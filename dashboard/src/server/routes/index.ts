@@ -16,6 +16,7 @@ import { createIssueRoutes } from './issues.js';
 import { createCliHistoryRoutes } from './cli-history.js';
 import { createMcpRoutes } from './mcp.js';
 import { createSpecsRoutes } from './specs.js';
+import { createLinearRoutes } from './linear.js';
 
 /**
  * Aggregate all route modules into a single Hono app.
@@ -65,6 +66,9 @@ export function createRoutes(
 
   // MCP server management routes
   routes.route('/', createMcpRoutes());
+
+  // Linear API proxy routes (needs workflowRoot for import/export)
+  routes.route('/', createLinearRoutes(workflowRoot));
 
   return routes;
 }

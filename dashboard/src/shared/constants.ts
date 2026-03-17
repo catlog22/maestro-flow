@@ -160,6 +160,18 @@ export const ISSUE_API_ENDPOINTS = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Linear API endpoint paths
+// ---------------------------------------------------------------------------
+
+export const LINEAR_API_ENDPOINTS = {
+  STATUS: '/api/linear/status',
+  TEAMS: '/api/linear/teams',
+  BOARD: '/api/linear/board',
+  IMPORT: '/api/linear/import',
+  EXPORT: '/api/linear/export',
+} as const;
+
+// ---------------------------------------------------------------------------
 // WebSocket endpoint
 // ---------------------------------------------------------------------------
 

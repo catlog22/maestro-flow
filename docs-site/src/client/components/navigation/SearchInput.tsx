@@ -4,7 +4,7 @@ import { useI18n } from '@/client/i18n/index.js';
 import { searchInventory, type SearchResult } from '@/client/routes/route-config.js';
 
 // ---------------------------------------------------------------------------
-// SearchInput — search input with autocomplete and keyboard shortcuts
+// SearchInput — warm minimal search with Ctrl+K shortcut and dropdown
 // ---------------------------------------------------------------------------
 
 interface SearchInputProps {
@@ -22,23 +22,19 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Search debounce
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
       return;
     }
-
     const timer = setTimeout(() => {
       const searchResults = searchInventory(query);
-      setResults(searchResults.slice(0, 8)); // Limit to 8 results
+      setResults(searchResults.slice(0, 8));
       setFocusedIndex(-1);
     }, 150);
-
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Handle keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       switch (e.key) {
@@ -67,7 +63,6 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
     [results, focusedIndex]
   );
 
-  // Global keyboard shortcut (Cmd+K / Ctrl+K)
   useEffect(() => {
     const handleGlobalKeydown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -76,12 +71,10 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
         setIsOpen(true);
       }
     };
-
     window.addEventListener('keydown', handleGlobalKeydown);
     return () => window.removeEventListener('keydown', handleGlobalKeydown);
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -92,7 +85,6 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
         setIsOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -112,30 +104,36 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
 
   const getTypeLabel = (type: SearchResult['type']): string => {
     switch (type) {
-      case 'command':
-        return t('search.type.command');
-      case 'claude_skill':
-        return t('search.type.claude_skill');
-      case 'codex_skill':
-        return t('search.type.codex_skill');
+      case 'command': return t('search.type.command');
+      case 'claude_skill': return t('search.type.claude_skill');
+      case 'codex_skill': return t('search.type.codex_skill');
     }
   };
 
   const getTypeColor = (type: SearchResult['type']): string => {
     switch (type) {
-      case 'command':
-        return 'text-accent-blue';
-      case 'claude_skill':
-        return 'text-accent-purple';
-      case 'codex_skill':
-        return 'text-accent-orange';
+      case 'command': return 'text-accent-blue';
+      case 'claude_skill': return 'text-accent-purple';
+      case 'codex_skill': return 'text-accent-orange';
     }
   };
 
   return (
     <div className={`relative ${className}`}>
-      {/* Search input */}
-      <div className="relative">
+      {/* Search input — warm minimal card style */}
+      <div className="relative flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] py-[7px] bg-bg-card border border-border rounded-[var(--radius-md)] text-[length:var(--font-size-sm)] text-text-tertiary cursor-text transition-all duration-[var(--duration-fast)] hover:border-text-placeholder focus-within:border-border-focused focus-within:shadow-[var(--shadow-focus-ring)]">
+        <svg
+          className="w-[14px] h-[14px] shrink-0 text-text-tertiary"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
         <input
           ref={inputRef}
           type="search"
@@ -152,43 +150,9 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
           aria-haspopup="listbox"
           aria-controls="search-results"
           aria-activedescendant={focusedIndex >= 0 ? `result-${focusedIndex}` : undefined}
-          className={[
-            'w-full px-[var(--spacing-2)] py-[var(--spacing-1)] pr-20',
-            'text-[length:var(--font-size-sm)]',
-            'bg-bg-primary border border-border rounded-[var(--radius-default)]',
-            'text-text-primary placeholder:text-text-placeholder',
-            'transition-all duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
-            'focus-visible:outline-none focus-visible:border-border-focused focus-visible:shadow-[var(--shadow-focus-ring)]',
-            'hover:border-border-focused',
-          ].join(' ')}
+          className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder:text-text-tertiary text-[length:var(--font-size-sm)]"
         />
-
-        {/* Search icon */}
-        <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
-
-        {/* Keyboard shortcut hint */}
-        <kbd
-          className={[
-            'absolute right-2 top-1/2 -translate-y-1/2',
-            'px-1.5 py-0.5 text-[length:var(--font-size-xs)]',
-            'bg-bg-secondary border border-border rounded',
-            'text-text-tertiary font-sans',
-            'hidden sm:inline-flex items-center gap-0.5',
-          ].join(' ')}
-        >
+        <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[length:10px] font-sans px-[var(--spacing-1-5)] py-[1px] bg-bg-primary border border-border rounded text-text-placeholder">
           <span className="text-[10px]">{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}</span>
           <span>K</span>
         </kbd>
@@ -200,11 +164,7 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
           ref={dropdownRef}
           id="search-results"
           role="listbox"
-          className={[
-            'absolute z-50 w-full mt-1 overflow-hidden',
-            'bg-bg-secondary border border-border rounded-[var(--radius-default)]',
-            'shadow-[var(--shadow-dropdown)]',
-          ].join(' ')}
+          className="absolute z-50 w-full mt-[var(--spacing-1)] overflow-hidden bg-bg-card border border-border rounded-[var(--radius-lg)] shadow-[var(--shadow-lg)]"
         >
           {results.map((result, index) => (
             <button
@@ -218,29 +178,21 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
                 'w-full px-[var(--spacing-3)] py-[var(--spacing-2)]',
                 'text-left transition-colors duration-[var(--duration-fast)]',
                 'focus-visible:outline-none',
-                focusedIndex === index
-                  ? 'bg-bg-hover'
-                  : index === 0
-                    ? 'bg-bg-secondary'
-                    : 'bg-bg-secondary',
-                focusedIndex === index || index === 0 ? 'hover:bg-bg-hover' : '',
-                'border-b border-border last:border-b-0',
+                focusedIndex === index ? 'bg-bg-hover' : '',
+                'border-b border-border-divider last:border-b-0',
               ].join(' ')}
             >
               <div className="flex items-start gap-[var(--spacing-2)]">
-                {/* Type badge */}
                 <span
                   className={[
-                    'shrink-0 px-1.5 py-0.5 text-[length:var(--font-size-xs)]',
-                    'font-[var(--font-weight-medium)] rounded-sm',
-                    'bg-bg-primary',
+                    'shrink-0 px-[var(--spacing-1-5)] py-[1px] text-[length:var(--font-size-xs)]',
+                    'font-[var(--font-weight-medium)] rounded-[var(--radius-sm)]',
+                    'bg-bg-secondary',
                     getTypeColor(result.type),
                   ].join(' ')}
                 >
                   {getTypeLabel(result.type)}
                 </span>
-
-                {/* Content */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-[var(--spacing-1-5)]">
                     <span className="text-[length:var(--font-size-sm)] font-[var(--font-weight-medium)] text-text-primary">
@@ -262,13 +214,7 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
 
       {/* No results */}
       {isOpen && query.length >= 2 && results.length === 0 && (
-        <div
-          className={[
-            'absolute z-50 w-full mt-1 px-[var(--spacing-3)] py-[var(--spacing-2)]',
-            'bg-bg-secondary border border-border rounded-[var(--radius-default)]',
-            'text-[length:var(--font-size-sm)] text-text-secondary',
-          ].join(' ')}
-        >
+        <div className="absolute z-50 w-full mt-[var(--spacing-1)] px-[var(--spacing-3)] py-[var(--spacing-2)] bg-bg-card border border-border rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] text-[length:var(--font-size-sm)] text-text-secondary">
           {t('search.no_results')}
         </div>
       )}
@@ -296,34 +242,26 @@ export function CompactSearchInput({ onSearch, className = '' }: CompactSearchIn
 
   return (
     <form onSubmit={handleSubmit} className={className}>
-      <div className="relative">
+      <div className="relative flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] py-[7px] bg-bg-card border border-border rounded-[var(--radius-md)] transition-all duration-[var(--duration-fast)] hover:border-text-placeholder focus-within:border-border-focused">
+        <svg
+          className="w-[14px] h-[14px] text-text-tertiary shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden="true"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('search.placeholder')}
-          className={[
-            'w-full px-[var(--spacing-2)] py-[var(--spacing-1)] pl-8',
-            'text-[length:var(--font-size-sm)]',
-            'bg-bg-primary border border-border rounded-[var(--radius-sm)]',
-            'text-text-primary placeholder:text-text-placeholder',
-            'focus-visible:outline-none focus-visible:border-border-focused',
-          ].join(' ')}
+          className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder:text-text-placeholder text-[length:var(--font-size-sm)]"
         />
-        <svg
-          className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-tertiary"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-          />
-        </svg>
       </div>
     </form>
   );

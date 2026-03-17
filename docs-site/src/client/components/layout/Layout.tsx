@@ -4,17 +4,17 @@ import { Sidebar } from './Sidebar.js';
 import { MainContent } from './MainContent.js';
 
 // ---------------------------------------------------------------------------
-// Layout — main 3-panel layout (TopBar + Sidebar + MainContent)
+// Layout — warm minimal 3-panel layout (fixed TopBar + fixed Sidebar + Content)
 // ---------------------------------------------------------------------------
 
 export function Layout({ children }: { children?: ReactNode }) {
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
-      {/* Top Bar */}
+    <div className="flex flex-col min-h-screen bg-bg-primary">
+      {/* Fixed Top Bar */}
       <TopBar />
 
-      {/* Main area: Sidebar + Content */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main area: Fixed Sidebar + Scrollable Content */}
+      <div className="flex pt-[var(--size-topbar-height)] min-h-screen">
         <Sidebar />
         <MainContent>{children}</MainContent>
       </div>

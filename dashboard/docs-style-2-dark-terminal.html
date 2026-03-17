@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Docs - Dark Terminal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 14px; line-height: 1.7; background: #0F0F0F; color: #C8C5BF; -webkit-font-smoothing: antialiased; }
+
+    :root {
+      --bg: #0F0F0F; --bg2: #161616; --bg3: #1C1C1C; --card: #1A1A1A;
+      --hover: rgba(255,255,255,0.04); --active: rgba(255,255,255,0.07);
+      --t1: #E8E5DE; --t2: #9E9B95; --t3: #6B6862; --t4: #3A3835;
+      --bdr: #2A2825; --bdr2: #232220;
+      --green: #5AC78B; --blue: #6BB3E8; --orange: #E8A44C; --yellow: #D4B84E;
+      --purple: #A88CD7; --red: #E86B6B; --cyan: #5CC8C8;
+      --tint-green: rgba(90,199,139,0.08); --tint-blue: rgba(107,179,232,0.08);
+      --tint-orange: rgba(232,164,76,0.08); --tint-purple: rgba(168,140,215,0.08);
+      --sidebar-w: 250px; --header-h: 52px;
+    }
+
+    /* === Header === */
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; background: rgba(15,15,15,0.9);
+      backdrop-filter: blur(16px); border-bottom: 1px solid var(--bdr);
+      z-index: 100;
+    }
+    .header-l { display: flex; align-items: center; gap: 14px; }
+    .logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; color: var(--t1); }
+    .logo-glyph { font-family: 'JetBrains Mono'; font-size: 18px; color: var(--green); }
+    .logo-sep { color: var(--t4); }
+    .logo-sub { font-size: 12px; font-weight: 500; color: var(--t3); font-family: 'JetBrains Mono'; }
+    .header-r { display: flex; align-items: center; gap: 10px; }
+    .search-box {
+      display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+      background: var(--bg3); border: 1px solid var(--bdr); border-radius: 8px;
+      font-size: 12px; color: var(--t3); cursor: pointer; min-width: 220px;
+      font-family: 'JetBrains Mono'; transition: border-color 150ms;
+    }
+    .search-box:hover { border-color: var(--t4); }
+    .search-box svg { width: 13px; height: 13px; }
+    .search-box kbd { margin-left: auto; font-size: 10px; padding: 1px 5px; background: var(--bg); border: 1px solid var(--bdr); border-radius: 3px; color: var(--t4); font-family: 'JetBrains Mono'; }
+    .header-link { font-size: 12px; font-weight: 500; color: var(--t3); text-decoration: none; padding: 5px 10px; border-radius: 6px; font-family: 'JetBrains Mono'; transition: all 120ms; }
+    .header-link:hover { color: var(--t1); background: var(--hover); }
+    .gh-btn { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--bdr); background: none; color: var(--t2); font-size: 12px; cursor: pointer; transition: all 120ms; }
+    .gh-btn:hover { border-color: var(--t3); color: var(--t1); }
+    .gh-btn svg { width: 14px; height: 14px; }
+
+    /* === Layout === */
+    .layout { display: flex; padding-top: var(--header-h); min-height: 100vh; }
+
+    /* === Sidebar === */
+    .sidebar {
+      position: fixed; top: var(--header-h); bottom: 0; left: 0;
+      width: var(--sidebar-w); background: var(--bg2); border-right: 1px solid var(--bdr);
+      overflow-y: auto; padding: 12px 0; z-index: 50;
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 3px; }
+    .nav-group { padding: 0 10px; margin-bottom: 4px; }
+    .nav-group-label {
+      font-family: 'JetBrains Mono'; font-size: 10px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--t4); padding: 10px 10px 6px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      border-radius: 6px; font-size: 12px; color: var(--t3); text-decoration: none;
+      font-family: 'JetBrains Mono'; transition: all 100ms; cursor: pointer;
+    }
+    .nav-item:hover { background: var(--hover); color: var(--t2); }
+    .nav-item.active { background: var(--active); color: var(--green); }
+    .nav-item .cmd { color: var(--t4); }
+    .nav-item .badge { margin-left: auto; font-size: 9px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: rgba(90,199,139,0.15); color: var(--green); }
+
+    /* === Content === */
+    .content-area { margin-left: var(--sidebar-w); flex: 1; display: flex; justify-content: center; }
+    .content { max-width: 760px; width: 100%; padding: 40px 48px 80px; }
+
+    /* === Breadcrumb === */
+    .breadcrumb { display: flex; align-items: center; gap: 4px; margin-bottom: 28px; font-family: 'JetBrains Mono'; font-size: 11px; color: var(--t4); }
+    .breadcrumb a { color: var(--t4); text-decoration: none; }
+    .breadcrumb a:hover { color: var(--t2); }
+    .breadcrumb .sep { margin: 0 2px; }
+
+    /* === Typography === */
+    .content h1 { font-size: 30px; font-weight: 700; color: var(--t1); margin-bottom: 8px; line-height: 1.2; letter-spacing: -0.02em; }
+    .content .subtitle { font-size: 15px; color: var(--t3); margin-bottom: 36px; }
+    .content h2 { font-size: 20px; font-weight: 700; color: var(--t1); margin-top: 52px; margin-bottom: 16px; }
+    .content h2::before { content: '## '; color: var(--t4); font-family: 'JetBrains Mono'; font-size: 16px; }
+    .content h3 { font-size: 15px; font-weight: 600; color: var(--t1); margin-top: 32px; margin-bottom: 10px; }
+    .content h3::before { content: '### '; color: var(--t4); font-family: 'JetBrains Mono'; font-size: 13px; }
+    .content p { color: var(--t2); margin-bottom: 16px; }
+    .content a { color: var(--blue); text-decoration: none; }
+    .content a:hover { text-decoration: underline; }
+    .content ul, .content ol { padding-left: 20px; margin-bottom: 16px; color: var(--t2); }
+    .content li { margin-bottom: 6px; }
+    .content li::marker { color: var(--t4); }
+    .content strong { color: var(--t1); }
+
+    /* === Code === */
+    .inline-code { font-family: 'JetBrains Mono'; font-size: 12px; background: var(--bg3); padding: 2px 7px; border-radius: 4px; color: var(--cyan); }
+    .code-block {
+      background: var(--bg3); border: 1px solid var(--bdr); border-radius: 8px;
+      margin-bottom: 20px; overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 14px; border-bottom: 1px solid var(--bdr);
+    }
+    .code-dots { display: flex; gap: 5px; }
+    .code-dots span { width: 8px; height: 8px; border-radius: 50%; }
+    .code-lang { font-family: 'JetBrains Mono'; font-size: 10px; font-weight: 500; color: var(--t4); margin-left: auto; }
+    .code-copy { font-family: 'JetBrains Mono'; font-size: 10px; color: var(--t4); background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+    .code-copy:hover { color: var(--t2); background: var(--hover); }
+    .code-body { padding: 14px 16px; overflow-x: auto; }
+    .code-body pre { font-family: 'JetBrains Mono'; font-size: 13px; line-height: 1.65; color: var(--t2); }
+    .code-body .kw { color: var(--purple); }
+    .code-body .str { color: var(--green); }
+    .code-body .cm { color: var(--t4); font-style: italic; }
+    .code-body .fn { color: var(--blue); }
+    .code-body .num { color: var(--orange); }
+    .code-body .prompt { color: var(--green); user-select: none; }
+    .code-body .output { color: var(--t3); }
+
+    /* === Terminal block === */
+    .terminal {
+      background: #0A0A0A; border: 1px solid var(--bdr); border-radius: 8px;
+      margin-bottom: 20px; overflow: hidden;
+    }
+    .terminal-header {
+      display: flex; align-items: center; gap: 6px; padding: 8px 14px;
+      background: var(--bg3); border-bottom: 1px solid var(--bdr);
+    }
+    .terminal-dots { display: flex; gap: 5px; }
+    .terminal-dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-title { font-family: 'JetBrains Mono'; font-size: 11px; color: var(--t4); margin-left: 8px; }
+    .terminal-body { padding: 14px 16px; overflow-x: auto; }
+    .terminal-body pre { font-family: 'JetBrains Mono'; font-size: 13px; line-height: 1.7; color: var(--t2); }
+    .terminal-body .prompt { color: var(--green); }
+    .terminal-body .flag { color: var(--orange); }
+    .terminal-body .output { color: var(--t3); }
+    .terminal-body .success { color: var(--green); }
+    .terminal-body .dim { color: var(--t4); }
+
+    /* === Callouts === */
+    .callout { padding: 14px 16px; border-radius: 8px; margin-bottom: 20px; border-left: 3px solid; display: flex; gap: 10px; }
+    .callout-icon { font-family: 'JetBrains Mono'; font-size: 12px; font-weight: 600; flex-shrink: 0; margin-top: 1px; }
+    .callout-body { flex: 1; }
+    .callout-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; font-family: 'JetBrains Mono'; }
+    .callout-text { font-size: 13px; line-height: 1.6; }
+    .callout.info { background: var(--tint-blue); border-color: var(--blue); }
+    .callout.info .callout-icon, .callout.info .callout-title { color: var(--blue); }
+    .callout.info .callout-text { color: #8ec4e8; }
+    .callout.warn { background: var(--tint-orange); border-color: var(--orange); }
+    .callout.warn .callout-icon, .callout.warn .callout-title { color: var(--orange); }
+    .callout.warn .callout-text { color: #c8a070; }
+    .callout.tip { background: var(--tint-green); border-color: var(--green); }
+    .callout.tip .callout-icon, .callout.tip .callout-title { color: var(--green); }
+    .callout.tip .callout-text { color: #80c8a0; }
+
+    /* === Feature grid === */
+    .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 24px; }
+    .feature-card {
+      padding: 16px 18px; background: var(--card); border: 1px solid var(--bdr);
+      border-radius: 8px; transition: all 150ms; cursor: pointer; text-decoration: none;
+    }
+    .feature-card:hover { border-color: var(--t4); }
+    .feature-card-icon { font-size: 20px; margin-bottom: 8px; }
+    .feature-card-title { font-family: 'JetBrains Mono'; font-size: 13px; font-weight: 600; color: var(--t1); margin-bottom: 4px; }
+    .feature-card-desc { font-size: 12px; color: var(--t3); line-height: 1.5; }
+
+    /* === Table === */
+    .doc-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+    .doc-table th { text-align: left; padding: 8px 12px; font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 600; color: var(--t3); background: var(--bg3); border-bottom: 1px solid var(--bdr); text-transform: uppercase; letter-spacing: 0.05em; }
+    .doc-table td { padding: 8px 12px; border-bottom: 1px solid var(--bdr); color: var(--t2); font-size: 13px; }
+    .doc-table tr:hover td { background: var(--hover); }
+
+    /* === Status indicators === */
+    .status-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--bdr); }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .status-name { font-family: 'JetBrains Mono'; font-size: 12px; color: var(--t2); flex: 1; }
+    .status-val { font-family: 'JetBrains Mono'; font-size: 11px; }
+
+    /* === TOC === */
+    .toc {
+      position: fixed; top: calc(var(--header-h) + 40px); right: 20px;
+      width: 180px; font-family: 'JetBrains Mono';
+    }
+    .toc-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--t4); margin-bottom: 10px; }
+    .toc-list { list-style: none; padding: 0; border-left: 1px solid var(--bdr); }
+    .toc-item { padding: 3px 0 3px 12px; }
+    .toc-item a { color: var(--t4); text-decoration: none; font-size: 11px; transition: color 100ms; }
+    .toc-item a:hover { color: var(--t2); }
+    .toc-item.active a { color: var(--green); }
+    .toc-item.active { border-left: 1px solid var(--green); margin-left: -1px; }
+
+    /* === Footer nav === */
+    .footer-nav { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--bdr); }
+    .footer-link { text-decoration: none; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--bdr); transition: all 120ms; }
+    .footer-link:hover { border-color: var(--t4); }
+    .footer-link-label { font-family: 'JetBrains Mono'; font-size: 10px; color: var(--t4); margin-bottom: 2px; }
+    .footer-link-title { font-family: 'JetBrains Mono'; font-size: 13px; font-weight: 600; color: var(--t1); }
+
+    @media (max-width: 1200px) { .toc { display: none; } }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-l">
+    <div class="logo">
+      <span class="logo-glyph">&gt;_</span>
+      <span>Maestro</span>
+      <span class="logo-sep">/</span>
+      <span class="logo-sub">docs</span>
+    </div>
+  </div>
+  <div class="header-r">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      search...
+      <kbd>/</kbd>
+    </div>
+    <a class="header-link" href="#">guides</a>
+    <a class="header-link" href="#">api</a>
+    <a class="header-link" href="#">changelog</a>
+    <button class="gh-btn">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+      GitHub
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-group">
+      <div class="nav-group-label">// start</div>
+      <a class="nav-item active" href="#">introduction</a>
+      <a class="nav-item" href="#">quick-start</a>
+      <a class="nav-item" href="#">installation</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">// concepts</div>
+      <a class="nav-item" href="#">workflows</a>
+      <a class="nav-item" href="#">phases</a>
+      <a class="nav-item" href="#">tasks</a>
+      <a class="nav-item" href="#">state <span class="badge">new</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">// commands</div>
+      <a class="nav-item" href="#"><span class="cmd">/</span>maestro</a>
+      <a class="nav-item" href="#"><span class="cmd">/</span>maestro-init</a>
+      <a class="nav-item" href="#"><span class="cmd">/</span>maestro-plan</a>
+      <a class="nav-item" href="#"><span class="cmd">/</span>maestro-execute</a>
+      <a class="nav-item" href="#"><span class="cmd">/</span>maestro-verify</a>
+      <a class="nav-item" href="#"><span class="cmd">/</span>maestro-quick</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">// quality</div>
+      <a class="nav-item" href="#">review</a>
+      <a class="nav-item" href="#">testing</a>
+      <a class="nav-item" href="#">debugging</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">// advanced</div>
+      <a class="nav-item" href="#">mcp-server</a>
+      <a class="nav-item" href="#">extensions</a>
+      <a class="nav-item" href="#">agents</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="content-area">
+    <div class="content">
+      <div class="breadcrumb">
+        <a href="#">docs</a><span class="sep">/</span>
+        <a href="#">start</a><span class="sep">/</span>
+        <span style="color:var(--t2)">introduction</span>
+      </div>
+
+      <h1>Introduction</h1>
+      <p class="subtitle">Workflow orchestration for AI-native software development.</p>
+
+      <div class="feature-grid">
+        <a class="feature-card" href="#">
+          <div class="feature-card-icon" style="color:var(--green)">&#9654;</div>
+          <div class="feature-card-title">quick-start</div>
+          <div class="feature-card-desc">First project in 5 minutes. Zero config needed.</div>
+        </a>
+        <a class="feature-card" href="#">
+          <div class="feature-card-icon" style="color:var(--blue)">&#9881;</div>
+          <div class="feature-card-title">concepts</div>
+          <div class="feature-card-desc">Phases, tasks, waves, and the execution model.</div>
+        </a>
+        <a class="feature-card" href="#">
+          <div class="feature-card-icon" style="color:var(--purple)">&#10095;</div>
+          <div class="feature-card-title">commands</div>
+          <div class="feature-card-desc">Full CLI reference with 30+ commands and flags.</div>
+        </a>
+        <a class="feature-card" href="#">
+          <div class="feature-card-icon" style="color:var(--orange)">&#9733;</div>
+          <div class="feature-card-title">extensions</div>
+          <div class="feature-card-desc">Build custom tools and plug into the pipeline.</div>
+        </a>
+      </div>
+
+      <h2 id="what-is-maestro">What is Maestro</h2>
+      <p>Maestro is a <strong>workflow orchestration CLI</strong> that structures software development into phases and tasks, with built-in AI-powered planning, execution, and verification.</p>
+      <p>It works as a layer on top of <strong>Claude Code</strong>, adding project memory, structured decomposition, and quality gates to every development cycle.</p>
+
+      <div class="callout tip">
+        <span class="callout-icon">[TIP]</span>
+        <div class="callout-body">
+          <div class="callout-title">First time?</div>
+          <div class="callout-text">Jump straight to the <a href="#">quick-start</a> guide and come back here for deeper understanding.</div>
+        </div>
+      </div>
+
+      <h2 id="the-pipeline">The Pipeline</h2>
+      <p>Every project follows a natural execution pipeline:</p>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span style="background:#E86B6B"></span>
+            <span style="background:#D4B84E"></span>
+            <span style="background:#5AC78B"></span>
+          </div>
+          <span class="terminal-title">maestro pipeline</span>
+        </div>
+        <div class="terminal-body"><pre><span class="prompt">$</span> maestro <span class="flag">--help</span>
+
+<span class="output">  maestro pipeline:</span>
+
+  <span class="dim">brainstorm</span> <span class="dim">&rarr;</span> <span class="success">init</span> <span class="dim">&rarr;</span> roadmap <span class="dim">&rarr;</span> plan <span class="dim">&rarr;</span> execute <span class="dim">&rarr;</span> verify
+  <span class="dim">                |                          |</span>
+  <span class="dim">     spec-generate (alt)           quality pipeline</span>
+  <span class="dim">                                 review &rarr; test &rarr; debug</span>
+
+<span class="output">  Available commands:</span>
+  <span class="success">  /maestro</span>          Intelligent coordinator
+  <span class="success">  /maestro-init</span>     Initialize project
+  <span class="success">  /maestro-plan</span>     Plan phase execution
+  <span class="success">  /maestro-execute</span>  Execute phase plan
+  <span class="success">  /maestro-verify</span>   Goal-backward verification</pre></div>
+      </div>
+
+      <h2 id="key-features">Key Features</h2>
+      <table class="doc-table">
+        <thead><tr><th>Feature</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="inline-code">Phase Management</span></td><td>Sequential phases with auto-transitions and state tracking</td></tr>
+          <tr><td><span class="inline-code">Wave Execution</span></td><td>DAG-based parallel task execution within each phase</td></tr>
+          <tr><td><span class="inline-code">MCP Server</span></td><td>Expose all tools via Model Context Protocol (stdio)</td></tr>
+          <tr><td><span class="inline-code">Quality Pipeline</span></td><td>Code review, UAT testing, and debugging automation</td></tr>
+          <tr><td><span class="inline-code">Extensions</span></td><td>Plugin system loaded from <span class="inline-code">~/.maestro/extensions/</span></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="install">Installation</h2>
+
+      <div class="terminal">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span style="background:#E86B6B"></span>
+            <span style="background:#D4B84E"></span>
+            <span style="background:#5AC78B"></span>
+          </div>
+          <span class="terminal-title">bash</span>
+        </div>
+        <div class="terminal-body"><pre><span class="cm"># install globally</span>
+<span class="prompt">$</span> npm install <span class="flag">-g</span> maestro-flow
+
+<span class="cm"># verify</span>
+<span class="prompt">$</span> maestro <span class="flag">--version</span>
+<span class="output">maestro-flow v0.1.0</span>
+
+<span class="cm"># initialize a project</span>
+<span class="prompt">$</span> maestro init
+<span class="success">&#10003; Created .workflow/project.md</span>
+<span class="success">&#10003; Created .workflow/state.json</span>
+<span class="success">&#10003; Created .workflow/config.json</span>
+<span class="success">&#10003; Project initialized successfully</span></pre></div>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-icon">[!]</span>
+        <div class="callout-body">
+          <div class="callout-title">Prerequisite</div>
+          <div class="callout-text">Requires Node.js 18+. Maestro works best paired with Claude Code as the AI execution backend.</div>
+        </div>
+      </div>
+
+      <h2 id="config-example">Configuration</h2>
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-dots">
+            <span style="background:#E86B6B"></span>
+            <span style="background:#D4B84E"></span>
+            <span style="background:#5AC78B"></span>
+          </div>
+          <span class="code-lang">typescript</span>
+          <button class="code-copy">copy</button>
+        </div>
+        <div class="code-body"><pre><span class="cm">// maestro.config.ts</span>
+<span class="kw">import</span> { <span class="fn">defineConfig</span> } <span class="kw">from</span> <span class="str">'maestro-flow'</span>;
+
+<span class="kw">export default</span> <span class="fn">defineConfig</span>({
+  project: {
+    name: <span class="str">'my-app'</span>,
+    version: <span class="str">'1.0.0'</span>,
+  },
+  phases: [
+    { name: <span class="str">'Setup'</span>,    tasks: <span class="num">3</span> },
+    { name: <span class="str">'Core API'</span>,  tasks: <span class="num">5</span> },
+    { name: <span class="str">'Frontend'</span>,  tasks: <span class="num">8</span> },
+    { name: <span class="str">'Deploy'</span>,    tasks: <span class="num">4</span> },
+  ],
+});</pre></div>
+      </div>
+
+      <h2 id="project-structure">Project Structure</h2>
+      <div class="code-block">
+        <div class="code-header">
+          <div class="code-dots">
+            <span style="background:#E86B6B"></span>
+            <span style="background:#D4B84E"></span>
+            <span style="background:#5AC78B"></span>
+          </div>
+          <span class="code-lang">tree</span>
+        </div>
+        <div class="code-body"><pre><span class="fn">.workflow/</span>
+<span class="dim">|--</span> project.md          <span class="cm"># project definition</span>
+<span class="dim">|--</span> roadmap.md          <span class="cm"># phase roadmap</span>
+<span class="dim">|--</span> state.json          <span class="cm"># current state</span>
+<span class="dim">|--</span> config.json         <span class="cm"># configuration</span>
+<span class="dim">|--</span> <span class="fn">phases/</span>
+<span class="dim">|   |--</span> <span class="fn">01-setup/</span>       <span class="cm"># self-contained phase dir</span>
+<span class="dim">|   |--</span> <span class="fn">02-core-api/</span>
+<span class="dim">|   `--</span> <span class="fn">03-frontend/</span>
+<span class="dim">`--</span> <span class="fn">specs/</span>              <span class="cm"># specification files</span></pre></div>
+      </div>
+
+      <!-- Footer navigation -->
+      <div class="footer-nav">
+        <div></div>
+        <a class="footer-link" href="#">
+          <div class="footer-link-label">next &rarr;</div>
+          <div class="footer-link-title">quick-start</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-label">// on_this_page</div>
+    <ul class="toc-list">
+      <li class="toc-item active"><a href="#what-is-maestro">what-is-maestro</a></li>
+      <li class="toc-item"><a href="#the-pipeline">the-pipeline</a></li>
+      <li class="toc-item"><a href="#key-features">key-features</a></li>
+      <li class="toc-item"><a href="#install">installation</a></li>
+      <li class="toc-item"><a href="#config-example">configuration</a></li>
+      <li class="toc-item"><a href="#project-structure">project-structure</a></li>
+    </ul>
+  </aside>
+</div>
+
+</body>
+</html>

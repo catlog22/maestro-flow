@@ -3,7 +3,7 @@ import type { Category } from '@/client/routes/route-config.js';
 import { getCategoryIcon } from '@/client/utils/categoryIcons.js';
 
 // ---------------------------------------------------------------------------
-// LandingPage — home page with category cards
+// LandingPage — warm minimal home page with hero + card grid
 // ---------------------------------------------------------------------------
 
 interface LandingPageProps {
@@ -14,19 +14,19 @@ export default function LandingPage({ categories }: LandingPageProps) {
   const { t } = useI18n();
 
   return (
-    <div className="max-w-6xl mx-auto">
+    <div>
       {/* Hero section */}
-      <div className="mb-[var(--spacing-8)] text-center">
-        <h1 className="text-[length:var(--font-size-3xl)] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-3)]">
+      <div className="mb-[var(--spacing-8)]">
+        <h1 className="text-[length:28px] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-2)] leading-[1.3]">
           Maestro Documentation
         </h1>
-        <p className="text-[length:var(--font-size-lg)] text-text-secondary max-w-2xl mx-auto">
+        <p className="text-[length:var(--font-size-md)] text-text-secondary leading-[var(--line-height-relaxed)] max-w-[520px]">
           {t('landing.description')}
         </p>
       </div>
 
-      {/* Category grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--spacing-4)]">
+      {/* Category card grid — 2 columns */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-[var(--spacing-3)]">
         {categories.map((category) => (
           <CategoryCard key={category.id} category={category} />
         ))}
@@ -36,37 +36,45 @@ export default function LandingPage({ categories }: LandingPageProps) {
 }
 
 // ---------------------------------------------------------------------------
-// CategoryCard — individual category card
+// CategoryCard — warm minimal card with icon, hover lift effect
 // ---------------------------------------------------------------------------
 
-interface CategoryCardProps {
-  category: Category;
-}
+function CategoryCard({ category }: { category: Category }) {
+  // Tint color mapping
+  const tintColors: Record<string, string> = {
+    pipeline: 'bg-tint-green',
+    spec: 'bg-tint-blue',
+    quality: 'bg-tint-orange',
+    manage: 'bg-tint-gray',
+    maestro: 'bg-tint-purple',
+    team: 'bg-tint-yellow',
+    cli: 'bg-tint-blue',
+    brainstorm: 'bg-tint-orange',
+    workflow: 'bg-tint-green',
+    ddd: 'bg-tint-purple',
+    issue: 'bg-tint-orange',
+    ui_design: 'bg-tint-purple',
+    session: 'bg-tint-blue',
+  };
+  const tint = tintColors[category.id] || 'bg-tint-gray';
 
-function CategoryCard({ category }: CategoryCardProps) {
   return (
     <a
       href={`/${category.id}`}
-      className={[
-        'block p-[var(--spacing-4)] rounded-[var(--radius-lg)]',
-        'bg-bg-secondary border border-border',
-        'transition-all duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
-        'hover:shadow-[var(--shadow-card)] hover:border-border-focused',
-        'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-      ].join(' ')}
+      className="block p-[var(--spacing-5)] bg-bg-card border border-border rounded-[var(--radius-lg)] no-underline transition-all duration-[180ms] ease-[var(--ease-bounce)] hover:border-text-placeholder hover:-translate-y-[2px] hover:shadow-[var(--shadow-md)]"
     >
-      {/* Category icon/name */}
-      <div className="flex items-center gap-[var(--spacing-2)] mb-[var(--spacing-2)]">
-        <span className="text-[length:var(--font-size-xl)]">
-          {getCategoryIcon(category.id)}
-        </span>
-        <h3 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary">
-          {category.name}
-        </h3>
+      {/* Icon */}
+      <div className={`w-8 h-8 rounded-[var(--radius-default)] flex items-center justify-center mb-[var(--spacing-3)] ${tint}`}>
+        <span className="text-[length:18px]">{getCategoryIcon(category.id)}</span>
       </div>
 
+      {/* Title */}
+      <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-1)]">
+        {category.name}
+      </h3>
+
       {/* Description */}
-      <p className="text-[length:var(--font-size-sm)] text-text-secondary line-clamp-2">
+      <p className="text-[length:12px] text-text-secondary leading-[var(--line-height-normal)] line-clamp-2">
         {category.description}
       </p>
     </a>

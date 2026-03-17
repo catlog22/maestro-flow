@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useMemo } from 'react';
 import { useBoardStore } from '@/client/store/board-store.js';
 import { COLLAPSED_COLUMNS, STATUS_COLORS } from '@/shared/constants.js';
-import type { PhaseCard as PhaseCardType, PhaseStatus } from '@/shared/types.js';
+import type { PhaseCard as PhaseCardType, PhaseStatus, SelectedKanbanItem } from '@/shared/types.js';
+import type { LinearIssue } from '@/shared/linear-types.js';
 import { KanbanColumn } from '@/client/components/kanban/KanbanColumn.js';
 import { useI18n } from '@/client/i18n/index.js';
 
@@ -42,11 +43,34 @@ function groupPhases(phases: PhaseCardType[]): Map<string, PhaseCardType[]> {
   return groups;
 }
 
-interface KanbanBoardProps {
-  onSelectPhase: (id: number) => void;
+/** Map Linear state.type → kanban column ID */
+const LINEAR_STATE_TO_COLUMN: Record<string, string> = {
+  backlog: 'backlog',
+  unstarted: 'backlog',
+  started: 'in-progress',
+  completed: 'done',
+};
+
+function groupLinearIssues(issues: LinearIssue[]): Map<string, LinearIssue[]> {
+  const groups = new Map<string, LinearIssue[]>();
+  for (const col of COLLAPSED_COLUMNS) {
+    groups.set(col.id, []);
+  }
+  for (const issue of issues) {
+    const colId = LINEAR_STATE_TO_COLUMN[issue.state.type] ?? 'backlog';
+    groups.get(colId)?.push(issue);
+  }
+  return groups;
 }
 
-export function KanbanBoard({ onSelectPhase }: KanbanBoardProps) {
+interface KanbanBoardProps {
+  onSelectPhase: (id: number) => void;
+  linearIssues?: LinearIssue[];
+  selectedItem?: SelectedKanbanItem | null;
+  onSelectItem?: (item: SelectedKanbanItem) => void;
+}
+
+export function KanbanBoard({ onSelectPhase, linearIssues, selectedItem, onSelectItem }: KanbanBoardProps) {
   const { t } = useI18n();
   const board = useBoardStore((s) => s.board);
   const setSelectedPhase = useBoardStore((s) => s.setSelectedPhase);
@@ -96,6 +120,11 @@ export function KanbanBoard({ onSelectPhase }: KanbanBoardProps) {
     return () => el.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  const groupedLinear = useMemo(
+    () => groupLinearIssues(linearIssues ?? []),
+    [linearIssues],
+  );
+
   if (!board) return null;
 
   const grouped = groupPhases(board.phases);
@@ -113,6 +142,9 @@ export function KanbanBoard({ onSelectPhase }: KanbanBoardProps) {
           color={COLUMN_COLORS[col.id] ?? STATUS_COLORS.pending}
           animationDelay={i * 50}
           onSelectPhase={onSelectPhase}
+          linearIssues={groupedLinear.get(col.id)}
+          selectedItem={selectedItem}
+          onSelectItem={onSelectItem}
         />
       ))}
     </div>

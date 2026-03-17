@@ -17,15 +17,21 @@ export interface GeneralSettings {
   language: 'en' | 'zh-CN';
 }
 
+/** Linear integration settings */
+export interface LinearSettings {
+  apiKey: string;
+}
+
 /** Full settings config */
 export interface SettingsConfig {
   general: GeneralSettings;
   agents: Record<AgentType, AgentSettingsEntry>;
   cliTools: string; // raw JSON string of cli-tools.json
+  linear: LinearSettings;
 }
 
 /** Section type union */
-export type SettingsSectionType = 'general' | 'agents' | 'cli-tools' | 'specs';
+export type SettingsSectionType = 'general' | 'agents' | 'cli-tools' | 'specs' | 'linear';
 
 export interface SettingsStore {
   open: boolean;
@@ -57,6 +63,7 @@ const DEFAULT_CONFIG: SettingsConfig = {
   general: { theme: 'system', language: 'en' },
   agents: DEFAULT_AGENTS,
   cliTools: '{}',
+  linear: { apiKey: '' },
 };
 
 function deepClone<T>(obj: T): T {

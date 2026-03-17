@@ -4,8 +4,25 @@ import { useI18n } from '@/client/i18n/index.js';
 import { inventoryData, getCommandsByCategory, getCommandSlug, type Command, type Skill } from '@/client/routes/route-config.js';
 
 // ---------------------------------------------------------------------------
-// Sidebar — collapsible category navigation
+// Sidebar — warm minimal collapsible category navigation with colored dots
 // ---------------------------------------------------------------------------
+
+// Category color mapping for nav dots
+const categoryColors: Record<string, string> = {
+  pipeline: 'bg-accent-green',
+  spec: 'bg-accent-blue',
+  quality: 'bg-accent-orange',
+  manage: 'bg-accent-gray',
+  maestro: 'bg-accent-purple',
+  team: 'bg-accent-yellow',
+  cli: 'bg-accent-blue',
+  brainstorm: 'bg-accent-orange',
+  workflow: 'bg-accent-green',
+  ddd: 'bg-accent-purple',
+  issue: 'bg-accent-red',
+  ui_design: 'bg-accent-pink',
+  session: 'bg-accent-blue',
+};
 
 interface CategorySection {
   id: string;
@@ -20,7 +37,6 @@ export function Sidebar() {
   const { t } = useI18n();
   const location = useLocation();
 
-  // Build sections from inventory data
   const defaultSections: CategorySection[] = useMemo(() => {
     return inventoryData.categories.map((cat) => ({
       id: cat.id,
@@ -28,22 +44,15 @@ export function Sidebar() {
       commands: getCommandsByCategory(cat.id),
       claudeSkills: inventoryData.claude_skills.filter((s) => s.category === cat.id),
       codexSkills: inventoryData.codex_skills.filter((s) => s.category === cat.id),
-      isOpen: ['pipeline', 'spec', 'quality'].includes(cat.id), // Default open for main categories
+      isOpen: ['pipeline', 'spec', 'quality'].includes(cat.id),
     }));
   }, []);
 
   const [sections, setSections] = useState<CategorySection[]>(defaultSections);
 
-  // Check if a category or item is currently active
-  const isActivePath = (categoryId: string, itemSlug?: string): boolean => {
+  const isActivePath = (categoryId: string): boolean => {
     const pathParts = location.pathname.split('/').filter(Boolean);
-    if (pathParts[0] === categoryId) {
-      if (itemSlug) {
-        return pathParts[1] === itemSlug;
-      }
-      return true;
-    }
-    return false;
+    return pathParts[0] === categoryId;
   };
 
   const toggleSection = (id: string) => {
@@ -54,64 +63,15 @@ export function Sidebar() {
     );
   };
 
-  const expandAll = () => {
-    setSections((prev) => prev.map((s) => ({ ...s, isOpen: true })));
-  };
-
-  const collapseAll = () => {
-    setSections((prev) => prev.map((s) => ({ ...s, isOpen: false })));
-  };
-
   return (
     <aside
       role="navigation"
       aria-label={t('sidebar.categories')}
-      className="w-[var(--size-sidebar-width)] bg-bg-secondary border-r border-border overflow-y-auto shrink-0"
+      className="fixed top-[var(--size-topbar-height)] bottom-0 left-0 w-[var(--size-sidebar-width)] bg-bg-secondary border-r border-border overflow-y-auto z-50"
     >
-      {/* Expand/Collapse controls */}
-      <div className="flex items-center justify-between px-[var(--spacing-3)] py-[var(--spacing-2)] border-b border-border">
-        <span className="text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] text-text-tertiary uppercase tracking-[var(--letter-spacing-wide)]">
-          {t('sidebar.categories')}
-        </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={expandAll}
-            aria-label={t('sidebar.expand_all')}
-            className={[
-              'p-1 rounded-sm hover:bg-bg-hover',
-              'transition-all duration-[var(--duration-fast)]',
-              'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-              'text-text-tertiary hover:text-text-secondary',
-            ].join(' ')}
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={collapseAll}
-            aria-label={t('sidebar.collapse_all')}
-            className={[
-              'p-1 rounded-sm hover:bg-bg-hover',
-              'transition-all duration-[var(--duration-fast)]',
-              'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-              'text-text-tertiary hover:text-text-secondary',
-            ].join(' ')}
-          >
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Category sections */}
-      <nav className="px-[var(--spacing-3)] py-[var(--spacing-3)]" aria-label="Command categories">
+      <nav className="py-[var(--spacing-4)]" aria-label="Command categories">
         {sections.map((section) => (
-          <CategorySection
+          <SidebarSection
             key={section.id}
             section={section}
             isActive={isActivePath(section.id)}
@@ -124,63 +84,69 @@ export function Sidebar() {
 }
 
 // ---------------------------------------------------------------------------
-// CategorySection — collapsible section with items
+// SidebarSection — collapsible section with group label and items
 // ---------------------------------------------------------------------------
 
-interface CategorySectionProps {
+interface SidebarSectionProps {
   section: CategorySection;
   isActive: boolean;
   onToggle: () => void;
 }
 
-function CategorySection({ section, isActive, onToggle }: CategorySectionProps) {
+function SidebarSection({ section, isActive, onToggle }: SidebarSectionProps) {
   const { t } = useI18n();
+  const hasItems = section.commands.length > 0 || section.claudeSkills.length > 0 || section.codexSkills.length > 0;
+  const dotColor = categoryColors[section.id] || 'bg-accent-gray';
 
   return (
-    <div className="mb-[var(--spacing-2)]">
-      {/* Section header */}
-      <NavLink
-        to={`/${section.id}`}
-        onClick={(e) => {
-          // Prevent navigation if clicking the arrow
-          if ((e.target as HTMLElement).closest('button')) {
-            e.preventDefault();
-            onToggle();
-          }
-        }}
-        className={({ isActive: linkIsActive }) => [
-          'flex items-center justify-between w-full px-[var(--spacing-2)] py-[var(--spacing-1-5)]',
-          'text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)]',
-          'transition-all duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
-          'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-          'rounded-[var(--radius-default)]',
-          linkIsActive || isActive
-            ? 'text-accent-blue bg-bg-active'
-            : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-hover',
-        ].join(' ')}
-        aria-current={isActive ? 'page' : undefined}
-      >
-        <span className="uppercase tracking-[var(--letter-spacing-wide)]">
+    <div className="px-[var(--spacing-3)] mb-[var(--spacing-2)]">
+      {/* Section header — group label style */}
+      <div className="flex items-center justify-between">
+        <NavLink
+          to={`/${section.id}`}
+          className={({ isActive: linkIsActive }) => [
+            'flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] py-[var(--spacing-2)]',
+            'text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[var(--letter-spacing-wide)]',
+            'transition-all duration-[var(--duration-fast)]',
+            'rounded-[var(--radius-default)] flex-1',
+            linkIsActive || isActive
+              ? 'text-text-primary'
+              : 'text-text-tertiary hover:text-text-secondary',
+          ].join(' ')}
+        >
+          {hasItems && (
+            <svg
+              className={[
+                'w-3 h-3 transition-transform duration-[var(--duration-fast)]',
+                section.isOpen ? 'rotate-12' : '',
+              ].join(' ')}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+          )}
           {t(section.titleKey)}
-        </span>
-        {(section.commands.length > 0 || section.claudeSkills.length > 0 || section.codexSkills.length > 0) && (
+        </NavLink>
+
+        {hasItems && (
           <button
             type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onToggle();
-            }}
+            onClick={onToggle}
             aria-expanded={section.isOpen}
             aria-label={`Toggle ${t(section.titleKey)} section`}
-            className={[
-              'p-1 rounded-sm hover:bg-bg-hover',
-              'transition-all duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
-            ].join(' ')}
+            className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-hover text-text-tertiary transition-all duration-[var(--duration-fast)]"
           >
             <svg
               className={[
-                'w-3 h-3 transition-transform duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
+                'w-3 h-3 transition-transform duration-[var(--duration-fast)]',
                 section.isOpen ? 'rotate-90' : '',
               ].join(' ')}
               fill="none"
@@ -192,38 +158,36 @@ function CategorySection({ section, isActive, onToggle }: CategorySectionProps) 
             </svg>
           </button>
         )}
-      </NavLink>
+      </div>
 
       {/* Section items */}
-      {section.isOpen && (
-        <div className="ml-[var(--spacing-2)] mt-[var(--spacing-0-5)] flex flex-col gap-[var(--spacing-0-5)]">
-          {/* Commands */}
+      {section.isOpen && hasItems && (
+        <div className="mt-[var(--spacing-0-5)] flex flex-col gap-[var(--spacing-0-5)]">
           {section.commands.map((cmd) => (
             <SidebarItem
               key={cmd.name}
               category={section.id}
               item={getCommandSlug(cmd.name)}
               type="command"
+              dotColor={dotColor}
             />
           ))}
-
-          {/* Claude Skills */}
           {section.claudeSkills.map((skill) => (
             <SidebarItem
               key={skill.name}
               category="skills"
               item={skill.name}
               type="claude-skill"
+              dotColor="bg-accent-purple"
             />
           ))}
-
-          {/* Codex Skills */}
           {section.codexSkills.map((skill) => (
             <SidebarItem
               key={skill.name}
               category="codex"
               item={skill.name}
               type="codex-skill"
+              dotColor="bg-accent-orange"
             />
           ))}
         </div>
@@ -233,63 +197,48 @@ function CategorySection({ section, isActive, onToggle }: CategorySectionProps) 
 }
 
 // ---------------------------------------------------------------------------
-// SidebarItem — individual navigation item
+// SidebarItem — individual navigation item with colored dot
 // ---------------------------------------------------------------------------
 
 interface SidebarItemProps {
   category: string;
   item: string;
   type: 'command' | 'claude-skill' | 'codex-skill';
+  dotColor: string;
 }
 
-function SidebarItem({ category, item, type }: SidebarItemProps) {
+function SidebarItem({ category, item, type, dotColor }: SidebarItemProps) {
   const href = `/${category}/${item}`;
   const location = useLocation();
   const isActive = location.pathname === href;
 
-  // Get icon based on type
-  const getIcon = () => {
-    switch (type) {
-      case 'command':
-        return (
-          <svg className="w-3 h-3 text-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-        );
-      case 'claude-skill':
-        return (
-          <svg className="w-3 h-3 text-accent-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
-        );
-      case 'codex-skill':
-        return (
-          <svg className="w-3 h-3 text-accent-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-          </svg>
-        );
-    }
-  };
+  // Badge for skill types
+  const badge = type === 'claude-skill' ? (
+    <span className="ml-auto text-[length:9px] font-[var(--font-weight-semibold)] px-[var(--spacing-1-5)] py-[1px] rounded-full bg-status-bg-planning text-accent-purple">
+      Skill
+    </span>
+  ) : type === 'codex-skill' ? (
+    <span className="ml-auto text-[length:9px] font-[var(--font-weight-semibold)] px-[var(--spacing-1-5)] py-[1px] rounded-full bg-status-bg-verifying text-accent-orange">
+      Codex
+    </span>
+  ) : null;
 
   return (
     <NavLink
       to={href}
       className={[
-        'flex items-center gap-[var(--spacing-2)] px-[var(--spacing-2)] py-[var(--spacing-1-5)]',
-        'text-[length:var(--font-size-sm)] font-[var(--font-weight-medium)]',
-        'transition-all duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
-        'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
+        'flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] py-[var(--spacing-1-5)]',
+        'text-[length:var(--font-size-sm)]',
+        'transition-all duration-[var(--duration-fast)]',
         'rounded-[var(--radius-default)]',
-        'border-l-2',
         isActive
-          ? 'text-accent-blue bg-bg-active border-accent-blue'
-          : 'text-text-secondary border-transparent hover:text-text-primary hover:bg-bg-hover hover:border-border-focused',
+          ? 'bg-bg-active text-text-primary font-[var(--font-weight-semibold)]'
+          : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
       ].join(' ')}
     >
-      {getIcon()}
+      <span className={`w-[5px] h-[5px] rounded-full shrink-0 ${dotColor}`}></span>
       <span className="truncate">{item}</span>
+      {badge}
     </NavLink>
   );
 }
-
-

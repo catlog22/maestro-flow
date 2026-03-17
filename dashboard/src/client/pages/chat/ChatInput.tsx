@@ -109,8 +109,8 @@ export function ChatInput() {
 
   return (
     <div
-      className="shrink-0 border-t px-6 pb-[14px]"
-      style={{ borderColor: 'var(--color-border)', backgroundColor: 'var(--color-bg-primary)' }}
+      className="shrink-0 px-6 pb-[14px] pt-2"
+      style={{ backgroundColor: 'var(--color-bg-primary)' }}
     >
       {isNonInteractive && (
         <div
@@ -161,18 +161,19 @@ export function ChatInput() {
           style={{
             borderColor: 'var(--color-border)',
             backgroundColor: 'var(--color-bg-card)',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)',
             transitionDuration: 'var(--duration-normal)',
           }}
           onFocusCapture={(e) => {
             const wrap = e.currentTarget as HTMLElement;
             wrap.style.borderColor = 'var(--color-accent-orange)';
-            wrap.style.boxShadow = '0 0 0 3px rgba(200, 134, 58, 0.08)';
+            wrap.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06), 0 0 0 3px rgba(200, 134, 58, 0.08)';
           }}
           onBlurCapture={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget as Node)) {
               const wrap = e.currentTarget as HTMLElement;
               wrap.style.borderColor = 'var(--color-border)';
-              wrap.style.boxShadow = 'none';
+              wrap.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)';
             }
           }}
         >
@@ -190,7 +191,7 @@ export function ChatInput() {
           />
           <div
             className="flex items-center gap-[2px] px-[6px] py-1"
-            style={{ borderTop: '1px solid var(--color-border-divider)' }}
+            style={{}}
           >
             {/* File button */}
             <ToolbarButton

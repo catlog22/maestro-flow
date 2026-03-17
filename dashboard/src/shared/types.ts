@@ -27,6 +27,15 @@ export type TaskType = 'feature' | 'fix' | 'refactor' | 'test' | 'docs';
 export type ProjectStatus = 'planning' | 'executing' | 'verifying' | 'idle';
 
 // ---------------------------------------------------------------------------
+// Kanban item selection — unified type for phases and Linear issues
+// ---------------------------------------------------------------------------
+import type { LinearIssue } from './linear-types.js';
+
+export type SelectedKanbanItem =
+  | { type: 'phase'; phaseId: number }
+  | { type: 'linearIssue'; issue: LinearIssue };
+
+// ---------------------------------------------------------------------------
 // Re-export agent types for convenience
 // ---------------------------------------------------------------------------
 export type { AgentProcess, NormalizedEntry, ApprovalRequest, AgentStatusPayload, AgentStoppedPayload } from './agent-types.js';

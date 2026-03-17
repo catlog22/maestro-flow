@@ -3,17 +3,29 @@ import { useBoardStore } from '@/client/store/board-store.js';
 import { StatusBadge } from '@/client/components/common/StatusBadge.js';
 import { ProgressBar } from '@/client/components/common/ProgressBar.js';
 import { STATUS_COLORS } from '@/shared/constants.js';
-import type { TaskCard } from '@/shared/types.js';
+import type { TaskCard, SelectedKanbanItem } from '@/shared/types.js';
+import { LINEAR_PRIORITY_LABELS, LINEAR_PRIORITY_COLORS } from '@/shared/linear-types.js';
 
 // ---------------------------------------------------------------------------
-// KanbanDetailPanel — phase detail content for the right-side DetailPanel
+// KanbanDetailPanel — phase or linear issue detail for the right-side panel
 // ---------------------------------------------------------------------------
 
 interface KanbanDetailPanelProps {
-  phaseId: number;
+  selectedItem: SelectedKanbanItem;
 }
 
-export function KanbanDetailPanel({ phaseId }: KanbanDetailPanelProps) {
+export function KanbanDetailPanel({ selectedItem }: KanbanDetailPanelProps) {
+  if (selectedItem.type === 'linearIssue') {
+    return <LinearIssueDetail issue={selectedItem.issue} />;
+  }
+  return <PhaseDetail phaseId={selectedItem.phaseId} />;
+}
+
+// ---------------------------------------------------------------------------
+// PhaseDetail — original phase detail (unchanged logic)
+// ---------------------------------------------------------------------------
+
+function PhaseDetail({ phaseId }: { phaseId: number }) {
   const board = useBoardStore((s) => s.board);
   const phase = board?.phases.find((p) => p.phase === phaseId);
   const [tasks, setTasks] = useState<TaskCard[]>([]);
@@ -134,7 +146,6 @@ export function KanbanDetailPanel({ phaseId }: KanbanDetailPanelProps) {
                   key={task.id}
                   className="flex items-center gap-[var(--spacing-2)] py-[var(--spacing-1-5)] border-b border-border-divider last:border-b-0 text-[length:var(--font-size-xs)]"
                 >
-                  {/* Checkbox indicator */}
                   <span
                     className={[
                       'w-3.5 h-3.5 rounded-[4px] border-[1.5px] shrink-0',
@@ -143,9 +154,7 @@ export function KanbanDetailPanel({ phaseId }: KanbanDetailPanelProps) {
                         : 'border-border',
                     ].join(' ')}
                   />
-                  {/* Task name */}
                   <span className="flex-1 text-text-primary">{task.title}</span>
-                  {/* Status */}
                   <span
                     className="text-[length:10px] font-[var(--font-weight-medium)] shrink-0"
                     style={{ color: statusColor }}
@@ -159,7 +168,7 @@ export function KanbanDetailPanel({ phaseId }: KanbanDetailPanelProps) {
         )}
       </div>
 
-      {/* Activity log (static placeholder based on phase data) */}
+      {/* Activity log */}
       <div>
         <div className="text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[0.06em] text-text-tertiary mb-[var(--spacing-2)]">
           Activity
@@ -200,7 +209,116 @@ export function KanbanDetailPanel({ phaseId }: KanbanDetailPanelProps) {
   );
 }
 
-/** Format an ISO timestamp as a relative time string */
+// ---------------------------------------------------------------------------
+// LinearIssueDetail — detail view for a Linear issue
+// ---------------------------------------------------------------------------
+
+import type { LinearIssue } from '@/shared/linear-types.js';
+
+function LinearIssueDetail({ issue }: { issue: LinearIssue }) {
+  const priorityColor = LINEAR_PRIORITY_COLORS[issue.priority];
+
+  return (
+    <div className="space-y-[var(--spacing-4)]">
+      {/* Identifier + Title */}
+      <div>
+        <span className="text-[length:var(--font-size-xs)] font-mono text-text-tertiary">
+          {issue.identifier}
+        </span>
+        <h3 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-bold)] text-text-primary mt-[var(--spacing-1)]">
+          {issue.title}
+        </h3>
+      </div>
+
+      {/* Status + Priority badges */}
+      <div className="flex flex-wrap gap-[var(--spacing-2)]">
+        <span
+          className="text-[length:10px] font-[var(--font-weight-semibold)] px-[var(--spacing-2)] py-[2px] rounded-full"
+          style={{ backgroundColor: `#${issue.state.color}20`, color: `#${issue.state.color}` }}
+        >
+          {issue.state.name}
+        </span>
+        <span
+          className="text-[length:10px] font-[var(--font-weight-semibold)] px-[var(--spacing-2)] py-[2px] rounded-full"
+          style={{ backgroundColor: `${priorityColor}20`, color: priorityColor }}
+        >
+          {LINEAR_PRIORITY_LABELS[issue.priority]}
+        </span>
+      </div>
+
+      {/* Assignee */}
+      {issue.assignee && (
+        <div>
+          <div className="text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[0.06em] text-text-tertiary mb-[var(--spacing-2)]">
+            Assignee
+          </div>
+          <div className="flex items-center gap-[var(--spacing-2)]">
+            <span className="w-6 h-6 rounded-full bg-bg-hover flex items-center justify-center text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] text-text-secondary">
+              {issue.assignee.displayName.charAt(0).toUpperCase()}
+            </span>
+            <span className="text-[length:var(--font-size-sm)] text-text-primary">
+              {issue.assignee.displayName}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Labels */}
+      {issue.labels.length > 0 && (
+        <div>
+          <div className="text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[0.06em] text-text-tertiary mb-[var(--spacing-2)]">
+            Labels
+          </div>
+          <div className="flex flex-wrap gap-[var(--spacing-1)]">
+            {issue.labels.map((label) => (
+              <span
+                key={label.id}
+                className="text-[length:var(--font-size-xs)] px-2 py-0.5 rounded-full"
+                style={{ backgroundColor: `#${label.color}20`, color: `#${label.color}` }}
+              >
+                {label.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Description */}
+      {issue.description && (
+        <div>
+          <div className="text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[0.06em] text-text-tertiary mb-[var(--spacing-2)]">
+            Description
+          </div>
+          <p className="text-[length:var(--font-size-sm)] text-text-secondary leading-[1.6] whitespace-pre-wrap">
+            {issue.description}
+          </p>
+        </div>
+      )}
+
+      {/* Open in Linear link */}
+      <div>
+        <a
+          href={issue.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-[var(--spacing-1)] text-[length:var(--font-size-sm)] text-accent-blue hover:underline"
+        >
+          Open in Linear
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function formatRelative(iso: string): string {
   const now = Date.now();
   const then = new Date(iso).getTime();

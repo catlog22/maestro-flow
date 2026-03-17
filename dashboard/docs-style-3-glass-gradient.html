@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Docs - Glass Gradient</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 14px; line-height: 1.7; background: #0C0A14; color: #D0CDE0; -webkit-font-smoothing: antialiased; }
+
+    :root {
+      --bg: #0C0A14; --bg2: #13111D; --bg3: #1A1726;
+      --glass: rgba(26,23,38,0.6); --glass2: rgba(26,23,38,0.8);
+      --hover: rgba(255,255,255,0.04); --active: rgba(255,255,255,0.07);
+      --t1: #F0EEF8; --t2: #A8A4B8; --t3: #6E6A80; --t4: #3C3850;
+      --bdr: rgba(255,255,255,0.06); --bdr2: rgba(255,255,255,0.04);
+      --accent: #8B6EE8; --accent2: #6B8EE8; --accent3: #E86BAA;
+      --green: #5CE0A0; --orange: #E8A44C; --yellow: #D4C04E; --red: #E86B6B; --cyan: #5CC8E8;
+      --grad1: linear-gradient(135deg, #8B6EE8, #6B8EE8);
+      --grad2: linear-gradient(135deg, #E86BAA, #8B6EE8);
+      --grad3: linear-gradient(135deg, #5CE0A0, #5CC8E8);
+      --sidebar-w: 256px; --header-h: 56px;
+    }
+
+    /* === Ambient glow === */
+    body::before {
+      content: ''; position: fixed; top: -200px; left: -100px;
+      width: 600px; height: 600px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(139,110,232,0.08), transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: ''; position: fixed; bottom: -300px; right: -200px;
+      width: 700px; height: 700px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(107,142,232,0.06), transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* === Header === */
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; background: rgba(12,10,20,0.7);
+      backdrop-filter: blur(20px) saturate(1.5); border-bottom: 1px solid var(--bdr);
+      z-index: 100;
+    }
+    .header-l { display: flex; align-items: center; gap: 16px; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; }
+    .logo-mark {
+      width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      background: var(--grad1); position: relative; overflow: hidden;
+    }
+    .logo-mark::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,255,255,0.2), transparent); border-radius: 8px; }
+    .logo-mark svg { width: 16px; height: 16px; stroke: #fff; position: relative; z-index: 1; }
+    .logo-text { background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .logo-sep { width: 1px; height: 20px; background: var(--t4); }
+    .logo-sub { font-size: 13px; font-weight: 500; color: var(--t3); }
+    .header-r { display: flex; align-items: center; gap: 10px; }
+    .search-box {
+      display: flex; align-items: center; gap: 8px; padding: 7px 14px;
+      background: var(--glass); border: 1px solid var(--bdr); border-radius: 10px;
+      font-size: 13px; color: var(--t3); cursor: pointer; min-width: 240px;
+      backdrop-filter: blur(10px); transition: all 150ms;
+    }
+    .search-box:hover { border-color: rgba(139,110,232,0.3); }
+    .search-box svg { width: 14px; height: 14px; }
+    .search-box kbd { margin-left: auto; font-size: 10px; font-family: 'Inter'; padding: 2px 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--bdr); border-radius: 4px; color: var(--t4); }
+    .header-link { font-size: 13px; font-weight: 500; color: var(--t3); text-decoration: none; padding: 6px 12px; border-radius: 8px; transition: all 150ms; }
+    .header-link:hover { color: var(--t1); background: var(--hover); }
+    .header-cta {
+      font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px;
+      background: var(--grad1); color: #fff; border: none; cursor: pointer;
+      transition: opacity 150ms;
+    }
+    .header-cta:hover { opacity: 0.85; }
+
+    /* === Layout === */
+    .layout { display: flex; padding-top: var(--header-h); min-height: 100vh; position: relative; z-index: 1; }
+
+    /* === Sidebar === */
+    .sidebar {
+      position: fixed; top: var(--header-h); bottom: 0; left: 0;
+      width: var(--sidebar-w); background: var(--glass2);
+      backdrop-filter: blur(16px); border-right: 1px solid var(--bdr);
+      overflow-y: auto; padding: 16px 0; z-index: 50;
+    }
+    .sidebar::-webkit-scrollbar { width: 3px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--t4); border-radius: 3px; }
+    .nav-group { padding: 0 12px; margin-bottom: 6px; }
+    .nav-group-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 8px 12px 6px; display: flex; align-items: center; gap: 6px;
+      background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+      border-radius: 8px; font-size: 13px; color: var(--t3); text-decoration: none;
+      transition: all 120ms; cursor: pointer; position: relative;
+    }
+    .nav-item:hover { background: var(--hover); color: var(--t2); }
+    .nav-item.active {
+      background: rgba(139,110,232,0.1); color: var(--accent);
+      font-weight: 600;
+    }
+    .nav-item.active::before {
+      content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+      width: 3px; border-radius: 0 3px 3px 0; background: var(--grad1);
+    }
+    .nav-item .badge {
+      margin-left: auto; font-size: 9px; font-weight: 700; padding: 1px 6px;
+      border-radius: 100px; background: var(--grad2); color: #fff;
+    }
+    .nav-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+    /* === Content === */
+    .content-area { margin-left: var(--sidebar-w); flex: 1; display: flex; justify-content: center; }
+    .content { max-width: 760px; width: 100%; padding: 40px 48px 80px; }
+
+    /* === Hero section === */
+    .hero {
+      padding: 40px 36px; margin-bottom: 36px; border-radius: 16px; position: relative; overflow: hidden;
+      background: var(--glass); border: 1px solid var(--bdr); backdrop-filter: blur(12px);
+    }
+    .hero::before {
+      content: ''; position: absolute; top: -50%; right: -20%; width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(139,110,232,0.15), transparent 70%);
+      pointer-events: none;
+    }
+    .hero::after {
+      content: ''; position: absolute; bottom: -40%; left: -10%; width: 250px; height: 250px;
+      background: radial-gradient(circle, rgba(107,142,232,0.1), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 100px; background: rgba(139,110,232,0.15); color: var(--accent); margin-bottom: 16px; position: relative; z-index: 1; }
+    .hero h1 { font-size: 32px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; letter-spacing: -0.03em; position: relative; z-index: 1; background: linear-gradient(135deg, var(--t1), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p { font-size: 15px; color: var(--t2); line-height: 1.7; position: relative; z-index: 1; max-width: 520px; }
+
+    /* === Breadcrumb === */
+    .breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 28px; font-size: 12px; color: var(--t4); }
+    .breadcrumb a { color: var(--t4); text-decoration: none; transition: color 120ms; }
+    .breadcrumb a:hover { color: var(--accent); }
+    .breadcrumb svg { width: 10px; height: 10px; }
+
+    /* === Typography === */
+    .content h2 { font-size: 22px; font-weight: 700; color: var(--t1); margin-top: 52px; margin-bottom: 16px; }
+    .content h3 { font-size: 16px; font-weight: 600; color: var(--t1); margin-top: 32px; margin-bottom: 12px; }
+    .content p { color: var(--t2); margin-bottom: 16px; }
+    .content a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .content a:hover { text-decoration: underline; }
+    .content strong { color: var(--t1); }
+    .content ul, .content ol { padding-left: 22px; margin-bottom: 16px; color: var(--t2); }
+    .content li { margin-bottom: 6px; }
+
+    /* === Code === */
+    .inline-code { font-family: 'JetBrains Mono'; font-size: 12px; background: rgba(139,110,232,0.1); padding: 2px 7px; border-radius: 5px; color: var(--accent); }
+    .code-block {
+      background: var(--glass); border: 1px solid var(--bdr); border-radius: 12px;
+      margin-bottom: 20px; overflow: hidden; backdrop-filter: blur(10px);
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px; border-bottom: 1px solid var(--bdr);
+    }
+    .code-lang { font-size: 11px; font-weight: 600; background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .code-copy { font-size: 11px; color: var(--t4); background: none; border: none; cursor: pointer; padding: 2px 8px; border-radius: 4px; transition: all 120ms; }
+    .code-copy:hover { color: var(--t2); background: var(--hover); }
+    .code-body { padding: 16px; overflow-x: auto; }
+    .code-body pre { font-family: 'JetBrains Mono'; font-size: 13px; line-height: 1.6; color: var(--t2); }
+    .code-body .kw { color: var(--accent); }
+    .code-body .str { color: var(--green); }
+    .code-body .cm { color: var(--t4); }
+    .code-body .fn { color: var(--accent2); }
+    .code-body .num { color: var(--orange); }
+    .code-body .prompt { color: var(--green); }
+
+    /* === Glass cards grid === */
+    .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
+    .glass-card {
+      padding: 20px; background: var(--glass); border: 1px solid var(--bdr);
+      border-radius: 14px; cursor: pointer; transition: all 200ms; text-decoration: none;
+      backdrop-filter: blur(10px); position: relative; overflow: hidden;
+    }
+    .glass-card:hover { border-color: rgba(139,110,232,0.3); transform: translateY(-3px); }
+    .glass-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      opacity: 0; transition: opacity 200ms;
+    }
+    .glass-card:nth-child(1)::before { background: var(--grad1); }
+    .glass-card:nth-child(2)::before { background: var(--grad3); }
+    .glass-card:nth-child(3)::before { background: var(--grad2); }
+    .glass-card:hover::before { opacity: 1; }
+    .glass-card-num { font-size: 28px; font-weight: 800; margin-bottom: 8px; }
+    .glass-card:nth-child(1) .glass-card-num { background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .glass-card:nth-child(2) .glass-card-num { background: var(--grad3); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .glass-card:nth-child(3) .glass-card-num { background: var(--grad2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .glass-card-title { font-size: 14px; font-weight: 600; color: var(--t1); margin-bottom: 4px; }
+    .glass-card-desc { font-size: 12px; color: var(--t3); line-height: 1.5; }
+
+    /* === Callouts === */
+    .callout { padding: 16px 18px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 12px; border: 1px solid; backdrop-filter: blur(8px); }
+    .callout svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+    .callout-body { flex: 1; }
+    .callout-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .callout-text { font-size: 13px; line-height: 1.6; }
+    .callout.info { background: rgba(107,142,232,0.06); border-color: rgba(107,142,232,0.15); color: var(--accent2); }
+    .callout.info .callout-text { color: #8ea8d0; }
+    .callout.warn { background: rgba(232,164,76,0.06); border-color: rgba(232,164,76,0.15); color: var(--orange); }
+    .callout.warn .callout-text { color: #c0a070; }
+    .callout.tip { background: rgba(92,224,160,0.06); border-color: rgba(92,224,160,0.15); color: var(--green); }
+    .callout.tip .callout-text { color: #80c0a8; }
+
+    /* === Table === */
+    .doc-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+    .doc-table th {
+      text-align: left; padding: 10px 14px; font-weight: 600; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      background: var(--glass); color: var(--t3); border-bottom: 1px solid var(--bdr);
+    }
+    .doc-table td { padding: 10px 14px; border-bottom: 1px solid var(--bdr2); color: var(--t2); }
+    .doc-table tr:hover td { background: var(--hover); }
+
+    /* === Steps === */
+    .steps { margin-bottom: 28px; }
+    .step { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--bdr2); }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: #fff; background: var(--grad1);
+    }
+    .step-body { flex: 1; }
+    .step-title { font-size: 14px; font-weight: 600; color: var(--t1); margin-bottom: 4px; }
+    .step-desc { font-size: 13px; color: var(--t3); }
+
+    /* === Pipeline visual === */
+    .pipeline-visual {
+      display: flex; align-items: center; gap: 0; margin-bottom: 28px; padding: 20px;
+      background: var(--glass); border: 1px solid var(--bdr); border-radius: 14px;
+      backdrop-filter: blur(10px); overflow-x: auto;
+    }
+    .pipe-node {
+      padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .pipe-arrow { color: var(--t4); font-size: 16px; padding: 0 6px; flex-shrink: 0; }
+    .pipe-active { background: rgba(139,110,232,0.15); color: var(--accent); border: 1px solid rgba(139,110,232,0.2); }
+    .pipe-done { background: rgba(92,224,160,0.1); color: var(--green); border: 1px solid rgba(92,224,160,0.15); }
+    .pipe-future { background: var(--hover); color: var(--t3); border: 1px solid var(--bdr); }
+
+    /* === TOC === */
+    .toc {
+      position: fixed; top: calc(var(--header-h) + 40px); right: 24px;
+      width: 180px;
+    }
+    .toc-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; background: var(--grad1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .toc-list { list-style: none; padding: 0; border-left: 1px solid var(--bdr); }
+    .toc-item { padding: 4px 0 4px 14px; }
+    .toc-item a { color: var(--t4); text-decoration: none; font-size: 12px; transition: color 100ms; }
+    .toc-item a:hover { color: var(--t2); }
+    .toc-item.active a { color: var(--accent); }
+    .toc-item.active { border-left: 2px solid var(--accent); margin-left: -1px; }
+
+    /* === Footer nav === */
+    .footer-nav { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--bdr); }
+    .footer-link {
+      text-decoration: none; padding: 14px 18px; border-radius: 12px;
+      border: 1px solid var(--bdr); transition: all 150ms;
+      background: var(--glass); backdrop-filter: blur(8px);
+    }
+    .footer-link:hover { border-color: rgba(139,110,232,0.3); }
+    .footer-link-label { font-size: 11px; color: var(--t4); margin-bottom: 2px; }
+    .footer-link-title { font-size: 14px; font-weight: 600; color: var(--t1); }
+
+    @media (max-width: 1200px) { .toc { display: none; } }
+    @media (max-width: 1000px) { .card-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-l">
+    <div class="logo">
+      <span class="logo-mark"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+      <span class="logo-text">Maestro</span>
+    </div>
+    <span class="logo-sep"></span>
+    <span class="logo-sub">Documentation</span>
+  </div>
+  <div class="header-r">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      Search documentation...
+      <kbd>Ctrl K</kbd>
+    </div>
+    <a class="header-link" href="#">Guides</a>
+    <a class="header-link" href="#">API</a>
+    <button class="header-cta">Get Started</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-group">
+      <div class="nav-group-label">Getting Started</div>
+      <a class="nav-item active" href="#">
+        <span class="nav-dot" style="background:var(--accent)"></span>
+        Introduction
+      </a>
+      <a class="nav-item" href="#">
+        <span class="nav-dot" style="background:var(--green)"></span>
+        Quick Start
+      </a>
+      <a class="nav-item" href="#">
+        <span class="nav-dot" style="background:var(--accent2)"></span>
+        Installation
+      </a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Concepts</div>
+      <a class="nav-item" href="#">Workflows</a>
+      <a class="nav-item" href="#">Phases & Tasks</a>
+      <a class="nav-item" href="#">State Management</a>
+      <a class="nav-item" href="#">Configuration <span class="badge">New</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Commands</div>
+      <a class="nav-item" href="#">/maestro</a>
+      <a class="nav-item" href="#">/maestro-init</a>
+      <a class="nav-item" href="#">/maestro-plan</a>
+      <a class="nav-item" href="#">/maestro-execute</a>
+      <a class="nav-item" href="#">/maestro-verify</a>
+      <a class="nav-item" href="#">/maestro-quick</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Quality</div>
+      <a class="nav-item" href="#">Code Review</a>
+      <a class="nav-item" href="#">Testing</a>
+      <a class="nav-item" href="#">Debugging</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Advanced</div>
+      <a class="nav-item" href="#">MCP Server</a>
+      <a class="nav-item" href="#">Extensions</a>
+      <a class="nav-item" href="#">Agent Architecture</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="content-area">
+    <div class="content">
+      <div class="breadcrumb">
+        <a href="#">Docs</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <a href="#">Getting Started</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <span style="color:var(--t2)">Introduction</span>
+      </div>
+
+      <!-- Hero -->
+      <div class="hero">
+        <div class="hero-badge">v0.1.0 Released</div>
+        <h1>Build with Maestro</h1>
+        <p>Workflow orchestration that brings structure, intelligence, and quality gates to AI-native software development.</p>
+      </div>
+
+      <!-- Stats cards -->
+      <div class="card-grid">
+        <a class="glass-card" href="#">
+          <div class="glass-card-num">30+</div>
+          <div class="glass-card-title">Commands</div>
+          <div class="glass-card-desc">Full CLI coverage for every workflow stage.</div>
+        </a>
+        <a class="glass-card" href="#">
+          <div class="glass-card-num">15+</div>
+          <div class="glass-card-title">Agents</div>
+          <div class="glass-card-desc">Specialized AI agents for planning, execution, and review.</div>
+        </a>
+        <a class="glass-card" href="#">
+          <div class="glass-card-num">7</div>
+          <div class="glass-card-title">Schemas</div>
+          <div class="glass-card-desc">Typed JSON schemas for state, tasks, and verification.</div>
+        </a>
+      </div>
+
+      <h2 id="overview">Overview</h2>
+      <p>Maestro orchestrates your development workflow through structured <strong>phases</strong>, each containing <strong>tasks</strong> executed in parallel <strong>waves</strong> based on dependency analysis.</p>
+
+      <div class="callout tip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div class="callout-body">
+          <div class="callout-title">New to Maestro?</div>
+          <div class="callout-text">Start with the <a href="#">Quick Start</a> to set up your first project in under 5 minutes.</div>
+        </div>
+      </div>
+
+      <h2 id="pipeline">The Pipeline</h2>
+      <p>Every project follows a natural progression through these stages:</p>
+      <div class="pipeline-visual">
+        <span class="pipe-node pipe-done">brainstorm</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-node pipe-done">init</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-node pipe-done">roadmap</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-node pipe-active">plan</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-node pipe-future">execute</span>
+        <span class="pipe-arrow">&rarr;</span>
+        <span class="pipe-node pipe-future">verify</span>
+      </div>
+
+      <h2 id="getting-started">Getting Started</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <div class="step-title">Install Maestro</div>
+            <div class="step-desc">Install globally via npm to get the <span class="inline-code">maestro</span> CLI.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <div class="step-title">Initialize Your Project</div>
+            <div class="step-desc">Run <span class="inline-code">/maestro-init</span> to create the <span class="inline-code">.workflow/</span> structure.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <div class="step-title">Create a Roadmap</div>
+            <div class="step-desc">Define phases with <span class="inline-code">/maestro-roadmap</span> or generate specs first.</div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-body">
+            <div class="step-title">Plan & Execute</div>
+            <div class="step-desc">Use <span class="inline-code">/maestro-plan</span> then <span class="inline-code">/maestro-execute</span> for each phase.</div>
+          </div>
+        </div>
+      </div>
+
+      <h2 id="install">Installation</h2>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Terminal</span>
+          <button class="code-copy">Copy</button>
+        </div>
+        <div class="code-body"><pre><span class="cm"># Install globally</span>
+<span class="prompt">$</span> npm install -g maestro-flow
+
+<span class="cm"># Verify installation</span>
+<span class="prompt">$</span> maestro --version
+
+<span class="cm"># Initialize a new project</span>
+<span class="prompt">$</span> maestro init</pre></div>
+      </div>
+
+      <div class="callout info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div class="callout-body">
+          <div class="callout-title">Prerequisites</div>
+          <div class="callout-text">Node.js 18+ required. Works best with Claude Code as the AI execution backend.</div>
+        </div>
+      </div>
+
+      <h2 id="features">Key Features</h2>
+      <table class="doc-table">
+        <thead><tr><th>Feature</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><span class="inline-code">Phase Management</span></td><td>Sequential phases with automatic state transitions</td></tr>
+          <tr><td><span class="inline-code">Wave Execution</span></td><td>DAG-based parallel task execution within phases</td></tr>
+          <tr><td><span class="inline-code">MCP Integration</span></td><td>Expose tools via Model Context Protocol (stdio transport)</td></tr>
+          <tr><td><span class="inline-code">Quality Pipeline</span></td><td>Built-in code review, UAT testing, debugging</td></tr>
+          <tr><td><span class="inline-code">Extension System</span></td><td>Plugin architecture at <span class="inline-code">~/.maestro/extensions/</span></td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="config">Configuration</h2>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">TypeScript</span>
+          <button class="code-copy">Copy</button>
+        </div>
+        <div class="code-body"><pre><span class="cm">// maestro.config.ts</span>
+<span class="kw">import</span> { <span class="fn">defineConfig</span> } <span class="kw">from</span> <span class="str">'maestro-flow'</span>;
+
+<span class="kw">export default</span> <span class="fn">defineConfig</span>({
+  project: {
+    name: <span class="str">'my-app'</span>,
+    version: <span class="str">'1.0.0'</span>,
+  },
+  phases: [
+    { name: <span class="str">'Setup'</span>,    tasks: <span class="num">3</span> },
+    { name: <span class="str">'Core API'</span>,  tasks: <span class="num">5</span> },
+    { name: <span class="str">'Frontend'</span>,  tasks: <span class="num">8</span> },
+    { name: <span class="str">'Deploy'</span>,    tasks: <span class="num">4</span> },
+  ],
+});</pre></div>
+      </div>
+
+      <div class="callout warn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div class="callout-body">
+          <div class="callout-title">Important</div>
+          <div class="callout-text">Always run <span class="inline-code">maestro init</span> before your first project. This creates the required <span class="inline-code">.workflow/</span> directory.</div>
+        </div>
+      </div>
+
+      <!-- Footer navigation -->
+      <div class="footer-nav">
+        <div></div>
+        <a class="footer-link" href="#">
+          <div class="footer-link-label">Next</div>
+          <div class="footer-link-title">Quick Start Guide &rarr;</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-label">On this page</div>
+    <ul class="toc-list">
+      <li class="toc-item active"><a href="#overview">Overview</a></li>
+      <li class="toc-item"><a href="#pipeline">The Pipeline</a></li>
+      <li class="toc-item"><a href="#getting-started">Getting Started</a></li>
+      <li class="toc-item"><a href="#install">Installation</a></li>
+      <li class="toc-item"><a href="#features">Key Features</a></li>
+      <li class="toc-item"><a href="#config">Configuration</a></li>
+    </ul>
+  </aside>
+</div>
+
+</body>
+</html>

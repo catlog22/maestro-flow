@@ -4,7 +4,7 @@ import { useI18n } from '@/client/i18n/index.js';
 import type { Category } from '@/client/routes/route-config.js';
 
 // ---------------------------------------------------------------------------
-// Breadcrumbs — navigation breadcrumb trail (Home > Category > Command)
+// Breadcrumbs — warm minimal breadcrumb trail with chevron separators
 // ---------------------------------------------------------------------------
 
 interface BreadcrumbItem {
@@ -26,18 +26,14 @@ export function Breadcrumbs({ categories, className = '' }: BreadcrumbsProps) {
     const pathParts = location.pathname.split('/').filter(Boolean);
     const breadcrumbs: BreadcrumbItem[] = [];
 
-    // Always add home
     breadcrumbs.push({
       label: t('nav.home'),
       href: '/',
       isCurrent: pathParts.length === 0,
     });
 
-    if (pathParts.length === 0) {
-      return breadcrumbs;
-    }
+    if (pathParts.length === 0) return breadcrumbs;
 
-    // Category level
     const categoryId = pathParts[0];
     const category = categories.find((c) => c.id === categoryId);
     if (category) {
@@ -48,13 +44,10 @@ export function Breadcrumbs({ categories, className = '' }: BreadcrumbsProps) {
       });
     }
 
-    // Command/Skill level
     if (pathParts.length >= 2) {
       const slug = pathParts[1];
-      // Convert slug back to readable name
-      const label = slug.replace(/-/g, '-');
       breadcrumbs.push({
-        label: label,
+        label: slug,
         href: `/${categoryId}/${slug}`,
         isCurrent: true,
       });
@@ -63,9 +56,7 @@ export function Breadcrumbs({ categories, className = '' }: BreadcrumbsProps) {
     return breadcrumbs;
   }, [location.pathname, categories, t]);
 
-  if (items.length <= 1) {
-    return null; // Don't show breadcrumbs for home page
-  }
+  if (items.length <= 1) return null;
 
   return (
     <nav
@@ -74,7 +65,7 @@ export function Breadcrumbs({ categories, className = '' }: BreadcrumbsProps) {
       itemScope
       itemType="https://schema.org/BreadcrumbList"
     >
-      <ol className="flex items-center gap-[var(--spacing-1)] text-[length:var(--font-size-sm)] text-text-secondary">
+      <ol className="flex items-center gap-[var(--spacing-1-5)] text-[length:12px] text-text-tertiary">
         {items.map((item, index) => (
           <li
             key={item.href || index}
@@ -87,13 +78,15 @@ export function Breadcrumbs({ categories, className = '' }: BreadcrumbsProps) {
 
             {index > 0 && (
               <svg
-                className="w-4 h-4 text-text-tertiary mx-[var(--spacing-1)]"
+                className="w-[10px] h-[10px] text-text-placeholder mx-[var(--spacing-1)]"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                strokeWidth="2"
+                strokeLinecap="round"
                 aria-hidden="true"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <polyline points="9 18 15 12 9 6" />
               </svg>
             )}
 
@@ -108,11 +101,7 @@ export function Breadcrumbs({ categories, className = '' }: BreadcrumbsProps) {
             ) : (
               <NavLink
                 to={item.href!}
-                className={[
-                  'transition-colors duration-[var(--duration-fast)]',
-                  'hover:text-accent-blue hover:underline',
-                  'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)] rounded',
-                ].join(' ')}
+                className="text-text-tertiary transition-colors duration-[var(--duration-fast)] hover:text-text-primary rounded"
                 itemProp="item"
               >
                 <span itemProp="name">{item.label}</span>
@@ -178,7 +167,6 @@ export function CompactBreadcrumbs({
 
   if (items.length <= 1) return null;
 
-  // Truncate if too many items
   const displayItems =
     items.length > maxItems
       ? [items[0], { label: '...', href: undefined, isCurrent: false }, items[items.length - 1]]
@@ -186,19 +174,31 @@ export function CompactBreadcrumbs({
 
   return (
     <nav className={className} aria-label="Breadcrumb">
-      <div className="flex items-center gap-[var(--spacing-1)] text-[length:var(--font-size-xs)] text-text-secondary">
+      <div className="flex items-center gap-[var(--spacing-1)] text-[length:var(--font-size-xs)] text-text-tertiary">
         {displayItems.map((item, index) => (
           <span key={index} className="flex items-center">
-            {index > 0 && <span className="mx-[var(--spacing-1)] text-text-tertiary">/</span>}
+            {index > 0 && (
+              <svg
+                className="w-[10px] h-[10px] text-text-placeholder mx-[var(--spacing-1)]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth="2"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            )}
             {item.href && !item.isCurrent ? (
               <a
                 href={item.href}
-                className="hover:text-accent-blue transition-colors truncate max-w-[100px]"
+                className="hover:text-text-primary transition-colors truncate max-w-[100px]"
               >
                 {item.label}
               </a>
             ) : (
-              <span className="text-text-primary font-medium truncate max-w-[120px]">
+              <span className="text-text-primary font-[var(--font-weight-medium)] truncate max-w-[120px]">
                 {item.label}
               </span>
             )}

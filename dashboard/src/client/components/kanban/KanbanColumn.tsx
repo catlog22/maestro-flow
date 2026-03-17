@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import type { PhaseCard as PhaseCardType } from '@/shared/types.js';
+import type { PhaseCard as PhaseCardType, SelectedKanbanItem } from '@/shared/types.js';
+import type { LinearIssue } from '@/shared/linear-types.js';
 import { PhaseCard } from '@/client/components/kanban/PhaseCard.js';
 import { KanbanTaskRow } from '@/client/components/kanban/TaskRow.js';
+import { LinearIssueCard } from '@/client/components/kanban/LinearIssueCard.js';
 import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
@@ -24,9 +26,12 @@ interface KanbanColumnProps {
   color: string;
   animationDelay?: number;
   onSelectPhase: (id: number) => void;
+  linearIssues?: LinearIssue[];
+  selectedItem?: SelectedKanbanItem | null;
+  onSelectItem?: (item: SelectedKanbanItem) => void;
 }
 
-export function KanbanColumn({ title, phases, color, animationDelay = 0, onSelectPhase }: KanbanColumnProps) {
+export function KanbanColumn({ title, phases, color, animationDelay = 0, onSelectPhase, linearIssues, selectedItem, onSelectItem }: KanbanColumnProps) {
   const { t } = useI18n();
   const noPhasesLabel = t('kanban.no_phases');
 
@@ -79,28 +84,50 @@ export function KanbanColumn({ title, phases, color, animationDelay = 0, onSelec
           {title}
         </h3>
         <span className="text-[length:var(--font-size-xs)] text-text-tertiary bg-bg-card rounded-full px-[var(--spacing-1-5)] tabular-nums">
-          {phases.length}
+          {phases.length + (linearIssues?.length ?? 0)}
         </span>
       </div>
 
       {/* Card list */}
       <div className="flex flex-col gap-[var(--spacing-2)] px-[var(--spacing-2)] pb-[var(--spacing-2)] overflow-y-auto flex-1" role="list">
-        {phases.length === 0 ? (
+        {phases.length === 0 && (!linearIssues || linearIssues.length === 0) ? (
           <div className="text-[length:var(--font-size-xs)] text-text-secondary text-center py-[var(--spacing-6)] italic">
             {noPhasesLabel}
           </div>
         ) : (
-          phases.map((phase) => (
-            <div key={phase.phase}>
-              <PhaseCard phase={phase} />
-              {/* Inline task rows for active phases */}
-              {ACTIVE_STATUSES.has(phase.status) && tasksByPhase[phase.phase]?.map((task) => (
-                <div key={task.id} className="mt-[var(--spacing-1)]">
-                  <KanbanTaskRow task={task} />
-                </div>
-              ))}
-            </div>
-          ))
+          <>
+            {phases.map((phase) => (
+              <div key={phase.phase}>
+                <PhaseCard phase={phase} />
+                {/* Inline task rows for active phases */}
+                {ACTIVE_STATUSES.has(phase.status) && tasksByPhase[phase.phase]?.map((task) => (
+                  <div key={task.id} className="mt-[var(--spacing-1)]">
+                    <KanbanTaskRow task={task} />
+                  </div>
+                ))}
+              </div>
+            ))}
+            {/* Linear issues separator + cards */}
+            {linearIssues && linearIssues.length > 0 && (
+              <>
+                {phases.length > 0 && (
+                  <div className="flex items-center gap-[var(--spacing-2)] py-[var(--spacing-1)]">
+                    <div className="flex-1 h-px bg-border-divider" />
+                    <span className="text-[length:10px] text-text-tertiary font-[var(--font-weight-medium)] uppercase tracking-wider">Linear</span>
+                    <div className="flex-1 h-px bg-border-divider" />
+                  </div>
+                )}
+                {linearIssues.map((issue) => (
+                  <LinearIssueCard
+                    key={issue.id}
+                    issue={issue}
+                    selected={selectedItem?.type === 'linearIssue' && selectedItem.issue.id === issue.id}
+                    onSelect={() => onSelectItem?.({ type: 'linearIssue', issue })}
+                  />
+                ))}
+              </>
+            )}
+          </>
         )}
       </div>
     </section>

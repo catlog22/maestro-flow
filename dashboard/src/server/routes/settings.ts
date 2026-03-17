@@ -20,6 +20,22 @@ export function createSettingsRoutes(workflowRoot: string): Hono {
   const app = new Hono();
   const paths = getConfigPaths(workflowRoot);
 
+  // Load LINEAR_API_KEY from config at startup
+  void (async () => {
+    try {
+      const raw = await readFile(paths.dashboardConfig, 'utf-8');
+      const json = JSON.parse(raw) as Record<string, unknown>;
+      const settings = json['settings'] as Record<string, unknown> | undefined;
+      const linear = settings?.['linear'] as Record<string, unknown> | undefined;
+      const apiKey = typeof linear?.['apiKey'] === 'string' ? linear['apiKey'] : '';
+      if (apiKey && !process.env.LINEAR_API_KEY) {
+        process.env.LINEAR_API_KEY = apiKey;
+      }
+    } catch {
+      // Config not found — skip
+    }
+  })();
+
   // -----------------------------------------------------------------------
   // GET /api/settings — read all config
   // -----------------------------------------------------------------------
@@ -51,6 +67,28 @@ export function createSettingsRoutes(workflowRoot: string): Hono {
       result['cliTools'] = raw;
     } catch {
       result['cliTools'] = '{}';
+    }
+
+    // Read linear settings
+    try {
+      const raw = await readFile(paths.dashboardConfig, 'utf-8');
+      const json = JSON.parse(raw) as Record<string, unknown>;
+      if (json['settings']) {
+        const settings = json['settings'] as Record<string, unknown>;
+        if (settings['linear']) {
+          const linear = settings['linear'] as Record<string, unknown>;
+          const apiKey = typeof linear['apiKey'] === 'string' ? linear['apiKey'] : '';
+          result['linear'] = {
+            apiKey: apiKey ? `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}` : '',
+            configured: !!apiKey,
+          };
+        }
+      }
+    } catch {
+      // Already handled above
+    }
+    if (!result['linear']) {
+      result['linear'] = { apiKey: '', configured: false };
     }
 
     return c.json(result);
@@ -143,6 +181,42 @@ export function createSettingsRoutes(workflowRoot: string): Hono {
       if (message.includes('JSON')) {
         return c.json({ ok: false, error: `Invalid JSON: ${message}` }, 400);
       }
+      return c.json({ ok: false, error: message }, 500);
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // PUT /api/settings/linear — write Linear API Key
+  // -----------------------------------------------------------------------
+  app.put('/api/settings/linear', async (c) => {
+    try {
+      const body = await c.req.json() as { apiKey?: string };
+      const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+
+      let config: Record<string, unknown> = {};
+      try {
+        const raw = await readFile(paths.dashboardConfig, 'utf-8');
+        config = JSON.parse(raw) as Record<string, unknown>;
+      } catch {
+        // Start with empty config
+      }
+
+      const settings = (config['settings'] ?? {}) as Record<string, unknown>;
+      settings['linear'] = { apiKey };
+      config['settings'] = settings;
+
+      await writeFile(paths.dashboardConfig, JSON.stringify(config, null, 2), 'utf-8');
+
+      // Also set the env var so linear routes pick it up immediately
+      if (apiKey) {
+        process.env.LINEAR_API_KEY = apiKey;
+      } else {
+        delete process.env.LINEAR_API_KEY;
+      }
+
+      return c.json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Write failed';
       return c.json({ ok: false, error: message }, 500);
     }
   });

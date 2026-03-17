@@ -5,7 +5,7 @@ import type { Category, Skill } from '@/client/routes/route-config.js';
 import { useEffect, useState } from 'react';
 
 // ---------------------------------------------------------------------------
-// SkillDetailPage — full documentation for a Claude or Codex skill
+// SkillDetailPage — warm minimal skill documentation
 // ---------------------------------------------------------------------------
 
 interface SkillDetailPageProps {
@@ -28,9 +28,7 @@ export default function SkillDetailPage({ skillName, skillType, skill, category 
         setError(null);
         const data = await loadSkill(skillType, skillName);
         setContent(data);
-        if (!data) {
-          setError(`Skill "${skillName}" not found in ${skillType} skills`);
-        }
+        if (!data) setError(`Skill "${skillName}" not found in ${skillType} skills`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load skill');
       } finally {
@@ -42,195 +40,128 @@ export default function SkillDetailPage({ skillName, skillType, skill, category 
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue" />
-        </div>
+      <div className="flex items-center justify-center py-[var(--spacing-12)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="p-4 bg-bg-error/10 border border-border-error rounded-[var(--radius-default)]">
-          <p className="text-text-error">{error}</p>
-        </div>
+      <div className="p-[var(--spacing-4)] bg-tint-orange border border-border rounded-[var(--radius-lg)]">
+        <p className="text-accent-red">{error}</p>
       </div>
     );
   }
 
+  const allRoles = content?.roles || skill.roles || [];
+  const allPhases = content?.phases || skill.phases || [];
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       {/* Header */}
-      <div className="mb-[var(--spacing-6)]">
-        <div className="flex items-center gap-[var(--spacing-2)] mb-[var(--spacing-2)]">
-          <span className="text-2xl">
-            {skillType === 'claude' ? '🤖' : '⚡'}
-          </span>
+      <div className="mb-[var(--spacing-8)]">
+        <div className="flex items-center gap-[var(--spacing-3)] mb-[var(--spacing-2)]">
+          <span className="text-[length:24px]">{skillType === 'claude' ? '🤖' : '⚡'}</span>
           <div>
             <div className="flex items-center gap-[var(--spacing-2)]">
-              <h1 className="text-[length:var(--font-size-2xl)] font-[var(--font-weight-bold)] text-text-primary">
+              <h1 className="text-[length:28px] font-[var(--font-weight-bold)] text-text-primary leading-[1.3]">
                 {content?.name || skill.name}
               </h1>
               <span
                 className={[
-                  'px-2 py-0.5 text-[length:var(--font-size-xs)] rounded-sm',
-                  'font-[var(--font-weight-medium)] uppercase',
-                  skillType === 'claude'
-                    ? 'bg-accent-purple/10 text-accent-purple'
-                    : 'bg-accent-orange/10 text-accent-orange',
+                  'px-[var(--spacing-2)] py-[2px] text-[length:10px] rounded-full font-[var(--font-weight-semibold)] uppercase',
+                  skillType === 'claude' ? 'bg-status-bg-planning text-accent-purple' : 'bg-status-bg-verifying text-accent-orange',
                 ].join(' ')}
               >
                 {skillType === 'claude' ? 'Claude Skill' : 'Codex Skill'}
               </span>
             </div>
-            <p className="text-[length:var(--font-size-sm)] text-text-tertiary">
-              {category.name}
-            </p>
+            <p className="text-[length:12px] text-text-tertiary">{category.name}</p>
           </div>
         </div>
-        <p className="text-[length:var(--font-size-base)] text-text-secondary">
+        <p className="text-[length:var(--font-size-md)] text-text-secondary leading-[var(--line-height-relaxed)]">
           {content?.description || skill.description}
         </p>
       </div>
 
-      {/* Usage/Argument hint */}
+      {/* Usage */}
       {content?.argumentHint && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.usage')}
-          </h2>
-          <code className="block px-[var(--spacing-3)] py-[var(--spacing-2)] bg-bg-code text-text-code rounded-[var(--radius-default)] text-[length:var(--font-size-sm)] overflow-x-auto">
+        <Section title={t('content.usage')}>
+          <code className="block px-[var(--spacing-4)] py-[var(--spacing-3)] bg-bg-code text-text-code rounded-[var(--radius-lg)] text-[length:var(--font-size-sm)] font-mono overflow-x-auto">
             {`Skill({ skill: "${skillName}" }${content.argumentHint !== 'true' ? `, args: "${content.argumentHint}"` : ''})`}
           </code>
-        </section>
+        </Section>
       )}
 
-      {/* Roles (from content or inventory) */}
-      {(content?.roles && content.roles.length > 0) && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.roles')}
-          </h2>
+      {/* Roles */}
+      {allRoles.length > 0 && (
+        <Section title={t('content.roles')}>
           <div className="flex flex-wrap gap-[var(--spacing-2)]">
-            {content.roles.map((role) => (
-              <span
-                key={role}
-                className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary"
-              >
+            {allRoles.map((role) => (
+              <span key={role} className="px-[var(--spacing-3)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-full text-[length:12px] text-text-secondary">
                 {role}
               </span>
             ))}
           </div>
-        </section>
-      )}
-
-      {/* Fallback to inventory roles if content doesn't have them */}
-      {(!content?.roles && skill.roles && skill.roles.length > 0) && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.roles')}
-          </h2>
-          <div className="flex flex-wrap gap-[var(--spacing-2)]">
-            {skill.roles.map((role) => (
-              <span
-                key={role}
-                className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary"
-              >
-                {role}
-              </span>
-            ))}
-          </div>
-        </section>
+        </Section>
       )}
 
       {/* Phases */}
-      {(content?.phases && content.phases.length > 0) && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.phases')}
-          </h2>
+      {allPhases.length > 0 && (
+        <Section title={t('content.phases')}>
           <ol className="space-y-[var(--spacing-2)]">
-            {content.phases.map((phase, index) => (
-              <li
-                key={phase}
-                className="flex items-start gap-[var(--spacing-2)] text-[length:var(--font-size-sm)] text-text-secondary"
-              >
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-bg-tertiary text-[length:var(--font-size-xs)] font-[var(--font-weight-medium)] text-text-primary shrink-0">
+            {allPhases.map((phase, index) => (
+              <li key={phase} className="flex items-start gap-[var(--spacing-3)] text-[length:var(--font-size-sm)] text-text-secondary">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-tint-blue text-[length:11px] font-[var(--font-weight-semibold)] text-accent-blue shrink-0">
                   {index + 1}
                 </span>
                 <span>{phase}</span>
               </li>
             ))}
           </ol>
-        </section>
-      )}
-
-      {/* Fallback to inventory phases if content doesn't have them */}
-      {(!content?.phases && skill.phases && skill.phases.length > 0) && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.phases')}
-          </h2>
-          <ol className="space-y-[var(--spacing-2)]">
-            {skill.phases.map((phase, index) => (
-              <li
-                key={phase}
-                className="flex items-start gap-[var(--spacing-2)] text-[length:var(--font-size-sm)] text-text-secondary"
-              >
-                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-bg-tertiary text-[length:var(--font-size-xs)] font-[var(--font-weight-medium)] text-text-primary shrink-0">
-                  {index + 1}
-                </span>
-                <span>{phase}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
+        </Section>
       )}
 
       {/* Allowed tools */}
       {content?.allowedTools && content.allowedTools.length > 0 && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.allowed_tools')}
-          </h2>
+        <Section title={t('content.allowed_tools')}>
           <div className="flex flex-wrap gap-[var(--spacing-2)]">
             {content.allowedTools.map((tool) => (
-              <span
-                key={tool}
-                className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary"
-              >
+              <span key={tool} className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary font-mono">
                 {tool}
               </span>
             ))}
           </div>
-        </section>
+        </Section>
       )}
 
       {/* Path reference */}
       {skill.path && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.file_reference')}
-          </h2>
-          <code className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary">
+        <Section title={t('content.file_reference')}>
+          <code className="inline-block px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border-divider rounded-[var(--radius-sm)] text-[length:12px] text-accent-purple font-mono">
             {skill.path}
           </code>
-        </section>
+        </Section>
       )}
 
-      {/* Full documentation content */}
+      {/* Full documentation */}
       {content?.rawContent && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Documentation
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.rawContent} />
-          </div>
-        </section>
+        <Section title="Documentation">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.rawContent} /></div>
+        </Section>
       )}
     </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-[var(--spacing-8)]">
+      <h2 className="text-[length:20px] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-4)] pb-[var(--spacing-2)] border-b border-border-divider">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }

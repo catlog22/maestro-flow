@@ -13,7 +13,7 @@ const components: Components = {
     if (isInline) {
       return (
         <code
-          className="bg-bg-card px-[var(--spacing-1)] py-[var(--spacing-0-5)] rounded-[var(--radius-sm)] text-[0.9em] font-mono text-accent-purple"
+          className="bg-bg-secondary px-[var(--spacing-1)] py-[var(--spacing-0-5)] rounded-[var(--radius-sm)] text-[0.9em] font-mono text-accent-purple"
           {...props}
         >
           {children}
@@ -29,7 +29,7 @@ const components: Components = {
             {lang}
           </span>
         )}
-        <code className={`block font-mono text-[length:var(--font-size-sm)] ${className ?? ''}`} {...props}>
+        <code className={`block font-mono text-[length:var(--font-size-sm)] ${className ?? ''}`} style={{ color: 'var(--code-t1)' }} {...props}>
           {children}
         </code>
       </div>
@@ -39,7 +39,8 @@ const components: Components = {
   pre({ children, ...props }) {
     return (
       <pre
-        className="bg-bg-card border border-border rounded-[var(--radius-md)] p-[var(--spacing-4)] overflow-x-auto my-[var(--spacing-3)] text-text-primary"
+        className="rounded-[var(--radius-md)] p-[var(--spacing-4)] overflow-x-auto my-[var(--spacing-3)] border"
+        style={{ background: 'var(--code-bg)', borderColor: 'var(--code-border)', color: 'var(--code-t1)' }}
         {...props}
       >
         {children}

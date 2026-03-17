@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type CSSProperties } from 'react';
 import type { FileNode } from '@/client/hooks/useArtifacts.js';
 import { ArtifactCard } from '@/client/components/artifacts/ArtifactCard.js';
 import Search from 'lucide-react/dist/esm/icons/search.js';
@@ -44,6 +44,21 @@ function groupBy(files: FlatFile[]): Map<string, FlatFile[]> {
 }
 
 const TYPE_FILTERS = ['All', 'json', 'md', 'jsonl'] as const;
+
+/** Infer phase dot color and optional status label from group name */
+function getGroupStyle(group: string): { dotColor: string; statusLabel?: string; statusBg?: string; statusColor?: string } {
+  // Non-phase groups
+  if (group === 'root' || !group.match(/^\d{2}-/)) {
+    return { dotColor: 'var(--color-text-tertiary)' };
+  }
+  // Infer status from common keywords in phase directory names
+  const lower = group.toLowerCase();
+  if (lower.includes('setup') || lower.includes('complete') || lower.includes('init')) {
+    return { dotColor: 'var(--color-status-completed)', statusLabel: 'Done', statusBg: 'var(--color-status-bg-completed)', statusColor: 'var(--color-status-completed)' };
+  }
+  // Default: show as active/executing phase
+  return { dotColor: 'var(--color-accent-yellow)', statusLabel: 'Active', statusBg: 'var(--color-status-bg-executing)', statusColor: 'var(--color-status-executing)' };
+}
 
 export function GalleryView({ tree, onSelectFile, selectedPath }: GalleryViewProps) {
   const [search, setSearch] = useState('');
@@ -128,14 +143,24 @@ export function GalleryView({ tree, onSelectFile, selectedPath }: GalleryViewPro
             No artifacts found
           </div>
         ) : (
-          Array.from(grouped.entries()).map(([group, files]) => (
+          Array.from(grouped.entries()).map(([group, files]) => {
+            const gs = getGroupStyle(group);
+            return (
             <div key={group} className="mb-[24px]">
               {/* Group header */}
               <div className="flex items-center gap-[10px] mb-[10px] pl-[var(--spacing-1)]">
-                <span className="w-[10px] h-[10px] rounded-full shrink-0 bg-text-tertiary" />
-                <span className="text-[13px] font-[var(--font-weight-bold)] text-text-primary">{group}</span>
+                <span className="w-[10px] h-[10px] rounded-full shrink-0" style={{ background: gs.dotColor }} />
+                <span className="text-[13px] font-[var(--font-weight-bold)] text-text-primary">{group === 'root' ? 'Project' : group}</span>
+                {gs.statusLabel && (
+                  <span
+                    className="text-[10px] font-[var(--font-weight-semibold)] px-[var(--spacing-2)] py-[2px] rounded-full"
+                    style={{ background: gs.statusBg, color: gs.statusColor } as CSSProperties}
+                  >
+                    {gs.statusLabel}
+                  </span>
+                )}
                 <span className="text-[11px] text-text-tertiary">{files.length} file{files.length !== 1 ? 's' : ''}</span>
-                <div className="flex-1 h-px bg-border-divider" />
+                <div className="flex-1 h-px bg-border-divider ml-[var(--spacing-2)]" />
               </div>
 
               {/* Card grid */}
@@ -152,7 +177,7 @@ export function GalleryView({ tree, onSelectFile, selectedPath }: GalleryViewPro
                 ))}
               </div>
             </div>
-          ))
+          );})
         )}
       </div>
     </div>

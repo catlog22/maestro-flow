@@ -35,11 +35,14 @@ export function createArtifactRoutes(workflowRoot: string): Hono {
   // GET /api/artifacts?tree=true — directory tree
   // GET /api/artifacts/*path    — serve file
   app.get('/api/artifacts/*', async (c) => {
-    // Check for tree query first (path param will be empty string)
-    const rawPath = c.req.param('*') ?? '';
     const tree = c.req.query('tree');
 
-    if (tree === 'true' && rawPath === '') {
+    // Extract file path from the URL (Hono wildcard param may be empty in v4)
+    const prefix = '/api/artifacts/';
+    const urlPath = decodeURIComponent(new URL(c.req.url).pathname);
+    const rawPath = urlPath.startsWith(prefix) ? urlPath.slice(prefix.length) : (c.req.param('*') ?? '');
+
+    if (tree === 'true' && !rawPath) {
       const treeData = await buildTree(resolvedRoot, resolvedRoot);
       return c.json(treeData);
     }

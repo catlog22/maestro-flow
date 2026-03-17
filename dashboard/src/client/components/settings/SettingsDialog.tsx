@@ -20,6 +20,7 @@ const SECTIONS: SectionNavItem[] = [
   { id: 'agents', label: 'Agents', icon: 'bot' },
   { id: 'cli-tools', label: 'CLI Tools', icon: 'terminal' },
   { id: 'specs', label: 'Specs', icon: 'file-text' },
+  { id: 'linear', label: 'Linear', icon: 'linear' },
 ];
 
 /** Simple SVG icons to avoid heavy lucide imports for just 4 icons */
@@ -60,6 +61,14 @@ function SectionIcon({ icon }: { icon: string }) {
           <polyline points="10 9 9 9 8 9" />
         </svg>
       );
+    case 'linear':
+      return (
+        <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 17l6-6" />
+          <path d="M10 18l4-4" />
+          <path d="M14 20l7-7" />
+        </svg>
+      );
     default:
       return null;
   }
@@ -80,7 +89,8 @@ export function SettingsDialog() {
     return (
       JSON.stringify(s.config.general) !== JSON.stringify(s.draft.general) ||
       JSON.stringify(s.config.agents) !== JSON.stringify(s.draft.agents) ||
-      s.config.cliTools !== s.draft.cliTools
+      s.config.cliTools !== s.draft.cliTools ||
+      JSON.stringify(s.config.linear) !== JSON.stringify(s.draft.linear)
     );
   });
 

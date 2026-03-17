@@ -1,9 +1,10 @@
 import { useI18n } from '@/client/i18n/index.js';
 import type { Category, Command, Skill } from '@/client/routes/route-config.js';
 import { Link } from 'react-router-dom';
+import { getCategoryIcon } from '@/client/utils/categoryIcons.js';
 
 // ---------------------------------------------------------------------------
-// CategoryPage — displays all commands and skills in a category
+// CategoryPage — warm minimal category listing
 // ---------------------------------------------------------------------------
 
 interface CategoryPageProps {
@@ -24,24 +25,24 @@ export default function CategoryPage({
   const { t } = useI18n();
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       {/* Header */}
-      <div className="mb-[var(--spacing-6)]">
-        <div className="flex items-center gap-[var(--spacing-2)] mb-[var(--spacing-2)]">
-          <span className="text-2xl">{getCategoryIcon(categoryId)}</span>
-          <h1 className="text-[length:var(--font-size-2xl)] font-[var(--font-weight-bold)] text-text-primary">
+      <div className="mb-[var(--spacing-8)]">
+        <div className="flex items-center gap-[var(--spacing-3)] mb-[var(--spacing-2)]">
+          <span className="text-[length:24px]">{getCategoryIcon(categoryId)}</span>
+          <h1 className="text-[length:28px] font-[var(--font-weight-bold)] text-text-primary leading-[1.3]">
             {category.name}
           </h1>
         </div>
-        <p className="text-[length:var(--font-size-base)] text-text-secondary">
+        <p className="text-[length:var(--font-size-md)] text-text-secondary">
           {category.description}
         </p>
       </div>
 
-      {/* Commands section */}
+      {/* Commands */}
       {commands.length > 0 && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
+        <section className="mb-[var(--spacing-8)]">
+          <h2 className="text-[length:20px] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-4)] pb-[var(--spacing-2)] border-b border-border-divider">
             {t('sidebar.commands')} ({commands.length})
           </h2>
           <div className="space-y-[var(--spacing-2)]">
@@ -52,10 +53,10 @@ export default function CategoryPage({
         </section>
       )}
 
-      {/* Claude Skills section */}
+      {/* Claude Skills */}
       {claudeSkills.length > 0 && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
+        <section className="mb-[var(--spacing-8)]">
+          <h2 className="text-[length:20px] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-4)] pb-[var(--spacing-2)] border-b border-border-divider">
             {t('sidebar.skills')} ({claudeSkills.length})
           </h2>
           <div className="space-y-[var(--spacing-2)]">
@@ -66,10 +67,10 @@ export default function CategoryPage({
         </section>
       )}
 
-      {/* Codex Skills section */}
+      {/* Codex Skills */}
       {codexSkills.length > 0 && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
+        <section className="mb-[var(--spacing-8)]">
+          <h2 className="text-[length:20px] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-4)] pb-[var(--spacing-2)] border-b border-border-divider">
             {t('sidebar.codex_skills')} ({codexSkills.length})
           </h2>
           <div className="space-y-[var(--spacing-2)]">
@@ -84,44 +85,27 @@ export default function CategoryPage({
 }
 
 // ---------------------------------------------------------------------------
-// CommandCard — command link card
+// CommandCard
 // ---------------------------------------------------------------------------
 
-interface CommandCardProps {
-  command: Command;
-  categoryId: string;
-}
-
-function CommandCard({ command, categoryId }: CommandCardProps) {
+function CommandCard({ command, categoryId }: { command: Command; categoryId: string }) {
   const slug = getCommandSlug(command.name);
-
   return (
     <Link
       to={`/${categoryId}/${slug}`}
-      className={[
-        'block p-[var(--spacing-3)] rounded-[var(--radius-default)]',
-        'bg-bg-secondary border border-border',
-        'transition-all duration-[var(--duration-fast)]',
-        'hover:bg-bg-hover hover:border-border-focused',
-        'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-      ].join(' ')}
+      className="block p-[var(--spacing-4)] bg-bg-card border border-border rounded-[var(--radius-lg)] no-underline transition-all duration-[180ms] ease-[var(--ease-bounce)] hover:border-text-placeholder hover:-translate-y-[1px] hover:shadow-[var(--shadow-sm)]"
     >
-      <div className="flex items-start justify-between gap-[var(--spacing-2)]">
+      <div className="flex items-start justify-between gap-[var(--spacing-3)]">
         <div className="min-w-0 flex-1">
-          <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-medium)] text-text-primary mb-1">
+          <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-1)]">
             {command.name}
           </h3>
-          <p className="text-[length:var(--font-size-sm)] text-text-secondary line-clamp-2">
+          <p className="text-[length:12px] text-text-secondary line-clamp-2">
             {command.description}
           </p>
         </div>
-        <svg
-          className="w-5 h-5 text-text-tertiary shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        <svg className="w-4 h-4 text-text-placeholder shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+          <polyline points="9 18 15 12 9 6" />
         </svg>
       </div>
     </Link>
@@ -129,92 +113,44 @@ function CommandCard({ command, categoryId }: CommandCardProps) {
 }
 
 // ---------------------------------------------------------------------------
-// SkillCard — skill link card
+// SkillCard
 // ---------------------------------------------------------------------------
 
-interface SkillCardProps {
-  skill: Skill;
-  skillType: 'claude' | 'codex';
-}
-
-function SkillCard({ skill, skillType }: SkillCardProps) {
+function SkillCard({ skill, skillType }: { skill: Skill; skillType: 'claude' | 'codex' }) {
   const href = skillType === 'claude' ? `/skills/${skill.name}` : `/codex/${skill.name}`;
-
   return (
     <Link
       to={href}
-      className={[
-        'block p-[var(--spacing-3)] rounded-[var(--radius-default)]',
-        'bg-bg-secondary border border-border',
-        'transition-all duration-[var(--duration-fast)]',
-        'hover:bg-bg-hover hover:border-border-focused',
-        'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-      ].join(' ')}
+      className="block p-[var(--spacing-4)] bg-bg-card border border-border rounded-[var(--radius-lg)] no-underline transition-all duration-[180ms] ease-[var(--ease-bounce)] hover:border-text-placeholder hover:-translate-y-[1px] hover:shadow-[var(--shadow-sm)]"
     >
-      <div className="flex items-start justify-between gap-[var(--spacing-2)]">
+      <div className="flex items-start justify-between gap-[var(--spacing-3)]">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-[var(--spacing-2)] mb-1">
-            <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-medium)] text-text-primary">
+          <div className="flex items-center gap-[var(--spacing-2)] mb-[var(--spacing-1)]">
+            <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-semibold)] text-text-primary">
               {skill.name}
             </h3>
             <span
               className={[
-                'px-1.5 py-0.5 text-[length:var(--font-size-xs)] rounded-sm',
-                'font-[var(--font-weight-medium)]',
-                skillType === 'claude' ? 'bg-accent-purple/10 text-accent-purple' : 'bg-accent-orange/10 text-accent-orange',
+                'px-[var(--spacing-2)] py-[1px] text-[length:10px] rounded-full font-[var(--font-weight-semibold)]',
+                skillType === 'claude' ? 'bg-status-bg-planning text-accent-purple' : 'bg-status-bg-verifying text-accent-orange',
               ].join(' ')}
             >
               {skillType === 'claude' ? 'Claude' : 'Codex'}
             </span>
           </div>
-          <p className="text-[length:var(--font-size-sm)] text-text-secondary line-clamp-2">
+          <p className="text-[length:12px] text-text-secondary line-clamp-2">
             {skill.description}
           </p>
-          {skill.roles && (
-            <p className="text-[length:var(--font-size-xs)] text-text-tertiary mt-1">
-              Roles: {skill.roles.join(', ')}
-            </p>
-          )}
         </div>
-        <svg
-          className="w-5 h-5 text-text-tertiary shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        <svg className="w-4 h-4 text-text-placeholder shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round">
+          <polyline points="9 18 15 12 9 6" />
         </svg>
       </div>
     </Link>
   );
 }
 
-// Helper functions
 function getCommandSlug(commandName: string): string {
   const parts = commandName.split('-');
   return parts.length > 1 ? parts.slice(1).join('-') : commandName;
-}
-
-function getCategoryIcon(categoryId: string): string {
-  const icons: Record<string, string> = {
-    pipeline: '⚡',
-    spec: '📋',
-    quality: '✅',
-    manage: '⚙️',
-    maestro: '🤖',
-    team: '👥',
-    cli: '💻',
-    brainstorm: '💡',
-    workflow: '🔄',
-    ddd: '📚',
-    issue: '🐛',
-    paper: '📝',
-    scholar: '🎓',
-    context: '💾',
-    data: '📊',
-    experiment: '🧪',
-    ui_design: '🎨',
-    session: '🪪',
-  };
-  return icons[categoryId] || '📁';
 }

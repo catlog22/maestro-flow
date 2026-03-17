@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Docs - Warm Minimal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 14px; line-height: 1.7; background: #FAF8F5; color: #2D2A26; -webkit-font-smoothing: antialiased; }
+
+    :root {
+      --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+      --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+      --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+      --bdr: #E8E5DE; --bdr2: #ECEAE4;
+      --blue: #4A90D9; --green: #3D9B6F; --orange: #D4832E; --yellow: #C99B2D;
+      --purple: #8B6BBF; --red: #D05454;
+      --tint-blue: #EBF2FA; --tint-green: #EEF7F2; --tint-yellow: #FDF6E4;
+      --tint-orange: #FDF0E4; --tint-purple: #F3EEF9;
+      --sidebar-w: 260px; --toc-w: 200px; --header-h: 56px;
+    }
+
+    /* === Header === */
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--header-h);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; background: rgba(243,240,234,0.85);
+      backdrop-filter: blur(12px); border-bottom: 1px solid var(--bdr);
+      z-index: 100;
+    }
+    .header-l { display: flex; align-items: center; gap: 16px; }
+    .logo { font-weight: 700; font-size: 16px; color: var(--t1); display: flex; align-items: center; gap: 8px; }
+    .logo-icon { width: 24px; height: 24px; background: var(--t1); border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+    .logo-icon svg { width: 14px; height: 14px; stroke: #fff; }
+    .logo-sep { width: 1px; height: 20px; background: var(--bdr); }
+    .logo-sub { font-size: 13px; font-weight: 500; color: var(--t2); }
+    .header-r { display: flex; align-items: center; gap: 12px; }
+    .search-box {
+      display: flex; align-items: center; gap: 8px; padding: 7px 14px;
+      background: var(--card); border: 1px solid var(--bdr); border-radius: 10px;
+      font-size: 13px; color: var(--t3); cursor: pointer; min-width: 240px;
+      transition: all 150ms;
+    }
+    .search-box:hover { border-color: var(--t4); }
+    .search-box svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .search-box kbd { margin-left: auto; font-size: 10px; font-family: 'Inter'; padding: 2px 6px; background: var(--bg); border: 1px solid var(--bdr); border-radius: 4px; color: var(--t4); }
+    .header-link { font-size: 13px; font-weight: 500; color: var(--t2); text-decoration: none; padding: 6px 12px; border-radius: 8px; transition: all 150ms; }
+    .header-link:hover { color: var(--t1); background: var(--hover); }
+    .version-badge { font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px; background: rgba(61,155,111,0.12); color: var(--green); }
+
+    /* === Layout === */
+    .layout { display: flex; padding-top: var(--header-h); min-height: 100vh; }
+
+    /* === Sidebar === */
+    .sidebar {
+      position: fixed; top: var(--header-h); bottom: 0; left: 0;
+      width: var(--sidebar-w); background: var(--bg2); border-right: 1px solid var(--bdr);
+      overflow-y: auto; padding: 16px 0; z-index: 50;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 4px; }
+    .nav-group { padding: 0 12px; margin-bottom: 8px; }
+    .nav-group-label {
+      font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--t3); padding: 8px 12px 6px; display: flex; align-items: center; gap: 6px;
+    }
+    .nav-group-label svg { width: 12px; height: 12px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+      border-radius: 8px; font-size: 13px; color: var(--t2); text-decoration: none;
+      transition: all 120ms; cursor: pointer;
+    }
+    .nav-item:hover { background: var(--hover); color: var(--t1); }
+    .nav-item.active { background: var(--active); color: var(--t1); font-weight: 600; }
+    .nav-item .badge { margin-left: auto; font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 100px; background: rgba(74,144,217,0.12); color: var(--blue); }
+    .nav-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+    /* === Content === */
+    .content-area { margin-left: var(--sidebar-w); flex: 1; display: flex; justify-content: center; }
+    .content { max-width: 740px; width: 100%; padding: 40px 40px 80px; }
+
+    /* === Breadcrumb === */
+    .breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 24px; font-size: 12px; color: var(--t3); }
+    .breadcrumb a { color: var(--t3); text-decoration: none; transition: color 120ms; }
+    .breadcrumb a:hover { color: var(--t1); }
+    .breadcrumb svg { width: 10px; height: 10px; }
+
+    /* === Typography === */
+    .content h1 { font-size: 28px; font-weight: 700; color: var(--t1); margin-bottom: 8px; line-height: 1.3; }
+    .content .subtitle { font-size: 16px; color: var(--t2); margin-bottom: 32px; line-height: 1.6; }
+    .content h2 { font-size: 20px; font-weight: 700; color: var(--t1); margin-top: 48px; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--bdr2); }
+    .content h3 { font-size: 16px; font-weight: 600; color: var(--t1); margin-top: 32px; margin-bottom: 12px; }
+    .content p { color: var(--t2); margin-bottom: 16px; }
+    .content a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    .content a:hover { text-decoration: underline; }
+    .content ul, .content ol { padding-left: 24px; margin-bottom: 16px; color: var(--t2); }
+    .content li { margin-bottom: 6px; }
+
+    /* === Code === */
+    .inline-code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: var(--bg2); padding: 2px 7px; border-radius: 5px; color: var(--purple); border: 1px solid var(--bdr2); }
+    .code-block {
+      background: #2D2A26; border-radius: 12px; margin-bottom: 20px; overflow: hidden;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 16px; background: rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .code-lang { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); text-transform: uppercase; }
+    .code-copy {
+      font-size: 11px; color: rgba(255,255,255,0.4); background: none; border: none;
+      cursor: pointer; padding: 2px 8px; border-radius: 4px; transition: all 120ms;
+    }
+    .code-copy:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.08); }
+    .code-body { padding: 16px; overflow-x: auto; }
+    .code-body pre { font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; color: #E8E5DE; }
+    .code-body .kw { color: #C9A0DC; }
+    .code-body .str { color: #A8D4A0; }
+    .code-body .cm { color: #78756F; }
+    .code-body .fn { color: #7DB8E0; }
+    .code-body .num { color: #E0C088; }
+
+    /* === Callout boxes === */
+    .callout { padding: 14px 18px; border-radius: 10px; margin-bottom: 20px; display: flex; gap: 12px; }
+    .callout svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px; }
+    .callout-body { flex: 1; }
+    .callout-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .callout-text { font-size: 13px; line-height: 1.6; }
+    .callout.info { background: var(--tint-blue); color: var(--blue); }
+    .callout.info .callout-text { color: #3a6fa0; }
+    .callout.warn { background: var(--tint-orange); color: var(--orange); }
+    .callout.warn .callout-text { color: #9e622a; }
+    .callout.tip { background: var(--tint-green); color: var(--green); }
+    .callout.tip .callout-text { color: #2d7653; }
+
+    /* === Table === */
+    .doc-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+    .doc-table th { text-align: left; padding: 10px 14px; font-weight: 600; color: var(--t1); background: var(--bg2); border-bottom: 1px solid var(--bdr); }
+    .doc-table td { padding: 10px 14px; border-bottom: 1px solid var(--bdr2); color: var(--t2); }
+    .doc-table tr:hover td { background: var(--hover); }
+
+    /* === Cards grid === */
+    .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    .doc-card {
+      padding: 18px 20px; background: var(--card); border: 1px solid var(--bdr);
+      border-radius: 12px; cursor: pointer; transition: all 180ms; text-decoration: none;
+    }
+    .doc-card:hover { border-color: var(--t4); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
+    .doc-card-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+    .doc-card-title { font-size: 14px; font-weight: 600; color: var(--t1); margin-bottom: 4px; }
+    .doc-card-desc { font-size: 12px; color: var(--t2); line-height: 1.5; }
+
+    /* === TOC (right rail) === */
+    .toc {
+      position: fixed; top: calc(var(--header-h) + 40px); right: 24px;
+      width: var(--toc-w); font-size: 12px;
+    }
+    .toc-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--t3); margin-bottom: 10px; }
+    .toc-list { list-style: none; padding: 0; border-left: 1px solid var(--bdr2); }
+    .toc-item { padding: 4px 0 4px 14px; }
+    .toc-item a { color: var(--t3); text-decoration: none; transition: color 120ms; }
+    .toc-item a:hover { color: var(--t1); }
+    .toc-item.active a { color: var(--t1); font-weight: 600; }
+    .toc-item.active { border-left: 2px solid var(--t1); margin-left: -1px; }
+
+    /* === Footer nav === */
+    .footer-nav { display: flex; justify-content: space-between; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--bdr); }
+    .footer-link { text-decoration: none; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--bdr); transition: all 150ms; max-width: 45%; }
+    .footer-link:hover { border-color: var(--t4); background: var(--card); }
+    .footer-link-label { font-size: 11px; color: var(--t3); margin-bottom: 2px; }
+    .footer-link-title { font-size: 14px; font-weight: 600; color: var(--t1); }
+
+    @media (max-width: 1200px) { .toc { display: none; } }
+    @media (max-width: 900px) {
+      .sidebar { transform: translateX(-100%); }
+      .content-area { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-l">
+    <div class="logo">
+      <span class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+      Maestro
+    </div>
+    <span class="logo-sep"></span>
+    <span class="logo-sub">Documentation</span>
+  </div>
+  <div class="header-r">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      Search docs...
+      <kbd>Ctrl K</kbd>
+    </div>
+    <a class="header-link" href="#">Guides</a>
+    <a class="header-link" href="#">API</a>
+    <a class="header-link" href="#">Changelog</a>
+    <span class="version-badge">v0.1.0</span>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-group">
+      <div class="nav-group-label">Getting Started</div>
+      <a class="nav-item active" href="#">
+        <span class="nav-dot" style="background:var(--green)"></span>
+        Introduction
+      </a>
+      <a class="nav-item" href="#">
+        <span class="nav-dot" style="background:var(--blue)"></span>
+        Quick Start
+      </a>
+      <a class="nav-item" href="#">
+        <span class="nav-dot" style="background:var(--purple)"></span>
+        Installation
+      </a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Core Concepts</div>
+      <a class="nav-item" href="#">Workflows</a>
+      <a class="nav-item" href="#">Phases & Tasks</a>
+      <a class="nav-item" href="#">State Management</a>
+      <a class="nav-item" href="#">Configuration <span class="badge">New</span></a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Commands</div>
+      <a class="nav-item" href="#">/maestro</a>
+      <a class="nav-item" href="#">/maestro-init</a>
+      <a class="nav-item" href="#">/maestro-plan</a>
+      <a class="nav-item" href="#">/maestro-execute</a>
+      <a class="nav-item" href="#">/maestro-verify</a>
+      <a class="nav-item" href="#">/maestro-quick</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Quality</div>
+      <a class="nav-item" href="#">Code Review</a>
+      <a class="nav-item" href="#">Testing</a>
+      <a class="nav-item" href="#">Debugging</a>
+    </div>
+    <div class="nav-group">
+      <div class="nav-group-label">Advanced</div>
+      <a class="nav-item" href="#">MCP Server</a>
+      <a class="nav-item" href="#">Extensions</a>
+      <a class="nav-item" href="#">Agent Architecture</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="content-area">
+    <div class="content">
+      <div class="breadcrumb">
+        <a href="#">Docs</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <a href="#">Getting Started</a>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        <span style="color:var(--t1)">Introduction</span>
+      </div>
+
+      <h1>Introduction to Maestro</h1>
+      <p class="subtitle">A workflow orchestration CLI that brings structure, reproducibility, and intelligent automation to your software development process.</p>
+
+      <div class="card-grid">
+        <a class="doc-card" href="#">
+          <div class="doc-card-icon" style="background:var(--tint-green)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3D9B6F" stroke-width="2" stroke-linecap="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+          </div>
+          <div class="doc-card-title">Quick Start</div>
+          <div class="doc-card-desc">Get up and running in under 5 minutes with your first project.</div>
+        </a>
+        <a class="doc-card" href="#">
+          <div class="doc-card-icon" style="background:var(--tint-blue)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4A90D9" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="doc-card-title">Core Concepts</div>
+          <div class="doc-card-desc">Understand phases, tasks, waves, and the execution model.</div>
+        </a>
+        <a class="doc-card" href="#">
+          <div class="doc-card-icon" style="background:var(--tint-purple)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8B6BBF" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <div class="doc-card-title">Command Reference</div>
+          <div class="doc-card-desc">Complete reference for all 30+ CLI commands and options.</div>
+        </a>
+        <a class="doc-card" href="#">
+          <div class="doc-card-icon" style="background:var(--tint-orange)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#D4832E" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div class="doc-card-title">Best Practices</div>
+          <div class="doc-card-desc">Patterns and tips for getting the most out of Maestro.</div>
+        </a>
+      </div>
+
+      <h2 id="overview">Overview</h2>
+      <p>Maestro orchestrates your development workflow through a structured pipeline of <strong>phases</strong>, each containing <strong>tasks</strong> that are automatically planned, executed, and verified.</p>
+
+      <div class="callout tip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div class="callout-body">
+          <div class="callout-title">Tip</div>
+          <div class="callout-text">New to Maestro? Start with the <a href="#">Quick Start guide</a> to set up your first project in minutes.</div>
+        </div>
+      </div>
+
+      <h3 id="pipeline">The Pipeline</h3>
+      <p>Every project follows a natural flow from ideation to completion:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">Pipeline</span>
+          <button class="code-copy">Copy</button>
+        </div>
+        <div class="code-body"><pre>brainstorm &rarr; init &rarr; roadmap &rarr; plan &rarr; execute &rarr; verify
+     <span class="cm">|              |                           |</span>
+     <span class="cm">|   spec-generate (alternative)            |</span>
+     <span class="cm">|                                  quality pipeline</span>
+     <span class="cm">|                              review &rarr; test &rarr; debug</span></pre></div>
+      </div>
+
+      <h3 id="key-features">Key Features</h3>
+      <table class="doc-table">
+        <thead>
+          <tr><th>Feature</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="inline-code">Phase Management</span></td><td>Organize work into sequential phases with automatic transitions</td></tr>
+          <tr><td><span class="inline-code">Wave Execution</span></td><td>Parallel task execution within phases using dependency graphs</td></tr>
+          <tr><td><span class="inline-code">MCP Integration</span></td><td>Expose tools via Model Context Protocol for AI-native workflows</td></tr>
+          <tr><td><span class="inline-code">Quality Pipeline</span></td><td>Built-in code review, testing, and debugging automation</td></tr>
+          <tr><td><span class="inline-code">Extension System</span></td><td>Plugin architecture for custom tools and integrations</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="installation">Installation</h2>
+      <p>Install Maestro globally via npm:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">bash</span>
+          <button class="code-copy">Copy</button>
+        </div>
+        <div class="code-body"><pre><span class="cm"># Install globally</span>
+npm install -g maestro-flow
+
+<span class="cm"># Verify installation</span>
+maestro --version
+
+<span class="cm"># Initialize a new project</span>
+maestro init</pre></div>
+      </div>
+
+      <div class="callout info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div class="callout-body">
+          <div class="callout-title">Prerequisites</div>
+          <div class="callout-text">Maestro requires Node.js 18+ and works best with Claude Code as the AI backend.</div>
+        </div>
+      </div>
+
+      <h2 id="quick-example">Quick Example</h2>
+      <p>Here's a minimal example to get a project running:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">typescript</span>
+          <button class="code-copy">Copy</button>
+        </div>
+        <div class="code-body"><pre><span class="cm">// maestro.config.ts</span>
+<span class="kw">import</span> { <span class="fn">defineConfig</span> } <span class="kw">from</span> <span class="str">'maestro-flow'</span>;
+
+<span class="kw">export default</span> <span class="fn">defineConfig</span>({
+  project: {
+    name: <span class="str">'my-app'</span>,
+    version: <span class="str">'1.0.0'</span>,
+  },
+  phases: [
+    { name: <span class="str">'Setup'</span>,    tasks: <span class="num">3</span> },
+    { name: <span class="str">'Core API'</span>,  tasks: <span class="num">5</span> },
+    { name: <span class="str">'Frontend'</span>,  tasks: <span class="num">8</span> },
+    { name: <span class="str">'Deploy'</span>,    tasks: <span class="num">4</span> },
+  ],
+});</pre></div>
+      </div>
+
+      <div class="callout warn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div class="callout-body">
+          <div class="callout-title">Important</div>
+          <div class="callout-text">Always run <span class="inline-code">maestro init</span> before starting a new project. This creates the required <span class="inline-code">.workflow/</span> directory structure.</div>
+        </div>
+      </div>
+
+      <!-- Footer navigation -->
+      <div class="footer-nav">
+        <div></div>
+        <a class="footer-link" href="#">
+          <div class="footer-link-label">Next</div>
+          <div class="footer-link-title">Quick Start Guide &rarr;</div>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOC -->
+  <aside class="toc">
+    <div class="toc-label">On this page</div>
+    <ul class="toc-list">
+      <li class="toc-item active"><a href="#overview">Overview</a></li>
+      <li class="toc-item"><a href="#pipeline">The Pipeline</a></li>
+      <li class="toc-item"><a href="#key-features">Key Features</a></li>
+      <li class="toc-item"><a href="#installation">Installation</a></li>
+      <li class="toc-item"><a href="#quick-example">Quick Example</a></li>
+    </ul>
+  </aside>
+</div>
+
+</body>
+</html>

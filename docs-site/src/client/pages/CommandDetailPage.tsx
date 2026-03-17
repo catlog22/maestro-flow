@@ -6,7 +6,7 @@ import type { Category, Command } from '@/client/routes/route-config.js';
 import { useEffect, useState } from 'react';
 
 // ---------------------------------------------------------------------------
-// CommandDetailPage — full documentation for a single command
+// CommandDetailPage — warm minimal command documentation
 // ---------------------------------------------------------------------------
 
 interface CommandDetailPageProps {
@@ -28,9 +28,7 @@ export default function CommandDetailPage({ commandName, category, command }: Co
         setError(null);
         const data = await loadCommand(commandName);
         setContent(data);
-        if (!data) {
-          setError(`Command "${commandName}" not found`);
-        }
+        if (!data) setError(`Command "${commandName}" not found`);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load command');
       } finally {
@@ -42,170 +40,132 @@ export default function CommandDetailPage({ commandName, category, command }: Co
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue" />
-        </div>
+      <div className="flex items-center justify-center py-[var(--spacing-12)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent-blue" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto">
-        <div className="p-4 bg-bg-error/10 border border-border-error rounded-[var(--radius-default)]">
-          <p className="text-text-error">{error}</p>
-        </div>
+      <div className="p-[var(--spacing-4)] bg-tint-orange border border-border rounded-[var(--radius-lg)]">
+        <p className="text-accent-red">{error}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       {/* Header */}
-      <div className="mb-[var(--spacing-6)]">
-        <div className="flex items-center gap-[var(--spacing-2)] mb-[var(--spacing-2)]">
-          <span className="text-2xl">{getCategoryIcon(category.id)}</span>
+      <div className="mb-[var(--spacing-8)]">
+        <div className="flex items-center gap-[var(--spacing-3)] mb-[var(--spacing-2)]">
+          <span className="text-[length:24px]">{getCategoryIcon(category.id)}</span>
           <div>
-            <h1 className="text-[length:var(--font-size-2xl)] font-[var(--font-weight-bold)] text-text-primary">
+            <h1 className="text-[length:28px] font-[var(--font-weight-bold)] text-text-primary leading-[1.3]">
               {content?.name || command.name}
             </h1>
-            <p className="text-[length:var(--font-size-sm)] text-text-tertiary">
-              {category.name}
-            </p>
+            <p className="text-[length:12px] text-text-tertiary">{category.name}</p>
           </div>
         </div>
-        <p className="text-[length:var(--font-size-base)] text-text-secondary">
+        <p className="text-[length:var(--font-size-md)] text-text-secondary leading-[var(--line-height-relaxed)]">
           {content?.description || command.description}
         </p>
       </div>
 
-      {/* Command usage */}
+      {/* Usage */}
       {(content?.argumentHint || command.argumentHint) && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.usage')}
-          </h2>
-          <code className="block px-[var(--spacing-3)] py-[var(--spacing-2)] bg-bg-code text-text-code rounded-[var(--radius-default)] text-[length:var(--font-size-sm)] overflow-x-auto">
+        <Section title={t('content.usage')}>
+          <code className="block px-[var(--spacing-4)] py-[var(--spacing-3)] bg-bg-code text-text-code rounded-[var(--radius-lg)] text-[length:var(--font-size-sm)] font-mono overflow-x-auto">
             /{command.name} {content?.argumentHint || command.argumentHint}
           </code>
-        </section>
+        </Section>
       )}
 
-      {/* Purpose section */}
+      {/* Purpose */}
       {content?.purpose && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Purpose
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.purpose} />
-          </div>
-        </section>
+        <Section title="Purpose">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.purpose} /></div>
+        </Section>
       )}
 
       {/* Required Reading */}
       {content?.requiredReading && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Required Reading
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.requiredReading} />
-          </div>
-        </section>
+        <Section title="Required Reading">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.requiredReading} /></div>
+        </Section>
       )}
 
       {/* Context */}
       {content?.context && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Context
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.context} />
-          </div>
-        </section>
+        <Section title="Context">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.context} /></div>
+        </Section>
       )}
 
       {/* Execution */}
       {content?.execution && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Execution
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.execution} />
-          </div>
-        </section>
+        <Section title="Execution">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.execution} /></div>
+        </Section>
       )}
 
       {/* Error Codes */}
       {content?.errorCodes && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Error Codes
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.errorCodes} />
-          </div>
-        </section>
+        <Section title="Error Codes">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.errorCodes} /></div>
+        </Section>
       )}
 
       {/* Success Criteria */}
       {content?.successCriteria && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Success Criteria
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.successCriteria} />
-          </div>
-        </section>
+        <Section title="Success Criteria">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.successCriteria} /></div>
+        </Section>
       )}
 
       {/* Allowed tools */}
-      {(content?.allowedTools && content.allowedTools.length > 0) && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.allowed_tools')}
-          </h2>
+      {content?.allowedTools && content.allowedTools.length > 0 && (
+        <Section title={t('content.allowed_tools')}>
           <div className="flex flex-wrap gap-[var(--spacing-2)]">
             {content.allowedTools.map((tool) => (
-              <span
-                key={tool}
-                className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary"
-              >
+              <span key={tool} className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary font-mono">
                 {tool}
               </span>
             ))}
           </div>
-        </section>
+        </Section>
       )}
 
       {/* File reference */}
       {command.file && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            {t('content.file_reference')}
-          </h2>
-          <code className="px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border rounded-[var(--radius-sm)] text-[length:var(--font-size-sm)] text-text-secondary">
+        <Section title={t('content.file_reference')}>
+          <code className="inline-block px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border-divider rounded-[var(--radius-sm)] text-[length:12px] text-accent-purple font-mono">
             {command.file}
           </code>
-        </section>
+        </Section>
       )}
 
-      {/* Full documentation content (if not already shown) */}
+      {/* Full documentation fallback */}
       {content?.rawContent && !content.purpose && (
-        <section className="mb-[var(--spacing-6)]">
-          <h2 className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
-            Documentation
-          </h2>
-          <div className="text-text-secondary">
-            <MarkdownRenderer content={content.rawContent} />
-          </div>
-        </section>
+        <Section title="Documentation">
+          <div className="text-text-secondary"><MarkdownRenderer content={content.rawContent} /></div>
+        </Section>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Section — warm minimal section with h2 border-bottom
+// ---------------------------------------------------------------------------
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-[var(--spacing-8)]">
+      <h2 className="text-[length:20px] font-[var(--font-weight-bold)] text-text-primary mb-[var(--spacing-4)] pb-[var(--spacing-2)] border-b border-border-divider">
+        {title}
+      </h2>
+      {children}
+    </section>
   );
 }

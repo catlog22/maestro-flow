@@ -1,0 +1,246 @@
+{
+  "commands": {
+    "maestro": {
+      "name": "maestro",
+      "name_zh": "指挥家",
+      "description": "智能协调器 - 分析意图 + 读取项目状态 → 选择最优命令链 → 通过 Skill() 执行",
+      "description_zh": "智能协调器 - 分析用户意图， 读取项目状态， 选择并执行最优命令链"
+    },
+    "maestro-init": {
+      "name": "maestro-init",
+      "name_zh": "初始化项目",
+      "description": "通过自动状态检测初始化项目（空项目/代码库/现有项目）",
+      "description_zh": "通过自动状态检测初始化项目， 支持空项目、 代码库和现有项目"
+    },
+    "maestro-plan": {
+      "name": "maestro-plan",
+      "name_zh": "规划阶段",
+      "description": "探索、澄清、规划、检查并确认阶段执行计划",
+      "description_zh": "探索、 澄清、规划、检查并确认阶段执行计划"
+    },
+    "maestro-execute": {
+      "name": "maestro-execute",
+      "name_zh": "执行计划",
+      "description": "使用波次并行执行和原子提交来执行阶段计划",
+      "description_zh": "按照计划执行任务， 支持波次并行执行和原子提交"
+    },
+    "maestro-verify": {
+      "name": "maestro-verify",
+      "name_zh": "验证阶段",
+      "description": "目标回溯验证， 三层检查、 反模式扫描和 奈奎斯特覆盖率验证",
+      "description_zh": "目标回溯验证， 三层检查、 反模式扫描和 奈奎斯特覆盖率验证"
+    },
+    "maestro-quick": {
+      "name": "maestro-quick",
+      "name_zh": "快速任务",
+      "description": "快速执行任务， 跳过规划阶段， 保持工作流质量保证",
+      "description_zh": "快速执行任务， 跳过规划阶段， 同时保持工作流质量保证"
+    },
+    "maestro-brainstorm": {
+      "name": "maestro-brainstorm",
+      "name_zh": "头脑风暴",
+      "description": "统一头脑风暴， 支持双模式操作 - 自动流水线或单角色分析",
+      "description_zh": "统一头脑风暴， 支持双模式操作 - 自动流水线或单角色分析"
+    },
+    "maestro-analyze": {
+      "name": "maestro-analyze",
+      "name_zh": "分析讨论",
+      "description": "多维度分析， 支持 CLI 探索、决策提取和意图跟踪",
+      "description_zh": "多维度分析， 支持 CLI 探索、 决策提取和意图跟踪"
+    },
+    "maestro-roadmap": {
+      "name": "maestro-roadmap",
+      "name_zh": "路线图",
+      "description": "交互式路线图创建， 支持迭代精化 - 规格生成的轻量级替代方案",
+      "description_zh": "交互式路线图创建， 支持迭代精化 - 规格生成的轻量级替代方案"
+    },
+    "maestro-ui-design": {
+      "name": "maestro-ui-design",
+      "name_zh": "UI 设计",
+      "description": "通过 ui-ux-pro-max 生成多种风格的 UI 设计原型， 用户选择最佳方案",
+      "description_zh": "通过 ui-ux-pro-max 生成多种风格的 UI 设计原型， 用户选择最佳方案"
+    },
+    "maestro-spec-generate": {
+      "name": "maestro-spec-generate",
+      "name_zh": "规格生成",
+      "description": "通过 7 阶段流水线从想法/需求生成规格文档包",
+      "description_zh": "通过 7 阶段流水线从想法/需求生成规格文档包"
+    },
+    "maestro-phase-transition": {
+      "name": "maestro-phase-transition",
+      "name_zh": "阶段转换",
+      "description": "将当前阶段标记为完成， 提取经验教训， 为下一阶段做准备",
+      "description_zh": "将当前阶段标记为完成， 提取经验教训， 为下一阶段做准备"
+    },
+    "maestro-phase-add": {
+      "name": "maestro-phase-add",
+      "name_zh": "添加阶段",
+      "description": "在项目路线图中添加或插入新阶段",
+      "description_zh": "在项目路线图中添加或插入新阶段"
+    },
+    "maestro-milestone-audit": {
+      "name": "maestro-milestone-audit",
+      "name_zh": "里程碑审计",
+      "description": "审核当前里程碑的跨阶段集成差距",
+      "description_zh": "审核当前里程碑的跨阶段集成差距"
+    },
+    "maestro-milestone-complete": {
+      "name": "maestro-milestone-complete",
+      "name_zh": "完成里程碑",
+      "description": "归档已完成的里程碑并为下一个做准备",
+      "description_zh": "归档已完成的里程碑并为下一个做准备"
+    },
+    "spec-setup": {
+      "name": "spec-setup",
+      "name_zh": "规格设置",
+      "description": "通过扫描项目结构并创建规范文件来初始化系统规格",
+      "description_zh": "通过扫描项目结构并创建规范文件来初始化系统规格"
+    },
+    "spec-add": {
+      "name": "spec-add",
+      "name_zh": "添加规范",
+      "description": "向知识库添加规范条目（bug、模式、决策或规则）",
+      "description_zh": "向知识库添加规范条目（bug、模式、决策或规则)"
+    },
+    "spec-load": {
+      "name": "spec-load",
+      "name_zh": "加载规范",
+      "description": "加载当前上下文相关的规范（用于代理的上下文注入）",
+      "description_zh": "加载当前上下文相关的规范（用于代理的上下文注入）"
+    },
+    "spec-map": {
+      "name": "spec-map",
+      "name_zh": "映射规范",
+      "description": "使用并行映射代理分析代码库并生成文档索引",
+      "description_zh": "使用并行映射代理分析代码库并生成文档索引"
+    },
+    "quality-test": {
+      "name": "quality-test",
+      "name_zh": "UAT 测试",
+      "description": "对话式 UAT， 支持会话持久化、 自动诊断和 差距修复循环",
+      "description_zh": "对话式 UAT， 支持会话持久化、 自动诊断和 差距修复循环"
+    },
+    "quality-debug": {
+      "name": "quality-debug",
+      "name_zh": "调试",
+      "description": "并行假设驱动调试， 支持 UAT 集成",
+      "description_zh": "并行假设驱动调试， 支持 UAT 集成"
+    },
+    "quality-test-gen": {
+      "name": "quality-test-gen",
+      "name_zh": "测试生成",
+      "description": "使用 TDD/E2E 分类和测试计划生成缺失的测试",
+      "description_zh": "使用 TDD/E2E 分类和测试计划生成缺失的测试"
+    },
+    "quality-integration-test": {
+      "name": "quality-integration-test",
+      "name_zh": "集成测试",
+      "description": "自迭代集成测试循环， 支持反思驱动的自适应",
+      "description_zh": "自迭代集成测试循环， 支持反思驱动的自适应"
+    },
+    "quality-refactor": {
+      "name": "quality-refactor",
+      "name_zh": "重构",
+      "description": "技术债务减少， 支持反思驱动的迭代",
+      "description_zh": "技术债务减少， 支持反思驱动的迭代"
+    },
+    "quality-review": {
+      "name": "quality-review",
+      "name_zh": "代码审查",
+      "description": "分层代码审查（快速/标准/深度）， 支持并行代理和 严重性分类和自动问题创建",
+      "description_zh": "分层代码审查（快速/标准/深度)， 支持并行代理、 严重性分类和自动问题创建"
+    },
+    "quality-sync": {
+      "name": "quality-sync",
+      "name_zh": "文档同步",
+      "description": "代码变更后同步代码库文档 - 通过 git diff 跟踪更新文档",
+      "description_zh": "代码变更后同步代码库文档 - 通过 git diff 跟踪更新文档"
+    },
+    "manage-status": {
+      "name": "manage-status",
+      "name_zh": "项目状态",
+      "description": "显示项目仪表板， 包含阶段进度、 活跃任务和 下一步操作",
+      "description_zh": "显示项目仪表板， 包含阶段进度、 活跃任务和 下一步操作"
+    },
+    "manage-memory": {
+      "name": "manage-memory",
+      "name_zh": "记忆管理",
+      "description": "管理记忆条目 - 工作流记忆和项目记忆",
+      "description_zh": "管理记忆条目 - 工作流记忆和项目记忆"
+    },
+    "manage-memory-capture": {
+      "name": "manage-memory-capture",
+      "name_zh": "捕获记忆",
+      "description": "将会话记忆（压缩或提示）捕获到工作流记忆存储",
+      "description_zh": "将会话记忆（压缩或提示) 捕获到工作流记忆存储"
+    },
+    "manage-codebase-rebuild": {
+      "name": "manage-codebase-rebuild",
+      "name_zh": "重建代码库文档",
+      "description": "完全重建代码库文档 - 扫描项目， 生成 layer-0/1/2 文档",
+      "description_zh": "完全重建代码库文档 - 扫描项目， 生成 layer-0/1/2 文档"
+    },
+    "manage-codebase-refresh": {
+      "name": "manage-codebase-refresh",
+      "name_zh": "刷新代码库文档",
+      "description": "根据最近更改增量刷新代码库文档",
+      "description_zh": "根据最近更改增量刷新代码库文档"
+    },
+    "manage-issue": {
+      "name": "manage-issue",
+      "name_zh": "问题管理",
+      "description": "交互式问题管理 - 创建、 查询、 更新、 关闭、 链接问题",
+      "description_zh": "交互式问题管理 - 创建、 查询、 更新、 关闭、 链接问题"
+    },
+    "manage-issue-discover": {
+      "name": "manage-issue-discover",
+      "name_zh": "问题发现",
+      "description": "自动问题发现 - 多视角分析或提示驱动探索",
+      "description_zh": "自动问题发现 - 多视角分析或提示驱动探索"
+    }
+  },
+  "skills": {
+    "team-lifecycle-v4": {
+      "name": "team-lifecycle-v4",
+      "name_zh": "完整生命周期团队",
+      "description": "具有清晰架构的完整生命周期团队技能",
+      "description_zh": "具有清晰架构的完整生命周期团队技能"
+    },
+    "team-coordinate": {
+      "name": "team-coordinate",
+      "name_zh": "团队协调",
+      "description": "支持动态角色生成的通用团队协调技能",
+      "description_zh": "支持动态角色生成的通用团队协调技能"
+    },
+    "team-executor": {
+      "name": "team-executor",
+      "name_zh": "团队执行器",
+      "description": "轻量级会话执行技能， 恢复现有团队会话",
+      "description_zh": "轻量级会话执行技能， 恢复现有团队会话"
+    },
+    "team-testing": {
+      "name": "team-testing",
+      "name_zh": "团队测试",
+      "description": "统一团队技能用于测试团队， 渐进式测试覆盖和 TDD",
+      "description_zh": "统一团队技能用于测试团队， 渐进式测试覆盖和 TDD"
+    },
+    "team-review": {
+      "name": "team-review",
+      "name_zh": "团队审查",
+      "description": "统一团队技能用于代码审查。 3 角色流水线",
+      "description_zh": "统一团队技能用于代码审查。 3 角色流水线"
+    },
+    "team-quality-assurance": {
+      "name": "team-quality-assurance",
+      "name_zh": "质量保证团队",
+      "description": "统一团队技能用于质量保证。 完整闭环 QA",
+      "description_zh": "统一团队技能用于质量保证. 完整闭环 QA"
+    },
+    "team-tech-debt": {
+      "name": "team-tech-debt",
+      "name_zh": "技术债务团队",
+      "description": "统一团队技能用于技术债务识别和修复",
+      "description_zh": "统一团队技能用于技术债务识别和修复"
+    }
+  }
+}
