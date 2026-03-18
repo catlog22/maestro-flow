@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { PhaseCard } from '@/shared/types.js';
 import { useBoardStore } from '@/client/store/board-store.js';
 import { STATUS_COLORS } from '@/shared/constants.js';
@@ -6,6 +7,83 @@ import PlayIcon from 'lucide-react/dist/esm/icons/play.js';
 // ---------------------------------------------------------------------------
 // ActiveExecutionPanel -- shows the current executing phase with wave details
 // ---------------------------------------------------------------------------
+
+const STATUS_NEXT_COMMAND: Record<string, string> = {
+  pending: '/maestro-analyze {N}',
+  exploring: '/maestro-plan {N}',
+  planning: '/maestro-execute {N}',
+  executing: '/maestro-execute {N}',
+  verifying: '/quality-review {N}',
+  testing: '/quality-test {N}',
+  completed: '/maestro-phase-transition',
+  blocked: '/quality-debug',
+};
+
+function getNextActionPhase(phases: PhaseCard[]): PhaseCard | null {
+  const active = phases.filter((p) => p.status !== 'completed' && p.status !== 'blocked');
+  if (active.length === 0) return null;
+  return active.reduce((min, p) => (p.phase < min.phase ? p : min), active[0]);
+}
+
+function NextActionPanel({ phase }: { phase: PhaseCard | null }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!phase) {
+    return (
+      <div className="text-[length:var(--font-size-sm)] text-text-tertiary italic text-center py-[var(--spacing-6)]">
+        All phases complete
+      </div>
+    );
+  }
+
+  const rawCommand = STATUS_NEXT_COMMAND[phase.status] ?? '';
+  const command = rawCommand.replace('{N}', String(phase.phase));
+  const color = STATUS_COLORS[phase.status as keyof typeof STATUS_COLORS];
+
+  function handleCopy() {
+    navigator.clipboard.writeText(command).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-[var(--spacing-2)]">
+      {/* Phase info */}
+      <div className="flex items-center gap-[var(--spacing-2-5)] mb-[var(--spacing-2)]">
+        <div
+          className="w-8 h-8 rounded-[10px] flex items-center justify-center text-[length:var(--font-size-base)] font-bold text-white shrink-0"
+          style={{ backgroundColor: color }}
+        >
+          {phase.phase}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[length:var(--font-size-sm)] font-bold text-text-primary truncate">{phase.title}</div>
+          <span
+            className="inline-block text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] px-[var(--spacing-1-5)] py-px rounded-full mt-px"
+            style={{ backgroundColor: `${color}1a`, color }}
+          >
+            {phase.status}
+          </span>
+        </div>
+      </div>
+
+      {/* Command row */}
+      <div className="flex items-center gap-[var(--spacing-2)]">
+        <code className="flex-1 font-mono bg-bg-primary border border-border-divider rounded px-[var(--spacing-1-5)] py-[var(--spacing-0-5)] text-[length:var(--font-size-xs)] text-text-primary truncate">
+          {command}
+        </code>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="shrink-0 cursor-pointer text-text-tertiary hover:text-text-primary transition-colors text-[length:var(--font-size-xs)]"
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function ActiveExecutionPanel() {
   const phases = useBoardStore((s) => s.board?.phases ?? []);
@@ -35,9 +113,7 @@ export function ActiveExecutionPanel() {
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-[var(--spacing-4)] py-[var(--spacing-3)]">
         {!executing ? (
-          <div className="text-[length:var(--font-size-sm)] text-text-tertiary italic text-center py-[var(--spacing-6)]">
-            No active execution
-          </div>
+          <NextActionPanel phase={getNextActionPhase(phases)} />
         ) : (
           <ExecutionContent phase={executing} />
         )}

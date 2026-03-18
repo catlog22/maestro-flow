@@ -6,6 +6,7 @@ import { MCP_API_ENDPOINTS } from '@/shared/constants.js';
 // ---------------------------------------------------------------------------
 
 export interface McpServerEntry {
+  id: string;
   name: string;
   scope: 'global' | 'project' | 'enterprise' | 'codex';
   projectPath?: string;
@@ -17,6 +18,11 @@ export interface McpServerEntry {
   env?: Record<string, string>;
   cli: { claude: boolean; codex: boolean };
   raw: Record<string, unknown>;
+}
+
+export interface ProjectGroup {
+  projectPath: string | null;
+  servers: McpServerEntry[];
 }
 
 export interface McpTemplate {
@@ -49,7 +55,7 @@ export interface McpStore {
   setActiveView: (view: McpView) => void;
   setScopeFilter: (filter: ScopeFilter) => void;
   setSearch: (q: string) => void;
-  setSelectedServer: (name: string | null) => void;
+  setSelectedServer: (id: string | null) => void;
   setTemplateSearch: (q: string) => void;
   setTemplateCategory: (cat: string | null) => void;
 
@@ -64,11 +70,24 @@ export interface McpStore {
   // Derived getters
   filteredServers: () => McpServerEntry[];
   filteredTemplates: () => McpTemplate[];
+  projectGroups: () => ProjectGroup[];
+  selectedEntry: () => McpServerEntry | null;
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+export function makeServerId(
+  scope: McpServerEntry['scope'],
+  name: string,
+  projectPath?: string,
+): string {
+  if (scope === 'project' && projectPath) {
+    return `project:${name}@${projectPath}`;
+  }
+  return `${scope}:${name}`;
+}
 
 function normalizeServers(data: Record<string, unknown>): McpServerEntry[] {
   const servers: McpServerEntry[] = [];
@@ -82,15 +101,13 @@ function normalizeServers(data: Record<string, unknown>): McpServerEntry[] {
     servers.push(makeEntry(name, cfg, 'global'));
   }
 
-  // Project
+  // Project -- each project gets its own isolated entries (no dedup against global)
   for (const [projPath, projCfg] of Object.entries(projects)) {
     const mcpServers = (projCfg.mcpServers ?? {}) as Record<string, Record<string, unknown>>;
     const disabled = (projCfg.disabledMcpServers ?? []) as string[];
     for (const [name, cfg] of Object.entries(mcpServers)) {
-      if (servers.some((s) => s.name === name && s.scope === 'global')) continue;
       servers.push({
-        ...makeEntry(name, cfg, 'project'),
-        projectPath: projPath,
+        ...makeEntry(name, cfg, 'project', projPath),
         enabled: !disabled.includes(name),
       });
     }
@@ -98,15 +115,13 @@ function normalizeServers(data: Record<string, unknown>): McpServerEntry[] {
 
   // Enterprise
   for (const [name, cfg] of Object.entries(enterpriseServers)) {
-    if (!servers.some((s) => s.name === name)) {
-      servers.push({ ...makeEntry(name, cfg, 'enterprise'), enabled: true });
-    }
+    servers.push({ ...makeEntry(name, cfg, 'enterprise'), enabled: true });
   }
 
   // Codex
   if (codex?.servers) {
     for (const [name, cfg] of Object.entries(codex.servers)) {
-      const existing = servers.find((s) => s.name === name);
+      const existing = servers.find((s) => s.name === name && s.scope === 'global');
       if (existing) {
         existing.cli.codex = true;
       } else {
@@ -122,11 +137,15 @@ function makeEntry(
   name: string,
   cfg: Record<string, unknown>,
   scope: McpServerEntry['scope'],
+  projectPath?: string,
 ): McpServerEntry {
   const hasUrl = typeof cfg.url === 'string';
+  const id = makeServerId(scope, name, projectPath);
   return {
+    id,
     name,
     scope,
+    projectPath,
     enabled: cfg.enabled !== false,
     transport: hasUrl ? 'http' : 'stdio',
     command: typeof cfg.command === 'string' ? cfg.command : undefined,
@@ -158,7 +177,7 @@ export const useMcpStore = create<McpStore>((set, get) => ({
   setActiveView: (view) => set({ activeView: view }),
   setScopeFilter: (filter) => set({ scopeFilter: filter }),
   setSearch: (q) => set({ search: q }),
-  setSelectedServer: (name) => set({ selectedServer: name }),
+  setSelectedServer: (id) => set({ selectedServer: id }),
   setTemplateSearch: (q) => set({ templateSearch: q }),
   setTemplateCategory: (cat) => set({ templateCategory: cat }),
 
@@ -292,5 +311,27 @@ export const useMcpStore = create<McpStore>((set, get) => ({
       );
     }
     return result;
+  },
+
+  projectGroups: () => {
+    const { servers } = get();
+    const map = new Map<string | null, McpServerEntry[]>();
+    for (const srv of servers) {
+      const key = srv.projectPath ?? null;
+      const list = map.get(key) ?? [];
+      list.push(srv);
+      map.set(key, list);
+    }
+    const groups: ProjectGroup[] = [];
+    for (const [projectPath, svrs] of map) {
+      groups.push({ projectPath, servers: svrs });
+    }
+    return groups;
+  },
+
+  selectedEntry: () => {
+    const { servers, selectedServer } = get();
+    if (!selectedServer) return null;
+    return servers.find((s) => s.id === selectedServer) ?? null;
   },
 }));

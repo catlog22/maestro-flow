@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Columns2, Plus, X } from 'lucide-react';
 import { useAgentStore } from '@/client/store/agent-store.js';
 import { useResizableSplit } from '@/client/hooks/useResizableSplit.js';
@@ -28,12 +28,36 @@ export function ChatPage() {
     );
   }, [processes]);
 
-  // Auto-select first process if none selected
+  // Track when the user explicitly entered new-session mode by clicking "+"
+  const isNewSessionModeRef = useRef(false);
+  // Use process count (a number) as dep — stable across status updates, only changes on add/remove
+  const processCount = Object.keys(processes).length;
+  const prevProcessCountRef = useRef(processCount);
+  // Keep a ref to sorted processes so the effect can read the current list without it as a dep
+  const sortedProcessesRef = useRef(sortedProcesses);
+  sortedProcessesRef.current = sortedProcesses;
+
+  // Auto-select first process on initial load or after spawn.
+  // Does NOT auto-select when user intentionally clicked "+" (isNewSessionModeRef.current = true).
   useEffect(() => {
-    if (!activeProcessId && sortedProcesses.length > 0) {
-      setActiveProcessId(sortedProcesses[0].id);
+    const prevCount = prevProcessCountRef.current;
+    prevProcessCountRef.current = processCount;
+
+    if (isNewSessionModeRef.current) {
+      // New-session mode: only auto-select when a new process actually spawns
+      if (processCount > prevCount && !activeProcessId) {
+        isNewSessionModeRef.current = false;
+        const first = sortedProcessesRef.current[0];
+        if (first) setActiveProcessId(first.id);
+      }
+      return;
     }
-  }, [activeProcessId, sortedProcesses, setActiveProcessId]);
+
+    if (!activeProcessId && processCount > 0) {
+      const first = sortedProcessesRef.current[0];
+      if (first) setActiveProcessId(first.id);
+    }
+  }, [activeProcessId, processCount, setActiveProcessId]);
 
   const activeProcess = activeProcessId ? processes[activeProcessId] : null;
   const splitProcess = splitProcessId ? processes[splitProcessId] : null;
@@ -107,7 +131,10 @@ export function ChatPage() {
           )}
           <button
             type="button"
-            onClick={() => setActiveProcessId(null)}
+            onClick={() => {
+              isNewSessionModeRef.current = true;
+              setActiveProcessId(null);
+            }}
             className="w-7 h-7 rounded-[8px] border-none bg-transparent flex items-center justify-center cursor-pointer transition-all duration-150"
             style={{ color: 'var(--color-text-tertiary)' }}
             onMouseEnter={(e) => {

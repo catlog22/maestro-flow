@@ -8,6 +8,8 @@ import { FilterChipBar } from '@/client/components/common/FilterChipBar.js';
 import { DetailPanel } from '@/client/components/common/DetailPanel.js';
 import { KanbanBoard } from '@/client/components/kanban/KanbanBoard.js';
 import { TimelineView } from '@/client/components/kanban/TimelineView.js';
+import { KanbanTableView } from '@/client/components/kanban/KanbanTableView.js';
+import { KanbanCenterView } from '@/client/components/kanban/KanbanCenterView.js';
 import { KanbanDetailPanel } from '@/client/components/kanban/KanbanDetailPanel.js';
 import { LinearImportDialog } from '@/client/components/kanban/LinearImportDialog.js';
 import { LinearExportDialog } from '@/client/components/kanban/LinearExportDialog.js';
@@ -22,6 +24,8 @@ import type { Issue } from '@/shared/issue-types.js';
 import type { LinearIssue } from '@/shared/linear-types.js';
 import LayoutGrid from 'lucide-react/dist/esm/icons/layout-grid.js';
 import Clock from 'lucide-react/dist/esm/icons/clock.js';
+import TableIcon from 'lucide-react/dist/esm/icons/table.js';
+import LayoutDashboard from 'lucide-react/dist/esm/icons/layout-dashboard.js';
 import RefreshCw from 'lucide-react/dist/esm/icons/refresh-cw.js';
 import Download from 'lucide-react/dist/esm/icons/download.js';
 import Upload from 'lucide-react/dist/esm/icons/upload.js';
@@ -32,7 +36,9 @@ import Upload from 'lucide-react/dist/esm/icons/upload.js';
 
 const FILTER_CHIPS = ['All', 'Executing', 'Planning', 'Pending'] as const;
 
-type ActiveView = 'kanban' | 'timeline';
+type ActiveView = 'kanban' | 'timeline' | 'table' | 'center';
+
+const VIEW_ORDER: ActiveView[] = ['kanban', 'timeline', 'table', 'center'];
 
 export function KanbanPage() {
   const [activeView, setActiveView] = useState<ActiveView>('kanban');
@@ -108,7 +114,7 @@ export function KanbanPage() {
   const detailOpen = selectedItem !== null && !cliPanelIssueId;
 
   const handleViewSwitch = useCallback((index: number) => {
-    setActiveView(index === 0 ? 'kanban' : 'timeline');
+    setActiveView(VIEW_ORDER[index] ?? 'kanban');
   }, []);
 
   useEffect(() => {
@@ -116,8 +122,10 @@ export function KanbanPage() {
       items: [
         { label: 'Kanban', icon: <LayoutGrid size={14} />, shortcut: 'K' },
         { label: 'Timeline', icon: <Clock size={14} />, shortcut: 'T' },
+        { label: 'Table', icon: <TableIcon size={14} />, shortcut: 'L' },
+        { label: 'Center', icon: <LayoutDashboard size={14} />, shortcut: 'C' },
       ],
-      activeIndex: activeView === 'kanban' ? 0 : 1,
+      activeIndex: VIEW_ORDER.indexOf(activeView),
       onSwitch: handleViewSwitch,
     });
   }, [register, activeView, handleViewSwitch]);
@@ -287,7 +295,7 @@ export function KanbanPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Main content */}
         <div className="flex-1 overflow-auto min-w-0">
-          {activeView === 'kanban' ? (
+          {activeView === 'kanban' && (
             <KanbanBoard
               onSelectPhase={handleSelectPhase}
               linearIssues={allLinearIssues}
@@ -303,8 +311,27 @@ export function KanbanPage() {
               selectedIssueIds={selectedIssueIds}
               onToggleIssueCheck={toggleSelect}
             />
-          ) : (
+          )}
+          {activeView === 'timeline' && (
             <TimelineView onSelectPhase={handleSelectPhase} />
+          )}
+          {activeView === 'table' && (
+            <KanbanTableView
+              localIssues={issues}
+              linearIssues={allLinearIssues}
+              selectedItem={selectedItem}
+              onSelectItem={handleSelectItem}
+              onSelectPhase={handleSelectPhase}
+            />
+          )}
+          {activeView === 'center' && (
+            <KanbanCenterView
+              localIssues={issues}
+              linearIssues={allLinearIssues}
+              selectedItem={selectedItem}
+              onSelectItem={handleSelectItem}
+              onSelectPhase={handleSelectPhase}
+            />
           )}
         </div>
 

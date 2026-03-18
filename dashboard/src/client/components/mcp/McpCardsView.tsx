@@ -4,6 +4,7 @@ import Terminal from 'lucide-react/dist/esm/icons/terminal.js';
 import Globe from 'lucide-react/dist/esm/icons/globe.js';
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right.js';
 import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left.js';
+import FolderOpen from 'lucide-react/dist/esm/icons/folder-open.js';
 import { useMcpStore } from '@/client/store/mcp-store.js';
 import type { McpServerEntry } from '@/client/store/mcp-store.js';
 
@@ -16,6 +17,22 @@ interface ScopeGroup {
   label: string;
   color: string;
   servers: McpServerEntry[];
+  /** When scope='project', sub-groups by workspace path. */
+  projectSubGroups?: ProjectSubGroup[];
+}
+
+interface ProjectSubGroup {
+  projectPath: string;
+  folderName: string;
+  servers: McpServerEntry[];
+}
+
+/** Extract last path segment (folder name) from a full path string. */
+function basename(p: string): string {
+  const sep = p.includes('/') ? '/' : p.includes('\\') ? '\\' : '/';
+  const cleaned = p.endsWith(sep) ? p.slice(0, -1) : p;
+  const idx = cleaned.lastIndexOf(sep);
+  return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
 }
 
 const SCOPE_META: Record<string, { label: string; color: string }> = {
@@ -57,7 +74,7 @@ export function McpCardsView() {
     return result;
   }, [allServers, scopeFilter, search]);
 
-  // Group by scope
+  // Group by scope (project scope gets sub-grouped by workspace)
   const groups = useMemo<ScopeGroup[]>(() => {
     const map = new Map<string, McpServerEntry[]>();
     for (const srv of filteredServers) {
@@ -70,7 +87,28 @@ export function McpCardsView() {
       const list = map.get(scope);
       if (list && list.length > 0) {
         const meta = SCOPE_META[scope] ?? { label: scope, color: 'var(--color-text-tertiary)' };
-        result.push({ scope, label: meta.label, color: meta.color, servers: list });
+        const group: ScopeGroup = { scope, label: meta.label, color: meta.color, servers: list };
+
+        // Sub-group project-scope servers by workspace path
+        if (scope === 'project') {
+          const subMap = new Map<string, McpServerEntry[]>();
+          for (const srv of list) {
+            const key = srv.projectPath ?? '__unknown__';
+            const sub = subMap.get(key) ?? [];
+            sub.push(srv);
+            subMap.set(key, sub);
+          }
+          group.projectSubGroups = [];
+          for (const [projectPath, svrs] of subMap) {
+            group.projectSubGroups.push({
+              projectPath,
+              folderName: basename(projectPath),
+              servers: svrs,
+            });
+          }
+        }
+
+        result.push(group);
       }
     }
     return result;
@@ -107,20 +145,60 @@ export function McpCardsView() {
             </span>
           </div>
 
-          {/* Card grid */}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[10px]">
-            {group.servers.map((srv, si) => (
-              <ServerCard
-                key={srv.name}
-                server={srv}
-                selected={selectedServer === srv.name}
-                isEnterprise={group.scope === 'enterprise'}
-                delay={si * 0.04}
-                onSelect={() => setSelectedServer(selectedServer === srv.name ? null : srv.name)}
-                onToggle={() => handleToggle(srv)}
-              />
-            ))}
-          </div>
+          {/* Card grid -- project scope uses sub-groups, others render directly */}
+          {group.projectSubGroups ? (
+            <div className="flex flex-col gap-[14px]">
+              {group.projectSubGroups.map((sub) => (
+                <div key={sub.projectPath}>
+                  {/* Sub-group header */}
+                  <div className="flex items-center gap-[8px] mb-[8px]">
+                    <FolderOpen
+                      size={13}
+                      strokeWidth={1.8}
+                      style={{ color: 'var(--color-status-planning, #9178B5)', opacity: 0.7 }}
+                    />
+                    <span
+                      className="text-[11px] font-bold text-text-secondary"
+                      title={sub.projectPath}
+                    >
+                      {sub.folderName}
+                    </span>
+                    <span className="text-[9px] font-mono text-text-tertiary opacity-60">
+                      {sub.servers.length}
+                    </span>
+                  </div>
+                  {/* Sub-group card grid */}
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[10px]">
+                    {sub.servers.map((srv, si) => (
+                      <ServerCard
+                        key={srv.id}
+                        server={srv}
+                        selected={selectedServer === srv.id}
+                        isEnterprise={false}
+                        delay={si * 0.04}
+                        onSelect={() => setSelectedServer(selectedServer === srv.id ? null : srv.id)}
+                        onToggle={() => handleToggle(srv)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-[10px]">
+              {group.servers.map((srv, si) => (
+                <ServerCard
+                  key={srv.id}
+                  server={srv}
+                  selected={selectedServer === srv.id}
+                  isEnterprise={group.scope === 'enterprise'}
+                  delay={si * 0.04}
+                  onSelect={() => setSelectedServer(selectedServer === srv.id ? null : srv.id)}
+                  onToggle={() => handleToggle(srv)}
+                />
+              ))}
+            </div>
+          )}
         </motion.div>
       ))}
     </div>

@@ -10,7 +10,20 @@ import Edit3 from 'lucide-react/dist/esm/icons/edit-3.js';
 import Trash2 from 'lucide-react/dist/esm/icons/trash-2.js';
 import ChevronRight from 'lucide-react/dist/esm/icons/chevron-right.js';
 import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left.js';
+import FolderOpen from 'lucide-react/dist/esm/icons/folder-open.js';
 import { McpDetailPanel } from '@/client/components/mcp/McpDetailPanel.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract last path segment (folder name) from a full path string. */
+function basename(p: string): string {
+  const sep = p.includes('/') ? '/' : p.includes('\\') ? '\\' : '/';
+  const cleaned = p.endsWith(sep) ? p.slice(0, -1) : p;
+  const idx = cleaned.lastIndexOf(sep);
+  return idx >= 0 ? cleaned.slice(idx + 1) : cleaned;
+}
 
 // ---------------------------------------------------------------------------
 // McpListView -- table view with stats bar, toolbar, and detail panel
@@ -73,7 +86,7 @@ export function McpListView() {
   };
 
   const selectedEntry = selectedServer
-    ? allServers.find((s) => s.name === selectedServer) ?? null
+    ? allServers.find((s) => s.id === selectedServer) ?? null
     : null;
 
   function handleToggle(srv: McpServerEntry) {
@@ -186,23 +199,88 @@ export function McpListView() {
               </tr>
             </thead>
             <tbody>
-              {servers.map((srv) => (
-                <ServerRow
-                  key={srv.name}
-                  server={srv}
-                  selected={selectedServer === srv.name}
-                  onSelect={() => setSelectedServer(selectedServer === srv.name ? null : srv.name)}
-                  onToggle={() => handleToggle(srv)}
-                  onRemove={() => handleRemove(srv)}
-                />
-              ))}
-              {servers.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="text-center py-8 text-text-tertiary text-[length:var(--font-size-sm)]">
-                    No servers found
-                  </td>
-                </tr>
-              )}
+              {(() => {
+                const showProjectGroups = scopeFilter === 'all' || scopeFilter === 'project';
+                if (!showProjectGroups) {
+                  // No grouping needed -- render flat
+                  return servers.map((srv) => (
+                    <ServerRow
+                      key={srv.id}
+                      server={srv}
+                      selected={selectedServer === srv.id}
+                      onSelect={() => setSelectedServer(selectedServer === srv.id ? null : srv.id)}
+                      onToggle={() => handleToggle(srv)}
+                      onRemove={() => handleRemove(srv)}
+                    />
+                  ));
+                }
+
+                // Separate project-scope servers from others
+                const projectServers = servers.filter((s) => s.scope === 'project');
+                const nonProjectServers = servers.filter((s) => s.scope !== 'project');
+
+                // Group project servers by projectPath
+                const groupMap = new Map<string, McpServerEntry[]>();
+                for (const srv of projectServers) {
+                  const key = srv.projectPath ?? '';
+                  const list = groupMap.get(key) ?? [];
+                  list.push(srv);
+                  groupMap.set(key, list);
+                }
+
+                const rows: React.ReactNode[] = [];
+
+                // Non-project rows first
+                for (const srv of nonProjectServers) {
+                  rows.push(
+                    <ServerRow
+                      key={srv.id}
+                      server={srv}
+                      selected={selectedServer === srv.id}
+                      onSelect={() => setSelectedServer(selectedServer === srv.id ? null : srv.id)}
+                      onToggle={() => handleToggle(srv)}
+                      onRemove={() => handleRemove(srv)}
+                    />,
+                  );
+                }
+
+                // Project groups
+                for (const [path, svrs] of groupMap) {
+                  const folderName = basename(path);
+                  rows.push(
+                    <ProjectGroupRow
+                      key={`group:${path}`}
+                      folderName={folderName}
+                      fullPath={path}
+                      count={svrs.length}
+                    />,
+                  );
+                  for (const srv of svrs) {
+                    rows.push(
+                      <ServerRow
+                        key={srv.id}
+                        server={srv}
+                        selected={selectedServer === srv.id}
+                        onSelect={() => setSelectedServer(selectedServer === srv.id ? null : srv.id)}
+                        onToggle={() => handleToggle(srv)}
+                        onRemove={() => handleRemove(srv)}
+                      />,
+                    );
+                  }
+                }
+
+                if (rows.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-text-tertiary text-[length:var(--font-size-sm)]">
+                        No servers found
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return rows;
+              })()}
             </tbody>
           </table>
         </div>
@@ -232,6 +310,40 @@ function StatItem({ color, value, label }: { color: string; value: number; label
       <span className="text-[16px] font-extrabold text-text-primary font-mono">{value}</span>
       <span className="text-[10px] font-semibold text-text-tertiary uppercase tracking-[0.04em]">{label}</span>
     </div>
+  );
+}
+
+function ProjectGroupRow({
+  folderName,
+  fullPath,
+  count,
+}: {
+  folderName: string;
+  fullPath: string;
+  count: number;
+}) {
+  return (
+    <tr className="group-header-row">
+      <td
+        colSpan={7}
+        className="px-[14px] py-[6px] bg-[rgba(145,120,181,0.04)] border-b border-border-divider"
+      >
+        <div className="flex items-center gap-[8px]">
+          <FolderOpen
+            size={13}
+            strokeWidth={1.8}
+            style={{ color: 'var(--color-status-planning, #9178B5)', opacity: 0.7 }}
+          />
+          <span
+            className="text-[11px] font-bold text-text-secondary"
+            title={fullPath}
+          >
+            {folderName}
+          </span>
+          <span className="text-[9px] font-mono text-text-tertiary opacity-60">{count}</span>
+        </div>
+      </td>
+    </tr>
   );
 }
 

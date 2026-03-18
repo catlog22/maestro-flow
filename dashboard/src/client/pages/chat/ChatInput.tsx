@@ -37,6 +37,8 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
   const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const { isMultiline } = useAutoExpandTextarea(text, composerRef);
   const storeProcessId = useAgentStore((s) => s.activeProcessId);
   const processes = useAgentStore((s) => s.processes);
@@ -108,6 +110,24 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
     setText(e.target.value);
   }, []);
 
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setText((prev) => prev + (prev ? ' ' : '') + `@${file.name}`);
+      textareaRef.current?.focus();
+    }
+    e.target.value = '';
+  }, []);
+
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setText((prev) => prev + (prev ? ' ' : '') + `@${file.name}`);
+      textareaRef.current?.focus();
+    }
+    e.target.value = '';
+  }, []);
+
   const showAgentSelector = !effectiveProcessId && externalProcessId === undefined;
   const currentModel = activeProcess?.type ?? agentType;
 
@@ -116,6 +136,9 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
       className="shrink-0 px-6 pb-[14px] pt-2"
       style={{ backgroundColor: 'var(--color-bg-primary)' }}
     >
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+      <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
       {isNonInteractive && (
         <div
           className="mb-2 px-3 py-1 rounded-[var(--radius-default)] text-[length:var(--font-size-xs)] text-text-tertiary"
@@ -208,11 +231,13 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
             <ToolbarButton
               tooltip="File"
               icon={<Paperclip size={15} strokeWidth={1.8} />}
+              onClick={() => fileInputRef.current?.click()}
             />
             {/* Image button */}
             <ToolbarButton
               tooltip="Image"
               icon={<Image size={15} strokeWidth={1.8} />}
+              onClick={() => imageInputRef.current?.click()}
             />
             {/* Skills button */}
             <ToolbarButton
