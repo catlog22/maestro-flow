@@ -20,7 +20,10 @@ import { StreamJsonAdapter } from './agents/stream-json-adapter.js';
 import { CodexCliAdapter } from './agents/codex-cli-adapter.js';
 import { CodexAppServerAdapter } from './agents/codex-app-server-adapter.js';
 import { OpenCodeAdapter } from './agents/opencode-adapter.js';
+import { AgentSdkAdapter } from './agents/agent-sdk-adapter.js';
 import { ExecutionScheduler } from './execution/execution-scheduler.js';
+import { CommanderAgent } from './commander/commander-agent.js';
+import { loadCommanderConfig } from './commander/commander-config.js';
 import { createRoutes } from './routes/index.js';
 
 async function main(): Promise<void> {
@@ -60,6 +63,7 @@ async function main(): Promise<void> {
   agentManager.registerAdapter(new CodexCliAdapter());
   agentManager.registerAdapter(new CodexAppServerAdapter());
   agentManager.registerAdapter(new OpenCodeAdapter());
+  agentManager.registerAdapter(new AgentSdkAdapter());
 
   // ---------------------------------------------------------------------------
   // Execution Scheduler — orchestrates issue execution via agent processes
@@ -69,9 +73,22 @@ async function main(): Promise<void> {
   const executionScheduler = new ExecutionScheduler(agentManager, eventBus, jsonlPath);
 
   // ---------------------------------------------------------------------------
+  // Commander Agent — autonomous tick loop for project orchestration
+  // ---------------------------------------------------------------------------
+  const commanderConfig = await loadCommanderConfig(workflowRoot);
+  const commanderAgent = new CommanderAgent(
+    eventBus,
+    stateManager,
+    executionScheduler,
+    agentManager,
+    workflowRoot,
+    commanderConfig,
+  );
+
+  // ---------------------------------------------------------------------------
   // WebSocket Manager — broadcasts EventBus events to connected WS clients
   // ---------------------------------------------------------------------------
-  const wsManager = new WebSocketManager(eventBus, agentManager, executionScheduler);
+  const wsManager = new WebSocketManager(eventBus, agentManager, executionScheduler, commanderAgent);
 
   // ---------------------------------------------------------------------------
   // Hono application
@@ -83,7 +100,7 @@ async function main(): Promise<void> {
   app.use('*', logger());
 
   // API routes
-  const routes = createRoutes(stateManager, workflowRoot, eventBus, sseHub, agentManager, executionScheduler);
+  const routes = createRoutes(stateManager, workflowRoot, eventBus, sseHub, agentManager, executionScheduler, commanderAgent);
   app.route('/', routes);
 
   // Resolve dashboard root relative to this file (works for both dev and npm install)
@@ -126,6 +143,7 @@ async function main(): Promise<void> {
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
+    commanderAgent.stop();
     await executionScheduler.destroy();
     await agentManager.stopAll();
     wsManager.destroy();

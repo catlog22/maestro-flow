@@ -58,6 +58,7 @@ const DEFAULT_AGENTS: Record<AgentType, AgentSettingsEntry> = {
   gemini: { model: '', approvalMode: 'suggest' },
   qwen: { model: '', approvalMode: 'suggest' },
   opencode: { model: '', approvalMode: 'suggest' },
+  'agent-sdk': { model: '', approvalMode: 'suggest' },
 };
 
 const DEFAULT_CONFIG: SettingsConfig = {

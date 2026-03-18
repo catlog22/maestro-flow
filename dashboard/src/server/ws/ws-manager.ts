@@ -7,6 +7,7 @@ import type { WsServerMessage, WsClientMessage, WsEventType } from '../../shared
 import type { DashboardEventBus } from '../state/event-bus.js';
 import type { AgentManager } from '../agents/agent-manager.js';
 import type { ExecutionScheduler } from '../execution/execution-scheduler.js';
+import type { CommanderAgent } from '../commander/commander-agent.js';
 
 // ---------------------------------------------------------------------------
 // WebSocketManager — manages WS clients, bridges EventBus to WS broadcast
@@ -21,6 +22,7 @@ export class WebSocketManager {
     private readonly eventBus: DashboardEventBus,
     private readonly agentManager: AgentManager,
     private readonly executionScheduler?: ExecutionScheduler,
+    private readonly commanderAgent?: CommanderAgent,
   ) {
     this.wss = new WebSocketServer({ noServer: true });
 
@@ -208,6 +210,40 @@ export class WebSocketManager {
           } else if (msg.enabled === false) {
             this.executionScheduler.stopSupervisor();
           }
+        }
+        break;
+
+      // --- Commander actions ---------------------------------------------------
+      case 'commander:start':
+        if (this.commanderAgent) {
+          this.commanderAgent.start()
+            .catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err);
+              this.sendError(ws, 'commander:start', message);
+            });
+        }
+        break;
+
+      case 'commander:stop':
+        if (this.commanderAgent) {
+          this.commanderAgent.stop();
+        }
+        break;
+
+      case 'commander:pause':
+        if (this.commanderAgent) {
+          const state = this.commanderAgent.getState();
+          if (state.status === 'paused') {
+            this.commanderAgent.resume();
+          } else {
+            this.commanderAgent.pause();
+          }
+        }
+        break;
+
+      case 'commander:config':
+        if (this.commanderAgent) {
+          this.commanderAgent.updateConfig(msg.config);
         }
         break;
 

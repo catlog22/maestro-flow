@@ -5,6 +5,7 @@ import type { DashboardEventBus } from '../state/event-bus.js';
 import type { SSEHub } from '../sse/sse-hub.js';
 import type { AgentManager } from '../agents/agent-manager.js';
 import type { ExecutionScheduler } from '../execution/execution-scheduler.js';
+import type { CommanderAgent } from '../commander/commander-agent.js';
 import { createHealthRoute } from './health.js';
 import { createBoardRoutes } from './board.js';
 import { createPhaseRoutes } from './phases.js';
@@ -19,6 +20,7 @@ import { createCliHistoryRoutes } from './cli-history.js';
 import { createMcpRoutes } from './mcp.js';
 import { createSpecsRoutes } from './specs.js';
 import { createLinearRoutes } from './linear.js';
+import { createCommanderRoutes } from '../commander/commander-routes.js';
 
 /**
  * Aggregate all route modules into a single Hono app.
@@ -35,6 +37,7 @@ export function createRoutes(
   sseHub: SSEHub,
   agentManager: AgentManager,
   executionScheduler?: ExecutionScheduler,
+  commanderAgent?: CommanderAgent,
 ): Hono {
   const routes = new Hono();
 
@@ -77,6 +80,11 @@ export function createRoutes(
 
   // Linear API proxy routes (needs workflowRoot for import/export)
   routes.route('/', createLinearRoutes(workflowRoot));
+
+  // Commander routes (depends on CommanderAgent)
+  if (commanderAgent) {
+    routes.route('/', createCommanderRoutes(commanderAgent));
+  }
 
   return routes;
 }

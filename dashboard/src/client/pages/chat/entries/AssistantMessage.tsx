@@ -14,6 +14,7 @@ const AVATAR_CONFIG: Record<AgentType, { label: string; color: string; className
   gemini:        { label: 'G', color: 'var(--color-accent-blue)', className: 'gemini' },
   qwen:          { label: 'Q', color: 'var(--color-accent-orange)', className: 'qwen' },
   opencode:      { label: 'O', color: 'var(--color-text-tertiary)', className: 'opencode' },
+  'agent-sdk':   { label: 'S', color: 'var(--color-accent-purple)', className: 'claude' },
 };
 
 export function AssistantMessage({ entry }: { entry: AssistantMessageEntry }) {

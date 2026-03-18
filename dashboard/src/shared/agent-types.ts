@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 /** Supported agent CLI types */
-export type AgentType = 'claude-code' | 'codex' | 'codex-server' | 'gemini' | 'qwen' | 'opencode';
+export type AgentType = 'claude-code' | 'codex' | 'codex-server' | 'gemini' | 'qwen' | 'opencode' | 'agent-sdk';
 
 /** Agent process lifecycle status */
 export type AgentProcessStatus =

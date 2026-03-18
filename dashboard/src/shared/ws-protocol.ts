@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AgentConfig, AgentProcess, AgentType, NormalizedEntry, ApprovalRequest, AgentStatusPayload, AgentStoppedPayload } from './agent-types.js';
+import type { CommanderConfig } from './commander-types.js';
 import type { SupervisorConfig, SupervisorStatus } from './execution-types.js';
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,11 @@ export type WsEventType =
   | 'execution:completed'
   | 'execution:failed'
   | 'supervisor:status'
+  // Commander events
+  | 'commander:status'
+  | 'commander:tick'
+  | 'commander:decision'
+  | 'commander:config'
   // Board events (mirrored from SSE for WS clients)
   | 'board:full'
   | 'phase:updated'
@@ -68,7 +74,11 @@ export type WsClientMessage =
   | WsClientCliBridgeStoppedMessage
   | WsClientExecuteIssueMessage
   | WsClientExecuteBatchMessage
-  | WsClientSupervisorToggleMessage;
+  | WsClientSupervisorToggleMessage
+  | WsClientCommanderStartMessage
+  | WsClientCommanderStopMessage
+  | WsClientCommanderPauseMessage
+  | WsClientCommanderConfigMessage;
 
 export interface WsClientSpawnMessage {
   action: 'spawn';
@@ -133,6 +143,27 @@ export interface WsClientSupervisorToggleMessage {
   action: 'supervisor:toggle';
   enabled: boolean;
   config?: Partial<SupervisorConfig>;
+}
+
+// ---------------------------------------------------------------------------
+// Commander client messages
+// ---------------------------------------------------------------------------
+
+export interface WsClientCommanderStartMessage {
+  action: 'commander:start';
+}
+
+export interface WsClientCommanderStopMessage {
+  action: 'commander:stop';
+}
+
+export interface WsClientCommanderPauseMessage {
+  action: 'commander:pause';
+}
+
+export interface WsClientCommanderConfigMessage {
+  action: 'commander:config';
+  config: Partial<CommanderConfig>;
 }
 
 // ---------------------------------------------------------------------------
