@@ -1,7 +1,7 @@
 {
   "id": "ISS-{{YYYYMMDD}}-{{NNN}}",
   "title": "{{TITLE}}",
-  "status": "registered",
+  "status": "open",
   "priority": 3,
   "severity": "medium",
   "source": "verification",
@@ -17,6 +17,10 @@
     "suggested_fix": "{{REMEDIATION_CODE_OR_STEPS}}",
     "notes": ""
   },
+
+  "analysis": null,
+  "path": null,
+  "phase_id": null,
 
   "tags": [],
   "affected_components": [],

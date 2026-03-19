@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // WebSocket Manager — broadcasts EventBus events to connected WS clients
   // ---------------------------------------------------------------------------
-  const wsManager = new WebSocketManager(eventBus, agentManager, executionScheduler, commanderAgent);
+  const wsManager = new WebSocketManager(eventBus, agentManager, executionScheduler, commanderAgent, workflowRoot);
 
   // ---------------------------------------------------------------------------
   // Hono application

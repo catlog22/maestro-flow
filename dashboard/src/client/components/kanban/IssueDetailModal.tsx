@@ -1,5 +1,10 @@
 import { useEffect } from 'react';
 import type { Issue } from '@/shared/issue-types.js';
+import { getDisplayStatus, ISSUE_DISPLAY_STATUS_COLORS } from '@/shared/constants.js';
+import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
+import { AnalysisSection } from '../issue/AnalysisSection.js';
+import { SolutionSection } from '../issue/SolutionSection.js';
+import { ExecutionResultSection } from '../issue/ExecutionResultSection.js';
 
 // ---------------------------------------------------------------------------
 // IssueDetailModal — 3 style variants for viewing an issue (Linear-style)
@@ -31,13 +36,6 @@ const EXEC_COLORS: Record<string, string> = {
   completed: '#5A9E78',
   failed: '#C46555',
   retrying: '#B89540',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
 };
 
 interface Props {
@@ -79,6 +77,70 @@ function PropRow({ label, children }: { label: string; children: React.ReactNode
       </div>
       {children}
     </div>
+  );
+}
+
+// Action buttons for issue lifecycle
+function ActionButtons({ issue }: { issue: Issue }) {
+  const displayStatus = getDisplayStatus(issue);
+  if (displayStatus !== 'open' && displayStatus !== 'analyzing' && displayStatus !== 'planned') return null;
+
+  return (
+    <div className="flex gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border-divider)' }}>
+      {!issue.analysis && (
+        <button
+          type="button"
+          onClick={() => sendWsMessage({ action: 'issue:analyze', issueId: issue.id })}
+          className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
+          style={{ backgroundColor: 'var(--color-accent-blue)', color: 'white' }}
+        >
+          Analyze
+        </button>
+      )}
+      {issue.analysis && !issue.solution && (
+        <button
+          type="button"
+          onClick={() => sendWsMessage({ action: 'issue:plan', issueId: issue.id })}
+          className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
+          style={{ backgroundColor: 'var(--color-accent-blue)', color: 'white' }}
+        >
+          Plan
+        </button>
+      )}
+      {issue.solution && (
+        <button
+          type="button"
+          onClick={() => sendWsMessage({ action: 'execute:issue', issueId: issue.id })}
+          className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
+          style={{ backgroundColor: '#5A9E78', color: 'white' }}
+        >
+          Execute
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Conditional sections for analysis/solution/execution result
+function DetailSections({ issue }: { issue: Issue }) {
+  return (
+    <>
+      {issue.analysis && (
+        <PropRow label="Analysis">
+          <AnalysisSection analysis={issue.analysis} />
+        </PropRow>
+      )}
+      {issue.solution && (
+        <PropRow label="Solution">
+          <SolutionSection solution={issue.solution} />
+        </PropRow>
+      )}
+      {issue.execution && issue.execution.result && (
+        <PropRow label="Execution Result">
+          <ExecutionResultSection execution={issue.execution} />
+        </PropRow>
+      )}
+    </>
   );
 }
 
@@ -149,12 +211,18 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
 
             {/* Status */}
             <PropRow label="Status">
-              <span
-                className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
-              >
-                {STATUS_LABELS[issue.status] ?? issue.status}
-              </span>
+              {(() => {
+                const ds = getDisplayStatus(issue);
+                const dsColor = ISSUE_DISPLAY_STATUS_COLORS[ds];
+                return (
+                  <span
+                    className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: `${dsColor}20`, color: dsColor }}
+                  >
+                    {ds.replace('_', ' ')}
+                  </span>
+                );
+              })()}
             </PropRow>
 
             {issue.executor && (
@@ -174,6 +242,9 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
               </PropRow>
             )}
 
+            {/* Analysis / Solution / Execution Result */}
+            <DetailSections issue={issue} />
+
             {issue.execution && issue.execution.status !== 'idle' && (
               <PropRow label="Execution">
                 <div className="space-y-1.5">
@@ -184,7 +255,7 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
                     </span>
                     {issue.execution.retryCount > 0 && (
                       <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>
-                        (×{issue.execution.retryCount})
+                        (x{issue.execution.retryCount})
                       </span>
                     )}
                   </div>
@@ -206,6 +277,9 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
                 <div>Updated {formatRelative(issue.updated_at)}</div>
               </div>
             </PropRow>
+
+            {/* Action Buttons */}
+            <ActionButtons issue={issue} />
           </div>
         </div>
       </>
@@ -260,11 +334,11 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
               <div className="flex items-center gap-2 mb-4">
                 <Badge label={issue.type} color={typeColor} bg={`${typeColor}20`} />
                 <Badge label={issue.priority} color={priColor} bg={`${priColor}20`} />
-                <Badge
-                  label={STATUS_LABELS[issue.status] ?? issue.status}
-                  color="var(--color-text-secondary)"
-                  bg="var(--color-bg-secondary)"
-                />
+                {(() => {
+                  const ds = getDisplayStatus(issue);
+                  const dsColor = ISSUE_DISPLAY_STATUS_COLORS[ds];
+                  return <Badge label={ds.replace('_', ' ')} color={dsColor} bg={`${dsColor}20`} />;
+                })()}
               </div>
 
               <h2
@@ -309,6 +383,16 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
                   </div>
                 </div>
               )}
+
+              {/* Analysis / Solution / Execution Result */}
+              <div className="mt-5 space-y-5">
+                <DetailSections issue={issue} />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-5">
+                <ActionButtons issue={issue} />
+              </div>
             </div>
           </div>
 
@@ -333,12 +417,18 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
             </PropRow>
 
             <PropRow label="Status">
-              <span
-                className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
-              >
-                {STATUS_LABELS[issue.status] ?? issue.status}
-              </span>
+              {(() => {
+                const ds = getDisplayStatus(issue);
+                const dsColor = ISSUE_DISPLAY_STATUS_COLORS[ds];
+                return (
+                  <span
+                    className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                    style={{ backgroundColor: `${dsColor}20`, color: dsColor }}
+                  >
+                    {ds.replace('_', ' ')}
+                  </span>
+                );
+              })()}
             </PropRow>
 
             {issue.executor && (
@@ -353,7 +443,7 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
                   <span className="w-2 h-2 rounded-full" style={{ backgroundColor: execColor }} />
                   <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
                     {issue.execution.status}
-                    {issue.execution.retryCount > 0 && ` (×${issue.execution.retryCount})`}
+                    {issue.execution.retryCount > 0 && ` (x${issue.execution.retryCount})`}
                   </span>
                 </div>
                 {issue.execution.startedAt && (
@@ -408,11 +498,11 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
         <div className="flex items-center gap-2">
           <Badge label={issue.type} color={typeColor} bg={`${typeColor}20`} />
           <Badge label={issue.priority} color={priColor} bg={`${priColor}20`} />
-          <Badge
-            label={STATUS_LABELS[issue.status] ?? issue.status}
-            color="var(--color-text-secondary)"
-            bg="var(--color-bg-secondary)"
-          />
+          {(() => {
+            const ds = getDisplayStatus(issue);
+            const dsColor = ISSUE_DISPLAY_STATUS_COLORS[ds];
+            return <Badge label={ds.replace('_', ' ')} color={dsColor} bg={`${dsColor}20`} />;
+          })()}
           <button
             type="button"
             onClick={onClose}
@@ -479,6 +569,16 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
                 </pre>
               </div>
             )}
+
+            {/* Analysis / Solution / Execution Result */}
+            <div className="mt-8 space-y-6">
+              <DetailSections issue={issue} />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-8">
+              <ActionButtons issue={issue} />
+            </div>
           </div>
         </div>
 
@@ -496,12 +596,18 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
           </PropRow>
 
           <PropRow label="Status">
-            <span
-              className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-              style={{ backgroundColor: 'var(--color-bg-card)', color: 'var(--color-text-secondary)', border: '1px solid var(--color-border)' }}
-            >
-              {STATUS_LABELS[issue.status] ?? issue.status}
-            </span>
+            {(() => {
+              const ds = getDisplayStatus(issue);
+              const dsColor = ISSUE_DISPLAY_STATUS_COLORS[ds];
+              return (
+                <span
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-full"
+                  style={{ backgroundColor: `${dsColor}20`, color: dsColor }}
+                >
+                  {ds.replace('_', ' ')}
+                </span>
+              );
+            })()}
           </PropRow>
 
           {issue.executor && (

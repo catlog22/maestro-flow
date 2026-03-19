@@ -74,7 +74,7 @@ export interface CommanderState {
 // ---------------------------------------------------------------------------
 
 export interface PriorityAction {
-  type: 'execute_issue' | 'create_issue' | 'advance_phase' | 'flag_blocker';
+  type: 'execute_issue' | 'analyze_issue' | 'plan_issue' | 'create_issue' | 'advance_phase' | 'flag_blocker';
   /** Target identifier (ISS-xxx or phase-slug) */
   target: string;
   reason: string;

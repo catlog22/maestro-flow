@@ -23,6 +23,7 @@ export class WebSocketManager {
     private readonly agentManager: AgentManager,
     private readonly executionScheduler?: ExecutionScheduler,
     private readonly commanderAgent?: CommanderAgent,
+    private readonly workflowRoot: string = process.cwd(),
   ) {
     this.wss = new WebSocketServer({ noServer: true });
 
@@ -198,6 +199,61 @@ export class WebSocketManager {
               this.sendError(ws, 'execute:batch', message);
             });
         }
+        break;
+
+      // --- Issue analyze/plan actions (UI -> AgentManager) -------------------
+      case 'issue:analyze':
+        if (!msg.issueId) {
+          this.sendError(ws, 'issue:analyze', 'Missing issueId');
+          break;
+        }
+        this.agentManager.spawn('claude-code', {
+          type: 'claude-code',
+          prompt: `Analyze issue ${msg.issueId}: Read .workflow/issues/issues.jsonl, find the issue, explore codebase for root cause analysis, and update the issue with analysis results.`,
+          workDir: this.workflowRoot,
+          approvalMode: 'auto',
+        })
+          .then((proc) => {
+            const response: WsServerMessage = {
+              type: 'agent:spawned',
+              data: proc,
+              timestamp: new Date().toISOString(),
+            };
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(response));
+            }
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            this.sendError(ws, 'issue:analyze', message);
+          });
+        break;
+
+      case 'issue:plan':
+        if (!msg.issueId) {
+          this.sendError(ws, 'issue:plan', 'Missing issueId');
+          break;
+        }
+        this.agentManager.spawn('claude-code', {
+          type: 'claude-code',
+          prompt: `Plan solution for issue ${msg.issueId}: Read the issue from .workflow/issues/issues.jsonl, use existing analysis, generate solution steps, and update the issue with the solution.`,
+          workDir: this.workflowRoot,
+          approvalMode: 'auto',
+        })
+          .then((proc) => {
+            const response: WsServerMessage = {
+              type: 'agent:spawned',
+              data: proc,
+              timestamp: new Date().toISOString(),
+            };
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify(response));
+            }
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            this.sendError(ws, 'issue:plan', message);
+          });
         break;
 
       case 'supervisor:toggle':

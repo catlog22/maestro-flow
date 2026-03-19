@@ -8,6 +8,8 @@ import { dirname, join } from 'node:path';
 
 import type {
   Issue,
+  IssueAnalysis,
+  IssueSolution,
   CreateIssueRequest,
   UpdateIssueRequest,
   IssueType,
@@ -92,10 +94,13 @@ function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
 /**
  * Issue routes following the Hono factory pattern.
  *
- * GET    /api/issues         - list all issues (optional ?status=&type= filters)
- * POST   /api/issues         - create a new issue
- * PATCH  /api/issues/:id     - update an existing issue
- * DELETE /api/issues/:id     - delete an issue
+ * GET    /api/issues              - list all issues (optional ?status=&type= filters)
+ * POST   /api/issues              - create a new issue
+ * GET    /api/issues/:id          - get a single issue by ID
+ * PATCH  /api/issues/:id          - update an existing issue
+ * PATCH  /api/issues/:id/analysis - set issue analysis
+ * PATCH  /api/issues/:id/solution - set issue solution plan
+ * DELETE /api/issues/:id          - delete an issue
  */
 export function createIssueRoutes(workflowRoot: string): Hono {
   const app = new Hono();
@@ -208,6 +213,143 @@ export function createIssueRoutes(workflowRoot: string): Hono {
         issues[idx] = {
           ...issues[idx],
           ...patch,
+          updated_at: new Date().toISOString(),
+        };
+        updated = issues[idx];
+        await writeIssuesJsonl(jsonlPath, issues);
+      });
+
+      if (!updated) {
+        return c.json({ error: `Issue not found: ${id}` }, 404);
+      }
+      return c.json(updated);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/issues/:id
+  app.get('/api/issues/:id', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const issues = await readIssuesJsonl(jsonlPath);
+      const issue = issues.find((i) => i.id === id);
+      if (!issue) {
+        return c.json({ error: `Issue not found: ${id}` }, 404);
+      }
+      return c.json(issue);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // PATCH /api/issues/:id/analysis
+  app.patch('/api/issues/:id/analysis', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const body = await c.req.json<Record<string, unknown>>();
+
+      // Validate required IssueAnalysis fields
+      if (!body.root_cause || typeof body.root_cause !== 'string') {
+        return c.json({ error: 'Missing or invalid "root_cause" field' }, 400);
+      }
+      if (!body.impact || typeof body.impact !== 'string') {
+        return c.json({ error: 'Missing or invalid "impact" field' }, 400);
+      }
+      if (!Array.isArray(body.related_files)) {
+        return c.json({ error: 'Missing or invalid "related_files" field' }, 400);
+      }
+      if (typeof body.confidence !== 'number' || body.confidence < 0 || body.confidence > 1) {
+        return c.json({ error: 'Missing or invalid "confidence" field (must be number 0-1)' }, 400);
+      }
+      if (!body.suggested_approach || typeof body.suggested_approach !== 'string') {
+        return c.json({ error: 'Missing or invalid "suggested_approach" field' }, 400);
+      }
+      if (!body.analyzed_at || typeof body.analyzed_at !== 'string') {
+        return c.json({ error: 'Missing or invalid "analyzed_at" field' }, 400);
+      }
+      if (!body.analyzed_by || typeof body.analyzed_by !== 'string') {
+        return c.json({ error: 'Missing or invalid "analyzed_by" field' }, 400);
+      }
+
+      const analysis: IssueAnalysis = {
+        root_cause: body.root_cause as string,
+        impact: body.impact as string,
+        related_files: body.related_files as string[],
+        confidence: body.confidence as number,
+        suggested_approach: body.suggested_approach as string,
+        analyzed_at: body.analyzed_at as string,
+        analyzed_by: body.analyzed_by as string,
+      };
+
+      let updated: Issue | null = null;
+
+      await withWriteLock(async () => {
+        const issues = await readIssuesJsonl(jsonlPath);
+        const idx = issues.findIndex((i) => i.id === id);
+        if (idx === -1) return;
+
+        issues[idx] = {
+          ...issues[idx],
+          analysis,
+          updated_at: new Date().toISOString(),
+        };
+        updated = issues[idx];
+        await writeIssuesJsonl(jsonlPath, issues);
+      });
+
+      if (!updated) {
+        return c.json({ error: `Issue not found: ${id}` }, 404);
+      }
+      return c.json(updated);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // PATCH /api/issues/:id/solution
+  app.patch('/api/issues/:id/solution', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const body = await c.req.json<Record<string, unknown>>();
+
+      // Validate required IssueSolution fields
+      if (!Array.isArray(body.steps) || body.steps.length === 0) {
+        return c.json({ error: 'Missing or invalid "steps" field (must be non-empty array)' }, 400);
+      }
+      if (!body.planned_at || typeof body.planned_at !== 'string') {
+        return c.json({ error: 'Missing or invalid "planned_at" field' }, 400);
+      }
+      if (!body.planned_by || typeof body.planned_by !== 'string') {
+        return c.json({ error: 'Missing or invalid "planned_by" field' }, 400);
+      }
+
+      // Build solution object
+      const solution: IssueSolution = {
+        steps: body.steps as IssueSolution['steps'],
+        planned_at: body.planned_at as string,
+        planned_by: body.planned_by as string,
+      };
+      if (body.context !== undefined && typeof body.context === 'string') {
+        solution.context = body.context;
+      }
+      if (body.promptTemplate !== undefined && typeof body.promptTemplate === 'string') {
+        solution.promptTemplate = body.promptTemplate;
+      }
+
+      let updated: Issue | null = null;
+
+      await withWriteLock(async () => {
+        const issues = await readIssuesJsonl(jsonlPath);
+        const idx = issues.findIndex((i) => i.id === id);
+        if (idx === -1) return;
+
+        issues[idx] = {
+          ...issues[idx],
+          solution,
           updated_at: new Date().toISOString(),
         };
         updated = issues[idx];

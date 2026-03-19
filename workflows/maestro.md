@@ -135,7 +135,10 @@ function detectTaskType(text) {
     ['milestone_audit',  /milestone.*audit|cross.*phase.*check|里程碑.*审计/i],
     ['milestone_complete', /milestone.*compl|finish.*milestone|完成.*里程碑/i],
 
-    // Priority 21: Issue management
+    // Priority 21: Issue management (granular patterns first, then generic)
+    ['issue_analyze',     /analyze.*issue|issue.*analyze|分析.*问题|issue.*root.*cause/i],
+    ['issue_plan',        /plan.*issue|issue.*plan|规划.*问题|issue.*solution/i],
+    ['issue_execute',     /execute.*issue|issue.*execute|执行.*问题|run.*issue/i],
     ['issue',             /issue|问题|缺陷|gap.*track|issue.*manage|discover.*issue/i],
 
     // Priority 22-29: Maintenance operations
@@ -344,6 +347,9 @@ const chainMap = {
   'spec_map':           [{ cmd: 'spec-map' }],
   'memory_capture':     [{ cmd: 'manage-memory-capture', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],
+  'issue_analyze':      [{ cmd: 'manage-issue-analyze', args: '"{description}"' }],
+  'issue_plan':         [{ cmd: 'manage-issue-plan', args: '"{description}"' }],
+  'issue_execute':      [{ cmd: 'manage-issue-execute', args: '"{description}"' }],
   'memory':             [{ cmd: 'manage-memory', args: '"{description}"' }],
   'quick':              [{ cmd: 'maestro-quick', args: '"{description}"' }],
 
@@ -454,7 +460,7 @@ function resolvePhase(intent_analysis, project_state) {
   if (chainName === 'analyze-plan-execute') return null;
 
   // 4. Chain doesn't need phase (init, status, memory, etc.)
-  const noPhaseCommands = ['manage-status', 'manage-issue', 'maestro-init', 'maestro-spec-generate',
+  const noPhaseCommands = ['manage-status', 'manage-issue', 'manage-issue-analyze', 'manage-issue-plan', 'manage-issue-execute', 'maestro-init', 'maestro-spec-generate',
     'maestro-roadmap', 'spec-setup', 'spec-map', 'manage-memory', 'manage-memory-capture',
     'manage-codebase-rebuild', 'manage-codebase-refresh', 'maestro-milestone-audit',
     'maestro-milestone-complete', 'maestro-phase-transition', 'maestro-phase-add'];
@@ -696,6 +702,9 @@ Display completion report:
 | `"integration test payment"` | integration_test | integration-test | quality-integration-test |
 | `"list critical issues"` | issue | issue | manage-issue "list critical issues" |
 | `"discover issues"` | issue | issue | manage-issue "discover" |
+| `"analyze issue ISS-xxx"` | issue_analyze | issue_analyze | manage-issue-analyze "ISS-xxx" |
+| `"plan issue ISS-xxx"` | issue_plan | issue_plan | manage-issue-plan "ISS-xxx" |
+| `"execute issue ISS-xxx"` | issue_execute | issue_execute | manage-issue-execute "ISS-xxx" |
 | `"team review code"` | team_review | team_review | team-review |
 | `"team qa full scan"` | team_qa | team_qa | team-quality-assurance |
 | `"team test auth module"` | team_test | team_test | team-testing |

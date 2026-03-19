@@ -74,6 +74,8 @@ export type WsClientMessage =
   | WsClientCliBridgeStoppedMessage
   | WsClientExecuteIssueMessage
   | WsClientExecuteBatchMessage
+  | WsClientAnalyzeIssueMessage
+  | WsClientPlanIssueMessage
   | WsClientSupervisorToggleMessage
   | WsClientCommanderStartMessage
   | WsClientCommanderStopMessage
@@ -137,6 +139,19 @@ export interface WsClientExecuteBatchMessage {
   issueIds: string[];
   executor?: AgentType;
   maxConcurrency?: number;
+}
+
+export interface WsClientAnalyzeIssueMessage {
+  action: 'issue:analyze';
+  issueId: string;
+  tool?: string;   // 'gemini' | 'qwen'
+  depth?: string;  // 'standard' | 'deep'
+}
+
+export interface WsClientPlanIssueMessage {
+  action: 'issue:plan';
+  issueId: string;
+  tool?: string;   // 'gemini' | 'qwen'
 }
 
 export interface WsClientSupervisorToggleMessage {

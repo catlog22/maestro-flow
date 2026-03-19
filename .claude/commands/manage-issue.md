@@ -14,6 +14,8 @@ allowed-tools:
 Issue lifecycle management for the project issue tracker. Supports create, list, status, update, close, and link (bidirectional issue-task cross-reference). All issues stored in `.workflow/issues/issues.jsonl` using the issue.json schema.
 
 For automated issue discovery, use `/manage-issue-discover`.
+
+**Closed-loop workflow**: After creating an issue, use `/manage-issue-analyze` for root cause analysis, `/manage-issue-plan` for solution planning, and `/manage-issue-execute` for execution.
 </purpose>
 
 <required_reading>

@@ -18,6 +18,8 @@ Automated issue discovery via multi-perspective codebase analysis (8 perspective
 - **`by-prompt "..."`**: Prompt-driven — user describes what to look for, system decomposes into exploration dimensions with iterative deepening.
 
 For CRUD operations (create, list, update, close, link), use `/manage-issue`.
+
+After discovery, use `/manage-issue-analyze <ISS-ID>` to perform root cause analysis on individual findings.
 </purpose>
 
 <required_reading>

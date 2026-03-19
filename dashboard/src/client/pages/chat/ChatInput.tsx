@@ -203,7 +203,7 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
             wrap.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06), 0 0 0 3px rgba(200, 134, 58, 0.08)';
           }}
           onBlurCapture={(e) => {
-            if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) {
+            if (!e.relatedTarget || !(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) {
               const wrap = e.currentTarget as HTMLElement;
               wrap.style.borderColor = 'var(--color-border)';
               wrap.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)';

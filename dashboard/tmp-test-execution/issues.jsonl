@@ -1,2 +1,2 @@
-{"id":"ISS-1","title":"Test Issue 1","description":"Test Description 1","type":"task","priority":"medium","status":"in_progress","created_at":"2026-03-18T03:27:06.752Z","updated_at":"2026-03-18T03:27:06.760Z","execution":{"status":"running","retryCount":0,"startedAt":"2026-03-18T03:27:06.760Z"}}
-{"id":"ISS-2","title":"Test Issue 2","description":"Test Description 2","type":"task","priority":"medium","status":"open","created_at":"2026-03-18T03:27:06.752Z","updated_at":"2026-03-18T03:27:06.752Z"}
+{"id":"ISS-1","title":"Test Issue 1","description":"Test Description 1","type":"task","priority":"medium","status":"open","created_at":"2026-03-18T11:46:08.867Z","updated_at":"2026-03-18T11:46:08.867Z"}
+{"id":"ISS-2","title":"Test Issue 2","description":"Test Description 2","type":"task","priority":"medium","status":"open","created_at":"2026-03-18T11:46:08.867Z","updated_at":"2026-03-18T11:46:08.867Z"}

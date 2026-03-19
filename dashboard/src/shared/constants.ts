@@ -1,6 +1,7 @@
 import type { PhaseStatus, TaskStatus, SSEEventType } from './types.js';
 import type { WsEventType } from './ws-protocol.js';
 import type { AgentType } from './agent-types.js';
+import type { Issue } from './issue-types.js';
 
 // ---------------------------------------------------------------------------
 // Status enums
@@ -247,3 +248,46 @@ export const AGENT_LABELS: Record<AgentType, string> = {
   'opencode': 'OpenCode',
   'agent-sdk': 'Agent SDK',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Issue display status (derived from issue metadata for UI)
+// ---------------------------------------------------------------------------
+
+/** UI-derived status that includes metadata-based states */
+export type DisplayStatus =
+  | 'open'
+  | 'analyzing'
+  | 'planned'
+  | 'in_progress'
+  | 'resolved'
+  | 'closed';
+
+export const ISSUE_DISPLAY_STATUS_COLORS: Record<DisplayStatus, string> = {
+  open: '#A09D97',
+  analyzing: '#5B8DB8',
+  planned: '#9178B5',
+  in_progress: '#B89540',
+  resolved: '#5A9E78',
+  closed: '#6B6966',
+} as const;
+
+/**
+ * Derive display status from issue.status + metadata (analysis/solution presence).
+ * Maps the raw IssueStatus to a richer UI state based on attached data.
+ */
+export function getDisplayStatus(issue: Issue): DisplayStatus {
+  switch (issue.status) {
+    case 'closed':
+      return 'closed';
+    case 'resolved':
+      return 'resolved';
+    case 'in_progress':
+      return 'in_progress';
+    case 'open':
+      if (issue.solution) return 'planned';
+      if (issue.analysis) return 'analyzing';
+      return 'open';
+    default:
+      return 'open';
+  }
+}

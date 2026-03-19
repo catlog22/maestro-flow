@@ -29,7 +29,7 @@ ALWAYS return a single JSON object (no markdown, no explanation):
 {
   "priority_actions": [
     {
-      "type": "execute_issue" | "create_issue" | "advance_phase" | "flag_blocker",
+      "type": "execute_issue" | "analyze_issue" | "plan_issue" | "create_issue" | "advance_phase" | "flag_blocker",
       "target": "ISS-xxx" | "phase-slug",
       "reason": "concise rationale",
       "risk": "low" | "medium" | "high",
@@ -51,6 +51,11 @@ ALWAYS return a single JSON object (no markdown, no explanation):
    - Simple file edits, docs -> gemini (fast, cost-effective)
    - Code implementation, debugging -> claude-code (thorough)
    - Code review, analysis -> codex (strong reasoning)
+8. Issue closed-loop progression:
+   - Open issue WITHOUT analysis and WITHOUT solution -> analyze_issue
+   - Open issue WITH analysis but WITHOUT solution -> plan_issue
+   - Open issue WITH solution -> execute_issue
+   - Prefer depth over breadth (complete one issue's chain before starting next)
 
 ## Risk Assessment Guidelines
 - LOW: Read-only operations, documentation, simple config changes
@@ -80,9 +85,10 @@ export function buildAssessmentPrompt(context: AssessmentContext): string {
   const phaseStatus = context.currentPhase?.status ?? 'unknown';
 
   const issueList = context.openIssues.length > 0
-    ? context.openIssues.map((i) =>
-        `- [${i.id}] ${i.priority.toUpperCase()} ${i.type}: ${i.title}${i.solution ? ' (has solution)' : ''}`,
-      ).join('\n')
+    ? context.openIssues.map((i) => {
+        const state = i.solution ? '[READY]' : i.analysis ? '[ANALYZED]' : '[NEW]';
+        return `- [${i.id}] ${state} ${i.priority.toUpperCase()} ${i.type}: ${i.title}${i.solution ? ' (has solution)' : ''}`;
+      }).join('\n')
     : '(none)';
 
   const decisionList = context.recentDecisions.length > 0
@@ -140,7 +146,7 @@ export const COMMANDER_OUTPUT_SCHEMA: OutputFormat = {
           properties: {
             type: {
               type: 'string',
-              enum: ['execute_issue', 'create_issue', 'advance_phase', 'flag_blocker'],
+              enum: ['execute_issue', 'analyze_issue', 'plan_issue', 'create_issue', 'advance_phase', 'flag_blocker'],
             },
             target: { type: 'string', description: 'ISS-xxx or phase-slug' },
             reason: { type: 'string' },

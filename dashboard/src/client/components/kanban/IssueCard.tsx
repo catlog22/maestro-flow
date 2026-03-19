@@ -4,6 +4,7 @@ import type { AgentType } from '@/shared/agent-types.js';
 import { useExecutionStore } from '@/client/store/execution-store.js';
 import { useIssueStore } from '@/client/store/issue-store.js';
 import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
+import { getDisplayStatus, ISSUE_DISPLAY_STATUS_COLORS } from '@/shared/constants.js';
 
 // ---------------------------------------------------------------------------
 // IssueCard — kanban card with execution controls
@@ -21,13 +22,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: '#B89540',
   medium: '#5B8DB8',
   low: '#A09D97',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Open',
-  in_progress: 'In Progress',
-  resolved: 'Resolved',
-  closed: 'Closed',
 };
 
 const EXECUTOR_OPTIONS: { value: AgentType; label: string }[] = [
@@ -146,6 +140,26 @@ export function IssueCard({ issue, selected, onSelect, batchMode, isChecked, onT
             {issue.type}
           </span>
 
+          {/* Path badge */}
+          {issue.path && (
+            <span
+              className="text-[10px] font-medium px-1.5 py-[var(--spacing-0-5)] rounded-full"
+              style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)', border: '1px solid var(--color-border)' }}
+            >
+              {issue.path}
+            </span>
+          )}
+
+          {/* Solution indicator */}
+          {issue.solution && (
+            <span
+              className="text-[10px] font-medium px-1.5 py-[var(--spacing-0-5)] rounded-full"
+              style={{ backgroundColor: '#9178B520', color: '#9178B5' }}
+            >
+              {issue.solution.steps.length} steps
+            </span>
+          )}
+
           {/* Execution status indicator */}
           {statusInfo && (
             <span
@@ -176,9 +190,15 @@ export function IssueCard({ issue, selected, onSelect, batchMode, isChecked, onT
 
         {/* Row 3: Status + executor + execute button */}
         <div className="flex items-center justify-between">
-          <span className="text-[length:10px] text-text-tertiary">
-            {STATUS_LABELS[issue.status] ?? issue.status}
-          </span>
+          {(() => {
+            const ds = getDisplayStatus(issue);
+            const dsColor = ISSUE_DISPLAY_STATUS_COLORS[ds];
+            return (
+              <span className="text-[length:10px]" style={{ color: dsColor }}>
+                {ds.replace('_', ' ')}
+              </span>
+            );
+          })()}
 
           <div className="flex items-center gap-[var(--spacing-1)]">
             {/* Executor selector (compact) */}

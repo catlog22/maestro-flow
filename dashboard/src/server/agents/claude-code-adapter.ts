@@ -5,6 +5,8 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import { randomUUID } from 'node:crypto';
+import { resolve as resolvePath } from 'node:path';
+import { existsSync } from 'node:fs';
 import type {
   AgentConfig,
   AgentProcess,
@@ -13,6 +15,20 @@ import type {
 } from '../../shared/agent-types.js';
 import { BaseAgentAdapter } from './base-adapter.js';
 import { EntryNormalizer } from './entry-normalizer.js';
+
+/**
+ * Resolve the Claude Code CLI `.js` entry point for direct `node` invocation.
+ * On Windows, the global `claude` command is a `.cmd` wrapper requiring
+ * `shell: true`, which adds cmd.exe nesting. Spawning `node cli.js` directly
+ * avoids that overhead.
+ */
+function resolveClaudeCliPath(): string {
+  const npmPrefix = process.env.APPDATA
+    ? resolvePath(process.env.APPDATA, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js')
+    : '';
+  if (npmPrefix && existsSync(npmPrefix)) return npmPrefix;
+  return '';
+}
 
 // ---------------------------------------------------------------------------
 // Claude Code stream-json message shapes (narrowed from unknown)
@@ -106,27 +122,38 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     processId: string,
     config: AgentConfig,
   ): Promise<AgentProcess> {
-    const child = spawn(
-      'npx',
-      [
-        '@anthropic-ai/claude-code',
-        '--output-format=stream-json',
-        '--input-format=stream-json',
-        '--verbose',
-        '--print',
-        config.prompt,
-      ],
-      {
-        cwd: config.workDir,
-        env: { ...process.env, ...config.env },
-        stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true,
-      },
-    );
+    // Build CLI arguments — use --print for one-shot prompts.
+    // stdin is kept open only when --input-format=stream-json is used (interactive).
+    const args = [
+      '--output-format=stream-json',
+      '--verbose',
+      '--print',
+      config.prompt,
+    ];
+
+    // Resolve CLI entry point for direct node invocation (avoids cmd.exe
+    // wrapper nesting on Windows which causes stdout buffering).
+    const cliPath = resolveClaudeCliPath();
+    const child = cliPath
+      ? spawn(process.execPath, [cliPath, ...args], {
+          cwd: config.workDir,
+          env: { ...process.env, ...config.env },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+      : spawn('claude', args, {
+          cwd: config.workDir,
+          env: { ...process.env, ...config.env },
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: true,
+        });
 
     if (!child.stdout || !child.stdin || !child.stderr) {
       throw new Error('Failed to spawn Claude Code: stdio streams not available');
     }
+
+    // Close stdin immediately for --print mode. Without this, the child process
+    // blocks indefinitely waiting for stdin input on Windows pipes.
+    child.stdin.end();
 
     // Line-by-line parsing of stream-json stdout
     const rl = createInterface({ input: child.stdout });
@@ -291,12 +318,8 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       }
 
       case 'result': {
-        if (msg.result) {
-          this.emitEntry(
-            processId,
-            EntryNormalizer.assistantMessage(processId, msg.result, false),
-          );
-        }
+        // Note: msg.result duplicates the assistant message text already emitted
+        // via 'assistant' / 'content_block_*' events, so we skip it here.
         if (msg.usage) {
           this.emitEntry(
             processId,

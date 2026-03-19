@@ -30,11 +30,31 @@ export interface IssueSolution {
   steps: SolutionStep[];
   context?: string;          // exploration context, key files
   promptTemplate?: string;   // custom prompt template (Liquid syntax)
+  planned_at?: string;       // ISO timestamp when solution was planned
+  planned_by?: string;       // agent or user who created the plan
+}
+
+// ---------------------------------------------------------------------------
+// Analysis — structured root cause analysis (from /issue:analyze)
+// ---------------------------------------------------------------------------
+
+/** Structured root cause analysis record attached to an issue */
+export interface IssueAnalysis {
+  root_cause: string;           // identified root cause description
+  impact: string;               // impact assessment
+  related_files: string[];      // files related to the issue
+  confidence: number;           // 0-1 confidence score
+  suggested_approach: string;   // recommended fix approach
+  analyzed_at: string;          // ISO timestamp
+  analyzed_by: string;          // agent or user who performed analysis
 }
 
 // ---------------------------------------------------------------------------
 // Core interfaces
 // ---------------------------------------------------------------------------
+
+/** Issue resolution path */
+export type IssuePath = 'standalone' | 'workflow';
 
 /** Full Issue record (stored in JSONL) */
 export interface Issue {
@@ -47,7 +67,10 @@ export interface Issue {
   executor?: AgentType;
   promptMode?: PromptMode;
   solution?: IssueSolution;
+  analysis?: IssueAnalysis;
   execution?: IssueExecution;
+  path?: IssuePath;
+  phase_id?: number;
   source_entry_id?: string;
   source_process_id?: string;
   created_at: string;

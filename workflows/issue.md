@@ -92,7 +92,7 @@ Build issue record from template:
 {
   "id": "{ID}",
   "title": "{TITLE}",
-  "status": "registered",
+  "status": "open",
   "priority": {PRIORITY},
   "severity": "{SEVERITY}",
   "source": "{SOURCE}",
@@ -112,7 +112,7 @@ Build issue record from template:
     {
       "timestamp": "{NOW_ISO}",
       "from_status": null,
-      "to_status": "registered",
+      "to_status": "open",
       "actor": "user",
       "note": "Issue created"
     }
@@ -133,7 +133,7 @@ Write to storage:
 
    Created: {ID}
    Title:   {TITLE}
-   Status:  registered
+   Status:  open
    Severity: {SEVERITY}
 
 4. Suggest next steps:
@@ -150,7 +150,7 @@ Parse filter options from ARGS:
 
 ```
 Options:
-  --status VALUE    Filter by status (registered|in_progress|completed|failed|deferred)
+  --status VALUE    Filter by status (open|in_progress|completed|failed|deferred)
   --phase VALUE     Filter by phase_ref
   --severity VALUE  Filter by severity (critical|high|medium|low)
   --source VALUE    Filter by source
@@ -178,7 +178,7 @@ ISSUES ({count} found):
 ---------------------------------------------------------------
 ID                | Status      | Sev    | Pri | Title
 ---------------------------------------------------------------
-ISS-20260315-001  | registered  | high   |  2  | Refresh token rotation
+ISS-20260315-001  | open        | high   |  2  | Refresh token rotation
 ISS-20260315-002  | in_progress | medium |  3  | Missing input validation
 ---------------------------------------------------------------
 
@@ -257,7 +257,7 @@ RESOLUTION:
 Suggest next steps based on status:
 
 ```
-If status == "registered":
+If status == "open":
   - Skill({ skill: "manage-issue", args: "update {id} --status in_progress" }) -- Start working on it
   - Skill({ skill: "manage-issue", args: "link {id} --task TASK-NNN" }) -- Link to a task
 
@@ -278,7 +278,7 @@ Parse issue ID and field updates from ARGS:
 ```
 Options:
   ISS-XXXXXXXX-NNN       Issue ID (required, first positional arg)
-  --status VALUE          New status (registered|in_progress)
+  --status VALUE          New status (open|in_progress)
   --priority NUMBER       New priority (1-5)
   --severity VALUE        New severity (critical|high|medium|low)
   --tags TAG1,TAG2        Replace tags

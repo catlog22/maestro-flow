@@ -358,9 +358,11 @@ export class CommanderAgent {
     // Sort approved actions by priority (execute_issue first, then by risk ascending)
     const priorityOrder: Record<string, number> = {
       execute_issue: 0,
-      flag_blocker: 1,
-      create_issue: 2,
-      advance_phase: 3,
+      analyze_issue: 1,
+      plan_issue: 2,
+      flag_blocker: 3,
+      create_issue: 4,
+      advance_phase: 5,
     };
 
     withinThreshold.sort((a, b) => {
@@ -412,6 +414,27 @@ export class CommanderAgent {
               action.target,
               action.executor as Parameters<typeof this.executionScheduler.executeIssue>[1],
             );
+            break;
+
+          case 'analyze_issue':
+            // Use AgentManager for lightweight analysis (don't occupy Scheduler slots)
+            await this.agentManager.spawn(action.executor as any, {
+              type: action.executor as any,
+              prompt: `Analyze issue ${action.target}: Read .workflow/issues/issues.jsonl, find the issue by ID, analyze root cause by exploring codebase, and write analysis results back to the issue record. Follow the manage-issue-analyze workflow pattern.`,
+              workDir: this.workflowRoot,
+              approvalMode: 'auto',
+            });
+            console.log(`[Commander] Dispatched analyze_issue: ${action.target}`);
+            break;
+
+          case 'plan_issue':
+            await this.agentManager.spawn(action.executor as any, {
+              type: action.executor as any,
+              prompt: `Plan solution for issue ${action.target}: Read the issue from .workflow/issues/issues.jsonl, use the existing analysis if available, generate a solution with steps[], context, and promptTemplate, then write it back to the issue record. Follow the manage-issue-plan workflow pattern.`,
+              workDir: this.workflowRoot,
+              approvalMode: 'auto',
+            });
+            console.log(`[Commander] Dispatched plan_issue: ${action.target}`);
             break;
 
           case 'flag_blocker':

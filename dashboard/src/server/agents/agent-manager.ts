@@ -11,6 +11,7 @@ import type {
 } from '../../shared/agent-types.js';
 import type { AgentAdapter } from './base-adapter.js';
 import type { DashboardEventBus } from '../state/event-bus.js';
+import { EntryNormalizer } from './entry-normalizer.js';
 
 export class AgentManager {
   private readonly adapters = new Map<AgentType, AgentAdapter>();
@@ -73,6 +74,14 @@ export class AgentManager {
 
     // Emit spawned event
     this.eventBus.emit('agent:spawned', process);
+
+    // Emit user's initial prompt as a user_message entry so it appears in chat
+    if (config.prompt) {
+      const userEntry = EntryNormalizer.userMessage(process.id, config.prompt);
+      const history = this.entryHistory.get(process.id);
+      if (history) history.push(userEntry);
+      this.eventBus.emit('agent:entry', userEntry);
+    }
 
     return process;
   }
