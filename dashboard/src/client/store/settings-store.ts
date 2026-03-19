@@ -25,6 +25,14 @@ export interface LinearSettings {
   apiKey: string;
 }
 
+/** Chinese response status */
+export interface ChineseResponseStatus {
+  claudeEnabled: boolean;
+  codexEnabled: boolean;
+  codexNeedsMigration: boolean;
+  guidelinesExists: boolean;
+}
+
 /** Full settings config */
 export interface SettingsConfig {
   general: GeneralSettings;
@@ -44,6 +52,7 @@ export interface SettingsStore {
   loading: boolean;
   saving: boolean;
   error: string | null;
+  chineseResponse: ChineseResponseStatus | null;
 
   setOpen: (open: boolean) => void;
   setActiveSection: (section: SettingsSectionType) => void;
@@ -52,6 +61,8 @@ export interface SettingsStore {
   saveConfig: (section: keyof SettingsConfig) => Promise<void>;
   discardDraft: (section: keyof SettingsConfig) => void;
   isDirty: (section: keyof SettingsConfig) => boolean;
+  loadChineseResponse: () => Promise<void>;
+  toggleChineseResponse: (enabled: boolean, target: 'claude' | 'codex') => Promise<void>;
 }
 
 const DEFAULT_AGENTS: Record<AgentType, AgentSettingsEntry> = {
@@ -83,6 +94,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   loading: false,
   saving: false,
   error: null,
+  chineseResponse: null,
 
   setOpen: (open) => {
     set({ open });
@@ -154,5 +166,31 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     const { config, draft } = get();
     if (!config || !draft) return false;
     return JSON.stringify(config[section]) !== JSON.stringify(draft[section]);
+  },
+
+  loadChineseResponse: async () => {
+    try {
+      const res = await fetch('/api/language/chinese-response');
+      if (!res.ok) return;
+      const data = (await res.json()) as ChineseResponseStatus;
+      set({ chineseResponse: data });
+    } catch {
+      // Silently fail
+    }
+  },
+
+  toggleChineseResponse: async (enabled, target) => {
+    try {
+      const res = await fetch('/api/language/chinese-response', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, target }),
+      });
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      // Reload status after toggle
+      await get().loadChineseResponse();
+    } catch (err) {
+      set({ error: String(err) });
+    }
   },
 }));

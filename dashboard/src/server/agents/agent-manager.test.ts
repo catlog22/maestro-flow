@@ -57,7 +57,7 @@ describe('AgentManager — CLI Bridge lifecycle', () => {
 
     const entries = manager.getEntries('cli-2');
     expect(entries).toHaveLength(1);
-    expect(entries[0].content).toBe('hello');
+    expect((entries[0] as { content: string }).content).toBe('hello');
   });
 
   it('addCliEntry caps history at MAX_HISTORY', () => {

@@ -48,7 +48,7 @@ export function CliToolsSection() {
       >
         <div className="flex items-center justify-between mb-[var(--spacing-2)]">
           <span className="text-[length:var(--font-size-xs)] text-text-tertiary">
-            ~/.claude/cli-tools.json
+            ~/.maestro/cli-tools.json
           </span>
           <button
             type="button"

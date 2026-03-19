@@ -35,6 +35,8 @@ export interface AgentStore {
   setProcessThought: (processId: string, thought: ThoughtData) => void;
   setProcessStreaming: (processId: string, streaming: boolean) => void;
   updateProcessTokenUsage: (processId: string, input: number, output: number, cacheRead: number, cacheWrite: number) => void;
+  /** Remove a process and all associated state (entries, thoughts, streaming, tokens) */
+  dismissProcess: (processId: string) => void;
   clearAll: () => void;
 }
 
@@ -117,6 +119,29 @@ export const useAgentStore = create<AgentStore>((set) => ({
             cacheWrite: existing.cacheWrite + cacheWrite,
           },
         },
+      };
+    }),
+
+  dismissProcess: (processId) =>
+    set((state) => {
+      const { [processId]: _p, ...remainingProcesses } = state.processes;
+      const { [processId]: _e, ...remainingEntries } = state.entries;
+      const { [processId]: _t, ...remainingThoughts } = state.processThoughts;
+      const { [processId]: _s, ...remainingStreaming } = state.processStreaming;
+      const { [processId]: _u, ...remainingTokenUsage } = state.processTokenUsage;
+      // Clear any pending approvals for this process
+      const remainingApprovals: Record<string, typeof state.pendingApprovals[string]> = {};
+      for (const [id, approval] of Object.entries(state.pendingApprovals)) {
+        if (approval.processId !== processId) remainingApprovals[id] = approval;
+      }
+      return {
+        processes: remainingProcesses,
+        entries: remainingEntries,
+        processThoughts: remainingThoughts,
+        processStreaming: remainingStreaming,
+        processTokenUsage: remainingTokenUsage,
+        pendingApprovals: remainingApprovals,
+        activeProcessId: state.activeProcessId === processId ? null : state.activeProcessId,
       };
     }),
 

@@ -1,6 +1,7 @@
-import { readFile, writeFile, readdir, stat, access, constants } from 'node:fs/promises';
+import { readFile, writeFile, readdir, stat, access, constants, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { Hono } from 'hono';
 
 // ---------------------------------------------------------------------------
@@ -10,7 +11,7 @@ import { Hono } from 'hono';
 /** Paths for settings files */
 function getConfigPaths(workflowRoot: string) {
   return {
-    cliTools: resolve(homedir(), '.claude', 'cli-tools.json'),
+    cliTools: resolve(homedir(), '.maestro', 'cli-tools.json'),
     dashboardConfig: resolve(workflowRoot, 'config.json'),
     specDir: resolve(workflowRoot, '.spec'),
   };
@@ -253,6 +254,123 @@ export function createSettingsRoutes(workflowRoot: string): Hono {
       return c.json({ specs });
     } catch {
       return c.json({ specs: [] });
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // GET /api/language/chinese-response — check status
+  // -----------------------------------------------------------------------
+  app.get('/api/language/chinese-response', async (c) => {
+    try {
+      const userClaudePath = join(homedir(), '.claude', 'CLAUDE.md');
+      const userCodexPath = join(homedir(), '.codex', 'AGENTS.md');
+      const chineseRefPattern = /@.*chinese-response\.md/i;
+      const chineseSectionPattern = /## 中文回复/;
+      const oldCodexRefPattern = /- \*\*中文回复准则\*\*:\s*@.*chinese-response\.md/i;
+
+      let claudeEnabled = false;
+      let codexEnabled = false;
+      let codexNeedsMigration = false;
+
+      if (existsSync(userClaudePath)) {
+        const content = readFileSync(userClaudePath, 'utf8');
+        claudeEnabled = chineseRefPattern.test(content);
+      }
+
+      if (existsSync(userCodexPath)) {
+        const content = readFileSync(userCodexPath, 'utf8');
+        codexEnabled = chineseSectionPattern.test(content);
+        if (codexEnabled && oldCodexRefPattern.test(content)) {
+          codexNeedsMigration = true;
+        }
+      }
+
+      const guidelinesPath = join(homedir(), '.maestro', 'workflows', 'chinese-response.md');
+      const guidelinesExists = existsSync(guidelinesPath);
+
+      return c.json({ claudeEnabled, codexEnabled, codexNeedsMigration, guidelinesExists });
+    } catch (error) {
+      return c.json({ error: (error as Error).message }, 500);
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // POST /api/language/chinese-response — toggle on/off
+  // -----------------------------------------------------------------------
+  app.post('/api/language/chinese-response', async (c) => {
+    try {
+      const body = await c.req.json() as { enabled: boolean; target: 'claude' | 'codex' };
+      const { enabled, target = 'claude' } = body;
+
+      if (typeof enabled !== 'boolean') {
+        return c.json({ error: 'Missing or invalid enabled parameter' }, 400);
+      }
+
+      const guidelinesPath = join(homedir(), '.maestro', 'workflows', 'chinese-response.md');
+      if (!existsSync(guidelinesPath)) {
+        return c.json({ error: 'Chinese response guidelines file not found at ~/.maestro/workflows/chinese-response.md' }, 404);
+      }
+
+      const guidelinesRef = '~/.maestro/workflows/chinese-response.md';
+      const isCodex = target === 'codex';
+      const targetDir = isCodex ? join(homedir(), '.codex') : join(homedir(), '.claude');
+      const targetFile = isCodex ? join(targetDir, 'AGENTS.md') : join(targetDir, 'CLAUDE.md');
+
+      if (!existsSync(targetDir)) {
+        mkdirSync(targetDir, { recursive: true });
+      }
+
+      let content = '';
+      if (existsSync(targetFile)) {
+        content = readFileSync(targetFile, 'utf8');
+      } else {
+        content = isCodex ? '# Codex Code Guidelines\n\n' : '# Claude Instructions\n\n';
+      }
+
+      if (isCodex) {
+        const chineseSectionRe = /\n*## 中文回复\n[\s\S]*?(?=\n## |$)/;
+        const oldRefRe = /- \*\*中文回复准则\*\*:\s*@.*chinese-response\.md/i;
+
+        if (enabled) {
+          const hasSection = chineseSectionRe.test(content);
+          if (hasSection) {
+            const hasOldRef = oldRefRe.test(content);
+            if (hasOldRef) {
+              content = content.replace(chineseSectionRe, '\n').replace(/\n{3,}/g, '\n\n').trim();
+              if (content) content += '\n';
+              const chineseContent = readFileSync(guidelinesPath, 'utf8');
+              content = content.trimEnd() + '\n\n## 中文回复\n\n' + chineseContent + '\n';
+              writeFileSync(targetFile, content, 'utf8');
+              return c.json({ success: true, enabled, migrated: true });
+            }
+            return c.json({ success: true, message: 'Already enabled' });
+          }
+          const chineseContent = readFileSync(guidelinesPath, 'utf8');
+          content = content.trimEnd() + '\n\n## 中文回复\n\n' + chineseContent + '\n';
+        } else {
+          content = content.replace(chineseSectionRe, '\n').replace(/\n{3,}/g, '\n\n').trim();
+          if (content) content += '\n';
+        }
+      } else {
+        const chineseRefLine = `- **中文回复准则**: @${guidelinesRef}`;
+        const chineseRefRe = /^- \*\*中文回复准则\*\*:.*chinese-response\.md.*$/gm;
+        const chineseSectionRe = /\n*## 中文回复\n+- \*\*中文回复准则\*\*:.*chinese-response\.md.*\n*/gm;
+
+        if (enabled) {
+          if (chineseRefRe.test(content)) {
+            return c.json({ success: true, message: 'Already enabled' });
+          }
+          content = content.trimEnd() + '\n\n## 中文回复\n\n' + chineseRefLine + '\n';
+        } else {
+          content = content.replace(chineseSectionRe, '\n').replace(/\n{3,}/g, '\n\n').trim();
+          if (content) content += '\n';
+        }
+      }
+
+      writeFileSync(targetFile, content, 'utf8');
+      return c.json({ success: true, enabled, target });
+    } catch (error) {
+      return c.json({ error: (error as Error).message }, 500);
     }
   });
 
