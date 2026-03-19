@@ -129,8 +129,28 @@ Ensure phases in Step 2 respect architectural constraints.
 Spawn `cli-roadmap-plan-agent`.
 If `apiResearchContext` is set: include as "External API Research" context in the agent prompt — technology complexity, API constraints, and integration effort inform phase sizing and dependency ordering.
 
+### Phase Sizing Rules (MANDATORY)
+
+| Rule | Constraint |
+|------|-----------|
+| **Minimum tasks per phase** | 5 tasks. If a phase would have fewer, merge it into an adjacent phase. |
+| **Maximum phases (full-stack)** | 3 phases for a complete front-end + back-end project. Larger scope uses milestones, not more phases. |
+| **Maximum phases (backend-only / frontend-only)** | 2 phases. Single-side projects should not exceed 2 phases. |
+| **Merge principle** | Same-module, same-concern, or tightly-coupled work belongs in ONE phase. Infra + core logic + API in one phase is fine. |
+| **Split principle** | Only split when there is a hard dependency boundary (e.g., backend API must exist before frontend can integrate). |
+
+**Phase sizing checklist (applied after decomposition, before presenting to user):**
+1. Count estimated tasks per phase. Any phase < 5 tasks → merge into neighbor.
+2. Count total phases. Full-stack > 3 or single-side > 2 → merge related phases.
+3. Verify each phase has a meaningful deliverable boundary (not just "setup" or "cleanup").
+
+**Scope classification:**
+- **Single-side**: Pure frontend or pure backend project → max 2 phases.
+- **Full-stack**: One frontend + one backend → max 3 phases.
+- **Large scope** (monorepo with 2+ services, workers, multiple backends): Use milestones. Each milestone follows the 2-3 phase limit independently. Phase counts reset per milestone.
+
 **Progressive mode**:
-- 2-4 layers: MVP / Usable / Refined / Optimized
+- 2-3 layers: MVP / Usable / Refined (Optimized merged into Refined unless justified)
 - Each layer: goal, scope, excludes, convergence, risks, effort
 - MVP must be self-contained (no external dependencies)
 - Each feature in exactly ONE layer (no overlap)
@@ -171,10 +191,10 @@ Phase directories use `{NN}-{slug}` format (e.g., `01-auth`, `02-api`).
    - Max 5 rounds
 
 3. **Process Feedback**
-   - **Approve**: Exit loop, proceed to Step 5
+   - **Approve**: Run phase sizing checklist (Step 3 rules) before accepting. If violations found, auto-merge and inform user.
    - **Adjust Scope**: Move phases between milestones, modify criteria
    - **Reorder**: Change phase sequencing
-   - **Split/Merge**: Break large phases or combine small ones
+   - **Split/Merge**: Break large phases or combine small ones (enforce min 5 tasks, max 3 phases)
    - **Re-decompose**: Return to Step 3 with new strategy
 
 4. **Loop** until approved or max rounds reached

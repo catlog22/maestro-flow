@@ -94,9 +94,7 @@ export class AgentManager {
 
     // Generate execId for CLI History persistence (dashboard-spawned sessions)
     const prefix = config.type === 'claude-code' ? 'cld' : config.type.substring(0, 3);
-    const now = new Date();
-    const ts = `${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
-    const execId = `${prefix}-${ts}-${process.id.substring(0, 4)}`;
+    const execId = `${prefix}-${process.id.replace(/-/g, '').substring(0, 12)}`;
     this.processExecIds.set(process.id, execId);
     this.processConfigs.set(process.id, { process, config });
 
@@ -175,8 +173,14 @@ export class AgentManager {
 
     this.eventBus.emit('agent:stopped', { processId });
 
+    // Persist meta to CLI History before cleanup
+    const saved = this.processConfigs.get(processId);
+    if (saved) this.persistMeta(processId, saved.process, saved.config, 0);
+
     this.processToAdapter.delete(processId);
     this.entryHistory.delete(processId);
+    this.processExecIds.delete(processId);
+    this.processConfigs.delete(processId);
   }
 
   /** Handle agent process that stopped on its own */
@@ -194,8 +198,14 @@ export class AgentManager {
 
     this.eventBus.emit('agent:stopped', { processId, reason });
 
+    // Persist meta to CLI History before cleanup
+    const saved = this.processConfigs.get(processId);
+    if (saved) this.persistMeta(processId, saved.process, saved.config, reason ? 1 : 0);
+
     this.processToAdapter.delete(processId);
     this.entryHistory.delete(processId);
+    this.processExecIds.delete(processId);
+    this.processConfigs.delete(processId);
   }
 
   /** Send a message to a running agent process */

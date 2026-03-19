@@ -338,6 +338,11 @@ Decompose specification into executable Epics and Stories.
 - Recommended execution order with rationale
 - MVP definition of done (3-5 criteria)
 
+**Epic sizing awareness** (informs Phase 7 roadmap generation):
+- Epics that are too small (1-2 Stories, all size S) should be flagged for merge in Phase 7
+- Each Epic should carry enough substance to become part of a phase with 5+ tasks
+- Prefer fewer, larger Epics over many tiny ones
+
 **Step 7.2: Interactive Validation**
 - Present Epic overview, user adjusts: merge/split epics, adjust MVP scope
 - `--yes`: accept as-is
@@ -408,14 +413,35 @@ Convert Epics into an interactive roadmap with user confirmation.
 - Read `epics/_index.md` for Epic table, dependency map, MVP tags
 - Read individual `EPIC-NNN-{slug}.md` for Stories and acceptance criteria
 - Read `architecture/_index.md` for technical constraints (ADR decisions)
-- Map:
-  - Each Epic → one phase (directory name: `{NN}-{slug}`)
+
+**Phase Sizing Rules (MANDATORY — applied during mapping):**
+
+| Rule | Constraint |
+|------|-----------|
+| **Minimum Stories per phase** | 5 Stories. If an Epic maps to fewer than 5 Stories, merge with related Epic into one phase. |
+| **Maximum phases (full-stack)** | 3 phases for a complete front-end + back-end project. |
+| **Maximum phases (backend-only / frontend-only)** | 2 phases. |
+| **Merge principle** | Small Epics (1-2 Stories, all size S) MUST be merged into a related phase. Same-module or same-concern Epics belong together. |
+| **Split principle** | Only split when a hard dependency boundary exists (e.g., backend API must exist before frontend can integrate). |
+
+- Map (with sizing rules applied):
+  - Multiple small Epics → merge into one phase (not 1:1 Epic→Phase)
   - MVP-tagged Epics → Milestone 1
   - Post-MVP Epics → Milestone 2+
   - Epic dependencies (from Mermaid diagram) → phase ordering
   - Stories within Epics → phase success criteria
   - ADR decisions → phase technical constraints
   - Epic size estimates → phase effort (S/M/L/XL)
+
+**Post-mapping sizing check:**
+1. Count Stories per phase. Any phase < 5 Stories → merge into neighbor.
+2. Count total phases. Full-stack > 3 or single-side > 2 → merge related phases.
+3. Verify each phase has a meaningful deliverable boundary.
+
+**Scope classification:**
+- **Single-side**: Pure frontend or pure backend project → max 2 phases.
+- **Full-stack**: One frontend + one backend → max 3 phases.
+- **Large scope** (monorepo with 2+ services, workers, multiple backends): Use milestones. Each milestone follows the 2-3 phase limit independently. Phase counts reset per milestone.
 
 **Step 11.2: Generate Draft Roadmap**
 - Produce `roadmap.md` following `@templates/roadmap.md` structure:
@@ -452,12 +478,13 @@ Convert Epics into an interactive roadmap with user confirmation.
 
 **Step 11.3: Interactive Refinement (max 3 rounds)**
 - Present roadmap overview: phase count, milestone structure, dependency graph
+- **Before presenting**: validate phase sizing rules (min 5 tasks/phase, max 3 phases full-stack). Auto-merge violations and inform user.
 - User feedback via AskUserQuestion:
-  - **Approve**: Proceed to finalize
-  - **Adjust Scope**: Move Epics between milestones, split/merge phases
+  - **Approve**: Run final sizing check before accepting
+  - **Adjust Scope**: Move Epics between milestones, split/merge phases (enforce sizing rules)
   - **Reorder**: Change phase sequencing
-  - **Split/Merge**: Break large phases or combine small ones
-- `--yes`: auto-approve draft roadmap
+  - **Split/Merge**: Break large phases or combine small ones (min 5 tasks enforced)
+- `--yes`: auto-approve draft roadmap (sizing rules still enforced automatically)
 - Each round: update roadmap.md, log change in iteration history
 
 **Step 11.4: Write Outputs**

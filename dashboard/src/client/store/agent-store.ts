@@ -69,12 +69,17 @@ export const useAgentStore = create<AgentStore>((set) => ({
     }),
 
   addEntry: (processId, entry) =>
-    set((state) => ({
-      entries: {
-        ...state.entries,
-        [processId]: [...(state.entries[processId] ?? []), entry],
-      },
-    })),
+    set((state) => {
+      const existing = state.entries[processId] ?? [];
+      // Idempotent: skip if entry with same id already exists (prevents duplicates on reconnect)
+      if (entry.id && existing.some(e => e.id === entry.id)) return state;
+      return {
+        entries: {
+          ...state.entries,
+          [processId]: [...existing, entry],
+        },
+      };
+    }),
 
   setApproval: (approval) =>
     set((state) => ({
