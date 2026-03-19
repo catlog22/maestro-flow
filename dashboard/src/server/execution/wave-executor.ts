@@ -6,6 +6,7 @@
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from 'node:crypto';
+import { join } from 'node:path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
 
@@ -15,6 +16,7 @@ import type { WaveTask, WaveSession, DecompositionResult } from '../../shared/wa
 import type { DashboardEventBus } from '../state/event-bus.js';
 import type { AgentManager } from '../agents/agent-manager.js';
 import { EntryNormalizer } from '../agents/entry-normalizer.js';
+import { loadDashboardAgentSettings, type SavedAgentSettings } from '../config.js';
 
 // ---------------------------------------------------------------------------
 // Decomposition prompt + output schema
@@ -258,6 +260,20 @@ export class WaveExecutor {
     return this.sessions.get(processId);
   }
 
+  /** Load saved agent-sdk settings and build env overrides */
+  private async loadSettings(): Promise<{ settings: SavedAgentSettings | undefined; env: Record<string, string> | undefined }> {
+    // workDir points to project root; .workflow is a sibling
+    const workflowRoot = join(this.workDir, '.workflow');
+    const settings = await loadDashboardAgentSettings(workflowRoot, 'agent-sdk');
+    let env: Record<string, string> | undefined;
+    if (settings?.baseUrl || settings?.apiKey) {
+      env = {};
+      if (settings.baseUrl) env['ANTHROPIC_BASE_URL'] = settings.baseUrl;
+      if (settings.apiKey) env['ANTHROPIC_API_KEY'] = settings.apiKey;
+    }
+    return { settings, env };
+  }
+
   // -------------------------------------------------------------------------
   // Private: Main execution flow
   // -------------------------------------------------------------------------
@@ -376,6 +392,8 @@ export class WaveExecutor {
       processId, 'AgentSDK:decompose', { issueId: issue.id }, 'running',
     ));
 
+    const { settings, env } = await this.loadSettings();
+
     try {
       for await (const message of query({
         prompt,
@@ -384,11 +402,12 @@ export class WaveExecutor {
           tools: ['Read', 'Glob', 'Grep'],
           allowedTools: ['Read', 'Glob', 'Grep'],
           permissionMode: 'dontAsk',
-          model: 'sonnet',
+          model: settings?.model || 'sonnet',
           outputFormat: DECOMPOSE_OUTPUT_SCHEMA,
           cwd: this.workDir,
           maxTurns: 6,
           persistSession: false,
+          ...(env ? { env: { ...process.env, ...env } } : {}),
         },
       })) {
         const msg = message as Record<string, unknown>;
@@ -448,6 +467,7 @@ export class WaveExecutor {
     ));
 
     let resultText = '';
+    const { settings: taskSettings, env: taskEnv } = await this.loadSettings();
 
     try {
       for await (const message of query({
@@ -456,10 +476,11 @@ export class WaveExecutor {
           abortController,
           permissionMode: 'bypassPermissions',
           allowDangerouslySkipPermissions: true,
-          model: 'sonnet',
+          model: taskSettings?.model || 'sonnet',
           cwd: this.workDir,
           maxTurns: 10,
           persistSession: false,
+          ...(taskEnv ? { env: { ...process.env, ...taskEnv } } : {}),
         },
       })) {
         const msg = message as Record<string, unknown>;

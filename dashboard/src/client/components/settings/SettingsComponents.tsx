@@ -82,17 +82,19 @@ export function SettingsInput({
   onChange,
   placeholder,
   className,
+  type = 'text',
 }: {
   id?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  type?: 'text' | 'password';
 }) {
   return (
     <input
       id={id}
-      type="text"
+      type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}

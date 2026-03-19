@@ -133,16 +133,20 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
 
     // Resolve CLI entry point for direct node invocation (avoids cmd.exe
     // wrapper nesting on Windows which causes stdout buffering).
+    const childEnv: Record<string, string | undefined> = { ...process.env, ...config.env };
+    if (config.baseUrl) childEnv.ANTHROPIC_BASE_URL = config.baseUrl;
+    if (config.apiKey) childEnv.ANTHROPIC_API_KEY = config.apiKey;
+
     const cliPath = resolveClaudeCliPath();
     const child = cliPath
       ? spawn(process.execPath, [cliPath, ...args], {
           cwd: config.workDir,
-          env: { ...process.env, ...config.env },
+          env: childEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
         })
       : spawn('claude', args, {
           cwd: config.workDir,
-          env: { ...process.env, ...config.env },
+          env: childEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           shell: true,
         });

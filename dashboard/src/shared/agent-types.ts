@@ -26,6 +26,8 @@ export interface AgentConfig {
   env?: Record<string, string>;
   model?: string;
   approvalMode?: 'suggest' | 'auto';
+  baseUrl?: string;
+  apiKey?: string;
 }
 
 /** Runtime state of a spawned agent process */

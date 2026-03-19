@@ -154,8 +154,16 @@ export class AgentSdkAdapter extends BaseAgentAdapter {
       model: config.model,
     };
 
-    if (config.env) {
+    if (config.env || config.baseUrl || config.apiKey) {
       options.env = { ...process.env, ...config.env };
+    }
+    if (config.baseUrl) {
+      options.env = options.env ?? { ...process.env };
+      options.env.ANTHROPIC_BASE_URL = config.baseUrl;
+    }
+    if (config.apiKey) {
+      options.env = options.env ?? { ...process.env };
+      options.env.ANTHROPIC_API_KEY = config.apiKey;
     }
 
     // Set permission mode based on config

@@ -17,6 +17,7 @@ import { cn } from '@/client/lib/utils.js';
 
 const AGENT_TYPES: { type: AgentType; label: string; description: string }[] = [
   { type: 'claude-code', label: 'Claude Code', description: 'Anthropic Claude CLI agent' },
+  { type: 'agent-sdk', label: 'Agent SDK', description: 'Anthropic Agent SDK (supports custom endpoints)' },
   { type: 'codex', label: 'Codex', description: 'OpenAI Codex CLI agent' },
   { type: 'gemini', label: 'Gemini', description: 'Google Gemini CLI agent' },
   { type: 'qwen', label: 'Qwen', description: 'Alibaba Qwen CLI agent' },
@@ -93,6 +94,33 @@ export function AgentsSection() {
                       { value: 'suggest', label: 'Suggest (manual)' },
                       { value: 'auto', label: 'Auto-approve' },
                     ]}
+                  />
+                </SettingsField>
+
+                <SettingsField
+                  label="Base URL"
+                  description="Custom API endpoint (leave empty for default)"
+                  htmlFor={`agent-baseurl-${type}`}
+                >
+                  <SettingsInput
+                    id={`agent-baseurl-${type}`}
+                    value={agent.baseUrl ?? ''}
+                    onChange={(v) => updateAgent(type, { baseUrl: v })}
+                    placeholder="https://api.anthropic.com"
+                  />
+                </SettingsField>
+
+                <SettingsField
+                  label="API Key"
+                  description="API key for the endpoint (overrides system default)"
+                  htmlFor={`agent-apikey-${type}`}
+                >
+                  <SettingsInput
+                    id={`agent-apikey-${type}`}
+                    value={agent.apiKey ?? ''}
+                    onChange={(v) => updateAgent(type, { apiKey: v })}
+                    placeholder="sk-..."
+                    type="password"
                   />
                 </SettingsField>
               </div>

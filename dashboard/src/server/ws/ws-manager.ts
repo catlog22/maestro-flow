@@ -9,6 +9,7 @@ import type { AgentManager } from '../agents/agent-manager.js';
 import type { ExecutionScheduler } from '../execution/execution-scheduler.js';
 import type { WaveExecutor } from '../execution/wave-executor.js';
 import type { CommanderAgent } from '../commander/commander-agent.js';
+import { loadDashboardAgentSettings } from '../config.js';
 
 // ---------------------------------------------------------------------------
 // WebSocketManager — manages WS clients, bridges EventBus to WS broadcast
@@ -122,22 +123,7 @@ export class WebSocketManager {
     switch (msg.action) {
       // --- Agent actions (Dashboard UI -> AgentManager) -----------------------
       case 'spawn':
-        this.agentManager.spawn(msg.config.type, msg.config)
-          .then((proc) => {
-            // Send spawned process info back to originating client
-            const response: WsServerMessage = {
-              type: 'agent:spawned',
-              data: proc,
-              timestamp: new Date().toISOString(),
-            };
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify(response));
-            }
-          })
-          .catch((err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err);
-            this.sendError(ws, 'spawn', message);
-          });
+        this.mergeSettingsAndSpawn(ws, msg.config);
         break;
 
       case 'stop':
@@ -318,6 +304,37 @@ export class WebSocketManager {
         console.log(`[WS] Unknown client action: ${(msg as { action: string }).action}`);
         break;
     }
+  }
+
+  /**
+   * Merge saved agent settings into spawn config, then spawn.
+   */
+  private mergeSettingsAndSpawn(ws: WebSocket, config: import('../../shared/agent-types.js').AgentConfig): void {
+    loadDashboardAgentSettings(this.workflowRoot, config.type)
+      .then((saved) => {
+        const mergedConfig = {
+          ...config,
+          model: config.model || saved?.model || undefined,
+          approvalMode: config.approvalMode || saved?.approvalMode || undefined,
+          baseUrl: config.baseUrl || saved?.baseUrl || undefined,
+          apiKey: config.apiKey || saved?.apiKey || undefined,
+        };
+        return this.agentManager.spawn(mergedConfig.type, mergedConfig);
+      })
+      .then((proc) => {
+        const response: WsServerMessage = {
+          type: 'agent:spawned',
+          data: proc,
+          timestamp: new Date().toISOString(),
+        };
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify(response));
+        }
+      })
+      .catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.sendError(ws, 'spawn', message);
+      });
   }
 
   /**

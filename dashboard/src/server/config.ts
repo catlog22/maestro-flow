@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
+import type { AgentType } from '../shared/agent-types.js';
 
 // ---------------------------------------------------------------------------
 // Dashboard configuration
@@ -43,6 +44,39 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<Dashboard
   } catch {
     // Config file missing or unreadable — use defaults
     return applyEnvOverrides({ ...DEFAULT_CONFIG });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Agent settings loader — reads saved per-agent config from .workflow/config.json
+// ---------------------------------------------------------------------------
+
+export interface SavedAgentSettings {
+  model?: string;
+  approvalMode?: 'suggest' | 'auto';
+  baseUrl?: string;
+  apiKey?: string;
+}
+
+/**
+ * Load saved agent settings from `.workflow/config.json` → `settings.agents[type]`.
+ * Returns undefined if file is missing or agent type has no saved settings.
+ */
+export async function loadDashboardAgentSettings(
+  workflowRoot: string,
+  agentType: AgentType,
+): Promise<SavedAgentSettings | undefined> {
+  const configPath = join(workflowRoot, 'config.json');
+  try {
+    const raw = await readFile(configPath, 'utf-8');
+    const json = JSON.parse(raw) as Record<string, unknown>;
+    const settings = json['settings'] as Record<string, unknown> | undefined;
+    if (!settings) return undefined;
+    const agents = settings['agents'] as Record<string, SavedAgentSettings> | undefined;
+    if (!agents) return undefined;
+    return agents[agentType] ?? undefined;
+  } catch {
+    return undefined;
   }
 }
 

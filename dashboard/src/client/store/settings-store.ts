@@ -9,6 +9,8 @@ import type { AgentType } from '@/shared/agent-types.js';
 export interface AgentSettingsEntry {
   model: string;
   approvalMode: 'suggest' | 'auto';
+  baseUrl?: string;
+  apiKey?: string;
 }
 
 /** General dashboard settings */
@@ -52,13 +54,13 @@ export interface SettingsStore {
 }
 
 const DEFAULT_AGENTS: Record<AgentType, AgentSettingsEntry> = {
-  'claude-code': { model: '', approvalMode: 'suggest' },
-  codex: { model: '', approvalMode: 'suggest' },
-  'codex-server': { model: '', approvalMode: 'suggest' },
-  gemini: { model: '', approvalMode: 'suggest' },
-  qwen: { model: '', approvalMode: 'suggest' },
-  opencode: { model: '', approvalMode: 'suggest' },
-  'agent-sdk': { model: '', approvalMode: 'suggest' },
+  'claude-code': { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
+  codex: { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
+  'codex-server': { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
+  gemini: { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
+  qwen: { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
+  opencode: { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
+  'agent-sdk': { model: '', approvalMode: 'suggest', baseUrl: '', apiKey: '' },
 };
 
 const DEFAULT_CONFIG: SettingsConfig = {
