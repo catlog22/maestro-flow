@@ -31,9 +31,10 @@ export function AppLayout() {
   useEffect(() => {
     async function fetchInitialState() {
       try {
-        const [boardRes, agentsRes] = await Promise.all([
+        const [boardRes, agentsRes, healthRes] = await Promise.all([
           fetch(API_ENDPOINTS.BOARD),
           fetch('/api/agents'),
+          fetch(API_ENDPOINTS.HEALTH),
         ]);
         if (!boardRes.ok) {
           setFetchError(true);
@@ -48,6 +49,13 @@ export function AppLayout() {
           const { addProcess } = useAgentStore.getState();
           for (const proc of agents) {
             addProcess(proc);
+          }
+        }
+
+        if (healthRes.ok) {
+          const health = await healthRes.json() as { workspace?: string };
+          if (health.workspace) {
+            useBoardStore.getState().setWorkspace(health.workspace);
           }
         }
       } catch {

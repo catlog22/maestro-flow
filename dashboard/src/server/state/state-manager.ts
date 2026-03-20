@@ -21,9 +21,10 @@ export class StateManager {
   private board: BoardState;
   /** Cache: phase number → directory path for O(1) lookups */
   private phaseDirCache = new Map<number, string>();
+  private isSwitching = false;
 
   constructor(
-    private readonly workflowRoot: string,
+    private workflowRoot: string,
     private readonly eventBus: DashboardEventBus,
   ) {
     this.board = emptyBoard();
@@ -77,6 +78,29 @@ export class StateManager {
 
     this.eventBus.emit(SSE_EVENT_TYPES.BOARD_FULL, this.board);
     return this.board;
+  }
+
+  // -------------------------------------------------------------------------
+  // Workspace switch — replace root, rebuild state, broadcast switch event
+  // -------------------------------------------------------------------------
+
+  get switching(): boolean {
+    return this.isSwitching;
+  }
+
+  async resetForNewWorkspace(newRoot: string): Promise<void> {
+    if (this.isSwitching) {
+      throw new Error('Workspace switch already in progress.');
+    }
+    this.isSwitching = true;
+    try {
+      this.phaseDirCache.clear();
+      this.workflowRoot = newRoot;
+      await this.buildInitialState();
+      this.eventBus.emit(SSE_EVENT_TYPES.WORKSPACE_SWITCHED, { workspace: newRoot });
+    } finally {
+      this.isSwitching = false;
+    }
   }
 
   // -------------------------------------------------------------------------

@@ -47,6 +47,7 @@ const ALL_EVENT_TYPES: SSEEventType[] = [
   'execution:completed',
   'execution:failed',
   'supervisor:status',
+  'workspace:switched',
 ];
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,8 @@ export interface DashboardEventMap {
   'execution:completed': ExecutionCompletedPayload;
   'execution:failed': ExecutionFailedPayload;
   'supervisor:status': SupervisorStatus;
+  // Workspace events
+  'workspace:switched': { workspace: string };
 }
 
 // ---------------------------------------------------------------------------

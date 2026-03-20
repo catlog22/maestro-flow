@@ -2,6 +2,7 @@ import { useBoardStore } from '@/client/store/board-store.js';
 import { useSettingsStore } from '@/client/store/settings-store.js';
 import { useI18n } from '@/client/i18n/index.js';
 import { ViewSwitcher } from '@/client/components/common/ViewSwitcher.js';
+import { WorkspaceSwitcher } from '@/client/components/common/WorkspaceSwitcher.js';
 
 // ---------------------------------------------------------------------------
 // TopBar — project name, milestone badge, current phase, connection dot
@@ -33,6 +34,8 @@ export function TopBar() {
         >
           Maestro
         </span>
+
+        <WorkspaceSwitcher />
 
         {project && (
           <>

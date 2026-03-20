@@ -16,7 +16,7 @@ export function useSSE(): void {
   useEffect(() => {
     let disposed = false;
     // Access actions via getState() to avoid selector re-renders
-    const { setBoard, updatePhase, updateTask, setConnected } = useBoardStore.getState();
+    const { setBoard, updatePhase, updateTask, setConnected, setWorkspace } = useBoardStore.getState();
 
     function connect() {
       if (disposed) return;
@@ -60,6 +60,14 @@ export function useSSE(): void {
             setBoard({ ...board, project });
           }
         } catch (err) { console.warn('[SSE] Failed to parse project:updated event', err); }
+      });
+
+      es.addEventListener(SSE_EVENT_TYPES.WORKSPACE_SWITCHED, (e) => {
+        try {
+          const { workspace } = JSON.parse((e as MessageEvent).data);
+          setBoard(null);
+          setWorkspace(workspace);
+        } catch (err) { console.warn('[SSE] Failed to parse workspace:switched event', err); }
       });
 
       // Heartbeat — just confirms connection is alive

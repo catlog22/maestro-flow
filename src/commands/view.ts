@@ -85,7 +85,7 @@ export function registerViewCommand(program: Command): void {
     .description('Launch the maestro dashboard kanban board')
     .option('-p, --port <port>', 'Dashboard port', String(DEFAULT_PORT))
     .option('--host <host>', 'Bind host', '127.0.0.1')
-    .option('--path <dir>', 'Project workspace path')
+    .option('--path <dir>', 'Path to maestro workspace root containing .workflow/ (hot-switches running server without restart)')
     .option('--no-browser', 'Do not open browser')
     .option('--dev', 'Use Vite dev server with HMR (hot reload)')
     .action(async (opts: { port: string; host: string; path?: string; browser: boolean; dev?: boolean }) => {
@@ -178,12 +178,24 @@ export function registerViewCommand(program: Command): void {
         const normalizedCurrent = currentWorkspace.replace(/[\\/]+$/, '').toLowerCase();
         const normalizedRequested = workflowRoot.replace(/[\\/]+$/, '').toLowerCase();
 
-        if (normalizedCurrent && normalizedCurrent !== normalizedRequested) {
-          console.error('');
-          console.error(`  Note: Requested workspace differs from running server.`);
-          console.error(`    Running:   ${currentWorkspace}`);
-          console.error(`    Requested: ${workflowRoot}`);
-          console.error(`  Stop the server and re-run to switch workspace.`);
+        if (opts.path && normalizedCurrent !== normalizedRequested) {
+          // Hot-switch workspace via API
+          try {
+            const res = await fetch(`http://${host}:${port}/api/workspace`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: workflowRoot }),
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => res.statusText);
+              console.error(`  Error: Failed to switch workspace — ${text}`);
+              process.exit(1);
+            }
+            console.error(`  Workspace switched to ${workflowRoot}`);
+          } catch (err) {
+            console.error(`  Error: Failed to switch workspace — ${(err as Error).message}`);
+            process.exit(1);
+          }
         }
 
         if (opts.browser) {

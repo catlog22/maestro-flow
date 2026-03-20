@@ -9,18 +9,21 @@ export interface BoardStore {
   board: BoardState | null;
   connected: boolean;
   selectedPhase: number | null;
+  workspace: string | null;
 
-  setBoard: (board: BoardState) => void;
+  setBoard: (board: BoardState | null) => void;
   updatePhase: (phase: number, data: Partial<PhaseCard>) => void;
   updateTask: (taskId: string, data: Partial<TaskCard>) => void;
   setConnected: (status: boolean) => void;
   setSelectedPhase: (phase: number | null) => void;
+  setWorkspace: (path: string | null) => void;
 }
 
 export const useBoardStore = create<BoardStore>((set) => ({
   board: null,
   connected: false,
   selectedPhase: null,
+  workspace: null,
 
   setBoard: (board) => set({ board }),
 
@@ -50,4 +53,6 @@ export const useBoardStore = create<BoardStore>((set) => ({
   setConnected: (status) => set({ connected: status }),
 
   setSelectedPhase: (phase) => set({ selectedPhase: phase }),
+
+  setWorkspace: (path) => set({ workspace: path }),
 }));

@@ -42,8 +42,8 @@ export function createRoutes(
 ): Hono {
   const routes = new Hono();
 
-  // Health (reports workspace)
-  routes.route('/', createHealthRoute(workflowRoot));
+  // Health (reports workspace) + workspace switch endpoint
+  routes.route('/', createHealthRoute(workflowRoot, stateManager));
 
   // Data routes (depend on StateManager)
   routes.route('/', createBoardRoutes(stateManager));

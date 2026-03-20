@@ -56,6 +56,7 @@ export const SSE_EVENT_TYPES: Record<string, SSEEventType> = {
   WATCHER_ERROR: 'watcher:error',
   HEARTBEAT: 'heartbeat',
   CONNECTED: 'connected',
+  WORKSPACE_SWITCHED: 'workspace:switched',
 } as const;
 
 // ---------------------------------------------------------------------------
