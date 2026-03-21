@@ -136,6 +136,11 @@ export const WS_EVENT_TYPES: Record<string, WsEventType> = {
   EXECUTION_COMPLETED: 'execution:completed',
   EXECUTION_FAILED: 'execution:failed',
   SUPERVISOR_STATUS: 'supervisor:status',
+  // Commander events
+  COMMANDER_STATUS: 'commander:status',
+  COMMANDER_TICK: 'commander:tick',
+  COMMANDER_DECISION: 'commander:decision',
+  COMMANDER_CONFIG: 'commander:config',
   // Board events (shared with SSE)
   BOARD_FULL: 'board:full',
   PHASE_UPDATED: 'phase:updated',

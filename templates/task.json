@@ -10,6 +10,8 @@
   "effort": "medium",
   "action": "{{CONCRETE_ACTION_WITH_EXACT_VALUES}}",
   "status": "pending",
+  "completed_at": null,
+  "actual_duration": null,
 
   "scope": "{{MODULE_PATH}}",
   "focus_paths": [],

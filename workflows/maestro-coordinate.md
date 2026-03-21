@@ -265,9 +265,11 @@ const state = {
   intent, task_type: taskType, chain_name: chainName,
   tool: cliTool, auto_mode: autoYes, phase: resolvedPhase,
   current_step: 0,
+  gemini_session_id: null,
+  step_analyses: [],
   steps: chain.map((s, i) => ({
     index: i, cmd: s.cmd, args: s.args || '',
-    status: 'pending', exec_id: null
+    status: 'pending', exec_id: null, analysis: null
   }))
 };
 Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
@@ -303,19 +305,34 @@ function assembleArgs(step) {
 
 #### 6b: Build prompt from template
 
-Read `~/.maestro/templates/cli/prompts/coordinate-step.txt`, fill placeholders:
+Read `~/.maestro/templates/cli/prompts/coordinate-step.txt`, fill placeholders.
+If previous step has analysis hints, inject them as `{{ANALYSIS_HINTS}}`.
 
 ```javascript
 function escapeForShell(str) { return "'" + str.replace(/'/g, "'\\''") + "'"; }
 
 const assembledArgs = assembleArgs(step);
 const template = Read('~/.maestro/templates/cli/prompts/coordinate-step.txt');
+
+// Build analysis hints from previous step's gemini evaluation
+let analysisHints = '';
+const prevAnalysis = (state.step_analyses || []).find(a => a.step_index === state.current_step - 1);
+if (prevAnalysis?.next_step_hints) {
+  const h = prevAnalysis.next_step_hints;
+  const parts = [];
+  if (h.prompt_additions) parts.push(h.prompt_additions);
+  if (h.cautions?.length) parts.push('Cautions: ' + h.cautions.join('; '));
+  if (h.context_to_carry) parts.push('Context from prior step: ' + h.context_to_carry);
+  if (parts.length) analysisHints = parts.join('\n');
+}
+
 const prompt = template
   .replace('{{COMMAND}}', `/${step.cmd}`)
   .replace('{{ARGS}}', assembledArgs)
   .replace('{{STEP_N}}', `${state.current_step + 1}/${state.steps.length}`)
   .replace('{{AUTO_DIRECTIVE}}', state.auto_mode ? 'Auto-confirm all prompts. No interactive questions.' : '')
-  .replace('{{CHAIN_NAME}}', state.chain_name);
+  .replace('{{CHAIN_NAME}}', state.chain_name)
+  .replace('{{ANALYSIS_HINTS}}', analysisHints);
 ```
 
 #### 6c: Launch
@@ -371,6 +388,88 @@ if (!failed) {
   // On Abort: state.status = 'aborted', save, exit
 }
 
+// Save output for analysis
+Write(`${sessionDir}/step-${stepIdx + 1}-output.txt`, output);
+Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+
+// → Step 7b: Gemini analysis (skip if step failed/skipped or single-step chain)
+if (step.status === 'completed' && state.steps.length > 1) {
+  // → Step 7b
+} else {
+  // Skip analysis, advance directly
+  state.current_step = stepIdx + 1;
+  Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+  if (state.current_step < state.steps.length) { /* → Step 6 */ }
+  else { /* → Step 8 */ }
+}
+```
+
+---
+
+### Step 7b: Analyze Step Output (via gemini)
+
+After each step completes, call gemini to evaluate execution quality and generate optimization hints for subsequent steps.
+
+```javascript
+const stepIdx = state.current_step;
+const step = state.steps[stepIdx];
+const output = Read(`${sessionDir}/step-${stepIdx + 1}-output.txt`);
+const nextStep = stepIdx < state.steps.length - 1 ? state.steps[stepIdx + 1] : null;
+
+// Build analysis prompt
+const priorAnalyses = (state.step_analyses || [])
+  .map(a => `- Step ${a.step_index + 1} (${a.cmd}): score=${a.quality_score}, issues=${a.issues?.length || 0}`)
+  .join('\n');
+
+const analysisPrompt = `PURPOSE: Evaluate execution quality of coordinate step "${step.cmd}" (${stepIdx + 1}/${state.steps.length}) and generate optimization hints for the next step.
+CHAIN: ${state.chain_name} | Intent: ${state.intent}
+COMMAND: /${step.cmd} ${step.args || ''}
+STEP OUTPUT (last 200 lines):
+${output.split('\n').slice(-200).join('\n')}
+${priorAnalyses ? `PRIOR STEP ANALYSES:\n${priorAnalyses}` : ''}
+${nextStep ? `NEXT STEP: /${nextStep.cmd} ${nextStep.args || ''}` : 'NEXT STEP: None (last step)'}
+EXPECTED OUTPUT (strict JSON):
+{
+  "quality_score": <0-100>,
+  "execution_assessment": { "success": <bool>, "completeness": "<full|partial|minimal>", "key_outputs": [], "missing_outputs": [] },
+  "issues": [{ "severity": "critical|high|medium|low", "description": "" }],
+  "next_step_hints": {
+    "prompt_additions": "<extra context or constraints to inject into next step prompt>",
+    "cautions": ["<things next step should watch out for>"],
+    "context_to_carry": "<key facts from this step's output that next step needs>"
+  },
+  "step_summary": ""
+}`;
+
+let cliCommand = `maestro cli -p ${escapeForShell(analysisPrompt)} --tool gemini --mode analysis --rule analysis-review-code-quality`;
+if (state.gemini_session_id) cliCommand += ` --resume ${state.gemini_session_id}`;
+Bash({ command: cliCommand, run_in_background: true, timeout: 300000 });
+// ■ STOP — wait for hook callback
+```
+
+### Step 7c: Post-Analyze Callback
+
+```javascript
+const analysisResult = /* parsed JSON from callback output */;
+
+// Capture gemini session ID for resume chain
+state.gemini_session_id = /* from callback stderr [MAESTRO_EXEC_ID=xxx] */;
+
+// Store analysis
+if (!state.step_analyses) state.step_analyses = [];
+state.step_analyses.push({
+  step_index: stepIdx, cmd: step.cmd,
+  quality_score: analysisResult.quality_score,
+  issues: analysisResult.issues,
+  next_step_hints: analysisResult.next_step_hints,
+  summary: analysisResult.step_summary
+});
+step.analysis = {
+  quality_score: analysisResult.quality_score,
+  issue_count: (analysisResult.issues || []).length
+};
+Write(`${sessionDir}/step-${stepIdx + 1}-analysis.json`, JSON.stringify(analysisResult, null, 2));
+
 // Advance
 state.current_step = stepIdx + 1;
 Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
@@ -402,9 +501,10 @@ Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
   Tool:    {tool}
 
   Steps:
-    [✓] 1. maestro-plan — completed
-    [✓] 2. maestro-execute — completed
+    [✓] 1. maestro-plan — completed (quality: 85/100)
+    [✓] 2. maestro-execute — completed (quality: 78/100)
 
+  Avg Quality: {avg_score}/100
   Next: /maestro-coordinate continue
 ============================================================
 ```
@@ -420,3 +520,6 @@ Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
 5. **Tool fallback** — if `maestro cli` fails: retry with same tool once, then try `gemini` → `qwen`
 6. **Auto-confirm injection** — `{{AUTO_DIRECTIVE}}` in template prevents blocking during background execution
 7. **Resumable** — `-c` reads `state.json`, jumps to first pending step
+8. **Gemini analysis after each step** — evaluate output quality via `maestro cli --tool gemini --mode analysis`, chained via `--resume`. Analysis generates `next_step_hints` injected into next step's prompt as `{{ANALYSIS_HINTS}}`
+9. **Session capture** — after each gemini callback, capture exec_id → `gemini_session_id` for resume chain
+10. **Analysis skip conditions** — skip gemini analysis for: failed/skipped steps, single-step chains

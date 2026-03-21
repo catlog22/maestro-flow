@@ -391,7 +391,7 @@ export class CommanderAgent {
       }
     }
 
-    return {
+    const decision: Decision = {
       id: randomUUID(),
       timestamp: new Date().toISOString(),
       trigger,
@@ -399,6 +399,10 @@ export class CommanderAgent {
       actions,
       deferred,
     };
+
+    this.eventBus.emit('commander:decision', decision);
+
+    return decision;
   }
 
   // -------------------------------------------------------------------------
@@ -464,5 +468,6 @@ export class CommanderAgent {
 
   private emitStatus(): void {
     this.eventBus.emit('supervisor:status', this.executionScheduler.getStatus());
+    this.eventBus.emit('commander:status', this.state);
   }
 }

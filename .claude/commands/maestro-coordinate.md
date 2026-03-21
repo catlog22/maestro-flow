@@ -57,6 +57,9 @@ Follow '~/.maestro/workflows/maestro-coordinate.md' completely.
 - [ ] Intent classified and chain selected via detectTaskType + chainMap
 - [ ] Each step executed via `maestro cli` with coordinate-step template
 - [ ] Auto-confirm injected, structured return parsed
+- [ ] Each completed step analyzed via `maestro cli --tool gemini --mode analysis`
+- [ ] Analysis hints injected into next step prompt via `{{ANALYSIS_HINTS}}`
+- [ ] Gemini sessions chained via `--resume` for accumulated context
 - [ ] Session state at .workflow/.maestro-coordinate/{session_id}/
-- [ ] Completion report with per-step status
+- [ ] Completion report with per-step status and quality scores
 </success_criteria>

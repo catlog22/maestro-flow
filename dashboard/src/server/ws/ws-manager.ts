@@ -203,7 +203,7 @@ export class WebSocketManager {
           this.sendError(ws, 'issue:analyze', 'Missing issueId');
           break;
         }
-        this.handleIssueAnalyze(ws, msg.issueId);
+        this.handleIssueAnalyze(ws, msg.issueId, msg.tool, msg.depth);
         break;
 
       case 'issue:plan':
@@ -211,7 +211,7 @@ export class WebSocketManager {
           this.sendError(ws, 'issue:plan', 'Missing issueId');
           break;
         }
-        this.handleIssuePlan(ws, msg.issueId);
+        this.handleIssuePlan(ws, msg.issueId, msg.tool);
         break;
 
       // --- Wave execution (Agent SDK wave mode) ---------------------------
@@ -339,67 +339,22 @@ export class WebSocketManager {
   }
 
   /**
-   * Handle issue:analyze — read issue, spawn agent with type-aware prompt.
-   * agent-sdk: uses MCP tools (get_issue/update_issue).
-   * claude-code: pre-injected issue JSON + Bash curl for writeback.
+   * Handle issue:analyze — spawn agent with /manage-issue-analyze slash command.
    */
-  private handleIssueAnalyze(ws: WebSocket, issueId: string): void {
-    this.buildIssuePromptAndSpawn(ws, 'issue:analyze', issueId, (issue, agentType) => {
-      const issueJson = JSON.stringify(issue, null, 2);
-      if (agentType === 'agent-sdk') {
-        return [
-          `Analyze issue ${issueId}.`,
-          `Use the get_issue MCP tool to read the full issue details.`,
-          `Explore the codebase for root cause analysis.`,
-          `Use the update_issue MCP tool to write back your analysis results (root_cause, impact, related_files, confidence, suggested_approach).`,
-        ].join('\n');
-      }
-      return [
-        `Analyze issue ${issueId}. The issue data is provided below.`,
-        '',
-        '## Issue Data',
-        '```json',
-        issueJson,
-        '```',
-        '',
-        'Explore the codebase for root cause analysis.',
-        'When done, write back analysis results using:',
-        `curl -s -X PATCH http://localhost:3001/api/issues/${issueId}/analysis \\`,
-        `  -H 'Content-Type: application/json' \\`,
-        `  -d '{"root_cause":"...","impact":"...","related_files":[...],"confidence":0.8,"suggested_approach":"..."}'`,
-      ].join('\n');
-    });
+  private handleIssueAnalyze(ws: WebSocket, issueId: string, tool?: string, depth?: string): void {
+    const resolvedTool = tool || 'gemini';
+    const resolvedDepth = depth || 'standard';
+    const prompt = `/manage-issue-analyze ${issueId} --tool ${resolvedTool} --depth ${resolvedDepth}`;
+    this.buildIssuePromptAndSpawn(ws, 'issue:analyze', issueId, () => prompt);
   }
 
   /**
    * Handle issue:plan — read issue, spawn agent with type-aware prompt.
    */
-  private handleIssuePlan(ws: WebSocket, issueId: string): void {
-    this.buildIssuePromptAndSpawn(ws, 'issue:plan', issueId, (issue, agentType) => {
-      const issueJson = JSON.stringify(issue, null, 2);
-      if (agentType === 'agent-sdk') {
-        return [
-          `Plan a solution for issue ${issueId}.`,
-          `Use the get_issue MCP tool to read the full issue details and existing analysis.`,
-          `Generate actionable solution steps with targets and verification criteria.`,
-          `Use the update_issue MCP tool to write back the solution (steps array with description, target, verification).`,
-        ].join('\n');
-      }
-      return [
-        `Plan a solution for issue ${issueId}. The issue data is provided below.`,
-        '',
-        '## Issue Data',
-        '```json',
-        issueJson,
-        '```',
-        '',
-        'Use existing analysis if available. Generate solution steps.',
-        'When done, write back the solution using:',
-        `curl -s -X PATCH http://localhost:3001/api/issues/${issueId}/solution \\`,
-        `  -H 'Content-Type: application/json' \\`,
-        `  -d '{"steps":[{"description":"...","target":"...","verification":"..."}],"context":"..."}'`,
-      ].join('\n');
-    });
+  private handleIssuePlan(ws: WebSocket, issueId: string, tool?: string): void {
+    const resolvedTool = tool || 'gemini';
+    const prompt = `/manage-issue-plan ${issueId} --tool ${resolvedTool}`;
+    this.buildIssuePromptAndSpawn(ws, 'issue:plan', issueId, () => prompt);
   }
 
   /**

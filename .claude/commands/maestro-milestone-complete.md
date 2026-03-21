@@ -41,11 +41,11 @@ Follow '~/.maestro/workflows/milestone-complete.md' completely.
 </execution>
 
 <error_codes>
-| Code | Meaning                                        |
-|------|------------------------------------------------|
-| E001 | Milestone identifier required                  |
-| E002 | Audit not passed (report missing or verdict FAIL) |
-| E003 | Incomplete phases remain in this milestone     |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Milestone identifier required | Check arguments format, re-run with correct input |
+| E002 | error | Audit not passed (report missing or verdict FAIL) | Run maestro-milestone-audit first |
+| E003 | error | Incomplete phases remain in this milestone | Complete remaining phases before milestone completion |
 </error_codes>
 
 <success_criteria>

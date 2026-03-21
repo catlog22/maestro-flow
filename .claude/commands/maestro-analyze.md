@@ -54,6 +54,8 @@ $ARGUMENTS -- phase number for phase mode, topic text for scratch mode, with opt
 <execution>
 Follow '~/.maestro/workflows/analyze.md' completely.
 
+**Handoff:** context.md is consumed by maestro-plan (Step 4 loads Locked/Free/Deferred decisions).
+
 **Next-step routing on completion:**
 
 Phase mode:

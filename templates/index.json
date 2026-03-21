@@ -15,6 +15,12 @@
   "requirements": [],
   "spec_ref": null,
 
+  "session_id": null,
+  "recommendation": null,
+  "confidence": null,
+  "analysis_at": null,
+  "planning_at": null,
+
   "plan": {
     "task_ids": [],
     "task_count": 0,

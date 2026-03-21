@@ -54,16 +54,19 @@ Follow '~/.maestro/workflows/verify.md' completely.
 - All checks pass, no gaps → Skill({ skill: "quality-review", args: "{phase}" })
 - Gaps found (must-have failures or anti-pattern blockers) → Skill({ skill: "maestro-plan", args: "{phase} --gaps" })
 - Low test coverage (Nyquist gaps) → Skill({ skill: "quality-test-gen", args: "{phase}" })
+
+**Gap-fix closure loop:**
+Gaps found → maestro-plan --gaps → maestro-execute → maestro-verify (re-run)
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Phase argument required | parse_input |
-| E002 | error | Phase directory not found | parse_input |
-| E003 | error | No execution results found (missing summaries) | parse_input |
-| W001 | warning | Test coverage below configured threshold | run_nyquist_audit |
-| W002 | warning | Anti-pattern blockers found in modified files | scan_antipatterns |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Phase argument required | Check arguments format, re-run with correct input |
+| E002 | error | Phase directory not found | Check arguments format, re-run with correct input |
+| E003 | error | No execution results found (missing summaries) | Check arguments format, re-run with correct input |
+| W001 | warning | Test coverage below configured threshold | Review coverage gaps, run quality-test-gen |
+| W002 | warning | Anti-pattern blockers found in modified files | Fix anti-pattern blockers before proceeding |
 </error_codes>
 
 <success_criteria>

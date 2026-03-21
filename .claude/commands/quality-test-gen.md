@@ -53,13 +53,13 @@ Follow '~/.maestro/workflows/test-gen.md' completely.
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Phase number required | parse_input |
-| E002 | error | No verification results found (run maestro-verify first) | parse_input |
-| E003 | error | No test framework detected | discover_test_infrastructure |
-| W001 | warning | Some generated tests fail (bugs discovered) | run_all_tests |
-| W002 | warning | Regression in existing tests | run_all_tests |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Phase number required | Check arguments format, re-run with correct input |
+| E002 | error | No verification results found (run maestro-verify first) | Check arguments format, re-run with correct input |
+| E003 | error | No test framework detected | Install test framework or configure test runner |
+| W001 | warning | Some generated tests fail (bugs discovered) | Investigate test failures, fix source code |
+| W002 | warning | Regression in existing tests | Investigate test failures, fix source code |
 </error_codes>
 
 <success_criteria>

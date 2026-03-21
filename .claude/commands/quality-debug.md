@@ -53,16 +53,18 @@ Follow '~/.maestro/workflows/debug.md' completely.
 - Root cause found (from UAT), auto-fix → Skill({ skill: "quality-test", args: "{phase} --auto-fix" })
 - Inconclusive, need more info → Skill({ skill: "quality-debug", args: "{issue} -c" }) (resume session)
 - Standalone fix already applied → Skill({ skill: "maestro-verify", args: "{phase}" })
+
+Note: Debug output (.debug/) is auto-loaded by maestro-plan --gaps.
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Issue description required (no arguments, no active sessions) | parse_input |
-| E002 | error | UAT file not found for --from-uat phase | load_uat_gaps |
-| W001 | warning | Existing debug session found, offer resume | check_sessions |
-| W002 | warning | Checkpoint reached, user input needed | handle_checkpoint |
-| W003 | warning | Some gaps inconclusive, partial diagnosis | collect_results |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Issue description required (no arguments, no active sessions) | Check arguments format, re-run with correct input |
+| E002 | error | UAT file not found for --from-uat phase | Verify UAT file exists for specified phase |
+| W001 | warning | Existing debug session found, offer resume | Review existing sessions, choose resume or new |
+| W002 | warning | Checkpoint reached, user input needed | Provide requested input to continue |
+| W003 | warning | Some gaps inconclusive, partial diagnosis | Review partial results, retry inconclusive gaps |
 </error_codes>
 
 <success_criteria>

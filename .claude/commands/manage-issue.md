@@ -5,6 +5,7 @@ argument-hint: "<create|list|status|update|close|link> [options]"
 allowed-tools:
   - Read
   - Write
+  - Edit
   - Bash
   - Glob
   - Grep
@@ -45,6 +46,11 @@ $ARGUMENTS -- subcommand + options. Parse first token as subcommand.
 <execution>
 Parse subcommand from first token of $ARGUMENTS.
 Follow '~/.maestro/workflows/issue.md' completely.
+
+**Next-step routing on completion:**
+- create → Skill({ skill: "manage-issue-analyze", args: "<ISS-ID>" }) or Skill({ skill: "manage-issue-plan", args: "<ISS-ID>" })
+- list → Skill({ skill: "manage-issue-analyze", args: "<ISS-ID>" }) for any open issue
+- close → Skill({ skill: "manage-status" })
 </execution>
 
 <error_codes>

@@ -59,12 +59,12 @@ Other commands:
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | No arguments provided when --auto requires @ reference | parse_input |
-| E002 | error | .workflow/ already exists for greenfield init | detect_state |
-| E003 | error | Brainstorm session not found (--from-brainstorm) | parse_input |
-| W001 | warning | Research agent failed, continuing with partial results | run_research |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | No arguments provided when --auto requires @ reference | Check arguments format, re-run with correct input |
+| E002 | error | .workflow/ already exists for greenfield init | Check .workflow/ directory state, resolve conflicts |
+| E003 | error | Brainstorm session not found (--from-brainstorm) | Check arguments format, re-run with correct input |
+| W001 | warning | Research agent failed, continuing with partial results | Retry research or proceed with partial results |
 </error_codes>
 
 <success_criteria>

@@ -6,6 +6,8 @@ Execute the following command:
 
 {{AUTO_DIRECTIVE}}
 
+{{ANALYSIS_HINTS}}
+
 ## Return Format
 
 Output MUST end with this exact block (fill each field on its own line):

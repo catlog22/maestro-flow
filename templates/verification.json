@@ -8,5 +8,30 @@
     "artifacts": [],
     "key_links": []
   },
-  "gaps": []
+  "layer1_truths": [],
+  "layer2_artifacts": [],
+  "layer3_wiring": [],
+  "anti_pattern_scan": {
+    "status": "pending",
+    "blockers": [],
+    "warnings": []
+  },
+  "nyquist": {
+    "status": "pending",
+    "coverage_score": null,
+    "requirement_map": []
+  },
+  "gaps": [
+    {
+      "_schema": "Unified gap object",
+      "id": "GAP-NNN",
+      "type": "must_have|coverage|anti_pattern|uat",
+      "severity": "critical|high|medium|low",
+      "description": "...",
+      "source": "layer1|layer2|layer3|nyquist|uat",
+      "status": "open|planned|fixed",
+      "related_issue": null
+    }
+  ],
+  "fix_plans": []
 }

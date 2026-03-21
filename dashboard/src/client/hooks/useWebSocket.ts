@@ -8,6 +8,7 @@ import type { BoardState, PhaseCard } from '@/shared/types.js';
 import type { WsServerMessage, WsClientMessage, ExecutionStartedPayload, ExecutionCompletedPayload, ExecutionFailedPayload } from '@/shared/ws-protocol.js';
 import type { AgentProcess, NormalizedEntry, ApprovalRequest, AgentStatusPayload, AgentStoppedPayload, AgentThoughtPayload, AgentStreamingPayload, TokenUsageEntry } from '@/shared/agent-types.js';
 import type { SupervisorStatus } from '@/shared/execution-types.js';
+import type { CommanderState, Decision } from '@/shared/commander-types.js';
 
 // ---------------------------------------------------------------------------
 // useWebSocket — connect to /ws, dispatch to stores, auto-reconnect
@@ -52,6 +53,8 @@ export function useWebSocket(): void {
       addSlot,
       removeSlot,
       setSupervisorStatus,
+      setCommanderState,
+      addDecision,
     } = useExecutionStore.getState();
     const { fetchIssues } = useIssueStore.getState();
 
@@ -222,6 +225,18 @@ export function useWebSocket(): void {
           case WS_EVENT_TYPES.SUPERVISOR_STATUS: {
             const status = msg.data as SupervisorStatus;
             setSupervisorStatus(status);
+            break;
+          }
+
+          case WS_EVENT_TYPES.COMMANDER_STATUS: {
+            const commanderStatus = msg.data as CommanderState;
+            setCommanderState(commanderStatus);
+            break;
+          }
+
+          case WS_EVENT_TYPES.COMMANDER_DECISION: {
+            const decision = msg.data as Decision;
+            addDecision(decision);
             break;
           }
 

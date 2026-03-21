@@ -3,6 +3,11 @@
   "status": "pending",
   "validated_at": null,
   "test_framework": null,
+  "infrastructure": {
+    "framework": null,
+    "runner": null,
+    "config_file": null
+  },
   "coverage": {
     "statements": 0,
     "branches": 0,
@@ -10,5 +15,17 @@
     "lines": 0
   },
   "requirement_coverage": [],
-  "gaps": []
+  "gaps": [
+    {
+      "_schema": "Unified gap object",
+      "id": "GAP-NNN",
+      "type": "must_have|coverage|anti_pattern|uat",
+      "severity": "critical|high|medium|low",
+      "description": "...",
+      "source": "layer1|layer2|layer3|nyquist|uat",
+      "status": "open|planned|fixed",
+      "related_issue": null
+    }
+  ],
+  "suggested_tests": []
 }

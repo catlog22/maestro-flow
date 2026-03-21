@@ -61,14 +61,14 @@ Follow '~/.maestro/workflows/integration-test.md' completely.
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Phase number required | parse_input |
-| E002 | error | Phase directory not found | parse_input |
-| E003 | error | No test framework detected | explore |
-| W001 | warning | Max iterations reached without convergence | adjust |
-| W002 | warning | Regression detected, switching to Surgical strategy | adjust |
-| W003 | warning | Stuck 3+ iterations, switching to Reflective strategy | adjust |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Phase number required | Check arguments format, re-run with correct input |
+| E002 | error | Phase directory not found | Check arguments format, re-run with correct input |
+| E003 | error | No test framework detected | Install test framework or verify project setup |
+| W001 | warning | Max iterations reached without convergence | Review reflection log, consider manual intervention |
+| W002 | warning | Regression detected, switching to Surgical strategy | Review reflection log, consider manual intervention |
+| W003 | warning | Stuck 3+ iterations, switching to Reflective strategy | Review reflection log, consider manual intervention |
 </error_codes>
 
 <success_criteria>

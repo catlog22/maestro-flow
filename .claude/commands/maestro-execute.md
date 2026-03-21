@@ -68,13 +68,13 @@ If failed tasks exist, suggest Skill({ skill: "quality-debug" }) for investigati
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Phase argument required | parse_input |
-| E002 | error | Phase directory not found | parse_input |
-| E003 | error | plan.json not found in phase directory | load_plan |
-| E004 | error | No pending tasks, all tasks already completed | detect_resume_point |
-| W001 | warning | Executor completed with partial failures | execute_waves |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Phase argument required | Check arguments format, re-run with correct input |
+| E002 | error | Phase directory not found | Check arguments format, re-run with correct input |
+| E003 | error | plan.json not found in phase directory | Verify plan.json exists, run maestro-plan first |
+| E004 | error | No pending tasks, all tasks already completed | Check task statuses, reset if needed |
+| W001 | warning | Executor completed with partial failures | Check task dependencies, retry failed wave |
 </error_codes>
 
 <success_criteria>

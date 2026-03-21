@@ -43,6 +43,7 @@ export type SelectedKanbanItem =
 export type { AgentProcess, NormalizedEntry, ApprovalRequest, AgentStatusPayload, AgentStoppedPayload } from './agent-types.js';
 import type { AgentProcess, NormalizedEntry, ApprovalRequest, AgentStatusPayload, AgentStoppedPayload } from './agent-types.js';
 import type { SupervisorStatus } from './execution-types.js';
+import type { CommanderState, Decision, CommanderConfig } from './commander-types.js';
 import type { ExecutionStartedPayload, ExecutionCompletedPayload, ExecutionFailedPayload } from './ws-protocol.js';
 
 // ---------------------------------------------------------------------------
@@ -67,6 +68,10 @@ export type SSEEventType =
   | 'execution:completed'
   | 'execution:failed'
   | 'supervisor:status'
+  | 'commander:status'
+  | 'commander:tick'
+  | 'commander:decision'
+  | 'commander:config'
   | 'workspace:switched';
 
 // ---------------------------------------------------------------------------
@@ -228,6 +233,6 @@ export interface BoardState {
 /** SSE event envelope */
 export interface SSEEvent {
   type: SSEEventType;
-  data: BoardState | PhaseCard | TaskCard | ScratchCard | ProjectState | AgentProcess | NormalizedEntry | ApprovalRequest | AgentStatusPayload | AgentStoppedPayload | ExecutionStartedPayload | ExecutionCompletedPayload | ExecutionFailedPayload | SupervisorStatus | { workspace: string } | string | null;
+  data: BoardState | PhaseCard | TaskCard | ScratchCard | ProjectState | AgentProcess | NormalizedEntry | ApprovalRequest | AgentStatusPayload | AgentStoppedPayload | ExecutionStartedPayload | ExecutionCompletedPayload | ExecutionFailedPayload | SupervisorStatus | CommanderState | Decision | CommanderConfig | { workspace: string } | string | null;
   timestamp: string;
 }

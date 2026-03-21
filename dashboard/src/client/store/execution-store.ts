@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ExecutionSlot, SupervisorStatus } from '@/shared/execution-types.js';
+import type { CommanderState, Decision } from '@/shared/commander-types.js';
 
 // ---------------------------------------------------------------------------
 // Execution store — global state for execution slots, multi-select, CLI panel
@@ -9,6 +10,8 @@ export interface ExecutionStore {
   slots: Record<string, ExecutionSlot>;       // processId -> slot
   queue: string[];
   supervisorStatus: SupervisorStatus | null;
+  commanderState: CommanderState | null;
+  recentDecisions: Decision[];
   selectedIssueIds: Set<string>;              // multi-select for batch
   cliPanelIssueId: string | null;             // which issue's CLI to show
 
@@ -17,6 +20,8 @@ export interface ExecutionStore {
   removeSlot: (processId: string) => void;
   setQueue: (queue: string[]) => void;
   setSupervisorStatus: (status: SupervisorStatus) => void;
+  setCommanderState: (state: CommanderState) => void;
+  addDecision: (decision: Decision) => void;
 
   // Multi-select actions
   toggleSelect: (issueId: string) => void;
@@ -36,6 +41,8 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
   slots: {},
   queue: [],
   supervisorStatus: null,
+  commanderState: null,
+  recentDecisions: [],
   selectedIssueIds: new Set(),
   cliPanelIssueId: null,
 
@@ -56,6 +63,16 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
     set({
       supervisorStatus: status,
       queue: status.queued,
+    }),
+
+  setCommanderState: (commanderState) =>
+    set({ commanderState }),
+
+  addDecision: (decision) =>
+    set((state) => {
+      const next = [...state.recentDecisions, decision];
+      if (next.length > 20) next.shift();
+      return { recentDecisions: next };
     }),
 
   toggleSelect: (issueId) =>

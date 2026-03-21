@@ -18,6 +18,7 @@ import type {
   AgentTurnCompletedPayload,
 } from '../../shared/agent-types.js';
 import type { SupervisorStatus } from '../../shared/execution-types.js';
+import type { CommanderState, Decision, CommanderConfig } from '../../shared/commander-types.js';
 import type {
   ExecutionStartedPayload,
   ExecutionCompletedPayload,
@@ -47,6 +48,10 @@ const ALL_EVENT_TYPES: SSEEventType[] = [
   'execution:completed',
   'execution:failed',
   'supervisor:status',
+  'commander:status',
+  'commander:tick',
+  'commander:decision',
+  'commander:config',
   'workspace:switched',
 ];
 
@@ -75,6 +80,11 @@ export interface DashboardEventMap {
   'execution:completed': ExecutionCompletedPayload;
   'execution:failed': ExecutionFailedPayload;
   'supervisor:status': SupervisorStatus;
+  // Commander events
+  'commander:status': CommanderState;
+  'commander:tick': CommanderState;
+  'commander:decision': Decision;
+  'commander:config': CommanderConfig;
   // Workspace events
   'workspace:switched': { workspace: string };
 }

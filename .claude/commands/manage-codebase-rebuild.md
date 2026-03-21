@@ -31,10 +31,10 @@ Follow '~/.maestro/workflows/codebase-rebuild.md' completely.
 </execution>
 
 <error_codes>
-| Code | Meaning                                  |
-|------|------------------------------------------|
-| E001 | .workflow/ not initialized               |
-| W001 | A mapper agent failed (partial results)  |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | .workflow/ not initialized | Run maestro-init first to create .workflow/ |
+| W001 | warning | A mapper agent failed (partial results) | Retry failed mapper or accept partial results |
 </error_codes>
 
 <success_criteria>

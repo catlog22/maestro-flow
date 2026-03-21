@@ -64,9 +64,9 @@ Auto-selection: ≥3 high uncertainty factors → Progressive, ≥3 low → Dire
 Follow '~/.maestro/workflows/roadmap.md' completely.
 
 **Next-step routing on completion:**
-- Roadmap approved, ready to plan → Skill({ skill: "maestro-plan", args: "1" })
+- Roadmap approved → Skill({ skill: "maestro-analyze", args: "1" })
+- Simple project, skip analysis → Skill({ skill: "maestro-plan", args: "1" })
 - Need UI design first → Skill({ skill: "maestro-ui-design", args: "1" })
-- Need analysis before planning → Skill({ skill: "maestro-analyze", args: "1" })
 - View project dashboard → Skill({ skill: "manage-status" })
 </execution>
 

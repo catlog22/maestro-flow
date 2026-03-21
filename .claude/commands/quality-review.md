@@ -101,14 +101,14 @@ Next steps:
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Phase argument required | parse_input |
-| E002 | error | Phase directory not found | parse_input |
-| E003 | error | No execution results found (no task summaries) | collect_files |
-| E004 | error | No changed files detected in phase | collect_files |
-| W001 | warning | Some dimension agents failed, partial results | parallel_review |
-| W002 | warning | Deep-dive iteration limit reached with unresolved criticals | deep_dive |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Phase argument required | Check arguments format, re-run with correct input |
+| E002 | error | Phase directory not found | Check arguments format, re-run with correct input |
+| E003 | error | No execution results found (no task summaries) | Verify execution completed with task summaries |
+| E004 | error | No changed files detected in phase | Verify execution completed with task summaries |
+| W001 | warning | Some dimension agents failed, partial results | Retry failed dimensions or accept partial results |
+| W002 | warning | Deep-dive iteration limit reached with unresolved criticals | Accept current findings or escalate manually |
 </error_codes>
 
 <success_criteria>

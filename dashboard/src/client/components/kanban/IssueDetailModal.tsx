@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Issue } from '@/shared/issue-types.js';
 import { getDisplayStatus, ISSUE_DISPLAY_STATUS_COLORS } from '@/shared/constants.js';
@@ -81,9 +81,21 @@ function PropRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
+const TOOL_OPTIONS: { value: string; label: string }[] = [
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'qwen', label: 'Qwen' },
+];
+
+const DEPTH_OPTIONS: { value: string; label: string }[] = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'deep', label: 'Deep' },
+];
+
 // Action buttons for issue lifecycle — navigate to chat after dispatching
 function ActionButtons({ issue }: { issue: Issue }) {
   const navigate = useNavigate();
+  const [selectedTool, setSelectedTool] = useState('gemini');
+  const [selectedDepth, setSelectedDepth] = useState('standard');
   const displayStatus = getDisplayStatus(issue);
   if (displayStatus !== 'open' && displayStatus !== 'analyzing' && displayStatus !== 'planned') return null;
 
@@ -93,46 +105,70 @@ function ActionButtons({ issue }: { issue: Issue }) {
   };
 
   return (
-    <div className="flex gap-2 pt-3 border-t" style={{ borderColor: 'var(--color-border-divider)' }}>
-      {!issue.analysis && (
+    <div className="pt-3 border-t" style={{ borderColor: 'var(--color-border-divider)' }}>
+      {/* Tool / Depth selectors */}
+      <div className="flex items-center gap-2 mb-2">
+        <select
+          value={selectedTool}
+          onChange={(e) => setSelectedTool(e.target.value)}
+          className="px-[var(--spacing-2)] py-[var(--spacing-1)] rounded-[var(--radius-sm)] border border-border bg-bg-primary text-text-primary text-[length:var(--font-size-xs)] cursor-pointer"
+        >
+          {TOOL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <select
+          value={selectedDepth}
+          onChange={(e) => setSelectedDepth(e.target.value)}
+          className="px-[var(--spacing-2)] py-[var(--spacing-1)] rounded-[var(--radius-sm)] border border-border bg-bg-primary text-text-primary text-[length:var(--font-size-xs)] cursor-pointer"
+        >
+          {DEPTH_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        {!issue.analysis && (
+          <button
+            type="button"
+            onClick={() => dispatchAndOpenChat({ action: 'issue:analyze', issueId: issue.id, tool: selectedTool, depth: selectedDepth })}
+            className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-accent-blue)', color: 'white' }}
+          >
+            Analyze
+          </button>
+        )}
+        {issue.analysis && !issue.solution && (
+          <button
+            type="button"
+            onClick={() => dispatchAndOpenChat({ action: 'issue:plan', issueId: issue.id, tool: selectedTool })}
+            className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
+            style={{ backgroundColor: 'var(--color-accent-blue)', color: 'white' }}
+          >
+            Plan
+          </button>
+        )}
+        {issue.solution && (
+          <button
+            type="button"
+            onClick={() => dispatchAndOpenChat({ action: 'execute:issue', issueId: issue.id })}
+            className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
+            style={{ backgroundColor: '#5A9E78', color: 'white' }}
+          >
+            Execute
+          </button>
+        )}
+        {/* Wave Execute -- decompose + parallel execution via Agent SDK */}
         <button
           type="button"
-          onClick={() => dispatchAndOpenChat({ action: 'issue:analyze', issueId: issue.id })}
+          onClick={() => dispatchAndOpenChat({ action: 'execute:wave', issueId: issue.id })}
           className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
-          style={{ backgroundColor: 'var(--color-accent-blue)', color: 'white' }}
+          style={{ backgroundColor: 'var(--color-accent-purple)', color: 'white' }}
         >
-          Analyze
+          Wave Execute
         </button>
-      )}
-      {issue.analysis && !issue.solution && (
-        <button
-          type="button"
-          onClick={() => dispatchAndOpenChat({ action: 'issue:plan', issueId: issue.id })}
-          className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
-          style={{ backgroundColor: 'var(--color-accent-blue)', color: 'white' }}
-        >
-          Plan
-        </button>
-      )}
-      {issue.solution && (
-        <button
-          type="button"
-          onClick={() => dispatchAndOpenChat({ action: 'execute:issue', issueId: issue.id })}
-          className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
-          style={{ backgroundColor: '#5A9E78', color: 'white' }}
-        >
-          Execute
-        </button>
-      )}
-      {/* Wave Execute — decompose + parallel execution via Agent SDK */}
-      <button
-        type="button"
-        onClick={() => dispatchAndOpenChat({ action: 'execute:wave', issueId: issue.id })}
-        className="text-[11px] font-medium px-3 py-1.5 rounded-md transition-colors hover:opacity-90"
-        style={{ backgroundColor: 'var(--color-accent-purple)', color: 'white' }}
-      >
-        Wave Execute
-      </button>
+      </div>
     </div>
   );
 }

@@ -40,11 +40,11 @@ Follow '~/.maestro/workflows/quick.md' completely.
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Task description required (no text provided) | parse_input |
-| E002 | error | Scratch directory creation failed | create_scratch_task |
-| W001 | warning | Verification found minor gaps | run_verification |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Task description required (no text provided) | Check arguments format, re-run with correct input |
+| E002 | error | Scratch directory creation failed | Check disk space and .workflow/ permissions |
+| W001 | warning | Verification found minor gaps | Review gaps and determine if they need fixing |
 </error_codes>
 
 <success_criteria>

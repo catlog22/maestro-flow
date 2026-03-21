@@ -9,6 +9,7 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
+  - AskUserQuestion
 ---
 
 <purpose>
@@ -38,15 +39,16 @@ Follow '~/.maestro/workflows/milestone-audit.md' completely.
 - Verdict PASS → Skill({ skill: "maestro-milestone-complete", args: "{milestone}" })
 - Verdict FAIL, integration gaps → Skill({ skill: "maestro-plan", args: "{affected_phase} --gaps" })
 - Verdict FAIL, incomplete phases → Skill({ skill: "maestro-execute", args: "{incomplete_phase}" })
+- Gaps fixed, need re-audit → Skill({ skill: "maestro-milestone-audit", args: "{milestone}" })
 </execution>
 
 <error_codes>
-| Code | Meaning                                    |
-|------|--------------------------------------------|
-| E001 | Milestone identifier required              |
-| E002 | Milestone not found in roadmap             |
-| E003 | Phases incomplete for this milestone       |
-| W001 | Phase lacks completed_at — may not have been formally transitioned |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Milestone identifier required | Check arguments format, re-run with correct input |
+| E002 | error | Milestone not found in roadmap | Check arguments format, re-run with correct input |
+| E003 | error | Phases incomplete for this milestone | Complete remaining phases before audit |
+| W001 | warning | Phase lacks completed_at — may not have been formally transitioned | Run phase-transition for the phase first |
 </error_codes>
 
 <success_criteria>

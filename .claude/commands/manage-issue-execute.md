@@ -46,6 +46,11 @@ $ARGUMENTS -- ISS-ID (required) + optional flags.
 
 <execution>
 Follow '~/.maestro/workflows/issue-execute.md' completely.
+
+**Next-step routing on completion:**
+- Execution succeeded → Skill({ skill: "manage-issue", args: "close <ISS-ID> --resolution fixed" })
+- Execution failed → Skill({ skill: "quality-debug", args: "<failure description>" }) then retry
+- Want verification → Skill({ skill: "maestro-verify", args: "{phase}" })
 </execution>
 
 <error_codes>

@@ -66,13 +66,13 @@ Note: If this was a --gaps plan, after execute run Skill({ skill: "maestro-verif
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | Phase argument required | parse_input |
-| E002 | error | Phase directory not found | parse_input |
-| E003 | error | --gaps requires verification.json to exist | parse_input |
-| W001 | warning | Exploration agent returned incomplete results | run_exploration |
-| W002 | warning | Plan-checker found minor issues, continuing | check_plan |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Phase argument required | Check arguments format, re-run with correct input |
+| E002 | error | Phase directory not found | Check arguments format, re-run with correct input |
+| E003 | error | --gaps requires verification.json to exist | Check arguments format, re-run with correct input |
+| W001 | warning | Exploration agent returned incomplete results | Retry exploration or proceed with available context |
+| W002 | warning | Plan-checker found minor issues, continuing | Review plan-checker feedback, adjust plan if needed |
 </error_codes>
 
 <success_criteria>
