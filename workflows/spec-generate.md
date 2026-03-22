@@ -353,7 +353,7 @@ Generate architecture decisions, component design, and technology selections.
 Decompose specification into executable Epics and Stories.
 
 **Step 7.1: Epic Decomposition via CLI**
-- Group requirements into 3-7 logical Epics (EPIC-NNN IDs)
+- Group requirements into logical Epics (EPIC-NNN IDs). Epic count is unconstrained — Phase 7 will merge Epics into minimal phases via the minimum-phase principle.
 - Tag MVP subset
 - For each Epic: 2-5 Stories in "As a...I want...So that..." format
 - Each Story: 2-4 testable acceptance criteria, relative size (S/M/L/XL), trace to REQ-NNN
@@ -437,34 +437,35 @@ Convert Epics into an interactive roadmap with user confirmation.
 - Read individual `EPIC-NNN-{slug}.md` for Stories and acceptance criteria
 - Read `architecture/_index.md` for technical constraints (ADR decisions)
 
-**Phase Sizing Rules (MANDATORY — applied during mapping):**
+**Minimum-Phase Principle (MANDATORY — applied during mapping):**
+
+Phase = synchronization barrier (full plan→execute→verify cycle). Minimize phases for maximum execution efficiency. The wave DAG inside each Phase handles task ordering and parallelism.
 
 | Rule | Constraint |
 |------|-----------|
-| **Minimum Stories per phase** | 5 Stories. If an Epic maps to fewer than 5 Stories, merge with related Epic into one phase. |
-| **Maximum phases (full-stack)** | 3 phases for a complete front-end + back-end project. |
-| **Maximum phases (backend-only / frontend-only)** | 2 phases. |
-| **Merge principle** | Small Epics (1-2 Stories, all size S) MUST be merged into a related phase. Same-module or same-concern Epics belong together. |
-| **Split principle** | Only split when a hard dependency boundary exists (e.g., backend API must exist before frontend can integrate). |
+| **Default** | **1 Phase**. Merge all Epics into a single phase; wave DAG handles internal ordering. |
+| **Maximum** | **2 Phases**. Only when a hard dependency boundary exists that cannot be resolved. |
+| **Exceptional** | **3 Phases**. Must explicitly justify why 2 is insufficient. |
+| **Minimum Stories per phase** | 5 Stories. If an Epic maps to fewer than 5 Stories, merge with related Epic. |
+| **Merge principle** | Small Epics (1-2 Stories, all size S) MUST be merged. Same-module or same-concern Epics belong together. Multiple Epics → one phase is normal. |
+| **Split principle** | Only split when ALL three hard-dependency conditions are met: (1) runtime dependency — cannot mock/stub, (2) not parallelizable via contract/interface, (3) full barrier — all of Phase A must complete before any of Phase B starts. |
 
-- Map (with sizing rules applied):
-  - Multiple small Epics → merge into one phase (not 1:1 Epic→Phase)
-  - MVP-tagged Epics → Milestone 1
-  - Post-MVP Epics → Milestone 2+
-  - Epic dependencies (from Mermaid diagram) → phase ordering
+- Map (with minimum-phase principle applied):
+  - Default: ALL Epics → 1 Phase (wave DAG orders tasks by Epic dependencies)
+  - Only split if hard dependency conditions are all met
+  - MVP-tagged Epics → Milestone 1, Post-MVP → Milestone 2+
+  - Epic dependencies → wave ordering within phase (not phase splits)
   - Stories within Epics → phase success criteria
   - ADR decisions → phase technical constraints
-  - Epic size estimates → phase effort (S/M/L/XL)
 
 **Post-mapping sizing check:**
-1. Count Stories per phase. Any phase < 5 Stories → merge into neighbor.
-2. Count total phases. Full-stack > 3 or single-side > 2 → merge related phases.
+1. Count total phases. If > 2 → justify each split against the 3 hard-dependency conditions, merge if unjustified.
+2. Count Stories per phase. Any phase < 5 Stories → merge into neighbor.
 3. Verify each phase has a meaningful deliverable boundary.
 
-**Scope classification:**
-- **Single-side**: Pure frontend or pure backend project → max 2 phases.
-- **Full-stack**: One frontend + one backend → max 3 phases.
-- **Large scope** (monorepo with 2+ services, workers, multiple backends): Use milestones. Each milestone follows the 2-3 phase limit independently. Phase counts reset per milestone.
+**Scope escalation:**
+- **Single project** (any size): 1-2 Phases. Use wave DAG for internal parallelism.
+- **Large scope** (monorepo with 2+ independently deployable services): Use **Milestones**. Each Milestone follows the 1-2 Phase limit independently.
 
 **Step 11.2: Generate Draft Roadmap**
 - Produce `roadmap.md` following `@templates/roadmap.md` structure:
@@ -501,13 +502,13 @@ Convert Epics into an interactive roadmap with user confirmation.
 
 **Step 11.3: Interactive Refinement (max 3 rounds)**
 - Present roadmap overview: phase count, milestone structure, dependency graph
-- **Before presenting**: validate phase sizing rules (min 5 tasks/phase, max 3 phases full-stack). Auto-merge violations and inform user.
+- **Before presenting**: validate minimum-phase principle (default 1, max 2, exceptional 3). Auto-merge violations and inform user.
 - User feedback via AskUserQuestion:
   - **Approve**: Run final sizing check before accepting
-  - **Adjust Scope**: Move Epics between milestones, split/merge phases (enforce sizing rules)
+  - **Adjust Scope**: Move Epics between milestones, merge phases (enforce minimum-phase principle)
   - **Reorder**: Change phase sequencing
-  - **Split/Merge**: Break large phases or combine small ones (min 5 tasks enforced)
-- `--yes`: auto-approve draft roadmap (sizing rules still enforced automatically)
+  - **Split/Merge**: Combine small phases (min 5 tasks enforced); splits require hard-dependency justification
+- `--yes`: auto-approve draft roadmap (minimum-phase principle still enforced automatically)
 - Each round: update roadmap.md, log change in iteration history
 
 **Step 11.4: Write Outputs**

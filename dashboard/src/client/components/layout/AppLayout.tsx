@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { TopBar } from '@/client/components/layout/TopBar.js';
 import { DockRail } from '@/client/components/layout/DockRail.js';
 import { MainContent } from '@/client/components/layout/MainContent.js';
@@ -24,6 +24,8 @@ export function AppLayout() {
   const [isPinned, setIsPinned] = useState(false);
   const togglePin = () => setIsPinned((p) => !p);
   const viewSwitcherCtx = useViewSwitcherProvider();
+  const location = useLocation();
+  const showOrchestrator = location.pathname.startsWith('/kanban');
 
   // Establish WebSocket connection for real-time updates
   useWebSocket();
@@ -96,7 +98,7 @@ export function AppLayout() {
         <DockRail isPinned={isPinned} onTogglePin={togglePin} />
         <MainContent>
           <Outlet />
-          <OrchestratorStatusBar />
+          {showOrchestrator && <OrchestratorStatusBar />}
         </MainContent>
       </div>
     </div>

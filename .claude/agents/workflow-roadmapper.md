@@ -79,5 +79,5 @@ These identifiers become the phase directory names under `.workflow/phases/`.
 - Each phase must be independently valuable (deliverable milestone)
 - Success criteria must be specific and verifiable, not vague
 - Phases should be ordered by dependency and risk (tackle high-risk early)
-- Keep phase count between 3 and 8
+- **Minimum-phase principle**: Default 1 phase, max 2, exceptional 3 with justification. Phase = synchronization barrier (plan→execute→verify cycle). Wave DAG inside each phase handles task ordering. Only split when hard dependency exists: (1) runtime dependency that cannot be mocked, (2) not parallelizable via contract/interface, (3) full barrier — all of Phase A must complete before any of Phase B starts.
 - Do not define implementation tasks; that is the planner's job

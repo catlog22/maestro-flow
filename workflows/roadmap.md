@@ -175,31 +175,42 @@ IF .workflow/codebase/ exists (from spec-map or codebase-rebuild):
 Spawn `cli-roadmap-plan-agent`.
 If `apiResearchContext` is set: include as "External API Research" context in the agent prompt — technology complexity, API constraints, and integration effort inform phase sizing and dependency ordering.
 
-### Phase Sizing Rules (MANDATORY)
+### Minimum-Phase Principle (MANDATORY)
+
+**Core rule: Phase = synchronization barrier.** Each Phase triggers a full plan→execute→verify→transition serial cycle. More phases = slower delivery. The wave DAG inside each Phase already handles task ordering and parallelism, so only create a new Phase when tasks **cannot** start until a previous Phase's entire output exists.
+
+**Default: 1 Phase.** Put everything into a single Phase unless a hard dependency forces a split.
 
 | Rule | Constraint |
 |------|-----------|
+| **Default** | **1 Phase**. All work in one plan→execute cycle; wave DAG handles internal ordering. |
+| **Maximum** | **2 Phases**. Only when a hard dependency boundary exists that cannot be resolved. |
+| **Exceptional** | **3 Phases**. Must explicitly justify why 2 is insufficient. |
 | **Minimum tasks per phase** | 5 tasks. If a phase would have fewer, merge it into an adjacent phase. |
-| **Maximum phases (full-stack)** | 3 phases for a complete front-end + back-end project. Larger scope uses milestones, not more phases. |
-| **Maximum phases (backend-only / frontend-only)** | 2 phases. Single-side projects should not exceed 2 phases. |
 | **Merge principle** | Same-module, same-concern, or tightly-coupled work belongs in ONE phase. Infra + core logic + API in one phase is fine. |
-| **Split principle** | Only split when there is a hard dependency boundary (e.g., backend API must exist before frontend can integrate). |
+| **Split principle** | Only split when ALL three hard-dependency conditions are met (see below). |
+
+**Hard dependency — all three conditions required to justify a Phase split:**
+1. **Runtime dependency**: Phase B code at runtime MUST call Phase A's real output (cannot mock/stub).
+2. **Not parallelizable**: A and B cannot develop concurrently via contract/interface/type agreement.
+3. **Full barrier**: ALL of Phase A's tasks must complete before ANY of Phase B's tasks can start.
+
+If only 1-2 conditions are met → keep in the same Phase, use wave dependencies instead.
 
 **Phase sizing checklist (applied after decomposition, before presenting to user):**
-1. Count estimated tasks per phase. Any phase < 5 tasks → merge into neighbor.
-2. Count total phases. Full-stack > 3 or single-side > 2 → merge related phases.
+1. Count total phases. If > 2 → justify each split against the 3 hard-dependency conditions, merge if unjustified.
+2. Count estimated tasks per phase. Any phase < 5 tasks → merge into neighbor.
 3. Verify each phase has a meaningful deliverable boundary (not just "setup" or "cleanup").
 
-**Scope classification:**
-- **Single-side**: Pure frontend or pure backend project → max 2 phases.
-- **Full-stack**: One frontend + one backend → max 3 phases.
-- **Large scope** (monorepo with 2+ services, workers, multiple backends): Use milestones. Each milestone follows the 2-3 phase limit independently. Phase counts reset per milestone.
+**Scope escalation:**
+- **Single project** (any size): 1-2 Phases. Use wave DAG for internal parallelism.
+- **Large scope** (monorepo with 2+ independently deployable services): Use **Milestones** to divide scope. Each Milestone follows the 1-2 Phase limit independently.
 
 **Progressive mode**:
-- 2-3 layers: MVP / Usable / Refined (Optimized merged into Refined unless justified)
-- Each layer: goal, scope, excludes, convergence, risks, effort
+- Progressive layers (MVP → Usable → Refined) map to **Milestones**, not Phases.
+- Each Milestone contains 1-2 Phases following the minimum-phase principle.
 - MVP must be self-contained (no external dependencies)
-- Each feature in exactly ONE layer (no overlap)
+- Each feature in exactly ONE milestone (no overlap)
 
 **Direct mode**:
 - Topologically-sorted task sequence
@@ -218,6 +229,7 @@ If `apiResearchContext` is set: include as "External API Research" context in th
 ```
 
 Phase numbering: integers (1, 2, 3) for planned work, decimals (2.1, 2.2) for inserted phases.
+Decimal phases count toward the total phase limit.
 Phase directories use `{NN}-{slug}` format (e.g., `01-auth`, `02-api`).
 
 **Requirements traceability**: Every Active requirement from project.md MUST appear in exactly one phase's Requirements field. If a requirement maps to no phase, surface it as a gap.
@@ -237,10 +249,10 @@ Phase directories use `{NN}-{slug}` format (e.g., `01-auth`, `02-api`).
    - Max 5 rounds
 
 3. **Process Feedback**
-   - **Approve**: Run phase sizing checklist (Step 3 rules) before accepting. If violations found, auto-merge and inform user.
-   - **Adjust Scope**: Move phases between milestones, modify criteria
+   - **Approve**: Run minimum-phase checklist (Step 3 rules) before accepting. If violations found, auto-merge and inform user.
+   - **Adjust Scope**: Move features between milestones, modify criteria
    - **Reorder**: Change phase sequencing
-   - **Split/Merge**: Break large phases or combine small ones (enforce min 5 tasks, max 3 phases)
+   - **Split/Merge**: Break large phases or combine small ones (enforce min 5 tasks, max 2 phases)
    - **Re-decompose**: Return to Step 3 with new strategy
 
 4. **Loop** until approved or max rounds reached

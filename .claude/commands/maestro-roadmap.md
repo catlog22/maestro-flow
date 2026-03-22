@@ -54,10 +54,12 @@ maestro-init → maestro-spec-generate → spec package + roadmap.md
 **Dual modes:**
 | Mode | Strategy | Best For |
 |------|----------|----------|
-| Progressive | MVP → Usable → Refined → Optimized | High uncertainty, need validation |
-| Direct | Topological task sequence | Clear requirements, confirmed tech |
+| Progressive | MVP → Usable → Refined (as **Milestones**, each with 1-2 phases) | High uncertainty, need validation |
+| Direct | Topological task sequence (1-2 phases, wave DAG handles ordering) | Clear requirements, confirmed tech |
 
 Auto-selection: ≥3 high uncertainty factors → Progressive, ≥3 low → Direct, else → ask user.
+
+**Minimum-phase principle:** Default 1 phase per milestone. Only split into 2 phases when hard dependency exists (runtime + not parallelizable + full barrier). Max 2 phases, exceptional 3 with justification.
 </context>
 
 <execution>
