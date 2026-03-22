@@ -33,10 +33,7 @@ export const useCoordinateStore = create<CoordinateStore>((set) => ({
   clarificationQuestion: null,
 
   onStatus: (session) =>
-    set({
-      session,
-      clarificationQuestion: session.status !== 'awaiting_clarification' ? null : undefined,
-    }),
+    set({ session }),
 
   onStep: (payload) =>
     set((state) => {

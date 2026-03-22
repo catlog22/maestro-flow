@@ -32,6 +32,7 @@ import {
   resolveAgentType,
 } from './chain-map.js';
 import type { WorkflowSnapshot, StepAnalysis } from './types.js';
+import { setPromptsDir } from './prompts/index.js';
 
 // ---------------------------------------------------------------------------
 // Start options (same interface as CoordinateRunner)
@@ -66,6 +67,7 @@ export class WorkflowCoordinator {
     private readonly stateManager: StateManager,
     private readonly workflowRoot: string,
   ) {
+    setPromptsDir(workflowRoot);
     this.stateAnalyzer = new StateAnalyzerAgent(stateManager, workflowRoot);
     this.intentClassifier = new IntentClassifierAgent();
     this.qualityReviewer = new QualityReviewerAgent();

@@ -109,6 +109,7 @@ export function CoordinatePanel() {
   const [clarifyResponse, setClarifyResponse] = useState('');
 
   const isRunning = session?.status === 'running' || session?.status === 'classifying' || session?.status === 'analyzing_state' || session?.status === 'classifying_intent' || session?.status === 'reviewing';
+  const isAwaitingClarification = session?.status === 'awaiting_clarification';
   const isIdle = !session || session.status === 'idle' || session.status === 'completed' || session.status === 'failed';
 
   const handleStart = useCallback(() => {
