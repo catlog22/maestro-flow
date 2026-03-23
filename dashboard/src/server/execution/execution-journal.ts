@@ -15,7 +15,7 @@ export class ExecutionJournal {
   private readonly maxSizeBytes: number;
 
   constructor(workflowRoot: string, maxSizeBytes = 10 * 1024 * 1024) {
-    this.journalPath = join(workflowRoot, '.workflow', 'execution', 'journal.jsonl');
+    this.journalPath = join(workflowRoot, 'execution', 'journal.jsonl');
     this.maxSizeBytes = maxSizeBytes;
   }
 

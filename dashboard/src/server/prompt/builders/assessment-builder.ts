@@ -57,13 +57,27 @@ ${decisionList}
 ${blockerList}
 
 ## Task
-Assess the current state and recommend priority actions. Consider:
-1. Are there open issues that should be executed now?
-2. Is the current phase progressing well or stalled?
-3. Are there risks or blockers that need attention?
-4. Should any phase transitions be triggered?
+Assess the current state and recommend priority actions.
 
-Return your assessment as JSON.`;
+Consider:
+1. Which open issues should be executed now? Prioritize issues with solutions ([READY]) over unplanned ones.
+2. Is the current phase progressing well or stalled? Look at worker utilization and recent decisions.
+3. Are there risks or blockers that need immediate attention?
+4. Should any phase transitions be triggered based on completion state?
+
+Respond with ONLY a valid JSON object:
+{
+  "assessment": "brief overall assessment",
+  "health": "healthy | degraded | stalled",
+  "actions": [
+    {
+      "type": "dispatch | pause | escalate | transition",
+      "issueId": "issue id if applicable",
+      "reason": "why this action"
+    }
+  ],
+  "risks": ["risk descriptions if any"]
+}`;
 
     return { userPrompt, mode: 'assessment' };
   }

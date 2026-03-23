@@ -508,7 +508,7 @@ export class CoordinateRunner {
 
   private get sessionDir(): string {
     if (!this.session) throw new Error('No active session');
-    return join(this.workflowRoot, '.workflow', '.maestro-coordinate', this.session.sessionId);
+    return join(this.workflowRoot, '.maestro-coordinate', this.session.sessionId);
   }
 
   private async persistState(): Promise<void> {
@@ -527,7 +527,7 @@ export class CoordinateRunner {
     try {
       let stateDir: string;
       if (sessionId) {
-        stateDir = join(this.workflowRoot, '.workflow', '.maestro-coordinate', sessionId);
+        stateDir = join(this.workflowRoot, '.maestro-coordinate', sessionId);
       } else if (this.session) {
         stateDir = this.sessionDir;
       } else {

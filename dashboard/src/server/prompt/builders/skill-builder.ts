@@ -12,8 +12,26 @@ export class SkillPromptBuilder implements PromptBuilder {
   async build(context: PromptContext): Promise<PromptResult> {
     const { issue } = context;
 
-    const userPrompt = `Execute the following issue:\n\nIssue ID: ${issue.id}\nTitle: ${issue.title}\nType: ${issue.type}\nPriority: ${issue.priority}\n\nDescription:\n${issue.description}`;
+    const lines = [
+      `Execute the following issue:`,
+      '',
+      `Issue ID: ${issue.id}`,
+      `Title: ${issue.title}`,
+      `Type: ${issue.type}`,
+      `Priority: ${issue.priority}`,
+      '',
+      `Description:`,
+      issue.description,
+    ];
 
-    return { userPrompt, mode: 'skill' };
+    if (issue.analysis?.suggested_approach) {
+      lines.push('', `Suggested approach: ${issue.analysis.suggested_approach}`);
+    }
+
+    if (issue.analysis?.related_files && issue.analysis.related_files.length > 0) {
+      lines.push(`Key files: ${issue.analysis.related_files.join(', ')}`);
+    }
+
+    return { userPrompt: lines.join('\n'), mode: 'skill' };
   }
 }
