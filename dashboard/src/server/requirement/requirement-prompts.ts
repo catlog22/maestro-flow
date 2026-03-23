@@ -127,6 +127,60 @@ export function buildRefinePrompt(requirement: ExpandedRequirement, feedback: st
 }
 
 // ---------------------------------------------------------------------------
+// Continue prompt builder (expand on top of a prior expansion)
+// ---------------------------------------------------------------------------
+
+export function buildContinuePrompt(
+  text: string,
+  depth: ExpansionDepth,
+  previousRequirement: ExpandedRequirement,
+): string {
+  const prevItems = previousRequirement.items.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    type: item.type,
+    priority: item.priority,
+    dependencies: item.dependencies,
+    estimated_effort: item.estimated_effort,
+  }));
+
+  const lines = [
+    '## Previous Expansion (context)',
+    `Title: ${previousRequirement.title}`,
+    `Summary: ${previousRequirement.summary}`,
+    `Depth: ${previousRequirement.depth}`,
+    `Original input: ${previousRequirement.userInput}`,
+    '',
+    '### Previous Items',
+    JSON.stringify(prevItems, null, 2),
+    '',
+    '## New Requirement (continue planning)',
+    text,
+    '',
+    DEPTH_INSTRUCTIONS[depth],
+    '',
+    '## Instructions',
+    'The user wants to continue planning on top of the previous expansion.',
+    'Use the previous expansion as context and foundation.',
+    'You may reference, extend, or build upon the previous items.',
+    'Produce a NEW expansion that incorporates both the previous work and the new requirement.',
+    'Do NOT simply copy the previous items — merge, extend, or restructure as needed.',
+    '',
+    '## Output',
+    'Return a JSON object with these fields:',
+    '- title: concise name for this combined requirement set',
+    '- summary: 1-2 sentence overview covering both previous and new scope',
+    '- items: array of checklist items (merged/extended), each with:',
+    '  - title, description, type, priority, dependencies, estimated_effort',
+    '',
+    'Return ONLY valid JSON. No markdown fences, no explanation.',
+  ];
+
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
 // Output schema for Agent SDK structured output
 // ---------------------------------------------------------------------------
 

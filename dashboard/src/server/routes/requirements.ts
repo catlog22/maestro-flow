@@ -59,7 +59,8 @@ export function createRequirementRoutes(requirementExpander: RequirementExpander
       }
 
       const depth = (body.depth as ExpansionDepth | undefined) ?? 'standard';
-      const result = await requirementExpander.expand((body.text as string).trim(), depth);
+      const previousRequirementId = body.previousRequirementId as string | undefined;
+      const result = await requirementExpander.expand((body.text as string).trim(), depth, 'sdk', previousRequirementId);
 
       return c.json(result, 201);
     } catch (err) {

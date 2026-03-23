@@ -28,6 +28,8 @@ export interface RequirementStore {
   error: string | null;
   progressMessage: string | null;
   committedResult: CommittedResult | null;
+  /** When set, the next expand will use this requirement as context */
+  continueFrom: ExpandedRequirement | null;
 
   // Actions that send WS messages
   expand: (text: string, depth?: ExpansionDepth, method?: string) => void;
@@ -35,6 +37,7 @@ export interface RequirementStore {
   commit: (mode: 'issues' | 'coordinate') => void;
   resetRequirement: () => void;
   loadHistory: (id: string) => void;
+  setContinueFrom: (req: ExpandedRequirement | null) => void;
 
   // Fetch persisted history from server
   fetchHistory: () => Promise<void>;
@@ -67,13 +70,16 @@ export const useRequirementStore = create<RequirementStore>((set, get) => ({
   error: null,
   progressMessage: null,
   committedResult: null,
+  continueFrom: null,
 
   expand: (text, depth, method) => {
+    const continueFrom = get().continueFrom;
     set({
       isLoading: true,
       error: null,
       progressMessage: null,
       committedResult: null,
+      continueFrom: null,
       currentRequirement: {
         id: '',
         status: 'expanding',
@@ -92,6 +98,7 @@ export const useRequirementStore = create<RequirementStore>((set, get) => ({
         text,
         depth,
         method: (method ?? 'sdk') as 'sdk' | 'cli',
+        ...(continueFrom ? { previousRequirementId: continueFrom.id } : {}),
       });
     } catch (e) {
       set({ isLoading: false, error: e instanceof Error ? e.message : String(e) });
@@ -145,7 +152,12 @@ export const useRequirementStore = create<RequirementStore>((set, get) => ({
       error: null,
       progressMessage: null,
       committedResult: null,
+      continueFrom: null,
     });
+  },
+
+  setContinueFrom: (req) => {
+    set({ continueFrom: req });
   },
 
   loadHistory: (id) => {

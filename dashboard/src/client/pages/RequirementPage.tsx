@@ -12,6 +12,8 @@ import PlusCircleIcon from 'lucide-react/dist/esm/icons/plus-circle.js';
 import CodeIcon from 'lucide-react/dist/esm/icons/code.js';
 import RotateCcwIcon from 'lucide-react/dist/esm/icons/rotate-ccw.js';
 import ArrowRightIcon from 'lucide-react/dist/esm/icons/arrow-right.js';
+import LayersIcon from 'lucide-react/dist/esm/icons/layers.js';
+import XIcon from 'lucide-react/dist/esm/icons/x.js';
 
 // ---------------------------------------------------------------------------
 // RequirementPage — 4:6 split panel
@@ -67,8 +69,13 @@ function Composer() {
   const [text, setText] = useState('');
   const [depth, setDepth] = useState<ExpansionDepth>('standard');
   const [method, setMethod] = useState<ExpansionMethod>('sdk');
-  const { expand, isLoading } = useRequirementStore(
-    useShallow((s) => ({ expand: s.expand, isLoading: s.isLoading })),
+  const { expand, isLoading, continueFrom, setContinueFrom } = useRequirementStore(
+    useShallow((s) => ({
+      expand: s.expand,
+      isLoading: s.isLoading,
+      continueFrom: s.continueFrom,
+      setContinueFrom: s.setContinueFrom,
+    })),
   );
 
   const handleExpand = useCallback(() => {
@@ -103,15 +110,45 @@ function Composer() {
       </p>
 
       {/* Composer card */}
-      <div className="bg-bg-card border border-border rounded-[var(--style-composer-radius)] shadow-sm transition-all duration-[var(--duration-normal)] focus-within:border-[var(--color-accent-orange)] focus-within:shadow-[0_2px_10px_rgba(0,0,0,0.03),0_0_0_3px_rgba(200,134,58,0.08)]">
+      <div className={`bg-bg-card border rounded-[var(--style-composer-radius)] shadow-sm transition-all duration-[var(--duration-normal)] focus-within:shadow-[0_2px_10px_rgba(0,0,0,0.03),0_0_0_3px_rgba(200,134,58,0.08)] ${
+        continueFrom
+          ? 'border-[var(--color-accent-purple)] focus-within:border-[var(--color-accent-purple)]'
+          : 'border-border focus-within:border-[var(--color-accent-orange)]'
+      }`}>
+        {/* Continue-from context badge */}
+        {continueFrom && (
+          <div className="flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] pt-[var(--spacing-2-5)]">
+            <div className="flex items-center gap-[var(--spacing-1-5)] flex-1 min-w-0 px-[var(--spacing-2-5)] py-[var(--spacing-1-5)] rounded-[var(--radius-default)] bg-[var(--color-tint-planning)]">
+              <LayersIcon size={12} strokeWidth={2} className="text-[var(--color-accent-purple)] shrink-0" />
+              <span className="text-[10px] font-semibold text-[var(--color-accent-purple)] shrink-0">
+                Continue from
+              </span>
+              <span className="text-[10px] font-medium text-text-secondary truncate">
+                {continueFrom.title || continueFrom.userInput.substring(0, 40)}
+              </span>
+              <span className="text-[9px] text-text-placeholder shrink-0">
+                {continueFrom.items.length} items
+              </span>
+            </div>
+            <button
+              type="button"
+              className="w-[20px] h-[20px] rounded-[var(--radius-sm)] flex items-center justify-center text-text-placeholder hover:bg-bg-hover hover:text-text-primary transition-all duration-[var(--duration-fast)] shrink-0"
+              onClick={() => setContinueFrom(null)}
+              title="Dismiss context"
+            >
+              <XIcon size={12} strokeWidth={2} />
+            </button>
+          </div>
+        )}
         <textarea
           className="w-full border-none bg-transparent resize-none outline-none text-text-primary leading-relaxed font-sans"
           style={{
             fontSize: 'var(--style-composer-textarea-size)',
             padding: 'var(--style-composer-padding)',
             paddingBottom: 'var(--spacing-2)',
+            paddingTop: continueFrom ? 'var(--spacing-2)' : undefined,
           }}
-          placeholder="Describe a feature, user story, or requirement..."
+          placeholder={continueFrom ? 'Describe additional requirements to build upon...' : 'Describe a feature, user story, or requirement...'}
           rows={3}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -163,8 +200,8 @@ function Composer() {
             disabled={!text.trim() || isLoading}
             onClick={handleExpand}
           >
-            <ZapIcon size={13} strokeWidth={2} />
-            {isLoading ? 'Expanding...' : 'Expand'}
+            {continueFrom ? <LayersIcon size={13} strokeWidth={2} /> : <ZapIcon size={13} strokeWidth={2} />}
+            {isLoading ? 'Expanding...' : continueFrom ? 'Continue' : 'Expand'}
           </button>
         </div>
       </div>
@@ -414,6 +451,7 @@ function StructuredView() {
     isLoading,
     committedResult,
     resetRequirement,
+    setContinueFrom,
   } = useRequirementStore(
     useShallow((s) => ({
       currentRequirement: s.currentRequirement,
@@ -423,6 +461,7 @@ function StructuredView() {
       isLoading: s.isLoading,
       committedResult: s.committedResult,
       resetRequirement: s.resetRequirement,
+      setContinueFrom: s.setContinueFrom,
     })),
   );
 
@@ -593,16 +632,38 @@ function StructuredView() {
               <CodeIcon size={14} strokeWidth={1.8} />
               Coordinate
             </button>
+            <div className="w-px h-[20px] bg-border-divider mx-[var(--spacing-1)]" />
+            <button
+              type="button"
+              className="flex items-center gap-[var(--spacing-1-5)] px-[var(--spacing-3)] py-[var(--spacing-2)] rounded-[var(--radius-md)] border border-[var(--color-accent-purple)]/20 text-[var(--color-accent-purple)] text-[length:var(--font-size-xs)] font-semibold hover:bg-[var(--color-tint-planning)] transition-all duration-[var(--duration-normal)] disabled:opacity-[var(--opacity-disabled)]"
+              disabled={isLoading}
+              onClick={() => setContinueFrom(currentRequirement)}
+              title="Use this expansion as context for further planning"
+            >
+              <LayersIcon size={14} strokeWidth={1.8} />
+              Continue
+            </button>
           </>
         ) : (
-          <button
-            type="button"
-            className="flex items-center gap-[var(--spacing-1-5)] px-[var(--spacing-4)] py-[var(--spacing-2)] rounded-[var(--radius-md)] border border-border text-text-secondary text-[length:var(--font-size-xs)] font-semibold hover:text-text-primary hover:bg-bg-hover transition-all duration-[var(--duration-normal)]"
-            onClick={resetRequirement}
-          >
-            <RotateCcwIcon size={14} strokeWidth={1.8} />
-            New Requirement
-          </button>
+          <>
+            <button
+              type="button"
+              className="flex items-center gap-[var(--spacing-1-5)] px-[var(--spacing-4)] py-[var(--spacing-2)] rounded-[var(--radius-md)] border border-border text-text-secondary text-[length:var(--font-size-xs)] font-semibold hover:text-text-primary hover:bg-bg-hover transition-all duration-[var(--duration-normal)]"
+              onClick={resetRequirement}
+            >
+              <RotateCcwIcon size={14} strokeWidth={1.8} />
+              New Requirement
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-[var(--spacing-1-5)] px-[var(--spacing-3)] py-[var(--spacing-2)] rounded-[var(--radius-md)] border border-[var(--color-accent-purple)]/20 text-[var(--color-accent-purple)] text-[length:var(--font-size-xs)] font-semibold hover:bg-[var(--color-tint-planning)] transition-all duration-[var(--duration-normal)]"
+              onClick={() => setContinueFrom(currentRequirement)}
+              title="Use this expansion as context for further planning"
+            >
+              <LayersIcon size={14} strokeWidth={1.8} />
+              Continue Planning
+            </button>
+          </>
         )}
         <div className="flex-1" />
         <span className="text-[10px] text-text-tertiary">

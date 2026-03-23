@@ -33,6 +33,7 @@ export class RequirementWsHandler implements WsHandler {
           msg.text as string,
           msg.depth as ExpansionDepth | undefined,
           msg.method as 'sdk' | 'cli' | undefined,
+          msg.previousRequirementId as string | undefined,
         );
         broadcast('requirement:expanded', { requirement });
         break;

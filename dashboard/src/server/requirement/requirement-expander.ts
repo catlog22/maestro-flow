@@ -30,6 +30,7 @@ import {
   REQUIREMENT_SYSTEM_PROMPT,
   buildExpandPrompt,
   buildRefinePrompt,
+  buildContinuePrompt,
 } from './requirement-prompts.js';
 
 // ---------------------------------------------------------------------------
@@ -123,7 +124,7 @@ export class RequirementExpander {
   // -------------------------------------------------------------------------
 
   /** Expand user text into a structured requirement checklist */
-  async expand(text: string, depth: ExpansionDepth = 'standard', method: ExpansionMethod = 'sdk'): Promise<ExpandedRequirement> {
+  async expand(text: string, depth: ExpansionDepth = 'standard', method: ExpansionMethod = 'sdk', previousRequirementId?: string): Promise<ExpandedRequirement> {
     const id = `REQ-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
     const now = new Date().toISOString();
 
@@ -143,8 +144,14 @@ export class RequirementExpander {
     this.emitProgress(id, 'expanding', 'Expanding requirement...');
 
     try {
+      // Build prompt — use continue prompt if building on a previous expansion
+      const previousReq = previousRequirementId ? this.store.get(previousRequirementId) : undefined;
+      const prompt = previousReq
+        ? buildContinuePrompt(text, depth, previousReq)
+        : buildExpandPrompt(text, depth);
+
       const result = await this.runExpansionQuery(
-        buildExpandPrompt(text, depth),
+        prompt,
       );
 
       requirement.title = result.title;

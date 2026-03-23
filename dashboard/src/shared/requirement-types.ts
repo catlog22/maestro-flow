@@ -60,6 +60,8 @@ export interface RequirementExpandMessage {
   action: 'requirement:expand';
   text: string;
   depth?: ExpansionDepth;
+  /** When continuing from a prior expansion, include its ID as context */
+  previousRequirementId?: string;
 }
 
 /** Client requests refinement of an existing expansion */
