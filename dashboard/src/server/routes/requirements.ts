@@ -21,6 +21,7 @@ const VALID_COMMIT_MODES = new Set<string>(['issues', 'coordinate']);
 /**
  * Requirement routes following the Hono factory pattern.
  *
+ * GET    /api/requirements              - list all expanded requirements
  * POST   /api/requirements/expand       - expand user text into structured requirement
  * POST   /api/requirements/:id/refine   - refine an existing expansion with feedback
  * POST   /api/requirements/:id/commit   - commit requirement as issues or coordinate session
@@ -28,6 +29,19 @@ const VALID_COMMIT_MODES = new Set<string>(['issues', 'coordinate']);
  */
 export function createRequirementRoutes(requirementExpander: RequirementExpander): Hono {
   const app = new Hono();
+
+  // GET /api/requirements — list all (newest first)
+  app.get('/api/requirements', (c) => {
+    try {
+      const all = requirementExpander.getAll();
+      // Sort newest first
+      all.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return c.json(all);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
 
   // POST /api/requirements/expand
   app.post('/api/requirements/expand', async (c) => {

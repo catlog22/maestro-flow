@@ -36,6 +36,9 @@ export interface RequirementStore {
   resetRequirement: () => void;
   loadHistory: (id: string) => void;
 
+  // Fetch persisted history from server
+  fetchHistory: () => Promise<void>;
+
   // WS event handlers (called from useWebSocket)
   onProgress: (payload: RequirementProgressPayload) => void;
   onExpanded: (payload: RequirementExpandedPayload) => void;
@@ -155,6 +158,19 @@ export const useRequirementStore = create<RequirementStore>((set, get) => ({
         progressMessage: null,
         committedResult: null,
       });
+    }
+  },
+
+  fetchHistory: async () => {
+    try {
+      const res = await fetch('/api/requirements');
+      if (!res.ok) return;
+      const data = (await res.json()) as ExpandedRequirement[];
+      if (Array.isArray(data) && data.length > 0) {
+        set({ history: data });
+      }
+    } catch {
+      // Non-fatal — history is convenience, not critical
     }
   },
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useRequirementStore } from '@/client/store/requirement-store.js';
 import type { ExpansionDepth, ChecklistItem } from '@/shared/requirement-types.js';
@@ -744,6 +744,12 @@ function buildDepFlow(items: ChecklistItem[]): string[] {
 // ---------------------------------------------------------------------------
 
 export function RequirementPage() {
+  const fetchHistory = useRequirementStore((s) => s.fetchHistory);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
   return (
     <div className="h-full flex">
       {/* Left column — 40%: composer + history */}
