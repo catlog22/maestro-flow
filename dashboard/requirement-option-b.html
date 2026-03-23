@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Requirement Expansion — Option B: Kanban Lifecycle</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+    --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+    --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+    --bdr: #E8E5DE; --bdr2: #ECEAE4;
+    --blue: #5B8DB8; --green: #5A9E78; --orange: #C8863A; --purple: #9178B5;
+    --red: #D05454;
+    --tint-blue: #EDF2F8; --tint-green: #EEF5F0; --tint-orange: #FAF0E3;
+    --tint-purple: #F2EDF8; --tint-red: #FCEEEE; --tint-gray: #F2F1EE;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Inter', -apple-system, sans-serif; font-size: 13px;
+    line-height: 1.5; background: var(--bg); color: var(--t1);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ===== TopBar ===== */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 48px; padding: 0 24px; background: var(--bg2);
+    border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+  }
+  .topbar-l { display: flex; align-items: center; gap: 12px; }
+  .brand { font-weight: 700; font-size: 15px; color: var(--t1); }
+  .brand-sub { font-size: 12px; color: var(--t2); }
+  .topbar-r { display: flex; align-items: center; gap: 10px; }
+  .pill {
+    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .pill--green { background: rgba(90,158,120,0.12); color: var(--green); }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+  .btn {
+    font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px;
+    border: none; cursor: pointer; transition: all 150ms;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+  .btn-primary { background: var(--t1); color: #fff; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-ghost { background: none; color: var(--t2); border: 1px solid var(--bdr); }
+  .btn-ghost:hover { background: var(--hover); color: var(--t1); }
+
+  /* ===== Body ===== */
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ===== Input Panel (Left) ===== */
+  .input-panel {
+    width: 340px; background: var(--bg2); border-right: 1px solid var(--bdr);
+    flex-shrink: 0; display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .panel-section { padding: 16px; }
+  .panel-section + .panel-section { border-top: 1px solid var(--bdr2); }
+  .panel-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--t3); margin-bottom: 8px;
+  }
+  .input-area {
+    width: 100%; border: 1px solid var(--bdr); border-radius: 10px;
+    padding: 12px 14px; font-size: 13px; font-family: inherit;
+    color: var(--t1); background: var(--card); outline: none; resize: vertical;
+    min-height: 120px; line-height: 1.5;
+    transition: border-color 200ms;
+  }
+  .input-area:focus { border-color: var(--orange); }
+  .input-area::placeholder { color: var(--t4); }
+
+  .depth-tabs {
+    display: flex; gap: 4px; background: var(--card); border-radius: 8px;
+    padding: 3px; border: 1px solid var(--bdr2);
+  }
+  .depth-tab {
+    flex: 1; text-align: center; font-size: 11px; font-weight: 500;
+    padding: 5px 0; border-radius: 6px; border: none; background: none;
+    color: var(--t3); cursor: pointer; transition: all 150ms;
+  }
+  .depth-tab:hover { color: var(--t2); }
+  .depth-tab.active {
+    background: var(--t1); color: #fff;
+  }
+
+  .recent-list { display: flex; flex-direction: column; gap: 4px; }
+  .recent-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    font-size: 12px; color: var(--t2); cursor: pointer;
+    transition: background 150ms;
+  }
+  .recent-item:hover { background: var(--hover); color: var(--t1); }
+  .recent-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .recent-dot--done { background: var(--green); }
+  .recent-dot--reviewing { background: var(--orange); }
+  .recent-dot--expanding { background: var(--blue); }
+  .recent-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-time { font-size: 10px; color: var(--t3); flex-shrink: 0; }
+
+  /* ===== Kanban Board ===== */
+  .board {
+    flex: 1; display: flex; gap: 16px;
+    padding: 20px; overflow-x: auto;
+  }
+  .column {
+    min-width: 280px; width: 280px; flex-shrink: 0;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .column-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 4px 8px;
+  }
+  .column-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .column-icon svg { width: 12px; height: 12px; stroke-width: 2; }
+  .column-icon--draft { background: var(--tint-gray); color: var(--t3); }
+  .column-icon--expanding { background: var(--tint-blue); color: var(--blue); }
+  .column-icon--reviewing { background: var(--tint-orange); color: var(--orange); }
+  .column-icon--done { background: var(--tint-green); color: var(--green); }
+  .column-title { font-size: 12px; font-weight: 600; color: var(--t1); }
+  .column-count {
+    font-size: 10px; font-weight: 600; color: var(--t3);
+    background: var(--bg2); padding: 1px 7px; border-radius: 100px;
+    margin-left: auto;
+  }
+
+  .column-body { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+
+  /* ===== Requirement Card ===== */
+  .req-card {
+    background: var(--card); border: 1px solid var(--bdr2); border-radius: 10px;
+    padding: 14px 16px; cursor: pointer;
+    transition: all 150ms;
+  }
+  .req-card:hover {
+    border-color: var(--bdr); box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .req-card--active {
+    border-color: var(--orange); box-shadow: 0 0 0 3px rgba(200,134,58,0.08);
+  }
+  .req-card-title {
+    font-size: 13px; font-weight: 600; color: var(--t1);
+    margin-bottom: 4px; line-height: 1.3;
+  }
+  .req-card-desc {
+    font-size: 11px; color: var(--t2); line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .req-card-footer {
+    display: flex; align-items: center; gap: 6px; margin-top: 10px;
+  }
+  .req-tag {
+    font-size: 9px; font-weight: 600; padding: 2px 7px; border-radius: 100px;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .req-tag--depth { background: var(--tint-purple); color: var(--purple); }
+  .req-tag--items { background: var(--tint-blue); color: var(--blue); }
+  .req-card-time { font-size: 10px; color: var(--t3); margin-left: auto; }
+
+  /* Progress inside expanding cards */
+  .req-progress {
+    margin-top: 10px; height: 3px; background: var(--bdr2); border-radius: 2px;
+    overflow: hidden;
+  }
+  .req-progress-fill {
+    height: 100%; border-radius: 2px;
+    transition: width 300ms;
+  }
+  .req-progress-fill--blue { background: var(--blue); }
+  .req-progress-fill--orange { background: var(--orange); }
+
+  /* Item list inside reviewing card */
+  .req-items { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+  .req-item-row {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--t2); padding: 3px 0;
+  }
+  .req-item-dot {
+    width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  }
+  .req-item-dot--feature { background: var(--blue); }
+  .req-item-dot--task { background: var(--purple); }
+  .req-item-dot--improvement { background: var(--green); }
+  .req-item-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ===== Action Footer in reviewing card ===== */
+  .req-actions {
+    display: flex; gap: 6px; margin-top: 12px; padding-top: 10px;
+    border-top: 1px solid var(--bdr2);
+  }
+  .req-action {
+    font-size: 10px; font-weight: 600; padding: 4px 10px; border-radius: 6px;
+    border: none; cursor: pointer; transition: all 150ms;
+  }
+  .req-action--commit { background: var(--t1); color: #fff; }
+  .req-action--commit:hover { opacity: 0.85; }
+  .req-action--refine { background: var(--tint-purple); color: var(--purple); border: none; }
+  .req-action--refine:hover { background: var(--purple); color: #fff; }
+  .req-action--reset { background: none; color: var(--t3); border: 1px solid var(--bdr2); }
+  .req-action--reset:hover { color: var(--t1); }
+
+  /* ===== Done checkmark ===== */
+  .req-done-badge {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 600; color: var(--green);
+    margin-top: 8px;
+  }
+  .req-done-badge svg { width: 12px; height: 12px; stroke-width: 2.5; }
+
+  /* ===== Empty column hint ===== */
+  .column-empty {
+    text-align: center; padding: 20px 16px;
+    font-size: 11px; color: var(--t4);
+    border: 1px dashed var(--bdr2); border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- TopBar -->
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="brand">Maestro</span>
+      <span class="brand-sub">Requirements</span>
+    </div>
+    <div class="topbar-r">
+      <div class="pill pill--green">
+        <div class="pill-dot"></div>
+        Agent Ready
+      </div>
+      <button class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+        New Requirement
+      </button>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- Left Panel -->
+    <aside class="input-panel">
+      <div class="panel-section">
+        <div class="panel-label">New Requirement</div>
+        <textarea class="input-area" placeholder="Describe your requirement in natural language...">Implement a real-time notification system with WebSocket support, per-user preferences, read/unread tracking, and notification center UI.</textarea>
+      </div>
+      <div class="panel-section">
+        <div class="panel-label">Expansion Depth</div>
+        <div class="depth-tabs">
+          <button class="depth-tab">High-level</button>
+          <button class="depth-tab active">Standard</button>
+          <button class="depth-tab">Atomic</button>
+        </div>
+      </div>
+      <div class="panel-section" style="padding-bottom:10px">
+        <button class="btn btn-primary" style="width:100%; justify-content: center;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Expand Requirement
+        </button>
+      </div>
+      <div class="panel-section" style="flex:1">
+        <div class="panel-label">Recent</div>
+        <div class="recent-list">
+          <div class="recent-item">
+            <div class="recent-dot recent-dot--reviewing"></div>
+            <span class="recent-text">Real-time notification system</span>
+            <span class="recent-time">2m ago</span>
+          </div>
+          <div class="recent-item">
+            <div class="recent-dot recent-dot--done"></div>
+            <span class="recent-text">User authentication flow</span>
+            <span class="recent-time">1h ago</span>
+          </div>
+          <div class="recent-item">
+            <div class="recent-dot recent-dot--done"></div>
+            <span class="recent-text">Payment gateway integration</span>
+            <span class="recent-time">3h ago</span>
+          </div>
+          <div class="recent-item">
+            <div class="recent-dot recent-dot--expanding"></div>
+            <span class="recent-text">Dashboard analytics widgets</span>
+            <span class="recent-time">5h ago</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Kanban Board -->
+    <div class="board">
+      <!-- Draft Column -->
+      <div class="column">
+        <div class="column-head">
+          <div class="column-icon column-icon--draft">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <span class="column-title">Draft</span>
+          <span class="column-count">1</span>
+        </div>
+        <div class="column-body">
+          <div class="req-card">
+            <div class="req-card-title">Dashboard analytics widgets</div>
+            <div class="req-card-desc">Add interactive charts and KPI widgets to the main dashboard with real-time data updates</div>
+            <div class="req-card-footer">
+              <span class="req-tag req-tag--depth">standard</span>
+              <span class="req-card-time">5h ago</span>
+            </div>
+          </div>
+          <div class="column-empty">Drop requirement here</div>
+        </div>
+      </div>
+
+      <!-- Expanding Column -->
+      <div class="column">
+        <div class="column-head">
+          <div class="column-icon column-icon--expanding">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <span class="column-title">Expanding</span>
+          <span class="column-count">1</span>
+        </div>
+        <div class="column-body">
+          <div class="req-card">
+            <div class="req-card-title">Real-time notification system</div>
+            <div class="req-card-desc">WebSocket support, per-user preferences, read/unread tracking, notification center UI</div>
+            <div class="req-card-footer">
+              <span class="req-tag req-tag--depth">standard</span>
+              <span class="req-card-time">2m ago</span>
+            </div>
+            <div class="req-progress">
+              <div class="req-progress-fill req-progress-fill--blue" style="width:55%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reviewing Column -->
+      <div class="column">
+        <div class="column-head">
+          <div class="column-icon column-icon--reviewing">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <span class="column-title">Reviewing</span>
+          <span class="column-count">1</span>
+        </div>
+        <div class="column-body">
+          <div class="req-card req-card--active">
+            <div class="req-card-title">User authentication flow</div>
+            <div class="req-card-desc">Complete auth system with OAuth, MFA, session management, and role-based access control</div>
+            <div class="req-card-footer">
+              <span class="req-tag req-tag--depth">deep</span>
+              <span class="req-tag req-tag--items">8 items</span>
+              <span class="req-card-time">1h ago</span>
+            </div>
+            <div class="req-items">
+              <div class="req-item-row">
+                <div class="req-item-dot req-item-dot--feature"></div>
+                <span class="req-item-text">OAuth 2.0 provider integration</span>
+              </div>
+              <div class="req-item-row">
+                <div class="req-item-dot req-item-dot--feature"></div>
+                <span class="req-item-text">Multi-factor authentication</span>
+              </div>
+              <div class="req-item-row">
+                <div class="req-item-dot req-item-dot--task"></div>
+                <span class="req-item-text">Session management & token rotation</span>
+              </div>
+              <div class="req-item-row">
+                <div class="req-item-dot req-item-dot--task"></div>
+                <span class="req-item-text">RBAC permission model</span>
+              </div>
+              <div class="req-item-row" style="color:var(--t4); font-style: italic;">
+                <span class="req-item-text">+ 4 more items</span>
+              </div>
+            </div>
+            <div class="req-actions">
+              <button class="req-action req-action--commit">Commit Issues</button>
+              <button class="req-action req-action--refine">Refine</button>
+              <button class="req-action req-action--reset">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Done Column -->
+      <div class="column">
+        <div class="column-head">
+          <div class="column-icon column-icon--done">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <span class="column-title">Done</span>
+          <span class="column-count">1</span>
+        </div>
+        <div class="column-body">
+          <div class="req-card" style="opacity:0.75">
+            <div class="req-card-title">Payment gateway integration</div>
+            <div class="req-card-desc">Stripe + PayPal payment processing with webhook handlers and refund support</div>
+            <div class="req-card-footer">
+              <span class="req-tag req-tag--depth">standard</span>
+              <span class="req-tag req-tag--items">5 items</span>
+              <span class="req-card-time">3h ago</span>
+            </div>
+            <div class="req-done-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+              Committed as 5 issues
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

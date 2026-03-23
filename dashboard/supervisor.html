@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Supervisor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 13px; line-height: 1.5; background: #FAF8F5; color: #2D2A26; -webkit-font-smoothing: antialiased; }
+
+    :root {
+      --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+      --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+      --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+      --bdr: #E8E5DE; --bdr2: #ECEAE4;
+      --blue: #4A90D9; --green: #3D9B6F; --orange: #D4832E; --yellow: #C99B2D;
+      --purple: #8B6BBF; --red: #D05454; --gray: #A09D97;
+      --tint-green: #EEF7F2; --tint-yellow: #FDF6E4; --tint-orange: #FDF0E4;
+      --tint-purple: #F3EEF9; --tint-gray: #F2F1EE; --tint-blue: #EBF2FA;
+    }
+
+    .shell { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ================================================================
+       TopBar
+       ================================================================ */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 48px; padding: 0 24px; background: var(--bg2);
+      border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+    }
+    .topbar-l { display: flex; align-items: center; gap: 12px; }
+    .brand { font-weight: 700; font-size: 15px; color: var(--t1); }
+    .topbar-r { display: flex; align-items: center; gap: 10px; }
+    .pill { font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px; display: flex; align-items: center; gap: 5px; }
+    .pill-green { background: rgba(61,155,111,0.12); color: var(--green); }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+    /* ================================================================
+       Tab Bar (from B)
+       ================================================================ */
+    .tab-bar {
+      display: flex; align-items: center; gap: 0; padding: 0 24px;
+      background: var(--bg2); border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+    }
+    .tab {
+      padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--t3);
+      cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent;
+      transition: all 150ms; display: flex; align-items: center; gap: 6px;
+    }
+    .tab:hover { color: var(--t1); }
+    .tab.active { color: var(--t1); font-weight: 600; border-bottom-color: var(--t1); }
+    .tab svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .tab-badge { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; background: var(--card); color: var(--t3); }
+
+    /* ================================================================
+       View container — each tab switches one .view
+       ================================================================ */
+    .view-wrap { flex: 1; overflow: hidden; position: relative; }
+    .view { display: none; position: absolute; inset: 0; }
+    .view.active { display: flex; }
+
+    /* Split-pane views: list + detail */
+    .view-split { flex-direction: row; }
+    /* Full-width views: scrollable single column */
+    .view-full { flex-direction: column; overflow-y: auto; padding: 24px; gap: 20px; }
+
+    /* ================================================================
+       List pane (from C)
+       ================================================================ */
+    .list-pane {
+      width: 320px; background: var(--bg); border-right: 1px solid var(--bdr);
+      flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .list-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--bdr2);
+    }
+    .list-title { font-size: 14px; font-weight: 700; color: var(--t1); }
+    .list-search {
+      margin: 0 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--bdr2);
+      background: var(--card); font-size: 12px; color: var(--t1); outline: none;
+      width: calc(100% - 24px); margin-top: 10px; margin-bottom: 6px;
+      transition: border-color 150ms;
+    }
+    .list-search:focus { border-color: var(--blue); }
+    .list-search::placeholder { color: var(--t4); }
+    .list-body { flex: 1; overflow-y: auto; }
+    .list-section-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); padding: 10px 16px 4px; }
+
+    .list-item {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+      border-left: 3px solid transparent; transition: all 120ms;
+    }
+    .list-item:hover { background: var(--hover); }
+    .list-item.active { background: var(--tint-blue); border-left-color: var(--blue); }
+    .list-item-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .list-item-icon svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .list-item-info { flex: 1; min-width: 0; }
+    .list-item-name { font-size: 12px; font-weight: 600; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .list-item-meta { font-size: 10px; color: var(--t3); display: flex; gap: 8px; }
+    .list-item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+
+    /* ================================================================
+       Detail pane (from C)
+       ================================================================ */
+    .detail-pane { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+    .detail-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; border-bottom: 1px solid var(--bdr2); flex-shrink: 0;
+    }
+    .detail-head-left { display: flex; align-items: center; gap: 12px; }
+    .detail-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .detail-icon svg { width: 18px; height: 18px; stroke-width: 1.8; }
+    .detail-title { font-size: 16px; font-weight: 700; color: var(--t1); }
+    .detail-subtitle { font-size: 11px; color: var(--t2); }
+    .detail-actions { display: flex; gap: 8px; }
+    .detail-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* ================================================================
+       Shared components
+       ================================================================ */
+
+    /* Tags */
+    .tag { display: inline-flex; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px; }
+    .tag-green { background: rgba(61,155,111,.12); color: var(--green); }
+    .tag-yellow { background: rgba(201,155,45,.12); color: var(--yellow); }
+    .tag-purple { background: rgba(139,107,191,.12); color: var(--purple); }
+    .tag-orange { background: rgba(212,131,46,.12); color: var(--orange); }
+    .tag-red { background: rgba(208,84,84,.12); color: var(--red); }
+    .tag-blue { background: rgba(74,144,217,.12); color: var(--blue); }
+    .tag-gray { background: rgba(160,157,151,.12); color: var(--gray); }
+
+    /* Buttons */
+    .btn { font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer; transition: all 150ms; }
+    .btn-primary { background: var(--t1); color: #fff; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-ghost { background: none; color: var(--t2); border: 1px solid var(--bdr); }
+    .btn-ghost:hover { background: var(--hover); color: var(--t1); }
+    .btn-sm { font-size: 11px; padding: 5px 12px; }
+    .btn-icon { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--bdr2); background: var(--card); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--t3); transition: all 150ms; }
+    .btn-icon:hover { color: var(--t1); border-color: var(--bdr); }
+    .btn-icon svg { width: 14px; height: 14px; stroke-width: 1.8; }
+
+    /* Toggle switch */
+    .toggle { width: 36px; height: 20px; border-radius: 100px; background: var(--bdr); border: none; cursor: pointer; position: relative; transition: background 200ms; }
+    .toggle.on { background: var(--green); }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 200ms; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .toggle.on::after { transform: translateX(16px); }
+
+    /* Section card */
+    .section { border-radius: 12px; background: var(--card); border: 1px solid var(--bdr2); overflow: hidden; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--bdr2); }
+    .section-title { font-size: 12px; font-weight: 600; color: var(--t1); }
+    .section-body { padding: 14px 16px; }
+
+    /* Key-value rows */
+    .kv { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--bdr2); }
+    .kv:last-child { border-bottom: none; }
+    .kv-label { font-size: 11px; color: var(--t3); width: 120px; flex-shrink: 0; }
+    .kv-value { font-size: 12px; color: var(--t1); font-weight: 500; }
+
+    /* Stat boxes */
+    .stat-row { display: flex; gap: 16px; }
+    .stat-box { flex: 1; background: var(--bg); border-radius: 10px; padding: 14px; border: 1px solid var(--bdr2); }
+    .stat-box-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--t3); }
+    .stat-box-value { font-size: 22px; font-weight: 700; color: var(--t1); margin-top: 2px; }
+    .stat-box-sub { font-size: 10px; color: var(--t2); }
+
+    /* History timeline */
+    .hist { display: flex; flex-direction: column; gap: 0; }
+    .hist-item { display: flex; gap: 12px; padding: 8px 0; position: relative; }
+    .hist-item::before {
+      content: ''; position: absolute; left: 11px; top: 24px; bottom: -8px;
+      width: 1px; background: var(--bdr2);
+    }
+    .hist-item:last-child::before { display: none; }
+    .hist-dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 2px solid var(--card); }
+    .hist-dot-inner { width: 8px; height: 8px; border-radius: 50%; }
+    .hist-info { flex: 1; }
+    .hist-time { font-size: 10px; color: var(--t4); font-family: 'SF Mono', Consolas, monospace; }
+    .hist-text { font-size: 12px; color: var(--t1); }
+    .hist-dur { font-size: 10px; color: var(--t3); }
+
+    /* Progress bar */
+    .prog-track { height: 6px; background: rgba(0,0,0,.04); border-radius: 100px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 100px; }
+
+    /* Pattern bar */
+    .pat-detail { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--bdr2); }
+    .pat-detail:last-child { border-bottom: none; }
+    .pat-name { font-size: 12px; font-weight: 600; color: var(--t1); font-family: 'SF Mono', Consolas, monospace; min-width: 130px; }
+    .pat-bar { flex: 1; }
+    .pat-stat { font-size: 11px; color: var(--t3); white-space: nowrap; }
+
+    /* Prompt preview */
+    .prompt-preview {
+      background: var(--t1); color: #d4d0ca; border-radius: 10px; padding: 16px;
+      font-family: 'SF Mono', Consolas, monospace; font-size: 11px; line-height: 1.6;
+      max-height: 200px; overflow-y: auto;
+    }
+    .prompt-preview .kw { color: var(--blue); }
+    .prompt-preview .str { color: var(--green); }
+
+    .mono { font-family: 'SF Mono', Consolas, monospace; }
+
+    @media (max-width: 800px) {
+      .list-pane { width: 240px; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ================================================================
+       TopBar
+       ================================================================ -->
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="brand">Maestro</span>
+      <span style="color:var(--t4);font-size:12px">/</span>
+      <span style="font-size:13px;font-weight:500;color:var(--t2)">Supervisor</span>
+    </div>
+    <div class="topbar-r">
+      <span style="font-size:11px;color:var(--t3)">Last sync 12s ago</span>
+      <span class="pill pill-green"><span class="pill-dot"></span> Healthy</span>
+    </div>
+  </header>
+
+  <!-- ================================================================
+       Tab Bar
+       ================================================================ -->
+  <nav class="tab-bar">
+    <button class="tab active" onclick="showTab('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Overview
+    </button>
+    <button class="tab" onclick="showTab('schedules')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Schedules
+      <span class="tab-badge">5</span>
+    </button>
+    <button class="tab" onclick="showTab('learning')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Learning
+    </button>
+    <button class="tab" onclick="showTab('prompts')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+      Prompts
+    </button>
+    <button class="tab" onclick="showTab('extensions')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Extensions
+      <span class="tab-badge">3</span>
+    </button>
+  </nav>
+
+  <!-- ================================================================
+       Views
+       ================================================================ -->
+  <div class="view-wrap">
+
+    <!-- ==================== Overview (full-width) ==================== -->
+    <div class="view view-full active" id="view-overview">
+      <div style="font-size:18px;font-weight:700;color:var(--t1)">System Overview</div>
+
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+        <div class="stat-box">
+          <div class="stat-box-label">Commands (24h)</div>
+          <div class="stat-box-value">47</div>
+          <div class="stat-box-sub">1,284 total</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Success Rate</div>
+          <div class="stat-box-value" style="color:var(--green)">94.2%</div>
+          <div class="stat-box-sub">+2.1% vs last week</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Active Schedules</div>
+          <div class="stat-box-value">4 / 5</div>
+          <div class="stat-box-sub">Next run in 5m</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-box-label">Extensions</div>
+          <div class="stat-box-value">3</div>
+          <div class="stat-box-sub">All enabled</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div class="section">
+          <div class="section-head"><span class="section-title">Top Patterns</span></div>
+          <div class="section-body">
+            <div class="pat-detail"><span class="pat-name">maestro-execute</span><div class="pat-bar"><div class="prog-track"><div class="prog-fill" style="width:92%;background:var(--green)"></div></div></div><span class="pat-stat">142 / 96%</span></div>
+            <div class="pat-detail"><span class="pat-name">quality-review</span><div class="pat-bar"><div class="prog-track"><div class="prog-fill" style="width:88%;background:var(--green)"></div></div></div><span class="pat-stat">89 / 98%</span></div>
+            <div class="pat-detail"><span class="pat-name">maestro-plan</span><div class="pat-bar"><div class="prog-track"><div class="prog-fill" style="width:78%;background:var(--blue)"></div></div></div><span class="pat-stat">76 / 91%</span></div>
+            <div class="pat-detail"><span class="pat-name">quality-test-gen</span><div class="pat-bar"><div class="prog-track"><div class="prog-fill" style="width:65%;background:var(--yellow)"></div></div></div><span class="pat-stat">54 / 82%</span></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head"><span class="section-title">Suggestions</span><span class="tag tag-orange" style="font-size:9px">3 new</span></div>
+          <div class="section-body" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--green);margin-top:4px;flex-shrink:0"></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--t1)">Batch quality-review</div><div style="font-size:11px;color:var(--t2)">3 sequential runs could go parallel (87%)</div></div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow);margin-top:4px;flex-shrink:0"></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--t1)">maestro-execute failure spike</div><div style="font-size:11px;color:var(--t2)">32% failure in last 24h, check task configs (92%)</div></div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--purple);margin-top:4px;flex-shrink:0"></div>
+              <div><div style="font-size:12px;font-weight:600;color:var(--t1)">Schedule learning sync</div><div style="font-size:11px;color:var(--t2)">KB hasn't been refreshed in 3 days (74%)</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><span class="section-title">Recent Schedule Activity</span><button class="btn btn-ghost btn-sm" onclick="showTab('schedules')">View all</button></div>
+        <div class="section-body" style="padding:0">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);text-align:left;padding:8px 16px;border-bottom:1px solid var(--bdr2)">Task</th>
+              <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);text-align:left;padding:8px 12px;border-bottom:1px solid var(--bdr2)">Type</th>
+              <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);text-align:left;padding:8px 12px;border-bottom:1px solid var(--bdr2)">Last Run</th>
+              <th style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);text-align:left;padding:8px 12px;border-bottom:1px solid var(--bdr2)">Status</th>
+            </tr></thead>
+            <tbody>
+              <tr style="cursor:pointer" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+                <td style="font-size:12px;padding:10px 16px;font-weight:500;border-bottom:1px solid var(--bdr2)">Auto Dispatch</td>
+                <td style="padding:10px 12px;border-bottom:1px solid var(--bdr2)"><span class="tag tag-orange">auto-dispatch</span></td>
+                <td style="font-size:11px;color:var(--t2);padding:10px 12px;border-bottom:1px solid var(--bdr2)">5 min ago</td>
+                <td style="padding:10px 12px;border-bottom:1px solid var(--bdr2)"><span class="tag tag-green">success</span></td>
+              </tr>
+              <tr style="cursor:pointer" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+                <td style="font-size:12px;padding:10px 16px;font-weight:500;border-bottom:1px solid var(--bdr2)">Health Check</td>
+                <td style="padding:10px 12px;border-bottom:1px solid var(--bdr2)"><span class="tag tag-green">health-check</span></td>
+                <td style="font-size:11px;color:var(--t2);padding:10px 12px;border-bottom:1px solid var(--bdr2)">10 min ago</td>
+                <td style="padding:10px 12px;border-bottom:1px solid var(--bdr2)"><span class="tag tag-green">success</span></td>
+              </tr>
+              <tr style="cursor:pointer" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background=''">
+                <td style="font-size:12px;padding:10px 16px;font-weight:500">Nightly Cleanup</td>
+                <td style="padding:10px 12px"><span class="tag tag-blue">cleanup</span></td>
+                <td style="font-size:11px;color:var(--t2);padding:10px 12px">Today 03:00</td>
+                <td style="padding:10px 12px"><span class="tag tag-green">success</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Schedules (list + detail) ==================== -->
+    <div class="view view-split" id="view-schedules">
+      <div class="list-pane">
+        <div class="list-head">
+          <span class="list-title">Schedules</span>
+          <button class="btn btn-primary btn-sm">+ New</button>
+        </div>
+        <input class="list-search" placeholder="Filter schedules..." />
+        <div class="list-body">
+          <div class="list-item active" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Auto Dispatch</div>
+              <div class="list-item-meta"><span class="mono">*/5 * * * *</span><span>5m ago</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">active</span></div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Health Check</div>
+              <div class="list-item-meta"><span class="mono">*/10 * * * *</span><span>10m ago</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">active</span></div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Nightly Cleanup</div>
+              <div class="list-item-meta"><span class="mono">0 3 * * *</span><span>Today 03:00</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">active</span></div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Weekly Report</div>
+              <div class="list-item-meta"><span class="mono">0 9 * * MON</span><span>Mon 09:00</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">active</span></div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)" style="opacity:.55">
+            <div class="list-item-icon" style="background:var(--tint-gray);color:var(--gray)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Learning Analysis</div>
+              <div class="list-item-meta"><span class="mono">0 */6 * * *</span><span>Disabled</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-gray" style="font-size:9px">off</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-pane">
+        <div class="detail-head">
+          <div class="detail-head-left">
+            <div class="detail-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+            </div>
+            <div>
+              <div class="detail-title">Auto Dispatch</div>
+              <div class="detail-subtitle">auto-dispatch &middot; Every 5 minutes</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-ghost btn-sm">Edit</button>
+            <button class="btn btn-primary btn-sm">Run Now</button>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="stat-row">
+            <div class="stat-box">
+              <div class="stat-box-label">Total Runs</div>
+              <div class="stat-box-value">287</div>
+              <div class="stat-box-sub">Since Mar 1</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Success Rate</div>
+              <div class="stat-box-value" style="color:var(--green)">98.6%</div>
+              <div class="stat-box-sub">4 failures</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Avg Duration</div>
+              <div class="stat-box-value">1.2s</div>
+              <div class="stat-box-sub">Max: 3.8s</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">Configuration</span></div>
+            <div class="section-body">
+              <div class="kv"><span class="kv-label">Cron</span><span class="kv-value mono">*/5 * * * *</span></div>
+              <div class="kv"><span class="kv-label">Type</span><span class="kv-value"><span class="tag tag-orange">auto-dispatch</span></span></div>
+              <div class="kv"><span class="kv-label">Enabled</span><span class="kv-value"><button class="toggle on" onclick="this.classList.toggle('on')"></button></span></div>
+              <div class="kv"><span class="kv-label">Last Run</span><span class="kv-value" style="font-size:11px;color:var(--t2)">2026-03-23 14:25:03</span></div>
+              <div class="kv"><span class="kv-label">Next Run</span><span class="kv-value" style="font-size:11px;color:var(--t2)">2026-03-23 14:30:00</span></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">Run History</span></div>
+            <div class="section-body">
+              <div class="hist">
+                <div class="hist-item">
+                  <div class="hist-dot" style="background:var(--tint-green)"><div class="hist-dot-inner" style="background:var(--green)"></div></div>
+                  <div class="hist-info"><div class="hist-time">14:25:03</div><div class="hist-text">Dispatched 2 tasks to execution queue</div><div class="hist-dur">1.2s</div></div>
+                </div>
+                <div class="hist-item">
+                  <div class="hist-dot" style="background:var(--tint-green)"><div class="hist-dot-inner" style="background:var(--green)"></div></div>
+                  <div class="hist-info"><div class="hist-time">14:20:01</div><div class="hist-text">No pending tasks, skipped</div><div class="hist-dur">0.3s</div></div>
+                </div>
+                <div class="hist-item">
+                  <div class="hist-dot" style="background:var(--tint-green)"><div class="hist-dot-inner" style="background:var(--green)"></div></div>
+                  <div class="hist-info"><div class="hist-time">14:15:02</div><div class="hist-text">Dispatched 1 task to execution queue</div><div class="hist-dur">0.9s</div></div>
+                </div>
+                <div class="hist-item">
+                  <div class="hist-dot" style="background:var(--tint-red)"><div class="hist-dot-inner" style="background:var(--red)"></div></div>
+                  <div class="hist-info"><div class="hist-time">14:10:00</div><div class="hist-text">Failed: Connection timeout to scheduler</div><div class="hist-dur">5.0s</div></div>
+                </div>
+                <div class="hist-item">
+                  <div class="hist-dot" style="background:var(--tint-green)"><div class="hist-dot-inner" style="background:var(--green)"></div></div>
+                  <div class="hist-info"><div class="hist-time">14:05:01</div><div class="hist-text">Dispatched 3 tasks to execution queue</div><div class="hist-dur">1.8s</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Learning (list + detail) ==================== -->
+    <div class="view view-split" id="view-learning">
+      <div class="list-pane">
+        <div class="list-head"><span class="list-title">Learning</span></div>
+        <input class="list-search" placeholder="Filter patterns & entries..." />
+        <div class="list-body">
+          <div class="list-section-label">Command Patterns</div>
+          <div class="list-item active" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">maestro-execute</div>
+              <div class="list-item-meta"><span>142 runs</span><span style="color:var(--green)">96%</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">quality-review</div>
+              <div class="list-item-meta"><span>89 runs</span><span style="color:var(--green)">98%</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">maestro-plan</div>
+              <div class="list-item-meta"><span>76 runs</span><span style="color:var(--green)">91%</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-yellow);color:var(--yellow)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">quality-test-gen</div>
+              <div class="list-item-meta"><span>54 runs</span><span style="color:var(--yellow)">82%</span></div>
+            </div>
+          </div>
+          <div class="list-section-label">Knowledge Base</div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-gray);color:var(--gray)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">ESM import conventions</div>
+              <div class="list-item-meta"><span class="tag tag-blue" style="font-size:9px">auto</span><span>23 uses</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-gray);color:var(--gray)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Commander.js structure</div>
+              <div class="list-item-meta"><span class="tag tag-purple" style="font-size:9px">manual</span><span>31 uses</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-gray);color:var(--gray)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">Hono route patterns</div>
+              <div class="list-item-meta"><span class="tag tag-blue" style="font-size:9px">auto</span><span>15 uses</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-pane">
+        <div class="detail-head">
+          <div class="detail-head-left">
+            <div class="detail-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <div>
+              <div class="detail-title">maestro-execute</div>
+              <div class="detail-subtitle">142 total runs &middot; Last used 2m ago</div>
+            </div>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="stat-row">
+            <div class="stat-box">
+              <div class="stat-box-label">Frequency</div>
+              <div class="stat-box-value">142</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Success Rate</div>
+              <div class="stat-box-value" style="color:var(--green)">96%</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-box-label">Avg Duration</div>
+              <div class="stat-box-value">4.2m</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">Contexts Used</span></div>
+            <div class="section-body" style="display:flex;gap:6px;flex-wrap:wrap">
+              <span class="tag tag-blue">phase-execute</span>
+              <span class="tag tag-purple">scratch-execute</span>
+              <span class="tag tag-orange">wave-dispatch</span>
+              <span class="tag tag-green">verification</span>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">Success Over Time</span></div>
+            <div class="section-body">
+              <div style="display:flex;align-items:flex-end;gap:4px;height:60px">
+                <div style="flex:1;background:var(--green);opacity:.6;border-radius:3px 3px 0 0;height:85%"></div>
+                <div style="flex:1;background:var(--green);opacity:.7;border-radius:3px 3px 0 0;height:90%"></div>
+                <div style="flex:1;background:var(--green);opacity:.5;border-radius:3px 3px 0 0;height:78%"></div>
+                <div style="flex:1;background:var(--green);opacity:.8;border-radius:3px 3px 0 0;height:92%"></div>
+                <div style="flex:1;background:var(--green);opacity:.6;border-radius:3px 3px 0 0;height:88%"></div>
+                <div style="flex:1;background:var(--green);opacity:.9;border-radius:3px 3px 0 0;height:95%"></div>
+                <div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:96%"></div>
+                <div style="flex:1;background:var(--yellow);opacity:.7;border-radius:3px 3px 0 0;height:82%"></div>
+                <div style="flex:1;background:var(--green);opacity:.8;border-radius:3px 3px 0 0;height:94%"></div>
+                <div style="flex:1;background:var(--green);border-radius:3px 3px 0 0;height:96%"></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:4px">
+                <span style="font-size:9px;color:var(--t4)">10d ago</span>
+                <span style="font-size:9px;color:var(--t4)">Today</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-head"><span class="section-title">Suggestions</span></div>
+            <div class="section-body">
+              <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow);margin-top:4px;flex-shrink:0"></div>
+                <div>
+                  <div style="font-size:12px;font-weight:600;color:var(--t1)">High failure rate detected</div>
+                  <div style="font-size:11px;color:var(--t2)">32% failure in last 24h — check task configs</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Prompts (list + detail) ==================== -->
+    <div class="view view-split" id="view-prompts">
+      <div class="list-pane">
+        <div class="list-head"><span class="list-title">Prompt Builders</span></div>
+        <input class="list-search" placeholder="Filter builders..." />
+        <div class="list-body">
+          <div class="list-item active" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">execution-prompt</div>
+              <div class="list-item-meta"><span>wave-execute</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">planning-prompt</div>
+              <div class="list-item-meta"><span>deep-plan</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">review-prompt</div>
+              <div class="list-item-meta"><span>quality-scan</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">debug-prompt</div>
+              <div class="list-item-meta"><span>hypothesis-test</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-yellow);color:var(--yellow)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">test-gen-prompt</div>
+              <div class="list-item-meta"><span>tdd-cycle</span></div>
+            </div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-gray);color:var(--gray)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">analysis-prompt</div>
+              <div class="list-item-meta"><span>multi-dim</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-pane">
+        <div class="detail-head">
+          <div class="detail-head-left">
+            <div class="detail-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <div>
+              <div class="detail-title">execution-prompt</div>
+              <div class="detail-subtitle">Bound to: wave-execute strategy</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-primary btn-sm">Preview</button>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="section">
+            <div class="section-head"><span class="section-title">Binding</span></div>
+            <div class="section-body">
+              <div class="kv"><span class="kv-label">Strategy</span><span class="kv-value"><span class="tag tag-orange">wave-execute</span></span></div>
+              <div class="kv"><span class="kv-label">Mode</span><span class="kv-value">execution</span></div>
+              <div class="kv"><span class="kv-label">Builder</span><span class="kv-value mono">execution-prompt</span></div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-head"><span class="section-title">Preview Output</span></div>
+            <div class="section-body">
+              <div class="prompt-preview">
+<span class="kw">SYSTEM</span>: You are a task execution agent...<br>
+<span class="kw">TASK</span>: <span class="str">Implement the following task with atomic commits</span><br>
+<span class="kw">CONTEXT</span>: Phase 3 — API Endpoints<br>
+<span class="kw">FILES</span>: [task.files mapped]<br>
+<span class="kw">CONSTRAINTS</span>:<br>
+  - <span class="str">Follow existing patterns</span><br>
+  - <span class="str">Run tests before commit</span><br>
+  - <span class="str">No breaking changes</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Extensions (list + detail) ==================== -->
+    <div class="view view-split" id="view-extensions">
+      <div class="list-pane">
+        <div class="list-head"><span class="list-title">Extensions</span></div>
+        <div class="list-body">
+          <div class="list-item active" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">auto-retry-strategy</div>
+              <div class="list-item-meta"><span>v1.2.0</span><span>strategy</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">enabled</span></div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">smart-prompt-builder</div>
+              <div class="list-item-meta"><span>v2.0.1</span><span>builder</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">enabled</span></div>
+          </div>
+          <div class="list-item" onclick="selectItem(this)">
+            <div class="list-item-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="list-item-info">
+              <div class="list-item-name">metrics-collector</div>
+              <div class="list-item-meta"><span>v1.0.3</span><span>adapter</span></div>
+            </div>
+            <div class="list-item-right"><span class="tag tag-green" style="font-size:9px">enabled</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="detail-pane">
+        <div class="detail-head">
+          <div class="detail-head-left">
+            <div class="detail-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div>
+              <div class="detail-title">auto-retry-strategy</div>
+              <div class="detail-subtitle">v1.2.0 &middot; strategy</div>
+            </div>
+          </div>
+          <div class="detail-actions">
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+          </div>
+        </div>
+        <div class="detail-body">
+          <div class="section">
+            <div class="section-head"><span class="section-title">About</span></div>
+            <div class="section-body">
+              <div style="font-size:13px;color:var(--t2);line-height:1.6">Automatically retries failed tasks with exponential backoff. Configurable max retries, base delay, and jitter factor. Integrates with the execution pipeline to intercept failures and reschedule.</div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-head"><span class="section-title">Details</span></div>
+            <div class="section-body">
+              <div class="kv"><span class="kv-label">Type</span><span class="kv-value"><span class="tag tag-blue">strategy</span></span></div>
+              <div class="kv"><span class="kv-label">Version</span><span class="kv-value mono">1.2.0</span></div>
+              <div class="kv"><span class="kv-label">Status</span><span class="kv-value"><span class="tag tag-green">enabled</span></span></div>
+              <div class="kv"><span class="kv-label">Entry Point</span><span class="kv-value mono" style="font-size:11px">extensions/auto-retry/index.ts</span></div>
+            </div>
+          </div>
+          <div class="section">
+            <div class="section-head"><span class="section-title">Configuration</span></div>
+            <div class="section-body">
+              <div class="kv"><span class="kv-label">Max Retries</span><span class="kv-value">3</span></div>
+              <div class="kv"><span class="kv-label">Base Delay</span><span class="kv-value">1000ms</span></div>
+              <div class="kv"><span class="kv-label">Backoff Factor</span><span class="kv-value">2.0x</span></div>
+              <div class="kv"><span class="kv-label">Jitter</span><span class="kv-value">enabled</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const view = document.getElementById('view-' + name);
+  if (view) view.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.getAttribute('onclick')?.includes("'" + name + "'")) t.classList.add('active');
+  });
+}
+
+function selectItem(el) {
+  const parent = el.closest('.list-body');
+  if (parent) parent.querySelectorAll('.list-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+</body>
+</html>

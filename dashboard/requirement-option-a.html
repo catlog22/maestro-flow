@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Requirement Expansion — Option A: Conversational Flow</title>
+<style>
+  :root {
+    --color-bg-primary: #FAF8F5;
+    --color-bg-secondary: #F3F0EA;
+    --color-bg-card: #FFFFFF;
+    --color-bg-hover: rgba(55, 53, 47, 0.04);
+    --color-text-primary: #2D2A26;
+    --color-text-secondary: #78756F;
+    --color-text-tertiary: #A09D97;
+    --color-text-placeholder: #D1CEC8;
+    --color-border: #E8E5DE;
+    --color-border-divider: #ECEAE4;
+    --color-accent-orange: #C8863A;
+    --color-accent-blue: #5B8DB8;
+    --color-accent-purple: #9178B5;
+    --color-accent-green: #5A9E78;
+    --color-tint-exploring: #EDF2F8;
+    --color-tint-planning: #F2EDF8;
+    --color-tint-verifying: #FAF0E3;
+    --color-tint-completed: #EEF5F0;
+    --color-tint-red: #FCEEEE;
+    --color-red: #D05454;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    width: 48px;
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 14px 0;
+    gap: 6px;
+    background: var(--color-bg-primary);
+    flex-shrink: 0;
+  }
+  .sidebar-btn {
+    width: 34px; height: 34px; border-radius: 10px;
+    border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--color-text-tertiary);
+    transition: all 150ms;
+  }
+  .sidebar-btn:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+  .sidebar-btn.active { background: var(--color-tint-verifying); color: var(--color-accent-orange); }
+  .sidebar-btn svg { width: 18px; height: 18px; stroke-width: 1.6; }
+
+  /* ===== Main ===== */
+  .main {
+    flex: 1; display: flex; flex-direction: column;
+    overflow-y: auto; padding-top: 8vh; padding-bottom: 60px;
+    align-items: center;
+  }
+  .content { width: 100%; max-width: 720px; padding: 0 24px; }
+
+  /* ===== Heading ===== */
+  .heading {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: clamp(26px, 3.5vw, 34px);
+    font-weight: 700; line-height: 1.2;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em; margin-bottom: 6px;
+  }
+  .subtitle { font-size: 14px; color: var(--color-text-tertiary); margin-bottom: 28px; }
+
+  /* ===== Composer ===== */
+  .composer {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.02);
+    margin-bottom: 12px;
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .composer:focus-within {
+    border-color: var(--color-accent-orange);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.04), 0 0 0 3px rgba(200, 134, 58, 0.08);
+  }
+  .composer-textarea {
+    width: 100%; border: none; background: transparent; resize: none; outline: none;
+    font-size: 15px; line-height: 1.6; color: var(--color-text-primary);
+    padding: 18px 20px 8px; min-height: 80px; font-family: inherit;
+  }
+  .composer-textarea::placeholder { color: var(--color-text-placeholder); }
+
+  .composer-toolbar {
+    display: flex; align-items: center; padding: 6px 12px 10px; gap: 6px;
+  }
+  .depth-selector {
+    display: flex; gap: 2px; background: var(--color-bg-secondary); border-radius: 8px; padding: 2px;
+  }
+  .depth-btn {
+    font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 6px;
+    border: none; background: transparent; color: var(--color-text-tertiary);
+    cursor: pointer; transition: all 150ms;
+  }
+  .depth-btn:hover { color: var(--color-text-secondary); }
+  .depth-btn.active {
+    background: var(--color-bg-card); color: var(--color-text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .toolbar-spacer { flex: 1; }
+  .expand-btn {
+    font-size: 13px; font-weight: 600; padding: 6px 18px; border-radius: 8px;
+    border: none; background: var(--color-text-primary); color: #fff;
+    cursor: pointer; transition: opacity 150ms;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .expand-btn:hover { opacity: 0.85; }
+  .expand-btn svg { width: 14px; height: 14px; stroke-width: 2; }
+
+  /* ===== Status Bar ===== */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; margin-bottom: 20px;
+    background: var(--color-tint-verifying); border-radius: 10px;
+    font-size: 13px; color: var(--color-accent-orange);
+  }
+  .status-bar .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--color-accent-orange);
+    border-top-color: transparent; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .status-bar .progress-track {
+    flex: 1; height: 3px; background: rgba(200,134,58,0.2); border-radius: 2px;
+  }
+  .status-bar .progress-fill {
+    width: 45%; height: 100%; background: var(--color-accent-orange); border-radius: 2px;
+    transition: width 300ms;
+  }
+
+  /* ===== Expansion Result Card ===== */
+  .expansion-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .expansion-header {
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--color-border-divider);
+  }
+  .expansion-title {
+    font-size: 16px; font-weight: 700; color: var(--color-text-primary);
+    margin-bottom: 4px;
+  }
+  .expansion-summary {
+    font-size: 13px; color: var(--color-text-secondary); line-height: 1.5;
+  }
+  .expansion-meta {
+    display: flex; gap: 12px; margin-top: 10px;
+  }
+  .meta-tag {
+    font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 100px;
+  }
+  .meta-tag--depth { background: var(--color-tint-planning); color: var(--color-accent-purple); }
+  .meta-tag--count { background: var(--color-tint-exploring); color: var(--color-accent-blue); }
+  .meta-tag--status { background: var(--color-tint-completed); color: var(--color-accent-green); }
+
+  /* ===== Checklist ===== */
+  .checklist { padding: 6px 0; }
+  .checklist-item {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--color-border-divider);
+    transition: background 150ms;
+  }
+  .checklist-item:hover { background: var(--color-bg-hover); }
+  .checklist-item:last-child { border-bottom: none; }
+
+  .item-check {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 1.5px solid var(--color-border); background: var(--color-bg-card);
+    flex-shrink: 0; margin-top: 2px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 150ms;
+  }
+  .item-check:hover { border-color: var(--color-accent-green); }
+  .item-check.checked {
+    background: var(--color-accent-green); border-color: var(--color-accent-green);
+  }
+  .item-check.checked svg { opacity: 1; }
+  .item-check svg { width: 12px; height: 12px; stroke: #fff; stroke-width: 2.5; opacity: 0; }
+
+  .item-body { flex: 1; min-width: 0; }
+  .item-title { font-size: 14px; font-weight: 600; color: var(--color-text-primary); line-height: 1.3; }
+  .item-desc {
+    font-size: 12px; color: var(--color-text-tertiary); line-height: 1.5; margin-top: 3px;
+  }
+  .item-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .item-tag {
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .item-tag--feature { background: var(--color-tint-exploring); color: var(--color-accent-blue); }
+  .item-tag--task { background: var(--color-tint-planning); color: var(--color-accent-purple); }
+  .item-tag--bug { background: var(--color-tint-red); color: var(--color-red); }
+  .item-tag--improvement { background: var(--color-tint-completed); color: var(--color-accent-green); }
+  .item-tag--high { background: var(--color-tint-red); color: var(--color-red); }
+  .item-tag--medium { background: var(--color-tint-verifying); color: var(--color-accent-orange); }
+  .item-tag--low { background: var(--color-bg-secondary); color: var(--color-text-tertiary); }
+  .item-tag--effort { background: var(--color-bg-secondary); color: var(--color-text-secondary); }
+
+  /* ===== Action Bar ===== */
+  .action-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 20px; border-top: 1px solid var(--color-border-divider);
+    background: var(--color-bg-secondary);
+    border-radius: 0 0 14px 14px;
+  }
+  .action-btn {
+    font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px;
+    border: none; cursor: pointer; transition: all 150ms;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .action-btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+  .action-btn--primary { background: var(--color-text-primary); color: #fff; }
+  .action-btn--primary:hover { opacity: 0.85; }
+  .action-btn--secondary { background: var(--color-bg-card); color: var(--color-text-secondary); border: 1px solid var(--color-border); }
+  .action-btn--secondary:hover { color: var(--color-text-primary); background: var(--color-bg-hover); }
+  .action-btn--ghost { background: none; color: var(--color-text-tertiary); }
+  .action-btn--ghost:hover { color: var(--color-text-primary); }
+  .action-spacer { flex: 1; }
+
+  /* ===== Refine Input ===== */
+  .refine-bar {
+    display: flex; gap: 8px; padding: 0 20px 14px;
+    align-items: flex-end;
+  }
+  .refine-input {
+    flex: 1; border: 1px solid var(--color-border); border-radius: 10px;
+    padding: 10px 14px; font-size: 13px; font-family: inherit;
+    color: var(--color-text-primary); background: var(--color-bg-card);
+    outline: none; resize: none; min-height: 40px;
+    transition: border-color 150ms;
+  }
+  .refine-input:focus { border-color: var(--color-accent-purple); }
+  .refine-input::placeholder { color: var(--color-text-placeholder); }
+
+  /* ===== Keyboard Hints ===== */
+  .hints {
+    display: flex; gap: 12px; padding: 0 4px; margin-top: 6px;
+    font-size: 10px; color: var(--color-text-placeholder);
+  }
+  .hints kbd {
+    font-family: monospace; font-size: 10px; padding: 1px 5px;
+    border: 1px solid var(--color-border-divider); border-radius: 3px;
+    background: var(--color-bg-secondary);
+  }
+  .hints .right { margin-left: auto; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <button class="sidebar-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+  <button class="sidebar-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+  </button>
+  <button class="sidebar-btn active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+  </button>
+  <button class="sidebar-btn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+  </button>
+</nav>
+
+<!-- Main Content -->
+<main class="main">
+  <div class="content">
+
+    <!-- Heading -->
+    <h1 class="heading">Expand your requirements</h1>
+    <p class="subtitle">Describe what you need. AI decomposes it into a structured checklist.</p>
+
+    <!-- Composer -->
+    <div class="composer">
+      <textarea class="composer-textarea" placeholder="Describe a feature, user story, or requirement..." rows="3">Implement a real-time notification system with WebSocket support, including notification preferences per user, read/unread tracking, and a notification center UI component.</textarea>
+      <div class="composer-toolbar">
+        <div class="depth-selector">
+          <button class="depth-btn">High-level</button>
+          <button class="depth-btn active">Standard</button>
+          <button class="depth-btn">Atomic</button>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <button class="expand-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Expand
+        </button>
+      </div>
+    </div>
+
+    <!-- Hints -->
+    <div class="hints" style="margin-bottom: 28px;">
+      <span><kbd>Ctrl+Enter</kbd> expand</span>
+      <span><kbd>Tab</kbd> cycle depth</span>
+      <span class="right">Claude Agent SDK</span>
+    </div>
+
+    <!-- Status Bar (simulated expanding state) -->
+    <div class="status-bar">
+      <div class="spinner"></div>
+      <span>Expanding requirement...</span>
+      <div class="progress-track"><div class="progress-fill" style="width:45%"></div></div>
+      <span style="font-weight:600">45%</span>
+    </div>
+
+    <!-- Expansion Result -->
+    <div class="expansion-card">
+      <div class="expansion-header">
+        <div class="expansion-title">Real-time Notification System</div>
+        <div class="expansion-summary">
+          Full-stack notification system with WebSocket transport, per-user preference management,
+          read/unread state tracking, and a notification center UI with badge counts and grouping.
+        </div>
+        <div class="expansion-meta">
+          <span class="meta-tag meta-tag--depth">Standard depth</span>
+          <span class="meta-tag meta-tag--count">6 items</span>
+          <span class="meta-tag meta-tag--status">Reviewing</span>
+        </div>
+      </div>
+
+      <!-- Checklist Items -->
+      <div class="checklist">
+        <div class="checklist-item">
+          <div class="item-check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-body">
+            <div class="item-title">WebSocket server infrastructure</div>
+            <div class="item-desc">Set up WebSocket server with connection management, heartbeat, reconnection logic, and authentication handshake.</div>
+            <div class="item-tags">
+              <span class="item-tag item-tag--feature">feature</span>
+              <span class="item-tag item-tag--high">high</span>
+              <span class="item-tag item-tag--effort">large</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-item">
+          <div class="item-check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-body">
+            <div class="item-title">Notification data model & storage</div>
+            <div class="item-desc">Design notification schema with type, payload, recipient, read status, timestamps. Create migration and repository layer.</div>
+            <div class="item-tags">
+              <span class="item-tag item-tag--task">task</span>
+              <span class="item-tag item-tag--high">high</span>
+              <span class="item-tag item-tag--effort">medium</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-item">
+          <div class="item-check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-body">
+            <div class="item-title">User notification preferences API</div>
+            <div class="item-desc">CRUD endpoints for per-user notification preferences: channels (email, push, in-app), frequency, quiet hours.</div>
+            <div class="item-tags">
+              <span class="item-tag item-tag--feature">feature</span>
+              <span class="item-tag item-tag--medium">medium</span>
+              <span class="item-tag item-tag--effort">medium</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-item">
+          <div class="item-check checked">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-body">
+            <div class="item-title">Read/unread state tracking</div>
+            <div class="item-desc">Mark-as-read and mark-all-read APIs. Efficient unread count query with caching. Batch state updates.</div>
+            <div class="item-tags">
+              <span class="item-tag item-tag--task">task</span>
+              <span class="item-tag item-tag--medium">medium</span>
+              <span class="item-tag item-tag--effort">small</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-item">
+          <div class="item-check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-body">
+            <div class="item-title">Notification Center UI component</div>
+            <div class="item-desc">Bell icon with unread badge, dropdown panel with notification list, grouping by type/date, empty state.</div>
+            <div class="item-tags">
+              <span class="item-tag item-tag--feature">feature</span>
+              <span class="item-tag item-tag--high">high</span>
+              <span class="item-tag item-tag--effort">large</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="checklist-item">
+          <div class="item-check">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="item-body">
+            <div class="item-title">Integration tests & E2E scenarios</div>
+            <div class="item-desc">WebSocket connection tests, notification delivery pipeline tests, preference-based filtering tests.</div>
+            <div class="item-tags">
+              <span class="item-tag item-tag--improvement">improvement</span>
+              <span class="item-tag item-tag--low">low</span>
+              <span class="item-tag item-tag--effort">medium</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Refine Input -->
+      <div class="refine-bar">
+        <textarea class="refine-input" placeholder="Provide feedback to refine this expansion..." rows="1">Add push notification support via Firebase Cloud Messaging</textarea>
+        <button class="action-btn action-btn--secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Refine
+        </button>
+      </div>
+
+      <!-- Action Bar -->
+      <div class="action-bar">
+        <button class="action-btn action-btn--primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          Commit as Issues
+        </button>
+        <button class="action-btn action-btn--secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Commit as Coordinate
+        </button>
+        <div class="action-spacer"></div>
+        <button class="action-btn action-btn--ghost">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Reset
+        </button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+</body>
+</html>

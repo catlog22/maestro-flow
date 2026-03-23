@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Supervisor — Option A: Sidebar Tabs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 13px; line-height: 1.5; background: #FAF8F5; color: #2D2A26; -webkit-font-smoothing: antialiased; }
+
+    :root {
+      --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+      --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+      --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+      --bdr: #E8E5DE; --bdr2: #ECEAE4;
+      --blue: #4A90D9; --green: #3D9B6F; --orange: #D4832E; --yellow: #C99B2D;
+      --purple: #8B6BBF; --red: #D05454; --gray: #A09D97;
+      --tint-green: #EEF7F2; --tint-yellow: #FDF6E4; --tint-orange: #FDF0E4;
+      --tint-purple: #F3EEF9; --tint-gray: #F2F1EE; --tint-blue: #EBF2FA; --tint-red: #FCEEEE;
+    }
+
+    .shell { display: flex; flex-direction: column; height: 100vh; }
+
+    /* TopBar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 48px; padding: 0 20px; background: var(--bg2);
+      border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+    }
+    .topbar-l { display: flex; align-items: center; gap: 12px; }
+    .brand { font-weight: 700; font-size: 15px; color: var(--t1); }
+    .brand-sub { font-size: 12px; color: var(--t2); }
+    .topbar-r { display: flex; align-items: center; gap: 12px; }
+    .pill { font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px; background: rgba(61,155,111,0.12); color: var(--green); display: flex; align-items: center; gap: 5px; }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 220px; background: var(--bg2); border-right: 1px solid var(--bdr);
+      flex-shrink: 0; display: flex; flex-direction: column; overflow-y: auto;
+    }
+    .sb-section { padding: 12px 10px; }
+    .sb-section + .sb-section { border-top: 1px solid var(--bdr2); }
+    .sb-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--t3); padding: 0 10px; margin-bottom: 6px; }
+    .sb-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+      border-radius: 8px; font-size: 12px; font-weight: 500; color: var(--t2);
+      cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+      transition: all 150ms;
+    }
+    .sb-item:hover { background: var(--hover); color: var(--t1); }
+    .sb-item.active { background: var(--active); color: var(--t1); font-weight: 600; }
+    .sb-item svg { width: 16px; height: 16px; stroke-width: 1.8; flex-shrink: 0; }
+    .sb-badge { margin-left: auto; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 100px; background: var(--card); color: var(--t3); }
+
+    /* Main */
+    .main { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+    /* Page header */
+    .page-head { display: flex; align-items: center; justify-content: space-between; }
+    .page-title { font-size: 18px; font-weight: 700; color: var(--t1); }
+    .page-desc { font-size: 12px; color: var(--t2); margin-top: 2px; }
+    .btn {
+      font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px;
+      border: none; cursor: pointer; transition: all 150ms;
+    }
+    .btn-primary { background: var(--t1); color: #fff; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-ghost { background: none; color: var(--t2); border: 1px solid var(--bdr); }
+    .btn-ghost:hover { background: var(--hover); color: var(--t1); }
+
+    /* Stats row */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat-card {
+      background: var(--card); border-radius: 12px; padding: 16px;
+      border: 1px solid var(--bdr2);
+    }
+    .stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--t3); margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 700; color: var(--t1); }
+    .stat-sub { font-size: 11px; color: var(--t2); margin-top: 2px; }
+    .stat-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+    .stat-icon svg { width: 16px; height: 16px; stroke-width: 1.8; }
+
+    /* Card / Section */
+    .card {
+      background: var(--card); border-radius: 12px; border: 1px solid var(--bdr2);
+      overflow: hidden;
+    }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--bdr2);
+    }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--t1); }
+    .card-body { padding: 14px 18px; }
+
+    /* Table */
+    .tbl { width: 100%; border-collapse: collapse; }
+    .tbl th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--t3); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--bdr2); }
+    .tbl td { font-size: 12px; color: var(--t1); padding: 10px 12px; border-bottom: 1px solid var(--bdr2); vertical-align: middle; }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: var(--hover); }
+
+    /* Tags */
+    .tag { display: inline-flex; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px; }
+    .tag-green { background: rgba(61,155,111,.12); color: var(--green); }
+    .tag-yellow { background: rgba(201,155,45,.12); color: var(--yellow); }
+    .tag-purple { background: rgba(139,107,191,.12); color: var(--purple); }
+    .tag-orange { background: rgba(212,131,46,.12); color: var(--orange); }
+    .tag-red { background: rgba(208,84,84,.12); color: var(--red); }
+    .tag-blue { background: rgba(74,144,217,.12); color: var(--blue); }
+    .tag-gray { background: rgba(160,157,151,.12); color: var(--gray); }
+
+    /* Toggle */
+    .toggle { width: 36px; height: 20px; border-radius: 100px; background: var(--bdr); border: none; cursor: pointer; position: relative; transition: background 200ms; }
+    .toggle.on { background: var(--green); }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 200ms; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .toggle.on::after { transform: translateX(16px); }
+
+    /* Progress bar */
+    .prog-bar { height: 6px; background: rgba(0,0,0,.06); border-radius: 100px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 100px; }
+
+    /* Patterns grid */
+    .patterns { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .pattern-card {
+      background: var(--bg); border-radius: 10px; padding: 14px; border: 1px solid var(--bdr2);
+      transition: all 150ms;
+    }
+    .pattern-card:hover { border-color: var(--bdr); transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0,0,0,.04); }
+    .pattern-cmd { font-size: 13px; font-weight: 600; color: var(--t1); font-family: 'SF Mono', Consolas, monospace; margin-bottom: 6px; }
+    .pattern-meta { display: flex; gap: 12px; font-size: 11px; color: var(--t3); }
+    .pattern-meta span { display: flex; align-items: center; gap: 4px; }
+
+    /* Suggestion cards */
+    .suggestions { display: flex; flex-direction: column; gap: 8px; }
+    .sug-card {
+      display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px;
+      border-radius: 10px; border: 1px solid var(--bdr2);
+    }
+    .sug-icon { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .sug-icon svg { width: 14px; height: 14px; stroke-width: 2; }
+    .sug-title { font-size: 12px; font-weight: 600; color: var(--t1); }
+    .sug-desc { font-size: 11px; color: var(--t2); margin-top: 2px; }
+    .sug-conf { font-size: 10px; font-weight: 600; color: var(--t3); margin-top: 4px; }
+
+    /* Extensions list */
+    .ext-row { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--bdr2); }
+    .ext-row:last-child { border-bottom: none; }
+    .ext-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ext-icon svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .ext-info { flex: 1; }
+    .ext-name { font-size: 13px; font-weight: 600; color: var(--t1); }
+    .ext-desc { font-size: 11px; color: var(--t2); }
+    .ext-ver { font-size: 10px; color: var(--t4); font-family: monospace; }
+
+    /* Prompts config */
+    .prompt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .prompt-card {
+      background: var(--bg); border-radius: 10px; padding: 14px; border: 1px solid var(--bdr2);
+      cursor: pointer; transition: all 150ms;
+    }
+    .prompt-card:hover { border-color: var(--blue); background: var(--tint-blue); }
+    .prompt-card.active { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); }
+    .prompt-name { font-size: 12px; font-weight: 600; color: var(--t1); margin-bottom: 4px; }
+    .prompt-binding { font-size: 11px; color: var(--t2); }
+
+    /* Hide inactive panels */
+    .panel { display: none; }
+    .panel.active { display: flex; flex-direction: column; gap: 20px; }
+
+    /* Two-col layout */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .mono { font-family: 'SF Mono', Consolas, monospace; }
+
+    @media (max-width: 900px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .two-col { grid-template-columns: 1fr; }
+      .patterns { grid-template-columns: 1fr; }
+      .prompt-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="brand">Maestro</span>
+      <span style="color:var(--t4)">&middot;</span>
+      <span class="brand-sub">Supervisor</span>
+    </div>
+    <div class="topbar-r">
+      <span style="font-size:11px;color:var(--t3)">Last sync 12s ago</span>
+      <span class="pill"><span class="pill-dot"></span> Active</span>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- Sidebar navigation -->
+    <nav class="sidebar">
+      <div class="sb-section">
+        <div class="sb-label">Supervisor</div>
+        <button class="sb-item active" onclick="showPanel('monitor')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          Monitor
+        </button>
+        <button class="sb-item" onclick="showPanel('schedule')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Schedules
+          <span class="sb-badge">5</span>
+        </button>
+        <button class="sb-item" onclick="showPanel('learning')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          Learning
+        </button>
+        <button class="sb-item" onclick="showPanel('prompts')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+          Prompts
+        </button>
+        <button class="sb-item" onclick="showPanel('extensions')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          Extensions
+          <span class="sb-badge">3</span>
+        </button>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Quick Actions</div>
+        <button class="sb-item" onclick="showPanel('commander')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          Commander
+        </button>
+        <button class="sb-item" onclick="showPanel('coordinator')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Coordinator
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <div class="main">
+
+      <!-- ============ Monitor Panel ============ -->
+      <div class="panel active" id="panel-monitor">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Supervisor Monitor</div>
+            <div class="page-desc">Real-time overview of system health and activity</div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <div class="stat-label">Total Commands</div>
+            <div class="stat-value">1,284</div>
+            <div class="stat-sub">+47 today</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="stat-label">Success Rate</div>
+            <div class="stat-value">94.2%</div>
+            <div class="stat-sub">Last 7 days</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <div class="stat-label">KB Entries</div>
+            <div class="stat-value">38</div>
+            <div class="stat-sub">12 auto-learned</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <div class="stat-label">Extensions</div>
+            <div class="stat-value">3</div>
+            <div class="stat-sub">All healthy</div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">Recent Scheduled Runs</span>
+              <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="showPanel('schedule')">View all</button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <table class="tbl">
+                <thead><tr><th>Task</th><th>Type</th><th>Last Run</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td style="font-weight:500">Nightly Cleanup</td><td><span class="tag tag-blue">cleanup</span></td><td class="mono" style="font-size:11px;color:var(--t3)">03:00 AM</td><td><span class="tag tag-green">success</span></td></tr>
+                  <tr><td style="font-weight:500">Health Check</td><td><span class="tag tag-green">health-check</span></td><td class="mono" style="font-size:11px;color:var(--t3)">10 min ago</td><td><span class="tag tag-green">success</span></td></tr>
+                  <tr><td style="font-weight:500">Weekly Report</td><td><span class="tag tag-purple">report</span></td><td class="mono" style="font-size:11px;color:var(--t3)">Mon 09:00</td><td><span class="tag tag-green">success</span></td></tr>
+                  <tr><td style="font-weight:500">Auto Dispatch</td><td><span class="tag tag-orange">auto-dispatch</span></td><td class="mono" style="font-size:11px;color:var(--t3)">5 min ago</td><td><span class="tag tag-yellow">running</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <span class="card-title">Suggestions</span>
+              <span style="font-size:10px;color:var(--t3)">3 new</span>
+            </div>
+            <div class="card-body">
+              <div class="suggestions">
+                <div class="sug-card">
+                  <div class="sug-icon" style="background:var(--tint-green);color:var(--green)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                  </div>
+                  <div>
+                    <div class="sug-title">Batch similar quality-review calls</div>
+                    <div class="sug-desc">3 sequential reviews could run in parallel</div>
+                    <div class="sug-conf">Confidence: 87%</div>
+                  </div>
+                </div>
+                <div class="sug-card">
+                  <div class="sug-icon" style="background:var(--tint-yellow);color:var(--yellow)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </div>
+                  <div>
+                    <div class="sug-title">High failure rate on maestro-execute</div>
+                    <div class="sug-desc">32% failure in last 24h, check task configs</div>
+                    <div class="sug-conf">Confidence: 92%</div>
+                  </div>
+                </div>
+                <div class="sug-card">
+                  <div class="sug-icon" style="background:var(--tint-purple);color:var(--purple)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  </div>
+                  <div>
+                    <div class="sug-title">Auto-schedule learning analysis</div>
+                    <div class="sug-desc">KB hasn't been refreshed in 3 days</div>
+                    <div class="sug-conf">Confidence: 74%</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Schedule Panel ============ -->
+      <div class="panel" id="panel-schedule">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Scheduled Tasks</div>
+            <div class="page-desc">Manage cron-based automated tasks</div>
+          </div>
+          <button class="btn btn-primary">+ New Schedule</button>
+        </div>
+        <div class="card">
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Name</th><th>Type</th><th>Cron</th><th>Last Run</th><th>Next Run</th><th>Enabled</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:600">Nightly Cleanup</td>
+                  <td><span class="tag tag-blue">cleanup</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">0 3 * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">Today 03:00</td>
+                  <td style="font-size:11px;color:var(--t2)">Tomorrow 03:00</td>
+                  <td><button class="toggle on" onclick="this.classList.toggle('on')"></button></td>
+                  <td><button class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Run</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">Health Check</td>
+                  <td><span class="tag tag-green">health-check</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">*/10 * * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">10 min ago</td>
+                  <td style="font-size:11px;color:var(--t2)">in 10 min</td>
+                  <td><button class="toggle on" onclick="this.classList.toggle('on')"></button></td>
+                  <td><button class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Run</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">Weekly Report</td>
+                  <td><span class="tag tag-purple">report</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">0 9 * * MON</td>
+                  <td style="font-size:11px;color:var(--t2)">Mon 09:00</td>
+                  <td style="font-size:11px;color:var(--t2)">Next Mon</td>
+                  <td><button class="toggle on" onclick="this.classList.toggle('on')"></button></td>
+                  <td><button class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Run</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">Auto Dispatch</td>
+                  <td><span class="tag tag-orange">auto-dispatch</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">*/5 * * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">5 min ago</td>
+                  <td style="font-size:11px;color:var(--t2)">in 5 min</td>
+                  <td><button class="toggle on" onclick="this.classList.toggle('on')"></button></td>
+                  <td><button class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Run</button></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:600">Learning Analysis</td>
+                  <td><span class="tag tag-yellow">learning-analysis</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">0 */6 * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">6h ago</td>
+                  <td style="font-size:11px;color:var(--t2)">in 6h</td>
+                  <td><button class="toggle" onclick="this.classList.toggle('on')"></button></td>
+                  <td><button class="btn btn-ghost" style="font-size:10px;padding:3px 8px">Run</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Learning Panel ============ -->
+      <div class="panel" id="panel-learning">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Self-Learning</div>
+            <div class="page-desc">Command patterns, knowledge base, and optimization suggestions</div>
+          </div>
+        </div>
+
+        <div class="stats" style="grid-template-columns: repeat(3,1fr)">
+          <div class="stat-card">
+            <div class="stat-label">Unique Patterns</div>
+            <div class="stat-value">24</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Knowledge Entries</div>
+            <div class="stat-value">38</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg Success</div>
+            <div class="stat-value">94.2%</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">Top Command Patterns</span></div>
+          <div class="card-body">
+            <div class="patterns">
+              <div class="pattern-card">
+                <div class="pattern-cmd">maestro-execute</div>
+                <div class="pattern-meta">
+                  <span>142 runs</span>
+                  <span style="color:var(--green)">96% success</span>
+                  <span>~4.2m avg</span>
+                </span>
+              </div>
+              <div class="pattern-card">
+                <div class="pattern-cmd">quality-review</div>
+                <div class="pattern-meta">
+                  <span>89 runs</span>
+                  <span style="color:var(--green)">98% success</span>
+                  <span>~2.1m avg</span>
+                </div>
+              </div>
+              <div class="pattern-card">
+                <div class="pattern-cmd">maestro-plan</div>
+                <div class="pattern-meta">
+                  <span>76 runs</span>
+                  <span style="color:var(--green)">91% success</span>
+                  <span>~3.8m avg</span>
+                </div>
+              </div>
+              <div class="pattern-card">
+                <div class="pattern-cmd">quality-test-gen</div>
+                <div class="pattern-meta">
+                  <span>54 runs</span>
+                  <span style="color:var(--yellow)">82% success</span>
+                  <span>~5.6m avg</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><span class="card-title">Knowledge Base</span></div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Topic</th><th>Source</th><th>Uses</th><th>Tags</th></tr></thead>
+              <tbody>
+                <tr><td style="font-weight:500">ESM import conventions</td><td><span class="tag tag-blue">auto</span></td><td>23</td><td><span class="tag tag-gray">typescript</span></td></tr>
+                <tr><td style="font-weight:500">Test file naming patterns</td><td><span class="tag tag-blue">auto</span></td><td>18</td><td><span class="tag tag-gray">testing</span></td></tr>
+                <tr><td style="font-weight:500">Commander.js command structure</td><td><span class="tag tag-purple">manual</span></td><td>31</td><td><span class="tag tag-gray">cli</span></td></tr>
+                <tr><td style="font-weight:500">Hono route patterns</td><td><span class="tag tag-blue">auto</span></td><td>15</td><td><span class="tag tag-gray">api</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Prompts Panel ============ -->
+      <div class="panel" id="panel-prompts">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Prompt Registry</div>
+            <div class="page-desc">Manage prompt builders and strategy-mode bindings</div>
+          </div>
+          <button class="btn btn-primary">Preview Prompt</button>
+        </div>
+        <div class="card">
+          <div class="card-head"><span class="card-title">Registered Builders</span></div>
+          <div class="card-body">
+            <div class="prompt-grid">
+              <div class="prompt-card active">
+                <div class="prompt-name">execution-prompt</div>
+                <div class="prompt-binding">Mode: wave-execute</div>
+              </div>
+              <div class="prompt-card">
+                <div class="prompt-name">planning-prompt</div>
+                <div class="prompt-binding">Mode: deep-plan</div>
+              </div>
+              <div class="prompt-card">
+                <div class="prompt-name">review-prompt</div>
+                <div class="prompt-binding">Mode: quality-scan</div>
+              </div>
+              <div class="prompt-card">
+                <div class="prompt-name">debug-prompt</div>
+                <div class="prompt-binding">Mode: hypothesis-test</div>
+              </div>
+              <div class="prompt-card">
+                <div class="prompt-name">test-gen-prompt</div>
+                <div class="prompt-binding">Mode: tdd-cycle</div>
+              </div>
+              <div class="prompt-card">
+                <div class="prompt-name">analysis-prompt</div>
+                <div class="prompt-binding">Mode: multi-dim</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Extensions Panel ============ -->
+      <div class="panel" id="panel-extensions">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Extensions</div>
+            <div class="page-desc">Installed supervisor extensions and plugins</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body">
+            <div class="ext-row">
+              <div class="ext-icon" style="background:var(--tint-blue);color:var(--blue)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div class="ext-info">
+                <div class="ext-name">auto-retry-strategy</div>
+                <div class="ext-desc">Automatically retries failed tasks with exponential backoff</div>
+              </div>
+              <span class="ext-ver">v1.2.0</span>
+              <span class="tag tag-green">enabled</span>
+              <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            </div>
+            <div class="ext-row">
+              <div class="ext-icon" style="background:var(--tint-purple);color:var(--purple)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div class="ext-info">
+                <div class="ext-name">smart-prompt-builder</div>
+                <div class="ext-desc">Context-aware prompt construction with template caching</div>
+              </div>
+              <span class="ext-ver">v2.0.1</span>
+              <span class="tag tag-green">enabled</span>
+              <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            </div>
+            <div class="ext-row">
+              <div class="ext-icon" style="background:var(--tint-orange);color:var(--orange)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+              </div>
+              <div class="ext-info">
+                <div class="ext-name">metrics-collector</div>
+                <div class="ext-desc">Aggregates execution metrics for learning pipeline</div>
+              </div>
+              <span class="ext-ver">v1.0.3</span>
+              <span class="tag tag-green">enabled</span>
+              <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ Commander Panel (placeholder) ============ -->
+      <div class="panel" id="panel-commander">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Commander</div>
+            <div class="page-desc">Direct command execution interface</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="text-align:center;padding:48px;color:var(--t3)">Commander interface — interactive command terminal</div>
+        </div>
+      </div>
+
+      <!-- ============ Coordinator Panel (placeholder) ============ -->
+      <div class="panel" id="panel-coordinator">
+        <div class="page-head">
+          <div>
+            <div class="page-title">Coordinator</div>
+            <div class="page-desc">Agent coordination and dispatch management</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-body" style="text-align:center;padding:48px;color:var(--t3)">Coordinator interface — agent dispatch and monitoring</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sb-item').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('panel-' + name);
+  if (panel) panel.classList.add('active');
+  // Find button by matching text
+  document.querySelectorAll('.sb-item').forEach(b => {
+    if (b.getAttribute('onclick')?.includes(name)) b.classList.add('active');
+  });
+}
+</script>
+</body>
+</html>

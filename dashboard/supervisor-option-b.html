@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Supervisor — Option B: Top Tabs + Cards</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 13px; line-height: 1.5; background: #FAF8F5; color: #2D2A26; -webkit-font-smoothing: antialiased; }
+
+    :root {
+      --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+      --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+      --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+      --bdr: #E8E5DE; --bdr2: #ECEAE4;
+      --blue: #4A90D9; --green: #3D9B6F; --orange: #D4832E; --yellow: #C99B2D;
+      --purple: #8B6BBF; --red: #D05454; --gray: #A09D97;
+      --tint-green: #EEF7F2; --tint-yellow: #FDF6E4; --tint-orange: #FDF0E4;
+      --tint-purple: #F3EEF9; --tint-gray: #F2F1EE; --tint-blue: #EBF2FA;
+    }
+
+    .shell { display: flex; flex-direction: column; height: 100vh; }
+
+    /* TopBar */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 48px; padding: 0 24px; background: var(--bg2);
+      border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+    }
+    .topbar-l { display: flex; align-items: center; gap: 12px; }
+    .brand { font-weight: 700; font-size: 15px; color: var(--t1); }
+    .topbar-r { display: flex; align-items: center; gap: 10px; }
+    .pill { font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px; display: flex; align-items: center; gap: 5px; }
+    .pill-green { background: rgba(61,155,111,0.12); color: var(--green); }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+    /* Tab bar */
+    .tab-bar {
+      display: flex; align-items: center; gap: 0; padding: 0 24px;
+      background: var(--bg2); border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+    }
+    .tab {
+      padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--t3);
+      cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent;
+      transition: all 150ms; display: flex; align-items: center; gap: 6px;
+    }
+    .tab:hover { color: var(--t1); }
+    .tab.active { color: var(--t1); font-weight: 600; border-bottom-color: var(--t1); }
+    .tab svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .tab-badge { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 100px; background: var(--card); color: var(--t3); }
+
+    /* Content */
+    .content { flex: 1; overflow-y: auto; padding: 24px; }
+
+    /* Panels */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* Bento grid */
+    .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+    .bento-4 { grid-column: span 4; }
+    .bento-6 { grid-column: span 6; }
+    .bento-8 { grid-column: span 8; }
+    .bento-12 { grid-column: span 12; }
+    .bento-3 { grid-column: span 3; }
+
+    /* Card */
+    .card {
+      background: var(--card); border-radius: 14px; border: 1px solid var(--bdr2);
+      overflow: hidden; transition: box-shadow 200ms;
+    }
+    .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,.04); }
+    .card-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--bdr2);
+    }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--t1); }
+    .card-body { padding: 16px 18px; }
+
+    /* Stat mini card */
+    .stat-mini {
+      background: var(--card); border-radius: 14px; border: 1px solid var(--bdr2);
+      padding: 18px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .stat-mini-top { display: flex; align-items: center; justify-content: space-between; }
+    .stat-mini-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .stat-mini-icon svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .stat-mini-label { font-size: 11px; color: var(--t3); font-weight: 500; }
+    .stat-mini-value { font-size: 28px; font-weight: 700; color: var(--t1); line-height: 1; }
+    .stat-mini-delta { font-size: 10px; font-weight: 600; display: flex; align-items: center; gap: 3px; }
+    .delta-up { color: var(--green); }
+    .delta-down { color: var(--red); }
+
+    /* Mini bar chart */
+    .mini-bars { display: flex; align-items: flex-end; gap: 3px; height: 40px; margin-top: 4px; }
+    .mini-bar { flex: 1; border-radius: 3px 3px 0 0; min-width: 4px; transition: height 300ms; }
+
+    /* Tag */
+    .tag { display: inline-flex; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 100px; }
+    .tag-green { background: rgba(61,155,111,.12); color: var(--green); }
+    .tag-yellow { background: rgba(201,155,45,.12); color: var(--yellow); }
+    .tag-purple { background: rgba(139,107,191,.12); color: var(--purple); }
+    .tag-orange { background: rgba(212,131,46,.12); color: var(--orange); }
+    .tag-red { background: rgba(208,84,84,.12); color: var(--red); }
+    .tag-blue { background: rgba(74,144,217,.12); color: var(--blue); }
+    .tag-gray { background: rgba(160,157,151,.12); color: var(--gray); }
+
+    /* Table */
+    .tbl { width: 100%; border-collapse: collapse; }
+    .tbl th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--t3); text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--bdr2); }
+    .tbl td { font-size: 12px; color: var(--t1); padding: 10px 12px; border-bottom: 1px solid var(--bdr2); }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: var(--hover); }
+
+    /* Toggle */
+    .toggle { width: 36px; height: 20px; border-radius: 100px; background: var(--bdr); border: none; cursor: pointer; position: relative; transition: background 200ms; }
+    .toggle.on { background: var(--green); }
+    .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 200ms; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+    .toggle.on::after { transform: translateX(16px); }
+
+    /* Button */
+    .btn { font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer; transition: all 150ms; }
+    .btn-primary { background: var(--t1); color: #fff; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-sm { font-size: 10px; padding: 4px 10px; }
+    .btn-ghost { background: none; color: var(--t2); border: 1px solid var(--bdr); }
+    .btn-ghost:hover { background: var(--hover); }
+    .btn-icon { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--bdr2); background: var(--card); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--t3); transition: all 150ms; }
+    .btn-icon:hover { color: var(--t1); border-color: var(--bdr); }
+    .btn-icon svg { width: 14px; height: 14px; stroke-width: 1.8; }
+
+    /* Progress ring */
+    .ring-wrap { position: relative; width: 64px; height: 64px; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: var(--t1); }
+
+    /* Schedule row enhanced */
+    .sched-row {
+      display: flex; align-items: center; gap: 14px; padding: 14px 0;
+      border-bottom: 1px solid var(--bdr2);
+    }
+    .sched-row:last-child { border-bottom: none; }
+    .sched-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sched-icon svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .sched-info { flex: 1; }
+    .sched-name { font-size: 13px; font-weight: 600; color: var(--t1); }
+    .sched-meta { font-size: 11px; color: var(--t3); display: flex; gap: 12px; margin-top: 2px; }
+    .sched-actions { display: flex; gap: 6px; }
+
+    /* Pattern pill */
+    .pattern-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 0;
+      border-bottom: 1px solid var(--bdr2);
+    }
+    .pattern-row:last-child { border-bottom: none; }
+    .pattern-rank { width: 24px; height: 24px; border-radius: 6px; background: var(--bg2); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--t3); flex-shrink: 0; }
+    .pattern-name { font-size: 12px; font-weight: 600; color: var(--t1); font-family: 'SF Mono', Consolas, monospace; }
+    .pattern-bars { flex: 1; display: flex; align-items: center; gap: 8px; }
+    .pattern-bar-track { flex: 1; height: 6px; background: rgba(0,0,0,.04); border-radius: 100px; overflow: hidden; }
+    .pattern-bar-fill { height: 100%; border-radius: 100px; }
+    .pattern-stat { font-size: 11px; color: var(--t3); white-space: nowrap; min-width: 48px; text-align: right; }
+
+    /* Extension tile */
+    .ext-tile {
+      background: var(--bg); border-radius: 12px; padding: 16px; border: 1px solid var(--bdr2);
+      display: flex; flex-direction: column; gap: 10px; transition: all 150ms;
+    }
+    .ext-tile:hover { border-color: var(--bdr); transform: translateY(-1px); }
+    .ext-tile-top { display: flex; align-items: center; justify-content: space-between; }
+    .ext-tile-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .ext-tile-icon svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .ext-tile-name { font-size: 13px; font-weight: 600; color: var(--t1); }
+    .ext-tile-desc { font-size: 11px; color: var(--t2); line-height: 1.4; }
+    .ext-tile-bottom { display: flex; align-items: center; justify-content: space-between; }
+    .ext-tile-ver { font-size: 10px; color: var(--t4); font-family: monospace; }
+
+    /* Prompt builder card */
+    .prompt-tile {
+      background: var(--bg); border-radius: 12px; padding: 16px;
+      border: 1px solid var(--bdr2); cursor: pointer; transition: all 150ms;
+    }
+    .prompt-tile:hover { border-color: var(--blue); background: var(--tint-blue); }
+    .prompt-tile-name { font-size: 13px; font-weight: 600; color: var(--t1); margin-bottom: 4px; font-family: 'SF Mono', Consolas, monospace; }
+    .prompt-tile-mode { font-size: 11px; color: var(--t2); }
+    .prompt-tile-binding { margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+    .prompt-tile-arrow { color: var(--t4); font-size: 12px; }
+
+    .mono { font-family: 'SF Mono', Consolas, monospace; }
+
+    @media (max-width: 960px) {
+      .bento-3 { grid-column: span 6; }
+      .bento-4 { grid-column: span 6; }
+      .bento-6 { grid-column: span 12; }
+      .bento-8 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="brand">Maestro</span>
+      <span style="color:var(--t4);font-size:12px">/</span>
+      <span style="font-size:13px;font-weight:500;color:var(--t2)">Supervisor</span>
+    </div>
+    <div class="topbar-r">
+      <span class="pill pill-green"><span class="pill-dot"></span> Healthy</span>
+    </div>
+  </header>
+
+  <!-- Top tab navigation -->
+  <div class="tab-bar">
+    <button class="tab active" onclick="showTab('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Overview
+    </button>
+    <button class="tab" onclick="showTab('schedules')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Schedules
+      <span class="tab-badge">5</span>
+    </button>
+    <button class="tab" onclick="showTab('learning')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Learning
+    </button>
+    <button class="tab" onclick="showTab('prompts')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+      Prompts
+    </button>
+    <button class="tab" onclick="showTab('extensions')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Extensions
+      <span class="tab-badge">3</span>
+    </button>
+  </div>
+
+  <div class="content">
+
+    <!-- ============ Overview ============ -->
+    <div class="panel active" id="tab-overview">
+      <div class="bento">
+        <!-- Stats row -->
+        <div class="stat-mini bento-3">
+          <div class="stat-mini-top">
+            <div class="stat-mini-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <span class="stat-mini-delta delta-up">+47</span>
+          </div>
+          <div class="stat-mini-label">Total Commands</div>
+          <div class="stat-mini-value">1,284</div>
+          <div class="mini-bars">
+            <div class="mini-bar" style="height:30%;background:var(--blue);opacity:.3"></div>
+            <div class="mini-bar" style="height:45%;background:var(--blue);opacity:.4"></div>
+            <div class="mini-bar" style="height:60%;background:var(--blue);opacity:.5"></div>
+            <div class="mini-bar" style="height:40%;background:var(--blue);opacity:.4"></div>
+            <div class="mini-bar" style="height:75%;background:var(--blue);opacity:.6"></div>
+            <div class="mini-bar" style="height:55%;background:var(--blue);opacity:.5"></div>
+            <div class="mini-bar" style="height:90%;background:var(--blue)"></div>
+          </div>
+        </div>
+        <div class="stat-mini bento-3">
+          <div class="stat-mini-top">
+            <div class="stat-mini-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <span class="stat-mini-delta delta-up">+2.1%</span>
+          </div>
+          <div class="stat-mini-label">Success Rate</div>
+          <div class="stat-mini-value">94.2%</div>
+          <div class="mini-bars">
+            <div class="mini-bar" style="height:85%;background:var(--green);opacity:.5"></div>
+            <div class="mini-bar" style="height:88%;background:var(--green);opacity:.6"></div>
+            <div class="mini-bar" style="height:82%;background:var(--green);opacity:.5"></div>
+            <div class="mini-bar" style="height:91%;background:var(--green);opacity:.7"></div>
+            <div class="mini-bar" style="height:89%;background:var(--green);opacity:.6"></div>
+            <div class="mini-bar" style="height:93%;background:var(--green);opacity:.8"></div>
+            <div class="mini-bar" style="height:94%;background:var(--green)"></div>
+          </div>
+        </div>
+        <div class="stat-mini bento-3">
+          <div class="stat-mini-top">
+            <div class="stat-mini-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+          </div>
+          <div class="stat-mini-label">Knowledge Base</div>
+          <div class="stat-mini-value">38</div>
+          <div style="font-size:11px;color:var(--t3)">12 auto / 26 manual</div>
+        </div>
+        <div class="stat-mini bento-3">
+          <div class="stat-mini-top">
+            <div class="stat-mini-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="stat-mini-label">Active Schedules</div>
+          <div class="stat-mini-value">4<span style="font-size:14px;color:var(--t3);font-weight:400"> / 5</span></div>
+          <div style="font-size:11px;color:var(--t3)">Next run in 5 min</div>
+        </div>
+
+        <!-- Top patterns (left) + Suggestions (right) -->
+        <div class="card bento-8">
+          <div class="card-head"><span class="card-title">Top Command Patterns</span></div>
+          <div class="card-body">
+            <div class="pattern-row">
+              <span class="pattern-rank">1</span>
+              <span class="pattern-name" style="min-width:140px">maestro-execute</span>
+              <div class="pattern-bars">
+                <div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:92%;background:var(--green)"></div></div>
+              </div>
+              <span class="pattern-stat">142 / 96%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">2</span>
+              <span class="pattern-name" style="min-width:140px">quality-review</span>
+              <div class="pattern-bars">
+                <div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:88%;background:var(--green)"></div></div>
+              </div>
+              <span class="pattern-stat">89 / 98%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">3</span>
+              <span class="pattern-name" style="min-width:140px">maestro-plan</span>
+              <div class="pattern-bars">
+                <div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:78%;background:var(--blue)"></div></div>
+              </div>
+              <span class="pattern-stat">76 / 91%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">4</span>
+              <span class="pattern-name" style="min-width:140px">quality-test-gen</span>
+              <div class="pattern-bars">
+                <div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:65%;background:var(--yellow)"></div></div>
+              </div>
+              <span class="pattern-stat">54 / 82%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">5</span>
+              <span class="pattern-name" style="min-width:140px">maestro-verify</span>
+              <div class="pattern-bars">
+                <div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:58%;background:var(--blue)"></div></div>
+              </div>
+              <span class="pattern-stat">41 / 89%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card bento-4">
+          <div class="card-head"><span class="card-title">Suggestions</span><span class="tag tag-orange" style="font-size:9px">3 new</span></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--green);margin-top:5px;flex-shrink:0"></div>
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--t1)">Batch quality-review</div>
+                <div style="font-size:11px;color:var(--t2)">3 sequential runs &rarr; parallel</div>
+                <div style="font-size:10px;color:var(--t3);margin-top:2px">87% confidence</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--yellow);margin-top:5px;flex-shrink:0"></div>
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--t1)">maestro-execute failures</div>
+                <div style="font-size:11px;color:var(--t2)">32% failure in 24h</div>
+                <div style="font-size:10px;color:var(--t3);margin-top:2px">92% confidence</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start">
+              <div style="width:8px;height:8px;border-radius:50%;background:var(--purple);margin-top:5px;flex-shrink:0"></div>
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--t1)">Schedule learning sync</div>
+                <div style="font-size:11px;color:var(--t2)">KB stale for 3 days</div>
+                <div style="font-size:10px;color:var(--t3);margin-top:2px">74% confidence</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent schedule runs -->
+        <div class="card bento-12">
+          <div class="card-head">
+            <span class="card-title">Recent Schedule Activity</span>
+            <button class="btn btn-ghost btn-sm" onclick="showTab('schedules')">View all</button>
+          </div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Task</th><th>Type</th><th>Cron</th><th>Last Run</th><th>Duration</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight:500">Auto Dispatch</td>
+                  <td><span class="tag tag-orange">auto-dispatch</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">*/5 * * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">5 min ago</td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">1.2s</td>
+                  <td><span class="tag tag-green">success</span></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:500">Health Check</td>
+                  <td><span class="tag tag-green">health-check</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">*/10 * * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">10 min ago</td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">0.8s</td>
+                  <td><span class="tag tag-green">success</span></td>
+                </tr>
+                <tr>
+                  <td style="font-weight:500">Nightly Cleanup</td>
+                  <td><span class="tag tag-blue">cleanup</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">0 3 * * *</td>
+                  <td style="font-size:11px;color:var(--t2)">Today 03:00</td>
+                  <td class="mono" style="font-size:11px;color:var(--t3)">4.5s</td>
+                  <td><span class="tag tag-green">success</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Schedules ============ -->
+    <div class="panel" id="tab-schedules">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--t1)">Scheduled Tasks</div>
+          <div style="font-size:12px;color:var(--t2)">4 active, 1 disabled</div>
+        </div>
+        <button class="btn btn-primary">+ New Schedule</button>
+      </div>
+      <div class="card">
+        <div class="card-body">
+          <div class="sched-row">
+            <div class="sched-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+            </div>
+            <div class="sched-info">
+              <div class="sched-name">Auto Dispatch</div>
+              <div class="sched-meta">
+                <span class="mono">*/5 * * * *</span>
+                <span>Last: 5m ago</span>
+                <span>Next: in 5m</span>
+              </div>
+            </div>
+            <span class="tag tag-orange">auto-dispatch</span>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            <div class="sched-actions">
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="btn-icon" style="color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </div>
+          <div class="sched-row">
+            <div class="sched-icon" style="background:var(--tint-green);color:var(--green)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            </div>
+            <div class="sched-info">
+              <div class="sched-name">Health Check</div>
+              <div class="sched-meta">
+                <span class="mono">*/10 * * * *</span>
+                <span>Last: 10m ago</span>
+                <span>Next: in 10m</span>
+              </div>
+            </div>
+            <span class="tag tag-green">health-check</span>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            <div class="sched-actions">
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="btn-icon" style="color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </div>
+          <div class="sched-row">
+            <div class="sched-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </div>
+            <div class="sched-info">
+              <div class="sched-name">Nightly Cleanup</div>
+              <div class="sched-meta">
+                <span class="mono">0 3 * * *</span>
+                <span>Last: Today 03:00</span>
+                <span>Next: Tomorrow 03:00</span>
+              </div>
+            </div>
+            <span class="tag tag-blue">cleanup</span>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            <div class="sched-actions">
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="btn-icon" style="color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </div>
+          <div class="sched-row">
+            <div class="sched-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="sched-info">
+              <div class="sched-name">Weekly Report</div>
+              <div class="sched-meta">
+                <span class="mono">0 9 * * MON</span>
+                <span>Last: Mon 09:00</span>
+                <span>Next: Next Mon</span>
+              </div>
+            </div>
+            <span class="tag tag-purple">report</span>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+            <div class="sched-actions">
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="btn-icon" style="color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </div>
+          <div class="sched-row" style="opacity:.55">
+            <div class="sched-icon" style="background:var(--tint-gray);color:var(--gray)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            </div>
+            <div class="sched-info">
+              <div class="sched-name">Learning Analysis</div>
+              <div class="sched-meta">
+                <span class="mono">0 */6 * * *</span>
+                <span>Last: 6h ago</span>
+                <span style="color:var(--t4)">Disabled</span>
+              </div>
+            </div>
+            <span class="tag tag-gray">learning-analysis</span>
+            <button class="toggle" onclick="this.classList.toggle('on')"></button>
+            <div class="sched-actions">
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>
+              <button class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+              <button class="btn-icon" style="color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Learning ============ -->
+    <div class="panel" id="tab-learning">
+      <div style="font-size:18px;font-weight:700;color:var(--t1);margin-bottom:18px">Self-Learning</div>
+      <div class="bento">
+        <div class="card bento-8">
+          <div class="card-head"><span class="card-title">Command Patterns</span></div>
+          <div class="card-body">
+            <div class="pattern-row">
+              <span class="pattern-rank">1</span>
+              <span class="pattern-name" style="min-width:140px">maestro-execute</span>
+              <div class="pattern-bars"><div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:92%;background:var(--green)"></div></div></div>
+              <span class="pattern-stat">142 / 96%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">2</span>
+              <span class="pattern-name" style="min-width:140px">quality-review</span>
+              <div class="pattern-bars"><div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:88%;background:var(--green)"></div></div></div>
+              <span class="pattern-stat">89 / 98%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">3</span>
+              <span class="pattern-name" style="min-width:140px">maestro-plan</span>
+              <div class="pattern-bars"><div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:78%;background:var(--blue)"></div></div></div>
+              <span class="pattern-stat">76 / 91%</span>
+            </div>
+            <div class="pattern-row">
+              <span class="pattern-rank">4</span>
+              <span class="pattern-name" style="min-width:140px">quality-test-gen</span>
+              <div class="pattern-bars"><div class="pattern-bar-track"><div class="pattern-bar-fill" style="width:65%;background:var(--yellow)"></div></div></div>
+              <span class="pattern-stat">54 / 82%</span>
+            </div>
+          </div>
+        </div>
+        <div class="card bento-4">
+          <div class="card-head"><span class="card-title">Stats</span></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:14px">
+            <div><div style="font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">Unique Patterns</div><div style="font-size:22px;font-weight:700;color:var(--t1)">24</div></div>
+            <div><div style="font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">Knowledge Entries</div><div style="font-size:22px;font-weight:700;color:var(--t1)">38</div></div>
+            <div><div style="font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase">Avg Duration</div><div style="font-size:22px;font-weight:700;color:var(--t1)">3.8m</div></div>
+          </div>
+        </div>
+        <div class="card bento-12">
+          <div class="card-head"><span class="card-title">Knowledge Base</span></div>
+          <div class="card-body" style="padding:0">
+            <table class="tbl">
+              <thead><tr><th>Topic</th><th>Content</th><th>Source</th><th>Uses</th><th>Tags</th></tr></thead>
+              <tbody>
+                <tr><td style="font-weight:500">ESM import conventions</td><td style="color:var(--t2);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Use .js extensions in import paths for ESM compatibility</td><td><span class="tag tag-blue">auto</span></td><td>23</td><td><span class="tag tag-gray">typescript</span></td></tr>
+                <tr><td style="font-weight:500">Test file naming</td><td style="color:var(--t2);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">*.test.ts for unit, *.integration.test.ts for integration</td><td><span class="tag tag-blue">auto</span></td><td>18</td><td><span class="tag tag-gray">testing</span></td></tr>
+                <tr><td style="font-weight:500">Commander.js structure</td><td style="color:var(--t2);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Commands follow program.command().description().action() pattern</td><td><span class="tag tag-purple">manual</span></td><td>31</td><td><span class="tag tag-gray">cli</span></td></tr>
+                <tr><td style="font-weight:500">Hono route patterns</td><td style="color:var(--t2);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Factory function returns Hono instance with route definitions</td><td><span class="tag tag-blue">auto</span></td><td>15</td><td><span class="tag tag-gray">api</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Prompts ============ -->
+    <div class="panel" id="tab-prompts">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+        <div style="font-size:18px;font-weight:700;color:var(--t1)">Prompt Registry</div>
+        <button class="btn btn-primary">Preview Builder</button>
+      </div>
+      <div class="bento">
+        <div class="prompt-tile bento-4">
+          <div class="prompt-tile-name">execution-prompt</div>
+          <div class="prompt-tile-mode">Strategy: wave-execute</div>
+          <div class="prompt-tile-binding"><span class="tag tag-orange">execute</span><span class="prompt-tile-arrow">&rarr;</span><span class="tag tag-blue">wave</span></div>
+        </div>
+        <div class="prompt-tile bento-4">
+          <div class="prompt-tile-name">planning-prompt</div>
+          <div class="prompt-tile-mode">Strategy: deep-plan</div>
+          <div class="prompt-tile-binding"><span class="tag tag-purple">plan</span><span class="prompt-tile-arrow">&rarr;</span><span class="tag tag-blue">decompose</span></div>
+        </div>
+        <div class="prompt-tile bento-4">
+          <div class="prompt-tile-name">review-prompt</div>
+          <div class="prompt-tile-mode">Strategy: quality-scan</div>
+          <div class="prompt-tile-binding"><span class="tag tag-green">review</span><span class="prompt-tile-arrow">&rarr;</span><span class="tag tag-blue">multi-dim</span></div>
+        </div>
+        <div class="prompt-tile bento-4">
+          <div class="prompt-tile-name">debug-prompt</div>
+          <div class="prompt-tile-mode">Strategy: hypothesis-test</div>
+          <div class="prompt-tile-binding"><span class="tag tag-red">debug</span><span class="prompt-tile-arrow">&rarr;</span><span class="tag tag-blue">parallel</span></div>
+        </div>
+        <div class="prompt-tile bento-4">
+          <div class="prompt-tile-name">test-gen-prompt</div>
+          <div class="prompt-tile-mode">Strategy: tdd-cycle</div>
+          <div class="prompt-tile-binding"><span class="tag tag-yellow">test</span><span class="prompt-tile-arrow">&rarr;</span><span class="tag tag-blue">red-green</span></div>
+        </div>
+        <div class="prompt-tile bento-4">
+          <div class="prompt-tile-name">analysis-prompt</div>
+          <div class="prompt-tile-mode">Strategy: multi-dim</div>
+          <div class="prompt-tile-binding"><span class="tag tag-blue">analyze</span><span class="prompt-tile-arrow">&rarr;</span><span class="tag tag-blue">score</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ Extensions ============ -->
+    <div class="panel" id="tab-extensions">
+      <div style="font-size:18px;font-weight:700;color:var(--t1);margin-bottom:18px">Extensions</div>
+      <div class="bento">
+        <div class="ext-tile bento-4">
+          <div class="ext-tile-top">
+            <div class="ext-tile-icon" style="background:var(--tint-blue);color:var(--blue)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            </div>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="ext-tile-name">auto-retry-strategy</div>
+          <div class="ext-tile-desc">Retries failed tasks with exponential backoff</div>
+          <div class="ext-tile-bottom">
+            <span class="ext-tile-ver">v1.2.0</span>
+            <span class="tag tag-green">strategy</span>
+          </div>
+        </div>
+        <div class="ext-tile bento-4">
+          <div class="ext-tile-top">
+            <div class="ext-tile-icon" style="background:var(--tint-purple);color:var(--purple)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+            </div>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="ext-tile-name">smart-prompt-builder</div>
+          <div class="ext-tile-desc">Context-aware prompt construction with caching</div>
+          <div class="ext-tile-bottom">
+            <span class="ext-tile-ver">v2.0.1</span>
+            <span class="tag tag-purple">builder</span>
+          </div>
+        </div>
+        <div class="ext-tile bento-4">
+          <div class="ext-tile-top">
+            <div class="ext-tile-icon" style="background:var(--tint-orange);color:var(--orange)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <button class="toggle on" onclick="this.classList.toggle('on')"></button>
+          </div>
+          <div class="ext-tile-name">metrics-collector</div>
+          <div class="ext-tile-desc">Aggregates execution metrics for learning</div>
+          <div class="ext-tile-bottom">
+            <span class="ext-tile-ver">v1.0.3</span>
+            <span class="tag tag-orange">adapter</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const panel = document.getElementById('tab-' + name);
+  if (panel) panel.classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.getAttribute('onclick')?.includes(name)) t.classList.add('active');
+  });
+}
+</script>
+</body>
+</html>

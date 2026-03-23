@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Maestro — Requirement Expansion</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+    --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+    --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+    --bdr: #E8E5DE; --bdr2: #ECEAE4;
+    --blue: #5B8DB8; --green: #5A9E78; --orange: #C8863A; --purple: #9178B5;
+    --red: #D05454; --yellow: #C99B2D;
+    --tint-blue: #EDF2F8; --tint-green: #EEF5F0; --tint-orange: #FAF0E3;
+    --tint-purple: #F2EDF8; --tint-red: #FCEEEE; --tint-gray: #F2F1EE;
+    --tint-yellow: #FDF6E4;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px; line-height: 1.5;
+    background: var(--bg); color: var(--t1);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ================================================================
+     TopBar
+     ================================================================ */
+  .topbar {
+    display: flex; align-items: center;
+    height: 48px; padding: 0 20px; background: var(--bg2);
+    border-bottom: 1px solid var(--bdr); flex-shrink: 0;
+  }
+  .topbar-l { display: flex; align-items: center; gap: 12px; }
+  .brand { font-weight: 700; font-size: 15px; color: var(--t1); }
+  .topbar-tabs {
+    display: flex; gap: 2px; margin-left: 24px;
+    background: rgba(45,42,38,0.04); border-radius: 8px; padding: 2px;
+  }
+  .topbar-tab {
+    font-size: 12px; font-weight: 500; padding: 5px 14px; border-radius: 6px;
+    border: none; background: none; color: var(--t3); cursor: pointer;
+    transition: all 150ms;
+  }
+  .topbar-tab:hover { color: var(--t2); }
+  .topbar-tab.active {
+    background: var(--card); color: var(--t1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .topbar-spacer { flex: 1; }
+  .topbar-r { display: flex; align-items: center; gap: 10px; }
+  .status-pill {
+    font-size: 10px; font-weight: 600; padding: 4px 12px; border-radius: 100px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .status-pill--reviewing { background: var(--tint-orange); color: var(--orange); }
+  .status-pill-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+    animation: pulse 2s ease infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
+
+  /* ================================================================
+     Split Layout
+     ================================================================ */
+  .split { display: flex; flex: 1; overflow: hidden; }
+
+  /* ================================================================
+     Left Panel — Composer + History
+     ================================================================ */
+  .split-left {
+    width: 400px; min-width: 360px; max-width: 440px;
+    border-right: 1px solid var(--bdr);
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* -- Composer area -- */
+  .composer-area {
+    padding: 24px 20px 0;
+    flex-shrink: 0;
+  }
+  .composer-heading {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 22px; font-weight: 700; line-height: 1.2;
+    color: var(--t1); letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .composer-sub {
+    font-size: 12px; color: var(--t3); margin-bottom: 16px;
+  }
+
+  .composer {
+    background: var(--card);
+    border: 1px solid var(--bdr);
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03), 0 0 0 1px rgba(0,0,0,0.02);
+    transition: border-color 200ms, box-shadow 200ms;
+  }
+  .composer:focus-within {
+    border-color: var(--orange);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03), 0 0 0 3px rgba(200,134,58,0.08);
+  }
+  .composer-textarea {
+    width: 100%; border: none; background: transparent; resize: none; outline: none;
+    font-size: 14px; line-height: 1.6; color: var(--t1);
+    padding: 16px 18px 6px; min-height: 72px; font-family: inherit;
+  }
+  .composer-textarea::placeholder { color: var(--t4); }
+
+  .composer-toolbar {
+    display: flex; align-items: center; padding: 4px 10px 8px; gap: 4px;
+  }
+  .depth-selector {
+    display: flex; gap: 2px; background: var(--bg2); border-radius: 7px; padding: 2px;
+  }
+  .depth-btn {
+    font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 5px;
+    border: none; background: transparent; color: var(--t3);
+    cursor: pointer; transition: all 150ms;
+  }
+  .depth-btn:hover { color: var(--t2); }
+  .depth-btn.active {
+    background: var(--card); color: var(--t1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .toolbar-spacer { flex: 1; }
+  .expand-btn {
+    font-size: 12px; font-weight: 600; padding: 5px 16px; border-radius: 7px;
+    border: none; background: var(--t1); color: #fff;
+    cursor: pointer; transition: opacity 150ms;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .expand-btn:hover { opacity: 0.85; }
+  .expand-btn svg { width: 13px; height: 13px; stroke-width: 2; }
+
+  .hints {
+    display: flex; gap: 10px; padding: 6px 4px 0;
+    font-size: 10px; color: var(--t4);
+  }
+  .hints kbd {
+    font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 10px;
+    padding: 1px 5px; border: 1px solid var(--bdr2); border-radius: 3px;
+    background: var(--bg2);
+  }
+
+  /* -- History area -- */
+  .history-area {
+    flex: 1; overflow-y: auto; padding: 0 20px 20px;
+    margin-top: 20px;
+  }
+  .history-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--t3);
+    padding: 0 2px; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .history-label svg { width: 12px; height: 12px; stroke-width: 2; }
+
+  .history-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .history-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 10px; border-radius: 8px;
+    cursor: pointer; transition: background 150ms;
+  }
+  .history-item:hover { background: var(--hover); }
+  .history-item.active { background: var(--active); }
+
+  .history-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .history-dot--reviewing { background: var(--orange); }
+  .history-dot--done { background: var(--green); }
+  .history-dot--expanding { background: var(--blue); }
+  .history-dot--failed { background: var(--red); }
+
+  .history-body { flex: 1; min-width: 0; }
+  .history-title {
+    font-size: 12px; font-weight: 600; color: var(--t1);
+    line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .history-meta {
+    display: flex; gap: 8px; margin-top: 2px;
+    font-size: 10px; color: var(--t3);
+  }
+  .history-tag {
+    font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 100px;
+  }
+  .history-tag--items { background: var(--tint-blue); color: var(--blue); }
+  .history-tag--depth { background: var(--tint-purple); color: var(--purple); }
+  .history-tag--done { background: var(--tint-green); color: var(--green); }
+
+  .history-time {
+    font-size: 10px; color: var(--t4); flex-shrink: 0;
+  }
+
+  .history-divider {
+    height: 1px; background: var(--bdr2); margin: 6px 10px;
+  }
+  .history-section-label {
+    font-size: 10px; font-weight: 500; color: var(--t4);
+    padding: 4px 10px;
+  }
+
+  /* ================================================================
+     Right Panel — Expansion Result
+     ================================================================ */
+  .split-right {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  .result-header {
+    padding: 16px 20px; border-bottom: 1px solid var(--bdr2);
+    display: flex; align-items: flex-start; gap: 14px;
+  }
+  .result-header-body { flex: 1; }
+  .result-title { font-size: 16px; font-weight: 700; color: var(--t1); line-height: 1.3; }
+  .result-summary {
+    font-size: 12px; color: var(--t2); line-height: 1.5; margin-top: 4px;
+  }
+  .result-tags {
+    display: flex; gap: 8px; margin-top: 8px;
+  }
+  .result-tag {
+    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 100px;
+  }
+  .result-tag--items { background: var(--tint-blue); color: var(--blue); }
+  .result-tag--deps { background: var(--tint-purple); color: var(--purple); }
+  .result-tag--effort { background: var(--tint-orange); color: var(--orange); }
+  .result-tag--status { background: var(--tint-green); color: var(--green); }
+
+  .result-actions {
+    display: flex; gap: 6px; flex-shrink: 0; align-self: center;
+  }
+
+  .btn {
+    font-size: 12px; font-weight: 600; padding: 7px 16px; border-radius: 8px;
+    border: none; cursor: pointer; transition: all 150ms;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+  .btn-primary { background: var(--t1); color: #fff; }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-secondary { background: var(--card); color: var(--t2); border: 1px solid var(--bdr); }
+  .btn-secondary:hover { color: var(--t1); background: var(--hover); }
+  .btn-accent { background: var(--green); color: #fff; }
+  .btn-accent:hover { opacity: 0.85; }
+  .btn-ghost { background: none; color: var(--t3); border: none; padding: 7px 10px; }
+  .btn-ghost:hover { color: var(--t1); }
+
+  /* -- Dependency Graph -- */
+  .dep-graph {
+    padding: 12px 20px; border-bottom: 1px solid var(--bdr2);
+    background: var(--bg2);
+  }
+  .dep-graph-label {
+    font-size: 10px; font-weight: 600; color: var(--t3); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 5px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .dep-graph-label svg { width: 12px; height: 12px; stroke-width: 2; }
+  .dep-graph-viz {
+    display: flex; align-items: center; gap: 4px; overflow-x: auto;
+    padding: 4px 0;
+  }
+  .dep-node {
+    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 5px;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .dep-node--1 { background: var(--tint-blue); color: var(--blue); }
+  .dep-node--2 { background: var(--tint-purple); color: var(--purple); }
+  .dep-node--3 { background: var(--tint-orange); color: var(--orange); }
+  .dep-node--4 { background: var(--tint-green); color: var(--green); }
+  .dep-arrow { color: var(--t4); font-size: 12px; flex-shrink: 0; }
+
+  /* -- Checklist Table -- */
+  .result-body { flex: 1; overflow-y: auto; }
+
+  .checklist-table { width: 100%; border-collapse: collapse; }
+  .checklist-table th {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; color: var(--t3); text-align: left;
+    padding: 10px 14px; border-bottom: 1px solid var(--bdr2);
+    background: var(--bg); position: sticky; top: 0; z-index: 1;
+  }
+  .checklist-table td {
+    padding: 12px 14px; border-bottom: 1px solid var(--bdr2);
+    vertical-align: top;
+  }
+  .checklist-table tr { transition: background 150ms; }
+  .checklist-table tr:hover { background: var(--hover); }
+
+  .td-num {
+    width: 28px; font-size: 11px; font-weight: 600; color: var(--t4);
+    text-align: center;
+  }
+  .td-title { font-size: 13px; font-weight: 600; color: var(--t1); line-height: 1.3; }
+  .td-desc { font-size: 11px; color: var(--t3); margin-top: 2px; line-height: 1.4; }
+
+  .tag {
+    font-size: 9px; font-weight: 600; padding: 2px 7px; border-radius: 100px;
+    text-transform: uppercase; letter-spacing: 0.03em; display: inline-flex;
+  }
+  .tag--feature { background: var(--tint-blue); color: var(--blue); }
+  .tag--task { background: var(--tint-purple); color: var(--purple); }
+  .tag--bug { background: var(--tint-red); color: var(--red); }
+  .tag--improvement { background: var(--tint-green); color: var(--green); }
+
+  .priority-bar { display: flex; align-items: center; gap: 4px; }
+  .priority-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .priority-dot--high { background: var(--orange); }
+  .priority-dot--medium { background: var(--yellow); }
+  .priority-dot--low { background: var(--t4); }
+  .priority-label { font-size: 11px; color: var(--t2); }
+
+  .effort-badge {
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+    background: var(--bg2); color: var(--t2);
+  }
+
+  .dep-links { display: flex; flex-wrap: wrap; gap: 3px; }
+  .dep-link {
+    font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+    background: var(--tint-purple); color: var(--purple); cursor: pointer;
+    transition: all 150ms;
+  }
+  .dep-link:hover { background: var(--purple); color: #fff; }
+  .dep-none { font-size: 10px; color: var(--t4); }
+
+  .td-actions { display: flex; gap: 2px; }
+  .icon-btn {
+    width: 26px; height: 26px; border-radius: 6px; border: none;
+    background: none; cursor: pointer; color: var(--t4);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 150ms;
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--t1); }
+  .icon-btn svg { width: 14px; height: 14px; stroke-width: 1.8; }
+
+  /* -- Refine Bar -- */
+  .refine-bar {
+    display: flex; gap: 8px; padding: 12px 20px;
+    border-top: 1px solid var(--bdr2); background: var(--bg);
+    align-items: flex-end;
+  }
+  .refine-input {
+    flex: 1; border: 1px solid var(--bdr); border-radius: 10px;
+    padding: 9px 14px; font-size: 13px; font-family: inherit;
+    color: var(--t1); background: var(--card);
+    outline: none; resize: none; min-height: 38px;
+    transition: border-color 150ms;
+  }
+  .refine-input:focus { border-color: var(--purple); }
+  .refine-input::placeholder { color: var(--t4); }
+
+  /* -- Result Footer -- */
+  .result-footer {
+    padding: 12px 20px; border-top: 1px solid var(--bdr);
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg);
+  }
+  .footer-spacer { flex: 1; }
+  .footer-info { font-size: 10px; color: var(--t3); }
+
+  /* ================================================================
+     Empty State (right panel when no selection)
+     ================================================================ */
+  .empty-state {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: var(--t4); gap: 10px;
+  }
+  .empty-state svg { width: 40px; height: 40px; stroke-width: 1; }
+  .empty-state-text { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- ============================================================
+       TopBar
+       ============================================================ -->
+  <header class="topbar">
+    <div class="topbar-l">
+      <span class="brand">Maestro</span>
+      <div class="topbar-tabs">
+        <button class="topbar-tab">Board</button>
+        <button class="topbar-tab active">Requirements</button>
+        <button class="topbar-tab">Issues</button>
+        <button class="topbar-tab">Teams</button>
+      </div>
+    </div>
+    <div class="topbar-spacer"></div>
+    <div class="topbar-r">
+      <div class="status-pill status-pill--reviewing">
+        <div class="status-pill-dot"></div>
+        Reviewing
+      </div>
+      <span style="font-size:11px; color:var(--t3)">REQ-m1abc &middot; 2m ago</span>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       Split Layout
+       ============================================================ -->
+  <div class="split">
+
+    <!-- ========================================================
+         LEFT: Composer + History
+         ======================================================== -->
+    <div class="split-left">
+
+      <!-- Composer -->
+      <div class="composer-area">
+        <h1 class="composer-heading">Expand requirements</h1>
+        <p class="composer-sub">Natural language to structured decomposition</p>
+
+        <div class="composer">
+          <textarea class="composer-textarea" placeholder="Describe a feature, user story, or requirement..." rows="3">Implement a real-time notification system with WebSocket support, including notification preferences per user, read/unread tracking, and a notification center UI component.</textarea>
+          <div class="composer-toolbar">
+            <div class="depth-selector">
+              <button class="depth-btn">High-level</button>
+              <button class="depth-btn active">Standard</button>
+              <button class="depth-btn">Atomic</button>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <button class="expand-btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Expand
+            </button>
+          </div>
+        </div>
+        <div class="hints">
+          <span><kbd>Ctrl+Enter</kbd> expand</span>
+          <span><kbd>Tab</kbd> depth</span>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="history-area">
+        <div class="history-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          History
+        </div>
+
+        <div class="history-list">
+          <!-- Active item -->
+          <div class="history-item active">
+            <div class="history-dot history-dot--reviewing"></div>
+            <div class="history-body">
+              <div class="history-title">Real-time notification system</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--items">6 items</span>
+                <span class="history-tag history-tag--depth">standard</span>
+              </div>
+            </div>
+            <span class="history-time">2m</span>
+          </div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--done"></div>
+            <div class="history-body">
+              <div class="history-title">User authentication & OAuth flow</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--done">done</span>
+                <span class="history-tag history-tag--items">8 items</span>
+              </div>
+            </div>
+            <span class="history-time">1h</span>
+          </div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--done"></div>
+            <div class="history-body">
+              <div class="history-title">Payment gateway integration</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--done">done</span>
+                <span class="history-tag history-tag--items">5 items</span>
+              </div>
+            </div>
+            <span class="history-time">3h</span>
+          </div>
+
+          <div class="history-divider"></div>
+          <div class="history-section-label">Yesterday</div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--done"></div>
+            <div class="history-body">
+              <div class="history-title">Dashboard analytics widgets</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--done">done</span>
+                <span class="history-tag history-tag--items">4 items</span>
+              </div>
+            </div>
+            <span class="history-time">1d</span>
+          </div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--done"></div>
+            <div class="history-body">
+              <div class="history-title">File upload & attachment system</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--done">done</span>
+                <span class="history-tag history-tag--items">7 items</span>
+              </div>
+            </div>
+            <span class="history-time">1d</span>
+          </div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--failed"></div>
+            <div class="history-body">
+              <div class="history-title">Email template engine</div>
+              <div class="history-meta">
+                <span style="font-size:9px; font-weight:600; padding:1px 6px; border-radius:100px; background:var(--tint-red); color:var(--red);">failed</span>
+              </div>
+            </div>
+            <span class="history-time">1d</span>
+          </div>
+
+          <div class="history-divider"></div>
+          <div class="history-section-label">Mar 21</div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--done"></div>
+            <div class="history-body">
+              <div class="history-title">Search indexing pipeline</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--done">done</span>
+                <span class="history-tag history-tag--items">6 items</span>
+              </div>
+            </div>
+            <span class="history-time">2d</span>
+          </div>
+
+          <div class="history-item">
+            <div class="history-dot history-dot--done"></div>
+            <div class="history-body">
+              <div class="history-title">RBAC permission model</div>
+              <div class="history-meta">
+                <span class="history-tag history-tag--done">done</span>
+                <span class="history-tag history-tag--items">9 items</span>
+              </div>
+            </div>
+            <span class="history-time">2d</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================
+         RIGHT: Expansion Result
+         ======================================================== -->
+    <div class="split-right">
+
+      <!-- Result Header -->
+      <div class="result-header">
+        <div class="result-header-body">
+          <div class="result-title">Real-time Notification System</div>
+          <div class="result-summary">
+            Full-stack notification system with WebSocket transport, per-user preference management,
+            read/unread state tracking, and a notification center UI with badge counts and grouping.
+          </div>
+          <div class="result-tags">
+            <span class="result-tag result-tag--items">6 items</span>
+            <span class="result-tag result-tag--deps">3 dependency chains</span>
+            <span class="result-tag result-tag--effort">~2 sprints</span>
+            <span class="result-tag result-tag--status">reviewing</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dependency Graph -->
+      <div class="dep-graph">
+        <div class="dep-graph-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98"/><path d="M15.41 6.51l-6.82 3.98"/></svg>
+          Dependency Flow
+        </div>
+        <div class="dep-graph-viz">
+          <span class="dep-node dep-node--1">1. WS Server</span>
+          <span class="dep-arrow">&rarr;</span>
+          <span class="dep-node dep-node--2">2. Data Model</span>
+          <span class="dep-arrow">&rarr;</span>
+          <span class="dep-node dep-node--3">3. Preferences</span>
+          <span class="dep-arrow">&rarr;</span>
+          <span class="dep-node dep-node--3">4. Read/Unread</span>
+          <span class="dep-arrow">&rarr;</span>
+          <span class="dep-node dep-node--4">5. UI Component</span>
+          <span class="dep-arrow">&rarr;</span>
+          <span class="dep-node dep-node--4">6. Tests</span>
+        </div>
+      </div>
+
+      <!-- Checklist Table -->
+      <div class="result-body">
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th style="width:28px">#</th>
+              <th>Item</th>
+              <th style="width:68px">Type</th>
+              <th style="width:88px">Priority</th>
+              <th style="width:52px">Effort</th>
+              <th style="width:76px">Deps</th>
+              <th style="width:56px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-num">1</td>
+              <td>
+                <div class="td-title">WebSocket server infrastructure</div>
+                <div class="td-desc">Connection management, heartbeat, reconnection, auth handshake</div>
+              </td>
+              <td><span class="tag tag--feature">feature</span></td>
+              <td>
+                <div class="priority-bar">
+                  <div class="priority-dot priority-dot--high"></div>
+                  <span class="priority-label">High</span>
+                </div>
+              </td>
+              <td><span class="effort-badge">L</span></td>
+              <td><span class="dep-none">&mdash;</span></td>
+              <td>
+                <div class="td-actions">
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="td-num">2</td>
+              <td>
+                <div class="td-title">Notification data model & storage</div>
+                <div class="td-desc">Schema with type, payload, recipient, read status. Migration + repository layer.</div>
+              </td>
+              <td><span class="tag tag--task">task</span></td>
+              <td>
+                <div class="priority-bar">
+                  <div class="priority-dot priority-dot--high"></div>
+                  <span class="priority-label">High</span>
+                </div>
+              </td>
+              <td><span class="effort-badge">M</span></td>
+              <td>
+                <div class="dep-links"><span class="dep-link">#1</span></div>
+              </td>
+              <td>
+                <div class="td-actions">
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="td-num">3</td>
+              <td>
+                <div class="td-title">User notification preferences API</div>
+                <div class="td-desc">CRUD for per-user preferences: channels, frequency, quiet hours</div>
+              </td>
+              <td><span class="tag tag--feature">feature</span></td>
+              <td>
+                <div class="priority-bar">
+                  <div class="priority-dot priority-dot--medium"></div>
+                  <span class="priority-label">Medium</span>
+                </div>
+              </td>
+              <td><span class="effort-badge">M</span></td>
+              <td>
+                <div class="dep-links"><span class="dep-link">#2</span></div>
+              </td>
+              <td>
+                <div class="td-actions">
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="td-num">4</td>
+              <td>
+                <div class="td-title">Read/unread state tracking</div>
+                <div class="td-desc">Mark-as-read, mark-all-read APIs. Unread count with caching. Batch updates.</div>
+              </td>
+              <td><span class="tag tag--task">task</span></td>
+              <td>
+                <div class="priority-bar">
+                  <div class="priority-dot priority-dot--medium"></div>
+                  <span class="priority-label">Medium</span>
+                </div>
+              </td>
+              <td><span class="effort-badge">S</span></td>
+              <td>
+                <div class="dep-links"><span class="dep-link">#2</span></div>
+              </td>
+              <td>
+                <div class="td-actions">
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="td-num">5</td>
+              <td>
+                <div class="td-title">Notification Center UI component</div>
+                <div class="td-desc">Bell icon + badge, dropdown panel, grouped notification list, empty state</div>
+              </td>
+              <td><span class="tag tag--feature">feature</span></td>
+              <td>
+                <div class="priority-bar">
+                  <div class="priority-dot priority-dot--high"></div>
+                  <span class="priority-label">High</span>
+                </div>
+              </td>
+              <td><span class="effort-badge">L</span></td>
+              <td>
+                <div class="dep-links">
+                  <span class="dep-link">#3</span>
+                  <span class="dep-link">#4</span>
+                </div>
+              </td>
+              <td>
+                <div class="td-actions">
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td class="td-num">6</td>
+              <td>
+                <div class="td-title">Integration tests & E2E scenarios</div>
+                <div class="td-desc">WebSocket connection, delivery pipeline, preference filtering tests</div>
+              </td>
+              <td><span class="tag tag--improvement">improve</span></td>
+              <td>
+                <div class="priority-bar">
+                  <div class="priority-dot priority-dot--low"></div>
+                  <span class="priority-label">Low</span>
+                </div>
+              </td>
+              <td><span class="effort-badge">M</span></td>
+              <td>
+                <div class="dep-links"><span class="dep-link">#5</span></div>
+              </td>
+              <td>
+                <div class="td-actions">
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Refine Bar -->
+      <div class="refine-bar">
+        <textarea class="refine-input" placeholder="Provide feedback to refine this expansion..." rows="1"></textarea>
+        <button class="btn btn-secondary" style="flex-shrink:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Refine
+        </button>
+      </div>
+
+      <!-- Result Footer -->
+      <div class="result-footer">
+        <button class="btn btn-accent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          Commit as Issues
+        </button>
+        <button class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Coordinate
+        </button>
+        <div class="footer-spacer"></div>
+        <span class="footer-info">6 items &middot; ~2 sprints &middot; 3 dep chains</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>
