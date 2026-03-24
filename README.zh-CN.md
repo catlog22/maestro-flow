@@ -314,6 +314,10 @@ Maestro-Flow 站在两个项目的肩膀上：
 
 **[@catlog22](https://github.com/catlog22)** — 创建者 & 维护者
 
+## 友情链接
+
+- [Linux DO：学AI，上L站！](https://linux.do/)
+
 ## 许可证
 
 MIT
