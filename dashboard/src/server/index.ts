@@ -86,16 +86,19 @@ async function main(): Promise<void> {
   const { join } = await import('node:path');
   const jsonlPath = join(workflowRoot, 'issues', 'issues.jsonl');
   const journal = new ExecutionJournal(workflowRoot);
+
+  // Create SelfLearningService before ExecutionScheduler so it can be injected
+  const promptRegistry = PromptRegistry.createDefault();
+  const learningService = new SelfLearningService(eventBus, journal, workflowRoot);
+
   const executionScheduler = new ExecutionScheduler(
     agentManager, eventBus, jsonlPath,
-    undefined, undefined, journal,
+    undefined, undefined, journal, learningService,
   );
 
   // ---------------------------------------------------------------------------
-  // Supervisor Services — self-learning, task scheduling, extension management
+  // Supervisor Services — task scheduling, extension management
   // ---------------------------------------------------------------------------
-  const promptRegistry = PromptRegistry.createDefault();
-  const learningService = new SelfLearningService(eventBus, journal, workflowRoot);
   const taskSchedulerService = new TaskSchedulerService(
     eventBus, workflowRoot, executionScheduler, learningService,
   );

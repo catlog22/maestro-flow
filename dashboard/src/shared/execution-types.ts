@@ -116,6 +116,7 @@ export interface SchedulerStatus {
   queued: string[];
   retrying: { issueId: string; retryAt: string }[];
   lastTickAt: string | null;
+  isCommanderActive: boolean;
   stats: {
     totalDispatched: number;
     totalCompleted: number;

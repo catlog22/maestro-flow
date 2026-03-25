@@ -35,6 +35,9 @@ export interface ExecutionStore {
   openCliPanel: (issueId: string) => void;
   closeCliPanel: () => void;
 
+  // Supervisor control
+  toggleSupervisor: (enabled: boolean) => Promise<void>;
+
   // Derived helpers
   getSlotForIssue: (issueId: string) => ExecutionSlot | undefined;
   isIssueRunning: (issueId: string) => boolean;
@@ -81,6 +84,24 @@ export const useExecutionStore = create<ExecutionStore>((set, get) => ({
       if (res.ok) {
         const config = await res.json();
         set({ commanderConfig: config });
+      }
+    } catch {
+      // ignore fetch errors
+    }
+  },
+
+  toggleSupervisor: async (enabled) => {
+    try {
+      const res = await fetch('/api/execution/supervisor', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status) {
+          set({ supervisorStatus: data.status });
+        }
       }
     } catch {
       // ignore fetch errors

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useExecutionStore } from '@/client/store/execution-store.js';
 import { useSupervisorStore } from '@/client/store/supervisor-store.js';
 import { useI18n } from '@/client/i18n/index.js';
@@ -38,6 +39,8 @@ export function MonitorTab() {
   const slots = useExecutionStore((s) => s.slots);
   const queue = useExecutionStore((s) => s.queue);
   const status = useExecutionStore((s) => s.supervisorStatus);
+  const toggleSupervisor = useExecutionStore((s) => s.toggleSupervisor);
+  const [toggling, setToggling] = useState(false);
   const learningStats = useSupervisorStore((s) => s.learningStats);
   const learningPatterns = useSupervisorStore((s) => s.learningPatterns);
   const scheduledTasks = useSupervisorStore((s) => s.scheduledTasks);
@@ -51,8 +54,41 @@ export function MonitorTab() {
   return (
     <div className="flex flex-col overflow-y-auto h-full" style={{ padding: 24, gap: 20 }}>
       {/* Title */}
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-        {t('supervisor.overview.title')}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
+          {t('supervisor.overview.title')}
+        </div>
+        <button
+          type="button"
+          disabled={toggling}
+          onClick={async () => {
+            const next = !(status?.enabled ?? false);
+            setToggling(true);
+            await toggleSupervisor(next);
+            setToggling(false);
+          }}
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            padding: '5px 14px',
+            borderRadius: 8,
+            border: '1px solid',
+            borderColor: (status?.enabled ?? false)
+              ? 'var(--color-accent-green)'
+              : 'var(--color-border)',
+            background: (status?.enabled ?? false)
+              ? 'rgba(90,158,120,0.12)'
+              : 'none',
+            color: (status?.enabled ?? false)
+              ? 'var(--color-accent-green)'
+              : 'var(--color-text-secondary)',
+            cursor: toggling ? 'wait' : 'pointer',
+            opacity: toggling ? 0.6 : 1,
+            transition: 'opacity 120ms',
+          }}
+        >
+          {toggling ? '...' : (status?.enabled ?? false) ? 'Disable' : 'Enable'}
+        </button>
       </div>
 
       {/* Stat boxes row */}

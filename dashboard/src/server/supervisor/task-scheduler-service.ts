@@ -19,7 +19,7 @@ import type { ScheduledTask, ScheduledTaskType, TaskRunHistory } from '../../sha
 interface MinimalExecutionScheduler {
   enableAutoDispatch(): void;
   disableAutoDispatch(): void;
-  getStatus(): { enabled: boolean };
+  getStatus(): { enabled: boolean; isCommanderActive: boolean };
 }
 
 /** Minimal interface for SelfLearningService dependency */
@@ -285,6 +285,9 @@ export class TaskSchedulerService {
     }
 
     const status = this.executionScheduler.getStatus();
+    if (status.isCommanderActive) {
+      return 'Skipped: Commander is managing dispatch';
+    }
     if (!status.enabled) {
       this.executionScheduler.enableAutoDispatch();
       return 'Auto-dispatch enabled';

@@ -4,6 +4,7 @@
 
 import type { Issue } from '../../shared/issue-types.js';
 import type { ExecutionSlot, SchedulerConfig } from '../../shared/execution-types.js';
+import type { LearningSuggestion } from '../../shared/learning-types.js';
 
 // ---------------------------------------------------------------------------
 // Context provided to strategies each tick
@@ -20,6 +21,8 @@ export interface DispatchContext {
   config: SchedulerConfig;
   /** Available capacity (maxConcurrent - running) */
   availableSlots: number;
+  /** Optional: learning suggestions from SelfLearningService */
+  learningSuggestions?: LearningSuggestion[];
 }
 
 // ---------------------------------------------------------------------------

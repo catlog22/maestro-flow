@@ -122,6 +122,10 @@ export class CommanderAgent {
     this.executionScheduler.registerStrategy(commanderStrategy);
     this.executionScheduler.setStrategy('commander');
 
+    // Signal that Commander manages dispatch, disable tick-based auto-dispatch
+    this.executionScheduler.isCommanderActive = true;
+    this.executionScheduler.disableAutoDispatch();
+
     // Hourly tick counter reset
     this.hourResetTimer = setInterval(() => {
       this.ticksThisHour = 0;
@@ -150,6 +154,9 @@ export class CommanderAgent {
       }
       this.previousStrategyName = null;
     }
+
+    // Release commander dispatch control
+    this.executionScheduler.isCommanderActive = false;
 
     if (this.hourResetTimer) {
       clearInterval(this.hourResetTimer);

@@ -55,6 +55,7 @@ describe('useExecutionStore', () => {
         queued: ['ISS-1', 'ISS-2'],
         retrying: [],
         lastTickAt: null,
+        isCommanderActive: false,
         stats: { totalDispatched: 0, totalCompleted: 0, totalFailed: 0 },
       } as SupervisorStatus;
       useExecutionStore.getState().setSupervisorStatus(status);

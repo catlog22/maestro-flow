@@ -20,6 +20,7 @@ import { WorkspaceManager, type WorkspaceConfig } from './workspace-manager.js';
 import { PromptRegistry } from '../prompt/prompt-registry.js';
 import type { ExecutionJournal } from './execution-journal.js';
 import type { DispatchStrategy, DispatchContext, DispatchDecision } from './dispatch-strategy.js';
+import type { SelfLearningService } from '../supervisor/self-learning-service.js';
 import { PriorityStrategy } from './strategies/priority-strategy.js';
 import { SmartStrategy } from './strategies/smart-strategy.js';
 
@@ -50,6 +51,9 @@ export class ExecutionScheduler {
   private tokenUsage = { totalInputTokens: 0, totalOutputTokens: 0 };
   private readonly strategies = new Map<string, DispatchStrategy>();
   private activeStrategy: DispatchStrategy;
+  private selfLearningService?: SelfLearningService;
+  private isDispatching = false;
+  public isCommanderActive = false;
 
   constructor(
     private readonly agentManager: AgentManager,
@@ -58,9 +62,11 @@ export class ExecutionScheduler {
     config?: Partial<SchedulerConfig>,
     promptRegistry?: PromptRegistry,
     private readonly journal?: ExecutionJournal,
+    selfLearningService?: SelfLearningService,
   ) {
     this.config = { ...DEFAULT_SCHEDULER_CONFIG, ...config };
     this.promptRegistry = promptRegistry ?? PromptRegistry.createDefault();
+    this.selfLearningService = selfLearningService;
 
     // Initialize workspace manager if enabled
     const ws = this.config.workspace;
@@ -89,6 +95,10 @@ export class ExecutionScheduler {
 
   /** Dispatch a single issue for execution */
   async executeIssue(issueId: string, executor?: AgentType): Promise<void> {
+    if (this.isDispatching) {
+      console.warn(`[Execution] executeIssue(${issueId}) called while tick dispatch in progress, skipping to avoid conflict`);
+      return;
+    }
     if (!this.claim(issueId)) return;
 
     if (executor && !VALID_EXECUTORS.has(executor)) {
@@ -172,6 +182,10 @@ export class ExecutionScheduler {
   /** Start the automatic dispatch tick loop */
   enableAutoDispatch(): void {
     if (this.tickTimer) return;
+    if (this.isCommanderActive) {
+      console.warn('[Execution] enableAutoDispatch skipped: Commander is managing dispatch');
+      return;
+    }
     this.config.enabled = true;
     this.tickTimer = setInterval(() => void this.tick(), this.config.pollIntervalMs);
     this.emitStatus();
@@ -232,6 +246,7 @@ export class ExecutionScheduler {
         retryAt: new Date(r.retryAt).toISOString(),
       })),
       lastTickAt: this.lastTickAt,
+      isCommanderActive: this.isCommanderActive,
       stats: { ...this.stats },
       tokenUsage: { ...this.tokenUsage },
     };
@@ -901,34 +916,41 @@ export class ExecutionScheduler {
 
   /** Delegate issue selection to the active strategy and execute returned decisions. */
   private async dispatchViaStrategy(): Promise<void> {
-    const availableSlots = this.config.maxConcurrentAgents - this.runningSlots.size;
-    if (availableSlots <= 0) return;
+    if (this.isDispatching) return;
+    this.isDispatching = true;
+    try {
+      const availableSlots = this.config.maxConcurrentAgents - this.runningSlots.size;
+      if (availableSlots <= 0) return;
 
-    const issues = await readIssuesJsonl(this.jsonlPath);
-    const context: DispatchContext = {
-      issues,
-      runningSlots: this.runningSlots,
-      claimed: this.claimed,
-      config: this.config,
-      availableSlots,
-    };
+      const issues = await readIssuesJsonl(this.jsonlPath);
+      const context: DispatchContext = {
+        issues,
+        runningSlots: this.runningSlots,
+        claimed: this.claimed,
+        config: this.config,
+        availableSlots,
+        learningSuggestions: this.selfLearningService?.getStats().suggestions ?? [],
+      };
 
-    const decisions = await this.activeStrategy.selectIssues(context);
+      const decisions = await this.activeStrategy.selectIssues(context);
 
-    for (const decision of decisions) {
-      // Re-check capacity (previous dispatches in this batch may have filled slots)
-      if (this.runningSlots.size >= this.config.maxConcurrentAgents) break;
+      for (const decision of decisions) {
+        // Re-check capacity (previous dispatches in this batch may have filled slots)
+        if (this.runningSlots.size >= this.config.maxConcurrentAgents) break;
 
-      if (!this.claim(decision.issueId)) continue;
+        if (!this.claim(decision.issueId)) continue;
 
-      const issue = issues.find((i) => i.id === decision.issueId);
-      if (!issue) {
-        this.claimed.delete(decision.issueId);
-        continue;
+        const issue = issues.find((i) => i.id === decision.issueId);
+        if (!issue) {
+          this.claimed.delete(decision.issueId);
+          continue;
+        }
+
+        const executor = (decision.executor ?? issue.executor ?? this.config.defaultExecutor) as AgentType;
+        await this.dispatch(issue, executor);
       }
-
-      const executor = (decision.executor ?? issue.executor ?? this.config.defaultExecutor) as AgentType;
-      await this.dispatch(issue, executor);
+    } finally {
+      this.isDispatching = false;
     }
   }
 

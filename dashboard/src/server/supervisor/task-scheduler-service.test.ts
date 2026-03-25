@@ -13,9 +13,13 @@ import type { ScheduledTask, ScheduledTaskType } from '../../shared/schedule-typ
 // ---------------------------------------------------------------------------
 class MockExecutionScheduler {
   private _enabled = true;
+  private _commanderActive = false;
   enableAutoDispatch(): void { this._enabled = true; }
   disableAutoDispatch(): void { this._enabled = false; }
-  getStatus(): { enabled: boolean } { return { enabled: this._enabled }; }
+  getStatus(): { enabled: boolean; isCommanderActive: boolean } {
+    return { enabled: this._enabled, isCommanderActive: this._commanderActive };
+  }
+  setCommanderActive(active: boolean): void { this._commanderActive = active; }
 }
 
 class MockLearningService {
@@ -532,6 +536,41 @@ describe('TaskSchedulerService', () => {
 
       const result = await service.runTask(task.id);
       expect(result.result).toContain('disabled');
+    });
+
+    it('auto-dispatch skips when Commander is active', async () => {
+      execScheduler.disableAutoDispatch();
+      execScheduler.setCommanderActive(true);
+      await service.start();
+
+      const task = await service.createTask({
+        name: 'AD Commander Active',
+        cronExpression: '0 * * * *',
+        taskType: 'auto-dispatch',
+        enabled: false,
+        config: {},
+      });
+
+      const result = await service.runTask(task.id);
+      expect(result.result).toContain('Skipped');
+      expect(result.result).toContain('Commander');
+    });
+
+    it('auto-dispatch works normally when Commander is not active', async () => {
+      execScheduler.disableAutoDispatch();
+      execScheduler.setCommanderActive(false);
+      await service.start();
+
+      const task = await service.createTask({
+        name: 'AD Commander Inactive',
+        cronExpression: '0 * * * *',
+        taskType: 'auto-dispatch',
+        enabled: false,
+        config: {},
+      });
+
+      const result = await service.runTask(task.id);
+      expect(result.result).toContain('enabled');
     });
   });
 

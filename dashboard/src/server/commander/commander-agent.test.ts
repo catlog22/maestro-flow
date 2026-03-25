@@ -63,6 +63,11 @@ function createMockExecutionScheduler(): ExecutionScheduler {
       stats: { totalCompleted: 0, totalFailed: 0 },
     }),
     executeIssue: vi.fn().mockResolvedValue(undefined),
+    getActiveStrategyName: vi.fn().mockReturnValue('priority'),
+    registerStrategy: vi.fn(),
+    setStrategy: vi.fn(),
+    disableAutoDispatch: vi.fn(),
+    isCommanderActive: false,
   } as unknown as ExecutionScheduler;
 }
 
@@ -712,6 +717,43 @@ describe('CommanderAgent', () => {
       expect(consoleSpy).toHaveBeenCalledWith('[Commander] Stopped');
 
       consoleSpy.mockRestore();
+    });
+  });
+
+  // --- Concurrency conflict protection ---
+  describe('concurrency conflict protection', () => {
+    it('start() sets isCommanderActive and disables tick auto-dispatch', async () => {
+      const { agent, scheduler } = createAgent();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await agent.start();
+
+      expect(scheduler.isCommanderActive).toBe(true);
+      expect(scheduler.disableAutoDispatch).toHaveBeenCalled();
+
+      agent.stop();
+      consoleSpy.mockRestore();
+    });
+
+    it('stop() resets isCommanderActive to false', async () => {
+      const { agent, scheduler } = createAgent();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+      await agent.start();
+      expect(scheduler.isCommanderActive).toBe(true);
+
+      agent.stop();
+      expect(scheduler.isCommanderActive).toBe(false);
+
+      consoleSpy.mockRestore();
+    });
+
+    it('stop() is safe when never started (isCommanderActive stays false)', () => {
+      const { agent, scheduler } = createAgent();
+
+      agent.stop();
+
+      expect(scheduler.isCommanderActive).toBe(false);
     });
   });
 
