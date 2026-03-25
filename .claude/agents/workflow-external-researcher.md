@@ -26,9 +26,9 @@ You perform targeted external research using Exa search to gather API details, d
 Focus: concrete API details, library versions, integration patterns, configuration options.
 Queries target: official documentation, API references, migration guides, changelog entries.
 
-### Design Research (for brainstorm)
-Focus: design alternatives, architecture patterns, competitive analysis, UX patterns.
-Queries target: design systems, pattern libraries, case studies, comparison articles.
+### Design Research (for brainstorm, ui-design)
+Focus: how other projects solve similar problems, extractable patterns, design alternatives, architecture approaches.
+Queries target: open-source implementations, design systems, case studies, pattern libraries, comparison articles.
 
 ### Detail Verification (for analyze)
 Focus: verify assumptions, check best practices, validate technology choices.
@@ -50,8 +50,20 @@ Return structured markdown (do NOT write files):
   - Integration: {how to integrate}
   - Caveats: {known issues or limitations}
 
+### Reference Projects / Implementations
+- **{Project/Product}**: {what they do}, {how they solve the problem}
+  - Architecture: {brief description}
+  - Key pattern: {extractable pattern}
+  - Source: {link/reference}
+
+### Extractable Patterns
+- **{Pattern name}**: {description}
+  - Used by: {which projects}
+  - Applicability: {when to use / when not}
+  - Adaptation notes: {how to adapt for our context}
+
 ### Recommended Approach
-{Prescriptive recommendation with rationale}
+{Prescriptive recommendation with rationale, referencing patterns above}
 
 ### Alternatives Considered
 | Option | Pros | Cons | Verdict |

@@ -189,12 +189,13 @@ Topic keywords: {extracted_keywords}
 
 <task>
 Search for:
-1. Existing solutions and design patterns for this type of system/feature
-2. Architecture approaches (at least 2-3 alternatives with trade-offs)
-3. UX/UI patterns if applicable (interaction models, layout strategies)
-4. Competitive/similar implementations for inspiration
+1. Reference projects — how 2-3 similar projects/products solve this problem (architecture, key decisions, what worked)
+2. Extractable patterns — reusable design patterns distilled from those projects, with applicability notes
+3. Architecture approaches (at least 2-3 alternatives with trade-offs)
+4. UX/UI patterns if applicable (interaction models, layout strategies)
 5. Common design pitfalls and anti-patterns to avoid
 
+IMPORTANT: Output MUST include "Reference Projects / Implementations" and "Extractable Patterns" sections.
 Focus on design ROUTES — alternative approaches the brainstorm roles can evaluate.
 Be prescriptive where evidence is strong, present alternatives where trade-offs exist.
 Return structured markdown only — do NOT write files.
