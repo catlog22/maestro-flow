@@ -7,12 +7,14 @@ import {
   SettingsSaveBar,
 } from '../SettingsComponents.js';
 import { cn } from '@/client/lib/utils.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // LinearSection — API Key configuration + connection test + team selector
 // ---------------------------------------------------------------------------
 
 export function LinearSection() {
+  const { t } = useI18n();
   const draft = useSettingsStore((s) => s.draft?.linear);
   const saving = useSettingsStore((s) => s.saving);
   const isDirty = useSettingsStore((s) => s.isDirty('linear'));
@@ -61,10 +63,10 @@ export function LinearSection() {
 
   return (
     <div className="flex flex-col gap-[var(--spacing-4)]">
-      <SettingsCard title="Linear Integration" description="Connect to Linear for issue syncing and kanban board integration">
+      <SettingsCard title={t('settings.linear.integration_card')} description={t('settings.linear.integration_desc')}>
         <SettingsField
-          label="API Key"
-          description="Your Linear personal API key. Get one from Linear Settings → API."
+          label={t('settings.linear.api_key_label')}
+          description={t('settings.linear.api_key_desc')}
           htmlFor="settings-linear-api-key"
         >
           <input
@@ -91,7 +93,7 @@ export function LinearSection() {
             }`}
           />
           <span className="text-[length:var(--font-size-sm)] text-text-secondary">
-            {configured === true ? 'Connected' : configured === false ? 'Not configured' : 'Checking...'}
+            {configured === true ? t('settings.linear.connected') : configured === false ? t('settings.linear.not_configured') : t('settings.linear.checking')}
           </span>
         </div>
 
@@ -110,7 +112,7 @@ export function LinearSection() {
               'disabled:opacity-50 disabled:pointer-events-none',
             )}
           >
-            {testing ? 'Testing...' : 'Test Connection'}
+            {testing ? t('settings.linear.testing') : t('settings.linear.test_connection')}
           </button>
           {testResult && (
             <span
@@ -127,7 +129,7 @@ export function LinearSection() {
 
       {/* Team list (shown when connected) */}
       {configured && teams.length > 0 && (
-        <SettingsCard title="Teams" description="Linear teams accessible with this API key">
+        <SettingsCard title={t('settings.linear.teams_card')} description={t('settings.linear.teams_desc')}>
           <div className="flex flex-col gap-[var(--spacing-1)]">
             {teams.map((team) => (
               <div

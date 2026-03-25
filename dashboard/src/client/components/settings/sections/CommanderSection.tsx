@@ -1,3 +1,4 @@
+import { useI18n } from '@/client/i18n/index.js';
 import { useSettingsStore } from '@/client/store/settings-store.js';
 import type { CommanderConfig, CommanderSafetyConfig } from '@/shared/commander-types.js';
 import type { WorkspacePolicy } from '@/shared/execution-types.js';
@@ -12,27 +13,14 @@ import {
 } from '../SettingsComponents.js';
 
 // ---------------------------------------------------------------------------
-// CommanderSection — Commander agent configuration (5 card groups)
+// CommanderSection -- Commander agent configuration (5 card groups)
 // ---------------------------------------------------------------------------
 
-const PROFILE_OPTIONS = [
-  { value: 'development' as const, label: 'Development' },
-  { value: 'staging' as const, label: 'Staging' },
-  { value: 'production' as const, label: 'Production' },
-  { value: 'custom' as const, label: 'Custom' },
-];
+const PROFILE_KEYS = ['development', 'staging', 'production', 'custom'] as const;
 
-const MODEL_OPTIONS = [
-  { value: 'haiku' as const, label: 'Haiku (fast)' },
-  { value: 'sonnet' as const, label: 'Sonnet (balanced)' },
-  { value: 'opus' as const, label: 'Opus (thorough)' },
-];
+const MODEL_KEYS = ['haiku', 'sonnet', 'opus'] as const;
 
-const THRESHOLD_OPTIONS = [
-  { value: 'low' as const, label: 'Low (manual)' },
-  { value: 'medium' as const, label: 'Medium' },
-  { value: 'high' as const, label: 'High (fully auto)' },
-];
+const THRESHOLD_KEYS = ['low', 'medium', 'high'] as const;
 
 const EXECUTOR_OPTIONS: { value: AgentType; label: string }[] = [
   { value: 'claude-code', label: 'Claude Code' },
@@ -75,12 +63,28 @@ function NumberField({
 }
 
 export function CommanderSection() {
+  const { t } = useI18n();
   const draft = useSettingsStore((s) => s.draft?.commander);
   const saving = useSettingsStore((s) => s.saving);
   const isDirty = useSettingsStore((s) => s.isDirty('commander'));
   const updateDraft = useSettingsStore((s) => s.updateDraft);
   const saveConfig = useSettingsStore((s) => s.saveConfig);
   const discardDraft = useSettingsStore((s) => s.discardDraft);
+
+  const profileOptions = PROFILE_KEYS.map((key) => ({
+    value: key,
+    label: t(`settings.commander.profile_${key}`),
+  }));
+
+  const modelOptions = MODEL_KEYS.map((key) => ({
+    value: key,
+    label: t(`settings.commander.model_${key}`),
+  }));
+
+  const thresholdOptions = THRESHOLD_KEYS.map((key) => ({
+    value: key,
+    label: t(`settings.commander.threshold_${key}`),
+  }));
 
   if (!draft) return null;
 
@@ -100,60 +104,60 @@ export function CommanderSection() {
     <div className="flex flex-col gap-[var(--spacing-4)]">
       {/* Profile */}
       <SettingsCard
-        title="Profile"
-        description="Environment profile that presets key parameters for different deployment stages"
+        title={t('settings.commander.profile_card')}
+        description={t('settings.commander.profile_desc')}
       >
         <SettingsField
-          label="Environment"
-          description="Select a profile preset (switch to Custom to override individual fields)"
+          label={t('settings.commander.environment_label')}
+          description={t('settings.commander.environment_desc')}
           htmlFor="cmd-profile"
         >
           <SettingsSelect
             id="cmd-profile"
             value={draft.profile}
             onChange={(v) => update({ profile: v })}
-            options={PROFILE_OPTIONS}
+            options={profileOptions}
           />
         </SettingsField>
       </SettingsCard>
 
       {/* Core Loop */}
       <SettingsCard
-        title="Core Loop"
-        description="Tick-based orchestration parameters controlling polling, concurrency, and retries"
+        title={t('settings.commander.core_card')}
+        description={t('settings.commander.core_desc')}
       >
         <NumberField
           id="cmd-poll-interval"
-          label="Poll Interval (ms)"
-          description="Time between decision loop ticks"
+          label={t('settings.commander.poll_interval_label')}
+          description={t('settings.commander.poll_interval_desc')}
           value={draft.pollIntervalMs}
           onChange={(v) => update({ pollIntervalMs: v })}
         />
         <NumberField
           id="cmd-max-workers"
-          label="Max Concurrent Workers"
-          description="Maximum parallel agent executions"
+          label={t('settings.commander.max_workers_label')}
+          description={t('settings.commander.max_workers_desc')}
           value={draft.maxConcurrentWorkers}
           onChange={(v) => update({ maxConcurrentWorkers: v })}
         />
         <NumberField
           id="cmd-stall-timeout"
-          label="Stall Timeout (ms)"
-          description="Marks a worker as stalled after this duration"
+          label={t('settings.commander.stall_timeout_label')}
+          description={t('settings.commander.stall_timeout_desc')}
           value={draft.stallTimeoutMs}
           onChange={(v) => update({ stallTimeoutMs: v })}
         />
         <NumberField
           id="cmd-max-retries"
-          label="Max Retries"
-          description="Maximum retries per issue on failure"
+          label={t('settings.commander.max_retries_label')}
+          description={t('settings.commander.max_retries_desc')}
           value={draft.maxRetries}
           onChange={(v) => update({ maxRetries: v })}
         />
         <NumberField
           id="cmd-retry-backoff"
-          label="Retry Backoff (ms)"
-          description="Delay between retry attempts"
+          label={t('settings.commander.retry_backoff_label')}
+          description={t('settings.commander.retry_backoff_desc')}
           value={draft.retryBackoffMs}
           onChange={(v) => update({ retryBackoffMs: v })}
         />
@@ -161,43 +165,43 @@ export function CommanderSection() {
 
       {/* Decision */}
       <SettingsCard
-        title="Decision"
-        description="Assessment and auto-approval settings controlling how Commander evaluates issues"
+        title={t('settings.commander.decision_card')}
+        description={t('settings.commander.decision_desc')}
       >
         <SettingsField
-          label="Decision Model"
-          description="Model used for assessment queries"
+          label={t('settings.commander.decision_model_label')}
+          description={t('settings.commander.decision_model_desc')}
           htmlFor="cmd-decision-model"
         >
           <SettingsSelect
             id="cmd-decision-model"
             value={draft.decisionModel}
             onChange={(v) => update({ decisionModel: v })}
-            options={MODEL_OPTIONS}
+            options={modelOptions}
           />
         </SettingsField>
         <NumberField
           id="cmd-assess-turns"
-          label="Assess Max Turns"
-          description="Max exploration turns for assessment"
+          label={t('settings.commander.assess_turns_label')}
+          description={t('settings.commander.assess_turns_desc')}
           value={draft.assessMaxTurns}
           onChange={(v) => update({ assessMaxTurns: v })}
         />
         <SettingsField
-          label="Auto-Approve Threshold"
-          description="Risk level below which actions are auto-approved"
+          label={t('settings.commander.threshold_label')}
+          description={t('settings.commander.threshold_desc')}
           htmlFor="cmd-approve-threshold"
         >
           <SettingsSelect
             id="cmd-approve-threshold"
             value={draft.autoApproveThreshold}
             onChange={(v) => update({ autoApproveThreshold: v })}
-            options={THRESHOLD_OPTIONS}
+            options={thresholdOptions}
           />
         </SettingsField>
         <SettingsField
-          label="Default Executor"
-          description="Agent type used for dispatched issues"
+          label={t('settings.commander.executor_label')}
+          description={t('settings.commander.executor_desc')}
           htmlFor="cmd-executor"
         >
           <SettingsSelect
@@ -211,40 +215,40 @@ export function CommanderSection() {
 
       {/* Safety */}
       <SettingsCard
-        title="Safety"
-        description="Protective constraints to prevent runaway loops and protect sensitive files"
+        title={t('settings.commander.safety_card')}
+        description={t('settings.commander.safety_desc')}
       >
         <NumberField
           id="cmd-debounce"
-          label="Event Debounce (ms)"
-          description="Minimum interval between processing events"
+          label={t('settings.commander.debounce_label')}
+          description={t('settings.commander.debounce_desc')}
           value={draft.safety.eventDebounceMs}
           onChange={(v) => updateSafety({ eventDebounceMs: v })}
         />
         <NumberField
           id="cmd-circuit-breaker"
-          label="Circuit Breaker Threshold"
-          description="Auto-pause after N consecutive failures"
+          label={t('settings.commander.circuit_breaker_label')}
+          description={t('settings.commander.circuit_breaker_desc')}
           value={draft.safety.circuitBreakerThreshold}
           onChange={(v) => updateSafety({ circuitBreakerThreshold: v })}
         />
         <NumberField
           id="cmd-max-ticks"
-          label="Max Ticks per Hour"
-          description="Prevent runaway decision loops"
+          label={t('settings.commander.max_ticks_label')}
+          description={t('settings.commander.max_ticks_desc')}
           value={draft.safety.maxTicksPerHour}
           onChange={(v) => updateSafety({ maxTicksPerHour: v })}
         />
         <NumberField
           id="cmd-max-tokens"
-          label="Max Tokens per Hour"
-          description="Token budget limit per hour"
+          label={t('settings.commander.max_tokens_label')}
+          description={t('settings.commander.max_tokens_desc')}
           value={draft.safety.maxTokensPerHour}
           onChange={(v) => updateSafety({ maxTokensPerHour: v })}
         />
         <SettingsField
-          label="Protected Paths"
-          description="File globs Commander must not operate on (comma-separated)"
+          label={t('settings.commander.protected_paths_label')}
+          description={t('settings.commander.protected_paths_desc')}
           htmlFor="cmd-protected-paths"
         >
           <SettingsInput
@@ -266,12 +270,12 @@ export function CommanderSection() {
 
       {/* Workspace */}
       <SettingsCard
-        title="Workspace"
-        description="Per-issue workspace isolation settings"
+        title={t('settings.commander.workspace_card')}
+        description={t('settings.commander.workspace_desc')}
       >
         <SettingsField
-          label="Enabled"
-          description="Enable per-issue workspace isolation"
+          label={t('settings.commander.workspace_enabled_label')}
+          description={t('settings.commander.workspace_enabled_desc')}
         >
           <SettingsToggle
             enabled={draft.workspace.enabled}
@@ -279,8 +283,8 @@ export function CommanderSection() {
           />
         </SettingsField>
         <SettingsField
-          label="Use Worktree"
-          description="Use git worktree for isolation (vs plain directory)"
+          label={t('settings.commander.workspace_worktree_label')}
+          description={t('settings.commander.workspace_worktree_desc')}
         >
           <SettingsToggle
             enabled={draft.workspace.useWorktree}
@@ -288,8 +292,8 @@ export function CommanderSection() {
           />
         </SettingsField>
         <SettingsField
-          label="Auto Cleanup"
-          description="Automatically remove workspaces after completion"
+          label={t('settings.commander.workspace_autocleanup_label')}
+          description={t('settings.commander.workspace_autocleanup_desc')}
         >
           <SettingsToggle
             enabled={draft.workspace.autoCleanup}
@@ -297,8 +301,8 @@ export function CommanderSection() {
           />
         </SettingsField>
         <SettingsField
-          label="Strict"
-          description="Enforce strict workspace boundaries"
+          label={t('settings.commander.workspace_strict_label')}
+          description={t('settings.commander.workspace_strict_desc')}
         >
           <SettingsToggle
             enabled={draft.workspace.strict}

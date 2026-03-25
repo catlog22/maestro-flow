@@ -4,6 +4,7 @@ import { useSettingsStore } from '@/client/store/settings-store.js';
 import type { SettingsSectionType } from '@/client/store/settings-store.js';
 import { SettingsSection } from './SettingsSection.js';
 import { cn } from '@/client/lib/utils.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // SettingsDialog — modal with 2-pane layout (sidebar nav + content area)
@@ -15,15 +16,11 @@ interface SectionNavItem {
   icon: string;
 }
 
-const SECTIONS: SectionNavItem[] = [
-  { id: 'general', label: 'General', icon: 'cog' },
-  { id: 'agents', label: 'Agents', icon: 'bot' },
-  { id: 'commander', label: 'Commander', icon: 'commander' },
-  { id: 'cli-tools', label: 'CLI Tools', icon: 'terminal' },
-  { id: 'specs', label: 'Specs', icon: 'file-text' },
-  { id: 'linear', label: 'Linear', icon: 'linear' },
-  { id: 'kanban', label: 'Kanban', icon: 'kanban' },
-];
+const SECTION_IDS: SettingsSectionType[] = ['general', 'agents', 'commander', 'cli-tools', 'specs', 'linear', 'kanban'];
+const SECTION_ICONS: Record<string, string> = {
+  general: 'cog', agents: 'bot', commander: 'commander',
+  'cli-tools': 'terminal', specs: 'file-text', linear: 'linear', kanban: 'kanban',
+};
 
 /** Simple SVG icons to avoid heavy lucide imports for just 4 icons */
 function SectionIcon({ icon }: { icon: string }) {
@@ -97,6 +94,7 @@ function SectionIcon({ icon }: { icon: string }) {
 }
 
 export function SettingsDialog() {
+  const { t } = useI18n();
   const open = useSettingsStore((s) => s.open);
   const setOpen = useSettingsStore((s) => s.setOpen);
   const activeSection = useSettingsStore((s) => s.activeSection);
@@ -123,7 +121,7 @@ export function SettingsDialog() {
     (nextOpen: boolean) => {
       if (!nextOpen && anyDirty) {
         const confirmed = window.confirm(
-          'You have unsaved changes. Are you sure you want to close?',
+          t('settings.unsaved_confirm'),
         );
         if (!confirmed) return;
       }
@@ -163,7 +161,7 @@ export function SettingsDialog() {
           {/* Header */}
           <div className="flex items-center justify-between px-[var(--spacing-6)] py-[var(--spacing-4)] border-b border-border shrink-0">
             <Dialog.Title className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-primary">
-              Settings
+              {t('settings.title')}
             </Dialog.Title>
             <Dialog.Close
               className={cn(
@@ -189,23 +187,23 @@ export function SettingsDialog() {
               aria-label="Settings sections"
             >
               <div className="flex flex-col gap-[var(--spacing-0-5)]">
-                {SECTIONS.map((item) => (
+                {SECTION_IDS.map((id) => (
                   <button
-                    key={item.id}
+                    key={id}
                     type="button"
-                    onClick={() => setActiveSection(item.id)}
+                    onClick={() => setActiveSection(id)}
                     className={cn(
                       'flex items-center gap-[var(--spacing-2)] px-[var(--spacing-2)] py-[var(--spacing-1-5)] rounded-[var(--radius-default)] text-left text-[length:var(--font-size-sm)] font-[var(--font-weight-medium)] w-full',
                       'transition-all duration-[var(--duration-fast)] ease-[var(--ease-notion)]',
                       'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)]',
-                      activeSection === item.id
+                      activeSection === id
                         ? 'bg-bg-active text-text-primary'
                         : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
                     )}
-                    aria-current={activeSection === item.id ? 'page' : undefined}
+                    aria-current={activeSection === id ? 'page' : undefined}
                   >
-                    <SectionIcon icon={item.icon} />
-                    <span className="truncate">{item.label}</span>
+                    <SectionIcon icon={SECTION_ICONS[id]} />
+                    <span className="truncate">{t(`settings.nav.${id === 'cli-tools' ? 'cli_tools' : id}`)}</span>
                   </button>
                 ))}
               </div>
@@ -216,7 +214,7 @@ export function SettingsDialog() {
               {loading && !config ? (
                 <div className="flex items-center justify-center h-full">
                   <span className="text-[length:var(--font-size-sm)] text-text-secondary">
-                    Loading settings...
+                    {t('settings.loading')}
                   </span>
                 </div>
               ) : draft ? (
@@ -224,7 +222,7 @@ export function SettingsDialog() {
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <span className="text-[length:var(--font-size-sm)] text-text-secondary">
-                    Failed to load settings
+                    {t('settings.failed')}
                   </span>
                 </div>
               )}

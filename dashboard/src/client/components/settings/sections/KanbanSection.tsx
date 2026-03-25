@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useUIPrefsStore } from '@/client/store/ui-prefs-store.js';
 import type { CreateModalStyle, DetailModalStyle } from '@/client/store/ui-prefs-store.js';
 import { SettingsCard } from '../SettingsComponents.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // KanbanSection — issue create/detail modal style preference with live preview
@@ -489,17 +490,20 @@ function LivePreviewZone({
   createStyle,
   detailStyle,
   animKey,
+  labels,
+  captions,
+  createBtnLabel,
+  detailBtnLabel,
 }: {
   target: PreviewTarget;
   createStyle: CreateModalStyle;
   detailStyle: DetailModalStyle;
   animKey: string;
+  labels: Record<PreviewTarget, Record<number, string>>;
+  captions: Record<PreviewTarget, Record<number, string>>;
+  createBtnLabel: string;
+  detailBtnLabel: string;
 }) {
-  const labels: Record<PreviewTarget, Record<number, string>> = {
-    create: { 1: 'Command Palette', 2: 'Form Dialog', 3: 'Focus Mode' },
-    detail: { 1: 'Slide Panel', 2: 'Modal Overlay', 3: 'Full Page' },
-  };
-
   const style = target === 'create' ? createStyle : detailStyle;
   const accentColor = target === 'create' ? 'var(--color-accent-orange)' : 'var(--color-accent-blue)';
 
@@ -534,10 +538,7 @@ function LivePreviewZone({
 
       {/* Caption */}
       <p className="mt-2 text-[10px] text-center" style={{ color: 'var(--color-text-tertiary)' }}>
-        {target === 'create'
-          ? ['Triggered by the "+" button or pressing C', 'Traditional form with all fields visible', 'Distraction-free writing experience'][style - 1]
-          : ['Slides in from the right, board stays visible', 'Centered overlay with two-column layout', 'Full-screen takeover with breadcrumb navigation'][style - 1]
-        }
+        {captions[target][style]}
       </p>
     </div>
   );
@@ -546,6 +547,7 @@ function LivePreviewZone({
 // ── Main KanbanSection ─────────────────────────────────────────────────────
 
 export function KanbanSection() {
+  const { t } = useI18n();
   const createStyle = useUIPrefsStore((s) => s.createModalStyle);
   const detailStyle = useUIPrefsStore((s) => s.detailModalStyle);
   const setCreateStyle = useUIPrefsStore((s) => s.setCreateModalStyle);
@@ -572,9 +574,9 @@ export function KanbanSection() {
     description: string;
     thumb: React.ReactNode;
   }[] = [
-    { value: 1, label: 'Command', description: 'Dark command palette, keyboard-first', thumb: <CreateThumb1 /> },
-    { value: 2, label: 'Form', description: 'Structured dialog with all fields', thumb: <CreateThumb2 /> },
-    { value: 3, label: 'Focus', description: 'Writing-first, distraction-free', thumb: <CreateThumb3 /> },
+    { value: 1, label: t('settings.kanban.create_command'), description: t('settings.kanban.create_command_desc'), thumb: <CreateThumb1 /> },
+    { value: 2, label: t('settings.kanban.create_form'), description: t('settings.kanban.create_form_desc'), thumb: <CreateThumb2 /> },
+    { value: 3, label: t('settings.kanban.create_focus'), description: t('settings.kanban.create_focus_desc'), thumb: <CreateThumb3 /> },
   ];
 
   const DETAIL_STYLES: {
@@ -583,9 +585,9 @@ export function KanbanSection() {
     description: string;
     thumb: React.ReactNode;
   }[] = [
-    { value: 1, label: 'Panel', description: 'Slides in from the right side', thumb: <DetailThumb1 /> },
-    { value: 2, label: 'Overlay', description: 'Two-column centered modal', thumb: <DetailThumb2 /> },
-    { value: 3, label: 'Page', description: 'Full-screen with breadcrumb nav', thumb: <DetailThumb3 /> },
+    { value: 1, label: t('settings.kanban.detail_panel'), description: t('settings.kanban.detail_panel_desc'), thumb: <DetailThumb1 /> },
+    { value: 2, label: t('settings.kanban.detail_overlay'), description: t('settings.kanban.detail_overlay_desc'), thumb: <DetailThumb2 /> },
+    { value: 3, label: t('settings.kanban.detail_page'), description: t('settings.kanban.detail_page_desc'), thumb: <DetailThumb3 /> },
   ];
 
   return (
@@ -593,8 +595,8 @@ export function KanbanSection() {
 
       {/* Create modal style */}
       <SettingsCard
-        title="Issue Create Modal"
-        description="Choose how the new issue form appears when you click + or press C"
+        title={t('settings.kanban.create_card')}
+        description={t('settings.kanban.create_desc')}
       >
         <div className="flex gap-3 mt-1">
           {CREATE_STYLES.map((s) => (
@@ -615,8 +617,8 @@ export function KanbanSection() {
 
       {/* Detail view style */}
       <SettingsCard
-        title="Issue Detail View"
-        description="Choose how issue details appear when you click on a card"
+        title={t('settings.kanban.detail_card')}
+        description={t('settings.kanban.detail_desc')}
       >
         <div className="flex gap-3 mt-1">
           {DETAIL_STYLES.map((s) => (
@@ -636,21 +638,21 @@ export function KanbanSection() {
       </SettingsCard>
 
       {/* Live preview */}
-      <SettingsCard title="Interaction Preview" description="Click any style above to see an animated preview">
+      <SettingsCard title={t('settings.kanban.preview_card')} description={t('settings.kanban.preview_desc')}>
         {/* Target toggle */}
         <div className="flex gap-1 mb-4">
-          {(['create', 'detail'] as PreviewTarget[]).map((t) => (
+          {(['create', 'detail'] as PreviewTarget[]).map((target) => (
             <button
-              key={t}
+              key={target}
               type="button"
-              onClick={() => { setPreviewTarget(t); setAnimKey(`${t}-${createStyle}-${detailStyle}-${Date.now()}`); }}
+              onClick={() => { setPreviewTarget(target); setAnimKey(`${target}-${createStyle}-${detailStyle}-${Date.now()}`); }}
               className="px-3 py-1 rounded-[var(--radius-sm)] text-[11px] font-medium transition-all"
               style={{
-                backgroundColor: previewTarget === t ? 'var(--color-bg-active)' : 'transparent',
-                color: previewTarget === t ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                backgroundColor: previewTarget === target ? 'var(--color-bg-active)' : 'transparent',
+                color: previewTarget === target ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
               }}
             >
-              {t === 'create' ? 'Create Modal' : 'Detail View'}
+              {target === 'create' ? t('settings.kanban.preview_create') : t('settings.kanban.preview_detail')}
             </button>
           ))}
         </div>
@@ -660,6 +662,16 @@ export function KanbanSection() {
           createStyle={createStyle}
           detailStyle={detailStyle}
           animKey={animKey}
+          labels={{
+            create: { 1: t('settings.kanban.create_command'), 2: t('settings.kanban.create_form'), 3: t('settings.kanban.create_focus') },
+            detail: { 1: t('settings.kanban.detail_panel'), 2: t('settings.kanban.detail_overlay'), 3: t('settings.kanban.detail_page') },
+          }}
+          captions={{
+            create: { 1: t('settings.kanban.create_caption_1'), 2: t('settings.kanban.create_caption_2'), 3: t('settings.kanban.create_caption_3') },
+            detail: { 1: t('settings.kanban.detail_caption_1'), 2: t('settings.kanban.detail_caption_2'), 3: t('settings.kanban.detail_caption_3') },
+          }}
+          createBtnLabel={t('settings.kanban.preview_create')}
+          detailBtnLabel={t('settings.kanban.preview_detail')}
         />
       </SettingsCard>
 

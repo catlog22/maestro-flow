@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { SettingsCard } from '../SettingsComponents.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // SpecsSection — read-only spec directory browser
@@ -12,6 +13,7 @@ interface SpecEntry {
 }
 
 export function SpecsSection() {
+  const { t } = useI18n();
   const [specs, setSpecs] = useState<SpecEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export function SpecsSection() {
     return (
       <div className="flex items-center justify-center py-[var(--spacing-8)]">
         <span className="text-[length:var(--font-size-sm)] text-text-secondary">
-          Loading specs...
+          {t('settings.specs.loading')}
         </span>
       </div>
     );
@@ -52,7 +54,7 @@ export function SpecsSection() {
 
   if (error) {
     return (
-      <SettingsCard title="Specs" description="Could not load spec directory">
+      <SettingsCard title={t('settings.specs.error_card')} description={t('settings.specs.error_desc')}>
         <p className="text-[length:var(--font-size-sm)] text-status-blocked">{error}</p>
       </SettingsCard>
     );
@@ -61,11 +63,11 @@ export function SpecsSection() {
   if (specs.length === 0) {
     return (
       <SettingsCard
-        title="Specifications"
-        description="No specifications found in .workflow/.spec/"
+        title={t('settings.specs.empty_card')}
+        description={t('settings.specs.empty_desc')}
       >
         <p className="text-[length:var(--font-size-sm)] text-text-secondary italic">
-          Run the spec-generate pipeline to create specifications.
+          {t('settings.specs.empty_hint')}
         </p>
       </SettingsCard>
     );
@@ -77,7 +79,7 @@ export function SpecsSection() {
         <SettingsCard key={spec.name} title={spec.name} description={spec.path}>
           {spec.createdAt && (
             <span className="text-[length:var(--font-size-xs)] text-text-tertiary">
-              Created: {spec.createdAt}
+              {t('settings.specs.created')}: {spec.createdAt}
             </span>
           )}
         </SettingsCard>

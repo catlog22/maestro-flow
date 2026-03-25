@@ -10,6 +10,7 @@ import {
   SettingsSaveBar,
 } from '../SettingsComponents.js';
 import { cn } from '@/client/lib/utils.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // AgentsSection — per-agent-type config with type-appropriate fields
@@ -89,16 +90,17 @@ const AGENT_FIELD_CONFIG: Partial<Record<AgentType, AgentFieldConfig>> = {
   },
 };
 
-const AGENT_TYPES: { type: AgentType; label: string; description: string }[] = [
-  { type: 'claude-code', label: 'Claude Code', description: 'Anthropic Claude CLI agent' },
-  { type: 'agent-sdk', label: 'Agent SDK', description: 'Anthropic Agent SDK (supports custom endpoints)' },
-  { type: 'codex', label: 'Codex', description: 'OpenAI Codex CLI agent' },
-  { type: 'gemini', label: 'Gemini', description: 'Google Gemini CLI agent' },
-  { type: 'qwen', label: 'Qwen', description: 'Alibaba Qwen CLI agent' },
-  { type: 'opencode', label: 'OpenCode', description: 'Open-source code agent' },
+const AGENT_TYPES: { type: AgentType; label: string }[] = [
+  { type: 'claude-code', label: 'Claude Code' },
+  { type: 'agent-sdk', label: 'Agent SDK' },
+  { type: 'codex', label: 'Codex' },
+  { type: 'gemini', label: 'Gemini' },
+  { type: 'qwen', label: 'Qwen' },
+  { type: 'opencode', label: 'OpenCode' },
 ];
 
 export function AgentsSection() {
+  const { t } = useI18n();
   const draft = useSettingsStore((s) => s.draft?.agents);
   const saving = useSettingsStore((s) => s.saving);
   const isDirty = useSettingsStore((s) => s.isDirty('agents'));
@@ -106,6 +108,18 @@ export function AgentsSection() {
   const saveConfig = useSettingsStore((s) => s.saveConfig);
   const discardDraft = useSettingsStore((s) => s.discardDraft);
   const [expanded, setExpanded] = useState<AgentType | null>(null);
+
+  const agentDescription = (type: AgentType): string => {
+    const keyMap: Record<string, string> = {
+      'claude-code': 'settings.agents.claude_code_desc',
+      'agent-sdk': 'settings.agents.agent_sdk_desc',
+      codex: 'settings.agents.codex_desc',
+      gemini: 'settings.agents.gemini_desc',
+      qwen: 'settings.agents.qwen_desc',
+      opencode: 'settings.agents.opencode_desc',
+    };
+    return t(keyMap[type] ?? 'settings.agents.claude_code_desc');
+  };
 
   if (!draft) return null;
 
@@ -122,13 +136,13 @@ export function AgentsSection() {
 
   return (
     <div className="flex flex-col gap-[var(--spacing-3)]">
-      {AGENT_TYPES.map(({ type, label, description }) => {
+      {AGENT_TYPES.map(({ type, label }) => {
         const agent = draft[type];
         const isExpanded = expanded === type;
         const fieldCfg = AGENT_FIELD_CONFIG[type];
 
         return (
-          <SettingsCard key={type} title={label} description={description}>
+          <SettingsCard key={type} title={label} description={agentDescription(type)}>
             <button
               type="button"
               onClick={() => toggle(type)}
@@ -138,27 +152,27 @@ export function AgentsSection() {
                 'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)] rounded-[var(--radius-sm)]',
               )}
             >
-              {isExpanded ? 'Hide configuration' : 'Show configuration'}
+              {isExpanded ? t('settings.agents.hide_config') : t('settings.agents.show_config')}
             </button>
 
             {isExpanded && (
               <div className="mt-[var(--spacing-3)] border-t border-border-divider pt-[var(--spacing-3)]">
                 <SettingsField
-                  label="Model"
-                  description="Override the default model for this agent type"
+                  label={t('settings.agents.model_label')}
+                  description={t('settings.agents.model_desc')}
                   htmlFor={`agent-model-${type}`}
                 >
                   <SettingsInput
                     id={`agent-model-${type}`}
                     value={agent.model}
                     onChange={(v) => updateAgent(type, { model: v })}
-                    placeholder="Default"
+                    placeholder={t('settings.agents.model_placeholder')}
                   />
                 </SettingsField>
 
                 <SettingsField
-                  label="Approval Mode"
-                  description="How tool calls are approved"
+                  label={t('settings.agents.approval_label')}
+                  description={t('settings.agents.approval_desc')}
                   htmlFor={`agent-approval-${type}`}
                 >
                   <SettingsSelect
@@ -166,16 +180,16 @@ export function AgentsSection() {
                     value={agent.approvalMode}
                     onChange={(v) => updateAgent(type, { approvalMode: v })}
                     options={[
-                      { value: 'suggest', label: 'Suggest (manual)' },
-                      { value: 'auto', label: 'Auto-approve' },
+                      { value: 'suggest', label: t('settings.agents.approval_suggest') },
+                      { value: 'auto', label: t('settings.agents.approval_auto') },
                     ]}
                   />
                 </SettingsField>
 
                 {fieldCfg?.showBaseUrl && (
                   <SettingsField
-                    label="Base URL"
-                    description="Custom API endpoint (leave empty for default)"
+                    label={t('settings.agents.base_url_label')}
+                    description={t('settings.agents.base_url_desc')}
                     htmlFor={`agent-baseurl-${type}`}
                   >
                     <SettingsInput
@@ -205,8 +219,8 @@ export function AgentsSection() {
 
                 {fieldCfg?.showSettingsFile && (
                   <SettingsField
-                    label={fieldCfg.settingsFileLabel ?? 'Settings File'}
-                    description={fieldCfg.settingsFileDescription ?? 'Path to settings JSON file'}
+                    label={fieldCfg.settingsFileLabel ?? t('settings.agents.settings_file_label')}
+                    description={fieldCfg.settingsFileDescription ?? t('settings.agents.settings_file_desc')}
                     htmlFor={`agent-settings-file-${type}`}
                   >
                     <SettingsInput
@@ -219,8 +233,8 @@ export function AgentsSection() {
                 )}
 
                 <SettingsField
-                  label="Env File"
-                  description="Path to .env file for loading environment variables (supports ~)"
+                  label={t('settings.agents.env_file_label')}
+                  description={t('settings.agents.env_file_desc')}
                   htmlFor={`agent-envfile-${type}`}
                 >
                   <SettingsInput

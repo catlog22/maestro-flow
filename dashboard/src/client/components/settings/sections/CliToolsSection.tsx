@@ -2,12 +2,14 @@ import { useState, useCallback } from 'react';
 import { useSettingsStore } from '@/client/store/settings-store.js';
 import { SettingsCard, SettingsSaveBar } from '../SettingsComponents.js';
 import { cn } from '@/client/lib/utils.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // CliToolsSection — JSON textarea editor for cli-tools.json
 // ---------------------------------------------------------------------------
 
 export function CliToolsSection() {
+  const { t } = useI18n();
   const draft = useSettingsStore((s) => s.draft?.cliTools ?? '{}');
   const saving = useSettingsStore((s) => s.saving);
   const isDirty = useSettingsStore((s) => s.isDirty('cliTools'));
@@ -43,8 +45,8 @@ export function CliToolsSection() {
   return (
     <div className="flex flex-col gap-[var(--spacing-4)]">
       <SettingsCard
-        title="CLI Tools Configuration"
-        description="Edit the cli-tools.json configuration file. This controls which CLI tools are available and their settings."
+        title={t('settings.cli_tools.config_card')}
+        description={t('settings.cli_tools.config_desc')}
       >
         <div className="flex items-center justify-between mb-[var(--spacing-2)]">
           <span className="text-[length:var(--font-size-xs)] text-text-tertiary">
@@ -59,7 +61,7 @@ export function CliToolsSection() {
               'focus-visible:outline-none focus-visible:shadow-[var(--shadow-focus-ring)] rounded-[var(--radius-sm)]',
             )}
           >
-            Format JSON
+            {t('settings.cli_tools.format_json')}
           </button>
         </div>
 

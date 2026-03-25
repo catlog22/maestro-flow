@@ -1,4 +1,5 @@
 import { cn } from '@/client/lib/utils.js';
+import { useI18n } from '@/client/i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // SettingsToggle — boolean toggle switch
@@ -193,6 +194,8 @@ export function SettingsSaveBar({
 }) {
   if (!dirty) return null;
 
+  const { t } = useI18n();
+
   return (
     <div className="sticky bottom-0 left-0 right-0 flex items-center justify-end gap-[var(--spacing-2)] px-[var(--spacing-4)] py-[var(--spacing-3)] border-t border-border bg-bg-secondary/95 backdrop-blur-sm">
       <button
@@ -208,7 +211,7 @@ export function SettingsSaveBar({
           'disabled:opacity-50 disabled:pointer-events-none',
         )}
       >
-        Discard
+        {t('settings.discard')}
       </button>
       <button
         type="button"
@@ -223,7 +226,7 @@ export function SettingsSaveBar({
           'disabled:opacity-50 disabled:pointer-events-none',
         )}
       >
-        {saving ? 'Saving...' : 'Save changes'}
+        {saving ? t('settings.saving') : t('settings.save')}
       </button>
     </div>
   );
