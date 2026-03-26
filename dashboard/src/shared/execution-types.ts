@@ -137,8 +137,8 @@ export type SupervisorStatus = SchedulerStatus;
 // ---------------------------------------------------------------------------
 
 export type SupervisorTab =
-  | 'monitor'
   | 'commander'
+  | 'executions'
   | 'coordinator'
   | 'prompts'
   | 'extensions'

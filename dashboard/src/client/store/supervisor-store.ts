@@ -47,7 +47,7 @@ export interface SupervisorStore {
 
 export const useSupervisorStore = create<SupervisorStore>((set, get) => ({
   // Initial state
-  activeTab: 'monitor',
+  activeTab: 'commander',
   learningStats: null,
   learningPatterns: [],
   knowledgeEntries: [],

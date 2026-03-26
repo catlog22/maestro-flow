@@ -52,7 +52,7 @@ describe('SupervisorStore', () => {
   beforeEach(() => {
     // Reset store between tests
     useSupervisorStore.setState({
-      activeTab: 'monitor',
+      activeTab: 'commander',
       learningStats: null,
       learningPatterns: [],
       knowledgeEntries: [],
@@ -74,7 +74,7 @@ describe('SupervisorStore', () => {
   describe('initial state', () => {
     it('has correct defaults', () => {
       const state = useSupervisorStore.getState();
-      expect(state.activeTab).toBe('monitor');
+      expect(state.activeTab).toBe('commander');
       expect(state.learningStats).toBeNull();
       expect(state.learningPatterns).toEqual([]);
       expect(state.scheduledTasks).toEqual([]);
