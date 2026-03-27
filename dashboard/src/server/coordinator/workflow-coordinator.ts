@@ -68,14 +68,15 @@ async function createGraphWalker(agentManager: AgentManager, eventBus: Dashboard
       // Forward raw walker events
       eventBus.emit(event.type as any, event);
 
-      // Translate walker step events → coordinate:step events for the UI
-      if (event.type === 'walker:step_completed' || event.type === 'walker:step_started') {
+      // Translate walker:command events → coordinate:step events for the UI
+      if (event.type === 'walker:command') {
+        const status = event.status as string;
         eventBus.emit('coordinate:step' as any, {
           sessionId: event.session_id,
           step: {
             cmd: event.cmd ?? event.node_id,
-            status: event.type === 'walker:step_completed'
-              ? (event.success ? 'completed' : 'failed')
+            status: status === 'completed' ? 'completed'
+              : status === 'failed' ? 'failed'
               : 'running',
             summary: event.summary ?? null,
             qualityScore: event.quality_score ?? null,

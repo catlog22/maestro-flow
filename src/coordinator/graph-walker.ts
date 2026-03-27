@@ -183,7 +183,7 @@ export class GraphWalker {
 
     const execResult = await this.executor.execute({
       prompt,
-      agent_type: 'claude-code',
+      agent_type: (state.tool as 'claude-code' | 'codex' | 'gemini' | 'qwen' | 'opencode') || 'claude-code',
       work_dir: (state.context.inputs['workflowRoot'] as string) ?? '.',
       approval_mode: state.auto_mode ? 'auto' : 'suggest',
       timeout_ms: node.timeout_ms ?? graph.defaults?.timeout_ms ?? 300000,
