@@ -1,0 +1,32 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/test-gen",
+  "name": "Test Gen",
+  "description": "Generate missing tests with TDD/E2E classification and RED-GREEN methodology",
+  "version": "1.0.0",
+  "tags": [
+    "quality",
+    "testing"
+  ],
+  "entry": "test_gen",
+  "inputs": {
+    "phase": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "nodes": {
+    "test_gen": {
+      "type": "command",
+      "cmd": "quality-test-gen",
+      "next": "done",
+      "analyze": false,
+      "args": "{phase}",
+      "description": "Generate missing tests with TDD/E2E classification and RED-GREEN methodology"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

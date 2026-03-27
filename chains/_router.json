@@ -1,0 +1,201 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "_router",
+  "name": "State Router",
+  "description": "Route to appropriate graph based on project state",
+  "version": "1.0.0",
+  "tags": ["internal", "router"],
+  "entry": "check_init",
+  "inputs": {
+    "phase": { "type": "string", "required": false },
+    "description": { "type": "string", "required": false }
+  },
+  "nodes": {
+    "check_init": {
+      "type": "decision",
+      "eval": "ctx.project.initialized",
+      "edges": [
+        { "value": false, "target": "to_init" },
+        { "default": true, "target": "check_has_roadmap" }
+      ]
+    },
+    "check_has_roadmap": {
+      "type": "decision",
+      "eval": "ctx.project.phases_total",
+      "edges": [
+        { "match": "phases_total == 0", "target": "check_accumulated_context" },
+        { "default": true, "target": "check_phase_status" }
+      ]
+    },
+    "check_accumulated_context": {
+      "type": "decision",
+      "eval": "ctx.project.accumulated_context",
+      "edges": [
+        { "match": "accumulated_context != null", "target": "to_next_milestone" },
+        { "default": true, "target": "to_brainstorm_driven" }
+      ]
+    },
+    "check_phase_status": {
+      "type": "decision",
+      "eval": "ctx.project.phase_status",
+      "edges": [
+        { "value": "pending", "target": "check_pending_artifacts" },
+        { "value": "exploring", "target": "check_has_plan" },
+        { "value": "planning", "target": "check_has_plan" },
+        { "value": "executing", "target": "check_tasks_done" },
+        { "value": "verifying", "target": "check_verification" },
+        { "value": "testing", "target": "check_uat" },
+        { "value": "completed", "target": "check_all_phases" },
+        { "value": "blocked", "target": "to_debug" }
+      ]
+    },
+    "check_pending_artifacts": {
+      "type": "decision",
+      "eval": "ctx.project.artifacts.context",
+      "edges": [
+        { "value": true, "target": "to_plan" },
+        { "default": true, "target": "to_analyze" }
+      ]
+    },
+    "check_has_plan": {
+      "type": "decision",
+      "eval": "ctx.project.artifacts.plan",
+      "edges": [
+        { "value": true, "target": "to_execute_verify" },
+        { "default": true, "target": "to_plan" }
+      ]
+    },
+    "check_tasks_done": {
+      "type": "decision",
+      "eval": "ctx.project.execution.tasks_completed",
+      "edges": [
+        {
+          "match": "tasks_completed >= tasks_total && tasks_total > 0",
+          "target": "to_verify"
+        },
+        { "default": true, "target": "to_execute" }
+      ]
+    },
+    "check_verification": {
+      "type": "decision",
+      "eval": "ctx.project.verification_status",
+      "edges": [
+        { "value": "passed", "target": "check_review_after_verify" },
+        { "default": true, "target": "to_quality_loop_partial" }
+      ]
+    },
+    "check_review_after_verify": {
+      "type": "decision",
+      "eval": "ctx.project.review_verdict",
+      "edges": [
+        { "value": null, "target": "to_review" },
+        { "default": true, "target": "check_uat_after_review" }
+      ]
+    },
+    "check_uat_after_review": {
+      "type": "decision",
+      "eval": "ctx.project.uat_status",
+      "edges": [
+        { "value": "pending", "target": "to_test" },
+        { "value": "passed", "target": "to_phase_transition" },
+        { "default": true, "target": "to_debug_from_uat" }
+      ]
+    },
+    "check_uat": {
+      "type": "decision",
+      "eval": "ctx.project.uat_status",
+      "edges": [
+        { "value": "passed", "target": "to_phase_transition" },
+        { "default": true, "target": "to_debug_from_uat" }
+      ]
+    },
+    "check_all_phases": {
+      "type": "decision",
+      "eval": "ctx.project.phases_completed",
+      "edges": [
+        {
+          "match": "phases_completed >= phases_total",
+          "target": "to_milestone_close"
+        },
+        { "default": true, "target": "to_phase_transition" }
+      ]
+    },
+    "to_init": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/init"
+    },
+    "to_analyze": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/analyze"
+    },
+    "to_plan": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/plan"
+    },
+    "to_execute": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/execute"
+    },
+    "to_verify": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/verify"
+    },
+    "to_review": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/review"
+    },
+    "to_test": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/test"
+    },
+    "to_debug": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/debug"
+    },
+    "to_debug_from_uat": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/debug",
+      "delegate_inputs": { "args_prefix": "--from-uat" }
+    },
+    "to_execute_verify": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "execute-verify"
+    },
+    "to_phase_transition": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/phase-transition"
+    },
+    "to_milestone_close": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "milestone-close"
+    },
+    "to_brainstorm_driven": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "brainstorm-driven"
+    },
+    "to_next_milestone": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "next-milestone"
+    },
+    "to_quality_loop_partial": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "quality-loop",
+      "delegate_inputs": { "entry_override": "plan_gaps" }
+    }
+  }
+}

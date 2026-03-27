@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/roadmap",
+  "name": "Roadmap",
+  "description": "Interactive roadmap creation with iterative refinement",
+  "version": "1.0.0",
+  "tags": [
+    "maestro",
+    "roadmap"
+  ],
+  "entry": "roadmap",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "roadmap": {
+      "type": "command",
+      "cmd": "maestro-roadmap",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Interactive roadmap creation with iterative refinement"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

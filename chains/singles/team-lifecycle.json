@@ -1,0 +1,30 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/team-lifecycle",
+  "name": "Team Lifecycle",
+  "description": "Full lifecycle team with clean architecture — analyst, planner, executor, reviewer, tester",
+  "version": "1.0.0",
+  "tags": [
+    "team"
+  ],
+  "entry": "team_lifecycle",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "team_lifecycle": {
+      "type": "command",
+      "cmd": "team-lifecycle-v4",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Full lifecycle team with clean architecture — analyst, planner, executor, reviewer, tester"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

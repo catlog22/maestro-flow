@@ -1,0 +1,94 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "quality-loop",
+  "name": "Quality Loop",
+  "description": "Verify -> Review -> Test -> Debug -> Fix -> re-Verify cycle",
+  "version": "1.0.0",
+  "tags": ["quality", "loop"],
+  "entry": "verify",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "defaults": {
+    "timeout_ms": 600000,
+    "analyze": true
+  },
+  "nodes": {
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward 3-layer verification with anti-pattern scan",
+      "args": "{phase}",
+      "next": "check_verify",
+      "max_visits": 4
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "review", "description": "Verification passed" },
+        { "default": true, "target": "plan_gaps", "description": "Verification failed" }
+      ]
+    },
+    "review": {
+      "type": "command",
+      "cmd": "quality-review",
+      "description": "Multi-dimensional code review with severity classification",
+      "args": "{phase}",
+      "next": "check_review"
+    },
+    "check_review": {
+      "type": "decision",
+      "eval": "ctx.result.review_verdict",
+      "edges": [
+        { "value": "BLOCK", "target": "plan_gaps", "description": "Review blocked" },
+        { "default": true, "target": "test", "description": "Review passed/warned" }
+      ]
+    },
+    "test": {
+      "type": "command",
+      "cmd": "quality-test",
+      "description": "User acceptance testing with auto-diagnosis",
+      "args": "{phase}",
+      "auto_flag": "--auto-fix",
+      "next": "check_test"
+    },
+    "check_test": {
+      "type": "decision",
+      "eval": "ctx.result.uat_status",
+      "edges": [
+        { "value": "passed", "target": "done", "description": "UAT passed" },
+        { "default": true, "target": "debug", "description": "UAT failed" }
+      ]
+    },
+    "debug": {
+      "type": "command",
+      "cmd": "quality-debug",
+      "description": "Hypothesis-driven debugging from UAT failures",
+      "args": "--from-uat {phase}",
+      "next": "plan_gaps",
+      "max_visits": 2
+    },
+    "plan_gaps": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Re-plan to address quality gaps and failures",
+      "args": "{phase} --gaps",
+      "auto_flag": "--auto",
+      "next": "re_execute"
+    },
+    "re_execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Re-execute tasks from updated gap-fix plan",
+      "args": "{phase}",
+      "next": "verify",
+      "max_visits": 3
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Quality loop completed for phase {phase}"
+    }
+  }
+}

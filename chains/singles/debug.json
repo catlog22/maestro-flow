@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/debug",
+  "name": "Debug",
+  "description": "Parallel hypothesis-driven debugging with structured root cause analysis",
+  "version": "1.0.0",
+  "tags": ["quality", "debug"],
+  "entry": "debug",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "debug": {
+      "type": "command",
+      "cmd": "quality-debug",
+      "args": "{phase}",
+      "description": "Hypothesis-driven debugging with parallel agents and UAT integration",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

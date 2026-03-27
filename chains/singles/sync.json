@@ -1,0 +1,32 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/sync",
+  "name": "Sync",
+  "description": "Sync codebase docs after code changes via git diff tracing",
+  "version": "1.0.0",
+  "tags": [
+    "quality",
+    "docs"
+  ],
+  "entry": "sync",
+  "inputs": {
+    "phase": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "nodes": {
+    "sync": {
+      "type": "command",
+      "cmd": "quality-sync",
+      "next": "done",
+      "analyze": false,
+      "args": "{phase}",
+      "description": "Sync codebase docs after code changes via git diff tracing"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

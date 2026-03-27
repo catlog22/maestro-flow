@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/issue-discover",
+  "name": "Issue Discover",
+  "description": "Multi-perspective issue discovery via automated codebase analysis",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "issue"
+  ],
+  "entry": "issue_discover",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "issue_discover": {
+      "type": "command",
+      "cmd": "manage-issue-discover",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Multi-perspective issue discovery via automated codebase analysis"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

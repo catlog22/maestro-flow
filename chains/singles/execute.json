@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/execute",
+  "name": "Execute",
+  "description": "Execute phase plan with wave-based parallel execution and atomic commits",
+  "version": "1.0.0",
+  "tags": ["execution"],
+  "entry": "execute",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "args": "{phase}",
+      "description": "Run wave-based task execution with parallel agents",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

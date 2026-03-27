@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/issue-execute",
+  "name": "Issue Execute",
+  "description": "Execute planned solution for an issue via dual-mode agent dispatch",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "issue"
+  ],
+  "entry": "issue_execute",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "issue_execute": {
+      "type": "command",
+      "cmd": "manage-issue-execute",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Execute planned solution for an issue via dual-mode agent dispatch"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

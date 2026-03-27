@@ -1,0 +1,29 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "milestone-close",
+  "name": "Milestone Close",
+  "description": "Milestone Audit -> Phase Transition -> Done",
+  "version": "1.0.0",
+  "tags": ["milestone"],
+  "entry": "audit",
+  "inputs": {},
+  "nodes": {
+    "audit": {
+      "type": "command",
+      "cmd": "maestro-milestone-audit",
+      "description": "Audit current milestone for cross-phase integration gaps",
+      "next": "transition"
+    },
+    "transition": {
+      "type": "command",
+      "cmd": "maestro-phase-transition",
+      "description": "Complete phase, extract learnings, advance to next",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Milestone closed successfully"
+    }
+  }
+}

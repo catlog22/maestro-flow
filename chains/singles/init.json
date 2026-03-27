@@ -1,0 +1,23 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/init",
+  "name": "Init",
+  "description": "Initialize project with auto state detection (empty/code/existing)",
+  "version": "1.0.0",
+  "tags": ["setup", "init"],
+  "entry": "init",
+  "inputs": {},
+  "nodes": {
+    "init": {
+      "type": "command",
+      "cmd": "maestro-init",
+      "description": "Initialize project structure and state files",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/team-coordinate",
+  "name": "Team Coordinate",
+  "description": "Universal team coordination with dynamic role generation",
+  "version": "1.0.0",
+  "tags": [
+    "team"
+  ],
+  "entry": "team_coordinate",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "team_coordinate": {
+      "type": "command",
+      "cmd": "team-coordinate",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Universal team coordination with dynamic role generation"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

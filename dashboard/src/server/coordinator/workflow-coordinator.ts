@@ -4,8 +4,9 @@
 // ---------------------------------------------------------------------------
 
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { AgentStoppedPayload, NormalizedEntry } from '../../shared/agent-types.js';
 import type {
@@ -34,6 +35,62 @@ import {
 import type { WorkflowSnapshot, StepAnalysis } from './types.js';
 import { setPromptsDir, loadPrompt } from './prompts/index.js';
 
+// [GRAPH_WALKER] Feature flag — set USE_GRAPH_WALKER=true to route through GraphWalker
+const USE_GRAPH_WALKER = process.env.USE_GRAPH_WALKER === 'true';
+
+// [GRAPH_WALKER] Lazy-loaded graph walker factory (dynamic imports avoid compile-time dependency)
+async function createGraphWalker(agentManager: AgentManager, eventBus: DashboardEventBus, workflowRoot: string) {
+  const { GraphWalker } = await import('../../../../src/coordinator/graph-walker.js');
+  const { GraphLoader } = await import('../../../../src/coordinator/graph-loader.js');
+  const { DefaultExprEvaluator } = await import('../../../../src/coordinator/expr-evaluator.js');
+  const { DefaultOutputParser } = await import('../../../../src/coordinator/output-parser.js');
+  const { DefaultPromptAssembler } = await import('../../../../src/coordinator/prompt-assembler.js');
+  const { DashboardExecutor } = await import('./dashboard-executor.js');
+  const { IntentRouter } = await import('../../../../src/coordinator/intent-router.js');
+
+  const { homedir } = await import('node:os');
+
+  const globalChainsRoot = resolve(homedir(), '.maestro', 'chains');
+  const localChainsRoot = resolve(workflowRoot, 'chains');
+  const chainsRoot = existsSync(localChainsRoot) ? localChainsRoot : globalChainsRoot;
+  const templateDir = resolve(homedir(), '.maestro', 'templates', 'cli', 'prompts');
+
+  const loader = new GraphLoader(chainsRoot);
+  const executor = new DashboardExecutor(agentManager, eventBus);
+  const assembler = new DefaultPromptAssembler(workflowRoot, templateDir);
+  const evaluator = new DefaultExprEvaluator();
+  const parser = new DefaultOutputParser();
+  const router = new IntentRouter(loader, chainsRoot);
+
+  // Bridge walker events → dashboard coordinate events for real-time UI updates
+  const emitter = {
+    emit(event: { type: string; [k: string]: unknown }) {
+      // Forward raw walker events
+      eventBus.emit(event.type as any, event);
+
+      // Translate walker step events → coordinate:step events for the UI
+      if (event.type === 'walker:step_completed' || event.type === 'walker:step_started') {
+        eventBus.emit('coordinate:step' as any, {
+          sessionId: event.session_id,
+          step: {
+            cmd: event.cmd ?? event.node_id,
+            status: event.type === 'walker:step_completed'
+              ? (event.success ? 'completed' : 'failed')
+              : 'running',
+            summary: event.summary ?? null,
+            qualityScore: event.quality_score ?? null,
+          },
+        });
+      }
+    },
+  };
+
+  const sessionDir = join(workflowRoot, '.workflow', '.maestro-coordinate');
+  const walker = new GraphWalker(loader, assembler, executor, null, parser, evaluator, emitter, sessionDir);
+
+  return { walker, router, executor };
+}
+
 // ---------------------------------------------------------------------------
 // Start options (same interface as CoordinateRunner)
 // ---------------------------------------------------------------------------
@@ -61,6 +118,10 @@ export class WorkflowCoordinator {
   private readonly intentClassifier: IntentClassifierAgent;
   private readonly qualityReviewer: QualityReviewerAgent;
 
+  // [GRAPH_WALKER] Lazily initialized graph walker components
+  private graphWalker: Awaited<ReturnType<typeof createGraphWalker>> | null = null;
+  private graphWalkerInitPromise: Promise<Awaited<ReturnType<typeof createGraphWalker>>> | null = null;
+
   constructor(
     private readonly eventBus: DashboardEventBus,
     private readonly agentManager: AgentManager,
@@ -79,6 +140,16 @@ export class WorkflowCoordinator {
     this.eventBus.on('agent:stopped', this.agentStoppedHandler);
   }
 
+  // [GRAPH_WALKER] Lazy initialization — only created on first use when flag is on
+  private async getGraphWalker() {
+    if (this.graphWalker) return this.graphWalker;
+    if (!this.graphWalkerInitPromise) {
+      this.graphWalkerInitPromise = createGraphWalker(this.agentManager, this.eventBus, this.workflowRoot);
+    }
+    this.graphWalker = await this.graphWalkerInitPromise;
+    return this.graphWalker;
+  }
+
   // -------------------------------------------------------------------------
   // Public API
   // -------------------------------------------------------------------------
@@ -86,6 +157,11 @@ export class WorkflowCoordinator {
   async start(intent: string, opts?: CoordinateStartOpts): Promise<CoordinateSession> {
     if (this.session?.status === 'running') {
       throw new Error('A coordinate session is already running. Stop it first or wait for completion.');
+    }
+
+    // [GRAPH_WALKER] Delegate to graph walker path when feature flag is on
+    if (USE_GRAPH_WALKER) {
+      return this.startViaGraphWalker(intent, opts);
     }
 
     const tool = opts?.tool ?? 'claude';
@@ -180,6 +256,12 @@ export class WorkflowCoordinator {
   }
 
   async stop(): Promise<void> {
+    // [GRAPH_WALKER] Delegate stop to graph walker when flag is on
+    if (USE_GRAPH_WALKER && this.graphWalker) {
+      await this.stopViaGraphWalker();
+      return;
+    }
+
     if (!this.session) return;
     this.clearStepTimeout();
 
@@ -202,6 +284,11 @@ export class WorkflowCoordinator {
   }
 
   async resume(sessionId?: string): Promise<CoordinateSession | null> {
+    // [GRAPH_WALKER] Delegate resume to graph walker when flag is on
+    if (USE_GRAPH_WALKER) {
+      return this.resumeViaGraphWalker(sessionId);
+    }
+
     const state = await this.loadState(sessionId);
     if (!state) return null;
 
@@ -277,6 +364,140 @@ export class WorkflowCoordinator {
   destroy(): void {
     this.clearStepTimeout();
     this.eventBus.off('agent:stopped', this.agentStoppedHandler);
+  }
+
+  // -------------------------------------------------------------------------
+  // [GRAPH_WALKER] Bridge methods — delegate to GraphWalker engine
+  // -------------------------------------------------------------------------
+
+  private async startViaGraphWalker(intent: string, opts?: CoordinateStartOpts): Promise<CoordinateSession> {
+    const gw = await this.getGraphWalker();
+
+    const graphId = opts?.chainName
+      ? opts.chainName
+      : gw.router.resolve(intent);
+
+    const sessionId = `coord-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+    this.session = {
+      sessionId,
+      status: 'running',
+      intent,
+      chainName: graphId,
+      tool: opts?.tool ?? 'claude',
+      autoMode: opts?.autoMode ?? false,
+      currentStep: 0,
+      steps: [],
+      avgQuality: null,
+    };
+    this.emitStatus();
+    await this.persistState();
+
+    // Run walker in background — session returned immediately, UI gets step events via emitter
+    void this.runGraphWalker(gw, graphId, intent, opts);
+
+    return this.session;
+  }
+
+  private async runGraphWalker(
+    gw: Awaited<ReturnType<typeof createGraphWalker>>,
+    graphId: string,
+    intent: string,
+    opts?: CoordinateStartOpts,
+  ): Promise<void> {
+    try {
+      const walkerState = await gw.walker.start(graphId, intent, {
+        tool: opts?.tool ?? 'claude',
+        autoMode: opts?.autoMode ?? false,
+        workflowRoot: this.workflowRoot,
+        inputs: {
+          phase: opts?.phase ?? '',
+          description: intent,
+        },
+      });
+
+      if (!this.session) return;
+
+      // Sync final WalkerState → CoordinateSession
+      this.syncWalkerToSession(walkerState);
+      this.emitStatus();
+      await this.persistState();
+    } catch (err) {
+      if (!this.session) return;
+      const message = err instanceof Error ? err.message : String(err);
+      this.session.status = 'failed';
+      this.eventBus.emit('coordinate:error', {
+        error: message,
+        context: 'graph_walker',
+        step: this.session.currentStep,
+        timestamp: Date.now(),
+      });
+      this.emitStatus();
+      await this.persistState();
+    }
+  }
+
+  /** Convert WalkerState history → CoordinateSession steps */
+  private syncWalkerToSession(walkerState: { status: string; history: Array<{ node_id: string; node_type: string; entered_at: string; exited_at?: string; outcome?: string; exec_id?: string; summary?: string; quality_score?: number }> }): void {
+    if (!this.session) return;
+
+    this.session.steps = walkerState.history
+      .filter(h => h.node_type === 'command')
+      .map((h, i) => ({
+        index: i,
+        cmd: h.node_id,
+        args: '',
+        status: h.outcome === 'success' ? 'completed' as const
+          : h.outcome === 'failure' ? 'failed' as const
+          : 'skipped' as const,
+        processId: h.exec_id ?? null,
+        analysis: null,
+        summary: h.summary ?? null,
+        qualityScore: h.quality_score ?? null,
+        startedAt: h.entered_at,
+        completedAt: h.exited_at,
+      }));
+
+    this.session.status = walkerState.status === 'completed' ? 'completed'
+      : walkerState.status === 'failed' ? 'failed'
+      : 'paused';
+  }
+
+  private async stopViaGraphWalker(): Promise<void> {
+    const gw = await this.getGraphWalker();
+    await gw.walker.stop();
+    if (this.session) {
+      this.session.status = 'failed';
+      this.emitStatus();
+      await this.persistState();
+    }
+  }
+
+  private async resumeViaGraphWalker(sessionId?: string): Promise<CoordinateSession | null> {
+    const gw = await this.getGraphWalker();
+
+    try {
+      // Resume runs the walker to completion — returns final state
+      const walkerState = await gw.walker.resume(sessionId);
+
+      this.session = {
+        sessionId: walkerState.session_id,
+        status: 'running',
+        intent: walkerState.intent,
+        chainName: walkerState.graph_id,
+        tool: walkerState.tool,
+        autoMode: walkerState.auto_mode,
+        currentStep: 0,
+        steps: [],
+        avgQuality: null,
+      };
+
+      this.syncWalkerToSession(walkerState);
+      this.emitStatus();
+      await this.persistState();
+      return this.session;
+    } catch {
+      return null;
+    }
   }
 
   // -------------------------------------------------------------------------

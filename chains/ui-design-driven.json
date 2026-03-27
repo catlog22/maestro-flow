@@ -1,0 +1,64 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "ui-design-driven",
+  "name": "UI Design-Driven",
+  "description": "UI Design -> Plan -> Execute -> Verify pipeline",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "ui-design"],
+  "entry": "ui_design",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "defaults": { "analyze": true },
+  "nodes": {
+    "ui_design": {
+      "type": "command",
+      "cmd": "maestro-ui-design",
+      "description": "Generate UI design prototypes with multiple styles, user selects winner",
+      "args": "{phase}",
+      "auto_flag": "-y",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan with task decomposition",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward 3-layer verification",
+      "args": "{phase}",
+      "next": "check_verify",
+      "max_visits": 2
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "done" },
+        { "default": true, "target": "done_with_issues" }
+      ]
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "UI design-driven pipeline completed successfully"
+    },
+    "done_with_issues": {
+      "type": "terminal",
+      "status": "paused",
+      "summary": "UI design-driven pipeline completed with verification issues"
+    }
+  }
+}

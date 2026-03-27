@@ -1,0 +1,30 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/spec-add",
+  "name": "Spec Add",
+  "description": "Add knowledge entries (bug fixes, code patterns, decisions, rules) to specs",
+  "version": "1.0.0",
+  "tags": [
+    "spec"
+  ],
+  "entry": "spec_add",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "spec_add": {
+      "type": "command",
+      "cmd": "spec-add",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Add knowledge entries (bug fixes, code patterns, decisions, rules) to specs"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

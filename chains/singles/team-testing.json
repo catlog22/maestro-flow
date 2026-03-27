@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/team-testing",
+  "name": "Team Testing",
+  "description": "Progressive test coverage through Generator-Critic loops",
+  "version": "1.0.0",
+  "tags": [
+    "team",
+    "testing"
+  ],
+  "entry": "team_testing",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "team_testing": {
+      "type": "command",
+      "cmd": "team-testing",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Progressive test coverage through Generator-Critic loops"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

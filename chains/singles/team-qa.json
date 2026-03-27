@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/team-qa",
+  "name": "Team QA",
+  "description": "Full closed-loop QA combining issue discovery and software testing",
+  "version": "1.0.0",
+  "tags": [
+    "team",
+    "quality"
+  ],
+  "entry": "team_qa",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "team_qa": {
+      "type": "command",
+      "cmd": "team-quality-assurance",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Full closed-loop QA combining issue discovery and software testing"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

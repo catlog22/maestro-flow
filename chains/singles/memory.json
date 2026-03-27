@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/memory",
+  "name": "Memory",
+  "description": "Manage memory entries — workflow memory and system memory",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "memory"
+  ],
+  "entry": "memory",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "memory": {
+      "type": "command",
+      "cmd": "manage-memory",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Manage memory entries — workflow memory and system memory"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

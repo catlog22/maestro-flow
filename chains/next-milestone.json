@@ -1,0 +1,49 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "next-milestone",
+  "name": "Next Milestone",
+  "description": "Create roadmap for next milestone and execute first phase",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "milestone"],
+  "entry": "roadmap",
+  "inputs": {
+    "description": { "type": "string" },
+    "phase": { "type": "string" }
+  },
+  "nodes": {
+    "roadmap": {
+      "type": "command",
+      "cmd": "maestro-roadmap",
+      "description": "Create or refine project roadmap for new milestone",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan for first phase of new milestone",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Execute planned tasks with wave-based parallel execution",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward verification of execution results",
+      "args": "{phase}",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "analyze-plan-execute",
+  "name": "Analyze-Plan-Execute",
+  "description": "Quick analyze -> Plan (scratch) -> Execute (scratch) fast track",
+  "version": "1.0.0",
+  "tags": ["scratch", "fast-track"],
+  "entry": "analyze",
+  "inputs": {
+    "description": { "type": "string", "required": true }
+  },
+  "defaults": { "analyze": true },
+  "nodes": {
+    "analyze": {
+      "type": "command",
+      "cmd": "maestro-analyze",
+      "description": "Quick analysis with decision extraction (scratch mode)",
+      "args": "\"{description}\" -q",
+      "auto_flag": "-y",
+      "next": "plan",
+      "extract": {
+        "scratch_dir": {
+          "strategy": "line_match",
+          "pattern": "scratch_dir:",
+          "target": "var.scratch_dir"
+        }
+      }
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create scratch execution plan from analysis context",
+      "args": "--dir {var.scratch_dir}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Execute scratch tasks from plan",
+      "args": "--dir {var.scratch_dir}",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Analyze-plan-execute fast track completed"
+    }
+  }
+}

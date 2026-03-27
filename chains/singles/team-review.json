@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/team-review",
+  "name": "Team Review",
+  "description": "3-role code review pipeline: scanner, reviewer, fixer",
+  "version": "1.0.0",
+  "tags": [
+    "team",
+    "review"
+  ],
+  "entry": "team_review",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "team_review": {
+      "type": "command",
+      "cmd": "team-review",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "3-role code review pipeline: scanner, reviewer, fixer"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

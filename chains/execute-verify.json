@@ -1,0 +1,59 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "execute-verify",
+  "name": "Execute-Verify",
+  "description": "Execute -> Verify with fix loop on failure",
+  "version": "1.0.0",
+  "tags": ["execution"],
+  "entry": "execute",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "defaults": { "analyze": true },
+  "nodes": {
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution with atomic commits",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward 3-layer verification with anti-pattern scan",
+      "args": "{phase}",
+      "next": "check_verify",
+      "max_visits": 3
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "done", "description": "Verification passed" },
+        { "default": true, "target": "fix_plan", "description": "Verification failed" }
+      ]
+    },
+    "fix_plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Re-plan to address verification gaps and failures",
+      "args": "{phase} --gaps",
+      "auto_flag": "--auto",
+      "next": "fix_execute"
+    },
+    "fix_execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Re-execute tasks from updated gap-fix plan",
+      "args": "{phase}",
+      "next": "verify",
+      "max_visits": 3
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Execute-verify completed for phase {phase}"
+    }
+  }
+}

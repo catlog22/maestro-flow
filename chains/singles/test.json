@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/test",
+  "name": "Test",
+  "description": "Conversational UAT with session persistence and auto-diagnosis",
+  "version": "1.0.0",
+  "tags": ["quality", "testing"],
+  "entry": "test",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "test": {
+      "type": "command",
+      "cmd": "quality-test",
+      "args": "{phase}",
+      "description": "User acceptance testing with auto-diagnosis and gap-plan closure loop",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

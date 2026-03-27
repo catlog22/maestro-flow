@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/memory-capture",
+  "name": "Memory Capture",
+  "description": "Capture session memory (compact or tips) into workflow memory",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "memory"
+  ],
+  "entry": "memory_capture",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "memory_capture": {
+      "type": "command",
+      "cmd": "manage-memory-capture",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Capture session memory (compact or tips) into workflow memory"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/codebase-refresh",
+  "name": "Codebase Refresh",
+  "description": "Incremental refresh of codebase docs based on recent changes",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "codebase"
+  ],
+  "entry": "codebase_refresh",
+  "inputs": {},
+  "nodes": {
+    "codebase_refresh": {
+      "type": "command",
+      "cmd": "manage-codebase-refresh",
+      "next": "done",
+      "analyze": false,
+      "description": "Incremental refresh of codebase docs based on recent changes"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

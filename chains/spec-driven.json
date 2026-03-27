@@ -1,0 +1,71 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "spec-driven",
+  "name": "Spec-Driven",
+  "description": "Init -> Spec Generate -> Plan -> Execute -> Verify pipeline",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "spec"],
+  "entry": "init",
+  "inputs": {
+    "phase": { "type": "string" },
+    "description": { "type": "string", "required": true }
+  },
+  "defaults": { "analyze": true },
+  "nodes": {
+    "init": {
+      "type": "command",
+      "cmd": "maestro-init",
+      "description": "Initialize project structure and state files",
+      "next": "spec_generate"
+    },
+    "spec_generate": {
+      "type": "command",
+      "cmd": "maestro-spec-generate",
+      "description": "Generate specification package through 7-phase document chain",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan with task decomposition",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward 3-layer verification",
+      "args": "{phase}",
+      "next": "check_verify",
+      "max_visits": 2
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "done", "description": "Verification passed" },
+        { "default": true, "target": "done_with_issues", "description": "Verification failed" }
+      ]
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Spec-driven pipeline completed successfully"
+    },
+    "done_with_issues": {
+      "type": "terminal",
+      "status": "paused",
+      "summary": "Spec-driven pipeline completed with verification issues"
+    }
+  }
+}

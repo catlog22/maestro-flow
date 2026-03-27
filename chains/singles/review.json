@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/review",
+  "name": "Review",
+  "description": "Tiered code review (quick/standard/deep) with severity classification",
+  "version": "1.0.0",
+  "tags": ["quality", "review"],
+  "entry": "review",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "review": {
+      "type": "command",
+      "cmd": "quality-review",
+      "args": "{phase}",
+      "description": "Multi-dimensional code review with parallel agents and severity ranking",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

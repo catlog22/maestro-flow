@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/codebase-rebuild",
+  "name": "Codebase Rebuild",
+  "description": "Full rebuild of codebase documentation via parallel mapper agents",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "codebase"
+  ],
+  "entry": "codebase_rebuild",
+  "inputs": {},
+  "nodes": {
+    "codebase_rebuild": {
+      "type": "command",
+      "cmd": "manage-codebase-rebuild",
+      "next": "done",
+      "analyze": false,
+      "description": "Full rebuild of codebase documentation via parallel mapper agents"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

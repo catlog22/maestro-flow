@@ -1,0 +1,32 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/ui-design",
+  "name": "UI Design",
+  "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max",
+  "version": "1.0.0",
+  "tags": [
+    "maestro",
+    "ui-design"
+  ],
+  "entry": "ui_design",
+  "inputs": {
+    "phase": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "nodes": {
+    "ui_design": {
+      "type": "command",
+      "cmd": "maestro-ui-design",
+      "next": "done",
+      "analyze": false,
+      "args": "{phase}",
+      "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

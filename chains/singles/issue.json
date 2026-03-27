@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/issue",
+  "name": "Issue",
+  "description": "Issue CRUD operations — create, query, update, close, and link issues",
+  "version": "1.0.0",
+  "tags": [
+    "manage",
+    "issue"
+  ],
+  "entry": "issue",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "issue": {
+      "type": "command",
+      "cmd": "manage-issue",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Issue CRUD operations — create, query, update, close, and link issues"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

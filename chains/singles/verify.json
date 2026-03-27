@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/verify",
+  "name": "Verify",
+  "description": "Goal-backward verification with 3-layer checks and anti-pattern scan",
+  "version": "1.0.0",
+  "tags": ["quality", "verification"],
+  "entry": "verify",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "args": "{phase}",
+      "description": "3-layer must-have verification, anti-pattern scan, Nyquist test coverage audit",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

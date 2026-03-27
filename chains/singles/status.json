@@ -1,0 +1,23 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/status",
+  "name": "Status",
+  "description": "Display project dashboard with phase progress, active tasks, and next steps",
+  "version": "1.0.0",
+  "tags": ["info", "dashboard"],
+  "entry": "status",
+  "inputs": {},
+  "nodes": {
+    "status": {
+      "type": "command",
+      "cmd": "manage-status",
+      "description": "Show project dashboard with phase progress, task status, and recommendations",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

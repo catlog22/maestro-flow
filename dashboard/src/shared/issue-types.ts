@@ -30,6 +30,8 @@ export interface IssueSolution {
   steps: SolutionStep[];
   context?: string;          // exploration context, key files
   promptTemplate?: string;   // custom prompt template (Liquid syntax)
+  chain?: string;            // chain graph ID (e.g., 'issue-lifecycle') — routes execution through GraphWalker
+  chainMode?: 'full' | 'plan-execute' | 'direct';  // chain entry mode (default: 'full')
   planned_at?: string;       // ISO timestamp when solution was planned
   planned_by?: string;       // agent or user who created the plan
 }

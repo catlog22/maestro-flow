@@ -1,0 +1,25 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/spec-setup",
+  "name": "Spec Setup",
+  "description": "Initialize project-level specs via interactive questionnaire",
+  "version": "1.0.0",
+  "tags": [
+    "spec"
+  ],
+  "entry": "spec_setup",
+  "inputs": {},
+  "nodes": {
+    "spec_setup": {
+      "type": "command",
+      "cmd": "spec-setup",
+      "next": "done",
+      "analyze": false,
+      "description": "Initialize project-level specs via interactive questionnaire"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

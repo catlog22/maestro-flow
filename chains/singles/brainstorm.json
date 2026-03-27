@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/brainstorm",
+  "name": "Brainstorm",
+  "description": "Multi-role brainstorming with auto pipeline or single-role analysis",
+  "version": "1.0.0",
+  "tags": [
+    "maestro",
+    "brainstorm"
+  ],
+  "entry": "brainstorm",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "brainstorm": {
+      "type": "command",
+      "cmd": "maestro-brainstorm",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Multi-role brainstorming with auto pipeline or single-role analysis"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

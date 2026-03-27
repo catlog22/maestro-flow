@@ -1,0 +1,23 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/quick",
+  "name": "Quick",
+  "description": "Execute a quick ad-hoc task with workflow guarantees but skip optional agents",
+  "version": "1.0.0",
+  "tags": ["fast-track", "scratch"],
+  "entry": "quick",
+  "inputs": {},
+  "nodes": {
+    "quick": {
+      "type": "command",
+      "cmd": "maestro-quick",
+      "description": "Fast task execution skipping optional exploration and analysis agents",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

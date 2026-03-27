@@ -1,0 +1,27 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/plan",
+  "name": "Plan",
+  "description": "Create execution plan for a phase with exploration and clarification",
+  "version": "1.0.0",
+  "tags": ["planning"],
+  "entry": "plan",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "args": "{phase}",
+      "description": "Explore, clarify, plan, check, and confirm a phase execution plan",
+      "auto_flag": "--auto",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

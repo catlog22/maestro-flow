@@ -1,0 +1,257 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://maestro.dev/schemas/chain-graph.schema.json",
+  "title": "ChainGraph",
+  "description": "Graph Coordinator chain graph definition",
+  "type": "object",
+  "required": ["id", "name", "version", "entry", "nodes"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "entry": {
+      "type": "string"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/GraphInput" }
+    },
+    "nodes": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/GraphNode" }
+    },
+    "defaults": { "$ref": "#/definitions/GraphDefaults" }
+  },
+  "definitions": {
+    "GraphInput": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean"]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "default": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" }
+          ]
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GraphDefaults": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": { "type": "number" },
+        "analyze": { "type": "boolean" },
+        "max_visits": { "type": "number" },
+        "auto_flag": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "GraphNode": {
+      "oneOf": [
+        { "$ref": "#/definitions/CommandNode" },
+        { "$ref": "#/definitions/DecisionNode" },
+        { "$ref": "#/definitions/GateNode" },
+        { "$ref": "#/definitions/ForkNode" },
+        { "$ref": "#/definitions/JoinNode" },
+        { "$ref": "#/definitions/EvalNode" },
+        { "$ref": "#/definitions/TerminalNode" }
+      ]
+    },
+    "CommandNode": {
+      "type": "object",
+      "required": ["type", "cmd", "next"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "command"
+        },
+        "cmd": { "type": "string" },
+        "args": { "type": "string" },
+        "auto_flag": { "type": "string" },
+        "next": { "type": "string" },
+        "on_failure": { "type": "string" },
+        "max_visits": { "type": "number" },
+        "timeout_ms": { "type": "number" },
+        "analyze": { "type": "boolean" },
+        "extract": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/ExtractionRule" }
+        }
+      }
+    },
+    "ExtractionRule": {
+      "type": "object",
+      "required": ["strategy", "pattern", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["regex", "json_path", "line_match"]
+        },
+        "pattern": { "type": "string" },
+        "target": { "type": "string" }
+      }
+    },
+    "DecisionNode": {
+      "type": "object",
+      "required": ["type", "edges"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "decision"
+        },
+        "strategy": {
+          "type": "string",
+          "enum": ["expr", "llm"]
+        },
+        "eval": { "type": "string" },
+        "prompt": { "type": "string" },
+        "context_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "edges": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/DecisionEdge" }
+        }
+      }
+    },
+    "DecisionEdge": {
+      "type": "object",
+      "required": ["target"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "number" },
+            { "type": "boolean" }
+          ]
+        },
+        "match": { "type": "string" },
+        "label": { "type": "string" },
+        "default": { "type": "boolean" },
+        "target": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "GateNode": {
+      "type": "object",
+      "required": ["type", "condition", "on_pass", "on_fail"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "gate"
+        },
+        "condition": { "type": "string" },
+        "on_pass": { "type": "string" },
+        "on_fail": { "type": "string" },
+        "wait": { "type": "boolean" },
+        "wait_message": { "type": "string" }
+      }
+    },
+    "ForkNode": {
+      "type": "object",
+      "required": ["type", "branches", "join"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "fork"
+        },
+        "branches": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "join": { "type": "string" }
+      }
+    },
+    "JoinNode": {
+      "type": "object",
+      "required": ["type", "strategy", "next"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "join"
+        },
+        "strategy": {
+          "type": "string",
+          "enum": ["all", "any", "majority"]
+        },
+        "next": { "type": "string" },
+        "merge": {
+          "type": "string",
+          "enum": ["concat", "last", "best_score"]
+        }
+      }
+    },
+    "EvalNode": {
+      "type": "object",
+      "required": ["type", "set", "next"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "eval"
+        },
+        "set": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "next": { "type": "string" }
+      }
+    },
+    "TerminalNode": {
+      "type": "object",
+      "required": ["type", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "terminal"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failure", "paused", "delegate"]
+        },
+        "delegate_graph": { "type": "string" },
+        "delegate_inputs": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "summary": { "type": "string" }
+      }
+    }
+  }
+}

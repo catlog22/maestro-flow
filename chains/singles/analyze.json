@@ -1,0 +1,23 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/analyze",
+  "name": "Analyze",
+  "description": "Multi-dimensional analysis with CLI exploration and decision extraction",
+  "version": "1.0.0",
+  "tags": ["analysis"],
+  "entry": "analyze",
+  "inputs": {},
+  "nodes": {
+    "analyze": {
+      "type": "command",
+      "cmd": "maestro-analyze",
+      "description": "Explore codebase, score across 6 dimensions, extract decisions and gray areas",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

@@ -2,6 +2,8 @@
 // ExecutionScheduler — orchestrates issue execution via agent processes
 // ---------------------------------------------------------------------------
 
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { readIssuesJsonl, writeIssuesJsonl, withIssueWriteLock } from '../utils/issue-store.js';
 
 import type { AgentType, AgentProcess } from '../../shared/agent-types.js';
@@ -54,6 +56,13 @@ export class ExecutionScheduler {
   private selfLearningService?: SelfLearningService;
   private isDispatching = false;
   public isCommanderActive = false;
+
+  // Lazy-cached GraphWalker infrastructure (shared across dispatchViaChain calls)
+  private chainInfraPromise: Promise<{
+    GraphWalker: any; GraphLoader: any; DefaultExprEvaluator: any;
+    DefaultOutputParser: any; DefaultPromptAssembler: any; DashboardExecutor: any;
+    homedir: () => string;
+  }> | null = null;
 
   constructor(
     private readonly agentManager: AgentManager,
@@ -423,6 +432,12 @@ export class ExecutionScheduler {
   // -------------------------------------------------------------------------
 
   private async dispatch(issue: Issue, executor: AgentType): Promise<void> {
+    // Route to chain-based execution when issue has a chain defined
+    if (issue.solution?.chain) {
+      await this.dispatchViaChain(issue, executor);
+      return;
+    }
+
     const prompt = await this.buildPrompt(issue);
     const now = new Date().toISOString();
     const retryCount = issue.execution?.retryCount ?? 0;
@@ -510,6 +525,154 @@ export class ExecutionScheduler {
       executor,
       issue: startedIssue ?? undefined,
     });
+  }
+
+  /**
+   * Chain-based dispatch — routes issue execution through a GraphWalker chain.
+   * The chain (e.g., 'issue-lifecycle') defines the multi-step execution flow.
+   */
+  private async dispatchViaChain(issue: Issue, executor: AgentType): Promise<void> {
+    const now = new Date().toISOString();
+    const retryCount = issue.execution?.retryCount ?? 0;
+    const chainId = issue.solution!.chain!;
+    const chainMode = issue.solution?.chainMode ?? 'full';
+
+    // Workspace isolation
+    let workDir = process.cwd();
+    if (this.workspaceManager) {
+      try {
+        const ws = await this.workspaceManager.createForIssue(issue.id);
+        workDir = ws.path;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (this.config.workspace.strict) {
+          await this.handleFailure(issue.id, `Workspace creation failed: ${message}`);
+          return;
+        }
+        console.error(`[Execution] Workspace creation failed for ${issue.id}, falling back to cwd:`, message);
+      }
+    }
+
+    // Update issue status
+    await this.updateIssueFields(issue.id, {
+      status: 'in_progress',
+      execution: { status: 'running', retryCount, startedAt: now },
+    });
+
+    this.stats.totalDispatched++;
+
+    this.eventBus.emit('execution:started', {
+      issueId: issue.id,
+      processId: `chain-${issue.id}`,
+      executor,
+    });
+
+    // Lazy-load GraphWalker infrastructure (cached after first call)
+    try {
+      if (!this.chainInfraPromise) {
+        this.chainInfraPromise = Promise.all([
+          import('../../../../src/coordinator/graph-walker.js'),
+          import('../../../../src/coordinator/graph-loader.js'),
+          import('../../../../src/coordinator/expr-evaluator.js'),
+          import('../../../../src/coordinator/output-parser.js'),
+          import('../../../../src/coordinator/prompt-assembler.js'),
+          import('../coordinator/dashboard-executor.js'),
+          import('node:os'),
+        ]).then(([gw, gl, ee, op, pa, de, os]) => ({
+          GraphWalker: gw.GraphWalker,
+          GraphLoader: gl.GraphLoader,
+          DefaultExprEvaluator: ee.DefaultExprEvaluator,
+          DefaultOutputParser: op.DefaultOutputParser,
+          DefaultPromptAssembler: pa.DefaultPromptAssembler,
+          DashboardExecutor: de.DashboardExecutor,
+          homedir: os.homedir,
+        }));
+      }
+      const infra = await this.chainInfraPromise;
+      const { GraphWalker, GraphLoader, DefaultExprEvaluator, DefaultOutputParser, DefaultPromptAssembler, DashboardExecutor, homedir } = infra;
+
+      const globalChainsRoot = resolve(homedir(), '.maestro', 'chains');
+      const localChainsRoot = resolve(workDir, 'chains');
+      const chainsRoot = existsSync(localChainsRoot) ? localChainsRoot : globalChainsRoot;
+      const templateDir = resolve(homedir(), '.maestro', 'templates', 'cli', 'prompts');
+
+      const loader = new GraphLoader(chainsRoot);
+      const dashExecutor = new DashboardExecutor(this.agentManager, this.eventBus);
+      const assembler = new DefaultPromptAssembler(workDir, templateDir);
+      const evaluator = new DefaultExprEvaluator();
+      const parser = new DefaultOutputParser();
+
+      // Bridge walker events → execution events for UI progress tracking
+      const eventBus = this.eventBus;
+      const issueId = issue.id;
+      const emitter = {
+        emit(event: { type: string; [k: string]: unknown }) {
+          eventBus.emit(event.type as any, event);
+          if (event.type === 'walker:command') {
+            const status = event.status as string;
+            if (status === 'completed' || status === 'failed') {
+              eventBus.emit('coordinate:step' as any, {
+                sessionId: `chain-${issueId}`,
+                step: {
+                  cmd: event.cmd ?? event.node_id,
+                  status: status === 'completed' ? 'completed' : 'failed',
+                  summary: (event as any).summary ?? null,
+                  qualityScore: null,
+                },
+              });
+            }
+          }
+        },
+      };
+
+      const sessionDir = join(workDir, '.workflow', '.maestro-coordinate', `chain-${issue.id}`);
+      const walker = new GraphWalker(loader, assembler, dashExecutor, null, parser, evaluator, emitter, sessionDir);
+
+      const walkerState = await walker.start(chainId, issue.description, {
+        tool: executor,
+        autoMode: true,
+        workflowRoot: workDir,
+        inputs: {
+          issue_id: issue.id,
+          description: issue.description,
+          mode: chainMode,
+        },
+      });
+
+      // Determine success from walker state
+      if (walkerState.status === 'completed') {
+        const lastCmd = walkerState.history.filter((h: { node_type: string; summary?: string }) => h.node_type === 'command').pop();
+        await this.updateIssueFields(issue.id, {
+          status: 'resolved',
+          execution: {
+            status: 'completed',
+            retryCount,
+            completedAt: new Date().toISOString(),
+            result: { summary: lastCmd?.summary ?? 'Chain completed' },
+          },
+        });
+        this.claimed.delete(issue.id);
+        this.stats.totalCompleted++;
+
+        const completedIssue = await this.findIssue(issue.id);
+        this.eventBus.emit('execution:completed', {
+          issueId: issue.id,
+          processId: `chain-${issue.id}`,
+          issue: completedIssue ?? undefined,
+        });
+      } else {
+        const failedStep = walkerState.history.filter((h: { outcome?: string; summary?: string }) => h.outcome === 'failure').pop();
+        await this.handleFailure(issue.id, failedStep?.summary ?? 'Chain execution failed');
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await this.handleFailure(issue.id, `Chain dispatch failed: ${message}`);
+    }
+
+    // Workspace cleanup
+    if (this.workspaceManager?.getWorkspacePath(issue.id)) {
+      void this.workspaceManager.removeForIssue(issue.id);
+    }
   }
 
   private async buildPrompt(issue: Issue): Promise<string> {

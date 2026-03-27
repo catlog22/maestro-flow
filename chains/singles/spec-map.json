@@ -1,0 +1,25 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/spec-map",
+  "name": "Spec Map",
+  "description": "Analyze codebase with parallel mapper agents to produce codebase documents",
+  "version": "1.0.0",
+  "tags": [
+    "spec"
+  ],
+  "entry": "spec_map",
+  "inputs": {},
+  "nodes": {
+    "spec_map": {
+      "type": "command",
+      "cmd": "spec-map",
+      "next": "done",
+      "analyze": false,
+      "description": "Analyze codebase with parallel mapper agents to produce codebase documents"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

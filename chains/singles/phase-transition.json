@@ -1,0 +1,23 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/phase-transition",
+  "name": "Phase Transition",
+  "description": "Mark current phase as complete, extract learnings, advance to next phase",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "transition"],
+  "entry": "phase_transition",
+  "inputs": {},
+  "nodes": {
+    "phase_transition": {
+      "type": "command",
+      "cmd": "maestro-phase-transition",
+      "description": "Complete current phase, archive artifacts, extract learnings, advance state",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

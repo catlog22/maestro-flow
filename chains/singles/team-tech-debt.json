@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/team-tech-debt",
+  "name": "Team Tech Debt",
+  "description": "Tech debt identification and remediation with validation",
+  "version": "1.0.0",
+  "tags": [
+    "team",
+    "tech-debt"
+  ],
+  "entry": "team_tech_debt",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "team_tech_debt": {
+      "type": "command",
+      "cmd": "team-tech-debt",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Tech debt identification and remediation with validation"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

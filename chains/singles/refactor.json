@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/refactor",
+  "name": "Refactor",
+  "description": "Tech debt reduction with reflection-driven iteration",
+  "version": "1.0.0",
+  "tags": [
+    "quality",
+    "refactor"
+  ],
+  "entry": "refactor",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "refactor": {
+      "type": "command",
+      "cmd": "quality-refactor",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Tech debt reduction with reflection-driven iteration"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

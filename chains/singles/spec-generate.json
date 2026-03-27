@@ -1,0 +1,31 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/spec-generate",
+  "name": "Spec Generate",
+  "description": "Generate specification package through 7-phase document chain",
+  "version": "1.0.0",
+  "tags": [
+    "maestro",
+    "spec"
+  ],
+  "entry": "spec_generate",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "spec_generate": {
+      "type": "command",
+      "cmd": "maestro-spec-generate",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Generate specification package through 7-phase document chain"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

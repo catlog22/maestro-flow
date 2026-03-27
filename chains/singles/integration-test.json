@@ -1,0 +1,32 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/integration-test",
+  "name": "Integration Test",
+  "description": "Self-iterating integration test cycle with adaptive strategy engine",
+  "version": "1.0.0",
+  "tags": [
+    "quality",
+    "testing"
+  ],
+  "entry": "integration_test",
+  "inputs": {
+    "phase": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "nodes": {
+    "integration_test": {
+      "type": "command",
+      "cmd": "quality-integration-test",
+      "next": "done",
+      "analyze": false,
+      "args": "{phase}",
+      "description": "Self-iterating integration test cycle with adaptive strategy engine"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

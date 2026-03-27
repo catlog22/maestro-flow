@@ -1,0 +1,112 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "full-lifecycle",
+  "name": "Full Lifecycle",
+  "description": "Plan -> Execute -> Verify -> Review -> Test -> Transition with decision points",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "phase"],
+  "entry": "plan",
+  "inputs": {
+    "phase": { "type": "string", "required": true },
+    "description": { "type": "string" }
+  },
+  "defaults": { "analyze": true },
+  "nodes": {
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan by exploring codebase, clarifying requirements, and generating task decomposition",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution with atomic commits",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward 3-layer verification with anti-pattern scan",
+      "args": "{phase}",
+      "next": "check_verify",
+      "max_visits": 3
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "review" },
+        { "default": true, "target": "fix_plan" }
+      ]
+    },
+    "fix_plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Re-plan to address verification gaps and failures",
+      "args": "{phase} --gaps",
+      "auto_flag": "--auto",
+      "next": "fix_execute"
+    },
+    "fix_execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Re-execute tasks from updated gap-fix plan",
+      "args": "{phase}",
+      "next": "verify",
+      "max_visits": 3
+    },
+    "review": {
+      "type": "command",
+      "cmd": "quality-review",
+      "description": "Multi-dimensional code review with severity classification",
+      "args": "{phase}",
+      "next": "check_review"
+    },
+    "check_review": {
+      "type": "decision",
+      "eval": "ctx.result.review_verdict",
+      "edges": [
+        { "value": "BLOCK", "target": "fix_plan" },
+        { "default": true, "target": "test" }
+      ]
+    },
+    "test": {
+      "type": "command",
+      "cmd": "quality-test",
+      "description": "User acceptance testing with auto-diagnosis",
+      "args": "{phase}",
+      "auto_flag": "--auto-fix",
+      "next": "check_test"
+    },
+    "check_test": {
+      "type": "decision",
+      "eval": "ctx.result.uat_status",
+      "edges": [
+        { "value": "passed", "target": "transition" },
+        { "default": true, "target": "debug" }
+      ]
+    },
+    "debug": {
+      "type": "command",
+      "cmd": "quality-debug",
+      "description": "Hypothesis-driven debugging from UAT failures",
+      "args": "--from-uat {phase}",
+      "next": "fix_execute",
+      "max_visits": 2
+    },
+    "transition": {
+      "type": "command",
+      "cmd": "maestro-phase-transition",
+      "description": "Complete phase, extract learnings, advance to next",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

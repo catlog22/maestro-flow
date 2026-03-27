@@ -1,0 +1,259 @@
+{
+  "$schema": "intent-map.schema.json",
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "type": "state_continue",
+      "regex": "^(continue|next|go|继续|下一步)$",
+      "flags": "i",
+      "route": { "strategy": "state_router" }
+    },
+    {
+      "type": "status",
+      "regex": "^(status|状态|dashboard)$",
+      "flags": "i",
+      "route": { "graph": "singles/status" }
+    },
+    {
+      "type": "spec_generate",
+      "regex": "spec.*(generat|creat|build)|PRD|产品.*规格",
+      "flags": "i",
+      "route": { "graph": "spec-driven" }
+    },
+    {
+      "type": "brainstorm",
+      "regex": "brainstorm|ideate|头脑风暴|发散",
+      "flags": "i",
+      "route": { "graph": "brainstorm-driven" }
+    },
+    {
+      "type": "analyze",
+      "regex": "analy[sz]e|feasib|evaluat|assess|discuss|分析|评估|讨论",
+      "flags": "i",
+      "route": { "graph": "singles/analyze" }
+    },
+    {
+      "type": "ui_design",
+      "regex": "ui.*design|design.*ui|prototype|设计.*原型|UI.*风格",
+      "flags": "i",
+      "route": { "graph": "ui-design-driven" }
+    },
+    {
+      "type": "init",
+      "regex": "init|setup.*project|初始化|新项目",
+      "flags": "i",
+      "route": { "graph": "singles/init" }
+    },
+    {
+      "type": "plan",
+      "regex": "plan(?!.*gap)|break.*down|规划|分解",
+      "flags": "i",
+      "route": { "graph": "singles/plan" }
+    },
+    {
+      "type": "roadmap",
+      "regex": "roadmap|路线图",
+      "flags": "i",
+      "route": { "graph": "roadmap-driven" }
+    },
+    {
+      "type": "execute",
+      "regex": "execute|implement|build|develop|code|实现|开发",
+      "flags": "i",
+      "route": { "graph": "singles/execute" }
+    },
+    {
+      "type": "verify",
+      "regex": "verif[iy]|validate.*result|验证|校验",
+      "flags": "i",
+      "route": { "graph": "singles/verify" }
+    },
+    {
+      "type": "review",
+      "regex": "\\breview.*code|code.*review|代码.*审查",
+      "flags": "i",
+      "route": { "graph": "singles/review" }
+    },
+    {
+      "type": "test_gen",
+      "regex": "test.*gen|generat.*test|add.*test|写测试",
+      "flags": "i",
+      "route": { "graph": "singles/test-gen" }
+    },
+    {
+      "type": "test",
+      "regex": "\\btest|uat|测试|验收",
+      "flags": "i",
+      "route": { "graph": "singles/test" }
+    },
+    {
+      "type": "debug",
+      "regex": "debug|diagnos|troubleshoot|fix.*bug|调试|排查",
+      "flags": "i",
+      "route": { "graph": "singles/debug" }
+    },
+    {
+      "type": "integration_test",
+      "regex": "integrat.*test|e2e|集成测试",
+      "flags": "i",
+      "route": { "graph": "singles/integration-test" }
+    },
+    {
+      "type": "refactor",
+      "regex": "refactor|tech.*debt|重构|技术债",
+      "flags": "i",
+      "route": { "graph": "singles/refactor" }
+    },
+    {
+      "type": "sync",
+      "regex": "sync.*doc|refresh.*doc|同步",
+      "flags": "i",
+      "route": { "graph": "singles/sync" }
+    },
+    {
+      "type": "phase_transition",
+      "regex": "phase.*transit|next.*phase|推进|切换.*阶段",
+      "flags": "i",
+      "route": { "graph": "singles/phase-transition" }
+    },
+    {
+      "type": "phase_add",
+      "regex": "phase.*add|add.*phase|添加.*阶段",
+      "flags": "i",
+      "route": { "graph": "singles/phase-add" }
+    },
+    {
+      "type": "milestone_audit",
+      "regex": "milestone.*audit|里程碑.*审计",
+      "flags": "i",
+      "route": { "graph": "singles/milestone-audit" }
+    },
+    {
+      "type": "milestone_complete",
+      "regex": "milestone.*compl|完成.*里程碑",
+      "flags": "i",
+      "route": { "graph": "singles/milestone-complete" }
+    },
+    {
+      "type": "issue_analyze",
+      "regex": "analyze.*issue|issue.*root.*cause",
+      "flags": "i",
+      "route": { "graph": "singles/issue-analyze" }
+    },
+    {
+      "type": "issue_plan",
+      "regex": "plan.*issue|issue.*solution",
+      "flags": "i",
+      "route": { "graph": "singles/issue-plan" }
+    },
+    {
+      "type": "issue_execute",
+      "regex": "execute.*issue|run.*issue",
+      "flags": "i",
+      "route": { "graph": "singles/issue-execute" }
+    },
+    {
+      "type": "issue_discover",
+      "regex": "discover.*issue|find.*issue|发现.*问题",
+      "flags": "i",
+      "route": { "graph": "singles/issue-discover" }
+    },
+    {
+      "type": "issue",
+      "regex": "issue|问题|缺陷",
+      "flags": "i",
+      "route": { "graph": "singles/issue" }
+    },
+    {
+      "type": "codebase_rebuild",
+      "regex": "codebase.*rebuild|重建.*文档",
+      "flags": "i",
+      "route": { "graph": "singles/codebase-rebuild" }
+    },
+    {
+      "type": "codebase_refresh",
+      "regex": "codebase.*refresh|刷新.*文档",
+      "flags": "i",
+      "route": { "graph": "singles/codebase-refresh" }
+    },
+    {
+      "type": "spec_setup",
+      "regex": "spec.*setup|规范.*初始化",
+      "flags": "i",
+      "route": { "graph": "singles/spec-setup" }
+    },
+    {
+      "type": "spec_add",
+      "regex": "spec.*add|添加.*规范",
+      "flags": "i",
+      "route": { "graph": "singles/spec-add" }
+    },
+    {
+      "type": "spec_load",
+      "regex": "spec.*load|加载.*规范",
+      "flags": "i",
+      "route": { "graph": "singles/spec-load" }
+    },
+    {
+      "type": "spec_map",
+      "regex": "spec.*map|规范.*映射",
+      "flags": "i",
+      "route": { "graph": "singles/spec-map" }
+    },
+    {
+      "type": "memory_capture",
+      "regex": "memory.*captur|save.*memory|compact",
+      "flags": "i",
+      "route": { "graph": "singles/memory-capture" }
+    },
+    {
+      "type": "memory",
+      "regex": "memory|manage.*mem|记忆",
+      "flags": "i",
+      "route": { "graph": "singles/memory" }
+    },
+    {
+      "type": "team_lifecycle",
+      "regex": "team.*lifecycle|团队.*生命周期",
+      "flags": "i",
+      "route": { "graph": "singles/team-lifecycle" }
+    },
+    {
+      "type": "team_coordinate",
+      "regex": "team.*coordinat|团队.*协调",
+      "flags": "i",
+      "route": { "graph": "singles/team-coordinate" }
+    },
+    {
+      "type": "team_qa",
+      "regex": "team.*(qa|quality)|团队.*质量",
+      "flags": "i",
+      "route": { "graph": "singles/team-qa" }
+    },
+    {
+      "type": "team_test",
+      "regex": "team.*test|团队.*测试",
+      "flags": "i",
+      "route": { "graph": "singles/team-testing" }
+    },
+    {
+      "type": "team_review",
+      "regex": "team.*review|团队.*评审",
+      "flags": "i",
+      "route": { "graph": "singles/team-review" }
+    },
+    {
+      "type": "team_tech_debt",
+      "regex": "team.*tech.*debt|团队.*技术债",
+      "flags": "i",
+      "route": { "graph": "singles/team-tech-debt" }
+    },
+    {
+      "type": "quick",
+      "regex": "quick|small.*task|ad.?hoc|简单|快速",
+      "flags": "i",
+      "route": { "graph": "singles/quick" }
+    }
+  ],
+  "fallback": { "graph": "singles/quick" }
+}

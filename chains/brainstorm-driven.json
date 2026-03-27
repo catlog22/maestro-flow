@@ -1,0 +1,79 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "brainstorm-driven",
+  "name": "Brainstorm-Driven",
+  "description": "Brainstorm -> Init -> Analyze -> Plan -> Execute -> Verify pipeline",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "brainstorm"],
+  "entry": "brainstorm",
+  "inputs": {
+    "phase": { "type": "string" },
+    "description": { "type": "string", "required": true }
+  },
+  "defaults": { "analyze": true },
+  "nodes": {
+    "brainstorm": {
+      "type": "command",
+      "cmd": "maestro-brainstorm",
+      "description": "Multi-role brainstorming with auto pipeline or single-role analysis",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "init"
+    },
+    "init": {
+      "type": "command",
+      "cmd": "maestro-init",
+      "description": "Initialize project structure and state files",
+      "next": "analyze"
+    },
+    "analyze": {
+      "type": "command",
+      "cmd": "maestro-analyze",
+      "description": "Multi-dimensional analysis with CLI exploration and decision extraction",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan with task decomposition",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "description": "Goal-backward 3-layer verification",
+      "args": "{phase}",
+      "next": "check_verify",
+      "max_visits": 2
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "done" },
+        { "default": true, "target": "done_with_issues" }
+      ]
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Brainstorm-driven pipeline completed successfully"
+    },
+    "done_with_issues": {
+      "type": "terminal",
+      "status": "paused",
+      "summary": "Brainstorm-driven pipeline completed with verification issues"
+    }
+  }
+}

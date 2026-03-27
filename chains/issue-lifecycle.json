@@ -1,0 +1,74 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "issue-lifecycle",
+  "name": "Issue Lifecycle",
+  "description": "Full issue resolution: analyze → plan → execute → verify with decision routing",
+  "version": "1.0.0",
+  "tags": ["issue", "lifecycle"],
+  "entry": "check_mode",
+  "inputs": {
+    "issue_id": { "type": "string", "required": true },
+    "description": { "type": "string" },
+    "mode": { "type": "string", "default": "full" }
+  },
+  "nodes": {
+    "check_mode": {
+      "type": "decision",
+      "eval": "ctx.inputs.mode",
+      "edges": [
+        { "value": "direct", "target": "execute" },
+        { "value": "plan-execute", "target": "plan" },
+        { "default": true, "target": "analyze" }
+      ]
+    },
+    "analyze": {
+      "type": "command",
+      "cmd": "manage-issue-analyze",
+      "description": "Root cause analysis for the issue using CLI exploration",
+      "args": "{issue_id}",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "manage-issue-plan",
+      "description": "Generate codebase-aware solution plan with step decomposition",
+      "args": "{issue_id}",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "manage-issue-execute",
+      "description": "Execute planned solution via dual-mode agent dispatch",
+      "args": "{issue_id}",
+      "next": "check_result"
+    },
+    "check_result": {
+      "type": "decision",
+      "eval": "ctx.result.status",
+      "edges": [
+        { "value": "SUCCESS", "target": "done" },
+        { "default": true, "target": "retry_plan" }
+      ]
+    },
+    "retry_plan": {
+      "type": "command",
+      "cmd": "manage-issue-plan",
+      "description": "Re-plan after execution failure with updated context",
+      "args": "{issue_id} --retry",
+      "next": "retry_execute",
+      "max_visits": 2
+    },
+    "retry_execute": {
+      "type": "command",
+      "cmd": "manage-issue-execute",
+      "description": "Re-execute with revised plan",
+      "args": "{issue_id}",
+      "next": "done",
+      "max_visits": 2
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

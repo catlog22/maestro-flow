@@ -1,0 +1,30 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/spec-load",
+  "name": "Spec Load",
+  "description": "Load relevant specs for current context by keyword routing",
+  "version": "1.0.0",
+  "tags": [
+    "spec"
+  ],
+  "entry": "spec_load",
+  "inputs": {
+    "description": {
+      "type": "string"
+    }
+  },
+  "nodes": {
+    "spec_load": {
+      "type": "command",
+      "cmd": "spec-load",
+      "next": "done",
+      "analyze": false,
+      "args": "\"{description}\"",
+      "description": "Load relevant specs for current context by keyword routing"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}
