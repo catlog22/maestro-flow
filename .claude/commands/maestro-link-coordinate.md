@@ -1,7 +1,7 @@
 ---
 name: maestro-link-coordinate
-description: Interactive step-by-step workflow coordinator — preview, modify, skip, add/remove steps before execution
-argument-hint: "\"intent text\" [--list] [-c [sessionId]] [--chain <name>] [--tool <tool>]"
+description: Chain-graph coordinator — load chain JSON, walk graph nodes, execute each step via maestro cli
+argument-hint: "\"intent text\" [--list] [-c [sessionId]] [--chain <name>] [--tool <tool>] [-y]"
 allowed-tools:
   - Read
   - Write
@@ -10,36 +10,37 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
-  - AskUserQuestion
 ---
 <purpose>
-Interactive step-by-step coordinator that extends Graph Walker with pause-preview-act semantics.
-At each command node: shows preview (command, args, description, prompt, upcoming chain with
-descriptions), then asks user to Execute / Skip / Modify args / Add step / Delete step / Quit.
-Enables dynamic chain editing during walk — user controls the pace and shape of the workflow.
+Graph-driven workflow coordinator using chain JSON definitions from `chains/`.
+Loads a chain graph, walks nodes (command/decision/gate/terminal), executes each
+command step via `maestro cli --tool <tool> --mode write`. Decision nodes auto-resolve
+based on previous step output. Walker state persisted for resume support.
 
-Each command node carries a `description` field that explains what the step does, enabling
-meaningful previews and informed user decisions at each step.
+Replaces hardcoded chainMap with declarative chain JSON graphs — same execution
+model as maestro-coordinate but data-driven.
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/maestro-link-coordinate.md
 </required_reading>
 
+<deferred_reading>
+- [coordinate template](~/.maestro/templates/cli/prompts/coordinate-step.txt) — read when filling step prompts
+</deferred_reading>
+
 <context>
-$ARGUMENTS — user intent text, flags, or `--list`.
+$ARGUMENTS — user intent text, or flags.
 
 **Flags:**
-- `--list` — List all available command chains with ID, name, cmd count, description
-- `-c` / `--continue [sessionId]` — Resume previous link session (latest if no ID)
-- `--chain <name>` — Force a specific graph (use `--list` to see available names)
+- `--list` — List all available chain graphs with ID, name, cmd count
+- `-c` / `--continue [sessionId]` — Resume previous session
+- `--chain <name>` — Force a specific chain graph (e.g. `full-lifecycle`, `issue-lifecycle`)
 - `--tool <tool>` — CLI tool override (default: claude)
+- `-y` / `--yes` — Auto mode: skip confirmations, inject auto-flags
 
-**Discovery:** Run `--list` first to see available chains and their descriptions, then
-pick one with `--chain <name>` or let IntentRouter auto-resolve from intent text.
-
-**Session persistence:** Each session saves to `.workflow/.maestro-coordinate/{session_id}/`
-with link-state.json, graph-snapshot.json (with edits), modifications.json, and outputs/.
+**Chain discovery:** `--list` scans `chains/` directory. Use `--chain <id>` to force a specific graph.
+Without `--chain`, intent is matched via `chains/_intent-map.json` patterns.
 </context>
 
 <execution>
@@ -49,21 +50,23 @@ Follow '~/.maestro/workflows/maestro-link-coordinate.md' completely.
 <error_codes>
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
-| E001 | error | No intent and no --list/--chain | Ask user for intent or suggest --list |
-| E002 | error | Graph not found or empty | Show `--list` output for available chains |
-| E003 | error | Step execution failed | Show failure summary, offer Skip/Quit |
-| E004 | error | Resume session not found | List available sessions in .maestro-coordinate/ |
-| E005 | warning | Decision node has no matching edge | Falls to default edge or fails gracefully |
+| E001 | error | No intent and no --list/--chain | Suggest --list to see available chains |
+| E002 | error | Chain graph not found | Show --list output |
+| E003 | error | Step execution failed | Auto-retry once, then skip or abort |
+| E004 | error | Resume session not found | List sessions in .maestro-coordinate/ |
+| E005 | warning | Decision node has no matching edge | Fall to default edge or fail |
+| E006 | error | CLI tool unavailable | Try fallback tool |
 </error_codes>
 
 <success_criteria>
-- [ ] `--list` shows all chains with descriptions, tags, and command counts
-- [ ] Graph loaded and first step preview displays command, args, description, upcoming chain
-- [ ] Each step pauses for user action before execution
-- [ ] User can add/remove/modify/skip steps dynamically
-- [ ] Upcoming chain shows command descriptions (not just raw args)
-- [ ] Decision/gate/eval nodes auto-resolve without pausing
-- [ ] Session state persisted at .workflow/.maestro-coordinate/{session_id}/
-- [ ] Resume (-c) restores exact position including graph modifications
-- [ ] Completion summary shows executed/skipped/added/removed counts
+- [ ] Chain graph loaded from `chains/` JSON file
+- [ ] Entry node resolved, graph walk initiated
+- [ ] Each command node executed via `maestro cli` with coordinate-step template
+- [ ] Decision nodes auto-resolved from `ctx.result.status`
+- [ ] Gate/eval nodes processed without CLI call
+- [ ] Terminal node reached → session complete
+- [ ] Walker state persisted to `.workflow/.maestro-coordinate/{session_id}/`
+- [ ] Resume (`-c`) restores position and continues walk
+- [ ] `--list` displays all chains from `chains/` directory
+- [ ] Completion report with per-step status
 </success_criteria>

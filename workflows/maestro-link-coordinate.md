@@ -1,149 +1,436 @@
 # Workflow: maestro-link-coordinate
 
-Interactive step-by-step coordinator. Pauses at each command node for user preview and action. Supports dynamic chain editing (add/remove/modify/skip steps). Each command node carries a `description` for meaningful previews.
+Chain-graph coordinator. Loads a chain JSON from `chains/`, walks the graph node by node, executes each command step via `maestro cli`. Decision/gate/eval nodes auto-resolve. Walker state persisted for resume.
 
 ---
 
-### Step 1: Parse Arguments & Load Graph
+### Step 1: Parse Arguments
 
 ```javascript
 const args = $ARGUMENTS.trim();
 const listMode = /\b--list\b/.test(args);
+const autoYes = /\b(-y|--yes)\b/.test(args);
 const resumeMode = /\b(-c|--continue)\b/.test(args);
 const resumeId = args.match(/(?:-c|--continue)\s+(\S+)/)?.[1] || null;
 const forcedChain = args.match(/--chain\s+(\S+)/)?.[1] || null;
 const cliTool = args.match(/--tool\s+(\S+)/)?.[1] || 'claude';
 const intent = args
-  .replace(/\b(--list|-c|--continue)\b/g, '')
+  .replace(/\b(-y|--yes|--list|-c|--continue)\b/g, '')
   .replace(/(?:-c|--continue)\s+\S+/g, '')
   .replace(/--(chain|tool)\s+\S+/g, '')
   .trim();
 ```
 
-**If listMode:**
-1. Load all graphs via `GraphLoader.listAll()`
-2. For each graph: show ID, Name, Cmd count, Description
-3. Exit — no interactive session
+**Resolve chains root:**
 
-**If resumeMode:**
-1. Find session in `.workflow/.maestro-coordinate/` (by ID or latest)
-2. Load `link-state.json` + `graph-snapshot.json`
-3. Resume from last `pending_preview` → jump to **Step 3**
-
-**If no intent and no --chain:** Ask user via AskUserQuestion for intent or suggest `--list`.
-
-**Resolve graph:**
-- If `--chain` → use directly
-- Else → use IntentRouter to resolve intent to graph ID
-- Load graph, deep-clone for mutable editing, create LinkWalker
-
----
-
-### Step 2: Initialize & Get First Preview
-
-1. Call `walker.start(graphId, intent, { tool, workflowRoot })` with resolved graph
-2. Walker initializes state, reads `.workflow/state.json` for project snapshot
-3. Walker advances through entry node → auto-resolves non-command nodes (decision/gate/eval)
-4. Returns `LinkStepPreview` for first command node:
-   - `node_id`, `cmd`, `resolved_args` (template vars substituted)
-   - `prompt_preview` (full assembled prompt)
-   - `step_index` / `total_steps` (position in chain)
-   - `upcoming[]` — remaining command nodes with `cmd`, `args_template`, `description`
-   - `context_summary` — previous step result if any
-5. If null (empty graph or only non-command nodes) → error E002
-
----
-
-### Step 3: Interactive Loop
-
-Display step preview to user via AskUserQuestion:
-
-```
-**Step {step_index}/{total_steps}: /{cmd}**
-Args: {resolved_args}
-Description: {node.description}
-
-Context: {context_summary}
-
-Upcoming chain:
-  → {upcoming[0].cmd} — {upcoming[0].description}
-  → {upcoming[1].cmd} — {upcoming[1].description}
-  ...
-
-Choose action:
-- **Execute** — run this step now
-- **Skip** — skip and advance to next command
-- **Modify <new_args>** — change args, then execute
-- **Add <cmd> [args]** — insert a new step after current
-- **Delete <N>** — remove Nth upcoming step
-- **Quit** — save session and exit (resumable with -c)
+```bash
+# Local chains first, fallback to global
+test -d chains && CHAINS_ROOT="chains" || CHAINS_ROOT="$HOME/.maestro/chains"
 ```
 
-**Handle response:**
-
-| Action | Walker Call | Next |
-|--------|-----------|------|
-| Execute | `executeStep({ type: 'execute' })` | Step 4 |
-| Skip | `executeStep({ type: 'skip' })` | Step 4 |
-| Modify "args" | `executeStep({ type: 'modify', args })` | Step 4 |
-| Add "cmd" "args" | `addNode(current_node, cmd, args)` — updates graph, refreshes upcoming | Stay Step 3 |
-| Delete N | `removeNode(upcoming[N-1].node_id)` — removes from graph, refreshes upcoming | Stay Step 3 |
-| Quit | `executeStep({ type: 'quit' })` — saves state | Step 5 |
-
-**On Add/Delete:** The graph is mutated in-place. Rebuild the upcoming display from `session.traceCommandPath()` and re-display the same step preview with updated upcoming list.
-
 ---
 
-### Step 4: Post-Step Processing
+### Step 2: Handle --list
 
-After execute/skip returns the next preview:
+If `listMode`:
 
-1. **Show result summary** of the step just completed:
-   - Outcome: success / failure / skipped
-   - Summary from parsed output (extracted from COORDINATE RESULT block)
-   - Duration if available
+```bash
+# List all chain JSON files
+for f in "$CHAINS_ROOT"/*.json "$CHAINS_ROOT"/singles/*.json; do
+  [ -f "$f" ] && echo "$f"
+done
+```
 
-2. **If next preview is not null** → loop back to **Step 3**
+For each JSON file: read `id`, `name`, `description`, count nodes with `type: "command"`.
 
-3. **If next preview is null** → walk reached terminal node → go to **Step 5**
-
-**Decision node handling:** After a command completes, the walker may traverse decision/gate/eval nodes before reaching the next command. These are resolved automatically:
-- Decision: evaluates `ctx.result.*` against edge conditions
-- Gate: evaluates condition expression
-- Eval: sets context variables
-- Terminal: ends the walk
-
-If a decision has no matching edge, the walk fails with E005.
-
----
-
-### Step 5: Completion
-
-Print session summary:
+Display:
 
 ```
-Session: {session_id}
-Status: {completed|paused|failed}
-Graph: {graph_id} ({graph_name})
+Available chains:
 
-Steps executed: {count}
-Steps skipped: {count}
-Steps added: {count}  (chain modifications)
-Steps removed: {count}
-
-History:
-  1. /{cmd} — {outcome} — {summary}
-  2. /{cmd} — {outcome} — {summary}
+  ID                        Name                  Cmds  Description
+  ────────────────────────────────────────────────────────────────────
+  full-lifecycle             Full Lifecycle         6    Plan → execute → verify → review → test → transition
+  issue-lifecycle            Issue Lifecycle         5    Analyze → plan → execute with retry
+  singles/analyze            Analyze                1    Run maestro-analyze
   ...
 ```
 
-**Session files** at `.workflow/.maestro-coordinate/{session_id}/`:
+Exit after display.
 
-| File | Content |
-|------|---------|
-| `link-state.json` | Full `LinkSessionState` (extends WalkerState with link_mode, pending_preview, chain_modifications) |
-| `graph-snapshot.json` | Modified graph copy (reflects all user add/remove/modify edits) |
-| `modifications.json` | Ordered log of chain modifications with timestamps |
-| `outputs/{node_id}.txt` | Raw output per executed step |
+---
 
-**Resume:** `maestro lc -c` loads latest session. `maestro lc -c {session_id}` loads specific session. Walker reconstructs from link-state + graph-snapshot, resumes at pending_preview position.
+### Step 3: Load Chain Graph
+
+**If resumeMode:** Jump to **Step 3b**.
+
+**If no intent and no forcedChain:** Error E001.
+
+#### 3a: Resolve graph ID
+
+```javascript
+let graphId;
+if (forcedChain) {
+  graphId = forcedChain;
+} else {
+  // Load _intent-map.json, match intent against patterns
+  const intentMap = Read(`${CHAINS_ROOT}/_intent-map.json`);
+  // For each pattern: test regex against intent
+  // First match → route.graph
+  // No match → fallback.graph ("singles/quick")
+  graphId = matchedGraphId;
+}
+```
+
+Load chain JSON:
+
+```javascript
+const graph = Read(`${CHAINS_ROOT}/${graphId}.json`);
+// Validate: must have "entry", "nodes", each node must have "type"
+```
+
+If file not found → Error E002.
+
+#### 3b: Resume session
+
+```bash
+# Find session state
+ls .workflow/.maestro-coordinate/*/link-state.json 2>/dev/null | sort -r | head -1
+```
+
+If `resumeId` specified, load `.workflow/.maestro-coordinate/{resumeId}/link-state.json`.
+If not specified, load latest session.
+
+Load `link-state.json` → restore `graph`, `currentNode`, `history`, `context`.
+Jump to **Step 5** with restored position.
+
+---
+
+### Step 4: Initialize Session
+
+```javascript
+const sessionId = `lc-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15)}`;
+const sessionDir = `.workflow/.maestro-coordinate/${sessionId}`;
+```
+
+```bash
+mkdir -p "${sessionDir}"
+```
+
+Read project state for context:
+
+```bash
+test -f .workflow/state.json && cat .workflow/state.json
+```
+
+```javascript
+const state = {
+  session_id: sessionId,
+  status: 'running',
+  created_at: new Date().toISOString(),
+  intent, graph_id: graphId,
+  tool: cliTool, auto_mode: autoYes,
+  current_node: graph.entry,
+  context: {
+    result: { status: 'SUCCESS' },  // initial — no prior step
+    inputs: {
+      phase: /* from state.json current_phase or intent match */,
+      description: intent,
+      issue_id: /* if present in intent */,
+    },
+  },
+  history: [],
+  step_count: 0,
+  gemini_session_id: null,
+  step_analyses: [],
+};
+Write(`${sessionDir}/link-state.json`, JSON.stringify(state, null, 2));
+Write(`${sessionDir}/graph.json`, JSON.stringify(graph, null, 2));
+```
+
+---
+
+### Step 5: Walk Loop — Resolve Current Node
+
+Read `state.current_node` from state, look up in `graph.nodes`:
+
+```javascript
+const node = graph.nodes[state.current_node];
+```
+
+**Route by node type:**
+
+| Node Type | Action |
+|-----------|--------|
+| `command` | → **Step 6** (execute via CLI) |
+| `decision` | → **Step 5a** (evaluate + advance) |
+| `gate` | → **Step 5b** (check condition) |
+| `eval` | → **Step 5c** (set context vars) |
+| `terminal` | → **Step 8** (complete) |
+| `fork` / `join` | → **Step 5d** (sequential fallback) |
+
+#### 5a: Decision node
+
+```javascript
+// node.eval = "ctx.result.status"
+// node.edges = [{ value: "SUCCESS", target: "done" }, { default: true, target: "retry" }]
+const evalValue = resolveExpression(node.eval, state.context);
+const matchedEdge = node.edges.find(e => e.value === evalValue)
+  || node.edges.find(e => e.default);
+if (!matchedEdge) { /* Error E005 */ }
+```
+
+Record in history, advance `current_node = matchedEdge.target`, loop back to **Step 5**.
+
+#### 5b: Gate node
+
+```javascript
+// node.condition = "ctx.inputs.phase"
+const pass = !!resolveExpression(node.condition, state.context);
+state.current_node = pass ? node.next : (node.on_fail || /* terminal */);
+```
+
+Loop back to **Step 5**.
+
+#### 5c: Eval node
+
+```javascript
+// node.set = { "key": "value_expression" }
+for (const [k, v] of Object.entries(node.set)) {
+  state.context[k] = resolveExpression(v, state.context);
+}
+state.current_node = node.next;
+```
+
+Loop back to **Step 5**.
+
+#### 5d: Fork/join (sequential fallback)
+
+Advance to `node.next` or `node.join`. Loop back to **Step 5**.
+
+---
+
+### Step 6: Execute Command Node via maestro cli
+
+#### 6a: Check max_visits
+
+```javascript
+const visits = state.history.filter(h => h.node_id === state.current_node).length;
+if (node.max_visits && visits >= node.max_visits) {
+  // Skip — max visits reached
+  state.history.push({ node_id: state.current_node, type: 'command', outcome: 'skipped', reason: 'max_visits' });
+  state.current_node = node.on_failure || node.next || /* find terminal */;
+  // → Step 5
+}
+```
+
+#### 6b: Resolve args
+
+```javascript
+const resolvedArgs = (node.args || '')
+  .replace(/\{phase\}/g, state.context.inputs.phase || '')
+  .replace(/\{description\}/g, state.context.inputs.description || '')
+  .replace(/\{issue_id\}/g, state.context.inputs.issue_id || '');
+```
+
+#### 6c: Build prompt from template
+
+Read `~/.maestro/templates/cli/prompts/coordinate-step.txt`, fill placeholders:
+
+```javascript
+function escapeForShell(str) { return "'" + str.replace(/'/g, "'\\''") + "'"; }
+
+const template = Read('~/.maestro/templates/cli/prompts/coordinate-step.txt');
+
+// Analysis hints from previous step
+let analysisHints = '';
+const prevAnalysis = (state.step_analyses || []).slice(-1)[0];
+if (prevAnalysis?.next_step_hints) {
+  const h = prevAnalysis.next_step_hints;
+  const parts = [];
+  if (h.prompt_additions) parts.push(h.prompt_additions);
+  if (h.cautions?.length) parts.push('Cautions: ' + h.cautions.join('; '));
+  if (h.context_to_carry) parts.push('Context: ' + h.context_to_carry);
+  if (parts.length) analysisHints = parts.join('\n');
+}
+
+const AUTO_FLAG_MAP = {
+  'maestro-analyze': '-y', 'maestro-brainstorm': '-y', 'maestro-ui-design': '-y',
+  'maestro-plan': '--auto', 'maestro-spec-generate': '-y', 'quality-test': '--auto-fix',
+};
+
+let stepArgs = resolvedArgs;
+if (state.auto_mode) {
+  const flag = AUTO_FLAG_MAP[node.cmd];
+  if (flag && !stepArgs.includes(flag)) stepArgs = stepArgs ? `${stepArgs} ${flag}` : flag;
+}
+
+const prompt = template
+  .replace('{{COMMAND}}', `/${node.cmd}`)
+  .replace('{{ARGS}}', stepArgs)
+  .replace('{{STEP_N}}', `${state.step_count + 1}`)
+  .replace('{{AUTO_DIRECTIVE}}', state.auto_mode ? 'Auto-confirm all prompts. No interactive questions.' : '')
+  .replace('{{CHAIN_NAME}}', state.graph_id)
+  .replace('{{ANALYSIS_HINTS}}', analysisHints);
+```
+
+#### 6d: Launch
+
+```
+------------------------------------------------------------
+  NODE: {current_node} → /{node.cmd}  |  Tool: {tool}
+  Graph: {graph_id}  |  Step: {step_count + 1}
+------------------------------------------------------------
+```
+
+```javascript
+state.history.push({
+  node_id: state.current_node, type: 'command', cmd: node.cmd,
+  args: stepArgs, started_at: new Date().toISOString(), outcome: 'running'
+});
+Write(`${sessionDir}/link-state.json`, JSON.stringify(state, null, 2));
+
+Bash({
+  command: `maestro cli -p ${escapeForShell(prompt)} --tool ${state.tool} --mode write`,
+  run_in_background: true, timeout: 600000
+});
+// STOP — wait for hook callback
+```
+
+---
+
+### Step 7: Post-Step Processing
+
+#### 7a: Parse output
+
+```javascript
+const output = /* callback output */;
+const histEntry = state.history[state.history.length - 1];
+
+// Success/failure detection
+const failed = /^STATUS:\s*FAILURE/m.test(output) || output.includes('STATUS: FAILURE');
+histEntry.outcome = failed ? 'failure' : 'success';
+histEntry.completed_at = new Date().toISOString();
+
+// Context propagation — capture phase/spec/scratch from output
+const phaseMatch = output.match(/PHASE:\s*(\d+)/m);
+if (phaseMatch) state.context.inputs.phase = phaseMatch[1];
+
+// Set ctx.result for decision node evaluation
+state.context.result = { status: failed ? 'FAILURE' : 'SUCCESS', raw: output.slice(-2000) };
+state.step_count++;
+
+Write(`${sessionDir}/step-${state.step_count}-output.txt`, output);
+```
+
+#### 7b: Handle failure
+
+```javascript
+if (failed && state.auto_mode && !histEntry.retried) {
+  histEntry.retried = true;
+  histEntry.outcome = 'running';
+  // Re-execute Step 6d (retry once)
+} else if (failed) {
+  // Advance to on_failure or next
+  state.current_node = node.on_failure || node.next;
+  Write(`${sessionDir}/link-state.json`, JSON.stringify(state, null, 2));
+  // → Step 5
+}
+```
+
+#### 7c: Gemini analysis (multi-step chains only)
+
+Skip if: single-command graph, step failed/skipped, or `node.analyze === false`.
+
+```javascript
+const cmdNodeCount = Object.values(graph.nodes).filter(n => n.type === 'command').length;
+if (histEntry.outcome === 'success' && cmdNodeCount > 1 && node.analyze !== false) {
+  const analysisPrompt = `PURPOSE: Evaluate step "${node.cmd}" quality and generate hints for next step.
+CHAIN: ${state.graph_id} | Intent: ${state.intent}
+COMMAND: /${node.cmd} ${stepArgs}
+OUTPUT (last 200 lines): ${output.split('\n').slice(-200).join('\n')}
+EXPECTED (JSON): { "quality_score": <0-100>, "issues": [], "next_step_hints": { "prompt_additions": "", "cautions": [], "context_to_carry": "" }, "step_summary": "" }`;
+
+  let cmd = `maestro cli -p ${escapeForShell(analysisPrompt)} --tool gemini --mode analysis`;
+  if (state.gemini_session_id) cmd += ` --resume ${state.gemini_session_id}`;
+  Bash({ command: cmd, run_in_background: true, timeout: 300000 });
+  // STOP — wait for callback
+}
+```
+
+#### 7d: Post-analysis callback
+
+```javascript
+const analysis = /* parsed JSON from callback */;
+state.gemini_session_id = /* from callback [MAESTRO_EXEC_ID=xxx] */;
+state.step_analyses.push({
+  node_id: state.current_node, cmd: node.cmd,
+  quality_score: analysis.quality_score,
+  issues: analysis.issues,
+  next_step_hints: analysis.next_step_hints,
+  summary: analysis.step_summary,
+});
+
+Write(`${sessionDir}/step-${state.step_count}-analysis.json`, JSON.stringify(analysis, null, 2));
+```
+
+#### 7e: Advance to next node
+
+```javascript
+state.current_node = node.next;
+Write(`${sessionDir}/link-state.json`, JSON.stringify(state, null, 2));
+// → Step 5
+```
+
+---
+
+### Step 8: Completion
+
+Terminal node reached or no valid next node.
+
+```javascript
+const completed = state.history.filter(h => h.outcome === 'success').length;
+const failed = state.history.filter(h => h.outcome === 'failure').length;
+const skipped = state.history.filter(h => h.outcome === 'skipped').length;
+
+state.status = failed > 0 ? 'completed_with_errors' : 'completed';
+state.completed_at = new Date().toISOString();
+Write(`${sessionDir}/link-state.json`, JSON.stringify(state, null, 2));
+```
+
+```
+============================================================
+  LINK-COORDINATE COMPLETE
+============================================================
+  Session: {session_id}
+  Graph:   {graph_id}
+  Tool:    {tool}
+
+  Steps:
+    [✓] analyze → success (quality: 85)
+    [✓] plan → success (quality: 90)
+    [✗] execute → failure
+    [→] check_result → decision → retry_plan
+    [✓] retry_plan → success
+    [✓] retry_execute → success
+    [→] done → terminal
+
+  Executed: {completed} | Failed: {failed} | Skipped: {skipped}
+  Avg Quality: {avg}/100
+============================================================
+```
+
+---
+
+## Core Rules
+
+1. **STOP after each `maestro cli` call** — background execution, wait for hook callback
+2. **Graph-driven** — chain JSON is single source of truth for step order and branching
+3. **Decision auto-resolve** — evaluate `ctx.result.status` against edge conditions, no user interaction
+4. **max_visits** — prevent infinite loops on retry nodes
+5. **Template-driven** — all command steps use `coordinate-step.txt` template
+6. **Context propagation** — `ctx.result` updated after each step, available to decision nodes
+7. **Gemini analysis** — between steps (skippable via `analyze: false` on node), hints injected into next step
+8. **Resumable** — `-c` loads `link-state.json`, continues from `current_node`
+9. **Tool fallback** — if CLI fails: retry once, then try `gemini` → `qwen`
+10. **Local chains first** — check `./chains/` before `~/.maestro/chains/`
