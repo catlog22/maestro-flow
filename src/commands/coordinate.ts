@@ -172,7 +172,7 @@ export function registerCoordinateCommand(program: Command): void {
           autoMode: opts.yes ?? false,
           stepMode: true,
           workflowRoot,
-          inputs: { phase: '', description: intent },
+          inputs: { description: intent },
         });
 
         printState(state);
@@ -262,7 +262,7 @@ export function registerCoordinateCommand(program: Command): void {
             autoMode: opts.yes ?? false,
             dryRun: opts.dryRun,
             workflowRoot,
-            inputs: { phase: '', description: intent },
+            inputs: { description: intent },
           });
         }
 
