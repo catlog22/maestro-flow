@@ -1,6 +1,35 @@
+import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Components } from 'react-markdown';
+
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <img
+        src={src}
+        alt={alt ?? ''}
+        onClick={() => setExpanded(true)}
+        className="max-w-full max-h-[400px] rounded-[var(--radius-md)] border border-border cursor-pointer hover:opacity-90 transition-opacity my-[var(--spacing-2)]"
+        style={{ objectFit: 'contain' }}
+      />
+      {expanded && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 cursor-pointer"
+          onClick={() => setExpanded(false)}
+        >
+          <img
+            src={src}
+            alt={alt ?? ''}
+            className="max-w-[90vw] max-h-[90vh] rounded-[var(--radius-lg)]"
+            style={{ objectFit: 'contain' }}
+          />
+        </div>
+      )}
+    </>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // MarkdownRenderer -- Notion-style markdown rendering with GFM support
@@ -151,6 +180,7 @@ const components: Components = {
   em({ children }) {
     return <em className="italic text-text-secondary">{children}</em>;
   },
+  img: ({ src, alt }) => <MarkdownImage src={src} alt={alt} />,
 };
 
 export function MarkdownRenderer({ content }: { content: string }) {
