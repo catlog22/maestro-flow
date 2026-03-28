@@ -149,12 +149,14 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
           cwd: config.workDir,
           env: childEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
+          windowsHide: true,
         })
       : spawn('claude', args, {
           cwd: config.workDir,
           env: childEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           shell: true,
+          windowsHide: true,
         });
 
     if (!child.stdout || !child.stdin || !child.stderr) {

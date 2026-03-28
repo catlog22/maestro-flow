@@ -113,6 +113,7 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
       env: childEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true,
+      windowsHide: true,
     });
 
     if (!child.stdout || !child.stdin || !child.stderr) {

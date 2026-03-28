@@ -46,7 +46,30 @@ export function MessageArea({ processId }: { processId: string | null }) {
     );
   }
 
+  const processStatus = useAgentStore((s) =>
+    processId ? s.processes[processId]?.status : undefined,
+  );
+
   if (entries.length === 0) {
+    const isActive = processStatus === 'running' || processStatus === 'spawning';
+
+    if (isActive) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex gap-1">
+              <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--color-accent-orange)', animationDelay: '0ms' }} />
+              <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--color-accent-orange)', animationDelay: '150ms' }} />
+              <span className="w-2 h-2 rounded-full animate-bounce" style={{ backgroundColor: 'var(--color-accent-orange)', animationDelay: '300ms' }} />
+            </div>
+            <span className="text-[12px]" style={{ color: 'var(--color-text-tertiary)' }}>
+              {processStatus === 'spawning' ? 'Starting agent...' : 'Thinking...'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 flex items-center justify-center text-text-tertiary text-[length:var(--font-size-sm)]">
         No messages yet

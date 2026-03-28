@@ -42,6 +42,7 @@ export class GraphWalker {
             step_mode: options.stepMode ?? false,
             intent,
         };
+        state.context.inputs['intent'] = intent;
         if (options.inputs)
             Object.assign(state.context.inputs, options.inputs);
         this.activeState = state;
@@ -431,7 +432,10 @@ export class GraphWalker {
         }
         catch { /* no state file */ }
         return {
-            inputs: { workflowRoot: options.workflowRoot },
+            inputs: {
+                workflowRoot: options.workflowRoot,
+                phase: project.current_phase != null ? String(project.current_phase) : '',
+            },
             project,
             result: null,
             analysis: null,
@@ -454,9 +458,20 @@ export class GraphWalker {
             throw new Error('No sessionDir configured for resume');
         if (sessionId) {
             const filePath = join(this.sessionDir, sessionId, 'walker-state.json');
-            return JSON.parse(readFileSync(filePath, 'utf-8'));
+            try {
+                return JSON.parse(readFileSync(filePath, 'utf-8'));
+            }
+            catch {
+                throw new Error(`Session not found: ${sessionId} (expected ${filePath})`);
+            }
         }
-        const entries = readdirSync(this.sessionDir, { withFileTypes: true });
+        let entries;
+        try {
+            entries = readdirSync(this.sessionDir, { withFileTypes: true });
+        }
+        catch {
+            throw new Error(`No sessions directory at ${this.sessionDir}`);
+        }
         const dirs = entries
             .filter(e => e.isDirectory() && e.name.startsWith('coord-'))
             .map(e => e.name)

@@ -134,6 +134,7 @@ export function registerViewCommand(program: Command): void {
           env,
           stdio: ['ignore', 'pipe', 'pipe'],
           shell: true,
+          windowsHide: true,
         });
         child.stderr?.on('data', (d: Buffer) => process.stderr.write(d));
         child.stdout?.on('data', (d: Buffer) => process.stderr.write(d));
@@ -234,6 +235,7 @@ export function registerViewCommand(program: Command): void {
           stdio: ['ignore', 'pipe', 'pipe'],
           detached: true,
           shell: true,
+          windowsHide: true,
         });
         child.stderr?.on('data', (d: Buffer) => process.stderr.write(d));
         child.stdout?.on('data', (d: Buffer) => process.stderr.write(d));
