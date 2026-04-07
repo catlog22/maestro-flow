@@ -91,11 +91,6 @@ export class CodexCliAdapter extends BaseAgentAdapter {
       '-',
     ];
 
-    // Write mode: bypass approvals and sandbox
-    if (config.approvalMode === 'auto') {
-      args.push('--dangerously-bypass-approvals-and-sandbox');
-    }
-
     // Profile from config.toml
     if (config.settingsFile) {
       args.push('--profile', config.settingsFile);
