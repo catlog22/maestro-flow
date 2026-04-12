@@ -26,6 +26,7 @@ import {
 } from './constants.js';
 import { resolveSelf } from '../tools/team-members.js';
 import { readRecentActivity, type ActivityEvent } from '../tools/team-activity.js';
+import { findWorkspaceRoot } from './workspace.js';
 
 interface StatuslineInput {
   model?: { display_name?: string };
@@ -101,9 +102,11 @@ function readCurrentTask(session: string): string {
   return '';
 }
 
-/** Read current phase from .workflow/state.json */
+/** Read current phase from .workflow/state.json (using workspace resolver) */
 function readPhase(dir: string): string {
-  const statePath = join(dir, '.workflow', 'state.json');
+  const root = findWorkspaceRoot(dir);
+  if (!root) return '';
+  const statePath = join(root, '.workflow', 'state.json');
   if (!existsSync(statePath)) return '';
   try {
     const state = JSON.parse(readFileSync(statePath, 'utf8'));

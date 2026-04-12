@@ -23,6 +23,7 @@
       }
     ]
   },
+  "transition_history": [],
   "milestone_history": [
     {
       "name": "{{MILESTONE_NAME}}",

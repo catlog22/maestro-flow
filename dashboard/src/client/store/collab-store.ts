@@ -133,22 +133,9 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
     }
   },
 
-  // -- SSE subscription ------------------------------------------------------
-  // Follows the pattern in useSSE.ts — store exposes subscribe/unsubscribe so
-  // the SSE hook can delegate collab events here.
-
-  subscribeToSSE: () => {
-    // noop — SSE listeners are wired in useSSE.ts via useCollabStore.getState()
-    // This method exists so components can express intent, but actual event
-    // routing goes through the central useSSE hook which already owns the
-    // EventSource connection.
-  },
-
-  unsubscribeFromSSE: () => {
-    // noop — cleanup handled by useSSE hook lifecycle
-  },
-
   // -- Setters ---------------------------------------------------------------
+  // Note: SSE event routing is handled centrally by useSSE.ts which calls
+  // store actions directly on collab events. No store-level subscribe/unsubscribe needed.
 
   setActiveTab: (tab) => set({ activeTab: tab }),
   setStatusFilter: (filter) => set({ statusFilter: filter }),

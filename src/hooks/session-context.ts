@@ -6,9 +6,12 @@
  * that's handled per-agent by spec-injector.
  */
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { resolveWorkspace } from './workspace.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,14 +47,15 @@ interface WorkflowState {
  */
 export function evaluateSessionContext(data: SessionContextInput): HookOutput | null {
   const cwd = data.cwd || process.cwd();
+  const workspaceRoot = resolveWorkspace(data);
   const sections: string[] = [];
 
-  // 1. Workflow state
-  const workflowSection = buildWorkflowSection(cwd);
+  // 1. Workflow state (use workspace root if found)
+  const workflowSection = workspaceRoot ? buildWorkflowSection(workspaceRoot) : null;
   if (workflowSection) sections.push(workflowSection);
 
-  // 2. Available specs
-  const specsSection = buildSpecsSection(cwd);
+  // 2. Available specs (use workspace root if found)
+  const specsSection = workspaceRoot ? buildSpecsSection(workspaceRoot) : null;
   if (specsSection) sections.push(specsSection);
 
   // 3. Git context (lightweight)
@@ -108,25 +112,64 @@ function buildSpecsSection(cwd: string): string | null {
   }
 }
 
-function buildGitSection(cwd: string): string | null {
+const GIT_CACHE_TTL_MS = 30_000;
+
+interface GitCache {
+  branch: string;
+  lastCommit: string;
+  timestamp: number;
+}
+
+function getGitCachePath(cwd: string): string {
+  const hash = createHash('md5').update(cwd).digest('hex').slice(0, 12);
+  return join(tmpdir(), `maestro-git-${hash}.json`);
+}
+
+function readGitCache(cachePath: string): GitCache | null {
   try {
-    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+    if (!existsSync(cachePath)) return null;
+    const stat = statSync(cachePath);
+    if (Date.now() - stat.mtimeMs > GIT_CACHE_TTL_MS) return null;
+    return JSON.parse(readFileSync(cachePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function buildGitSection(cwd: string): string | null {
+  const cachePath = getGitCachePath(cwd);
+  const cached = readGitCache(cachePath);
+  if (cached) {
+    const parts = [`## Git`, `Branch: ${cached.branch}`];
+    if (cached.lastCommit) parts.push(`Last: ${cached.lastCommit}`);
+    return parts.join(' | ');
+  }
+
+  try {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
       cwd,
       encoding: 'utf8',
-      timeout: 3000,
+      timeout: 1000,
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim();
 
     let lastCommit = '';
     try {
-      lastCommit = execSync('git log -1 --oneline', {
+      lastCommit = execFileSync('git', ['log', '-1', '--oneline'], {
         cwd,
         encoding: 'utf8',
-        timeout: 3000,
+        timeout: 1000,
         stdio: ['pipe', 'pipe', 'pipe'],
       }).trim();
     } catch {
       // No commits yet
+    }
+
+    // Write cache
+    try {
+      writeFileSync(cachePath, JSON.stringify({ branch, lastCommit, timestamp: Date.now() }));
+    } catch {
+      // Cache write failure is non-critical
     }
 
     const parts = [`## Git`, `Branch: ${branch}`];

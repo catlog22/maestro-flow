@@ -160,7 +160,28 @@ Display: "project.md: Context updated with milestone {milestone} summary"
        BREAK
    ```
 
-7. Write updated `.workflow/state.json`:
+7. Record milestone transition in history:
+   ```
+   Append to state.transition_history[] (create array if absent):
+     {
+       "type": "milestone",
+       "from_phase": null,
+       "to_phase": null,
+       "milestone": completed_milestone,
+       "transitioned_at": "{timestamp}",
+       "trigger": "milestone-complete",
+       "force": was --force used (boolean),
+       "snapshot": {
+         "phases_completed": phases in this milestone,
+         "phases_total": existing_state.phases_summary.total,
+         "deferred_count": existing_state.accumulated_context.deferred.length,
+         "verification_status": "completed",
+         "learnings_count": retrospective learnings count (from Step 3)
+       }
+     }
+   ```
+
+8. Write updated `.workflow/state.json`:
    ```json
    // If next_milestone exists:
    {

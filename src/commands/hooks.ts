@@ -11,6 +11,8 @@ import { evaluateDelegateNotifications } from '../hooks/delegate-monitor.js';
 import { runTeamMonitor } from '../hooks/team-monitor.js';
 import { evaluateSpecInjection } from '../hooks/spec-injector.js';
 import { evaluateSessionContext } from '../hooks/session-context.js';
+import { evaluateSkillContext } from '../hooks/skill-context.js';
+import { resolveWorkspace } from '../hooks/workspace.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,6 +44,8 @@ interface HookDef {
   matcher?: string;
   /** Minimum level required to install this hook */
   level: HookLevel;
+  /** If true, hook exits silently when no Maestro workspace is found */
+  requiresWorkspace?: boolean;
 }
 
 /**
@@ -58,18 +62,19 @@ export const HOOK_LEVELS: readonly HookLevel[] = ['none', 'minimal', 'standard',
 export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Statusline + context-monitor + spec-injector',
-  standard: '+ delegate/team/telemetry + session-context',
+  standard: '+ delegate/team/telemetry + session-context + skill-context',
   full: '+ workflow-guard (PreToolUse)',
 };
 
 const HOOK_DEFS: Record<string, HookDef> = {
   'context-monitor': { event: 'PostToolUse', level: 'minimal' },
-  'spec-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'minimal' },
+  'spec-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'minimal', requiresWorkspace: true },
   'delegate-monitor': { event: 'PostToolUse', level: 'standard' },
   'team-monitor': { event: 'PostToolUse', level: 'standard' },
   'telemetry': { event: 'PostToolUse', level: 'standard' },
   'session-context': { event: 'Notification', level: 'standard' },
-  'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full' },
+  'skill-context': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
 };
 
 /** Numeric ordering for level comparison */
@@ -122,7 +127,7 @@ function findHookInSettings(settings: ClaudeSettings, hookName: string): boolean
   for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification'] as const) {
     const groups = settings.hooks[eventKey] as HookGroup[] | undefined;
     if (!groups) continue;
-    if (groups.some((g) => g.hooks.some((h) => h.command.includes(`hooks run ${hookName}`)))) {
+    if (groups.some((g) => g.hooks.some((h) => h.command.includes(`hooks run ${hookName}`) || h.command.includes(`hook-runner.js") ${hookName}`) || h.command.includes(`hook-runner.js" ${hookName}`)))) {
       return true;
     }
   }
@@ -158,11 +163,9 @@ export function installHooksByLevel(
       : getClaudeSettingsPath());
 
   const settings = loadClaudeSettings(settingsPath);
-  const binDir = getMaestroBinDir();
 
   // --- Statusline (always with any hook level) ---
-  const statuslineCmd = `node "${join(binDir, 'maestro-statusline.js')}"`;
-  settings.statusLine = { type: 'command', command: statuslineCmd };
+  settings.statusLine = { type: 'command', command: 'maestro-statusline' };
 
   // --- Remove existing maestro hooks to avoid duplicates ---
   removeMaestroHooks(settings);
@@ -199,7 +202,7 @@ export function installHooksByLevel(
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
     let input = '';
-    const timeout = setTimeout(() => resolve(input), 3000);
+    const timeout = setTimeout(() => resolve(input), 500);
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => (input += chunk));
     process.stdin.on('end', () => {
@@ -287,7 +290,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const agentType: string = toolInput.subagent_type ?? '';
     if (!agentType) return;
 
-    const cwd = data.cwd ?? process.cwd();
+    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
     const sessionId: string = data.session_id ?? '';
 
     const result = evaluateSpecInjection(agentType, cwd, sessionId);
@@ -314,6 +317,22 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const raw = await readStdin();
     const data = raw ? JSON.parse(raw) : {};
     const result = evaluateSessionContext(data);
+    if (result) {
+      process.stdout.write(JSON.stringify(result));
+    }
+  },
+
+  'skill-context': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['skillContext'] === false) return;
+
+    const raw = await readStdin();
+    const data = raw ? JSON.parse(raw) : {};
+    const prompt: string = data.user_prompt ?? data.prompt ?? '';
+    if (!prompt) return;
+
+    const cwd = data.cwd ?? process.cwd();
+    const result = evaluateSkillContext({ user_prompt: prompt, cwd });
     if (result) {
       process.stdout.write(JSON.stringify(result));
     }
@@ -366,6 +385,18 @@ export function registerHooksCommand(program: Command): void {
         console.error(`Unknown hook: ${name}. Available: ${Object.keys(HOOK_RUNNERS).join(', ')}`);
         process.exit(1);
       }
+
+      // Workspace gate — hooks with requiresWorkspace exit silently
+      // when no Maestro workspace (.workflow/ + valid state.json) is found.
+      // This avoids stdin parsing + evaluator overhead for non-workflow projects.
+      const def = HOOK_DEFS[name];
+      if (def?.requiresWorkspace) {
+        const cwd = process.cwd();
+        if (!resolveWorkspace({ cwd })) {
+          process.exit(0);
+        }
+      }
+
       try {
         await runner();
       } catch {
@@ -497,10 +528,12 @@ export function registerHooksCommand(program: Command): void {
           : name === 'team-monitor' ? 'teamMonitor'
           : name === 'spec-injector' ? 'specInjector'
           : name === 'session-context' ? 'sessionContext'
+          : name === 'skill-context' ? 'skillContext'
           : name;
         const enabled = config.toggles[toggleKey] !== false;
         const matcher = def.matcher ? ` [${def.matcher}]` : '';
-        console.log(`  ${name}: ${def.event}${matcher} — ${enabled ? 'enabled' : 'disabled'} (level: ${def.level})`);
+        const wf = def.requiresWorkspace ? ' (workspace)' : '';
+        console.log(`  ${name}: ${def.event}${matcher} — ${enabled ? 'enabled' : 'disabled'} (level: ${def.level})${wf}`);
       }
 
       console.log('\nCoordinator hooks (in-process):');

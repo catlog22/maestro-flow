@@ -10,7 +10,7 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-export function TimelineEventNode({ event }: { event: CollabActivityEntry; index: number }) {
+export function TimelineEventNode({ event }: { event: CollabActivityEntry }) {
   const color = COLLAB_ACTION_COLORS[event.action] ?? '#9ca3af';
 
   return (

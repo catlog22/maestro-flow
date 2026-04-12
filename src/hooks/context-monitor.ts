@@ -23,6 +23,7 @@ import {
   DEBOUNCE_CALLS,
   BRIDGE_PREFIX,
 } from './constants.js';
+import { resolveWorkspace } from './workspace.js';
 
 interface MonitorInput {
   session_id?: string;
@@ -123,9 +124,8 @@ export function evaluateContext(data: MonitorInput): HookOutput | null {
   warnData.lastLevel = currentLevel;
   writeFileSync(warnPath, JSON.stringify(warnData));
 
-  // Detect maestro workflow state
-  const cwd = data.cwd || process.cwd();
-  const hasWorkflow = existsSync(join(cwd, '.workflow', 'state.json'));
+  // Detect maestro workflow state via workspace resolver
+  const hasWorkflow = resolveWorkspace(data) !== null;
 
   const message = buildMessage(usedPct, remaining, isCritical, hasWorkflow);
 

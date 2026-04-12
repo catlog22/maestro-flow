@@ -186,6 +186,25 @@ d. If all phases completed:
    status: "idle"
    (All phases done)
 
+e. Record transition in history:
+   Append to state.transition_history[] (create array if absent):
+     {
+       "type": "phase",
+       "from_phase": completing_phase_number,
+       "to_phase": next_phase (or null if last phase in milestone),
+       "milestone": state.current_milestone,
+       "transitioned_at": "{ISO timestamp}",
+       "trigger": "phase-transition",
+       "force": was --force used (boolean),
+       "snapshot": {
+         "phases_completed": state.phases_summary.completed (after increment),
+         "phases_total": state.phases_summary.total,
+         "deferred_count": state.accumulated_context.deferred.length,
+         "verification_status": index.verification.status (from the completing phase),
+         "learnings_count": learnings.length (from Step 5, or 0 if Step 5 not yet run)
+       }
+     }
+
 Write updated state.json
 ```
 
