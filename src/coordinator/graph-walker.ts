@@ -13,6 +13,7 @@ import type {
 } from './graph-types.js';
 import type { GraphLoader } from './graph-loader.js';
 import type { ParallelCommandExecutor, BranchResult } from './parallel-executor.js';
+import type { WorkflowHookRegistry } from '../hooks/workflow-hooks.js';
 
 export interface StartOptions {
   tool: string;
@@ -37,6 +38,7 @@ export class GraphWalker {
     private readonly sessionDir?: string,
     private readonly parallelExecutor?: ParallelCommandExecutor,
     private readonly llmDecider?: LLMDecider | null,
+    private readonly hooks?: WorkflowHookRegistry,
   ) {}
 
   async start(graphId: string, intent: string, options: StartOptions): Promise<WalkerState> {
@@ -72,6 +74,16 @@ export class GraphWalker {
 
     this.activeState = state;
     this.emit({ type: 'walker:started', session_id: sessionId, graph_id: graphId, intent });
+
+    if (this.hooks) {
+      try {
+        const bail = await this.hooks.beforeRun.call({ sessionId, graphId, intent });
+        if (bail !== undefined) {
+          state.status = 'failed';
+          return state;
+        }
+      } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+    }
 
     if (options.dryRun) return this.dryRunWalk(state, graph);
     return this.walkGraph(state, graph);
@@ -114,6 +126,16 @@ export class GraphWalker {
   async walkGraph(state: WalkerState, graph: ChainGraph): Promise<WalkerState> {
     this.activeState = state;
     await this.walk(state, graph);
+
+    if (this.hooks) {
+      try {
+        await this.hooks.afterRun.call(
+          { sessionId: state.session_id, graphId: state.graph_id, intent: state.intent },
+          state,
+        );
+      } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+    }
+
     return state;
   }
 
@@ -124,6 +146,7 @@ export class GraphWalker {
       if (!node) {
         state.status = 'failed';
         this.emit({ type: 'walker:error', session_id: state.session_id, error: `Node not found: ${nodeId}` });
+        if (this.hooks) { try { await this.hooks.onError.call({ nodeId, error: new Error(`Node not found: ${nodeId}`), state }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); } }
         break;
       }
 
@@ -138,6 +161,7 @@ export class GraphWalker {
         }
         state.status = 'failed';
         this.emit({ type: 'walker:error', session_id: state.session_id, error: `Max visits (${maxVisits}) exceeded for ${nodeId}` });
+        if (this.hooks) { try { await this.hooks.onError.call({ nodeId, error: new Error(`Max visits (${maxVisits}) exceeded for ${nodeId}`), state }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); } }
         break;
       }
 
@@ -150,6 +174,20 @@ export class GraphWalker {
       };
       state.history.push(entry);
       this.emit({ type: 'walker:node_enter', session_id: state.session_id, node_id: nodeId, node_type: node.type });
+
+      // Hook: beforeNode — bail to skip this node
+      if (this.hooks) {
+        try {
+          const bail = await this.hooks.beforeNode.call({ nodeId, node: node as CommandNode, state });
+          if (bail !== undefined) {
+            entry.outcome = 'skipped';
+            entry.error_message = typeof bail === 'string' ? bail : 'Skipped by hook';
+            entry.exited_at = new Date().toISOString();
+            this.emit({ type: 'walker:node_exit', session_id: state.session_id, node_id: nodeId, outcome: 'skipped' });
+            continue;
+          }
+        } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+      }
 
       // Dispatch by type
       switch (node.type) {
@@ -178,6 +216,13 @@ export class GraphWalker {
 
       entry.exited_at = new Date().toISOString();
       this.emit({ type: 'walker:node_exit', session_id: state.session_id, node_id: nodeId, outcome: entry.outcome ?? 'success' });
+
+      // Hook: afterNode
+      if (this.hooks) {
+        try {
+          await this.hooks.afterNode.call({ nodeId, node: node as CommandNode, state }, entry.outcome ?? 'success');
+        } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+      }
 
       // Step mode: pause after each command node execution
       if (state.step_mode && node.type === 'command' && state.status === 'running') {
@@ -216,10 +261,32 @@ export class GraphWalker {
 
     const prompt = await this.assembler.assemble(assembleReq);
 
+    // Hook: transformPrompt waterfall
+    let finalPrompt = prompt;
+    if (this.hooks) {
+      try {
+        finalPrompt = await this.hooks.transformPrompt.call(prompt);
+      } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+    }
+
     // Clean up any stale report file from a prior visit to this node. Without
     // this, a loop that re-enters `nodeId` (max_visits / retry) would read
     // yesterday's SUCCESS and skip the real execution check.
     this.clearNodeReport(state.session_id, nodeId);
+
+    // Hook: beforeCommand — bail to skip execution
+    if (this.hooks) {
+      try {
+        const bail = await this.hooks.beforeCommand.call({ nodeId, cmd: node.cmd, prompt: finalPrompt });
+        if (bail !== undefined) {
+          entry.outcome = 'skipped';
+          entry.error_message = typeof bail === 'string' ? bail : 'Skipped by hook';
+          state.current_node = node.next;
+          state.status = 'running';
+          return;
+        }
+      } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
+    }
 
     state.status = 'waiting_command';
     this.save(state);
@@ -230,7 +297,7 @@ export class GraphWalker {
       state,
       retryPolicy,
       async () => this.executor.execute({
-        prompt,
+        prompt: finalPrompt,
         agent_type: (state.tool as AgentType) || 'claude',
         work_dir: (state.context.inputs['workflowRoot'] as string) ?? '.',
         approval_mode: state.auto_mode ? 'auto' : 'suggest',
@@ -290,8 +357,16 @@ export class GraphWalker {
         entry.outcome = 'skipped';
       } else {
         state.status = 'failed';
+        if (this.hooks) { try { await this.hooks.onError.call({ nodeId, error: new Error(recovery.last_error ?? 'Command failed'), state }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); } }
       }
       this.emit({ type: 'walker:command', session_id: state.session_id, node_id: nodeId, cmd: node.cmd, status: 'failed' });
+    }
+
+    // Hook: afterCommand
+    if (this.hooks) {
+      try {
+        await this.hooks.afterCommand.call({ nodeId, cmd: node.cmd, result: execResult });
+      } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
     }
   }
 
@@ -306,15 +381,18 @@ export class GraphWalker {
       if (target) {
         state.current_node = target;
         this.emit({ type: 'walker:decision', session_id: state.session_id, node_id: nodeId, resolved_value: 'llm', target });
+        try { if (this.hooks) this.hooks.onDecision.call({ nodeId, resolvedValue: 'llm', target }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
         return;
       }
       const defaultEdge = node.edges.find(e => e.default);
       if (defaultEdge) {
         state.current_node = defaultEdge.target;
         this.emit({ type: 'walker:decision', session_id: state.session_id, node_id: nodeId, resolved_value: 'llm-default', target: defaultEdge.target });
+        try { if (this.hooks) this.hooks.onDecision.call({ nodeId, resolvedValue: 'llm-default', target: defaultEdge.target }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
       } else {
         state.status = 'failed';
         this.emit({ type: 'walker:error', session_id: state.session_id, error: `LLM decider failed and no default edge in ${nodeId}` });
+        if (this.hooks) { try { await this.hooks.onError.call({ nodeId, error: new Error(`LLM decider failed and no default edge in ${nodeId}`), state }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); } }
       }
       return;
     }
@@ -325,6 +403,7 @@ export class GraphWalker {
       if (this.evaluator.match(edge, resolvedValue, state.context)) {
         state.current_node = edge.target;
         this.emit({ type: 'walker:decision', session_id: state.session_id, node_id: nodeId, resolved_value: resolvedValue, target: edge.target });
+        try { if (this.hooks) this.hooks.onDecision.call({ nodeId, resolvedValue, target: edge.target }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
         return;
       }
     }
@@ -337,12 +416,14 @@ export class GraphWalker {
       if (target) {
         state.current_node = target;
         this.emit({ type: 'walker:decision', session_id: state.session_id, node_id: nodeId, resolved_value: 'llm-fallback', target });
+        try { if (this.hooks) this.hooks.onDecision.call({ nodeId, resolvedValue: 'llm-fallback', target }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
         return;
       }
     }
 
     state.status = 'failed';
     this.emit({ type: 'walker:error', session_id: state.session_id, error: `No matching edge in decision ${nodeId}` });
+    if (this.hooks) { try { await this.hooks.onError.call({ nodeId, error: new Error(`No matching edge in decision ${nodeId}`), state }); } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); } }
   }
 
   // Build an LLMDecisionRequest and ask the injected decider. Returns the

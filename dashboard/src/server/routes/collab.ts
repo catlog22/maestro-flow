@@ -1,0 +1,332 @@
+// ---------------------------------------------------------------------------
+// Collab REST API routes — read-only access to .workflow/collab/ data
+// ---------------------------------------------------------------------------
+
+import { Hono } from 'hono';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+import type { DashboardEventBus } from '../state/event-bus.js';
+import type {
+  CollabMember,
+  CollabActivityEntry,
+  CollabPresence,
+  CollabAggregatedActivity,
+  CollabPreflightResult,
+} from '../../shared/collab-types.js';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function readJsonSafe(filePath: string): Record<string, unknown> | null {
+  try {
+    if (!existsSync(filePath)) return null;
+    return JSON.parse(readFileSync(filePath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+function readJsonlSafe(filePath: string): Record<string, unknown>[] {
+  try {
+    if (!existsSync(filePath)) return [];
+    const content = readFileSync(filePath, 'utf-8').trim();
+    if (!content) return [];
+    return content.split('\n').map((line) => JSON.parse(line));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Presence computation
+// ---------------------------------------------------------------------------
+
+const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+const AWAY_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+function computeStatus(lastSeenTs: string): 'online' | 'away' | 'offline' {
+  const diff = Date.now() - new Date(lastSeenTs).getTime();
+  if (diff <= ONLINE_THRESHOLD_MS) return 'online';
+  if (diff <= AWAY_THRESHOLD_MS) return 'away';
+  return 'offline';
+}
+
+// ---------------------------------------------------------------------------
+// Route factory
+// ---------------------------------------------------------------------------
+
+export function createCollabRoutes(
+  workflowRoot: string | (() => string),
+  _eventBus: DashboardEventBus,
+): Hono {
+  const app = new Hono();
+  const getCollabDir = () =>
+    join(typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot, '.workflow/collab');
+
+  // GET /api/collab/members
+  app.get('/api/collab/members', async (c) => {
+    try {
+      const collabDir = getCollabDir();
+      const membersDir = join(collabDir, 'members');
+
+      if (!existsSync(membersDir)) {
+        return c.json([]);
+      }
+
+      // Read activity to derive lastSeen timestamps
+      const activityPath = join(collabDir, 'activity.jsonl');
+      const activityEntries = readJsonlSafe(activityPath);
+
+      // Build per-user last activity map
+      const lastActivityByUser: Record<string, string> = {};
+      for (const entry of activityEntries) {
+        const user = entry.user as string | undefined;
+        const ts = entry.ts as string | undefined;
+        if (!user || !ts) continue;
+        if (!lastActivityByUser[user] || ts > lastActivityByUser[user]) {
+          lastActivityByUser[user] = ts;
+        }
+      }
+
+      // Build per-user current phase/task from most recent activity
+      const latestByUser: Record<string, Record<string, unknown>> = {};
+      for (const entry of activityEntries) {
+        const user = entry.user as string | undefined;
+        if (!user) continue;
+        const ts = entry.ts as string | undefined;
+        const existing = latestByUser[user];
+        if (!existing || (ts && ts >= (existing.ts as string))) {
+          latestByUser[user] = entry;
+        }
+      }
+
+      const entries = readdirSync(membersDir);
+      const members: CollabMember[] = [];
+
+      for (const entry of entries) {
+        if (!entry.endsWith('.json')) continue;
+        const data = readJsonSafe(join(membersDir, entry));
+        if (!data) continue;
+
+        const uid = data.uid as string;
+        const joinedAt = data.joinedAt as string;
+        const lastSeen = lastActivityByUser[uid] || joinedAt;
+        const status = computeStatus(lastSeen);
+
+        const latest = latestByUser[uid];
+
+        members.push({
+          uid,
+          name: (data.name as string) || uid,
+          email: (data.email as string) || '',
+          status,
+          currentPhase: latest?.phase_id != null ? String(latest.phase_id) : undefined,
+          currentTask: (latest?.task_id as string) || undefined,
+          lastSeen,
+          joinedAt,
+          role: (data.role as string) || 'member',
+          host: (data.host as string) || '',
+        });
+      }
+
+      // Sort by name
+      members.sort((a, b) => a.name.localeCompare(b.name));
+
+      return c.json(members);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/collab/activity
+  app.get('/api/collab/activity', async (c) => {
+    try {
+      const collabDir = getCollabDir();
+      const activityPath = join(collabDir, 'activity.jsonl');
+
+      let entries = readJsonlSafe(activityPath) as unknown as CollabActivityEntry[];
+
+      // Filter by since
+      const since = c.req.query('since');
+      if (since) {
+        const sinceTime = new Date(since).getTime();
+        if (!isNaN(sinceTime)) {
+          entries = entries.filter((e) => new Date(e.ts).getTime() >= sinceTime);
+        }
+      }
+
+      // Reverse chronological order
+      entries.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+
+      // Apply limit
+      const limitParam = parseInt(c.req.query('limit') || '50', 10);
+      const limit = isNaN(limitParam) || limitParam <= 0 ? 50 : limitParam;
+      entries = entries.slice(0, limit);
+
+      return c.json(entries);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/collab/status
+  app.get('/api/collab/status', async (c) => {
+    try {
+      const collabDir = getCollabDir();
+      const membersDir = join(collabDir, 'members');
+
+      if (!existsSync(membersDir)) {
+        return c.json({ online: 0, total: 0, members: [] });
+      }
+
+      // Read activity to derive lastSeen timestamps
+      const activityPath = join(collabDir, 'activity.jsonl');
+      const activityEntries = readJsonlSafe(activityPath);
+
+      // Build per-user last activity map
+      const lastActivityByUser: Record<string, string> = {};
+      for (const entry of activityEntries) {
+        const user = entry.user as string | undefined;
+        const ts = entry.ts as string | undefined;
+        if (!user || !ts) continue;
+        if (!lastActivityByUser[user] || ts > lastActivityByUser[user]) {
+          lastActivityByUser[user] = ts;
+        }
+      }
+
+      const entries = readdirSync(membersDir);
+      const members: CollabPresence[] = [];
+      let online = 0;
+
+      for (const entry of entries) {
+        if (!entry.endsWith('.json')) continue;
+        const data = readJsonSafe(join(membersDir, entry));
+        if (!data) continue;
+
+        const uid = data.uid as string;
+        const joinedAt = data.joinedAt as string;
+        const lastSeen = lastActivityByUser[uid] || joinedAt;
+        const status = computeStatus(lastSeen);
+
+        if (status === 'online') online++;
+
+        members.push({
+          uid,
+          name: (data.name as string) || uid,
+          status,
+          lastSeen,
+        });
+      }
+
+      return c.json({ online, total: members.length, members });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/collab/activity/aggregated
+  app.get('/api/collab/activity/aggregated', async (c) => {
+    try {
+      const collabDir = getCollabDir();
+      const activityPath = join(collabDir, 'activity.jsonl');
+
+      const entries = readJsonlSafe(activityPath) as unknown as CollabActivityEntry[];
+      if (entries.length === 0) {
+        return c.json([]);
+      }
+
+      // Group by (phase_id, task_id) pair
+      const groups = new Map<string, { phase: string; task: string; members: Set<string>; count: number }>();
+
+      for (const entry of entries) {
+        const phase = entry.phase_id != null ? String(entry.phase_id) : '';
+        const task = entry.task_id || '';
+        const key = `${phase}::${task}`;
+
+        let group = groups.get(key);
+        if (!group) {
+          group = { phase, task, members: new Set<string>(), count: 0 };
+          groups.set(key, group);
+        }
+
+        group.count++;
+        if (entry.user) {
+          group.members.add(entry.user);
+        }
+      }
+
+      const result: CollabAggregatedActivity[] = [];
+      for (const group of groups.values()) {
+        const memberCount = group.members.size;
+        let risk: CollabAggregatedActivity['risk'] = 'none';
+        if (memberCount >= 4) risk = 'high';
+        else if (memberCount === 3) risk = 'medium';
+        else if (memberCount === 2) risk = 'low';
+
+        result.push({
+          phase: group.phase,
+          task: group.task,
+          count: group.count,
+          members: Array.from(group.members),
+          risk,
+        });
+      }
+
+      return c.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/collab/preflight
+  app.get('/api/collab/preflight', async (c) => {
+    try {
+      const collabDir = getCollabDir();
+
+      if (!existsSync(collabDir)) {
+        return c.json({ exists: false, memberCount: 0, hasActivity: false } as CollabPreflightResult);
+      }
+
+      // Count member files
+      const membersDir = join(collabDir, 'members');
+      let memberCount = 0;
+      if (existsSync(membersDir)) {
+        try {
+          const entries = readdirSync(membersDir);
+          memberCount = entries.filter((e) => e.endsWith('.json')).length;
+        } catch {
+          memberCount = 0;
+        }
+      }
+
+      // Check activity
+      const activityPath = join(collabDir, 'activity.jsonl');
+      let hasActivity = false;
+      if (existsSync(activityPath)) {
+        try {
+          const content = readFileSync(activityPath, 'utf-8').trim();
+          hasActivity = content.length > 0;
+        } catch {
+          hasActivity = false;
+        }
+      }
+
+      return c.json({
+        exists: true,
+        memberCount,
+        hasActivity,
+      } as CollabPreflightResult);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  return app;
+}

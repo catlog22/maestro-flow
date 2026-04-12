@@ -1,8 +1,11 @@
+import type { WorkflowHookRegistry } from '../hooks/workflow-hooks.js';
+
 export interface MaestroConfig {
   version: string;
   extensions: ExtensionConfig[];
   mcp: McpConfig;
   workflows: WorkflowConfig;
+  hooks?: HooksConfig;
 }
 
 export interface ExtensionConfig {
@@ -47,4 +50,25 @@ export interface ExtensionContext {
   registerTool: (tool: Tool) => void;
   config: Record<string, unknown>;
   log: (msg: string) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Hook System Types
+// ---------------------------------------------------------------------------
+
+export interface MaestroPlugin {
+  name: string;
+  apply(registry: WorkflowHookRegistry): void;
+}
+
+export interface ExternalHookConfig {
+  event: string;
+  command: string;
+  timeout_ms?: number;
+}
+
+export interface HooksConfig {
+  toggles: Record<string, boolean>;
+  external: ExternalHookConfig[];
+  plugins: string[];
 }

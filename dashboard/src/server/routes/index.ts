@@ -24,6 +24,7 @@ import { createSpecsRoutes } from './specs.js';
 import { createWikiRoutes } from './wiki.js';
 import { createLinearRoutes } from './linear.js';
 import { createTeamRoutes } from './teams.js';
+import { createCollabRoutes } from './collab.js';
 import { createCommanderRoutes } from '../commander/commander-routes.js';
 import { createCoordinatorRoutes } from '../coordinator/coordinator-routes.js';
 import { createRequirementRoutes } from './requirements.js';
@@ -118,6 +119,9 @@ export function createRoutes(
 
   // Team session routes (dynamic root for workspace switch)
   routes.route('/', createTeamRoutes(getRoot));
+
+  // Collab routes (human collaboration, dynamic root for workspace switch)
+  routes.route('/', createCollabRoutes(getRoot, eventBus));
 
   // EventBus recent events endpoint (ring buffer audit)
   routes.get('/api/events/recent', (c) => {

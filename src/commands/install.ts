@@ -35,6 +35,12 @@ import {
   type Manifest,
 } from '../core/manifest.js';
 import { applyOverlays, ensureOverlayDir } from '../core/overlay/applier.js';
+import {
+  installHooksByLevel,
+  HOOK_LEVELS,
+  HOOK_LEVEL_DESCRIPTIONS,
+  type HookLevel,
+} from './hooks.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -542,7 +548,18 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
     mcpProjectRoot = mcpProjectRoot.trim();
   }
 
-  // ── Step 6: Backup ──────────────────────────────────────────────────
+  // ── Step 6: Hook level selection ────────────────────────────────────
+
+  const hookLevel = await select<HookLevel>({
+    message: 'Claude Code hooks:',
+    choices: HOOK_LEVELS.map((level) => ({
+      name: `${level} — ${HOOK_LEVEL_DESCRIPTIONS[level]}`,
+      value: level,
+    })),
+    default: 'none' as HookLevel,
+  });
+
+  // ── Step 7: Backup ──────────────────────────────────────────────────
 
   let doBackup = false;
   if (existingManifest) {
@@ -552,7 +569,7 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
     });
   }
 
-  // ── Step 7: Review & confirm ────────────────────────────────────────
+  // ── Step 8: Review & confirm ────────────────────────────────────────
 
   const targetBase = mode === 'global' ? homedir() : projectPath;
   const selectedComponents = components.filter((c) => selected.includes(c.def.id));
@@ -566,6 +583,7 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
     console.error(`  │ MCP:        ${mcpTools.length} tools enabled`);
     if (mcpProjectRoot) console.error(`  │ MCP root:   ${mcpProjectRoot}`);
   }
+  console.error(`  │ Hooks:      ${hookLevel} (${HOOK_LEVEL_DESCRIPTIONS[hookLevel]})`);
   if (doBackup) {
     console.error('  │ Backup:     yes');
   }
@@ -582,7 +600,7 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
     return;
   }
 
-  // ── Step 8: Execute ─────────────────────────────────────────────────
+  // ── Step 9: Execute ─────────────────────────────────────────────────
 
   console.error('');
 
@@ -640,6 +658,13 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
     mcpRegistered = addMcpServer(mode, projectPath, mcpTools, mcpProjectRoot || undefined);
   }
 
+  // Hook installation
+  let hookResult: { installedHooks: string[] } | null = null;
+  if (hookLevel !== 'none') {
+    hookResult = installHooksByLevel(hookLevel, { project: mode === 'project' });
+    console.error(`  Hooks installed (${hookLevel}): ${hookResult.installedHooks.length} hooks`);
+  }
+
   // Save manifest
   const manifestPath = saveManifest(manifest);
 
@@ -653,6 +678,7 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
   if (disabledRestored > 0) console.error(`  │ Disabled:  ${disabledRestored} items restored`);
   if (overlaysAppliedCount > 0) console.error(`  │ Overlays:  ${overlaysAppliedCount} applied`);
   if (mcpRegistered) console.error('  │ MCP:       maestro-tools registered');
+  if (hookResult) console.error(`  │ Hooks:     ${hookLevel} (${hookResult.installedHooks.length} hooks)`);
   console.error(`  │ Manifest: ${manifestPath}`);
   console.error('  └──────────────────────────────────────────────');
   console.error('');
@@ -667,7 +693,7 @@ async function interactiveInstall(pkgRoot: string, version: string): Promise<voi
 function forceInstall(
   pkgRoot: string,
   version: string,
-  opts: { global?: boolean; path?: string },
+  opts: { global?: boolean; path?: string; hooks?: string },
 ): void {
   console.error(`maestro install v${version}`);
   console.error('');
@@ -728,6 +754,13 @@ function forceInstall(
   // Apply overlays (non-invasive command patches)
   const overlaysAppliedCount = applyOverlaysPostInstall(mode, targetBase);
 
+  // Hook installation
+  const hookLevel = (opts.hooks ?? 'none') as HookLevel;
+  if (hookLevel !== 'none' && HOOK_LEVELS.includes(hookLevel)) {
+    const hookResult = installHooksByLevel(hookLevel, { project: mode === 'project' });
+    console.error(`  Hooks (${hookLevel}): ${hookResult.installedHooks.length} hooks → ${hookResult.settingsPath}`);
+  }
+
   saveManifest(manifest);
 
   const parts = [`${totalStats.files} files`];
@@ -751,7 +784,8 @@ export function registerInstallCommand(program: Command): void {
     .option('--global', 'Install global assets only (~/.maestro/)')
     .option('--path <dir>', 'Install project assets to target directory')
     .option('--force', 'Skip interactive prompts, install all available components')
-    .action(async (opts: { global?: boolean; path?: string; force?: boolean }) => {
+    .option('--hooks <level>', 'Install Claude Code hooks: none, minimal, standard, full (default: none)')
+    .action(async (opts: { global?: boolean; path?: string; force?: boolean; hooks?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root

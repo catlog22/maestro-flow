@@ -22,6 +22,8 @@ import type { SpawnFn } from '../coordinator/cli-executor.js';
 import { DefaultLLMDecider } from '../coordinator/llm-decider.js';
 import { CoordinateBrokerAdapter } from '../coordinator/coordinate-broker-adapter.js';
 import { createDefaultDelegateBroker, type DelegateBrokerApi } from '../async/delegate-broker.js';
+import { HookManager } from '../hooks/hook-manager.js';
+import { TelemetryPlugin } from '../hooks/plugins/telemetry-plugin.js';
 import { randomBytes } from 'node:crypto';
 
 const execFileAsync = promisify(execFile);
@@ -162,12 +164,16 @@ async function createWalker(
   // SpawnFn as command execution so the same CLI tool configuration applies.
   const llmDecider = new DefaultLLMDecider(spawnFn, { workDir: workflowRoot });
 
+  const hookManager = new HookManager();
+  hookManager.applyPlugin(new TelemetryPlugin());
+
   const walker = new GraphWalker(
     loader, assembler, executor,
     null, parser, evaluator,
     emitter, sessionDir,
     parallelExecutor,
     llmDecider,
+    hookManager.getRegistry(),
   );
   return { walker, router, loader, broker };
 }

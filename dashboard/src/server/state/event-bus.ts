@@ -38,6 +38,7 @@ import type {
   ExecutionCompletedPayload,
   ExecutionFailedPayload,
 } from '../../shared/ws-protocol.js';
+import type { CollabMember, CollabActivityEntry } from '../../shared/collab-types.js';
 
 // ---------------------------------------------------------------------------
 // All event types — single source of truth for onAny / offAny
@@ -86,6 +87,8 @@ const ALL_EVENT_TYPES: SSEEventType[] = [
   'requirement:progress',
   'workspace:switched',
   'wiki:invalidated',
+  'collab:members_updated',
+  'collab:activity',
 ];
 
 // ---------------------------------------------------------------------------
@@ -142,6 +145,9 @@ export interface DashboardEventMap {
   'workspace:switched': { workspace: string };
   // Wiki index events
   'wiki:invalidated': { at: number; path?: string };
+  // Collab events
+  'collab:members_updated': CollabMember[];
+  'collab:activity': CollabActivityEntry;
 }
 
 // ---------------------------------------------------------------------------

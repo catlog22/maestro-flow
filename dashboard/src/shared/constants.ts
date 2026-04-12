@@ -60,6 +60,8 @@ export const SSE_EVENT_TYPES: Record<string, SSEEventType> = {
   CONNECTED: 'connected',
   WORKSPACE_SWITCHED: 'workspace:switched',
   WIKI_INVALIDATED: 'wiki:invalidated',
+  COLLAB_MEMBERS_UPDATED: 'collab:members_updated',
+  COLLAB_ACTIVITY: 'collab:activity',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -191,6 +193,8 @@ export const WS_EVENT_TYPES: Record<string, WsEventType> = {
   WIKI_INVALIDATED: 'wiki:invalidated',
   HEARTBEAT: 'heartbeat',
   CONNECTED: 'connected',
+  COLLAB_MEMBERS_UPDATED: 'collab:members_updated',
+  COLLAB_ACTIVITY: 'collab:activity',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -248,6 +252,18 @@ export const TEAM_API_ENDPOINTS = {
   SESSION: '/api/teams/sessions/:sessionId',
   SESSION_MESSAGES: '/api/teams/sessions/:sessionId/messages',
   SESSION_FILE: '/api/teams/sessions/:sessionId/files',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Collab API endpoint paths
+// ---------------------------------------------------------------------------
+
+export const COLLAB_API_ENDPOINTS = {
+  MEMBERS: '/api/collab/members',
+  ACTIVITY: '/api/collab/activity',
+  STATUS: '/api/collab/status',
+  AGGREGATED: '/api/collab/activity/aggregated',
+  PREFLIGHT: '/api/collab/preflight',
 } as const;
 
 // ---------------------------------------------------------------------------

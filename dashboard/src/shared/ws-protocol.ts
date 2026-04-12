@@ -62,7 +62,10 @@ export type WsEventType =
   | 'workspace:switched'
   | 'heartbeat'
   | 'connected'
-  | 'wiki:invalidated';
+  | 'wiki:invalidated'
+  // Collab events
+  | 'collab:members_updated'
+  | 'collab:activity';
 
 // ---------------------------------------------------------------------------
 // Server → Client messages
