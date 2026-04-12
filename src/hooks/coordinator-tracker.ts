@@ -30,6 +30,7 @@ export interface CoordStep {
 export interface CoordBridgeData {
   session_id: string;
   coord_session_id?: string;
+  maestro_session_id?: string;
   coordinator: CoordinatorType;
   chain_name: string;
   intent: string;
@@ -97,13 +98,13 @@ export function readMaestroSession(workspaceRoot: string): CoordBridgeData | nul
     if (sessions.length === 0) return null;
 
     const raw: MaestroStatusJson = JSON.parse(readFileSync(sessions[0].path, 'utf8'));
-    return parseMaestroStatus(raw, sessions[0].mtime);
+    return parseMaestroStatus(raw, sessions[0].mtime, sessions[0].name);
   } catch {
     return null;
   }
 }
 
-function parseMaestroStatus(raw: MaestroStatusJson, mtime: number): CoordBridgeData | null {
+function parseMaestroStatus(raw: MaestroStatusJson, mtime: number, dirName?: string): CoordBridgeData | null {
   const steps = raw.steps ?? [];
   const currentIdx = raw.current_step ?? 0;
   const completed = steps.filter(s => s.status === 'completed').length;
@@ -124,6 +125,7 @@ function parseMaestroStatus(raw: MaestroStatusJson, mtime: number): CoordBridgeD
 
   return {
     session_id: '',
+    maestro_session_id: raw.session_id ?? dirName ?? undefined,
     coordinator: 'maestro',
     chain_name: raw.chain_name ?? '',
     intent: raw.intent ?? '',

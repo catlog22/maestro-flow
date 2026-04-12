@@ -1,13 +1,13 @@
 ---
 name: maestro-coordinate
-description: CLI-based coordinator — classifies intent, reads project state, selects command chain, executes each step via maestro cli with auto-confirm, and chains Gemini analysis hints between steps. Session state at .workflow/.maestro-coordinate/{session_id}/.
-argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--tool <tool>]"
-allowed-tools: Read, Write, Bash, Glob, Grep
+description: Team-agent pipeline coordinator — classifies intent, maps to skill chain, spawns one agent per step whose prompt contains the skill invocation ($skill-name "intent"). Step results propagate as context to each successor. Session state at .workflow/.maestro-coordinate/{session-id}/state.json.
+argument-hint: "\"intent text\" [-y] [-c|--continue] [--dry-run] [--chain <name>]"
+allowed-tools: spawn_agent, wait, send_input, close_agent, Read, Write, Bash, Glob, Grep
 ---
 
 ## Auto Mode
 
-When `-y` or `--yes`: Skip clarification prompts. Auto-inject confirmation signals into each step prompt.
+When `-y` or `--yes`: Skip clarification and confirmation prompts. Pass `-y` through to each step's skill invocation.
 
 # Maestro Coordinate
 
@@ -16,58 +16,52 @@ When `-y` or `--yes`: Skip clarification prompts. Auto-inject confirmation signa
 ```bash
 $maestro-coordinate "implement user authentication with JWT"
 $maestro-coordinate -y "refactor the payment module"
-$maestro-coordinate -c "continue"
+$maestro-coordinate --continue
 $maestro-coordinate --dry-run "add rate limiting to API endpoints"
-$maestro-coordinate --chain quality-fix "fix failing tests"
+$maestro-coordinate --chain feature "add dark mode toggle"
 ```
 
 **Flags**:
-- `-y, --yes` — Auto mode: skip clarification and confirmation prompts
-- `-c, --continue` — Resume previous session (latest if no session id given)
-- `--dry-run` — Show planned chain without executing
-- `--chain <name>` — Force a specific command chain
-- `--tool <tool>` — CLI tool override (default: claude)
+- `-y, --yes` — Auto mode: skip all prompts; propagate `-y` to each skill
+- `--continue` — Resume latest paused session from last incomplete step
+- `--dry-run` — Display planned chain without spawning any agents
+- `--chain <name>` — Force a specific chain (skips intent classification)
 
-**Session state**: `.workflow/.maestro-coordinate/{session_id}/state.json`
+**Session state**: `.workflow/.maestro-coordinate/{session-id}/state.json`
 
 ---
 
 ## Overview
 
-Pipeline coordinator that executes maestro command chains via external `maestro cli` with structured context propagation between steps. Each step is executed with `maestro cli --tool <tool> --mode write` using the `coordinate-step` prompt template. After each step, a Gemini analysis run extracts quality hints that are injected into the next step's prompt via `{{ANALYSIS_HINTS}}`. Gemini sessions chain via `--resume` for accumulated context.
+Sequential pipeline coordinator (Pattern 2.5). Each chain step is one `spawn_agent` whose message contains a `$skill-name "intent"` invocation together with context accumulated from prior steps. The agent executes the skill and returns structured findings; those findings are injected into the next step's spawn message as `## Context from Previous Steps`.
 
 ```
-+-------------------------------------------------------------------+
-|  maestro-coordinate Pipeline                                       |
-+-------------------------------------------------------------------+
-|                                                                   |
-|  Phase 1: Intent Resolution                                       |
-|     +-- Parse flags and detect mode (fresh / resume)              |
-|     +-- Read .workflow/state.json for project context             |
-|     +-- [if -c] Load existing session                             |
-|     +-- Classify intent via detectTaskType                        |
-|     +-- Map to chain via chainMap lookup                          |
-|     +-- [--dry-run] Display chain and stop                        |
-|     +-- [!-y] Present chain for confirmation                      |
-|                                                                   |
-|  Phase 2: Step Execution Loop                                     |
-|     +-- For each step in chain:                                   |
-|     |   +-- Build coordinate-step prompt (+ ANALYSIS_HINTS)       |
-|     |   +-- exec_command: maestro cli --mode write (step)         |
-|     |   +-- exec_command: maestro cli --mode analysis (Gemini)    |
-|     |   +-- Extract hints from Gemini output                      |
-|     |   +-- Update session state.json                             |
-|     +-- On step failure: set abort flag, suggest -c resume        |
-|                                                                   |
-|  Phase 3: Completion Report                                       |
-|     +-- Display per-step status + quality scores                  |
-|     +-- Archive session state                                      |
-+-------------------------------------------------------------------+
+Intent  →  Resolve Chain  →  Step 1  →  Step 2  →  …  →  Step N  →  Report
+              (chainMap)     spawn         spawn               spawn
+                             wait          wait                wait
+                             close         close               close
+                              │             │                   │
+                           findings  →  prev_context  →  prev_context
 ```
 
 ---
 
+## Chain Map
+
+| Intent keywords | Chain | Steps (skills, in order) |
+|----------------|-------|--------------------------|
+| fix, bug, error, broken, crash | `quality-fix` | $manage-issue-analyze → $manage-issue-execute → $maestro-verify |
+| test, spec, coverage | `quality-test` | $quality-test |
+| refactor, cleanup, debt | `quality-refactor` | $quality-refactor |
+| feature, implement, add, build | `feature` | $maestro-plan → $maestro-execute → $maestro-verify |
+| review, check, audit | `quality-review` | $quality-review |
+| deploy, release, ship | `deploy` | $maestro-verify → $maestro-execute |
+
+---
+
 ## Implementation
+
+> **Full implementation reference**: The complete `detectTaskType`, `detectNextAction`, and `chainMap` definitions (35+ intent patterns, 40+ chain types) are in `~/workflows/maestro-coordinate.codex.md`. Read that file for authoritative logic before executing any step.
 
 ### Session Initialization
 
@@ -77,130 +71,197 @@ const timeStr = new Date().toISOString().substring(11, 19).replace(/:/g, '')
 const sessionId = `MCC-${dateStr}-${timeStr}`
 const sessionDir = `.workflow/.maestro-coordinate/${sessionId}`
 
+Bash(`mkdir -p ${sessionDir}`)
+
 functions.update_plan({
   explanation: "Starting coordinate session",
   plan: [
-    { step: "Phase 1: Intent resolution", status: "in_progress" },
-    { step: "Phase 2: Step execution loop", status: "pending" },
+    { step: "Phase 1: Resolve intent and chain", status: "in_progress" },
+    { step: "Phase 2: Execute steps (pipeline)", status: "pending" },
     { step: "Phase 3: Completion report", status: "pending" }
   ]
 })
 ```
 
-Create session directory and `state.json`:
-```json
-{
-  "id": "<sessionId>",
-  "intent": "<user intent>",
-  "chain": null,
-  "tool": "claude",
-  "status": "in_progress",
-  "started_at": "<ISO>",
-  "steps": [],
-  "current_step": 0,
-  "analysis_session_id": null
-}
-```
+### Phase 1: Resolve Intent and Chain
 
-### Phase 1: Intent Resolution
-
-**Resume mode** (`-c`): Read latest session dir, load `state.json`, skip to Phase 2 at `current_step`.
+**`--continue` mode**: Glob `.workflow/.maestro-coordinate/MCC-*/state.json` sorted by name desc; load the most recent; skip to Phase 2 at the first step where `status === "pending"`.
 
 **Fresh mode**:
+
 1. Read `.workflow/state.json` for project context (`current_phase`, `workflow_name`)
-   — Also read `~/.maestro/workflows/cli-tools-usage.md` for available chain definitions if `--chain` is not specified
-2. Classify intent with `detectTaskType` heuristics:
+2. If `--chain` is given, use it directly
+3. Otherwise, classify intent with keyword heuristics (see Chain Map above)
+4. If no keyword matches and not `AUTO_YES`: ask one clarifying question via `functions.request_user_input`
+5. Resolve the chain's skill list from Chain Map
+6. Write `state.json`:
 
-| Intent keywords | Chain |
-|----------------|-------|
-| fix, bug, error, broken | quality-fix |
-| test, spec, coverage | quality-test |
-| refactor, cleanup, debt | quality-refactor |
-| feature, implement, add | maestro-plan + maestro-execute |
-| review, check, audit | quality-review |
-| deploy, release, ship | maestro-verify + maestro-execute |
+```javascript
+Write(`${sessionDir}/state.json`, JSON.stringify({
+  id: sessionId,
+  intent,
+  chain: resolvedChain,
+  auto_yes: AUTO_YES,
+  status: "in_progress",
+  started_at: new Date().toISOString(),
+  steps: CHAIN_MAP[resolvedChain].map((skill, i) => ({
+    step_n: i + 1,
+    skill,
+    status: "pending",
+    findings: null,
+    quality_score: null,
+    hints_for_next: null
+  }))
+}, null, 2))
+```
 
-3. If `--chain` specified, use that chain directly
-4. If `--dry-run`, display the planned chain and stop
-5. If `!AUTO_YES`, confirm chain with user via `functions.request_user_input`
+**`--dry-run`**: Display the chain plan and stop — no agents spawned.
 
-Save resolved chain to `state.json`.
+```
+Chain:  <resolvedChain>
+Steps:
+  1. <skill-1>
+  2. <skill-2>
+  3. <skill-3>
+```
+
+**User confirmation** (skip if `AUTO_YES`): Display the plan above and prompt `Proceed? (yes/no)`.
 
 ```javascript
 functions.update_plan({
-  explanation: "Intent resolved, starting execution",
+  explanation: "Chain resolved, starting pipeline",
   plan: [
-    { step: "Phase 1: Intent resolution", status: "completed" },
-    { step: "Phase 2: Step execution loop", status: "in_progress" },
+    { step: "Phase 1: Resolve intent and chain", status: "completed" },
+    { step: "Phase 2: Execute steps (pipeline)", status: "in_progress" },
     { step: "Phase 3: Completion report", status: "pending" }
   ]
 })
 ```
 
-### Phase 2: Step Execution Loop
-
-For each step in the resolved chain:
-
-**Step execution**:
-
-> **Prompt safety**: `intent`, `stepDescription`, and `prevStepSummary` may contain quotes or newlines. Write the assembled prompt to a temp file and reference it via `$(cat ...)`.
-
-```javascript
-const stepPrompt = `COORDINATE_STEP: ${stepN}
-INTENT: ${intent}
-CHAIN: ${chain}
-STEP_CONTEXT: ${prevStepSummary}
-ANALYSIS_HINTS: ${analysisHints || 'none'}
-AUTO_YES: ${AUTO_YES}
 ---
-Execute step ${stepN}: ${stepDescription}`
 
-Write(`/tmp/${sessionId}-step-${stepN}.txt`, stepPrompt)
-functions.exec_command({
-  cmd: `maestro cli -p "$(cat /tmp/${sessionId}-step-${stepN}.txt)" --tool ${tool} --mode write`,
-  workdir: "."
-})
-```
+### Phase 2: Execute Steps (Pipeline)
 
-**Post-step analysis** (Gemini):
+Sequential loop — each step spawns one agent, waits for it, extracts findings, then closes it before spawning the next.
+
 ```javascript
-functions.exec_command({
-  cmd: `maestro cli -p "PURPOSE: Analyze the output of step ${stepN} for quality and correctness.
-TASK: Identify gaps | Extract key findings | Prepare hints for next step
-MODE: analysis
-CONTEXT: @.workflow/.maestro-coordinate/${sessionId}/
-EXPECTED: JSON with: quality_score (0-10), gaps (string[]), hints_for_next (string)
-" --tool gemini --mode analysis ${analysisSessionId ? '--resume ' + analysisSessionId : ''}`,
-  workdir: "."
-})
-```
+let prevContext = ''  // accumulates across steps
 
-Store `analysisSessionId` from stderr `[MAESTRO_EXEC_ID=...]` for `--resume` chaining.
+for (const step of state.steps.filter(s => s.status === 'pending')) {
+  const skillFlag = AUTO_YES ? `-y` : ''
 
-Update `state.json` after each step:
-```json
-{
-  "steps": [..., {
-    "step": <N>,
-    "description": "<stepDesc>",
-    "status": "completed",
-    "quality_score": <score>,
-    "completed_at": "<ISO>"
-  }],
-  "current_step": <N+1>
+  // Assemble the agent prompt with the skill invocation embedded
+  const stepPrompt = buildStepPrompt({
+    step,
+    totalSteps: state.steps.length,
+    chain: state.chain,
+    intent: state.intent,
+    prevContext,
+    skillFlag,
+    sessionDir
+  })
+
+  // Spawn step agent
+  const agent = spawn_agent({ message: stepPrompt })
+
+  // Wait — with timeout urge
+  let result = wait({ ids: [agent], timeout_ms: 600000 })
+  if (result.timed_out) {
+    send_input({ id: agent, message: "Please wrap up and output your findings JSON now." })
+    result = wait({ ids: [agent], timeout_ms: 120000 })
+  }
+
+  // Parse structured output from agent
+  const output = parseLastJSON(result.status[agent].completed) ?? {
+    quality_score: null,
+    findings: result.status[agent].completed?.slice(-500) ?? "(no output)",
+    hints_for_next: ""
+  }
+
+  close_agent({ id: agent })
+
+  // Persist step result
+  step.status = result.timed_out ? "failed" : "completed"
+  step.findings = output.findings
+  step.quality_score = output.quality_score
+  step.hints_for_next = output.hints_for_next
+  step.completed_at = new Date().toISOString()
+  Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2))
+
+  // Build prev_context for next step
+  prevContext += `\n\n## Step ${step.step_n}: ${step.skill}\nFindings: ${step.findings}\nHints: ${step.hints_for_next ?? ''}`
+
+  // Abort on failure — mark remaining steps as skipped
+  if (step.status === "failed") {
+    state.steps
+      .filter(s => s.status === 'pending')
+      .forEach(s => { s.status = 'skipped'; s.findings = `Blocked: step ${step.step_n} (${step.skill}) failed` })
+    state.status = "aborted"
+    Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2))
+    break
+  }
 }
 ```
 
-On step failure: set `state.status = "aborted"`, stop loop, display resume instructions.
+---
+
+#### Step Agent Prompt Template (`buildStepPrompt`)
+
+The assembled prompt embeds the skill call so the agent knows exactly what to invoke:
+
+```
+## TASK ASSIGNMENT
+
+### MANDATORY FIRST STEPS
+1. Read: ~/.codex/agents/universal-executor.md
+2. Read: ~/workflows/maestro-coordinate.codex.md
+3. Read: ~/.codex/skills/{skill}/SKILL.md
+
+---
+
+**Coordinate Chain: {chain}  |  Step {step_n} of {totalSteps}**
+
+## Skill Invocation
+Execute this skill call to complete your task:
+
+  ${skill} "{intent}" {skillFlag}
+
+Follow the Implementation section of the skill file you read in step 2.
+The intent above is your driving goal.
+
+{#if prevContext}
+## Context from Previous Steps
+{prevContext}
+
+Use hints from the previous step to guide execution priorities.
+{/if}
+
+## Output (required — last JSON block in your response)
+After execution complete, output exactly:
+```json
+{
+  "quality_score": <0-10>,
+  "findings": "<what was accomplished — max 500 chars>",
+  "hints_for_next": "<specific guidance for the next chain step>"
+}
+```
+
+Session artifacts: {sessionDir}/
+```
+
+---
 
 ### Phase 3: Completion Report
 
 ```javascript
+state.status = state.steps.every(s => s.status === 'completed') ? "completed" : state.status
+Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2))
+
 functions.update_plan({
   explanation: "Coordinate complete",
   plan: [
-    { step: "Phase 1: Intent resolution", status: "completed" },
-    { step: "Phase 2: Step execution loop", status: "completed" },
+    { step: "Phase 1: Resolve intent and chain", status: "completed" },
+    { step: "Phase 2: Execute steps (pipeline)", status: "completed" },
     { step: "Phase 3: Completion report", status: "completed" }
   ]
 })
@@ -211,36 +272,40 @@ Display:
 === COORDINATE COMPLETE ===
 Session:  <sessionId>
 Chain:    <chain>
-Steps:    <N>/<total>
+Steps:    <N completed>/<total>
 
 STEP RESULTS:
-  [1] <step> — score: <N>/10 ✓
-  [2] <step> — score: <N>/10 ✓
-  ...
+  [1] <skill>  — score: <N>/10  ✓  <findings summary>
+  [2] <skill>  — score: <N>/10  ✓  <findings summary>
+  [3] <skill>  — score: <N>/10  ✓  <findings summary>
 
-Session: .workflow/.maestro-coordinate/<sessionId>/state.json
+State:  .workflow/.maestro-coordinate/<sessionId>/state.json
+Resume: $maestro-coordinate --continue
 ```
 
 ---
 
 ## Error Handling
 
-| Code | Severity | Description | Recovery |
-|------|----------|-------------|----------|
-| E001 | error | No intent and project not initialized | Suggest `$maestro-init` |
-| E002 | error | Clarity too low after 2 clarification rounds | Ask user to rephrase intent |
-| E003 | error | Step execution failed | Display step error, set status aborted, suggest resume with `-c` |
-| E004 | error | Resume session not found | Show available sessions in `.workflow/.maestro-coordinate/` |
-| E005 | error | CLI tool unavailable | Try fallback tool (gemini → qwen → codex) |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Intent unclassifiable after clarification | Default to `feature` chain; note in state.json |
+| E002 | error | `--chain` value not in chain map | List valid chains, abort |
+| E003 | error | Step agent timeout (both waits) | Mark step `failed`; skip remaining steps; suggest `--continue` |
+| E004 | error | Step agent failed (non-JSON output) | Mark step `failed`; preserve raw output in `findings`; skip remaining |
+| E005 | error | `--continue`: no session found | Glob `.workflow/.maestro-coordinate/MCC-*/`, list sessions, prompt |
+| W001 | warning | Step output JSON missing `hints_for_next` | Continue with empty hints; next step still gets `findings` |
 
 ---
 
 ## Core Rules
 
-1. **Start immediately**: Init session directory and state.json before any other action
-2. **Auto-confirm injection**: If `-y`, inject auto-confirm signal into every step prompt
-3. **Resume is additive**: Resume picks up from `current_step` — never re-executes completed steps
-4. **Gemini session chains**: Reuse `--resume <analysisSessionId>` for accumulated Gemini context across steps
-5. **State.json is source of truth**: All step progress tracked in `state.json` — never rely on memory
-6. **Step failure stops chain**: Abort on first step failure; never skip to next step silently
-7. **Dry-run is read-only**: `--dry-run` must never execute any maestro cli write commands
+1. **Start Immediately**: Init session dir and write `state.json` before any spawn
+2. **Sequential**: Never spawn step N+1 until step N agent is closed and results written
+3. **Skill in Prompt**: Every step agent's message MUST contain `$skill-name "intent"` — this is how the agent knows which skill to execute
+4. **State.json is source of truth**: Write after every step; `--continue` reads it to resume
+5. **Skip on Failure**: Step failure immediately marks all remaining steps `skipped` and aborts the loop
+6. **Close before spawn**: Always `close_agent` the current step agent before spawning the next
+7. **Dry-run is read-only**: Stop after displaying the chain plan — never spawn agents
+8. **Timeout handling**: One urge via `send_input`; if still timed out → mark `failed`
+9. **No CLI fallback**: All execution is agent-native — no `exec_command("maestro cli ...")`

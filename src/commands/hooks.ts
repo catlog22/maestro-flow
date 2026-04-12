@@ -14,13 +14,10 @@ import { evaluateSessionContext } from '../hooks/session-context.js';
 import { evaluateSkillContext } from '../hooks/skill-context.js';
 import { resolveWorkspace } from '../hooks/workspace.js';
 import {
-  parseCoordinateOutput,
-  readWalkerState,
   readMaestroSession,
   readLatestSession,
   readCoordBridge,
   writeCoordBridge,
-  buildNextStepHint,
   type CoordBridgeData,
 } from '../hooks/coordinator-tracker.js';
 
@@ -50,7 +47,7 @@ interface ClaudeSettings {
 // ---------------------------------------------------------------------------
 
 interface HookDef {
-  event: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Notification';
+  event: 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Notification' | 'Stop';
   matcher?: string;
   /** Minimum level required to install this hook */
   level: HookLevel;
@@ -72,19 +69,19 @@ export const HOOK_LEVELS: readonly HookLevel[] = ['none', 'minimal', 'standard',
 export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Statusline + context-monitor + spec-injector',
-  standard: '+ delegate/team/telemetry + session-context + skill-context',
+  standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
   full: '+ workflow-guard (PreToolUse)',
 };
 
 const HOOK_DEFS: Record<string, HookDef> = {
   'context-monitor': { event: 'PostToolUse', level: 'minimal' },
   'spec-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'minimal', requiresWorkspace: true },
-  'delegate-monitor': { event: 'PostToolUse', level: 'standard' },
-  'team-monitor': { event: 'PostToolUse', level: 'standard' },
-  'telemetry': { event: 'PostToolUse', level: 'standard' },
+  'delegate-monitor': { event: 'PostToolUse', matcher: 'Bash|Agent', level: 'standard' },
+  'team-monitor': { event: 'Stop', level: 'standard' },
+  'telemetry': { event: 'Stop', level: 'standard' },
   'session-context': { event: 'Notification', level: 'standard' },
   'skill-context': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
-  'coordinator-tracker': { event: 'PostToolUse', level: 'standard', requiresWorkspace: true },
+  'coordinator-tracker': { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
 };
 
@@ -117,7 +114,7 @@ const HOOK_MARKER = 'maestro';
 
 function removeMaestroHooks(settings: ClaudeSettings): void {
   if (!settings.hooks) return;
-  for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification'] as const) {
+  for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification', 'Stop'] as const) {
     const groups = settings.hooks[eventKey] as HookGroup[] | undefined;
     if (!groups) continue;
     for (const group of groups) {
@@ -135,7 +132,7 @@ function removeMaestroHooks(settings: ClaudeSettings): void {
 
 function findHookInSettings(settings: ClaudeSettings, hookName: string): boolean {
   if (!settings.hooks) return false;
-  for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification'] as const) {
+  for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification', 'Stop'] as const) {
     const groups = settings.hooks[eventKey] as HookGroup[] | undefined;
     if (!groups) continue;
     if (groups.some((g) => g.hooks.some((h) => h.command.includes(`hooks run ${hookName}`) || h.command.includes(`hook-runner.js") ${hookName}`) || h.command.includes(`hook-runner.js" ${hookName}`)))) {
@@ -353,6 +350,8 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
   'team-monitor': async () => {
     const raw = await readStdin();
     const data = raw ? JSON.parse(raw) : {};
+    // Stop event has no tool_name; use 'turn_complete' as the action
+    if (!data.tool_name) data.tool_name = 'turn_complete';
     runTeamMonitor(data);
   },
 
@@ -362,16 +361,14 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
 
     const raw = await readStdin();
     const data = JSON.parse(raw);
-    const toolName: string = data.tool_name ?? 'unknown';
     const sessionId: string = data.session_id ?? '';
     if (!sessionId) return;
 
     const { tmpdir } = await import('node:os');
     const telemetryPath = join(tmpdir(), `maestro-telemetry-${sessionId}.jsonl`);
     const entry = JSON.stringify({
-      tool: toolName,
+      event: 'turn_complete',
       timestamp: Date.now(),
-      success: data.tool_output !== undefined,
     });
     const { appendFileSync } = await import('node:fs');
     appendFileSync(telemetryPath, entry + '\n');
@@ -389,22 +386,8 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const workspace = resolveWorkspace(data);
     if (!workspace) return;
 
-    let bridgeData: CoordBridgeData | null = null;
-
-    // Path A: Capture coordinate session from Bash output JSON
-    // Triggered when /maestro-link-coordinate calls `maestro coordinate start/next`
-    if (data.tool_name === 'Bash') {
-      const output = typeof data.tool_output === 'string' ? data.tool_output : '';
-      const coordResult = parseCoordinateOutput(output);
-      if (coordResult) {
-        bridgeData = readWalkerState(workspace, coordResult.session_id);
-      }
-    }
-
-    // Path B: Read status.json (/maestro & /maestro-coordinate)
-    if (!bridgeData) {
-      bridgeData = readMaestroSession(workspace);
-    }
+    // Read status.json (/maestro & /maestro-coordinate)
+    let bridgeData: CoordBridgeData | null = readMaestroSession(workspace);
 
     // Fallback: pick most recently updated session
     if (!bridgeData) {
@@ -415,17 +398,6 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     if (!bridgeData) return;
     bridgeData.session_id = sessionId;
     writeCoordBridge(sessionId, bridgeData);
-
-    // Output next-step hint when paused
-    const hint = buildNextStepHint(bridgeData);
-    if (hint) {
-      process.stdout.write(JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PostToolUse',
-          additionalContext: hint,
-        },
-      }));
-    }
   },
 };
 

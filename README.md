@@ -197,7 +197,7 @@ Maestro-Flow doesn't pick one AI — it uses them together:
 
 Maestro-Flow includes a context-aware hook system that integrates with Claude Code's hook protocol. Hooks run as subprocesses, communicating via stdin/stdout JSON.
 
-### 8 Hooks, 3 Levels
+### 9 Hooks, 3 Levels
 
 | Hook | Event | Purpose |
 |------|-------|---------|
@@ -208,19 +208,20 @@ Maestro-Flow includes a context-aware hook system that integrates with Claude Co
 | `telemetry` | PostToolUse | Execution telemetry collection |
 | `session-context` | Notification | Injects workflow state + spec overview at session start |
 | `skill-context` | UserPromptSubmit | Injects workflow state + artifact tree when invoking workflow skills |
+| `coordinator-tracker` | PostToolUse | Tracks coordinator chain progress, injects next-step hint when paused |
 | `workflow-guard` | PreToolUse:Bash/Write/Edit | Protects critical files and enforces workflow constraints |
 
 Install hooks at the level you need:
 
 ```bash
 maestro hooks install --level minimal    # context-monitor + spec-injector
-maestro hooks install --level standard   # + delegate/team/telemetry + session-context + skill-context
+maestro hooks install --level standard   # + delegate/team/telemetry + session-context + skill-context + coordinator-tracker
 maestro hooks install --level full       # + workflow-guard
 ```
 
 ### Workspace-Aware Activation
 
-Workflow-dependent hooks (`spec-injector`, `skill-context`, `workflow-guard`) declare `requiresWorkspace: true`. When no Maestro workspace is detected, these hooks exit silently before reading stdin — zero overhead for non-workflow projects. Workspace detection walks up the directory tree looking for `.workflow/state.json` with Maestro-specific fingerprint fields.
+Workflow-dependent hooks (`spec-injector`, `skill-context`, `coordinator-tracker`, `workflow-guard`) declare `requiresWorkspace: true`. When no Maestro workspace is detected, these hooks exit silently before reading stdin — zero overhead for non-workflow projects. Workspace detection walks up the directory tree looking for `.workflow/state.json` with Maestro-specific fingerprint fields.
 
 ### Spec Injection
 
