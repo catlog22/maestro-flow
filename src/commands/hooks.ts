@@ -13,6 +13,16 @@ import { evaluateSpecInjection } from '../hooks/spec-injector.js';
 import { evaluateSessionContext } from '../hooks/session-context.js';
 import { evaluateSkillContext } from '../hooks/skill-context.js';
 import { resolveWorkspace } from '../hooks/workspace.js';
+import {
+  parseCoordinateOutput,
+  readWalkerState,
+  readMaestroSession,
+  readLatestSession,
+  readCoordBridge,
+  writeCoordBridge,
+  buildNextStepHint,
+  type CoordBridgeData,
+} from '../hooks/coordinator-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,6 +84,7 @@ const HOOK_DEFS: Record<string, HookDef> = {
   'telemetry': { event: 'PostToolUse', level: 'standard' },
   'session-context': { event: 'Notification', level: 'standard' },
   'skill-context': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'coordinator-tracker': { event: 'PostToolUse', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
 };
 
@@ -332,7 +343,8 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     if (!prompt) return;
 
     const cwd = data.cwd ?? process.cwd();
-    const result = evaluateSkillContext({ user_prompt: prompt, cwd });
+    const sessionId: string = data.session_id ?? '';
+    const result = evaluateSkillContext({ user_prompt: prompt, cwd, session_id: sessionId });
     if (result) {
       process.stdout.write(JSON.stringify(result));
     }
@@ -363,6 +375,57 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     });
     const { appendFileSync } = await import('node:fs');
     appendFileSync(telemetryPath, entry + '\n');
+  },
+
+  'coordinator-tracker': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['coordinatorTracker'] === false) return;
+
+    const raw = await readStdin();
+    const data = JSON.parse(raw);
+    const sessionId: string = data.session_id ?? '';
+    if (!sessionId) return;
+
+    const workspace = resolveWorkspace(data);
+    if (!workspace) return;
+
+    let bridgeData: CoordBridgeData | null = null;
+
+    // Path A: Capture coordinate session from Bash output JSON
+    // Triggered when /maestro-link-coordinate calls `maestro coordinate start/next`
+    if (data.tool_name === 'Bash') {
+      const output = typeof data.tool_output === 'string' ? data.tool_output : '';
+      const coordResult = parseCoordinateOutput(output);
+      if (coordResult) {
+        bridgeData = readWalkerState(workspace, coordResult.session_id);
+      }
+    }
+
+    // Path B: Read status.json (/maestro & /maestro-coordinate)
+    if (!bridgeData) {
+      bridgeData = readMaestroSession(workspace);
+    }
+
+    // Fallback: pick most recently updated session
+    if (!bridgeData) {
+      const existing = readCoordBridge(sessionId);
+      bridgeData = readLatestSession(workspace, existing);
+    }
+
+    if (!bridgeData) return;
+    bridgeData.session_id = sessionId;
+    writeCoordBridge(sessionId, bridgeData);
+
+    // Output next-step hint when paused
+    const hint = buildNextStepHint(bridgeData);
+    if (hint) {
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PostToolUse',
+          additionalContext: hint,
+        },
+      }));
+    }
   },
 };
 
@@ -529,6 +592,7 @@ export function registerHooksCommand(program: Command): void {
           : name === 'spec-injector' ? 'specInjector'
           : name === 'session-context' ? 'sessionContext'
           : name === 'skill-context' ? 'skillContext'
+          : name === 'coordinator-tracker' ? 'coordinatorTracker'
           : name;
         const enabled = config.toggles[toggleKey] !== false;
         const matcher = def.matcher ? ` [${def.matcher}]` : '';

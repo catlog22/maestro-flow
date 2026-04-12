@@ -1,0 +1,13 @@
+{
+  "session_id": "coord-1744668285953-d428",
+  "status": "step_paused",
+  "graph_id": "full-lifecycle",
+  "current_node": "verify",
+  "steps_completed": 3,
+  "steps_failed": 0,
+  "history": [
+    { "node_id": "plan", "outcome": "success", "summary": "Generated 5 tasks" },
+    { "node_id": "execute", "outcome": "success", "summary": "Executed 5/5 tasks" },
+    { "node_id": "verify", "outcome": "success", "summary": "Verification passed" }
+  ]
+}

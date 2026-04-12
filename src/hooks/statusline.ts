@@ -24,6 +24,7 @@ import {
   ANSI_CYAN,
   getFaceLevel,
 } from './constants.js';
+import { readCoordBridge, type CoordBridgeData } from './coordinator-tracker.js';
 import { resolveSelf } from '../tools/team-members.js';
 import { readRecentActivity, type ActivityEvent } from '../tools/team-activity.js';
 import { findWorkspaceRoot } from './workspace.js';
@@ -275,6 +276,34 @@ export function buildTeamSegment(session: string): string {
   }
 }
 
+/**
+ * Build coordinator progress segment from bridge file.
+ * Returns e.g. "[3/6]verify" or "[P]review" (paused) or empty string.
+ */
+export function buildCoordinatorSegment(session: string): string {
+  if (!session) return '';
+  try {
+    const bridge = readCoordBridge(session);
+    if (!bridge) return '';
+
+    const { status, steps_completed, steps_total, current_step } = bridge;
+    if (status === 'completed' || status === 'failed') return '';
+
+    const stepLabel = current_step?.skill ?? '';
+    const isPaused = status === 'paused' || status === 'step_paused';
+    const prefix = isPaused ? 'P' : `${steps_completed}/${steps_total}`;
+
+    let seg = `[${prefix}]${stepLabel}`;
+    if (bridge.coord_session_id) {
+      const shortId = bridge.coord_session_id.slice(0, 12);
+      seg += ` (${shortId})`;
+    }
+    return seg;
+  } catch {
+    return '';
+  }
+}
+
 /** Main statusline handler — processes input and returns formatted string */
 export function formatStatusline(data: StatuslineInput): string {
   const model = data.model?.display_name || 'Claude';
@@ -296,12 +325,16 @@ export function formatStatusline(data: StatuslineInput): string {
   // Phase from .workflow/
   const phase = readPhase(dir);
 
+  // Coordinator progress
+  const coord = session ? buildCoordinatorSegment(session) : '';
+
   // Teammate activity (team-lite Wave 3B)
   const team = session ? buildTeamSegment(session) : '';
 
   // Assemble segments
   const parts: string[] = [`${ANSI_DIM}${model}${ANSI_RESET}`];
   if (phase) parts.push(`${ANSI_CYAN}${phase}${ANSI_RESET}`);
+  if (coord) parts.push(`${ANSI_CYAN}${coord}${ANSI_RESET}`);
   if (task)  parts.push(`${ANSI_BOLD}${task}${ANSI_RESET}`);
   if (team)  parts.push(`${ANSI_DIM}${team}${ANSI_RESET}`);
   parts.push(`${ANSI_DIM}${basename(dir)}${ANSI_RESET}`);

@@ -21,6 +21,9 @@ export const BRIDGE_PREFIX = 'maestro-ctx-';
 /** Delegate notification file prefix in os.tmpdir() */
 export const NOTIFY_PREFIX = 'maestro-notify-';
 
+/** Coordinator tracker bridge file prefix in os.tmpdir() */
+export const COORD_BRIDGE_PREFIX = 'maestro-coord-';
+
 /** Max ms to wait for stdin before exiting (Windows pipe safety) */
 export const STDIN_TIMEOUT_MS = 3000;
 

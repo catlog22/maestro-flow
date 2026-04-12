@@ -1,0 +1,73 @@
+{
+  "id": "full-lifecycle",
+  "name": "Full Lifecycle",
+  "entry": "plan",
+  "nodes": {
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "args": "{phase}",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "verify": {
+      "type": "command",
+      "cmd": "maestro-verify",
+      "args": "{phase}",
+      "next": "check_verify"
+    },
+    "check_verify": {
+      "type": "decision",
+      "eval": "ctx.result.verification_status",
+      "edges": [
+        { "value": "passed", "target": "review" },
+        { "default": true, "target": "fix_plan" }
+      ]
+    },
+    "review": {
+      "type": "command",
+      "cmd": "quality-review",
+      "args": "{phase}",
+      "next": "check_review"
+    },
+    "check_review": {
+      "type": "decision",
+      "edges": [
+        { "value": "BLOCK", "target": "fix_plan" },
+        { "default": true, "target": "test" }
+      ]
+    },
+    "fix_plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "args": "{phase} --gaps",
+      "next": "fix_execute"
+    },
+    "fix_execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "args": "{phase}",
+      "next": "verify"
+    },
+    "test": {
+      "type": "command",
+      "cmd": "quality-test",
+      "args": "{phase}",
+      "next": "transition"
+    },
+    "transition": {
+      "type": "command",
+      "cmd": "maestro-phase-transition",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

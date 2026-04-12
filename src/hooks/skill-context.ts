@@ -12,6 +12,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { resolveWorkspace } from './workspace.js';
+import { readCoordBridge, buildNextStepHint, type CoordBridgeData } from './coordinator-tracker.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,6 +58,7 @@ interface PhaseIndex {
 export interface SkillContextInput {
   user_prompt?: string;
   cwd?: string;
+  session_id?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +73,9 @@ const SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
   { pattern: /\/maestro-phase-transition(?:\s+(\d+))?/, skill: 'maestro-phase-transition' },
   { pattern: /\/quality-review\s+(\d+)/, skill: 'quality-review' },
   { pattern: /\/quality-test\s+(\d+)/, skill: 'quality-test' },
+  { pattern: /\/maestro(?:\s|$)/, skill: 'maestro' },
+  { pattern: /\/maestro-coordinate(?:\s|$)/, skill: 'maestro-coordinate' },
+  { pattern: /\/maestro-link-coordinate(?:\s|$)/, skill: 'maestro-link-coordinate' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -116,6 +121,16 @@ export function evaluateSkillContext(data: SkillContextInput): HookOutput | null
   }
 
   const sections: string[] = [];
+
+  // Section 0: Coordinator session context (for /maestro, /maestro-coordinate, /maestro-link-coordinate)
+  const COORDINATOR_SKILLS = ['maestro', 'maestro-coordinate', 'maestro-link-coordinate'];
+  if (COORDINATOR_SKILLS.includes(skill.skill) && data.session_id) {
+    const coordBridge = readCoordBridge(data.session_id);
+    if (coordBridge) {
+      const hint = buildNextStepHint(coordBridge);
+      if (hint) sections.push(hint);
+    }
+  }
 
   // Section 1: Workflow state summary
   const stateSection = buildStateSection(state, skill);
