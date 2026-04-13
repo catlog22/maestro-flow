@@ -1,0 +1,93 @@
+{
+  "team_name": "team-testing",
+  "team_display_name": "Team Testing",
+  "description": "Testing team with Generator-Critic loop, shared defect memory, and progressive test layers",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Change scope analysis, layer selection, quality gating",
+      "message_types": ["pipeline_selected", "gc_loop_trigger", "quality_gate", "task_unblocked", "error", "shutdown"]
+    },
+    "strategist": {
+      "task_prefix": "STRATEGY",
+      "responsibility": "Analyze git diff, determine test layers, define coverage targets",
+      "message_types": ["strategy_ready", "error"]
+    },
+    "generator": {
+      "task_prefix": "TESTGEN",
+      "responsibility": "Generate test cases by layer (unit/integration/E2E)",
+      "message_types": ["tests_generated", "tests_revised", "error"]
+    },
+    "executor": {
+      "task_prefix": "TESTRUN",
+      "responsibility": "Execute tests, collect coverage, auto-fix failures",
+      "message_types": ["tests_passed", "tests_failed", "coverage_report", "error"]
+    },
+    "analyst": {
+      "task_prefix": "TESTANA",
+      "responsibility": "Defect pattern analysis, coverage gap analysis, quality report",
+      "message_types": ["analysis_ready", "error"]
+    }
+  },
+
+  "pipelines": {
+    "targeted": {
+      "description": "Small scope: strategy → generate L1 → run",
+      "task_chain": ["STRATEGY-001", "TESTGEN-001", "TESTRUN-001"],
+      "gc_loops": 0
+    },
+    "standard": {
+      "description": "Progressive: L1 → L2 with analysis",
+      "task_chain": ["STRATEGY-001", "TESTGEN-001", "TESTRUN-001", "TESTGEN-002", "TESTRUN-002", "TESTANA-001"],
+      "gc_loops": 1
+    },
+    "comprehensive": {
+      "description": "Full coverage: parallel L1+L2, then L3 with analysis",
+      "task_chain": ["STRATEGY-001", "TESTGEN-001", "TESTGEN-002", "TESTRUN-001", "TESTRUN-002", "TESTGEN-003", "TESTRUN-003", "TESTANA-001"],
+      "gc_loops": 2,
+      "parallel_groups": [["TESTGEN-001", "TESTGEN-002"], ["TESTRUN-001", "TESTRUN-002"]]
+    }
+  },
+
+  "innovation_patterns": {
+    "generator_critic": {
+      "generator": "generator",
+      "critic": "executor",
+      "max_rounds": 3,
+      "convergence_trigger": "coverage >= target && pass_rate >= 0.95"
+    },
+    "shared_memory": {
+      "file": "shared-memory.json",
+      "fields": {
+        "strategist": "test_strategy",
+        "generator": "generated_tests",
+        "executor": "execution_results",
+        "analyst": "analysis_report"
+      },
+      "persistent_fields": ["defect_patterns", "effective_test_patterns", "coverage_history"]
+    },
+    "dynamic_pipeline": {
+      "selector": "coordinator",
+      "criteria": "changed_file_count + module_count + change_type"
+    }
+  },
+
+  "test_layers": {
+    "L1": { "name": "Unit Tests", "coverage_target": 80, "description": "Function-level isolation tests" },
+    "L2": { "name": "Integration Tests", "coverage_target": 60, "description": "Module interaction tests" },
+    "L3": { "name": "E2E Tests", "coverage_target": 40, "description": "User scenario end-to-end tests" }
+  },
+
+  "collaboration_patterns": ["CP-1", "CP-3", "CP-5"],
+
+  "session_dirs": {
+    "base": ".workflow/.team/TST-{slug}-{YYYY-MM-DD}/",
+    "strategy": "strategy/",
+    "tests": "tests/",
+    "results": "results/",
+    "analysis": "analysis/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

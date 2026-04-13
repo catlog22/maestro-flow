@@ -1,0 +1,27 @@
+{
+  "name": "team-review",
+  "description": "Code scanning, vulnerability review, optimization suggestions, and automated fix",
+  "sessionDir": ".workflow/.team-review/",
+  "msgDir": ".workflow/.team-msg/team-review/",
+  "roles": {
+    "coordinator": { "prefix": "RC", "type": "orchestration", "file": "roles/coordinator/role.md" },
+    "scanner":     { "prefix": "SCAN", "type": "read-only-analysis", "file": "roles/scanner/role.md" },
+    "reviewer":    { "prefix": "REV", "type": "read-only-analysis", "file": "roles/reviewer/role.md" },
+    "fixer":       { "prefix": "FIX", "type": "code-generation", "file": "roles/fixer/role.md" }
+  },
+  "collaboration_pattern": "CP-1",
+  "pipeline": ["scanner", "reviewer", "fixer"],
+  "dimensions": {
+    "security":        { "prefix": "SEC", "tools": ["semgrep", "npm-audit"] },
+    "correctness":     { "prefix": "COR", "tools": ["tsc", "eslint-error"] },
+    "performance":     { "prefix": "PRF", "tools": [] },
+    "maintainability": { "prefix": "MNT", "tools": ["eslint-warning"] }
+  },
+  "severity_levels": ["critical", "high", "medium", "low", "info"],
+  "defaults": {
+    "max_deep_analysis": 15,
+    "max_quick_findings": 20,
+    "max_parallel_fixers": 3,
+    "quick_fix_threshold": 5
+  }
+}
