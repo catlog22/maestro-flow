@@ -694,6 +694,252 @@ describe('delegate command', () => {
     });
   });
 
+  it('main action with --async flag launches detached worker and prints exec ID', async () => {
+    const stderrChunks: string[] = [];
+    const logs: string[] = [];
+    const originalLog = console.log;
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map((value) => String(value)).join(' '));
+    };
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8'));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      await program.parseAsync(
+        ['delegate', 'test async prompt', '--async', '--id', 'exec-async-action', '--to', 'gemini', '--session', 'ses-test'],
+        { from: 'user' },
+      );
+    } catch {
+      // May throw due to launchDetachedDelegateWorker trying to spawn — that's OK
+    } finally {
+      console.log = originalLog;
+      process.stderr.write = originalStderrWrite;
+    }
+
+    const stderrOutput = stderrChunks.join('');
+    assert.match(stderrOutput, /MAESTRO_EXEC_ID=exec-async-action/);
+  });
+
+  it('main action without --session triggers resolveRelaySessionId with relay files', async () => {
+    // Create relay session files in temp MAESTRO_HOME async directory
+    const asyncDir = join(tempHome, 'data', 'async');
+    mkdirSync(asyncDir, { recursive: true });
+
+    // Write a relay session file with a dead PID (should get cleaned up)
+    writeFileSync(
+      join(asyncDir, 'relay-session-99999999.id'),
+      JSON.stringify({ sessionId: 'dead-session', pid: 99999999, startedAt: '2026-04-12T09:00:00Z' }),
+    );
+
+    // Write a relay session file with current PID (alive)
+    writeFileSync(
+      join(asyncDir, 'relay-session-live.id'),
+      JSON.stringify({ sessionId: 'live-session', pid: process.pid, startedAt: '2026-04-12T10:00:00Z' }),
+    );
+
+    // Write a corrupted relay session file (should be skipped)
+    writeFileSync(
+      join(asyncDir, 'relay-session-corrupt.id'),
+      'NOT JSON{{{',
+    );
+
+    const stderrChunks: string[] = [];
+    const logs: string[] = [];
+    const originalLog = console.log;
+    const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map((value) => String(value)).join(' '));
+    };
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf-8'));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      // NO --session flag — will trigger resolveRelaySessionId
+      await program.parseAsync(
+        ['delegate', 'test relay resolve', '--async', '--id', 'exec-relay-resolve', '--to', 'gemini'],
+        { from: 'user' },
+      );
+    } catch {
+      // Expected: spawn may fail
+    } finally {
+      console.log = originalLog;
+      process.stderr.write = originalStderrWrite;
+    }
+
+    const stderrOutput = stderrChunks.join('');
+    assert.match(stderrOutput, /MAESTRO_EXEC_ID=exec-relay-resolve/);
+
+    // Verify the dead PID file was cleaned up
+    assert.ok(!existsSync(join(asyncDir, 'relay-session-99999999.id')), 'stale relay file should be removed');
+  });
+
+  it('output subcommand exits with error for unknown execution', async () => {
+    const errors: string[] = [];
+    const originalError = console.error;
+    const exitCodes: number[] = [];
+    const originalExit = process.exit;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((value) => String(value)).join(' '));
+    };
+    (process as any).exit = (code: number) => {
+      exitCodes.push(code);
+      throw new Error(`process.exit(${code})`);
+    };
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      await program.parseAsync(['delegate', 'output', 'nonexistent-id'], { from: 'user' });
+    } catch {
+      // Expected: process.exit throws
+    } finally {
+      console.error = originalError;
+      (process as any).exit = originalExit;
+    }
+
+    assert.ok(errors.some(e => e.includes('Execution not found')));
+    assert.deepEqual(exitCodes, [1]);
+  });
+
+  it('status subcommand exits with error for unknown execution', async () => {
+    const errors: string[] = [];
+    const originalError = console.error;
+    const exitCodes: number[] = [];
+    const originalExit = process.exit;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((value) => String(value)).join(' '));
+    };
+    (process as any).exit = (code: number) => {
+      exitCodes.push(code);
+      throw new Error(`process.exit(${code})`);
+    };
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      await program.parseAsync(['delegate', 'status', 'nonexistent-id'], { from: 'user' });
+    } catch {
+      // Expected: process.exit throws
+    } finally {
+      console.error = originalError;
+      (process as any).exit = originalExit;
+    }
+
+    assert.ok(errors.some(e => e.includes('Execution not found')));
+    assert.deepEqual(exitCodes, [1]);
+  });
+
+  it('tail subcommand exits with error for unknown execution', async () => {
+    const errors: string[] = [];
+    const originalError = console.error;
+    const exitCodes: number[] = [];
+    const originalExit = process.exit;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((value) => String(value)).join(' '));
+    };
+    (process as any).exit = (code: number) => {
+      exitCodes.push(code);
+      throw new Error(`process.exit(${code})`);
+    };
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      await program.parseAsync(['delegate', 'tail', 'nonexistent-id'], { from: 'user' });
+    } catch {
+      // Expected: process.exit throws
+    } finally {
+      console.error = originalError;
+      (process as any).exit = originalExit;
+    }
+
+    assert.ok(errors.some(e => e.includes('Execution not found')));
+    assert.deepEqual(exitCodes, [1]);
+  });
+
+  it('cancel subcommand exits with error for unknown execution', async () => {
+    const errors: string[] = [];
+    const originalError = console.error;
+    const exitCodes: number[] = [];
+    const originalExit = process.exit;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((value) => String(value)).join(' '));
+    };
+    (process as any).exit = (code: number) => {
+      exitCodes.push(code);
+      throw new Error(`process.exit(${code})`);
+    };
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      await program.parseAsync(['delegate', 'cancel', 'nonexistent-id'], { from: 'user' });
+    } catch {
+      // Expected: process.exit throws
+    } finally {
+      console.error = originalError;
+      (process as any).exit = originalExit;
+    }
+
+    assert.ok(errors.some(e => e.includes('Execution not found')));
+    assert.deepEqual(exitCodes, [1]);
+  });
+
+  it('output subcommand exits with error when no output available', async () => {
+    const store = new CliHistoryStore();
+    store.saveMeta('exec-no-output', {
+      execId: 'exec-no-output',
+      tool: 'gemini',
+      mode: 'analysis',
+      prompt: 'No output test',
+      workDir: 'D:/maestro2',
+      startedAt: '2026-04-12T10:00:00.000Z',
+    });
+    // Note: no appendEntry — so getOutput returns null
+
+    const errors: string[] = [];
+    const originalError = console.error;
+    const exitCodes: number[] = [];
+    const originalExit = process.exit;
+
+    console.error = (...args: unknown[]) => {
+      errors.push(args.map((value) => String(value)).join(' '));
+    };
+    (process as any).exit = (code: number) => {
+      exitCodes.push(code);
+      throw new Error(`process.exit(${code})`);
+    };
+
+    try {
+      const program = new Command();
+      registerDelegateCommand(program);
+      await program.parseAsync(['delegate', 'output', 'exec-no-output'], { from: 'user' });
+    } catch {
+      // Expected: process.exit throws
+    } finally {
+      console.error = originalError;
+      (process as any).exit = originalExit;
+    }
+
+    assert.ok(errors.some(e => e.includes('No output available')));
+    assert.deepEqual(exitCodes, [1]);
+  });
+
   it('tail with custom event limit respects the limit', async () => {
     const store = new CliHistoryStore();
     store.saveMeta('exec-tail-limit', {

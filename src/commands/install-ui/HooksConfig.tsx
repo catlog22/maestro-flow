@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import {
   HOOK_LEVELS,
@@ -7,7 +7,8 @@ import {
 } from '../hooks.js';
 
 // ---------------------------------------------------------------------------
-// HooksConfig -- Hook level selection panel
+// HooksConfig -- Hook level selection panel (radio-style)
+// Supports: Up/Down arrows, number keys 1-4, Space to select
 // ---------------------------------------------------------------------------
 
 interface HooksConfigProps {
@@ -16,11 +17,23 @@ interface HooksConfigProps {
 }
 
 export function HooksConfig({ level, onLevelChange }: HooksConfigProps) {
+  const [index, setIndex] = useState(() => HOOK_LEVELS.indexOf(level));
+
   useInput(
-    (input) => {
-      const num = parseInt(input, 10);
-      if (!isNaN(num) && num >= 1 && num <= HOOK_LEVELS.length) {
-        onLevelChange(HOOK_LEVELS[num - 1]);
+    (input, key) => {
+      if (key.upArrow) {
+        setIndex((i) => (i <= 0 ? HOOK_LEVELS.length - 1 : i - 1));
+      } else if (key.downArrow) {
+        setIndex((i) => (i >= HOOK_LEVELS.length - 1 ? 0 : i + 1));
+      } else if (input === ' ') {
+        onLevelChange(HOOK_LEVELS[index]);
+      } else {
+        const num = parseInt(input, 10);
+        if (!isNaN(num) && num >= 1 && num <= HOOK_LEVELS.length) {
+          const idx = num - 1;
+          setIndex(idx);
+          onLevelChange(HOOK_LEVELS[idx]);
+        }
       }
     },
   );
@@ -34,13 +47,20 @@ export function HooksConfig({ level, onLevelChange }: HooksConfigProps) {
       <Box flexDirection="column" marginTop={1}>
         {HOOK_LEVELS.map((lvl, i) => {
           const isActive = lvl === level;
+          const isHighlighted = i === index;
           const label = lvl.charAt(0).toUpperCase() + lvl.slice(1);
           const desc = HOOK_LEVEL_DESCRIPTIONS[lvl];
 
           return (
             <Box key={lvl}>
-              <Text color={isActive ? 'cyan' : 'gray'}>
-                [{i + 1}] {isActive ? '>' : ' '} {label}
+              <Text color={isHighlighted ? 'cyan' : 'gray'}>
+                [{i + 1}]
+              </Text>
+              <Text color={isActive ? 'green' : 'gray'}>
+                {' '}{isActive ? '(x)' : '( )'}{' '}
+              </Text>
+              <Text color={isHighlighted ? 'cyan' : undefined} bold={isHighlighted}>
+                {label}
               </Text>
               <Text dimColor> -- {desc}</Text>
             </Box>
@@ -49,7 +69,9 @@ export function HooksConfig({ level, onLevelChange }: HooksConfigProps) {
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>Press 1-{HOOK_LEVELS.length} to select hook level</Text>
+        <Text dimColor>
+          [Up/Down] Navigate  [Space/1-{HOOK_LEVELS.length}] Select  [Enter] Done  [Esc] Back
+        </Text>
       </Box>
     </Box>
   );

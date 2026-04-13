@@ -5,6 +5,7 @@ import { MCP_TOOLS } from '../install-backend.js';
 
 // ---------------------------------------------------------------------------
 // McpConfig -- MCP tools configuration panel
+// Supports: Up/Down arrows, Space to toggle, number keys, y/n enable
 // ---------------------------------------------------------------------------
 
 interface McpConfigProps {
@@ -28,11 +29,14 @@ export function McpConfig({
 }: McpConfigProps) {
   const [editingRoot, setEditingRoot] = useState(false);
   const [rootInput, setRootInput] = useState(projectRoot);
+  // Index 0 = enable toggle, 1..N = tools
+  const [index, setIndex] = useState(0);
+  const totalRows = enabled ? 1 + MCP_TOOLS.length : 1;
 
   const toggleTool = useCallback(
-    (index: number) => {
-      if (index < 0 || index >= MCP_TOOLS.length) return;
-      const toolName = MCP_TOOLS[index];
+    (toolIndex: number) => {
+      if (toolIndex < 0 || toolIndex >= MCP_TOOLS.length) return;
+      const toolName = MCP_TOOLS[toolIndex];
       if (tools.includes(toolName)) {
         onToolsChange(tools.filter((t) => t !== toolName));
       } else {
@@ -44,34 +48,33 @@ export function McpConfig({
 
   useInput(
     (input, key) => {
-      if (editingRoot) return; // TextInput captures input when active
+      if (editingRoot) return;
 
-      // y/Y to enable, n/N to disable
-      if (input === 'y' || input === 'Y') {
+      if (key.upArrow) {
+        setIndex((i) => (i <= 0 ? totalRows - 1 : i - 1));
+      } else if (key.downArrow) {
+        setIndex((i) => (i >= totalRows - 1 ? 0 : i + 1));
+      } else if (input === ' ') {
+        if (index === 0) {
+          onEnableChange(!enabled);
+        } else {
+          toggleTool(index - 1);
+        }
+      } else if (input === 'y' || input === 'Y') {
         onEnableChange(true);
-        return;
-      }
-      if (input === 'n' || input === 'N') {
+      } else if (input === 'n' || input === 'N') {
         onEnableChange(false);
-        return;
-      }
-
-      // Number keys 1-6 to toggle tools
-      const num = parseInt(input, 10);
-      if (!isNaN(num) && num >= 1 && num <= MCP_TOOLS.length) {
-        toggleTool(num - 1);
-        return;
-      }
-
-      // 'r' to edit project root
-      if (input === 'r' || input === 'R') {
+      } else if (input === 'r' || input === 'R') {
         setEditingRoot(true);
-        return;
+      } else {
+        const num = parseInt(input, 10);
+        if (!isNaN(num) && num >= 1 && num <= MCP_TOOLS.length && enabled) {
+          toggleTool(num - 1);
+        }
       }
     },
   );
 
-  // Handle root input submission
   const handleRootSubmit = useCallback(
     (value: string) => {
       onRootChange(value);
@@ -87,26 +90,27 @@ export function McpConfig({
       </Text>
 
       <Box marginTop={1}>
-        <Text>
+        <Text color={index === 0 ? 'cyan' : undefined}>
           Enable MCP server?{' '}
         </Text>
         <Text color={enabled ? 'green' : 'yellow'} bold>
           {enabled ? '[Yes]' : '[No]'}
         </Text>
-        <Text dimColor> [y/n]</Text>
+        <Text dimColor> [y/n/Space]</Text>
       </Box>
 
       {enabled && (
         <Box flexDirection="column" marginTop={1}>
-          <Text bold>Tools (press 1-{MCP_TOOLS.length} to toggle):</Text>
+          <Text bold>Tools:</Text>
           <Box flexDirection="column" marginTop={1}>
             {MCP_TOOLS.map((tool, i) => {
               const checked = tools.includes(tool);
+              const hl = index === i + 1;
               return (
                 <Box key={tool}>
-                  <Text color={checked ? 'cyan' : 'gray'}>
-                    [{i + 1}] {checked ? '[x]' : '[ ]'} {tool}
-                  </Text>
+                  <Text color={hl ? 'cyan' : 'gray'}>[{i + 1}]</Text>
+                  <Text color={checked ? 'green' : 'gray'}> {checked ? '[x]' : '[ ]'} </Text>
+                  <Text color={hl ? 'cyan' : undefined} bold={hl}>{tool}</Text>
                 </Box>
               );
             })}
@@ -139,6 +143,12 @@ export function McpConfig({
           )}
         </Box>
       )}
+
+      <Box marginTop={1}>
+        <Text dimColor>
+          [Up/Down] Navigate  [Space/1-{MCP_TOOLS.length}] Toggle  [y/n] Enable  [Enter] Done  [Esc] Back
+        </Text>
+      </Box>
     </Box>
   );
 }

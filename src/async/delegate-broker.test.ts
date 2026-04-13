@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { DelegateBrokerClient, FileDelegateBroker, SqliteDelegateBroker } from './index.js';
@@ -989,5 +989,86 @@ describe('Delegate broker', () => {
     // No requestedBy or reason in payload
     assert.equal(cancelEvent?.payload.requestedBy, undefined);
     assert.equal(cancelEvent?.payload.reason, undefined);
+  });
+
+  it('FileDelegateBroker recovers from corrupted state file', () => {
+    writeFileSync(statePath, 'NOT VALID JSON{{{', 'utf-8');
+    const broker = new FileDelegateBroker(statePath);
+
+    // Should not throw — falls back to empty state
+    const job = broker.getJob('nonexistent');
+    assert.equal(job, null);
+
+    // Should be able to write fresh state
+    broker.registerSession({ sessionId: 's1', now: '2026-04-12T00:00:00Z' });
+    const result = broker.publishEvent({
+      jobId: 'j1',
+      type: 'queued',
+      status: 'queued',
+      payload: { summary: 'test' },
+      now: '2026-04-12T00:00:00Z',
+    });
+    assert.equal(result.jobId, 'j1');
+  });
+
+  it('FileDelegateBroker handles state with wrong version', () => {
+    writeFileSync(statePath, JSON.stringify({ version: 99, sessions: {}, jobs: {}, eventsByJob: {}, nextEventId: 1 }), 'utf-8');
+    const broker = new FileDelegateBroker(statePath);
+
+    // Wrong version — should fall back to empty state
+    const job = broker.getJob('nonexistent');
+    assert.equal(job, null);
+  });
+
+  it('listMessages returns empty for job with no queued messages metadata', () => {
+    const client = new DelegateBrokerClient({ statePath });
+    client.publishEvent({
+      jobId: 'job-no-msgs',
+      type: 'queued',
+      status: 'queued',
+      payload: { summary: 'test' },
+      now: '2026-04-12T00:00:00Z',
+    });
+
+    const messages = client.listMessages('job-no-msgs');
+    assert.deepEqual(messages, []);
+  });
+
+  it('listMessages returns empty for nonexistent job', () => {
+    const client = new DelegateBrokerClient({ statePath });
+    const messages = client.listMessages('nonexistent');
+    assert.deepEqual(messages, []);
+  });
+
+  it('ack counts only unacked events and skips already-acked', () => {
+    const client = new DelegateBrokerClient({ statePath });
+    client.registerSession({ sessionId: 's1', now: '2026-04-12T00:00:00Z' });
+
+    const e1 = client.publishEvent({
+      jobId: 'j1',
+      type: 'queued',
+      status: 'queued',
+      payload: { summary: 'first' },
+      now: '2026-04-12T00:00:00Z',
+    });
+    const e2 = client.publishEvent({
+      jobId: 'j1',
+      type: 'status_update',
+      status: 'running',
+      payload: { summary: 'second' },
+      now: '2026-04-12T00:00:01Z',
+    });
+
+    // Ack first event
+    const count1 = client.ack({ sessionId: 's1', eventIds: [e1.eventId], now: '2026-04-12T00:00:02Z' });
+    assert.equal(count1, 1);
+
+    // Ack both — only e2 should be newly acked
+    const count2 = client.ack({ sessionId: 's1', eventIds: [e1.eventId, e2.eventId], now: '2026-04-12T00:00:03Z' });
+    assert.equal(count2, 1);
+
+    // Ack same again — nothing new
+    const count3 = client.ack({ sessionId: 's1', eventIds: [e1.eventId, e2.eventId], now: '2026-04-12T00:00:04Z' });
+    assert.equal(count3, 0);
   });
 });
