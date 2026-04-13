@@ -29,6 +29,7 @@ interface StreamJsonMessage {
   type: 'message';
   content?: string;
   delta?: boolean;
+  role?: 'user' | 'assistant';
 }
 
 interface StreamJsonToolUse {
@@ -311,6 +312,11 @@ export class StreamJsonAdapter extends BaseAgentAdapter {
   }
 
   private handleMessageEntry(msg: StreamJsonMessage, processId: string): void {
+    // Skip user-role messages (echoed input prompt from Gemini CLI)
+    if (msg.role === 'user') {
+      return;
+    }
+
     let content = msg.content ?? '';
 
     // Think tag extraction: strip <think> blocks, emit as separate thinking entries

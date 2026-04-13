@@ -133,20 +133,39 @@ export class CliHistoryStore {
     }
 
     const entries: EntryLike[] = [];
+    // Accumulate partial (delta) assistant messages into a single entry
+    const pendingDeltas: string[] = [];
+
     for (const line of raw.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
         const entry = JSON.parse(trimmed) as EntryLike;
         if (!RESUME_INCLUDE_TYPES.has(entry.type)) continue;
-        // Skip partial assistant messages
-        if (entry.type === 'assistant_message' && entry.partial === true) continue;
+        if (entry.type === 'assistant_message') {
+          if (entry.partial === true) {
+            // Collect delta text
+            pendingDeltas.push(String(entry.content ?? ''));
+          } else {
+            // Flush accumulated deltas before a complete message
+            if (pendingDeltas.length > 0) {
+              entries.push({ type: 'assistant_message', content: pendingDeltas.join('') });
+              pendingDeltas.length = 0;
+            }
+            entries.push(entry);
+          }
+          continue;
+        }
         // For tool_use, only include completed
         if (entry.type === 'tool_use' && entry.status !== 'completed') continue;
         entries.push(entry);
       } catch {
         // skip malformed lines
       }
+    }
+    // Flush trailing deltas
+    if (pendingDeltas.length > 0) {
+      entries.push({ type: 'assistant_message', content: pendingDeltas.join('') });
     }
     return entries;
   }
@@ -238,7 +257,7 @@ export class CliHistoryStore {
       if (!trimmed) continue;
       try {
         const entry = JSON.parse(trimmed) as EntryLike;
-        if (entry.type === 'assistant_message' && entry.partial !== true) {
+        if (entry.type === 'assistant_message') {
           parts.push(String(entry.content ?? ''));
         }
       } catch {

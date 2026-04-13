@@ -190,8 +190,12 @@ Resume auto-assembles previous conversation context. Warning emitted when contex
 ```bash
 maestro cli show                     # recent 20 executions
 maestro cli show --all               # up to 100
-maestro cli output <id>              # final assistant output
-maestro cli output <id> --verbose    # full metadata + output
+maestro cli output <id>              # assistant output (always shows status header)
+maestro cli output <id> --verbose    # include start/end timestamps
+maestro cli output <id> --tail 20    # last 20 lines of output
+maestro cli output <id> --lines 10   # alias for --tail
+maestro cli watch <id>               # stream output in real-time until completion
+maestro cli watch <id> --timeout 60000  # auto-exit after 60s
 ```
 </execution>
 

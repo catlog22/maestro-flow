@@ -257,7 +257,9 @@ export function registerCliCommand(program: Command): void {
     .command('output <id>')
     .description('Get assistant output for a CLI execution')
     .option('--verbose', 'Show full metadata and raw output')
-    .action((id: string, opts: { verbose?: boolean }) => {
+    .option('--tail <n>', 'Show last N lines of output', parseInt)
+    .option('--lines <n>', 'Alias for --tail', parseInt)
+    .action((id: string, opts: { verbose?: boolean; tail?: number; lines?: number }) => {
       const store = new CliHistoryStore();
       const meta = store.loadMeta(id);
 
@@ -266,16 +268,19 @@ export function registerCliCommand(program: Command): void {
         process.exit(1);
       }
 
+      // Always show status header
+      const status = statusLabel(meta);
+      const elapsed = meta.completedAt
+        ? `${((new Date(meta.completedAt).getTime() - new Date(meta.startedAt).getTime()) / 1000).toFixed(1)}s`
+        : 'running';
+      console.error(`[${meta.execId}] ${meta.tool}/${meta.mode} — ${status} (${elapsed})`);
+
       if (opts.verbose) {
-        console.log(`ID:     ${meta.execId}`);
-        console.log(`Tool:   ${meta.tool}`);
-        console.log(`Mode:   ${meta.mode}`);
-        console.log(`Status: ${statusLabel(meta)}`);
-        console.log(`Start:  ${meta.startedAt}`);
+        console.error(`Start:  ${meta.startedAt}`);
         if (meta.completedAt) {
-          console.log(`End:    ${meta.completedAt}`);
+          console.error(`End:    ${meta.completedAt}`);
         }
-        console.log('---');
+        console.error('---');
       }
 
       const output = store.getOutput(id);
@@ -284,6 +289,13 @@ export function registerCliCommand(program: Command): void {
         process.exit(1);
       }
 
-      process.stdout.write(output);
+      const tailN = opts.tail ?? opts.lines;
+      if (tailN && tailN > 0) {
+        const lines = output.split('\n');
+        const sliced = lines.slice(-tailN);
+        process.stdout.write(sliced.join('\n'));
+      } else {
+        process.stdout.write(output);
+      }
     });
 }
