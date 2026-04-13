@@ -1,7 +1,7 @@
 ---
 name: team-lifecycle-v4
 description: Full lifecycle team skill — plan, develop, test, review in one coordinated session. Role-based architecture with coordinator-driven beat model. Triggers on "team lifecycle v4".
-allowed-tools: TeamCreate(*), TeamDelete(*), SendMessage(*), TaskCreate(*), TaskUpdate(*), TaskList(*), TaskGet(*), Agent(*), AskUserQuestion(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*)
+allowed-tools: TeamCreate(*), TeamDelete(*), SendMessage(*), TaskCreate(*), TaskUpdate(*), TaskList(*), TaskGet(*), Agent(*), AskUserQuestion(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__ccw-tools__team_msg(*)
 ---
 
 # Team Lifecycle v4
@@ -78,6 +78,12 @@ team_name: <team-name>
 requirement: <task-description>
 inner_loop: <true|false>
 
+## Progress Milestones
+session_id: <session-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final SendMessage.
+
 Read role_spec file (@<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
 Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`
 })
@@ -103,6 +109,12 @@ session: <session-folder>
 session_id: <session-id>
 team_name: <team-name>
 requirement: <task-description>
+
+## Progress Milestones
+session_id: <session-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final SendMessage.
 
 Read role_spec file (@<skill_root>/roles/supervisor/role.md) to load checkpoint definitions.
 Init: load baseline context, report ready, go idle.

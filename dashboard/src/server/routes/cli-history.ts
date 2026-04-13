@@ -106,7 +106,16 @@ export function createCliHistoryRoutes(): Hono {
         const trimmed = line.trim();
         if (!trimmed) continue;
         try {
-          entries.push(JSON.parse(trimmed));
+          const entry = JSON.parse(trimmed) as Record<string, unknown>;
+          // Filter out protocol echo artifacts from old Gemini JSONL
+          if (
+            entry.type === 'assistant_message'
+            && typeof entry.content === 'string'
+            && (entry.content as string).trimStart().startsWith('# Analysis Mode Protocol')
+          ) {
+            continue;
+          }
+          entries.push(entry);
         } catch {
           // skip malformed lines
         }

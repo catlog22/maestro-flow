@@ -21,17 +21,28 @@ import type { RequirementProgressPayload, RequirementExpandedPayload, Requiremen
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 
+/** Detect protocol echo: Gemini CLI echoed input prompt stored as assistant_message in old JSONL */
+const PROTOCOL_ECHO_PREFIXES = ['# Analysis Mode Protocol', '# Write Mode Protocol'];
+function isProtocolEcho(content: string): boolean {
+  return PROTOCOL_ECHO_PREFIXES.some(prefix => content.trimStart().startsWith(prefix));
+}
+
 /**
  * Post-process history entries loaded from disk:
- * 1. Clear partial flag on assistant messages (session is historical)
- * 2. Consolidate consecutive assistant_message fragments into single messages
- * 3. Merge tool_use running→completed pairs
+ * 1. Filter out protocol echo artifacts from old Gemini JSONL
+ * 2. Clear partial flag on assistant messages (session is historical)
+ * 3. Consolidate consecutive assistant_message fragments into single messages
+ * 4. Merge tool_use running→completed pairs
  */
 function consolidateHistoryEntries(raw: NormalizedEntry[], processId: string): NormalizedEntry[] {
   const merged: NormalizedEntry[] = [];
   for (const entry of raw) {
     const fixed = { ...entry, processId } as NormalizedEntry;
     if (fixed.type === 'assistant_message') {
+      // Skip protocol echo artifacts from old Gemini executions
+      const content = (fixed as { content: string }).content ?? '';
+      if (isProtocolEcho(content)) continue;
+
       (fixed as { partial: boolean }).partial = false;
       const prev = merged[merged.length - 1];
       if (prev && prev.type === 'assistant_message') {
@@ -136,10 +147,29 @@ export function useWebSocket(): void {
         fetch('/api/board').then(r => r.ok ? r.json() : null).then(data => {
           if (data) setBoard(data as BoardState);
         }).catch(() => {});
-        fetch('/api/agents').then(r => r.ok ? r.json() : null).then((agents: unknown) => {
-          if (Array.isArray(agents)) {
-            for (const proc of agents) {
+        fetch('/api/agents').then(r => r.ok ? r.json() : null).then(async (agents: unknown) => {
+          if (!Array.isArray(agents)) return;
+
+          // Pre-fetch CLI history list for status reconciliation
+          let historyMetas: Array<{ execId: string; completedAt?: string; exitCode?: number; delegateStatus?: string }> = [];
+          try {
+            const histRes = await fetch('/api/cli-history?limit=50');
+            if (histRes.ok) historyMetas = await histRes.json() as typeof historyMetas;
+          } catch { /* silent */ }
+          const historyByExecId = new Map(historyMetas.map(m => [m.execId, m]));
+
+          for (const proc of agents) {
               const agentProc = proc as AgentProcess;
+
+              // Reconcile: if server says running but CLI history says completed, fix status
+              if (agentProc.id.startsWith('cli-history-') && agentProc.status === 'running') {
+                const execId = agentProc.id.slice('cli-history-'.length);
+                const histMeta = historyByExecId.get(execId);
+                if (histMeta?.completedAt) {
+                  agentProc.status = (histMeta.exitCode != null && histMeta.exitCode !== 0) ? 'error' : 'stopped';
+                }
+              }
+
               addProcess(agentProc);
               const isCliHistory = agentProc.id.startsWith('cli-history-');
 
@@ -170,7 +200,6 @@ export function useWebSocket(): void {
                   }
                 })
                 .catch(() => {});
-            }
           }
         }).catch(() => {});
       };

@@ -83,6 +83,32 @@ TaskUpdate({ taskId: "QARUN-gc-<round>", addBlockedBy: ["QAGEN-fix-<round>"] })
 
 Read-only status report, then STOP.
 
+**Worker Progress** (from message bus):
+
+Before generating status output, read worker milestones:
+
+```javascript
+const progressMsgs = mcp__ccw-tools__team_msg({
+  operation: "list", session_id: sessionId, type: "progress", last: 50
+})
+const blockerMsgs = mcp__ccw-tools__team_msg({
+  operation: "list", session_id: sessionId, type: "blocker", last: 10
+})
+
+// Aggregate latest milestone per task
+const taskProgress = {}
+for (const msg of (progressMsgs.result?.messages || [])) {
+  const tid = msg.data?.task_id
+  if (tid && (!taskProgress[tid] || msg.ts > taskProgress[tid].ts)) {
+    taskProgress[tid] = { phase: msg.data.phase, pct: msg.data.progress_pct, ts: msg.ts }
+  }
+}
+```
+
+Include in status output:
+- Per-worker latest milestone (phase + progress_pct) next to task status
+- Active blockers section (if any blockerMsgs found)
+
 Output:
 ```
 [coordinator] QA Pipeline Status
@@ -159,6 +185,12 @@ inner_loop: <true|false>
 ## Current Task
 - Task ID: <task-id>
 - Task: <subject>
+
+## Progress Milestones
+session_id: <session-id>
+Report progress via team_msg at natural phase boundaries (context loaded -> core work done -> verification).
+Report blockers immediately via team_msg type="blocker".
+Report completion via team_msg type="task_complete" after final SendMessage.
 
 Read role_spec file to load Phase 2-4 domain instructions.
 Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).`

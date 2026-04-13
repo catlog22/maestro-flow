@@ -559,6 +559,34 @@ export function ChatPage() {
     }
   }, [activeProcessId, processCount, setActiveProcessId]);
 
+  // Auto-dismiss stopped/error sessions after 2 minutes (non-active only)
+  const autoDismissTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  useEffect(() => {
+    const AUTO_DISMISS_MS = 2 * 60 * 1000;
+    for (const proc of sortedProcesses) {
+      const isTerminal = proc.status === 'stopped' || proc.status === 'error';
+      const isActive = proc.id === activeProcessId;
+      if (isTerminal && !isActive && !autoDismissTimers.current[proc.id]) {
+        autoDismissTimers.current[proc.id] = setTimeout(() => {
+          delete autoDismissTimers.current[proc.id];
+          dismissProcess(proc.id);
+        }, AUTO_DISMISS_MS);
+      }
+      // Cancel timer if process becomes active or resumes running
+      if ((!isTerminal || isActive) && autoDismissTimers.current[proc.id]) {
+        clearTimeout(autoDismissTimers.current[proc.id]);
+        delete autoDismissTimers.current[proc.id];
+      }
+    }
+    // Cleanup timers for processes that no longer exist
+    for (const id of Object.keys(autoDismissTimers.current)) {
+      if (!processes[id]) {
+        clearTimeout(autoDismissTimers.current[id]);
+        delete autoDismissTimers.current[id];
+      }
+    }
+  }, [sortedProcesses, activeProcessId, dismissProcess, processes]);
+
   const splitProcess = splitProcessId ? processes[splitProcessId] : null;
   const showWelcome = !activeProcessId;
 
