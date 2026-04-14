@@ -21,12 +21,12 @@ Complements `quality-retrospective` (which is phase-scoped) by harvesting from *
 </purpose>
 
 <required_reading>
-@workflows/harvest.md
+@~/.maestro/workflows/harvest.md
 </required_reading>
 
 <deferred_reading>
-- @workflows/issue.md (issues.jsonl schema for issue routing — read when creating issues in Stage 6c)
-- @workflows/specs-add.md (spec entry format — read when routing to spec in Stage 6b)
+- @~/.maestro/workflows/issue.md (issues.jsonl schema for issue routing — read when creating issues in Stage 6c)
+- @~/.maestro/workflows/specs-add.md (spec entry format — read when routing to spec in Stage 6b)
 </deferred_reading>
 
 <context>
@@ -70,7 +70,7 @@ Arguments: $ARGUMENTS
 </context>
 
 <execution>
-Follow 'workflows/harvest.md' Stages 1–8 in order. Key invariants:
+Follow '~/.maestro/workflows/harvest.md' Stages 1–8 in order. Key invariants:
 
 1. **Read-only until Stage 6** — Stages 1–5 must not write anything. All extraction and classification happens in-memory.
 2. **Dedup before write** — Stage 7 (dedup_check) runs BEFORE each write in Stage 6. Check harvest-log.jsonl, wiki search, issues.jsonl, and learnings.md for existing matches.
