@@ -39,6 +39,21 @@
       "type": "decision",
       "eval": "ctx.result.verification_status",
       "edges": [
+        { "value": "passed", "target": "business_test" },
+        { "default": true, "target": "fix_plan" }
+      ]
+    },
+    "business_test": {
+      "type": "command",
+      "cmd": "quality-business-test",
+      "description": "PRD-forward business testing with requirement traceability",
+      "args": "{phase} --auto",
+      "next": "check_business_test"
+    },
+    "check_business_test": {
+      "type": "decision",
+      "eval": "ctx.result.business_test_status",
+      "edges": [
         { "value": "passed", "target": "review" },
         { "default": true, "target": "fix_plan" }
       ]

@@ -19,6 +19,7 @@ Given a user intent string and the current workflow state snapshot, classify the
 | execute | maestro-execute {phase} | Implement/build/develop |
 | verify | maestro-verify {phase} | Verify phase results |
 | review | quality-review {phase} | Code review |
+| business_test | quality-business-test {phase} | PRD-forward business testing |
 | test_gen | quality-test-gen {phase} | Generate tests |
 | test | quality-test {phase} | Run UAT tests |
 | debug | quality-debug "{description}" | Debug/diagnose issues |

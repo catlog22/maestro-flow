@@ -1,0 +1,68 @@
+{
+  "_template_note": "Template for business-test-report.json. Fields marked with {placeholder} are filled at runtime.",
+  "phase": "{phase}",
+  "spec_ref": "{spec_ref}",
+  "spec_mode": "full|degraded",
+  "completed_at": "{ISO timestamp}",
+  "execution_mode": "gen-code|agent",
+  "iterations": {
+    "L1": { "count": 0, "converged": false },
+    "L2": { "count": 0, "converged": false },
+    "L3": { "count": 0, "converged": false }
+  },
+  "layers": {
+    "L1": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "pass_rate": 0.0 },
+    "L2": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "pass_rate": 0.0 },
+    "L3": { "total": 0, "passed": 0, "failed": 0, "blocked": 0, "pass_rate": 0.0 }
+  },
+  "requirement_coverage": [
+    {
+      "_example": true,
+      "req_id": "REQ-001",
+      "title": "Requirement title",
+      "total_criteria": 0,
+      "criteria_results": [
+        {
+          "ac_id": "AC-1",
+          "description": "Acceptance criterion text",
+          "priority": "critical|high|medium",
+          "status": "passed|failed|blocked|untested",
+          "tests": ["BT-001"],
+          "failure": null
+        }
+      ],
+      "coverage_pct": 0.0,
+      "verdict": "verified|partial|unverified"
+    }
+  ],
+  "failures": [
+    {
+      "_example": true,
+      "id": "BF-001",
+      "test_id": "BT-001",
+      "req_ref": "REQ-001:AC-1",
+      "layer": "L1|L2|L3",
+      "severity": "critical|high|medium",
+      "classification": "code_defect|test_defect|env_issue",
+      "description": "Failure description",
+      "expected": "Expected behavior",
+      "actual": "Actual behavior",
+      "fix_suggestion": {
+        "file": "src/...",
+        "line": 0,
+        "direction": "Fix direction"
+      }
+    }
+  ],
+  "summary": {
+    "total_requirements": 0,
+    "fully_verified": 0,
+    "partially_verified": 0,
+    "unverified": 0,
+    "coverage_pct": 0.0,
+    "total_scenarios": 0,
+    "total_passed": 0,
+    "total_failed": 0,
+    "total_blocked": 0
+  }
+}

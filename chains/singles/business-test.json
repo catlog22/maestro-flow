@@ -1,0 +1,26 @@
+{
+  "$schema": "../chain-graph.schema.json",
+  "id": "singles/business-test",
+  "name": "Business Test",
+  "description": "PRD-forward business scenario testing with requirement traceability",
+  "version": "1.0.0",
+  "tags": ["quality", "testing"],
+  "entry": "business_test",
+  "inputs": {
+    "phase": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "business_test": {
+      "type": "command",
+      "cmd": "quality-business-test",
+      "args": "{phase}",
+      "description": "PRD-forward business testing with multi-layer execution and requirement traceability",
+      "next": "done",
+      "analyze": false
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success"
+    }
+  }
+}

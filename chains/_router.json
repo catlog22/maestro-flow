@@ -80,6 +80,15 @@
       "type": "decision",
       "eval": "ctx.project.verification_status",
       "edges": [
+        { "value": "passed", "target": "check_business_test" },
+        { "default": true, "target": "to_quality_loop_partial" }
+      ]
+    },
+    "check_business_test": {
+      "type": "decision",
+      "eval": "ctx.project.business_test_status",
+      "edges": [
+        { "value": null, "target": "to_business_test" },
         { "value": "passed", "target": "check_review_after_verify" },
         { "default": true, "target": "to_quality_loop_partial" }
       ]
@@ -144,6 +153,11 @@
       "type": "terminal",
       "status": "delegate",
       "delegate_graph": "singles/verify"
+    },
+    "to_business_test": {
+      "type": "terminal",
+      "status": "delegate",
+      "delegate_graph": "singles/business-test"
     },
     "to_review": {
       "type": "terminal",

@@ -93,6 +93,12 @@
       "route": { "graph": "singles/debug" }
     },
     {
+      "type": "business_test",
+      "regex": "business.*test|PRD.*test|requirement.*test|业务.*测试|需求.*验证",
+      "flags": "i",
+      "route": { "graph": "singles/business-test" }
+    },
+    {
       "type": "integration_test",
       "regex": "integrat.*test|e2e|集成测试",
       "flags": "i",

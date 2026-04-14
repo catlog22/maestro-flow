@@ -8,7 +8,7 @@ The Maestro-Flow command system includes 36 slash commands, organized into 4 maj
 |----------|-------|--------|----------------|
 | **Core Workflow** | 15 | `maestro-*` | Project initialization, planning, execution, verification, phase progression |
 | **Management** | 9 | `manage-*` | Issue management, codebase documentation, memory, status |
-| **Quality** | 7 | `quality-*` | Code review, testing, debugging, refactoring, sync |
+| **Quality** | 8 | `quality-*` | Code review, business testing, UAT, debugging, refactoring, sync |
 | **Specification** | 4 | `spec-*` | Project spec initialization, loading, mapping, entry |
 
 The global entry point `/maestro` is the smart coordinator that automatically selects the optimal command chain based on user intent and project state.
@@ -39,6 +39,7 @@ graph TB
 
     subgraph quality["Quality Pipeline"]
         QR["/quality-review"]
+        QBT["/quality-business-test"]
         QTG["/quality-test-gen"]
         QT["/quality-test"]
         QD["/quality-debug"]
@@ -81,11 +82,13 @@ graph TB
     AN --> PL
     PL --> EX
     EX --> VF
-    VF --> QR
+    VF --> QBT
+    QBT --> QR
     QR --> QT
     QT --> PT
     PT -->|"Next Phase"| AN
 
+    QBT -->|"Failure"| PL
     VF -->|gaps| PL
     QT -->|"Failure"| QD
     QD -->|"Fix"| PL
@@ -107,7 +110,7 @@ graph TB
     subgraph phase_pipeline["Main Phase Pipeline"]
         direction LR
         AN["analyze"] --> PL["plan"] --> EX["execute"] --> VF["verify"]
-        VF --> QR["review"] --> QT["test"] --> PT["transition"]
+        VF --> QBT["business-test"] --> QR["review"] --> QT["test"] --> PT["transition"]
     end
 
     subgraph issue_loop["Issue Closed-Loop"]
@@ -154,7 +157,7 @@ graph TB
 
 > **Key relationship overview**: The Phase pipeline and Issue closed-loop are two parallel workflows interconnected through the following mechanisms:
 >
-> 1. **Phase to Issue (problem production)**: `quality-review` automatically creates Issues for critical/high severity findings during code review; `quality-test` produces Issues on failure; `maestro-verify` can associate Issues when gaps are found
+> 1. **Phase to Issue (problem production)**: `quality-review` automatically creates Issues for critical/high severity findings during code review; `quality-business-test` produces Issues on business rule failures (with REQ traceability); `quality-test` produces Issues on failure; `maestro-verify` can associate Issues when gaps are found
 > 2. **Issue to Phase (fix injection)**: Issues link to specific Phases via the `phase_id` field, with `path=workflow` indicating the Issue belongs to the Phase pipeline context; code modified during Issue execution serves the owning Phase
 > 3. **Commander bidirectional orchestration**: Commander Agent manages both Phase task scheduling (via ExecutionScheduler) and Issue closed-loop advancement (via AgentManager), forming a unified automation scheduling layer
 > 4. **Shared storage**: Both workflows share `issues.jsonl` storage and WebSocket real-time communication
@@ -166,7 +169,7 @@ The Issue `path` field distinguishes two processing paths:
 | path | Meaning | Source | Lifecycle |
 |------|---------|--------|-----------|
 | `standalone` | Independent Issue, not bound to a Phase | Manual creation, `/manage-issue-discover`, external import | Independent closed-loop, does not affect Phase progression |
-| `workflow` | Phase-linked Issue | `quality-review` auto-create, Phase verification output | May block Phase transition |
+| `workflow` | Phase-linked Issue | `quality-review` auto-create, `quality-business-test` failure, Phase verification output | May block Phase transition |
 
 - `standalone` Issues are displayed independently on the kanban board, resolved through the Issue closed-loop (analyze, plan, execute)
 - `workflow` Issues carry a `phase_id` and are displayed alongside their corresponding Phase column on the kanban board; their resolution status may affect whether the Phase can transition
@@ -223,9 +226,12 @@ stateDiagram-v2
     exploring --> planning: /maestro-plan
     planning --> executing: /maestro-execute
     executing --> verifying: /maestro-verify
-    verifying --> testing: /quality-test
+    verifying --> business_testing: /quality-business-test
+    business_testing --> testing: /quality-test
     testing --> completed: /maestro-phase-transition
     completed --> [*]
+
+    business_testing --> planning: Business rule failure → plan --gaps
 
     verifying --> planning: Gaps found → plan --gaps
     testing --> planning: Failure → debug → plan --gaps
@@ -258,7 +264,7 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 ### 1.2 Phase Pipeline (executed cyclically for each Phase)
 
 ```
-/maestro-analyze → /maestro-plan → /maestro-execute → /maestro-verify → /quality-review → /quality-test → /maestro-phase-transition
+/maestro-analyze → /maestro-plan → /maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test → /maestro-phase-transition
 ```
 
 | Stage | Command | Input | Output | Dashboard Status |
@@ -267,6 +273,7 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 | Plan | `/maestro-plan {N}` | context.md | plan.json + TASK-*.json | `exploring` → `planning` |
 | Execute | `/maestro-execute {N}` | plan.json | .summaries/, code changes | `planning` → `executing` |
 | Verify | `/maestro-verify {N}` | .summaries/ | verification.json | `executing` → `verifying` |
+| Business Test | `/quality-business-test {N}` | REQ-*.md acceptance criteria | business-test-report.json | `verifying` |
 | Review | `/quality-review {N}` | code changes | review.json | `verifying` |
 | Test | `/quality-test {N}` | verification.json | uat.md | `verifying` → `testing` |
 | Advance | `/maestro-phase-transition` | all passed | next phase initialization | `testing` → `completed` |
@@ -277,6 +284,7 @@ When verification or testing finds gaps:
 
 ```
 /maestro-verify (gaps found) → /maestro-plan --gaps → /maestro-execute → /maestro-verify (re-check)
+/quality-business-test (business rule failure) → /quality-debug --from-business-test → /maestro-plan --gaps → re-execute
 /quality-test --auto-fix (failure) → /quality-debug → /maestro-plan --gaps → re-execute
 ```
 
@@ -361,7 +369,7 @@ Automatic chaining: `lite-plan → lite-execute → lite-test-review`, managed e
 The Issue system runs in parallel with the Phase pipeline. It can operate as an independent closed-loop or deeply integrate with Phases.
 
 **Relationship with the main pipeline** (see "Interaction Between Main Pipeline and Issues" in the Command Panorama):
-- **Phase produces Issues**: `quality-review` automatically creates Issues for critical/high findings during review (auto-issue creation); `quality-test` creates Issues on failure; gaps from `maestro-verify` can also be converted to Issues
+- **Phase produces Issues**: `quality-review` automatically creates Issues for critical/high findings during review (auto-issue creation); `quality-business-test` creates Issues on business rule failures (with REQ traceability); `quality-test` creates Issues on failure; gaps from `maestro-verify` can also be converted to Issues
 - **Issue fixes inject back into Phase**: Issues with `phase_id` (`path=workflow`) serve the Phase after fix execution; re-verify and re-test are required before transition
 - **Standalone Issues do not block Phases**: `path=standalone` Issues are resolved through the Issue closed-loop independently, without affecting Phase progression
 - **Commander unified scheduling**: Commander Agent drives both Phase tasks and Issue closed-loop, auto-scheduling with priority order `execute > analyze > plan`
@@ -485,24 +493,36 @@ Quality commands typically run after Phase execution, but can also be used indep
 ### 4.1 Standard Quality Flow
 
 ```
-/maestro-execute → /maestro-verify → /quality-review → /quality-test-gen → /quality-test → /maestro-phase-transition
+/maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test-gen → /quality-test → /maestro-phase-transition
 ```
 
 ### 4.2 Command Descriptions
 
 | Command | Purpose | Parameters | Typical Scenario |
 |---------|---------|------------|------------------|
+| `/quality-business-test {N}` | PRD-forward business testing | `--spec` `--layer L1\|L2\|L3` `--gen-code` `--dry-run` `--re-run` `--auto` | Extract scenarios from REQ acceptance criteria, progressive L1 Interface → L2 Business Rule → L3 Scenario |
 | `/quality-review {N}` | Tiered code review | `--level quick\|standard\|deep` | Review code quality after execution |
 | `/quality-test-gen {N}` | Test generation | `--layer unit\|e2e\|all` | Nyquist coverage analysis + RED-GREEN |
 | `/quality-test {N}` | Session-based UAT | `--smoke` `--auto-fix` | Acceptance testing + auto-fix loop |
-| `/quality-debug` | Hypothesis-driven debugging | `--from-uat {N}` `--parallel` | Root cause analysis after test failure |
+| `/quality-debug` | Hypothesis-driven debugging | `--from-uat {N}` `--from-business-test {N}` `--parallel` | Root cause analysis after test failure |
 | `/quality-integration-test {N}` | Integration testing | `--max-iter N` `--layer L0-L3` | L0-L3 progressive integration testing |
 | `/quality-refactor` | Technical debt remediation | `[scope]` | Reflection-driven refactoring iteration |
 | `/quality-sync` | Documentation sync | `--since HEAD~N` | Sync documentation after code changes |
 
-### 4.3 Debug Loop
+### 4.3 Three-Track Testing
+
+Three test commands verify from different angles — complementary, not replacements:
+
+| Command | Input Source | Verification Angle |
+|---------|-------------|-------------------|
+| `/quality-business-test` | REQ-*.md acceptance criteria | **PRD-forward** — are business rules satisfied? |
+| `/quality-test` | verification.json must_haves | **Code-backward** — does the code work? |
+| `/quality-test-gen` | validation.json gaps | **Coverage-backward** — is coverage sufficient? |
+
+### 4.4 Debug Loop
 
 ```
+/quality-business-test (business rule failure) → /quality-debug --from-business-test {N} → fix → /quality-business-test --re-run (re-verify)
 /quality-test (failure found) → /quality-debug --from-uat {N} → fix → /quality-test (re-verify)
 ```
 
@@ -561,10 +581,12 @@ graph LR
     AN --> PL[plan]
     PL --> EX[execute]
     EX --> VF[verify]
-    VF --> QR[review]
+    VF --> QBT[business-test]
+    QBT --> QR[review]
     QR --> QT[test]
     QT --> PT[phase-transition]
     VF -->|"gaps"| PL
+    QBT -->|"Failure"| PL
     QT -->|"Failure"| PL
 ```
 
@@ -661,10 +683,12 @@ graph LR
 ### Test Failure After Phase Execution
 
 ```bash
-/quality-test 3                     # 2 failures found
-/quality-debug --from-uat 3         # Auto-diagnose root cause
+/quality-business-test 3             # PRD-forward business testing (L1→L2→L3)
+/quality-test 3                     # Session-based UAT
+# If failures found:
+/quality-debug --from-business-test 3  # Diagnose from business test failures
 /maestro-plan 3 --gaps              # Generate fix plan
 /maestro-execute 3                  # Execute fix
-/quality-test 3                     # Re-verify
+/quality-business-test 3 --re-run   # Re-run only failed scenarios
 /maestro-phase-transition           # Advance after passing
 ```
