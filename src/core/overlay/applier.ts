@@ -21,13 +21,14 @@ import {
 } from 'node:fs';
 import { join, basename, dirname, resolve } from 'node:path';
 import { paths } from '../../config/paths.js';
-import { loadAllOverlays, loadOverlay } from './loader.js';
+import { loadAllOverlays, loadOverlay, validateOverlayMeta } from './loader.js';
 import { applyOverlay, removeOverlay as stripMarkers } from './patcher.js';
 import {
   OVERLAY_MANIFEST_VERSION,
   type AppliedOverlay,
   type AppliedTarget,
   type OverlayFile,
+  type OverlayMeta,
   type OverlayManifest,
 } from './types.js';
 
@@ -362,4 +363,161 @@ export function importOverlayFile(
     overlayName: overlay.meta.name,
     overwritten,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Bundle — pack multiple overlays (+ docs) into a single portable file
+// ---------------------------------------------------------------------------
+
+export interface OverlayBundle {
+  version: '1.0';
+  overlays: OverlayMeta[];
+  /** Relative path → file content for docs referenced by overlays. */
+  docs: Record<string, string>;
+}
+
+export interface BundleResult {
+  dest: string;
+  overlayCount: number;
+  docCount: number;
+}
+
+/**
+ * Bundle all (or selected) overlays from `overlayDir` into a single JSON file.
+ * Includes any files under `overlayDir/docs/` that are referenced by overlay
+ * patch content via `@~/.maestro/overlays/docs/` paths.
+ */
+export function bundleOverlays(
+  overlayDir: string,
+  outPath: string,
+  names?: string[],
+): BundleResult {
+  const { overlays } = loadAllOverlays(overlayDir);
+
+  const selected = names
+    ? overlays.filter((o) => names.includes(o.meta.name))
+    : overlays;
+
+  if (selected.length === 0) {
+    throw new Error(names ? `No matching overlays found for: ${names.join(', ')}` : 'No overlays to bundle');
+  }
+
+  // Collect referenced docs from patch content
+  const DOC_REF_RE = /@~\/\.maestro\/overlays\/docs\/([^\s)]+)/g;
+  const referencedDocs = new Set<string>();
+  for (const ov of selected) {
+    for (const patch of ov.meta.patches) {
+      let m: RegExpExecArray | null;
+      DOC_REF_RE.lastIndex = 0;
+      while ((m = DOC_REF_RE.exec(patch.content)) !== null) {
+        referencedDocs.add(m[1]);
+      }
+    }
+  }
+
+  // Read doc files
+  const docs: Record<string, string> = {};
+  const docsDir = join(overlayDir, 'docs');
+  for (const docName of referencedDocs) {
+    const docPath = join(docsDir, docName);
+    if (existsSync(docPath)) {
+      docs[docName] = readFileSync(docPath, 'utf-8');
+    }
+  }
+
+  const bundle: OverlayBundle = {
+    version: '1.0',
+    overlays: selected.map((o) => o.meta),
+    docs,
+  };
+
+  let dest = resolve(outPath);
+  if (existsSync(dest) && statSync(dest).isDirectory()) {
+    dest = join(dest, 'overlays-bundle.json');
+  }
+  const destDir = dirname(dest);
+  if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
+  writeFileSync(dest, JSON.stringify(bundle, null, 2), 'utf-8');
+
+  return { dest, overlayCount: selected.length, docCount: Object.keys(docs).length };
+}
+
+// ---------------------------------------------------------------------------
+// Import bundle — unpack a bundle into individual overlay files + docs
+// ---------------------------------------------------------------------------
+
+export interface ImportBundleItem {
+  name: string;
+  overwritten: boolean;
+}
+
+export interface ImportBundleResult {
+  source: string;
+  items: ImportBundleItem[];
+  docsWritten: number;
+}
+
+/**
+ * Import a bundle file, writing each overlay as an individual JSON file into
+ * `overlayDir` and restoring any bundled docs into `overlayDir/docs/`.
+ */
+export function importBundle(
+  bundlePath: string,
+  overlayDir: string,
+): ImportBundleResult {
+  const source = resolve(bundlePath);
+  if (!existsSync(source)) throw new Error(`Bundle file not found: ${source}`);
+
+  const raw = readFileSync(source, 'utf-8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`Invalid JSON in bundle: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const obj = parsed as Record<string, unknown>;
+  if (obj.version !== '1.0' || !Array.isArray(obj.overlays)) {
+    throw new Error('Invalid bundle format: expected { version: "1.0", overlays: [...] }');
+  }
+
+  ensureOverlayDir(overlayDir);
+
+  // Validate and write each overlay
+  const items: ImportBundleItem[] = [];
+  const errors: string[] = [];
+  for (const meta of obj.overlays as unknown[]) {
+    const validationErrors = validateOverlayMeta(meta);
+    if (validationErrors.length > 0) {
+      const name = (meta as Record<string, unknown>)?.name ?? '(unknown)';
+      errors.push(`${name}: ${validationErrors.join('; ')}`);
+      continue;
+    }
+    const overlayMeta = meta as OverlayMeta;
+    const dest = join(overlayDir, `${overlayMeta.name}.json`);
+    const overwritten = existsSync(dest);
+    writeFileSync(dest, JSON.stringify(overlayMeta, null, 2), 'utf-8');
+    items.push({ name: overlayMeta.name, overwritten });
+  }
+
+  if (errors.length > 0 && items.length === 0) {
+    throw new Error(`All overlays in bundle are invalid:\n  ${errors.join('\n  ')}`);
+  }
+
+  // Restore docs
+  let docsWritten = 0;
+  const docs = obj.docs as Record<string, string> | undefined;
+  if (docs && typeof docs === 'object') {
+    const docsDir = join(overlayDir, 'docs');
+    if (!existsSync(docsDir)) mkdirSync(docsDir, { recursive: true });
+    for (const [name, content] of Object.entries(docs)) {
+      if (typeof content !== 'string') continue;
+      // Sanitize: no path traversal
+      if (name.includes('..') || name.startsWith('/')) continue;
+      writeFileSync(join(docsDir, name), content, 'utf-8');
+      docsWritten++;
+    }
+  }
+
+  return { source, items, docsWritten };
 }

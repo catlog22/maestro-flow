@@ -348,7 +348,7 @@ async function ensureWorkflowReady(name: string, wf: WorkflowProfile): Promise<b
     }
 
     console.error(`  Running ${bin} install...`);
-    const installResult = spawnSync(bin, ['install', '--force', '--global'], {
+    const installResult = spawnSync(bin, ['install', '--force'], {
       stdio: 'inherit',
       shell: true,
     });

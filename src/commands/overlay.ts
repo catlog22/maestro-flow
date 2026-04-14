@@ -8,6 +8,8 @@
 //   import <file>    — alias of `add`; validates + copies + applies
 //   export <name>    — copy an installed overlay to a portable path
 //   remove <name>    — strip markers from targets and delete overlay file
+//   bundle           — pack overlays + docs into a single portable file
+//   import-bundle    — unpack a bundle file into overlays + docs and apply
 // ---------------------------------------------------------------------------
 
 import type { Command } from 'commander';
@@ -28,9 +30,11 @@ import {
   deleteOverlayManifest,
   exportOverlayFile,
   importOverlayFile,
+  bundleOverlays,
+  importBundle,
   type ApplyReport,
 } from '../core/overlay/applier.js';
-import { loadAllOverlays, loadOverlay, OverlayLoadError } from '../core/overlay/loader.js';
+import { loadOverlay, OverlayLoadError } from '../core/overlay/loader.js';
 
 // ---------------------------------------------------------------------------
 // Scope discovery
@@ -68,58 +72,12 @@ function overlayDir(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Subcommand: list
+// Subcommand: list (ink-based TUI)
 // ---------------------------------------------------------------------------
 
-function runList(): void {
-  const dir = overlayDir();
-  if (!existsSync(dir)) {
-    console.error(`No overlays directory at ${dir}`);
-    return;
-  }
-
-  const { overlays, errors } = loadAllOverlays(dir);
-  if (overlays.length === 0 && errors.length === 0) {
-    console.error('No overlays installed.');
-    return;
-  }
-
-  // Collect applied state from all scope manifests
-  const scopes = discoverScopes();
-  const appliedByScope = new Map<string, Set<string>>();
-  for (const s of scopes) {
-    const m = loadOverlayManifest(s.scope, s.targetBase);
-    const names = new Set<string>();
-    if (m) for (const ao of m.appliedOverlays) names.add(ao.overlayName);
-    appliedByScope.set(`${s.scope}:${s.targetBase}`, names);
-  }
-
-  console.error('');
-  console.error(`  Overlays in ${dir}:`);
-  console.error('');
-  for (const o of overlays) {
-    const enabled = o.meta.enabled === false ? 'disabled' : 'enabled';
-    const prio = o.meta.priority ?? 50;
-    const appliedInScopes: string[] = [];
-    for (const [key, names] of appliedByScope) {
-      if (names.has(o.meta.name)) appliedInScopes.push(key.split(':')[0]);
-    }
-    const status =
-      appliedInScopes.length > 0 ? `applied[${appliedInScopes.join(',')}]` : 'pending';
-    console.error(`  - ${o.meta.name}  [${enabled}]  priority=${prio}  ${status}`);
-    console.error(`      targets: ${o.meta.targets.join(', ')}`);
-    if (o.meta.description) console.error(`      ${o.meta.description}`);
-  }
-
-  if (errors.length > 0) {
-    console.error('');
-    console.error('  Load errors:');
-    for (const e of errors) {
-      console.error(`  ! ${e.path}`);
-      for (const msg of e.errors) console.error(`      ${msg}`);
-    }
-  }
-  console.error('');
+async function runList(interactive: boolean): Promise<void> {
+  const { runOverlayListUI } = await import('./overlay-ui/index.js');
+  await runOverlayListUI(interactive);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,10 +125,13 @@ function runAdd(file: string): void {
   const dir = overlayDir();
   try {
     const result = importOverlayFile(file, dir);
-    if (result.overwritten) {
-      console.error(`Overwriting existing overlay: ${result.dest}`);
-    }
-    console.error(`Installed overlay: ${result.dest}`);
+    console.error('');
+    console.error('=== OVERLAY IMPORTED ===');
+    console.error(`  Name:   ${result.overlayName}`);
+    console.error(`  Source: ${result.source}`);
+    console.error(`  Dest:   ${result.dest}`);
+    if (result.overwritten) console.error('  Status: overwritten');
+    console.error('');
   } catch (err) {
     if (err instanceof OverlayLoadError) {
       console.error(`Invalid overlay: ${err.filePath}`);
@@ -192,7 +153,12 @@ function runExport(name: string, opts: { out?: string }): void {
   const outPath = opts.out ?? resolve(process.cwd(), `${name}.json`);
   try {
     const result = exportOverlayFile(dir, name, outPath);
-    console.error(`Exported overlay '${result.overlayName}' to ${result.dest}`);
+    console.error('');
+    console.error('=== OVERLAY EXPORTED ===');
+    console.error(`  Name:   ${result.overlayName}`);
+    console.error(`  Source: ${result.source}`);
+    console.error(`  Dest:   ${result.dest}`);
+    console.error('');
   } catch (err) {
     console.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
@@ -244,6 +210,52 @@ function runRemove(name: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Subcommand: bundle
+// ---------------------------------------------------------------------------
+
+function runBundle(opts: { out?: string; names?: string[] }): void {
+  const dir = overlayDir();
+  const outPath = opts.out ?? resolve(process.cwd(), 'overlays-bundle.json');
+  try {
+    const result = bundleOverlays(dir, outPath, opts.names);
+    console.error('');
+    console.error('=== BUNDLE CREATED ===');
+    console.error(`  Path:     ${result.dest}`);
+    console.error(`  Overlays: ${result.overlayCount}`);
+    console.error(`  Docs:     ${result.docCount}`);
+    console.error('');
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: import-bundle
+// ---------------------------------------------------------------------------
+
+function runImportBundle(file: string): void {
+  const dir = overlayDir();
+  try {
+    const result = importBundle(file, dir);
+    console.error('');
+    console.error('=== BUNDLE IMPORTED ===');
+    console.error(`  Source: ${result.source}`);
+    console.error(`  Docs:   ${result.docsWritten} file(s) restored`);
+    console.error('');
+    for (const item of result.items) {
+      const tag = item.overwritten ? '(overwritten)' : '(new)';
+      console.error(`  + ${item.name} ${tag}`);
+    }
+    console.error('');
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+  runApply();
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -254,8 +266,9 @@ export function registerOverlayCommand(program: Command): void {
 
   overlay
     .command('list')
-    .description('Show overlays on disk and their applied state')
-    .action(() => runList());
+    .description('Show overlays with cumulative section map and interactive management')
+    .option('--no-interactive', 'Disable interactive mode (non-TTY safe)')
+    .action((opts: { interactive?: boolean }) => runList(opts.interactive !== false));
 
   overlay
     .command('apply')
@@ -282,4 +295,16 @@ export function registerOverlayCommand(program: Command): void {
     .command('remove <name>')
     .description('Strip an overlay from targets and delete its file')
     .action((name: string) => runRemove(name));
+
+  overlay
+    .command('bundle')
+    .description('Pack overlays (+ referenced docs) into a single portable JSON file')
+    .option('-o, --out <path>', 'Output file (default: ./overlays-bundle.json)')
+    .option('-n, --names <names...>', 'Only bundle specific overlays by name')
+    .action((opts: { out?: string; names?: string[] }) => runBundle(opts));
+
+  overlay
+    .command('import-bundle <file>')
+    .description('Import a bundle file, unpacking overlays and docs, then apply')
+    .action((file: string) => runImportBundle(file));
 }
