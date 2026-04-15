@@ -61,6 +61,8 @@ interface AppServerSession {
     resolve: (result: Record<string, unknown>) => void;
     reject: (error: Error) => void;
   }>;
+  /** Accumulated final assistant message text from the current/last turn. */
+  lastAssistantMessage: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +134,7 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
       turnId: null,
       nextRpcId: 1,
       pendingRpc: new Map(),
+      lastAssistantMessage: '',
     };
 
     this.sessions.set(processId, session);
@@ -158,7 +161,15 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
     // --- Initialize session ---
     try {
       await this.rpcCall(session, 'initialize', {
-        capabilities: { experimentalApi: true },
+        capabilities: {
+          experimentalApi: true,
+          optOutNotificationMethods: [
+            'item/agentMessage/delta',
+            'item/reasoning/summaryTextDelta',
+            'item/reasoning/summaryPartAdded',
+            'item/reasoning/textDelta',
+          ],
+        },
         clientInfo: {
           name: 'maestro-dashboard',
           title: 'Maestro Dashboard',
@@ -531,6 +542,12 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
     const type = item.type as string | undefined;
     const name = (item.name as string | undefined)?.toLowerCase() ?? '';
 
+    // Semantic phase mapping — emit phase changes for dashboard/MCP visibility
+    const phase = this.inferPhase(type, name, item);
+    if (phase) {
+      this.emitEntry(processId, EntryNormalizer.statusChange(processId, 'running', phase));
+    }
+
     // Function call output (command execution)
     if (type === 'function_call_output' || (type === 'function_call' && /exec|shell|command|run|bash/.test(name))) {
       this.emitEntry(
@@ -561,11 +578,46 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
     // Text content
     const text = this.extractText(item);
     if (text.length > 0) {
+      // Accumulate assistant message for efficient result retrieval
+      const session = this.sessions.get(processId);
+      if (session) {
+        session.lastAssistantMessage = text;
+      }
       this.emitEntry(
         processId,
         EntryNormalizer.assistantMessage(processId, text, false),
       );
     }
+  }
+
+  /** Get the last assistant message for a process (O(1) without re-parsing JSONL). */
+  getLastMessage(processId: string): string {
+    return this.sessions.get(processId)?.lastAssistantMessage ?? '';
+  }
+
+  /** Map codex item type/name to a semantic phase label. */
+  private inferPhase(
+    type: string | undefined,
+    name: string,
+    item: Record<string, unknown>,
+  ): string | null {
+    if (type === 'function_call' || type === 'function_call_output') {
+      // File operations → editing
+      if (/file|write|create|patch|edit|apply/.test(name)) return 'editing';
+      // Command execution → verifying or running
+      if (/exec|shell|command|run|bash/.test(name)) {
+        const cmd = (item.command as string) ?? (item.output as string) ?? '';
+        if (/\b(test|lint|build|typecheck|check|verify|validate|pytest|jest|vitest|tsc|eslint)\b/i.test(cmd)) {
+          return 'verifying';
+        }
+        return 'running';
+      }
+      // Search/read operations → investigating
+      if (/search|read|find|grep|glob|list|mcp|tool/.test(name)) return 'investigating';
+    }
+    // Agent message (final answer) → finalizing
+    if (type === 'message') return 'finalizing';
+    return null;
   }
 
   private extractText(item: Record<string, unknown>): string {
