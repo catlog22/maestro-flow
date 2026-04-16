@@ -2,7 +2,15 @@
 name: quality-sync
 description: Sync codebase docs after code changes - traces git diff through component/feature/requirement impact chain
 argument-hint: "[--full] [--since <commit|HEAD~N>] [--dry-run]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - Glob
+  - Grep
+  - Agent
+  - AskUserQuestion
 ---
 <purpose>
 Synchronize project state after manual code changes or to refresh codebase documentation. Detects changes via git diff, traces impact through doc-index.json (file -> component -> feature -> requirement), updates state.json and index.json, and refreshes affected `.workflow/codebase/` documentation. Use --full flag for a complete resync of all tracked files regardless of git diff.

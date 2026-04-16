@@ -2,7 +2,15 @@
 name: maestro-phase-add
 description: Add or insert a new phase into the project roadmap with automatic renumbering
 argument-hint: "<slug> <title> [--after N]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - Glob
+  - Grep
+  - Agent
+  - AskUserQuestion
 ---
 
 <purpose>

@@ -1,7 +1,7 @@
 ---
 name: quality-refactor
 description: Tech debt reduction with reflection-driven iteration
-argument-hint: "[scope: module path, feature area, or 'all']"
+argument-hint: "[<scope>]"
 allowed-tools:
   - Read
   - Write

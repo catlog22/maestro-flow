@@ -2,7 +2,15 @@
 name: manage-codebase-refresh
 description: Incremental refresh of codebase docs based on recent changes
 argument-hint: "[--since <date>] [--deep]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - Glob
+  - Grep
+  - Agent
+  - AskUserQuestion
 ---
 
 <purpose>

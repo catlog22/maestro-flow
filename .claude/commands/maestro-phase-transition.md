@@ -2,7 +2,15 @@
 name: maestro-phase-transition
 description: Mark current or specified phase as complete, extract learnings, advance to next phase
 argument-hint: "[phase-number] [--force]"
-allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+allowed-tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - Glob
+  - Grep
+  - Agent
+  - AskUserQuestion
 ---
 
 <purpose>

@@ -1,7 +1,7 @@
 ---
 name: maestro-milestone-audit
 description: Audit current milestone for cross-phase integration gaps
-argument-hint: "[milestone, e.g., 'v1.0']"
+argument-hint: "[<milestone>]"
 allowed-tools:
   - Read
   - Write

@@ -12,10 +12,10 @@
   "nodes": {
     "spec_map": {
       "type": "command",
-      "cmd": "spec-map",
+      "cmd": "manage-codebase-rebuild",
       "next": "done",
       "analyze": false,
-      "description": "Analyze codebase with parallel mapper agents to produce codebase documents"
+      "description": "Analyze codebase with parallel mapper agents to produce codebase documents (consolidated into manage-codebase-rebuild)"
     },
     "done": {
       "type": "terminal",

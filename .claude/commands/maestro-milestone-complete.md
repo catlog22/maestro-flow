@@ -1,7 +1,7 @@
 ---
 name: maestro-milestone-complete
 description: Archive completed milestone and prepare for next
-argument-hint: "[milestone, e.g., 'v1.0']"
+argument-hint: "[<milestone>]"
 allowed-tools:
   - Read
   - Write
@@ -35,6 +35,7 @@ Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json
 Follow '~/.maestro/workflows/milestone-complete.md' completely.
 
 **Next-step routing on completion:**
+- Cut a release for this milestone → Skill({ skill: "maestro-milestone-release" })
 - Next milestone has phases → Skill({ skill: "maestro-plan", args: "{next_milestone_first_phase}" })
 - Need to capture learnings → Skill({ skill: "manage-memory-capture", args: "compact" })
 - View updated project state → Skill({ skill: "manage-status" })
