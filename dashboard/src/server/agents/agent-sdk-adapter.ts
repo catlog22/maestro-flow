@@ -46,20 +46,11 @@ export class AgentSdkAdapter extends BaseAgentAdapter {
 
   private readonly abortControllers = new Map<string, AbortController>();
   private readonly pendingApprovals = new Map<string, PendingApproval>();
-  private issueMcpServer: McpSdkServerConfigWithInstance | null = null;
   private readonly issueMcpServerPromise: Promise<McpSdkServerConfigWithInstance> | null;
 
   constructor(workflowRoot?: string) {
     super();
     this.issueMcpServerPromise = workflowRoot ? createIssueMcpServer(workflowRoot) : null;
-  }
-
-  private async getIssueMcpServer(): Promise<McpSdkServerConfigWithInstance | null> {
-    if (!this.issueMcpServerPromise) return null;
-    if (!this.issueMcpServer) {
-      this.issueMcpServer = await this.issueMcpServerPromise;
-    }
-    return this.issueMcpServer;
   }
 
   // --- Lifecycle hooks -----------------------------------------------------
@@ -203,7 +194,7 @@ export class AgentSdkAdapter extends BaseAgentAdapter {
     }
 
     // Inject issue MCP server if available
-    const issueMcp = await this.getIssueMcpServer();
+    const issueMcp = this.issueMcpServerPromise ? await this.issueMcpServerPromise : null;
     if (issueMcp) {
       options.mcpServers = { 'issue-monitor': issueMcp };
     }

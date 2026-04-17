@@ -2,9 +2,9 @@
 
 # Maestro-Flow
 
-### Multi-Agent Workflow Orchestration for Claude Code & Codex
+### The Orchestration Layer for the Multi-Agent Era
 
-**One command. Multiple AI agents. Structured delivery.**
+**Don't just run agents. Orchestrate them.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-≥18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
@@ -13,32 +13,11 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
----
-
-*I don't write code — Claude Code and Codex do. But telling them what to do, in what order, with what context, and verifying the result — that's where all the time goes. Maestro-Flow makes that orchestration automatic.*
-
 </div>
 
 ---
 
-## Background
-
-This project is a **ground-up rewrite** of [Claude-Code-Workflow (CCW)](https://github.com/catlog22/Claude-Code-Workflow), my earlier multi-CLI orchestration framework. CCW proved that coordinating Claude, Codex, Gemini and other AI agents through structured workflows is powerful — but it grew complex. Too many layers, too many abstractions.
-
-Maestro-Flow takes the core ideas that worked and rebuilds them with a clear philosophy: **less ceremony, faster execution.** The spec-driven phase pipeline is inspired by [GET SHIT DONE (GSD)](https://github.com/gsd-build/get-shit-done) — its context engineering approach and atomic commit discipline are genuinely elegant. Maestro-Flow adopts those design patterns while adding what GSD doesn't have: a real-time visual dashboard, multi-agent execution with Claude Agent SDK, and an autonomous Commander that keeps the pipeline moving without you.
-
-**What changed from CCW:**
-- Stripped the heavy session/beat orchestration layer — replaced with lightweight skill-based routing
-- Merged the terminal dashboard into a proper web UI with Linear-style Kanban
-- Unified CLI tool invocation through a single `maestro cli` interface
-- Added autonomous Commander Agent (assess → decide → dispatch loop)
-- Built a complete Issue closed-loop system (discover → analyze → plan → execute → close)
-
-**What we kept:**
-- Multi-CLI orchestration (Claude, Codex, Gemini, Qwen, OpenCode)
-- Structured workflows as Markdown definitions
-- Slash commands as the user interface
-- Agent definitions as focused role specifications
+Maestro-Flow is a workflow orchestration framework for multi-agent development with Claude Code, Codex, Gemini, and other AI agents. It automates the most time-consuming part of AI-assisted engineering — deciding which agents to use, in what order, with what context. Describe your intent, and Maestro-Flow routes to the optimal command chain, drives parallel agent execution, and closes the loop through a real-time dashboard, self-healing issue pipeline, and evolving knowledge graph.
 
 ---
 
@@ -74,103 +53,92 @@ graph LR
     J -->|next phase| D
 ```
 
-Each phase has explicit status tracking. The dashboard shows what's happening and what to do next.
-
 ### Quick Channels
-
-Not everything needs a full pipeline:
 
 | Channel | Flow | When |
 |---------|------|------|
-| `/maestro-quick` | analyze → plan → execute | Quick fixes, small features |
-| Scratch mode | `analyze -q` → `plan --dir` → `execute --dir` | No roadmap, just get it done |
+| `/maestro-quick` | analyze > plan > execute | Quick fixes, small features |
+| Scratch mode | `analyze -q` > `plan --dir` > `execute --dir` | No roadmap, just get it done |
 | `/maestro "..."` | AI-routed command chain | Describe intent, let Maestro-Flow decide |
 
 ---
 
-## The Dashboard
+## Four Pillars
 
-A real-time project control panel at `http://127.0.0.1:3001`. Built with React 19, Tailwind CSS 4, and WebSocket live updates.
+### 1. Structured Pipeline
 
-### Four Views
+Phase-based execution with explicit status tracking. Each phase moves through analyze > plan > execute > verify > review > test > transition. The dashboard shows what's happening and what to do next.
 
-| View | Key | What You See |
-|------|-----|-------------|
-| **Board** | `K` | Kanban columns — Backlog, In Progress, Review, Done. Phase cards and Issue cards side by side. |
-| **Timeline** | `T` | Gantt-style phase timeline with progress bars |
-| **Table** | `L` | Every phase and issue in a sortable table |
-| **Center** | `C` | Command center — active executions, issue queue, quality metrics |
+51 slash commands across 6 categories power every stage — from project initialization to quality retrospective.
 
-### What You Can Do
+### 2. Autonomous Autopilot
 
-- **Pick an agent, hit play** — Select Claude / Codex / Gemini on any Issue card, click execute
-- **Batch dispatch** — Multi-select Issues, send them all to agents in parallel
-- **Watch agents work** — Real-time CLI output streaming panel
-- **Full Issue lifecycle** — Create, analyze, plan, execute, close — all from the board
-- **Linear sync** — Import/export Issues to Linear for team workflows
-
-### Commander Agent
-
-The autonomous supervisor. Runs a tick loop in the background:
+**Commander Agent** — a background supervisor that runs a tick loop:
 
 ```
 assess → decide → dispatch → wait → assess → ...
 ```
 
-It reads project state (phases, tasks, Issues, agent slots), decides what needs attention, and dispatches agents automatically. Three profiles: `conservative`, `balanced`, `aggressive`.
+It reads project state (phases, tasks, issues, agent slots), decides what needs attention, and dispatches agents automatically. Three profiles: `conservative`, `balanced`, `aggressive`.
 
-When the Commander is on, Issues flow from discovery to resolution without manual intervention.
-
----
-
-## Issue Closed-Loop
-
-Issues aren't just tickets — they're a self-healing pipeline:
+**Issue Closed-Loop** — issues aren't just tickets, they're a self-healing pipeline:
 
 ```mermaid
 graph LR
-    A[Discover] --> B[Create]
-    B --> C[Analyze]
-    C --> D[Plan]
-    D --> E[Execute]
-    E --> F[Close]
+    A[Discover] --> B[Analyze]
+    B --> C[Plan]
+    C --> D[Execute]
+    D --> E[Close]
 ```
 
 | Stage | Command | What Happens |
 |-------|---------|-------------|
 | **Discover** | `/manage-issue-discover` | 8-perspective scan: bugs, UX, tech debt, security, performance, testing gaps, code quality, documentation |
-| **Analyze** | `/manage-issue-analyze` | Root cause analysis via CLI exploration. Writes structured `analysis` to the Issue. |
-| **Plan** | `/manage-issue-plan` | Generates solution steps — target files, code changes, verification criteria |
-| **Execute** | `/manage-issue-execute` | Dual-mode: Dashboard API dispatch when server is up, direct CLI execution when offline |
-| **Close** | Automatic | Verification passes → `resolved` → `closed` |
+| **Analyze** | `/manage-issue-analyze` | Root cause analysis via CLI exploration |
+| **Plan** | `/manage-issue-plan` | Generate solution steps with target files and verification criteria |
+| **Execute** | `/manage-issue-execute` | Dashboard API dispatch or direct CLI execution |
+| **Close** | Automatic | Verification passes > resolved > closed |
 
-### How Issues Connect to the Pipeline
+Quality commands (`review`, `test`, `verify`) automatically create issues for problems they find. Issue fixes flow back into the phase pipeline. The loop closes itself.
 
-```mermaid
-graph TB
-    subgraph Phase Pipeline
-        EX[execute] --> VE[verify]
-        VE --> RE[review]
-        RE --> TE[test]
-    end
-    subgraph Issue Loop
-        DI[discover] --> AN[analyze]
-        AN --> PL[plan]
-        PL --> IX[execute]
-    end
-    RE -->|critical/high findings| DI
-    TE -->|test failures| DI
-    VE -->|verification gaps| DI
-    IX -->|fixed code| EX
-```
+### 3. Visual Control Plane
 
-Quality commands (`review`, `test`, `verify`) automatically create Issues for problems they find. Issue fixes flow back into the phase. The loop closes itself.
+Real-time project dashboard at `http://127.0.0.1:3001`. Built with React 19, Tailwind CSS 4, and WebSocket live updates.
+
+| View | Key | What You See |
+|------|-----|-------------|
+| **Board** | `K` | Kanban columns — Backlog, In Progress, Review, Done |
+| **Timeline** | `T` | Gantt-style phase timeline with progress bars |
+| **Table** | `L` | Every phase and issue in a sortable table |
+| **Center** | `C` | Command center — active executions, issue queue, quality metrics |
+
+Pick an agent on any issue card, hit play. Batch-select issues, dispatch them all in parallel. Watch agents work in a real-time streaming panel.
+
+### 4. Smart Knowledge Base
+
+The project builds intelligence over time through two systems:
+
+**Wiki Knowledge Graph** — structured entries (specs, phases, decisions, lessons) connected by semantic links. BM25 search, backlink traversal, health scoring. `/wiki-connect` discovers hidden connections; `/wiki-digest` generates themed digests with coverage heatmaps and gap analysis.
+
+**Learning Toolkit** — 5 commands that turn code and history into reusable knowledge:
+
+| Command | What It Does |
+|---------|-------------|
+| `/learn-retro` | Unified retrospective — git metrics + decision evaluation via `--lens git\|decision\|all` |
+| `/learn-follow` | Guided reading with forcing questions — extracts patterns and builds understanding |
+| `/learn-decompose` | 4-dimension parallel pattern extraction, saves to specs/wiki |
+| `/learn-second-opinion` | Multi-perspective analysis: review, challenge, or consult modes |
+| `/learn-investigate` | Systematic question investigation with hypothesis testing |
+
+All learning commands share `lessons.jsonl` — a unified knowledge store queryable via `/manage-learn`. Specs, retrospectives, and manual insights all flow into the same pool.
 
 ---
 
-## Multi-Agent Execution
+## Under the Hood
 
-Maestro-Flow doesn't pick one AI — it uses them together:
+### Multi-Agent Engine
+
+Maestro-Flow coordinates multiple AI agents in parallel:
 
 ```
               ┌────────────────────────────────┐
@@ -186,106 +154,59 @@ Maestro-Flow doesn't pick one AI — it uses them together:
      └───────────┘ └────────────┘ └───────────┘
 ```
 
-- **Wave execution** — Independent tasks run in parallel across agents, dependent tasks wait for predecessors
-- **Agent SDK** — Native Claude Agent SDK for Claude Code processes
-- **CLI adapters** — Codex, Gemini, Qwen, OpenCode all accessible through `maestro cli`
-- **Workspace isolation** — Each agent gets a clean execution context
+- **Wave execution** — independent tasks run in parallel, dependent tasks wait for predecessors
+- **Agent SDK** — native Claude Agent SDK for Claude Code processes
+- **CLI adapters** — Codex, Gemini, Qwen, OpenCode all accessible through `maestro delegate`
+- **Workspace isolation** — each agent gets a clean execution context
 
----
+### Hook System
 
-## Hook System
+9 context-aware hooks across 3 installation levels:
 
-Maestro-Flow includes a context-aware hook system that integrates with Claude Code's hook protocol. Hooks run as subprocesses, communicating via stdin/stdout JSON.
+| Hook | Purpose |
+|------|---------|
+| `context-monitor` | Monitors context usage, injects warnings when running low |
+| `spec-injector` | Auto-injects project specs into subagent prompts by agent type |
+| `delegate-monitor` | Tracks async delegate task completion |
+| `team-monitor` | Team collaboration message awareness |
+| `telemetry` | Execution telemetry collection |
+| `session-context` | Injects workflow state at session start |
+| `skill-context` | Injects workflow state when invoking workflow skills |
+| `coordinator-tracker` | Tracks coordinator chain progress |
+| `workflow-guard` | Protects critical files and enforces workflow constraints |
 
-### 9 Hooks, 3 Levels
-
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `context-monitor` | PostToolUse | Monitors context usage, injects warnings when running low |
-| `spec-injector` | PreToolUse:Agent | Auto-injects project specs into subagent prompts by agent type |
-| `delegate-monitor` | PostToolUse | Tracks async delegate task completion |
-| `team-monitor` | PostToolUse | Team collaboration message awareness |
-| `telemetry` | PostToolUse | Execution telemetry collection |
-| `session-context` | Notification | Injects workflow state + spec overview at session start |
-| `skill-context` | UserPromptSubmit | Injects workflow state + artifact tree when invoking workflow skills |
-| `coordinator-tracker` | PostToolUse | Tracks coordinator chain progress, injects next-step hint when paused |
-| `workflow-guard` | PreToolUse:Bash/Write/Edit | Protects critical files and enforces workflow constraints |
-
-Install hooks at the level you need:
+The `spec-injector` routes project specs to agents based on type — execution agents get coding conventions, planning agents get architecture constraints. A 4-tier context budget (full > reduced > minimal > skip) adapts injection volume to remaining context.
 
 ```bash
 maestro hooks install --level minimal    # context-monitor + spec-injector
-maestro hooks install --level standard   # + delegate/team/telemetry + session-context + skill-context + coordinator-tracker
+maestro hooks install --level standard   # + delegate/team/telemetry + session/skill-context + coordinator-tracker
 maestro hooks install --level full       # + workflow-guard
 ```
 
-### Workspace-Aware Activation
+### Overlay System
 
-Workflow-dependent hooks (`spec-injector`, `skill-context`, `coordinator-tracker`, `workflow-guard`) declare `requiresWorkspace: true`. When no Maestro workspace is detected, these hooks exit silently before reading stdin — zero overhead for non-workflow projects. Workspace detection walks up the directory tree looking for `.workflow/state.json` with Maestro-specific fingerprint fields.
-
-### Spec Injection
-
-The `spec-injector` hook automatically routes project specs (`.workflow/specs/`) to subagents based on their type — execution agents get coding conventions, planning agents get architecture constraints, test agents get test conventions. Uses `updatedInput` to rewrite the agent prompt, with a 4-tier context budget (full → reduced → minimal → skip) that adapts injection volume based on remaining context.
-
-```
-Agent("code-developer") → auto-injects execution specs
-Agent("workflow-planner") → auto-injects planning specs
-Agent("tdd-developer") → auto-injects execution + test specs
-```
-
-See **[Hooks Guide](guide/hooks-guide.md)** for full documentation.
-
----
-
-## Command Overlay System
-
-Overlay non-invasive patches onto `.claude/commands/*.md` files — add steps, reading requirements, quality gates — without editing the originals. Overlays survive `maestro install` upgrades.
+Non-invasive patches for `.claude/commands/*.md` — add steps, reading requirements, quality gates without editing originals. Overlays survive `maestro install` upgrades.
 
 ```bash
-# Create via natural language
 /maestro-overlay "add CLI verification after maestro-execute"
-
-# Or manually
-maestro overlay add my-overlay.json    # Install + apply
 maestro overlay list                   # Interactive TUI management
 maestro overlay bundle -o team.json    # Pack for sharing
-maestro overlay import-bundle team.json # Unpack + apply
 ```
-
-Each overlay declares targets (commands) and patches (section + mode + content). The patcher wraps injected content in hashed HTML-comment markers for idempotent apply and surgical removal.
-
-See **[Overlay Guide](guide/overlay-guide.md)** for full documentation.
 
 ---
 
 ## 51 Commands, 21 Agents
 
-### Commands (Slash Commands for Claude Code)
+### Commands
 
-| Category | Count | Purpose |
-|----------|-------|---------|
-| `maestro-*` | 20 | Full lifecycle — init, brainstorm, roadmap, analyze, plan, execute, verify, coordinate, milestones, overlays, UI design |
-| `manage-*` | 12 | Issue lifecycle, codebase docs, knowledge capture, memory, harvest, status |
-| `quality-*` | 9 | Review, test, debug, test-gen, integration-test, business-test, refactor, retrospective, sync |
-| `learn-*` | 5 | Learning toolkit — unified retro, follow-along, pattern decompose, investigate, second opinion |
-| `spec-*` | 3 | Specification setup, add, load |
-| `wiki-*` | 2 | Knowledge graph — connection discovery, knowledge digest |
-
-### Learning Toolkit (NEW)
-
-Commands that turn the wiki knowledge graph and spec system into an active learning engine:
-
-| Command | What It Does | Inspired By |
-|---------|-------------|-------------|
-| `/learn-retro` | Unified retrospective — git metrics + decision evaluation via `--lens git\|decision\|all` | gstack `/retro` |
-| `/learn-follow` | Guided follow-along reading with forcing questions — extracts patterns and builds understanding | gstack `/office-hours` |
-| `/learn-decompose` | Decompose code into cataloged design patterns across 4 dimensions, save to specs/wiki | — |
-| `/learn-second-opinion` | Multi-perspective analysis: review (3 personas), challenge (adversarial), consult (Q&A) | gstack `/codex` |
-| `/learn-investigate` | Systematic question investigation with hypothesis testing and 3-strike escalation | gstack `/investigate` |
-| `/wiki-connect` | Surface hidden connections in the wiki graph, suggest or auto-apply new links | — |
-| `/wiki-digest` | Generate knowledge digests with theme clustering, gap analysis, coverage heatmap, and `--create-issues` for gap→issue routing | — |
-
-All learning commands share the same `lessons.jsonl` knowledge store, making insights queryable via `/manage-learn`.
+| Category | Count | Prefix | Purpose |
+|----------|-------|--------|---------|
+| **Core Workflow** | 20 | `maestro-*` | Full lifecycle — init, brainstorm, roadmap, analyze, plan, execute, verify, coordinate, milestones, overlays, UI design |
+| **Management** | 12 | `manage-*` | Issue lifecycle, codebase docs, knowledge capture, memory, harvest, status |
+| **Quality** | 9 | `quality-*` | Review, test, debug, test-gen, integration-test, business-test, refactor, retrospective, sync |
+| **Learning** | 5 | `learn-*` | Unified retro, follow-along, pattern decompose, investigate, second opinion |
+| **Specification** | 3 | `spec-*` | Setup, add, load |
+| **Wiki** | 2 | `wiki-*` | Connection discovery, knowledge digest |
 
 ### Agents
 
@@ -303,21 +224,10 @@ All learning commands share the same `lessons.jsonl` knowledge store, making ins
 
 ### Install
 
-#### npm (Recommended)
-
 ```bash
 npm install -g maestro-flow
 
 # Install workflows, commands, agents, templates
-maestro install
-```
-
-#### From Source
-
-```bash
-git clone https://github.com/catlog22/Maestro-Flow.git
-cd Maestro-Flow
-npm install && npm run build && npm install -g .
 maestro install
 ```
 
@@ -333,40 +243,14 @@ maestro install
 /maestro "build a REST API for user management"
 ```
 
-### Dashboard & TUI
+### Dashboard
 
 ```bash
-# Web dashboard — real-time project control panel
-maestro serve
-# → http://127.0.0.1:3001
-
-# TUI — terminal-based dashboard
-maestro view
+maestro serve                  # → http://127.0.0.1:3001
+maestro view                   # Terminal TUI alternative
 ```
-
-| View | Key | Description |
-|------|-----|-------------|
-| **Board** | `K` | Kanban — Backlog, In Progress, Review, Done |
-| **Timeline** | `T` | Gantt-style phase timeline |
-| **Table** | `L` | Sortable phase & issue table |
-| **Center** | `C` | Command center — active executions, quality metrics |
-
-### Workflow Launcher
-
-Switch between different workflow configurations (e.g., Maestro ↔ CCW):
-
-```bash
-maestro launcher               # Interactive workflow + settings picker
-maestro launcher list           # Show registered workflows
-```
-
-When switching workflows, the launcher automatically:
-- Detects missing dependencies and offers `npm install -g <package>` + resource installation
-- Detects project-level workflow file conflicts and offers cleanup
 
 ### MCP Server
-
-Expose Maestro-Flow tools to Claude Code and other MCP clients:
 
 ```bash
 # Claude Code — load as development MCP server
@@ -376,7 +260,12 @@ claude --dangerously-load-development-channels server:maestro --dangerously-skip
 npm run mcp
 ```
 
-With MCP connected, delegate tools (`delegate_message`, `delegate_status`, `delegate_output`, `delegate_tail`, `delegate_cancel`) and other Maestro tools are available programmatically.
+### Workflow Launcher
+
+```bash
+maestro launcher               # Interactive workflow + settings picker
+maestro launcher list           # Show registered workflows
+```
 
 ---
 
@@ -392,10 +281,8 @@ maestro/
 ├── dashboard/               # Real-time web dashboard
 │   └── src/
 │       ├── client/          # React 19 + Zustand + Tailwind CSS 4
-│       │   └── components/
-│       │       └── kanban/  # 19 Kanban components
 │       ├── server/          # Hono API + WebSocket + SSE
-│       │   ├── agents/      # AgentManager + adapters (Claude SDK, Codex CLI, OpenCode)
+│       │   ├── agents/      # AgentManager + adapters
 │       │   ├── commander/   # Autonomous Commander Agent
 │       │   └── execution/   # ExecutionScheduler + WaveExecutor
 │       └── shared/          # Shared types
@@ -423,7 +310,7 @@ maestro/
 ## Documentation
 
 - **[Command Usage Guide](guide/command-usage-guide.md)** — All 51 commands with workflow diagrams, pipeline chaining, Issue closed-loop, and quick channels
-- **[Delegate Async Guide](guide/delegate-async-guide.md)** — Async task delegation: CLI & MCP usage, message injection, chaining, broker lifecycle, delegate vs CLI comparison
+- **[Delegate Async Guide](guide/delegate-async-guide.md)** — Async task delegation: CLI & MCP usage, message injection, chaining, broker lifecycle
 - **[Overlay Guide](guide/overlay-guide.md)** — Non-invasive command extensions: overlay format, section injection, bundle/import, interactive TUI management
 - **[Hooks Guide](guide/hooks-guide.md)** — Hook system architecture, 9 hooks, spec injection, context budget, configuration
 - **[Team Lite — User Guide](guide/team-lite-guide.md)** — Daily workflow for 2-8 person teams: join, sync, activity awareness, conflict preflight
@@ -433,11 +320,8 @@ maestro/
 
 ## Acknowledgments
 
-Maestro-Flow stands on the shoulders of two projects:
-
-- **[GET SHIT DONE](https://github.com/gsd-build/get-shit-done)** by TACHES — The spec-driven development model, context engineering philosophy, and atomic commit discipline that shaped Maestro-Flow's pipeline design. GSD proved that structured meta-prompting is the right way to drive AI agents at scale.
-
-- **[Claude-Code-Workflow](https://github.com/catlog22/Claude-Code-Workflow)** — The predecessor to Maestro-Flow. CCW pioneered multi-CLI orchestration (Gemini + Codex + Qwen + Claude), skill-based workflow routing, and team agent architecture. Maestro-Flow is CCW rebuilt from scratch — faster, leaner, with a visual dashboard and autonomous commander.
+- **[GET SHIT DONE](https://github.com/gsd-build/get-shit-done)** by TACHES — The spec-driven development model and context engineering philosophy that shaped Maestro-Flow's pipeline design.
+- **[Claude-Code-Workflow](https://github.com/catlog22/Claude-Code-Workflow)** — The predecessor that pioneered multi-CLI orchestration and skill-based workflow routing.
 
 ## Contributors
 

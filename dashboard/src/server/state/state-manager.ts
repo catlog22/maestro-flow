@@ -210,6 +210,7 @@ export class StateManager {
     const phases: PhaseCard[] = [];
     this.phaseDirCache.clear();
 
+    const usedPhaseNums = new Set<number>();
     let nextFallback = 1;
     for (const slug of slugs) {
       const dirPath = join(phasesDir, slug);
@@ -218,13 +219,16 @@ export class StateManager {
       if (phase) {
         phases.push(normalizePhase(phase));
         this.phaseDirCache.set(phase.phase, dirPath);
+        usedPhaseNums.add(phase.phase);
         if (phase.phase >= nextFallback) nextFallback = phase.phase + 1;
       } else {
-        // Fallback: synthesize a minimal PhaseCard from directory name + contents
+        // Advance fallback past any already-used numbers
+        while (usedPhaseNums.has(nextFallback)) nextFallback++;
         const synth = await synthesizePhaseFromDir(slug, dirPath, nextFallback);
         if (synth) {
           phases.push(normalizePhase(synth));
           this.phaseDirCache.set(synth.phase, dirPath);
+          usedPhaseNums.add(synth.phase);
           nextFallback = synth.phase + 1;
         }
       }
@@ -319,8 +323,8 @@ async function synthesizePhaseFromDir(slug: string, dirPath: string, fallbackNum
   return {
     phase: phaseNum,
     slug,
-    title: slug.replace(/^(?:\d+|[a-zA-Z]\d+)-?/, '').replace(/[-_]/g, ' ') || `Phase ${phaseNum}`,
-    status: 'pending' as PhaseCard['status'],
+    title: slug.replace(/^(?:\d+|[a-zA-Z]+\d+)-?/, '').replace(/[-_]/g, ' ') || `Phase ${phaseNum}`,
+    status: 'not_started' as PhaseCard['status'],
     created_at: '',
     updated_at: '',
     goal: '',

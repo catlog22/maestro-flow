@@ -28,7 +28,7 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 
 // ---------------------------------------------------------------------------
 // Kanban column configuration
-// Collapsed view: 4 columns grouping the 8 statuses
+// Collapsed view: 6 columns grouping the 9 statuses
 // ---------------------------------------------------------------------------
 
 export interface ColumnDefinition {
