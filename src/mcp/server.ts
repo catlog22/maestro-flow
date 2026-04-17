@@ -4,8 +4,11 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { ToolRegistry } from '../core/tool-registry.js';
 import { loadConfig } from '../config/index.js';
+import { paths } from '../config/paths.js';
 import { registerBuiltinTools } from '../tools/index.js';
 import { DelegateChannelRelay } from './delegate-channel-relay.js';
 
@@ -42,6 +45,30 @@ export async function startMcpServer(): Promise<void> {
   );
 
   _server = server;
+
+  // DIAGNOSTIC: capture client capabilities/version after handshake completes.
+  // Compare two CC startup modes:
+  //   1) plain `claude` (or `claude mcp add maestro`)
+  //   2) `claude --dangerously-load-development-channels server:maestro`
+  // and diff the two files to learn whether CC announces a channel-aware
+  // reciprocal capability the server can detect.
+  server.oninitialized = () => {
+    try {
+      const dir = join(paths.data, 'async');
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, `client-handshake-${process.pid}.json`);
+      writeFileSync(file, JSON.stringify({
+        pid: process.pid,
+        ppid: process.ppid,
+        ssePort: process.env.CLAUDE_CODE_SSE_PORT ?? null,
+        capturedAt: new Date().toISOString(),
+        clientVersion: server.getClientVersion() ?? null,
+        clientCapabilities: server.getClientCapabilities() ?? null,
+      }, null, 2), 'utf-8');
+    } catch {
+      // best-effort
+    }
+  };
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     const tools = registry.list();

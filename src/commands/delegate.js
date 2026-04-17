@@ -11,6 +11,7 @@ import { generateCliExecId } from '../agents/cli-agent-runner.js';
 import { loadCliToolsConfig, selectTool } from '../config/cli-tools-config.js';
 import { paths } from '../config/paths.js';
 import { DelegateBrokerClient } from '../async/index.js';
+import { handleDelegateMessage } from '../async/delegate-control.js';
 import { deriveExecutionStatus, deriveDelegateStatus, padRight, truncate, readExecutionEntries, summarizeBrokerEventCli, } from '../utils/cli-format.js';
 function statusLabel(meta) {
     const s = deriveExecutionStatus(meta);
@@ -121,7 +122,7 @@ export function launchDetachedDelegateWorker(request, options = {}) {
                 jobId: request.execId,
                 type: 'queued',
                 status: 'queued',
-                payload: { summary: `Delegate queued for ${request.tool}/${request.mode}` },
+                payload: { summary: `${request.tool}/${request.mode} queued` },
                 jobMetadata: buildJobMetadata(request, child.pid),
                 now: startedAt,
             });
@@ -145,38 +146,82 @@ function isProcessAlive(pid) {
         return false;
     }
 }
-function resolveRelaySessionId() {
-    const asyncDir = join(paths.data, 'async');
+/**
+ * Scan the async dir and return live relay records.
+ *
+ * "Live" requires BOTH:
+ *  - `pid` (the MCP server process) is alive
+ *  - `ownerPid` (the Claude Code process that spawned it) is alive, when recorded
+ *
+ * The `ownerPid` check rejects zombie MCP servers whose parent Claude Code
+ * exited but whose node process never shut down. Older relay files without
+ * `ownerPid` fall back to pid-only liveness (backward compatible).
+ *
+ * Stale files (dead pid OR dead ownerPid) are unlinked as a side effect.
+ */
+export function readLiveRelayRecords(asyncDir) {
+    let files;
     try {
-        const files = readdirSync(asyncDir)
-            .filter((f) => f.startsWith('relay-session-') && f.endsWith('.id'));
-        if (files.length === 0)
-            return undefined;
-        let newest;
-        for (const file of files) {
-            const filePath = join(asyncDir, file);
-            try {
-                const data = JSON.parse(readFileSync(filePath, 'utf-8'));
-                if (data.pid && !isProcessAlive(data.pid)) {
-                    try {
-                        unlinkSync(filePath);
-                    }
-                    catch { }
-                    continue;
-                }
-                if (!newest || data.startedAt > newest.startedAt) {
-                    newest = data;
-                }
-            }
-            catch {
-                // Skip corrupted files
-            }
-        }
-        return newest?.sessionId;
+        files = readdirSync(asyncDir).filter((f) => f.startsWith('relay-session-') && f.endsWith('.id'));
     }
     catch {
-        return undefined;
+        return [];
     }
+    const live = [];
+    for (const file of files) {
+        const filePath = join(asyncDir, file);
+        let data;
+        try {
+            data = JSON.parse(readFileSync(filePath, 'utf-8'));
+        }
+        catch {
+            continue;
+        }
+        const pidAlive = !data.pid || isProcessAlive(data.pid);
+        const ownerAlive = !data.ownerPid || isProcessAlive(data.ownerPid);
+        if (!pidAlive || !ownerAlive) {
+            try {
+                unlinkSync(filePath);
+            }
+            catch { /* ignore */ }
+            continue;
+        }
+        live.push(data);
+    }
+    return live;
+}
+/**
+ * Resolve the relay session ID that matches the current Claude Code session.
+ * Matches by CLAUDE_CODE_SSE_PORT when available (precise), falls back to
+ * newest live session (legacy). Stale relay files are cleaned along the way.
+ */
+function resolveRelaySessionId() {
+    const records = readLiveRelayRecords(join(paths.data, 'async'));
+    if (records.length === 0)
+        return undefined;
+    const currentSsePort = process.env.CLAUDE_CODE_SSE_PORT;
+    if (currentSsePort) {
+        const portMatch = records.find((r) => r.ssePort === currentSsePort);
+        if (portMatch?.sessionId)
+            return portMatch.sessionId;
+    }
+    let newest;
+    for (const record of records) {
+        if (!newest || (record.startedAt ?? '') > (newest.startedAt ?? '')) {
+            newest = record;
+        }
+    }
+    return newest?.sessionId;
+}
+/** Check if the MCP notification channel is functional for the current session. */
+export function isChannelAvailable() {
+    if (process.env.CLAUDECODE !== '1')
+        return false;
+    const currentSsePort = process.env.CLAUDE_CODE_SSE_PORT;
+    if (!currentSsePort)
+        return false;
+    const records = readLiveRelayRecords(join(paths.data, 'async'));
+    return records.some((r) => r.ssePort === currentSsePort);
 }
 export function registerDelegateCommand(program) {
     const delegate = program
@@ -194,7 +239,7 @@ export function registerDelegateCommand(program) {
         .option('--includeDirs <dirs>', 'Additional directories (comma-separated)')
         .option('--session <id>', 'Claude Code session ID for completion notifications')
         .option('--backend <type>', 'Adapter backend: direct (default) or terminal (tmux/wezterm)')
-        .option('--async', 'Run the delegate in the background and return immediately')
+        .option('--async', 'Run in the background with MCP notifications (default is synchronous)')
         .addOption(new Option('--worker').hideHelp())
         .action(async (prompt, opts) => {
         if (!prompt) {
@@ -229,7 +274,10 @@ export function registerDelegateCommand(program) {
             backend,
         };
         try {
-            if (opts.async && !opts.worker) {
+            // Auto-detect: async only when the MCP notification channel can deliver
+            // results back. Checks CLAUDECODE env + relay session matched by SSE port.
+            const useAsync = !opts.worker && (opts.async || isChannelAvailable());
+            if (useAsync) {
                 process.stderr.write(`[MAESTRO_EXEC_ID=${execId}]\n`);
                 launchDetachedDelegateWorker(request);
                 console.log(`Started async delegate: ${execId}`);
@@ -237,7 +285,19 @@ export function registerDelegateCommand(program) {
                 return;
             }
             const runner = new CliAgentRunner();
-            const exitCode = await runner.run(request);
+            const syncMode = !opts.worker;
+            const exitCode = await runner.run({ ...request, sync: syncMode });
+            // In sync mode, output the final result after completion
+            if (syncMode) {
+                const store = new CliHistoryStore();
+                const output = store.getOutput(execId);
+                if (output) {
+                    process.stderr.write('\n--- Output ---\n');
+                    process.stdout.write(output);
+                    if (!output.endsWith('\n'))
+                        process.stdout.write('\n');
+                }
+            }
             process.exit(exitCode);
         }
         catch (err) {
@@ -290,6 +350,9 @@ export function registerDelegateCommand(program) {
         .command('output <id>')
         .description('Get assistant output for a delegated execution')
         .option('--verbose', 'Show full metadata and raw output')
+        .option('--all', 'Include thinking/reasoning entries in output')
+        .option('--offset <n>', 'Character offset to start from (for pagination)')
+        .option('--limit <n>', 'Max characters to return (for pagination)')
         .action((id, opts) => {
         const store = new CliHistoryStore();
         const meta = store.loadMeta(id);
@@ -297,6 +360,8 @@ export function registerDelegateCommand(program) {
             console.error(`Execution not found: ${id}`);
             process.exit(1);
         }
+        const offset = opts.offset ? parseInt(opts.offset, 10) : undefined;
+        const limit = opts.limit ? parseInt(opts.limit, 10) : undefined;
         if (opts.verbose) {
             console.log(`ID:     ${meta.execId}`);
             console.log(`Tool:   ${meta.tool}`);
@@ -306,9 +371,14 @@ export function registerDelegateCommand(program) {
             if (meta.completedAt) {
                 console.log(`End:    ${meta.completedAt}`);
             }
+            const totalChars = store.getOutputLength(meta.execId);
+            console.log(`Chars:  ${totalChars}`);
+            if (offset || limit) {
+                console.log(`Page:   offset=${offset ?? 0} limit=${limit ?? 'all'}`);
+            }
             console.log('---');
         }
-        const output = store.getOutput(id);
+        const output = store.getOutput(id, { includeAll: opts.all, offset, limit });
         if (!output) {
             console.error(`No output available for: ${id}`);
             process.exit(1);
@@ -408,6 +478,81 @@ export function registerDelegateCommand(program) {
         console.log(`Cancellation requested for ${id}.`);
         console.log(`Current status: ${deriveDelegateStatus(meta, updated)}`);
         console.log('Use `maestro delegate status <id>` or `maestro delegate tail <id>` to follow progress.');
+    });
+    // ---- message subcommand --------------------------------------------------
+    delegate
+        .command('message <id> <text>')
+        .description('Send a follow-up message to a running or completed delegate')
+        .option('--delivery <mode>', 'Delivery mode: inject or after_complete', 'inject')
+        .action((id, text, opts) => {
+        const delivery = opts.delivery ?? 'inject';
+        if (delivery !== 'inject' && delivery !== 'after_complete') {
+            console.error(`Invalid delivery mode: ${delivery}. Use "inject" or "after_complete".`);
+            process.exit(1);
+        }
+        let result;
+        try {
+            result = handleDelegateMessage({
+                execId: id,
+                message: text,
+                delivery: delivery,
+                requestedBy: 'cli:delegate:message',
+            });
+        }
+        catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.error(`Failed: ${message}`);
+            process.exit(1);
+        }
+        console.log(`Message accepted for ${result.execId}`);
+        console.log(`Delivery:  ${result.delivery}`);
+        console.log(`Status:    ${result.status}`);
+        if (result.immediateDispatch) {
+            console.log(`Dispatch:  immediate (previous status: ${result.previousStatus})`);
+        }
+        else {
+            console.log(`Queue:     ${result.queueDepth} message(s) pending`);
+        }
+    });
+    // ---- messages subcommand -------------------------------------------------
+    delegate
+        .command('messages <id>')
+        .description('List queued and dispatched follow-up messages for a delegate')
+        .action((id) => {
+        const store = new CliHistoryStore();
+        const broker = new DelegateBrokerClient();
+        const meta = store.loadMeta(id);
+        const job = broker.getJob(id);
+        if (!meta && !job) {
+            console.error(`Execution not found: ${id}`);
+            process.exit(1);
+        }
+        const messages = broker.listMessages(id);
+        if (messages.length === 0) {
+            console.log(`No messages for ${id}.`);
+            return;
+        }
+        const colId = 12;
+        const colDelivery = 16;
+        const colStatus = 12;
+        const colMessage = 60;
+        const header = [
+            padRight('MessageID', colId),
+            padRight('Delivery', colDelivery),
+            padRight('Status', colStatus),
+            padRight('Message', colMessage),
+        ].join('  ');
+        console.log(header);
+        console.log('-'.repeat(header.length));
+        for (const msg of messages) {
+            const row = [
+                padRight(msg.messageId.slice(0, colId), colId),
+                padRight(msg.delivery, colDelivery),
+                padRight(msg.status, colStatus),
+                padRight(truncate(msg.message, colMessage), colMessage),
+            ].join('  ');
+            console.log(row);
+        }
     });
 }
 //# sourceMappingURL=delegate.js.map

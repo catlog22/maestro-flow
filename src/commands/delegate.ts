@@ -207,70 +207,90 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+export interface RelayRecord {
+  sessionId?: string;
+  pid?: number;
+  ownerPid?: number;
+  ssePort?: string;
+  startedAt?: string;
+}
+
+/**
+ * Scan the async dir and return live relay records.
+ *
+ * "Live" requires BOTH:
+ *  - `pid` (the MCP server process) is alive
+ *  - `ownerPid` (the Claude Code process that spawned it) is alive, when recorded
+ *
+ * The `ownerPid` check rejects zombie MCP servers whose parent Claude Code
+ * exited but whose node process never shut down. Older relay files without
+ * `ownerPid` fall back to pid-only liveness (backward compatible).
+ *
+ * Stale files (dead pid OR dead ownerPid) are unlinked as a side effect.
+ */
+export function readLiveRelayRecords(asyncDir: string): RelayRecord[] {
+  let files: string[];
+  try {
+    files = readdirSync(asyncDir).filter(
+      (f) => f.startsWith('relay-session-') && f.endsWith('.id'),
+    );
+  } catch {
+    return [];
+  }
+
+  const live: RelayRecord[] = [];
+  for (const file of files) {
+    const filePath = join(asyncDir, file);
+    let data: RelayRecord;
+    try {
+      data = JSON.parse(readFileSync(filePath, 'utf-8')) as RelayRecord;
+    } catch {
+      continue;
+    }
+
+    const pidAlive = !data.pid || isProcessAlive(data.pid);
+    const ownerAlive = !data.ownerPid || isProcessAlive(data.ownerPid);
+    if (!pidAlive || !ownerAlive) {
+      try { unlinkSync(filePath); } catch { /* ignore */ }
+      continue;
+    }
+    live.push(data);
+  }
+  return live;
+}
+
 /**
  * Resolve the relay session ID that matches the current Claude Code session.
  * Matches by CLAUDE_CODE_SSE_PORT when available (precise), falls back to
- * newest alive session (legacy).  Cleans up dead relay files along the way.
+ * newest live session (legacy). Stale relay files are cleaned along the way.
  */
 function resolveRelaySessionId(): string | undefined {
-  const asyncDir = join(paths.data, 'async');
+  const records = readLiveRelayRecords(join(paths.data, 'async'));
+  if (records.length === 0) return undefined;
+
   const currentSsePort = process.env.CLAUDE_CODE_SSE_PORT;
-  try {
-    const files = readdirSync(asyncDir)
-      .filter((f) => f.startsWith('relay-session-') && f.endsWith('.id'));
-
-    if (files.length === 0) return undefined;
-
-    let portMatch: string | undefined;
-    let newest: { sessionId: string; startedAt: string } | undefined;
-
-    for (const file of files) {
-      const filePath = join(asyncDir, file);
-      try {
-        const data = JSON.parse(readFileSync(filePath, 'utf-8'));
-        if (data.pid && !isProcessAlive(data.pid)) {
-          try { unlinkSync(filePath); } catch {}
-          continue;
-        }
-        // Precise match: relay recorded the same SSE port as this session
-        if (currentSsePort && data.ssePort === currentSsePort) {
-          portMatch = data.sessionId;
-        }
-        if (!newest || data.startedAt > newest.startedAt) {
-          newest = data;
-        }
-      } catch {
-        // Skip corrupted files
-      }
-    }
-
-    return portMatch ?? newest?.sessionId;
-  } catch {
-    return undefined;
+  if (currentSsePort) {
+    const portMatch = records.find((r) => r.ssePort === currentSsePort);
+    if (portMatch?.sessionId) return portMatch.sessionId;
   }
+
+  let newest: RelayRecord | undefined;
+  for (const record of records) {
+    if (!newest || (record.startedAt ?? '') > (newest.startedAt ?? '')) {
+      newest = record;
+    }
+  }
+  return newest?.sessionId;
 }
 
 /** Check if the MCP notification channel is functional for the current session. */
-function isChannelAvailable(): boolean {
+export function isChannelAvailable(): boolean {
   if (process.env.CLAUDECODE !== '1') return false;
   const currentSsePort = process.env.CLAUDE_CODE_SSE_PORT;
   if (!currentSsePort) return false;
 
-  const asyncDir = join(paths.data, 'async');
-  try {
-    const files = readdirSync(asyncDir)
-      .filter((f) => f.startsWith('relay-session-') && f.endsWith('.id'));
-
-    for (const file of files) {
-      try {
-        const data = JSON.parse(readFileSync(join(asyncDir, file), 'utf-8'));
-        if (data.ssePort === currentSsePort && data.pid && isProcessAlive(data.pid)) {
-          return true;
-        }
-      } catch { /* skip */ }
-    }
-  } catch { /* dir missing */ }
-  return false;
+  const records = readLiveRelayRecords(join(paths.data, 'async'));
+  return records.some((r) => r.ssePort === currentSsePort);
 }
 
 export function registerDelegateCommand(program: Command): void {
@@ -291,7 +311,7 @@ export function registerDelegateCommand(program: Command): void {
     .option('--includeDirs <dirs>', 'Additional directories (comma-separated)')
     .option('--session <id>', 'Claude Code session ID for completion notifications')
     .option('--backend <type>', 'Adapter backend: direct (default) or terminal (tmux/wezterm)')
-    .option('--async', 'Run in the background with MCP notifications (default is synchronous)')
+    .option('--async', 'Run detached in the background; results delivered via MCP channel notifications (default: synchronous)')
     .addOption(new Option('--worker').hideHelp())
     .action(async (prompt: string | undefined, opts: {
       to?: string;
@@ -344,9 +364,11 @@ export function registerDelegateCommand(program: Command): void {
       };
 
       try {
-        // Auto-detect: async only when the MCP notification channel can deliver
-        // results back. Checks CLAUDECODE env + relay session matched by SSE port.
-        const useAsync = !opts.worker && (opts.async || isChannelAvailable());
+        // Default = sync. Async only when --async is explicitly passed.
+        // Channel auto-detection is unreliable: CC's --channels mode is not
+        // observable from the MCP server side (verified via clientCapabilities
+        // diff — both modes announce identical capabilities).
+        const useAsync = !opts.worker && opts.async === true;
         if (useAsync) {
           process.stderr.write(`[MAESTRO_EXEC_ID=${execId}]\n`);
           launchDetachedDelegateWorker(request);
@@ -357,6 +379,32 @@ export function registerDelegateCommand(program: Command): void {
 
         const runner = new CliAgentRunner();
         const syncMode = !opts.worker;
+
+        // Sync mode: emit ONE broker event at start so any active channel
+        // subscriber (CC launched with --dangerously-load-development-channels)
+        // sees a "started" notification. No subsequent events are published —
+        // sync output returns directly via stdout when the command completes.
+        if (syncMode) {
+          try {
+            const broker = new DelegateBrokerClient();
+            broker.publishEvent({
+              jobId: execId,
+              type: 'status_update',
+              status: 'running',
+              payload: { summary: `${toolName}/${mode} started (sync)` },
+              jobMetadata: {
+                tool: toolName,
+                mode,
+                workDir,
+                backend,
+                ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+              },
+            });
+          } catch {
+            // Broker publish is best-effort; sync execution must continue.
+          }
+        }
+
         const exitCode = await runner.run({ ...request, sync: syncMode });
 
         // In sync mode, output the final result after completion

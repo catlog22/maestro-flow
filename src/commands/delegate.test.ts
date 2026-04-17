@@ -1,6 +1,6 @@
 import { after, before, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Command } from 'commander';
@@ -10,11 +10,19 @@ describe('delegate command', () => {
   let registerDelegateCommand: typeof import('./delegate.js').registerDelegateCommand;
   let launchDetachedDelegateWorker: typeof import('./delegate.js').launchDetachedDelegateWorker;
   let buildDetachedDelegateWorkerArgs: typeof import('./delegate.js').buildDetachedDelegateWorkerArgs;
+  let isChannelAvailable: typeof import('./delegate.js').isChannelAvailable;
+  let readLiveRelayRecords: typeof import('./delegate.js').readLiveRelayRecords;
   let CliHistoryStore: typeof import('../agents/cli-history-store.js').CliHistoryStore;
 
   before(async () => {
     process.env.MAESTRO_HOME = tempHome;
-    ({ registerDelegateCommand, launchDetachedDelegateWorker, buildDetachedDelegateWorkerArgs } = await import('./delegate.js'));
+    ({
+      registerDelegateCommand,
+      launchDetachedDelegateWorker,
+      buildDetachedDelegateWorkerArgs,
+      isChannelAvailable,
+      readLiveRelayRecords,
+    } = await import('./delegate.js'));
     ({ CliHistoryStore } = await import('../agents/cli-history-store.js'));
   });
 
@@ -1001,5 +1009,169 @@ describe('delegate command', () => {
 
     // Should complete without error - the tail command respects its limit flags
     assert.ok(logs.length > 0, 'tail produced output');
+  });
+
+  describe('channel availability (zombie relay detection)', () => {
+    const asyncDir = join(tempHome, 'data', 'async');
+    const DEAD_PID = 99999999; // unlikely to correspond to a real process
+
+    const writeRelayFile = (
+      fileName: string,
+      payload: Record<string, unknown>,
+    ) => {
+      mkdirSync(asyncDir, { recursive: true });
+      writeFileSync(join(asyncDir, fileName), JSON.stringify(payload), 'utf-8');
+    };
+
+    beforeEach(() => {
+      // Remove just the relay files; the SQLite broker may still be held open
+      // by prior tests (EBUSY on Windows), so we skip wiping the whole dir.
+      if (existsSync(asyncDir)) {
+        for (const name of readdirSync(asyncDir)) {
+          if (name.startsWith('relay-session-') && name.endsWith('.id')) {
+            try { unlinkSync(join(asyncDir, name)); } catch {}
+          }
+        }
+      }
+    });
+
+    it('readLiveRelayRecords drops relays whose ownerPid is dead and cleans the file', () => {
+      writeRelayFile('relay-session-zombie.id', {
+        sessionId: 'zombie',
+        pid: process.pid,
+        ownerPid: DEAD_PID,
+        ssePort: '42627',
+        startedAt: '2026-04-16T08:00:00.000Z',
+      });
+      writeRelayFile('relay-session-live.id', {
+        sessionId: 'live',
+        pid: process.pid,
+        ownerPid: process.pid,
+        ssePort: '42627',
+        startedAt: '2026-04-16T11:00:00.000Z',
+      });
+
+      const live = readLiveRelayRecords(asyncDir);
+      assert.equal(live.length, 1);
+      assert.equal(live[0].sessionId, 'live');
+      assert.equal(
+        existsSync(join(asyncDir, 'relay-session-zombie.id')),
+        false,
+        'zombie relay file should be unlinked',
+      );
+      assert.ok(existsSync(join(asyncDir, 'relay-session-live.id')));
+    });
+
+    it('readLiveRelayRecords drops relays whose pid is dead', () => {
+      writeRelayFile('relay-session-deadpid.id', {
+        sessionId: 'deadpid',
+        pid: DEAD_PID,
+        ownerPid: process.pid,
+        ssePort: '42627',
+        startedAt: '2026-04-16T08:00:00.000Z',
+      });
+
+      const live = readLiveRelayRecords(asyncDir);
+      assert.equal(live.length, 0);
+      assert.equal(
+        existsSync(join(asyncDir, 'relay-session-deadpid.id')),
+        false,
+      );
+    });
+
+    it('readLiveRelayRecords treats records without ownerPid as alive (backward compat)', () => {
+      writeRelayFile('relay-session-legacy.id', {
+        sessionId: 'legacy',
+        pid: process.pid,
+        ssePort: '42627',
+        startedAt: '2026-04-16T08:00:00.000Z',
+      });
+
+      const live = readLiveRelayRecords(asyncDir);
+      assert.equal(live.length, 1);
+      assert.equal(live[0].sessionId, 'legacy');
+    });
+
+    it('isChannelAvailable returns false when all port-matching relays are zombies', () => {
+      writeRelayFile('relay-session-z1.id', {
+        sessionId: 'z1',
+        pid: process.pid,
+        ownerPid: DEAD_PID,
+        ssePort: '42627',
+        startedAt: '2026-04-16T08:00:00.000Z',
+      });
+      writeRelayFile('relay-session-z2.id', {
+        sessionId: 'z2',
+        pid: process.pid,
+        ownerPid: DEAD_PID,
+        ssePort: '42627',
+        startedAt: '2026-04-16T09:00:00.000Z',
+      });
+
+      const prev = {
+        CLAUDECODE: process.env.CLAUDECODE,
+        SSE: process.env.CLAUDE_CODE_SSE_PORT,
+      };
+      process.env.CLAUDECODE = '1';
+      process.env.CLAUDE_CODE_SSE_PORT = '42627';
+      try {
+        assert.equal(isChannelAvailable(), false);
+      } finally {
+        if (prev.CLAUDECODE === undefined) delete process.env.CLAUDECODE;
+        else process.env.CLAUDECODE = prev.CLAUDECODE;
+        if (prev.SSE === undefined) delete process.env.CLAUDE_CODE_SSE_PORT;
+        else process.env.CLAUDE_CODE_SSE_PORT = prev.SSE;
+      }
+    });
+
+    it('isChannelAvailable returns true when a live relay matches the current SSE port', () => {
+      writeRelayFile('relay-session-live.id', {
+        sessionId: 'live',
+        pid: process.pid,
+        ownerPid: process.pid,
+        ssePort: '42627',
+        startedAt: '2026-04-16T11:00:00.000Z',
+      });
+
+      const prev = {
+        CLAUDECODE: process.env.CLAUDECODE,
+        SSE: process.env.CLAUDE_CODE_SSE_PORT,
+      };
+      process.env.CLAUDECODE = '1';
+      process.env.CLAUDE_CODE_SSE_PORT = '42627';
+      try {
+        assert.equal(isChannelAvailable(), true);
+      } finally {
+        if (prev.CLAUDECODE === undefined) delete process.env.CLAUDECODE;
+        else process.env.CLAUDECODE = prev.CLAUDECODE;
+        if (prev.SSE === undefined) delete process.env.CLAUDE_CODE_SSE_PORT;
+        else process.env.CLAUDE_CODE_SSE_PORT = prev.SSE;
+      }
+    });
+
+    it('isChannelAvailable ignores live relays whose port does not match', () => {
+      writeRelayFile('relay-session-other.id', {
+        sessionId: 'other',
+        pid: process.pid,
+        ownerPid: process.pid,
+        ssePort: '55555',
+        startedAt: '2026-04-16T11:00:00.000Z',
+      });
+
+      const prev = {
+        CLAUDECODE: process.env.CLAUDECODE,
+        SSE: process.env.CLAUDE_CODE_SSE_PORT,
+      };
+      process.env.CLAUDECODE = '1';
+      process.env.CLAUDE_CODE_SSE_PORT = '42627';
+      try {
+        assert.equal(isChannelAvailable(), false);
+      } finally {
+        if (prev.CLAUDECODE === undefined) delete process.env.CLAUDECODE;
+        else process.env.CLAUDECODE = prev.CLAUDECODE;
+        if (prev.SSE === undefined) delete process.env.CLAUDE_CODE_SSE_PORT;
+        else process.env.CLAUDE_CODE_SSE_PORT = prev.SSE;
+      }
+    });
   });
 });

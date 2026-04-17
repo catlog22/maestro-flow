@@ -54,6 +54,7 @@ Auto mode:
 - Project initialized, need spec package → Skill({ skill: "maestro-spec-generate", args: "--from-brainstorm {session_id}" })
 - Project initialized, quick roadmap → Skill({ skill: "maestro-roadmap", args: "--from-brainstorm {session_id}" })
 - Need deeper analysis first → Skill({ skill: "maestro-analyze", args: "{topic}" })
+- `html-prototypes/` produced and user wants interactive A/B/C review → suggest Skill({ skill: "maestro-brainstorm-visualize", args: "--session {session_id}" }) (optional, user-triggered)
 
 Single role mode:
 - More roles needed → Skill({ skill: "maestro-brainstorm", args: "{next_role} --session {session_id}" })
@@ -76,9 +77,16 @@ Single role mode:
 <success_criteria>
 **Auto mode**:
 - [ ] guidance-specification.md with RFC 2119 keywords, terminology, non-goals, feature decomposition
-- [ ] Role analysis files for each selected role in `.brainstorming/{role}/`
+- [ ] design-research.md persisted when Step 1.7 external research ran (fail-soft: absence not a failure)
+- [ ] Spec Review Gate passed (Step 3.5) or `--yes` bypassed
+- [ ] Role analysis files for each selected NON-UI role in `.brainstorming/{role}/`
+- [ ] If `ui-designer` in selected_roles: `ui-designer/analysis.md` exists AND exactly one of `html-prototypes/` / `ascii-mockups/` / `api-sketches/` exists with `README.md` + ≥1 prototype file
+- [ ] ui-designer/analysis.md references each prototype via `@-notation`
+- [ ] HTML prototypes are self-contained (no external `<link>`/`<script src>` URLs — warn only)
 - [ ] Feature specs in `.brainstorming/feature-specs/` (or synthesis-specification.md)
+- [ ] UI-bearing feature specs reference the corresponding prototype in Section 3 (Interface Contract)
 - [ ] feature-index.json and synthesis-changelog.md
+- [ ] Final Output Gate passed (Step 5.5) or `--yes` bypassed
 - [ ] All user decisions captured with Decision Recording Protocol
 - [ ] Session metadata updated with completion status
 

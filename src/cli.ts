@@ -36,6 +36,10 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   overlay:    async () => (await import('./commands/overlay.js')).registerOverlayCommand,
   team:       async () => (await import('./commands/team.js')).registerTeamCommand,
   update:     async () => (await import('./commands/update.js')).registerUpdateCommand,
+  'brainstorm-visualize': async () => (await import('./commands/brainstorm-visualize.js')).registerBrainstormVisualizeCommand,
+  bv:         async () => (await import('./commands/brainstorm-visualize.js')).registerBrainstormVisualizeCommand,
+  'core-memory': async () => (await import('./commands/core-memory.js')).registerCoreMemoryCommand,
+  cm:         async () => (await import('./commands/core-memory.js')).registerCoreMemoryCommand,
 };
 
 // Determine which command is being invoked from argv (if any)
@@ -47,9 +51,14 @@ if (requestedCommand && requestedCommand in commandLoaders) {
   const register = await commandLoaders[requestedCommand]();
   register(program);
 } else {
-  // No command or unknown command (e.g., --help, --version) — register all
+  // No command or unknown command (e.g., --help, --version) — register all.
+  // Multiple keys may point to the same register function (e.g. a command and
+  // its alias share one module); deduplicate so we register each module once.
+  const seen = new Set<(p: Command) => void>();
   for (const loader of Object.values(commandLoaders)) {
     const register = await loader();
+    if (seen.has(register)) continue;
+    seen.add(register);
     register(program);
   }
 }

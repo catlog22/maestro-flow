@@ -198,6 +198,12 @@ export class DelegateChannelRelay {
       if (process.env.CLAUDE_CODE_SSE_PORT) {
         data.ssePort = process.env.CLAUDE_CODE_SSE_PORT;
       }
+      // Record parent PID (= Claude Code process that spawned this MCP).
+      // Lets the delegate CLI discard zombie relays whose parent has already died,
+      // even when the ephemeral SSE port has been reused by a new CC session.
+      if (typeof process.ppid === 'number' && process.ppid > 0) {
+        data.ownerPid = process.ppid;
+      }
       writeFileSync(this.sessionFilePath, JSON.stringify(data), 'utf-8');
     } catch {
       // Best-effort — file write failure shouldn't block relay

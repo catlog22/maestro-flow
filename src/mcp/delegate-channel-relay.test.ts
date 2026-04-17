@@ -511,4 +511,29 @@ describe('DelegateChannelRelay', () => {
 
     assert.equal(existsSync(sessionFile), false, 'Session file should be removed after stop');
   });
+
+  it('records ownerPid (parent PID) in the session file so stale relays can be detected', async () => {
+    const broker = new DelegateBrokerClient({ statePath });
+
+    const relay = new DelegateChannelRelay({
+      server: { async notification() {} },
+      broker,
+      sessionId: 'owner-pid-test',
+      pollIntervalMs: 60_000,
+      now: () => '2026-04-16T11:00:00.000Z',
+    });
+
+    await relay.start();
+
+    try {
+      const sessionDir = join(process.env.MAESTRO_HOME!, 'data', 'async');
+      const sessionFile = join(sessionDir, `relay-session-${process.pid}.id`);
+      const data = JSON.parse(readFileSync(sessionFile, 'utf-8'));
+
+      assert.equal(data.pid, process.pid);
+      assert.equal(data.ownerPid, process.ppid, 'ownerPid should equal process.ppid at write time');
+    } finally {
+      relay.stop();
+    }
+  });
 });
