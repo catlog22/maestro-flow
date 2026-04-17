@@ -85,7 +85,7 @@ export class CodexCliAdapter extends BaseAgentAdapter {
   ): Promise<AgentProcess> {
     const args = [
       'exec',
-      '--full-auto',
+      '--dangerously-bypass-approvals-and-sandbox',
       '--json',
       '--skip-git-repo-check',
       '-',
