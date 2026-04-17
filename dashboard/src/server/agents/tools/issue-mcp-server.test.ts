@@ -52,14 +52,14 @@ describe('issue-mcp-server', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('creates an MCP server with correct name', () => {
-    const server = createIssueMcpServer(tempDir);
+  it('creates an MCP server with correct name', async () => {
+    const server = await createIssueMcpServer(tempDir);
     expect(server.type).toBe('sdk');
     expect(server.name).toBe('issue-monitor');
   });
 
-  it('registers three tools: get_issue, list_issues, update_issue', () => {
-    createIssueMcpServer(tempDir);
+  it('registers three tools: get_issue, list_issues, update_issue', async () => {
+    await createIssueMcpServer(tempDir);
     expect(capturedTools.has('get_issue')).toBe(true);
     expect(capturedTools.has('list_issues')).toBe(true);
     expect(capturedTools.has('update_issue')).toBe(true);
