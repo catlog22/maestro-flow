@@ -5,6 +5,7 @@
 import { Hono } from 'hono';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { resolveIssuesJsonlPath } from '../utils/issue-store.js';
 import type {
   LinearIssue,
   LinearWorkflowState,
@@ -176,9 +177,10 @@ const ISSUE_CREATE_MUTATION = `
 
 export function createLinearRoutes(workflowRoot?: string | (() => string)): Hono {
   const app = new Hono();
-  const getJsonlPath = () => {
-    const root = typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot;
-    return root ? join(root, 'issues', 'issues.jsonl') : '';
+  const getRoot = () => typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot;
+  const getJsonlPath = async () => {
+    const root = getRoot();
+    return root ? resolveIssuesJsonlPath(root) : '';
   };
 
   // GET /api/linear/status -- check if API key is configured
@@ -320,7 +322,7 @@ export function createLinearRoutes(workflowRoot?: string | (() => string)): Hono
   // POST /api/linear/import -- import Linear issues → local issues.jsonl
   app.post('/api/linear/import', async (c) => {
     try {
-      const jp = getJsonlPath();
+      const jp = await getJsonlPath();
       if (!jp) {
         return c.json({ error: 'Workflow root not configured' }, 500);
       }

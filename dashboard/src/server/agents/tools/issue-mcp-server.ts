@@ -14,6 +14,7 @@ import {
   readIssuesJsonl,
   writeIssuesJsonl,
   withIssueWriteLock,
+  resolveIssuesJsonlPath,
 } from '../../utils/issue-store.js';
 
 // ---------------------------------------------------------------------------
@@ -134,8 +135,8 @@ function buildTools(jsonlPath: string) {
 // Factory
 // ---------------------------------------------------------------------------
 
-export function createIssueMcpServer(workflowRoot: string): McpSdkServerConfigWithInstance {
-  const jsonlPath = join(workflowRoot, 'issues', 'issues.jsonl');
+export async function createIssueMcpServer(workflowRoot: string): Promise<McpSdkServerConfigWithInstance> {
+  const jsonlPath = await resolveIssuesJsonlPath(workflowRoot);
   return createSdkMcpServer({
     name: 'issue-monitor',
     tools: buildTools(jsonlPath),

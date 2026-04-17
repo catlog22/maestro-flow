@@ -507,14 +507,14 @@ insight.routed_id = "SPEC-retro-{phase_num}-{INS_id}-{slug}.md"
 
 #### Target: note
 
-Reuse the existing `manage-memory-capture` skill in tip mode — do not duplicate the memory pipeline.
+Reuse the existing `manage-learn` skill in tip mode — do not duplicate the learning pipeline.
 
 ```
 note_text = "[Retro phase {NN} / {lens}] {insight.title}: {insight.summary}"
 tags = insight.tags + ["retrospective", "phase-{NN}", insight.lens]
 
 Skill({
-  skill: "manage-memory-capture",
+  skill: "manage-learn",
   args: "tip \"{note_text}\" --tag " + tags.join(",")
 })
 

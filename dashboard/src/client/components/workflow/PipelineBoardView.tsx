@@ -18,7 +18,7 @@ interface ColumnDef {
 }
 
 const COLUMNS: ColumnDef[] = [
-  { status: 'pending', label: 'Pending', match: ['pending'] },
+  { status: 'pending', label: 'Pending', match: ['not_started', 'pending'] },
   { status: 'exploring', label: 'Exploring', match: ['exploring'] },
   { status: 'planning', label: 'Planning', match: ['planning'] },
   { status: 'executing', label: 'Executing', match: ['executing'] },

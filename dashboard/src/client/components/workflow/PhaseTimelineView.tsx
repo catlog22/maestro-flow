@@ -17,7 +17,7 @@ const STAGE_LABELS = ['Explore', 'Plan', 'Execute', 'Verify', 'Test', 'Done'];
 function stageState(status: PhaseStatus, stageIdx: number): 'done' | 'current' | 'future' {
   const statusIdx = STAGE_ORDER.indexOf(status);
   if (status === 'completed') return 'done';
-  if (status === 'pending') return 'future';
+  if (status === 'pending' || status === 'not_started') return 'future';
   if (stageIdx < statusIdx) return 'done';
   if (stageIdx === statusIdx) return 'current';
   return 'future';

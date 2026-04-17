@@ -214,16 +214,34 @@ maestro overlay import-bundle team.json # 解包 + 应用
 
 ---
 
-## 36 个命令，21 个 Agent
+## 51 个命令，21 个 Agent
 
 ### 命令（Claude Code 斜杠命令）
 
 | 类别 | 数量 | 用途 |
 |------|------|------|
-| `maestro-*` | 15 | 全生命周期 — init、brainstorm、roadmap、analyze、plan、execute、verify、phase-transition |
-| `manage-*` | 9 | Issue CRUD、发现、分析、规划、执行、代码库文档、记忆管理 |
-| `quality-*` | 7 | review、test、debug、test-gen、integration-test、refactor、sync |
-| `spec-*` | 4 | 规格说明 — setup、add、load、map |
+| `maestro-*` | 20 | 全生命周期 — init、brainstorm、roadmap、analyze、plan、execute、verify、coordinate、milestones、overlays、UI design |
+| `manage-*` | 12 | Issue 生命周期、代码库文档、知识捕获、记忆管理、harvest、status |
+| `quality-*` | 9 | review、test、debug、test-gen、integration-test、business-test、refactor、retrospective、sync |
+| `spec-*` | 3 | 规格说明 — setup、add、load |
+| `learn-*` | 5 | 学习工具箱 — 统一复盘、跟读、模式分解、调查、第二意见 |
+| `wiki-*` | 2 | 知识图谱 — 连接发现、知识摘要 |
+
+### 学习工具箱 (Learning Toolkit)
+
+将 Wiki 知识图谱和 Spec 系统变为主动学习引擎的命令集：
+
+| 命令 | 做了什么 | 灵感来源 |
+|------|---------|---------|
+| `/learn-retro` | 统一复盘 — Git 活动指标 + 架构决策评估，通过 `--lens git\|decision\|all` 切换 | gstack `/retro` |
+| `/learn-follow` | 引导式跟读，带强制提问 — 提取模式、构建理解 | gstack `/office-hours` |
+| `/learn-decompose` | 4 维度分解代码为已编目的设计模式，保存到 specs/wiki | — |
+| `/learn-second-opinion` | 多视角分析：review（3 人格）、challenge（对抗式）、consult（问答式） | gstack `/codex` |
+| `/learn-investigate` | 系统化问题调查，假设验证 + 3 次上报机制 | gstack `/investigate` |
+| `/wiki-connect` | 发现 Wiki 图谱中的隐藏连接，建议或自动添加新链接 | — |
+| `/wiki-digest` | 生成知识摘要：主题聚类、缺口分析、覆盖热力图，`--create-issues` 将缺口路由为 Issue | — |
+
+所有学习命令共享同一个 `lessons.jsonl` 知识库，通过 `/manage-learn` 统一查询。
 
 ### Agent
 
@@ -308,9 +326,9 @@ maestro/
 │       │   └── execution/   # ExecutionScheduler + WaveExecutor
 │       └── shared/          # 共享类型
 ├── .claude/
-│   ├── commands/            # 36 个斜杠命令（.md）
+│   ├── commands/            # 51 个斜杠命令（.md）
 │   └── agents/              # 21 个 Agent 定义（.md）
-├── workflows/               # 36 个工作流实现（.md）
+├── workflows/               # 47 个工作流实现（.md）
 ├── templates/               # JSON 模板（task, plan, issue, ...）
 └── extensions/              # 插件系统
 ```
@@ -330,10 +348,12 @@ maestro/
 
 ## 文档
 
-- **[命令使用指南](guide/command-usage-guide.md)** — 全部 36 个命令，含工作流图表、管线衔接、Issue 闭环、快速通道
+- **[命令使用指南](guide/command-usage-guide.md)** — 全部 51 个命令，含工作流图表、管线衔接、Issue 闭环、快速通道
 - **[Delegate 异步执行指南](guide/delegate-async-guide.md)** — 异步任务委派：CLI & MCP 用法、消息注入、链式调用、Broker 生命周期、delegate vs cli 对比
 - **[Overlay 系统指南](guide/overlay-guide.md)** — 非侵入式命令扩展：overlay 格式、section 注入、bundle 打包/导入、交互式 TUI 管理
+- **[Hook 系统指南](guide/hooks-guide.md)** — Hook 系统架构、9 个 Hook、Spec 注入、上下文预算、配置
 - **[Team Lite — 使用指南](guide/team-lite-guide.md)** — 2-8 人小团队日常协作：加入、同步、队友活跃、冲突预飞检
+- **[Team Lite — 设计文档](guide/team-lite-design.md)** — 架构、数据模型、人机协作与智能体管线的命名空间边界
 
 ---
 

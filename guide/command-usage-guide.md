@@ -1,16 +1,16 @@
 # Maestro 命令使用指南
 
-Maestro 命令系统包含 44 个 slash 命令，分为 6 大类。本文档说明主干工作流的命令衔接、快速渠道、Issue 闭环工作流、学习工具集，以及各命令的使用场景。
+Maestro 命令系统包含 51 个 slash 命令，分为 6 大类。本文档说明主干工作流的命令衔接、快速渠道、Issue 闭环工作流、学习工具集，以及各命令的使用场景。
 
 ## 命令总览
 
 | 类别 | 命令数 | 前缀 | 职责 |
 |------|--------|------|------|
-| **核心工作流** | 15 | `maestro-*` | 项目初始化、规划、执行、验证、阶段推进 |
-| **管理** | 9 | `manage-*` | Issue 管理、代码库文档、内存、状态 |
-| **质量** | 8 | `quality-*` | 代码审查、业务测试、UAT、调试、重构、同步 |
-| **规范** | 4 | `spec-*` | 项目规范初始化、加载、映射、录入 |
-| **学习** | 6 | `learn-*` | Git 复盘、决策追溯、跟读学习、模式拆解、系统探究、多视角分析 |
+| **核心工作流** | 20 | `maestro-*` | 项目初始化、规划、执行、验证、阶段推进、coordinate、milestones、overlays |
+| **管理** | 12 | `manage-*` | Issue 生命周期、代码库文档、知识捕获、记忆管理、harvest、status |
+| **质量** | 9 | `quality-*` | 代码审查、业务测试、UAT、调试、重构、复盘、同步 |
+| **规范** | 3 | `spec-*` | 项目规范初始化、加载、录入 |
+| **学习** | 5 | `learn-*` | 统一复盘（git+决策）、跟读学习、模式拆解、系统探究、多视角分析 |
 | **知识图谱** | 2 | `wiki-*` | 连接发现、知识摘要 |
 
 全局入口 `/maestro` 是智能协调器，根据用户意图和项目状态自动选择最优命令链。
@@ -540,7 +540,6 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 
 ```bash
 /spec-setup                          # 初始化 specs/（扫描项目生成约定）
-/spec-map                            # 4 个并行 mapper agent 分析代码库
 /spec-add decision "使用 JSONL 格式存储 Issue"  # 录入设计决策
 /spec-add pattern "所有 API 端点使用 Hono 框架"  # 录入代码模式
 /spec-load --category planning       # 加载规划相关规范（agent 执行前调用）
@@ -559,7 +558,7 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 
 ```bash
 /manage-memory-capture compact       # 压缩当前会话记忆
-/manage-memory-capture tip "总是用 bun 而不是 npm" --tag tooling
+/manage-learn tip "总是用 bun 而不是 npm" --tag tooling
 /manage-memory list --store workflow --tag tooling
 /manage-memory search "认证"
 ```
@@ -706,41 +705,37 @@ graph LR
 ### 知识流向
 
 ```
-learn-retro-git ─────┐
-learn-retro-decision ─┤                    ┌─> specs (via /spec-add)
-learn-follow ─────────┼─> lessons.jsonl ───┼─> wiki (via maestro wiki create)
-learn-decompose ──────┤                    └─> issues (via /manage-issue)
-learn-second-opinion ─┤
-learn-investigate ────┘
-                           wiki-connect ──> wiki 图谱质量提升
-                           wiki-digest  ──> 知识摘要生成
+learn-retro (git+decision) ─┐
+learn-follow ───────────────┼─> lessons.jsonl ───┬─> specs (via /spec-add)
+learn-decompose ────────────┤                    ├─> wiki (via maestro wiki create)
+learn-second-opinion ───────┤                    └─> issues (via /manage-issue)
+learn-investigate ──────────┘
+                                 wiki-connect ──> wiki 图谱质量提升
+                                 wiki-digest  ──> 知识摘要 + gap→issue 路由
 ```
 
 ### learn-* 命令
 
-#### `/learn-retro-git` — Git 活动复盘
+#### `/learn-retro` — 统一复盘（Git + 决策）
 
-基于 Git 历史的复盘，不依赖工作流 Phase 状态。计算提交指标、检测工作会话、分析测试比率、追踪趋势。
+统一复盘命令，通过 `--lens` 切换 Git 活动分析和决策质量评估。不依赖工作流 Phase 状态。
 
-```bash
-/learn-retro-git                        # 默认最近 7 天
-/learn-retro-git --days 14              # 最近 14 天
-/learn-retro-git --author alice         # 按作者过滤
-/learn-retro-git --area src/auth        # 按目录范围
-/learn-retro-git --compare              # 对比上次复盘趋势
-```
-
-**输出**：`.workflow/learning/retro-git-{date}.md` + `.json`，洞察追加到 `lessons.jsonl`。
-
-#### `/learn-retro-decision` — 决策追溯与评估
-
-从 Wiki、Specs、Phase Context、Git 多源收集架构决策，用 3 视角（技术合理性/成本评估/事后替代方案）并行评估，分类为 Validated / Aging / Questionable / Stale / Reversed。
+**Git lens**：计算提交指标、检测工作会话、分析测试比率、追踪趋势。
+**Decision lens**：从 Wiki/Specs/Git 多源收集架构决策，3 视角并行评估，分类为 Validated / Aging / Questionable / Stale / Reversed。
 
 ```bash
-/learn-retro-decision                   # 扫描所有决策
-/learn-retro-decision --phase 2         # Phase 2 的决策
-/learn-retro-decision --tag auth        # 按标签过滤
+/learn-retro                            # 默认 --lens all（两个视角）
+/learn-retro --lens git                 # 仅 Git 活动复盘
+/learn-retro --lens decision            # 仅决策评估
+/learn-retro --lens git --days 14       # Git: 最近 14 天
+/learn-retro --lens git --author alice  # Git: 按作者过滤
+/learn-retro --lens git --area src/auth # Git: 按目录范围
+/learn-retro --lens git --compare       # Git: 对比上次复盘趋势
+/learn-retro --lens decision --phase 2  # Decision: Phase 2 的决策
+/learn-retro --lens decision --tag auth # Decision: 按标签过滤
 ```
+
+**输出**：`.workflow/learning/retro-{date}.md` + `.json`，洞察追加到 `lessons.jsonl`（source: `retro-git` / `retro-decision`）。
 
 #### `/learn-follow` — 跟读学习
 
@@ -824,8 +819,8 @@ learn-investigate ────┘
 #### 周末复盘
 
 ```bash
-/learn-retro-git                         # Git 活动复盘
-/learn-retro-decision                    # 决策复盘
+/learn-retro --lens git                  # Git 活动复盘
+/learn-retro --lens decision             # 决策复盘
 /manage-learn list --tag git-retro       # 浏览复盘洞察
 ```
 

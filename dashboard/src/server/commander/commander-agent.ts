@@ -2,7 +2,7 @@
 // CommanderAgent — tick loop + assess + decide + dispatch
 // ---------------------------------------------------------------------------
 
-import { readFile, appendFile, mkdir } from 'node:fs/promises';
+import { readFile, appendFile, mkdir, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -328,8 +328,13 @@ export class CommanderAgent {
     const project = this.stateManager.getProject();
     const schedulerStatus = this.executionScheduler.getStatus();
 
-    // Read open issues from JSONL
-    const jsonlPath = join(this.workflowRoot, 'issues', 'issues.jsonl');
+    // Read open issues from JSONL (check fallback path for older layouts)
+    const primaryPath = join(this.workflowRoot, 'issues', 'issues.jsonl');
+    const fallbackPath = join(this.workflowRoot, 'issues.jsonl');
+    let jsonlPath = primaryPath;
+    try { await access(primaryPath); } catch {
+      try { await access(fallbackPath); jsonlPath = fallbackPath; } catch { /* use primary */ }
+    }
     const allIssues = await readIssuesJsonl(jsonlPath);
     const openIssues = allIssues.filter((i) => i.status === 'open');
 

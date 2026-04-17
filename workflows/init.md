@@ -87,7 +87,7 @@ CHECK .workflow/state.json exists?
 1. Create `.workflow/` directory structure
 2. Create `.workflow/state.json` (status: "idle")
 3. Offer codebase mapping:
-   - "Map codebase first" → execute `/spec-map` to understand existing architecture, then return
+   - "Map codebase first" → execute `/manage-codebase-rebuild` to understand existing architecture, then return
    - "Skip mapping" → proceed
 4. Run Workflow Preferences (same as Path A step 2) → `.workflow/config.json`
 5. Ask user for project vision, goals, constraints (same deep questioning as Path A step 1)

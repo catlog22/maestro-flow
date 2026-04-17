@@ -1,15 +1,17 @@
 # Maestro-Flow Command Usage Guide
 
-The Maestro-Flow command system includes 36 slash commands, organized into 4 major categories. This document covers the main pipeline command sequencing, quick channels, the Issue closed-loop workflow, and the usage scenarios for each command.
+The Maestro-Flow command system includes 51 slash commands, organized into 6 major categories. This document covers the main pipeline command sequencing, quick channels, the Issue closed-loop workflow, learning toolkit, and the usage scenarios for each command.
 
 ## Command Overview
 
 | Category | Count | Prefix | Responsibility |
 |----------|-------|--------|----------------|
-| **Core Workflow** | 15 | `maestro-*` | Project initialization, planning, execution, verification, phase progression |
-| **Management** | 9 | `manage-*` | Issue management, codebase documentation, memory, status |
-| **Quality** | 8 | `quality-*` | Code review, business testing, UAT, debugging, refactoring, sync |
-| **Specification** | 4 | `spec-*` | Project spec initialization, loading, mapping, entry |
+| **Core Workflow** | 20 | `maestro-*` | Project initialization, planning, execution, verification, phase progression, coordination, milestones, overlays |
+| **Management** | 12 | `manage-*` | Issue lifecycle, codebase documentation, knowledge capture, memory, harvest, status |
+| **Quality** | 9 | `quality-*` | Code review, business testing, UAT, debugging, refactoring, retrospective, sync |
+| **Specification** | 3 | `spec-*` | Project spec initialization, loading, entry |
+| **Learning** | 5 | `learn-*` | Unified retro (git+decision), follow-along, pattern decompose, investigate, second opinion |
+| **Wiki** | 2 | `wiki-*` | Connection discovery, knowledge digest |
 
 The global entry point `/maestro` is the smart coordinator that automatically selects the optimal command chain based on user intent and project state.
 
@@ -536,7 +538,6 @@ Three test commands verify from different angles — complementary, not replacem
 
 ```bash
 /spec-setup                          # Initialize specs/ (scan project to generate conventions)
-/spec-map                            # 4 parallel mapper agents analyze the codebase
 /spec-add decision "Use JSONL format for Issue storage"  # Record a design decision
 /spec-add pattern "All API endpoints use the Hono framework"  # Record a code pattern
 /spec-load --category planning       # Load planning-related specs (called before agent execution)
@@ -555,7 +556,7 @@ Types: `bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `
 
 ```bash
 /manage-memory-capture compact       # Compact current session memory
-/manage-memory-capture tip "Always use bun instead of npm" --tag tooling
+/manage-learn tip "Always use bun instead of npm" --tag tooling
 /manage-memory list --store workflow --tag tooling
 /manage-memory search "authentication"
 ```

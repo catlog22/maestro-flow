@@ -99,7 +99,8 @@ Hints:
   View:    /manage-memory view <ID|filename>
   Edit:    /manage-memory edit <filename>
   Search:  /manage-memory search <query>
-  Capture: /manage-memory-capture [compact|tip]
+  Capture: /manage-memory-capture compact
+  Tips:    /manage-learn tip <text>
 ```
 
 ### Step 4: Execute Search (search mode)

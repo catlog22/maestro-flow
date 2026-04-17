@@ -258,17 +258,17 @@ See **[Overlay Guide](guide/overlay-guide.md)** for full documentation.
 
 ---
 
-## 44 Commands, 21 Agents
+## 51 Commands, 21 Agents
 
 ### Commands (Slash Commands for Claude Code)
 
 | Category | Count | Purpose |
 |----------|-------|---------|
-| `maestro-*` | 15 | Full lifecycle — init, brainstorm, roadmap, analyze, plan, execute, verify, phase-transition |
-| `manage-*` | 9 | Issue CRUD, discovery, analysis, planning, execution, codebase docs, memory |
-| `quality-*` | 7 | Review, test, debug, test-gen, integration-test, refactor, sync |
-| `spec-*` | 4 | Specification setup, add, load, map |
-| `learn-*` | 6 | Learning toolkit — git retro, decision retro, follow-along, pattern decompose, investigate, second opinion |
+| `maestro-*` | 20 | Full lifecycle — init, brainstorm, roadmap, analyze, plan, execute, verify, coordinate, milestones, overlays, UI design |
+| `manage-*` | 12 | Issue lifecycle, codebase docs, knowledge capture, memory, harvest, status |
+| `quality-*` | 9 | Review, test, debug, test-gen, integration-test, business-test, refactor, retrospective, sync |
+| `learn-*` | 5 | Learning toolkit — unified retro, follow-along, pattern decompose, investigate, second opinion |
+| `spec-*` | 3 | Specification setup, add, load |
 | `wiki-*` | 2 | Knowledge graph — connection discovery, knowledge digest |
 
 ### Learning Toolkit (NEW)
@@ -277,14 +277,13 @@ Commands that turn the wiki knowledge graph and spec system into an active learn
 
 | Command | What It Does | Inspired By |
 |---------|-------------|-------------|
-| `/learn-retro-git` | Git activity retrospective — metrics, session detection, per-author breakdown, trend tracking | gstack `/retro` |
-| `/learn-retro-decision` | Trace and evaluate architectural decisions across wiki, specs, and git | gstack cross-functional review |
+| `/learn-retro` | Unified retrospective — git metrics + decision evaluation via `--lens git\|decision\|all` | gstack `/retro` |
 | `/learn-follow` | Guided follow-along reading with forcing questions — extracts patterns and builds understanding | gstack `/office-hours` |
 | `/learn-decompose` | Decompose code into cataloged design patterns across 4 dimensions, save to specs/wiki | — |
 | `/learn-second-opinion` | Multi-perspective analysis: review (3 personas), challenge (adversarial), consult (Q&A) | gstack `/codex` |
 | `/learn-investigate` | Systematic question investigation with hypothesis testing and 3-strike escalation | gstack `/investigate` |
 | `/wiki-connect` | Surface hidden connections in the wiki graph, suggest or auto-apply new links | — |
-| `/wiki-digest` | Generate knowledge digests with theme clustering, gap analysis, and coverage heatmap | — |
+| `/wiki-digest` | Generate knowledge digests with theme clustering, gap analysis, coverage heatmap, and `--create-issues` for gap→issue routing | — |
 
 All learning commands share the same `lessons.jsonl` knowledge store, making insights queryable via `/manage-learn`.
 
@@ -401,9 +400,9 @@ maestro/
 │       │   └── execution/   # ExecutionScheduler + WaveExecutor
 │       └── shared/          # Shared types
 ├── .claude/
-│   ├── commands/            # 44 slash commands (.md)
+│   ├── commands/            # 51 slash commands (.md)
 │   └── agents/              # 21 agent definitions (.md)
-├── workflows/               # 36 workflow implementations (.md)
+├── workflows/               # 47 workflow implementations (.md)
 ├── templates/               # JSON templates (task, plan, issue, ...)
 └── extensions/              # Plugin system
 ```
@@ -423,10 +422,10 @@ maestro/
 
 ## Documentation
 
-- **[Command Usage Guide](guide/command-usage-guide.md)** — All 36 commands with workflow diagrams, pipeline chaining, Issue closed-loop, and quick channels
+- **[Command Usage Guide](guide/command-usage-guide.md)** — All 51 commands with workflow diagrams, pipeline chaining, Issue closed-loop, and quick channels
 - **[Delegate Async Guide](guide/delegate-async-guide.md)** — Async task delegation: CLI & MCP usage, message injection, chaining, broker lifecycle, delegate vs CLI comparison
 - **[Overlay Guide](guide/overlay-guide.md)** — Non-invasive command extensions: overlay format, section injection, bundle/import, interactive TUI management
-- **[Hooks Guide](guide/hooks-guide.md)** — Hook system architecture, 7 hooks, spec injection, context budget, configuration
+- **[Hooks Guide](guide/hooks-guide.md)** — Hook system architecture, 9 hooks, spec injection, context budget, configuration
 - **[Team Lite — User Guide](guide/team-lite-guide.md)** — Daily workflow for 2-8 person teams: join, sync, activity awareness, conflict preflight
 - **[Team Lite — Design](guide/team-lite-design.md)** — Architecture, data model, and namespace boundary between human-collab and agent-pipeline domains
 

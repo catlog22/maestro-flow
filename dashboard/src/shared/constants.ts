@@ -8,6 +8,7 @@ import type { Issue } from './issue-types.js';
 // ---------------------------------------------------------------------------
 
 export const PHASE_STATUSES: readonly PhaseStatus[] = [
+  'not_started',
   'pending',
   'exploring',
   'planning',
@@ -37,7 +38,7 @@ export interface ColumnDefinition {
 }
 
 export const COLLAPSED_COLUMNS: readonly ColumnDefinition[] = [
-  { id: 'backlog', label: 'Backlog', statuses: ['pending'] },
+  { id: 'backlog', label: 'Backlog', statuses: ['not_started', 'pending'] },
   { id: 'triage', label: 'Triage', statuses: [] },
   { id: 'in-progress', label: 'In Progress', statuses: ['exploring', 'planning', 'executing'] },
   { id: 'review', label: 'Review', statuses: ['verifying', 'testing'] },

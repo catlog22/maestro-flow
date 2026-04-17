@@ -61,7 +61,7 @@ IF .workflow/state.json exists:
     - key_decisions[] → architectural_constraints
     - blockers[] → known_risks
 
-IF .workflow/codebase/ exists (from spec-map or codebase-rebuild):
+IF .workflow/codebase/ exists (from codebase-rebuild or codebase-refresh):
   Read available codebase docs for feature inventory
 ```
 

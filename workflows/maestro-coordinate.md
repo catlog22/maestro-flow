@@ -214,7 +214,7 @@ const chainMap = {
   'spec_setup':         [{ cmd: 'spec-setup' }],
   'spec_add':           [{ cmd: 'spec-add', args: '"{description}"' }],
   'spec_load':          [{ cmd: 'spec-load', args: '"{description}"' }],
-  'spec_map':           [{ cmd: 'spec-map' }],
+  'spec_map':           [{ cmd: 'manage-codebase-rebuild' }],
   'memory_capture':     [{ cmd: 'manage-memory-capture', args: '"{description}"' }],
   'memory':             [{ cmd: 'manage-memory', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],

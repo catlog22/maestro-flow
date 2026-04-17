@@ -17,6 +17,10 @@ Knowledge synthesis command that generates actionable digests from the wiki know
 Unlike `maestro wiki list` which shows raw entries, this command synthesizes and interprets the knowledge base, producing a curated summary with gap analysis and recommended next actions.
 </purpose>
 
+<deferred_reading>
+- @~/.maestro/workflows/issue.md (issues.jsonl canonical schema for `--create-issues` routing)
+</deferred_reading>
+
 <context>
 Arguments: $ARGUMENTS
 
@@ -34,6 +38,7 @@ Arguments: $ARGUMENTS
 **Storage written:**
 - `.workflow/learning/digest-{slug}-{YYYY-MM-DD}.md` — Digest document
 - `.workflow/learning/lessons.jsonl` — Meta-insights about knowledge structure (source: "wiki-digest")
+- `.workflow/issues/issues.jsonl` — Knowledge-gap issues (only when `--create-issues`)
 
 **Storage read (via maestro wiki CLI, offline mode):**
 - `maestro wiki list --json` — All entries (or filtered)
@@ -143,20 +148,18 @@ Produce `.workflow/learning/digest-{slug}-{date}.md`:
 ### Stage 7: Gap → Issue Routing (if --create-issues)
 For each knowledge gap identified in Stage 5:
 1. Check `.workflow/issues/issues.jsonl` for existing gap with same theme + type
-2. If not duplicate, append to `issues.jsonl`:
-   ```json
-   {
-     "id": "ISS-{8hex}",
-     "title": "Knowledge gap: {gap description}",
-     "type": "knowledge-gap",
-     "status": "open",
-     "source": "wiki-digest",
-     "priority": "low",
-     "description": "Theme: {theme}, Missing type: {type}. Suggested action: {action}",
-     "tags": ["knowledge-gap", "{theme-slug}"],
-     "created": "{ISO date}"
-   }
-   ```
+2. If not duplicate, append to `issues.jsonl` using the canonical schema from `~/.maestro/workflows/issue.md` Step 4:
+   - `id`: `ISS-XXXXXXXX-NNN` format (8 hex hash + sequence)
+   - `title`: "Knowledge gap: {gap description}"
+   - `type`: "knowledge-gap"
+   - `status`: "open"
+   - `severity`: "low"
+   - `priority`: "low"
+   - `source`: "wiki-digest"
+   - `description`: "Theme: {theme}, Missing type: {type}. Suggested action: {action}"
+   - `tags`: ["knowledge-gap", "{theme-slug}"]
+   - `created`: ISO date
+   - `issue_history`: initial entry with `action: "created"`, `by: "wiki-digest"`, `timestamp`
 3. Report created issue count
 
 ### Stage 8: Persist
@@ -197,6 +200,6 @@ For each knowledge gap identified in Stage 5:
 - [ ] Digest written to `digest-{slug}-{date}.md`
 - [ ] Meta-insights appended to `lessons.jsonl`
 - [ ] `learning-index.json` updated
-- [ ] No files modified outside `.workflow/learning/`
+- [ ] No files modified outside `.workflow/learning/` and `.workflow/issues/` (issues only when `--create-issues`)
 - [ ] Summary displayed with key findings and next-step routing
 </success_criteria>

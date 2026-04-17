@@ -30,7 +30,7 @@ Arguments: $ARGUMENTS
 
 | Store | Path | Format | Index |
 |-------|------|--------|-------|
-| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` | `memory-index.json` |
+| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` (legacy only — new tips go to `manage-learn tip`) | `memory-index.json` |
 | `system` | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
 
 **System memory path detection:**

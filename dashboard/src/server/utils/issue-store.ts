@@ -6,8 +6,8 @@
 // ensuring all writes go through the same lock.
 // ---------------------------------------------------------------------------
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import type { Issue } from '../../shared/issue-types.js';
 
@@ -33,6 +33,27 @@ export function generateIssueId(): string {
   const ts = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 6);
   return `ISS-${ts}-${rand}`;
+}
+
+/**
+ * Resolve the issues.jsonl path for a workflow root.
+ * Primary: <root>/issues/issues.jsonl
+ * Fallback: <root>/issues.jsonl (older sandbox layout)
+ */
+export async function resolveIssuesJsonlPath(workflowRoot: string): Promise<string> {
+  const primary = join(workflowRoot, 'issues', 'issues.jsonl');
+  try {
+    await access(primary);
+    return primary;
+  } catch {
+    const fallback = join(workflowRoot, 'issues.jsonl');
+    try {
+      await access(fallback);
+      return fallback;
+    } catch {
+      return primary; // default to primary for writes
+    }
+  }
 }
 
 /** Read all issues from a JSONL file. Returns [] if file does not exist. */

@@ -84,7 +84,8 @@ async function main(): Promise<void> {
   // Execution Scheduler — orchestrates issue execution via agent processes
   // ---------------------------------------------------------------------------
   const { join } = await import('node:path');
-  const jsonlPath = join(workflowRoot, 'issues', 'issues.jsonl');
+  const { resolveIssuesJsonlPath } = await import('./utils/issue-store.js');
+  const jsonlPath = await resolveIssuesJsonlPath(workflowRoot);
   const journal = new ExecutionJournal(workflowRoot);
 
   // Create SelfLearningService before ExecutionScheduler so it can be injected

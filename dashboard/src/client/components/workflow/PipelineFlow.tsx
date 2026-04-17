@@ -11,6 +11,7 @@ interface PipelineFlowProps {
 }
 
 const STATUS_LABELS: Record<PhaseStatus, string> = {
+  not_started: 'Pending',
   pending: 'Pending',
   exploring: 'Explore',
   planning: 'Plan',

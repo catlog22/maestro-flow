@@ -520,7 +520,7 @@ const chainMap = {
   'spec_setup':         [{ cmd: 'spec-setup' }],
   'spec_add':           [{ cmd: 'spec-add', args: '"{description}"' }],
   'spec_load':          [{ cmd: 'spec-load', args: '"{description}"' }],
-  'spec_map':           [{ cmd: 'spec-map' }],
+  'spec_map':           [{ cmd: 'manage-codebase-rebuild' }],
   'memory_capture':     [{ cmd: 'manage-memory-capture', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],
   'issue_discover':     [{ cmd: 'manage-issue-discover', args: '"{description}"' }],
@@ -662,7 +662,7 @@ function resolvePhase(intent_analysis, project_state) {
   const noPhaseCommands = ['manage-status', 'manage-issue', 'manage-issue-discover',
     'manage-issue-analyze', 'manage-issue-plan', 'manage-issue-execute',
     'maestro-init', 'maestro-spec-generate',
-    'maestro-roadmap', 'spec-setup', 'spec-map', 'manage-memory', 'manage-memory-capture', 'manage-learn',
+    'maestro-roadmap', 'spec-setup', 'manage-memory', 'manage-memory-capture', 'manage-learn',
     'manage-codebase-rebuild', 'manage-codebase-refresh', 'maestro-milestone-audit',
     'maestro-milestone-complete', 'maestro-phase-transition', 'maestro-phase-add'];
   if (chain.every(s => noPhaseCommands.includes(s.cmd))) return null;

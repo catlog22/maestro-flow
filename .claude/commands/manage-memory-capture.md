@@ -41,7 +41,7 @@ Follow '~/.maestro/workflows/memory.md' Part B (Memory Capture) completely.
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
 | E001 | error | `.workflow/` not initialized — run Skill({ skill: "maestro-init" }) first | parse_input |
-| E002 | error | Empty note content in tip mode — provide text to save | parse_input |
+| E002 | error | Tip mode removed — use `Skill({ skill: "manage-learn", args: "tip <text>" })` instead | parse_input |
 | W001 | warning | No active workflow session found — compact will capture conversation only | analyze_session |
 | W002 | warning | Plan detection found no explicit plan — using inferred plan | analyze_session |
 </error_codes>

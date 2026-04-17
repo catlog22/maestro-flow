@@ -9,6 +9,7 @@ import PlayIcon from 'lucide-react/dist/esm/icons/play.js';
 // ---------------------------------------------------------------------------
 
 const STATUS_NEXT_COMMAND: Record<string, string> = {
+  not_started: '/maestro-analyze {N}',
   pending: '/maestro-analyze {N}',
   exploring: '/maestro-plan {N}',
   planning: '/maestro-execute {N}',
@@ -71,7 +72,7 @@ function NextActionPanel({ phase }: { phase: PhaseCard | null }) {
             className="inline-block text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] px-[var(--spacing-1-5)] py-px rounded-full mt-px"
             style={{ backgroundColor: `${color}1a`, color }}
           >
-            {phase.status}
+            {phase.status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
           </span>
         </div>
       </div>

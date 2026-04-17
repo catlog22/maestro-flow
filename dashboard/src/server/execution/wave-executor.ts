@@ -114,7 +114,8 @@ function assignWaves(tasks: WaveTask[]): number {
 export class WaveExecutor {
   private readonly sessions = new Map<string, WaveSession>();
   private readonly abortControllers = new Map<string, AbortController>();
-  private readonly issueMcpServer: McpSdkServerConfigWithInstance;
+  private issueMcpServer: McpSdkServerConfigWithInstance | null = null;
+  private issueMcpServerPromise: Promise<McpSdkServerConfigWithInstance>;
 
   constructor(
     private readonly eventBus: DashboardEventBus,
@@ -123,7 +124,14 @@ export class WaveExecutor {
     private readonly executionScheduler?: ExecutionScheduler,
     private readonly journal?: ExecutionJournal,
   ) {
-    this.issueMcpServer = createIssueMcpServer(workDir);
+    this.issueMcpServerPromise = createIssueMcpServer(workDir);
+  }
+
+  private async getIssueMcpServer(): Promise<McpSdkServerConfigWithInstance> {
+    if (!this.issueMcpServer) {
+      this.issueMcpServer = await this.issueMcpServerPromise;
+    }
+    return this.issueMcpServer;
   }
 
   /**
@@ -413,7 +421,7 @@ export class WaveExecutor {
       cwd: this.workDir,
       maxTurns: 6,
       persistSession: false,
-      mcpServers: { 'issue-monitor': this.issueMcpServer },
+      mcpServers: { 'issue-monitor': await this.getIssueMcpServer() },
     };
 
     if (settingsFile) {
@@ -521,7 +529,7 @@ export class WaveExecutor {
         cwd: this.workDir,
         maxTurns: 10,
         persistSession: false,
-        mcpServers: { 'issue-monitor': this.issueMcpServer },
+        mcpServers: { 'issue-monitor': await this.getIssueMcpServer() },
       };
 
       if (settingsFile) {

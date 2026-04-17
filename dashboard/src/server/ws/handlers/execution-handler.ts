@@ -9,7 +9,7 @@ import type { WaveExecutor } from '../../execution/wave-executor.js';
 import type { AgentWsHandler } from './agent-handler.js';
 import type { Issue } from '../../../shared/issue-types.js';
 import { loadDashboardAgentSettings } from '../../config.js';
-import { readIssuesJsonl, writeIssuesJsonl, withIssueWriteLock } from '../../utils/issue-store.js';
+import { readIssuesJsonl, writeIssuesJsonl, withIssueWriteLock, resolveIssuesJsonlPath } from '../../utils/issue-store.js';
 
 // ---------------------------------------------------------------------------
 // ExecutionWsHandler — execute:issue, execute:batch, execute:wave,
@@ -105,8 +105,7 @@ export class ExecutionWsHandler implements WsHandler {
       throw new Error('Missing issueId');
     }
 
-    const { join } = await import('node:path');
-    const jsonlPath = join(this.workflowRoot, 'issues', 'issues.jsonl');
+    const jsonlPath = await resolveIssuesJsonlPath(this.workflowRoot);
     const issues = await readIssuesJsonl(jsonlPath);
     const issue = issues.find((i) => i.id === issueId);
     if (!issue) {
@@ -116,8 +115,7 @@ export class ExecutionWsHandler implements WsHandler {
   }
 
   private async handleIssuePipeline(issueId: string, tool?: string): Promise<void> {
-    const { join } = await import('node:path');
-    const jsonlPath = join(this.workflowRoot, 'issues', 'issues.jsonl');
+    const jsonlPath = await resolveIssuesJsonlPath(this.workflowRoot);
 
     // Read issue and derive chain mode from current state
     const issues = await readIssuesJsonl(jsonlPath);
@@ -169,8 +167,7 @@ export class ExecutionWsHandler implements WsHandler {
     issueId: string,
     buildPrompt: (issue: import('../../../shared/issue-types.js').Issue, agentType: import('../../../shared/agent-types.js').AgentType) => string,
   ): Promise<void> {
-    const { join } = await import('node:path');
-    const jsonlPath = join(this.workflowRoot, 'issues', 'issues.jsonl');
+    const jsonlPath = await resolveIssuesJsonlPath(this.workflowRoot);
     const issues = await readIssuesJsonl(jsonlPath);
     const issue = issues.find((i) => i.id === issueId);
     if (!issue) {

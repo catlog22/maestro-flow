@@ -27,8 +27,8 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
 }
 
 describe('PHASE_STATUSES', () => {
-  it('contains 8 statuses', () => {
-    expect(PHASE_STATUSES).toHaveLength(8);
+  it('contains 9 statuses', () => {
+    expect(PHASE_STATUSES).toHaveLength(9);
   });
 
   it('includes expected statuses', () => {

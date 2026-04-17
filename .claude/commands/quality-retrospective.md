@@ -22,7 +22,7 @@ Post-execution multi-perspective retrospective (复盘) for completed phases. Co
 
 <deferred_reading>
 - @~/.maestro/workflows/issue.md (issues.jsonl schema for auto-creation)
-- @~/.maestro/workflows/memory.md (Part B for note routing via manage-learn tip)
+- @~/.maestro/workflows/learn.md (tip routing via manage-learn tip)
 - @~/.maestro/workflows/verify.md (verification.json schema for quality lens parsing)
 - @~/.maestro/workflows/review.md (review.json schema for quality lens parsing)
 </deferred_reading>

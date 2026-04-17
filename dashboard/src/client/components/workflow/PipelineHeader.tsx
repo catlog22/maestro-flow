@@ -25,6 +25,9 @@ function countByStatus(phases: PhaseCard[], status: PhaseStatus): number {
   if (status === 'verifying') {
     return phases.filter((p) => p.status === 'verifying' || p.status === 'testing').length;
   }
+  if (status === 'pending') {
+    return phases.filter((p) => p.status === 'pending' || p.status === 'not_started').length;
+  }
   return phases.filter((p) => p.status === status).length;
 }
 

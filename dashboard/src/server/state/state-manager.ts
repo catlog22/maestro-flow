@@ -72,7 +72,7 @@ export class StateManager {
   // -------------------------------------------------------------------------
 
   async buildInitialState(): Promise<BoardState> {
-    const project = await readJsonSafe<ProjectState>(
+    const rawProject = await readJsonSafe<Record<string, unknown>>(
       join(this.workflowRoot, 'state.json'),
     );
 
@@ -80,7 +80,7 @@ export class StateManager {
     const scratch = await this.readAllScratch();
 
     this.board = {
-      project: project ?? emptyProject(),
+      project: rawProject ? normalizeProject(rawProject) : emptyProject(),
       phases,
       scratch,
       lastUpdated: new Date().toISOString(),
@@ -122,9 +122,9 @@ export class StateManager {
 
     // state.json — project-level change
     if (rel === 'state.json') {
-      const project = await readJsonSafe<ProjectState>(filePath);
-      if (project) {
-        this.board.project = project;
+      const rawProject = await readJsonSafe<Record<string, unknown>>(filePath);
+      if (rawProject) {
+        this.board.project = normalizeProject(rawProject);
         this.board.lastUpdated = new Date().toISOString();
         this.eventBus.emit(SSE_EVENT_TYPES.PROJECT_UPDATED, this.board.project);
       }
@@ -210,6 +210,7 @@ export class StateManager {
     const phases: PhaseCard[] = [];
     this.phaseDirCache.clear();
 
+    let nextFallback = 1;
     for (const slug of slugs) {
       const dirPath = join(phasesDir, slug);
       const indexPath = join(dirPath, 'index.json');
@@ -217,6 +218,15 @@ export class StateManager {
       if (phase) {
         phases.push(normalizePhase(phase));
         this.phaseDirCache.set(phase.phase, dirPath);
+        if (phase.phase >= nextFallback) nextFallback = phase.phase + 1;
+      } else {
+        // Fallback: synthesize a minimal PhaseCard from directory name + contents
+        const synth = await synthesizePhaseFromDir(slug, dirPath, nextFallback);
+        if (synth) {
+          phases.push(normalizePhase(synth));
+          this.phaseDirCache.set(synth.phase, dirPath);
+          nextFallback = synth.phase + 1;
+        }
       }
     }
 
@@ -264,19 +274,66 @@ async function findPhaseDir(
 }
 
 async function readPhaseTasks(phaseDir: string): Promise<TaskCard[]> {
+  // Primary: read from .task/ subdirectory
   const taskDir = join(phaseDir, '.task');
-  const entries = await safeReaddirFiles(taskDir);
-  const tasks: TaskCard[] = [];
+  let entries = await safeReaddirFiles(taskDir);
+  let basePath = taskDir;
 
+  // Fallback: read TASK-*.json directly from phase directory
+  if (entries.filter((e) => e.startsWith('TASK-')).length === 0) {
+    entries = await safeReaddirFiles(phaseDir);
+    basePath = phaseDir;
+  }
+
+  const tasks: TaskCard[] = [];
   for (const entry of entries) {
     if (!entry.startsWith('TASK-') || !entry.endsWith('.json')) continue;
-    const task = await readJsonSafe<TaskCard>(join(taskDir, entry));
+    const task = await readJsonSafe<TaskCard>(join(basePath, entry));
     if (task) {
       tasks.push(task);
     }
   }
 
   return tasks;
+}
+
+/** Synthesize a minimal PhaseCard from a directory without index.json */
+async function synthesizePhaseFromDir(slug: string, dirPath: string, fallbackNum?: number): Promise<PhaseCard | null> {
+  // Try to extract phase number from slug (e.g. "1", "01-auth")
+  const leadingMatch = slug.match(/^(\d+)/);
+  const phaseNum = leadingMatch ? parseInt(leadingMatch[1], 10) : (fallbackNum ?? 0);
+  if (isNaN(phaseNum) || phaseNum <= 0) return null;
+
+  // Count TASK-*.json files (in .task/ or directly in dir)
+  const taskDirEntries = await safeReaddirFiles(join(dirPath, '.task'));
+  const directEntries = await safeReaddirFiles(dirPath);
+  const taskFiles = taskDirEntries.length > 0
+    ? taskDirEntries.filter((e) => e.startsWith('TASK-') && e.endsWith('.json'))
+    : directEntries.filter((e) => e.startsWith('TASK-') && e.endsWith('.json'));
+  const taskIds = taskFiles.map((f) => f.replace('.json', ''));
+
+  // Try to read plan.json for wave info
+  const plan = await readJsonSafe<Record<string, unknown>>(join(dirPath, 'plan.json'));
+  const planWaves = plan && Array.isArray(plan.waves) ? plan.waves : [];
+
+  return {
+    phase: phaseNum,
+    slug,
+    title: slug.replace(/^(?:\d+|[a-zA-Z]\d+)-?/, '').replace(/[-_]/g, ' ') || `Phase ${phaseNum}`,
+    status: 'pending' as PhaseCard['status'],
+    created_at: '',
+    updated_at: '',
+    goal: '',
+    success_criteria: [],
+    requirements: [],
+    spec_ref: null,
+    plan: { task_ids: taskIds, task_count: taskFiles.length, complexity: null, waves: planWaves },
+    execution: { method: '', started_at: null, completed_at: null, tasks_completed: 0, tasks_total: taskFiles.length, current_wave: 0, commits: [] },
+    verification: { status: 'pending', verified_at: null, must_haves: [], gaps: [] },
+    validation: { status: 'pending', test_coverage: null, gaps: [] },
+    uat: { status: 'pending', test_count: 0, passed: 0, gaps: [] },
+    reflection: { rounds: 0, strategy_adjustments: [] },
+  } as PhaseCard;
 }
 
 async function safeReaddir(dir: string): Promise<string[]> {
@@ -307,6 +364,39 @@ function emptyProject(): ProjectState {
     phases_summary: { total: 0, completed: 0, in_progress: 0, pending: 0 },
     last_updated: new Date().toISOString(),
     accumulated_context: { key_decisions: [], blockers: [], deferred: [] },
+  };
+}
+
+/** Normalize a raw state.json into a valid ProjectState, handling variant schemas */
+function normalizeProject(raw: Record<string, unknown>): ProjectState {
+  const defaults = emptyProject();
+  const ps = (raw.phases_summary ?? {}) as Record<string, unknown>;
+  const ac = (raw.accumulated_context ?? {}) as Record<string, unknown>;
+  return {
+    version: typeof raw.version === 'string' ? raw.version : defaults.version,
+    project_name: typeof raw.project_name === 'string' ? raw.project_name
+      : typeof raw.projectName === 'string' ? raw.projectName
+      : typeof raw.project === 'string' ? raw.project
+      : defaults.project_name,
+    current_milestone: typeof raw.current_milestone === 'string' ? raw.current_milestone : defaults.current_milestone,
+    current_phase: typeof raw.current_phase === 'number' ? raw.current_phase
+      : typeof raw.currentPhase === 'number' ? raw.currentPhase
+      : defaults.current_phase,
+    status: typeof raw.status === 'string' ? raw.status as ProjectState['status'] : defaults.status,
+    phases_summary: {
+      total: typeof ps.total === 'number' ? ps.total : defaults.phases_summary.total,
+      completed: typeof ps.completed === 'number' ? ps.completed : defaults.phases_summary.completed,
+      in_progress: typeof ps.in_progress === 'number' ? ps.in_progress : defaults.phases_summary.in_progress,
+      pending: typeof ps.pending === 'number' ? ps.pending : defaults.phases_summary.pending,
+    },
+    last_updated: typeof raw.last_updated === 'string' ? raw.last_updated
+      : typeof raw.updatedAt === 'string' ? raw.updatedAt
+      : defaults.last_updated,
+    accumulated_context: {
+      key_decisions: Array.isArray(ac.key_decisions) ? ac.key_decisions : defaults.accumulated_context.key_decisions,
+      blockers: Array.isArray(ac.blockers) ? ac.blockers : defaults.accumulated_context.blockers,
+      deferred: Array.isArray(ac.deferred) ? ac.deferred : defaults.accumulated_context.deferred,
+    },
   };
 }
 
