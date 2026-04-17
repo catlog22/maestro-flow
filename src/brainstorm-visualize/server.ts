@@ -21,7 +21,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, normalize } from 'node:path';
-import { emptyPage, indexPage, wrapScreen } from './frame.js';
+import { comparePage, emptyPage, indexPage, wrapScreen } from './frame.js';
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const OWNER_CHECK_MS = 5_000;
@@ -105,6 +105,26 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
       return;
     }
     respond(res, 200, 'text/html; charset=utf-8', wrapScreen(name, body));
+    return;
+  }
+
+  if (url.startsWith('/compare')) {
+    const params = new URL(url, 'http://localhost').searchParams;
+    const files = params.get('files')?.split(',').map((f) => decodeURIComponent(f.trim())).filter(Boolean);
+    if (!files || files.length === 0) {
+      respond(res, 400, 'text/plain; charset=utf-8', 'missing ?files=a.html,b.html');
+      return;
+    }
+    const screens: { name: string; body: string }[] = [];
+    for (const f of files) {
+      const body = readScreen(f);
+      if (body !== null) screens.push({ name: f, body });
+    }
+    if (screens.length === 0) {
+      respond(res, 404, 'text/plain; charset=utf-8', 'none of the requested screens found');
+      return;
+    }
+    respond(res, 200, 'text/html; charset=utf-8', comparePage(screens));
     return;
   }
 

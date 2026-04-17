@@ -22,6 +22,7 @@ Unified brainstorming combining interactive framework generation, multi-role par
 <deferred_reading>
 - [scratch-index.json](~/.maestro/templates/scratch-index.json) — read when operating in scratch mode
 - [index.json](~/.maestro/templates/index.json) — read when operating in phase mode
+- [brainstorm-visualize.md](~/.maestro/workflows/brainstorm-visualize.md) — read when html-prototypes/ produced and user wants to browse them
 </deferred_reading>
 
 <context>
@@ -54,7 +55,7 @@ Auto mode:
 - Project initialized, need spec package → Skill({ skill: "maestro-spec-generate", args: "--from-brainstorm {session_id}" })
 - Project initialized, quick roadmap → Skill({ skill: "maestro-roadmap", args: "--from-brainstorm {session_id}" })
 - Need deeper analysis first → Skill({ skill: "maestro-analyze", args: "{topic}" })
-- `html-prototypes/` produced and user wants interactive A/B/C review → suggest Skill({ skill: "maestro-brainstorm-visualize", args: "--session {session_id}" }) (optional, user-triggered)
+- `html-prototypes/` produced with 2+ files and user wants to browse → load `~/.maestro/workflows/brainstorm-visualize.md` and launch visualizer server (optional, user-triggered)
 
 Single role mode:
 - More roles needed → Skill({ skill: "maestro-brainstorm", args: "{next_role} --session {session_id}" })
