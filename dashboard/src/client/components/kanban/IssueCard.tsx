@@ -162,17 +162,6 @@ export function IssueCard({ issue, selected, onSelect, batchMode, isChecked, onT
             </span>
           )}
 
-          {/* Milestone badge */}
-          {issue.milestone_ref && (
-            <span
-              className="text-[10px] font-medium px-1.5 py-[var(--spacing-0-5)] rounded-full"
-              style={{ backgroundColor: '#B8954020', color: '#B89540' }}
-              title={`Milestone: ${issue.milestone_ref}`}
-            >
-              {issue.milestone_ref}
-            </span>
-          )}
-
           {/* Phase link — navigate to WorkflowPage */}
           {issue.phase_id != null && (
             <Link
@@ -187,16 +176,6 @@ export function IssueCard({ issue, selected, onSelect, batchMode, isChecked, onT
             >
               P-{String(issue.phase_id).padStart(2, '0')}
             </Link>
-          )}
-
-          {/* Source badge */}
-          {issue.source && issue.source !== 'manual' && (
-            <span
-              className="text-[10px] font-medium px-1.5 py-[var(--spacing-0-5)] rounded-full"
-              style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)', border: '1px solid var(--color-border)' }}
-            >
-              {issue.source}
-            </span>
           )}
 
           {/* Execution status indicator */}

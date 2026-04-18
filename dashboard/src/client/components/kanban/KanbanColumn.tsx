@@ -21,7 +21,7 @@ interface KanbanColumnProps {
   composingColumnId?: string | null;
   onStartCompose?: (columnId: string) => void;
   onStopCompose?: () => void;
-  onIssueCreated?: (issue: Issue) => void;
+  onIssueCreated?: () => void;
   batchMode?: boolean;
   selectedIssueIds?: Set<string>;
   onToggleIssueCheck?: (issueId: string) => void;

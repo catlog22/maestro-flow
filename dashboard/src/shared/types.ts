@@ -52,7 +52,7 @@ import type { CoordinateStatusPayload, CoordinateStepPayload, CoordinateAnalysis
 import type { RequirementProgressPayload, RequirementExpandedPayload, RequirementCommittedPayload, RequirementErrorPayload } from './requirement-types.js';
 import type { ScheduledTask } from './schedule-types.js';
 import type { ExtensionInfo } from './extension-types.js';
-import type { CollabMember, CollabActivityEntry, CollabTask } from './collab-types.js';
+import type { CollabMember, CollabActivityEntry } from './collab-types.js';
 
 // ---------------------------------------------------------------------------
 // SSE event types
@@ -101,8 +101,7 @@ export type SSEEventType =
   | 'workspace:switched'
   | 'wiki:invalidated'
   | 'collab:members_updated'
-  | 'collab:activity'
-  | 'collab:tasks_updated';
+  | 'collab:activity';
 
 // ---------------------------------------------------------------------------
 // Core interfaces — derived from fusion-design.md JSON schemas
@@ -129,17 +128,6 @@ export interface ProjectState {
   };
 }
 
-/** Active workflow session (from active session directories) */
-export interface ActiveSession {
-  session_id: string;
-  type: string;
-  status: string;
-  topic: string;
-  phase_ref?: number | null;
-  created_at: string;
-  updated_at: string;
-}
-
 /** Mirrors index.json — one phase in the lifecycle pipeline */
 export interface PhaseCard {
   phase: number;
@@ -152,8 +140,6 @@ export interface PhaseCard {
   success_criteria: string[];
   requirements: string[];
   spec_ref: string | null;
-  /** Active workflow sessions contributing to this phase */
-  active_sessions?: string[];
   plan: {
     task_ids: string[];
     task_count: number;
@@ -270,13 +256,12 @@ export interface BoardState {
   project: ProjectState;
   phases: PhaseCard[];
   scratch: ScratchCard[];
-  activeSessions: ActiveSession[];
   lastUpdated: string;
 }
 
 /** SSE event envelope */
 export interface SSEEvent {
   type: SSEEventType;
-  data: BoardState | PhaseCard | TaskCard | ScratchCard | ProjectState | AgentProcess | NormalizedEntry | ApprovalRequest | AgentStatusPayload | AgentStoppedPayload | AgentTurnCompletedPayload | ExecutionStartedPayload | ExecutionCompletedPayload | ExecutionFailedPayload | SupervisorStatus | CommanderState | Decision | CommanderConfig | AssessMetrics | CoordinateStatusPayload | CoordinateStepPayload | CoordinateAnalysisPayload | CoordinateClarificationPayload | RequirementProgressPayload | RequirementExpandedPayload | RequirementCommittedPayload | RequirementErrorPayload | LearningStats | { taskId: string; taskName: string; taskType: string } | { tasks: ScheduledTask[] } | { extensions: ExtensionInfo[] } | { name: string; error: string } | { workspace: string } | { at: number; path?: string } | CollabMember[] | CollabActivityEntry | CollabTask[] | string | null;
+  data: BoardState | PhaseCard | TaskCard | ScratchCard | ProjectState | AgentProcess | NormalizedEntry | ApprovalRequest | AgentStatusPayload | AgentStoppedPayload | AgentTurnCompletedPayload | ExecutionStartedPayload | ExecutionCompletedPayload | ExecutionFailedPayload | SupervisorStatus | CommanderState | Decision | CommanderConfig | AssessMetrics | CoordinateStatusPayload | CoordinateStepPayload | CoordinateAnalysisPayload | CoordinateClarificationPayload | RequirementProgressPayload | RequirementExpandedPayload | RequirementCommittedPayload | RequirementErrorPayload | LearningStats | { taskId: string; taskName: string; taskType: string } | { tasks: ScheduledTask[] } | { extensions: ExtensionInfo[] } | { name: string; error: string } | { workspace: string } | { at: number; path?: string } | CollabMember[] | CollabActivityEntry | string | null;
   timestamp: string;
 }

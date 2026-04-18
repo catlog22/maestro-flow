@@ -80,7 +80,7 @@ interface KanbanBoardProps {
   composingColumnId?: string | null;
   onStartCompose?: (columnId: string) => void;
   onStopCompose?: () => void;
-  onIssueCreated?: (issue: Issue) => void;
+  onIssueCreated?: () => void;
   showDone?: boolean;
   batchMode?: boolean;
   selectedIssueIds?: Set<string>;

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import type { AgentProcess, AgentProcessStatus, NormalizedEntry, ApprovalRequest, ThoughtData } from '@/shared/agent-types.js';
-import type { EditorGroupNode, EditorGroupLeaf } from '@/client/types/layout-types.js';
 
 const MAX_ENTRIES_PER_PROCESS = 500;
 
@@ -16,34 +15,6 @@ export interface TokenUsageAccumulator {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: find active tab's processId in a tree (used for derived activeProcessId)
-// ---------------------------------------------------------------------------
-
-function findLeafById(node: EditorGroupNode, id: string): EditorGroupLeaf | null {
-  if (node.type === 'leaf') return node.id === id ? node : null;
-  return findLeafById(node.first, id) ?? findLeafById(node.second, id);
-}
-
-/**
- * Derive the active process ID from the LayoutContext editor tree.
- * Reads the focused group's active tab ref (which is the processId for agent tabs).
- *
- * NOTE: This function requires the editor area tree and focused group ID.
- * It is used by `useDerivedActiveProcessId()` hook for backward compatibility.
- */
-export function deriveActiveProcessId(
-  editorArea: EditorGroupNode,
-  focusedGroupId: string,
-): string | null {
-  const leaf = findLeafById(editorArea, focusedGroupId);
-  if (!leaf || !leaf.activeTabId) return null;
-  const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId);
-  if (!activeTab) return null;
-  // For agent tabs, the ref field holds the processId
-  return activeTab.ref || null;
-}
-
-// ---------------------------------------------------------------------------
 // Agent store — global state for agent processes, entries, and approvals
 // ---------------------------------------------------------------------------
 
@@ -51,7 +22,6 @@ export interface AgentStore {
   processes: Record<string, AgentProcess>;
   entries: Record<string, NormalizedEntry[]>;
   pendingApprovals: Record<string, ApprovalRequest>;
-  /** @deprecated Use LayoutContext focusedGroupId + activeTabId instead. Kept for backward compatibility. */
   activeProcessId: string | null;
   processThoughts: Record<string, ThoughtData>;
   processStreaming: Record<string, boolean>;
@@ -63,7 +33,6 @@ export interface AgentStore {
   addEntry: (processId: string, entry: NormalizedEntry) => void;
   setApproval: (approval: ApprovalRequest) => void;
   clearApproval: (approvalId: string) => void;
-  /** @deprecated Use LayoutContext SET_ACTIVE_TAB dispatch instead. Kept for backward compatibility. */
   setActiveProcessId: (processId: string | null) => void;
   setProcessThought: (processId: string, thought: ThoughtData) => void;
   setProcessStreaming: (processId: string, streaming: boolean) => void;
@@ -151,7 +120,6 @@ export const useAgentStore = create<AgentStore>((set) => ({
       return { pendingApprovals: remaining };
     }),
 
-  /** @deprecated Backward-compatible setter. Prefer LayoutContext SET_ACTIVE_TAB dispatch. */
   setActiveProcessId: (processId) => set({ activeProcessId: processId }),
 
   setProcessThought: (processId, thought) =>

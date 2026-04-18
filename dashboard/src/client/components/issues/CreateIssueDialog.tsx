@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import type { Issue, CreateIssueRequest, IssueType, IssuePriority } from '@/shared/issue-types.js';
+import type { CreateIssueRequest, IssueType, IssuePriority } from '@/shared/issue-types.js';
 import { useIssueStore } from '@/client/store/issue-store.js';
 import { cn } from '@/client/lib/utils.js';
 
@@ -13,7 +13,6 @@ interface CreateIssueDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   prefill?: Partial<CreateIssueRequest>;
-  onCreated?: (issue: Issue) => void;
 }
 
 const ISSUE_TYPES: { value: IssueType; label: string }[] = [
@@ -42,7 +41,7 @@ const inputCls = cn(
 
 const labelCls = 'block text-[length:var(--font-size-sm)] font-[var(--font-weight-medium)] text-text-secondary mb-[var(--spacing-1)]';
 
-export function CreateIssueDialog({ open, onOpenChange, prefill, onCreated }: CreateIssueDialogProps) {
+export function CreateIssueDialog({ open, onOpenChange, prefill }: CreateIssueDialogProps) {
   const createIssue = useIssueStore((s) => s.createIssue);
 
   const [title, setTitle] = useState('');
@@ -79,11 +78,10 @@ export function CreateIssueDialog({ open, onOpenChange, prefill, onCreated }: Cr
     if (prefill?.source_entry_id) req.source_entry_id = prefill.source_entry_id;
     if (prefill?.source_process_id) req.source_process_id = prefill.source_process_id;
 
-    const created = await createIssue(req);
+    await createIssue(req);
     setSubmitting(false);
     onOpenChange(false);
-    if (created) onCreated?.(created);
-  }, [title, description, type, priority, prefill, createIssue, onOpenChange, onCreated]);
+  }, [title, description, type, priority, prefill, createIssue, onOpenChange]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

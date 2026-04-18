@@ -63,7 +63,6 @@ export const SSE_EVENT_TYPES: Record<string, SSEEventType> = {
   WIKI_INVALIDATED: 'wiki:invalidated',
   COLLAB_MEMBERS_UPDATED: 'collab:members_updated',
   COLLAB_ACTIVITY: 'collab:activity',
-  COLLAB_TASKS_UPDATED: 'collab:tasks_updated',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -198,7 +197,6 @@ export const WS_EVENT_TYPES: Record<string, WsEventType> = {
   CONNECTED: 'connected',
   COLLAB_MEMBERS_UPDATED: 'collab:members_updated',
   COLLAB_ACTIVITY: 'collab:activity',
-  COLLAB_TASKS_UPDATED: 'collab:tasks_updated',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -221,7 +219,6 @@ export const AGENT_API_ENDPOINTS = {
 export const ISSUE_API_ENDPOINTS = {
   ISSUES: '/api/issues',
   ISSUE: '/api/issues/:id',
-  ISSUE_SUPPLEMENTS: '/api/issues/:id/supplements',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -269,12 +266,6 @@ export const COLLAB_API_ENDPOINTS = {
   STATUS: '/api/collab/status',
   AGGREGATED: '/api/collab/activity/aggregated',
   PREFLIGHT: '/api/collab/preflight',
-  TASKS: '/api/collab/tasks',
-  TASK_DETAIL: '/api/collab/tasks/:id',
-  TASK_ASSIGN: '/api/collab/tasks/:id/assign',
-  TASK_CHECK: '/api/collab/tasks/:id/check',
-  JOIN: '/api/collab/join',
-  WHOAMI: '/api/collab/whoami',
 } as const;
 
 // ---------------------------------------------------------------------------

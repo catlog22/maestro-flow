@@ -10,16 +10,6 @@ export interface FileNode {
   path: string;
   type: 'file' | 'directory';
   children?: FileNode[];
-  /** File size in bytes */
-  size?: number;
-  /** ISO timestamp of last modification */
-  modifiedAt?: string;
-  /** File extension including dot (e.g. '.ts') */
-  extension?: string;
-  /** Whether children have been loaded (lazy loading) */
-  isLoaded?: boolean;
-  /** Whether this node is a symbolic link */
-  isSymlink?: boolean;
 }
 
 // ---------------------------------------------------------------------------

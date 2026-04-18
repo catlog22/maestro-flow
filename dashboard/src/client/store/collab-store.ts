@@ -6,16 +6,13 @@ import type {
   CollabPresence,
   CollabAggregatedActivity,
   CollabPreflightResult,
-  CollabTask,
 } from '@/shared/collab-types.js';
-import { COLLAB_TASK_COLUMNS } from '@/shared/collab-types.js';
-import type { CollabTaskStatus, CollabCheckAction } from '@/shared/collab-types.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type CollabTab = 'overview' | 'tasks' | 'analysis' | 'history';
+type CollabTab = 'overview' | 'analysis' | 'history';
 
 interface CollabStoreState {
   // State
@@ -30,48 +27,29 @@ interface CollabStoreState {
   typeFilter: string;
   memberFilter: string;
 
-  // Task state
-  tasks: CollabTask[];
-  selectedTaskId: string | null;
-  taskStatusFilter: string;
-  taskAssigneeFilter: string;
-  currentUser: CollabMember | null;
-
   // Async fetch actions
   fetchMembers: () => Promise<void>;
   fetchActivity: (limit?: number, since?: string) => Promise<void>;
   fetchPresence: () => Promise<void>;
   fetchAggregated: () => Promise<void>;
   fetchPreflight: () => Promise<CollabPreflightResult | null>;
-  fetchTasks: (status?: string, assignee?: string) => Promise<void>;
-  fetchWhoami: () => Promise<void>;
 
   // Write actions
   initCollab: () => Promise<{ success: boolean; error?: string }>;
   disableCollab: () => Promise<{ success: boolean; error?: string }>;
   addMember: (name: string, email?: string, role?: string) => Promise<{ success: boolean; error?: string }>;
   removeMember: (uid: string) => Promise<{ success: boolean; error?: string }>;
-  createTask: (title: string, description?: string, priority?: string, tags?: string[]) => Promise<{ success: boolean; error?: string; taskId?: string }>;
-  updateTaskStatus: (id: string, status: CollabTaskStatus) => Promise<{ success: boolean; error?: string }>;
-  assignTask: (id: string, assignee: string | null) => Promise<{ success: boolean; error?: string }>;
-  addTaskCheck: (id: string, action: CollabCheckAction, comment: string) => Promise<{ success: boolean; error?: string }>;
-  deleteTask: (id: string) => Promise<{ success: boolean; error?: string }>;
-  joinTeam: () => Promise<{ success: boolean; error?: string }>;
 
   // Setters
   setActiveTab: (tab: CollabTab) => void;
   setStatusFilter: (filter: string) => void;
   setTypeFilter: (filter: string) => void;
   setMemberFilter: (filter: string) => void;
-  setSelectedTaskId: (id: string | null) => void;
-  setTaskStatusFilter: (filter: string) => void;
-  setTaskAssigneeFilter: (filter: string) => void;
 
   // Derived
   filteredMembers: () => CollabMember[];
   filteredActivity: () => CollabActivityEntry[];
   recentActivity: (limit: number) => CollabActivityEntry[];
-  tasksByColumn: () => Map<string, CollabTask[]>;
 
   // Cleanup
   clearAll: () => void;
@@ -92,11 +70,6 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
   statusFilter: 'all',
   typeFilter: 'all',
   memberFilter: 'all',
-  tasks: [],
-  selectedTaskId: null,
-  taskStatusFilter: 'all',
-  taskAssigneeFilter: 'all',
-  currentUser: null,
 
   // -- Async fetch actions ---------------------------------------------------
 
@@ -222,141 +195,6 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
     }
   },
 
-  // -- Task fetch actions ----------------------------------------------------
-
-  fetchTasks: async (status?: string, assignee?: string) => {
-    set({ loading: true, error: null });
-    try {
-      const params = new URLSearchParams();
-      const s = status ?? get().taskStatusFilter;
-      const a = assignee ?? get().taskAssigneeFilter;
-      if (s && s !== 'all') params.set('status', s);
-      if (a && a !== 'all') params.set('assignee', a);
-      const qs = params.toString();
-      const url = qs ? `${COLLAB_API_ENDPOINTS.TASKS}?${qs}` : COLLAB_API_ENDPOINTS.TASKS;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`Failed: ${res.status}`);
-      const data = (await res.json()) as CollabTask[];
-      set({ tasks: data, loading: false });
-    } catch (err) {
-      set({ loading: false, error: String(err) });
-    }
-  },
-
-  fetchWhoami: async () => {
-    try {
-      const res = await fetch(COLLAB_API_ENDPOINTS.WHOAMI);
-      if (!res.ok) return;
-      const data = await res.json();
-      set({ currentUser: data as CollabMember | null });
-    } catch {
-      // Silently fail — non-critical
-    }
-  },
-
-  // -- Task write actions ----------------------------------------------------
-
-  createTask: async (title, description, priority, tags) => {
-    try {
-      const { currentUser } = get();
-      const res = await fetch(COLLAB_API_ENDPOINTS.TASKS, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          description: description || '',
-          priority: priority || 'medium',
-          reporter: currentUser?.uid || '',
-          tags: tags || [],
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
-      await get().fetchTasks();
-      return { success: true, taskId: data.id };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
-  updateTaskStatus: async (id, status) => {
-    try {
-      const url = COLLAB_API_ENDPOINTS.TASK_DETAIL.replace(':id', id);
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
-      await get().fetchTasks();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
-  assignTask: async (id, assignee) => {
-    try {
-      const url = COLLAB_API_ENDPOINTS.TASK_ASSIGN.replace(':id', id);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignee }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
-      await get().fetchTasks();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
-  addTaskCheck: async (id, action, comment) => {
-    try {
-      const { currentUser } = get();
-      const url = COLLAB_API_ENDPOINTS.TASK_CHECK.replace(':id', id);
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, author: currentUser?.uid || '', comment }),
-      });
-      const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
-      await get().fetchTasks();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
-  deleteTask: async (id) => {
-    try {
-      const url = COLLAB_API_ENDPOINTS.TASK_DETAIL.replace(':id', id);
-      const res = await fetch(url, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
-      if (get().selectedTaskId === id) set({ selectedTaskId: null });
-      await get().fetchTasks();
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
-  joinTeam: async () => {
-    try {
-      const res = await fetch(COLLAB_API_ENDPOINTS.JOIN, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
-      await Promise.all([get().fetchMembers(), get().fetchWhoami()]);
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
-  },
-
   // -- Setters ---------------------------------------------------------------
   // Note: SSE event routing is handled centrally by useSSE.ts which calls
   // store actions directly on collab events. No store-level subscribe/unsubscribe needed.
@@ -365,9 +203,6 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
   setStatusFilter: (filter) => set({ statusFilter: filter }),
   setTypeFilter: (filter) => set({ typeFilter: filter }),
   setMemberFilter: (filter) => set({ memberFilter: filter }),
-  setSelectedTaskId: (id) => set({ selectedTaskId: id }),
-  setTaskStatusFilter: (filter) => set({ taskStatusFilter: filter }),
-  setTaskAssigneeFilter: (filter) => set({ taskAssigneeFilter: filter }),
 
   // -- Derived ---------------------------------------------------------------
 
@@ -394,21 +229,6 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
     return activity.slice(-limit);
   },
 
-  tasksByColumn: () => {
-    const { tasks } = get();
-    const map = new Map<string, CollabTask[]>();
-    for (const col of COLLAB_TASK_COLUMNS) {
-      map.set(col.id, []);
-    }
-    // Also add 'closed' column
-    map.set('closed', []);
-    for (const task of tasks) {
-      const col = map.get(task.status);
-      if (col) col.push(task);
-    }
-    return map;
-  },
-
   // -- Cleanup ---------------------------------------------------------------
 
   clearAll: () =>
@@ -423,10 +243,5 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
       statusFilter: 'all',
       typeFilter: 'all',
       memberFilter: 'all',
-      tasks: [],
-      selectedTaskId: null,
-      taskStatusFilter: 'all',
-      taskAssigneeFilter: 'all',
-      currentUser: null,
     }),
 }));

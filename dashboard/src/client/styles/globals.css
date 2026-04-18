@@ -318,7 +318,7 @@
 
   /* Sizing */
   --size-sidebar-width: 240px;
-  --size-topbar-height: 36px;
+  --size-topbar-height: 44px;
   --size-card-min-width: 260px;
   --size-card-max-width: 340px;
   --size-tree-panel-width: 240px;
@@ -327,33 +327,7 @@
   --size-icon-lg: 20px;
   --size-scrollbar-width: 8px;
 
-  /* TopBar density tokens (36px) */
-  --size-topbar-icon-size: 16px;
-  --size-topbar-btn-size: 28px;
-  --size-topbar-h-padding: 12px;
-  --size-topbar-gap: 8px;
-
-  /* ActivityBar */
-  --size-activitybar-width: 48px;
-  --size-activitybar-icon-size: 20px;
-  --size-activitybar-hit-area: 36px;
-
-  /* SideBar width constraints */
-  --size-sidebar-min: 200px;
-  --size-sidebar-soft-min: 220px;
-  --size-sidebar-default: 260px;
-  --size-sidebar-secondary-default: 300px;
-  --size-sidebar-max: 480px;
-
-  /* EditorGroup */
-  --size-editor-min-width: 300px;
-  --size-editor-min-height: 200px;
-
-  /* StatusBar */
-  --size-statusbar-height: 22px;
-  --size-tabbar-height: 35px;
-
-  /* Dock rail layout (legacy, retained for transition) */
+  /* Dock rail layout */
   --size-rail-width: 48px;
   --size-panel-width: 256px;
 
@@ -494,35 +468,10 @@
   --ease-out: var(--ease-out);
   --ease-in-out: var(--ease-in-out);
 
-  /* Dock rail (legacy, retained for transition) */
+  /* Dock rail */
   --size-rail-width: var(--size-rail-width);
   --size-panel-width: var(--size-panel-width);
   --ease-spring: var(--ease-spring);
-
-  /* TopBar density tokens */
-  --size-topbar-height: var(--size-topbar-height);
-  --size-topbar-icon-size: var(--size-topbar-icon-size);
-  --size-topbar-btn-size: var(--size-topbar-btn-size);
-
-  /* ActivityBar tokens */
-  --size-activitybar-width: var(--size-activitybar-width);
-  --size-activitybar-icon-size: var(--size-activitybar-icon-size);
-  --size-activitybar-hit-area: var(--size-activitybar-hit-area);
-
-  /* SideBar tokens */
-  --size-sidebar-min: var(--size-sidebar-min);
-  --size-sidebar-soft-min: var(--size-sidebar-soft-min);
-  --size-sidebar-default: var(--size-sidebar-default);
-  --size-sidebar-secondary-default: var(--size-sidebar-secondary-default);
-  --size-sidebar-max: var(--size-sidebar-max);
-
-  /* EditorGroup tokens */
-  --size-editor-min-width: var(--size-editor-min-width);
-  --size-editor-min-height: var(--size-editor-min-height);
-
-  /* StatusBar + TabBar tokens */
-  --size-statusbar-height: var(--size-statusbar-height);
-  --size-tabbar-height: var(--size-tabbar-height);
 
   /* Status tints */
   --color-tint-completed: var(--color-tint-completed);

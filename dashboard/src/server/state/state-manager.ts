@@ -2,7 +2,6 @@ import { readdir } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
 import type {
-  ActiveSession,
   BoardState,
   PhaseCard,
   TaskCard,
@@ -79,24 +78,11 @@ export class StateManager {
 
     const phases = await this.readAllPhases();
     const scratch = await this.readAllScratch();
-    const activeSessions = await this.readAllActiveSessions();
-
-    // Associate active sessions with phases via phase_ref
-    for (const session of activeSessions) {
-      if (session.phase_ref != null) {
-        const phase = phases.find((p) => p.phase === session.phase_ref);
-        if (phase) {
-          if (!phase.active_sessions) phase.active_sessions = [];
-          phase.active_sessions.push(session.session_id);
-        }
-      }
-    }
 
     this.board = {
       project: rawProject ? normalizeProject(rawProject) : emptyProject(),
       phases,
       scratch,
-      activeSessions,
       lastUpdated: new Date().toISOString(),
     };
 
@@ -180,18 +166,6 @@ export class StateManager {
       return;
     }
 
-    // active/*/workflow-session.json — active session updated
-    const activeSessionMatch = rel.match(/^active\/[^/]+\/workflow-session\.json$/);
-    if (activeSessionMatch) {
-      const session = await readJsonSafe<ActiveSession>(filePath);
-      if (session) {
-        this.upsertActiveSession(normalizeActiveSession(session));
-        this.board.lastUpdated = new Date().toISOString();
-        this.eventBus.emit(SSE_EVENT_TYPES.BOARD_FULL, this.board);
-      }
-      return;
-    }
-
     // collab/members/*.json — member profile updated
     const collabMemberMatch = rel.match(/^collab\/members\/[^/]+\.json$/);
     if (collabMemberMatch) {
@@ -202,13 +176,6 @@ export class StateManager {
     // collab/activity.jsonl — activity log updated
     if (rel === 'collab/activity.jsonl') {
       this.eventBus.emit(SSE_EVENT_TYPES.COLLAB_ACTIVITY, { at: Date.now(), path: filePath });
-      return;
-    }
-
-    // collab/tasks/*.json — task updated
-    const collabTaskMatch = rel.match(/^collab\/tasks\/TASK-[^/]+\.json$/);
-    if (collabTaskMatch) {
-      this.eventBus.emit(SSE_EVENT_TYPES.COLLAB_TASKS_UPDATED, { at: Date.now(), path: filePath });
       return;
     }
   }
@@ -234,25 +201,6 @@ export class StateManager {
       this.board.scratch[idx] = card;
     } else {
       this.board.scratch.push(card);
-    }
-  }
-
-  private upsertActiveSession(session: ActiveSession): void {
-    const idx = this.board.activeSessions.findIndex((s) => s.session_id === session.session_id);
-    if (idx >= 0) {
-      this.board.activeSessions[idx] = session;
-    } else {
-      this.board.activeSessions.push(session);
-    }
-    // Re-associate with phase if phase_ref set
-    if (session.phase_ref != null) {
-      const phase = this.board.phases.find((p) => p.phase === session.phase_ref);
-      if (phase) {
-        if (!phase.active_sessions) phase.active_sessions = [];
-        if (!phase.active_sessions.includes(session.session_id)) {
-          phase.active_sessions.push(session.session_id);
-        }
-      }
     }
   }
 
@@ -288,22 +236,6 @@ export class StateManager {
 
     phases.sort((a, b) => a.phase - b.phase);
     return phases;
-  }
-
-  private async readAllActiveSessions(): Promise<ActiveSession[]> {
-    const activeDir = join(this.workflowRoot, 'active');
-    const slugs = await safeReaddir(activeDir);
-    const sessions: ActiveSession[] = [];
-
-    for (const slug of slugs) {
-      const sessionPath = join(activeDir, slug, 'workflow-session.json');
-      const raw = await readJsonSafe<ActiveSession>(sessionPath);
-      if (raw) {
-        sessions.push(normalizeActiveSession(raw));
-      }
-    }
-
-    return sessions;
   }
 
   private async readAllScratch(): Promise<ScratchCard[]> {
@@ -477,20 +409,7 @@ function emptyBoard(): BoardState {
     project: emptyProject(),
     phases: [],
     scratch: [],
-    activeSessions: [],
     lastUpdated: new Date().toISOString(),
-  };
-}
-
-function normalizeActiveSession(raw: ActiveSession): ActiveSession {
-  return {
-    session_id: raw.session_id ?? '',
-    type: raw.type ?? 'unknown',
-    status: raw.status ?? 'unknown',
-    topic: raw.topic ?? '',
-    phase_ref: raw.phase_ref ?? null,
-    created_at: raw.created_at ?? '',
-    updated_at: raw.updated_at ?? '',
   };
 }
 

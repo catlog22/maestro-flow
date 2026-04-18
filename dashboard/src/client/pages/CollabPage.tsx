@@ -6,24 +6,21 @@ import { CollabMembersList } from '@/client/components/collab/CollabMembersList.
 import { CollabActivityFeed } from '@/client/components/collab/CollabActivityFeed.js';
 import { ConflictHeatmap } from '@/client/components/collab/ConflictHeatmap.js';
 import { CollaborationTimeline } from '@/client/components/collab/CollaborationTimeline.js';
-import { CollabTaskBoard } from '@/client/components/collab/CollabTaskBoard.js';
-import { CollabTaskDetail } from '@/client/components/collab/CollabTaskDetail.js';
 import type { CollabPreflightResult } from '@/shared/collab-types.js';
 
 // ---------------------------------------------------------------------------
 // CollabPage — collaboration hub with setup flow + 3-tab workspace
 // ---------------------------------------------------------------------------
 
-type CollabTab = 'overview' | 'tasks' | 'analysis' | 'history';
+type CollabTab = 'overview' | 'analysis' | 'history';
 
 const TAB_ITEMS = [
   { label: 'Overview', key: 'overview' as const, shortcut: '1' },
-  { label: 'Tasks', key: 'tasks' as const, shortcut: '2' },
-  { label: 'Analysis', key: 'analysis' as const, shortcut: '3' },
-  { label: 'History', key: 'history' as const, shortcut: '4' },
+  { label: 'Analysis', key: 'analysis' as const, shortcut: '2' },
+  { label: 'History', key: 'history' as const, shortcut: '3' },
 ] as const;
 
-const TABS: CollabTab[] = ['overview', 'tasks', 'analysis', 'history'];
+const TABS: CollabTab[] = ['overview', 'analysis', 'history'];
 
 const tabVariants = {
   initial: { opacity: 0, y: 8 },
@@ -36,16 +33,12 @@ export function CollabPage() {
   const loading = useCollabStore((s) => s.loading);
   const error = useCollabStore((s) => s.error);
   const activeTab = useCollabStore((s) => s.activeTab);
-  const selectedTaskId = useCollabStore((s) => s.selectedTaskId);
   const fetchMembers = useCollabStore((s) => s.fetchMembers);
   const fetchActivity = useCollabStore((s) => s.fetchActivity);
   const fetchPresence = useCollabStore((s) => s.fetchPresence);
   const fetchAggregated = useCollabStore((s) => s.fetchAggregated);
   const fetchPreflight = useCollabStore((s) => s.fetchPreflight);
-  const fetchTasks = useCollabStore((s) => s.fetchTasks);
-  const fetchWhoami = useCollabStore((s) => s.fetchWhoami);
   const setActiveTab = useCollabStore((s) => s.setActiveTab);
-  const setSelectedTaskId = useCollabStore((s) => s.setSelectedTaskId);
   const clearAll = useCollabStore((s) => s.clearAll);
 
   const [preflight, setPreflight] = useState<CollabPreflightResult | null>(null);
@@ -76,9 +69,8 @@ export function CollabPage() {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === '1') setActiveTab('overview');
-      else if (e.key === '2') setActiveTab('tasks');
-      else if (e.key === '3') setActiveTab('analysis');
-      else if (e.key === '4') setActiveTab('history');
+      else if (e.key === '2') setActiveTab('analysis');
+      else if (e.key === '3') setActiveTab('history');
     }
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -98,8 +90,6 @@ export function CollabPage() {
         void fetchActivity();
         void fetchPresence();
         void fetchAggregated();
-        void fetchTasks();
-        void fetchWhoami();
       }
     })();
     return () => { cancelled = true; clearAll(); };
@@ -125,8 +115,6 @@ export function CollabPage() {
         void fetchActivity();
         void fetchPresence();
         void fetchAggregated();
-        void fetchTasks();
-        void fetchWhoami();
       }
     }} />;
   }
@@ -164,21 +152,6 @@ export function CollabPage() {
             transition={{ duration: 0.15 }}
           >
             {activeTab === 'overview' && <CollabOverview />}
-            {activeTab === 'tasks' && (
-              <div className="flex h-full overflow-hidden">
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <CollabTaskBoard />
-                </div>
-                {selectedTaskId && (
-                  <div className="w-[380px] shrink-0 border-l border-border bg-bg-primary h-full overflow-hidden">
-                    <CollabTaskDetail
-                      taskId={selectedTaskId}
-                      onClose={() => setSelectedTaskId(null)}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
             {activeTab === 'analysis' && (
               <div className="p-4 h-full overflow-y-auto">
                 <ConflictHeatmap />
@@ -289,19 +262,9 @@ function CollabSetupView({ onRefresh }: { onRefresh: () => void }) {
 function CollabOverview() {
   const members = useCollabStore((s) => s.members);
   const presence = useCollabStore((s) => s.presence);
-  const currentUser = useCollabStore((s) => s.currentUser);
-  const joinTeam = useCollabStore((s) => s.joinTeam);
-  const [joining, setJoining] = useState(false);
 
   const onlineCount = presence.filter((p) => p.status === 'online').length;
   const awayCount = presence.filter((p) => p.status === 'away').length;
-  const isMember = currentUser !== null;
-
-  async function handleJoin() {
-    setJoining(true);
-    await joinTeam();
-    setJoining(false);
-  }
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -324,16 +287,6 @@ function CollabOverview() {
 
         {/* Quick actions */}
         <div className="flex flex-wrap gap-2 mb-4">
-          {!isMember && (
-            <button
-              type="button"
-              onClick={handleJoin}
-              disabled={joining}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md,6px)] text-[11px] font-semibold bg-text-primary text-bg-primary hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {joining ? 'Joining...' : 'Join Team'}
-            </button>
-          )}
           <AddMemberButton />
           <QuickAction
             label="Sync Activity"

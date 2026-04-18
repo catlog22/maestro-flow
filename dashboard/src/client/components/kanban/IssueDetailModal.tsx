@@ -6,7 +6,6 @@ import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
 import { AnalysisSection } from '../issue/AnalysisSection.js';
 import { SolutionSection } from '../issue/SolutionSection.js';
 import { ExecutionResultSection } from '../issue/ExecutionResultSection.js';
-import { SupplementSection } from '../issue/SupplementSection.js';
 
 // ---------------------------------------------------------------------------
 // IssueDetailModal — 3 style variants for viewing an issue (Linear-style)
@@ -218,9 +217,6 @@ function ActionButtons({ issue }: { issue: Issue }) {
 function DetailSections({ issue }: { issue: Issue }) {
   return (
     <>
-      <PropRow label="Supplements">
-        <SupplementSection issue={issue} />
-      </PropRow>
       {issue.analysis && (
         <PropRow label="Analysis">
           <AnalysisSection analysis={issue.analysis} />
@@ -320,28 +316,6 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
                 );
               })()}
             </PropRow>
-
-            {/* Milestone + Source */}
-            {(issue.milestone_ref || issue.source) && (
-              <div className="flex items-center gap-2 flex-wrap">
-                {issue.milestone_ref && (
-                  <span
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: '#B8954020', color: '#B89540' }}
-                  >
-                    {issue.milestone_ref}
-                  </span>
-                )}
-                {issue.source && (
-                  <span
-                    className="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: 'var(--color-bg-secondary)', color: 'var(--color-text-tertiary)', border: '1px solid var(--color-border)' }}
-                  >
-                    {issue.source}
-                  </span>
-                )}
-              </div>
-            )}
 
             {issue.executor && (
               <PropRow label="Executor">
@@ -551,23 +525,6 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
               })()}
             </PropRow>
 
-            {issue.milestone_ref && (
-              <PropRow label="Milestone">
-                <span
-                  className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                  style={{ backgroundColor: '#B8954020', color: '#B89540' }}
-                >
-                  {issue.milestone_ref}
-                </span>
-              </PropRow>
-            )}
-
-            {issue.source && (
-              <PropRow label="Source">
-                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>{issue.source}</span>
-              </PropRow>
-            )}
-
             {issue.executor && (
               <PropRow label="Executor">
                 <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>{issue.executor}</span>
@@ -750,23 +707,6 @@ export function IssueDetailModal({ issue, style, onClose }: Props) {
               );
             })()}
           </PropRow>
-
-          {issue.milestone_ref && (
-            <PropRow label="Milestone">
-              <span
-                className="text-[11px] font-medium px-2.5 py-1 rounded-full"
-                style={{ backgroundColor: '#B8954020', color: '#B89540' }}
-              >
-                {issue.milestone_ref}
-              </span>
-            </PropRow>
-          )}
-
-          {issue.source && (
-            <PropRow label="Source">
-              <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-primary)' }}>{issue.source}</span>
-            </PropRow>
-          )}
 
           {issue.executor && (
             <PropRow label="Executor">

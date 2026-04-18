@@ -9,20 +9,16 @@ import type {
   Issue,
   IssueAnalysis,
   IssueSolution,
-  IssueSupplement,
   CreateIssueRequest,
   UpdateIssueRequest,
   IssueType,
   IssuePriority,
   IssueStatus,
-  IssueSource,
 } from '../../shared/issue-types.js';
 import {
   VALID_ISSUE_TYPES,
   VALID_ISSUE_PRIORITIES,
   VALID_ISSUE_STATUSES,
-  VALID_ISSUE_SOURCES,
-  VALID_SUPPLEMENT_STAGES,
 } from '../../shared/issue-types.js';
 import {
   generateIssueId,
@@ -83,9 +79,8 @@ function normalizeIssue(issue: Issue): Issue {
  * GET    /api/issues/:id          - get a single issue by ID
  * PATCH  /api/issues/:id          - update an existing issue
  * PATCH  /api/issues/:id/analysis - set issue analysis
- * PATCH  /api/issues/:id/solution    - set issue solution plan
- * PATCH  /api/issues/:id/supplements - append a supplement entry
- * DELETE /api/issues/:id             - delete an issue
+ * PATCH  /api/issues/:id/solution - set issue solution plan
+ * DELETE /api/issues/:id          - delete an issue
  */
 export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
   const app = new Hono();
@@ -134,9 +129,6 @@ export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
       if (body.priority !== undefined && !VALID_ISSUE_PRIORITIES.has(body.priority as string)) {
         return c.json({ error: `Invalid "priority": ${String(body.priority)}` }, 400);
       }
-      if (body.source !== undefined && !VALID_ISSUE_SOURCES.has(body.source as string)) {
-        return c.json({ error: `Invalid "source": ${String(body.source)}` }, 400);
-      }
 
       const now = new Date().toISOString();
       const issue: Issue = {
@@ -150,11 +142,7 @@ export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
         updated_at: now,
       };
 
-      // Attach optional fields
-      if (body.source !== undefined) issue.source = body.source as IssueSource;
-      if (body.milestone_ref && typeof body.milestone_ref === 'string') {
-        issue.milestone_ref = body.milestone_ref;
-      }
+      // Attach optional source fields
       if (body.source_entry_id && typeof body.source_entry_id === 'string') {
         issue.source_entry_id = body.source_entry_id;
       }
@@ -186,9 +174,6 @@ export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
       if (body.status !== undefined && !VALID_ISSUE_STATUSES.has(body.status as string)) {
         return c.json({ error: `Invalid "status": ${String(body.status)}` }, 400);
       }
-      if (body.source !== undefined && !VALID_ISSUE_SOURCES.has(body.source as string)) {
-        return c.json({ error: `Invalid "source": ${String(body.source)}` }, 400);
-      }
 
       let updated: Issue | null = null;
 
@@ -203,8 +188,6 @@ export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
         if (body.type !== undefined) patch.type = body.type as IssueType;
         if (body.priority !== undefined) patch.priority = body.priority as IssuePriority;
         if (body.status !== undefined) patch.status = body.status as IssueStatus;
-        if (body.source !== undefined) patch.source = body.source as IssueSource;
-        if (body.milestone_ref !== undefined) patch.milestone_ref = typeof body.milestone_ref === 'string' ? body.milestone_ref : undefined;
         if (body.executor !== undefined) patch.executor = body.executor as UpdateIssueRequest['executor'];
         if (body.promptMode !== undefined) patch.promptMode = body.promptMode as UpdateIssueRequest['promptMode'];
 
@@ -348,56 +331,6 @@ export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
         issues[idx] = {
           ...issues[idx],
           solution,
-          updated_at: new Date().toISOString(),
-        };
-        updated = issues[idx];
-        await writeIssuesJsonl(await getJsonlPath(), issues);
-      });
-
-      if (!updated) {
-        return c.json({ error: `Issue not found: ${id}` }, 404);
-      }
-      return c.json(updated);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: message }, 500);
-    }
-  });
-
-  // PATCH /api/issues/:id/supplements — append a single supplement entry
-  app.patch('/api/issues/:id/supplements', async (c) => {
-    try {
-      const id = c.req.param('id');
-      const body = await c.req.json<Record<string, unknown>>();
-
-      if (!body.content || typeof body.content !== 'string' || !body.content.trim()) {
-        return c.json({ error: 'Missing or invalid "content" field' }, 400);
-      }
-      if (!body.stage || typeof body.stage !== 'string' || !VALID_SUPPLEMENT_STAGES.has(body.stage)) {
-        return c.json({ error: `Invalid "stage": ${String(body.stage)}` }, 400);
-      }
-      if (!body.author || typeof body.author !== 'string' || !body.author.trim()) {
-        return c.json({ error: 'Missing or invalid "author" field' }, 400);
-      }
-
-      const entry: IssueSupplement = {
-        content: (body.content as string).trim(),
-        stage: body.stage as IssueSupplement['stage'],
-        author: (body.author as string).trim(),
-        created_at: new Date().toISOString(),
-      };
-
-      let updated: Issue | null = null;
-
-      await withIssueWriteLock(async () => {
-        const issues = await readIssuesJsonl(await getJsonlPath());
-        const idx = issues.findIndex((i) => i.id === id);
-        if (idx === -1) return;
-
-        const existing = issues[idx].supplements ?? [];
-        issues[idx] = {
-          ...issues[idx],
-          supplements: [...existing, entry],
           updated_at: new Date().toISOString(),
         };
         updated = issues[idx];

@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { I18nProvider } from '@/client/i18n/index.js';
 import { App } from '@/client/App.js';
 import '@/client/styles/globals.css';
-import '@/client/styles/markdown.css';
 
 // ---------------------------------------------------------------------------
 // React 19 entry point

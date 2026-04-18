@@ -259,10 +259,11 @@ function TabButton({
 }
 
 // ---------------------------------------------------------------------------
-// SessionTabBar — VS Code-style flat tab strip
+// GlobalTabBar — always-visible, shows session tabs (non-split) or just
+//                utility buttons (split mode)
 // ---------------------------------------------------------------------------
 
-function SessionTabBar({
+function GlobalTabBar({
   sortedProcesses,
   activeProcessId,
   splitOpen,
@@ -288,150 +289,107 @@ function SessionTabBar({
   onToggleFileTree: () => void;
 }) {
   return (
-    <div
-      className="flex items-center h-[35px] min-h-[35px] shrink-0 border-b select-none"
-      style={{
-        backgroundColor: 'var(--color-bg-secondary)',
-        borderColor: 'var(--color-border)',
-      }}
-    >
-      {/* Scrollable tab strip */}
+    <div className="sticky top-0 z-30 flex justify-center pt-2 pointer-events-none shrink-0">
       <div
-        className="flex items-end h-full overflow-x-auto flex-1 min-w-0"
-        style={{ scrollbarWidth: 'none' }}
-        role="tablist"
-        onWheel={(e) => {
-          if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-            e.currentTarget.scrollLeft += e.deltaY;
-            e.preventDefault();
-          }
+        className="inline-flex items-center gap-[2px] border rounded-[12px] p-[3px] pointer-events-auto"
+        style={{
+          backgroundColor: 'var(--color-bg-card)',
+          borderColor: 'var(--color-border)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+          maxWidth: 'calc(100% - 32px)',
         }}
       >
-        {!splitOpen && sortedProcesses.map((proc) => {
-          const isActive = proc.id === activeProcessId;
-          const dotColor = AGENT_DOT_COLORS[proc.type] ?? 'var(--color-text-tertiary)';
-          const label = AGENT_LABELS[proc.type] ?? proc.type;
-          const asyncDelegate = isAsyncDelegateProcess(proc);
-          const tooltip = `${label}${asyncDelegate ? ' · Async' : ''} · ${STATUS_LABELS[proc.status] ?? proc.status}\n${proc.config.prompt.slice(0, 120)}${proc.config.prompt.length > 120 ? '…' : ''}`;
-
-          return (
-            <div
-              key={proc.id}
-              role="tab"
-              aria-selected={isActive}
-              title={tooltip}
-              onClick={() => onSelectProcess(proc.id)}
-              className="group/tab flex items-center gap-[6px] px-3 h-full cursor-pointer shrink-0 relative transition-colors duration-100"
-              style={{
-                color: isActive ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
-                backgroundColor: isActive ? 'var(--color-bg-primary)' : 'transparent',
-                fontSize: 12,
-                fontWeight: isActive ? 500 : 400,
-                borderRight: '1px solid var(--color-border)',
-                maxWidth: 200,
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)';
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                  (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)';
-                }
-              }}
-            >
-              {/* Bottom accent bar for active tab */}
-              {isActive && (
-                <span
-                  className="absolute bottom-0 left-0 right-0 h-[2px]"
-                  style={{ backgroundColor: 'var(--color-accent-blue)' }}
-                />
-              )}
-              <span className="w-[6px] h-[6px] rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
-              <span className="truncate">{label}</span>
-              {asyncDelegate && (
-                <span
-                  className="px-[3px] py-[1px] rounded text-[8px] font-bold shrink-0"
-                  style={{ backgroundColor: 'var(--color-tint-exploring)', color: 'var(--color-accent-blue)' }}
-                >
-                  A
-                </span>
-              )}
-              {/* Close button */}
+        {/* Session tabs — only in non-split mode */}
+        {!splitOpen && (sortedProcesses.length > 0 || activeProcessId === null) && (
+          <div
+            className="flex items-center gap-[2px] overflow-x-auto"
+            style={{ scrollbarWidth: 'thin', maxWidth: 'min(600px, 60vw)' }}
+            onWheel={(e) => {
+              // Convert vertical scroll to horizontal scroll for the tab list
+              if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.currentTarget.scrollLeft += e.deltaY;
+                e.preventDefault();
+              }
+            }}
+          >
+            {sortedProcesses.map((proc) => (
+              <TabButton
+                key={proc.id}
+                process={proc}
+                isActive={proc.id === activeProcessId}
+                onClick={() => onSelectProcess(proc.id)}
+                onDismiss={() => onDismissProcess(proc.id)}
+              />
+            ))}
+            {/* "New" tab — shown when in new-session mode */}
+            {activeProcessId === null && (
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onDismissProcess(proc.id); }}
-                className="ml-auto w-[16px] h-[16px] rounded flex items-center justify-center opacity-0 group-hover/tab:opacity-100 transition-opacity shrink-0 hover:bg-bg-active"
-                style={{ color: 'var(--color-text-quaternary)' }}
-                aria-label="Close tab"
+                className="flex items-center gap-[6px] px-3 py-[5px] rounded-[9px] border-none text-[11px] font-medium cursor-pointer shrink-0"
+                style={{
+                  backgroundColor: 'var(--color-text-primary)',
+                  color: '#fff',
+                }}
               >
-                <X size={12} strokeWidth={1.5} />
+                <Plus size={10} strokeWidth={2.5} />
+                New
               </button>
-            </div>
-          );
-        })}
-
-        {/* New tab button */}
-        {!splitOpen && (
-          <button
-            type="button"
-            onClick={onNewSession}
-            className="flex items-center justify-center w-[35px] h-full shrink-0 border-none cursor-pointer transition-colors duration-100"
-            style={{ color: 'var(--color-text-tertiary)', backgroundColor: 'transparent' }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-            }}
-            aria-label="New session"
-          >
-            <Plus size={14} strokeWidth={2} />
-          </button>
+            )}
+          </div>
         )}
-      </div>
 
-      {/* Right-side toolbar */}
-      <div className="flex items-center shrink-0 px-1 gap-[2px]">
+        {/* Split toggle — only when 2+ sessions */}
         {sortedProcesses.length > 1 && (
-          <TabBarIconBtn icon={<Columns2 size={14} strokeWidth={1.8} />} isActive={splitOpen} onClick={onToggleSplit} title="Split view" />
+          <>
+            {!splitOpen && sortedProcesses.length > 0 && (
+              <div className="w-px h-4 shrink-0" style={{ backgroundColor: 'var(--color-border-divider)', margin: '0 2px' }} />
+            )}
+            <IconButton
+              icon={<Columns2 size={14} strokeWidth={1.8} />}
+              isActive={splitOpen}
+              onClick={onToggleSplit}
+              label="Toggle split view"
+            />
+          </>
         )}
-        <TabBarIconBtn icon={<FolderTree size={14} strokeWidth={1.8} />} isActive={fileTreeOpen} onClick={onToggleFileTree} title="File tree" />
-        <TabBarIconBtn icon={<Clock size={14} strokeWidth={1.8} />} isActive={historyOpen} onClick={onToggleHistory} title="History" />
+
+        {/* New session */}
+        <button
+          type="button"
+          onClick={onNewSession}
+          className="w-7 h-7 rounded-[8px] border-none bg-transparent flex items-center justify-center cursor-pointer transition-all duration-150 shrink-0"
+          style={{ color: 'var(--color-text-tertiary)' }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)';
+            (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+            (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)';
+          }}
+          aria-label="New session"
+        >
+          <Plus size={14} strokeWidth={2} />
+        </button>
+
+        {/* File tree toggle */}
+        <div className="w-px h-4 shrink-0" style={{ backgroundColor: 'var(--color-border-divider)', margin: '0 2px' }} />
+        <IconButton
+          icon={<FolderTree size={14} strokeWidth={1.8} />}
+          isActive={fileTreeOpen}
+          onClick={onToggleFileTree}
+          label="Toggle file tree"
+        />
+
+        {/* History toggle */}
+        <IconButton
+          icon={<Clock size={14} strokeWidth={1.8} />}
+          isActive={historyOpen}
+          onClick={onToggleHistory}
+          label="Toggle history"
+        />
       </div>
     </div>
-  );
-}
-
-function TabBarIconBtn({ icon, isActive, onClick, title }: { icon: React.ReactNode; isActive: boolean; onClick: () => void; title: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="flex items-center justify-center w-[28px] h-[28px] rounded border-none cursor-pointer transition-colors duration-100"
-      style={{
-        color: isActive ? 'var(--color-accent-blue)' : 'var(--color-text-tertiary)',
-        backgroundColor: isActive ? 'var(--color-tint-exploring)' : 'transparent',
-      }}
-      onMouseEnter={(e) => {
-        if (!isActive) {
-          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)';
-          (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isActive) {
-          (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-          (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)';
-        }
-      }}
-    >
-      {icon}
-    </button>
   );
 }
 
@@ -506,6 +464,49 @@ function PaneTabBar({
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// IconButton — small toggle button for the tab bar
+// ---------------------------------------------------------------------------
+
+function IconButton({
+  icon,
+  isActive,
+  onClick,
+  label,
+}: {
+  icon: React.ReactNode;
+  isActive: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center px-2 py-[5px] rounded-[9px] border-none bg-transparent cursor-pointer transition-all duration-150 shrink-0"
+      style={{
+        color: isActive ? 'var(--color-accent-blue)' : 'var(--color-text-tertiary)',
+        backgroundColor: isActive ? 'var(--color-tint-exploring)' : 'transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) {
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)';
+          (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) {
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+          (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)';
+        }
+      }}
+      aria-label={label}
+    >
+      {icon}
+    </button>
   );
 }
 
@@ -648,45 +649,28 @@ export function ChatPage() {
 
   return (
     <div className="h-full flex min-w-0 overflow-hidden relative">
-      {/* File tree panel */}
+      {/* Collapsible file tree panel */}
       <div
-        className="shrink-0 flex flex-col overflow-hidden border-r"
+        className="shrink-0 flex flex-col overflow-hidden border-r transition-[width] duration-200 ease-[var(--ease-notion)]"
         style={{
-          width: fileTreeOpen ? 220 : 0,
-          borderColor: 'var(--color-border)',
-          transition: 'width 200ms cubic-bezier(0.25, 0.1, 0.25, 1)',
+          width: fileTreeOpen ? 260 : 0,
+          borderColor: fileTreeOpen ? 'var(--color-border)' : 'transparent',
         }}
       >
         {fileTreeOpen && (
-          <>
-            <div className="flex items-center justify-between px-3 h-[35px] min-h-[35px] shrink-0 border-b" style={{ borderColor: 'var(--color-border)' }}>
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-text-quaternary)' }}>Explorer</span>
-              <button
-                type="button"
-                onClick={() => setFileTreeOpen(false)}
-                className="w-[20px] h-[20px] rounded flex items-center justify-center border-none cursor-pointer"
-                style={{ color: 'var(--color-text-quaternary)', backgroundColor: 'transparent' }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                aria-label="Close file tree"
-              >
-                <X size={12} strokeWidth={1.5} />
-              </button>
-            </div>
-            <TreeBrowser
-              tree={workspace.tree}
-              selectedPath={fileViewerPath}
-              onSelectFile={handleSelectFile}
-              loading={workspace.loading}
-            />
-          </>
+          <TreeBrowser
+            tree={workspace.tree}
+            selectedPath={fileViewerPath}
+            onSelectFile={handleSelectFile}
+            loading={workspace.loading}
+          />
         )}
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       {/* Global tab bar — always visible */}
-      <SessionTabBar
+      <GlobalTabBar
         sortedProcesses={sortedProcesses}
         activeProcessId={activeProcessId}
         splitOpen={splitOpen}

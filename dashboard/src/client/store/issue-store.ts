@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Issue, CreateIssueRequest, UpdateIssueRequest, IssueSupplement } from '@/shared/issue-types.js';
+import type { Issue, CreateIssueRequest, UpdateIssueRequest } from '@/shared/issue-types.js';
 import { ISSUE_API_ENDPOINTS } from '@/shared/constants.js';
 
 // ---------------------------------------------------------------------------
@@ -16,7 +16,6 @@ export interface IssueStore {
   createIssue: (req: CreateIssueRequest) => Promise<Issue | null>;
   updateIssue: (id: string, req: UpdateIssueRequest) => Promise<void>;
   deleteIssue: (id: string) => Promise<void>;
-  addSupplement: (issueId: string, content: string, stage: string, author: string) => Promise<void>;
 }
 
 export const useIssueStore = create<IssueStore>((set, get) => ({
@@ -117,39 +116,6 @@ export const useIssueStore = create<IssueStore>((set, get) => ({
       if (!res.ok) {
         throw new Error(`Failed to delete issue: ${res.status}`);
       }
-    } catch (err) {
-      // Rollback on failure
-      set({ issues: prev, error: String(err) });
-    }
-  },
-
-  addSupplement: async (issueId, content, stage, author) => {
-    set({ error: null });
-    const prev = get().issues;
-
-    // Optimistic update
-    const now = new Date().toISOString();
-    const entry: IssueSupplement = { content, stage: stage as IssueSupplement['stage'], author, created_at: now };
-    set((state) => ({
-      issues: state.issues.map((i) =>
-        i.id === issueId
-          ? { ...i, supplements: [...(i.supplements ?? []), entry], updated_at: now }
-          : i,
-      ),
-    }));
-
-    try {
-      const url = ISSUE_API_ENDPOINTS.ISSUES + `/${issueId}/supplements`;
-      const res = await fetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, stage, author }),
-      });
-      if (!res.ok) throw new Error(`Failed to add supplement: ${res.status}`);
-      const updated = (await res.json()) as Issue;
-      set((state) => ({
-        issues: state.issues.map((i) => (i.id === issueId ? updated : i)),
-      }));
     } catch (err) {
       // Rollback on failure
       set({ issues: prev, error: String(err) });

@@ -463,7 +463,7 @@ describe('E2E: Issue Execute — dispatch, batch, cancel, status', () => {
 
       // Step 7: Verify stopped
       statusRes = await app.request('/api/execution/status');
-      status = (await statusRes.json()) as { running: { issueId: string; executor: string }[] };
+      status = (await statusRes.json()) as { running: { issueId: string }[] };
       expect(status.running).toHaveLength(0);
     });
 
