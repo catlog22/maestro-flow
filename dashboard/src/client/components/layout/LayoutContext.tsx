@@ -233,8 +233,29 @@ function layoutReducer(state: LayoutState, action: LayoutAction): LayoutState {
 
     case 'SPLIT_GROUP': {
       const newGroupId = getNextGroupId();
-      const newLeaf = createDefaultLeaf(newGroupId);
-      const updated = splitNode(state.editorArea, action.groupId, action.direction, newLeaf);
+      // Move the active tab from the source group to the new pane
+      const sourceLeaf = findLeafById(state.editorArea, action.groupId);
+      let newLeaf: EditorGroupLeaf;
+      let editorAreaBeforeSplit = state.editorArea;
+      if (sourceLeaf && sourceLeaf.activeTabId) {
+        const activeTab = sourceLeaf.tabs.find(t => t.id === sourceLeaf.activeTabId);
+        if (activeTab) {
+          // Create new leaf with the active tab
+          newLeaf = { type: 'leaf', id: newGroupId, tabs: [activeTab], activeTabId: activeTab.id };
+          // Remove the tab from the source group
+          const remainingTabs = sourceLeaf.tabs.filter(t => t.id !== sourceLeaf.activeTabId);
+          const newActiveId = remainingTabs.length > 0 ? remainingTabs[remainingTabs.length - 1].id : null;
+          editorAreaBeforeSplit = updateLeaf(state.editorArea, action.groupId, {
+            tabs: remainingTabs,
+            activeTabId: newActiveId,
+          });
+        } else {
+          newLeaf = createDefaultLeaf(newGroupId);
+        }
+      } else {
+        newLeaf = createDefaultLeaf(newGroupId);
+      }
+      const updated = splitNode(editorAreaBeforeSplit, action.groupId, action.direction, newLeaf);
       if (!updated) return state;
       return {
         ...state,

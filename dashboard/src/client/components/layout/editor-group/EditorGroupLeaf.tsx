@@ -166,16 +166,6 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
 
   const canSplit = getNodeDepth(state.editorArea, node.id) < MAX_SPLIT_DEPTH;
 
-  // Auto-close non-default empty groups when last tab is CLOSED (not on initial mount)
-  const prevTabCount = useRef(node.tabs.length);
-  useEffect(() => {
-    const wasNonEmpty = prevTabCount.current > 0;
-    prevTabCount.current = node.tabs.length;
-    if (node.tabs.length === 0 && wasNonEmpty && !isDefaultGroup) {
-      dispatch({ type: 'CLOSE_GROUP', groupId: node.id });
-    }
-  }, [node.tabs.length, isDefaultGroup, node.id, dispatch]);
-
   return (
     <div
       className={`flex flex-col h-full overflow-hidden ${
