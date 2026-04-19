@@ -52,10 +52,27 @@ export const useAgentStore = create<AgentStore>((set) => ({
   processTokenUsage: {},
 
   addProcess: (process) =>
-    set((state) => ({
-      processes: { ...state.processes, [process.id]: process },
-      entries: { ...state.entries, [process.id]: state.entries[process.id] ?? [] },
-    })),
+    set((state) => {
+      const existing = state.entries[process.id];
+      if (existing && existing.length > 0) {
+        return { processes: { ...state.processes, [process.id]: process } };
+      }
+      // Synthesize user_message from config.prompt so every session shows what was asked
+      const prompt = process.config?.prompt;
+      const initialEntries: NormalizedEntry[] = prompt
+        ? [{
+            id: `synth-user-${process.id}`,
+            processId: process.id,
+            timestamp: process.startedAt,
+            type: 'user_message',
+            content: prompt,
+          } as NormalizedEntry]
+        : [];
+      return {
+        processes: { ...state.processes, [process.id]: process },
+        entries: { ...state.entries, [process.id]: initialEntries },
+      };
+    }),
 
   removeProcess: (processId) =>
     set((state) => {

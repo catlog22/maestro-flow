@@ -72,7 +72,9 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
     activeProcess != null
       ? activeProcess.interactive === false
       : executor != null && !INTERACTIVE_EXECUTOR_FALLBACK.has(executor);
-  const isDisabled = (externalProcessId !== undefined && !effectiveProcessId)
+  // Disabled when: a specific processId was provided but process is non-interactive,
+  // OR processId is a non-null string that doesn't resolve. null = new conversation (always enabled).
+  const isDisabled = (externalProcessId !== undefined && externalProcessId !== null && !effectiveProcessId)
     || (!isAsyncDelegateSession && isNonInteractive);
 
   // -- IME-safe composition input --
@@ -109,8 +111,8 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
           content: trimmed,
         });
       }
-    } else if (externalProcessId === undefined) {
-      // Only spawn new agents when not in external processId mode
+    } else if (externalProcessId === undefined || externalProcessId === null) {
+      // Spawn new agent when no processId or explicitly null (new conversation)
       sendWsMessage({
         action: 'spawn',
         config: {
@@ -169,7 +171,7 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
     e.target.value = '';
   }, []);
 
-  const showAgentSelector = !effectiveProcessId && externalProcessId === undefined;
+  const showAgentSelector = !effectiveProcessId && (externalProcessId === undefined || externalProcessId === null);
   const currentModel = activeProcess?.type ?? agentType;
 
   return (

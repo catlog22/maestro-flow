@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { SplitSquareHorizontal, Rows } from 'lucide-react';
 import { useLayoutContext, useLayoutSelector } from '@/client/components/layout/LayoutContext.js';
 import { useEditorContent } from './EditorContentContext.js';
@@ -16,7 +16,7 @@ import { FileViewer } from '@/client/pages/chat/FileViewer.js';
 // - TabBar renders tabs for open sessions with drag-and-drop support
 // - Inactive tab content preserved via CSS display:none (not conditional rendering)
 // - Empty leaf renders a welcome view with quick-start cards
-// - Split buttons visible in header (hover-reveal)
+// - Split buttons visible in header row
 // ---------------------------------------------------------------------------
 
 interface EditorGroupLeafProps {
@@ -44,7 +44,7 @@ function TabContentRenderer({ tab }: { tab: TabSession }) {
   switch (tab.type) {
     case 'chat':
     case 'agent':
-      // Empty ref = new conversation (welcome view with input)
+      // Empty ref = new conversation (welcome view with independent input)
       if (!tab.ref) {
         return (
           <div className="flex-1 flex flex-col items-center justify-center h-full">
@@ -57,7 +57,7 @@ function TabContentRenderer({ tab }: { tab: TabSession }) {
                   Select an agent, type a message, and press Enter to begin.
                 </p>
               </div>
-              <ChatInput />
+              <ChatInput processId={null} />
             </div>
           </div>
         );
@@ -72,7 +72,14 @@ function TabContentRenderer({ tab }: { tab: TabSession }) {
         </div>
       );
     case 'file':
-      return <FileViewer filePath={tab.ref} onClose={() => {}} />;
+      if (!tab.ref) {
+        return (
+          <div className="flex items-center justify-center h-full text-[12px]" style={{ color: 'var(--color-text-placeholder)' }}>
+            Open a file from the Explorer sidebar
+          </div>
+        );
+      }
+      return <FileViewer filePath={tab.ref} onClose={() => {}} embedded />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-text-tertiary text-[13px]">
@@ -124,6 +131,8 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
     }
   }, [dispatch, node.id, isFocused]);
 
+  const canSplit = getNodeDepth(state.editorArea, node.id) < MAX_SPLIT_DEPTH;
+
   // -- Keyboard shortcuts: Ctrl+Tab / Ctrl+Shift+Tab / Ctrl+W --
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -164,8 +173,6 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dispatch]);
 
-  const canSplit = getNodeDepth(state.editorArea, node.id) < MAX_SPLIT_DEPTH;
-
   return (
     <div
       className={`flex flex-col h-full overflow-hidden ${
@@ -175,8 +182,7 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
       data-editor-group={node.id}
     >
       {/* Header row: TabBar + split buttons */}
-      <div className="flex items-center shrink-0 h-[32px] border-b border-border bg-bg-secondary">
-        {/* Tab bar */}
+      <div className="flex items-center shrink-0 h-[28px] border-b border-border bg-bg-secondary">
         <div className="flex-1 min-w-0 overflow-hidden">
           <TabBar
             tabs={node.tabs}
@@ -188,24 +194,24 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
           />
         </div>
 
-        {/* Split buttons — only when splittable */}
+        {/* Split buttons */}
         {canSplit && (
           <div className="flex items-center gap-[1px] px-1 shrink-0">
             <button
-              className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
+              className="p-[3px] rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
               onClick={handleSplitHorizontal}
               title="Split Right"
               aria-label="Split right"
             >
-              <SplitSquareHorizontal size={14} />
+              <SplitSquareHorizontal size={13} />
             </button>
             <button
-              className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
+              className="p-[3px] rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
               onClick={handleSplitVertical}
               title="Split Down"
               aria-label="Split down"
             >
-              <Rows size={14} />
+              <Rows size={13} />
             </button>
           </div>
         )}

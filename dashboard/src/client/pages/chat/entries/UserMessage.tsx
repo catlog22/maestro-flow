@@ -3,11 +3,16 @@ import { File, Zap } from 'lucide-react';
 import type { UserMessageEntry } from '@/shared/agent-types.js';
 
 // ---------------------------------------------------------------------------
-// UserMessage -- right-aligned chat bubble for user input
+// UserMessage -- left-aligned message with blue "U" avatar (matches chat.html)
 // ---------------------------------------------------------------------------
 
 const SLASH_RE = /^(\/[a-zA-Z0-9_-]+)\s*/;
 const FILE_REF_RE = /@([\w./\\-]+\.\w+)/g;
+
+function formatMsgTime(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+}
 
 function renderFileRefs(text: string): ReactNode[] | string {
   const parts: ReactNode[] = [];
@@ -43,25 +48,36 @@ export function UserMessage({ entry }: { entry: UserMessageEntry }) {
   const body = match ? entry.content.slice(match[0].length) : entry.content;
 
   return (
-    <div className="flex justify-end" style={{ paddingTop: 6, paddingBottom: 6 }}>
+    <div className="flex gap-[8px]" style={{ paddingTop: 10, paddingBottom: 10 }}>
+      {/* User avatar */}
       <div
-        className="max-w-[75%] px-[14px] py-[10px] text-[13px] leading-[1.6] whitespace-pre-wrap break-words rounded-[14px]"
-        style={{
-          backgroundColor: 'var(--color-tint-exploring)',
-          color: 'var(--color-text-primary)',
-          borderBottomRightRadius: '4px',
-        }}
+        className="shrink-0 w-6 h-6 rounded-[6px] flex items-center justify-center mt-[2px] text-[10px] font-bold"
+        style={{ backgroundColor: 'var(--color-tint-exploring)', color: 'var(--color-accent-blue)' }}
       >
-        {command && (
-          <span
-            className="inline-flex items-center gap-[4px] mr-[6px] px-[7px] py-[1px] rounded-[6px] text-[11px] font-semibold align-middle"
-            style={{ backgroundColor: 'var(--color-tint-planning)', color: 'var(--color-accent-purple)' }}
-          >
-            <Zap size={10} strokeWidth={2} />
-            {command}
+        U
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
+        {/* Header: name + timestamp */}
+        <div className="flex items-center gap-[5px] mb-[2px]">
+          <span className="text-[11px] font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+            You
           </span>
-        )}
-        {renderFileRefs(body)}
+          <span className="text-[9px]" style={{ color: 'var(--color-text-placeholder)' }}>
+            {formatMsgTime(entry.timestamp)}
+          </span>
+        </div>
+        <div className="text-[13px] leading-[1.6] whitespace-pre-wrap break-words" style={{ color: 'var(--color-text-primary)' }}>
+          {command && (
+            <span
+              className="inline-flex items-center gap-[4px] mr-[6px] px-[7px] py-[1px] rounded-[6px] text-[11px] font-semibold align-middle"
+              style={{ backgroundColor: 'var(--color-tint-planning)', color: 'var(--color-accent-purple)' }}
+            >
+              <Zap size={10} strokeWidth={2} />
+              {command}
+            </span>
+          )}
+          {renderFileRefs(body)}
+        </div>
       </div>
     </div>
   );

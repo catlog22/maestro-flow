@@ -68,20 +68,40 @@ function TabIcon({ tab }: { tab: SidebarTab }) {
 // ConversationList — list of agent processes grouped by active/completed
 // ---------------------------------------------------------------------------
 
+/** Collect all leaf nodes from the editor tree */
+function collectLeaves(node: import('@/client/types/layout-types.js').EditorGroupNode): import('@/client/types/layout-types.js').EditorGroupLeaf[] {
+  if (node.type === 'leaf') return [node];
+  return [...collectLeaves(node.first), ...collectLeaves(node.second)];
+}
+
 function ConversationList() {
   const processes = useAgentStore((s) => s.processes);
   const setActiveProcessId = useAgentStore((s) => s.setActiveProcessId);
   const activeProcessId = useAgentStore((s) => s.activeProcessId);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const { state: layoutState, dispatch: layoutDispatch } = useLayoutContext();
 
   // Select a process: set active + lazy-load entries if empty
   const handleSelect = useCallback(async (processId: string) => {
     setActiveProcessId(processId);
 
+    // Directly activate the tab in LayoutContext (don't rely solely on ChatWorkspace sync)
+    const tabId = `chat-${processId}`;
+    const leaves = collectLeaves(layoutState.editorArea);
+    for (const leaf of leaves) {
+      if (leaf.tabs.some((t) => t.id === tabId)) {
+        if (leaf.activeTabId !== tabId) {
+          layoutDispatch({ type: 'SET_ACTIVE_TAB', groupId: leaf.id, tabId });
+        }
+        break;
+      }
+    }
+
     // Use getState() to read latest entries (avoid stale closure)
     const { entries, addEntry } = useAgentStore.getState();
     const existing = entries[processId];
-    if (existing && existing.length > 0) return;
+    // Skip fetch only if we already have content entries (user/assistant messages)
+    if (existing && existing.some((e) => e.type === 'user_message' || e.type === 'assistant_message')) return;
 
     setLoadingId(processId);
     try {
@@ -125,13 +145,41 @@ function ConversationList() {
           }
           merged.push(fixed);
         }
+        // Deduplicate token_usage: keep only the last one (cumulative totals)
+        const tokenUsageIndices: number[] = [];
+        for (let i = 0; i < merged.length; i++) {
+          if (merged[i].type === 'token_usage') tokenUsageIndices.push(i);
+        }
+        if (tokenUsageIndices.length > 1) {
+          // Remove all but the last token_usage
+          for (let i = tokenUsageIndices.length - 2; i >= 0; i--) {
+            merged.splice(tokenUsageIndices[i], 1);
+          }
+        }
+
+        // Synthesize user_message from process config if none exists
+        const hasUserMessage = merged.some((e) => e.type === 'user_message');
+        if (!hasUserMessage) {
+          const proc = useAgentStore.getState().processes[processId];
+          const prompt = proc?.config?.prompt;
+          if (prompt) {
+            const userEntry: NormalizedEntry = {
+              id: `synth-user-${processId}`,
+              processId,
+              timestamp: proc.startedAt,
+              type: 'user_message',
+              content: prompt,
+            } as NormalizedEntry;
+            merged.unshift(userEntry);
+          }
+        }
         for (const entry of merged) {
           addEntry(processId, entry);
         }
       }
     } catch { /* silent */ }
     setLoadingId(null);
-  }, [setActiveProcessId]);
+  }, [setActiveProcessId, layoutState.editorArea, layoutDispatch]);
 
   const { active, completed } = useMemo(() => {
     const all = Object.values(processes);

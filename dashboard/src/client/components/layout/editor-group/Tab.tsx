@@ -82,8 +82,8 @@ export const Tab = memo(function Tab({
       aria-selected={isActive}
       tabIndex={isActive ? 0 : -1}
       className={`
-        group relative flex items-center gap-[var(--spacing-1)] h-[32px]
-        min-w-[120px] max-w-[240px] px-[var(--spacing-2)] cursor-pointer
+        group relative flex items-center gap-[var(--spacing-1)] h-[28px]
+        min-w-[100px] max-w-[240px] px-[var(--spacing-2)] cursor-pointer
         select-none whitespace-nowrap transition-colors duration-100
         text-[length:var(--font-size-xs)]
         ${isActive
