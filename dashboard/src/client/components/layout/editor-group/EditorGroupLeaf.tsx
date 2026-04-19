@@ -1,15 +1,14 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import { SplitSquareHorizontal, Rows, FolderTree, Clock } from 'lucide-react';
+import { SplitSquareHorizontal, Rows } from 'lucide-react';
 import { useLayoutContext, useLayoutSelector } from '@/client/components/layout/LayoutContext.js';
 import { useEditorContent } from './EditorContentContext.js';
 import { TabBar } from './TabBar.js';
 import type { EditorGroupLeaf as EditorGroupLeafType, TabSession } from '@/client/types/layout-types.js';
+import { useAgentStore } from '@/client/store/agent-store.js';
 import { MessageArea } from '@/client/pages/chat/MessageArea.js';
 import { ChatInput } from '@/client/pages/chat/ChatInput.js';
 import { ThoughtDisplay } from '@/client/pages/chat/ThoughtDisplay.js';
 import { FileViewer } from '@/client/pages/chat/FileViewer.js';
-import { WorkspaceModeSwitcher } from '@/client/components/chat/WorkspaceModeSwitcher.js';
-import { useChatSidebar } from '@/client/components/chat/ChatSidebarContext.js';
 
 // ---------------------------------------------------------------------------
 // EditorGroupLeaf -- renders TabBar slot + content area for a leaf node
@@ -40,35 +39,32 @@ function getNodeDepth(
   return -1;
 }
 
-/** Welcome view shown when no tabs are open — includes ChatInput */
-function WelcomeView() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center h-full">
-      <div className="w-full px-4" style={{ maxWidth: 'clamp(360px, calc(100% - 32px), 780px)' }}>
-        <div className="flex flex-col items-center mb-6">
-          <h2
-            className="text-[length:var(--font-size-lg)] font-[var(--font-weight-semibold)] text-text-secondary mb-[var(--spacing-2)]"
-          >
-            Start a new conversation
-          </h2>
-          <p className="text-[length:var(--font-size-sm)] text-text-tertiary">
-            Select an agent, type a message, and press Enter to begin.
-          </p>
-        </div>
-        <ChatInput />
-      </div>
-    </div>
-  );
-}
-
 /** Renders content based on tab type */
 function TabContentRenderer({ tab }: { tab: TabSession }) {
   switch (tab.type) {
     case 'chat':
     case 'agent':
+      // Empty ref = new conversation (welcome view with input)
+      if (!tab.ref) {
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center h-full">
+            <div className="w-full px-4" style={{ maxWidth: 'clamp(360px, calc(100% - 32px), 700px)' }}>
+              <div className="flex flex-col items-center mb-6">
+                <h2 className="text-[16px] font-semibold mb-[6px]" style={{ color: 'var(--color-text-secondary)' }}>
+                  Start a new conversation
+                </h2>
+                <p className="text-[13px]" style={{ color: 'var(--color-text-tertiary)' }}>
+                  Select an agent, type a message, and press Enter to begin.
+                </p>
+              </div>
+              <ChatInput />
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="flex flex-col h-full">
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             <MessageArea processId={tab.ref} />
           </div>
           <ThoughtDisplay processId={tab.ref} />
@@ -79,7 +75,7 @@ function TabContentRenderer({ tab }: { tab: TabSession }) {
       return <FileViewer filePath={tab.ref} onClose={() => {}} />;
     default:
       return (
-        <div className="flex items-center justify-center h-full text-text-tertiary text-[length:var(--font-size-sm)]">
+        <div className="flex items-center justify-center h-full text-text-tertiary text-[13px]">
           {tab.title}
         </div>
       );
@@ -92,7 +88,6 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
   const routedContent = useEditorContent();
   const isFocused = focusedGroupId === node.id;
   const isDefaultGroup = node.id === 'editor-group-1';
-  const { fileTreeOpen, setFileTreeOpen, historyOpen, setHistoryOpen } = useChatSidebar();
 
   // Refs for keyboard shortcut values
   const tabsRef = useRef(node.tabs);
@@ -104,7 +99,12 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
 
   const handleTabClick = useCallback((tabId: string) => {
     dispatch({ type: 'SET_ACTIVE_TAB', groupId: node.id, tabId });
-  }, [dispatch, node.id]);
+    // Sync: update activeProcessId when user clicks a chat tab
+    const tab = node.tabs.find((t) => t.id === tabId);
+    if (tab?.type === 'chat' && tab.ref) {
+      useAgentStore.getState().setActiveProcessId(tab.ref);
+    }
+  }, [dispatch, node.id, node.tabs]);
 
   const handleTabClose = useCallback((tabId: string) => {
     dispatch({ type: 'CLOSE_TAB', groupId: node.id, tabId });
@@ -166,6 +166,13 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
 
   const canSplit = getNodeDepth(state.editorArea, node.id) < MAX_SPLIT_DEPTH;
 
+  // Auto-close non-default empty groups when last tab is closed
+  useEffect(() => {
+    if (node.tabs.length === 0 && !isDefaultGroup) {
+      dispatch({ type: 'CLOSE_GROUP', groupId: node.id });
+    }
+  }, [node.tabs.length, isDefaultGroup, node.id, dispatch]);
+
   return (
     <div
       className={`flex flex-col h-full overflow-hidden ${
@@ -174,16 +181,8 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
       onMouseDown={handleFocus}
       data-editor-group={node.id}
     >
-      {/* Header row: mode switcher + TabBar + action buttons */}
-      <div className="flex items-center shrink-0 h-[35px] border-b border-border bg-bg-secondary">
-        {/* Workspace mode switcher */}
-        <div className="pl-2 shrink-0">
-          <WorkspaceModeSwitcher />
-        </div>
-
-        {/* Divider */}
-        <div className="w-px h-4 mx-1 shrink-0" style={{ backgroundColor: 'var(--color-border-divider)' }} />
-
+      {/* Header row: TabBar + split buttons */}
+      <div className="flex items-center shrink-0 h-[32px] border-b border-border bg-bg-secondary">
         {/* Tab bar */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <TabBar
@@ -196,54 +195,27 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
           />
         </div>
 
-        {/* Action buttons — always visible */}
-        <div className="flex items-center gap-[1px] px-1 shrink-0">
-          {canSplit && (
-            <>
-              <button
-                className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
-                onClick={handleSplitHorizontal}
-                title="Split Right (Ctrl+\\)"
-                aria-label="Split right"
-              >
-                <SplitSquareHorizontal size={14} />
-              </button>
-              <button
-                className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
-                onClick={handleSplitVertical}
-                title="Split Down (Ctrl+K Ctrl+\\)"
-                aria-label="Split down"
-              >
-                <Rows size={14} />
-              </button>
-              <div className="w-px h-4 mx-0.5 shrink-0" style={{ backgroundColor: 'var(--color-border-divider)' }} />
-            </>
-          )}
-          <button
-            className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active transition-colors"
-            onClick={() => setFileTreeOpen(!fileTreeOpen)}
-            title="Toggle file tree"
-            aria-label="Toggle file tree"
-            style={{
-              color: fileTreeOpen ? 'var(--color-accent-blue)' : 'var(--color-text-tertiary)',
-              backgroundColor: fileTreeOpen ? 'var(--color-tint-exploring)' : undefined,
-            }}
-          >
-            <FolderTree size={14} />
-          </button>
-          <button
-            className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active transition-colors"
-            onClick={() => setHistoryOpen(!historyOpen)}
-            title="Toggle history"
-            aria-label="Toggle history"
-            style={{
-              color: historyOpen ? 'var(--color-accent-blue)' : 'var(--color-text-tertiary)',
-              backgroundColor: historyOpen ? 'var(--color-tint-exploring)' : undefined,
-            }}
-          >
-            <Clock size={14} />
-          </button>
-        </div>
+        {/* Split buttons — only when splittable */}
+        {canSplit && (
+          <div className="flex items-center gap-[1px] px-1 shrink-0">
+            <button
+              className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
+              onClick={handleSplitHorizontal}
+              title="Split Right"
+              aria-label="Split right"
+            >
+              <SplitSquareHorizontal size={14} />
+            </button>
+            <button
+              className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-active text-text-tertiary hover:text-text-secondary transition-colors"
+              onClick={handleSplitVertical}
+              title="Split Down"
+              aria-label="Split down"
+            >
+              <Rows size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Content area */}
@@ -255,7 +227,10 @@ export const EditorGroupLeaf = memo(function EditorGroupLeaf({ node }: EditorGro
               {routedContent}
             </div>
           ) : (
-            <WelcomeView />
+            /* Empty pane — click "+" to create a tab */
+            <div className="flex items-center justify-center h-full text-[12px]" style={{ color: 'var(--color-text-placeholder)' }}>
+              Click + to open a new tab
+            </div>
           )
         ) : (
           /* Render all tabs, hide inactive with display:none */

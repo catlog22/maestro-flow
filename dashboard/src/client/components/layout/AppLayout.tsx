@@ -31,6 +31,7 @@ export function AppLayout() {
   const viewSwitcherCtx = useViewSwitcherProvider();
   const location = useLocation();
   const showOrchestrator = location.pathname.startsWith('/kanban');
+  const isChatPage = location.pathname.startsWith('/chat');
 
   // Establish WebSocket connection for real-time updates
   useWebSocket();
@@ -140,9 +141,9 @@ export function AppLayout() {
         </MainContent>
       </div>
 
-      {/* Row 3: status bar + collapsible bottom panel */}
-      <StatusBar />
-      <PanelArea />
+      {/* Row 3: status bar + collapsible bottom panel (hidden on chat page) */}
+      {!isChatPage && <StatusBar />}
+      {!isChatPage && <PanelArea />}
     </div>
     </ViewSwitcherContext>
     </LayoutProvider>

@@ -23,7 +23,7 @@ function renderFileRefs(text: string): ReactNode[] | string {
       <span
         key={match.index}
         className="inline-flex items-center gap-[3px] mx-[2px] px-[6px] py-[1px] rounded-[5px] text-[11px] font-mono align-middle"
-        style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: '#E8DFD5' }}
+        style={{ backgroundColor: 'var(--color-tint-exploring)', color: 'var(--color-accent-blue)' }}
       >
         <File size={10} strokeWidth={2} />
         {filename.split(/[\\/]/).pop()}
@@ -43,13 +43,13 @@ export function UserMessage({ entry }: { entry: UserMessageEntry }) {
   const body = match ? entry.content.slice(match[0].length) : entry.content;
 
   return (
-    <div className="flex justify-end py-[var(--spacing-1-5)]">
+    <div className="flex justify-end" style={{ paddingTop: 6, paddingBottom: 6 }}>
       <div
-        className="max-w-[70%] px-[14px] py-[10px] text-[13px] leading-[1.6] whitespace-pre-wrap break-words"
+        className="max-w-[75%] px-[14px] py-[10px] text-[13px] leading-[1.6] whitespace-pre-wrap break-words rounded-[14px]"
         style={{
-          backgroundColor: '#3D352D',
-          color: '#F0EBE5',
-          borderRadius: '16px 16px 4px 16px',
+          backgroundColor: 'var(--color-tint-exploring)',
+          color: 'var(--color-text-primary)',
+          borderBottomRightRadius: '4px',
         }}
       >
         {command && (

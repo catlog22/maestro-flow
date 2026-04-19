@@ -3,7 +3,7 @@ import { useAgentStore } from '@/client/store/agent-store.js';
 import type { ThinkingEntry } from '@/shared/agent-types.js';
 
 // ---------------------------------------------------------------------------
-// ThinkingBlock -- collapsible block for agent thinking/reasoning content
+// ThinkingBlock -- purple tinted bar with animated dots (chat.html reference)
 // ---------------------------------------------------------------------------
 
 export function ThinkingBlock({ entry }: { entry: ThinkingEntry }) {
@@ -14,10 +14,8 @@ export function ThinkingBlock({ entry }: { entry: ThinkingEntry }) {
   const isPartial = useMemo(() => {
     const idx = entries.findIndex((e) => e.id === entry.id);
     if (idx === -1 || idx === entries.length - 1) return true;
-    // If the next entry exists, thinking is complete
     const nextEntry = entries[idx + 1];
     if (!nextEntry) return true;
-    // Calculate duration from timestamps
     return false;
   }, [entries, entry.id]);
 
@@ -38,29 +36,37 @@ export function ThinkingBlock({ entry }: { entry: ThinkingEntry }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="text-left text-[12px] leading-[1.6] italic py-[4px] cursor-pointer transition-colors"
-        style={{ color: 'var(--color-text-tertiary)', transitionDuration: 'var(--duration-fast)' }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--color-text-secondary)'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)'; }}
+        className="flex items-center gap-[5px] w-full rounded-[6px] cursor-pointer transition-opacity hover:opacity-80"
+        style={{
+          padding: '6px 10px',
+          backgroundColor: 'var(--color-tint-planning)',
+          margin: '3px 0',
+          fontSize: '10px',
+          color: 'var(--color-accent-purple)',
+          fontWeight: 500,
+          border: 'none',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+        }}
       >
-        <span
-          className="not-italic font-semibold text-[10px] uppercase tracking-[0.04em] mr-[6px]"
-          style={{ color: 'var(--color-accent-purple)' }}
-        >
-          Thinking
-        </span>
-        <span style={{ color: 'var(--color-accent-purple)' }}>
-          {entry.content.slice(0, 60)}{entry.content.length > 60 ? '...' : ''}
-        </span>
-        <span
-          className="not-italic text-[10px] font-mono ml-[4px]"
-          style={{ color: 'var(--color-text-placeholder)' }}
-        >
-          {durationLabel.replace('Thought for ', '').replace('Thinking...', '...')}
+        {isPartial && (
+          <span className="flex gap-[2px]">
+            <span className="w-[3px] h-[3px] rounded-full animate-bounce" style={{ backgroundColor: 'var(--color-accent-purple)', animationDelay: '0ms', opacity: 0.7 }} />
+            <span className="w-[3px] h-[3px] rounded-full animate-bounce" style={{ backgroundColor: 'var(--color-accent-purple)', animationDelay: '200ms', opacity: 0.7 }} />
+            <span className="w-[3px] h-[3px] rounded-full animate-bounce" style={{ backgroundColor: 'var(--color-accent-purple)', animationDelay: '400ms', opacity: 0.7 }} />
+          </span>
+        )}
+        <span className="truncate">
+          {isPartial
+            ? (entry.content.slice(0, 60) || 'Thinking...')
+            : durationLabel}
         </span>
       </button>
       {open && (
-        <div className="text-[12px] leading-[1.6] italic mt-[2px] pl-[2px] whitespace-pre-wrap break-words" style={{ color: 'var(--color-text-tertiary)' }}>
+        <div
+          className="text-[11px] leading-[1.6] italic mt-[2px] pl-[10px] whitespace-pre-wrap break-words"
+          style={{ color: 'var(--color-text-tertiary)' }}
+        >
           {entry.content}
         </div>
       )}

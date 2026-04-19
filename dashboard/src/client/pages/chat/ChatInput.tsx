@@ -1,8 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import Paperclip from 'lucide-react/dist/esm/icons/paperclip.js';
-import Image from 'lucide-react/dist/esm/icons/image.js';
 import Zap from 'lucide-react/dist/esm/icons/zap.js';
-import Send from 'lucide-react/dist/esm/icons/send.js';
+import Plus from 'lucide-react/dist/esm/icons/plus.js';
 import { useAgentStore } from '@/client/store/agent-store.js';
 import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
 import { useCompositionInput } from '@/client/hooks/useCompositionInput.js';
@@ -14,10 +12,22 @@ import type { SlashCommand } from '@/client/hooks/useSlashCommandController.js';
 import type { AgentType } from '@/shared/agent-types.js';
 
 // ---------------------------------------------------------------------------
-// ChatInput -- composer with toolbar buttons matching design-chat-v1a
+// ChatInput -- composer with chip + icon agent selector (chat.html reference)
 // ---------------------------------------------------------------------------
 
 const AGENT_TYPES: AgentType[] = ['claude-code', 'codex', 'gemini', 'qwen', 'opencode', 'agent-sdk'];
+
+/** Short labels for agent icon buttons */
+const AGENT_SHORT: Record<AgentType, string> = {
+  'claude-code': 'C',
+  codex: 'Cx',
+  'codex-server': 'Cs',
+  gemini: 'G',
+  'gemini-a2a': 'Ga',
+  qwen: 'Q',
+  opencode: 'O',
+  'agent-sdk': 'S',
+};
 
 const SLASH_COMMANDS: SlashCommand[] = [
   { name: '/maestro-plan', desc: 'Create detailed phase plan', color: 'var(--color-accent-purple)', bg: 'var(--color-tint-planning)' },
@@ -164,13 +174,13 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
 
   return (
     <div
-      className="shrink-0 px-6 pb-[14px] pt-2"
+      className="shrink-0 px-4 pb-[10px] pt-1"
       style={{ backgroundColor: 'var(--color-bg-primary)' }}
     >
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
       <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
-      <div className="max-w-[780px] mx-auto relative">
+      <div className="max-w-[700px] mx-auto relative">
         {/* Slash command menu */}
         {slashController.isOpen && (
           <div
@@ -210,6 +220,53 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
           </div>
         )}
 
+        {/* Agent bar: chip + icon buttons (matching chat.html reference) */}
+        {showAgentSelector && (
+          <div className="flex items-center justify-center gap-[3px] py-[4px]">
+            <div
+              className="flex items-center gap-[4px] px-[10px] py-[3px] rounded-full border text-[10px] font-semibold cursor-pointer transition-all duration-100"
+              style={{
+                borderColor: 'var(--color-accent-orange)',
+                backgroundColor: 'var(--color-tint-verifying)',
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
+              </svg>
+              Maestro
+            </div>
+            <div className="flex gap-[1px] ml-[2px]">
+              {AGENT_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setAgentType(t)}
+                  title={AGENT_LABELS[t]}
+                  className="w-6 h-6 rounded-[4px] border-none flex items-center justify-center cursor-pointer text-[9px] font-bold transition-all duration-100"
+                  style={{
+                    backgroundColor: agentType === t ? 'var(--color-bg-active)' : 'transparent',
+                    color: agentType === t ? 'var(--color-text-primary)' : 'var(--color-text-tertiary)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (agentType !== t) (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (agentType !== t) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <span
+                    className="w-[14px] h-[14px] rounded-[3px] flex items-center justify-center text-[8px] font-bold text-white"
+                    style={{ backgroundColor: AGENT_DOT_COLORS[t] }}
+                  >
+                    {AGENT_SHORT[t]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Composer */}
         <div
           ref={composerRef}
@@ -217,20 +274,19 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
           style={{
             borderColor: 'var(--color-border)',
             backgroundColor: 'var(--color-bg-card)',
-            borderRadius: 'var(--style-composer-radius)',
-            boxShadow: 'var(--style-card-shadow)',
+            borderRadius: '10px',
             transitionDuration: 'var(--duration-normal)',
           }}
           onFocusCapture={(e) => {
             const wrap = e.currentTarget as HTMLElement;
-            wrap.style.borderColor = 'var(--color-accent-orange)';
-            wrap.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06), 0 0 0 3px rgba(200, 134, 58, 0.08)';
+            wrap.style.borderColor = 'var(--color-accent-blue)';
+            wrap.style.boxShadow = '0 0 0 3px rgba(74,144,217,0.08)';
           }}
           onBlurCapture={(e) => {
             if (!e.relatedTarget || !(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) {
               const wrap = e.currentTarget as HTMLElement;
               wrap.style.borderColor = 'var(--color-border)';
-              wrap.style.boxShadow = '0 2px 12px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.02)';
+              wrap.style.boxShadow = 'none';
             }
           }}
         >
@@ -250,29 +306,28 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
                   : 'Send a message, / for commands...'
             }
             rows={isMultiline ? 3 : 1}
-            className={`w-full resize-none border-none leading-[1.5] bg-transparent outline-none disabled:opacity-40 disabled:cursor-not-allowed ${isMultiline ? 'min-h-[72px] max-h-[200px]' : 'min-h-[42px] max-h-[42px]'}`}
-            style={{ color: 'var(--color-text-primary)', fontSize: 'var(--style-composer-textarea-size)', padding: 'var(--style-composer-padding)' }}
+            className={`w-full resize-none border-none leading-[1.5] bg-transparent outline-none disabled:opacity-40 disabled:cursor-not-allowed ${isMultiline ? 'min-h-[72px] max-h-[140px]' : 'min-h-[36px] max-h-[36px]'}`}
+            style={{ color: 'var(--color-text-primary)', fontSize: '13px', padding: '8px 12px', fontFamily: 'inherit' }}
           />
           <div
-            className="flex items-center gap-[2px] px-[6px] py-1"
-            style={{}}
+            className="flex items-center gap-[4px] px-[5px] py-[3px]"
+            style={{ borderTop: '1px solid var(--color-border-divider)' }}
           >
-            {/* File button */}
-            <ToolbarButton
-              tooltip="File"
-              icon={<Paperclip size={15} strokeWidth={1.8} />}
+            {/* Add button */}
+            <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-            />
-            {/* Image button */}
-            <ToolbarButton
-              tooltip="Image"
-              icon={<Image size={15} strokeWidth={1.8} />}
-              onClick={() => imageInputRef.current?.click()}
-            />
+              className="w-[26px] h-[26px] rounded-[5px] border-none bg-transparent flex items-center justify-center cursor-pointer transition-all duration-100"
+              style={{ color: 'var(--color-text-tertiary)' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)'; }}
+            >
+              <Plus size={13} strokeWidth={2} />
+            </button>
+
             {/* Skills button */}
-            <ToolbarButton
-              tooltip="Skills"
-              icon={<Zap size={15} strokeWidth={1.8} />}
+            <button
+              type="button"
               onClick={() => {
                 if (slashController.isOpen) {
                   slashController.setDismissed(true);
@@ -281,9 +336,13 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
                   textareaRef.current?.focus();
                 }
               }}
-            />
-
-            <div className="w-px h-[18px] mx-1" style={{ backgroundColor: 'var(--color-border-divider)' }} />
+              className="px-[7px] py-[2px] rounded-[4px] border-none bg-transparent text-[10px] font-medium cursor-pointer transition-all duration-100"
+              style={{ color: 'var(--color-text-tertiary)', fontFamily: 'inherit' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)'; }}
+            >
+              Skills
+            </button>
 
             {/* Context usage indicator */}
             <ContextUsageIndicator processId={effectiveProcessId} />
@@ -311,103 +370,41 @@ export function ChatInput({ processId: externalProcessId, executor }: ChatInputP
               </div>
             )}
 
-            {/* Agent selector */}
-            <div
-              className="flex items-center gap-[5px] ml-auto px-[10px] py-[3px] cursor-pointer text-[11px] font-medium transition-colors duration-150"
-              style={{
-                border: 'var(--style-btn-secondary-border)',
-                backgroundColor: 'var(--style-btn-secondary-bg)',
-                borderRadius: 'var(--style-btn-secondary-radius)',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              <span
-                className="w-[7px] h-[7px] rounded-full shrink-0"
-                style={{ backgroundColor: AGENT_DOT_COLORS[showAgentSelector ? agentType : currentModel] }}
-              />
-              {showAgentSelector ? (
-                <select
-                  value={agentType}
-                  onChange={(e) => setAgentType(e.target.value as AgentType)}
-                  className="border-none bg-transparent cursor-pointer outline-none appearance-none text-[11px] font-medium"
-                  style={{ color: 'inherit' }}
-                >
-                  {AGENT_TYPES.map((t) => (
-                    <option key={t} value={t}>{AGENT_LABELS[t]}</option>
-                  ))}
-                </select>
-              ) : (
-                <span>{AGENT_LABELS[currentModel] ?? currentModel}</span>
-              )}
-            </div>
+            {/* Current model indicator (when process is active) */}
+            {!showAgentSelector && (
+              <div
+                className="flex items-center gap-[5px] ml-auto px-[7px] py-[2px] text-[10px] font-medium"
+                style={{ color: 'var(--color-text-tertiary)' }}
+              >
+                <span
+                  className="w-[6px] h-[6px] rounded-full shrink-0"
+                  style={{ backgroundColor: AGENT_DOT_COLORS[currentModel] }}
+                />
+                {AGENT_LABELS[currentModel] ?? currentModel}
+              </div>
+            )}
+
+            <div className="flex-1" />
 
             {/* Send button */}
             <button
               type="button"
               onClick={handleSend}
               disabled={!text.trim() || isDisabled}
-              className="shrink-0 w-[34px] h-[30px] rounded-[8px] flex items-center justify-center transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 ml-1 border-none cursor-pointer"
-              style={{ backgroundColor: 'var(--style-send-btn-bg)', color: 'var(--style-send-btn-color)' }}
+              className="shrink-0 w-[28px] h-[28px] rounded-[7px] flex items-center justify-center transition-all disabled:opacity-40 disabled:cursor-not-allowed border-none cursor-pointer"
+              style={{ backgroundColor: 'var(--color-accent-orange)', color: '#fff', transition: 'all 150ms cubic-bezier(0.34,1.56,0.64,1)' }}
+              onMouseEnter={(e) => { if (!isDisabled) (e.currentTarget as HTMLElement).style.transform = 'scale(1.06)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
               aria-label="Send message"
             >
-              <Send size={15} strokeWidth={2} />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
             </button>
           </div>
-        </div>
-        <div
-          className="flex gap-3 mt-[5px] px-[6px] text-[10px]"
-          style={{ color: 'var(--color-text-placeholder)' }}
-        >
-          <span><kbd className="font-mono text-[10px] px-1 border rounded-[3px]" style={{ borderColor: 'var(--color-border-divider)', backgroundColor: 'var(--color-bg-secondary)' }}>Enter</kbd> {isAsyncDelegateSession ? 'queue' : 'send'}</span>
-          <span><kbd className="font-mono text-[10px] px-1 border rounded-[3px]" style={{ borderColor: 'var(--color-border-divider)', backgroundColor: 'var(--color-bg-secondary)' }}>/</kbd> skills</span>
-          <span className="ml-auto">
-            {AGENT_LABELS[showAgentSelector ? agentType : currentModel]}
-            {' \u00b7 '}
-            {isAsyncDelegateSession
-              ? (delegateDelivery === 'after_complete' ? 'after complete' : 'inject')
-              : 'opus-4.6'}
-          </span>
         </div>
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// ToolbarButton — icon button in the composer toolbar
-// ---------------------------------------------------------------------------
-
-function ToolbarButton({
-  tooltip,
-  icon,
-  onClick,
-}: {
-  tooltip: string;
-  icon: React.ReactNode;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group relative w-[30px] h-[30px] rounded-[8px] border-none bg-transparent flex items-center justify-center cursor-pointer transition-all duration-150"
-      style={{ color: 'var(--color-text-tertiary)' }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--style-icon-btn-hover-bg)';
-        (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)';
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-        (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)';
-      }}
-    >
-      {icon}
-      <span
-        className="absolute bottom-[calc(100%+6px)] left-1/2 -translate-x-1/2 px-[7px] py-[2px] rounded-[5px] text-[10px] font-medium text-white whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-[120ms]"
-        style={{ backgroundColor: 'var(--color-text-primary)' }}
-      >
-        {tooltip}
-      </span>
-    </button>
-  );
-}

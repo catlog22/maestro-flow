@@ -4,13 +4,7 @@ import type { TabSession } from '@/client/types/layout-types.js';
 import type { AgentProcessStatus } from '@/shared/agent-types.js';
 
 // ---------------------------------------------------------------------------
-// Tab -- individual tab with 5 visual states, drag initiation, status indicator
-// ---------------------------------------------------------------------------
-// - Visual states: default, hover, active, dragging, drop-target
-// - Active tab visually connects to content area (filled bg + accent bottom border)
-// - Close button visible on hover and on active tab
-// - Process status indicator (dot): running=green, paused=yellow, stopped=gray
-// - HTML5 DragData transfer: { type, tabId, sourceGroupId, processId }
+// Tab -- individual tab with type icon, status subtitle, drag support
 // ---------------------------------------------------------------------------
 
 /** Status dot color mapping */
@@ -21,6 +15,15 @@ const STATUS_DOT_COLORS: Record<string, string> = {
   stopping: 'var(--color-accent-orange)',
   stopped: 'var(--color-text-tertiary)',
   error: 'var(--color-accent-red, #e53935)',
+};
+
+/** Status subtitle labels */
+const STATUS_SUBTITLES: Partial<Record<AgentProcessStatus, string>> = {
+  spawning: 'starting',
+  running: 'running',
+  paused: 'paused',
+  stopping: 'stopping',
+  error: 'error',
 };
 
 export interface TabProps {
@@ -98,16 +101,27 @@ export const Tab = memo(function Tab({
       data-group-id={groupId}
       title={tab.title}
     >
-      {/* Status indicator dot */}
-      {dotColor && (
-        <span
-          className="w-[6px] h-[6px] rounded-full shrink-0"
-          style={{ backgroundColor: dotColor }}
-        />
-      )}
+      {/* Type icon — chat (green) */}
+      <svg
+        className="shrink-0"
+        width="12" height="12" viewBox="0 0 24 24" fill="none" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+        stroke={dotColor ?? 'var(--color-accent-green)'}
+      >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
 
       {/* Tab title with ellipsis truncation */}
       <span className="truncate flex-1 min-w-0">{tab.title}</span>
+
+      {/* Status subtitle */}
+      {processStatus && STATUS_SUBTITLES[processStatus] && (
+        <span
+          className="text-[9px] font-normal shrink-0"
+          style={{ color: isActive ? 'var(--color-text-tertiary)' : 'var(--color-text-placeholder)' }}
+        >
+          &middot; {STATUS_SUBTITLES[processStatus]}
+        </span>
+      )}
 
       {/* Close button -- visible on hover and active */}
       <button

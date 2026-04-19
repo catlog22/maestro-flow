@@ -20,6 +20,8 @@ import type {
 
 /** Factory for creating NormalizedEntry instances with consistent base fields */
 export class EntryNormalizer {
+  private static partialCounter = 0;
+
   private constructor() {
     // Static-only class
   }
@@ -40,7 +42,7 @@ export class EntryNormalizer {
     partial: boolean,
   ): AssistantMessageEntry {
     return {
-      id: randomUUID(),
+      id: partial ? `p-${processId}-${++EntryNormalizer.partialCounter}` : randomUUID(),
       processId,
       timestamp: new Date().toISOString(),
       type: 'assistant_message',

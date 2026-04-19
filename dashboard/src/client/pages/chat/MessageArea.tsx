@@ -19,15 +19,15 @@ const EMPTY_ENTRIES: NormalizedEntry[] = [];
 function AgentLoadingPlaceholder({ agentType }: { agentType?: AgentType }) {
   const cfg = AVATAR_CONFIG[agentType ?? 'claude-code'] ?? AVATAR_CONFIG['claude-code'];
   return (
-    <div className="max-w-[780px] mx-auto px-6">
-      <div className="flex gap-[10px]" style={{ paddingTop: 10, paddingBottom: 10 }}>
+    <div className="max-w-[700px] mx-auto px-4">
+      <div className="flex gap-[8px]" style={{ paddingTop: 10, paddingBottom: 10 }}>
         <div
-          className="relative shrink-0 w-7 h-7 rounded-[8px] flex items-center justify-center mt-[2px] text-[11px] font-bold text-white"
-          style={{ backgroundColor: cfg.color }}
+          className="relative shrink-0 w-6 h-6 rounded-[6px] flex items-center justify-center mt-[2px] text-[10px] font-bold"
+          style={{ backgroundColor: cfg.tint, color: cfg.color }}
         >
           {cfg.label}
           <span
-            className="absolute inset-[-3px] rounded-[10px] pointer-events-none"
+            className="absolute inset-[-3px] rounded-[8px] pointer-events-none"
             style={{
               border: '1.5px solid currentColor',
               color: cfg.color,
@@ -106,12 +106,12 @@ export function MessageArea({ processId }: { processId: string | null }) {
         <div className="flex-1 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <div
-              className="relative w-9 h-9 rounded-[10px] flex items-center justify-center text-[13px] font-bold text-white"
-              style={{ backgroundColor: cfg.color }}
+              className="relative w-8 h-8 rounded-[8px] flex items-center justify-center text-[12px] font-bold"
+              style={{ backgroundColor: cfg.tint, color: cfg.color }}
             >
               {cfg.label}
               <span
-                className="absolute inset-[-3px] rounded-[12px] pointer-events-none"
+                className="absolute inset-[-3px] rounded-[10px] pointer-events-none"
                 style={{
                   border: '1.5px solid currentColor',
                   color: cfg.color,
@@ -168,7 +168,7 @@ export function MessageArea({ processId }: { processId: string | null }) {
               }
             }
             return (
-              <div className="max-w-[780px] mx-auto px-6">
+              <div className="max-w-[700px] mx-auto px-4">
                 <EntryContextMenu entry={entry} onCreateIssue={handleCreateIssue}>
                   <EntryRenderer entry={entry} isGroupContinuation={isGroupContinuation} />
                 </EntryContextMenu>

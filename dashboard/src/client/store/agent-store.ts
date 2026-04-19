@@ -87,11 +87,14 @@ export const useAgentStore = create<AgentStore>((set) => ({
 
         if (entry.partial && last?.type === 'assistant_message' && last.partial) {
           // Merge: accumulate delta into the existing partial entry
+          // Optimized: single slice + mutate instead of spread + slice
           const merged = { ...last, content: last.content + entry.content, id: entry.id };
-          newEntries = [...existing.slice(0, lastIdx), merged];
+          newEntries = existing.slice();
+          newEntries[lastIdx] = merged;
         } else if (!entry.partial && last?.type === 'assistant_message' && last.partial) {
           // Final message replaces accumulated partial
-          newEntries = [...existing.slice(0, lastIdx), entry];
+          newEntries = existing.slice();
+          newEntries[lastIdx] = entry;
         } else {
           newEntries = [...existing, entry];
         }

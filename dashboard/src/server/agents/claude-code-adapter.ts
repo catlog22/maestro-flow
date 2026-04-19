@@ -449,12 +449,14 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     if (!Array.isArray(contentBlocks)) {
       return '';
     }
-    return contentBlocks
-      .filter((block): block is { type: string; text: string } =>
-        block.type === 'text' && typeof block.text === 'string',
-      )
-      .map((block) => block.text)
-      .join('');
+    // Single-pass loop avoids intermediate array allocations from filter().map().join()
+    let result = '';
+    for (const block of contentBlocks) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        result += block.text;
+      }
+    }
+    return result;
   }
 
   private handlePermissionRequest(

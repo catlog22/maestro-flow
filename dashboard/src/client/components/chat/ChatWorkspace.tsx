@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLayoutContext, useLayoutSelector } from '@/client/components/layout/LayoutContext.js';
 import { EditorGroupContainer } from '@/client/components/layout/editor-group/EditorGroupContainer.js';
 import { useAgentStore } from '@/client/store/agent-store.js';
@@ -78,8 +78,15 @@ export function ChatWorkspace() {
   }, [activeProcessEntries, defaultGroupId, dispatch, editorArea]);
 
   // Sync activeProcessId → LayoutContext active tab (one-way)
+  // Only react to activeProcessId changes, NOT editorArea changes
+  // (editorArea changes on every tab click, which would fight user clicks)
+  const prevActiveRef = useRef(activeProcessId);
   useEffect(() => {
-    if (!activeProcessId) return;
+    if (!activeProcessId || activeProcessId === prevActiveRef.current) {
+      prevActiveRef.current = activeProcessId;
+      return;
+    }
+    prevActiveRef.current = activeProcessId;
     const tabId = `chat-${activeProcessId}`;
     const leaf = getFirstLeaf(editorArea);
     const hasTab = leaf.tabs.some((t) => t.id === tabId);

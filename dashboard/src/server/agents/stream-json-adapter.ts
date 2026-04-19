@@ -322,11 +322,11 @@ export class StreamJsonAdapter extends BaseAgentAdapter {
 
     let content = msg.content ?? '';
 
-    // Think tag extraction: strip <think> blocks, emit as separate thinking entries
-    if (content.includes('<think>')) {
+    // Think tag extraction: skip check entirely once already emitted for this process
+    if (!this.thinkingEmitted.has(processId) && content.includes('<think>')) {
       if (content.includes('</think>')) {
         const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
-        if (thinkMatch && !this.thinkingEmitted.has(processId)) {
+        if (thinkMatch) {
           const thought = thinkMatch[1].trim();
           if (thought.length > 0) {
             this.emitEntry(processId, EntryNormalizer.thinking(processId, thought));
@@ -346,18 +346,30 @@ export class StreamJsonAdapter extends BaseAgentAdapter {
       // (each message contains all text so far). Otherwise it's an actual
       // incremental delta (each message is only the new portion).
       const lastText = this.lastCumulativeText.get(processId);
-      if (lastText !== undefined && content.startsWith(lastText)) {
-        // Cumulative: extract only the new portion
-        const delta = content.slice(lastText.length);
-        this.lastCumulativeText.set(processId, content);
-        if (delta.length > 0) {
-          this.emitEntry(
-            processId,
-            EntryNormalizer.assistantMessage(processId, delta, true),
-          );
+      if (lastText !== undefined) {
+        // Length pre-check: early bailout when lengths don't match cumulative pattern
+        if (content.length >= lastText.length && content.startsWith(lastText)) {
+          // Cumulative: extract only the new portion
+          const delta = content.slice(lastText.length);
+          this.lastCumulativeText.set(processId, content);
+          if (delta.length > 0) {
+            this.emitEntry(
+              processId,
+              EntryNormalizer.assistantMessage(processId, delta, true),
+            );
+          }
+        } else {
+          // Actual incremental delta (content doesn't start with previous text)
+          this.lastCumulativeText.set(processId, content);
+          if (content.length > 0) {
+            this.emitEntry(
+              processId,
+              EntryNormalizer.assistantMessage(processId, content, true),
+            );
+          }
         }
       } else {
-        // First message or actual incremental delta
+        // First message in this turn
         this.lastCumulativeText.set(processId, content);
         if (content.length > 0) {
           this.emitEntry(
