@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Maestro Chat</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body { font-family: 'Inter', -apple-system, sans-serif; font-size: 13px; line-height: 1.5; background: #FAF8F5; color: #2D2A26; -webkit-font-smoothing: antialiased; }
+    :root {
+      --bg: #FAF8F5; --bg2: #F3F0EA; --card: #FFFFFF;
+      --hover: rgba(45,42,38,0.04); --active: rgba(45,42,38,0.07);
+      --t1: #2D2A26; --t2: #78756F; --t3: #A09D97; --t4: #D1CEC8;
+      --bdr: #E8E5DE; --bdr2: #ECEAE4;
+      --blue: #4A90D9; --green: #3D9B6F; --orange: #D4832E; --yellow: #C99B2D;
+      --purple: #8B6BBF; --red: #D05454; --gray: #A09D97;
+      --tint-green: #EEF7F2; --tint-yellow: #FDF6E4; --tint-orange: #FDF0E4;
+      --tint-purple: #F3EEF9; --tint-gray: #F2F1EE; --tint-blue: #EBF2FA;
+      --rail-w: 44px; --mono: 'SF Mono','Cascadia Code','Consolas',monospace;
+    }
+    .shell { display: flex; flex-direction: column; height: 100vh; }
+
+    /* ── TopBar (compact 36px) ── */
+    .topbar {
+      display: flex; align-items: center; height: 36px; padding: 0 10px;
+      background: var(--bg2); border-bottom: 1px solid var(--bdr); flex-shrink: 0; z-index: 100; gap: 6px;
+    }
+    .topbar-l { display: flex; align-items: center; gap: 6px; }
+    .topbar-dots { display: flex; gap: 5px; }
+    .topbar-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .brand { font-weight: 700; font-size: 13px; color: var(--t1); }
+    .tb-sel {
+      display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--t2);
+      padding: 2px 6px; border-radius: 5px; cursor: pointer; border: none; background: none;
+      font-family: inherit; transition: all 100ms;
+    }
+    .tb-sel:hover { background: var(--hover); color: var(--t1); }
+    .tb-sel svg { width: 10px; height: 10px; stroke-width: 2; }
+    .topbar-c { flex: 1; }
+    .topbar-r { display: flex; align-items: center; gap: 3px; }
+    .tb-btn {
+      width: 26px; height: 26px; border-radius: 5px; border: none; background: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--t3); transition: all 100ms;
+    }
+    .tb-btn:hover { background: var(--hover); color: var(--t1); }
+    .tb-btn.active { color: var(--t1); background: var(--active); }
+    .tb-btn svg { width: 13px; height: 13px; stroke-width: 1.8; }
+    .tb-sep { width: 1px; height: 14px; background: var(--bdr2); }
+    .pill-sm { font-size: 9px; font-weight: 600; padding: 1px 7px; border-radius: 100px; background: rgba(61,155,111,0.12); color: var(--green); }
+
+    .body-wrap { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Left Rail ── */
+    .rail {
+      width: var(--rail-w); background: var(--bg2); border-right: 1px solid var(--bdr);
+      flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+      padding-top: 4px; gap: 1px; z-index: 50;
+    }
+    .rail-btn {
+      width: 32px; height: 32px; border-radius: 6px; border: none; background: none;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--t3); transition: all 100ms; position: relative;
+    }
+    .rail-btn:hover { background: var(--hover); color: var(--t1); }
+    .rail-btn.active { color: var(--t1); }
+    .rail-btn.active::before {
+      content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+      width: 2px; border-radius: 0 2px 2px 0; background: var(--t1);
+    }
+    .rail-btn svg { width: 16px; height: 16px; stroke-width: 1.8; }
+    .rail-btn .tip {
+      position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%);
+      background: var(--t1); color: #fff; font-size: 10px; font-weight: 500;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 100ms; z-index: 999;
+    }
+    .rail-btn:hover .tip { opacity: 1; }
+    .rail-sep { width: 20px; height: 1px; background: var(--bdr2); margin: 3px 0; }
+    .rail-badge {
+      position: absolute; top: 3px; right: 3px; min-width: 14px; height: 14px;
+      border-radius: 7px; background: var(--orange); border: 2px solid var(--bg2);
+      font-size: 8px; font-weight: 700; color: #fff; display: flex; align-items: center;
+      justify-content: center; padding: 0 2px;
+    }
+    .rail-spacer { flex: 1; }
+
+    /* ── Left Sidebar (multi-view) ── */
+    .sidebar {
+      width: 230px; background: var(--bg2); border-right: 1px solid var(--bdr);
+      flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden;
+      transition: width 180ms ease;
+    }
+    .sidebar.collapsed { width: 0; border-right: none; }
+    .sb-header {
+      display: flex; align-items: center; gap: 0;
+      padding: 0 4px; border-bottom: 1px solid var(--bdr2); height: 32px; flex-shrink: 0;
+    }
+    .sb-tab {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 32px; border: none; background: none;
+      cursor: pointer; color: var(--t3); border-bottom: 2px solid transparent;
+      transition: all 100ms; position: relative;
+    }
+    .sb-tab:hover { color: var(--t1); }
+    .sb-tab.active { color: var(--t1); border-bottom-color: var(--t1); }
+    .sb-tab svg { width: 14px; height: 14px; stroke-width: 1.8; }
+    .sb-tab .sb-tip {
+      position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+      background: var(--t1); color: #fff; font-size: 10px; font-weight: 500;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 100ms; z-index: 99;
+    }
+    .sb-tab:hover .sb-tip { opacity: 1; }
+    .sb-tab-badge {
+      position: absolute; top: 4px; right: 2px; min-width: 12px; height: 12px;
+      border-radius: 6px; background: var(--orange); font-size: 7px; font-weight: 700;
+      color: #fff; display: flex; align-items: center; justify-content: center; padding: 0 2px;
+    }
+    .sb-spacer { flex: 1; }
+    .sb-actions { display: flex; gap: 1px; }
+    .sb-btn {
+      width: 22px; height: 22px; border-radius: 5px; border: none; background: none;
+      cursor: pointer; color: var(--t3); display: flex; align-items: center; justify-content: center;
+      transition: all 100ms;
+    }
+    .sb-btn:hover { background: var(--hover); color: var(--t1); }
+    .sb-btn svg { width: 12px; height: 12px; stroke-width: 2; }
+    .sb-search { padding: 4px 8px; }
+    .sb-search input {
+      width: 100%; padding: 4px 7px 4px 26px; font-size: 11px;
+      border: 1px solid var(--bdr); border-radius: 5px; background: var(--card);
+      color: var(--t1); outline: none; font-family: inherit; transition: border-color 100ms;
+    }
+    .sb-search input::placeholder { color: var(--t4); }
+    .sb-search input:focus { border-color: var(--blue); }
+    .sb-search-wrap { position: relative; }
+    .sb-search-wrap svg {
+      position: absolute; left: 7px; top: 50%; transform: translateY(-50%);
+      width: 11px; height: 11px; color: var(--t4); stroke-width: 2;
+    }
+
+    /* sidebar views (switchable) */
+    .sb-body { flex: 1; overflow: hidden; position: relative; }
+    .sb-view { position: absolute; inset: 0; overflow-y: auto; display: none; padding: 2px 6px 8px; }
+    .sb-view.active { display: block; }
+
+    /* conversation list */
+    .sb-label {
+      font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      color: var(--t3); padding: 6px 6px 2px;
+    }
+    .sb-item {
+      display: flex; align-items: center; gap: 7px; padding: 5px 7px;
+      border-radius: 5px; cursor: pointer; border: none; background: none;
+      width: 100%; text-align: left; transition: all 100ms;
+    }
+    .sb-item:hover { background: var(--hover); }
+    .sb-item.active { background: var(--active); }
+    .sb-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .sb-item-body { flex: 1; min-width: 0; }
+    .sb-item-title { font-size: 11px; font-weight: 500; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sb-item-meta { font-size: 9px; color: var(--t3); }
+
+    /* file tree */
+    .ft-item {
+      display: flex; align-items: center; gap: 5px; padding: 2px 7px;
+      border-radius: 4px; cursor: pointer; border: none; background: none;
+      width: 100%; text-align: left; font-family: inherit; transition: background 80ms;
+    }
+    .ft-item:hover { background: var(--hover); }
+    .ft-item.active { background: var(--active); }
+    .ft-item svg { width: 13px; height: 13px; flex-shrink: 0; stroke-width: 1.8; }
+    .ft-icon-dir { color: var(--yellow); }
+    .ft-icon-ts { color: var(--blue); }
+    .ft-icon-json { color: var(--yellow); }
+    .ft-icon-md { color: var(--purple); }
+    .ft-icon-file { color: var(--t3); }
+    .ft-name { font-size: 11px; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ft-children { padding-left: 14px; }
+    .ft-children.collapsed { display: none; }
+    .ft-toggle { width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ft-toggle svg { width: 9px; height: 9px; color: var(--t4); stroke-width: 2.5; transition: transform 100ms; }
+    .ft-toggle.open svg { transform: rotate(90deg); }
+
+    /* git sidebar */
+    .git-section { padding: 4px 0; }
+    .git-section-title { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--t3); padding: 4px 6px; }
+    .git-row {
+      display: flex; align-items: center; gap: 6px; padding: 3px 7px;
+      border-radius: 4px; font-size: 11px; cursor: pointer; transition: background 80ms;
+    }
+    .git-row:hover { background: var(--hover); }
+    .git-row svg { width: 12px; height: 12px; flex-shrink: 0; stroke-width: 1.8; }
+    .git-file { flex: 1; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .git-badge { font-size: 9px; font-weight: 600; padding: 0 5px; border-radius: 3px; }
+    .git-badge.m { background: rgba(201,155,45,0.15); color: var(--yellow); }
+    .git-badge.a { background: rgba(61,155,111,0.15); color: var(--green); }
+    .git-badge.d { background: rgba(208,84,84,0.15); color: var(--red); }
+    .git-branch { font-size: 11px; color: var(--t1); font-weight: 500; display: flex; align-items: center; gap: 5px; padding: 4px 7px; }
+    .git-branch svg { width: 12px; height: 12px; color: var(--green); }
+
+    /* ── Center (split panes) ── */
+    .center { flex: 1; display: flex; overflow: hidden; min-width: 0; }
+
+    /* splitter */
+    .splitter {
+      width: 5px; cursor: col-resize; flex-shrink: 0; position: relative;
+      background: transparent; z-index: 10;
+    }
+    .splitter::after {
+      content: ''; position: absolute; left: 2px; top: 0; bottom: 0;
+      width: 1px; background: var(--bdr);
+    }
+    .splitter:hover::after, .splitter.dragging::after { width: 3px; left: 1px; background: var(--blue); border-radius: 2px; }
+
+    /* ── Generic View Pane ── */
+    .pane {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 240px;
+      background: var(--bg);
+    }
+    .pane.collapsed { display: none; }
+
+    /* pane tab bar */
+    .pane-tabs {
+      display: flex; align-items: center; height: 32px; padding: 0 6px;
+      border-bottom: 1px solid var(--bdr2); flex-shrink: 0; gap: 0;
+    }
+    .pane-tab {
+      display: flex; align-items: center; gap: 4px; height: 32px;
+      padding: 0 10px; font-size: 11px; font-weight: 500; color: var(--t3);
+      cursor: pointer; border: none; background: none; border-bottom: 2px solid transparent;
+      transition: all 100ms; white-space: nowrap;
+    }
+    .pane-tab:hover { color: var(--t1); }
+    .pane-tab.active { color: var(--t1); font-weight: 600; border-bottom-color: var(--t1); }
+    .pane-tab-dot { width: 5px; height: 5px; border-radius: 50%; }
+    .pane-tab-close {
+      width: 14px; height: 14px; border-radius: 3px; border: none; background: none;
+      cursor: pointer; color: var(--t4); display: none; align-items: center; justify-content: center;
+    }
+    .pane-tab:hover .pane-tab-close { display: flex; }
+    .pane-tab-close:hover { background: var(--hover); color: var(--t1); }
+    .pane-tab-close svg { width: 8px; height: 8px; stroke-width: 3; }
+    .pane-tab-add {
+      width: 22px; height: 22px; border-radius: 4px; border: none; background: none;
+      cursor: pointer; color: var(--t4); display: flex; align-items: center; justify-content: center;
+      transition: all 100ms; margin-left: 2px;
+    }
+    .pane-tab-add:hover { background: var(--hover); color: var(--t1); }
+    .pane-tab-add svg { width: 11px; height: 11px; stroke-width: 2; }
+    .pane-tab-spacer { flex: 1; }
+    .pane-tab-menu {
+      width: 22px; height: 22px; border-radius: 4px; border: none; background: none;
+      cursor: pointer; color: var(--t4); display: flex; align-items: center; justify-content: center;
+    }
+    .pane-tab-menu:hover { background: var(--hover); color: var(--t1); }
+    .pane-tab-menu svg { width: 12px; height: 12px; stroke-width: 2; }
+
+    /* tab type icons */
+    .pane-tab-icon { width: 12px; height: 12px; flex-shrink: 0; stroke-width: 1.8; }
+    .pane-tab-icon.type-chat { color: var(--green); }
+    .pane-tab-icon.type-code { color: var(--blue); }
+    .pane-tab-icon.type-term { color: var(--orange); }
+    /* tab subtitle for chat/term status */
+    .pane-tab-sub { font-size: 9px; color: var(--t4); font-weight: 400; margin-left: 2px; }
+    .pane-tab.active .pane-tab-sub { color: var(--t3); }
+
+    /* pane content container */
+    .pane-body { flex: 1; overflow: hidden; position: relative; }
+    .pane-view { position: absolute; inset: 0; display: none; overflow: hidden; }
+    .pane-view.active { display: flex; flex-direction: column; }
+
+    /* ── Chat view ── */
+    .chat-messages { flex: 1; overflow-y: auto; }
+    .chat-messages-inner {
+      max-width: 700px; width: 100%; margin: 0 auto; padding: 16px 16px 8px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .msg { display: flex; gap: 8px; }
+    .msg-avatar {
+      width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 700;
+    }
+    .msg-avatar.user { background: var(--tint-blue); color: var(--blue); }
+    .msg-avatar.assistant { background: var(--tint-orange); color: var(--orange); }
+    .msg-body { flex: 1; min-width: 0; }
+    .msg-header { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
+    .msg-name { font-size: 11px; font-weight: 600; color: var(--t1); }
+    .msg-time { font-size: 9px; color: var(--t4); }
+    .msg-content { font-size: 13px; color: var(--t1); line-height: 1.6; }
+    .msg-content p { margin-bottom: 4px; }
+    .msg-content p:last-child { margin-bottom: 0; }
+    .msg-content code { font-family: var(--mono); font-size: 12px; background: var(--tint-gray); padding: 1px 4px; border-radius: 3px; }
+    .msg-code {
+      background: var(--t1); color: #E8E5DE; border-radius: 7px;
+      padding: 10px 12px; font-family: var(--mono); font-size: 11px; line-height: 1.5;
+      margin: 4px 0; overflow-x: auto;
+    }
+    .msg-code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 12px; background: rgba(255,255,255,0.06); border-radius: 7px 7px 0 0;
+      margin: -10px -12px 6px; font-size: 10px; color: var(--t4);
+    }
+    .msg-code-copy {
+      font-size: 9px; color: var(--t4); border: none; background: rgba(255,255,255,0.08);
+      padding: 1px 5px; border-radius: 3px; cursor: pointer; font-family: inherit;
+    }
+    .msg-tool {
+      display: flex; align-items: center; gap: 5px; padding: 4px 8px;
+      background: var(--tint-gray); border-radius: 5px; margin: 3px 0; font-size: 10px; color: var(--t2);
+    }
+    .msg-tool svg { width: 11px; height: 11px; color: var(--t3); flex-shrink: 0; }
+    .msg-tool-name { font-weight: 600; color: var(--t1); }
+    .msg-tool-status { margin-left: auto; font-size: 9px; font-weight: 600; }
+    .msg-tool-status.done { color: var(--green); }
+    .msg-tool-status.running { color: var(--yellow); }
+    .msg-thinking {
+      display: flex; align-items: center; gap: 5px; padding: 6px 10px;
+      border-radius: 6px; background: var(--tint-purple); margin: 3px 0;
+      font-size: 10px; color: var(--purple); font-weight: 500;
+    }
+    .msg-thinking .dots { display: flex; gap: 2px; }
+    .msg-thinking .dots span { width: 3px; height: 3px; border-radius: 50%; background: var(--purple); animation: think 1.4s infinite both; }
+    .msg-thinking .dots span:nth-child(2) { animation-delay: 0.2s; }
+    .msg-thinking .dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes think { 0%,80%,100% { opacity:.3; transform:scale(.8) } 40% { opacity:1; transform:scale(1) } }
+
+    /* chat input */
+    .chat-input-area { flex-shrink: 0; padding: 0 12px 10px; }
+    .chat-input-wrap { max-width: 700px; margin: 0 auto; }
+    .agent-bar { display: flex; align-items: center; justify-content: center; gap: 3px; padding: 4px 0 6px; }
+    .agent-chip {
+      display: flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 100px; border: 1px solid var(--bdr);
+      background: var(--card); font-size: 10px; font-weight: 600; color: var(--t1);
+      cursor: pointer; transition: all 100ms;
+    }
+    .agent-chip.active { border-color: var(--orange); background: var(--tint-orange); }
+    .agent-chip svg { width: 12px; height: 12px; }
+    .agent-icons { display: flex; gap: 1px; margin-left: 2px; }
+    .agent-icon {
+      width: 24px; height: 24px; border-radius: 4px; border: none; background: none;
+      cursor: pointer; color: var(--t3); display: flex; align-items: center; justify-content: center;
+    }
+    .agent-icon:hover { background: var(--hover); color: var(--t1); }
+    .agent-icon.active { color: var(--t1); background: var(--active); }
+    .agent-icon svg { width: 13px; height: 13px; }
+    .chat-input-box {
+      border: 1px solid var(--bdr); border-radius: 10px; background: var(--card);
+      transition: border-color 150ms, box-shadow 150ms;
+    }
+    .chat-input-box:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(74,144,217,0.08); }
+    .chat-textarea {
+      width: 100%; min-height: 36px; max-height: 140px; padding: 8px 12px;
+      font-size: 13px; font-family: inherit; color: var(--t1); line-height: 1.5;
+      border: none; background: none; outline: none; resize: none;
+    }
+    .chat-textarea::placeholder { color: var(--t4); }
+    .chat-input-footer {
+      display: flex; align-items: center; gap: 4px; padding: 3px 5px 5px 8px;
+      border-top: 1px solid var(--bdr2);
+    }
+    .ci-btn {
+      width: 26px; height: 26px; border-radius: 5px; border: none; background: none;
+      cursor: pointer; color: var(--t3); display: flex; align-items: center; justify-content: center;
+    }
+    .ci-btn:hover { background: var(--hover); color: var(--t1); }
+    .ci-btn svg { width: 13px; height: 13px; stroke-width: 2; }
+    .ci-opt {
+      padding: 2px 7px; border-radius: 4px; border: none; background: none;
+      font-size: 10px; font-weight: 500; color: var(--t3); cursor: pointer; font-family: inherit;
+    }
+    .ci-opt:hover { background: var(--hover); color: var(--t1); }
+    .ci-spacer { flex: 1; }
+    .ci-send {
+      width: 28px; height: 28px; border-radius: 7px; border: none;
+      background: var(--orange); cursor: pointer; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 150ms cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .ci-send:hover { transform: scale(1.06); background: #C0762A; }
+    .ci-send svg { width: 13px; height: 13px; stroke-width: 2.5; }
+
+    /* ── Code view (in pane) ── */
+    .cv-header {
+      display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+      border-bottom: 1px solid var(--bdr2); font-size: 10px; color: var(--t2); flex-shrink: 0;
+    }
+    .cv-path { font-family: var(--mono); font-size: 10px; color: var(--t2); }
+    .cv-body {
+      font-family: var(--mono); font-size: 12px; line-height: 1.6;
+      padding: 8px 0; color: var(--t1); overflow: auto; flex: 1;
+    }
+    .cv-line { display: flex; padding: 0 12px; }
+    .cv-line:hover { background: var(--hover); }
+    .cv-ln { width: 32px; text-align: right; color: var(--t4); user-select: none; flex-shrink: 0; padding-right: 10px; }
+    .cv-code { flex: 1; white-space: pre; }
+    .cv-kw { color: var(--purple); } .cv-str { color: var(--green); }
+    .cv-fn { color: var(--blue); } .cv-cm { color: var(--t3); font-style: italic; }
+    .cv-num { color: var(--orange); }
+
+    /* ── Terminal view (in pane) ── */
+    .term-view { background: var(--t1); }
+    .term-view .pane-body { background: var(--t1); }
+    .term-header {
+      display: flex; align-items: center; height: 28px; padding: 0 8px;
+      background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .term-tab {
+      padding: 0 8px; height: 28px; font-size: 10px; font-weight: 500;
+      color: rgba(255,255,255,0.4); border: none; background: none; cursor: pointer;
+      border-bottom: 2px solid transparent; font-family: inherit;
+    }
+    .term-tab.active { color: rgba(255,255,255,0.9); border-bottom-color: var(--orange); }
+    .term-body {
+      padding: 8px 12px; font-family: var(--mono); font-size: 11px;
+      color: rgba(255,255,255,0.7); line-height: 1.5; flex: 1; overflow-y: auto;
+    }
+    .term-prompt { color: var(--green); }
+    .term-info { color: var(--blue); }
+    .term-success { color: var(--green); }
+    .term-dim { color: rgba(255,255,255,0.3); }
+
+    /* ── Status bar ── */
+    .statusbar {
+      display: flex; align-items: center; height: 20px; padding: 0 8px;
+      background: var(--bg2); border-top: 1px solid var(--bdr); flex-shrink: 0;
+      font-size: 9px; color: var(--t3); gap: 10px;
+    }
+    .statusbar-item { display: flex; align-items: center; gap: 3px; }
+    .statusbar-item svg { width: 9px; height: 9px; stroke-width: 2; }
+    .statusbar-spacer { flex: 1; }
+    .statusbar-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bdr); border-radius: 3px; }
+    .term-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+  </style>
+</head>
+<body>
+<div class="shell">
+  <!-- TopBar -->
+  <header class="topbar">
+    <div class="topbar-l">
+      <div class="topbar-dots"><span class="topbar-dot" style="background:#F5BF4F"></span><span class="topbar-dot" style="background:#62C554"></span></div>
+      <span class="brand">Maestro</span>
+      <button class="tb-sel" type="button">maestro2 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+      <button class="tb-sel" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg> master</button>
+    </div>
+    <div class="topbar-c"></div>
+    <div class="topbar-r">
+      <span class="pill-sm">Connected</span>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" type="button" title="Single" onclick="setLayout('single')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></button>
+      <button class="tb-btn active" type="button" title="Split" onclick="setLayout('split')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" type="button" title="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+  </header>
+
+  <div class="body-wrap">
+    <!-- Left Rail (app navigation, unchanged) -->
+    <nav class="rail">
+      <button class="rail-btn" type="button" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        <span class="tip">Sidebar</span>
+      </button>
+      <div class="rail-sep"></div>
+      <button class="rail-btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span class="tip">Dashboard</span>
+      </button>
+      <button class="rail-btn active" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="tip">Chat</span>
+      </button>
+      <button class="rail-btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="tip">Workflow</span>
+      </button>
+      <button class="rail-btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="tip">Artifacts</span>
+      </button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        <span class="tip">Terminal</span>
+      </button>
+    </nav>
+
+    <!-- Left Sidebar (tabs in header to switch views) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sb-header">
+        <!-- View switching tabs in header -->
+        <button class="sb-tab active" type="button" onclick="switchSB('chat',this)" title="Conversations">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="sb-tip">Conversations</span>
+        </button>
+        <button class="sb-tab" type="button" onclick="switchSB('files',this)" title="Explorer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="sb-tip">Explorer</span>
+        </button>
+        <button class="sb-tab" type="button" onclick="switchSB('git',this)" title="Git">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+          <span class="sb-tip">Source Control</span>
+          <span class="sb-tab-badge">3</span>
+        </button>
+        <button class="sb-tab" type="button" onclick="switchSB('search',this)" title="Search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span class="sb-tip">Search</span>
+        </button>
+        <div class="sb-spacer"></div>
+        <div class="sb-actions">
+          <button class="sb-btn" type="button" title="New"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        </div>
+      </div>
+      <div class="sb-search">
+        <div class="sb-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Search..." />
+        </div>
+      </div>
+      <div class="sb-body">
+        <!-- Chat list -->
+        <div class="sb-view active" id="sb-chat">
+          <div class="sb-label">Active (3)</div>
+          <button class="sb-item active" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--green)"></span><div class="sb-item-body"><div class="sb-item-title">API endpoint refactoring</div><div class="sb-item-meta">2m ago &middot; gemini</div></div></button>
+          <button class="sb-item" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--yellow)"></span><div class="sb-item-body"><div class="sb-item-title">Auth middleware debugging</div><div class="sb-item-meta">15m ago &middot; claude</div></div></button>
+          <button class="sb-item" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--green)"></span><div class="sb-item-body"><div class="sb-item-title">Database migration plan</div><div class="sb-item-meta">1h ago &middot; gemini</div></div></button>
+          <div class="sb-label" style="padding-top:8px">Completed (4)</div>
+          <button class="sb-item" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--t4)"></span><div class="sb-item-body"><div class="sb-item-title">Setup CI/CD pipeline</div><div class="sb-item-meta">3h ago &middot; codex</div></div></button>
+          <button class="sb-item" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--t4)"></span><div class="sb-item-body"><div class="sb-item-title">Fix product search query</div><div class="sb-item-meta">5h ago &middot; gemini</div></div></button>
+          <button class="sb-item" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--t4)"></span><div class="sb-item-body"><div class="sb-item-title">React component patterns</div><div class="sb-item-meta">Yesterday &middot; claude</div></div></button>
+          <button class="sb-item" type="button" onclick="selectConv(this)"><span class="sb-dot" style="background:var(--t4)"></span><div class="sb-item-body"><div class="sb-item-title">Prisma schema design</div><div class="sb-item-meta">2 days ago &middot; gemini</div></div></button>
+        </div>
+
+        <!-- File explorer -->
+        <div class="sb-view" id="sb-files">
+          <div class="ft-dir"><button class="ft-item" type="button" onclick="toggleDir(this)"><span class="ft-toggle open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span><svg class="ft-icon-dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="ft-name">src</span></button>
+            <div class="ft-children">
+              <div class="ft-dir"><button class="ft-item" type="button" onclick="toggleDir(this)"><span class="ft-toggle open"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span><svg class="ft-icon-dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="ft-name">api</span></button>
+                <div class="ft-children">
+                  <button class="ft-item active" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">products.ts</span></button>
+                  <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">orders.ts</span></button>
+                  <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">auth.ts</span></button>
+                </div>
+              </div>
+              <div class="ft-dir"><button class="ft-item" type="button" onclick="toggleDir(this)"><span class="ft-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span><svg class="ft-icon-dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="ft-name">middleware</span></button>
+                <div class="ft-children collapsed">
+                  <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">validate.ts</span></button>
+                  <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">auth.ts</span></button>
+                </div>
+              </div>
+              <div class="ft-dir"><button class="ft-item" type="button" onclick="toggleDir(this)"><span class="ft-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span><svg class="ft-icon-dir" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="ft-name">services</span></button>
+                <div class="ft-children collapsed">
+                  <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">ProductService.ts</span></button>
+                </div>
+              </div>
+              <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">app.ts</span></button>
+            </div>
+          </div>
+          <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-json" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">package.json</span></button>
+          <button class="ft-item" type="button"><span class="ft-toggle"></span><svg class="ft-icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="ft-name">README.md</span></button>
+        </div>
+
+        <!-- Git view -->
+        <div class="sb-view" id="sb-git">
+          <div class="git-branch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            master
+          </div>
+          <div class="git-section">
+            <div class="git-section-title">Staged Changes (1)</div>
+            <div class="git-row"><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="git-file">src/api/products.ts</span><span class="git-badge m">M</span></div>
+          </div>
+          <div class="git-section">
+            <div class="git-section-title">Changes (2)</div>
+            <div class="git-row"><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="git-file">src/middleware/validate.ts</span><span class="git-badge m">M</span></div>
+            <div class="git-row"><svg class="ft-icon-ts" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="git-file">src/schemas/product.ts</span><span class="git-badge a">A</span></div>
+          </div>
+          <div class="git-section">
+            <div class="git-section-title">Recent Commits</div>
+            <div class="git-row" style="opacity:0.7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:var(--t4)"><circle cx="12" cy="12" r="4"/></svg><span class="git-file" style="font-size:10px">3a18b8c fix: filter historical processes</span></div>
+            <div class="git-row" style="opacity:0.7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:var(--t4)"><circle cx="12" cy="12" r="4"/></svg><span class="git-file" style="font-size:10px">e9aad59 feat: multi-split panel layout</span></div>
+            <div class="git-row" style="opacity:0.7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="color:var(--t4)"><circle cx="12" cy="12" r="4"/></svg><span class="git-file" style="font-size:10px">907b16e revert: roll back pre-04-18</span></div>
+          </div>
+        </div>
+
+        <!-- Search view -->
+        <div class="sb-view" id="sb-search">
+          <div style="padding:20px 10px;text-align:center;color:var(--t3);font-size:11px">Type to search across files</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center: Split Panes -->
+    <div class="center">
+      <!-- PANE 1 (left) -->
+      <div class="pane" id="pane1">
+        <div class="pane-tabs">
+          <button class="pane-tab active" data-view="p1-chat" type="button" onclick="switchTab(this)">
+            <svg class="pane-tab-icon type-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            API refactoring<span class="pane-tab-sub">&middot; Bash running</span>
+            <button class="pane-tab-close" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </button>
+          <button class="pane-tab" data-view="p1-chat2" type="button" onclick="switchTab(this)">
+            <svg class="pane-tab-icon type-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Auth debug<span class="pane-tab-sub">&middot; idle</span>
+          </button>
+          <button class="pane-tab" data-view="p1-term" type="button" onclick="switchTab(this)">
+            <svg class="pane-tab-icon type-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            maestro-dev
+          </button>
+          <button class="pane-tab-add" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="pane-tab-spacer"></div>
+        </div>
+        <div class="pane-body">
+          <div class="pane-view active" id="p1-chat">
+            <div class="chat-messages">
+              <div class="chat-messages-inner">
+                <div class="msg"><div class="msg-avatar user">U</div><div class="msg-body"><div class="msg-header"><span class="msg-name">You</span><span class="msg-time">10:32</span></div><div class="msg-content"><p>Refactor the product API endpoints to use the new validation middleware. The current endpoints in <code>src/api/products.ts</code> are using inline validation.</p></div></div></div>
+                <div class="msg"><div class="msg-avatar assistant">M</div><div class="msg-body"><div class="msg-header"><span class="msg-name">Maestro</span><span class="msg-time">10:32</span></div><div class="msg-content"><p>I'll refactor the endpoints. Let me examine the implementation.</p></div>
+                  <div class="msg-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="msg-tool-name">Read</span> src/api/products.ts<span class="msg-tool-status done">Done</span></div>
+                  <div class="msg-content"><p>Replaced inline validation with <code>validateRequest</code> middleware:</p></div>
+                  <div class="msg-code"><div class="msg-code-header"><span>src/api/products.ts</span><button class="msg-code-copy" type="button">Copy</button></div><span class="cv-kw">import</span> { validateRequest } <span class="cv-kw">from</span> <span class="cv-str">'../middleware/validate'</span>;
+router.<span class="cv-fn">post</span>(<span class="cv-str">'/'</span>, validateRequest(productSchema),
+  <span class="cv-kw">async</span> (req, res) => {
+    <span class="cv-kw">const</span> product = <span class="cv-kw">await</span> ProductService.create(req.body);
+    res.status(<span class="cv-num">201</span>).json(product);
+  });</div>
+                  <div class="msg-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg><span class="msg-tool-name">Edit</span> src/api/products.ts<span class="msg-tool-status done">Done</span></div>
+                  <div class="msg-content"><p>Refactored 5 route handlers. Removed 47 lines of duplicated validation.</p></div>
+                </div></div>
+                <div class="msg"><div class="msg-avatar user">U</div><div class="msg-body"><div class="msg-header"><span class="msg-name">You</span><span class="msg-time">10:34</span></div><div class="msg-content"><p>Run the tests to make sure nothing broke.</p></div></div></div>
+                <div class="msg"><div class="msg-avatar assistant">M</div><div class="msg-body"><div class="msg-header"><span class="msg-name">Maestro</span><span class="msg-time">10:34</span></div>
+                  <div class="msg-tool"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg><span class="msg-tool-name">Bash</span> npm test -- --grep "products"<span class="msg-tool-status running">Running</span></div>
+                  <div class="msg-thinking"><div class="dots"><span></span><span></span><span></span></div> Running test suite...</div>
+                </div></div>
+              </div>
+            </div>
+            <div class="chat-input-area"><div class="chat-input-wrap">
+              <div class="agent-bar">
+                <div class="agent-chip active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>Maestro</div>
+                <div class="agent-icons">
+                  <button class="agent-icon active" type="button" title="Gemini"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+                  <button class="agent-icon" type="button" title="Claude"><svg viewBox="0 0 24 24" fill="none"><path d="M9 3h6l3 4v10l-3 4H9l-3-4V7l3-4z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+                  <button class="agent-icon" type="button" title="Codex"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/><path d="M9 9l3 3-3 3M14 15h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                </div>
+              </div>
+              <div class="chat-input-box">
+                <textarea class="chat-textarea" placeholder="Send a message..." rows="1"></textarea>
+                <div class="chat-input-footer">
+                  <button class="ci-btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+                  <button class="ci-opt" type="button">Analysis &darr;</button>
+                  <button class="ci-opt" type="button">Auto &darr;</button>
+                  <div class="ci-spacer"></div>
+                  <button class="ci-send" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+                </div>
+              </div>
+            </div></div>
+          </div>
+          <div class="pane-view" id="p1-chat2">
+            <div class="chat-messages"><div class="chat-messages-inner"><div style="padding:30px 0;text-align:center;color:var(--t3);font-size:11px">Auth middleware debugging session &middot; idle</div></div></div>
+            <div class="chat-input-area"><div class="chat-input-wrap"><div class="chat-input-box"><textarea class="chat-textarea" placeholder="Send a message..." rows="1"></textarea><div class="chat-input-footer"><button class="ci-btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button><div class="ci-spacer"></div><button class="ci-send" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button></div></div></div></div>
+          </div>
+          <div class="pane-view" id="p1-code">
+            <div class="cv-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;stroke-width:2;color:var(--blue)"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="cv-path">src/api/products.ts</span></div>
+            <div class="cv-body">
+              <div class="cv-line"><span class="cv-ln">1</span><span class="cv-code"><span class="cv-kw">import</span> { Router } <span class="cv-kw">from</span> <span class="cv-str">'express'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">2</span><span class="cv-code"><span class="cv-kw">import</span> { validateRequest } <span class="cv-kw">from</span> <span class="cv-str">'../middleware/validate'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">3</span><span class="cv-code"><span class="cv-kw">import</span> { productSchema } <span class="cv-kw">from</span> <span class="cv-str">'../schemas/product'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">4</span><span class="cv-code"></span></div>
+              <div class="cv-line"><span class="cv-ln">5</span><span class="cv-code"><span class="cv-kw">const</span> router = <span class="cv-fn">Router</span>();</span></div>
+              <div class="cv-line"><span class="cv-ln">6</span><span class="cv-code"></span></div>
+              <div class="cv-line"><span class="cv-ln">7</span><span class="cv-code">router.<span class="cv-fn">post</span>(<span class="cv-str">'/'</span>,</span></div>
+              <div class="cv-line"><span class="cv-ln">8</span><span class="cv-code">  <span class="cv-fn">validateRequest</span>(productSchema),</span></div>
+              <div class="cv-line"><span class="cv-ln">9</span><span class="cv-code">  <span class="cv-kw">async</span> (req, res) => {</span></div>
+              <div class="cv-line"><span class="cv-ln">10</span><span class="cv-code">    <span class="cv-kw">const</span> p = <span class="cv-kw">await</span> ProductService.<span class="cv-fn">create</span>(req.body);</span></div>
+              <div class="cv-line"><span class="cv-ln">11</span><span class="cv-code">    res.status(<span class="cv-num">201</span>).<span class="cv-fn">json</span>(p);</span></div>
+              <div class="cv-line"><span class="cv-ln">12</span><span class="cv-code">  }</span></div>
+              <div class="cv-line"><span class="cv-ln">13</span><span class="cv-code">);</span></div>
+            </div>
+          </div>
+          <div class="pane-view term-view" id="p1-term">
+            <div class="term-header"><button class="term-tab active">maestro-dev</button></div>
+            <div class="term-body">
+              <div><span class="term-success">&#10003;</span> Ready in 420ms</div>
+              <div><span class="term-dim">  &ndash; Network:</span> http://192.168.1.80:3000</div>
+              <div><span class="term-prompt">$</span> maestro delegate "analyze products API" --to gemini</div>
+              <div><span class="term-dim">[MAESTRO_EXEC_ID=gem-103204-b7c3]</span></div>
+              <div><span class="term-success">&#10003;</span> Delegate started</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Splitter -->
+      <div class="splitter" id="splitter"></div>
+
+      <!-- PANE 2 (right) -->
+      <div class="pane" id="pane2">
+        <div class="pane-tabs">
+          <button class="pane-tab active" data-view="p2-code" type="button" onclick="switchTab(this)">
+            <svg class="pane-tab-icon type-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            products.ts
+            <button class="pane-tab-close" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </button>
+          <button class="pane-tab" data-view="p2-term" type="button" onclick="switchTab(this)">
+            <svg class="pane-tab-icon type-term" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            shell<span class="pane-tab-sub">&middot; 3 passed</span>
+          </button>
+          <button class="pane-tab-add" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <div class="pane-tab-spacer"></div>
+        </div>
+        <div class="pane-body">
+          <div class="pane-view active" id="p2-code">
+            <div class="cv-header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="width:11px;height:11px;stroke-width:2;color:var(--blue)"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg><span class="cv-path">src/api/products.ts</span></div>
+            <div class="cv-body">
+              <div class="cv-line"><span class="cv-ln">1</span><span class="cv-code"><span class="cv-kw">import</span> { Router } <span class="cv-kw">from</span> <span class="cv-str">'express'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">2</span><span class="cv-code"><span class="cv-kw">import</span> { validateRequest } <span class="cv-kw">from</span> <span class="cv-str">'../middleware/validate'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">3</span><span class="cv-code"><span class="cv-kw">import</span> { productSchema, updateSchema } <span class="cv-kw">from</span> <span class="cv-str">'../schemas/product'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">4</span><span class="cv-code"><span class="cv-kw">import</span> { ProductService } <span class="cv-kw">from</span> <span class="cv-str">'../services/ProductService'</span>;</span></div>
+              <div class="cv-line"><span class="cv-ln">5</span><span class="cv-code"></span></div>
+              <div class="cv-line"><span class="cv-ln">6</span><span class="cv-code"><span class="cv-kw">const</span> router = <span class="cv-fn">Router</span>();</span></div>
+              <div class="cv-line"><span class="cv-ln">7</span><span class="cv-code"></span></div>
+              <div class="cv-line"><span class="cv-ln">8</span><span class="cv-code"><span class="cv-cm">// GET all products</span></span></div>
+              <div class="cv-line"><span class="cv-ln">9</span><span class="cv-code">router.<span class="cv-fn">get</span>(<span class="cv-str">'/'</span>, <span class="cv-kw">async</span> (req, res) => {</span></div>
+              <div class="cv-line"><span class="cv-ln">10</span><span class="cv-code">  <span class="cv-kw">const</span> products = <span class="cv-kw">await</span> ProductService.<span class="cv-fn">findAll</span>(req.query);</span></div>
+              <div class="cv-line"><span class="cv-ln">11</span><span class="cv-code">  res.<span class="cv-fn">json</span>(products);</span></div>
+              <div class="cv-line"><span class="cv-ln">12</span><span class="cv-code">});</span></div>
+              <div class="cv-line"><span class="cv-ln">13</span><span class="cv-code"></span></div>
+              <div class="cv-line"><span class="cv-ln">14</span><span class="cv-code"><span class="cv-cm">// POST create product</span></span></div>
+              <div class="cv-line"><span class="cv-ln">15</span><span class="cv-code">router.<span class="cv-fn">post</span>(<span class="cv-str">'/'</span>,</span></div>
+              <div class="cv-line"><span class="cv-ln">16</span><span class="cv-code">  <span class="cv-fn">validateRequest</span>(productSchema),</span></div>
+              <div class="cv-line"><span class="cv-ln">17</span><span class="cv-code">  <span class="cv-kw">async</span> (req, res) => {</span></div>
+              <div class="cv-line"><span class="cv-ln">18</span><span class="cv-code">    <span class="cv-kw">const</span> product = <span class="cv-kw">await</span> ProductService.<span class="cv-fn">create</span>(req.body);</span></div>
+              <div class="cv-line"><span class="cv-ln">19</span><span class="cv-code">    res.status(<span class="cv-num">201</span>).<span class="cv-fn">json</span>(product);</span></div>
+              <div class="cv-line"><span class="cv-ln">20</span><span class="cv-code">  }</span></div>
+              <div class="cv-line"><span class="cv-ln">21</span><span class="cv-code">);</span></div>
+              <div class="cv-line"><span class="cv-ln">22</span><span class="cv-code"></span></div>
+              <div class="cv-line"><span class="cv-ln">23</span><span class="cv-code"><span class="cv-cm">// PUT update product</span></span></div>
+              <div class="cv-line"><span class="cv-ln">24</span><span class="cv-code">router.<span class="cv-fn">put</span>(<span class="cv-str">'/:id'</span>,</span></div>
+              <div class="cv-line"><span class="cv-ln">25</span><span class="cv-code">  <span class="cv-fn">validateRequest</span>(updateSchema),</span></div>
+              <div class="cv-line"><span class="cv-ln">26</span><span class="cv-code">  <span class="cv-kw">async</span> (req, res) => {</span></div>
+              <div class="cv-line"><span class="cv-ln">27</span><span class="cv-code">    <span class="cv-kw">const</span> product = <span class="cv-kw">await</span> ProductService.<span class="cv-fn">update</span>(req.params.id, req.body);</span></div>
+              <div class="cv-line"><span class="cv-ln">28</span><span class="cv-code">    res.<span class="cv-fn">json</span>(product);</span></div>
+              <div class="cv-line"><span class="cv-ln">29</span><span class="cv-code">  }</span></div>
+              <div class="cv-line"><span class="cv-ln">30</span><span class="cv-code">);</span></div>
+            </div>
+          </div>
+          <div class="pane-view term-view" id="p2-term">
+            <div class="term-header"><button class="term-tab active">shell</button></div>
+            <div class="term-body">
+              <div><span class="term-prompt">$</span> npm test -- --grep "products"</div>
+              <div>&nbsp;</div>
+              <div><span class="term-success">PASS</span> tests/api/products.test.ts</div>
+              <div>  <span class="term-dim">&#10003;</span> POST / creates product (23ms)</div>
+              <div>  <span class="term-dim">&#10003;</span> GET / lists products (8ms)</div>
+              <div>  <span class="term-dim">&#10003;</span> PUT /:id updates product (15ms)</div>
+              <div>&nbsp;</div>
+              <div>Tests: <span class="term-success">3 passed</span>, 3 total</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status bar -->
+  <div class="statusbar">
+    <div class="statusbar-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg> master</div>
+    <div class="statusbar-item"><span class="statusbar-dot" style="background:var(--green)"></span> 0 errors</div>
+    <div class="statusbar-item">3 warnings</div>
+    <div class="statusbar-spacer"></div>
+    <div class="statusbar-item">TypeScript</div>
+    <div class="statusbar-item">UTF-8</div>
+    <div class="statusbar-item">Ln 16, Col 3</div>
+  </div>
+</div>
+
+<script>
+  // Sidebar view switching (header tabs)
+  function switchSB(view, btn) {
+    document.querySelectorAll('.sb-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.sb-view').forEach(v => v.classList.remove('active'));
+    const target = document.getElementById('sb-' + view);
+    if (target) target.classList.add('active');
+  }
+
+  function selectConv(el) {
+    document.querySelectorAll('.sb-item.active').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // Tab switching (each tab = one typed view)
+  function switchTab(btn) {
+    const pane = btn.closest('.pane');
+    pane.querySelectorAll('.pane-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    const viewId = btn.getAttribute('data-view');
+    pane.querySelectorAll('.pane-view').forEach(v => v.classList.remove('active'));
+    const target = document.getElementById(viewId);
+    if (target) target.classList.add('active');
+  }
+
+  // Layout: single or split
+  function setLayout(mode) {
+    document.querySelectorAll('.topbar-r .tb-btn').forEach(b => b.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    const pane2 = document.getElementById('pane2');
+    const splitter = document.getElementById('splitter');
+    if (mode === 'single') {
+      pane2.classList.add('collapsed');
+      splitter.style.display = 'none';
+    } else {
+      pane2.classList.remove('collapsed');
+      splitter.style.display = '';
+    }
+  }
+
+  // File tree toggle
+  function toggleDir(btn) {
+    const toggle = btn.querySelector('.ft-toggle');
+    const children = btn.parentElement.querySelector('.ft-children');
+    if (children) { children.classList.toggle('collapsed'); toggle.classList.toggle('open', !children.classList.contains('collapsed')); }
+  }
+
+  // Splitter drag
+  const splitter = document.getElementById('splitter');
+  const pane1 = document.getElementById('pane1');
+  let dragging = false, startX, startW;
+  splitter.addEventListener('mousedown', e => {
+    dragging = true; startX = e.clientX; startW = pane1.offsetWidth;
+    splitter.classList.add('dragging');
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    pane1.style.flex = 'none'; pane1.style.width = Math.max(240, startW + e.clientX - startX) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; splitter.classList.remove('dragging');
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+  });
+
+  // Textarea auto-resize
+  document.querySelectorAll('.chat-textarea').forEach(ta => {
+    ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 140) + 'px'; });
+  });
+
+  // Scroll chat to bottom
+  document.querySelectorAll('.chat-messages').forEach(el => el.scrollTop = 999999);
+</script>
+</body>
+</html>

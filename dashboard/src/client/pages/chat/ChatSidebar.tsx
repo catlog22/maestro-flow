@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useAgentStore } from '@/client/store/agent-store.js';
 import { useWorkspaceTree } from '@/client/hooks/useWorkspaceTree.js';
+import { useGitStatus } from '@/client/hooks/useGitStatus.js';
 import { useLayoutContext } from '@/client/components/layout/LayoutContext.js';
 import { TreeBrowser } from '@/client/components/artifacts/TreeBrowser.js';
 import { useChatSidebar, type SidebarTab } from '@/client/components/chat/ChatSidebarContext.js';
@@ -404,9 +405,7 @@ export function ChatSidebar() {
           <GitView />
         )}
         {activeTab === 'search' && (
-          <div className="px-[10px] py-[20px] text-center text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
-            Type to search across files
-          </div>
+          <SearchView searchQuery={searchQuery} onSelectFile={handleSelectFile} />
         )}
       </div>
     </div>
@@ -414,36 +413,347 @@ export function ChatSidebar() {
 }
 
 // ---------------------------------------------------------------------------
-// GitView — basic git status display
+// SearchView — file content search
 // ---------------------------------------------------------------------------
 
-function GitView() {
-  const [branch, setBranch] = useState('');
+interface SearchResult {
+  file: string;
+  line: number;
+  text: string;
+}
 
+function SearchView({ searchQuery, onSelectFile }: { searchQuery: string; onSelectFile: (path: string) => void }) {
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [collapsedFiles, setCollapsedFiles] = useState<Set<string>>(new Set());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Debounced fetch
   useEffect(() => {
-    fetch('/api/board')
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data?.project?.branch) setBranch(data.project.branch);
-      })
-      .catch(() => {});
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (searchQuery.length < 2) {
+      setResults([]);
+      setTotal(0);
+      return;
+    }
+
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/workspace/search?q=${encodeURIComponent(searchQuery)}&limit=30`);
+        if (res.ok) {
+          const data = await res.json() as { results: SearchResult[]; total: number };
+          setResults(data.results);
+          setTotal(data.total);
+          setCollapsedFiles(new Set());
+        }
+      } catch { /* silent */ }
+      setLoading(false);
+    }, 300);
+
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchQuery]);
+
+  // Group results by file
+  const grouped = useMemo(() => {
+    const map = new Map<string, SearchResult[]>();
+    for (const r of results) {
+      const list = map.get(r.file);
+      if (list) list.push(r);
+      else map.set(r.file, [r]);
+    }
+    return map;
+  }, [results]);
+
+  const toggleFile = useCallback((file: string) => {
+    setCollapsedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(file)) next.delete(file);
+      else next.add(file);
+      return next;
+    });
   }, []);
+
+  if (searchQuery.length < 2) {
+    return (
+      <div className="px-[10px] py-[20px] text-center text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        Type to search across files
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="px-[10px] py-[20px] text-center text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        Searching...
+      </div>
+    );
+  }
+
+  if (results.length === 0) {
+    return (
+      <div className="px-[10px] py-[20px] text-center text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        No results
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div
-        className="flex items-center gap-[5px] text-[11px] font-medium px-[7px] py-[4px]"
-        style={{ color: 'var(--color-text-primary)' }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-green)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <div className="text-[9px] px-[6px] py-[2px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        {total} result{total !== 1 ? 's' : ''} in {grouped.size} file{grouped.size !== 1 ? 's' : ''}
+      </div>
+      {[...grouped.entries()].map(([file, matches]) => (
+        <div key={file}>
+          {/* File header */}
+          <button
+            type="button"
+            onClick={() => toggleFile(file)}
+            className="flex items-center gap-[4px] w-full border-none bg-transparent cursor-pointer text-left"
+            style={{ padding: '4px 6px', fontFamily: 'inherit' }}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="var(--color-text-tertiary)" style={{ transform: collapsedFiles.has(file) ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform 100ms' }}>
+              <path d="M2 1l4 3-4 3z" />
+            </svg>
+            <FileIcon />
+            <span className="flex-1 min-w-0 text-[11px] font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>
+              {file}
+            </span>
+            <span className="text-[9px] shrink-0" style={{ color: 'var(--color-text-tertiary)' }}>
+              {matches.length}
+            </span>
+          </button>
+          {/* Match rows */}
+          {!collapsedFiles.has(file) && matches.map((m) => (
+            <button
+              key={`${file}:${m.line}`}
+              type="button"
+              onClick={() => onSelectFile(file)}
+              className="flex items-center gap-[6px] w-full border-none bg-transparent cursor-pointer text-left transition-colors duration-75"
+              style={{ padding: '3px 7px 3px 22px', color: 'var(--color-text-primary)', fontFamily: 'inherit' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+            >
+              <span className="text-[10px] shrink-0 font-mono" style={{ color: 'var(--color-text-tertiary)', minWidth: 28, textAlign: 'right' }}>
+                {m.line}
+              </span>
+              <span className="text-[11px] truncate min-w-0">{m.text.trim()}</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GitView — full git source control sidebar
+// ---------------------------------------------------------------------------
+
+const STATUS_BADGE_STYLES: Record<string, { bg: string; color: string }> = {
+  M: { bg: 'rgba(201,155,45,0.15)', color: 'var(--color-accent-yellow)' },
+  A: { bg: 'rgba(61,155,111,0.15)', color: 'var(--color-accent-green)' },
+  D: { bg: 'rgba(208,84,84,0.15)', color: 'var(--color-accent-red)' },
+  R: { bg: 'rgba(130,130,200,0.15)', color: 'var(--color-accent-blue)' },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const style = STATUS_BADGE_STYLES[status] ?? STATUS_BADGE_STYLES.M;
+  return (
+    <span
+      className="text-[9px] font-semibold px-[5px] rounded-[3px] shrink-0"
+      style={{ backgroundColor: style.bg, color: style.color }}
+    >
+      {status}
+    </span>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" style={{ opacity: 0.6 }}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  );
+}
+
+function GitFileRow({ path, status, onClick }: { path: string; status: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-[6px] px-[7px] py-[3px] rounded-[4px] cursor-pointer w-full border-none bg-transparent text-left transition-colors duration-75"
+      style={{ color: 'var(--color-text-primary)', fontFamily: 'inherit' }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-bg-hover)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+    >
+      <FileIcon />
+      <span className="flex-1 min-w-0 text-[11px] truncate">{path}</span>
+      <StatusBadge status={status} />
+    </button>
+  );
+}
+
+function GitView() {
+  const git = useGitStatus();
+  const { state: layoutState, dispatch: layoutDispatch } = useLayoutContext();
+  const [stagedOpen, setStagedOpen] = useState(true);
+  const [changesOpen, setChangesOpen] = useState(true);
+  const [commitsOpen, setCommitsOpen] = useState(true);
+
+  const openFile = useCallback((filePath: string) => {
+    const leaf = getFirstLeaf(layoutState.editorArea);
+    const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
+    layoutDispatch({
+      type: 'OPEN_TAB',
+      groupId: leaf.id,
+      tab: {
+        id: `file-${filePath}`,
+        type: 'file',
+        title: fileName,
+        ref: filePath,
+      },
+    });
+  }, [layoutState.editorArea, layoutDispatch]);
+
+  if (git.loading && !git.branch) {
+    return (
+      <div className="px-[10px] py-[20px] text-center text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+        Loading git status...
+      </div>
+    );
+  }
+
+  if (git.error && !git.branch) {
+    return (
+      <div className="px-[10px] py-[20px] text-center text-[11px]" style={{ color: 'var(--color-accent-red)' }}>
+        {git.error}
+      </div>
+    );
+  }
+
+  const stagedCount = git.staged.length;
+  const changesCount = git.unstaged.length + git.untracked.length;
+
+  return (
+    <div>
+      {/* Branch bar */}
+      <div className="flex items-center gap-[5px] px-[7px] py-[4px] text-[11px] font-medium" style={{ color: 'var(--color-text-primary)' }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-green)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
           <line x1="6" y1="3" x2="6" y2="15" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
           <path d="M18 9a9 9 0 0 1-9 9" />
         </svg>
-        {branch || 'master'}
+        <span className="flex-1 min-w-0 truncate">{git.branch || 'unknown'}</span>
+        <button
+          type="button"
+          onClick={git.refresh}
+          title="Refresh"
+          className="flex items-center justify-center border-none bg-transparent cursor-pointer rounded-[3px] transition-colors duration-75"
+          style={{ width: 18, height: 18, color: 'var(--color-text-tertiary)' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--color-text-primary)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--color-text-tertiary)'; }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+        </button>
       </div>
-      <div className="px-[7px] py-[10px] text-center text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
-        Git status available in terminal
-      </div>
+
+      {/* Staged Changes */}
+      {stagedCount > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setStagedOpen((v) => !v)}
+            className="flex items-center gap-[4px] w-full border-none bg-transparent cursor-pointer text-left"
+            style={{ padding: '4px 6px', fontFamily: 'inherit' }}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="var(--color-text-tertiary)" style={{ transform: stagedOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 100ms' }}>
+              <path d="M2 1l4 3-4 3z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.04em]" style={{ color: 'var(--color-text-tertiary)' }}>
+              Staged Changes ({stagedCount})
+            </span>
+          </button>
+          {stagedOpen && git.staged.map((f) => (
+            <GitFileRow key={`staged-${f.path}`} path={f.path} status={f.status} onClick={() => openFile(f.path)} />
+          ))}
+        </div>
+      )}
+
+      {/* Changes (unstaged + untracked) */}
+      {changesCount > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setChangesOpen((v) => !v)}
+            className="flex items-center gap-[4px] w-full border-none bg-transparent cursor-pointer text-left"
+            style={{ padding: '4px 6px', fontFamily: 'inherit' }}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="var(--color-text-tertiary)" style={{ transform: changesOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 100ms' }}>
+              <path d="M2 1l4 3-4 3z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.04em]" style={{ color: 'var(--color-text-tertiary)' }}>
+              Changes ({changesCount})
+            </span>
+          </button>
+          {changesOpen && (
+            <>
+              {git.unstaged.map((f) => (
+                <GitFileRow key={`unstaged-${f.path}`} path={f.path} status={f.status} onClick={() => openFile(f.path)} />
+              ))}
+              {git.untracked.map((f) => (
+                <GitFileRow key={`untracked-${f}`} path={f} status="A" onClick={() => openFile(f)} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* No changes message */}
+      {stagedCount === 0 && changesCount === 0 && (
+        <div className="px-[7px] py-[10px] text-center text-[10px]" style={{ color: 'var(--color-text-tertiary)' }}>
+          No changes detected
+        </div>
+      )}
+
+      {/* Recent Commits */}
+      {git.commits.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setCommitsOpen((v) => !v)}
+            className="flex items-center gap-[4px] w-full border-none bg-transparent cursor-pointer text-left"
+            style={{ padding: '4px 6px', marginTop: 4, fontFamily: 'inherit' }}
+          >
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="var(--color-text-tertiary)" style={{ transform: commitsOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 100ms' }}>
+              <path d="M2 1l4 3-4 3z" />
+            </svg>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.04em]" style={{ color: 'var(--color-text-tertiary)' }}>
+              Recent Commits
+            </span>
+          </button>
+          {commitsOpen && git.commits.map((commit) => (
+            <div
+              key={commit.hash}
+              className="flex items-center gap-[6px] px-[7px] py-[3px] text-[10px]"
+              style={{ color: 'var(--color-text-primary)', opacity: 0.7 }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" className="shrink-0">
+                <circle cx="6" cy="6" r="3" fill="var(--color-text-tertiary)" />
+              </svg>
+              <span className="truncate min-w-0">
+                <span className="font-mono" style={{ color: 'var(--color-accent-blue)', marginRight: 4 }}>{commit.shortHash}</span>
+                {commit.message}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

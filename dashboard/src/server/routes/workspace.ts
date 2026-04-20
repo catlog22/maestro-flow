@@ -1,4 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import { resolve, relative, sep } from 'node:path';
 
 import { Hono } from 'hono';
@@ -60,6 +61,57 @@ export function createWorkspaceRoutes(workflowRoot: string | (() => string)): Ho
       return c.text(content, 200, { 'Content-Type': 'text/plain; charset=utf-8' });
     } catch {
       return c.json({ error: 'File not found' }, 404);
+    }
+  });
+
+  // File content search via git grep
+  app.get('/api/workspace/search', async (c) => {
+    const q = c.req.query('q') ?? '';
+    const limitParam = parseInt(c.req.query('limit') ?? '50', 10);
+    const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : 50;
+
+    if (q.length < 2) {
+      return c.json({ results: [], total: 0 });
+    }
+
+    const projectRoot = getProjectRoot();
+
+    try {
+      const stdout = await new Promise<string>((resolve, reject) => {
+        execFile(
+          'git', ['grep', '-n', '--no-color', '-I', q],
+          { cwd: projectRoot, timeout: 5000, maxBuffer: 2 * 1024 * 1024 },
+          (err, stdout) => {
+            // git grep exits with code 1 when no matches — treat as empty
+            if (err && (err as NodeJS.ErrnoException).code !== '1' && !stdout) {
+              // If exit code is 1 with no output, that means no matches
+              if ((err as { code?: number }).code === 1) {
+                resolve('');
+                return;
+              }
+              reject(err);
+              return;
+            }
+            resolve(stdout ?? '');
+          },
+        );
+      });
+
+      const lines = stdout.split('\n').filter(Boolean);
+      const total = lines.length;
+      const results = lines.slice(0, limit).map((line) => {
+        // Format: file:lineNumber:matchedLine
+        const firstColon = line.indexOf(':');
+        const secondColon = line.indexOf(':', firstColon + 1);
+        const file = toForwardSlash(line.slice(0, firstColon));
+        const lineNum = parseInt(line.slice(firstColon + 1, secondColon), 10);
+        const text = line.slice(secondColon + 1);
+        return { file, line: lineNum, text };
+      });
+
+      return c.json({ results, total });
+    } catch {
+      return c.json({ results: [], total: 0 });
     }
   });
 
