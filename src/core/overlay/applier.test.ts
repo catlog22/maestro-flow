@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   mkdtempSync,
   mkdirSync,
@@ -9,7 +9,17 @@ import {
   readdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
+
+// `paths.home` is frozen at module import time from MAESTRO_HOME env.
+// Mock it so each test gets a fresh temp-based home directory.
+let mockHome: string;
+vi.mock('../../config/paths.js', () => ({
+  paths: {
+    get home() { return mockHome; },
+  },
+}));
+
 import {
   applyOverlays,
   exportOverlayFile,
@@ -69,31 +79,20 @@ function setupScope(
   return { targetBase, overlayDir };
 }
 
-// Each test must use a unique MAESTRO_HOME so the shared `paths.home`
-// (already imported) resolves overlay-manifest paths inside tmp. We inject
-// via env before spawning child processes — for in-process tests we have
-// to work around the fact that `paths` is module-frozen. Strategy: set
-// MAESTRO_HOME before importing `applier`. In practice, vitest isolates
-// modules per file, so we set it at the top of the file.
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('applier', () => {
   let tmp: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'overlay-applier-'));
-    originalHome = process.env.MAESTRO_HOME;
-    process.env.MAESTRO_HOME = join(tmp, 'maestro-home');
-    mkdirSync(process.env.MAESTRO_HOME, { recursive: true });
+    mockHome = join(tmp, 'maestro-home');
+    mkdirSync(mockHome, { recursive: true });
   });
 
   afterEach(() => {
-    if (originalHome === undefined) delete process.env.MAESTRO_HOME;
-    else process.env.MAESTRO_HOME = originalHome;
     rmSync(tmp, { recursive: true, force: true });
   });
 

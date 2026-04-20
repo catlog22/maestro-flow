@@ -14,7 +14,7 @@
 //   - Section-parser scaling on large files
 // ---------------------------------------------------------------------------
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   mkdtempSync,
   mkdirSync,
@@ -25,6 +25,16 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+// `paths.home` is frozen at module import time from MAESTRO_HOME env.
+// Mock it so each test gets a fresh temp-based home directory.
+let mockHome: string;
+vi.mock('../../config/paths.js', () => ({
+  paths: {
+    get home() { return mockHome; },
+  },
+}));
+
 import {
   applyOverlays,
   exportOverlayFile,
@@ -119,18 +129,14 @@ function setupScope(
 
 describe('stress: overlay pipeline', () => {
   let tmp: string;
-  let originalHome: string | undefined;
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'overlay-stress-'));
-    originalHome = process.env.MAESTRO_HOME;
-    process.env.MAESTRO_HOME = join(tmp, 'maestro-home');
-    mkdirSync(process.env.MAESTRO_HOME, { recursive: true });
+    mockHome = join(tmp, 'maestro-home');
+    mkdirSync(mockHome, { recursive: true });
   });
 
   afterEach(() => {
-    if (originalHome === undefined) delete process.env.MAESTRO_HOME;
-    else process.env.MAESTRO_HOME = originalHome;
     rmSync(tmp, { recursive: true, force: true });
   });
 
