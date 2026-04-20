@@ -163,13 +163,48 @@ const phaseArg = $ARGUMENTS
   .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--auto|--gaps|--parallel|--collab|--dir\s+\S+|--spec\s+\S+/g, '')
   .trim()
 
+// Auto-bootstrap state.json if missing
+if (!fileExists('.workflow/state.json')) {
+  Bash('mkdir -p .workflow/scratch/')
+  writeMinimalStateJson()
+}
+
+// Scope determination (per scratch-milestone-architecture)
+const state = JSON.parse(Read('.workflow/state.json'))
+let scope, phaseNum = null, phaseSlug, contextDir
+
+if (dirMatch) {
+  contextDir = dirMatch[1]
+  phaseSlug = contextDir.split('/').pop()
+  // Inherit scope from parent artifact if registered
+  const parentArtifact = state.artifacts.find(a => a.path === contextDir)
+  scope = parentArtifact?.scope || 'standalone'
+} else if (phaseArg === '') {
+  if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
+    scope = 'milestone'
+    phaseSlug = slugify(state.milestones.find(m => m.id === state.current_milestone)?.name || state.current_milestone)
+    // Find latest analyze artifact for this milestone
+    contextDir = state.artifacts.filter(a => a.type === 'analyze' && a.milestone === state.current_milestone && a.status === 'completed').pop()?.path
+  } else {
+    ERROR('E001: No args and no roadmap')
+  }
+} else if (/^\d+$/.test(phaseArg)) {
+  scope = 'phase'
+  phaseNum = parseInt(phaseArg)
+  phaseSlug = resolvePhaseSlugFromRoadmap(phaseNum)
+  contextDir = state.artifacts.filter(a => a.type === 'analyze' && a.milestone === state.current_milestone && a.phase === phaseNum && a.status === 'completed').pop()?.path
+} else {
+  scope = state.current_milestone ? 'adhoc' : 'standalone'
+  phaseSlug = phaseArg.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
+}
+
 const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = dirMatch
-  ? `plan-${dirMatch[1].split('/').pop()}-${dateStr}`
-  : `plan-phase${phaseArg}-${dateStr}`
+const sessionId = `plan-${phaseSlug}-${dateStr}`
 const sessionFolder = `.workflow/.csv-wave/${sessionId}`
+const scratchDir = `.workflow/scratch/plan-${phaseSlug}-${dateStr}`
 
 Bash(`mkdir -p ${sessionFolder}`)
+Bash(`mkdir -p ${scratchDir}/.task/`)
 ```
 
 ---
@@ -180,25 +215,20 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Decomposition Rules**:
 
-1. **Phase resolution**:
+1. **Scope resolution**: Already determined in Session Initialization (milestone/phase/adhoc/standalone)
 
-| Condition | Action |
-|-----------|--------|
-| `--dir <path>` provided | Use path directly, set SCRATCH_MODE = true |
-| Number argument | Resolve `.workflow/phases/{NN}-*/` |
-| Slug argument | Resolve `.workflow/phases/*-{slug}/` |
-
-2. **Context loading**:
-   - Read `{PHASE_DIR}/context.md` (user decisions from analyze)
-   - Read `{PHASE_DIR}/index.json` (phase metadata, success criteria)
-   - Read spec-ref if `--spec` flag or index.json has spec_ref
+2. **Context loading** (from upstream analyze artifact or --dir):
+   - Read `{contextDir}/context.md` (user decisions from analyze) — if contextDir resolved
+   - Read `.workflow/project.md` — project vision and constraints
+   - Read `.workflow/roadmap.md` — phase structure and dependencies
+   - Read spec-ref if `--spec` flag
    - Read `.workflow/codebase/doc-index.json` if exists
-   - Read `{PHASE_DIR}/design-ref/MASTER.md` if exists (UI design reference)
+   - Find design artifacts from `state.json.artifacts[]` (type=brainstorm with ui-designer) for MASTER.md
    - Load project specs via `maestro spec load --category planning`
 
 3. **Upstream analysis check**:
-   - If `{PHASE_DIR}/conclusions.json` exists and has content: reuse as exploration context, skip wave 1
-   - If `{PHASE_DIR}/explorations.json` exists: load as additional context
+   - If `{contextDir}/conclusions.json` exists and has content: reuse as exploration context, skip wave 1
+   - If `{contextDir}/explorations.json` exists: load as additional context
 
 4. **Gap mode** (if `--gaps`):
    - Load gaps from `.workflow/issues/issues.jsonl` (primary), `verification.json` (fallback), `uat.md` (additional)

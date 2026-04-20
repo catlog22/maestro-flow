@@ -91,5 +91,5 @@ Follow '~/.maestro/workflows/roadmap.md' completely.
 - [ ] No circular dependencies in phase ordering
 - [ ] User approved roadmap (or auto-approved with -y)
 - [ ] `.workflow/roadmap.md` written with phase details, scope decisions, and progress table
-- [ ] Phase directories created under `.workflow/phases/`
+- [ ] No phase directories created (phases are labels in roadmap, not directories)
 </success_criteria>

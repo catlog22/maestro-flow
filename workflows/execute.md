@@ -2,20 +2,21 @@
 
 Wave-based parallel execution with atomic commits, breakpoint resume, and optional sync/reflection.
 
+Core principle: **Execute per-plan, not per-phase.** Each plan's wave DAG runs independently. Multiple plans execute sequentially.
+
 ---
 
 ## Prerequisites
 
-- Phase has a completed plan: `plan.json` + `.task/TASK-*.json` exist
-- `index.json` present with `plan.waves` populated
+- Plan exists in scratch directory: `plan.json` + `.task/TASK-*.json`
 - OR: executionContext handoff received from `/workflow:plan`
 
 ---
 
-## Phase Resolution
+## Plan Resolution
 
 ```
-Input: <phase> argument (number or slug) OR --dir <path>
+Input: [phase] argument OR --dir <path>
 
 # Worktree scope check
 IF file_exists(".workflow/worktree-scope.json"):
@@ -24,17 +25,36 @@ IF file_exists(".workflow/worktree-scope.json"):
     ERROR "Phase {phase} not owned by this worktree. Owned: {scope.owned_phases}"
     EXIT
 
-IF --dir <path> is provided:
-  1. Set PHASE_DIR = <path> (absolute or relative to project root)
-  2. Validate directory exists and contains index.json
-  3. Set SCRATCH_MODE = true (skip roadmap validation, phase transition)
-  4. Set PHASE_NUM = null, PHASE_SLUG = directory basename
+# Auto-bootstrap state.json if missing
+IF NOT file_exists(".workflow/state.json"):
+  mkdir -p .workflow/scratch/
+  Write minimal state.json
 
-ELSE (standard phase resolution):
-  1. If number: find .workflow/phases/{NN}-*/index.json
-  2. If slug: find .workflow/phases/*-{slug}/index.json
-  3. Validate plan exists (index.json.plan.task_count > 0)
-  4. Set PHASE_DIR = resolved path
+IF --dir <path> is provided:
+  1. Set PLAN_DIRS = [<path>]  // single plan
+  2. Validate directory exists and contains plan.json
+
+ELSE IF no arguments:
+  // Find all pending plans for current milestone
+  1. Read state.json.artifacts
+  2. Filter: milestone == current_milestone, type == "plan", status == "completed"
+  3. Exclude plans that already have a corresponding EXC artifact (same path)
+  4. Sort by phase order (from roadmap), adhoc plans last
+  5. Set PLAN_DIRS = filtered plan paths
+  6. If empty: ERROR E001 "No pending plans found"
+
+ELSE IF argument is a number:
+  // Find pending plans for specific phase
+  1. Read state.json.artifacts
+  2. Filter: milestone == current_milestone, type == "plan", status == "completed", phase == arg
+  3. Exclude plans with existing EXC artifacts
+  4. Set PLAN_DIRS = filtered plan paths
+
+// Execute plans sequentially
+FOR each PLAN_DIR IN PLAN_DIRS:
+  execute_single_plan(PLAN_DIR)
+  register_exc_artifact(PLAN_DIR)
+  extract_incremental_learnings(PLAN_DIR)
 ```
 
 ---
@@ -50,11 +70,11 @@ ELSE (standard phase resolution):
 
 ---
 
-## E1: Load Plan
+## E1: Load Plan (per PLAN_DIR)
 
-**Purpose:** Build or receive the execution queue.
+**Purpose:** Build or receive the execution queue for a single plan.
 
-### From executionContext handoff (preferred)
+### From executionContext handoff (preferred, first plan only)
 
 ```
 If executionContext is available in memory:
@@ -67,23 +87,22 @@ If executionContext is available in memory:
   Skip disk reload
 ```
 
-### From disk (fallback / resume)
+### From disk (fallback / resume / subsequent plans)
 
 ```
-Read ${PHASE_DIR}/index.json
-Read ${PHASE_DIR}/plan.json
+Read ${PLAN_DIR}/plan.json
 
 executionMethod = --method flag || config.json.execution.method || "agent"
 defaultExecutor = --executor flag || config.json.execution.default_executor || "gemini"
-executorAssignments = index.json.plan.executor_assignments || {}
+executorAssignments = plan.json.executor_assignments || {}
 ```
 
 ### Detect completed tasks (breakpoint resume)
 
 ```
 completed_tasks = []
-For each task_id in index.json.plan.task_ids:
-  Read .task/${task_id}.json
+For each task_id in plan.json.task_ids:
+  Read ${PLAN_DIR}/.task/${task_id}.json
   If status == "completed":
     completed_tasks.push(task_id)
 
@@ -96,7 +115,7 @@ If completed_tasks.length > 0:
 ### Build wave execution queue
 
 ```
-waves = plan.json.waves (or index.json.plan.waves)
+waves = plan.json.waves
 
 execution_queue = []
 For each wave in waves:
@@ -475,7 +494,7 @@ If config.json.workflow.reflection == true:
     - Any blocked tasks?
     - Patterns observed?
 
-  Append to ${PHASE_DIR}/reflection-log.md:
+  Append to ${PLAN_DIR}/reflection-log.md:
     ## Reflection - Wave Execution {timestamp}
     - Strategy adjustments: [...]
     - Patterns noted: [...]
@@ -515,12 +534,50 @@ If NOT SCRATCH_MODE:
 
 ---
 
+## E5: Register Artifact & Extract Learnings (per PLAN_DIR)
+
+**Purpose:** Register execution completion and extract incremental learnings.
+
+```
+// Register EXC artifact
+Read .workflow/state.json
+plan_artifact = state.json.artifacts.find(a => a.type == "plan" && a.path == PLAN_DIR_relative)
+next_id = max(artifacts.filter(a => a.type == "execute").map(a => parseInt(a.id.replace("EXC-","")))) + 1
+
+artifact = {
+  id: "EXC-{next_id padded to 3}",
+  type: "execute",
+  milestone: plan_artifact.milestone,
+  phase: plan_artifact.phase,
+  scope: plan_artifact.scope,
+  path: plan_artifact.path,    // same path — execute writes into plan dir
+  status: "completed",
+  depends_on: plan_artifact.id,
+  harvested: false,
+  created_at: execution_start_time,
+  completed_at: now()
+}
+
+state.json.artifacts.push(artifact)
+state.json.last_updated = now()
+Write state.json (atomic)
+
+// Incremental learning extraction
+Read all ${PLAN_DIR}/.summaries/TASK-*-summary.md
+Extract: strategy adjustments, patterns discovered, pitfalls encountered
+Append to .workflow/specs/learnings.md under "## Entries"
+Mark artifact.harvested = true
+Write state.json (atomic)
+```
+
+---
+
 ## Error Handling
 
 | Error | Action |
 |-------|--------|
-| Phase directory not found | Abort: "Phase {phase} not found." |
-| No plan exists | Abort: "No plan found. Run /workflow:plan first." |
+| No pending plans found | Abort: "No pending plans. Run /workflow:plan first." |
+| Plan directory not found | Abort: "Plan dir not found." |
 | Task file missing | Skip task, log error, continue wave |
 | Agent spawn fails | Retry once, then mark task as "blocked" |
 | Delegate fails | Resume with `--resume ${fixedId}`, then fallback to agent |

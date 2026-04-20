@@ -2,12 +2,12 @@
   "$schema": "./chain-graph.schema.json",
   "id": "full-lifecycle",
   "name": "Full Lifecycle",
-  "description": "Plan -> Execute -> Verify -> Review -> Test -> Transition with decision points",
-  "version": "1.0.0",
-  "tags": ["lifecycle", "phase"],
+  "description": "Plan -> Execute -> Verify -> Review -> Test -> Milestone Audit/Complete with decision points",
+  "version": "2.0.0",
+  "tags": ["lifecycle", "milestone"],
   "entry": "plan",
   "inputs": {
-    "phase": { "type": "string", "required": true },
+    "phase": { "type": "string", "required": false },
     "description": { "type": "string" }
   },
   "defaults": { "analyze": true },
@@ -38,21 +38,6 @@
     "check_verify": {
       "type": "decision",
       "eval": "ctx.result.verification_status",
-      "edges": [
-        { "value": "passed", "target": "business_test" },
-        { "default": true, "target": "fix_plan" }
-      ]
-    },
-    "business_test": {
-      "type": "command",
-      "cmd": "quality-business-test",
-      "description": "PRD-forward business testing with requirement traceability",
-      "args": "{phase} --auto",
-      "next": "check_business_test"
-    },
-    "check_business_test": {
-      "type": "decision",
-      "eval": "ctx.result.business_test_status",
       "edges": [
         { "value": "passed", "target": "review" },
         { "default": true, "target": "fix_plan" }
@@ -101,7 +86,7 @@
       "type": "decision",
       "eval": "ctx.result.uat_status",
       "edges": [
-        { "value": "passed", "target": "transition" },
+        { "value": "passed", "target": "milestone_audit" },
         { "default": true, "target": "debug" }
       ]
     },
@@ -113,10 +98,24 @@
       "next": "fix_execute",
       "max_visits": 2
     },
-    "transition": {
+    "milestone_audit": {
       "type": "command",
-      "cmd": "maestro-phase-transition",
-      "description": "Complete phase, extract learnings, advance to next",
+      "cmd": "maestro-milestone-audit",
+      "description": "Audit milestone for cross-phase integration gaps using artifact registry",
+      "next": "check_audit"
+    },
+    "check_audit": {
+      "type": "decision",
+      "eval": "ctx.result.audit_verdict",
+      "edges": [
+        { "value": "PASS", "target": "milestone_complete" },
+        { "default": true, "target": "fix_plan" }
+      ]
+    },
+    "milestone_complete": {
+      "type": "command",
+      "cmd": "maestro-milestone-complete",
+      "description": "Archive scratch artifacts, move to milestone_history, advance to next milestone",
       "next": "done"
     },
     "done": {

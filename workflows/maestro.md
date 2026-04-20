@@ -56,31 +56,26 @@ test -f .workflow/state.json && echo "exists" || echo "missing"
 ```
 
 **If `.workflow/state.json` exists:**
-1. Read `state.json` → extract `current_milestone`, `current_phase`, `status`, `phases_summary`, `accumulated_context`
+1. Read `state.json` → extract `current_milestone`, `status`, `milestones[]`, `artifacts[]`, `accumulated_context`
 2. Read `.workflow/roadmap.md` → extract phase list with titles
-3. For current_phase, read `.workflow/phases/{NN}-{slug}/index.json`:
-   - Extract: `status`, `plan`, `execution`, `verification`, `validation`, `uat`
-4. Check for artifacts in current phase directory:
-   ```bash
-   ls .workflow/phases/{NN}-{slug}/ 2>/dev/null | grep -E "(brainstorm|analysis|context|plan\.json|verification\.json|uat)\.md"
-   ```
-5. Build `$PROJECT_STATE`:
+3. Derive progress from artifact registry:
+   - Group `artifacts[]` by phase for current milestone
+   - For each phase: determine furthest artifact type (analyze→plan→execute→verify)
+   - Identify which phases have pending plans (plan artifact without execute artifact)
+4. Build `$PROJECT_STATE`:
    ```json
    {
      "initialized": true,
-     "current_phase": 1,
-     "phase_slug": "auth-system",
-     "phase_title": "Authentication System",
-     "phase_status": "pending|exploring|planning|executing|verifying|testing|completed|blocked",
-     "phase_artifacts": {
-       "brainstorm": false, "analysis": false, "context": false,
-       "plan": false, "verification": false, "uat": false
+     "current_milestone": "M1",
+     "milestone_name": "MVP Auth",
+     "milestone_progress": {
+       "phases_total": 3,
+       "phases_with_execute": 1,
+       "phases_with_plan": 2,
+       "adhoc_count": 0
      },
-     "execution": { "tasks_completed": 0, "tasks_total": 0 },
-     "verification_status": "pending",
-     "uat_status": "pending",
-     "phases_total": 3,
-     "phases_completed": 0,
+     "latest_artifact": { "id": "PLN-002", "type": "plan", "phase": 2 },
+     "pending_actions": ["execute phase 2", "analyze phase 3"],
      "has_blockers": false,
      "suggested_next": null
    }
@@ -262,7 +257,7 @@ function routeIntent(intent, projectState) {
     'manage': {
       'issue':       'issue',
       'milestone':   'milestone_audit',
-      'phase':       'phase_transition',
+      'phase':       'milestone_close',
       'memory':      'memory',
       'doc':         'sync',
       'codebase':    'codebase_refresh',
@@ -271,9 +266,9 @@ function routeIntent(intent, projectState) {
       '_default':    'status',
     },
     'transition': {
-      'phase':       'phase_transition',
+      'phase':       'milestone_close',
       'milestone':   'milestone_complete',
-      '_default':    'phase_transition',
+      '_default':    'milestone_close',
     },
     'continue':    { '_default': 'state_continue' },
     'sync': {
@@ -459,7 +454,7 @@ function detectNextAction(state) {
       if (rev === 'BLOCK') return { chain: 'review-fix', steps: ['maestro-plan --gaps', 'maestro-execute', 'quality-review'] };
       // Review passed or warned — proceed to UAT
       if (uat === 'pending') return { chain: 'test', steps: ['quality-test'] };
-      if (uat === 'passed') return { chain: 'phase-transition', steps: ['maestro-phase-transition'] };
+      if (uat === 'passed') return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
       if (uat === 'failed') return { chain: 'debug', steps: ['quality-debug --from-uat {phase}'] };
       if (uat === 'in_progress') return { chain: 'test', steps: ['quality-test'] };
       return { chain: 'test', steps: ['quality-test'] };
@@ -470,7 +465,7 @@ function detectNextAction(state) {
 
   // Testing
   if (ps === 'testing') {
-    if (uat === 'passed') return { chain: 'phase-transition', steps: ['maestro-phase-transition'] };
+    if (uat === 'passed') return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
     return { chain: 'debug', steps: ['quality-debug --from-uat {phase}'] };
   }
 
@@ -478,7 +473,7 @@ function detectNextAction(state) {
   if (ps === 'completed') {
     if (state.phases_completed >= state.phases_total)
       return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
-    return { chain: 'phase-transition', steps: ['maestro-phase-transition'] };
+    return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
   }
 
   // Phase forked (developed in a worktree)
@@ -524,8 +519,7 @@ const chainMap = {
   'retrospective':      [{ cmd: 'quality-retrospective', args: '{phase}' }],
   'learn':              [{ cmd: 'manage-learn', args: '"{description}"' }],
   'sync':               [{ cmd: 'quality-sync', args: '{phase}' }],
-  'phase_transition':   [{ cmd: 'maestro-phase-transition' }],
-  'phase_add':          [{ cmd: 'maestro-phase-add', args: '"{description}"' }],
+  'milestone_close':   [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'milestone_audit':    [{ cmd: 'maestro-milestone-audit' }],
   'milestone_complete': [{ cmd: 'maestro-milestone-complete' }],
   'codebase_rebuild':   [{ cmd: 'manage-codebase-rebuild' }],
@@ -562,7 +556,7 @@ const chainMap = {
     { cmd: 'maestro-verify', args: '{phase}' },
     { cmd: 'quality-review', args: '{phase}' },
     { cmd: 'quality-test', args: '{phase}' },
-    { cmd: 'maestro-phase-transition' }
+    { cmd: 'maestro-milestone-audit' }
   ],
   'spec-driven': [
     { cmd: 'maestro-init' },
@@ -652,7 +646,7 @@ Cross-validate intent against project state:
 - Intent says `execute` but phase has no plan → warn, prepend `maestro-plan`
 - Intent says `verify` but phase not executed → warn, prepend `maestro-execute`
 - Intent says `test` but phase not verified → warn, prepend `maestro-verify`
-- Intent says `phase_transition` but phase not verified → warn, prepend `maestro-verify`
+- Intent says `milestone_close` but not all phases executed → warn, suggest completing execution first
 
 Display warning but let user override.
 
@@ -679,7 +673,7 @@ function resolvePhase(intent_analysis, project_state) {
     'maestro-init', 'maestro-spec-generate', 'maestro-fork', 'maestro-merge',
     'maestro-roadmap', 'spec-setup', 'manage-memory', 'manage-memory-capture', 'manage-learn',
     'manage-codebase-rebuild', 'manage-codebase-refresh', 'maestro-milestone-audit',
-    'maestro-milestone-complete', 'maestro-phase-transition', 'maestro-phase-add'];
+    'maestro-milestone-complete', 'maestro-milestone-audit'];
   if (chain.every(s => noPhaseCommands.includes(s.cmd))) return null;
 
   // 6. Ask user
@@ -901,7 +895,7 @@ Display completion report:
 
 | Chain | Steps | Use Case |
 |-------|-------|----------|
-| `full-lifecycle` | plan → execute → verify → review → test → transition | Full phase completion |
+| `full-lifecycle` | plan → execute → verify → review → test → milestone-audit → milestone-complete | Full milestone completion |
 | `spec-driven` | init → spec-generate → plan → execute → verify | Start from idea/requirements (heavy path) |
 | `roadmap-driven` | init → maestro-roadmap → plan → execute → verify | Start from requirements (light path) |
 | `brainstorm-driven` | brainstorm → plan → execute → verify | Start from exploration |
@@ -946,7 +940,7 @@ Shows how structured extraction routes common inputs — especially cases where 
 | `"复盘 phase 2"` | `{retrospect, phase}` | retrospective | quality-retrospective |
 | `"team review code"` | `{review, team}` | team_review | team-review |
 | `"team qa full scan"` | `{analyze, team}` | team_qa | team-quality-assurance |
-| `"next phase"` | `{transition, phase}` | phase_transition | maestro-phase-transition |
+| `"next phase"` | `{transition, milestone}` | milestone_close | maestro-milestone-audit → milestone-complete |
 | `"milestone audit"` | `{manage, milestone}` | milestone_audit | maestro-milestone-audit |
 | `-y "implement feature X"` | `{execute, feature}` | execute | maestro-execute (auto mode) |
 

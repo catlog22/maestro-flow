@@ -32,9 +32,10 @@ You describe what you want. Maestro-Flow figures out which agents to use, in wha
 # Or step by step
 /maestro-init                    # Set up project workspace
 /maestro-roadmap                 # Create phased roadmap interactively
-/maestro-plan 1                  # Generate execution plan for Phase 1
-/maestro-execute 1               # Wave-based parallel agent execution
-/maestro-verify 1                # Goal-backward verification
+/maestro-analyze                 # Multi-dimensional analysis
+/maestro-plan                    # Generate execution plan
+/maestro-execute                 # Wave-based parallel agent execution
+/maestro-verify                  # Goal-backward verification
 ```
 
 ### The Pipeline
@@ -48,10 +49,12 @@ graph LR
     E --> F[execute]
     F --> G[verify]
     G --> H[review]
-    H --> I[test]
-    I --> J[transition]
-    J -->|next phase| D
+    H --> I[milestone-audit]
+    I --> J[milestone-complete]
+    J -->|next milestone| D
 ```
+
+All work artifacts live in `.workflow/scratch/`, tracked by `state.json` artifact registry. Phases are labels in the roadmap, not directories.
 
 ### Quick Channels
 
@@ -67,9 +70,9 @@ graph LR
 
 ### 1. Structured Pipeline
 
-Phase-based execution with explicit status tracking. Each phase moves through analyze > plan > execute > verify > review > test > transition. The dashboard shows what's happening and what to do next.
+Scratch-based milestone workflow with artifact registry tracking. Each milestone moves through analyze > plan > execute > verify > review > milestone-audit > milestone-complete. All artifacts live in `.workflow/scratch/`, registered in `state.json`. The dashboard shows what's happening and what to do next.
 
-51 slash commands across 6 categories power every stage — from project initialization to quality retrospective.
+49 slash commands across 6 categories power every stage — from project initialization to quality retrospective.
 
 ### 2. Autonomous Autopilot
 
@@ -195,13 +198,13 @@ maestro overlay bundle -o team.json    # Pack for sharing
 
 ---
 
-## 51 Commands, 21 Agents
+## 49 Commands, 21 Agents
 
 ### Commands
 
 | Category | Count | Prefix | Purpose |
 |----------|-------|--------|---------|
-| **Core Workflow** | 20 | `maestro-*` | Full lifecycle — init, brainstorm, roadmap, analyze, plan, execute, verify, coordinate, milestones, overlays, UI design |
+| **Core Workflow** | 18 | `maestro-*` | Full lifecycle — init, brainstorm, roadmap, analyze, plan, execute, verify, coordinate, milestones, overlays, UI design |
 | **Management** | 12 | `manage-*` | Issue lifecycle, codebase docs, knowledge capture, memory, harvest, status |
 | **Quality** | 9 | `quality-*` | Review, test, debug, test-gen, integration-test, business-test, refactor, retrospective, sync |
 | **Learning** | 5 | `learn-*` | Unified retro, follow-along, pattern decompose, investigate, second opinion |
@@ -236,8 +239,9 @@ maestro install
 ```bash
 /maestro-init                  # Initialize project
 /maestro-roadmap               # Create roadmap
-/maestro-plan 1                # Plan Phase 1
-/maestro-execute 1             # Execute with agents
+/maestro-analyze               # Analyze current milestone
+/maestro-plan                  # Plan (outputs to scratch/)
+/maestro-execute               # Execute all pending plans
 
 # Or just:
 /maestro "build a REST API for user management"
@@ -287,9 +291,9 @@ maestro/
 │       │   └── execution/   # ExecutionScheduler + WaveExecutor
 │       └── shared/          # Shared types
 ├── .claude/
-│   ├── commands/            # 51 slash commands (.md)
+│   ├── commands/            # 49 slash commands (.md)
 │   └── agents/              # 21 agent definitions (.md)
-├── workflows/               # 47 workflow implementations (.md)
+├── workflows/               # 45 workflow implementations (.md)
 ├── templates/               # JSON templates (task, plan, issue, ...)
 └── extensions/              # Plugin system
 ```

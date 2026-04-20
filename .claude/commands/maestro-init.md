@@ -70,7 +70,7 @@ Other commands:
 <success_criteria>
 - [ ] Deep questioning completed (threads followed, not rushed) — or extracted from document/brainstorm
 - [ ] `.workflow/project.md` created with Core Value, Requirements (Validated/Active/Out of Scope), Key Decisions
-- [ ] `.workflow/state.json` created and initialized to idle state
+- [ ] `.workflow/state.json` created with artifacts[] array, initialized to idle state
 - [ ] `.workflow/config.json` created with user-selected granularity, workflow agents, gate preferences
 - [ ] `.workflow/specs/` initialized with convention files
 - [ ] Research completed (if enabled) — 4 parallel agents spawned

@@ -14,28 +14,30 @@ Pipeline position: analyze -> **ui-design** -> plan -> execute -> verify
 
 ## Prerequisites
 
-- `.workflow/` directory initialized
-- Phase directory exists at `.workflow/phases/{NN}-{slug}/` — OR scratch mode for standalone
+- `.workflow/` directory initialized (or auto-bootstrap)
 - Python 3 available (required by ui-ux-pro-max skill)
 - ui-ux-pro-max skill installed (search.py available)
 
 ---
 
-## Phase Resolution
+## Scope Resolution
 
 ```
-Input: <phase> argument (number or slug) OR topic text
+Input: <phase> argument (number) OR topic text
 
-IF argument is a number or matches phase pattern:
-  1. Find .workflow/phases/{NN}-*/index.json
-  2. Set PHASE_DIR = resolved path, SCRATCH_MODE = false
+All output goes to scratch: .workflow/scratch/ui-design-{slug}-{date}/
 
-ELSE (topic text — scratch mode):
+IF argument is a number:
+  1. Resolve phase slug from roadmap.md
+  2. OUTPUT_DIR = .workflow/scratch/ui-design-{phase-slug}-{date}
+  3. scope = "phase", register artifact with phase number
+
+ELSE (topic text):
   1. slug = slugify(topic)
-  2. PHASE_DIR = .workflow/scratch/ui-design-{slug}-{YYYYMMDD}
-  3. mkdir -p ${PHASE_DIR}
-  4. Create minimal index.json (type="ui-design", goal=topic)
-  5. Set SCRATCH_MODE = true
+  2. OUTPUT_DIR = .workflow/scratch/ui-design-{slug}-{date}
+  3. scope = state.json.current_milestone ? "adhoc" : "standalone"
+
+mkdir -p ${OUTPUT_DIR}
 ```
 
 ---

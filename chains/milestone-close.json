@@ -2,8 +2,8 @@
   "$schema": "./chain-graph.schema.json",
   "id": "milestone-close",
   "name": "Milestone Close",
-  "description": "Milestone Audit -> Phase Transition -> Done",
-  "version": "1.0.0",
+  "description": "Milestone Audit -> Milestone Complete",
+  "version": "2.0.0",
   "tags": ["milestone"],
   "entry": "audit",
   "inputs": {},
@@ -11,19 +11,32 @@
     "audit": {
       "type": "command",
       "cmd": "maestro-milestone-audit",
-      "description": "Audit current milestone for cross-phase integration gaps",
-      "next": "transition"
+      "description": "Audit current milestone using artifact registry for cross-phase integration gaps",
+      "next": "check_audit"
     },
-    "transition": {
+    "check_audit": {
+      "type": "decision",
+      "eval": "ctx.result.audit_verdict",
+      "edges": [
+        { "value": "PASS", "target": "complete" },
+        { "default": true, "target": "failed" }
+      ]
+    },
+    "complete": {
       "type": "command",
-      "cmd": "maestro-phase-transition",
-      "description": "Complete phase, extract learnings, advance to next",
+      "cmd": "maestro-milestone-complete",
+      "description": "Archive scratch artifacts to milestones/, move artifact entries to history, advance state",
       "next": "done"
     },
     "done": {
       "type": "terminal",
       "status": "success",
       "summary": "Milestone closed successfully"
+    },
+    "failed": {
+      "type": "terminal",
+      "status": "failed",
+      "summary": "Audit failed — fix integration gaps before completing milestone"
     }
   }
 }

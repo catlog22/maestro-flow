@@ -31,12 +31,11 @@ graph TB
         UID["/maestro-ui-design"]
     end
 
-    subgraph pipeline["Phase Pipeline"]
+    subgraph pipeline["Milestone Pipeline"]
         AN["/maestro-analyze"]
         PL["/maestro-plan"]
         EX["/maestro-execute"]
         VF["/maestro-verify"]
-        PT["/maestro-phase-transition"]
     end
 
     subgraph quality["Quality Pipeline"]
@@ -87,8 +86,7 @@ graph TB
     VF --> QBT
     QBT --> QR
     QR --> QT
-    QT --> PT
-    PT -->|"Next Phase"| AN
+    QT -->|"All Phases completed"| MA
 
     QBT -->|"Failure"| PL
     VF -->|gaps| PL
@@ -101,8 +99,8 @@ graph TB
     IP --> IE
     IE --> ICL
 
-    PT -->|"All Phases completed"| MA
     MA --> MC
+    MC -->|"Next Milestone"| AN
 ```
 
 ### Interaction Between Main Pipeline and Issues
@@ -184,10 +182,10 @@ graph LR
     end
 
     subgraph workflow_path["workflow path"]
-        W1["review/verify/test<br>auto-create"] --> W2["Link to Phase N<br>phase_id=N"]
+        W1["review/verify/test<br>auto-create"] --> W2["Link to Milestone<br>milestone=M1"]
         W2 --> W3["Issue closed-loop fix"]
-        W3 --> W4["Phase re-verification"]
-        W4 --> W5["phase-transition"]
+        W3 --> W4["Re-verification"]
+        W4 --> W5["milestone-audit"]
     end
 
     style standalone_path fill:#1a1a2e,stroke:#4a4a6a
@@ -224,26 +222,23 @@ stateDiagram-v2
 ```mermaid
 stateDiagram-v2
     [*] --> pending: Phase created
-    pending --> exploring: /maestro-analyze
-    exploring --> planning: /maestro-plan
-    planning --> executing: /maestro-execute
-    executing --> verifying: /maestro-verify
-    verifying --> business_testing: /quality-business-test
-    business_testing --> testing: /quality-test
-    testing --> completed: /maestro-phase-transition
+    no_artifacts --> analyzed: /maestro-analyze → ANL artifact
+    analyzed --> planned: /maestro-plan → PLN artifact
+    planned --> executed: /maestro-execute → EXC artifact
+    executed --> verified: /maestro-verify → VRF artifact
+    verified --> audited: /maestro-milestone-audit
+    audited --> completed: /maestro-milestone-complete
     completed --> [*]
 
-    business_testing --> planning: Business rule failure → plan --gaps
-
-    verifying --> planning: Gaps found → plan --gaps
-    testing --> planning: Failure → debug → plan --gaps
-    executing --> blocked: Execution blocked
-    blocked --> planning: /quality-debug → fix
+    verified --> planned: Gaps found → plan --gaps
+    executed --> planned: Failure → debug → plan --gaps
 ```
+
+**Core change**: Phase = label, not directory. All artifacts live in `.workflow/scratch/`, tracked by `state.json.artifacts[]`. Each step produces an artifact entry (ANL/PLN/EXC/VRF) forming a dependency chain.
 
 ---
 
-## 1. Main Workflow (Phase Pipeline)
+## 1. Main Workflow (Milestone Pipeline)
 
 The main workflow progresses the project in units of **Phase**, with each Phase going through a complete lifecycle pipeline.
 
@@ -257,28 +252,31 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 |------|---------|---------|--------|
 | 0 | `/maestro-brainstorm` (optional) | Multi-role brainstorming | guidance-specification.md |
 | 1 | `/maestro-init` | Initialize .workflow/ directory | state.json, project.md, specs/ |
-| 2a | `/maestro-roadmap` | Lightweight roadmap (interactive) | roadmap.md + phases/ directory |
+| 2a | `/maestro-roadmap` | Lightweight roadmap (interactive) | roadmap.md (phases as labels) |
 | 2b | `/maestro-spec-generate` | Full specification chain (7 stages) | PRD + architecture docs + roadmap.md |
 | (optional) | `/maestro-ui-design` | UI design prototype | design-ref/ tokens |
 
 **Choosing 2a vs 2b**: Use roadmap for small projects or when requirements are clear; use spec-generate for large projects or when complete specification documents are needed.
 
-### 1.2 Phase Pipeline (executed cyclically for each Phase)
+### 1.2 Milestone Pipeline (Scratch-Based Artifact Registry)
 
 ```
-/maestro-analyze → /maestro-plan → /maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test → /maestro-phase-transition
+/maestro-analyze → /maestro-plan → /maestro-execute → /maestro-verify → /quality-review → /maestro-milestone-audit → /maestro-milestone-complete
 ```
 
-| Stage | Command | Input | Output | Dashboard Status |
-|-------|---------|-------|--------|-----------------|
-| Explore | `/maestro-analyze {N}` | phase directory | context.md, analysis.md | `pending` → `exploring` |
-| Plan | `/maestro-plan {N}` | context.md | plan.json + TASK-*.json | `exploring` → `planning` |
-| Execute | `/maestro-execute {N}` | plan.json | .summaries/, code changes | `planning` → `executing` |
-| Verify | `/maestro-verify {N}` | .summaries/ | verification.json | `executing` → `verifying` |
-| Business Test | `/quality-business-test {N}` | REQ-*.md acceptance criteria | business-test-report.json | `verifying` |
-| Review | `/quality-review {N}` | code changes | review.json | `verifying` |
-| Test | `/quality-test {N}` | verification.json | uat.md | `verifying` → `testing` |
-| Advance | `/maestro-phase-transition` | all passed | next phase initialization | `testing` → `completed` |
+| Stage | Command | Input | Output | Artifact |
+|-------|---------|-------|--------|----------|
+| Analyze | `/maestro-analyze` | roadmap + project.md | context.md, analysis.md | ANL-{NNN} |
+| Plan | `/maestro-plan` | context.md (from ANL) | plan.json + TASK-*.json | PLN-{NNN} |
+| Execute | `/maestro-execute` | plan.json | .summaries/, code changes | EXC-{NNN} |
+| Verify | `/maestro-verify` | .summaries/ | verification.json | VRF-{NNN} |
+| Review | `/quality-review` | code changes | review.json | — |
+| Audit | `/maestro-milestone-audit` | artifact registry | audit-report.md | — |
+| Complete | `/maestro-milestone-complete` | audit passed | archived to milestones/ | — |
+
+**All output paths**: `scratch/{type}-{slug}-{date}/` — no more `.workflow/phases/` directories.
+
+**Scope routing**: No args = entire milestone; number = specific phase; text = adhoc/standalone.
 
 ### 1.3 Gap Fix Loop
 

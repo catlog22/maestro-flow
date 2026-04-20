@@ -12,10 +12,10 @@ Dual verification: Goal-Backward structural verification + Nyquist test coverage
 
 ---
 
-## Phase Resolution
+## Scope Resolution
 
 ```
-Input: <phase> argument (number or slug)
+Input: [phase] argument OR --dir <path>
 
 # Worktree scope check
 IF file_exists(".workflow/worktree-scope.json"):
@@ -24,10 +24,38 @@ IF file_exists(".workflow/worktree-scope.json"):
     ERROR "Phase {phase} not owned by this worktree. Owned: {scope.owned_phases}"
     EXIT
 
-  1. If number: find .workflow/phases/{NN}-*/index.json
-  2. If slug: find .workflow/phases/*-{slug}/index.json
-  3. Validate execution has occurred (index.json.execution.tasks_completed > 0)
-  4. Set PHASE_DIR = resolved path
+IF --dir <path> is provided:
+  // Single plan verification
+  PLAN_DIRS = [<path>]
+  VERIFY_MODE = "single"
+  VERIFY_OUTPUT_DIR = <path>  // verification.json written into plan dir
+
+ELSE IF no arguments:
+  // Milestone-level verification
+  Read state.json.artifacts
+  PLAN_DIRS = artifacts.filter(a =>
+    a.milestone == current_milestone &&
+    a.type == "execute" &&
+    a.status == "completed"
+  ).map(a => a.path)
+  IF PLAN_DIRS is empty: ERROR E001
+  VERIFY_MODE = "milestone"
+  milestone_slug = slugify(current_milestone name)
+  VERIFY_OUTPUT_DIR = .workflow/scratch/verify-{milestone_slug}-{date}/
+  mkdir -p VERIFY_OUTPUT_DIR
+
+ELSE IF argument is a number:
+  // Phase-level verification
+  Read state.json.artifacts
+  PLAN_DIRS = artifacts.filter(a =>
+    a.milestone == current_milestone &&
+    a.type == "execute" &&
+    a.phase == arg &&
+    a.status == "completed"
+  ).map(a => a.path)
+  IF PLAN_DIRS is empty: ERROR E001
+  VERIFY_MODE = "phase"
+  VERIFY_OUTPUT_DIR = first plan dir  // single plan → write there
 ```
 
 ---

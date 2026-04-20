@@ -41,16 +41,17 @@ Quick mode (-q):
 ## Arguments
 
 ```
-$ARGUMENTS: "<phase|topic> [-y] [-c] [-q]"
+$ARGUMENTS: "[phase|topic] [-y] [-c] [-q]"
 
-<phase>     -- Phase number (phase mode, operates within phase directory)
-<topic>     -- Topic text (scratch mode, creates scratch directory)
+(no args)   -- Milestone-wide analysis (requires init + roadmap)
+<phase>     -- Phase number (phase-scoped, requires init + roadmap)
+<topic>     -- Topic text (adhoc if milestone exists, standalone if not)
 -y / --yes  -- Auto mode, skip interactive scoping, auto-deepen
 -c / --continue -- Resume from existing session
 -q / --quick -- Quick mode, skip exploration + scoring, go straight to decision extraction
 ```
 
-## Dual-Mode Routing
+## Scope Routing
 
 ```
 // Worktree scope check
@@ -60,17 +61,40 @@ IF file_exists(".workflow/worktree-scope.json"):
     ERROR "Phase {$ARGUMENTS} not owned by this worktree. Owned: {scope.owned_phases}"
     EXIT
 
-IF $ARGUMENTS matches /^\d+$/
-  → Phase mode
-  → Resolve phase dir from state.json + roadmap
-  → Set OUTPUT_DIR = .workflow/phases/{NN}-{slug}/
-  → Update index.json: status → "exploring"
+// Auto-bootstrap state.json if missing
+IF NOT file_exists(".workflow/state.json"):
+  mkdir -p .workflow/scratch/
+  Write minimal state.json: { project: null, status: "active", current_milestone: null,
+    current_task_id: null, milestones: [], artifacts: [], last_updated: now() }
 
-ELSE
-  → Scratch mode
-  → Slugify topic (lowercase, hyphens, max 40 chars)
-  → Set OUTPUT_DIR = .workflow/scratch/analyze-{slug}-{date}/
-  → Create directory + index.json from scratch-index template (type="analyze")
+// Scope determination
+IF $ARGUMENTS is empty:
+  IF state.json.current_milestone is non-null AND roadmap.md exists:
+    → scope = "milestone"
+    → milestone_slug = slugify(current_milestone name)
+    → Set OUTPUT_DIR = .workflow/scratch/analyze-{milestone_slug}-{date}/
+  ELSE:
+    → ERROR E001 "No args and no roadmap — provide topic text or create roadmap first"
+
+ELSE IF $ARGUMENTS matches /^\d+$/:
+  IF state.json.current_milestone is non-null AND roadmap.md exists:
+    → scope = "phase"
+    → phase_num = parsed number
+    → phase_slug = resolve from roadmap.md
+    → Set OUTPUT_DIR = .workflow/scratch/analyze-{phase_slug}-{date}/
+  ELSE:
+    → ERROR "Phase number requires init + roadmap"
+
+ELSE (text argument):
+  → topic_slug = slugify(text, max 40 chars)
+  IF state.json.current_milestone is non-null:
+    → scope = "adhoc"
+  ELSE:
+    → scope = "standalone"
+  → Set OUTPUT_DIR = .workflow/scratch/analyze-{topic_slug}-{date}/
+
+// Create output directory
+mkdir -p {OUTPUT_DIR}
 ```
 
 ## Output Structure
@@ -96,31 +120,23 @@ Parse $ARGUMENTS to determine mode and flags:
 - `-c` present: locate existing session folder (discussion.md exists), resume from last round
 - `-y` present: set AUTO_MODE=true
 - `-q` present: set QUICK_MODE=true (skip Steps 2-7, jump to Step 8: Decision Extraction)
-- Number (e.g., "3") = phase mode: resolve `.workflow/phases/{NN}-*/`, verify phase exists in roadmap
-- Text (e.g., "microservices vs monolith") = scratch mode: slugify topic, prepare scratch directory path
-- Missing/empty = error E001
+- Number (e.g., "3") = phase scope: resolve phase slug from roadmap, output to scratch/analyze-{phase-slug}-{date}/
+- Text (e.g., "microservices vs monolith") = adhoc/standalone scope: output to scratch/analyze-{slug}-{date}/
+- Missing/empty = milestone scope (if roadmap exists) or error E001
 
 **Session initialization:**
 - Session ID: `ANL-{slug}-{YYYY-MM-DD}`
-- Phase mode output: phase directory
-- Scratch mode output: `.workflow/scratch/analyze-{slug}-{date}/`
+- Output: `OUTPUT_DIR` (always under `.workflow/scratch/`)
 
-**Load prior context** (phase mode):
+**Load prior context** (milestone/phase scope):
 1. Read `.workflow/project.md` — project vision, constraints, Validated requirements (already shipped), Active requirements (current scope)
 2. Read `.workflow/roadmap.md` — phase structure and dependencies
-3. Read index.json in phase dir — goal, success_criteria
-4. Read `.brainstorming/guidance-specification.md` in phase dir (if exists) — detailed requirements, constraints, RFC 2119 decisions from brainstorm. Skip areas marked as MUST/MUST NOT (already locked).
-5. Read `.brainstorming/feature-index.json` in phase dir (if exists) — feature decomposition
-6. Read `brainstorm.md` in phase dir (if exists, legacy fallback, skip if guidance-specification.md loaded)
-7. Read `analysis.md` in phase dir (if exists, for continuation)
-8. Read `conclusions.json` in phase dir (if exists, for continuation)
-9. Read prior phases' `context.md` files — skip already-decided areas
-10. Read existing `context.md` in this phase (if exists, for continuation)
-11. Load project specs: `specs_content = maestro spec load --category planning`
-    Ensures analysis decisions don't conflict with existing architecture constraints.
-12. Read `.workflow/state.json` → `accumulated_context` (key_decisions, deferred items, blockers)
+3. Read `.workflow/state.json` → `current_milestone`, `artifacts[]`, `accumulated_context` (key_decisions, deferred items, blockers)
+4. Find prior analyze artifacts from `state.json.artifacts[]` where type=analyze and same milestone → load their `context.md` to skip already-decided areas
+5. Find brainstorm artifacts from `state.json.artifacts[]` where type=brainstorm and same milestone → load `guidance-specification.md` if exists
+6. Load project specs: `specs_content = maestro spec load --category planning`
 
-**Load prior context** (scratch mode):
+**Load prior context** (adhoc/standalone scope):
 1. Read `.workflow/project.md` (if exists) — project vision, Validated requirements, Active requirements, Key Decisions
 2. Read `.workflow/state.json` (if exists) → `accumulated_context` (key_decisions, deferred, blockers)
 3. Load project specs: `specs_content = maestro spec load --category planning`
@@ -576,6 +592,33 @@ IF deferred_items.length > 0:
     counter++
 
   Print: "Created {deferred_items.length} deferred issues for tracking"
+```
+
+### Step 8.8: Register Artifact
+
+```
+// Register in state.json artifact registry
+Read .workflow/state.json
+next_id = max(artifacts.filter(a => a.type == "analyze").map(a => parseInt(a.id.replace("ANL-","")))) + 1
+  // If no analyze artifacts exist: next_id = 1
+
+artifact = {
+  id: "ANL-{next_id padded to 3}",
+  type: "analyze",
+  milestone: state.json.current_milestone,  // null if standalone
+  phase: phase_num,                          // null if milestone/adhoc/standalone
+  scope: scope,                              // "milestone"|"phase"|"adhoc"|"standalone"
+  path: OUTPUT_DIR relative to .workflow/,   // e.g. "scratch/analyze-auth-2026-04-20"
+  status: "completed",
+  depends_on: null,
+  harvested: false,
+  created_at: session_start_time,
+  completed_at: now()
+}
+
+state.json.artifacts.push(artifact)
+state.json.last_updated = now()
+Write state.json (atomic: write tmp + rename)
 ```
 
 ### Step 9: Report & Next Step

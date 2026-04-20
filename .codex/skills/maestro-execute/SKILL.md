@@ -196,17 +196,18 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Decomposition Rules**:
 
-1. **Phase resolution**:
+1. **Plan resolution** (per scratch-milestone-architecture):
 
 | Input | Resolution |
 |-------|------------|
-| `--dir <path>` | Use path directly, set SCRATCH_MODE = true |
-| Number (e.g., `3`) | Find `.workflow/phases/{NN}-*/` matching phase number |
-| Slug (e.g., `auth`) | Find `.workflow/phases/*-{slug}/` |
+| `--dir <path>` | Use path directly (scratch plan dir) |
+| No args | Find all pending plans for current milestone from state.json.artifacts[] |
+| Number (e.g., `3`) | Find pending plans for phase N from state.json.artifacts[] |
 
-2. **Load plan**:
-   - Read `{PHASE_DIR}/plan.json` for wave structure
-   - Read `{PHASE_DIR}/index.json` for phase metadata
+   For multi-plan: execute sequentially. Each plan is a full CSV session.
+
+2. **Load plan** (per PLAN_DIR):
+   - Read `{PLAN_DIR}/plan.json` for wave structure
    - Extract `plan.waves` array with task assignments
 
 3. **Detect completed tasks (breakpoint resume)**:
@@ -307,24 +308,23 @@ If a task is blocked/failed and other tasks in later waves depend on it:
    - Update `status` to match CSV status
    - Write back to disk
 
-4. **Update index.json**:
-   ```json
-   {
-     "execution": {
-       "tasks_completed": N,
-       "tasks_total": M,
-       "current_wave": W,
-       "started_at": "<ISO>",
-       "completed_at": "<ISO or null>",
-       "commits": [{"hash": "...", "task": "...", "message": "..."}]
-     },
-     "status": "verifying" | "executing"
-   }
+4. **Register EXC artifact in state.json**:
    ```
-   - If all completed: set status = "verifying"
-   - If partial: set status = "executing" (resumable)
+   Read .workflow/state.json
+   plan_artifact = state.json.artifacts.find(a => a.type == "plan" && a.path == PLAN_DIR_relative)
+   next_id = max EXC-NNN + 1
+   Push artifact: { id: "EXC-{next_id}", type: "execute", milestone: plan_artifact.milestone,
+     phase: plan_artifact.phase, scope: plan_artifact.scope, path: plan_artifact.path,
+     status: "completed", depends_on: plan_artifact.id, harvested: false,
+     created_at: execution_start, completed_at: now() }
+   Write state.json (atomic)
+   ```
 
-5. **Update state.json**: Update project-level progress counters.
+5. **Extract incremental learnings**:
+   - Read all `.summaries/` from PLAN_DIR
+   - Extract strategy adjustments, patterns, pitfalls
+   - Append to `.workflow/specs/learnings.md`
+   - Mark artifact `harvested: true` in state.json
 
 6. **Generate context.md**:
 
@@ -368,11 +368,12 @@ Completed: {completed_count}/{total_count} tasks
 Blocked:   {blocked_count} tasks
 Waves:     {waves_executed}/{total_waves}
 
-Summaries: {phase_dir}/.summaries/
-Tasks:     {phase_dir}/.task/
+Summaries: {PLAN_DIR}/.summaries/
+Tasks:     {PLAN_DIR}/.task/
 
 Next steps:
-  Skill({ skill: "maestro-verify", args: "{phase}" })
+  Skill({ skill: "maestro-verify" })
+  Skill({ skill: "maestro-verify", args: "--dir {PLAN_DIR}" })
   Skill({ skill: "manage-status" })
 ```
 

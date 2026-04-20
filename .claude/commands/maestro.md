@@ -39,9 +39,9 @@ $ARGUMENTS — user intent text, or special keywords.
 - `--chain <name>` — Force a specific chain (bypass intent detection). Valid: full-lifecycle, spec-driven, brainstorm-driven, execute-verify, quality-loop, milestone-close, quick, review
 
 **State files read:**
-- `.workflow/state.json` — project state machine
+- `.workflow/state.json` — project state machine + artifact registry
 - `.workflow/roadmap.md` — milestone/phase structure
-- `.workflow/phases/*/index.json` — per-phase metadata and progress
+- `.workflow/scratch/*/plan.json` — plan metadata (via artifact registry paths)
 </context>
 
 <execution>
@@ -65,7 +65,7 @@ When `-y` is active, maestro propagates auto flags to downstream commands. Only 
 | quality-test-gen | *(none)* | No auto flag — generates tests normally |
 | quality-debug | *(none)* | No auto flag — runs diagnosis normally |
 | quality-retrospective | `--auto-yes` | Accept all routing recommendations (spec/note/issue) without prompting |
-| maestro-phase-transition | *(none)* | No auto flag — validates and transitions |
+| maestro-milestone-audit | *(none)* | No auto flag — validates milestone readiness |
 | manage-learn | *(none)* | No auto flag — pure file operation, no prompts |
 
 Commands not listed (manage-*, spec-*, milestone-*) have no auto flags and execute as-is.
@@ -87,7 +87,7 @@ Before each Step 7 Skill() call, if context usage is near the window limit:
 === MAESTRO SESSION COMPLETE ===
 Session: {session_id}
 Chain:   {chain_name} ({steps_completed}/{steps_total} steps)
-Phase:   {current_phase} (if applicable)
+Milestone: {current_milestone} (if applicable)
 Mode:    {auto | interactive}
 
 Steps:

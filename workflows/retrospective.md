@@ -667,7 +667,7 @@ Write .workflow/learning/learning-index.json
 
 ### Backward-compat append to specs/learnings.md
 
-`phase-transition` Step 5e already writes free-form learnings to `.workflow/specs/learnings.md`. To stay backward-compatible (so phase-transition's reader can still find retrospective output), append a one-line summary per insight:
+Append learnings to `.workflow/specs/learnings.md` (shared with milestone-complete's learning extraction). Append a one-line summary per insight:
 
 ```
 IF .workflow/specs/learnings.md exists:
@@ -679,7 +679,7 @@ IF .workflow/specs/learnings.md exists:
       Phase: {NN} | Source: retrospective | Insight: {INS_id} | Lens: {lens}
 ```
 
-If the file does not exist, do not create it (phase-transition owns its lifecycle).
+If the file does not exist, create it with a `## Entries` header.
 
 ---
 
@@ -707,7 +707,7 @@ Next steps (suggested):
   Skill({ skill: "manage-status" })                                    — Review project state
   Skill({ skill: "manage-issue", args: "list --source retrospective" }) — Triage created issues
   Skill({ skill: "manage-learn", args: "list" })                       — Browse the lessons library
-  Skill({ skill: "maestro-phase-transition" })                         — Close the phase if not yet transitioned
+  Skill({ skill: "maestro-milestone-audit" })                          — Audit milestone if all phases done
 ```
 
 If `mode == "range"` or `--all`, loop Stages 3–8 per phase, then print an aggregate summary at the end:

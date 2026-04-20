@@ -176,17 +176,46 @@ const subjectArg = $ARGUMENTS
   .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|-q|--quick/g, '')
   .trim()
 
-// Detect phase mode vs scratch mode
-const isPhaseMode = /^\d+$/.test(subjectArg)
-const slug = isPhaseMode
-  ? `phase${subjectArg}`
-  : subjectArg.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
+// Auto-bootstrap state.json if missing
+if (!fileExists('.workflow/state.json')) {
+  Bash('mkdir -p .workflow/scratch/')
+  writeMinimalStateJson()  // { project: null, status: "active", current_milestone: null, artifacts: [] }
+}
 
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
+// Scope determination (per scratch-milestone-architecture)
+const state = JSON.parse(Read('.workflow/state.json'))
+let scope, slug, phaseNum = null
+
+if (subjectArg === '') {
+  // No args → milestone-wide
+  if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
+    scope = 'milestone'
+    slug = slugify(state.milestones.find(m => m.id === state.current_milestone)?.name || state.current_milestone)
+  } else {
+    ERROR('E001: No args and no roadmap — provide topic text or create roadmap first')
+  }
+} else if (/^\d+$/.test(subjectArg)) {
+  // Phase number
+  if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
+    scope = 'phase'
+    phaseNum = parseInt(subjectArg)
+    slug = resolvePhaseSlugFromRoadmap(phaseNum)  // parse roadmap.md for phase N slug
+  } else {
+    ERROR('Phase number requires init + roadmap')
+  }
+} else {
+  // Text → adhoc or standalone
+  slug = subjectArg.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
+  scope = state.current_milestone ? 'adhoc' : 'standalone'
+}
+
+const dateStr = getUtc8ISOString().substring(0, 10)
 const sessionId = `analyze-${slug}-${dateStr}`
 const sessionFolder = `.workflow/.csv-wave/${sessionId}`
+const scratchDir = `.workflow/scratch/analyze-${slug}-${dateStr}`
 
 Bash(`mkdir -p ${sessionFolder}`)
+Bash(`mkdir -p ${scratchDir}`)
 ```
 
 ---
@@ -197,14 +226,13 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Decomposition Rules**:
 
-1. **Mode detection**: Number = phase mode (resolve `.workflow/phases/{NN}-{slug}/`), text = scratch mode
-2. **Context loading** (phase mode):
+1. **Scope detection**: Already determined in Session Initialization (milestone/phase/adhoc/standalone)
+2. **Context loading** (milestone/phase scope):
    - Read `.workflow/project.md` -- project vision and constraints
    - Read `.workflow/roadmap.md` -- phase structure and dependencies
-   - Read phase `index.json` -- goal, success_criteria
-   - Read `.brainstorming/guidance-specification.md` (if exists) -- detailed requirements from brainstorm
-   - Read `.brainstorming/feature-index.json` (if exists) -- feature decomposition
-   - Read prior phases' `context.md` files -- skip already-decided areas
+   - Read `.workflow/state.json` → `current_milestone`, `artifacts[]`, `accumulated_context`
+   - Find prior analyze artifacts from `state.json.artifacts[]` (type=analyze, same milestone) → load their `context.md`
+   - Find brainstorm artifacts from `state.json.artifacts[]` (type=brainstorm, same milestone) → load `guidance-specification.md`
    - Load project specs: `maestro spec load --category planning`
 
 3. **Quick mode routing**: If QUICK_MODE, generate only wave 3 (synthesis/decide) task in CSV. Skip exploration and scoring.
@@ -457,8 +485,18 @@ IF deferred_items.length > 0:
   Print: "Created {N} deferred issues for tracking"
 ```
 
-7. Update phase `index.json` with analysis status (if phase mode)
-8. Display summary
+7. **Register artifact in state.json**:
+   ```
+   Read .workflow/state.json
+   next_id = max ANL-NNN + 1 (or 1 if none)
+   Push artifact: { id: "ANL-{next_id}", type: "analyze", milestone: current_milestone,
+     phase: phaseNum, scope: scope, path: scratchDir (relative to .workflow/),
+     status: "completed", depends_on: null, harvested: false,
+     created_at: session_start, completed_at: now() }
+   Write state.json (atomic)
+   ```
+8. Copy final outputs (context.md, analysis.md, conclusions.json) from CSV session folder to `scratchDir`
+9. Display summary
 
 ---
 

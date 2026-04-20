@@ -4,20 +4,21 @@
 
 Produces two-layer plan output: `plan.json` (overview with task_ids[] and waves[]) + `.task/TASK-{NNN}.json` (individual task definitions).
 
+All output goes to `.workflow/scratch/plan-{slug}-{date}/`.
+
 ---
 
 ## Prerequisites
 
-- `.workflow/` directory initialized (`/workflow:init` completed)
-- Phase directory exists at `.workflow/phases/{NN}-{slug}/` — OR `--dir` specifies a scratch directory
-- `index.json` present in target directory
+- None for standalone operation (state.json auto-bootstraps)
+- For milestone/phase scope: init + roadmap required
 
 ---
 
-## Phase Resolution
+## Scope Resolution
 
 ```
-Input: <phase> argument (number or slug) OR --dir <path>
+Input: [phase] argument OR --dir <path>
 
 # Worktree scope check
 IF file_exists(".workflow/worktree-scope.json"):
@@ -26,19 +27,38 @@ IF file_exists(".workflow/worktree-scope.json"):
     ERROR "Phase {phase} not owned by this worktree. Owned: {scope.owned_phases}"
     EXIT
 
+# Auto-bootstrap state.json if missing
+IF NOT file_exists(".workflow/state.json"):
+  mkdir -p .workflow/scratch/
+  Write minimal state.json: { project: null, status: "active", current_milestone: null,
+    current_task_id: null, milestones: [], artifacts: [], last_updated: now() }
+
 IF --dir <path> is provided:
-  1. Set PHASE_DIR = <path> (absolute or relative to project root)
-  2. Validate directory exists and contains index.json
-  3. Set SCRATCH_MODE = true (skip roadmap validation, phase transition)
+  1. Set CONTEXT_DIR = <path> (absolute or relative to .workflow/)
+  2. Validate directory exists (context.md or conclusions.json present)
+  3. Determine scope from parent artifact in state.json (if registered), else "standalone"
   4. Set PHASE_NUM = null, PHASE_SLUG = directory basename
 
-ELSE (standard phase resolution):
-  1. If number: find .workflow/phases/{NN}-*/index.json
-  2. If slug: find .workflow/phases/*-{slug}/index.json
-  3. Validate phase exists and status is not "completed"
-  4. Set PHASE_DIR = resolved path
-  5. Set PHASE_NUM and PHASE_SLUG from directory name
-  6. Set SCRATCH_MODE = false
+ELSE IF no arguments:
+  IF state.json.current_milestone AND roadmap.md exists:
+    scope = "milestone"
+    milestone_slug = slugify(current_milestone name)
+    CONTEXT_DIR = find latest analyze artifact for this milestone from state.json.artifacts[]
+  ELSE:
+    ERROR E001 "No args and no roadmap — provide phase number or create roadmap"
+
+ELSE IF argument is a number:
+  IF state.json.current_milestone AND roadmap.md exists:
+    scope = "phase"
+    PHASE_NUM = parsed number
+    PHASE_SLUG = resolve from roadmap.md
+    CONTEXT_DIR = find latest analyze artifact for this phase from state.json.artifacts[]
+  ELSE:
+    ERROR "Phase number requires init + roadmap"
+
+# Output directory (always scratch)
+OUTPUT_DIR = .workflow/scratch/plan-{PHASE_SLUG or milestone_slug}-{date}/
+mkdir -p {OUTPUT_DIR}/.task/
 ```
 
 ---
@@ -63,8 +83,10 @@ ELSE (standard phase resolution):
 
 1. **Load user decisions**
    ```
-   Read ${PHASE_DIR}/context.md
-   -> If missing: warn "No context.md found. Run /maestro-analyze -q first or proceed with defaults."
+   IF CONTEXT_DIR exists:
+     Read ${CONTEXT_DIR}/context.md
+   ELSE:
+     warn "No upstream analyze found. Run /maestro-analyze first or proceed with defaults."
    ```
 
 2. **Load spec reference** (if `--spec` flag or index.json has spec_ref)
@@ -422,6 +444,53 @@ Build plan.json with gap-fix tasks
 
 ---
 
+## P4.5: Collision Detection
+
+**Purpose:** Warn if this plan's files overlap with existing plans in the same milestone.
+
+**Skip if:** scope == "standalone" (no milestone context to compare against)
+
+```
+// 1. Collect existing plan file sets
+existing_plans = state.json.artifacts
+  .filter(a => a.milestone == current_milestone
+           && a.type == "plan"
+           && a.status == "completed")
+
+existing_files = {}  // { file_path: [plan_id, ...] }
+FOR each plan IN existing_plans:
+  tasks = load_all_tasks(plan.path + "/.task/")
+  FOR each task IN tasks:
+    FOR each file IN task.files:
+      existing_files[file].push(plan.id)
+
+// 2. Collect new plan's file set
+new_tasks = load_all_tasks(OUTPUT_DIR + "/.task/")
+new_files = Set()
+FOR each task IN new_tasks:
+  FOR each file IN task.files:
+    new_files.add(file)
+
+// 3. Check intersection
+collisions = []
+FOR each file IN new_files:
+  IF file IN existing_files:
+    collisions.push({ file, existing_plans: existing_files[file] })
+
+// 4. Report (non-blocking)
+IF collisions.length > 0:
+  WARN: "碰撞检测发现 {collisions.length} 个文件重叠:"
+  FOR each c IN collisions:
+    "  {c.file} ← 已在 {c.existing_plans.join(', ')} 中规划"
+  "建议: 确认是否有意覆盖，或调整 task 范围"
+ELSE:
+  "碰撞检测通过: 无文件重叠"
+```
+
+**Note:** Only checks `task.files[]` (write targets). `task.read_first[]` (read-only references) are excluded.
+
+---
+
 ## P5: Confirmation
 
 **Purpose:** Present plan to user and determine next action.
@@ -469,6 +538,35 @@ Build plan.json with gap-fix tasks
    }
 
    Hand off to /workflow:execute with executionContext in memory
+   ```
+
+4. **Register artifact in state.json**
+   ```
+   Read .workflow/state.json
+   // Find upstream analyze artifact
+   upstream_analyze = state.json.artifacts
+     .filter(a => a.type == "analyze" && a.path == CONTEXT_DIR relative path)
+     .last()  // most recent
+
+   next_id = max(artifacts.filter(a => a.type == "plan").map(a => parseInt(a.id.replace("PLN-","")))) + 1
+
+   artifact = {
+     id: "PLN-{next_id padded to 3}",
+     type: "plan",
+     milestone: state.json.current_milestone,
+     phase: PHASE_NUM,
+     scope: scope,
+     path: OUTPUT_DIR relative to .workflow/,
+     status: "completed",
+     depends_on: upstream_analyze?.id || null,
+     harvested: false,
+     created_at: plan_start_time,
+     completed_at: now()
+   }
+
+   state.json.artifacts.push(artifact)
+   state.json.last_updated = now()
+   Write state.json (atomic: write tmp + rename)
    ```
 
 ---

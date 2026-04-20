@@ -50,7 +50,7 @@ CHECK .workflow/state.json exists?
 
    If `--auto` flag: skip interactive questioning, extract from @ referenced document.
    If `--from-brainstorm SESSION-ID`:
-   - Locate brainstorm session directory (`.workflow/scratch/brainstorm-*/` or `.workflow/phases/*/`)
+   - Locate brainstorm session directory (`.workflow/scratch/brainstorm-*/`)
    - Read `guidance-specification.md`:
      - Problem statement → project vision + core value
      - Features → project goals (Active requirements)

@@ -117,16 +117,10 @@
       "route": { "graph": "singles/sync" }
     },
     {
-      "type": "phase_transition",
-      "regex": "phase.*transit|next.*phase|推进|切换.*阶段",
+      "type": "milestone_close",
+      "regex": "phase.*transit|next.*phase|推进|切换.*阶段|close.*milestone|结束.*里程碑",
       "flags": "i",
-      "route": { "graph": "singles/phase-transition" }
-    },
-    {
-      "type": "phase_add",
-      "regex": "phase.*add|add.*phase|添加.*阶段",
-      "flags": "i",
-      "route": { "graph": "singles/phase-add" }
+      "route": { "graph": "milestone-close" }
     },
     {
       "type": "milestone_audit",

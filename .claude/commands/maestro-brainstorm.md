@@ -30,8 +30,8 @@ $ARGUMENTS -- topic text for auto mode, or role name for single role mode.
 
 **Auto mode**: topic text (e.g., "Build real-time collaboration platform") triggers full pipeline.
 **Single role mode**: valid role name (e.g., "system-architect") runs one role analysis.
-**Phase mode** (number): resolves phase directory, creates .brainstorming/ inside it.
-**Scratch mode** (text): creates `.workflow/scratch/brainstorm-{slug}-{date}/`.
+**All output** goes to `.workflow/scratch/brainstorm-{slug}-{date}/`.
+**Artifact registration**: On completion, registers artifact (type=brainstorm) in state.json.
 
 **Valid roles**: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert
 

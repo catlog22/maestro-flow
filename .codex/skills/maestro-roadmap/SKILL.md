@@ -73,7 +73,7 @@ $maestro-roadmap --from-brainstorm WFS-001 "Enhance auth system"
 |     +-- Interactive refinement (max 3 rounds, skip if -y)                 |
 |     +-- Generate context.md with roadmap summary                          |
 |     +-- Write .workflow/roadmap.md                                        |
-|     +-- Create phase directories under .workflow/phases/                  |
+|     +-- Ensure .workflow/scratch/ directory exists                         |
 |     +-- Display summary with next steps                                   |
 |                                                                           |
 +---------------------------------------------------------------------------+
@@ -303,7 +303,8 @@ spawn_agents_on_csv({
 
 5. **Write outputs**:
    - Write `.workflow/roadmap.md` using standard roadmap template structure
-   - Create phase directories: `.workflow/phases/{NN}-{slug}/` with empty `index.json`
+   - Ensure `.workflow/scratch/` directory exists (phases are labels, not directories)
+   - Update `state.json` milestones array and set `current_milestone`
    - Update `.workflow/state.json` (if exists): set `current_phase: 1`
 
 6. Display summary:

@@ -37,9 +37,9 @@ test -f .workflow/state.json && echo "exists" || echo "missing"
 ```javascript
 const projectState = {
   initialized: true,
-  current_phase: /* from state.json */,
-  phase_slug: '...',
-  phase_status: '...', // pending|exploring|planning|executing|verifying|testing|completed|blocked
+  current_milestone: /* from state.json */,
+  latest_artifact: /* last artifact in artifacts[] */,
+  milestone_progress: '...', // derived from artifact registry
   phase_artifacts: { brainstorm: false, analysis: false, context: false, plan: false, verification: false, uat: false },
   execution: { tasks_completed: 0, tasks_total: 0 },
   verification_status: 'pending',
@@ -109,7 +109,7 @@ function routeIntent(intent, projectState) {
   // Action × Object matrix
   const matrix = {
     'fix':       { 'bug': 'debug', 'issue': 'issue', 'code': 'debug', 'performance': 'debug', 'security': 'debug', '_default': 'debug' },
-    'create':    { 'feature': 'quick', 'issue': 'issue', 'test': 'test_gen', 'spec': 'spec_generate', 'ui': 'ui_design', 'config': 'init', 'phase': 'phase_add', '_default': 'quick' },
+    'create':    { 'feature': 'quick', 'issue': 'issue', 'test': 'test_gen', 'spec': 'spec_generate', 'ui': 'ui_design', 'config': 'init', 'phase': 'roadmap', '_default': 'quick' },
     'analyze':   { 'bug': 'analyze', 'issue': 'issue_analyze', 'code': 'analyze', 'codebase': 'spec_map', '_default': 'analyze' },
     'explore':   { 'issue': 'issue_discover', 'feature': 'brainstorm', 'ui': 'ui_design', '_default': 'brainstorm' },
     'plan':      { 'issue': 'issue_plan', 'spec': 'spec_generate', '_default': 'plan' },
@@ -119,8 +119,8 @@ function routeIntent(intent, projectState) {
     'test':      { '_default': 'test' },
     'debug':     { '_default': 'debug' },
     'refactor':  { '_default': 'refactor' },
-    'manage':    { 'issue': 'issue', 'milestone': 'milestone_audit', 'phase': 'phase_transition', 'memory': 'memory', 'doc': 'sync', 'codebase': 'codebase_refresh', 'team': 'team_coordinate', '_default': 'status' },
-    'transition':{ 'phase': 'phase_transition', 'milestone': 'milestone_complete', '_default': 'phase_transition' },
+    'manage':    { 'issue': 'issue', 'milestone': 'milestone_audit', 'phase': 'milestone_close', 'memory': 'memory', 'doc': 'sync', 'codebase': 'codebase_refresh', 'team': 'team_coordinate', '_default': 'status' },
+    'transition':{ 'phase': 'milestone_close', 'milestone': 'milestone_complete', '_default': 'milestone_close' },
     'continue':  { '_default': 'state_continue' },
     'sync':      { '_default': 'sync' },
     'learn':     { '_default': 'learn' },
@@ -170,18 +170,18 @@ function detectNextAction(s) {
     if (s.verification_status === 'passed') {
       if (!s.review_verdict) return { chain: 'review', steps: [{ cmd: 'quality-review', args: '{phase}' }] };
       if (s.uat_status === 'pending') return { chain: 'test', steps: [{ cmd: 'quality-test', args: '{phase}' }] };
-      if (s.uat_status === 'passed') return { chain: 'phase-transition', steps: [{ cmd: 'maestro-phase-transition' }] };
+      if (s.uat_status === 'passed') return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
       return { chain: 'debug', steps: [{ cmd: 'quality-debug', args: '--from-uat {phase}' }] };
     }
     return { chain: 'quality-loop-partial', steps: [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }] };
   }
   if (ps === 'testing') {
-    if (s.uat_status === 'passed') return { chain: 'phase-transition', steps: [{ cmd: 'maestro-phase-transition' }] };
+    if (s.uat_status === 'passed') return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
     return { chain: 'debug', steps: [{ cmd: 'quality-debug', args: '--from-uat {phase}' }] };
   }
   if (ps === 'completed') {
     if (s.phases_completed >= s.phases_total) return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
-    return { chain: 'phase-transition', steps: [{ cmd: 'maestro-phase-transition' }] };
+    return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
   }
   if (ps === 'blocked') return { chain: 'debug', steps: [{ cmd: 'quality-debug' }] };
   return { chain: 'status', steps: [{ cmd: 'manage-status' }] };
@@ -209,8 +209,8 @@ const chainMap = {
   'retrospective':      [{ cmd: 'quality-retrospective', args: '{phase}' }],
   'learn':              [{ cmd: 'manage-learn', args: '"{description}"' }],
   'sync':               [{ cmd: 'quality-sync', args: '{phase}' }],
-  'phase_transition':   [{ cmd: 'maestro-phase-transition' }],
-  'phase_add':          [{ cmd: 'maestro-phase-add', args: '"{description}"' }],
+  'milestone_close':    [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
+  'roadmap':            [{ cmd: 'maestro-roadmap', args: '"{description}"' }],
   'milestone_audit':    [{ cmd: 'maestro-milestone-audit' }],
   'milestone_complete': [{ cmd: 'maestro-milestone-complete' }],
   'codebase_rebuild':   [{ cmd: 'manage-codebase-rebuild' }],
@@ -240,7 +240,7 @@ const chainMap = {
   'spec-driven':     [{ cmd: 'maestro-init' }, { cmd: 'maestro-spec-generate', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'brainstorm-driven': [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'ui-design-driven': [{ cmd: 'maestro-ui-design', args: '{phase}' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'full-lifecycle':  [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-phase-transition' }],
+  'full-lifecycle':  [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'execute-verify':  [{ cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'quality-loop':    [{ cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'quality-debug', args: '--from-uat {phase}' }, { cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'milestone-close': [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
@@ -275,7 +275,8 @@ function resolvePhase() {
   // Fallback regex
   const m = intent.match(/phase\s*(\d+)|^(\d+)$/);
   if (m) return m[1] || m[2];
-  if (projectState.initialized) return projectState.current_phase;
+  // With scratch-based architecture, commands default to milestone-wide when no phase specified
+  // Return null to let commands use their default scope routing
   return null;
 }
 
@@ -326,7 +327,7 @@ const state = {
 };
 Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
 
-const context = { current_phase: resolvedPhase, user_intent: intent, issue_id: resolvedIssueId, spec_session_id: null };
+const context = { resolved_phase: resolvedPhase, user_intent: intent, issue_id: resolvedIssueId, spec_session_id: null };
 ```
 
 ---
@@ -344,7 +345,7 @@ const AUTO_FLAG_MAP = {
 
 function assembleArgs(step) {
   let a = (step.args || '')
-    .replace(/\{phase\}/g, context.current_phase || '')
+    .replace(/\{phase\}/g, context.resolved_phase || '')  // empty = milestone-wide default
     .replace(/\{description\}/g, context.user_intent || '')
     .replace(/\{issue_id\}/g, context.issue_id || '')
     .replace(/\{spec_session_id\}/g, context.spec_session_id || '')
@@ -424,7 +425,7 @@ step.completed_at = new Date().toISOString();
 
 // Context propagation
 const phaseMatch = output.match(/PHASE:\s*(\d+)/m);
-if (phaseMatch) context.current_phase = phaseMatch[1];
+if (phaseMatch) context.resolved_phase = phaseMatch[1];
 const specMatch = output.match(/SPEC-[\w-]+/);
 if (specMatch) context.spec_session_id = specMatch[0];
 const scratchMatch = output.match(/scratch_dir:\s*(.+)/m);

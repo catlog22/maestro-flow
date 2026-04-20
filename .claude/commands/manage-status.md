@@ -8,9 +8,9 @@ allowed-tools:
   - Grep
 ---
 <purpose>
-Display a unified project dashboard showing phase progress, task counts, active work, and intelligent next-step suggestions.
-Reads all state files from `.workflow/` and renders a formatted overview with progress bars and status tables.
-Provides situational awareness before continuing work.
+Display a unified project dashboard showing artifact progress, task counts, active work, and intelligent next-step suggestions.
+Reads state.json artifact registry and roadmap to render a formatted overview with progress and status tables.
+Provides situational awareness before continuing work. Uses virtual phase view derived from artifact registry.
 </purpose>
 
 <required_reading>
@@ -21,10 +21,10 @@ Provides situational awareness before continuing work.
 $ARGUMENTS (no arguments required)
 
 **State files read:**
-- `.workflow/state.json` -- project-level state machine
+- `.workflow/state.json` -- project-level state machine + artifact registry
 - `.workflow/roadmap.md` -- milestone and phase structure
-- `.workflow/phases/*/index.json` -- per-phase metadata and progress
-- `.workflow/phases/*/.task/TASK-*.json` -- individual task statuses
+- `.workflow/scratch/*/plan.json` -- plan metadata (via artifact registry paths)
+- `.workflow/scratch/*/.task/TASK-*.json` -- individual task statuses
 </context>
 
 <execution>
@@ -44,7 +44,7 @@ Follow '~/.maestro/workflows/status.md' completely.
 | Phase reviewed, verdict BLOCK | `/maestro-plan <N> --gaps` | Fix critical review findings first |
 | Phase reviewed, verdict PASS/WARN | `/quality-test <N>` | Proceed to UAT testing |
 | Phase verified, low test coverage | `/quality-test-gen <N>` | Generate missing automated tests |
-| UAT passed | `/maestro-phase-transition` | Move to next phase |
+| UAT passed, all phases done | `/maestro-milestone-audit` | Cross-phase integration check |
 | UAT has failures | `/quality-debug --from-uat <N>` | Debug UAT gaps with parallel agents |
 | Need integration test cycle | `/quality-integration-test <N>` | Self-iterating integration tests |
 | All phases in milestone complete | `/maestro-milestone-audit` | Cross-phase integration check |

@@ -2,8 +2,8 @@
   "$schema": "./chain-graph.schema.json",
   "id": "_router",
   "name": "State Router",
-  "description": "Route to appropriate graph based on project state",
-  "version": "1.0.0",
+  "description": "Route to appropriate graph based on project state and artifact registry",
+  "version": "2.0.0",
   "tags": ["internal", "router"],
   "entry": "check_init",
   "inputs": {
@@ -21,10 +21,10 @@
     },
     "check_has_roadmap": {
       "type": "decision",
-      "eval": "ctx.project.phases_total",
+      "eval": "ctx.project.milestones_total",
       "edges": [
-        { "match": "ctx.project.phases_total == 0", "target": "check_accumulated_context" },
-        { "default": true, "target": "check_phase_status" }
+        { "match": "ctx.project.milestones_total == 0", "target": "check_accumulated_context" },
+        { "default": true, "target": "check_artifact_state" }
       ]
     },
     "check_accumulated_context": {
@@ -35,98 +35,52 @@
         { "default": true, "target": "to_brainstorm_driven" }
       ]
     },
-    "check_phase_status": {
+    "check_artifact_state": {
       "type": "decision",
-      "eval": "ctx.project.phase_status",
+      "description": "Determine next step from artifact registry — what's the latest completed artifact type for current milestone?",
+      "eval": "ctx.project.latest_artifact_type",
       "edges": [
-        { "value": "pending", "target": "check_pending_artifacts" },
-        { "value": "exploring", "target": "check_has_plan" },
-        { "value": "planning", "target": "check_has_plan" },
-        { "value": "executing", "target": "check_tasks_done" },
-        { "value": "verifying", "target": "check_verification" },
-        { "value": "testing", "target": "check_uat" },
-        { "value": "completed", "target": "check_all_phases" },
-        { "value": "blocked", "target": "to_debug" }
-      ]
-    },
-    "check_pending_artifacts": {
-      "type": "decision",
-      "eval": "ctx.project.artifacts.context",
-      "edges": [
-        { "value": true, "target": "to_plan" },
+        { "value": null, "target": "to_analyze" },
+        { "value": "analyze", "target": "check_has_plan" },
+        { "value": "brainstorm", "target": "to_analyze" },
+        { "value": "plan", "target": "to_execute" },
+        { "value": "execute", "target": "to_verify" },
+        { "value": "verify", "target": "check_verify_result" },
         { "default": true, "target": "to_analyze" }
       ]
     },
     "check_has_plan": {
       "type": "decision",
-      "eval": "ctx.project.artifacts.plan",
+      "eval": "ctx.project.has_pending_plans",
       "edges": [
         { "value": true, "target": "to_execute_verify" },
         { "default": true, "target": "to_plan" }
       ]
     },
-    "check_tasks_done": {
-      "type": "decision",
-      "eval": "ctx.project.execution.tasks_completed",
-      "edges": [
-        {
-          "match": "ctx.project.execution.tasks_completed >= ctx.project.execution.tasks_total && ctx.project.execution.tasks_total > 0",
-          "target": "to_verify"
-        },
-        { "default": true, "target": "to_execute" }
-      ]
-    },
-    "check_verification": {
+    "check_verify_result": {
       "type": "decision",
       "eval": "ctx.project.verification_status",
       "edges": [
-        { "value": "passed", "target": "check_business_test" },
+        { "value": "passed", "target": "check_review" },
         { "default": true, "target": "to_quality_loop_partial" }
       ]
     },
-    "check_business_test": {
-      "type": "decision",
-      "eval": "ctx.project.business_test_status",
-      "edges": [
-        { "value": null, "target": "to_business_test" },
-        { "value": "passed", "target": "check_review_after_verify" },
-        { "default": true, "target": "to_quality_loop_partial" }
-      ]
-    },
-    "check_review_after_verify": {
+    "check_review": {
       "type": "decision",
       "eval": "ctx.project.review_verdict",
       "edges": [
         { "value": null, "target": "to_review" },
-        { "default": true, "target": "check_uat_after_review" }
-      ]
-    },
-    "check_uat_after_review": {
-      "type": "decision",
-      "eval": "ctx.project.uat_status",
-      "edges": [
-        { "value": "pending", "target": "to_test" },
-        { "value": "passed", "target": "to_phase_transition" },
-        { "default": true, "target": "to_debug_from_uat" }
-      ]
-    },
-    "check_uat": {
-      "type": "decision",
-      "eval": "ctx.project.uat_status",
-      "edges": [
-        { "value": "passed", "target": "to_phase_transition" },
-        { "default": true, "target": "to_debug_from_uat" }
+        { "value": "BLOCK", "target": "to_quality_loop_partial" },
+        { "default": true, "target": "check_all_phases" }
       ]
     },
     "check_all_phases": {
       "type": "decision",
-      "eval": "ctx.project.phases_completed",
+      "description": "Check if all phases in milestone have completed execute artifacts",
+      "eval": "ctx.project.all_phases_executed",
       "edges": [
-        {
-          "match": "ctx.project.phases_completed >= ctx.project.phases_total",
-          "target": "to_milestone_close"
-        },
-        { "default": true, "target": "to_phase_transition" }
+        { "value": true, "target": "to_milestone_close" },
+        { "default": true, "target": "to_analyze" }
       ]
     },
     "to_init": {
@@ -154,20 +108,10 @@
       "status": "delegate",
       "delegate_graph": "singles/verify"
     },
-    "to_business_test": {
-      "type": "terminal",
-      "status": "delegate",
-      "delegate_graph": "singles/business-test"
-    },
     "to_review": {
       "type": "terminal",
       "status": "delegate",
       "delegate_graph": "singles/review"
-    },
-    "to_test": {
-      "type": "terminal",
-      "status": "delegate",
-      "delegate_graph": "singles/test"
     },
     "to_debug": {
       "type": "terminal",
@@ -184,11 +128,6 @@
       "type": "terminal",
       "status": "delegate",
       "delegate_graph": "execute-verify"
-    },
-    "to_phase_transition": {
-      "type": "terminal",
-      "status": "delegate",
-      "delegate_graph": "singles/phase-transition"
     },
     "to_milestone_close": {
       "type": "terminal",

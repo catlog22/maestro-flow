@@ -13,7 +13,7 @@ allowed-tools:
 ---
 
 <purpose>
-Mark a milestone as complete after its audit has passed. Validates that the audit report exists and shows a passing verdict, archives the milestone by updating state.json, generates a milestone summary document capturing key outcomes and learnings, and prepares the project state for the next milestone.
+Mark a milestone as complete after its audit has passed. Archives all scratch artifacts to `milestones/{M}/artifacts/`, moves artifact entries from `state.json.artifacts[]` to `milestone_history`, extracts final learnings, and advances to the next milestone.
 </purpose>
 
 <required_reading>
@@ -23,37 +23,45 @@ Mark a milestone as complete after its audit has passed. Validates that the audi
 <context>
 Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json).
 
-**Requires:** `/maestro-milestone-audit` should have passed (all phases completed, no integration gaps).
+**Requires:** `/maestro-milestone-audit` should have passed.
 
 **State files:**
-- `.workflow/state.json` -- current_milestone, milestones array
-- `.workflow/roadmap.md` -- milestone structure
-- `.workflow/milestones/{milestone}/audit-report.md` -- audit results
+- `.workflow/state.json` — artifacts[], milestones[], current_milestone, milestone_history[]
+- `.workflow/roadmap.md` — milestone structure
+- `.workflow/milestones/{milestone}/audit-report.md` — audit results
 </context>
 
 <execution>
 Follow '~/.maestro/workflows/milestone-complete.md' completely.
 
+**Archive flow:**
+1. Validate audit passed + all artifacts completed
+2. Move scratch dirs to `milestones/{M}/artifacts/`
+3. Move artifact entries to `milestone_history[M].archived_artifacts`
+4. Extract learnings from summaries → `specs/learnings.md`
+5. Update state.json: advance to next milestone, clear artifacts[]
+6. Clean scratch dirs
+
 **Next-step routing on completion:**
-- Cut a release for this milestone → `/maestro-milestone-release`
-- Next milestone has phases → `/maestro-plan {next_milestone_first_phase}`
-- Need to capture learnings → `/manage-memory-capture compact`
-- View updated project state → `/manage-status`
+- Cut a release → `/maestro-milestone-release`
+- Next milestone → `/maestro-analyze` or `/maestro-plan 1`
+- View state → `/manage-status`
 </execution>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | Milestone identifier required | Check arguments format, re-run with correct input |
-| E002 | error | Audit not passed (report missing or verdict FAIL) | Run maestro-milestone-audit first |
-| E003 | error | Incomplete phases remain in this milestone | Complete remaining phases before milestone completion |
+| E001 | error | Milestone identifier required | Check arguments |
+| E002 | error | Audit not passed | Run maestro-milestone-audit first |
+| E003 | error | Incomplete artifacts remain | Complete remaining work first |
 </error_codes>
 
 <success_criteria>
-- [ ] Audit report verified as PASS before proceeding
-- [ ] Milestone marked complete in state.json with timestamp
-- [ ] Milestone summary generated with outcomes and learnings
-- [ ] Roadmap snapshot saved to milestones directory
-- [ ] project.md Context updated with milestone summary and key learnings
-- [ ] state.json updated with next milestone as current
+- [ ] Audit report verified as PASS
+- [ ] Scratch artifacts moved to milestones/{M}/artifacts/
+- [ ] Artifact entries archived to milestone_history
+- [ ] Learnings extracted to specs/learnings.md
+- [ ] state.json updated: next milestone as current, artifacts[] cleared
+- [ ] Roadmap snapshot saved
+- [ ] project.md Context updated with milestone summary
 </success_criteria>

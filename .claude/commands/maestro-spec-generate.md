@@ -38,7 +38,7 @@ $ARGUMENTS -- idea text, @file reference to requirements document, or brainstorm
 **Input types:**
 - Direct text: `"Build a real-time collaboration platform"`
 - File reference: `@requirements.md` or `@design-brief.txt`
-- Brainstorm import: `--from-brainstorm WFS-xxx` (reads `.workflow/scratch/brainstorm-*/` or `.workflow/phases/*/`)
+- Brainstorm import: `--from-brainstorm WFS-xxx` (reads `.workflow/scratch/brainstorm-*/`)
 
 **Output location:** `.workflow/.spec/SPEC-{slug}-{YYYY-MM-DD}/`
 

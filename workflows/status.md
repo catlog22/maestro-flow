@@ -44,43 +44,57 @@ Status dashboard with intelligent routing.
 
 ---
 
-## Step 2: Load Phase Details
+## Step 2: Build Virtual Phase View from Artifact Registry
 
-For each phase directory in `.workflow/phases/*/`:
+Derive phase progress from `state.json.artifacts[]`:
 
-1. Read `index.json` if exists:
-   - Extract: phase number, slug, title, status, goal
-   - Extract: plan (task_count, tasks_completed), execution progress
-   - Extract: verification status, validation status, uat status
+```
+// Group artifacts by phase for current milestone
+milestone_artifacts = state.json.artifacts.filter(a => a.milestone == current_milestone)
 
-2. Build phase summary array:
-   ```
-   phases[] = {
-     number, slug, title, status,
-     tasks_total, tasks_completed,
-     verification_status, validation_status
-   }
-   ```
+// Build phase view from roadmap + artifact registry
+phases_from_roadmap = parse roadmap.md → list of { number, slug, title }
+
+FOR each phase IN phases_from_roadmap:
+  phase_artifacts = milestone_artifacts.filter(a => a.phase == phase.number)
+  has_analyze = phase_artifacts.some(a => a.type == "analyze" && a.status == "completed")
+  has_plan = phase_artifacts.some(a => a.type == "plan" && a.status == "completed")
+  has_execute = phase_artifacts.some(a => a.type == "execute" && a.status == "completed")
+  has_verify = phase_artifacts.some(a => a.type == "verify" && a.status == "completed")
+
+  // Derive status from artifact chain
+  status = has_verify ? "verified" :
+           has_execute ? "executed" :
+           has_plan ? "planned" :
+           has_analyze ? "analyzed" :
+           "pending"
+
+  // Get task counts from plan artifacts
+  plan_artifact = phase_artifacts.find(a => a.type == "plan" && a.status == "completed")
+  IF plan_artifact:
+    plan_json = read .workflow/{plan_artifact.path}/plan.json
+    tasks_total = plan_json.task_ids.length
+    tasks_completed = count .task/TASK-*.json where status == "completed"
+
+phases[] = { number, slug, title, status, tasks_total, tasks_completed, has_verify }
+
+// Also show adhoc artifacts
+adhoc_artifacts = milestone_artifacts.filter(a => a.scope == "adhoc")
+```
 
 ---
 
-## Step 2.5: Roadmap ↔ State Consistency Check
-
-Verify that `roadmap.md` and `state.json` agree on phase structure:
+## Step 2.5: Artifact Registry Consistency Check
 
 ```
 IF .workflow/roadmap.md exists:
   roadmap_phases = parse phase headings from roadmap.md (count "### Phase N:" entries)
-  state_total = state.json.phases_summary.total
-  actual_dirs = count .workflow/phases/*/ directories
+  artifact_phases = unique phase numbers from milestone_artifacts
 
-  IF roadmap_phases != state_total OR roadmap_phases != actual_dirs:
-    Display WARNING:
-      ⚠️  STATE SYNC WARNING
-      Roadmap phases: {roadmap_phases}
-      State total:    {state_total}
-      Phase dirs:     {actual_dirs}
-      Run /maestro-roadmap or /maestro-phase-add to reconcile.
+  // Check for unregistered work (artifacts without matching roadmap phases)
+  orphan_artifacts = milestone_artifacts.filter(a => a.phase && !roadmap_phases.includes(a.phase))
+  IF orphan_artifacts.length > 0:
+    Display WARNING: "Artifacts reference phases not in roadmap"
 
 ELSE IF NOT .workflow/roadmap.md exists AND state.json.phases_summary.total > 0:
   Display WARNING:

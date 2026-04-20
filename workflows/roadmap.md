@@ -311,10 +311,9 @@ Phase directories use `{NN}-{slug}` format (e.g., `01-auth`, `02-api`).
 
    **Requirements traceability**: Cross-check that every Active requirement from project.md maps to exactly one phase. Surface unmapped requirements as gaps.
 
-2. **Create phase directories**: `.workflow/phases/{NN}-{slug}/` for each phase
-   - Create empty `index.json` in each
+2. **Ensure scratch directory**: `mkdir -p .workflow/scratch/`
 
-3. **Update state.json** (if exists): set `current_phase: 1`
+3. **Update state.json** (if exists): set milestones from roadmap, set `current_milestone` to first milestone
 
 ---
 

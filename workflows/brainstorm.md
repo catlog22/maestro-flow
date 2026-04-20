@@ -47,8 +47,8 @@ Phase 3: Single Role Analysis → Detection → Context → Agent → Validation
 ## Input
 
 - `$ARGUMENTS`: topic text (auto mode) or role name (single role mode)
-- Phase mode: operates within `.workflow/phases/{NN}-{slug}/`
-- Scratch mode: creates `.workflow/scratch/brainstorm-{slug}-{date}/`
+- All output goes to `.workflow/scratch/brainstorm-{slug}-{date}/`
+- Registers artifact (type=brainstorm) in state.json on completion
 
 ### Parameters
 
@@ -80,32 +80,21 @@ Phase 3: Single Role Analysis → Detection → Context → Agent → Validation
 
 ### Directory Structure
 
-**Phase mode**:
-```
-.workflow/phases/{NN}-{slug}/
-├── brainstorm.md                        # Legacy simple output (if no session)
-├── index.json                           # Updated timestamps
-└── .brainstorming/                      # Full brainstorm session
-    ├── guidance-specification.md         # Phase 2 output
-    ├── feature-index.json               # Phase 4 output
-    ├── synthesis-changelog.md            # Phase 4 audit trail
-    ├── feature-specs/                   # Phase 4 feature specs
-    │   ├── F-001-{slug}.md
-    │   └── F-00N-{slug}.md
-    ├── {role}/                          # Phase 3 role analyses (immutable)
-    │   ├── {role}-context.md
-    │   ├── analysis.md
-    │   ├── analysis-cross-cutting.md
-    │   └── analysis-F-{id}-{slug}.md
-    └── synthesis-specification.md       # Non-feature mode fallback
-```
-
-**Scratch mode**:
+All brainstorm output goes to scratch:
 ```
 .workflow/scratch/brainstorm-{slug}-{date}/
-├── index.json                           # scratch-index template
-└── .brainstorming/                      # Same structure as phase mode
-    └── ...
+├── guidance-specification.md         # Phase 2 output
+├── feature-index.json               # Phase 4 output
+├── synthesis-changelog.md            # Phase 4 audit trail
+├── feature-specs/                   # Phase 4 feature specs
+│   ├── F-001-{slug}.md
+│   └── F-00N-{slug}.md
+├── {role}/                          # Phase 3 role analyses (immutable)
+│   ├── {role}-context.md
+│   ├── analysis.md
+│   ├── analysis-cross-cutting.md
+│   └── analysis-F-{id}-{slug}.md
+└── synthesis-specification.md       # Non-feature mode fallback
 ```
 
 ---
@@ -138,17 +127,8 @@ Parse $ARGUMENTS to determine execution mode:
 
 **Output Directory Resolution**:
 - Phase mode (number): `.workflow/phases/{NN}-{slug}/.brainstorming/`
-- Scratch mode (text): `.workflow/scratch/brainstorm-{slug}-{date}/.brainstorming/`
-- Existing session: use session's `.brainstorming/` directory
-
-**Archive previous brainstorming session** (Phase mode only, skip if `--session` or `--update`):
-```
-PARENT_DIR = parent of output directory (e.g., .workflow/phases/{NN}-{slug}/)
-IF directory exists "${PARENT_DIR}/.brainstorming" AND NOT --session AND NOT --update:
-  mkdir -p "${PARENT_DIR}/.history"
-  TIMESTAMP = current timestamp formatted as "YYYY-MM-DDTHH-mm-ss"
-  mv "${PARENT_DIR}/.brainstorming" "${PARENT_DIR}/.history/.brainstorming-${TIMESTAMP}"
-```
+- All output: `.workflow/scratch/brainstorm-{slug}-{date}/`
+- Existing session: use existing session directory
 
 ---
 
