@@ -20,7 +20,7 @@ Automated issue discovery via multi-perspective codebase analysis (8 perspective
 
 For CRUD operations (create, list, update, close, link), use `/manage-issue`.
 
-After discovery, use `/manage-issue-analyze <ISS-ID>` to perform root cause analysis on individual findings.
+After discovery, use `/maestro-analyze --gaps <ISS-ID>` to perform root cause analysis on individual findings.
 </purpose>
 
 <required_reading>
@@ -73,5 +73,5 @@ Follow '~/.maestro/workflows/issue-discover.md' completely.
 - [ ] Findings deduplicated before issue creation
 - [ ] Issues appended to issues.jsonl with correct schema
 - [ ] Discovery session fully traceable via session directory
-- [ ] Next step routing: `/manage-issue-analyze <ISS-ID>` for root cause analysis, or `/manage-issue list` to review all issues
+- [ ] Next step routing: `/maestro-analyze --gaps <ISS-ID>` for root cause analysis, or `/manage-issue list` to review all issues
 </success_criteria>

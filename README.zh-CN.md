@@ -97,10 +97,10 @@ graph LR
 | 阶段 | 命令 | 做了什么 |
 |------|------|---------|
 | **发现** | `/manage-issue-discover` | 8 视角扫描: Bug、UX、技术债、安全、性能、测试缺口、代码质量、文档 |
-| **分析** | `/manage-issue-analyze` | CLI 探索式根因分析 |
-| **规划** | `/manage-issue-plan` | 生成解决方案步骤、目标文件、验证条件 |
-| **执行** | `/manage-issue-execute` | Dashboard API 派发或 CLI 直接执行 |
-| **关闭** | 自动 | 验证通过 -> resolved -> closed |
+| **分析** | `/maestro-analyze --gaps` | CLI 探索式根因分析，写入 `issue.analysis` |
+| **规划** | `/maestro-plan --gaps` | 生成 TASK 文件并通过 `task_refs` 关联到 Issue |
+| **执行** | `/maestro-execute` | 基于 wave 的并行执行，自动同步 Issue 状态 |
+| **关闭** | 自动 | 所有关联 task 完成 → resolved → closed |
 
 质量命令（`review`、`test`、`verify`）自动为发现的问题创建 Issue。Issue 修复的代码回流到阶段管线。闭环自动关闭。
 
@@ -171,7 +171,7 @@ Maestro-Flow 协调多个 AI 智能体并行工作:
 | `context-monitor` | 监控上下文用量，接近上限时注入警告 |
 | `spec-injector` | 按智能体类型自动注入项目规范到子 Agent 提示词 |
 | `delegate-monitor` | 跟踪异步 delegate 任务完成状态 |
-| `team-monitor` | 团队协作消息感知 |
+| `team-monitor` | Collab 心跳 -- 向 `.workflow/collab/activity.jsonl` 上报活动，供队友感知 |
 | `telemetry` | 执行遥测收集 |
 | `session-context` | 会话启动时注入工作流状态 |
 | `skill-context` | 调用工作流 Skill 时注入工作流状态 |
@@ -317,8 +317,8 @@ maestro/
 - **[Overlay 系统指南](guide/overlay-guide.md)** -- 非侵入式命令扩展: overlay 格式、section 注入、bundle 打包/导入、交互式 TUI 管理
 - **[Hook 系统指南](guide/hooks-guide.md)** -- Hook 系统架构、9 个 Hook、Spec 注入、上下文预算、配置
 - **[Worktree 并行开发指南](guide/worktree-guide.md)** -- 里程碑级 worktree 并行: fork、sync、merge、scope 保护、Dashboard 集成
-- **[Team Lite -- 使用指南](guide/team-lite-guide.md)** -- 2-8 人小团队日常协作: 加入、同步、队友活跃、冲突预飞检
-- **[Team Lite -- 设计文档](guide/team-lite-design.md)** -- 架构、数据模型、人机协作与智能体管线的命名空间边界
+- **[Collab 协作 -- 使用指南](guide/team-lite-guide.md)** -- 2-8 人小团队协作: 加入、同步、活动感知、冲突预检、任务管理、命名空间隔离
+- **[Collab 协作 -- 设计文档](guide/team-lite-design.md)** -- 架构、数据模型、人类协作域 (`.workflow/collab/`) 与智能体管线 (`.workflow/.team/`) 的命名空间边界
 
 ---
 

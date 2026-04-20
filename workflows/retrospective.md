@@ -11,7 +11,7 @@ This is a **post-execution analysis** workflow. It reads only — until the rout
 - `.workflow/` initialized (`.workflow/state.json` exists)
 - At least one phase directory under `.workflow/phases/{NN}-{slug}/`
 - Target phase has been executed (has `.task/` and `.summaries/`)
-- `maestro cli` available (used for the four lens analyses via Agent calls)
+- `maestro delegate` available (used for the four lens analyses via Agent calls)
 
 ---
 

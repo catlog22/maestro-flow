@@ -1,7 +1,7 @@
 ---
 name: maestro-analyze
-description: Multi-dimensional analysis via CSV wave pipeline. Diamond topology — CLI exploration agents (Wave 1), 6-dimension scoring agents (Wave 2), decision synthesis agent (Wave 3). Supports dual depth with -q quick mode. Replaces maestro-analyze command.
-argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase|topic> [-q|--quick]\""
+description: Multi-dimensional analysis via CSV wave pipeline. Diamond topology — CLI exploration agents (Wave 1), 6-dimension scoring agents (Wave 2), decision synthesis agent (Wave 3). Supports dual depth with -q quick mode and --gaps issue root cause analysis. Replaces maestro-analyze command.
+argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase|topic> [-q|--quick] [--gaps [ISS-ID]]\""
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
@@ -25,6 +25,7 @@ $maestro-analyze --continue "analyze-microservices-20260318"
 - `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
 - `--continue`: Resume existing session
 - `-q, --quick`: Quick mode -- skip exploration + scoring, go straight to decision extraction (Wave 3 only)
+- `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl. Replaces manage-issue-analyze.
 
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (decision extraction report) + `analysis.md` (6-dimension scoring summary)
@@ -37,7 +38,7 @@ Wave-based multi-dimensional analysis using `spawn_agents_on_csv`. Diamond topol
 
 **Core workflow**: Parse Subject -> CLI Exploration -> 6-Dimension Scoring -> Decision Synthesis
 
-**Dual depth**: Full mode (all 3 waves) or Quick mode (`-q`, Wave 3 only -- decision extraction from loaded context).
+**Tri-depth**: Full mode (all 3 waves), Quick mode (`-q`, Wave 3 only), or Gaps mode (`--gaps`, issue root cause analysis pipeline).
 
 ```
 +---------------------------------------------------------------------------+
@@ -170,10 +171,13 @@ const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 6
 
 // Parse analyze-specific flags
 const QUICK_MODE = $ARGUMENTS.includes('-q') || $ARGUMENTS.includes('--quick')
+const GAPS_MODE = $ARGUMENTS.includes('--gaps')
+const gapsIssueMatch = $ARGUMENTS.match(/--gaps\s+(ISS-\S+)/)
+const gapsIssueId = gapsIssueMatch ? gapsIssueMatch[1] : null
 
 // Clean subject text
 const subjectArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|-q|--quick/g, '')
+  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|-q|--quick|--gaps\s+ISS-\S+|--gaps/g, '')
   .trim()
 
 // Auto-bootstrap state.json if missing
@@ -186,7 +190,11 @@ if (!fileExists('.workflow/state.json')) {
 const state = JSON.parse(Read('.workflow/state.json'))
 let scope, slug, phaseNum = null
 
-if (subjectArg === '') {
+if (GAPS_MODE) {
+  // --gaps → issue root cause analysis
+  scope = 'gaps'
+  slug = gapsIssueId ? gapsIssueId.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'issue-gaps'
+} else if (subjectArg === '') {
   // No args → milestone-wide
   if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
     scope = 'milestone'
@@ -236,6 +244,16 @@ Bash(`mkdir -p ${scratchDir}`)
    - Load project specs: `maestro spec load --category planning`
 
 3. **Quick mode routing**: If QUICK_MODE, generate only wave 3 (synthesis/decide) task in CSV. Skip exploration and scoring.
+
+3b. **Gaps mode routing** (if GAPS_MODE):
+   - Load issues from `.workflow/issues/issues.jsonl`
+   - If `gapsIssueId`: load single issue, validate existence
+   - If no ISS-ID: filter `status == "open" || status == "registered"`
+   - For each issue, generate an exploration task (wave 1) focused on issue context
+   - Generate a synthesis task (wave 2) that writes analysis records back to issues.jsonl
+   - Skip standard dimension scoring (wave 2 in normal mode)
+   - Pipeline: Load Issues → CLI Exploration per issue → Root Cause Synthesis → Write issue.analysis → Output context.md
+   - On completion: append history entry `{ action: "analyzed", at: <ISO>, by: "maestro-analyze --gaps" }` per issue
 
 4. **Dimension and perspective selection** (full mode):
 
@@ -540,7 +558,9 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"exploration_finding","data":{"file":
 
 | Error | Resolution |
 |-------|------------|
-| Subject argument missing | Abort with error: "Analysis subject required (phase number or topic text)" |
+| Subject argument missing (non-gaps) | Abort with error: "Analysis subject required (phase number or topic text)" |
+| --gaps but no issues found | Abort with error: "No open/registered issues in issues.jsonl" |
+| --gaps ISS-ID not found | Abort with error: "Issue {ISS-ID} not found — run manage-issue list" |
 | Phase directory not found | List available phases, abort with error |
 | No prior context for quick mode | Warn: limited context, proceed with available information |
 | Exploration agent timeout | Mark as failed, continue with remaining exploration agents |
@@ -562,7 +582,8 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"exploration_finding","data":{"file":
 4. **Context Propagation**: prev_context built from master CSV, not from memory
 5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
 6. **Quick Mode Shortcut**: With -q flag, generate only wave 3 task, skip exploration and scoring
+6b. **Gaps Mode Pipeline**: With --gaps flag, load issues, explore per issue, write analysis records back to issues.jsonl, output context.md for plan --gaps
 7. **Skip on Failure**: Degrade gracefully -- missing exploration reduces scoring quality, missing scoring reduces synthesis quality
 8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
 9. **DO NOT STOP**: Continuous execution until all waves complete
-10. **Dual Output**: context.md is ALWAYS produced (both modes). analysis.md + conclusions.json are full-mode only.
+10. **Tri-Output**: context.md is ALWAYS produced (all modes). analysis.md + conclusions.json are full-mode only. Gaps mode writes analysis records to issues.jsonl + context.md for plan --gaps.

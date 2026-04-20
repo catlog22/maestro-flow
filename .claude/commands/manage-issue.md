@@ -16,7 +16,7 @@ Issue lifecycle management for the project issue tracker. Supports create, list,
 
 For automated issue discovery, use `/manage-issue-discover`.
 
-**Closed-loop workflow**: After creating an issue, use `/manage-issue-analyze` for root cause analysis, `/manage-issue-plan` for solution planning, and `/manage-issue-execute` for execution.
+**Closed-loop workflow**: After creating an issue, use `/maestro-analyze --gaps <ISS-ID>` for root cause analysis, `/maestro-plan --gaps` for solution planning, and `/maestro-execute` for execution.
 </purpose>
 
 <required_reading>
@@ -48,8 +48,8 @@ Parse subcommand from first token of $ARGUMENTS.
 Follow '~/.maestro/workflows/issue.md' completely.
 
 **Next-step routing on completion:**
-- create → `/manage-issue-analyze <ISS-ID>` or `/manage-issue-plan <ISS-ID>`
-- list → `/manage-issue-analyze <ISS-ID>` for any open issue
+- create → `/maestro-analyze --gaps <ISS-ID>` or `/maestro-plan --gaps`
+- list → `/maestro-analyze --gaps <ISS-ID>` for any open issue
 - close → `/manage-status`
 </execution>
 

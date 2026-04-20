@@ -176,7 +176,7 @@ maestro delegate message gem-143022-a7f2 "Fix all critical vulnerabilities" --de
 
 ## Prompt Construction
 
-Prompt assembly order (identical to `maestro cli`):
+Prompt assembly order:
 
 1. **Mode protocol** — `~/.maestro/templates/cli/protocols/{mode}-protocol.md`
 2. **User prompt** — the prompt text

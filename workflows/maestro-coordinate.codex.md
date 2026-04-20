@@ -1,6 +1,6 @@
 # Workflow: maestro-coordinate (Codex Edition)
 
-Codex team-agent version of `maestro-coordinate`. Replaces `maestro cli` background execution + hook callbacks with synchronous `spawn_agent / wait / close_agent`. Each chain step assembles a prompt containing the skill invocation (`$skill-name args`) and spawns one agent; the analysis step spawns a second agent inline. All async state-machine concerns are eliminated.
+Codex team-agent version of `maestro-coordinate`. Replaces `maestro delegate` background execution + hook callbacks with synchronous `spawn_agent / wait / close_agent`. Each chain step assembles a prompt containing the skill invocation (`$skill-name args`) and spawns one agent; the analysis step spawns a second agent inline. All async state-machine concerns are eliminated.
 
 > Referenced by: `~/.codex/skills/maestro-coordinate/SKILL.md`
 
@@ -235,9 +235,9 @@ const chainMap = {
   'memory':             [{ cmd: 'manage-memory',           args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue',            args: '"{description}"' }],
   'issue_discover':     [{ cmd: 'manage-issue-discover',   args: '"{description}"' }],
-  'issue_analyze':      [{ cmd: 'manage-issue-analyze',    args: '"{description}"' }],
-  'issue_plan':         [{ cmd: 'manage-issue-plan',       args: '"{description}"' }],
-  'issue_execute':      [{ cmd: 'manage-issue-execute',    args: '"{description}"' }],
+  'issue_analyze':      [{ cmd: 'maestro-analyze',          args: '--gaps "{description}"' }],
+  'issue_plan':         [{ cmd: 'maestro-plan',            args: '--gaps' }],
+  'issue_execute':      [{ cmd: 'maestro-execute',         args: '' }],
   'quick':              [{ cmd: 'maestro-quick',           args: '"{description}"' }],
   'team_lifecycle':     [{ cmd: 'team-lifecycle-v4',       args: '"{description}"' }],
   'team_coordinate':    [{ cmd: 'team-coordinate',         args: '"{description}"' }],
@@ -316,8 +316,8 @@ const chainMap = {
     { cmd: 'maestro-verify',  args: '{phase}' }
   ],
   'quality-fix': [
-    { cmd: 'manage-issue-analyze', args: '"{description}"' },
-    { cmd: 'manage-issue-execute', args: '"{description}"' },
+    { cmd: 'maestro-analyze',      args: '--gaps "{description}"' },
+    { cmd: 'maestro-execute',      args: '' },
     { cmd: 'maestro-verify',       args: '{phase}' }
   ],
   'deploy': [
@@ -327,15 +327,15 @@ const chainMap = {
 
   // ── Issue lifecycle chains (with quality gates) ────────────────────────────
   'issue-full': [
-    { cmd: 'manage-issue-analyze', args: '{issue_id}' },
-    { cmd: 'manage-issue-plan',    args: '{issue_id}' },
-    { cmd: 'manage-issue-execute', args: '{issue_id}' },
+    { cmd: 'maestro-analyze',      args: '--gaps {issue_id}' },
+    { cmd: 'maestro-plan',         args: '--gaps' },
+    { cmd: 'maestro-execute',      args: '' },
     { cmd: 'quality-review',       args: '--scope {affected_files}' },
     { cmd: 'manage-issue',         args: 'close {issue_id} --resolution fixed' }
   ],
   'issue-quick': [
-    { cmd: 'manage-issue-plan',    args: '{issue_id}' },
-    { cmd: 'manage-issue-execute', args: '{issue_id}' },
+    { cmd: 'maestro-plan',         args: '--gaps' },
+    { cmd: 'maestro-execute',      args: '' },
     { cmd: 'manage-issue',         args: 'close {issue_id} --resolution fixed' }
   ],
 };

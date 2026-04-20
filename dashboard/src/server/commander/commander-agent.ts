@@ -496,7 +496,7 @@ export class CommanderAgent {
             // Use AgentManager for lightweight analysis (don't occupy Scheduler slots)
             await this.agentManager.spawn(action.executor as any, {
               type: action.executor as any,
-              prompt: `Analyze issue ${action.target}: Read .workflow/issues/issues.jsonl, find the issue by ID, analyze root cause by exploring codebase, and write analysis results back to the issue record. Follow the manage-issue-analyze workflow pattern.`,
+              prompt: `Analyze issue ${action.target}: Run /maestro-analyze --gaps ${action.target} to perform root cause analysis and write the analysis record back to the issue.`,
               workDir: this.workflowRoot,
               approvalMode: 'auto',
             });
@@ -506,7 +506,7 @@ export class CommanderAgent {
           case 'plan_issue':
             await this.agentManager.spawn(action.executor as any, {
               type: action.executor as any,
-              prompt: `Plan solution for issue ${action.target}: Read the issue from .workflow/issues/issues.jsonl, use the existing analysis if available, generate a solution with steps[], context, and promptTemplate, then write it back to the issue record. Follow the manage-issue-plan workflow pattern.`,
+              prompt: `Plan solution for issue ${action.target}: Run /maestro-plan --gaps to generate TASK files linked to the issue via task_refs.`,
               workDir: this.workflowRoot,
               approvalMode: 'auto',
             });

@@ -17,11 +17,11 @@
   "nodes": {
     "issue_execute": {
       "type": "command",
-      "cmd": "manage-issue-execute",
+      "cmd": "maestro-execute",
       "next": "done",
       "analyze": false,
-      "args": "\"{description}\"",
-      "description": "Execute planned solution for an issue via dual-mode agent dispatch"
+      "args": "",
+      "description": "Wave-based execution with automatic issue status sync"
     },
     "done": {
       "type": "terminal",

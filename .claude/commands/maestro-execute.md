@@ -96,6 +96,20 @@ If exit code is 1, present warnings and ask whether to proceed.
 
 Follow '~/.maestro/workflows/execute.md' completely.
 
+### Issue Status Sync
+
+On each task completion, if `task.issue_id` exists, sync status back to the issue in `.workflow/issues/issues.jsonl`:
+
+```
+For each completed/failed TASK with issue_id:
+  Read issue from issues.jsonl by issue_id
+  Collect all task_refs[] statuses for that issue:
+    all task_refs completed → issue.status = "resolved"
+    any task_ref failed    → issue.status = "in_progress"
+  Append history entry: { action: "executed", at: <ISO>, by: "maestro-execute", summary: "TASK-{NNN} {status}" }
+  Write updated issue back to issues.jsonl
+```
+
 **Report format on completion:**
 
 ```

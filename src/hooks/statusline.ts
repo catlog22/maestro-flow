@@ -1,33 +1,46 @@
 /**
- * Maestro Statusline Hook
+ * Maestro Statusline Hook — Powerline × Notion style
  *
- * Displays: model | phase | task | directory | ASCII-face context bar
- * Writes bridge file for context-monitor hook consumption.
+ * Renders a Nerd-Font Powerline statusline with muted Notion-inspired colors.
+ * Segments are conditionally shown — empty segments are omitted for a clean line.
+ *
+ * Segments (left → right):
+ *   Model | Phase | Coordinator | Task | Team | Directory+Git | Context bar
  *
  * Input (stdin JSON from Claude Code):
  *   { model, workspace, session_id, context_window }
  *
- * Output (stdout): formatted statusline string
+ * Output (stdout): formatted Powerline string
  */
 
 import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
+import { execSync } from 'node:child_process';
 import {
   AUTO_COMPACT_BUFFER_PCT,
   BRIDGE_PREFIX,
-  FACES,
-  FACE_COLORS,
   ANSI_RESET,
-  ANSI_DIM,
-  ANSI_BOLD,
-  ANSI_CYAN,
-  getFaceLevel,
+  PL_SEP,
+  ICONS,
+  GIT_ICONS,
+  SEGMENT_BG,
+  SEGMENT_FG,
+  TEXT_COLORS,
+  ansiBg,
+  ansiFg,
+  getCtxLevel,
+  getStatuslineStyle,
+  type CtxLevel,
 } from './constants.js';
-import { readCoordBridge, type CoordBridgeData } from './coordinator-tracker.js';
+import { readCoordBridge } from './coordinator-tracker.js';
 import { resolveSelf } from '../tools/team-members.js';
 import { readRecentActivity, type ActivityEvent } from '../tools/team-activity.js';
 import { findWorkspaceRoot } from './workspace.js';
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 interface StatuslineInput {
   model?: { display_name?: string };
@@ -43,6 +56,63 @@ interface BridgeData {
   timestamp: number;
 }
 
+/** Segment key — maps to TEXT_COLORS for colored-text mode */
+type SegKey = 'model' | 'milestone' | 'phase' | 'coord' | 'task' | 'team' | 'dir' | 'ctxOk' | 'ctxWarn' | 'ctxAlert' | 'ctxCrit';
+
+interface Segment {
+  text: string;
+  key: SegKey;
+  bg: readonly [number, number, number];
+  fg: readonly [number, number, number];
+}
+
+// ---------------------------------------------------------------------------
+// Renderers
+// ---------------------------------------------------------------------------
+
+/**
+ * Powerline mode: colored background segments with arrow separators.
+ */
+function renderPowerline(segments: Segment[]): string {
+  if (segments.length === 0) return '';
+
+  let out = '';
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i];
+    out += ansiBg(seg.bg) + ansiFg(seg.fg) + ` ${seg.text} `;
+
+    if (i < segments.length - 1) {
+      out += ansiFg(seg.bg) + ansiBg(segments[i + 1].bg) + PL_SEP;
+    } else {
+      out += ANSI_RESET + ansiFg(seg.bg) + PL_SEP + ANSI_RESET;
+    }
+  }
+  return out;
+}
+
+/**
+ * Colored-text mode: colored text on transparent background, pipe separators.
+ * Similar style to CCometixLine reference.
+ */
+function renderColoredText(segments: Segment[]): string {
+  if (segments.length === 0) return '';
+
+  const sepColor = ansiFg(TEXT_COLORS.separator);
+  const sep = `${sepColor} | ${ANSI_RESET}`;
+
+  const parts = segments.map((seg) => {
+    const colorKey = seg.key as keyof typeof TEXT_COLORS;
+    const color = TEXT_COLORS[colorKey] ?? TEXT_COLORS.model;
+    return `${ansiFg(color)}${seg.text}${ANSI_RESET}`;
+  });
+
+  return parts.join(sep);
+}
+
+// ---------------------------------------------------------------------------
+// Context usage
+// ---------------------------------------------------------------------------
+
 /** Normalize remaining% to usable context (accounts for autocompact buffer) */
 function normalizeUsage(remaining: number): number {
   const usableRemaining = Math.max(
@@ -52,19 +122,31 @@ function normalizeUsage(remaining: number): number {
   return Math.max(0, Math.min(100, Math.round(100 - usableRemaining)));
 }
 
-/**
- * Build the context bar: face [=====-----] 62%
- */
-function buildContextBar(usedPct: number): string {
-  const level = getFaceLevel(usedPct);
-  const face = FACES[level];
-  const color = FACE_COLORS[level];
+/** Build context bar text: "icon ██████░░░░ 62%" */
+function buildContextText(usedPct: number): string {
   const filled = Math.floor(usedPct / 10);
-  const bar = '='.repeat(filled) + '-'.repeat(10 - filled);
-  return ` ${color}${face} [${bar}] ${usedPct}%${ANSI_RESET}`;
+  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
+  return `${ICONS.ctx} ${bar} ${usedPct}%`;
 }
 
-/** Write bridge file for context-monitor to consume */
+/** Get context segment colors by level */
+function getCtxColors(level: CtxLevel): {
+  bg: readonly [number, number, number];
+  fg: readonly [number, number, number];
+} {
+  const map = {
+    ok:    { bg: SEGMENT_BG.ctxOk,    fg: SEGMENT_FG.ctxOk },
+    warn:  { bg: SEGMENT_BG.ctxWarn,  fg: SEGMENT_FG.ctxWarn },
+    alert: { bg: SEGMENT_BG.ctxAlert, fg: SEGMENT_FG.ctxAlert },
+    crit:  { bg: SEGMENT_BG.ctxCrit,  fg: SEGMENT_FG.ctxCrit },
+  };
+  return map[level];
+}
+
+// ---------------------------------------------------------------------------
+// Bridge
+// ---------------------------------------------------------------------------
+
 function writeBridge(session: string, remaining: number, usedPct: number): void {
   try {
     const bridgePath = join(tmpdir(), `${BRIDGE_PREFIX}${session}.json`);
@@ -79,6 +161,10 @@ function writeBridge(session: string, remaining: number, usedPct: number): void 
     // Silent fail — bridge is best-effort
   }
 }
+
+// ---------------------------------------------------------------------------
+// Data readers
+// ---------------------------------------------------------------------------
 
 /** Read current in-progress task from Claude Code todos */
 function readCurrentTask(session: string): string {
@@ -103,45 +189,124 @@ function readCurrentTask(session: string): string {
   return '';
 }
 
-/** Read current phase from .workflow/state.json (using workspace resolver) */
-function readPhase(dir: string): string {
+// ---------------------------------------------------------------------------
+// Workflow state reader
+// ---------------------------------------------------------------------------
+
+interface WorkflowInfo {
+  milestone: string;         // e.g., "MVP" or ""
+  currentPhase: number;      // e.g., 2 or 0
+  currentStep: number;       // e.g., 1 or 0
+  status: string;            // e.g., "phase_2_pending"
+  total: number;             // total phases
+  completed: number;         // completed phases
+  inProgress: number;        // in-progress phases
+  planned: number;           // phases with plan artifacts (scratch/P{n}/plan.json)
+  workspaceRoot: string;     // workspace root path
+}
+
+const emptyWf: WorkflowInfo = {
+  milestone: '', currentPhase: 0, currentStep: 0, status: '',
+  total: 0, completed: 0, inProgress: 0, planned: 0, workspaceRoot: '',
+};
+
+/** Read milestone + phase progress from .workflow/state.json */
+function readWorkflowState(dir: string): WorkflowInfo {
   const root = findWorkspaceRoot(dir);
-  if (!root) return '';
+  if (!root) return emptyWf;
   const statePath = join(root, '.workflow', 'state.json');
-  if (!existsSync(statePath)) return '';
+  if (!existsSync(statePath)) return emptyWf;
   try {
     const state = JSON.parse(readFileSync(statePath, 'utf8'));
-    if (state.current_phase) {
-      let label = `P${state.current_phase}`;
-      if (state.current_step) label += `.${state.current_step}`;
-      return label;
+    const result: WorkflowInfo = { ...emptyWf, workspaceRoot: root };
+
+    if (state.current_milestone) result.milestone = state.current_milestone;
+    if (state.current_phase) result.currentPhase = state.current_phase;
+    if (state.current_step) result.currentStep = state.current_step;
+    if (state.status) result.status = state.status;
+
+    if (state.phases_summary) {
+      const s = state.phases_summary;
+      if (typeof s.total === 'number') result.total = s.total;
+      if (typeof s.completed === 'number') result.completed = s.completed;
+      if (typeof s.in_progress === 'number') result.inProgress = s.in_progress;
     }
+
+    // Count how many phases have plan artifacts
+    if (result.total > 0) {
+      let planned = 0;
+      for (let p = 1; p <= result.total; p++) {
+        const planPath = join(root, '.workflow', 'scratch', `P${p}`, 'plan.json');
+        if (existsSync(planPath)) planned++;
+      }
+      result.planned = planned;
+    }
+
+    return result;
   } catch {
-    // Silently fail
+    return emptyWf;
   }
-  return '';
+}
+
+// ---------------------------------------------------------------------------
+// Git segment
+// ---------------------------------------------------------------------------
+
+interface GitInfo {
+  branch: string;
+  dirty: boolean;
+  conflict: boolean;
+  ahead: number;
+  behind: number;
+}
+
+function readGitInfo(dir: string): GitInfo | null {
+  try {
+    const opts = { cwd: dir, timeout: 2000, stdio: 'pipe' as const };
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', opts).toString().trim();
+    if (!branch) return null;
+
+    const statusOut = execSync('git status --porcelain -uno', opts).toString();
+    const dirty = statusOut.length > 0;
+    const conflict = statusOut.split('\n').some((l) => l.startsWith('UU') || l.startsWith('AA'));
+
+    let ahead = 0;
+    let behind = 0;
+    try {
+      const ab = execSync('git rev-list --left-right --count HEAD...@{upstream}', opts).toString().trim();
+      const parts = ab.split(/\s+/);
+      if (parts.length === 2) {
+        ahead = parseInt(parts[0], 10) || 0;
+        behind = parseInt(parts[1], 10) || 0;
+      }
+    } catch {
+      // No upstream or detached — ignore
+    }
+
+    return { branch, dirty, conflict, ahead, behind };
+  } catch {
+    return null;
+  }
+}
+
+function formatGitSuffix(git: GitInfo): string {
+  let status = '';
+  if (git.conflict) status += GIT_ICONS.conflict;
+  else if (git.dirty) status += GIT_ICONS.dirty;
+  else status += GIT_ICONS.clean;
+
+  if (git.ahead > 0) status += `${GIT_ICONS.ahead}${git.ahead}`;
+  if (git.behind > 0) status += `${GIT_ICONS.behind}${git.behind}`;
+
+  return `${ICONS.git} ${git.branch} ${status}`;
 }
 
 // ---------------------------------------------------------------------------
 // Teammate activity segment (team-lite Wave 3B)
-//
-// Shows a compact summary of recent teammate activity in the statusline:
-//   "\u{1F465} alice (P3/001) | bob (spec-auth) +2"
-//
-// Contract:
-//   - Must be cheap (statusline runs on every refresh).
-//   - Result is cached per-session for 10s in os.tmpdir().
-//   - Must never throw — any error maps to empty string.
-//   - Emits nothing if team mode is off or no teammate activity in 30m.
 // ---------------------------------------------------------------------------
 
-/** TTL for the per-session team segment cache. */
 const TEAM_CACHE_TTL_MS = 10_000;
-
-/** Recent-activity lookback window for the team segment. */
 const TEAM_WINDOW_MIN = 30;
-
-/** Max teammates rendered inline before collapsing to " +N". */
 const TEAM_MAX_INLINE = 3;
 
 interface TeamCacheFile {
@@ -158,33 +323,17 @@ function writeTeamCache(path: string, segment: string): string {
     const data: TeamCacheFile = { ts: Date.now(), segment };
     writeFileSync(path, JSON.stringify(data));
   } catch {
-    // Best-effort: cache write failure must not break statusline.
+    // Best-effort
   }
   return segment;
 }
 
-/**
- * Collapse a task id to its short tail.
- *
- *   "TASK-001"          -> "001"
- *   "WFS-auth-refactor" -> "refactor"
- *   "plain"             -> "plain"
- */
 function shortTaskId(taskId: string): string {
   const idx = taskId.lastIndexOf('-');
   if (idx < 0) return taskId;
   return taskId.slice(idx + 1) || taskId;
 }
 
-/**
- * Format a single teammate's inline label from their most recent event.
- *
- * Rules (in priority order):
- *   - phase_id + task_id -> "name (P{phase}/{short_task})"
- *   - phase_id only      -> "name (P{phase})"
- *   - target only        -> "name ({target})"
- *   - otherwise          -> "name"
- */
 function formatTeammate(name: string, evt: ActivityEvent): string {
   if (typeof evt.phase_id === 'number' && typeof evt.task_id === 'string' && evt.task_id) {
     return `${name} (P${evt.phase_id}/${shortTaskId(evt.task_id)})`;
@@ -198,17 +347,8 @@ function formatTeammate(name: string, evt: ActivityEvent): string {
   return name;
 }
 
-/**
- * Build the teammate activity segment. Returns empty string if:
- *   - Team mode not enabled (no self record)
- *   - No recent teammate activity in the last 30 minutes (excluding self)
- *   - Any error (never throws)
- *
- * Result is cached per-session for 10 seconds via a JSON file in os.tmpdir().
- */
 export function buildTeamSegment(session: string): string {
   try {
-    // ---- Cache check ----
     const cachePath = teamCachePath(session);
     if (existsSync(cachePath)) {
       try {
@@ -222,20 +362,16 @@ export function buildTeamSegment(session: string): string {
           return cached.segment;
         }
       } catch {
-        // Corrupt cache file — fall through and recompute.
+        // Corrupt cache — recompute
       }
     }
 
-    // ---- Team mode gate ----
     const self = resolveSelf();
     if (!self) return writeTeamCache(cachePath, '');
 
-    // ---- Read recent activity ----
     const events = readRecentActivity(TEAM_WINDOW_MIN);
     if (events.length === 0) return writeTeamCache(cachePath, '');
 
-    // Group by "user@host", keep the most recent event per teammate.
-    // Exclude self (match on both user and host to avoid cross-host uid collision).
     const latest = new Map<string, ActivityEvent>();
     for (const evt of events) {
       if (!evt || typeof evt.user !== 'string' || typeof evt.host !== 'string') continue;
@@ -254,13 +390,10 @@ export function buildTeamSegment(session: string): string {
     }
     if (latest.size === 0) return writeTeamCache(cachePath, '');
 
-    // Sort teammates newest-first so the 3 most active show up inline.
     const ordered = Array.from(latest.values()).sort((a, b) => {
       const ta = Date.parse(a.ts);
       const tb = Date.parse(b.ts);
-      const sa = Number.isNaN(ta) ? 0 : ta;
-      const sb = Number.isNaN(tb) ? 0 : tb;
-      return sb - sa;
+      return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
     });
 
     const inline = ordered.slice(0, TEAM_MAX_INLINE).map((evt) => formatTeammate(evt.user, evt));
@@ -271,75 +404,158 @@ export function buildTeamSegment(session: string): string {
     const segment = `\u{1F465} ${body}`;
     return writeTeamCache(cachePath, segment);
   } catch {
-    // Hot path — never let statusline crash.
     return '';
   }
 }
 
-/**
- * Build coordinator progress segment from bridge file.
- * Returns e.g. "[3/6]verify" or "[P]review" (paused) or empty string.
- */
+// ---------------------------------------------------------------------------
+// Coordinator segment
+// ---------------------------------------------------------------------------
+
 export function buildCoordinatorSegment(session: string): string {
   if (!session) return '';
   try {
     const bridge = readCoordBridge(session);
     if (!bridge) return '';
 
-    const { status, steps_completed, steps_total, current_step } = bridge;
+    const { status, steps_completed, steps_total, current_step, chain_name } = bridge;
     if (status === 'completed' || status === 'failed') return '';
 
-    const stepLabel = current_step?.skill ?? '';
     const isPaused = status === 'paused' || status === 'step_paused';
-    const prefix = isPaused ? 'P' : `${steps_completed}/${steps_total}`;
+    const progress = isPaused ? 'P' : `${steps_completed}/${steps_total}`;
+    const stepLabel = current_step?.skill ?? '';
 
-    let seg = `[${prefix}]${stepLabel}`;
-    if (bridge.coord_session_id) {
-      const shortId = bridge.coord_session_id.slice(0, 12);
-      seg += ` (${shortId})`;
-    }
-    return seg;
+    // chain_name → stepLabel [progress]
+    const parts: string[] = [];
+    if (chain_name) parts.push(chain_name);
+    if (stepLabel) parts.push(stepLabel);
+    return `${parts.join(' ')} [${progress}]`;
   } catch {
     return '';
   }
 }
 
-/** Main statusline handler — processes input and returns formatted string */
+// ---------------------------------------------------------------------------
+// Main formatter
+// ---------------------------------------------------------------------------
+
+/** Main statusline handler — processes input and returns Powerline string */
 export function formatStatusline(data: StatuslineInput): string {
   const model = data.model?.display_name || 'Claude';
   const dir = data.workspace?.current_dir || process.cwd();
   const session = data.session_id || '';
   const remaining = data.context_window?.remaining_percentage;
 
-  // Context bar + bridge write
-  let ctx = '';
+  // ---- Collect data ----
+  const wf    = readWorkflowState(dir);
+  const coord = session ? buildCoordinatorSegment(session) : '';
+  const task  = session ? readCurrentTask(session) : '';
+  const team  = session ? buildTeamSegment(session) : '';
+  const git   = readGitInfo(dir);
+
+  let usedPct = 0;
   if (remaining != null) {
-    const usedPct = normalizeUsage(remaining);
+    usedPct = normalizeUsage(remaining);
     if (session) writeBridge(session, remaining, usedPct);
-    ctx = buildContextBar(usedPct);
   }
 
-  // Current task
-  const task = session ? readCurrentTask(session) : '';
+  // ---- Build segments ----
+  const segments: Segment[] = [];
 
-  // Phase from .workflow/
-  const phase = readPhase(dir);
+  // 1. Model
+  segments.push({
+    key: 'model',
+    text: `${ICONS.model} ${model}`,
+    bg: SEGMENT_BG.model,
+    fg: SEGMENT_FG.model,
+  });
 
-  // Coordinator progress
-  const coord = session ? buildCoordinatorSegment(session) : '';
+  // 2. Milestone (conditional — shown when workflow has milestones)
+  if (wf.milestone) {
+    let msText = `${ICONS.milestone} ${wf.milestone}`;
+    if (wf.total > 0) msText += ` ${wf.completed}/${wf.total}`;
+    segments.push({
+      key: 'milestone',
+      text: msText,
+      bg: SEGMENT_BG.milestone,
+      fg: SEGMENT_FG.milestone,
+    });
+  }
 
-  // Teammate activity (team-lite Wave 3B)
-  const team = session ? buildTeamSegment(session) : '';
+  // 3. Phase (conditional — shows current phase + status detail)
+  if (wf.currentPhase) {
+    let phaseText = `${ICONS.phase} P${wf.currentPhase}`;
+    if (wf.currentStep) phaseText += `.${wf.currentStep}`;
 
-  // Assemble segments
-  const parts: string[] = [`${ANSI_DIM}${model}${ANSI_RESET}`];
-  if (phase) parts.push(`${ANSI_CYAN}${phase}${ANSI_RESET}`);
-  if (coord) parts.push(`${ANSI_CYAN}${coord}${ANSI_RESET}`);
-  if (task)  parts.push(`${ANSI_BOLD}${task}${ANSI_RESET}`);
-  if (team)  parts.push(`${ANSI_DIM}${team}${ANSI_RESET}`);
-  parts.push(`${ANSI_DIM}${basename(dir)}${ANSI_RESET}`);
+    const tags: string[] = [];
+    if (wf.planned > 0) tags.push(`${wf.planned}plan`);
+    if (wf.inProgress > 0) tags.push(`${wf.inProgress}run`);
+    if (tags.length > 0) phaseText += ` [${tags.join(' ')}]`;
 
-  return parts.join(' | ') + ctx;
+    segments.push({
+      key: 'phase',
+      text: phaseText,
+      bg: SEGMENT_BG.phase,
+      fg: SEGMENT_FG.phase,
+    });
+  }
+
+  // 4. Coordinator + chain (conditional)
+  if (coord) {
+    segments.push({
+      key: 'coord',
+      text: `${ICONS.coord} ${coord}`,
+      bg: SEGMENT_BG.coord,
+      fg: SEGMENT_FG.coord,
+    });
+  }
+
+  // 5. Task (conditional)
+  if (task) {
+    segments.push({
+      key: 'task',
+      text: `${ICONS.task} ${task}`,
+      bg: SEGMENT_BG.task,
+      fg: SEGMENT_FG.task,
+    });
+  }
+
+  // 6. Team (conditional)
+  if (team) {
+    segments.push({
+      key: 'team',
+      text: `${ICONS.team} ${team}`,
+      bg: SEGMENT_BG.team,
+      fg: SEGMENT_FG.team,
+    });
+  }
+
+  // 7. Directory + Git
+  let dirText = `${ICONS.dir} ${basename(dir)}`;
+  if (git) dirText += `  ${formatGitSuffix(git)}`;
+  segments.push({
+    key: 'dir',
+    text: dirText,
+    bg: SEGMENT_BG.dir,
+    fg: SEGMENT_FG.dir,
+  });
+
+  // 8. Context bar (conditional — only when data available)
+  if (remaining != null) {
+    const level = getCtxLevel(usedPct);
+    const colors = getCtxColors(level);
+    const ctxKey = `ctx${level.charAt(0).toUpperCase()}${level.slice(1)}` as SegKey;
+    segments.push({
+      key: ctxKey,
+      text: buildContextText(usedPct),
+      bg: colors.bg,
+      fg: colors.fg,
+    });
+  }
+
+  // ---- Render ----
+  const style = getStatuslineStyle();
+  return style === 'powerline' ? renderPowerline(segments) : renderColoredText(segments);
 }
 
 /** Entry point — reads stdin JSON, writes formatted statusline to stdout */

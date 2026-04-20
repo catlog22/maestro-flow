@@ -52,9 +52,9 @@ graph TB
     subgraph issue["Issue Closed-Loop"]
         ID["/manage-issue-discover"]
         IC["/manage-issue<br>create"]
-        IA["/manage-issue-analyze"]
-        IP["/manage-issue-plan"]
-        IE["/manage-issue-execute"]
+        IA["/maestro-analyze --gaps"]
+        IP["/maestro-plan --gaps"]
+        IE["/maestro-execute"]
         ICL["/manage-issue<br>close"]
     end
 
@@ -197,9 +197,9 @@ graph LR
 ```mermaid
 stateDiagram-v2
     [*] --> open: Create Issue
-    open --> analyzing: /manage-issue-analyze<br>writes analysis
-    analyzing --> planned: /manage-issue-plan<br>writes solution
-    planned --> in_progress: /manage-issue-execute<br>starts execution
+    open --> analyzing: /maestro-analyze --gaps<br>writes analysis
+    analyzing --> planned: /maestro-plan --gaps<br>writes solution
+    planned --> in_progress: /maestro-execute<br>starts execution
     in_progress --> resolved: Execution succeeded
     in_progress --> open: Execution failed (rollback)
     resolved --> closed: /manage-issue close
@@ -385,11 +385,11 @@ Discover → Create → Analyze → Plan → Execute → Close
        ↓
 /manage-issue create --title "..." --severity high   # Create Issue
        ↓
-/manage-issue-analyze ISS-xxx                   # Root cause analysis → writes analysis
+/maestro-analyze --gaps ISS-xxx                  # Root cause analysis → writes analysis
        ↓
-/manage-issue-plan ISS-xxx                      # Solution planning → writes solution
+/maestro-plan --gaps                             # Solution planning → TASK-*.json + issue.task_refs[]
        ↓
-/manage-issue-execute ISS-xxx                   # Execute solution → status change
+/maestro-execute                                 # Execute solution → TASK completed + issue resolved
        ↓
 /manage-issue close ISS-xxx --resolution "fixed" # Close Issue
 ```
@@ -418,39 +418,36 @@ Output: Deduplicated Issue list, automatically written to `issues.jsonl`.
 /manage-issue link ISS-xxx --task TASK-001      # Bidirectional link Issue ↔ Task
 ```
 
-#### `/manage-issue-analyze` — Root Cause Analysis
+#### `/maestro-analyze --gaps` — Issue Root Cause Analysis
 
 ```bash
-/manage-issue-analyze ISS-xxx                   # Uses gemini by default
-/manage-issue-analyze ISS-xxx --tool qwen --depth deep  # Specify tool and depth
+/maestro-analyze --gaps ISS-xxx                  # Analyze Issue root cause (uses gemini by default)
+/maestro-analyze --gaps ISS-xxx --tool qwen --depth deep  # Specify tool and depth
 ```
 
-Flow: Read Issue → CLI codebase exploration → Identify root cause → Write to `analysis` field (root_cause, impact, confidence, related_files, suggested_approach).
+Flow: Read Issue → CLI codebase exploration → Identify root cause → Write to `issue.analysis` field (root_cause, impact, confidence, related_files, suggested_approach).
 
-After analysis, the Issue's display status changes from `open` to `analyzing`.
+After analysis, the Issue's display status changes from `open` to `analyzing` (diagnosed).
 
-#### `/manage-issue-plan` — Solution Planning
+#### `/maestro-plan --gaps` — Issue Solution Planning
 
 ```bash
-/manage-issue-plan ISS-xxx                      # Generate solution based on analysis
-/manage-issue-plan ISS-xxx --from-analysis       # Explicitly use analysis results
+/maestro-plan --gaps                             # Generate TASK-*.json from diagnosed Issues
+/maestro-plan --gaps --from-analysis              # Explicitly use analysis results
 ```
 
-Flow: Read Issue + analysis → CLI planning → Generate executable steps → Write to `solution` field (steps[], context, planned_by).
+Flow: Read Issue + analysis → CLI planning → Generate TASK-*.json files → Update `issue.task_refs[]` with task references.
 
 After planning, the Issue's display status changes from `analyzing` to `planned`.
 
-#### `/manage-issue-execute` — Solution Execution
+#### `/maestro-execute` — Unified Execution (Issues + Tasks)
 
 ```bash
-/manage-issue-execute ISS-xxx                            # Default claude-code
-/manage-issue-execute ISS-xxx --executor gemini           # Specify executor
-/manage-issue-execute ISS-xxx --dry-run                   # Dry run (no actual execution)
+/maestro-execute                                 # Execute all pending TASKs (including Issue-linked)
+/maestro-execute --dry-run                        # Dry run (no actual execution)
 ```
 
-**Dual-mode execution**:
-- **Server UP**: Dispatched via Dashboard API (`POST /api/execution/dispatch`)
-- **Server DOWN**: Executed directly via `maestro cli`
+**Unified data flow**: Issues produce TASKs via `--gaps` planning; `maestro-execute` runs TASKs and marks linked Issues as resolved on completion.
 
 ### 3.3 Issue and Kanban Integration
 
@@ -667,9 +664,9 @@ graph LR
 
 ```bash
 /manage-issue-discover by-prompt "Check error handling in all API endpoints"
-/manage-issue-analyze ISS-xxx
-/manage-issue-plan ISS-xxx
-/manage-issue-execute ISS-xxx --executor gemini
+/maestro-analyze --gaps ISS-xxx
+/maestro-plan --gaps
+/maestro-execute
 /manage-issue close ISS-xxx --resolution "Fixed"
 ```
 

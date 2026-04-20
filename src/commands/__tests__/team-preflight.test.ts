@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 
-import { runPreflight } from '../team.js';
+import { runPreflight } from '../../hooks/preflight-core.js';
 import type { MemberRecord } from '../../tools/team-members.js';
 import type { ActivityEvent } from '../../tools/team-activity.js';
 

@@ -9,6 +9,11 @@ export interface SpecInjectionConfig {
   maxContentLength?: number;
 }
 
+export interface StatuslineConfig {
+  style: 'powerline' | 'text';
+  nerdFont?: boolean;
+}
+
 export interface MaestroConfig {
   version: string;
   extensions: ExtensionConfig[];
@@ -16,6 +21,7 @@ export interface MaestroConfig {
   workflows: WorkflowConfig;
   hooks?: HooksConfig;
   specInjection?: SpecInjectionConfig;
+  statusline?: StatuslineConfig;
 }
 
 export interface ExtensionConfig {

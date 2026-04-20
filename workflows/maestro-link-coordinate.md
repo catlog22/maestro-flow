@@ -1,6 +1,6 @@
 # Workflow: maestro-link-coordinate
 
-Chain-graph coordinator via `maestro coordinate` CLI endpoint. Loads a chain graph, walks node by node via step-mode subcommands. Each command node executed through `maestro cli` internally.
+Chain-graph coordinator via `maestro coordinate` CLI endpoint. Loads a chain graph, walks node by node via step-mode subcommands. Each command node executed through `maestro delegate` internally.
 
 ---
 
@@ -93,7 +93,7 @@ After each call:
 
 The walker handles internally:
 - Prompt assembly from `coordinate-step` template (command nodes) and inline `buildDecisionPrompt` (decision nodes) — **the walker owns all prompt construction**
-- CLI execution via `maestro cli --tool {tool} --mode {write|analysis}`
+- CLI execution via `maestro delegate --to {tool} --mode {write|analysis}`
 - Decision/gate/eval node auto-resolution:
   - `strategy: 'expr'` — static expression, instant
   - `strategy: 'llm'` — spawns the configured CLI tool via a thin `DefaultLLMDecider`, expects a `DECISION: <target>\nREASONING: <text>` response

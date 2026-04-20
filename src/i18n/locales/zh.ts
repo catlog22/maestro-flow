@@ -72,6 +72,11 @@ export const zh: LocaleStrings = {
     statuslineDetected: '已检测：{cmd}',
     statuslineWillInstall: 'maestro-statusline',
     statuslineEnabled: 'maestro-statusline',
+    statuslineStyleTitle: '显示风格：',
+    statuslineStyleText: '彩色文字 + 管道分隔符（兼容所有终端）',
+    statuslineStylePowerline: '彩色背景 + 箭头分隔符（建议使用 Powerline 字体）',
+    statuslineNerdFontPrompt: 'Nerd Font 图标？',
+    statuslineNerdFontHint: '需要终端安装 Nerd Font 字体（如 CaskaydiaCove NF）',
 
     // Backup
     backupTitle: '备份配置',

@@ -1,7 +1,7 @@
-# CLI Tools Execution Specification
+# Delegate Execution Specification
 
 <purpose>
-Unified reference for `maestro cli` — runs agent tools (gemini, qwen, codex, claude, opencode) with a shared interface for prompt, mode, model, directory, templates, and session resume.
+Unified reference for `maestro delegate` — synchronous task delegation with broker-managed lifecycle, message injection, and MCP notifications.
 </purpose>
 
 **References**: `~/.maestro/cli-tools.json` (tool config), `~/.maestro/templates/cli/` (protocol + prompt templates)
@@ -15,15 +15,14 @@ Unified reference for `maestro cli` — runs agent tools (gemini, qwen, codex, c
 ### Command Syntax
 
 ```bash
-maestro cli -p "<PROMPT>" [options]
+maestro delegate "<PROMPT>" [options]
 ```
 
 ### Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-p, --prompt` | **Required**. Prompt text | — |
-| `--tool <name>` | Tool: gemini, qwen, codex, claude, opencode | First enabled in config |
+| `--to <name>` | Tool: gemini, qwen, codex, claude, opencode | First enabled in config |
 | `--mode <mode>` | `analysis` (read-only) or `write` (create/modify/delete) | `analysis` |
 | `--model <model>` | Model override | Tool's `primaryModel` |
 | `--cd <dir>` | Working directory | Current directory |
@@ -31,6 +30,7 @@ maestro cli -p "<PROMPT>" [options]
 | `--rule <template>` | Load protocol + prompt template | — (optional) |
 | `--id <id>` | Execution ID | Auto: `{prefix}-{HHmmss}-{rand4}` |
 | `--resume [id]` | Resume session (last if no id, comma-separated for merge) | — |
+| `--backend <type>` | Adapter backend: `direct` or `terminal` (tmux/wezterm) | `direct` |
 
 ### Mode Definition (Authoritative)
 
@@ -39,7 +39,7 @@ maestro cli -p "<PROMPT>" [options]
 | `analysis` | Read-only | Yes | Review, exploration, diagnosis, architecture analysis |
 | `write` | Create/Modify/Delete | No — requires explicit intent | Implementation, bug fixes, refactoring |
 
-> `--mode` is the **authoritative** permission control for maestro cli. The `MODE:` field inside prompt text is a hint for the agent — both should be consistent, but `--mode` governs actual behavior.
+> `--mode` is the **authoritative** permission control. The `MODE:` field inside prompt text is a hint for the agent — both should be consistent, but `--mode` governs actual behavior.
 </context>
 
 ---
@@ -72,8 +72,8 @@ maestro cli -p "<PROMPT>" [options]
 
 ### Tool Selection
 
-1. Explicit `--tool` specified → use it (validate enabled)
-2. No `--tool` → first enabled tool in config order
+1. Explicit `--to` specified → use it (validate enabled)
+2. No `--to` → first enabled tool in config order
 
 ### Fallback Chain
 
@@ -88,10 +88,10 @@ Primary model fails → `secondaryModel` → next enabled tool → first enabled
 
 ### Assembly Order
 
-`maestro cli` builds the final prompt as:
+`maestro delegate` builds the final prompt as:
 
 1. **Mode protocol** — `~/.maestro/templates/cli/protocols/{mode}-protocol.md`
-2. **User prompt** — the `-p` value
+2. **User prompt** — the positional `"<PROMPT>"` value
 3. **Rule template** — `~/.maestro/templates/cli/prompts/{rule}.txt` (if `--rule` specified)
 
 ### Prompt Template (6 Fields)
@@ -122,7 +122,7 @@ CONSTRAINTS: [scope limits] | [special requirements]
 
 ```bash
 # Cross-directory example
-maestro cli -p "CONTEXT: @**/* @../shared/**/*" --tool gemini --mode analysis \
+maestro delegate "CONTEXT: @**/* @../shared/**/*" --to gemini --mode analysis \
   --cd "src/auth" --includeDirs "../shared"
 ```
 
@@ -148,13 +148,13 @@ Memory: Integration with auth module, using shared error patterns
 ### Complete Example
 
 ```bash
-maestro cli -p "PURPOSE: Identify OWASP Top 10 vulnerabilities in auth module; success = all critical/high documented with remediation
+maestro delegate "PURPOSE: Identify OWASP Top 10 vulnerabilities in auth module; success = all critical/high documented with remediation
 TASK: Scan for injection flaws | Check auth bypass vectors | Evaluate session management | Assess data exposure
 MODE: analysis
 CONTEXT: @src/auth/**/* @src/middleware/auth.ts | Memory: Using bcrypt + JWT
 EXPECTED: Severity matrix, file:line references, remediation snippets, priority ranking
 CONSTRAINTS: Focus on authentication | Ignore test files
-" --tool gemini --mode analysis --rule analysis-assess-security-risks --cd "src/auth"
+" --to gemini --mode analysis --rule analysis-assess-security-risks --cd "src/auth"
 ```
 </context>
 
@@ -164,6 +164,24 @@ CONSTRAINTS: Focus on authentication | Ignore test files
 
 <execution>
 
+### Calling Convention
+
+`maestro delegate` runs synchronously — it blocks until the delegate completes. To avoid blocking the conversation, **always** use `run_in_background: true` on the Bash tool call, then stop output immediately and wait for the background completion callback.
+
+```
+Bash({
+  command: "maestro delegate \"<PROMPT>\" --to gemini --mode analysis",
+  run_in_background: true
+})
+// STOP — do not output anything further
+// Wait for Bash background completion callback to receive results
+```
+
+**Rules:**
+- **Never** use foreground Bash for delegate calls — it blocks the conversation for the entire execution duration
+- After the `Bash(run_in_background: true)` call, **stop immediately** — no follow-up text, no polling, no `delegate status` checks
+- When the background callback arrives, retrieve output with `maestro delegate output <id>`
+
 ### Execution ID
 
 ID prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`
@@ -171,16 +189,16 @@ ID prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode
 Output to stderr: `[MAESTRO_EXEC_ID=<id>]`
 
 ```bash
-maestro cli -p "<PROMPT>" --tool gemini --mode analysis    # auto-ID: gem-143022-a7f2
-maestro cli -p "<PROMPT>" --tool gemini --mode write --id my-task-1  # custom ID
+maestro delegate "<PROMPT>" --to gemini --mode analysis    # auto-ID: gem-143022-a7f2
+maestro delegate "<PROMPT>" --to gemini --mode write --id my-task-1  # custom ID
 ```
 
 ### Session Resume
 
 ```bash
-maestro cli -p "<PROMPT>" --tool gemini --resume              # last session
-maestro cli -p "<PROMPT>" --tool gemini --mode write --resume <id>  # specific
-maestro cli -p "<PROMPT>" --tool gemini --resume <id1>,<id2>     # merge multiple
+maestro delegate "<PROMPT>" --to gemini --resume              # last session
+maestro delegate "<PROMPT>" --to gemini --mode write --resume <id>  # specific
+maestro delegate "<PROMPT>" --to gemini --resume <id1>,<id2>     # merge multiple
 ```
 
 Resume auto-assembles previous conversation context. Warning emitted when context exceeds 32KB.
@@ -188,14 +206,13 @@ Resume auto-assembles previous conversation context. Warning emitted when contex
 ### Subcommands
 
 ```bash
-maestro cli show                     # recent 20 executions
-maestro cli show --all               # up to 100
-maestro cli output <id>              # assistant output (always shows status header)
-maestro cli output <id> --verbose    # include start/end timestamps
-maestro cli output <id> --tail 20    # last 20 lines of output
-maestro cli output <id> --lines 10   # alias for --tail
-maestro cli watch <id>               # stream output in real-time until completion
-maestro cli watch <id> --timeout 60000  # auto-exit after 60s
+maestro delegate show                     # recent 20 executions
+maestro delegate show --all               # up to 100
+maestro delegate output <id>              # assistant output
+maestro delegate output <id> --verbose    # include start/end timestamps
+maestro delegate status <id>              # broker + history + snapshot preview
+maestro delegate tail <id>                # recent events + history
+maestro delegate cancel <id>              # request cancellation
 ```
 </execution>
 
@@ -205,7 +222,7 @@ maestro cli watch <id> --timeout 60000  # auto-exit after 60s
 
 <execution>
 
-Proactively invoke `maestro cli` when these conditions are met — no user confirmation needed for `analysis` mode:
+Proactively invoke `maestro delegate` when these conditions are met — no user confirmation needed for `analysis` mode:
 
 | Trigger | Suggested Rule |
 |---------|---------------|

@@ -6,6 +6,8 @@ import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
 import { AnalysisSection } from '../issue/AnalysisSection.js';
 import { SolutionSection } from '../issue/SolutionSection.js';
 import { ExecutionResultSection } from '../issue/ExecutionResultSection.js';
+import { useIssueTasks } from '@/client/hooks/useIssueTasks.js';
+import { TaskPlanSection } from '@/client/components/issue/TaskPlanSection.js';
 
 // ---------------------------------------------------------------------------
 // IssueDetailModal — 3 style variants for viewing an issue (Linear-style)
@@ -215,6 +217,10 @@ function ActionButtons({ issue }: { issue: Issue }) {
 
 // Conditional sections for analysis/solution/execution result
 function DetailSections({ issue }: { issue: Issue }) {
+  const { tasks: linkedTasks, loading: tasksLoading } = useIssueTasks(
+    issue.task_refs?.length ? issue.id : null,
+  );
+
   return (
     <>
       {issue.analysis && (
@@ -222,11 +228,26 @@ function DetailSections({ issue }: { issue: Issue }) {
           <AnalysisSection analysis={issue.analysis} />
         </PropRow>
       )}
-      {issue.solution && (
+
+      {/* Linked TASK files (new unified model) — expandable detail */}
+      {linkedTasks.length > 0 && (
+        <PropRow label={`Execution Plan (${linkedTasks.length})`}>
+          <TaskPlanSection tasks={linkedTasks} />
+        </PropRow>
+      )}
+      {tasksLoading && (
+        <PropRow label="Execution Plan">
+          <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-tertiary)' }}>Loading…</span>
+        </PropRow>
+      )}
+
+      {/* Legacy solution fallback — only when no linked tasks */}
+      {!linkedTasks.length && !tasksLoading && issue.solution && (
         <PropRow label="Solution">
           <SolutionSection solution={issue.solution} />
         </PropRow>
       )}
+
       {issue.execution && issue.execution.result && (
         <PropRow label="Execution Result">
           <ExecutionResultSection execution={issue.execution} />

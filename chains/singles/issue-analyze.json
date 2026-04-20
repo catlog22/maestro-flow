@@ -17,11 +17,11 @@
   "nodes": {
     "issue_analyze": {
       "type": "command",
-      "cmd": "manage-issue-analyze",
+      "cmd": "maestro-analyze",
       "next": "done",
       "analyze": false,
-      "args": "\"{description}\"",
-      "description": "Root cause analysis for a specific issue using CLI exploration"
+      "args": "--gaps \"{description}\"",
+      "description": "Root cause analysis for a specific issue via --gaps mode"
     },
     "done": {
       "type": "terminal",

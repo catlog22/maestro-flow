@@ -1,7 +1,7 @@
 # Delegate Execution Specification
 
 <purpose>
-Unified reference for `maestro delegate` — synchronous task delegation with broker-managed lifecycle, message injection, and MCP notifications. Superset of `maestro cli` with cancellation and message chaining.
+Unified reference for `maestro delegate` — synchronous task delegation with broker-managed lifecycle, message injection, and MCP notifications.
 </purpose>
 
 **References**: `~/.maestro/cli-tools.json` (tool config), `~/.maestro/templates/cli/` (protocol + prompt templates)
@@ -87,7 +87,7 @@ With MCP connected, all delegate tools are available programmatically.
 
 ### Assembly Order
 
-`maestro delegate` builds the final prompt identically to `maestro cli`:
+`maestro delegate` builds the final prompt as:
 
 1. **Mode protocol** — `~/.maestro/templates/cli/protocols/{mode}-protocol.md`
 2. **User prompt** — the positional `"<PROMPT>"` value
@@ -243,7 +243,7 @@ All subcommands are also available as MCP tools for programmatic access:
 
 ### Snapshot & Preview
 
-`delegate status` includes a `Preview:` field showing the agent's latest output — built from `assistant_message`, `tool_use` completions, and `file_change` events. This serves the same purpose as `maestro cli watch` without requiring real-time streaming.
+`delegate status` includes a `Preview:` field showing the agent's latest output — built from `assistant_message`, `tool_use` completions, and `file_change` events.
 
 ### Job Lifecycle
 

@@ -308,6 +308,14 @@ If a task is blocked/failed and other tasks in later waves depend on it:
    - Update `status` to match CSV status
    - Write back to disk
 
+3b. **Issue status sync**: For each completed/failed task that has `issue_id`:
+   - Read issue from `.workflow/issues/issues.jsonl` by `issue_id`
+   - Collect all `task_refs[]` statuses for that issue:
+     - All task_refs completed → `issue.status = "resolved"`
+     - Any task_ref failed → `issue.status = "in_progress"`
+   - Append history entry: `{ action: "executed", at: <ISO>, by: "maestro-execute", summary: "TASK-{NNN} {status}" }`
+   - Write updated issue back to `issues.jsonl`
+
 4. **Register EXC artifact in state.json**:
    ```
    Read .workflow/state.json

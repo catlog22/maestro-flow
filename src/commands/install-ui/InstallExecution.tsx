@@ -144,7 +144,11 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
         if (config.installStatusline) {
           if (cancelled) return;
           setStatus(t.install.execInstallingStatusline);
-          installStatuslineFn({ project: config.mode === 'project' });
+          installStatuslineFn({
+            project: config.mode === 'project',
+            style: config.statuslineStyle,
+            nerdFont: config.statuslineNerdFont,
+          });
           statuslineInstalled = true;
         }
 

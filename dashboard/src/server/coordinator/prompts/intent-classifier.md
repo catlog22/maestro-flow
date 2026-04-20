@@ -31,9 +31,9 @@ Given a user intent string and the current workflow state snapshot, classify the
 | milestone_audit | maestro-milestone-audit | Audit milestone |
 | milestone_complete | maestro-milestone-complete | Complete milestone |
 | issue | manage-issue "{description}" | Issue management |
-| issue_analyze | manage-issue-analyze "{description}" | Analyze issue root cause |
-| issue_plan | manage-issue-plan "{description}" | Plan issue solution |
-| issue_execute | manage-issue-execute "{description}" | Execute issue fix |
+| issue_analyze | maestro-analyze --gaps "{description}" | Analyze issue root cause |
+| issue_plan | maestro-plan --gaps | Plan issue fix tasks |
+| issue_execute | maestro-execute | Execute issue fix tasks |
 | quick | maestro-quick "{description}" | Quick ad-hoc task |
 
 ### Multi-Step Chains

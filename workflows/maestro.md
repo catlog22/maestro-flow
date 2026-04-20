@@ -531,9 +531,9 @@ const chainMap = {
   'memory_capture':     [{ cmd: 'manage-memory-capture', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],
   'issue_discover':     [{ cmd: 'manage-issue-discover', args: '"{description}"' }],
-  'issue_analyze':      [{ cmd: 'manage-issue-analyze', args: '"{description}"' }],
-  'issue_plan':         [{ cmd: 'manage-issue-plan', args: '"{description}"' }],
-  'issue_execute':      [{ cmd: 'manage-issue-execute', args: '"{description}"' }],
+  'issue_analyze':      [{ cmd: 'maestro-analyze', args: '--gaps "{description}"' }],
+  'issue_plan':         [{ cmd: 'maestro-plan', args: '--gaps' }],
+  'issue_execute':      [{ cmd: 'maestro-execute', args: '' }],
   'memory':             [{ cmd: 'manage-memory', args: '"{description}"' }],
   'quick':              [{ cmd: 'maestro-quick', args: '"{description}"' }],
   'fork':               [{ cmd: 'maestro-fork', args: '-m {milestone_num}' }],
@@ -614,15 +614,15 @@ const chainMap = {
   ],
   // Issue lifecycle chains (with quality gates)
   'issue-full': [
-    { cmd: 'manage-issue-analyze', args: '{issue_id}' },
-    { cmd: 'manage-issue-plan', args: '{issue_id}' },
-    { cmd: 'manage-issue-execute', args: '{issue_id}' },
+    { cmd: 'maestro-analyze', args: '--gaps {issue_id}' },
+    { cmd: 'maestro-plan', args: '--gaps' },
+    { cmd: 'maestro-execute', args: '' },
     { cmd: 'quality-review', args: '--scope {affected_files}' },
     { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }
   ],
   'issue-quick': [
-    { cmd: 'manage-issue-plan', args: '{issue_id}' },
-    { cmd: 'manage-issue-execute', args: '{issue_id}' },
+    { cmd: 'maestro-plan', args: '--gaps' },
+    { cmd: 'maestro-execute', args: '' },
     { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }
   ]
 };
@@ -669,7 +669,6 @@ function resolvePhase(intent_analysis, project_state) {
 
   // 5. Chain doesn't need phase (init, status, memory, issue, etc.)
   const noPhaseCommands = ['manage-status', 'manage-issue', 'manage-issue-discover',
-    'manage-issue-analyze', 'manage-issue-plan', 'manage-issue-execute',
     'maestro-init', 'maestro-spec-generate', 'maestro-fork', 'maestro-merge',
     'maestro-roadmap', 'spec-setup', 'manage-memory', 'manage-memory-capture', 'manage-learn',
     'manage-codebase-rebuild', 'manage-codebase-refresh', 'maestro-milestone-audit',
@@ -939,8 +938,8 @@ Shows how structured extraction routes common inputs — especially cases where 
 | `"这个问题需要看看"` | `{analyze, bug}` | analyze | maestro-analyze |
 | `"创建一个 issue 跟踪"` | `{manage, issue}` | issue | manage-issue |
 | `"discover issues"` | `{explore, issue}` | issue_discover | manage-issue-discover |
-| `"analyze issue ISS-xxx"` | `{analyze, issue, ISS-xxx}` | issue_analyze | manage-issue-analyze |
-| `"plan issue ISS-xxx"` | `{plan, issue, ISS-xxx}` | issue_plan | manage-issue-plan |
+| `"analyze issue ISS-xxx"` | `{analyze, issue, ISS-xxx}` | issue_analyze | maestro-analyze --gaps |
+| `"plan issue ISS-xxx"` | `{plan, issue, ISS-xxx}` | issue_plan | maestro-plan --gaps |
 | `"brainstorm notification system"` | `{explore, feature}` | brainstorm | brainstorm-driven |
 | `"spec generate user auth"` | `{create, spec}` | spec_generate | spec-driven |
 | `"ui design landing page"` | `{create, ui}` | ui_design | ui-design-driven |

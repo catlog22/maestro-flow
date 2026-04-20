@@ -23,23 +23,23 @@
     },
     "analyze": {
       "type": "command",
-      "cmd": "manage-issue-analyze",
-      "description": "Root cause analysis for the issue using CLI exploration",
-      "args": "{issue_id}",
+      "cmd": "maestro-analyze",
+      "description": "Root cause analysis for the issue via --gaps mode",
+      "args": "--gaps {issue_id}",
       "next": "plan"
     },
     "plan": {
       "type": "command",
-      "cmd": "manage-issue-plan",
-      "description": "Generate codebase-aware solution plan with step decomposition",
-      "args": "{issue_id}",
+      "cmd": "maestro-plan",
+      "description": "Generate TASK files linked to issue via task_refs",
+      "args": "--gaps",
       "next": "execute"
     },
     "execute": {
       "type": "command",
-      "cmd": "manage-issue-execute",
-      "description": "Execute planned solution via dual-mode agent dispatch",
-      "args": "{issue_id}",
+      "cmd": "maestro-execute",
+      "description": "Wave-based execution with automatic issue status sync",
+      "args": "",
       "next": "check_result"
     },
     "check_result": {
@@ -52,17 +52,17 @@
     },
     "retry_plan": {
       "type": "command",
-      "cmd": "manage-issue-plan",
+      "cmd": "maestro-plan",
       "description": "Re-plan after execution failure with updated context",
-      "args": "{issue_id} --retry",
+      "args": "--gaps",
       "next": "retry_execute",
       "max_visits": 2
     },
     "retry_execute": {
       "type": "command",
-      "cmd": "manage-issue-execute",
+      "cmd": "maestro-execute",
       "description": "Re-execute with revised plan",
-      "args": "{issue_id}",
+      "args": "",
       "next": "done",
       "max_visits": 2
     },

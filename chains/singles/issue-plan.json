@@ -17,11 +17,11 @@
   "nodes": {
     "issue_plan": {
       "type": "command",
-      "cmd": "manage-issue-plan",
+      "cmd": "maestro-plan",
       "next": "done",
       "analyze": false,
-      "args": "\"{description}\"",
-      "description": "Solution planning for a specific issue with codebase-aware step generation"
+      "args": "--gaps",
+      "description": "Generate TASK files linked to issues via task_refs"
     },
     "done": {
       "type": "terminal",

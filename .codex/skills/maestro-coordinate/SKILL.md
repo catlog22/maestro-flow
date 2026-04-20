@@ -50,7 +50,7 @@ Intent  →  Resolve Chain  →  Step 1  →  Step 2  →  …  →  Step N  →
 
 | Intent keywords | Chain | Steps (skills, in order) |
 |----------------|-------|--------------------------|
-| fix, bug, error, broken, crash | `quality-fix` | $manage-issue-analyze → $manage-issue-execute → $maestro-verify |
+| fix, bug, error, broken, crash | `quality-fix` | $maestro-analyze --gaps → $maestro-plan --gaps → $maestro-execute → $maestro-verify |
 | test, spec, coverage | `quality-test` | $quality-test |
 | refactor, cleanup, debt | `quality-refactor` | $quality-refactor |
 | feature, implement, add, build | `feature` | $maestro-plan → $maestro-execute → $maestro-verify |

@@ -1,6 +1,6 @@
 # Workflow: maestro-coordinate
 
-Autonomous CLI coordinator. Classifies intent, selects command chain, executes each step via `maestro cli` with template-driven prompts and async state machine.
+Autonomous CLI coordinator. Classifies intent, selects command chain, executes each step via `maestro delegate` with template-driven prompts and async state machine.
 
 ---
 
@@ -223,9 +223,9 @@ const chainMap = {
   'memory':             [{ cmd: 'manage-memory', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],
   'issue_discover':     [{ cmd: 'manage-issue-discover', args: '"{description}"' }],
-  'issue_analyze':      [{ cmd: 'manage-issue-analyze', args: '"{description}"' }],
-  'issue_plan':         [{ cmd: 'manage-issue-plan', args: '"{description}"' }],
-  'issue_execute':      [{ cmd: 'manage-issue-execute', args: '"{description}"' }],
+  'issue_analyze':      [{ cmd: 'maestro-analyze', args: '--gaps "{description}"' }],
+  'issue_plan':         [{ cmd: 'maestro-plan', args: '--gaps' }],
+  'issue_execute':      [{ cmd: 'maestro-execute', args: '' }],
   'quick':              [{ cmd: 'maestro-quick', args: '"{description}"' }],
   'fork':               [{ cmd: 'maestro-fork', args: '-m {milestone_num}' }],
   'merge':              [{ cmd: 'maestro-merge', args: '-m {milestone_num}' }],
@@ -248,8 +248,8 @@ const chainMap = {
   'next-milestone': [{ cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'analyze-plan-execute': [{ cmd: 'maestro-analyze', args: '"{description}" -q' }, { cmd: 'maestro-plan', args: '--dir {scratch_dir}' }, { cmd: 'maestro-execute', args: '--dir {scratch_dir}' }],
   // Issue lifecycle chains (with quality gates)
-  'issue-full': [{ cmd: 'manage-issue-analyze', args: '{issue_id}' }, { cmd: 'manage-issue-plan', args: '{issue_id}' }, { cmd: 'manage-issue-execute', args: '{issue_id}' }, { cmd: 'quality-review', args: '--scope {affected_files}' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
-  'issue-quick': [{ cmd: 'manage-issue-plan', args: '{issue_id}' }, { cmd: 'manage-issue-execute', args: '{issue_id}' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
+  'issue-full': [{ cmd: 'maestro-analyze', args: '--gaps {issue_id}' }, { cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'quality-review', args: '--scope {affected_files}' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
+  'issue-quick': [{ cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
 };
 
 // Aliases: task type → named multi-step chain
@@ -332,7 +332,7 @@ const context = { resolved_phase: resolvedPhase, user_intent: intent, issue_id: 
 
 ---
 
-### Step 6: Execute Step via maestro cli
+### Step 6: Execute Step via maestro delegate
 
 #### 6a: Assemble args
 
@@ -404,7 +404,7 @@ state.steps[state.current_step].started_at = new Date().toISOString();
 Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
 
 Bash({
-  command: `maestro cli -p ${escapeForShell(prompt)} --tool ${state.tool} --mode write`,
+  command: `maestro delegate ${escapeForShell(prompt)} --to ${state.tool} --mode write`,
   run_in_background: true, timeout: 600000
 });
 // ■ STOP — wait for hook callback
@@ -496,9 +496,9 @@ EXPECTED OUTPUT (strict JSON):
   "step_summary": ""
 }`;
 
-let cliCommand = `maestro cli -p ${escapeForShell(analysisPrompt)} --tool gemini --mode analysis --rule analysis-review-code-quality`;
-if (state.gemini_session_id) cliCommand += ` --resume ${state.gemini_session_id}`;
-Bash({ command: cliCommand, run_in_background: true, timeout: 300000 });
+let delegateCmd = `maestro delegate ${escapeForShell(analysisPrompt)} --to gemini --mode analysis --rule analysis-review-code-quality`;
+if (state.gemini_session_id) delegateCmd += ` --resume ${state.gemini_session_id}`;
+Bash({ command: delegateCmd, run_in_background: true, timeout: 300000 });
 // ■ STOP — wait for hook callback
 ```
 
@@ -569,14 +569,14 @@ Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
 ## Core Rules
 
 1. **Semantic routing** — LLM-native structured extraction (`action × object`) replaces regex; disambiguates "问题" by context
-2. **STOP after each `maestro cli` call** — background execution, wait for hook callback
+2. **STOP after each `maestro delegate` call** — background execution, wait for hook callback
 3. **State machine** — advance via `current_step`, no sync loops for async operations
 4. **Template-driven** — all steps use `coordinate-step.txt`, no per-command prompt assembly
 5. **Context propagation** — parse PHASE / spec session ID / scratch_dir / issue_id from each step output, feed to next step
 6. **Quality gates** — issue chains auto-include review; `issue-full` is default for issue execution
-7. **Tool fallback** — if `maestro cli` fails: retry with same tool once, then try `gemini` → `qwen`
+7. **Tool fallback** — if `maestro delegate` fails: retry with same tool once, then try `gemini` → `qwen`
 8. **Auto-confirm injection** — `{{AUTO_DIRECTIVE}}` in template prevents blocking during background execution
 9. **Resumable** — `-c` reads `state.json`, jumps to first pending step
-10. **Gemini analysis after each step** — evaluate output quality via `maestro cli --tool gemini --mode analysis`, chained via `--resume`. Analysis generates `next_step_hints` injected into next step's prompt as `{{ANALYSIS_HINTS}}`
+10. **Gemini analysis after each step** — evaluate output quality via `maestro delegate --to gemini --mode analysis`, chained via `--resume`. Analysis generates `next_step_hints` injected into next step's prompt as `{{ANALYSIS_HINTS}}`
 11. **Session capture** — after each gemini callback, capture exec_id → `gemini_session_id` for resume chain
 12. **Analysis skip conditions** — skip gemini analysis for: failed/skipped steps, single-step chains

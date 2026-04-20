@@ -72,6 +72,11 @@ export const en: LocaleStrings = {
     statuslineDetected: 'detected: {cmd}',
     statuslineWillInstall: 'maestro-statusline',
     statuslineEnabled: 'maestro-statusline',
+    statuslineStyleTitle: 'Display Style:',
+    statuslineStyleText: 'colored text + pipe separators (works everywhere)',
+    statuslineStylePowerline: 'colored backgrounds + arrow separators (Powerline font recommended)',
+    statuslineNerdFontPrompt: 'Nerd Font icons?',
+    statuslineNerdFontHint: 'Requires a Nerd Font installed in your terminal (e.g. CaskaydiaCove NF)',
 
     // Backup
     backupTitle: 'Backup Configuration',

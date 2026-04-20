@@ -108,6 +108,22 @@ ELSE:
   wiki_context = structured block for downstream stages
 ```
 
+### Issue Linkback (--gaps mode)
+
+After plan generation and checking, if `--gaps` mode was used, link TASK files back to issues bidirectionally:
+
+```
+For each created TASK-{NNN}.json that has issue_id:
+  Update corresponding issue in .workflow/issues/issues.jsonl:
+    task_refs: append TASK-{NNN} to array
+    task_plan_dir: relative path to .task/ directory
+    status: "planned"
+    updated_at: now()
+  Append history entry: { action: "planned", at: <ISO>, by: "maestro-plan", summary: "Linked to TASK-{NNN}" }
+```
+
+This ensures issue → TASK traceability. The `task_refs[]` and `task_plan_dir` fields on the issue allow the dashboard to resolve and display associated TASK details.
+
 **Report format on completion:**
 
 ```

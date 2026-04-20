@@ -52,9 +52,9 @@ graph TB
     subgraph issue["Issue 闭环"]
         ID["/manage-issue-discover"]
         IC["/manage-issue<br>create"]
-        IA["/manage-issue-analyze"]
-        IP["/manage-issue-plan"]
-        IE["/manage-issue-execute"]
+        IA["/maestro-analyze --gaps"]
+        IP["/maestro-plan --gaps"]
+        IE["/maestro-execute"]
         ICL["/manage-issue<br>close"]
     end
 
@@ -97,7 +97,7 @@ graph TB
     IC --> IA
     IA --> IP
     IP --> IE
-    IE --> ICL
+    IE -->|resolved| ICL
 
     MA --> MC
     MC -->|下一 Milestone| AN
@@ -115,8 +115,8 @@ graph TB
 
     subgraph issue_loop["Issue 闭环"]
         direction LR
-        ID["discover"] --> IC["create"] --> IA["analyze"]
-        IA --> IP["plan"] --> IE["execute"] --> ICL["close"]
+        ID["discover"] --> IC["create"] --> IA["analyze --gaps"]
+        IA --> IP["plan --gaps"] --> IE["execute"] --> ICL["close"]
     end
 
     subgraph shared["共享基础设施"]
@@ -138,8 +138,8 @@ graph TB
 
     %% Commander 双向驱动
     CMD -->|"调度 Phase 任务"| SCHED
-    CMD -->|"自动推进 Issue"| IA
-    CMD -->|"自动推进 Issue"| IP
+    CMD -->|"自动 analyze --gaps"| IA
+    CMD -->|"自动 plan --gaps"| IP
 
     %% 共享存储
     IC --> JSONL
@@ -172,13 +172,13 @@ Issue 的 `path` 字段区分两种处理路径：
 | `standalone` | 独立 Issue，不绑定 Phase | 手动创建、`/manage-issue-discover`、外部导入 | 独立闭环，不影响 Phase 推进 |
 | `workflow` | Phase 关联 Issue | `quality-review` auto-create、`quality-business-test` 失败产生、Phase 验证产生 | 可能阻塞 Phase transition |
 
-- `standalone` Issue 在看板上独立显示，通过 Issue 闭环（analyze→plan→execute）自行解决
+- `standalone` Issue 在看板上独立显示，通过 Issue 闭环（analyze --gaps→plan --gaps→execute）自行解决
 - `workflow` Issue 带有 `phase_id`，在看板中与对应 Phase 同列展示，其解决状态可能影响 Phase 是否可以 transition
 
 ```mermaid
 graph LR
     subgraph standalone_path["standalone 路径"]
-        S1["手动创建 /<br>discover 发现"] --> S2["独立闭环<br>analyze→plan→execute"]
+        S1["手动创建 /<br>discover 发现"] --> S2["独立闭环<br>analyze --gaps→plan --gaps→execute"]
         S2 --> S3["close"]
     end
 
@@ -198,9 +198,9 @@ graph LR
 ```mermaid
 stateDiagram-v2
     [*] --> open: 创建 Issue
-    open --> analyzing: /manage-issue-analyze<br>写入 analysis
-    analyzing --> planned: /manage-issue-plan<br>写入 solution
-    planned --> in_progress: /manage-issue-execute<br>开始执行
+    open --> analyzing: /maestro-analyze --gaps<br>写入 analysis
+    analyzing --> planned: /maestro-plan --gaps<br>生成 TASK + task_refs
+    planned --> in_progress: /maestro-execute<br>开始执行
     in_progress --> resolved: 执行成功
     in_progress --> open: 执行失败（回退）
     resolved --> closed: /manage-issue close
@@ -391,13 +391,13 @@ Issue 系统与 Phase 管线并行运行，既可独立闭环，也可与 Phase 
 ```
 /manage-issue-discover                          # 自动发现问题
        ↓
-/manage-issue create --title "..." --severity high   # 创建 Issue
+/manage-issue create --title "..." --severity high   # 创建 Issue (open)
        ↓
-/manage-issue-analyze ISS-xxx                   # 根因分析 → 写入 analysis
+/maestro-analyze --gaps ISS-xxx                 # 根因分析 → issue.analysis (diagnosed)
        ↓
-/manage-issue-plan ISS-xxx                      # 解决方案 → 写入 solution
+/maestro-plan --gaps                            # 生成 TASK-*.json + issue.task_refs[] (planned)
        ↓
-/manage-issue-execute ISS-xxx                   # 执行方案 → 状态变更
+/maestro-execute                                # 执行 TASK → issue.status=resolved
        ↓
 /manage-issue close ISS-xxx --resolution "fixed" # 关闭 Issue
 ```
@@ -426,39 +426,36 @@ Issue 系统与 Phase 管线并行运行，既可独立闭环，也可与 Phase 
 /manage-issue link ISS-xxx --task TASK-001      # 双向关联 Issue ↔ Task
 ```
 
-#### `/manage-issue-analyze` — 根因分析
+#### `/maestro-analyze --gaps` — Issue 根因分析
 
 ```bash
-/manage-issue-analyze ISS-xxx                   # 默认使用 gemini
-/manage-issue-analyze ISS-xxx --tool qwen --depth deep  # 指定工具和深度
+/maestro-analyze --gaps ISS-xxx                 # 分析指定 Issue
+/maestro-analyze --gaps ISS-xxx --tool qwen     # 指定工具
 ```
 
-流程：读取 Issue → CLI 探索代码库 → 识别根因 → 写入 `analysis` 字段（root_cause, impact, confidence, related_files, suggested_approach）。
+流程：读取 Issue → CLI 探索代码库 → 识别根因 → 写入 `issue.analysis` 字段（root_cause, impact, confidence, related_files, suggested_approach）。
 
-分析完成后 Issue 的显示状态从 `open` 变为 `analyzing`。
+分析完成后 Issue 状态变为 `diagnosed`。
 
-#### `/manage-issue-plan` — 方案规划
+#### `/maestro-plan --gaps` — Issue 方案规划
 
 ```bash
-/manage-issue-plan ISS-xxx                      # 基于 analysis 生成方案
-/manage-issue-plan ISS-xxx --from-analysis       # 显式使用分析结果
+/maestro-plan --gaps                            # 基于 diagnosed Issue 生成 TASK
+/maestro-plan --gaps ISS-xxx                    # 指定 Issue 规划
 ```
 
-流程：读取 Issue + analysis → CLI 规划 → 生成可执行步骤 → 写入 `solution` 字段（steps[], context, planned_by）。
+流程：读取 Issue + analysis → 生成 TASK-*.json → 写入 `issue.task_refs[]` 关联。复用主干 plan 的 TASK 结构，Issue 修复与 Phase 任务统一管理。
 
-规划完成后 Issue 的显示状态从 `analyzing` 变为 `planned`。
+规划完成后 Issue 状态变为 `planned`。
 
-#### `/manage-issue-execute` — 方案执行
+#### `/maestro-execute` — Issue 方案执行
 
 ```bash
-/manage-issue-execute ISS-xxx                            # 默认 claude-code
-/manage-issue-execute ISS-xxx --executor gemini           # 指定执行器
-/manage-issue-execute ISS-xxx --dry-run                   # 干跑（不实际执行）
+/maestro-execute                                # 执行 TASK（含 Issue 关联的 TASK）
+/maestro-execute --dir scratch/xxx              # 指定 scratch 目录执行
 ```
 
-**双模式执行**：
-- **Server UP**: 通过 Dashboard API (`POST /api/execution/dispatch`) 调度
-- **Server DOWN**: 通过 `maestro cli` 直接执行
+流程：执行 Issue 关联的 TASK-*.json → TASK 完成后自动更新 `issue.status=resolved`。复用主干 execute 的调度机制，Issue 修复与 Phase 执行统一流程。
 
 ### 3.3 Issue 与看板集成
 
@@ -478,7 +475,7 @@ IssueCard 上的 **path 徽标** 标识 Issue 来源：
 - `workflow` — Phase 关联 Issue（review/verify/test 自动创建，带 `phase_id`）
 
 看板中可直接操作：
-- **Analyze/Plan/Execute 按钮** → 在 Issue 详情弹窗中点击，通过 WebSocket 触发后端 Agent
+- **Analyze/Plan/Execute 按钮** → 在 Issue 详情弹窗中点击，通过 WebSocket 触发 maestro-analyze --gaps / maestro-plan --gaps / maestro-execute
 - **执行器选择器** → 在 IssueCard 上 hover 显示，选择 Claude/Codex/Gemini
 - **批量执行** → 多选 Issue 后使用 ExecutionToolbar
 
@@ -486,11 +483,11 @@ IssueCard 上的 **path 徽标** 标识 Issue 来源：
 
 Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手动干预：
 
-1. 发现 `open` 且无 `analysis` 的 Issue → 自动触发 `analyze_issue`
-2. 发现有 `analysis` 无 `solution` 的 Issue → 自动触发 `plan_issue`
+1. 发现 `open` 且无 `analysis` 的 Issue → 自动触发 `maestro-analyze --gaps`
+2. 发现已 `diagnosed` 无 `task_refs` 的 Issue → 自动触发 `maestro-plan --gaps`
 3. 按优先级排序执行：`execute > analyze > plan`
 
-这意味着 Issue 可以在创建后由 Commander 全自动完成 分析→规划→执行 的闭环。
+这意味着 Issue 可以在创建后由 Commander 全自动完成 analyze --gaps → plan --gaps → execute 的闭环。
 
 ---
 
@@ -600,8 +597,8 @@ graph LR
 ```mermaid
 graph LR
     DIS[discover] --> CRE[create]
-    CRE --> ANA[analyze]
-    ANA --> PLN[plan]
+    CRE --> ANA["analyze --gaps"]
+    ANA --> PLN["plan --gaps"]
     PLN --> EXE[execute]
     EXE --> CLS[close]
 
@@ -673,9 +670,9 @@ graph LR
 
 ```bash
 /manage-issue-discover by-prompt "检查所有 API 端点的错误处理"
-/manage-issue-analyze ISS-xxx
-/manage-issue-plan ISS-xxx
-/manage-issue-execute ISS-xxx --executor gemini
+/maestro-analyze --gaps ISS-xxx
+/maestro-plan --gaps
+/maestro-execute
 /manage-issue close ISS-xxx --resolution "已修复"
 ```
 

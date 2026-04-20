@@ -17,7 +17,7 @@ Extract knowledge fragments from workflow artifacts (analysis results, brainstor
 
 Complements `quality-retrospective` (which is phase-scoped) by harvesting from **any** workflow artifact. Prevents knowledge loss from completed analysis and planning sessions that would otherwise only exist as stale files.
 
-**Closed-loop**: harvest extracts → wiki/spec/issue stores → downstream commands consume (wiki-digest, spec-load, manage-issue-plan).
+**Closed-loop**: harvest extracts → wiki/spec/issue stores → downstream commands consume (wiki-digest, spec-load, maestro-plan --gaps).
 </purpose>
 
 <required_reading>

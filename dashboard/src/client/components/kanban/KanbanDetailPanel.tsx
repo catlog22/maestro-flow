@@ -5,6 +5,8 @@ import { STATUS_COLORS } from '@/shared/constants.js';
 import type { TaskCard, SelectedKanbanItem } from '@/shared/types.js';
 import { LINEAR_PRIORITY_LABELS, LINEAR_PRIORITY_COLORS } from '@/shared/linear-types.js';
 import { usePhaseTasks } from '@/client/hooks/usePhaseTasks.js';
+import { useIssueTasks } from '@/client/hooks/useIssueTasks.js';
+import { TaskPlanSection } from '@/client/components/issue/TaskPlanSection.js';
 
 // ---------------------------------------------------------------------------
 // KanbanDetailPanel — phase or linear issue detail for the right-side panel
@@ -605,6 +607,9 @@ const EXEC_STATUS_COLORS: Record<string, string> = {
 };
 
 function IssueDetail({ issue }: { issue: Issue }) {
+  const { tasks: linkedTasks, loading: tasksLoading } = useIssueTasks(
+    issue.task_refs?.length ? issue.id : null,
+  );
   const typeColor = ISSUE_TYPE_COLORS[issue.type] ?? '#A09D97';
   const priorityColor = ISSUE_PRIORITY_COLORS[issue.priority] ?? '#A09D97';
 
@@ -704,6 +709,19 @@ function IssueDetail({ issue }: { issue: Issue }) {
             {issue.description}
           </p>
         </div>
+      )}
+
+      {/* Execution Plan — linked TASK files with expandable detail */}
+      {linkedTasks.length > 0 && (
+        <div>
+          <div className="text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[0.06em] text-text-tertiary mb-[var(--spacing-2)]">
+            Execution Plan ({linkedTasks.length} tasks)
+          </div>
+          <TaskPlanSection tasks={linkedTasks} />
+        </div>
+      )}
+      {tasksLoading && (
+        <div className="text-[length:var(--font-size-xs)] text-text-tertiary">Loading tasks…</div>
       )}
 
       {/* Timestamps */}

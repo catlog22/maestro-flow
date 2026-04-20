@@ -70,6 +70,11 @@ export interface LocaleStrings {
     statuslineDetected: string;
     statuslineWillInstall: string;
     statuslineEnabled: string;
+    statuslineStyleTitle: string;
+    statuslineStyleText: string;
+    statuslineStylePowerline: string;
+    statuslineNerdFontPrompt: string;
+    statuslineNerdFontHint: string;
 
     // Backup
     backupTitle: string;

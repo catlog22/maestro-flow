@@ -66,18 +66,18 @@ Document recurring conflict patterns across workflow sessions with resolutions.
 - Context packages: `.workflow/.archives/{session_id}/.process/context-package.json` (reference only)
 - Session lessons: `manifest.json` -> `archives[].lessons.challenges`
 
-## Conflict Identification (Use maestro cli)
+## Conflict Identification (Use maestro delegate)
 
 **Command Pattern**:
 ```bash
-maestro cli -p "
+maestro delegate "
 PURPOSE: Identify conflict patterns from workflow sessions
 TASK: • Extract conflicts from IMPL_PLAN and lessons • Group by type (architecture/dependencies/testing/performance) • Identify recurring patterns (same conflict in different sessions) • Link resolutions to specific sessions
 MODE: analysis
 CONTEXT: @.workflow/.archives/*/IMPL_PLAN.md @.workflow/.archives/manifest.json
 EXPECTED: Conflict patterns with frequency and resolution
 CONSTRAINTS: analysis=READ-ONLY
-" --tool gemini --mode analysis --rule workflow-skill-aggregation --cd .workflow/.archives
+" --to gemini --mode analysis --rule workflow-skill-aggregation --cd .workflow/.archives
 ```
 
 **Pattern Grouping**:

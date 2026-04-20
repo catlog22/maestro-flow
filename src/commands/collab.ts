@@ -42,6 +42,10 @@ import {
   type ActivityEvent,
 } from '../tools/team-activity.js';
 import {
+  runPreflight,
+  type PreflightResult,
+} from '../hooks/preflight-core.js';
+import {
   importBundle,
   type OverlayBundle,
 } from '../core/overlay/applier.js';
@@ -680,109 +684,9 @@ function runSync(opts: { dryRun?: boolean; withOverlays?: boolean }): void {
 // preflight
 // ---------------------------------------------------------------------------
 
-/**
- * Format a short relative time: "just now" / "N min" / "Nh Mm".
- * Inline to avoid adding a dependency.
- */
-function relTime(ts: string, now: number): string {
-  const ms = now - new Date(ts).getTime();
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return 'just now';
-  if (min < 60) return `${min} min`;
-  return `${Math.floor(min / 60)}h ${min % 60}m`;
-}
-
-export interface PreflightResult {
-  exitCode: 0 | 1 | 2;
-  warnings: string[]; // one line per unique (user@host) conflict
-  conflicts: Array<{
-    user: string;
-    host: string;
-    action: string;
-    ts: string;
-    relative: string;
-  }>;
-}
-
-/**
- * Pure preflight logic, exported for tests.
- *
- * Algorithm:
- *   1. If no self → exit 0 (team mode off is a safe no-op).
- *   2. Fetch recent activity (30 min window, clock tolerance handled by the
- *      team-activity module).
- *   3. Filter: same phase, different user.
- *   4. Deduplicate by `user@host` keeping the most recent event.
- *   5. Emit one warning line per unique teammate.
- *
- * `force` affects ONLY the exit code — warnings are still returned verbatim
- * so callers can print them to stderr before continuing.
- */
-export function runPreflight(
-  phase: number,
-  opts: { force?: boolean },
-  deps?: {
-    getSelf?: () => MemberRecord | null;
-    getActivity?: (mins: number) => ActivityEvent[];
-    now?: () => number;
-  },
-): PreflightResult {
-  const getSelf = deps?.getSelf ?? resolveSelf;
-  const getActivity = deps?.getActivity ?? readRecentActivity;
-  const now = deps?.now ?? Date.now;
-
-  const self = getSelf();
-  if (!self) {
-    return { exitCode: 0, warnings: [], conflicts: [] };
-  }
-
-  const events = getActivity(30);
-  const filtered = events.filter(
-    (e) => e.phase_id === phase && e.user !== self.uid,
-  );
-
-  // Dedupe by user@host, keep the most recent.
-  const latest = new Map<string, ActivityEvent>();
-  for (const e of filtered) {
-    const key = `${e.user}@${e.host}`;
-    const prev = latest.get(key);
-    if (!prev || Date.parse(e.ts) > Date.parse(prev.ts)) {
-      latest.set(key, e);
-    }
-  }
-
-  if (latest.size === 0) {
-    return { exitCode: 0, warnings: [], conflicts: [] };
-  }
-
-  const nowMs = now();
-  const warnings: string[] = [];
-  const conflicts: PreflightResult['conflicts'] = [];
-  // Stable order: most recent first.
-  const rows = Array.from(latest.values()).sort(
-    (a, b) => Date.parse(b.ts) - Date.parse(a.ts),
-  );
-  for (const e of rows) {
-    const rel = relTime(e.ts, nowMs);
-    warnings.push(
-      `\u26a0 ${e.user}@${e.host} is active on phase ${phase} ` +
-        `(last: ${e.action}, ${rel} ago)`,
-    );
-    conflicts.push({
-      user: e.user,
-      host: e.host,
-      action: e.action,
-      ts: e.ts,
-      relative: rel,
-    });
-  }
-
-  return {
-    exitCode: opts.force ? 0 : 1,
-    warnings,
-    conflicts,
-  };
-}
+// runPreflight and PreflightResult are imported from '../hooks/preflight-core.js'
+// and re-exported for backward compatibility.
+export { runPreflight, type PreflightResult } from '../hooks/preflight-core.js';
 
 function runPreflightCli(opts: {
   phase?: string;

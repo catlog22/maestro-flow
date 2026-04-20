@@ -126,12 +126,159 @@ export class LinearAdapter implements CollabAdapter {
 }
 
 // ---------------------------------------------------------------------------
+// Built-in adapter: GitHub Issues
+// ---------------------------------------------------------------------------
+
+/** GitHub Issues adapter using REST API v3. */
+export class GitHubAdapter implements CollabAdapter {
+  readonly name = 'github';
+  private owner = '';
+  private repo = '';
+  private token = '';
+
+  validateConfig(config: Record<string, unknown>): boolean {
+    if (typeof config.owner !== 'string' || !config.owner) return false;
+    if (typeof config.repo !== 'string' || !config.repo) return false;
+    if (typeof config.token !== 'string' || !config.token) return false;
+    this.owner = config.owner;
+    this.repo = config.repo;
+    this.token = config.token;
+    return true;
+  }
+
+  async sendNotification(event: CollabEvent): Promise<void> {
+    const p = event.payload;
+    const baseUrl = `https://api.github.com/repos/${this.owner}/${this.repo}`;
+
+    switch (event.type) {
+      case 'task.created': {
+        const title = typeof p.task_title === 'string' ? p.task_title : 'Untitled';
+        const description = typeof p.description === 'string' ? p.description : '';
+        const labels = Array.isArray(p.tags) ? p.tags as string[] : [];
+        const body = JSON.stringify({
+          title: `[Maestro] ${title}`,
+          body: description || `Created by ${p.actor ?? 'unknown'} via Maestro collab`,
+          labels,
+        });
+        await postJSON(`${baseUrl}/issues`, body, {
+          Authorization: `Bearer ${this.token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        });
+        break;
+      }
+
+      case 'task.status_changed': {
+        const issueNumber = p.github_issue_number;
+        if (typeof issueNumber !== 'number') break;
+        const state = p.status === 'done' || p.status === 'closed' ? 'closed' : 'open';
+        const body = JSON.stringify({ state });
+        await postJSON(`${baseUrl}/issues/${issueNumber}`, body, {
+          Authorization: `Bearer ${this.token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        });
+        break;
+      }
+
+      case 'task.assigned': {
+        const issueNumber = p.github_issue_number;
+        if (typeof issueNumber !== 'number') break;
+        const assignee = typeof p.github_username === 'string' ? p.github_username : '';
+        if (!assignee) break;
+        const body = JSON.stringify({ assignees: [assignee] });
+        await postJSON(`${baseUrl}/issues/${issueNumber}/assignees`, body, {
+          Authorization: `Bearer ${this.token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        });
+        break;
+      }
+
+      default: {
+        // For other events, add a comment if we have an issue number.
+        const issueNum = p.github_issue_number;
+        if (typeof issueNum !== 'number') break;
+        const body = JSON.stringify({ body: formatEventSummary(event) });
+        await postJSON(`${baseUrl}/issues/${issueNum}/comments`, body, {
+          Authorization: `Bearer ${this.token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+        });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Built-in adapter: Slack
+// ---------------------------------------------------------------------------
+
+/** Slack Incoming Webhook adapter with Block Kit formatting. */
+export class SlackAdapter implements CollabAdapter {
+  readonly name = 'slack';
+  private webhookUrl = '';
+  private channel = '';
+
+  validateConfig(config: Record<string, unknown>): boolean {
+    if (typeof config.webhookUrl !== 'string' || !config.webhookUrl) return false;
+    this.webhookUrl = config.webhookUrl;
+    this.channel = typeof config.channel === 'string' ? config.channel : '';
+    return true;
+  }
+
+  async sendNotification(event: CollabEvent): Promise<void> {
+    const summary = formatEventSummary(event);
+    const emoji = getSlackEmoji(event.type);
+
+    const payload: Record<string, unknown> = {
+      text: summary,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${emoji} *${eventTypeLabel(event.type)}*\n${summary}`,
+          },
+        },
+      ],
+    };
+
+    if (this.channel) {
+      payload.channel = this.channel;
+    }
+
+    await postJSON(this.webhookUrl, JSON.stringify(payload));
+  }
+}
+
+function getSlackEmoji(type: CollabEventType): string {
+  switch (type) {
+    case 'task.created': return ':clipboard:';
+    case 'task.assigned': return ':bust_in_silhouette:';
+    case 'task.status_changed': return ':arrows_counterclockwise:';
+    case 'task.checked': return ':white_check_mark:';
+    case 'role.changed': return ':key:';
+    default: return ':bell:';
+  }
+}
+
+function eventTypeLabel(type: CollabEventType): string {
+  switch (type) {
+    case 'task.created': return 'Task Created';
+    case 'task.assigned': return 'Task Assigned';
+    case 'task.status_changed': return 'Status Changed';
+    case 'task.checked': return 'Task Checked';
+    case 'role.changed': return 'Role Changed';
+    default: return 'Event';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Adapter registry
 // ---------------------------------------------------------------------------
 
 const BUILTIN_ADAPTERS: Record<string, new () => CollabAdapter> = {
   dingtalk: DingTalkAdapter,
   linear: LinearAdapter,
+  github: GitHubAdapter,
+  slack: SlackAdapter,
 };
 
 // ---------------------------------------------------------------------------

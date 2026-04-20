@@ -5,6 +5,7 @@ import { homedir } from 'node:os';
 import { paths } from '../config/paths.js';
 import { loadConfig, saveConfig, loadHooksConfig } from '../config/index.js';
 import { evaluateWorkflowGuard } from '../hooks/guards/workflow-guard.js';
+import { evaluatePreflightGuard, loadPreflightConfig } from '../hooks/guards/preflight-guard.js';
 import { evaluatePromptGuard } from '../hooks/guards/prompt-guard.js';
 import { evaluateContext } from '../hooks/context-monitor.js';
 import { evaluateDelegateNotifications } from '../hooks/delegate-monitor.js';
@@ -82,6 +83,7 @@ const HOOK_DEFS: Record<string, HookDef> = {
   'session-context': { event: 'Notification', level: 'standard' },
   'skill-context': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'coordinator-tracker': { event: 'Stop', level: 'standard', requiresWorkspace: true },
+  'preflight-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit|Agent', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
 };
 
@@ -165,10 +167,18 @@ export function detectStatusline(opts: { project?: boolean } = {}): string | nul
   return settings.statusLine?.command ?? null;
 }
 
+export type StatuslineStyle = 'powerline' | 'text';
+
 /**
- * Install only the statusline into Claude Code settings.json.
+ * Install the statusline into Claude Code settings.json
+ * and persist style preference to maestro config.
  */
-export function installStatusline(opts: { project?: boolean; settingsPath?: string } = {}): string {
+export function installStatusline(opts: {
+  project?: boolean;
+  settingsPath?: string;
+  style?: StatuslineStyle;
+  nerdFont?: boolean;
+} = {}): string {
   const settingsPath = opts.settingsPath
     ?? (opts.project
       ? join(process.cwd(), '.claude', 'settings.json')
@@ -177,6 +187,19 @@ export function installStatusline(opts: { project?: boolean; settingsPath?: stri
   settings.statusLine = { type: 'command', command: 'maestro-statusline' };
   paths.ensure(join(settingsPath, '..'));
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+
+  // Persist style preference to maestro config
+  if (opts.style) {
+    try {
+      const config = loadConfig();
+      config.statusline = {
+        style: opts.style,
+        nerdFont: opts.nerdFont ?? false,
+      };
+      saveConfig(config);
+    } catch { /* best-effort */ }
+  }
+
   return settingsPath;
 }
 
@@ -257,6 +280,31 @@ function readStdin(): Promise<string> {
 type HookRunner = () => Promise<void>;
 
 const HOOK_RUNNERS: Record<string, HookRunner> = {
+  'preflight-guard': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['preflightGuard'] === false) return;
+
+    const cwd = process.env.MAESTRO_PROJECT_ROOT || process.cwd();
+    const pfConfig = loadPreflightConfig(cwd);
+    const result = evaluatePreflightGuard(cwd, pfConfig);
+
+    if (result.conflictCount > 0) {
+      if (result.blocked) {
+        process.stdout.write(JSON.stringify({
+          decision: 'block',
+          reason: result.warnings.join('\n'),
+        }));
+        process.exit(2);
+      } else {
+        // Advisory mode: emit warnings as additional context
+        process.stdout.write(JSON.stringify({
+          decision: 'allow',
+          additionalContext: `[PreflightGuard] ${result.warnings.join(' | ')}`,
+        }));
+      }
+    }
+  },
+
   'workflow-guard': async () => {
     const config = loadHooksConfig();
     if (config.toggles['workflowGuard'] === false) return;
@@ -587,6 +635,7 @@ export function registerHooksCommand(program: Command): void {
       console.log('Claude Code hooks (subprocess):');
       for (const [name, def] of Object.entries(HOOK_DEFS)) {
         const toggleKey = name === 'workflow-guard' ? 'workflowGuard'
+          : name === 'preflight-guard' ? 'preflightGuard'
           : name === 'prompt-guard' ? 'promptGuard'
           : name === 'context-monitor' ? 'contextMonitor'
           : name === 'delegate-monitor' ? 'delegateMonitor'

@@ -152,13 +152,12 @@ export class ExecutionWsHandler implements WsHandler {
   private async handleIssueAnalyze(ws: WebSocket, issueId: string, tool?: string, depth?: string): Promise<void> {
     const resolvedTool = tool || 'gemini';
     const resolvedDepth = depth || 'standard';
-    const prompt = `/manage-issue-analyze ${issueId} --tool ${resolvedTool} --depth ${resolvedDepth}`;
+    const prompt = `/maestro-analyze --gaps ${issueId}`;
     await this.buildIssuePromptAndSpawn(ws, issueId, () => prompt);
   }
 
   private async handleIssuePlan(ws: WebSocket, issueId: string, tool?: string): Promise<void> {
-    const resolvedTool = tool || 'gemini';
-    const prompt = `/manage-issue-plan ${issueId} --tool ${resolvedTool}`;
+    const prompt = `/maestro-plan --gaps`;
     await this.buildIssuePromptAndSpawn(ws, issueId, () => prompt);
   }
 

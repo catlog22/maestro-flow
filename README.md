@@ -97,10 +97,10 @@ graph LR
 | Stage | Command | What Happens |
 |-------|---------|-------------|
 | **Discover** | `/manage-issue-discover` | 8-perspective scan: bugs, UX, tech debt, security, performance, testing gaps, code quality, documentation |
-| **Analyze** | `/manage-issue-analyze` | Root cause analysis via CLI exploration |
-| **Plan** | `/manage-issue-plan` | Generate solution steps with target files and verification criteria |
-| **Execute** | `/manage-issue-execute` | Dashboard API dispatch or direct CLI execution |
-| **Close** | Automatic | Verification passes > resolved > closed |
+| **Analyze** | `/maestro-analyze --gaps` | Root cause analysis via CLI exploration, writes `issue.analysis` |
+| **Plan** | `/maestro-plan --gaps` | Generate TASK files linked to issues via `task_refs` |
+| **Execute** | `/maestro-execute` | Wave-based parallel execution with automatic issue status sync |
+| **Close** | Automatic | All linked tasks completed > resolved > closed |
 
 Quality commands (`review`, `test`, `verify`) automatically create issues for problems they find. Issue fixes flow back into the phase pipeline. The loop closes itself.
 
@@ -171,7 +171,7 @@ Maestro-Flow coordinates multiple AI agents in parallel:
 | `context-monitor` | Monitors context usage, injects warnings when running low |
 | `spec-injector` | Auto-injects project specs into subagent prompts by agent type |
 | `delegate-monitor` | Tracks async delegate task completion |
-| `team-monitor` | Team collaboration message awareness |
+| `team-monitor` | Collab heartbeat — reports activity to `.workflow/collab/activity.jsonl` for teammate awareness |
 | `telemetry` | Execution telemetry collection |
 | `session-context` | Injects workflow state at session start |
 | `skill-context` | Injects workflow state when invoking workflow skills |
@@ -318,8 +318,8 @@ maestro/
 - **[Overlay Guide](guide/overlay-guide.md)** — Non-invasive command extensions: overlay format, section injection, bundle/import, interactive TUI management
 - **[Hooks Guide](guide/hooks-guide.md)** — Hook system architecture, 9 hooks, spec injection, context budget, configuration
 - **[Worktree Parallel Dev Guide](guide/worktree-guide.md)** — Milestone-level worktree parallelism: fork, sync, merge, scope enforcement, dashboard integration
-- **[Team Lite — User Guide](guide/team-lite-guide.md)** — Daily workflow for 2-8 person teams: join, sync, activity awareness, conflict preflight
-- **[Team Lite — Design](guide/team-lite-design.md)** — Architecture, data model, and namespace boundary between human-collab and agent-pipeline domains
+- **[Collab — User Guide](guide/team-lite-guide.md)** — Multi-person collaboration for 2-8 person teams: join, sync, activity awareness, conflict preflight, task management, namespace isolation
+- **[Collab — Design](guide/team-lite-design.md)** — Architecture, data model, namespace boundary between human-collab (`.workflow/collab/`) and agent-pipeline (`.workflow/.team/`) domains
 
 ---
 

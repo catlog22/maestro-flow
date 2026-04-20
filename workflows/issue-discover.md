@@ -115,7 +115,7 @@ Batch 2: scalability, ux, accessibility, compliance
 
 For each perspective, launch a CLI analysis:
 
-  maestro cli -p "PURPOSE: Discover {PERSPECTIVE} issues in the codebase.
+  maestro delegate "PURPOSE: Discover {PERSPECTIVE} issues in the codebase.
   Focus: {FOCUS_AREA}
   Guiding question: {QUESTION}
 
@@ -130,7 +130,7 @@ For each perspective, launch a CLI analysis:
   EXPECTED: JSON array of findings, each with:
     title, severity, description, location (file:line), fix_direction, affected_components[]
   CONSTRAINTS: Only report real issues with evidence, no speculative findings
-  " --tool gemini --mode analysis
+  " --to gemini --mode analysis
 
 Store results per perspective in:
   .workflow/issues/discoveries/{SESSION_ID}/{PERSPECTIVE}-findings.json
@@ -262,7 +262,7 @@ For each unique finding:
 ```
 Use Gemini CLI to decompose the user prompt into exploration dimensions:
 
-  maestro cli -p "PURPOSE: Decompose this issue discovery prompt into 3-5 specific exploration dimensions.
+  maestro delegate "PURPOSE: Decompose this issue discovery prompt into 3-5 specific exploration dimensions.
 
   User wants to find: {USER_PROMPT}
 
@@ -280,7 +280,7 @@ Use Gemini CLI to decompose the user prompt into exploration dimensions:
       file_patterns: string[],
       finding_criteria: string
     }]
-  " --tool gemini --mode analysis
+  " --to gemini --mode analysis
 
 Store dimensions in:
   .workflow/issues/discoveries/{SESSION_ID}/exploration-plan.json

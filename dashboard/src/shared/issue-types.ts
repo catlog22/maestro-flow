@@ -68,9 +68,14 @@ export interface Issue {
   status: IssueStatus;
   executor?: AgentType;
   promptMode?: PromptMode;
+  /** @deprecated Use task_refs + task_plan_dir instead. Retained for backward compat with legacy data. */
   solution?: IssueSolution;
   analysis?: IssueAnalysis;
   execution?: IssueExecution;
+  /** Associated TASK IDs (e.g. ["TASK-001", "TASK-003"]) — written by maestro-plan --gaps */
+  task_refs?: string[];
+  /** Relative path to .task/ directory containing the TASK JSON files */
+  task_plan_dir?: string;
   path?: IssuePath;
   phase_id?: number;
   source_entry_id?: string;

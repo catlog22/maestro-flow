@@ -4,6 +4,7 @@ export { FACES, getFaceLevel, WARNING_THRESHOLD, CRITICAL_THRESHOLD } from './co
 export { SyncHook, AsyncSeriesHook, AsyncSeriesBailHook, AsyncSeriesWaterfallHook } from './hook-engine.js';
 export { WorkflowHookRegistry } from './workflow-hooks.js';
 export { HookManager } from './hook-manager.js';
+export { runPreflight, type PreflightResult, type PreflightDeps } from './preflight-core.js';
 export type {
   RunContext,
   NodeContext,

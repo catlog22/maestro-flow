@@ -1,5 +1,8 @@
 # Workflow: Issue Execution
 
+> **DEPRECATED**: This workflow was used by the deleted `manage-issue-execute` command.
+> Use `maestro-execute` instead, which handles wave-based execution with automatic issue status sync.
+
 Execute a planned solution for an issue via dual-mode agent dispatch (server or direct CLI).
 
 ## Input
@@ -182,8 +185,8 @@ If SERVER_UP == false (or server dispatch failed):
        }
    - Rewrite file
 
-3. Execute via CLI:
-   maestro cli -p "{EXEC_PROMPT}" --tool {CLI_TOOL} --mode write
+3. Execute via delegate:
+   maestro delegate "{EXEC_PROMPT}" --to {CLI_TOOL} --mode write
 
 4. Evaluate result:
    - If CLI exits successfully → EXEC_SUCCESS = true
@@ -274,7 +277,7 @@ If execution failed:
 ## Output
 
 - **Updated**: `.workflow/issues/issues.jsonl` -- issue status transitions (open -> in_progress -> resolved/open)
-- **Execution modes**: Server dispatch (POST /api/execution/dispatch) or Direct CLI (maestro cli --mode write)
+- **Execution modes**: Server dispatch (POST /api/execution/dispatch) or Direct delegate (maestro delegate --mode write)
 
 ## Quality Criteria
 

@@ -404,7 +404,15 @@ spawn_agents_on_csv({
    }
    ```
 
-5. **Issue linking** (if --gaps): Update issues in `issues.jsonl` with status `planned`, link to TASK IDs.
+5. **Issue linking** (if --gaps):
+   For each created TASK-{NNN}.json that has `issue_id`:
+   - Update corresponding issue in `.workflow/issues/issues.jsonl`:
+     - `task_refs`: append TASK-{NNN} to array
+     - `task_plan_dir`: relative path to `.task/` directory
+     - `status`: "planned"
+     - `updated_at`: now()
+   - Append history entry: `{ action: "planned", at: <ISO>, by: "maestro-plan", summary: "Linked to TASK-{NNN}" }`
+   This ensures bidirectional issue ↔ TASK traceability for dashboard display.
 
 6. **Display summary + options** (skip options if AUTO_YES):
    ```

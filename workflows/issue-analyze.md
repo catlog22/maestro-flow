@@ -1,5 +1,9 @@
 # Workflow: Issue Analysis
 
+> **DEPRECATED**: This workflow was used by the deleted `manage-issue-analyze` command.
+> Use `maestro-analyze --gaps [ISS-ID]` instead, which integrates issue root cause analysis
+> into the unified analyze pipeline. See `~/.maestro/workflows/issue-gaps-analyze.md`.
+
 Root cause analysis for a specific issue using CLI exploration and codebase context gathering.
 
 ## Input
@@ -87,7 +91,7 @@ Root cause analysis for a specific issue using CLI exploration and codebase cont
 ```
 1. Build analysis prompt:
 
-   maestro cli -p "PURPOSE: Root cause analysis for issue {ISS-ID}: {ISSUE.title}
+   maestro delegate "PURPOSE: Root cause analysis for issue {ISS-ID}: {ISSUE.title}
    Identify the root cause, assess impact, and suggest an approach.
 
    ISSUE DETAILS:
@@ -116,7 +120,7 @@ Root cause analysis for a specific issue using CLI exploration and codebase cont
      confidence: 'high'|'medium'|'low',
      suggested_approach: string (actionable fix direction)
    CONSTRAINTS: Only cite evidence found in codebase, no speculation
-   " --tool {TOOL} --mode analysis
+   " --to {TOOL} --mode analysis
 
 2. Parse CLI output:
    - Extract JSON object from response

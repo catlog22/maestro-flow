@@ -3,7 +3,8 @@
 // ---------------------------------------------------------------------------
 
 import { Hono } from 'hono';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 import type {
   Issue,
@@ -341,6 +342,40 @@ export function createIssueRoutes(workflowRoot: string | (() => string)): Hono {
         return c.json({ error: `Issue not found: ${id}` }, 404);
       }
       return c.json(updated);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/issues/:id/tasks — resolve TASK files via task_refs + task_plan_dir
+  app.get('/api/issues/:id/tasks', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const issues = await readIssuesJsonl(await getJsonlPath());
+      const issue = issues.find((i) => i.id === id);
+      if (!issue) {
+        return c.json({ error: `Issue not found: ${id}` }, 404);
+      }
+      if (!issue.task_refs?.length || !issue.task_plan_dir) {
+        return c.json([]);
+      }
+
+      const root = getRoot();
+      const taskDir = resolve(root, issue.task_plan_dir);
+      const tasks: unknown[] = [];
+
+      for (const ref of issue.task_refs) {
+        try {
+          const filePath = join(taskDir, `${ref}.json`);
+          const content = await readFile(filePath, 'utf-8');
+          tasks.push(JSON.parse(content));
+        } catch {
+          // Skip missing/unreadable task files
+        }
+      }
+
+      return c.json(tasks);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);

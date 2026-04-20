@@ -64,7 +64,7 @@ Overlay = 一个 JSON 文件，声明"在哪个命令的哪个 section 注入什
     {
       "section": "execution",
       "mode": "append",
-      "content": "## CLI Verification (overlay)\n\nAfter execution, run:\n```bash\nmaestro cli -p \"PURPOSE: Verify...\" --mode analysis\n```"
+      "content": "## CLI Verification (overlay)\n\nAfter execution, run:\n```bash\nmaestro delegate \"PURPOSE: Verify...\" --mode analysis\n```"
     }
   ]
 }

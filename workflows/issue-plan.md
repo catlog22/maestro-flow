@@ -1,5 +1,8 @@
 # Workflow: Issue Planning
 
+> **DEPRECATED**: This workflow was used by the deleted `manage-issue-plan` command.
+> Use `maestro-plan --gaps` instead, which generates TASK files linked to issues via `task_refs`.
+
 Solution planning for a specific issue with codebase-aware step generation and prompt template construction.
 
 ## Input
@@ -91,7 +94,7 @@ Solution planning for a specific issue with codebase-aware step generation and p
 ```
 1. Build planning prompt:
 
-   maestro cli -p "PURPOSE: Generate a step-by-step solution plan for issue {ISS-ID}: {ISSUE.title}
+   maestro delegate "PURPOSE: Generate a step-by-step solution plan for issue {ISS-ID}: {ISSUE.title}
    Produce an actionable, ordered list of implementation steps.
 
    ISSUE DETAILS:
@@ -116,7 +119,7 @@ Solution planning for a specific issue with codebase-aware step generation and p
      context: string (approach summary),
      promptTemplate: string (execution prompt for the agent)
    CONSTRAINTS: Steps must be concrete and file-specific, not vague
-   " --tool {TOOL} --mode analysis
+   " --to {TOOL} --mode analysis
 
 2. Parse CLI output:
    - Extract JSON object from response
