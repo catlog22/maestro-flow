@@ -1,5 +1,6 @@
 import { useI18n } from '@/client/i18n/index.js';
 import { getAllGuideMeta } from '@/client/data/index.js';
+import { getGuideIcon } from '@/client/utils/guideIcons.js';
 import { Link } from 'react-router-dom';
 
 // ---------------------------------------------------------------------------
@@ -35,7 +36,9 @@ export default function GuidesIndexPage() {
           >
             {/* Icon + Title */}
             <div className="flex items-center gap-[var(--spacing-3)] mb-[var(--spacing-2)]">
-              <span className="text-[length:24px]">{guide.icon}</span>
+              <span className="flex items-center justify-center w-8 h-8 rounded-[var(--radius-default)] bg-tint-purple text-accent-purple">
+                {getGuideIcon(guide.icon, 'w-4 h-4')}
+              </span>
               <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-semibold)] text-text-primary">
                 {isZh && guide.title_zh ? guide.title_zh : guide.title}
               </h3>

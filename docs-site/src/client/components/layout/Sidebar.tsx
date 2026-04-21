@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useI18n } from '@/client/i18n/index.js';
 import { inventoryData, getCommandsByCategory, getCommandSlug, type Command, type Skill } from '@/client/routes/route-config.js';
 import { getAllGuideMeta } from '@/client/data/index.js';
+import { getGuideIcon } from '@/client/utils/guideIcons.js';
 
 // ---------------------------------------------------------------------------
 // Sidebar — warm minimal collapsible category navigation with colored dots
@@ -279,7 +280,7 @@ function SidebarGuidesSection() {
               : 'text-text-tertiary hover:text-text-secondary',
           ].join(' ')}
         >
-          <span>📖</span>
+          {getGuideIcon('book-open', 'w-3 h-3')}
           {isZh ? '指南' : 'Guides'}
         </NavLink>
 
@@ -324,7 +325,7 @@ function SidebarGuidesSection() {
                     : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
                 ].join(' ')}
               >
-                <span className="shrink-0 text-[length:12px]">{guide.icon}</span>
+                <span className="shrink-0 text-text-tertiary">{getGuideIcon(guide.icon, 'w-3.5 h-3.5')}</span>
                 <span className="truncate">{isZh && guide.title_zh ? guide.title_zh : guide.title}</span>
               </NavLink>
             );

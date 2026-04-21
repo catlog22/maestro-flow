@@ -3,6 +3,7 @@ import mermaid from 'mermaid';
 
 // ---------------------------------------------------------------------------
 // MermaidBlock -- renders mermaid diagram code as SVG
+// Uses theme-aware rendering with transparent background
 // ---------------------------------------------------------------------------
 
 let mermaidInitialized = false;
@@ -11,7 +12,28 @@ function initMermaid() {
   if (mermaidInitialized) return;
   mermaid.initialize({
     startOnLoad: false,
-    theme: 'default',
+    theme: 'base',
+    themeVariables: {
+      // Transparent background — container div provides the background
+      mainBkg: 'transparent',
+      // Text colors matching the site palette
+      primaryTextColor: '#78756F',
+      // Node styling — light stroke, no fill
+      primaryColor: '#F3F0EA',
+      primaryBorderColor: '#E8E5DE',
+      lineColor: '#A09D97',
+      // Edge labels
+      edgeLabelBackground: 'transparent',
+      // Cluster/group styling
+      clusterBkg: 'transparent',
+      clusterBorder: '#E8E5DE',
+      // Node text
+      nodeTextColor: '#2D2A26',
+      nodeBorder: '#E8E5DE',
+      // Font
+      fontFamily: 'inherit',
+      fontSize: '13px',
+    },
     securityLevel: 'loose',
     fontFamily: 'inherit',
   });
@@ -72,7 +94,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
   return (
     <div
       ref={containerRef}
-      className="bg-bg-card border border-border rounded-[var(--radius-lg)] p-[var(--spacing-4)] my-[var(--spacing-4)] overflow-x-auto [&_svg]:max-w-full [&_svg]:mx-auto"
+      className="my-[var(--spacing-4)] overflow-x-auto [&_svg]:max-w-full [&_svg]:mx-auto [&_.node rect]:fill-bg-secondary [&_.node rect]:stroke-border [&_.node polygon]:fill-bg-secondary [&_.node polygon]:stroke-border [&_.edgeLabel]:fill-transparent [&_.edgePath]:stroke-text-tertiary [&_.cluster rect]:fill-transparent [&_.cluster rect]:stroke-border"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

@@ -57,7 +57,7 @@ export const guideRegistry: Array<{
     description: 'Complete guide to all 51 commands with workflow diagrams and usage examples',
     title_zh: '命令使用指南',
     description_zh: '51 个命令的完整使用指南，包含工作流图和命令衔接说明',
-    icon: '📋',
+    icon: 'book-open',
   },
   {
     slug: 'overlay',
@@ -66,7 +66,7 @@ export const guideRegistry: Array<{
     description: 'Non-invasive command extension with JSON patches and idempotent injection',
     title_zh: 'Overlay 系统指南',
     description_zh: '非侵入式命令扩展机制 — JSON 补丁注入，幂等且可逆',
-    icon: '🔧',
+    icon: 'layers',
   },
   {
     slug: 'team-lite',
@@ -75,7 +75,7 @@ export const guideRegistry: Array<{
     description: 'Git-native team collaboration for 2-8 person teams with zero infrastructure',
     title_zh: 'Team Lite 协作方案',
     description_zh: '面向 2-8 人小团队的 Git-native 协作方案，零基础设施',
-    icon: '👥',
+    icon: 'users',
   },
   {
     slug: 'worktree',
@@ -84,7 +84,7 @@ export const guideRegistry: Array<{
     description: 'Milestone-level parallel development using git worktrees',
     title_zh: 'Worktree 并行开发指南',
     description_zh: '基于 git worktree 的里程碑级并行开发',
-    icon: '🌿',
+    icon: 'git-branch',
   },
   {
     slug: 'hooks-codex',
@@ -93,7 +93,7 @@ export const guideRegistry: Array<{
     description: 'Hooks integration design for OpenAI Codex CLI',
     title_zh: 'Codex Hooks 集成设计',
     description_zh: '为 OpenAI Codex CLI 设计的 hooks 集成方案',
-    icon: '🪝',
+    icon: 'hook',
   },
   {
     slug: 'introduction',
@@ -102,7 +102,7 @@ export const guideRegistry: Array<{
     description: 'Overview of Maestro Flow philosophy and command landscape',
     title_zh: 'Maestro Flow 介绍',
     description_zh: 'Maestro Flow 设计理念和命令全景概览',
-    icon: '🎭',
+    icon: 'sparkles',
   },
   {
     slug: 'hooks',
@@ -111,7 +111,7 @@ export const guideRegistry: Array<{
     description: 'Complete guide to the Maestro hooks system for Claude Code',
     title_zh: 'Hooks 系统指南',
     description_zh: 'Maestro hooks 系统的完整使用指南',
-    icon: '⚡',
+    icon: 'zap',
   },
   {
     slug: 'delegate-async',
@@ -120,7 +120,7 @@ export const guideRegistry: Array<{
     description: 'Asynchronous task delegation with broker-managed lifecycle',
     title_zh: '异步委派指南',
     description_zh: '异步任务委派与 broker 生命周期管理',
-    icon: '🚀',
+    icon: 'send',
   },
   {
     slug: 'team-lite-usage',
@@ -129,7 +129,7 @@ export const guideRegistry: Array<{
     description: 'Practical usage guide for Team Lite collaboration features',
     title_zh: 'Team Lite 使用指南',
     description_zh: 'Team Lite 协作功能的实际使用指南',
-    icon: '🤝',
+    icon: 'handshake',
   },
 ];
 
