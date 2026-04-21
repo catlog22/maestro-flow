@@ -5,14 +5,49 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--level 
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
+<purpose>
+Wave-based multi-dimensional code review using `spawn_agents_on_csv`. Decomposes review into independent dimension agents (Wave 1), then aggregates findings into a unified report with verdict (Wave 2).
 
-When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive validation, use defaults for level detection.
+**Core workflow**: Collect Files -> Decompose Dimensions -> Parallel Review -> Aggregate + Verdict
 
-# Maestro Review (CSV Wave)
+```
++---------------------------------------------------------------------------+
+|                    CODE REVIEW CSV WAVE WORKFLOW                           |
++---------------------------------------------------------------------------+
+|                                                                           |
+|  Phase 1: Phase Resolution -> CSV                                         |
+|     +-- Resolve phase directory from arguments                            |
+|     +-- Collect changed files from task summaries                         |
+|     +-- Auto-detect review level (quick/standard/deep)                    |
+|     +-- Determine active dimensions                                       |
+|     +-- Generate tasks.csv with one row per dimension                     |
+|     +-- User validates dimension breakdown (skip if -y)                   |
+|                                                                           |
+|  Phase 2: Wave Execution Engine                                           |
+|     +-- Wave 1: Dimension Review (parallel)                               |
+|     |   +-- Each dimension agent reviews all changed files                |
+|     |   +-- Agent classifies findings by severity                         |
+|     |   +-- Discoveries shared via board (patterns, conventions)          |
+|     |   +-- Results: severity_counts + top_issues per dimension           |
+|     +-- Wave 2: Aggregation + Deep-Dive (if needed)                       |
+|     |   +-- Aggregate all dimension findings                              |
+|     |   +-- If criticals > 0 (standard) or always (deep): deep-dive      |
+|     |   +-- Cross-dimension impact analysis                               |
+|     |   +-- Generate verdict: PASS / WARN / BLOCK                        |
+|     +-- discoveries.ndjson shared across all waves (append-only)          |
+|                                                                           |
+|  Phase 3: Results Aggregation                                             |
+|     +-- Export results.csv + review.json                                  |
+|     +-- Generate context.md with all findings                             |
+|     +-- Auto-create issues for qualifying findings                        |
+|     +-- Update phase index.json with review status                        |
+|     +-- Display summary with verdict + next steps                         |
+|                                                                           |
++---------------------------------------------------------------------------+
+```
+</purpose>
 
-## Usage
-
+<context>
 ```bash
 $quality-review "3"
 $quality-review -c 6 "3 --level deep"
@@ -25,56 +60,13 @@ $quality-review --continue "review-phase3-20260318"
 - `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
 - `--continue`: Resume existing session
 
+When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive validation, use defaults for level detection.
+
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `review.json` (structured review output)
+</context>
 
----
-
-## Overview
-
-Wave-based multi-dimensional code review using `spawn_agents_on_csv`. Decomposes review into independent dimension agents (Wave 1), then aggregates findings into a unified report with verdict (Wave 2).
-
-**Core workflow**: Collect Files → Decompose Dimensions → Parallel Review → Aggregate + Verdict
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    CODE REVIEW CSV WAVE WORKFLOW                         │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  Phase 1: Phase Resolution → CSV                                         │
-│     ├─ Resolve phase directory from arguments                            │
-│     ├─ Collect changed files from task summaries                         │
-│     ├─ Auto-detect review level (quick/standard/deep)                    │
-│     ├─ Determine active dimensions                                       │
-│     ├─ Generate tasks.csv with one row per dimension                     │
-│     └─ User validates dimension breakdown (skip if -y)                   │
-│                                                                          │
-│  Phase 2: Wave Execution Engine                                          │
-│     ├─ Wave 1: Dimension Review (parallel)                               │
-│     │   ├─ Each dimension agent reviews all changed files                │
-│     │   ├─ Agent classifies findings by severity                         │
-│     │   ├─ Discoveries shared via board (patterns, conventions)          │
-│     │   └─ Results: severity_counts + top_issues per dimension           │
-│     ├─ Wave 2: Aggregation + Deep-Dive (if needed)                       │
-│     │   ├─ Aggregate all dimension findings                              │
-│     │   ├─ If criticals > 0 (standard) or always (deep): deep-dive      │
-│     │   ├─ Cross-dimension impact analysis                               │
-│     │   └─ Generate verdict: PASS / WARN / BLOCK                        │
-│     └─ discoveries.ndjson shared across all waves (append-only)          │
-│                                                                          │
-│  Phase 3: Results Aggregation                                            │
-│     ├─ Export results.csv + review.json                                  │
-│     ├─ Generate context.md with all findings                             │
-│     ├─ Auto-create issues for qualifying findings                        │
-│     ├─ Update phase index.json with review status                        │
-│     └─ Display summary with verdict + next steps                         │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## CSV Schema
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -99,11 +91,11 @@ id,title,description,dimension,changed_files,project_specs,review_level,deps,con
 | `dimension` | Input | Review dimension: correctness/security/performance/architecture/maintainability/best-practices/aggregation |
 | `changed_files` | Input | Semicolon-separated file paths to review |
 | `project_specs` | Input | Relevant project specs/conventions context |
-| `review_level` | Input | quick/standard/deep — controls depth |
+| `review_level` | Input | quick/standard/deep -- controls depth |
 | `deps` | Input | Semicolon-separated dependency task IDs |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs |
 | `wave` | Computed | Wave number (1 = dimension review, 2 = aggregation) |
-| `status` | Output | `pending` → `completed` / `failed` / `skipped` |
+| `status` | Output | `pending` -> `completed` / `failed` / `skipped` |
 | `findings` | Output | Key review findings summary (max 500 chars) |
 | `severity_counts` | Output | JSON: `{"critical":N,"high":N,"medium":N,"low":N}` |
 | `top_issues` | Output | Top 5 issues with `[severity] description (file:line)` format |
@@ -113,36 +105,42 @@ id,title,description,dimension,changed_files,project_specs,review_level,deps,con
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
-| `tasks.csv` | Master state — all tasks with status/findings | Updated after each wave |
+| `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
 | `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable review report | Created in Phase 3 |
 | `review.json` | Structured review output for downstream | Created in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/review-{phase}-{date}/
-├── tasks.csv
-├── results.csv
-├── discoveries.ndjson
-├── context.md
-├── review.json
-└── wave-{N}.csv (temporary)
++-- tasks.csv
++-- results.csv
++-- discoveries.ndjson
++-- context.md
++-- review.json
++-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Skip on Failure**: If all dimension agents failed, skip aggregation
+7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+8. **DO NOT STOP**: Continuous execution until all waves complete
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -171,24 +169,22 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 Bash(`mkdir -p ${sessionFolder}`)
 ```
 
----
-
-### Phase 1: Phase Resolution → CSV
+### Phase 1: Phase Resolution -> CSV
 
 **Objective**: Resolve phase, collect changed files, determine review level, generate tasks.csv.
 
 **Decomposition Rules**:
 
 1. **Phase resolution**: Resolve `{phaseArg}` to `.workflow/phases/{NN}-{slug}/`
-2. **File collection**: Read `.task/TASK-*.json` → collect all `files[].path` where action != "read"
+2. **File collection**: Read `.task/TASK-*.json` -> collect all `files[].path` where action != "read"
 3. **Level detection**:
 
 | Condition | Level |
 |-----------|-------|
 | `--level` flag provided | Use explicit level |
-| ≤3 changed files | quick |
+| <=3 changed files | quick |
 | 4-19 changed files | standard |
-| ≥20 files OR phase marked critical | deep |
+| >=20 files OR phase marked critical | deep |
 
 4. **Dimension selection**:
 
@@ -204,11 +200,9 @@ If `--dimensions` flag provided, override with explicit list.
 
 6. **CSV generation**: One row per dimension + one aggregation row.
 
-**Wave computation**: Simple 2-wave — all dimension tasks = wave 1, aggregation = wave 2.
+**Wave computation**: Simple 2-wave -- all dimension tasks = wave 1, aggregation = wave 2.
 
 **User validation**: Display task breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -252,7 +246,7 @@ spawn_agents_on_csv({
 
 1. Read master `tasks.csv`
 2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps — if all wave 1 tasks failed, skip aggregation
+3. Check deps -- if all wave 1 tasks failed, skip aggregation
 4. Build `prev_context` from wave 1 findings:
    ```
    [Task 1: Correctness Review] Found 2 critical issues: null pointer in login handler...
@@ -263,8 +257,6 @@ spawn_agents_on_csv({
 6. Execute `spawn_agents_on_csv` for aggregation agent
 7. Merge results into master `tasks.csv`
 8. Delete `wave-2.csv`
-
----
 
 ### Phase 3: Results Aggregation
 
@@ -292,7 +284,7 @@ spawn_agents_on_csv({
 4. Generate `context.md`:
 
 ```markdown
-# Code Review Report — Phase {phase}
+# Code Review Report -- Phase {phase}
 
 ## Summary
 - Level: {level}
@@ -344,11 +336,9 @@ spawn_agents_on_csv({
 
 8. Display summary.
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -358,7 +348,7 @@ spawn_agents_on_csv({
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -367,7 +357,7 @@ spawn_agents_on_csv({
 | `performance_hotspot` | `data.location` | `{location, type, impact}` | Performance issue |
 | `architecture_violation` | `data.location` | `{location, rule, description}` | Architecture rule violation |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own review
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -378,31 +368,29 @@ spawn_agents_on_csv({
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"vulnerability","data":{"location":"src/auth/login.ts:42","type":"sql_injection","severity":"critical","cwe":"CWE-89"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
 | Phase directory not found | Abort with error: "Phase {N} not found" |
-| No task summaries found | Abort with error: "No execution results — run execute first" |
+| No task summaries found | Abort with error: "No execution results -- run execute first" |
 | No changed files | Abort with error: "No changed files detected" |
 | Dimension agent timeout | Mark as failed, skip dependent aggregation if all failed |
 | Aggregation agent failed | Use wave 1 results directly, verdict based on raw counts |
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Skip on Failure**: If all dimension agents failed, skip aggregation
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-8. **DO NOT STOP**: Continuous execution until all waves complete
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All dimension reviews executed in parallel (wave 1)
+- [ ] Aggregation + deep-dive executed (wave 2)
+- [ ] review.json produced with verdict and severity distribution
+- [ ] context.md produced with full review report
+- [ ] Issues auto-created for qualifying severity findings
+- [ ] Phase index.json updated with review status
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

@@ -5,14 +5,46 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--type u
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
+<purpose>
+Wave-based test generation using `spawn_agents_on_csv`. Each source file/module gets an independent agent that classifies, plans, and writes tests using RED-GREEN methodology. All agents run in a single parallel wave.
 
-When `--yes` or `-y`: Auto-confirm test plan, skip interactive validation, use defaults for framework detection.
+**Core workflow**: Discover Infrastructure -> Identify Gaps -> Classify Files -> Decompose to CSV -> Parallel Test Gen -> Aggregate Results
 
-# Maestro Test Gen (CSV Wave)
+```
++---------------------------------------------------------------------------+
+|                  TEST GENERATION CSV WAVE WORKFLOW                         |
++---------------------------------------------------------------------------+
+|                                                                           |
+|  Phase 1: Gap Analysis -> CSV                                             |
+|     +-- Resolve phase directory from arguments                            |
+|     +-- Discover test infrastructure (framework, patterns, conventions)   |
+|     +-- Identify gaps from verification.json + coverage-report.json       |
+|     +-- Classify changed files into unit/integration/e2e/skip             |
+|     +-- Apply --type filter if set                                        |
+|     +-- Generate tasks.csv with one row per source file                   |
+|     +-- User validates test plan breakdown (skip if -y)                   |
+|                                                                           |
+|  Phase 2: Wave Execution Engine                                           |
+|     +-- Wave 1: Test Generation (independent parallel)                    |
+|     |   +-- Each agent generates tests for its assigned source file       |
+|     |   +-- RED phase: write failing test targeting real behavior          |
+|     |   +-- GREEN assessment: check if source already satisfies           |
+|     |   +-- Discoveries shared via board (test patterns, fixtures)        |
+|     |   +-- Results: tests_created + coverage_delta per source file       |
+|     +-- discoveries.ndjson shared across all agents (append-only)         |
+|                                                                           |
+|  Phase 3: Results Aggregation                                             |
+|     +-- Export results.csv + test-gen-report.json                         |
+|     +-- Run full test suite to verify no regressions                      |
+|     +-- Generate context.md with all findings                             |
+|     +-- Update validation.json with new coverage status                   |
+|     +-- Display summary with next steps                                   |
+|                                                                           |
++---------------------------------------------------------------------------+
+```
+</purpose>
 
-## Usage
-
+<context>
 ```bash
 $quality-test-gen "3"
 $quality-test-gen -c 4 "3 --type unit"
@@ -25,53 +57,13 @@ $quality-test-gen --continue "test-gen-phase3-20260318"
 - `-c, --concurrency N`: Max concurrent agents within the wave (default: 6)
 - `--continue`: Resume existing session
 
+When `--yes` or `-y`: Auto-confirm test plan, skip interactive validation, use defaults for framework detection.
+
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `test-gen-report.json` (structured output for downstream)
+</context>
 
----
-
-## Overview
-
-Wave-based test generation using `spawn_agents_on_csv`. Each source file/module gets an independent agent that classifies, plans, and writes tests using RED-GREEN methodology. All agents run in a single parallel wave.
-
-**Core workflow**: Discover Infrastructure → Identify Gaps → Classify Files → Decompose to CSV → Parallel Test Gen → Aggregate Results
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                  TEST GENERATION CSV WAVE WORKFLOW                       │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  Phase 1: Gap Analysis → CSV                                             │
-│     ├─ Resolve phase directory from arguments                            │
-│     ├─ Discover test infrastructure (framework, patterns, conventions)   │
-│     ├─ Identify gaps from verification.json + coverage-report.json       │
-│     ├─ Classify changed files into unit/integration/e2e/skip             │
-│     ├─ Apply --type filter if set                                        │
-│     ├─ Generate tasks.csv with one row per source file                   │
-│     └─ User validates test plan breakdown (skip if -y)                   │
-│                                                                          │
-│  Phase 2: Wave Execution Engine                                          │
-│     ├─ Wave 1: Test Generation (independent parallel)                    │
-│     │   ├─ Each agent generates tests for its assigned source file       │
-│     │   ├─ RED phase: write failing test targeting real behavior          │
-│     │   ├─ GREEN assessment: check if source already satisfies           │
-│     │   ├─ Discoveries shared via board (test patterns, fixtures)        │
-│     │   └─ Results: tests_created + coverage_delta per source file       │
-│     └─ discoveries.ndjson shared across all agents (append-only)         │
-│                                                                          │
-│  Phase 3: Results Aggregation                                            │
-│     ├─ Export results.csv + test-gen-report.json                         │
-│     ├─ Run full test suite to verify no regressions                      │
-│     ├─ Generate context.md with all findings                             │
-│     ├─ Update validation.json with new coverage status                   │
-│     └─ Display summary with next steps                                   │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## CSV Schema
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -96,8 +88,8 @@ id,title,description,source_file,test_type,test_framework,deps,context_from,wave
 | `test_framework` | Input | Detected or specified framework: jest/vitest/pytest/mocha/playwright/cypress |
 | `deps` | Input | Semicolon-separated dependency task IDs (empty for independent parallel) |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs (empty for wave 1) |
-| `wave` | Computed | Wave number (always 1 — independent parallel topology) |
-| `status` | Output | `pending` → `completed` / `failed` / `skipped` |
+| `wave` | Computed | Wave number (always 1 -- independent parallel topology) |
+| `status` | Output | `pending` -> `completed` / `failed` / `skipped` |
 | `findings` | Output | Key findings summary: bugs discovered, patterns used (max 500 chars) |
 | `tests_created` | Output | Semicolon-separated paths to generated test files |
 | `coverage_delta` | Output | Coverage improvement estimate: `+N%` or `N new cases` |
@@ -107,36 +99,43 @@ id,title,description,source_file,test_type,test_framework,deps,context_from,wave
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column (empty for wave 1).
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
-| `tasks.csv` | Master state — all tasks with status/findings | Updated after wave completes |
+| `tasks.csv` | Master state -- all tasks with status/findings | Updated after wave completes |
 | `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across agents |
 | `context.md` | Human-readable test generation report | Created in Phase 3 |
 | `test-gen-report.json` | Structured output for downstream commands | Created in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/test-gen-{phase}-{date}/
-├── tasks.csv
-├── results.csv
-├── discoveries.ndjson
-├── context.md
-├── test-gen-report.json
-└── wave-{N}.csv (temporary)
++-- tasks.csv
++-- results.csv
++-- discoveries.ndjson
++-- context.md
++-- test-gen-report.json
++-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Single Wave**: All test generation agents run in one parallel wave (independent topology)
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **RED-GREEN Methodology**: Write failing test first, then assess -- never write trivially passing tests
+5. **Tests Expose, Not Fix**: Failing tests document bugs; source code changes are NOT permitted
+6. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+7. **Follow Existing Patterns**: Generated tests must match project's test conventions (imports, structure, assertions)
+8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+9. **DO NOT STOP**: Continuous execution until all agents complete and results are aggregated
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -165,9 +164,7 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 Bash(`mkdir -p ${sessionFolder}`)
 ```
 
----
-
-### Phase 1: Gap Analysis → CSV
+### Phase 1: Gap Analysis -> CSV
 
 **Objective**: Discover test infrastructure, identify coverage gaps, classify files, generate tasks.csv.
 
@@ -210,11 +207,9 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 7. **CSV generation**: One row per source file (skip category excluded).
 
-**Wave computation**: Single wave — all tasks are independent parallel (wave = 1).
+**Wave computation**: Single wave -- all tasks are independent parallel (wave = 1).
 
 **User validation**: Display test plan breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -262,12 +257,10 @@ Each agent receives:
 - Gap references (requirement IDs, descriptions)
 - RED-GREEN methodology rules:
   1. **RED**: Write test that fails if behavior is broken (not trivially passing)
-  2. **Verify RED**: Run test — if passes, strengthen; if fails with expected error, good
+  2. **Verify RED**: Run test -- if passes, strengthen; if fails with expected error, good
   3. **GREEN assessment**: If source satisfies, gap was missing test; if fails, record as bug discovery
 - Discovery board protocol for sharing test patterns and fixtures
-- Instruction to NOT fix source code — failing tests are valuable bug documentation
-
----
+- Instruction to NOT fix source code -- failing tests are valuable bug documentation
 
 ### Phase 3: Results Aggregation
 
@@ -332,7 +325,7 @@ Each agent receives:
 6. Generate `context.md`:
 
 ```markdown
-# Test Generation Report — Phase {phase}
+# Test Generation Report -- Phase {phase}
 
 ## Summary
 - Framework: {framework}
@@ -359,13 +352,13 @@ Each agent receives:
 - Existing tests broken: {N} (regressions)
 
 ## Bugs Discovered
-{list of failing tests with descriptions — NOT fixed, documented only}
+{list of failing tests with descriptions -- NOT fixed, documented only}
 
 ## Next Steps
 {suggested_next_command}
 ```
 
-7. Update `validation.json` gaps: change MISSING → COVERED for gaps that now have tests.
+7. Update `validation.json` gaps: change MISSING -> COVERED for gaps that now have tests.
 
 8. Copy `test-gen-report.json` to phase `.tests/` directory.
 
@@ -380,11 +373,9 @@ Each agent receives:
 | Regressions found | `quality-debug` immediately |
 | Coverage still low | Run again with `--type` for uncovered layers |
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -394,7 +385,7 @@ Each agent receives:
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -403,7 +394,7 @@ Each agent receives:
 | `mock_strategy` | `data.module` | `{module, strategy, file}` | How a dependency is mocked |
 | `bug_discovered` | `data.location` | `{location, test_file, description, severity}` | Bug found via failing test |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own test generation
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -414,34 +405,32 @@ Each agent receives:
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"test_pattern","data":{"name":"api-endpoint-test","file":"src/api/__tests__/users.test.ts","framework":"vitest","description":"supertest + vitest pattern for REST endpoints"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
 | Phase directory not found | Abort with error: "Phase {N} not found" |
-| No verification results found | Abort with error: "No verification results — run maestro-verify first" |
+| No verification results found | Abort with error: "No verification results -- run maestro-verify first" |
 | No test framework detected | Abort with error: "No test framework detected (E003)" |
-| No gaps identified | Info: "No coverage gaps found — phase fully tested" |
+| No gaps identified | Info: "No coverage gaps found -- phase fully tested" |
 | Agent timeout | Mark as failed, continue with remaining agents |
 | Test file write conflict | Agent checks for existing test, extends rather than overwrites |
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
 | Regression detected in existing tests | Flag as blocker (W002), do not fix source code |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Single Wave**: All test generation agents run in one parallel wave (independent topology)
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **RED-GREEN Methodology**: Write failing test first, then assess — never write trivially passing tests
-5. **Tests Expose, Not Fix**: Failing tests document bugs; source code changes are NOT permitted
-6. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-7. **Follow Existing Patterns**: Generated tests must match project's test conventions (imports, structure, assertions)
-8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-9. **DO NOT STOP**: Continuous execution until all agents complete and results are aggregated
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All test generation agents executed in parallel (single wave)
+- [ ] Test files created following project conventions
+- [ ] RED-GREEN methodology applied (no trivially passing tests)
+- [ ] test-gen-report.json produced with classification and results
+- [ ] context.md produced with test generation report
+- [ ] Full test suite run to verify no regressions
+- [ ] validation.json gaps updated for covered items
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

@@ -5,33 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"[bug description]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive symptom gathering (require bug description in args), use defaults for mode detection.
-
-# Maestro Debug (CSV Wave)
-
-## Usage
-
-```bash
-$quality-debug "Login button throws 500 error on click"
-$quality-debug -y "JWT token not refreshed --from-uat 3"
-$quality-debug -c 4 "Navigation crash --from-uat 3 --parallel"
-$quality-debug --continue "debug-jwt-expiry-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 5)
-- `--continue`: Resume existing session
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
-
----
-
-## Overview
-
+<purpose>
 Wave-based hypothesis-driven debugging using `spawn_agents_on_csv`. Wave 1 explores hypotheses in parallel, Wave 2 attempts fixes on confirmed hypotheses in parallel.
 
 **Core workflow**: Gather Symptoms -> Generate Hypotheses -> Parallel Investigation -> Parallel Fix Attempts -> Unify Results
@@ -71,10 +45,28 @@ Wave-based hypothesis-driven debugging using `spawn_agents_on_csv`. Wave 1 explo
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$quality-debug "Login button throws 500 error on click"
+$quality-debug -y "JWT token not refreshed --from-uat 3"
+$quality-debug -c 4 "Navigation crash --from-uat 3 --parallel"
+$quality-debug --continue "debug-jwt-expiry-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 5)
+- `--continue`: Resume existing session
+
+When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive symptom gathering (require bug description in args), use defaults for mode detection.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -103,16 +95,14 @@ id,title,description,hypothesis,evidence_for,evidence_against,deps,context_from,
 | `status` | Output | `pending` -> `confirmed` / `refuted` / `inconclusive` / `fixed` / `fix_failed` / `skipped` |
 | `findings` | Output | Key findings summary (max 500 chars) |
 | `fix_applied` | Output | Description of fix applied (wave 2 only) |
-| `verified` | Output | `true` / `false` — whether fix was verified to work (wave 2 only) |
+| `verified` | Output | `true` / `false` -- whether fix was verified to work (wave 2 only) |
 | `error` | Output | Error message if failed |
 
 ### Per-Wave CSV (Temporary)
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -122,9 +112,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable diagnosis report | Created in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/debug-{slug}-{date}/
@@ -134,10 +122,20 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- context.md
 +-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Skip on Refuted**: Wave 2 fix tasks skip if their hypothesis was refuted or inconclusive
+7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+8. **DO NOT STOP**: Continuous execution until all waves complete
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -166,8 +164,6 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
 ```
-
----
 
 ### Phase 1: Input Resolution -> CSV
 
@@ -206,8 +202,6 @@ Bash(`mkdir -p ${sessionFolder}`)
 **Wave computation**: Simple 2-wave -- all hypothesis tasks = wave 1, all fix tasks = wave 2.
 
 **User validation**: Display hypothesis breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -287,8 +281,6 @@ spawn_agents_on_csv({
 7. Merge results into master `tasks.csv`
 8. Delete `wave-2.csv`
 
----
-
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results and human-readable report.
@@ -347,11 +339,9 @@ spawn_agents_on_csv({
 
 7. Display summary.
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -361,7 +351,7 @@ spawn_agents_on_csv({
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -370,7 +360,7 @@ spawn_agents_on_csv({
 | `affected_component` | `data.component` | `{component, files[], impact}` | Component affected by bug |
 | `reproduction_path` | `data.trigger` | `{trigger, steps[], frequency}` | Bug reproduction path |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own investigation
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -381,10 +371,9 @@ spawn_agents_on_csv({
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"root_cause","data":{"location":"src/auth/login.ts:42","cause":"null_dereference","severity":"high","confidence":"confirmed"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -398,16 +387,15 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"root_cause","data":{"location":"src/
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
 | Existing debug session found | Offer resume (skip if AUTO_YES) |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Skip on Refuted**: Wave 2 fix tasks skip if their hypothesis was refuted or inconclusive
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-8. **DO NOT STOP**: Continuous execution until all waves complete
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] Wave 1 hypotheses investigated in parallel
+- [ ] Refuted/inconclusive hypotheses correctly skip wave 2 fix tasks
+- [ ] Wave 2 fixes attempted only for confirmed hypotheses
+- [ ] context.md produced with diagnosis summary
+- [ ] UAT gaps updated (if --from-uat)
+- [ ] Issues updated with diagnosis results
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>
