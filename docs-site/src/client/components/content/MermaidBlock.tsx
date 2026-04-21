@@ -44,7 +44,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [expanded, setExpanded] = useState(false);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(1.5);
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
 
   const closeOverlay = useCallback(() => {
     setExpanded(false);
-    setScale(1);
+    setScale(1.5);
   }, []);
 
   // ESC to close
@@ -146,7 +146,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
             <span className="tabular-nums min-w-[3ch] text-center">{Math.round(scale * 100)}%</span>
             <button onClick={(e) => { e.stopPropagation(); setScale((s) => Math.max(s - 0.2, 0.3)); }} className="hover:text-text-primary px-1" aria-label="Zoom out">&minus;</button>
             <span className="mx-1 text-border">|</span>
-            <button onClick={(e) => { e.stopPropagation(); setScale(1); }} className="hover:text-text-primary">Reset</button>
+            <button onClick={(e) => { e.stopPropagation(); setScale(1.5); }} className="hover:text-text-primary">Reset</button>
           </div>
 
           {/* Diagram container */}
