@@ -357,7 +357,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
 
     // Resolve workspace
     const { resolveWorkspace } = await import('../hooks/workspace.js');
-    const workspace = resolveWorkspace(cwd);
+    const workspace = resolveWorkspace({ cwd });
     if (!workspace) return;
 
     const result = evaluateKeywordInjection(prompt, workspace, sessionId);

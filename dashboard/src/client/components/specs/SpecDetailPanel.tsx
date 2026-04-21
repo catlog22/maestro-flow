@@ -9,17 +9,23 @@ import { useSpecsStore, type SpecEntry, type SpecType } from '@/client/store/spe
 // SpecDetailPanel -- sliding panel showing entry details (380px from right)
 // ---------------------------------------------------------------------------
 
-const BADGE_STYLES: Record<SpecType, { bg: string; text: string }> = {
+const BADGE_STYLES: Partial<Record<SpecType, { bg: string; text: string }>> = {
+  coding: { bg: 'var(--color-tint-exploring)', text: '#5B8DB8' },
+  arch: { bg: 'var(--color-tint-planning)', text: '#9178B5' },
+  quality: { bg: 'var(--color-tint-completed)', text: '#5A9E78' },
+  debug: { bg: 'rgba(196,101,85,0.10)', text: '#B85B4A' },
+  test: { bg: 'rgba(90,158,120,0.10)', text: '#3D8B5F' },
+  review: { bg: 'rgba(219,176,108,0.12)', text: '#C4A055' },
+  learning: { bg: 'var(--color-tint-blocked)', text: '#C46555' },
+  // Legacy types (backward compat for existing data)
   bug: { bg: 'var(--color-tint-blocked)', text: '#C46555' },
   pattern: { bg: 'var(--color-tint-exploring)', text: '#5B8DB8' },
   decision: { bg: 'var(--color-tint-planning)', text: '#9178B5' },
   rule: { bg: 'var(--color-tint-completed)', text: '#5A9E78' },
-  debug: { bg: 'rgba(196,101,85,0.10)', text: '#B85B4A' },
-  test: { bg: 'rgba(90,158,120,0.10)', text: '#3D8B5F' },
-  review: { bg: 'rgba(219,176,108,0.12)', text: '#C4A055' },
   validation: { bg: 'rgba(91,141,184,0.10)', text: '#4A7DA8' },
   general: { bg: 'var(--color-tint-pending)', text: '#A09D97' },
 };
+const DEFAULT_BADGE = { bg: 'var(--color-tint-pending)', text: '#A09D97' };
 
 function formatDate(ts: string): string {
   if (!ts) return '--';
@@ -45,7 +51,7 @@ interface SpecDetailPanelProps {
 export function SpecDetailPanel({ entry, onClose }: SpecDetailPanelProps) {
   const deleteEntry = useSpecsStore((s) => s.deleteEntry);
 
-  const badge = useMemo(() => BADGE_STYLES[entry.type] ?? BADGE_STYLES.general, [entry.type]);
+  const badge = useMemo(() => BADGE_STYLES[entry.type] ?? DEFAULT_BADGE, [entry.type]);
   const fileName = useMemo(
     () => entry.file ? entry.file.split('/').pop() : '',
     [entry.file],

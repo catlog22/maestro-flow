@@ -5,7 +5,7 @@ import { SPECS_API_ENDPOINTS } from '@/shared/constants.js';
 // Types
 // ---------------------------------------------------------------------------
 
-export type SpecType = 'bug' | 'pattern' | 'decision' | 'rule' | 'debug' | 'test' | 'review' | 'validation' | 'general';
+export type SpecType = 'coding' | 'arch' | 'quality' | 'debug' | 'test' | 'review' | 'learning' | 'bug' | 'pattern' | 'decision' | 'rule' | 'validation' | 'general';
 
 export interface SpecEntry {
   id: string;

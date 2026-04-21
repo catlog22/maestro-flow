@@ -12,38 +12,33 @@ import { useSpecsStore, type SpecType, type SpecEntry } from '@/client/store/spe
 // SpecsTableView -- sortable, filterable table with category & keyword support
 // ---------------------------------------------------------------------------
 
-const BADGE_STYLES: Record<SpecType, { bg: string; text: string }> = {
+const BADGE_STYLES: Partial<Record<SpecType, { bg: string; text: string }>> = {
+  coding: { bg: 'var(--color-tint-exploring)', text: '#5B8DB8' },
+  arch: { bg: 'var(--color-tint-planning)', text: '#9178B5' },
+  quality: { bg: 'var(--color-tint-completed)', text: '#5A9E78' },
+  debug: { bg: 'rgba(196,101,85,0.10)', text: '#B85B4A' },
+  test: { bg: 'rgba(90,158,120,0.10)', text: '#3D8B5F' },
+  review: { bg: 'rgba(219,176,108,0.12)', text: '#C4A055' },
+  learning: { bg: 'var(--color-tint-blocked)', text: '#C46555' },
   bug: { bg: 'var(--color-tint-blocked)', text: '#C46555' },
   pattern: { bg: 'var(--color-tint-exploring)', text: '#5B8DB8' },
   decision: { bg: 'var(--color-tint-planning)', text: '#9178B5' },
   rule: { bg: 'var(--color-tint-completed)', text: '#5A9E78' },
-  debug: { bg: 'rgba(196,101,85,0.10)', text: '#B85B4A' },
-  test: { bg: 'rgba(90,158,120,0.10)', text: '#3D8B5F' },
-  review: { bg: 'rgba(219,176,108,0.12)', text: '#C4A055' },
   validation: { bg: 'rgba(91,141,184,0.10)', text: '#4A7DA8' },
   general: { bg: 'var(--color-tint-pending)', text: '#A09D97' },
 };
+const DEFAULT_BADGE = { bg: 'var(--color-tint-pending)', text: '#A09D97' };
 
-const DOT_COLORS: Record<SpecType, string> = {
-  bug: '#C46555',
-  pattern: '#5B8DB8',
-  decision: '#9178B5',
-  rule: '#5A9E78',
-  debug: '#B85B4A',
-  test: '#3D8B5F',
-  review: '#C4A055',
-  validation: '#4A7DA8',
-  general: '#A09D97',
+const DOT_COLORS: Partial<Record<SpecType, string>> = {
+  coding: '#5B8DB8', arch: '#9178B5', quality: '#5A9E78',
+  debug: '#B85B4A', test: '#3D8B5F', review: '#C4A055', learning: '#C46555',
+  bug: '#C46555', pattern: '#5B8DB8', decision: '#9178B5', rule: '#5A9E78',
+  validation: '#4A7DA8', general: '#A09D97',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  general: '#A09D97',
-  planning: '#9178B5',
-  execution: '#5B8DB8',
-  debug: '#C46555',
-  test: '#5A9E78',
-  review: '#C4A055',
-  validation: '#3D8B5F',
+  coding: '#5B8DB8', arch: '#9178B5', quality: '#5A9E78',
+  learning: '#A09D97', debug: '#C46555', test: '#5A9E78', review: '#C4A055',
 };
 
 type FilterType = 'all' | SpecType;
@@ -545,7 +540,7 @@ function TableRow({
   index: number;
   visibleColumns: { key: ColumnKey; label: string; width?: number }[];
 }) {
-  const badge = BADGE_STYLES[entry.type];
+  const badge = BADGE_STYLES[entry.type] ?? DEFAULT_BADGE;
   const catColor = CATEGORY_COLORS[entry.category] ?? '#A09D97';
 
   const cellMap: Record<ColumnKey, React.ReactNode> = {

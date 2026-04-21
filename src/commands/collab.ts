@@ -957,8 +957,8 @@ function runSpecList(): void {
   console.log(`Personal specs for ${self.uid} (${files.length} files):`);
   console.log('');
   for (const file of files.sort()) {
-    const cats = CATEGORY_MAP[file];
-    const catLabel = cats ? cats.join(', ') : 'general';
+    const cat = CATEGORY_MAP[file];
+    const catLabel = cat ?? 'learning';
     console.log(`  ${file}  (${catLabel})`);
   }
 }
@@ -985,8 +985,8 @@ function runSpecEdit(filename: string): void {
 
   // Create file with template if it does not exist
   if (!existsSync(filePath)) {
-    const cats = CATEGORY_MAP[specFile];
-    const catComment = cats ? cats.join(', ') : 'general';
+    const cat = CATEGORY_MAP[specFile];
+    const catComment = cat ?? 'learning';
     writeFileSync(filePath, `# ${specFile.replace('.md', '')}\n\n<!-- categories: ${catComment} -->\n\n`, 'utf-8');
     console.log(`Created: ${filePath}`);
   } else {

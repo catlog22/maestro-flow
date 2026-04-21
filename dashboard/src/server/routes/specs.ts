@@ -31,7 +31,7 @@ export type { ParsedFrontmatter };
 
 export interface SpecEntry {
   id: string;
-  type: 'bug' | 'pattern' | 'decision' | 'rule' | 'debug' | 'test' | 'review' | 'validation' | 'general';
+  type: string;
   title: string;
   content: string;
   file: string;
@@ -52,31 +52,29 @@ interface SpecFileMeta {
 // Entry type detection
 // ---------------------------------------------------------------------------
 
-const ENTRY_TYPES = ['bug', 'pattern', 'decision', 'rule', 'debug', 'test', 'review', 'validation'] as const;
+const ENTRY_TYPES = ['coding', 'arch', 'quality', 'debug', 'test', 'review', 'learning'] as const;
 type EntryType = typeof ENTRY_TYPES[number];
 
 /** Map file basenames to default entry types when heading lacks a marker. */
 const FILE_TYPE_MAP: Record<string, EntryType> = {
-  'learnings': 'bug',
-  'coding-conventions': 'pattern',
-  'architecture-constraints': 'rule',
-  'quality-rules': 'rule',
+  'learnings': 'learning',
+  'coding-conventions': 'coding',
+  'architecture-constraints': 'arch',
+  'quality-rules': 'quality',
   'debug-notes': 'debug',
   'test-conventions': 'test',
   'review-standards': 'review',
-  'validation-rules': 'validation',
 };
 
 /** Map file basenames to default category when frontmatter lacks one. */
 const FILE_CATEGORY_MAP: Record<string, string> = {
-  'learnings': 'general',
-  'coding-conventions': 'execution',
-  'architecture-constraints': 'planning',
-  'quality-rules': 'execution',
+  'learnings': 'learning',
+  'coding-conventions': 'coding',
+  'architecture-constraints': 'arch',
+  'quality-rules': 'quality',
   'debug-notes': 'debug',
   'test-conventions': 'test',
   'review-standards': 'review',
-  'validation-rules': 'validation',
 };
 
 /** Detect entry type from heading text or fall back to file-based default. */
@@ -92,16 +90,16 @@ function detectEntryType(heading: string, fileName: string): SpecEntry['type'] {
     if (new RegExp(`\\b${t}\\s*:`).test(lower)) return t;
   }
   const stem = basename(fileName, extname(fileName));
-  return FILE_TYPE_MAP[stem] ?? 'general';
+  return FILE_TYPE_MAP[stem] ?? 'learning';
 }
 
 /** Strip [type], [date], and legacy "type:" prefix from heading to get clean title. */
 function extractCleanTitle(heading: string): string {
   return heading
-    .replace(/\[(bug|pattern|decision|rule|debug|test|review|validation)\]\s*/gi, '')
+    .replace(/\[(coding|arch|quality|debug|test|review|learning|bug|pattern|decision|rule|validation)\]\s*/gi, '')
     .replace(/\[\d{4}-\d{2}-\d{2}\]\s*/g, '')
     .replace(/\d{4}-\d{2}-\d{2}T[\d:.Z+-]*/g, '')
-    .replace(/^(bug|pattern|decision|rule|debug|test|review|validation)\s*:\s*/i, '')
+    .replace(/^(coding|arch|quality|debug|test|review|learning|bug|pattern|decision|rule|validation)\s*:\s*/i, '')
     .trim();
 }
 
@@ -368,7 +366,7 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
         return c.json({ error: 'Invalid file name' }, 400);
       }
 
-      const entryCategory = typeof type === 'string' && ENTRY_TYPES.includes(type as EntryType) ? type : 'general';
+      const entryCategory = typeof type === 'string' && ENTRY_TYPES.includes(type as EntryType) ? type : 'learning';
       const date = new Date().toISOString().slice(0, 10);
       const firstLine = content.trim().split('\n')[0].substring(0, 80);
       // Extract keywords: take meaningful words from first line (3-5 terms)
