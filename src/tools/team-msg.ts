@@ -2,14 +2,16 @@
  * Team Message Bus - JSONL-based persistent message log for Agent Teams
  *
  * Operations:
- * - log:       Append a message (to defaults to "coordinator", summary auto-generated if omitted)
- * - read:      Read message(s) by ID
- * - list:      List recent messages with optional filters (from/to/type/last N)
- * - status:    Summarize team member activity from message history
- * - delete:    Delete a specific message by ID
- * - clear:     Clear all messages for a team
- * - broadcast: Log a message with to="all"
- * - get_state: Read role state from meta.json
+ * - log:            Append a message (to defaults to "coordinator", summary auto-generated if omitted)
+ * - read:           Read message(s) by ID
+ * - list:           List recent messages with optional filters (from/to/type/last N)
+ * - status:         Summarize team member activity from message history
+ * - delete:         Delete a specific message by ID
+ * - clear:          Clear all messages for a team
+ * - broadcast:      Log a message with to="all"
+ * - get_state:      Read role state from meta.json
+ * - read_mailbox:   Read unread messages for a role and mark them as delivered
+ * - mailbox_status: Return counts of pending/notified/delivered/failed per role
  */
 
 import { z } from 'zod';
@@ -153,6 +155,9 @@ function readLegacyFiles(team: string): Partial<TeamMeta> {
 
 // --- Types ---
 
+/** Dispatch status lifecycle: pending -> notified -> delivered (or failed) */
+export type DispatchStatus = 'pending' | 'notified' | 'delivered' | 'failed';
+
 export interface TeamMessage {
   id: string;
   ts: string;
@@ -161,6 +166,12 @@ export interface TeamMessage {
   type: string;
   summary: string;
   data?: Record<string, unknown>;
+  // Dispatch tracking fields (backward compatible - older messages lack these)
+  dispatch_status?: DispatchStatus;
+  delivery_method?: string;
+  notified_at?: string;
+  delivered_at?: string;
+  failed_at?: string;
 }
 
 export interface StatusEntry {
@@ -173,7 +184,7 @@ export interface StatusEntry {
 // --- Zod Schema ---
 
 const ParamsSchema = z.object({
-  operation: z.enum(['log', 'read', 'list', 'status', 'delete', 'clear', 'broadcast', 'get_state']).describe('Operation to perform'),
+  operation: z.enum(['log', 'read', 'list', 'status', 'delete', 'clear', 'broadcast', 'get_state', 'read_mailbox', 'mailbox_status']).describe('Operation to perform'),
   session_id: z.string().optional().describe('Session ID that determines message storage path'),
   team_session_id: z.string().optional().describe('[deprecated] Use session_id'),
   team: z.string().optional().describe('[deprecated] Use session_id'),
@@ -184,8 +195,9 @@ const ParamsSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional().describe('[log/broadcast] Structured data payload'),
   id: z.string().optional().describe('[read/delete] Message ID'),
   last: z.number().min(1).max(100).optional().describe('[list] Return last N messages'),
-  role: z.string().optional().describe('[get_state] Role name to query'),
+  role: z.string().optional().describe('[get_state/read_mailbox] Role name to query'),
   ref: z.string().optional().describe('[deprecated] Use data.ref instead'),
+  delivery_method: z.string().optional().describe('[log] Delivery method for dispatch tracking'),
 });
 
 type Params = z.infer<typeof ParamsSchema>;
@@ -211,6 +223,7 @@ export const schema: ToolSchema = {
     *   *type* (string): Message type (default: "message").
     *   *summary* (string): One-line summary (auto-generated if omitted).
     *   *data* (object): Structured data payload.
+    *   *delivery_method* (string): Delivery method for dispatch tracking.
 
 *   **broadcast**: Send message to all team members.
     *   **session_id** (string, **REQUIRED**): Session ID.
@@ -231,6 +244,13 @@ export const schema: ToolSchema = {
     *   **session_id** (string, **REQUIRED**): Session ID.
     *   *role* (string): Role name to query.
 
+*   **read_mailbox**: Read unread messages for a role and mark them delivered.
+    *   **session_id** (string, **REQUIRED**): Session ID.
+    *   **role** (string, **REQUIRED**): Role name whose mailbox to read.
+
+*   **mailbox_status**: Return dispatch status counts per role.
+    *   **session_id** (string, **REQUIRED**): Session ID.
+
 *   **delete**: Delete a message by ID.
     *   **session_id** (string, **REQUIRED**): Session ID.
     *   **id** (string, **REQUIRED**): Message ID.
@@ -242,7 +262,7 @@ export const schema: ToolSchema = {
     properties: {
       operation: {
         type: 'string',
-        enum: ['log', 'read', 'list', 'status', 'delete', 'clear', 'broadcast', 'get_state'],
+        enum: ['log', 'read', 'list', 'status', 'delete', 'clear', 'broadcast', 'get_state', 'read_mailbox', 'mailbox_status'],
         description: 'Operation to perform',
       },
       session_id: {
@@ -256,7 +276,8 @@ export const schema: ToolSchema = {
       data: { type: 'object', description: '[log/broadcast] Structured data' },
       id: { type: 'string', description: '[read/delete] Message ID' },
       last: { type: 'number', description: '[list] Last N messages', minimum: 1, maximum: 100 },
-      role: { type: 'string', description: '[get_state] Role name to query' },
+      role: { type: 'string', description: '[get_state/read_mailbox] Role name to query' },
+      delivery_method: { type: 'string', description: '[log] Delivery method for dispatch tracking' },
       team_session_id: { type: 'string', description: '[deprecated] Use session_id' },
       team: { type: 'string', description: '[deprecated] Use session_id' },
       ref: { type: 'string', description: '[deprecated] Use data.ref instead' },
@@ -343,15 +364,29 @@ function opLog(params: Params, teamId: string): CcwToolResult {
   const messages = readAllMessages(teamId);
   const id = getNextId(messages);
 
+  const now = nowISO();
+
+  // When delivery_method is provided, the message starts as 'pending' (explicit delivery).
+  // When no delivery_method, it's a legacy direct message and defaults to 'delivered'.
+  const dispatchStatus: DispatchStatus = params.delivery_method ? 'pending' : 'delivered';
+
   const msg: TeamMessage = {
     id,
-    ts: nowISO(),
+    ts: now,
     from: params.from,
     to,
     type: params.type || 'message',
     summary,
+    dispatch_status: dispatchStatus,
   };
+
   if (params.data) msg.data = params.data;
+  if (params.delivery_method) msg.delivery_method = params.delivery_method;
+
+  // Set delivered_at for legacy messages (backward compat)
+  if (dispatchStatus === 'delivered') {
+    msg.delivered_at = now;
+  }
 
   appendFileSync(logPath, JSON.stringify(msg) + '\n', 'utf-8');
 

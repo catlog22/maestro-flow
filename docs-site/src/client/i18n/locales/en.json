@@ -81,7 +81,12 @@
   },
   "landing": {
     "title": "Maestro Documentation",
-    "description": "Complete documentation for Maestro commands, skills, and workflows."
+    "description": "Complete documentation for Maestro commands, skills, and workflows.",
+    "quick_guide_title": "Quick Guide",
+    "quick_guide_step1": "Start with /maestro-brainstorm to explore ideas, or /maestro-init to initialize a project",
+    "quick_guide_step2": "Create a roadmap with /maestro-roadmap, or generate full specs with /maestro-spec-generate",
+    "quick_guide_step3": "Plan tasks with /maestro-plan, execute with /maestro-execute, then verify with /maestro-verify",
+    "quick_guide_step4": "Use /learn-* commands for continuous learning and /wiki-* commands to manage your knowledge graph"
   },
   "content": {
     "copy": "Copy",

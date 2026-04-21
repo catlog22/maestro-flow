@@ -81,7 +81,12 @@
   },
   "landing": {
     "title": "Maestro 文档",
-    "description": "Maestro 命令、技能和工作流的完整文档。"
+    "description": "Maestro 命令、技能和工作流的完整文档。",
+    "quick_guide_title": "快速指南",
+    "quick_guide_step1": "使用 /maestro-brainstorm 探索项目想法，或直接 /maestro-init 初始化项目",
+    "quick_guide_step2": "通过 /maestro-roadmap 创建路线图，或 /maestro-spec-generate 生成完整规格",
+    "quick_guide_step3": "使用 /maestro-plan 规划阶段任务，/maestro-execute 执行，/maestro-verify 验证",
+    "quick_guide_step4": "利用 /learn-* 命令持续学习，/wiki-* 命令管理知识图谱"
   },
   "content": {
     "copy": "复制",

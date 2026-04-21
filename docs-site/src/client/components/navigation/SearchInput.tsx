@@ -150,9 +150,9 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
           aria-haspopup="listbox"
           aria-controls="search-results"
           aria-activedescendant={focusedIndex >= 0 ? `result-${focusedIndex}` : undefined}
-          className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder:text-text-tertiary text-[length:var(--font-size-sm)]"
+          className="flex-1 bg-transparent border-none outline-none text-text-primary placeholder:text-text-tertiary text-[length:var(--font-size-sm)] pr-14"
         />
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[length:10px] font-sans px-[var(--spacing-1-5)] py-[1px] bg-bg-primary border border-border rounded text-text-placeholder">
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:inline-flex items-center gap-0.5 text-[length:10px] font-sans px-[var(--spacing-1-5)] py-[1px] bg-bg-primary border border-border rounded text-text-placeholder pointer-events-none">
           <span className="text-[10px]">{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}</span>
           <span>K</span>
         </kbd>

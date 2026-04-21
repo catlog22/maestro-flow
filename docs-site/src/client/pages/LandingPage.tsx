@@ -25,6 +25,20 @@ export default function LandingPage({ categories }: LandingPageProps) {
         </p>
       </div>
 
+      {/* Quick guide */}
+      <div className="mb-[var(--spacing-8)] p-[var(--spacing-5)] bg-bg-card border border-border rounded-[var(--radius-lg)]">
+        <h2 className="text-[length:var(--font-size-base)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-3)]">
+          {t('landing.quick_guide_title')}
+        </h2>
+        <ol className="flex flex-col gap-[var(--spacing-2)] list-decimal list-inside text-[length:var(--font-size-sm)] text-text-secondary">
+          {Array.from({ length: 4 }, (_, i) => i + 1).map((step) => (
+            t(`landing.quick_guide_step${step}`) !== `landing.quick_guide_step${step}` ? (
+              <li key={step}>{t(`landing.quick_guide_step${step}`)}</li>
+            ) : null
+          ))}
+        </ol>
+      </div>
+
       {/* Category card grid — 2 columns */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-[var(--spacing-3)]">
         {categories.map((category) => (
@@ -40,6 +54,14 @@ export default function LandingPage({ categories }: LandingPageProps) {
 // ---------------------------------------------------------------------------
 
 function CategoryCard({ category }: { category: Category }) {
+  const { t } = useI18n();
+
+  // Resolve localized name and description via i18n, fall back to inventory data
+  const name = t(`categories.${category.id}`) !== `categories.${category.id}`
+    ? t(`categories.${category.id}`) : category.name;
+  const description = t(`category_descriptions.${category.id}`) !== `category_descriptions.${category.id}`
+    ? t(`category_descriptions.${category.id}`) : category.description;
+
   // Tint color mapping
   const tintColors: Record<string, string> = {
     pipeline: 'bg-tint-green',
@@ -55,6 +77,8 @@ function CategoryCard({ category }: { category: Category }) {
     issue: 'bg-tint-orange',
     ui_design: 'bg-tint-purple',
     session: 'bg-tint-blue',
+    learn: 'bg-tint-green',
+    wiki: 'bg-tint-blue',
   };
   const tint = tintColors[category.id] || 'bg-tint-gray';
 
@@ -70,12 +94,12 @@ function CategoryCard({ category }: { category: Category }) {
 
       {/* Title */}
       <h3 className="text-[length:var(--font-size-base)] font-[var(--font-weight-semibold)] text-text-primary mb-[var(--spacing-1)]">
-        {category.name}
+        {name}
       </h3>
 
       {/* Description */}
       <p className="text-[length:12px] text-text-secondary leading-[var(--line-height-normal)] line-clamp-2">
-        {category.description}
+        {description}
       </p>
     </a>
   );
