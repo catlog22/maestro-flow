@@ -1,7 +1,7 @@
 ---
 name: maestro-coordinate
 description: CLI-based coordinator — analyze intent → select command chain → execute sequentially via maestro delegate with auto-confirm. Async state machine with template-driven prompts and gemini analysis between steps.
-argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--tool <tool>]"
+argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
@@ -33,7 +33,6 @@ $ARGUMENTS — user intent text, or special flags.
 - `-c, --continue` — Resume previous session from last incomplete step
 - `--dry-run` — Show planned chain without executing
 - `--chain <name>` — Force specific chain (skips intent classification)
-- `--tool <tool>` — CLI tool override (default: gemini)
 
 **Session state**: `.workflow/.maestro-coordinate/{session-id}/state.json`
 </context>
@@ -46,8 +45,7 @@ $ARGUMENTS — user intent text, or special flags.
 5. **Gemini analysis after each step**: Evaluate output quality, generate hints for next step, chain via `--resume`.
 6. **Auto-confirm injection**: `{{AUTO_DIRECTIVE}}` in template prevents blocking during background execution.
 7. **Resumable**: `-c` reads `state.json`, jumps to first pending step.
-8. **Tool fallback**: If delegate fails: retry once, then try `gemini` → `qwen`.
-</invariants>
+8. **Delegate tool**: `maestro delegate --to codex` for all execution steps; `--to gemini` only for post-step analysis.</invariants>
 
 <execution>
 
@@ -59,10 +57,9 @@ const AUTO_YES = /\b(-y|--yes)\b/.test(args);
 const RESUME = /\b(-c|--continue)\b/.test(args);
 const DRY_RUN = /\b--dry-run\b/.test(args);
 const forcedChain = args.match(/--chain\s+(\S+)/)?.[1] || null;
-const cliTool = args.match(/--tool\s+(\S+)/)?.[1] || 'gemini';
 const intent = args
   .replace(/\b(-y|--yes|-c|--continue|--dry-run)\b/g, '')
-  .replace(/--(chain|tool)\s+\S+/g, '')
+  .replace(/--chain\s+\S+/g, '')
   .trim();
 ```
 
@@ -86,7 +83,7 @@ const state = {
   session_id: sessionId, status: 'running',
   created_at: new Date().toISOString(),
   intent, task_type: taskType, chain_name: chainName,
-  tool: cliTool, auto_mode: AUTO_YES, phase: resolvedPhase,
+  auto_mode: AUTO_YES, phase: resolvedPhase,
   current_step: 0, gemini_session_id: null, step_analyses: [],
   steps: chain.map((s, i) => ({
     index: i, cmd: s.cmd, args: s.args || '',
@@ -137,7 +134,7 @@ const prompt = template
   .replace('{{ANALYSIS_HINTS}}', analysisHints);
 
 Bash({
-  command: `maestro delegate ${escapeForShell(prompt)} --to ${state.tool} --mode write`,
+  command: `maestro delegate ${escapeForShell(prompt)} --to codex --mode write`,
   run_in_background: true, timeout: 600000
 });
 // ■ STOP — wait for hook callback
@@ -184,7 +181,6 @@ Post-analyze: store quality_score + issues + next_step_hints in `state.step_anal
 ============================================================
   Session: {session_id}
   Chain:   {chain_name} ({done}/{total})
-  Tool:    {cliTool}
 
   Steps:
     [✓] 1. maestro-plan — completed (quality: 85/100)
@@ -203,7 +199,6 @@ Post-analyze: store quality_score + issues + next_step_hints in `state.step_anal
 | E002 | error | Clarity too low after 2 rounds | Ask to rephrase |
 | E003 | error | Step failed + abort | Suggest resume with -c |
 | E004 | error | Resume session not found | Show available sessions |
-| E005 | error | CLI tool unavailable | Try fallback tool |
 </error_codes>
 
 <success_criteria>
