@@ -1,7 +1,7 @@
 ---
 name: maestro-coordinate
 description: CLI-based coordinator - analyze intent → select command chain → execute sequentially via maestro delegate with auto-confirm
-argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--tool <tool>]"
+argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>]"
 allowed-tools:
   - Read
   - Write
@@ -36,7 +36,6 @@ $ARGUMENTS — user intent text, or special keywords (`continue`/`next`/`status`
 - `-c` / `--continue` — Resume previous session
 - `--dry-run` — Show planned chain without executing
 - `--chain <name>` — Force a specific chain
-- `--tool <tool>` — CLI tool override (default: claude)
 </context>
 
 <execution>
@@ -50,7 +49,6 @@ Follow '~/.maestro/workflows/maestro-coordinate.md' completely.
 | E002 | error | Clarity too low after 2 rounds | Ask to rephrase |
 | E003 | error | Step failed + abort | Suggest resume with -c |
 | E004 | error | Resume session not found | Show available sessions |
-| E005 | error | CLI tool unavailable | Try fallback tool |
 </error_codes>
 
 <success_criteria>
