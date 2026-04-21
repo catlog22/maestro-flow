@@ -125,7 +125,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
       {/* Expanded overlay */}
       {expanded && (
         <div
-          className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center"
+          className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm"
           onClick={closeOverlay}
         >
           {/* Close button */}
@@ -142,23 +142,23 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
 
           {/* Zoom controls */}
           <div className="absolute bottom-[var(--spacing-5)] right-[var(--spacing-5)] z-10 flex items-center gap-2 bg-bg-card/80 rounded-[var(--radius-default)] px-3 py-1.5 text-[length:12px] text-text-secondary">
-            <button onClick={(e) => { e.stopPropagation(); setScale((s) => Math.min(s + 0.2, 3)); }} className="hover:text-text-primary px-1" aria-label="Zoom in">+</button>
+            <button onClick={(e) => { e.stopPropagation(); setScale((s) => Math.min(s + 0.2, 4)); }} className="hover:text-text-primary px-1" aria-label="Zoom in">+</button>
             <span className="tabular-nums min-w-[3ch] text-center">{Math.round(scale * 100)}%</span>
-            <button onClick={(e) => { e.stopPropagation(); setScale((s) => Math.max(s - 0.2, 0.3)); }} className="hover:text-text-primary px-1" aria-label="Zoom out">&minus;</button>
+            <button onClick={(e) => { e.stopPropagation(); setScale((s) => Math.max(s - 0.2, 0.5)); }} className="hover:text-text-primary px-1" aria-label="Zoom out">&minus;</button>
             <span className="mx-1 text-border">|</span>
             <button onClick={(e) => { e.stopPropagation(); setScale(1.5); }} className="hover:text-text-primary">Reset</button>
           </div>
 
-          {/* Diagram container */}
+          {/* Full viewport scrollable area */}
           <div
             ref={overlayRef}
-            className="max-w-[95vw] max-h-[90vh] overflow-auto p-[var(--spacing-6)]"
+            className="w-full h-full overflow-auto"
             onClick={(e) => e.stopPropagation()}
             onWheel={handleWheel}
           >
             <div
-              className="mermaid-diagram bg-bg-code rounded-[var(--radius-lg)] p-[var(--spacing-8)] origin-center transition-transform duration-150"
-              style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+              className="mermaid-diagram bg-bg-code rounded-[var(--radius-lg)] p-[var(--spacing-8)] m-auto"
+              style={{ width: `${scale * 90}vw`, maxWidth: 'none' }}
               dangerouslySetInnerHTML={{ __html: svg }}
             />
           </div>
