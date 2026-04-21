@@ -41,7 +41,7 @@ const SEED_DOCS: SeedDoc[] = [
       title: 'Coding Conventions',
       readMode: 'required',
       priority: 'high',
-      category: 'execution',
+      category: 'coding',
       keywords: ['style', 'naming', 'import', 'pattern', 'convention', 'formatting'],
     },
     body: `# Coding Conventions
@@ -54,7 +54,7 @@ const SEED_DOCS: SeedDoc[] = [
 
 ## Patterns
 
-## Manual Additions
+## Entries
 
 `,
   },
@@ -64,7 +64,7 @@ const SEED_DOCS: SeedDoc[] = [
       title: 'Architecture Constraints',
       readMode: 'required',
       priority: 'high',
-      category: 'planning',
+      category: 'arch',
       keywords: ['architecture', 'module', 'layer', 'boundary', 'dependency', 'structure'],
     },
     body: `# Architecture Constraints
@@ -77,24 +77,7 @@ const SEED_DOCS: SeedDoc[] = [
 
 ## Technology Constraints
 
-## Manual Additions
-
-`,
-  },
-  {
-    filename: 'quality-rules.md',
-    frontmatter: {
-      title: 'Quality Rules',
-      readMode: 'required',
-      priority: 'medium',
-      category: 'execution',
-      keywords: ['quality', 'test', 'coverage', 'lint', 'rule', 'validation'],
-    },
-    body: `# Quality Rules
-
-## Rules
-
-## Manual
+## Entries
 
 `,
   },
@@ -104,10 +87,25 @@ const SEED_DOCS: SeedDoc[] = [
       title: 'Learnings',
       readMode: 'optional',
       priority: 'medium',
-      category: 'general',
+      category: 'learning',
       keywords: ['bug', 'lesson', 'gotcha', 'learning'],
     },
     body: `# Learnings
+
+## Entries
+
+`,
+  },
+  {
+    filename: 'quality-rules.md',
+    frontmatter: {
+      title: 'Quality Rules',
+      readMode: 'required',
+      priority: 'medium',
+      category: 'quality',
+      keywords: ['quality', 'lint', 'rule', 'enforcement'],
+    },
+    body: `# Quality Rules
 
 ## Entries
 
@@ -123,9 +121,6 @@ const SEED_DOCS: SeedDoc[] = [
       keywords: ['debug', 'issue', 'workaround', 'root-cause', 'gotcha'],
     },
     body: `# Debug Notes
-
-Known issues, debugging tips, and root cause records.
-Add entries with: \`/spec-add debug <description>\`
 
 ## Entries
 
@@ -150,7 +145,7 @@ Add entries with: \`/spec-add debug <description>\`
 
 ## Patterns
 
-## Manual Additions
+## Entries
 
 `,
   },
@@ -165,30 +160,7 @@ Add entries with: \`/spec-add debug <description>\`
     },
     body: `# Review Standards
 
-## Review Checklist
-
-## Quality Gates
-
-## Manual Additions
-
-`,
-  },
-  {
-    filename: 'validation-rules.md',
-    frontmatter: {
-      title: 'Validation Rules',
-      readMode: 'required',
-      priority: 'high',
-      category: 'validation',
-      keywords: ['validation', 'verification', 'acceptance', 'criteria', 'check'],
-    },
-    body: `# Validation Rules
-
-## Verification Criteria
-
-## Acceptance Standards
-
-## Manual Additions
+## Entries
 
 `,
   },

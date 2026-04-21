@@ -4,11 +4,8 @@ description: "Unified team skill for code review. 3-role pipeline: scanner, revi
 allowed-tools: spawn_agent(*), wait_agent(*), send_message(*), followup_task(*), close_agent(*), list_agents(*), report_agent_job_result(*), request_user_input(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__ace-tool__search_context(*), mcp__maestro-tools__team_msg(*)
 ---
 
-# Team Review
-
+<purpose>
 Orchestrate multi-agent code review: scanner -> reviewer -> fixer. Toolchain + LLM scan, deep analysis with root cause enrichment, and automated fix with rollback-on-failure.
-
-## Architecture
 
 ```
 Skill(skill="team-review", args="task description")
@@ -29,23 +26,25 @@ Skill(skill="team-review", args="task description")
                 [scan]  [review]  [fix]
                 team-worker agents, each loads roles/<role>/role.md
 ```
+</purpose>
 
-## Role Registry
+<context>
+### Role Registry
 
 | Role | Path | Prefix | Inner Loop |
 |------|------|--------|------------|
-| coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | — | — |
+| coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | -- | -- |
 | scanner | [roles/scanner/role.md](roles/scanner/role.md) | SCAN-* | false |
 | reviewer | [roles/reviewer/role.md](roles/reviewer/role.md) | REV-* | false |
 | fixer | [roles/fixer/role.md](roles/fixer/role.md) | FIX-* | true |
 
-## Role Router
+### Role Router
 
 Parse `$ARGUMENTS`:
 - Has `--role <name>` -> Read `roles/<name>/role.md`, execute Phase 2-4
 - No `--role` -> `roles/coordinator/role.md`, execute entry router
 
-## Delegation Lock
+### Delegation Lock
 
 **Coordinator is a PURE ORCHESTRATOR. It coordinates, it does NOT do.**
 
@@ -68,9 +67,7 @@ Before calling ANY tool, apply this check:
 
 **No exceptions for "simple" tasks.** Even a single-file read-and-report MUST go through spawn_agent.
 
----
-
-## Shared Constants
+### Shared Constants
 
 - **Session prefix**: `RV`
 - **Session path**: `.workflow/.team/RV-<slug>-<date>/`
@@ -78,7 +75,7 @@ Before calling ANY tool, apply this check:
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
 - **Message bus**: `mcp__maestro-tools__team_msg(session_id=<session-id>, ...)`
 
-## Worker Spawn Template
+### Worker Spawn Template
 
 Coordinator spawns workers using this template:
 
@@ -110,7 +107,6 @@ pipeline_phase: <pipeline-phase>
 
 After spawning, use `wait_agent({ timeout_ms: 1800000 })` to collect results (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents. Use `close_agent({ target })` each worker.
 
-
 ### Model Selection Guide
 
 | Role | model | reasoning_effort | Rationale |
@@ -131,7 +127,7 @@ spawn_agent({
 })
 ```
 
-## User Commands
+### User Commands
 
 | Command | Action |
 |---------|--------|
@@ -143,9 +139,9 @@ spawn_agent({
 | `--dimensions=sec,cor,prf,mnt` | Custom dimensions |
 | `-y` / `--yes` | Skip confirmations |
 
-## v4 Agent Coordination
+### v4 Agent Coordination
 
-### Message Semantics
+#### Message Semantics
 
 | Intent | API | Example |
 |--------|-----|---------|
@@ -153,11 +149,11 @@ spawn_agent({
 | Not used in this skill | `followup_task` | No resident agents -- sequential 3-stage pipeline |
 | Check running agents | `list_agents` | Verify agent health during resume |
 
-### Pipeline Pattern
+#### Pipeline Pattern
 
 This is a **sequential 3-stage pipeline** (scan -> review -> fix). No parallel phases. Each stage completes before the next starts. The coordinator may skip stages (0 findings -> skip review+fix; user declines fix -> skip fix).
 
-### Agent Health Check
+#### Agent Health Check
 
 Use `list_agents({})` in handleResume and handleComplete:
 
@@ -168,13 +164,13 @@ const running = list_agents({})
 // Reset orphaned tasks (in_progress but agent gone) to pending
 ```
 
-### Named Agent Targeting
+#### Named Agent Targeting
 
 Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
 - `send_message({ target: "REV-001", message: "..." })` -- queue scan findings to running reviewer
 - `close_agent({ target: "SCAN-001" })` -- cleanup by name after completion
 
-## Completion Action
+### Completion Action
 
 When pipeline completes, coordinator presents:
 
@@ -193,26 +189,27 @@ request_user_input({
 })
 ```
 
-## Session Directory
+### Session Directory
 
 ```
 .workflow/.team/RV-<slug>-<date>/
-├── .msg/messages.jsonl     # Team message bus
-├── .msg/meta.json          # Session state + cross-role state
-├── wisdom/                 # Cross-task knowledge
-├── scan/                   # Scanner output
-├── review/                 # Reviewer output
-└── fix/                    # Fixer output
++-- .msg/messages.jsonl     # Team message bus
++-- .msg/meta.json          # Session state + cross-role state
++-- wisdom/                 # Cross-task knowledge
++-- scan/                   # Scanner output
++-- review/                 # Reviewer output
++-- fix/                    # Fixer output
 ```
 
-## Specs Reference
+### Specs Reference
 
-- [specs/pipelines.md](specs/pipelines.md) — Pipeline definitions and task registry
-- [specs/dimensions.md](specs/dimensions.md) — Review dimension definitions (SEC/COR/PRF/MNT)
-- [specs/finding-schema.json](specs/finding-schema.json) — Finding data schema
-- [specs/team-config.json](specs/team-config.json) — Team configuration
+- [specs/pipelines.md](specs/pipelines.md) -- Pipeline definitions and task registry
+- [specs/dimensions.md](specs/dimensions.md) -- Review dimension definitions (SEC/COR/PRF/MNT)
+- [specs/finding-schema.json](specs/finding-schema.json) -- Finding data schema
+- [specs/team-config.json](specs/team-config.json) -- Team configuration
+</context>
 
-## Error Handling
+<error_codes>
 
 | Scenario | Resolution |
 |----------|------------|
@@ -223,3 +220,13 @@ request_user_input({
 | User declines fix | Delete FIX tasks, complete with review-only results |
 | Fast-advance conflict | Coordinator reconciles on next callback |
 | Completion action fails | Default to Keep Active |
+</error_codes>
+
+<success_criteria>
+- [ ] Role router correctly dispatches to coordinator or worker based on --role flag
+- [ ] Sequential pipeline: scan -> review -> fix executed in order
+- [ ] Scanner findings passed as upstream context to reviewer
+- [ ] Fix stage skipped when scanner finds 0 findings or user declines
+- [ ] Session state persisted after each pipeline stage
+- [ ] Completion action presented and handled correctly
+</success_criteria>

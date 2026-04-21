@@ -109,7 +109,7 @@ Before any operations, load specification and template documents:
 
 **Load project specs:**
 ```
-specs_content = maestro spec load --category planning
+specs_content = maestro spec load --category arch
 ```
 Used in Phase 3 (architecture doc) and Phase 6 (epic decomposition) for constraint awareness.
 

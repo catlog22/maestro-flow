@@ -132,7 +132,7 @@ For each wave in waves:
 ## E1.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category execution
+specs_content = maestro spec load --category coding
 ```
 
 Pass specs_content to each executor agent in E2.

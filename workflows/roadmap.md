@@ -48,7 +48,7 @@ const dateStr = getUtc8ISOString().substring(0, 10)
 
 ### 1.5.1: Load Specs
 ```
-specs_content = maestro spec load --category planning
+specs_content = maestro spec load --category arch
 ```
 Ensure phases in Step 2 respect architectural constraints.
 

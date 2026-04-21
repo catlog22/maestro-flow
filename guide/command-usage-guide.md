@@ -541,9 +541,9 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 
 ```bash
 /spec-setup                          # 初始化 specs/（扫描项目生成约定）
-/spec-add decision "使用 JSONL 格式存储 Issue"  # 录入设计决策
-/spec-add pattern "所有 API 端点使用 Hono 框架"  # 录入代码模式
-/spec-load --category planning       # 加载规划相关规范（agent 执行前调用）
+/spec-add arch "使用 JSONL 格式存储 Issue"  # 录入设计决策
+/spec-add coding "所有 API 端点使用 Hono 框架"  # 录入代码模式
+/spec-load --category arch       # 加载规划相关规范（agent 执行前调用）
 ```
 
 类型：`bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `validation`

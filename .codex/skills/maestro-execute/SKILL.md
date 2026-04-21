@@ -5,44 +5,12 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--auto-c
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm task breakdown, skip blocked-task prompts, auto-continue through all waves.
-
-# Maestro Execute (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-execute "3"
-$maestro-execute -c 4 "3 --auto-commit"
-$maestro-execute -y "3 --method cli"
-$maestro-execute "3 --dir .workflow/scratch/quick-fix"
-$maestro-execute --continue "execute-phase3-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 5)
-- `--continue`: Resume existing session
-
-**Inner flags** (passed inside quotes):
-- `--auto-commit`: Atomic git commit after each task completion
-- `--method agent|cli`: Override execution method (default: from config.json)
-- `--dir <path>`: Use arbitrary directory instead of phase resolution (scratch mode)
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
-
----
-
-## Overview
-
+<purpose>
 Wave-based parallel task execution using `spawn_agents_on_csv`. Reads plan.json to build a CSV where waves are pre-computed from the plan. Each wave runs tasks in parallel, with cross-wave context propagation via `prev_context`. This is the core execution engine of the maestro pipeline.
 
-**Core workflow**: Load Plan → Build CSV from Tasks → Wave-by-Wave Parallel Execution → Aggregate Results
+**Core workflow**: Load Plan -> Build CSV from Tasks -> Wave-by-Wave Parallel Execution -> Aggregate Results
 
-**Topology**: Custom (waves inherited from plan.json — no Kahn's algorithm needed)
+**Topology**: Custom (waves inherited from plan.json -- no Kahn's algorithm needed)
 
 ```
 +---------------------------------------------------------------------------+
@@ -84,10 +52,34 @@ Wave-based parallel task execution using `spawn_agents_on_csv`. Reads plan.json 
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$maestro-execute "3"
+$maestro-execute -c 4 "3 --auto-commit"
+$maestro-execute -y "3 --method cli"
+$maestro-execute "3 --dir .workflow/scratch/quick-fix"
+$maestro-execute --continue "execute-phase3-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 5)
+- `--continue`: Resume existing session
+
+**Inner flags** (passed inside quotes):
+- `--auto-commit`: Atomic git commit after each task completion
+- `--method agent|cli`: Override execution method (default: from config.json)
+- `--dir <path>`: Use arbitrary directory instead of phase resolution (scratch mode)
+
+When `--yes` or `-y`: Auto-confirm task breakdown, skip blocked-task prompts, auto-continue through all waves.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -124,9 +116,7 @@ id,title,description,scope,convergence_criteria,hints,execution_directives,deps,
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column populated from predecessor task findings.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -137,9 +127,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable execution report | Created in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/execute-{phase}-{date}/
@@ -151,10 +139,22 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 +-- wave-{N}.csv (temporary)
 +-- wave-{N}-results.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave N+1 before wave N completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all execution state
+4. **Context Propagation**: prev_context built from master CSV findings, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Cascading Skip on Failure**: If a task fails/blocks, all dependent tasks are skipped
+7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+8. **Max 3 Fix Attempts**: Per task, auto-fix convergence failures up to 3 times, then mark blocked
+9. **Breakpoint Resume**: Always detect completed tasks and skip them on re-run
+10. **DO NOT STOP**: Continuous execution until all waves complete or user explicitly stops
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -187,8 +187,6 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
 ```
-
----
 
 ### Phase 1: Plan Resolution -> CSV
 
@@ -229,8 +227,6 @@ Bash(`mkdir -p ${sessionFolder}`)
    - Pass as context to all executor agents
 
 6. **User validation**: Display task/wave breakdown. Skip if AUTO_YES.
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -294,8 +290,6 @@ If a task is blocked/failed and other tasks in later waves depend on it:
 - Mark dependent tasks as `skipped` with error: "Dependency {dep_id} blocked/failed"
 - Do not attempt execution of skipped tasks
 
----
-
 ### Phase 3: Results Aggregation
 
 **Objective**: Update all state files and generate execution report.
@@ -311,8 +305,8 @@ If a task is blocked/failed and other tasks in later waves depend on it:
 3b. **Issue status sync**: For each completed/failed task that has `issue_id`:
    - Read issue from `.workflow/issues/issues.jsonl` by `issue_id`
    - Collect all `task_refs[]` statuses for that issue:
-     - All task_refs completed → `issue.status = "resolved"`
-     - Any task_ref failed → `issue.status = "in_progress"`
+     - All task_refs completed -> `issue.status = "resolved"`
+     - Any task_ref failed -> `issue.status = "in_progress"`
    - Append history entry: `{ action: "executed", at: <ISO>, by: "maestro-execute", summary: "TASK-{NNN} {status}" }`
    - Write updated issue back to `issues.jsonl`
 
@@ -385,11 +379,9 @@ Next steps:
   Skill({ skill: "manage-status" })
 ```
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -400,7 +392,7 @@ Next steps:
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack detail confirmed |
 | `test_command` | `data.command` | `{command, scope, result}` | Working test command discovered |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before starting task implementation
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -411,10 +403,9 @@ Next steps:
 ```bash
 echo '{"ts":"<ISO>","worker":"TASK-001","type":"code_pattern","data":{"name":"Result type","file":"src/types/result.ts","description":"All functions return Result<T,E> for error handling"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -429,18 +420,16 @@ echo '{"ts":"<ISO>","worker":"TASK-001","type":"code_pattern","data":{"name":"Re
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines, continue |
 | Continue mode: no session found | List available sessions |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave N+1 before wave N completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all execution state
-4. **Context Propagation**: prev_context built from master CSV findings, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Cascading Skip on Failure**: If a task fails/blocks, all dependent tasks are skipped
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-8. **Max 3 Fix Attempts**: Per task, auto-fix convergence failures up to 3 times, then mark blocked
-9. **Breakpoint Resume**: Always detect completed tasks and skip them on re-run
-10. **DO NOT STOP**: Continuous execution until all waves complete or user explicitly stops
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All waves executed in order with cross-wave context propagation
+- [ ] Completed tasks have .summaries/TASK-{NNN}-summary.md
+- [ ] .task/TASK-*.json statuses updated to match execution results
+- [ ] state.json updated with EXC artifact
+- [ ] context.md produced with execution report
+- [ ] Blocked tasks have checkpoint info for resume
+- [ ] Cascading skip applied for dependent tasks
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

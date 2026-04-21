@@ -5,9 +5,11 @@ argument-hint: "[--full] [--since <commit|HEAD~N>] [--dry-run]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-# Sync
+<purpose>
+Sync codebase documentation after code changes by tracing git diff through component, feature, and requirement layers. Updates `.workflow/codebase/` docs to reflect current source state.
+</purpose>
 
-## Usage
+<context>
 
 ```bash
 $quality-sync
@@ -22,9 +24,9 @@ $quality-sync "--since abc123 --dry-run"
 - `--since <commit|HEAD~N>` -- Diff since specific commit (default: last sync timestamp)
 - `--dry-run` -- Show what would be updated without writing
 
----
+</context>
 
-## Implementation
+<execution>
 
 ### Step 1: Validate
 
@@ -79,11 +81,21 @@ Features affected: {F}
 Docs updated: {D}
 ```
 
----
+</execution>
 
-## Error Handling
+<error_codes>
 
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | error | `.workflow/` not initialized -- run `Skill({ skill: "maestro-init" })` first |
 | W001 | warning | No changes detected since last sync |
+
+</error_codes>
+
+<success_criteria>
+- [ ] Changed files detected (or full resync triggered)
+- [ ] Impact chain traced through all layers
+- [ ] Documentation entries updated in `.workflow/codebase/`
+- [ ] `state.json` updated with sync timestamp and commit hash
+- [ ] Summary report displayed
+</success_criteria>

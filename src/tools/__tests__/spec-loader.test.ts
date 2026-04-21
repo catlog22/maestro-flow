@@ -54,10 +54,10 @@ describe('loadSpecs — single directory (no uid)', () => {
   });
 
   it('filters by category', () => {
-    const result = loadSpecs(TEST_DIR, 'execution');
+    const result = loadSpecs(TEST_DIR, 'coding');
     assert.ok(result.content.includes('Coding Conventions'));
-    assert.ok(result.content.includes('Learnings')); // always included
-    assert.strictEqual(result.totalLoaded, 2);
+    assert.ok(!result.content.includes('Learnings')); // 1:1 mapping, no always-include
+    assert.strictEqual(result.totalLoaded, 1);
   });
 
   it('returns empty when no specs directory', () => {
@@ -102,14 +102,14 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('respects category filter across layers', () => {
-    const result = loadSpecs(TEST_DIR, 'execution', 'alice');
-    // coding-conventions is execution category
+    const result = loadSpecs(TEST_DIR, 'coding', 'alice');
+    // coding-conventions is coding category
     assert.ok(result.content.includes('Use camelCase'));
     assert.ok(result.content.includes('Also use PascalCase'));
     assert.ok(result.content.includes('Prefer arrow functions'));
-    // learnings is always included
-    assert.ok(result.content.includes('Learnings'));
-    // debug-notes is debug category, should NOT appear under execution
+    // learnings is learning category, not coding — 1:1 mapping
+    assert.ok(!result.content.includes('Pattern X works'));
+    // debug-notes is debug category, should NOT appear under coding
     assert.ok(!result.content.includes('Team Debug Notes'));
   });
 
@@ -118,8 +118,8 @@ describe('loadSpecs — three-layer (uid provided)', () => {
     assert.ok(result.content.includes('Team Debug Notes'));
     // coding-conventions is NOT debug category
     assert.ok(!result.content.includes('Use camelCase'));
-    // learnings always included
-    assert.ok(result.content.includes('Learnings'));
+    // learnings is learning category, not loaded under debug
+    assert.ok(!result.content.includes('Learnings'));
   });
 
   it('counts specs from all layers', () => {
@@ -161,11 +161,13 @@ describe('loadSpecs — three-layer (uid provided)', () => {
     assert.strictEqual(result.totalLoaded, 2);
   });
 
-  it('always includes learnings.md regardless of layer or category', () => {
-    const result = loadSpecs(TEST_DIR, 'execution', 'alice');
+  it('loads learnings only with learning category', () => {
+    const result = loadSpecs(TEST_DIR, 'learning', 'alice');
     // Learnings from baseline
     assert.ok(result.content.includes('Pattern X works'));
     // Learnings from personal
     assert.ok(result.content.includes('Found bug in module X'));
+    // coding-conventions should NOT be included
+    assert.ok(!result.content.includes('Use camelCase'));
   });
 });

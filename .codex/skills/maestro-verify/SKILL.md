@@ -5,33 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--skip-t
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm check decomposition, skip interactive validation, use defaults for layer detection.
-
-# Maestro Verify (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-verify "3"
-$maestro-verify -c 4 "3 --skip-tests"
-$maestro-verify -y "3 --skip-antipattern"
-$maestro-verify --continue "verify-phase3-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 4)
-- `--continue`: Resume existing session
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `verification.json` (structured verification output) + `validation.json` (test coverage output, if Nyquist ran)
-
----
-
-## Overview
-
+<purpose>
 Wave-based 3-layer Goal-Backward verification using `spawn_agents_on_csv`. Decomposes verification into staged parallel checks across three waves: truth + artifact existence (Wave 1), artifact substance + wiring (Wave 2), anti-pattern scan + Nyquist audit (Wave 3).
 
 **Core workflow**: Load Phase Artifacts -> Establish Must-Haves -> Decompose Checks -> Staged Parallel Verification -> Aggregate + Fix Plans
@@ -82,10 +56,28 @@ Wave-based 3-layer Goal-Backward verification using `spawn_agents_on_csv`. Decom
 |                                                                         |
 +-------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$maestro-verify "3"
+$maestro-verify -c 4 "3 --skip-tests"
+$maestro-verify -y "3 --skip-antipattern"
+$maestro-verify --continue "verify-phase3-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 4)
+- `--continue`: Resume existing session
+
+When `--yes` or `-y`: Auto-confirm check decomposition, skip interactive validation, use defaults for layer detection.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `verification.json` (structured verification output) + `validation.json` (test coverage output, if Nyquist ran)
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -125,9 +117,7 @@ id,title,description,layer,phase_dir,check_type,deps,context_from,wave,status,fi
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -139,9 +129,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | `verification.json` | Structured verification output for downstream | Created in Phase 3 |
 | `validation.json` | Nyquist test coverage output (if ran) | Created in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/verify-{phase}-{date}/
@@ -153,10 +141,22 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- validation.json (if Nyquist ran)
 +-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Skip on Failure**: If artifact existence check failed, skip its substance/wiring checks
+7. **Respect Skip Flags**: `--skip-tests` and `--skip-antipattern` mark wave 3 tasks as skipped, not removed
+8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+9. **DO NOT STOP**: Continuous execution until all waves complete
+10. **Goal-Backward**: Verify goals are achieved, not just tasks completed
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -184,8 +184,6 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
 ```
-
----
 
 ### Phase 1: Phase Resolution -> CSV
 
@@ -232,8 +230,6 @@ Bash(`mkdir -p ${sessionFolder}`)
 8. **CSV generation**: One row per check task.
 
 **User validation**: Display check breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -335,8 +331,6 @@ spawn_agents_on_csv({
 - Classify: COVERED / PARTIAL / MISSING
 - Run coverage command if available
 - Report gaps and coverage percentage
-
----
 
 ### Phase 3: Results Aggregation
 
@@ -495,11 +489,9 @@ Files:
 | Low test coverage | `$quality-test-gen "{phase}"` to generate missing tests |
 | Human verification needed | `$quality-test "{phase}"` for interactive UAT |
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -509,7 +501,7 @@ Files:
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -519,7 +511,7 @@ Files:
 | `antipattern` | `data.location` | `{location, pattern, severity}` | Anti-pattern instance |
 | `test_gap` | `data.requirement` | `{requirement, status, suggested_test}` | Missing test coverage |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own check
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -530,10 +522,9 @@ Files:
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"verification_gap","data":{"gap_id":"GAP-001","layer":"truth","severity":"critical","description":"User cannot send messages - form handler is a stub"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -549,18 +540,17 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"verification_gap","data":{"gap_id":"
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Skip on Failure**: If artifact existence check failed, skip its substance/wiring checks
-7. **Respect Skip Flags**: `--skip-tests` and `--skip-antipattern` mark wave 3 tasks as skipped, not removed
-8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-9. **DO NOT STOP**: Continuous execution until all waves complete
-10. **Goal-Backward**: Verify goals are achieved, not just tasks completed
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All 3 waves executed in order (with skip flags respected)
+- [ ] verification.json produced with must_haves, gaps, antipatterns
+- [ ] validation.json produced (if Nyquist ran)
+- [ ] context.md produced with full report
+- [ ] Fix plans generated for gap clusters
+- [ ] Issues auto-created for gaps + blocker anti-patterns
+- [ ] Output files copied to phase directory
+- [ ] Phase index.json updated with verification status
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

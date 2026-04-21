@@ -41,7 +41,7 @@ You validate the quality of execution plans before they proceed to implementatio
 ## Input
 - `plan.json` and `.task/TASK-*.json` files
 - Requirements source (spec, roadmap, phase context)
-- **Project specs** — `maestro spec load --category planning`: verify tasks comply with architecture constraints and module boundaries
+- **Project specs** — `maestro spec load --category arch`: verify tasks comply with architecture constraints and module boundaries
 
 ## Output Location
 `.workflow/phases/{NN}-{slug}/plan-check.md`

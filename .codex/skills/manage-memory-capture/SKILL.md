@@ -5,9 +5,12 @@ argument-hint: "[compact|tip] [description] [--tag tag1,tag2]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-# Memory Capture
+<purpose>
+Capture session memory into `.workflow/memory/` with JSON index. Two modes: `compact` (full session compression) or `tip` (quick note with tags). Auto-detects mode or asks user when ambiguous.
+</purpose>
 
-## Usage
+<context>
+$ARGUMENTS — mode token followed by description and optional flags.
 
 ```bash
 $manage-memory-capture
@@ -19,9 +22,11 @@ $manage-memory-capture "compact Full auth implementation session"
 **Modes**: `compact` (full session compression) or `tip` (quick note with tags).
 No arguments: auto-detect or ask user.
 
----
+**Flags**:
+- `--tag tag1,tag2` — Comma-separated tags for the entry
+</context>
 
-## Implementation
+<execution>
 
 ### Step 1: Validate
 
@@ -73,14 +78,22 @@ ID: {entry_id}
 Type: {compact|tip}
 File: .workflow/memory/{filename}
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | error | `.workflow/` not initialized -- run `Skill({ skill: "maestro-init" })` first |
 | E002 | error | Empty note content in tip mode |
 | W001 | warning | No active workflow session -- compact captures conversation only |
 | W002 | warning | No explicit plan found -- using inferred plan |
+</error_codes>
+
+<success_criteria>
+- [ ] `.workflow/` existence validated; `.workflow/memory/` created if missing
+- [ ] Mode detected or prompted (compact vs tip)
+- [ ] Compact: conversation analyzed, MEM-id generated, markdown file written with all sections
+- [ ] Tip: content extracted, TIP-id generated, markdown file written
+- [ ] Index updated with new entry metadata
+- [ ] Confirmation displayed with ID, type, and file path
+</success_criteria>

@@ -147,7 +147,7 @@ Build the decomposition report grouped by dimension:
 **Next-step routing:**
 - Follow-along on a specific pattern → `/learn-follow <anchor-file>`
 - Get second opinion on findings → `/learn-second-opinion <target>`
-- Add all new patterns to specs → `/spec-add pattern ...` per pattern
+- Add all new patterns to specs → `/spec-add coding ...` per pattern
 </execution>
 
 <error_codes>

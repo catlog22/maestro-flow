@@ -15,7 +15,7 @@ export function registerSpecCommand(program: Command): void {
   spec
     .command('load')
     .description('Load specs matching category')
-    .option('--category <stage>', 'Filter by category: general|planning|execution|debug|test|review|validation')
+    .option('--category <stage>', 'Filter by category: coding|arch|quality|debug|test|review|learning')
     .option('--stdin', 'Read input from stdin (Hook mode)')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {

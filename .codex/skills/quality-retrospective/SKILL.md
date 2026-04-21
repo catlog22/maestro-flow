@@ -5,14 +5,45 @@ argument-hint: "[phase|N..M] [--lens technical|process|quality|decision] [--all]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-## Auto Mode
+<purpose>
+Multi-lens retrospective for completed phases. Context-Agent Fork loads phase artifacts once;
+four parallel lens agents (technical, process, quality, decision) analyze independently;
+synthesizer distills insights; outputs are routed to spec stubs, memory tips, issues, and lessons.jsonl.
 
-When `--auto-yes`: Accept all routing recommendations without prompting. Route all insights automatically.
+```
++------------------------------------------------------------------+
+|  quality-retrospective -- Context-Agent Fork + Parallel Fan-out   |
++------------------------------------------------------------------+
 
-# Quality Retrospective
+  Stage 1-3: Read-only resolution (no writes)
+  +---------------------------------------------+
+  | Parse mode -> Validate artifacts              |
+  | -> [scan] Find unreviewed phases              |
+  +----------------------+-----------------------+
+                         |
+  Stage 4: Context-Agent Fork (Pattern 2.10)
+  +----------------------------------------------------------------+
+  |  spawn ctx (fork_turns: "none")                                 |
+  |  wait ctx                                                       |
+  |  +----------+ +----------+ +----------+ +----------+           |
+  |  |lens-tech | |lens-proc | |lens-qual | |lens-dec  |           |
+  |  |fork=true | |fork=true | |fork=true | |fork=true |           |
+  |  +----------+ +----------+ +----------+ +----------+           |
+  |  wait_agent([lens-tech, lens-proc, lens-qual, lens-dec])        |
+  |  close lenses -> close ctx LAST                                 |
+  +----------------------+-----------------------------------------+
+                         | lens results
+  Stage 5: Synthesizer
+  +------------------------------------------+
+  |  spawn synthesizer (fork_turns: "none") |
+  |  -> wait -> close                        |
+  +----------------------+-------------------+
+                         | distilled_insights
+  Stage 6-8: Route -> Write -> Report
+```
+</purpose>
 
-## Usage
-
+<context>
 ```bash
 $quality-retrospective
 $quality-retrospective "3"
@@ -23,66 +54,32 @@ $quality-retrospective "3 --compare 2 --auto-yes"
 ```
 
 **Flags**:
-- No phase argument → `scan` mode: report unreviewed completed phases, prompt selection
-- `<N>` → `single` mode: retrospect phase N
-- `<N>..<M>` → `range` mode: retrospect phases N through M (inclusive)
-- `--all` → batch mode: re-run for every completed phase
-- `--lens <name>` — restrict to one lens (repeatable): `technical|process|quality|decision`
-- `--no-route` — produce retrospective.{md,json} only; skip auto-creation of spec/note/issue
-- `--compare <M>` — emit a delta section vs phase M's prior retrospective
-- `--auto-yes` — accept all routing recommendations without prompting
+- No phase argument -> `scan` mode: report unreviewed completed phases, prompt selection
+- `<N>` -> `single` mode: retrospect phase N
+- `<N>..<M>` -> `range` mode: retrospect phases N through M (inclusive)
+- `--all` -> batch mode: re-run for every completed phase
+- `--lens <name>` -- restrict to one lens (repeatable): `technical|process|quality|decision`
+- `--no-route` -- produce retrospective.{md,json} only; skip auto-creation of spec/note/issue
+- `--compare <M>` -- emit a delta section vs phase M's prior retrospective
+- `--auto-yes` -- accept all routing recommendations without prompting
+
+When `--auto-yes`: Accept all routing recommendations without prompting. Route all insights automatically.
 
 **Storage written**:
-- `.workflow/phases/{NN}-{slug}/retrospective.md` — human-readable record
-- `.workflow/phases/{NN}-{slug}/retrospective.json` — structured record
-- `.workflow/specs/SPEC-retro-*.md` — spec stubs (one per spec-routed insight)
-- `.workflow/issues/issues.jsonl` — appended issue rows (`source: "retrospective"`)
-- `.workflow/memory/TIP-*.md` — memory tips (via `manage-memory-capture` skill)
-- `.workflow/learning/lessons.jsonl` — append-only insight log
-- `.workflow/learning/learning-index.json` — updated searchable index
+- `.workflow/phases/{NN}-{slug}/retrospective.md` -- human-readable record
+- `.workflow/phases/{NN}-{slug}/retrospective.json` -- structured record
+- `.workflow/specs/SPEC-retro-*.md` -- spec stubs (one per spec-routed insight)
+- `.workflow/issues/issues.jsonl` -- appended issue rows (`source: "retrospective"`)
+- `.workflow/memory/TIP-*.md` -- memory tips (via `manage-memory-capture` skill)
+- `.workflow/learning/lessons.jsonl` -- append-only insight log
+- `.workflow/learning/learning-index.json` -- updated searchable index
 
 **Storage read (never modified)**:
 - `.workflow/phases/{NN}-{slug}/index.json`, `plan.json`, `verification.json`, `review.json`, `uat.md`
 - `.workflow/phases/{NN}-{slug}/.task/TASK-*.json`, `.summaries/TASK-*-summary.md`
 - `.workflow/issues/issues.jsonl`, `.workflow/state.json`
 
----
-
-## Architecture
-
-```
-+------------------------------------------------------------------+
-|  quality-retrospective — Context-Agent Fork + Parallel Fan-out   |
-+------------------------------------------------------------------+
-
-  Stage 1-3: Read-only resolution (no writes)
-  ┌─────────────────────────────────────────┐
-  │ Parse mode → Validate artifacts          │
-  │ → [scan] Find unreviewed phases          │
-  └──────────────────┬──────────────────────┘
-                     │
-  Stage 4: Context-Agent Fork (Pattern 2.10)
-  ┌────────────────────────────────────────────────────────────────┐
-  │  spawn ctx (fork_turns: "none")                                │
-  │  wait ctx                                                      │
-  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐         │
-  │  │lens-tech │ │lens-proc │ │lens-qual │ │lens-dec  │         │
-  │  │fork=true │ │fork=true │ │fork=true │ │fork=true │         │
-  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘         │
-  │  wait_agent([lens-tech, lens-proc, lens-qual, lens-dec])       │
-  │  close lenses → close ctx LAST                                 │
-  └──────────────────┬─────────────────────────────────────────────┘
-                     │ lens results
-  Stage 5: Synthesizer
-  ┌──────────────────────────────────────────┐
-  │  spawn synthesizer (fork_turns: "none") │
-  │  → wait → close                          │
-  └──────────────────┬───────────────────────┘
-                     │ distilled_insights
-  Stage 6-8: Route → Write → Report
-```
-
-## Agent Registry
+### Agent Registry
 
 | Agent | task_name | fork_turns | Responsibility |
 |-------|-----------|------------|----------------|
@@ -93,24 +90,36 @@ $quality-retrospective "3 --compare 2 --auto-yes"
 | Decision Lens | `lens-dec` | "all" | Key decisions made, tradeoffs accepted, ADR candidates, reversibility |
 | Synthesizer | `synthesizer` | "none" | Merge lens results, deduplicate insights, classify routing targets |
 
-## Fork Turns Strategy
+### Fork Turns Strategy
 
 | Agent | task_name | fork_turns | fork_from | Rationale |
 |-------|-----------|------------|-----------|-----------|
-| Context Agent | `ctx` | "none" | — | Independent artifact loader; clean start |
-| Technical Lens | `lens-tech` | "all" | `ctx` | Inherits loaded artifacts — no redundant file reads |
-| Process Lens | `lens-proc` | "all" | `ctx` | Inherits loaded artifacts — no redundant file reads |
-| Quality Lens | `lens-qual` | "all" | `ctx` | Inherits loaded artifacts — no redundant file reads |
-| Decision Lens | `lens-dec` | "all" | `ctx` | Inherits loaded artifacts — no redundant file reads |
-| Synthesizer | `synthesizer` | "none" | — | Clean context; receives lens results via message |
+| Context Agent | `ctx` | "none" | -- | Independent artifact loader; clean start |
+| Technical Lens | `lens-tech` | "all" | `ctx` | Inherits loaded artifacts -- no redundant file reads |
+| Process Lens | `lens-proc` | "all" | `ctx` | Inherits loaded artifacts -- no redundant file reads |
+| Quality Lens | `lens-qual` | "all" | `ctx` | Inherits loaded artifacts -- no redundant file reads |
+| Decision Lens | `lens-dec` | "all" | `ctx` | Inherits loaded artifacts -- no redundant file reads |
+| Synthesizer | `synthesizer` | "none" | -- | Clean context; receives lens results via message |
 
-**Context-Agent Lifecycle**: Spawn `ctx` first → `wait_agent` → spawn all lens agents (`fork_turns: "all"`) → `wait_agent` batch for lenses → `close_agent` lenses → `close_agent ctx` LAST.
+**Context-Agent Lifecycle**: Spawn `ctx` first -> `wait_agent` -> spawn all lens agents (`fork_turns: "all"`) -> `wait_agent` batch for lenses -> `close_agent` lenses -> `close_agent ctx` LAST.
 
-> **fork_turns semantics**: `fork_turns: "all"` means the spawned agent inherits the *orchestrator's* current conversation context — not the ctx agent's own context. When `wait_agent` for ctx returns, the ctx agent's completed artifact summaries are visible in the orchestrator's context. Lens agents forked after that point therefore inherit those summaries. Lens agents do **not** fork directly from `ctx`; the `fork_from: ctx` column above is conceptual shorthand for this sequencing.
+> **fork_turns semantics**: `fork_turns: "all"` means the spawned agent inherits the *orchestrator's* current conversation context -- not the ctx agent's own context. When `wait_agent` for ctx returns, the ctx agent's completed artifact summaries are visible in the orchestrator's context. Lens agents forked after that point therefore inherit those summaries. Lens agents do **not** fork directly from `ctx`; the `fork_from: ctx` column above is conceptual shorthand for this sequencing.
+</context>
 
----
+<invariants>
+1. **Read-only until Stage 6**: Stages 1-5 must not write any files -- only read and analyze
+2. **Context-agent spawns first**: `ctx` must complete before any lens agent is spawned
+3. **Parallel lens dispatch**: All active lens agents spawned in a single batch, then `wait_agent` for all together -- never sequentially
+4. **Context-agent closes last**: Close all lens agents before closing `ctx`
+5. **Synthesizer is isolated**: `fork_turns: "none"` -- receives lens results only via message, not full conversation history
+6. **Stable INS-ids**: `INS-{8hex}` from `hash(phase_num + lens + title)` -- re-runs do not create duplicates
+7. **Archive before overwrite**: Move existing retrospective.{md,json} to `.history/` with timestamp before writing new ones
+8. **Spec learnings.md backward-compat**: Append to it only if it already exists -- never create it
+9. **Route confirmation**: Unless `--auto-yes`, present routing table and ask per-group before writing spec/issue/memory
+10. **Lessons always written**: Append to `lessons.jsonl` regardless of `--no-route` -- routing only controls spec/issue/memory creation
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -128,7 +137,7 @@ functions.update_plan({
 })
 ```
 
-### Stages 1–3: Parse Mode and Validate Artifacts
+### Stages 1-3: Parse Mode and Validate Artifacts
 
 **Stage 1: Parse mode** from `$ARGUMENTS`:
 
@@ -147,7 +156,7 @@ Validate `--lens` values. If `--compare <M>` present, require single mode.
 - `.task/` directory must exist with at least one `TASK-*.json`
 - If existing `retrospective.json` found and not `--all`: emit W002, prompt overwrite
 
-**Stage 3: Scan mode** — list all completed phases without retrospective.json. Prompt user to select.
+**Stage 3: Scan mode** -- list all completed phases without retrospective.json. Prompt user to select.
 
 ```javascript
 functions.update_plan({
@@ -186,7 +195,7 @@ Phase: ${phaseDir}
 TASK:
 1. Read ${phaseDir}/index.json, plan.json, verification.json, review.json, uat.md
 2. Read all .task/TASK-*.json and .summaries/TASK-*-summary.md
-3. Read .workflow/issues/issues.jsonl — filter rows with phase link to this phase
+3. Read .workflow/issues/issues.jsonl -- filter rows with phase link to this phase
 4. Read .workflow/state.json for project context
 
 EXPECTED: Comprehensive artifact summary covering:
@@ -313,7 +322,7 @@ TASK:
 1. Merge all insights across lenses into a single list
 2. Deduplicate: if two lenses identified the same issue, merge into one (keep higher severity, combine evidence)
 3. Generate stable INS-{8hex} id for each: hash(phase_num + lens + title)
-4. Classify routing for each: spec (reusable pattern) | issue (recurring gap → create issue) | memory (process note) | none
+4. Classify routing for each: spec (reusable pattern) | issue (recurring gap -> create issue) | memory (process note) | none
 5. Produce phase-level metrics summary
 
 EXPECTED: JSON with:
@@ -378,14 +387,14 @@ Append to `.workflow/issues/issues.jsonl`:
   "severity": "<severity>",
   "source": "retrospective",
   "description": "<insight summary>",
-  "context": {"phase": <N>, "ins_id": "<INS-id>"},
+  "context": {"phase": "<N>", "ins_id": "<INS-id>"},
   "issue_history": [{"action": "created", "at": "<ISO>", "by": "quality-retrospective"}]
 }
 ```
 
 **Memory routing** (`routing: "memory"`):
 ```javascript
-Skill({ skill: "manage-memory-capture", args: `tip "${insight.title} — ${insight.summary}" --tag retrospective,phase-${N}` })
+Skill({ skill: "manage-memory-capture", args: `tip "${insight.title} -- ${insight.summary}" --tag retrospective,phase-${N}` })
 ```
 
 If `!AUTO_YES`: present routing table and ask confirmation before routing each group.
@@ -407,7 +416,7 @@ functions.apply_patch:
 +  "routing_summary": <routing_summary>
 +}
 *** Add File: .workflow/phases/<NN>-<slug>/retrospective.md
-+# Retrospective: Phase <N> — <slug>
++# Retrospective: Phase <N> -- <slug>
 +
 +> Generated: <ISO> | Lenses: technical, process, quality, decision
 +
@@ -457,10 +466,10 @@ Lenses:   technical, process, quality, decision
 Insights: <total> (<N> new, <N> duplicates merged)
 
 ROUTING:
-  Spec stubs:   <N>  → .workflow/specs/SPEC-retro-*.md
-  Issues:       <N>  → .workflow/issues/issues.jsonl
-  Memory tips:  <N>  → .workflow/memory/TIP-*.md
-  Lessons:      <N>  → .workflow/learning/lessons.jsonl
+  Spec stubs:   <N>  -> .workflow/specs/SPEC-retro-*.md
+  Issues:       <N>  -> .workflow/issues/issues.jsonl
+  Memory tips:  <N>  -> .workflow/memory/TIP-*.md
+  Lessons:      <N>  -> .workflow/learning/lessons.jsonl
 
 METRICS:
   Tasks:        <N>/<total> completed
@@ -472,10 +481,9 @@ Next:
   $manage-issue "list --source retrospective"
   $manage-learn "list --phase <N>"
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
@@ -484,22 +492,21 @@ Next:
 | E003 | error | `--compare` requires single phase mode | parse_input |
 | E004 | error | Phase has no execution artifacts (no .task/) | load_artifacts |
 | E005 | error | Phase directory not found or phase not completed | scan_unreviewed |
-| W001 | warning | One or more lens agents timed out — partial coverage | multi_lens_analysis |
-| W002 | warning | Existing retrospective.json found — prompted to overwrite | scan_unreviewed |
+| W001 | warning | One or more lens agents timed out -- partial coverage | multi_lens_analysis |
+| W002 | warning | Existing retrospective.json found -- prompted to overwrite | scan_unreviewed |
 | W003 | warning | `manage-memory-capture` did not return parseable TIP id; fell back to direct write | route_outputs |
 | W004 | warning | `--compare` target phase has no retrospective.json; delta omitted | load_artifacts |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Read-only until Stage 6**: Stages 1–5 must not write any files — only read and analyze
-2. **Context-agent spawns first**: `ctx` must complete before any lens agent is spawned
-3. **Parallel lens dispatch**: All active lens agents spawned in a single batch, then `wait_agent` for all together — never sequentially
-4. **Context-agent closes last**: Close all lens agents before closing `ctx`
-5. **Synthesizer is isolated**: `fork_turns: "none"` — receives lens results only via message, not full conversation history
-6. **Stable INS-ids**: `INS-{8hex}` from `hash(phase_num + lens + title)` — re-runs do not create duplicates
-7. **Archive before overwrite**: Move existing retrospective.{md,json} to `.history/` with timestamp before writing new ones
-8. **Spec learnings.md backward-compat**: Append to it only if it already exists — never create it
-9. **Route confirmation**: Unless `--auto-yes`, present routing table and ask per-group before writing spec/issue/memory
-10. **Lessons always written**: Append to `lessons.jsonl` regardless of `--no-route` — routing only controls spec/issue/memory creation
+<success_criteria>
+- [ ] Mode correctly parsed from arguments (scan/single/range/all)
+- [ ] Phase artifacts validated before analysis begins
+- [ ] Context agent loads all artifacts before lens agents spawn
+- [ ] All active lens agents spawned in parallel, waited as batch
+- [ ] Context agent closed last (after all lens agents)
+- [ ] Synthesizer produces deduplicated insights with stable INS-ids
+- [ ] Routing applied per insight (spec/issue/memory/none) with confirmation
+- [ ] retrospective.{md,json} written to phase directory
+- [ ] Lessons appended to lessons.jsonl regardless of --no-route flag
+- [ ] Existing retrospective archived before overwrite
+</success_criteria>

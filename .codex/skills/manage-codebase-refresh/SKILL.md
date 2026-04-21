@@ -5,9 +5,12 @@ argument-hint: "[--since <date>] [--deep]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-# Codebase Refresh
+<purpose>
+Incremental refresh of codebase documentation based on recent git changes. Detects changed files, maps them to existing doc entries, and updates only affected sections. Use `--deep` for broader context re-scanning.
+</purpose>
 
-## Usage
+<context>
+$ARGUMENTS — optional flags.
 
 ```bash
 $manage-codebase-refresh
@@ -19,10 +22,9 @@ $manage-codebase-refresh "--since 3d --deep"
 **Flags**:
 - `--since <date>` -- Override change detection window (ISO date or relative like `3d`)
 - `--deep` -- Force deeper re-scan even for minor changes
+</context>
 
----
-
-## Implementation
+<execution>
 
 ### Step 1: Validate Preconditions
 
@@ -70,13 +72,22 @@ Changes detected: {N} files
 Docs refreshed: {M} entries
 Skipped (unchanged): {K} entries
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | fatal | `.workflow/` not initialized |
 | E002 | fatal | No codebase docs exist -- use `Skill({ skill: "codebase-rebuild" })` instead |
 | W001 | warning | No changes detected since last refresh |
+</error_codes>
+
+<success_criteria>
+- [ ] Preconditions validated (.workflow/ and .workflow/codebase/ exist)
+- [ ] Change detection baseline resolved (--since flag, state.json, or 7-day fallback)
+- [ ] Git changes detected and mapped to doc entries via doc-index.json
+- [ ] Affected docs refreshed with updated source content
+- [ ] --deep flag triggers adjacent file re-scan
+- [ ] doc-index.json timestamps and state.json codebase_last_refreshed updated
+- [ ] Summary displayed with change/refresh/skip counts
+</success_criteria>

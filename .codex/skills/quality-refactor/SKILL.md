@@ -5,9 +5,14 @@ argument-hint: "<phase|--dir path> [--max-iterations N]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 ---
 
-# Refactor
+<purpose>
+Iterative refactoring cycle: analyze scope for tech debt -> plan refactoring tasks -> execute each with test verification -> reflect on strategy per round -> repeat if needed. Every change is verified against existing tests. Failed changes are reverted and retried with adjusted strategy.
+</purpose>
 
-## Usage
+<context>
+$ARGUMENTS -- module path, feature area, or "all", plus optional flags.
+
+**Usage**:
 
 ```bash
 $quality-refactor "src/auth"                    # module path scope
@@ -23,16 +28,20 @@ $quality-refactor "--dir .workflow/scratch/refactor-auth-2026-03-18"  # resume e
 - `--max-iterations N`: Max refactoring rounds (default: 3)
 
 **Output**: `.workflow/scratch/refactor-{slug}-{date}/` with index.json, plan.json, reflection-log.md, .task/, .summaries/
+</context>
 
----
+<invariants>
+1. **Test after every change** -- zero regressions tolerated
+2. **Revert on failure** -- never leave broken state
+3. **Max 2 retries per task** with strategy adjustment
+4. **Reflection-driven** -- every round records strategy, outcome, adjustment
+5. **User approval required** before execution (Step 4)
+6. **Quick wins first** -- order by risk (low first) and dependency
+7. **Agent calls use `run_in_background: false`** for synchronous execution
+8. **Incremental safety** -- each task is independently safe to apply or revert
+</invariants>
 
-## Overview
-
-Iterative refactoring cycle: analyze scope for tech debt -> plan refactoring tasks -> execute each with test verification -> reflect on strategy per round -> repeat if needed. Every change is verified against existing tests. Failed changes are reverted and retried with adjusted strategy.
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Parse Scope
 
@@ -57,7 +66,7 @@ Write `index.json` with type "refactor", scope, status "active", plan/execution/
 
 ### Step 3: Scope Analysis
 
-Load project specs if available (`maestro spec load --category execution`).
+Load project specs if available (`maestro spec load --category coding`).
 
 Analyze scope for tech debt categories:
 
@@ -166,26 +175,23 @@ Artifacts:
 ```
 
 If regressions: suggest Skill({ skill: "quality-debug" }).
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | Scope/description required | Prompt user for module path, feature area, or "all" |
 | E002 | error | Test suite not available | Suggest creating tests first, or proceed with manual verification |
 | W001 | warning | Partial test coverage | Note uncovered areas, proceed with extra caution |
+</error_codes>
 
----
-
-## Core Rules
-
-- **Test after every change** -- zero regressions tolerated
-- **Revert on failure** -- never leave broken state
-- **Max 2 retries per task** with strategy adjustment
-- **Reflection-driven** -- every round records strategy, outcome, adjustment
-- **User approval required** before execution (Step 4)
-- **Quick wins first** -- order by risk (low first) and dependency
-- **Agent calls use `run_in_background: false`** for synchronous execution
-- **Incremental safety** -- each task is independently safe to apply or revert
+<success_criteria>
+- [ ] Scope resolved and scratch directory created
+- [ ] Tech debt analysis completed with categorized findings
+- [ ] Refactoring plan approved by user
+- [ ] Each task executed with test verification
+- [ ] Failed changes reverted, retried with adjusted strategy
+- [ ] Reflection log records every round's strategy and outcome
+- [ ] Final test suite passes with zero regressions
+- [ ] Completion report with key learnings displayed
+</success_criteria>

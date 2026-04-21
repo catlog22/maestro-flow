@@ -4,11 +4,8 @@ description: Unified team skill for quality assurance. Full closed-loop QA combi
 allowed-tools: spawn_agent(*), wait_agent(*), send_message(*), followup_task(*), close_agent(*), list_agents(*), report_agent_job_result(*), request_user_input(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__maestro-tools__team_msg(*)
 ---
 
-# Team Quality Assurance
-
+<purpose>
 Orchestrate multi-agent QA: scout -> strategist -> generator -> executor -> analyst. Supports discovery, testing, and full closed-loop modes with parallel generation and GC loops.
-
-## Architecture
 
 ```
 Skill(skill="team-quality-assurance", args="task description")
@@ -29,25 +26,27 @@ Skill(skill="team-quality-assurance", args="task description")
                  [scout] [strat] [gen] [exec] [analyst]
                  team-worker agents, each loads roles/<role>/role.md
 ```
+</purpose>
 
-## Role Registry
+<context>
+### Role Registry
 
 | Role | Path | Prefix | Inner Loop |
 |------|------|--------|------------|
-| coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | — | — |
+| coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | -- | -- |
 | scout | [roles/scout/role.md](roles/scout/role.md) | SCOUT-* | false |
 | strategist | [roles/strategist/role.md](roles/strategist/role.md) | QASTRAT-* | false |
 | generator | [roles/generator/role.md](roles/generator/role.md) | QAGEN-* | false |
 | executor | [roles/executor/role.md](roles/executor/role.md) | QARUN-* | true |
 | analyst | [roles/analyst/role.md](roles/analyst/role.md) | QAANA-* | false |
 
-## Role Router
+### Role Router
 
 Parse `$ARGUMENTS`:
 - Has `--role <name>` -> Read `roles/<name>/role.md`, execute Phase 2-4
 - No `--role` -> `roles/coordinator/role.md`, execute entry router
 
-## Delegation Lock
+### Delegation Lock
 
 **Coordinator is a PURE ORCHESTRATOR. It coordinates, it does NOT do.**
 
@@ -70,9 +69,7 @@ Before calling ANY tool, apply this check:
 
 **No exceptions for "simple" tasks.** Even a single-file read-and-report MUST go through spawn_agent.
 
----
-
-## Shared Constants
+### Shared Constants
 
 - **Session prefix**: `QA`
 - **Session path**: `.workflow/.team/QA-<slug>-<date>/`
@@ -80,7 +77,7 @@ Before calling ANY tool, apply this check:
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
 - **Message bus**: `mcp__maestro-tools__team_msg(session_id=<session-id>, ...)`
 
-## Worker Spawn Template
+### Worker Spawn Template
 
 Coordinator spawns workers using this template:
 
@@ -112,7 +109,6 @@ pipeline_phase: <pipeline-phase>
 
 After spawning, use `wait_agent({ timeout_ms: 1800000 })` to collect results (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents. Use `close_agent({ target })` each worker.
 
-
 ### Model Selection Guide
 
 | Role | model | reasoning_effort | Rationale |
@@ -135,7 +131,7 @@ spawn_agent({
 })
 ```
 
-## User Commands
+### User Commands
 
 | Command | Action |
 |---------|--------|
@@ -145,9 +141,9 @@ spawn_agent({
 | `--mode=testing` | Force testing mode |
 | `--mode=full` | Force full QA mode |
 
-## v4 Agent Coordination
+### v4 Agent Coordination
 
-### Message Semantics
+#### Message Semantics
 
 | Intent | API | Example |
 |--------|-----|---------|
@@ -155,11 +151,11 @@ spawn_agent({
 | Not used in this skill | `followup_task` | No resident agents -- all workers are one-shot |
 | Check running agents | `list_agents` | Verify agent health during resume |
 
-### Pipeline Pattern
+#### Pipeline Pattern
 
 Sequential pipeline with GC loops: scout -> strategist -> generator -> executor -> analyst. The executor/generator may loop via GC fix tasks when coverage is below target (max 3 rounds).
 
-### Agent Health Check
+#### Agent Health Check
 
 Use `list_agents({})` in handleResume and handleComplete:
 
@@ -170,13 +166,13 @@ const running = list_agents({})
 // Reset orphaned tasks (in_progress but agent gone) to pending
 ```
 
-### Named Agent Targeting
+#### Named Agent Targeting
 
 Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
 - `send_message({ target: "QASTRAT-001", message: "..." })` -- queue scout findings to running strategist
 - `close_agent({ target: "SCOUT-001" })` -- cleanup by name after completion
 
-## Completion Action
+### Completion Action
 
 When pipeline completes, coordinator presents:
 
@@ -195,26 +191,27 @@ request_user_input({
 })
 ```
 
-## Session Directory
+### Session Directory
 
 ```
 .workflow/.team/QA-<slug>-<date>/
-├── .msg/messages.jsonl     # Team message bus
-├── .msg/meta.json          # Session state + shared memory
-├── wisdom/                 # Cross-task knowledge
-├── scan/                   # Scout output
-├── strategy/               # Strategist output
-├── tests/                  # Generator output (L1/, L2/, L3/)
-├── results/                # Executor output
-└── analysis/               # Analyst output
++-- .msg/messages.jsonl     # Team message bus
++-- .msg/meta.json          # Session state + shared memory
++-- wisdom/                 # Cross-task knowledge
++-- scan/                   # Scout output
++-- strategy/               # Strategist output
++-- tests/                  # Generator output (L1/, L2/, L3/)
++-- results/                # Executor output
++-- analysis/               # Analyst output
 ```
 
-## Specs Reference
+### Specs Reference
 
-- [specs/pipelines.md](specs/pipelines.md) — Pipeline definitions and task registry
-- [specs/team-config.json](specs/team-config.json) — Team configuration and shared memory schema
+- [specs/pipelines.md](specs/pipelines.md) -- Pipeline definitions and task registry
+- [specs/team-config.json](specs/team-config.json) -- Team configuration and shared memory schema
+</context>
 
-## Error Handling
+<error_codes>
 
 | Scenario | Resolution |
 |----------|------------|
@@ -225,3 +222,13 @@ request_user_input({
 | GC loop exceeded | Accept current coverage with warning |
 | Fast-advance conflict | Coordinator reconciles on next callback |
 | Completion action fails | Default to Keep Active |
+</error_codes>
+
+<success_criteria>
+- [ ] Role router correctly dispatches to coordinator or worker based on --role flag
+- [ ] Pipeline mode detected (discovery/testing/full) from task description
+- [ ] Scout -> strategist -> generator -> executor -> analyst executed in order
+- [ ] GC loops create fix tasks when coverage is below target (max 3 rounds)
+- [ ] Session state persisted after each pipeline stage
+- [ ] Completion action presented and handled correctly
+</success_criteria>

@@ -5,35 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase|topic> [-q
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive scoping, use defaults for perspectives and depth, auto-deepen for up to 3 rounds.
-
-# Maestro Analyze (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-analyze "3"
-$maestro-analyze -y "microservices vs monolith"
-$maestro-analyze -c 6 "3 -q"
-$maestro-analyze --continue "analyze-microservices-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
-- `--continue`: Resume existing session
-- `-q, --quick`: Quick mode -- skip exploration + scoring, go straight to decision extraction (Wave 3 only)
-- `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl. Replaces manage-issue-analyze.
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (decision extraction report) + `analysis.md` (6-dimension scoring summary)
-
----
-
-## Overview
-
+<purpose>
 Wave-based multi-dimensional analysis using `spawn_agents_on_csv`. Diamond topology: CLI exploration agents gather codebase context (Wave 1), 6-dimension scoring agents evaluate in parallel (Wave 2), then decision synthesis agent compiles final decisions and context.md (Wave 3).
 
 **Core workflow**: Parse Subject -> CLI Exploration -> 6-Dimension Scoring -> Decision Synthesis
@@ -82,10 +54,30 @@ Wave-based multi-dimensional analysis using `spawn_agents_on_csv`. Diamond topol
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$maestro-analyze "3"
+$maestro-analyze -y "microservices vs monolith"
+$maestro-analyze -c 6 "3 -q"
+$maestro-analyze --continue "analyze-microservices-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
+- `--continue`: Resume existing session
+- `-q, --quick`: Quick mode -- skip exploration + scoring, go straight to decision extraction (Wave 3 only)
+- `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl. Replaces manage-issue-analyze.
+
+When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive scoping, use defaults for perspectives and depth, auto-deepen for up to 3 rounds.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (decision extraction report) + `analysis.md` (6-dimension scoring summary)
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -125,9 +117,7 @@ id,title,description,dimension,analysis_type,deps,context_from,wave,status,findi
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -139,9 +129,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | `analysis.md` | 6-dimension scoring summary + risk matrix + Go/No-Go | Created in Phase 3 (full mode only) |
 | `conclusions.json` | Structured conclusions with decision trail | Created in Phase 3 (full mode only) |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/analyze-{slug}-{date}/
@@ -153,10 +141,23 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- conclusions.json
 +-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Quick Mode Shortcut**: With -q flag, generate only wave 3 task, skip exploration and scoring
+6b. **Gaps Mode Pipeline**: With --gaps flag, load issues, explore per issue, write analysis records back to issues.jsonl, output context.md for plan --gaps
+7. **Skip on Failure**: Degrade gracefully -- missing exploration reduces scoring quality, missing scoring reduces synthesis quality
+8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+9. **DO NOT STOP**: Continuous execution until all waves complete
+10. **Tri-Output**: context.md is ALWAYS produced (all modes). analysis.md + conclusions.json are full-mode only. Gaps mode writes analysis records to issues.jsonl + context.md for plan --gaps.
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -226,8 +227,6 @@ Bash(`mkdir -p ${sessionFolder}`)
 Bash(`mkdir -p ${scratchDir}`)
 ```
 
----
-
 ### Phase 1: Subject Resolution -> CSV
 
 **Objective**: Parse subject, load context, select dimensions, generate tasks.csv.
@@ -241,7 +240,7 @@ Bash(`mkdir -p ${scratchDir}`)
    - Read `.workflow/state.json` → `current_milestone`, `artifacts[]`, `accumulated_context`
    - Find prior analyze artifacts from `state.json.artifacts[]` (type=analyze, same milestone) → load their `context.md`
    - Find brainstorm artifacts from `state.json.artifacts[]` (type=brainstorm, same milestone) → load `guidance-specification.md`
-   - Load project specs: `maestro spec load --category planning`
+   - Load project specs: `maestro spec load --category arch`
 
 3. **Quick mode routing**: If QUICK_MODE, generate only wave 3 (synthesis/decide) task in CSV. Skip exploration and scoring.
 
@@ -272,8 +271,6 @@ Available exploration dimensions:
 **Wave computation**: 3-wave diamond -- explore = wave 1, score = wave 2, decide = wave 3. Quick mode: single wave.
 
 **User validation**: Display task breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -404,8 +401,6 @@ Each score MUST include specific evidence (code refs, data points from explorati
 - Generate Locked/Free/Deferred decisions for context.md
 - Build conclusions.json (full mode) with decision trail and recommendations
 
----
-
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results and output artifacts.
@@ -516,11 +511,9 @@ IF deferred_items.length > 0:
 8. Copy final outputs (context.md, analysis.md, conclusions.json) from CSV session folder to `scratchDir`
 9. Display summary
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -530,7 +523,7 @@ IF deferred_items.length > 0:
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -540,7 +533,7 @@ IF deferred_items.length > 0:
 | `decision_candidate` | `data.area` | `{area, options[], recommendation, classification}` | Gray area for decision |
 | `alternative` | `data.name` | `{name, description, pros[], cons[], fit_score}` | Alternative approach |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -551,10 +544,9 @@ IF deferred_items.length > 0:
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"exploration_finding","data":{"file":"src/auth/login.ts","line":42,"snippet":"export async function verifyToken(...)","dimension":"architecture","significance":"Core auth entry point"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -571,19 +563,15 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"exploration_finding","data":{"file":
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Quick Mode Shortcut**: With -q flag, generate only wave 3 task, skip exploration and scoring
-6b. **Gaps Mode Pipeline**: With --gaps flag, load issues, explore per issue, write analysis records back to issues.jsonl, output context.md for plan --gaps
-7. **Skip on Failure**: Degrade gracefully -- missing exploration reduces scoring quality, missing scoring reduces synthesis quality
-8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-9. **DO NOT STOP**: Continuous execution until all waves complete
-10. **Tri-Output**: context.md is ALWAYS produced (all modes). analysis.md + conclusions.json are full-mode only. Gaps mode writes analysis records to issues.jsonl + context.md for plan --gaps.
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All waves executed in order (or skipped per mode)
+- [ ] context.md produced (all modes)
+- [ ] analysis.md + conclusions.json produced (full mode only)
+- [ ] Deferred items auto-created as issues
+- [ ] Artifact registered in state.json
+- [ ] Final outputs copied to scratchDir
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

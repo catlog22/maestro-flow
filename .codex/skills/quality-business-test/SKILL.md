@@ -1,17 +1,34 @@
 ---
 name: quality-business-test
-description: PRD-forward business testing with requirement traceability, multi-layer execution (L1 Interface → L2 Business Rule → L3 Scenario), fixture generation, and feedback loop.
+description: PRD-forward business testing with requirement traceability, multi-layer execution (L1 Interface -> L2 Business Rule -> L3 Scenario), fixture generation, and feedback loop.
 argument-hint: "<phase> [--spec SPEC-xxx] [--layer L1|L2|L3] [--gen-code] [--dry-run] [--re-run] [--auto]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 ---
 
-## Auto Mode
+<purpose>
+Validate built features against PRD acceptance criteria through automated multi-layer business testing. Unlike quality-test (interactive UAT from code gaps) and quality-test-gen (generate tests from coverage gaps), this starts from REQ-*.md acceptance criteria and works forward.
 
-`--auto` skips interactive confirmation of test plan. `--dry-run` extracts scenarios only without execution.
+**Three-track testing** (complementary, not replacements):
 
-# Business Test (PRD-Forward)
+| Command | Input Source | Verification Angle |
+|---------|-------------|-------------------|
+| `quality-business-test` | REQ-*.md acceptance criteria | **PRD-forward** -- are business rules satisfied? |
+| `quality-test` | verification.json must_haves | **Code-backward** -- does the code work? |
+| `quality-test-gen` | validation.json gaps | **Coverage-backward** -- is coverage sufficient? |
 
-## Usage
+**Layer definitions:**
+
+| Layer | Name | Tests | Source |
+|-------|------|-------|--------|
+| L1 | Interface Contract | Single endpoint request/response, input validation, schema compliance | Architecture API endpoints + REQ AC |
+| L2 | Business Rule | Multi-step logic, state transitions, business constraints, edge cases | REQ acceptance criteria + NFR |
+| L3 | Business Scenario | Full user flows, multi-service chains, error propagation | Epic user stories |
+</purpose>
+
+<context>
+$ARGUMENTS -- phase number plus optional flags.
+
+**Usage**:
 
 ```bash
 $quality-business-test "3"                          # test phase 3 against PRD
@@ -32,33 +49,24 @@ $quality-business-test "3 --auto"                   # skip plan confirmation
 - `--re-run`: Re-run only previously failed/blocked scenarios
 - `--auto`: Skip interactive confirmations
 
+`--auto` skips interactive confirmation of test plan. `--dry-run` extracts scenarios only without execution.
+
 **Output**: `{phase_dir}/.tests/business/business-test-plan.json` + `business-test-report.json` + `business-test-summary.md`
+</context>
 
----
+<invariants>
+1. **PRD is source of truth** -- business rules drive test scenarios, not code structure
+2. **RFC 2119 keyword priority** -- MUST = critical, SHOULD = high, MAY = medium
+3. **Fail-fast across layers** -- critical L1 failures block L2/L3
+4. **Generator-Critic loop max 3 iterations** per layer
+5. **Traceability on every result** -- every pass/fail maps to REQ-NNN:AC-N
+6. **Agent calls use `run_in_background: false`** for synchronous execution
+7. **Auto-create issues** in `.workflow/issues/issues.jsonl` for every failure
+8. **Degraded mode** works without spec package (from success_criteria + plan.json)
+9. **Never modify source code** -- this command tests, it doesn't fix
+</invariants>
 
-## Overview
-
-Validate built features against PRD acceptance criteria through automated multi-layer business testing. Unlike quality-test (interactive UAT from code gaps) and quality-test-gen (generate tests from coverage gaps), this starts from REQ-*.md acceptance criteria and works forward.
-
-**Three-track testing** (complementary, not replacements):
-
-| Command | Input Source | Verification Angle |
-|---------|-------------|-------------------|
-| `quality-business-test` | REQ-*.md acceptance criteria | **PRD-forward** — are business rules satisfied? |
-| `quality-test` | verification.json must_haves | **Code-backward** — does the code work? |
-| `quality-test-gen` | validation.json gaps | **Coverage-backward** — is coverage sufficient? |
-
-**Layer definitions:**
-
-| Layer | Name | Tests | Source |
-|-------|------|-------|--------|
-| L1 | Interface Contract | Single endpoint request/response, input validation, schema compliance | Architecture API endpoints + REQ AC |
-| L2 | Business Rule | Multi-step logic, state transitions, business constraints, edge cases | REQ acceptance criteria + NFR |
-| L3 | Business Scenario | Full user flows, multi-service chains, error propagation | Epic user stories |
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Resolve Target & Load Spec Package
 
@@ -100,14 +108,14 @@ For each `REQ-NNN-{slug}.md`:
 
 Three tiers:
 
-**Tier 1 — Schema-derived**: From REQ data models, generate valid/invalid/boundary variants per entity:
+**Tier 1 -- Schema-derived**: From REQ data models, generate valid/invalid/boundary variants per entity:
 - valid: satisfies all constraints
 - invalid: violate each constraint individually (null, empty, overflow, wrong type)
 - boundary: edge values (min, max, min-1, max+1)
 
-**Tier 2 — Criteria-derived**: From "MUST return X when Y" -> `{ input: Y, expected: X }`. From "MUST validate Z" -> `{ input: invalid_Z, expected: error }`.
+**Tier 2 -- Criteria-derived**: From "MUST return X when Y" -> `{ input: Y, expected: X }`. From "MUST validate Z" -> `{ input: invalid_Z, expected: error }`.
 
-**Tier 3 — Scenario-derived (L3 only)**: From Epic user stories -> scenario packs with coordinated entity IDs across steps.
+**Tier 3 -- Scenario-derived (L3 only)**: From Epic user stories -> scenario packs with coordinated entity IDs across steps.
 
 **Microservice mocks**: From architecture API contract -> request/response pairs for WireMock stubs.
 
@@ -133,7 +141,7 @@ Each test method includes REQ-NNN:AC-N reference in display name. Test files pla
 
 If no `--gen-code`: scenarios stay as structured JSON for AI agent execution.
 
-### Step 6: Execute Tests (Progressive L1 → L2 → L3)
+### Step 6: Execute Tests (Progressive L1 -> L2 -> L3)
 
 **Fail-fast**: L1 critical failures -> STOP (don't run L2). L2 critical failures -> STOP (don't run L3).
 
@@ -192,11 +200,9 @@ FOR each REQ:
 | Low coverage (< 60%) | Skill({ skill: "quality-test-gen", args: "{phase}" }) |
 
 **Closure criteria**: Requirement marked "verified" ONLY when ALL MUST+SHOULD acceptance criteria pass.
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | Phase number required | Prompt user for phase number |
@@ -207,17 +213,16 @@ FOR each REQ:
 | W002 | warning | Some REQs have no testable AC | Note in report |
 | W003 | warning | Generator-Critic loop exhausted | Accept current state |
 | W004 | warning | Mock services unavailable for L3 | Skip L3 or use --gen-code |
+</error_codes>
 
----
-
-## Core Rules
-
-- **PRD is source of truth** -- business rules drive test scenarios, not code structure
-- **RFC 2119 keyword priority** -- MUST = critical, SHOULD = high, MAY = medium
-- **Fail-fast across layers** -- critical L1 failures block L2/L3
-- **Generator-Critic loop max 3 iterations** per layer
-- **Traceability on every result** -- every pass/fail maps to REQ-NNN:AC-N
-- **Agent calls use `run_in_background: false`** for synchronous execution
-- **Auto-create issues** in `.workflow/issues/issues.jsonl` for every failure
-- **Degraded mode** works without spec package (from success_criteria + plan.json)
-- **Never modify source code** -- this command tests, it doesn't fix
+<success_criteria>
+- [ ] Phase resolved and spec package loaded (or degraded mode activated)
+- [ ] Business test scenarios extracted from PRD acceptance criteria
+- [ ] Fixtures generated for all layers
+- [ ] Test plan written and confirmed (or --auto/--dry-run)
+- [ ] Tests executed progressively L1 -> L2 -> L3 with fail-fast
+- [ ] Traceability matrix maps every result to REQ-NNN:AC-N
+- [ ] Reports generated (JSON + summary markdown)
+- [ ] Issues auto-created for all failures
+- [ ] Next step suggested based on results
+</success_criteria>

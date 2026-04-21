@@ -5,13 +5,16 @@ argument-hint: "<phase> [--auto-fix] [--session ID]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 ---
 
-## Auto Mode
+<purpose>
+Conversational UAT: present expected behavior one test at a time, user confirms or describes issues. Severity inferred from natural language (never asked). Session persists in `uat.md` across context resets. Failed tests trigger parallel debug agent diagnosis and optional gap-fix closure.
 
-No auto mode -- UAT is inherently interactive. `--auto-fix` only automates gap closure, not test execution.
+**Philosophy**: Show expected, ask if reality matches.
+</purpose>
 
-# Test (UAT)
+<context>
+$ARGUMENTS -- phase number or scratch task ID, plus optional flags.
 
-## Usage
+**Usage**:
 
 ```bash
 $quality-test "3"                    # test phase 3
@@ -26,19 +29,22 @@ $quality-test "--session 04-comments"  # resume specific session
 - `--auto-fix`: Auto-trigger gap-fix loop (plan --gaps -> execute -> re-verify) on failures
 - `--session ID`: Resume a specific UAT session
 
+No auto mode -- UAT is inherently interactive. `--auto-fix` only automates gap closure, not test execution.
+
 **Output**: `{target_dir}/uat.md` + `.tests/test-plan.json` + `.tests/test-results.json` + `.tests/coverage-report.json`
+</context>
 
----
+<invariants>
+1. **One test at a time** -- never batch-present tests
+2. **Never ask severity** -- always infer from natural language
+3. **Session persistence** -- uat.md survives context resets, resume from any point
+4. **Batched writes** -- minimize file I/O (on issue, every 5 passes, completion)
+5. **Gap-fix loop max 2 iterations** -- prevent infinite loops
+6. **Agent calls use `run_in_background: false`** for synchronous execution
+7. **Auto-create issues** in `.workflow/issues/issues.jsonl` for every failed test
+</invariants>
 
-## Overview
-
-Conversational UAT: present expected behavior one test at a time, user confirms or describes issues. Severity inferred from natural language (never asked). Session persists in `uat.md` across context resets. Failed tests trigger parallel debug agent diagnosis and optional gap-fix closure.
-
-**Philosophy**: Show expected, ask if reality matches.
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Resolve Target
 
@@ -172,11 +178,9 @@ Auto-fix:    {fixed_count} gaps resolved
 Next steps:
   {suggested_next_command}
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | Phase or task target required | Prompt user for phase number |
@@ -184,15 +188,15 @@ Next steps:
 | E003 | error | Smoke test failed (app won't start) | Suggest Skill({ skill: "quality-debug" }) |
 | W001 | warning | Test scenarios failed | Auto-diagnose, suggest fix options |
 | W002 | warning | Coverage below threshold | Suggest Skill({ skill: "quality-test-gen" }) |
+</error_codes>
 
----
-
-## Core Rules
-
-- **One test at a time** -- never batch-present tests
-- **Never ask severity** -- always infer from natural language
-- **Session persistence** -- uat.md survives context resets, resume from any point
-- **Batched writes** -- minimize file I/O (on issue, every 5 passes, completion)
-- **Gap-fix loop max 2 iterations** -- prevent infinite loops
-- **Agent calls use `run_in_background: false`** for synchronous execution
-- **Auto-create issues** in `.workflow/issues/issues.jsonl` for every failed test
+<success_criteria>
+- [ ] Target resolved and verification context loaded
+- [ ] Test scenarios designed from user-observable outcomes
+- [ ] UAT file created with session persistence
+- [ ] Tests presented one at a time, severity inferred (never asked)
+- [ ] Issues auto-created for all failures
+- [ ] Diagnosis completed for failed test clusters
+- [ ] Gap closure offered (auto-fix or manual options)
+- [ ] Final report with pass/fail counts and next steps
+</success_criteria>

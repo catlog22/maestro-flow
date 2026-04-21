@@ -5,13 +5,15 @@ argument-hint: "\"task description\" [--discuss] [--full]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 ---
 
-## Auto Mode
+<purpose>
+Shortened pipeline for well-understood tasks. Creates a scratch directory, runs quick analysis, generates a plan, executes tasks, and optionally verifies results. Single agent, sequential flow — no CSV waves needed.
+
+**Pipeline**: `[discuss] → analyze-q → plan → execute → [verify]`
 
 Quick tasks default to minimal interaction. `--discuss` adds a decision extraction step. `--full` adds plan-checking and post-execution verification.
+</purpose>
 
-# Maestro Quick (Single Agent)
-
-## Usage
+<context>
 
 ```bash
 $maestro-quick "add rate limiting to /api/auth endpoints"
@@ -26,17 +28,17 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 
 **Output**: `.workflow/scratch/{slug}/` with plan.json, execution results, optional verification
 
----
+</context>
 
-## Overview
+<invariants>
+1. **Speed over ceremony** — minimal overhead, get to implementation fast
+2. **Follow existing patterns** — grep for 3+ similar implementations before writing new code
+3. **Atomic commits** — one commit per quick task, descriptive message
+4. **Scratch isolation** — all metadata stays in .workflow/scratch/{slug}/
+5. **Works without init** — quick tasks function even without full .workflow/ setup
+</invariants>
 
-Shortened pipeline for well-understood tasks. Creates a scratch directory, runs quick analysis, generates a plan, executes tasks, and optionally verifies results. Single agent, sequential flow — no CSV waves needed.
-
-**Pipeline**: `[discuss] → analyze-q → plan → execute → [verify]`
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Parse Arguments
 
@@ -143,9 +145,9 @@ Verification: {PASS|GAPS}
 {endif}
 ```
 
----
+</execution>
 
-## Error Handling
+<error_codes>
 
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
@@ -153,12 +155,13 @@ Verification: {PASS|GAPS}
 | E002 | error | Scratch directory creation failed | Check permissions |
 | W001 | warning | Verification found minor gaps | Report gaps, continue |
 
----
+</error_codes>
 
-## Core Rules
-
-1. **Speed over ceremony** — minimal overhead, get to implementation fast
-2. **Follow existing patterns** — grep for 3+ similar implementations before writing new code
-3. **Atomic commits** — one commit per quick task, descriptive message
-4. **Scratch isolation** — all metadata stays in .workflow/scratch/{slug}/
-5. **Works without init** — quick tasks function even without full .workflow/ setup
+<success_criteria>
+- [ ] Scratch directory created with config.json
+- [ ] Analysis completed and context.md written
+- [ ] Plan generated with subtasks
+- [ ] All tasks executed and statuses updated
+- [ ] Changes committed with descriptive message
+- [ ] Completion report displayed
+</success_criteria>

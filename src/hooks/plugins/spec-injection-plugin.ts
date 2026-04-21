@@ -58,7 +58,6 @@ function inferCategory(prompt: string): SpecCategory {
   if (/\b(review|audit|check quality)\b/.test(lower)) return 'review';
   if (/\b(test|spec|coverage|assert)\b/.test(lower)) return 'test';
   if (/\b(debug|diagnose|fix|error|bug)\b/.test(lower)) return 'debug';
-  if (/\b(plan|design|architect|decompose)\b/.test(lower)) return 'planning';
-  if (/\b(explore|discover|search|analyze)\b/.test(lower)) return 'exploration';
-  return 'execution'; // Default for implementation work
+  if (/\b(plan|design|architect|decompose|explore|discover|search|analyze)\b/.test(lower)) return 'arch';
+  return 'coding'; // Default for implementation work
 }

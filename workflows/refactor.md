@@ -80,7 +80,7 @@ Write index.json:
 ### Step 2.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category execution
+specs_content = maestro spec load --category coding
 ```
 
 Used in Step 3 to detect pattern violations against project conventions.

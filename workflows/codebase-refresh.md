@@ -67,7 +67,7 @@ Build a list of affected documentation sections:
 ### Step 3.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category planning
+specs_content = maestro spec load --category arch
 ```
 
 Used in Step 4-5 to validate refreshed docs against architectural expectations.

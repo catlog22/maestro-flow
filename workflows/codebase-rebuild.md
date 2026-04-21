@@ -84,7 +84,7 @@ d. ID assignment: TC-001, TC-002, ... in discovery order
 ### Step 2.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category planning
+specs_content = maestro spec load --category arch
 ```
 
 Used in Step 2-4 to produce architecture-aware documentation.

@@ -37,17 +37,17 @@ export interface SpecInjectionResult {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_AGENT_SPEC_MAP: Record<string, SpecInjectionRule> = {
-  // Execution agents → execution specs
-  'code-developer':      { categories: ['execution'], extras: [] },
-  'tdd-developer':       { categories: ['execution', 'test'], extras: [] },
-  'workflow-executor':   { categories: ['execution'], extras: [] },
-  'universal-executor':  { categories: ['execution'], extras: [] },
-  'test-fix-agent':      { categories: ['execution', 'test'], extras: [] },
+  // Execution agents → coding specs
+  'code-developer':      { categories: ['coding'], extras: [] },
+  'tdd-developer':       { categories: ['coding', 'test'], extras: [] },
+  'workflow-executor':   { categories: ['coding'], extras: [] },
+  'universal-executor':  { categories: ['coding'], extras: [] },
+  'test-fix-agent':      { categories: ['coding', 'test'], extras: [] },
 
-  // Planning agents → planning specs
-  'cli-lite-planning-agent': { categories: ['planning'], extras: [] },
-  'action-planning-agent':   { categories: ['planning'], extras: [] },
-  'workflow-planner':        { categories: ['planning'], extras: [] },
+  // Planning agents → arch specs
+  'cli-lite-planning-agent': { categories: ['arch'], extras: [] },
+  'action-planning-agent':   { categories: ['arch'], extras: [] },
+  'workflow-planner':        { categories: ['arch'], extras: [] },
 
   // Review agents → review specs
   'workflow-reviewer':   { categories: ['review'], extras: [] },
@@ -55,9 +55,6 @@ const DEFAULT_AGENT_SPEC_MAP: Record<string, SpecInjectionRule> = {
   // Debug agents → debug specs
   'debug-explore-agent': { categories: ['debug'], extras: [] },
   'workflow-debugger':   { categories: ['debug'], extras: [] },
-
-  // Explore agents → exploration (lightweight)
-  'Explore':             { categories: ['exploration'], extras: [] },
 };
 
 // ---------------------------------------------------------------------------

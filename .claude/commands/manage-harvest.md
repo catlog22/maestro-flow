@@ -91,7 +91,7 @@ Follow '~/.maestro/workflows/harvest.md' Stages 1–8 in order. Key invariants:
 - Review wiki entries → `maestro wiki list --type note`
 - Connect wiki graph → `/wiki-connect --fix`
 - Triage issues → `/manage-issue list --source harvest`
-- View specs → `/spec-load --category general`
+- View specs → `/spec-load --category learning`
 - Full retrospective → `/quality-retrospective`
 </execution>
 

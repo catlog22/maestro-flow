@@ -5,9 +5,11 @@ argument-hint: "[milestone, e.g., 'M1']"
 allowed-tools: Read, Write, Bash, Glob, Grep, Agent
 ---
 
-# Maestro Milestone Audit (Single Agent)
+<purpose>
+Sequential audit based on artifact registry in state.json. Checks phase coverage (ANL->PLN->EXC chains), ad-hoc completeness, execution completeness, and cross-artifact integration. Produces PASS/FAIL verdict report.
+</purpose>
 
-## Usage
+<context>
 
 ```bash
 $maestro-milestone-audit ""
@@ -16,15 +18,16 @@ $maestro-milestone-audit "M1"
 
 **Output**: Audit report with artifact chain verification, integration analysis, and PASS/FAIL verdict
 
----
+</context>
 
-## Overview
+<invariants>
+1. **Artifact registry is source of truth** — don't scan directories, read state.json
+2. **Non-blocking warnings** — missing analyze is warning, missing execute is error
+3. **Integration check is required** — always spawn checker agent
+4. **Clear verdict** — PASS or FAIL with specific reasons
+</invariants>
 
-Sequential audit based on artifact registry in state.json. Checks phase coverage (ANL→PLN→EXC chains), ad-hoc completeness, execution completeness, and cross-artifact integration.
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Parse Arguments
 
@@ -82,9 +85,9 @@ FAIL if:
 
 Display structured audit report with next-step routing.
 
----
+</execution>
 
-## Error Handling
+<error_codes>
 
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
@@ -93,11 +96,13 @@ Display structured audit report with next-step routing.
 | E003 | error | No execute artifacts found | Run maestro-execute first |
 | W001 | warning | Some phases lack analyze artifacts | Note: analysis optional but recommended |
 
----
+</error_codes>
 
-## Core Rules
-
-1. **Artifact registry is source of truth** — don't scan directories, read state.json
-2. **Non-blocking warnings** — missing analyze is warning, missing execute is error
-3. **Integration check is required** — always spawn checker agent
-4. **Clear verdict** — PASS or FAIL with specific reasons
+<success_criteria>
+- [ ] Artifact registry loaded and filtered by milestone
+- [ ] Phase coverage matrix generated
+- [ ] Ad-hoc and execution completeness verified
+- [ ] Integration check performed via agent
+- [ ] Audit report written to milestones/ directory
+- [ ] Clear PASS/FAIL verdict with specific reasons
+</success_criteria>

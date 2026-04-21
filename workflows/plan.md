@@ -100,7 +100,7 @@ mkdir -p {OUTPUT_DIR}/.task/
 
 3. **Load project specs**
    ```
-   specs_content = maestro spec load --category planning
+   specs_content = maestro spec load --category arch
    ```
    Pass to planner agent as project constraints context.
 

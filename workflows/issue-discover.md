@@ -98,7 +98,7 @@ Automated issue discovery via multi-perspective analysis or prompt-driven explor
 ### Step 3.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category execution
+specs_content = maestro spec load --category coding
 ```
 
 Pass to each analysis agent so severity assessments align with project quality standards.

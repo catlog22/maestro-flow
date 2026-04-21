@@ -5,36 +5,10 @@ argument-hint: "\"<requirements>\" [-y|--yes] [--phases N] [--from-brainstorm SE
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm strategy selection, skip interactive refinement rounds, use recommended defaults for decomposition mode and phase count.
-
-# Maestro Roadmap (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-roadmap "Implement user authentication with OAuth and 2FA"
-$maestro-roadmap -y "@requirements.md"
-$maestro-roadmap --phases 4 "Build real-time notification system"
-$maestro-roadmap --from-brainstorm WFS-001 "Enhance auth system"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `--phases N`: Target number of roadmap phases (default: auto-determined)
-- `--from-brainstorm SESSION-ID`: Import guidance-specification.md from brainstorm session as seed
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `.workflow/roadmap.md`
-
----
-
-## Overview
-
+<purpose>
 2-wave roadmap generation using `spawn_agents_on_csv`. Wave 1 runs parallel requirement analysis agents to assess scope, risk, and dependencies. Wave 2 runs a single roadmap assembly agent that synthesizes analysis findings into a complete roadmap with phases, milestones, and success criteria.
 
-**Core workflow**: Parse Requirements → Parallel Analysis → Roadmap Assembly → Interactive Refinement → Output
+**Core workflow**: Parse Requirements -> Parallel Analysis -> Roadmap Assembly -> Interactive Refinement -> Output
 
 ```
 +---------------------------------------------------------------------------+
@@ -78,10 +52,32 @@ $maestro-roadmap --from-brainstorm WFS-001 "Enhance auth system"
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+$ARGUMENTS -- requirement text or @file reference, plus optional flags.
 
-## CSV Schema
+**Usage**:
+
+```bash
+$maestro-roadmap "Implement user authentication with OAuth and 2FA"
+$maestro-roadmap -y "@requirements.md"
+$maestro-roadmap --phases 4 "Build real-time notification system"
+$maestro-roadmap --from-brainstorm WFS-001 "Enhance auth system"
+```
+
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `--phases N`: Target number of roadmap phases (default: auto-determined)
+- `--from-brainstorm SESSION-ID`: Import guidance-specification.md from brainstorm session as seed
+
+When `--yes` or `-y`: Auto-confirm strategy selection, skip interactive refinement rounds, use recommended defaults for decomposition mode and phase count.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `.workflow/roadmap.md`
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -111,22 +107,32 @@ id,title,description,analysis_focus,deps,context_from,wave,status,findings,error
 ### Per-Wave CSV (Temporary)
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Graceful Degradation**: If analysis fails, assembly proceeds with requirement text only
+7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+8. **DO NOT STOP**: Continuous execution until all waves complete
+</invariants>
 
-## Output Artifacts
+<execution>
+
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
-| `tasks.csv` | Master state — all tasks with status/findings | Updated after each wave |
+| `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
 | `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable roadmap generation report | Created in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/roadmap-{slug}-{date}/
@@ -136,10 +142,6 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- context.md
 +-- wave-{N}.csv (temporary)
 ```
-
----
-
-## Implementation
 
 ### Session Initialization
 
@@ -168,15 +170,13 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 Bash(`mkdir -p ${sessionFolder}`)
 ```
 
----
-
 ### Phase 1: Requirement Parsing + CSV Generation
 
 **Objective**: Parse requirements, assess uncertainty, select strategy, generate tasks.csv.
 
 **Decomposition Rules**:
 
-1. **Input parsing**: Parse `{requirementArg}` — direct text or `@file` reference
+1. **Input parsing**: Parse `{requirementArg}` -- direct text or `@file` reference
 2. **Brainstorm import**: If `--from-brainstorm`, read `guidance-specification.md` for enriched context (problem statement, features, non-goals, terminology)
 3. **Codebase detection**: Check for source files; if found, add codebase context to analysis prompts
 4. **Load project specs**: Read `.workflow/specs/` for constraint awareness
@@ -195,11 +195,9 @@ Strategy: >= 3 high -> progressive, >= 3 low -> direct, else -> ask user (or aut
 
 6. **CSV generation**: 3 analysis tasks (wave 1) + 1 assembly task (wave 2).
 
-7. **Wave computation**: Simple 2-wave — all analysis tasks = wave 1, assembly = wave 2.
+7. **Wave computation**: Simple 2-wave -- all analysis tasks = wave 1, assembly = wave 2.
 
 **User validation**: Display task breakdown + strategy (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -241,7 +239,7 @@ spawn_agents_on_csv({
 
 1. Read master `tasks.csv`
 2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps — if all wave 1 tasks failed, use degraded mode (requirement text only)
+3. Check deps -- if all wave 1 tasks failed, use degraded mode (requirement text only)
 4. Build `prev_context` from wave 1 findings:
    ```
    [Task 1: Scope Analysis] Features: auth, OAuth, 2FA. MVP: basic auth + OAuth. Size: M...
@@ -253,8 +251,6 @@ spawn_agents_on_csv({
 7. Execute `spawn_agents_on_csv` for assembly agent
 8. Merge results into master `tasks.csv`
 9. Delete `wave-2.csv`
-
----
 
 ### Phase 3: Results Aggregation
 
@@ -321,11 +317,9 @@ Next steps:
   manage-status                   -- View project dashboard
 ```
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -334,7 +328,7 @@ Next steps:
 | `convention` | singleton | `{naming, imports, formatting}` | Project code conventions |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -343,7 +337,7 @@ Next steps:
 | `dependency_constraint` | `data.from+data.to` | `{from, to, type, strength}` | Dependency between features |
 | `external_dependency` | `data.name` | `{name, type, risk, alternative}` | External system dependency |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -354,15 +348,13 @@ Next steps:
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"risk_factor","data":{"name":"OAuth provider rate limits","severity":"medium","probability":"high","mitigation":"Implement token caching and retry logic"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Error | Resolution |
 |-------|------------|
 | No requirement text provided | Abort with error: "Requirement text or @file required" |
-| Brainstorm session not found | Abort with error: "Session {id} not found" — list available sessions |
+| Brainstorm session not found | Abort with error: "Session {id} not found" -- list available sessions |
 | @file not found | Abort with error: "File {path} not found" |
 | Analysis agent timeout | Mark as failed, assembly uses available findings |
 | All analysis agents failed | Assembly runs in degraded mode (requirement text only) |
@@ -371,16 +363,16 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"risk_factor","data":{"name":"OAuth p
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Max refinement rounds (3) | Force proceed with current roadmap |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Graceful Degradation**: If analysis fails, assembly proceeds with requirement text only
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-8. **DO NOT STOP**: Continuous execution until all waves complete
+<success_criteria>
+- [ ] Requirements parsed from text, @file, or brainstorm session
+- [ ] Uncertainty assessed and decomposition strategy selected
+- [ ] Wave 1 analysis agents completed (scope, risk, dependency)
+- [ ] Wave 2 assembly agent produced roadmap.md
+- [ ] Interactive refinement offered (or skipped with -y)
+- [ ] .workflow/roadmap.md written with phases, milestones, success criteria
+- [ ] state.json updated with milestones and current_phase
+- [ ] context.md generated with analysis summary
+- [ ] Completion report displayed with next steps
+</success_criteria>

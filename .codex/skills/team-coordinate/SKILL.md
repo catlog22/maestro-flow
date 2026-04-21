@@ -4,12 +4,8 @@ description: Universal team coordination skill with dynamic role generation. Use
 allowed-tools: spawn_agent(*), wait_agent(*), send_message(*), followup_task(*), close_agent(*), list_agents(*), report_agent_job_result(*), request_user_input(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), mcp__maestro-tools__team_msg(*)
 ---
 
-# Team Coordinate
-
+<purpose>
 Universal team coordination skill: analyze task -> generate role-specs -> dispatch -> execute -> deliver. Only the **coordinator** is built-in. All worker roles are **dynamically generated** as lightweight role-spec files and spawned via the `team-worker` agent.
-
-
-## Architecture
 
 ```
 +---------------------------------------------------+
@@ -31,8 +27,10 @@ Universal team coordination skill: analyze task -> generate role-specs -> dispat
     maestro delegate --mode analysis  - analysis and exploration
     maestro delegate --mode write     - code generation and modification
 ```
+</purpose>
 
-## Delegation Lock
+<context>
+### Delegation Lock
 
 **Coordinator is a PURE ORCHESTRATOR. It coordinates, it does NOT do.**
 
@@ -53,11 +51,9 @@ Before calling ANY tool, apply this check:
 
 **If a tool call is BLOCKED**: STOP. Create a task, spawn a worker.
 
-**No exceptions for "simple" tasks.** Even a single-file read-and-report MUST go through spawn_agent. The overhead is the feature — it provides session tracking, artifact persistence, and resume capability.
+**No exceptions for "simple" tasks.** Even a single-file read-and-report MUST go through spawn_agent. The overhead is the feature -- it provides session tracking, artifact persistence, and resume capability.
 
----
-
-## Shared Constants
+### Shared Constants
 
 | Constant | Value |
 |----------|-------|
@@ -69,11 +65,9 @@ Before calling ANY tool, apply this check:
 | CLI write | `maestro delegate --mode write` |
 | Max roles | 5 |
 
-## Role Router
+### Role Router
 
 This skill is **coordinator-only**. Workers do NOT invoke this skill -- they are spawned as `team-worker` agents directly.
-
-### Input Parsing
 
 Parse `$ARGUMENTS`. No `--role` needed -- always routes to coordinator.
 
@@ -94,10 +88,6 @@ Workers can use CLI tools for analysis and code operations:
 |------|---------|
 | maestro delegate --mode analysis | Analysis, exploration, pattern discovery |
 | maestro delegate --mode write | Code generation, modification, refactoring |
-
-### Dispatch
-
-Always route to coordinator. Coordinator reads `roles/coordinator/role.md` and executes its phases.
 
 ### Orchestration Mode
 
@@ -126,11 +116,9 @@ User provides task description
 | `feedback <text>` | Inject feedback into active pipeline |
 | `improve [dimension]` | Auto-improve weakest quality dimension |
 
----
+### Coordinator Spawn Template
 
-## Coordinator Spawn Template
-
-### v2 Worker Spawn (all roles)
+#### v2 Worker Spawn (all roles)
 
 When coordinator spawns workers, use `team-worker` agent with role-spec path:
 
@@ -166,9 +154,6 @@ After spawning, use `wait_agent({ timeout_ms: 1800000 })` to collect results (30
 
 **Single-task roles**: Set `inner_loop: false`.
 
----
-
-
 ### Model Selection Guide
 
 Roles are **dynamically generated** at runtime. Select model/reasoning_effort based on the generated role's `responsibility_type`:
@@ -195,9 +180,9 @@ spawn_agent({
 })
 ```
 
-## v4 Agent Coordination
+### v4 Agent Coordination
 
-### Message Semantics
+#### Message Semantics
 
 | Intent | API | Example |
 |--------|-----|---------|
@@ -207,7 +192,7 @@ spawn_agent({
 
 **Note**: Since roles are dynamically generated, the coordinator must resolve task prefixes and role names from `team-session.json#roles` at runtime. There are no hardcoded role-specific examples.
 
-### fork_turns Strategy
+#### fork_turns Strategy
 
 `fork_turns: "none"` is the default. Consider `fork_turns: "all"` only when:
 - Runtime analysis reveals the task requires deep familiarity with the full conversation context
@@ -216,7 +201,7 @@ spawn_agent({
 
 This decision should be made per-task during Phase 4 based on the role's `responsibility_type`.
 
-### Agent Health Check
+#### Agent Health Check
 
 Use `list_agents({})` in handleResume and handleComplete:
 
@@ -227,13 +212,13 @@ const running = list_agents({})
 // Reset orphaned tasks (in_progress but agent gone) to pending
 ```
 
-### Named Agent Targeting
+#### Named Agent Targeting
 
 Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
 - `send_message({ target: "<TASK-ID>", message: "..." })` -- queue upstream context without interrupting
 - `close_agent({ target: "<TASK-ID>" })` -- cleanup by name
 
-## Completion Action
+### Completion Action
 
 When pipeline completes (all tasks done), coordinator presents an interactive choice:
 
@@ -252,7 +237,7 @@ request_user_input({
 })
 ```
 
-### Action Handlers
+#### Action Handlers
 
 | Choice | Steps |
 |--------|-------|
@@ -260,9 +245,7 @@ request_user_input({
 | Keep Active | Update session status="paused" -> output: "Resume with: Skill(skill='team-coordinate', args='resume')" |
 | Export Results | request_user_input(target path) -> copy artifacts to target -> Archive & Clean |
 
----
-
-## Specs Reference
+### Specs Reference
 
 | Spec | Purpose |
 |------|---------|
@@ -271,9 +254,7 @@ request_user_input({
 | [specs/quality-gates.md](specs/quality-gates.md) | Quality thresholds and scoring dimensions |
 | [specs/knowledge-transfer.md](specs/knowledge-transfer.md) | Context transfer protocols between roles |
 
----
-
-## Session Directory
+### Session Directory
 
 ```
 .workflow/.team/TC-<slug>-<date>/
@@ -298,7 +279,7 @@ request_user_input({
 |   +-- <round>.md
 ```
 
-### team-session.json Schema
+#### team-session.json Schema
 
 ```json
 {
@@ -327,9 +308,7 @@ request_user_input({
 }
 ```
 
----
-
-## Session Resume
+### Session Resume
 
 Coordinator supports `resume` / `continue` for interrupted sessions:
 
@@ -340,10 +319,9 @@ Coordinator supports `resume` / `continue` for interrupted sessions:
 5. Rebuild team and spawn needed workers only
 6. Create missing tasks, set dependencies
 7. Kick first executable task -> Phase 4 coordination loop
+</context>
 
----
-
-## Error Handling
+<error_codes>
 
 | Scenario | Resolution |
 |----------|------------|
@@ -355,3 +333,14 @@ Coordinator supports `resume` / `continue` for interrupted sessions:
 | Fast-advance spawns wrong task | Coordinator reconciles on next callback |
 | capability_gap reported | Coordinator generates new role-spec via handleAdapt |
 | Completion action fails | Default to Keep Active, log warning |
+</error_codes>
+
+<success_criteria>
+- [ ] Task analysis produces dependency graph and role definitions
+- [ ] Role-spec files generated in session directory
+- [ ] Workers spawned via team-worker agent with correct role-spec paths
+- [ ] Pipeline executes wave-by-wave respecting dependency graph
+- [ ] Session state persisted in team-session.json after each wave
+- [ ] Completion action presented and handled correctly
+- [ ] Session resumable after interruption
+</success_criteria>

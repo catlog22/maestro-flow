@@ -5,9 +5,13 @@ argument-hint: "<create|list|status|update|close|link> [options]"
 allowed-tools: Read, Write, Bash, Glob, Grep, AskUserQuestion
 ---
 
-# Issue Management
+<purpose>
+Issue CRUD operations: create, list, status, update, close, and link issues to tasks.
+All data stored in `.workflow/issues/issues.jsonl` with auto-created directory on first use.
+</purpose>
 
-## Usage
+<context>
+$ARGUMENTS — subcommand followed by options.
 
 ```bash
 $manage-issue "create --title 'Auth token expiry bug' --severity high --source manual"
@@ -18,9 +22,10 @@ $manage-issue "close ISS-20260318-001 --resolution fixed"
 $manage-issue "link ISS-20260318-001 --task TASK-003"
 ```
 
----
+**Subcommands**: `create`, `list`, `status`, `update`, `close`, `link`.
+</context>
 
-## Implementation
+<execution>
 
 ### Step 1: Parse Subcommand
 
@@ -53,13 +58,23 @@ ISS-20260318-001 | high     | open   | Auth token expiry bug
 **close**: Find issue by ID, set status to `closed`, add `resolution` and `closed_at`. Move line from `issues.jsonl` to `issue-history.jsonl`.
 
 **link**: Find issue by ID, add task reference to issue's `linked_tasks` array. If task JSON exists (`.task/TASK-*.json`), add issue reference to task's `linked_issues`. Bidirectional cross-reference.
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E_NO_SUBCOMMAND | error | No subcommand provided -- display valid subcommands |
 | E_INVALID_SUBCOMMAND | error | Unrecognized subcommand |
 | E_ISSUES_DIR_MISSING | warning | `.workflow/issues/` not found -- auto-created |
+</error_codes>
+
+<success_criteria>
+- [ ] Subcommand parsed and validated
+- [ ] Storage directory and files auto-created on first use
+- [ ] create: generates unique ISS-id, prompts for required fields, appends to JSONL
+- [ ] list: filters by status/phase/severity/source, renders table
+- [ ] status: displays full detail for given ISS-id
+- [ ] update: merges fields, tracks updated_at timestamp
+- [ ] close: sets status closed, moves to history file
+- [ ] link: bidirectional cross-reference between issue and task
+</success_criteria>

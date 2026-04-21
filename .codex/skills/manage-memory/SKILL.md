@@ -5,9 +5,12 @@ argument-hint: "[list|search|view|edit|delete|prune] [query|id|file] [--store wo
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-# Memory Management
+<purpose>
+Manage memory entries across workflow and system stores. Provides list, search, view, edit, delete, and prune operations over `.workflow/memory/` (workflow store) and `~/.claude/projects/{project}/memory/` (system store).
+</purpose>
 
-## Usage
+<context>
+$ARGUMENTS — subcommand followed by options. Defaults to `list` if no arguments.
 
 ```bash
 $manage-memory
@@ -19,9 +22,18 @@ $manage-memory "delete TIP-20260318-001 --confirm"
 $manage-memory "prune --before 2026-01-01 --type tip --dry-run"
 ```
 
----
+**Subcommands**: `list`, `search`, `view`, `edit`, `delete`, `prune`.
 
-## Implementation
+**Flags**:
+- `--store workflow|system|all` — Target store (default: all)
+- `--tag <tag>` — Filter by tag
+- `--type compact|tip` — Filter by entry type
+- `--confirm` — Skip delete confirmation prompt
+- `--before <date>` / `--after <date>` — Date filters for prune
+- `--dry-run` — Preview prune without deleting
+</context>
+
+<execution>
 
 ### Step 1: Resolve Store Paths
 
@@ -56,11 +68,9 @@ After write operations, verify:
 - No orphaned files without index entries (W001)
 - No dangling index references to missing files (W001)
 - System MEMORY.md references valid topic files (W002)
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | error | No memory stores found -- run `Skill({ skill: "memory-capture" })` or create MEMORY.md |
@@ -70,3 +80,16 @@ After write operations, verify:
 | W001 | warning | Index has orphaned files or dangling references |
 | W002 | warning | MEMORY.md references non-existent topic file |
 | W003 | warning | MEMORY.md exceeds 200 lines -- content truncated at load |
+</error_codes>
+
+<success_criteria>
+- [ ] Store paths resolved correctly for both workflow and system stores
+- [ ] Subcommand parsed and validated (defaults to list)
+- [ ] list: displays entries from selected stores with filtering
+- [ ] search: full-text grep across stores, ranked by match count
+- [ ] view: auto-detects store, displays full content
+- [ ] edit: reads and applies changes to system memory files
+- [ ] delete: requires confirmation, prevents MEMORY.md deletion
+- [ ] prune: requires filter, supports --dry-run, workflow store only
+- [ ] Integrity check after write operations (orphans, dangling refs)
+</success_criteria>

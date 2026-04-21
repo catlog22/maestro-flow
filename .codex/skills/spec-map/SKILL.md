@@ -5,32 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency 4] [--continue] \"[focus area]\""
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm mapper assignment, skip validation.
-
-# Maestro Spec Map (CSV Wave)
-
-## Usage
-
-```bash
-$spec-map ""
-$spec-map "auth"
-$spec-map -c 4 "api layer"
-$spec-map --continue "map-auth-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations
-- `-c, --concurrency N`: Max concurrent agents (default: 4)
-- `--continue`: Resume existing session
-
-**Output**: `.workflow/codebase/` (tech-stack.md, architecture.md, features.md, concerns.md)
-
----
-
-## Overview
-
+<purpose>
 Single-wave parallel execution — 4 independent mapper agents each analyze a different codebase dimension. No dependencies between tasks, maximum parallelism.
 
 **Topology**: Independent Parallel (single wave)
@@ -60,10 +35,27 @@ Single-wave parallel execution — 4 independent mapper agents each analyze a di
 │                                                        │
 └──────────────────────────────────────────────────────┘
 ```
+</purpose>
 
----
+<context>
 
-## CSV Schema
+```bash
+$spec-map ""
+$spec-map "auth"
+$spec-map -c 4 "api layer"
+$spec-map --continue "map-auth-20260318"
+```
+
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto-confirm mapper assignment, skip validation)
+- `-c, --concurrency N`: Max concurrent agents (default: 4)
+- `--continue`: Resume existing session
+
+**Output**: `.workflow/codebase/` (tech-stack.md, architecture.md, features.md, concerns.md)
+
+</context>
+
+<csv_schema>
 
 ### tasks.csv
 
@@ -91,9 +83,18 @@ id,title,description,focus_area,output_file,deps,context_from,wave,status,findin
 | `findings` | Output | Analysis summary (max 500 chars) |
 | `error` | Output | Error if failed |
 
----
+</csv_schema>
 
-## Implementation
+<invariants>
+1. **Start Immediately**: Initialize session, generate CSV, execute
+2. **CSV is Source of Truth**: tasks.csv holds all mapper state
+3. **Discovery Board is Append-Only**: Mappers share findings
+4. **Partial Results OK**: If 3/4 mappers succeed, still write available docs
+5. **Focus Area Scoping**: When focus is specified, descriptions narrow to that area
+6. **DO NOT STOP**: Execute until all mappers complete or fail
+</invariants>
+
+<execution>
 
 ### Session Initialization
 
@@ -144,9 +145,7 @@ spawn_agents_on_csv({
 3. Generate context.md summary
 4. Display report
 
----
-
-## Shared Discovery Board Protocol
+### Shared Discovery Board Protocol
 
 Discovery types particularly valuable for mapper agents:
 
@@ -159,9 +158,9 @@ Discovery types particularly valuable for mapper agents:
 
 Mappers share discoveries so other mappers can skip redundant exploration (e.g., if tech-stack mapper discovers the framework, features mapper can focus on feature-level analysis).
 
----
+</execution>
 
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -170,13 +169,12 @@ Mappers share discoveries so other mappers can skip redundant exploration (e.g.,
 | Mapper agent failed | Mark failed, output partial results |
 | .workflow/codebase/ exists | Prompt: refresh/skip/merge (auto-refresh with -y) |
 
----
+</error_codes>
 
-## Core Rules
-
-1. **Start Immediately**: Initialize session, generate CSV, execute
-2. **CSV is Source of Truth**: tasks.csv holds all mapper state
-3. **Discovery Board is Append-Only**: Mappers share findings
-4. **Partial Results OK**: If 3/4 mappers succeed, still write available docs
-5. **Focus Area Scoping**: When focus is specified, descriptions narrow to that area
-6. **DO NOT STOP**: Execute until all mappers complete or fail
+<success_criteria>
+- [ ] tasks.csv generated with 4 mapper tasks
+- [ ] All mappers executed (completed or failed with partial results)
+- [ ] `.workflow/codebase/` populated with output files
+- [ ] context.md summary generated
+- [ ] Completion report displayed
+</success_criteria>

@@ -60,7 +60,7 @@ Cross-reference against `coding-conventions.md`: documented vs undocumented patt
 2. Append new patterns to `lessons.jsonl` (source: "follow", stable INS-ids)
 3. If `--save-wiki`: create wiki note entry
 
-**Next steps:** `/learn-decompose <path>`, `/spec-add pattern ...`, `/learn-second-opinion <file>`
+**Next steps:** `/learn-decompose <path>`, `/spec-add coding ...`, `/learn-second-opinion <file>`
 </execution>
 
 <error_codes>

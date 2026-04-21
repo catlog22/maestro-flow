@@ -135,7 +135,7 @@ Parse $ARGUMENTS to determine execution mode:
 ### Step 1.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category planning
+specs_content = maestro spec load --category arch
 ```
 
 Pass to conceptual-planning-agent in Step 4 for architecture-aware role analysis.

@@ -5,36 +5,10 @@ argument-hint: "\"<idea or @file>\" [-y|--yes] [--skip-research] [--from-brainst
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm all interactive decisions, skip requirement clarification rounds, use recommended defaults for spec type and depth.
-
-# Maestro Spec Generate (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-spec-generate "Build a real-time collaboration platform"
-$maestro-spec-generate -y "@requirements.md"
-$maestro-spec-generate --skip-research "CLI workflow orchestration tool"
-$maestro-spec-generate --from-brainstorm WFS-001 "Enhance auth system"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `--skip-research`: Skip Wave 1 research, jump directly to document generation
-- `--from-brainstorm SESSION-ID`: Import guidance-specification.md from brainstorm session as seed
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + spec package in `.workflow/.spec/SPEC-{slug}-{date}/`
-
----
-
-## Overview
-
+<purpose>
 2-wave specification generation using `spawn_agents_on_csv`. Wave 1 runs parallel research agents to gather domain, competitive, and technical context. Wave 2 runs a single synthesis agent that produces the full 7-phase document chain (product brief, PRD, architecture, data model, API spec, UI wireframes, epic-to-roadmap) using Wave 1 research as context.
 
-**Core workflow**: Parse Input → Parallel Research → Sequential Document Chain → Readiness Check → Roadmap Output
+**Core workflow**: Parse Input -> Parallel Research -> Sequential Document Chain -> Readiness Check -> Roadmap Output
 
 ```
 +---------------------------------------------------------------------------+
@@ -79,10 +53,32 @@ $maestro-spec-generate --from-brainstorm WFS-001 "Enhance auth system"
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+$ARGUMENTS -- idea/topic text or @file reference, plus optional flags.
 
-## CSV Schema
+**Usage**:
+
+```bash
+$maestro-spec-generate "Build a real-time collaboration platform"
+$maestro-spec-generate -y "@requirements.md"
+$maestro-spec-generate --skip-research "CLI workflow orchestration tool"
+$maestro-spec-generate --from-brainstorm WFS-001 "Enhance auth system"
+```
+
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `--skip-research`: Skip Wave 1 research, jump directly to document generation
+- `--from-brainstorm SESSION-ID`: Import guidance-specification.md from brainstorm session as seed
+
+When `--yes` or `-y`: Auto-confirm all interactive decisions, skip requirement clarification rounds, use recommended defaults for spec type and depth.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + spec package in `.workflow/.spec/SPEC-{slug}-{date}/`
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -114,23 +110,33 @@ id,title,description,research_focus,doc_phase,deps,context_from,wave,status,find
 ### Per-Wave CSV (Temporary)
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Graceful Degradation**: If research fails, document chain proceeds with seed input only
+7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+8. **DO NOT STOP**: Continuous execution until all waves complete
+</invariants>
 
-## Output Artifacts
+<execution>
+
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
-| `tasks.csv` | Master state — all tasks with status/findings | Updated after each wave |
+| `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
 | `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable spec generation report | Created in Phase 3 |
 | `spec-config.json` | Session metadata and phase tracking | Created in Phase 1 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/spec-generate-{slug}-{date}/
@@ -163,10 +169,6 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- roadmap.md
 ```
 
----
-
-## Implementation
-
 ### Session Initialization
 
 ```javascript
@@ -193,15 +195,13 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 Bash(`mkdir -p ${sessionFolder}`)
 ```
 
----
-
 ### Phase 1: Input Parsing + CSV Generation
 
 **Objective**: Parse input, detect type, initialize session, generate tasks.csv.
 
 **Decomposition Rules**:
 
-1. **Input parsing**: Parse `{topicArg}` — direct text, `@file` reference, or brainstorm import
+1. **Input parsing**: Parse `{topicArg}` -- direct text, `@file` reference, or brainstorm import
 2. **Brainstorm import**: If `--from-brainstorm`, read `guidance-specification.md` as enriched seed
 3. **Codebase detection**: Check for source files (*.ts, *.js, *.py); if found, add codebase context to research prompts
 4. **Session init**: Create `spec-config.json` with session metadata
@@ -214,11 +214,9 @@ Bash(`mkdir -p ${sessionFolder}`)
 | `--skip-research` | 0 (skipped) | 1 document chain agent (wave 1) |
 | `--from-brainstorm` | 3 research agents (enriched) | 1 document chain agent |
 
-6. **Wave computation**: Simple 2-wave — all research tasks = wave 1, document chain = wave 2.
+6. **Wave computation**: Simple 2-wave -- all research tasks = wave 1, document chain = wave 2.
 
 **User validation**: Display task breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -261,7 +259,7 @@ spawn_agents_on_csv({
 
 1. Read master `tasks.csv`
 2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps — if all wave 1 tasks failed, use degraded mode (basic seed only)
+3. Check deps -- if all wave 1 tasks failed, use degraded mode (basic seed only)
 4. Build `prev_context` from wave 1 findings:
    ```
    [Task 1: Domain Research] Target users: developers building workflow tools. Market trends: ...
@@ -273,15 +271,13 @@ spawn_agents_on_csv({
 7. Merge results into master `tasks.csv`
 8. Delete `wave-2.csv`
 
----
-
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results, readiness check, and write spec package.
 
 1. Read final master `tasks.csv`
 2. Export as `results.csv`
-3. **Readiness check** — score on 4 dimensions (25% each):
+3. **Readiness check** -- score on 4 dimensions (25% each):
    - Completeness: all required documents generated with substantive content
    - Consistency: glossary terms used uniformly, scope containment
    - Traceability: goals -> requirements -> architecture -> epics chain
@@ -335,11 +331,9 @@ spawn_agents_on_csv({
 7. Write `.workflow/roadmap.md`
 8. Display summary.
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -348,7 +342,7 @@ spawn_agents_on_csv({
 | `convention` | singleton | `{naming, imports, formatting}` | Project code conventions |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -357,7 +351,7 @@ spawn_agents_on_csv({
 | `market_trend` | `data.name` | `{name, impact, relevance}` | Market trend |
 | `tech_constraint` | `data.name` | `{name, type, severity, mitigation}` | Technical constraint |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -368,15 +362,13 @@ spawn_agents_on_csv({
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"domain_term","data":{"term":"workflow","definition":"A sequence of orchestrated tasks","aliases":["pipeline","process"]}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Error | Resolution |
 |-------|------------|
 | No idea/topic provided | Abort with error: "Idea or topic text required" |
-| Brainstorm session not found | Abort with error: "Session {id} not found" — list available sessions |
+| Brainstorm session not found | Abort with error: "Session {id} not found" -- list available sessions |
 | @file not found | Abort with error: "File {path} not found" |
 | Research agent timeout | Mark as failed, document chain uses available findings |
 | All research agents failed | Document chain runs in degraded mode (seed only) |
@@ -384,16 +376,16 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"domain_term","data":{"term":"workflo
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Readiness score < 60% | Log issues, proceed with available output |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Graceful Degradation**: If research fails, document chain proceeds with seed input only
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-8. **DO NOT STOP**: Continuous execution until all waves complete
+<success_criteria>
+- [ ] Input parsed from text, @file, or brainstorm session
+- [ ] Session initialized with spec-config.json and tasks.csv
+- [ ] Wave 1 research agents completed (domain, competitive, tech stack)
+- [ ] Wave 2 document chain produced 7-phase spec package
+- [ ] Readiness check scored on completeness, consistency, traceability, depth
+- [ ] Spec package written to .workflow/.spec/SPEC-{slug}-{date}/
+- [ ] .workflow/roadmap.md written
+- [ ] context.md generated with research and spec summary
+- [ ] Completion report displayed with quality score and next steps
+</success_criteria>

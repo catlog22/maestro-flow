@@ -5,9 +5,20 @@ argument-hint: "[\"<insight text>\"|list|search <query>|show <INS-id>] [--catego
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-# Manage Learn
+<purpose>
+Pure file-operation CRUD skill for the workflow learning library. No agent spawning, no CLI calls, no LLM inference — just parse-infer-append-confirm. Complements `quality-retrospective`: where retrospective extracts insights in bulk from completed phases, `manage-learn` captures one timeless insight at a time during active work. Both write to the same `lessons.jsonl` store, disambiguated by `source` and `lens` fields.
 
-## Usage
+```
+Parse Mode  →  Bootstrap Store  →  Execute Mode  →  Confirm
+(capture /       (on first use)     (Bash/Read/      (INS-id
+  list /          Bash+Write)        Write/Grep)      + hints)
+  search /
+  show)
+```
+</purpose>
+
+<context>
+$ARGUMENTS — mode token followed by options.
 
 ```bash
 $manage-learn "Always read state.json before planning to detect current phase"
@@ -33,24 +44,19 @@ $manage-learn "\"Zod v4 breaks z.object().strict() API\" --category gotcha --tag
 **Storage**:
 - `.workflow/learning/lessons.jsonl` — append-only JSONL (shared with `quality-retrospective`)
 - `.workflow/learning/learning-index.json` — searchable index
+</context>
 
----
+<invariants>
+1. **No LLM or CLI calls**: This skill is pure file I/O — parse, infer, append, confirm. No `exec_command`, no `spawn_agent`.
+2. **Bootstrap on demand**: Create `.workflow/learning/` structure on first use; do not require it to exist.
+3. **Append-only lessons.jsonl**: Never rewrite or delete existing rows.
+4. **Stable INS-ids**: `INS-{8hex}` from `hash(insightText + timestamp)` — same text at different times gets different ids.
+5. **Source field**: Always `"manual"` for captures from this skill; `"retrospective"` is reserved for `quality-retrospective`.
+6. **Phase auto-link**: Read `state.json` automatically; `--phase 0` is the only way to force null.
+7. **Keyword inference is approximate**: When in doubt, default to `pattern` category rather than prompting user.
+</invariants>
 
-## Overview
-
-Pure file-operation CRUD skill for the workflow learning library. No agent spawning, no CLI calls, no LLM inference — just parse-infer-append-confirm. Complements `quality-retrospective`: where retrospective extracts insights in bulk from completed phases, `manage-learn` captures one timeless insight at a time during active work. Both write to the same `lessons.jsonl` store, disambiguated by `source` and `lens` fields.
-
-```
-Parse Mode  →  Bootstrap Store  →  Execute Mode  →  Confirm
-(capture /       (on first use)     (Bash/Read/      (INS-id
-  list /          Bash+Write)        Write/Grep)      + hints)
-  search /
-  show)
-```
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Parse Mode and Validate Arguments
 
@@ -106,7 +112,7 @@ Verify `.workflow/` exists (E001 if not).
   "lens": null,
   "category": "<inferred or explicit>",
   "tags": ["manual", "<user tags...>"],
-  "phase": <N or null>,
+  "phase": "<N or null>",
   "phase_slug": "<slug or null>",
   "confidence": "<high|medium|low>",
   "routed_to": null,
@@ -159,11 +165,9 @@ Tags:       manual, zod, typescript
 
 Next: $manage-learn "list"  or  $manage-learn "search zod"
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
 | E001 | error | `.workflow/` not initialized — run `$maestro-init` first | parse_input |
@@ -172,15 +176,15 @@ Next: $manage-learn "list"  or  $manage-learn "search zod"
 | E004 | error | INS-id not found in lessons.jsonl | show |
 | W001 | warning | Auto-phase detection: current_phase found but no matching directory; phase set to null | capture |
 | W002 | warning | `learning-index.json` row count differs from `lessons.jsonl`; offer to rebuild index | list/search |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **No LLM or CLI calls**: This skill is pure file I/O — parse, infer, append, confirm. No `exec_command`, no `spawn_agent`.
-2. **Bootstrap on demand**: Create `.workflow/learning/` structure on first use; do not require it to exist.
-3. **Append-only lessons.jsonl**: Never rewrite or delete existing rows.
-4. **Stable INS-ids**: `INS-{8hex}` from `hash(insightText + timestamp)` — same text at different times gets different ids.
-5. **Source field**: Always `"manual"` for captures from this skill; `"retrospective"` is reserved for `quality-retrospective`.
-6. **Phase auto-link**: Read `state.json` automatically; `--phase 0` is the only way to force null.
-7. **Keyword inference is approximate**: When in doubt, default to `pattern` category rather than prompting user.
+<success_criteria>
+- [ ] Mode parsed correctly (capture, list, search, show)
+- [ ] Learning store bootstrapped on first use
+- [ ] Capture: category inferred from keywords, phase auto-linked, INS-id generated
+- [ ] Capture: row appended to lessons.jsonl (append-only), index updated
+- [ ] List: filters applied, newest-first, respects --limit
+- [ ] Search: grep with weighted ranking across title/tags/summary
+- [ ] Show: full record displayed for valid INS-id
+- [ ] No LLM or CLI calls — pure file I/O only
+</success_criteria>

@@ -5,9 +5,21 @@ argument-hint: "<intent> | --list | --remove <name>"
 allowed-tools: Read, Write, Bash, Glob, Grep
 ---
 
-# Maestro Overlay
+<purpose>
+4-step pipeline: parse intent → identify targets + injection points → draft overlay JSON → install via CLI and report. Overlays are JSON patch files that augment `.claude/commands/*.md` non-invasively. They survive reinstalls because `maestro install` auto-reapplies them. Each overlay is idempotent: the patcher wraps content in hashed HTML-comment markers, so re-running `maestro overlay apply` produces no file changes.
 
-## Usage
+```
+Parse Intent  →  Identify Targets  →  Draft JSON  →  Install + Report
+(or --list /      (read command        (apply_patch    (exec_command +
+  --remove)         XML sections)       to overlays/)    banner)
+```
+
+**Available injection sections**: `purpose`, `required_reading`, `deferred_reading`, `context`, `execution`, `error_codes`, `success_criteria`
+
+**Patch modes**: `append`, `prepend`, `replace`, `new-section`
+</purpose>
+
+<context>
 
 ```bash
 $maestro-overlay "always run CLI verification after maestro-execute"
@@ -26,25 +38,18 @@ $maestro-overlay "--remove cli-verify-after-execute"
 - Shared docs: `~/.maestro/overlays/docs/*.md`
 - Shipped examples: `~/.maestro/overlays/_shipped/` (read-only)
 
----
+</context>
 
-## Overview
+<invariants>
+1. **Quick-exit first**: `--list` and `--remove` skip all intent parsing
+2. **Pristine source preferred**: Always read `.claude/commands/<name>.md` for the untouched command spec before deciding injection point
+3. **Idempotent content**: Injected blocks use hashed comment markers — re-runs produce no changes
+4. **Heading required**: Every injected block must start with a `## <Title> (overlay)` heading
+5. **Validate before report**: Run `maestro overlay add` successfully before displaying the report banner
+6. **Max 2 clarification questions**: If intent is ambiguous, ask at most 2 focused questions then proceed with best guess
+</invariants>
 
-4-step pipeline: parse intent → identify targets + injection points → draft overlay JSON → install via CLI and report. Overlays are JSON patch files that augment `.claude/commands/*.md` non-invasively. They survive reinstalls because `maestro install` auto-reapplies them. Each overlay is idempotent: the patcher wraps content in hashed HTML-comment markers, so re-running `maestro overlay apply` produces no file changes.
-
-```
-Parse Intent  →  Identify Targets  →  Draft JSON  →  Install + Report
-(or --list /      (read command        (apply_patch    (exec_command +
-  --remove)         XML sections)       to overlays/)    banner)
-```
-
-**Available injection sections**: `purpose`, `required_reading`, `deferred_reading`, `context`, `execution`, `error_codes`, `success_criteria`
-
-**Patch modes**: `append`, `prepend`, `replace`, `new-section`
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Parse User Intent
 
@@ -162,9 +167,9 @@ Remove:   maestro overlay remove <slug>
 Inspect:  maestro overlay list
 ```
 
----
+</execution>
 
-## Error Handling
+<error_codes>
 
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
@@ -173,13 +178,11 @@ Inspect:  maestro overlay list
 | E003 | error | `--remove` target not found in overlay store | Run `--list` to see installed overlays |
 | W001 | warning | One or more targets skipped (command missing from install) | Overlay still installed; applies when command is added |
 
----
+</error_codes>
 
-## Core Rules
-
-1. **Quick-exit first**: `--list` and `--remove` skip all intent parsing
-2. **Pristine source preferred**: Always read `.claude/commands/<name>.md` for the untouched command spec before deciding injection point
-3. **Idempotent content**: Injected blocks use hashed comment markers — re-runs produce no changes
-4. **Heading required**: Every injected block must start with a `## <Title> (overlay)` heading
-5. **Validate before report**: Run `maestro overlay add` successfully before displaying the report banner
-6. **Max 2 clarification questions**: If intent is ambiguous, ask at most 2 focused questions then proceed with best guess
+<success_criteria>
+- [ ] Intent parsed and targets identified
+- [ ] Overlay JSON drafted with correct section and mode
+- [ ] `maestro overlay add` executed successfully
+- [ ] Report displayed with apply/remove/inspect commands
+</success_criteria>

@@ -13,7 +13,7 @@ import { join } from 'node:path';
 // Types
 // ============================================================================
 
-export type SpecCategory = 'general' | 'exploration' | 'planning' | 'execution' | 'debug' | 'test' | 'review' | 'validation';
+export type SpecCategory = 'coding' | 'arch' | 'quality' | 'debug' | 'test' | 'review' | 'learning';
 
 export interface SpecLoadResult {
   content: string;
@@ -25,19 +25,15 @@ export interface SpecLoadResult {
 // Filename → Category mapping (single source of truth)
 // ============================================================================
 
-export const CATEGORY_MAP: Record<string, SpecCategory[]> = {
-  'coding-conventions.md':      ['execution'],
-  'architecture-constraints.md': ['execution', 'planning'],
-  'quality-rules.md':           ['execution'],
-  'debug-notes.md':             ['debug'],
-  'test-conventions.md':        ['test'],
-  'review-standards.md':        ['review'],
-  'validation-rules.md':        ['validation'],
-  'learnings.md':               ['general'],
+export const CATEGORY_MAP: Record<string, SpecCategory> = {
+  'coding-conventions.md':      'coding',
+  'architecture-constraints.md': 'arch',
+  'quality-rules.md':           'quality',
+  'debug-notes.md':             'debug',
+  'test-conventions.md':        'test',
+  'review-standards.md':        'review',
+  'learnings.md':               'learning',
 };
-
-// learnings.md is always included regardless of category filter
-const ALWAYS_INCLUDE = 'learnings.md';
 
 const SPECS_DIR = '.workflow/specs';
 export const TEAM_SPECS_DIR = '.workflow/collab/specs';
@@ -171,14 +167,11 @@ function shouldInclude(filename: string, category?: SpecCategory): boolean {
   // No category filter → load all
   if (!category) return true;
 
-  // Always include learnings
-  if (filename === ALWAYS_INCLUDE) return true;
+  const cat = CATEGORY_MAP[filename];
+  if (cat) return cat === category;
 
-  const cats = CATEGORY_MAP[filename];
-  if (cats) return cats.includes(category);
-
-  // Unknown files: include only when no category filter or category is 'general'
-  return category === 'general';
+  // Unknown files: include only when no category filter
+  return false;
 }
 
 function stripFrontmatter(raw: string): string {

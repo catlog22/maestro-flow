@@ -60,7 +60,7 @@ Started: {timestamp}
 
 ```
 specs_content = maestro spec load --category test
-arch_content = maestro spec load --category planning
+arch_content = maestro spec load --category arch
 ```
 
 `specs_content` for test conventions; `arch_content` for module boundaries in Step 2-3.

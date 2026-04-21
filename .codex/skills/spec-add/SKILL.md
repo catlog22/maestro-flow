@@ -1,31 +1,44 @@
 ---
 name: spec-add
-description: Add a spec entry (bug, pattern, decision, or rule) to the appropriate specs file
-argument-hint: "<type> <content>"
+description: Add a spec entry to the appropriate specs file by category
+argument-hint: "<category> <content>"
 allowed-tools: Read, Write, Bash, Glob, Grep
 ---
 
-# Spec Add
-
-## Usage
+<purpose>
+Add a spec entry to the appropriate specs file. Each category maps 1:1 to a single target file — no dual-write.
 
 ```bash
-$spec-add "pattern Always use named exports for utility functions"
-$spec-add "bug Off-by-one in pagination when page=0"
-$spec-add "decision Use Zod for runtime validation over io-ts"
-$spec-add "rule All API endpoints must return structured error objects"
+$spec-add "coding Always use named exports for utility functions"
+$spec-add "learning Off-by-one in pagination when page=0"
+$spec-add "arch Use Zod for runtime validation over io-ts"
+$spec-add "quality All API endpoints must return structured error objects"
 ```
 
-**Arguments**: `<type> <content>` where type is one of: bug, pattern, decision, rule, debug, test, review, validation.
+**Valid categories**: coding, arch, quality, debug, test, review, learning.
+</purpose>
 
----
+<context>
+$ARGUMENTS — `<category> <content>` where category selects the target file and content is the spec text.
 
-## Implementation
+**Category-to-file mapping (1:1, same as spec-load):**
+| Category | Target file |
+|----------|------------|
+| `coding` | `coding-conventions.md` |
+| `arch` | `architecture-constraints.md` |
+| `quality` | `quality-rules.md` |
+| `debug` | `debug-notes.md` |
+| `test` | `test-conventions.md` |
+| `review` | `review-standards.md` |
+| `learning` | `learnings.md` |
+</context>
+
+<execution>
 
 ### Step 1: Parse Input
 
-Extract type (first token) and content (remainder) from arguments.
-- Validate type is one of: bug, pattern, decision, rule, debug, test, review, validation (E003 if invalid)
+Extract category (first token) and content (remainder) from arguments.
+- Validate category is one of: coding, arch, quality, debug, test, review, learning (E003 if invalid)
 - Validate content is non-empty (E001 if missing)
 
 ### Step 2: Validate Specs Directory
@@ -36,44 +49,38 @@ test -d .workflow/specs || exit 1  # E002: not initialized
 
 ### Step 3: Route to File
 
-| Type | Primary File | Secondary Update |
-|------|-------------|-----------------|
-| `bug` | `learnings.md` | -- |
-| `pattern` | `learnings.md` | `coding-conventions.md` |
-| `decision` | `learnings.md` | `architecture-constraints.md` |
-| `rule` | `learnings.md` | `quality-rules.md` |
-| `debug` | `learnings.md` | `debug-notes.md` |
-| `test` | `learnings.md` | `test-conventions.md` |
-| `review` | `learnings.md` | `review-standards.md` |
-| `validation` | `learnings.md` | `validation-rules.md` |
+Resolve target file from category-to-file mapping table. If the target file does not exist, create it with a basic header.
 
 ### Step 4: Append Entry
 
-Append timestamped entry to `.workflow/specs/learnings.md` using the unified `[type] [date]` format:
+Append timestamped entry to the target file:
 
 ```markdown
-### [{type}] [{YYYY-MM-DD}] {first line of content}
+### [{category}] [{YYYY-MM-DD}] {first line of content}
 
 {content}
 ```
 
-Example: `### [bug] [2026-03-21] Off-by-one in pagination when page=0`
-
-If type has a secondary file, also update that file with the new convention/rule/decision.
+Example: `### [learning] [2026-03-21] Off-by-one in pagination when page=0`
 
 ### Step 5: Confirm
 
 ```
-Added [{type}] to learnings.md
-{Secondary file updated if applicable}
+Added [{category}] to {target_file}
 ```
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | fatal | Category and content are both required |
 | E002 | fatal | `.workflow/specs/` not initialized -- run `Skill({ skill: "spec-setup" })` first |
-| E003 | fatal | Invalid category -- must be one of: bug, pattern, decision, rule, debug, test, review, validation |
+| E003 | fatal | Invalid category -- must be one of: coding, arch, quality, debug, test, review, learning |
+</error_codes>
+
+<success_criteria>
+- [ ] Category and content parsed and validated
+- [ ] `.workflow/specs/` directory exists
+- [ ] Entry appended to target file with `[category] [date]` format
+- [ ] Confirmation displayed with category and affected file
+</success_criteria>

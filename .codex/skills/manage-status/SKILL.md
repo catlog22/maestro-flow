@@ -5,19 +5,25 @@ argument-hint: ""
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
-# Status Dashboard
+<purpose>
+Display project dashboard with phase progress, active tasks, and suggested next steps. Reads `.workflow/` state files and renders a formatted project overview. No arguments required.
+</purpose>
 
-## Usage
+<context>
+$ARGUMENTS — none required.
 
 ```bash
 $manage-status
 ```
 
-No arguments required. Reads `.workflow/` state files and renders a formatted project overview.
+Reads from:
+- `.workflow/state.json` — project-level state machine
+- `.workflow/roadmap.md` — milestone and phase structure
+- `.workflow/phases/*/index.json` — per-phase metadata and progress
+- `.workflow/phases/*/.task/TASK-*.json` — individual task statuses
+</context>
 
----
-
-## Implementation
+<execution>
 
 ### Step 1: Validate Project
 
@@ -78,12 +84,19 @@ Use this decision table to suggest the next action:
 | Phase reviewed PASS/WARN | `Skill({ skill: "quality-test", args: "<N>" })` |
 | UAT passed | `Skill({ skill: "maestro-phase-transition" })` |
 | All milestone phases done | `Skill({ skill: "maestro-milestone-audit" })` |
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | fatal | `.workflow/` not initialized -- run `Skill({ skill: "maestro-init" })` first |
 | E002 | fatal | `state.json` missing or corrupt |
+</error_codes>
+
+<success_criteria>
+- [ ] `.workflow/` and `state.json` validated
+- [ ] All state sources loaded (state.json, roadmap, phase indexes, task files)
+- [ ] Progress calculated per phase (total, completed, failed, blocked, pending, percentage)
+- [ ] Dashboard rendered with milestones, phases, active work, and next steps
+- [ ] Next step suggestion matches current project state via decision table
+</success_criteria>

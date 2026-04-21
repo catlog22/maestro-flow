@@ -533,9 +533,9 @@ Three test commands verify from different angles — complementary, not replacem
 
 ```bash
 /spec-setup                          # Initialize specs/ (scan project to generate conventions)
-/spec-add decision "Use JSONL format for Issue storage"  # Record a design decision
-/spec-add pattern "All API endpoints use the Hono framework"  # Record a code pattern
-/spec-load --category planning       # Load planning-related specs (called before agent execution)
+/spec-add arch "Use JSONL format for Issue storage"  # Record a design decision
+/spec-add coding "All API endpoints use the Hono framework"  # Record a code pattern
+/spec-load --category arch       # Load planning-related specs (called before agent execution)
 ```
 
 Types: `bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `validation`

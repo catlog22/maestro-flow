@@ -53,7 +53,7 @@ You implement a single task from the execution plan. Each task is executed atomi
   - `reference.files` -- Existing files to study for patterns
   - `reference.pattern` -- Pattern to follow
   - `issue_id` -- Linked issue ID (if from gap-fix planning, include in commit message)
-- **Project specs** (MANDATORY) -- Loaded via `maestro spec load --category execution`:
+- **Project specs** (MANDATORY) -- Loaded via `maestro spec load --category coding`:
   - Coding conventions (formatting, naming, imports, patterns)
   - Quality rules (enforcement criteria)
   - All specs with `readMode: required` and `category: execution`

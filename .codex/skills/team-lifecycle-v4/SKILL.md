@@ -4,11 +4,8 @@ description: Full lifecycle team skill with clean architecture. SKILL.md is a un
 allowed-tools: spawn_agent(*), wait_agent(*), send_message(*), followup_task(*), close_agent(*), list_agents(*), report_agent_job_result(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*), request_user_input(*), mcp__maestro-tools__team_msg(*)
 ---
 
-# Team Lifecycle v4
-
+<purpose>
 Orchestrate multi-agent software development: specification -> planning -> implementation -> testing -> review.
-
-## Architecture
 
 ```
 Skill(skill="team-lifecycle-v4", args="task description")
@@ -35,8 +32,10 @@ Skill(skill="team-lifecycle-v4", args="task description")
                               |
                          collect results
 ```
+</purpose>
 
-## Role Registry
+<context>
+### Role Registry
 
 | Role | Path | Prefix | Inner Loop |
 |------|------|--------|------------|
@@ -49,13 +48,13 @@ Skill(skill="team-lifecycle-v4", args="task description")
 | reviewer | [roles/reviewer/role.md](roles/reviewer/role.md) | REVIEW-*, QUALITY-*, IMPROVE-* | false |
 | supervisor | [roles/supervisor/role.md](roles/supervisor/role.md) | CHECKPOINT-* | false |
 
-## Role Router
+### Role Router
 
 Parse `$ARGUMENTS`:
 - Has `--role <name>` -> Read `roles/<name>/role.md`, execute Phase 2-4
 - No `--role` -> `roles/coordinator/role.md`, execute entry router
 
-## Delegation Lock
+### Delegation Lock
 
 **Coordinator is a PURE ORCHESTRATOR. It coordinates, it does NOT do.**
 
@@ -78,9 +77,7 @@ Before calling ANY tool, apply this check:
 
 **No exceptions for "simple" tasks.** Even a single-file read-and-report MUST go through spawn_agent.
 
----
-
-## Shared Constants
+### Shared Constants
 
 - **Session prefix**: `TLV4`
 - **Session path**: `.workflow/.team/TLV4-<slug>-<date>/`
@@ -88,7 +85,7 @@ Before calling ANY tool, apply this check:
 - **Discovery files**: `<session>/discoveries/{task_id}.json`
 - **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
 
-## Worker Spawn Template
+### Worker Spawn Template
 
 Coordinator spawns workers using this template:
 
@@ -119,11 +116,11 @@ pipeline_phase: <pipeline-phase>
 })
 ```
 
-## Supervisor Spawn Template
+### Supervisor Spawn Template
 
 Supervisor is a **resident agent** (independent from team_worker). Spawned once during session init, woken via followup_task for each CHECKPOINT task.
 
-### Spawn (Phase 2 -- once per session)
+#### Spawn (Phase 2 -- once per session)
 
 ```
 supervisorId = spawn_agent({
@@ -143,7 +140,7 @@ Wake cycle: orchestrator sends checkpoint requests via followup_task.`
 })
 ```
 
-### Wake (per CHECKPOINT task)
+#### Wake (per CHECKPOINT task)
 
 ```
 followup_task({
@@ -156,12 +153,11 @@ pipeline_progress: <done>/<total> tasks completed`
 wait_agent({ timeout_ms: 1800000 })  // 30 min
 ```
 
-### Shutdown (pipeline complete)
+#### Shutdown (pipeline complete)
 
 ```
 close_agent({ target: "supervisor" })
 ```
-
 
 ### Model Selection Guide
 
@@ -187,35 +183,9 @@ spawn_agent({
 })
 ```
 
-## Wave Execution Engine
+### v4 Agent Coordination
 
-For each wave in the pipeline:
-
-1. **Load state** -- Read `<session>/tasks.json`, filter tasks for current wave
-2. **Skip failed deps** -- Mark tasks whose dependencies failed/skipped as `skipped`
-3. **Build upstream context** -- For each task, gather findings from `context_from` tasks via tasks.json and `discoveries/{id}.json`
-4. **Separate task types** -- Split into regular tasks and CHECKPOINT tasks
-5. **Spawn regular tasks** -- For each regular task, call `spawn_agent({ agent_type: "team_worker", message: "..." })`, collect agent IDs
-6. **Wait** -- `wait_agent({ timeout_ms: 1800000 })` (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents.
-7. **Collect results** -- Read `discoveries/{task_id}.json` for each agent, update tasks.json status/findings/error, then `close_agent({ target })` each worker
-8. **Execute checkpoints** -- For each CHECKPOINT task, `followup_task` to supervisor, `wait_agent`, read checkpoint report from `artifacts/`, parse verdict
-9. **Handle block** -- If verdict is `block`, prompt user via `request_user_input` with options: Override / Revise upstream / Abort
-10. **Persist** -- Write updated state to `<session>/tasks.json`
-
-## User Commands
-
-| Command | Action |
-|---------|--------|
-| `check` / `status` | View execution status graph |
-| `resume` / `continue` | Advance to next step |
-| `revise <TASK-ID> [feedback]` | Revise specific task |
-| `feedback <text>` | Inject feedback for revision |
-| `recheck` | Re-run quality check |
-| `improve [dimension]` | Auto-improve weakest dimension |
-
-## v4 Agent Coordination
-
-### Message Semantics
+#### Message Semantics
 
 | Intent | API | Example |
 |--------|-----|---------|
@@ -226,7 +196,7 @@ For each wave in the pipeline:
 
 **CRITICAL**: The supervisor is a **resident agent** woken via `followup_task`, NOT `send_message`. Regular workers complete and are closed; the supervisor persists across checkpoints. See "Supervisor Spawn Template" above.
 
-### Agent Health Check
+#### Agent Health Check
 
 Use `list_agents({})` in handleResume and handleComplete:
 
@@ -238,7 +208,7 @@ const running = list_agents({})
 // ALSO check supervisor: if supervisor missing but CHECKPOINT tasks pending -> respawn
 ```
 
-### Named Agent Targeting
+#### Named Agent Targeting
 
 Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
 - `send_message({ target: "IMPL-001", message: "..." })` -- queue planning context to running implementer
@@ -246,7 +216,18 @@ Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
 - `close_agent({ target: "IMPL-001" })` -- cleanup regular worker by name
 - `close_agent({ target: "supervisor" })` -- shutdown supervisor at pipeline end
 
-## Completion Action
+### User Commands
+
+| Command | Action |
+|---------|--------|
+| `check` / `status` | View execution status graph |
+| `resume` / `continue` | Advance to next step |
+| `revise <TASK-ID> [feedback]` | Revise specific task |
+| `feedback <text>` | Inject feedback for revision |
+| `recheck` | Re-run quality check |
+| `improve [dimension]` | Auto-improve weakest dimension |
+
+### Completion Action
 
 When pipeline completes, coordinator presents:
 
@@ -265,27 +246,46 @@ request_user_input({
 })
 ```
 
-## Specs Reference
+### Specs Reference
 
 - [specs/pipelines.md](specs/pipelines.md) -- Pipeline definitions and task registry
 - [specs/quality-gates.md](specs/quality-gates.md) -- Quality gate criteria and scoring
 - [specs/knowledge-transfer.md](specs/knowledge-transfer.md) -- Artifact and state transfer protocols
 
-## Session Directory
+### Session Directory
 
 ```
 .workflow/.team/TLV4-<slug>-<date>/
-├── tasks.json                  # Task state (JSON)
-├── discoveries/                # Per-task findings ({task_id}.json)
-├── spec/                       # Spec phase outputs
-├── plan/                       # Implementation plan
-├── artifacts/                  # All deliverables
-├── wisdom/                     # Cross-task knowledge
-├── explorations/               # Shared explore cache
-└── discussions/                # Discuss round records
++-- tasks.json                  # Task state (JSON)
++-- discoveries/                # Per-task findings ({task_id}.json)
++-- spec/                       # Spec phase outputs
++-- plan/                       # Implementation plan
++-- artifacts/                  # All deliverables
++-- wisdom/                     # Cross-task knowledge
++-- explorations/               # Shared explore cache
++-- discussions/                # Discuss round records
 ```
+</context>
 
-## Error Handling
+<execution>
+
+### Wave Execution Engine
+
+For each wave in the pipeline:
+
+1. **Load state** -- Read `<session>/tasks.json`, filter tasks for current wave
+2. **Skip failed deps** -- Mark tasks whose dependencies failed/skipped as `skipped`
+3. **Build upstream context** -- For each task, gather findings from `context_from` tasks via tasks.json and `discoveries/{id}.json`
+4. **Separate task types** -- Split into regular tasks and CHECKPOINT tasks
+5. **Spawn regular tasks** -- For each regular task, call `spawn_agent({ agent_type: "team_worker", message: "..." })`, collect agent IDs
+6. **Wait** -- `wait_agent({ timeout_ms: 1800000 })` (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents.
+7. **Collect results** -- Read `discoveries/{task_id}.json` for each agent, update tasks.json status/findings/error, then `close_agent({ target })` each worker
+8. **Execute checkpoints** -- For each CHECKPOINT task, `followup_task` to supervisor, `wait_agent`, read checkpoint report from `artifacts/`, parse verdict
+9. **Handle block** -- If verdict is `block`, prompt user via `request_user_input` with options: Override / Revise upstream / Abort
+10. **Persist** -- Write updated state to `<session>/tasks.json`
+</execution>
+
+<error_codes>
 
 | Scenario | Resolution |
 |----------|------------|
@@ -297,3 +297,15 @@ request_user_input({
 | Completion action fails | Default to Keep Active |
 | Worker timeout | Mark task as failed, continue wave |
 | Discovery file missing | Mark task as failed with "No discovery file produced" |
+</error_codes>
+
+<success_criteria>
+- [ ] Role router correctly dispatches to coordinator or worker based on --role flag
+- [ ] Coordinator spawns workers with correct role-spec paths and task context
+- [ ] Supervisor spawned once and woken via followup_task for checkpoints
+- [ ] Wave execution engine processes tasks in dependency order
+- [ ] Checkpoint verdicts respected (block prompts user, pass continues)
+- [ ] Session state persisted in tasks.json after each wave
+- [ ] Agent health reconciled on resume (orphaned tasks reset to pending)
+- [ ] Completion action presented and handled correctly
+</success_criteria>

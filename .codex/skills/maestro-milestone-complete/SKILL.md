@@ -5,9 +5,11 @@ argument-hint: "[milestone] [--force]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
-# Milestone Complete
+<purpose>
+Sequential milestone archival: validate audit → archive scratch dirs → extract learnings → move artifact entries to milestone_history → advance state → clean scratch.
+</purpose>
 
-## Usage
+<context>
 
 ```bash
 $maestro-milestone-complete "M1"
@@ -17,15 +19,17 @@ $maestro-milestone-complete --force "M1"  # skip audit check
 
 **Output**: `.workflow/milestones/{milestone}/` archive directory
 
----
+</context>
 
-## Overview
+<invariants>
+1. **Audit before archive** — refuse without passing audit (unless --force)
+2. **Atomic state update** — write state.json via tmp+rename
+3. **Learnings are mandatory** — always extract before archiving
+4. **Clean after archive** — remove scratch dirs only after successful copy
+5. **Advance state** — always set next milestone or mark project complete
+</invariants>
 
-Sequential milestone archival: validate audit → archive scratch dirs → extract learnings → move artifact entries to milestone_history → advance state → clean scratch.
-
----
-
-## Implementation
+<execution>
 
 ### Step 1: Parse & Validate
 
@@ -128,9 +132,9 @@ Next steps:
   $manage-status              -- View state
 ```
 
----
+</execution>
 
-## Error Handling
+<error_codes>
 
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
@@ -138,12 +142,14 @@ Next steps:
 | E002 | error | Audit not passed | Run milestone-audit first |
 | E003 | error | Incomplete artifacts remain | Complete work first |
 
----
+</error_codes>
 
-## Core Rules
-
-1. **Audit before archive** — refuse without passing audit (unless --force)
-2. **Atomic state update** — write state.json via tmp+rename
-3. **Learnings are mandatory** — always extract before archiving
-4. **Clean after archive** — remove scratch dirs only after successful copy
-5. **Advance state** — always set next milestone or mark project complete
+<success_criteria>
+- [ ] Audit report validated (or --force used)
+- [ ] Scratch directories archived to milestones/
+- [ ] Learnings extracted and appended to specs/learnings.md
+- [ ] Artifact entries moved to milestone_history in state.json
+- [ ] State advanced to next milestone (or project marked complete)
+- [ ] Scratch directories cleaned
+- [ ] Summary and completion report generated
+</success_criteria>

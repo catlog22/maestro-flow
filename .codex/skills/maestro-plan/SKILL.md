@@ -5,35 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--auto] 
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm exploration angles, skip interactive clarification (P2), use defaults for complexity detection.
-
-# Maestro Plan (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-plan "3"
-$maestro-plan -y "3 --auto"
-$maestro-plan -c 4 "3 --spec SPEC-001"
-$maestro-plan "3 --gaps"
-$maestro-plan "3 --dir .workflow/scratch/quick-nav-fix"
-$maestro-plan --continue "plan-phase3-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 4)
-- `--continue`: Resume existing session
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `plan.json` + `.task/TASK-*.json`
-
----
-
-## Overview
-
+<purpose>
 Wave-based planning using `spawn_agents_on_csv`. Wave 1 explores codebase context in parallel across multiple angles, Wave 2 consumes all exploration findings to generate a verified execution plan.
 
 **Core workflow**: Resolve Phase -> Determine Explorations -> Parallel Exploration -> Sequential Planning -> Check + Confirm
@@ -74,10 +46,30 @@ Wave-based planning using `spawn_agents_on_csv`. Wave 1 explores codebase contex
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$maestro-plan "3"
+$maestro-plan -y "3 --auto"
+$maestro-plan -c 4 "3 --spec SPEC-001"
+$maestro-plan "3 --gaps"
+$maestro-plan "3 --dir .workflow/scratch/quick-nav-fix"
+$maestro-plan --continue "plan-phase3-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 4)
+- `--continue`: Resume existing session
+
+When `--yes` or `-y`: Auto-confirm exploration angles, skip interactive clarification (P2), use defaults for complexity detection.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `plan.json` + `.task/TASK-*.json`
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -109,9 +101,7 @@ id,title,description,exploration_focus,deps,context_from,wave,status,findings,er
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -123,9 +113,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | `plan.json` | Execution plan (in phase directory) | Created by wave 2 agent |
 | `.task/TASK-*.json` | Individual task definitions (in phase directory) | Created by wave 2 agent |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/plan-{phase}-{date}/
@@ -135,10 +123,20 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- context.md
 +-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Skip on Failure**: If all exploration agents failed, planning agent proceeds with available context
+7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+8. **DO NOT STOP**: Continuous execution until all waves complete
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -207,8 +205,6 @@ Bash(`mkdir -p ${sessionFolder}`)
 Bash(`mkdir -p ${scratchDir}/.task/`)
 ```
 
----
-
 ### Phase 1: Phase Resolution -> CSV
 
 **Objective**: Resolve phase, load context, determine exploration angles, generate tasks.csv.
@@ -224,7 +220,7 @@ Bash(`mkdir -p ${scratchDir}/.task/`)
    - Read spec-ref if `--spec` flag
    - Read `.workflow/codebase/doc-index.json` if exists
    - Find design artifacts from `state.json.artifacts[]` (type=brainstorm with ui-designer) for MASTER.md
-   - Load project specs via `maestro spec load --category planning`
+   - Load project specs via `maestro spec load --category arch`
 
 3. **Upstream analysis check**:
    - If `{contextDir}/conclusions.json` exists and has content: reuse as exploration context, skip wave 1
@@ -249,8 +245,6 @@ Bash(`mkdir -p ${scratchDir}/.task/`)
 **Wave computation**: Simple 2-wave -- all exploration tasks = wave 1, planning task = wave 2.
 
 **User validation**: Display exploration breakdown (skip if AUTO_YES or `--auto`).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -341,8 +335,6 @@ spawn_agents_on_csv({
 - If `--gaps`: create fix tasks from gap context, link to issues
 - If `--collab`: pre-allocate ID ranges for parallel planners
 
----
-
 ### Phase 3: Plan Checking + Confirmation
 
 **Objective**: Validate plan quality, revise if needed, present to user.
@@ -412,7 +404,7 @@ spawn_agents_on_csv({
      - `status`: "planned"
      - `updated_at`: now()
    - Append history entry: `{ action: "planned", at: <ISO>, by: "maestro-plan", summary: "Linked to TASK-{NNN}" }`
-   This ensures bidirectional issue ↔ TASK traceability for dashboard display.
+   This ensures bidirectional issue <-> TASK traceability for dashboard display.
 
 6. **Display summary + options** (skip options if AUTO_YES):
    ```
@@ -429,11 +421,9 @@ spawn_agents_on_csv({
      Skill({ skill: "maestro-plan", args: "{phase}" })     -- Re-plan with modifications
    ```
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -443,7 +433,7 @@ spawn_agents_on_csv({
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -452,7 +442,7 @@ spawn_agents_on_csv({
 | `risk_factor` | `data.risk` | `{risk, severity, mitigation, affected_files[]}` | Identified risk |
 | `test_command` | `data.command` | `{command, scope, framework}` | Test execution command |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own exploration
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -463,10 +453,9 @@ spawn_agents_on_csv({
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"existing_pattern","data":{"name":"Result error handling","file":"src/utils/result.ts","description":"All functions return Result<T,E> instead of throwing","usage":"Used in auth, payments, validation modules"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -481,16 +470,16 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"existing_pattern","data":{"name":"Re
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Skip on Failure**: If all exploration agents failed, planning agent proceeds with available context
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-8. **DO NOT STOP**: Continuous execution until all waves complete
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All waves executed in order
+- [ ] plan.json produced in phase directory
+- [ ] .task/TASK-*.json files produced for all tasks
+- [ ] Plan passes quality checks (coverage, deps, criteria)
+- [ ] context.md produced with exploration findings + plan overview
+- [ ] index.json updated with plan metadata
+- [ ] Issues linked (if --gaps mode)
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

@@ -5,14 +5,59 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--max-it
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
+<purpose>
+Linear pipeline test execution using `spawn_agents_on_csv`. Progressive L0 -> L1 -> L2 -> L3 layers where each layer depends on the previous passing. Self-iterating 6-phase cycle (Explore -> Design -> Develop -> Test -> Reflect -> Adjust) with adaptive strategy engine.
 
-When `--yes` or `-y`: Auto-confirm test plan, skip interactive validation, use defaults for layer detection.
+**Core workflow**: Explore Codebase -> Design Test Plan -> Progressive Layer Execution -> Reflect -> Adjust Strategy -> Iterate
 
-# Maestro Integration Test (CSV Wave)
+```
++-------------------------------------------------------------------------+
+|              INTEGRATION TEST CSV WAVE WORKFLOW                          |
++-------------------------------------------------------------------------+
+|                                                                          |
+|  Phase 1: Exploration -> CSV                                             |
+|     +-- Resolve phase directory from arguments                           |
+|     +-- Explore codebase for integration points                          |
+|     +-- Discover test infrastructure and existing tests                  |
+|     +-- Load pre-generated tests from quality-test-gen                   |
+|     +-- Design L0-L3 test plan                                           |
+|     +-- Generate tasks.csv with rows per layer + module                  |
+|     +-- User validates test plan (skip if -y)                            |
+|                                                                          |
+|  Phase 2: Wave Execution Engine (Linear Pipeline)                        |
+|     +-- Wave 1: L0 Static Analysis                                       |
+|     |   +-- Type checking (tsc --noEmit)                                 |
+|     |   +-- Linting (eslint / ruff)                                      |
+|     |   +-- Results: pass/fail per check                                 |
+|     +-- Wave 2: L1 Unit Tests (parallel per module)                      |
+|     |   +-- Each module agent runs unit tests independently              |
+|     |   +-- Discoveries shared (test commands, fixtures)                 |
+|     |   +-- Results: tests_passed + tests_failed per module              |
+|     +-- Wave 3: L2 Integration Tests                                     |
+|     |   +-- Cross-module + API + DB tests                                |
+|     |   +-- Uses L1 context for test commands and patterns               |
+|     |   +-- Results: tests_passed + tests_failed + coverage              |
+|     +-- Wave 4: L3 E2E Tests                                             |
+|     |   +-- Full user flow tests                                         |
+|     |   +-- Uses L2 context for integration points                       |
+|     |   +-- Results: tests_passed + tests_failed + coverage              |
+|     +-- discoveries.ndjson shared across all waves (append-only)         |
+|                                                                          |
+|  Phase 3: Reflect + Iterate                                              |
+|     +-- Calculate overall pass rate                                      |
+|     +-- Reflect on results (what worked, what failed, patterns)          |
+|     +-- Adjust strategy (conservative/aggressive/surgical/reflective)    |
+|     +-- If pass_rate < target: iterate (back to Phase 2)                 |
+|     +-- If pass_rate >= target OR max_iterations: finalize               |
+|     +-- Export results.csv + summary.json                                |
+|     +-- Generate context.md + reflection-log.md                          |
+|     +-- Display summary with next steps                                  |
+|                                                                          |
++-------------------------------------------------------------------------+
+```
+</purpose>
 
-## Usage
-
+<context>
 ```bash
 $quality-integration-test "3"
 $quality-integration-test -c 4 "3 --max-iterations 8"
@@ -25,67 +70,13 @@ $quality-integration-test --continue "integration-test-phase3-20260318"
 - `-c, --concurrency N`: Max concurrent agents within each wave (default: 4)
 - `--continue`: Resume existing session
 
+When `--yes` or `-y`: Auto-confirm test plan, skip interactive validation, use defaults for layer detection.
+
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `summary.json` (structured output for downstream)
+</context>
 
----
-
-## Overview
-
-Linear pipeline test execution using `spawn_agents_on_csv`. Progressive L0 → L1 → L2 → L3 layers where each layer depends on the previous passing. Self-iterating 6-phase cycle (Explore → Design → Develop → Test → Reflect → Adjust) with adaptive strategy engine.
-
-**Core workflow**: Explore Codebase → Design Test Plan → Progressive Layer Execution → Reflect → Adjust Strategy → Iterate
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│              INTEGRATION TEST CSV WAVE WORKFLOW                          │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  Phase 1: Exploration → CSV                                              │
-│     ├─ Resolve phase directory from arguments                            │
-│     ├─ Explore codebase for integration points                           │
-│     ├─ Discover test infrastructure and existing tests                   │
-│     ├─ Load pre-generated tests from quality-test-gen                    │
-│     ├─ Design L0-L3 test plan                                            │
-│     ├─ Generate tasks.csv with rows per layer + module                   │
-│     └─ User validates test plan (skip if -y)                             │
-│                                                                          │
-│  Phase 2: Wave Execution Engine (Linear Pipeline)                        │
-│     ├─ Wave 1: L0 Static Analysis                                        │
-│     │   ├─ Type checking (tsc --noEmit)                                  │
-│     │   ├─ Linting (eslint / ruff)                                       │
-│     │   └─ Results: pass/fail per check                                  │
-│     ├─ Wave 2: L1 Unit Tests (parallel per module)                       │
-│     │   ├─ Each module agent runs unit tests independently               │
-│     │   ├─ Discoveries shared (test commands, fixtures)                  │
-│     │   └─ Results: tests_passed + tests_failed per module               │
-│     ├─ Wave 3: L2 Integration Tests                                      │
-│     │   ├─ Cross-module + API + DB tests                                 │
-│     │   ├─ Uses L1 context for test commands and patterns                │
-│     │   └─ Results: tests_passed + tests_failed + coverage               │
-│     ├─ Wave 4: L3 E2E Tests                                              │
-│     │   ├─ Full user flow tests                                          │
-│     │   ├─ Uses L2 context for integration points                        │
-│     │   └─ Results: tests_passed + tests_failed + coverage               │
-│     └─ discoveries.ndjson shared across all waves (append-only)          │
-│                                                                          │
-│  Phase 3: Reflect + Iterate                                              │
-│     ├─ Calculate overall pass rate                                       │
-│     ├─ Reflect on results (what worked, what failed, patterns)           │
-│     ├─ Adjust strategy (conservative/aggressive/surgical/reflective)     │
-│     ├─ If pass_rate < target: iterate (back to Phase 2)                  │
-│     ├─ If pass_rate >= target OR max_iterations: finalize                │
-│     ├─ Export results.csv + summary.json                                 │
-│     ├─ Generate context.md + reflection-log.md                           │
-│     └─ Display summary with next steps                                   │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## CSV Schema
-
+<csv_schema>
 ### tasks.csv (Master State)
 
 ```csv
@@ -112,7 +103,7 @@ id,title,description,test_layer,test_scope,deps,context_from,wave,status,finding
 | `deps` | Input | Semicolon-separated dependency task IDs (previous layer tasks) |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs |
 | `wave` | Computed | Wave number: 1=L0, 2=L1, 3=L2, 4=L3 |
-| `status` | Output | `pending` → `completed` / `failed` / `skipped` |
+| `status` | Output | `pending` -> `completed` / `failed` / `skipped` |
 | `findings` | Output | Key findings summary: failures, patterns, coverage notes (max 500 chars) |
 | `tests_passed` | Output | Count of passing tests |
 | `tests_failed` | Output | Count of failing tests |
@@ -123,13 +114,11 @@ id,title,description,test_layer,test_scope,deps,context_from,wave,status,finding
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column populated from predecessor findings.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
-| `tasks.csv` | Master state — all tasks with status/findings | Updated after each wave |
+| `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
 | `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
@@ -137,28 +126,39 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 | `summary.json` | Structured output for downstream commands | Created in Phase 3 |
 | `reflection-log.md` | Per-iteration reflection history | Append-only across iterations |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/integration-test-{phase}-{date}/
-├── tasks.csv
-├── results.csv
-├── discoveries.ndjson
-├── context.md
-├── summary.json
-├── reflection-log.md
-├── state.json
-├── iteration-{N}/
-│   ├── wave-{N}.csv (temporary)
-│   └── test-results.json
-└── wave-{N}.csv (temporary)
++-- tasks.csv
++-- results.csv
++-- discoveries.ndjson
++-- context.md
++-- summary.json
++-- reflection-log.md
++-- state.json
++-- iteration-{N}/
+|   +-- wave-{N}.csv (temporary)
+|   +-- test-results.json
++-- wave-{N}.csv (temporary)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave N+1 before wave N completes and results are merged
+3. **Progressive Layers**: L0 -> L1 -> L2 -> L3 -- each layer gates the next
+4. **CSV is Source of Truth**: Master tasks.csv holds all state
+5. **Context Propagation**: prev_context built from master CSV, not from memory
+6. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+7. **Self-Iterating**: Loop until convergence or max iterations -- do not stop after one pass
+8. **Strategy is Adaptive**: Apply the strategy engine rules for transitions, never stay on a failing strategy
+9. **Reflect Before Adjusting**: Always log reflection before changing strategy
+10. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+11. **DO NOT STOP**: Continuous execution until convergence or max iterations reached
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -207,9 +207,7 @@ Write(`${sessionFolder}/reflection-log.md`,
   `# Integration Test Reflection Log\nPhase: ${phaseArg}\nStarted: ${getUtc8ISOString()}\n\n## Iterations\n`)
 ```
 
----
-
-### Phase 1: Exploration → CSV
+### Phase 1: Exploration -> CSV
 
 **Objective**: Explore codebase, discover integration points, design L0-L3 test plan, generate tasks.csv.
 
@@ -247,11 +245,9 @@ Write(`${sessionFolder}/reflection-log.md`,
 
 **User validation**: Display layer breakdown with test counts (skip if AUTO_YES).
 
----
-
 ### Phase 2: Wave Execution Engine
 
-**Objective**: Execute test layers wave-by-wave via spawn_agents_on_csv. Progressive — each layer requires previous to pass.
+**Objective**: Execute test layers wave-by-wave via spawn_agents_on_csv. Progressive -- each layer requires previous to pass.
 
 #### Wave 1: L0 Static Analysis
 
@@ -293,10 +289,10 @@ spawn_agents_on_csv({
 
 1. Read master `tasks.csv`
 2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps — all L0 tasks must be completed (not failed)
+3. Check deps -- all L0 tasks must be completed (not failed)
 4. Build `prev_context` from L0 findings:
    ```
-   [Task 1: L0 Type Check] Clean — 0 type errors
+   [Task 1: L0 Type Check] Clean -- 0 type errors
    [Task 2: L0 Lint] 3 warnings in auth module (non-blocking)
    ```
 5. Write `wave-2.csv` with `prev_context` column
@@ -323,8 +319,6 @@ spawn_agents_on_csv({
 4. Write `wave-4.csv` with `prev_context`
 5. Execute `spawn_agents_on_csv` for L3 agents
 6. Merge results, delete temp CSV
-
----
 
 ### Phase 3: Reflect + Iterate
 
@@ -390,9 +384,9 @@ Update `state.json` with new strategy and iteration count.
 
 #### Step 3d: Convergence Check
 
-- If `overall_pass_rate >= target_coverage`: **CONVERGED** → finalize
-- If `iteration >= max_iterations`: **MAX_ITER_REACHED** → finalize
-- Otherwise: **ITERATE** → reset pending tasks for failing layers, go back to Phase 2
+- If `overall_pass_rate >= target_coverage`: **CONVERGED** -> finalize
+- If `iteration >= max_iterations`: **MAX_ITER_REACHED** -> finalize
+- Otherwise: **ITERATE** -> reset pending tasks for failing layers, go back to Phase 2
 
 #### Step 3e: Finalize
 
@@ -424,7 +418,7 @@ Update `state.json` with new strategy and iteration count.
 4. Generate `context.md`:
 
 ```markdown
-# Integration Test Report — Phase {phase}
+# Integration Test Report -- Phase {phase}
 
 ## Summary
 - Iterations: {N}/{max_iter}
@@ -435,7 +429,7 @@ Update `state.json` with new strategy and iteration count.
 ## Layer Results
 | Layer | Status | Passed | Failed | Pass Rate | Coverage |
 |-------|--------|--------|--------|-----------|----------|
-| L0 Static | {pass/fail} | — | — | — | — |
+| L0 Static | {pass/fail} | -- | -- | -- | -- |
 | L1 Unit | {status} | {P} | {F} | {rate}% | {cov}% |
 | L2 Integration | {status} | {P} | {F} | {rate}% | {cov}% |
 | L3 E2E | {status} | {P} | {F} | {rate}% | {cov}% |
@@ -443,7 +437,7 @@ Update `state.json` with new strategy and iteration count.
 ## Iteration History
 | Iter | Strategy | Pass Rate | Delta | Action |
 |------|----------|-----------|-------|--------|
-| 1 | conservative | 72.0% | — | fixed 3 type errors |
+| 1 | conservative | 72.0% | -- | fixed 3 type errors |
 | 2 | conservative | 85.5% | +13.5% | fixed auth test fixtures |
 | 3 | aggressive | 97.5% | +12.0% | batch-fixed API tests |
 
@@ -472,11 +466,9 @@ Update `state.json` with new strategy and iteration count.
 | Max iter, <80% | `quality-debug` for deep investigation |
 | Bugs discovered | `maestro-plan {phase} --gaps` to plan fixes |
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -486,7 +478,7 @@ Update `state.json` with new strategy and iteration count.
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -496,7 +488,7 @@ Update `state.json` with new strategy and iteration count.
 | `regression` | `data.test` | `{test, file, previous_status, current_status}` | Test that regressed |
 | `flaky_test` | `data.test` | `{test, file, fail_rate, pattern}` | Intermittently failing test |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own test execution
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -507,10 +499,9 @@ Update `state.json` with new strategy and iteration count.
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"test_command","data":{"layer":"L1","command":"npx vitest run --reporter=verbose","flags":"--testPathPattern=unit","cwd":"."}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -526,19 +517,16 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"test_command","data":{"layer":"L1","
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
 | state.json missing on resume | Rebuild from tasks.csv status column |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave N+1 before wave N completes and results are merged
-3. **Progressive Layers**: L0 → L1 → L2 → L3 — each layer gates the next
-4. **CSV is Source of Truth**: Master tasks.csv holds all state
-5. **Context Propagation**: prev_context built from master CSV, not from memory
-6. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-7. **Self-Iterating**: Loop until convergence or max iterations — do not stop after one pass
-8. **Strategy is Adaptive**: Apply the strategy engine rules for transitions, never stay on a failing strategy
-9. **Reflect Before Adjusting**: Always log reflection before changing strategy
-10. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-11. **DO NOT STOP**: Continuous execution until convergence or max iterations reached
+<success_criteria>
+- [ ] Session initialized with state.json and reflection-log.md
+- [ ] tasks.csv generated with correct layer/wave assignments and dependencies
+- [ ] All waves executed sequentially (L0 -> L1 -> L2 -> L3) with gate checks
+- [ ] Reflection logged after each iteration with strategy assessment
+- [ ] Strategy engine transitions applied correctly based on pass rates
+- [ ] Convergence reached or max iterations exhausted
+- [ ] results.csv, summary.json, and context.md generated
+- [ ] Temporary wave-{N}.csv files cleaned up after merge
+- [ ] discoveries.ndjson maintained as append-only across all waves
+</success_criteria>

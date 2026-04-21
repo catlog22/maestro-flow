@@ -38,7 +38,7 @@ When invoked with `quick` flag:
 - `.workflow/phases/{NN}-{slug}/context.md` -- Phase context and decisions
 - `.workflow/phases/{NN}-{slug}/research.md` -- Phase research (if available)
 - Spec references and doc-index
-- **Project specs** (MANDATORY) -- Loaded via `maestro spec load --category planning`:
+- **Project specs** (MANDATORY) -- Loaded via `maestro spec load --category arch`:
   - Architecture constraints (module structure, layer boundaries, dependency rules)
   - Coding conventions (naming, imports, patterns)
   - All specs with `readMode: required` and `category: planning`

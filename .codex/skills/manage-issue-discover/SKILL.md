@@ -5,33 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"[by-prompt 'what 
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm perspective selection, skip interactive validation, use defaults for scope detection.
-
-# Maestro Issue Discover (CSV Wave)
-
-## Usage
-
-```bash
-$manage-issue-discover
-$manage-issue-discover -c 8 ""
-$manage-issue-discover -y "by-prompt 'error handling gaps in auth module'"
-$manage-issue-discover --continue "discover-multi-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 8)
-- `--continue`: Resume existing session
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + issues appended to `.workflow/issues/issues.jsonl`
-
----
-
-## Overview
-
+<purpose>
 Wave-based multi-perspective issue discovery using `spawn_agents_on_csv`. In default mode, 8 independent perspective agents scan the codebase in parallel (Wave 1), then a single dedup + issue creation agent aggregates all findings (Wave 2). In by-prompt mode, user-defined exploration dimensions replace the 8 fixed perspectives.
 
 **Core workflow**: Parse Mode -> Define Perspectives -> Parallel Scan -> Dedup + Issue Creation
@@ -79,11 +53,28 @@ Wave-based multi-perspective issue discovery using `spawn_agents_on_csv`. In def
 |                                                                         |
 +-------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$manage-issue-discover
+$manage-issue-discover -c 8 ""
+$manage-issue-discover -y "by-prompt 'error handling gaps in auth module'"
+$manage-issue-discover --continue "discover-multi-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 8)
+- `--continue`: Resume existing session
 
+When `--yes` or `-y`: Auto-confirm perspective selection, skip interactive validation, use defaults for scope detection.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + issues appended to `.workflow/issues/issues.jsonl`
+</context>
+
+<csv_schema>
 ### tasks.csv (Master State)
 
 ```csv
@@ -121,9 +112,7 @@ id,title,description,perspective,scope_glob,deps,context_from,wave,status,findin
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -135,9 +124,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | `discovery-state.json` | Session metadata and progress | Updated throughout |
 | `.workflow/issues/issues.jsonl` | Issues appended here | Append-only |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/discover-{mode}-{date}/
@@ -156,10 +143,22 @@ Also writes to:
 +-- discovery-issues.jsonl
 +-- {perspective}-findings.json (per perspective raw output)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+6. **Skip on Failure**: If all perspective agents failed, skip dedup
+7. **Evidence Required**: Every finding must have file:line reference -- no speculative issues
+8. **Dedup Before Create**: Never append to issues.jsonl without deduplication
+9. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+10. **DO NOT STOP**: Continuous execution until all waves complete
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -208,8 +207,6 @@ Initialize `discovery-state.json`:
 }
 ```
 
----
-
 ### Phase 1: Mode Resolution -> CSV
 
 **Objective**: Determine mode, define perspectives/dimensions, determine scope, generate tasks.csv.
@@ -241,11 +238,9 @@ Initialize `discovery-state.json`:
 4. Store dimensions in `{discoveryDir}/exploration-plan.json`
 5. Generate N dimension rows (wave 1) + 1 dedup row (wave 2)
 
-**Specs loading**: `specs_content = maestro spec load --category execution` -- pass to agents for severity calibration.
+**Specs loading**: `specs_content = maestro spec load --category coding` -- pass to agents for severity calibration.
 
 **User validation**: Display perspective/dimension breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -328,8 +323,6 @@ spawn_agents_on_csv({
 - Append to `{discoveryDir}/discovery-issues.jsonl`
 - Report: total issues_found (pre-dedup), issues after dedup, severity_distribution
 
----
-
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results and human-readable report.
@@ -345,7 +338,7 @@ spawn_agents_on_csv({
   "status": "completed",
   "started_at": "{ISO}",
   "completed_at": "{ISO}",
-  "perspectives_completed": ["security", "performance", ...],
+  "perspectives_completed": ["security", "performance", "..."],
   "issues_found": 42,
   "issues_deduplicated": 31
 }
@@ -434,11 +427,9 @@ Files:
 | Specific area needs deeper look | `$manage-issue-discover "by-prompt '...'"` -- Explore deeper |
 | Full scan complete | `$manage-issue "list --source discovery"` -- View discovered issues |
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -448,7 +439,7 @@ Files:
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -458,7 +449,7 @@ Files:
 | `reliability_risk` | `data.location` | `{location, failure_mode, impact}` | Reliability concern |
 | `scalability_limit` | `data.location` | `{location, constraint, threshold}` | Scalability bottleneck |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own scan
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -469,10 +460,9 @@ Files:
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"vulnerability","data":{"location":"src/auth/login.ts:42","type":"sql_injection","severity":"critical","cwe":"CWE-89"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -486,18 +476,16 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"vulnerability","data":{"location":"s
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
 | ID collision in issues.jsonl | Re-read file, recalculate next sequence number |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-6. **Skip on Failure**: If all perspective agents failed, skip dedup
-7. **Evidence Required**: Every finding must have file:line reference -- no speculative issues
-8. **Dedup Before Create**: Never append to issues.jsonl without deduplication
-9. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-10. **DO NOT STOP**: Continuous execution until all waves complete
+<success_criteria>
+- [ ] Session initialized with discovery-state.json
+- [ ] tasks.csv generated with correct perspective/wave assignments
+- [ ] All perspective agents executed in parallel (wave 1)
+- [ ] Dedup agent aggregates and deduplicates findings (wave 2)
+- [ ] Issues appended to .workflow/issues/issues.jsonl with unique IDs
+- [ ] results.csv and context.md generated with full breakdown
+- [ ] Temporary wave-{N}.csv files cleaned up after merge
+- [ ] discoveries.ndjson maintained as append-only
+- [ ] Per-perspective findings saved to discovery directory
+</success_criteria>

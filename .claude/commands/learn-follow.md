@@ -135,7 +135,7 @@ Build a structured summary document:
 
 **Next-step routing:**
 - Deep dive into a discovered pattern → `/learn-decompose <path>`
-- Add undocumented pattern to specs → `/spec-add pattern <description>`
+- Add undocumented pattern to specs → `/spec-add coding <description>`
 - Get second opinion on a finding → `/learn-second-opinion <file>`
 - Browse related wiki entries → `/wiki-digest <topic>`
 </execution>

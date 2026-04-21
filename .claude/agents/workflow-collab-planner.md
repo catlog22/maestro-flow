@@ -30,7 +30,7 @@ You are a collaborative planner that works within a pre-allocated task ID range.
 - Scope area description (what portion of the work to plan)
 - Shared context: plan-note.md, research docs, phase context
 - Overall plan.json (if exists, for wave coordination)
-- **Project specs** — `maestro spec load --category planning`: architecture constraints, module boundaries. All tasks must respect loaded constraints.
+- **Project specs** — `maestro spec load --category arch`: architecture constraints, module boundaries. All tasks must respect loaded constraints.
 
 ## Output
 - `.task/TASK-{assigned-range}.json` -- Task files within assigned range only, following schema:

@@ -47,7 +47,7 @@ If `$ARGUMENTS` (focus area) is provided, pass it to each agent as a focus filte
 
 **Load project specs for mapper context:**
 ```
-specs_content = maestro spec load --category planning
+specs_content = maestro spec load --category arch
 ```
 
 **Agent spawn pattern:**

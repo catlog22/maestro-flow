@@ -18,7 +18,7 @@ function setupTestSpecs(): void {
   mkdirSync(SPECS_DIR, { recursive: true });
   writeFileSync(join(SPECS_DIR, 'coding-conventions.md'), `---
 title: Coding Conventions
-category: execution
+category: coding
 ---
 
 # Coding Conventions
@@ -33,7 +33,7 @@ category: execution
 `);
   writeFileSync(join(SPECS_DIR, 'architecture-constraints.md'), `---
 title: Architecture Constraints
-category: planning
+category: arch
 ---
 
 # Architecture Constraints
@@ -44,7 +44,7 @@ category: planning
 `);
   writeFileSync(join(SPECS_DIR, 'quality-rules.md'), `---
 title: Quality Rules
-category: execution
+category: quality
 ---
 
 # Quality Rules
@@ -66,7 +66,7 @@ category: test
 `);
   writeFileSync(join(SPECS_DIR, 'learnings.md'), `---
 title: Learnings
-category: general
+category: learning
 ---
 
 # Learnings
@@ -87,25 +87,24 @@ describe('evaluateSpecInjection', () => {
   beforeEach(() => setupTestSpecs());
   afterEach(() => cleanupTestSpecs());
 
-  it('injects execution specs for code-developer agent', () => {
+  it('injects coding specs for code-developer agent', () => {
     const result = evaluateSpecInjection('code-developer', TEST_DIR);
     assert.strictEqual(result.inject, true);
     assert.ok(result.content?.includes('Coding Conventions'));
-    assert.ok(result.content?.includes('Quality Rules'));
-    assert.ok(result.categories?.includes('execution'));
+    assert.ok(result.categories?.includes('coding'));
   });
 
-  it('injects planning specs for workflow-planner agent', () => {
+  it('injects arch specs for workflow-planner agent', () => {
     const result = evaluateSpecInjection('workflow-planner', TEST_DIR);
     assert.strictEqual(result.inject, true);
     assert.ok(result.content?.includes('Architecture Constraints'));
-    assert.ok(result.categories?.includes('planning'));
+    assert.ok(result.categories?.includes('arch'));
   });
 
   it('injects multiple categories for tdd-developer', () => {
     const result = evaluateSpecInjection('tdd-developer', TEST_DIR);
     assert.strictEqual(result.inject, true);
-    assert.ok(result.categories?.includes('execution'));
+    assert.ok(result.categories?.includes('coding'));
     assert.ok(result.categories?.includes('test'));
     assert.ok(result.content?.includes('Test Conventions'));
     assert.ok(result.content?.includes('Coding Conventions'));
@@ -121,9 +120,10 @@ describe('evaluateSpecInjection', () => {
     assert.strictEqual(result.inject, false);
   });
 
-  it('always includes learnings.md', () => {
+  it('does not include learnings.md when loading coding category', () => {
     const result = evaluateSpecInjection('code-developer', TEST_DIR);
-    assert.ok(result.content?.includes('Learnings'));
+    // 1:1 mapping: coding category only loads coding-conventions.md
+    assert.ok(!result.content?.includes('Pattern X works well'));
   });
 
   it('respects config mapping override', () => {

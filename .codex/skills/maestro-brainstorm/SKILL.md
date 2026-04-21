@@ -5,38 +5,10 @@ argument-hint: "[topic] [-y|--yes] [-c|--concurrency N] [--continue] [--count N]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm role selection, skip interactive questions, use defaults for count and role selection.
-
-# Maestro Brainstorm (CSV Wave)
-
-## Usage
-
-```bash
-$maestro-brainstorm "Build real-time collaboration platform"
-$maestro-brainstorm -y "Build real-time collaboration platform"
-$maestro-brainstorm -c 6 "Build real-time collaboration platform --count 5"
-$maestro-brainstorm --continue "brainstorm-collab-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode)
-- `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
-- `--continue`: Resume existing session
-- `--count N`: Number of roles to select (default 3, max 9)
-- `--skip-questions`: Skip context gathering questions
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `.brainstorming/` (role analyses + synthesis artifacts)
-
----
-
-## Overview
-
+<purpose>
 Wave-based multi-role brainstorming using `spawn_agents_on_csv`. Diamond topology: guidance specification generation (Wave 1), parallel role analysis agents (Wave 2), then synthesis + feature-index generation (Wave 3).
 
-**Core workflow**: Parse Topic → Generate Guidance Spec → Parallel Role Analysis → Synthesis + Feature Index
+**Core workflow**: Parse Topic -> Generate Guidance Spec -> Parallel Role Analysis -> Synthesis + Feature Index
 
 ```
 +---------------------------------------------------------------------------+
@@ -81,10 +53,30 @@ Wave-based multi-role brainstorming using `spawn_agents_on_csv`. Diamond topolog
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+```bash
+$maestro-brainstorm "Build real-time collaboration platform"
+$maestro-brainstorm -y "Build real-time collaboration platform"
+$maestro-brainstorm -c 6 "Build real-time collaboration platform --count 5"
+$maestro-brainstorm --continue "brainstorm-collab-20260318"
+```
 
-## CSV Schema
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode)
+- `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
+- `--continue`: Resume existing session
+- `--count N`: Number of roles to select (default 3, max 9)
+- `--skip-questions`: Skip context gathering questions
+
+When `--yes` or `-y`: Auto-confirm role selection, skip interactive questions, use defaults for count and role selection.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `.brainstorming/` (role analyses + synthesis artifacts)
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -119,9 +111,7 @@ id,title,description,role,topic,guidance_spec,deps,context_from,wave,status,find
 
 Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
----
-
-## Output Artifacts
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -132,9 +122,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | `context.md` | Human-readable brainstorm report | Created in Phase 3 |
 | `.brainstorming/` | Role analyses + synthesis artifacts | Populated in Phase 3 |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/brainstorm-{slug}-{date}/
@@ -156,10 +144,22 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
     |   +-- analysis-F-{id}-{slug}.md
     +-- synthesis-specification.md (fallback mode)
 ```
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
+3. **CSV is Source of Truth**: Master tasks.csv holds all state
+4. **Context Propagation**: prev_context built from master CSV, not from memory
+5. **Guidance First**: Wave 1 (guidance) MUST complete before any role analysis begins
+6. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
+7. **Skip on Failure**: If guidance fails, abort. If all roles fail, skip synthesis.
+8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+9. **DO NOT STOP**: Continuous execution until all waves complete
+10. **9 Valid Roles Only**: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert
+</invariants>
 
-## Implementation
+<execution>
 
 ### Session Initialization
 
@@ -189,8 +189,6 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}/.brainstorming`)
 ```
-
----
 
 ### Phase 1: Topic Resolution -> CSV
 
@@ -226,8 +224,6 @@ Bash(`mkdir -p ${sessionFolder}/.brainstorming`)
 **Wave computation**: 3-wave diamond -- guidance = wave 1, all role tasks = wave 2, synthesis = wave 3.
 
 **User validation**: Display task breakdown (skip if AUTO_YES).
-
----
 
 ### Phase 2: Wave Execution Engine
 
@@ -347,8 +343,6 @@ spawn_agents_on_csv({
 - Build `feature-index.json` and `synthesis-changelog.md`
 - Four-Layer Aggregation: Direct Reference, Structured Extraction, Conflict Distillation, Cross-Feature Annotation
 
----
-
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results and human-readable report.
@@ -393,11 +387,9 @@ spawn_agents_on_csv({
 5. Update phase `index.json` with brainstorm status (if phase mode)
 6. Display summary with next step suggestions
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -407,7 +399,7 @@ spawn_agents_on_csv({
 | `blocker` | `data.issue` | `{issue, severity, impact}` | Blocking issue found |
 | `tech_stack` | singleton | `{framework, language, tools[]}` | Technology stack info |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -417,7 +409,7 @@ spawn_agents_on_csv({
 | `role_insight` | `data.role+data.topic` | `{role, topic, insight, confidence}` | Role-specific finding |
 | `cross_role_conflict` | `data.area` | `{area, roles[], positions[], resolution}` | Cross-role disagreement |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -428,10 +420,9 @@ spawn_agents_on_csv({
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"terminology","data":{"term":"CRDT","definition":"Conflict-free Replicated Data Type","aliases":["conflict-free"],"category":"technical"}}' >> {session_folder}/discoveries.ndjson
 ```
+</execution>
 
----
-
-## Error Handling
+<error_codes>
 
 | Error | Resolution |
 |-------|------------|
@@ -446,18 +437,16 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"terminology","data":{"term":"CRDT","
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
 | Phase directory not found | Abort with error: "Phase {N} not found" |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **Wave Order is Sacred**: Never execute wave 2 before wave 1 completes and results are merged
-3. **CSV is Source of Truth**: Master tasks.csv holds all state
-4. **Context Propagation**: prev_context built from master CSV, not from memory
-5. **Guidance First**: Wave 1 (guidance) MUST complete before any role analysis begins
-6. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
-7. **Skip on Failure**: If guidance fails, abort. If all roles fail, skip synthesis.
-8. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
-9. **DO NOT STOP**: Continuous execution until all waves complete
-10. **9 Valid Roles Only**: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert
+<success_criteria>
+- [ ] Session folder created with valid tasks.csv
+- [ ] All 3 waves executed in order
+- [ ] guidance-specification.md produced in .brainstorming/
+- [ ] Role analysis files produced per selected role
+- [ ] Synthesis artifacts produced (feature specs or synthesis-specification.md)
+- [ ] feature-index.json and synthesis-changelog.md produced
+- [ ] context.md produced with full brainstorm report
+- [ ] Artifacts copied to target .brainstorming/ directory
+- [ ] discoveries.ndjson append-only throughout
+</success_criteria>

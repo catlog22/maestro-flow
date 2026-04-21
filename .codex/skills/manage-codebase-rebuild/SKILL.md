@@ -5,38 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency 5] [--continue] \"[--force] [--skip
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
-## Auto Mode
-
-When `--yes` or `-y`: Auto-confirm rebuild (implies --force), skip all prompts.
-
-# Maestro Codebase Rebuild (CSV Wave)
-
-## Usage
-
-```bash
-$manage-codebase-rebuild ""
-$manage-codebase-rebuild -y "--force"
-$manage-codebase-rebuild -c 5 "--force --skip-commit"
-$manage-codebase-rebuild --continue "rebuild-full-20260318"
-```
-
-**Flags**:
-- `-y, --yes`: Skip all confirmations (auto mode, implies --force)
-- `-c, --concurrency N`: Max concurrent agents (default: 5)
-- `--continue`: Resume existing session
-
-**Inner flags** (passed inside quotes):
-- `--force`: Clear existing .workflow/codebase/ and rebuild from scratch
-- `--skip-commit`: Do not auto-commit after rebuild
-
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
-**Target**: `.workflow/codebase/` (doc-index.json, tech-registry/, feature-maps/)
-
----
-
-## Overview
-
+<purpose>
 Single-wave parallel execution -- 5 independent doc generator agents each analyze a different documentation dimension of the codebase. All agents run concurrently with no dependencies. This is a destructive operation that rebuilds the entire `.workflow/codebase/` directory from scratch.
 
 **Core workflow**: Prepare Directory -> Decompose Doc Dimensions -> Parallel Generation -> Assemble doc-index.json
@@ -75,10 +44,37 @@ Single-wave parallel execution -- 5 independent doc generator agents each analyz
 |                                                                           |
 +---------------------------------------------------------------------------+
 ```
+</purpose>
 
----
+<context>
+$ARGUMENTS -- optional flags for rebuild control.
 
-## CSV Schema
+**Usage**:
+
+```bash
+$manage-codebase-rebuild ""
+$manage-codebase-rebuild -y "--force"
+$manage-codebase-rebuild -c 5 "--force --skip-commit"
+$manage-codebase-rebuild --continue "rebuild-full-20260318"
+```
+
+**Flags**:
+- `-y, --yes`: Skip all confirmations (auto mode, implies --force)
+- `-c, --concurrency N`: Max concurrent agents (default: 5)
+- `--continue`: Resume existing session
+
+**Inner flags** (passed inside quotes):
+- `--force`: Clear existing .workflow/codebase/ and rebuild from scratch
+- `--skip-commit`: Do not auto-commit after rebuild
+
+When `--yes` or `-y`: Auto-confirm rebuild (implies --force), skip all prompts.
+
+**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
+**Target**: `.workflow/codebase/` (doc-index.json, tech-registry/, feature-maps/)
+</context>
+
+<csv_schema>
 
 ### tasks.csv (Master State)
 
@@ -110,10 +106,22 @@ id,title,description,doc_dimension,output_path,deps,context_from,wave,status,fin
 ### Per-Wave CSV (Temporary)
 
 Single wave generates `wave-1.csv`. No `prev_context` needed (all tasks independent).
+</csv_schema>
 
----
+<invariants>
+1. **Start Immediately**: First action is session initialization, then Phase 1
+2. **CSV is Source of Truth**: tasks.csv holds all generator state
+3. **Discovery Board is Append-Only**: Generators share findings via NDJSON
+4. **Partial Results OK**: If 3/5 generators succeed, still assemble available docs
+5. **Destructive by Design**: This is a full rebuild -- existing codebase/ is cleared
+6. **Single Wave**: All generators are independent, no wave ordering needed
+7. **Cleanup Temp Files**: Remove wave-1.csv after results are merged
+8. **DO NOT STOP**: Execute until all generators complete or fail
+</invariants>
 
-## Output Artifacts
+<execution>
+
+### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
@@ -134,9 +142,7 @@ Single wave generates `wave-1.csv`. No `prev_context` needed (all tasks independ
 | `feature-maps/_index.md` | Feature index table |
 | `feature-maps/{slug}.md` | Per-feature documentation |
 
----
-
-## Session Structure
+### Session Structure
 
 ```
 .workflow/.csv-wave/rebuild-{scope}-{date}/
@@ -148,10 +154,6 @@ Single wave generates `wave-1.csv`. No `prev_context` needed (all tasks independ
 +-- wave-1.csv (temporary)
 +-- wave-1-results.csv (temporary)
 ```
-
----
-
-## Implementation
 
 ### Session Initialization
 
@@ -174,8 +176,6 @@ const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
 ```
-
----
 
 ### Phase 1: Setup -> CSV
 
@@ -214,8 +214,6 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 7. **User validation**: Display doc generator breakdown. Skip if AUTO_YES.
 
----
-
 ### Phase 2: Wave Execution (Single Wave)
 
 **Objective**: Run all 5 doc generators concurrently via spawn_agents_on_csv.
@@ -251,8 +249,6 @@ spawn_agents_on_csv({
 
 6. Read `wave-1-results.csv`, merge into master `tasks.csv`
 7. Delete `wave-1.csv`
-
----
 
 ### Phase 3: Results -> .workflow/codebase/
 
@@ -341,11 +337,9 @@ Next steps:
   Skill({ skill: "manage-codebase-refresh" })
 ```
 
----
+### Shared Discovery Board Protocol
 
-## Shared Discovery Board Protocol
-
-### Standard Discovery Types
+#### Standard Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
@@ -354,14 +348,14 @@ Next steps:
 | `integration_point` | `data.file` | `{file, description, exports[]}` | Module connection point |
 | `convention` | singleton | `{naming, imports, formatting}` | Project coding conventions |
 
-### Domain Discovery Types
+#### Domain Discovery Types
 
 | Type | Dedup Key | Data Schema | Description |
 |------|-----------|-------------|-------------|
 | `component` | `data.id` | `{id, name, type, code_locations[]}` | Component discovered by scanner |
 | `feature_group` | `data.name` | `{name, component_ids[], directory}` | Feature grouping identified |
 
-### Protocol
+#### Protocol
 
 1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
 2. **Skip covered**: If discovery of same type + dedup key exists, skip
@@ -374,11 +368,9 @@ echo '{"ts":"<ISO>","worker":"1","type":"tech_stack","data":{"framework":"Expres
 ```
 
 Generators share discoveries so other generators can skip redundant scanning (e.g., Component Scanner discovers components, Feature Mapper and Tech Registry Writer can leverage those findings).
+</execution>
 
----
-
-## Error Handling
-
+<error_codes>
 | Error | Resolution |
 |-------|------------|
 | .workflow/ not initialized | Abort: "Run init first" (E001) |
@@ -390,16 +382,16 @@ Generators share discoveries so other generators can skip redundant scanning (e.
 | CSV parse error | Validate format, show line number |
 | discoveries.ndjson corrupt | Ignore malformed lines |
 | Continue mode: no session found | List available sessions |
+</error_codes>
 
----
-
-## Core Rules
-
-1. **Start Immediately**: First action is session initialization, then Phase 1
-2. **CSV is Source of Truth**: tasks.csv holds all generator state
-3. **Discovery Board is Append-Only**: Generators share findings via NDJSON
-4. **Partial Results OK**: If 3/5 generators succeed, still assemble available docs
-5. **Destructive by Design**: This is a full rebuild -- existing codebase/ is cleared
-6. **Single Wave**: All generators are independent, no wave ordering needed
-7. **Cleanup Temp Files**: Remove wave-1.csv after results are merged
-8. **DO NOT STOP**: Execute until all generators complete or fail
+<success_criteria>
+- [ ] Session initialized with tasks.csv
+- [ ] .workflow/codebase/ cleared (if --force or confirmed)
+- [ ] All 5 doc generators executed via spawn_agents_on_csv
+- [ ] doc-index.json assembled from generator findings
+- [ ] tech-registry/ and feature-maps/ populated with markdown docs
+- [ ] state.json updated with rebuild timestamp
+- [ ] context.md generated with rebuild report
+- [ ] Auto-commit performed (unless --skip-commit)
+- [ ] Completion report displayed with counts and next steps
+</success_criteria>

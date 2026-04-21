@@ -134,12 +134,12 @@ Parse $ARGUMENTS to determine mode and flags:
 3. Read `.workflow/state.json` → `current_milestone`, `artifacts[]`, `accumulated_context` (key_decisions, deferred items, blockers)
 4. Find prior analyze artifacts from `state.json.artifacts[]` where type=analyze and same milestone → load their `context.md` to skip already-decided areas
 5. Find brainstorm artifacts from `state.json.artifacts[]` where type=brainstorm and same milestone → load `guidance-specification.md` if exists
-6. Load project specs: `specs_content = maestro spec load --category planning`
+6. Load project specs: `specs_content = maestro spec load --category arch`
 
 **Load prior context** (adhoc/standalone scope):
 1. Read `.workflow/project.md` (if exists) — project vision, Validated requirements, Active requirements, Key Decisions
 2. Read `.workflow/state.json` (if exists) → `accumulated_context` (key_decisions, deferred, blockers)
-3. Load project specs: `specs_content = maestro spec load --category planning`
+3. Load project specs: `specs_content = maestro spec load --category arch`
 
 **Quick mode routing**: If QUICK_MODE, skip to Step 8 (Decision Extraction) after loading context.
 
