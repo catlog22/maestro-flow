@@ -31,16 +31,6 @@ jobs:
           cache: 'npm'
           cache-dependency-path: docs-site/package-lock.json
 
-      - name: Copy command and skill files for Vite glob
-        run: |
-          mkdir -p docs-site/.claude/commands docs-site/.claude/skills
-          cp .claude/commands/*.md docs-site/.claude/commands/ 2>/dev/null || true
-          for d in .claude/skills/*/; do
-            name=$(basename "$d")
-            mkdir -p "docs-site/.claude/skills/$name"
-            cp "$d/SKILL.md" "docs-site/.claude/skills/$name/" 2>/dev/null || true
-          done
-
       - name: Install dependencies
         run: npm ci
         working-directory: docs-site

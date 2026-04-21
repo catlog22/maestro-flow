@@ -31,7 +31,7 @@ export interface SkillContent {
 }
 
 // Use import.meta.glob to load all markdown files
-// Note: This requires vite to be configured with proper fs.allow
+// Files are copied to docs-site/.claude/ during build (see deploy-docs.yml)
 const commandModules = import.meta.glob('/.claude/commands/*.md', { query: '?raw', import: 'default' });
 const claudeSkillModules = import.meta.glob('/.claude/skills/*/SKILL.md', { query: '?raw', import: 'default' });
 const codexSkillModules = import.meta.glob('/.codex/skills/*/SKILL.md', { query: '?raw', import: 'default' });
