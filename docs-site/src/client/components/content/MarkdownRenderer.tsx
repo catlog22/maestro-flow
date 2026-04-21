@@ -40,21 +40,21 @@ const components: Components = {
     return (
       <div className="relative group">
         {lang && (
-          <span className="absolute top-[var(--spacing-2)] right-[var(--spacing-3)] text-[length:11px] font-[var(--font-weight-semibold)] text-[rgba(255,255,255,0.4)] uppercase">
+          <span className="absolute top-[var(--spacing-2)] right-[var(--spacing-3)] text-[length:11px] font-[var(--font-weight-semibold)] text-text-tertiary uppercase">
             {lang}
           </span>
         )}
-        <code className={`block font-mono text-[length:var(--font-size-sm)] leading-[1.6] text-text-code ${className ?? ''}`} {...props}>
+        <code className={`block font-mono text-[length:var(--font-size-sm)] leading-[1.6] text-text-secondary ${className ?? ''}`} {...props}>
           {children}
         </code>
       </div>
     );
   },
-  // Pre wrapper — dark rounded block
+  // Pre wrapper — transparent with subtle border
   pre({ children, ...props }) {
     return (
       <pre
-        className="bg-bg-code rounded-[var(--radius-lg)] p-[var(--spacing-4)] overflow-x-auto my-[var(--spacing-4)]"
+        className="bg-transparent border border-border-divider rounded-[var(--radius-lg)] p-[var(--spacing-4)] overflow-x-auto my-[var(--spacing-4)]"
         {...props}
       >
         {children}

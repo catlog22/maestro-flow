@@ -14,30 +14,20 @@ function initMermaid() {
     startOnLoad: false,
     theme: 'base',
     themeVariables: {
-      // Node fill — warm white matching site card bg
-      mainBkg: '#FFFFFF',
-      // Node border — visible warm gray
-      primaryBorderColor: '#D1CEC8',
-      // Text inside nodes — dark, high contrast
-      primaryTextColor: '#2D2A26',
-      // Edge/arrow lines
-      lineColor: '#A09D97',
-      // Edge label background
-      edgeLabelBackground: '#FAF8F5',
-      // Cluster background & border
-      clusterBkg: 'rgba(243,240,234,0.5)',
-      clusterBorder: '#D1CEC8',
-      // Secondary nodes
-      secondaryColor: '#F3F0EA',
-      secondaryBorderColor: '#D1CEC8',
-      secondaryTextColor: '#2D2A26',
-      // Tertiary
-      tertiaryColor: '#ECEAE4',
-      tertiaryBorderColor: '#D1CEC8',
-      tertiaryTextColor: '#2D2A26',
-      // Line thickness
+      mainBkg: '#302D28',
+      primaryBorderColor: '#5A554F',
+      primaryTextColor: '#E8E5DE',
+      lineColor: '#78756F',
+      edgeLabelBackground: 'transparent',
+      clusterBkg: 'rgba(255,255,255,0.03)',
+      clusterBorder: '#4A4740',
+      secondaryColor: '#302D28',
+      secondaryBorderColor: '#5AC78B',
+      secondaryTextColor: '#E8E5DE',
+      tertiaryColor: '#302D28',
+      tertiaryBorderColor: '#6BA8E8',
+      tertiaryTextColor: '#E8E5DE',
       lineWidth: '1.5px',
-      // Font
       fontFamily: 'Inter, system-ui, sans-serif',
       fontSize: '13px',
     },
@@ -101,7 +91,7 @@ export function MermaidBlock({ chart }: MermaidBlockProps) {
   return (
     <div
       ref={containerRef}
-      className="mermaid-diagram bg-bg-code rounded-[var(--radius-lg)] p-[var(--spacing-5)] my-[var(--spacing-4)] overflow-x-auto"
+      className="mermaid-diagram rounded-[var(--radius-lg)] p-[var(--spacing-5)] my-[var(--spacing-4)] overflow-x-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );

@@ -292,7 +292,7 @@
   /* Sizing */
   --size-sidebar-width: 260px;
   --size-topbar-height: 56px;
-  --size-content-max-width: 740px;
+  --size-content-max-width: 960px;
   --size-toc-width: 200px;
   --size-card-min-width: 260px;
   --size-card-max-width: 340px;
@@ -474,45 +474,59 @@ body {
 
 
 /* ===== MERMAID DIAGRAMS ===== */
-/* Dark code-block background with high-contrast nodes */
+/* All nodes: dark fill + colored borders + white text */
 .mermaid-diagram svg {
   max-width: 100%;
   margin: 0 auto;
 }
-/* Node background — only the outer container rect */
-.mermaid-diagram .node .basic.label-container {
-  fill: #3A3632 !important;
-  stroke: #5A554F !important;
-  stroke-width: 1.5px;
+/* All node backgrounds — force dark, override classDef inline styles */
+.mermaid-diagram .node rect,
+.mermaid-diagram .node polygon,
+.mermaid-diagram .node circle {
+  fill: #302D28 !important;
+  stroke-width: 1.5px !important;
 }
-/* Inner label rect must be transparent — it sits on top of foreignObject text */
-.mermaid-diagram .node .label rect {
-  fill: transparent !important;
-  stroke: none !important;
-}
-/* Node text — high contrast on dark fill */
-.mermaid-diagram .nodeLabel,
-.mermaid-diagram .nodeLabel p,
-.mermaid-diagram .nodeLabel span {
-  color: #E8E5DE !important;
-  fill: #E8E5DE !important;
-}
-.mermaid-diagram .edgePath .path {
-  stroke: #A09D97 !important;
-  stroke-width: 1.5px;
-}
-.mermaid-diagram .edgeLabel,
-.mermaid-diagram .edgeLabel .label {
-  background-color: #2D2A26 !important;
-  color: #C8C5BE !important;
-  fill: #C8C5BE !important;
-}
+/* Different border colors per node type for visual distinction */
+.mermaid-diagram .node.default .basic.label-container,
+.mermaid-diagram .node.default rect { stroke: #5A554F !important; }
+.mermaid-diagram .node.phaseNode rect { stroke: #5AC78B !important; }
+.mermaid-diagram .node.issueNode rect { stroke: #8B6BBF !important; }
+.mermaid-diagram .node.sharedNode rect { stroke: #6BA8E8 !important; }
+.mermaid-diagram .node.commander rect { stroke: #6BA8E8 !important; }
+/* Inner label rect — transparent, never covers text */
+.mermaid-diagram .node .label rect,
 .mermaid-diagram .edgeLabel rect {
   fill: transparent !important;
   stroke: none !important;
 }
+/* Node text — always white */
+.mermaid-diagram .nodeLabel,
+.mermaid-diagram .nodeLabel p,
+.mermaid-diagram .nodeLabel span,
+.mermaid-diagram .node text {
+  color: #E8E5DE !important;
+  fill: #E8E5DE !important;
+}
+/* Edges */
+.mermaid-diagram .edgePath .path {
+  stroke: #78756F !important;
+  stroke-width: 1.5px;
+}
+.mermaid-diagram .edgeLabel,
+.mermaid-diagram .edgeLabel .label {
+  background-color: transparent !important;
+  color: #C8C5BE !important;
+  fill: #C8C5BE !important;
+}
+/* Arrows */
+.mermaid-diagram .arrowheadPath,
+.mermaid-diagram marker path {
+  fill: #78756F !important;
+  stroke: #78756F !important;
+}
+/* Clusters — subtle grouped regions */
 .mermaid-diagram .cluster rect {
-  fill: rgba(255,255,255,0.04) !important;
+  fill: rgba(255,255,255,0.03) !important;
   stroke: #4A4740 !important;
   stroke-width: 1px;
   rx: 8;
@@ -522,13 +536,7 @@ body {
   color: #A09D97 !important;
   fill: #A09D97 !important;
 }
-.mermaid-diagram .arrowheadPath {
-  fill: #A09D97 !important;
-}
-.mermaid-diagram marker path {
-  fill: #A09D97 !important;
-  stroke: #A09D97 !important;
-}
+
 
 
 /* Selection */
