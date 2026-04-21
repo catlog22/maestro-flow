@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useI18n } from '@/client/i18n/index.js';
 import { inventoryData, getCommandsByCategory, getCommandSlug, type Command, type Skill } from '@/client/routes/route-config.js';
+import { getAllGuideMeta } from '@/client/data/index.js';
 
 // ---------------------------------------------------------------------------
 // Sidebar — warm minimal collapsible category navigation with colored dots
@@ -70,6 +71,13 @@ export function Sidebar() {
       className="fixed top-[var(--size-topbar-height)] bottom-0 left-0 w-[var(--size-sidebar-width)] bg-bg-secondary border-r border-border overflow-y-auto z-50"
     >
       <nav className="py-[var(--spacing-4)]" aria-label="Command categories">
+        {/* Guides section */}
+        <SidebarGuidesSection />
+
+        {/* Divider */}
+        <div className="mx-[var(--spacing-3)] my-[var(--spacing-2)] border-t border-border-divider" />
+
+        {/* Category sections */}
         {sections.map((section) => (
           <SidebarSection
             key={section.id}
@@ -240,5 +248,89 @@ function SidebarItem({ category, item, type, dotColor }: SidebarItemProps) {
       <span className="truncate">{item}</span>
       {badge}
     </NavLink>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SidebarGuidesSection — collapsible guides navigation
+// ---------------------------------------------------------------------------
+
+function SidebarGuidesSection() {
+  const { t, locale } = useI18n();
+  const location = useLocation();
+  const [isOpen, setIsOpen] = useState(true);
+  const isZh = locale === 'zh-CN';
+  const guides = useMemo(() => getAllGuideMeta(), []);
+  const isGuidesActive = location.pathname.startsWith('/guides');
+
+  return (
+    <div className="px-[var(--spacing-3)] mb-[var(--spacing-2)]">
+      {/* Section header */}
+      <div className="flex items-center justify-between">
+        <NavLink
+          to="/guides"
+          className={({ isActive: linkIsActive }) => [
+            'flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] py-[var(--spacing-2)]',
+            'text-[length:10px] font-[var(--font-weight-semibold)] uppercase tracking-[var(--letter-spacing-wide)]',
+            'transition-all duration-[var(--duration-fast)]',
+            'rounded-[var(--radius-default)] flex-1',
+            linkIsActive || isGuidesActive
+              ? 'text-text-primary'
+              : 'text-text-tertiary hover:text-text-secondary',
+          ].join(' ')}
+        >
+          <span>📖</span>
+          {isZh ? '指南' : 'Guides'}
+        </NavLink>
+
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-expanded={isOpen}
+          className="p-1 rounded-[var(--radius-sm)] hover:bg-bg-hover text-text-tertiary transition-all duration-[var(--duration-fast)]"
+        >
+          <svg
+            className={[
+              'w-3 h-3 transition-transform duration-[var(--duration-fast)]',
+              isOpen ? 'rotate-90' : '',
+            ].join(' ')}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Guide items */}
+      {isOpen && (
+        <div className="mt-[var(--spacing-0-5)] flex flex-col gap-[var(--spacing-0-5)]">
+          {guides.map((guide) => {
+            const href = `/guides/${guide.slug}`;
+            const isActive = location.pathname === href;
+            return (
+              <NavLink
+                key={guide.slug}
+                to={href}
+                className={[
+                  'flex items-center gap-[var(--spacing-2)] px-[var(--spacing-3)] py-[var(--spacing-1-5)]',
+                  'text-[length:var(--font-size-sm)]',
+                  'transition-all duration-[var(--duration-fast)]',
+                  'rounded-[var(--radius-default)]',
+                  isActive
+                    ? 'bg-bg-active text-text-primary font-[var(--font-weight-semibold)]'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-hover',
+                ].join(' ')}
+              >
+                <span className="shrink-0 text-[length:12px]">{guide.icon}</span>
+                <span className="truncate">{isZh && guide.title_zh ? guide.title_zh : guide.title}</span>
+              </NavLink>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

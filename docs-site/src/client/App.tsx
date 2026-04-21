@@ -9,9 +9,19 @@ const CategoryPage = lazy(() => import('./pages/CategoryPage.js'));
 const CommandDetailPage = lazy(() => import('./pages/CommandDetailPage.js'));
 const SkillDetailPage = lazy(() => import('./pages/SkillDetailPage.js'));
 const SearchPage = lazy(() => import('./pages/SearchPage.js'));
+const GuidesIndexPage = lazy(() => import('./pages/GuidesIndexPage.js'));
+const GuidePage = lazy(() => import('./pages/GuidePage.js'));
 
 // Import Router components
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+
+// Route wrapper for guide pages (extracts slug from URL params)
+function GuideRouteWrapper() {
+  const { slug } = useParams<{ slug: string }>();
+  if (!slug) return <Navigate to="/guides" replace />;
+  return <GuidePage slug={slug} />;
+}
 
 // ---------------------------------------------------------------------------
 // App — root component with i18n provider, router, and layout
@@ -102,6 +112,10 @@ export function App() {
 
               {/* Search page */}
               <Route path="/search" element={<SearchPage />} />
+
+              {/* Guides */}
+              <Route path="/guides" element={<GuidesIndexPage />} />
+              <Route path="/guides/:slug" element={<GuideRouteWrapper />} />
 
               {/* Catch-all - redirect to home */}
               <Route path="*" element={<Navigate to="/" replace />} />

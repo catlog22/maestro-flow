@@ -115,6 +115,7 @@
     "section_error_codes": "Error Codes",
     "section_success_criteria": "Success Criteria",
     "section_documentation": "Documentation",
-    "section_workflow": "Workflow Connections"
+    "section_workflow": "Workflow Connections",
+    "related_guides": "Related Guides"
   }
 }

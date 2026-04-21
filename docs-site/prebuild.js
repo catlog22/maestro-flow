@@ -1,5 +1,5 @@
-// prebuild.js — Copy .claude commands and skills into docs-site for Vite glob resolution
-import { cpSync, mkdirSync, existsSync, readdirSync, statSync } from 'fs';
+// prebuild.js — Copy .claude commands/skills and guide files into docs-site for Vite glob resolution
+import { cpSync, mkdirSync, existsSync, readdirSync, statSync, copyFileSync } from 'fs';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -30,4 +30,18 @@ if (existsSync(srcSkills)) {
   mkdirSync(destSkills, { recursive: true });
   cpSync(srcSkills, destSkills, { recursive: true });
   console.log(`Copied skills: ${readdirSync(destSkills).length} directories`);
+}
+
+// Copy guides (Chinese .md only, skip .en.md)
+const srcGuides = join(root, 'guide');
+const destGuides = join(__dirname, 'guides');
+if (existsSync(srcGuides)) {
+  mkdirSync(destGuides, { recursive: true });
+  const guideFiles = readdirSync(srcGuides).filter(f =>
+    f.endsWith('.md') && !f.endsWith('.en.md')
+  );
+  for (const file of guideFiles) {
+    copyFileSync(join(srcGuides, file), join(destGuides, file));
+  }
+  console.log(`Copied guides: ${guideFiles.length} files`);
 }

@@ -115,6 +115,7 @@
     "section_error_codes": "错误代码",
     "section_success_criteria": "成功标准",
     "section_documentation": "文档",
-    "section_workflow": "工作流衔接"
+    "section_workflow": "工作流衔接",
+    "related_guides": "相关指南"
   }
 }
