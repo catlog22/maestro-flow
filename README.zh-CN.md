@@ -323,6 +323,7 @@ maestro/
 - **[Collab 协作 -- 使用指南](guide/team-lite-guide.md)** -- 2-8 人小团队协作: 加入、同步、活动感知、冲突预检、任务管理、命名空间隔离
 - **[Collab 协作 -- 设计文档](guide/team-lite-design.md)** -- 架构、数据模型、人类协作域 (`.workflow/collab/`) 与智能体管线 (`.workflow/.team/`) 的命名空间边界
 - **[MCP 工具参考](guide/mcp-tools-guide.md)** -- 全部 9 个 MCP 端点工具：文件操作 (edit/write/read)、团队协作 (msg/mailbox/task/agent)、持久记忆
+- **[CLI 命令参考](guide/cli-commands-guide.md)** -- 全部 21 个终端命令 — 安装、委派、协调、Wiki、Hook、Overlay、协作等
 
 ---
 

@@ -47,7 +47,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 
 Two edit modes: **update** (text replacement) and **line** (position-driven operations). Supports dryRun preview, multi-edit batches, fuzzy matching, and auto line-ending adaptation (CRLF/LF).
 
-#### Parameters
+#### edit_file Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -73,7 +73,7 @@ Two edit modes: **update** (text replacement) and **line** (position-driven oper
 | `end_line` | number | No | End line for range operations |
 | `text` | string | No | Content for insert/replace |
 
-#### Examples
+#### edit_file Examples
 
 ```jsonc
 // Text replacement
@@ -95,7 +95,7 @@ Two edit modes: **update** (text replacement) and **line** (position-driven oper
 
 Create or overwrite files with auto-created parent directories. Supports optional backup and multiple encodings.
 
-#### Parameters
+#### write_file Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -105,7 +105,7 @@ Create or overwrite files with auto-created parent directories. Supports optiona
 | `backup` | boolean | No | `false` | Create timestamped backup before overwrite |
 | `encoding` | `"utf8"` \| `"utf-8"` \| `"ascii"` \| `"latin1"` \| `"binary"` \| `"hex"` \| `"base64"` | No | `"utf8"` | File encoding |
 
-#### Examples
+#### write_file Examples
 
 ```jsonc
 // Create file
@@ -121,7 +121,7 @@ Create or overwrite files with auto-created parent directories. Supports optiona
 
 Read a single file with optional line-based pagination. Useful for large files.
 
-#### Parameters
+#### read_file Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -129,7 +129,7 @@ Read a single file with optional line-based pagination. Useful for large files.
 | `offset` | number | No | — | Line offset (0-based) |
 | `limit` | number | No | — | Number of lines to read |
 
-#### Examples
+#### read_file Examples
 
 ```jsonc
 // Read entire file
@@ -145,7 +145,7 @@ Read a single file with optional line-based pagination. Useful for large files.
 
 Batch file reading, directory traversal, and content regex search. Supports glob pattern filtering and depth control.
 
-#### Parameters
+#### read_many_files Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -156,7 +156,7 @@ Batch file reading, directory traversal, and content regex search. Supports glob
 | `includeContent` | boolean | No | `true` | Include file content in results |
 | `maxFiles` | number | No | `50` | Max files to return |
 
-#### Examples
+#### read_many_files Examples
 
 ```jsonc
 // Read multiple files
@@ -182,7 +182,7 @@ Persistent JSONL message bus for agent team communication. Provides 10 operation
 
 **Storage**: `.workflow/.team/{session-id}/.msg/messages.jsonl`
 
-#### Parameters
+#### team_msg Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -213,7 +213,7 @@ Persistent JSONL message bus for agent team communication. Provides 10 operation
 | `delete` | Delete a message by ID |
 | `clear` | Delete all messages for a session |
 
-#### Examples
+#### team_msg Examples
 
 ```jsonc
 // Send message
@@ -234,7 +234,7 @@ Mailbox-style agent messaging with delivery tracking and broker injection. Compa
 
 **Storage**: `.workflow/.team/{session-id}/.msg/mailbox.jsonl`
 
-#### Parameters
+#### team_mailbox Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -250,7 +250,7 @@ Mailbox-style agent messaging with delivery tracking and broker injection. Compa
 | `limit` | number | No | `50` | Max messages (1-100) |
 | `mark_delivered` | boolean | No | `true` | Mark returned messages as delivered |
 
-#### Examples
+#### team_mailbox Examples
 
 ```jsonc
 // Send message (auto-inject into running agent)
@@ -271,7 +271,7 @@ Team task CRUD with session-scoped namespaces and state machine validation. Buil
 
 **Storage**: `.workflow/.team/{session_id}/tasks/{id}.json`
 
-#### Parameters
+#### team_task Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -291,7 +291,7 @@ open → assigned → in_progress → pending_review → done → closed
                                                         ↘ open (reopen)
 ```
 
-#### Examples
+#### team_task Examples
 
 ```jsonc
 // Create task
@@ -312,7 +312,7 @@ Agent lifecycle management — spawn, shutdown, and remove agents via the Delega
 
 **Storage**: `.workflow/.team/{session_id}/members.json`
 
-#### Parameters
+#### team_agent Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -322,7 +322,7 @@ Agent lifecycle management — spawn, shutdown, and remove agents via the Delega
 | `prompt` | string | spawn | — | Agent instructions |
 | `tool` | string | No | `"gemini"` | CLI tool to use |
 
-#### Examples
+#### team_agent Examples
 
 ```jsonc
 // Spawn agent
@@ -347,7 +347,7 @@ Cross-session JSON memory storage at `~/.maestro/data/core-memory/`. Provides 4 
 
 **ID format**: `CMEM-YYYYMMDD-HHMMSS`
 
-#### Parameters
+#### core_memory Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -359,7 +359,7 @@ Cross-session JSON memory storage at `~/.maestro/data/core-memory/`. Provides 4 
 | `limit` | number | No | `100` | Max results |
 | `tags` | string[] | No | — | Tag filter (AND logic) |
 
-#### Examples
+#### core_memory Examples
 
 ```jsonc
 // Import memory
@@ -373,361 +373,6 @@ Cross-session JSON memory storage at `~/.maestro/data/core-memory/`. Provides 4 
 
 // List with tag filter
 { "operation": "list", "tags": ["auth"], "limit": 10 }
-```
-
----
-
-## CLI Terminal Commands
-
-In addition to MCP tools, Maestro provides 21 terminal commands invoked via `maestro <command>`.
-
-### Command Overview
-
-| Command | Alias | Purpose |
-|---------|-------|---------|
-| `maestro install` | — | Install Maestro assets (interactive) |
-| `maestro uninstall` | — | Remove installed assets |
-| `maestro view` | — | Launch Dashboard kanban board |
-| `maestro stop` | — | Stop Dashboard server |
-| `maestro update` | — | Check/install latest version |
-| `maestro serve` | — | Start workflow server |
-| `maestro run` | — | Execute a named workflow |
-| `maestro delegate` | — | Delegate task to AI agent |
-| `maestro coordinate` | `coord` | Graph workflow coordinator |
-| `maestro cli` | — | Run CLI agent tools |
-| `maestro launcher` | — | Claude Code launcher (workflow/settings switching) |
-| `maestro spec` | — | Project spec management |
-| `maestro wiki` | — | Wiki knowledge graph queries |
-| `maestro hooks` | — | Hook management and evaluation |
-| `maestro overlay` | — | Command overlay management |
-| `maestro collab` | `team` | Human team collaboration |
-| `maestro agent-msg` | `msg` | Agent team message bus |
-| `maestro core-memory` | `cm` | Persistent memory management |
-| `maestro brainstorm-visualize` | `bv` | Brainstorm visualization server |
-| `maestro ext` | — | Extension management |
-| `maestro tool` | — | Tool interaction (list/exec) |
-
----
-
-### maestro install
-
-Install Maestro assets to project or global directory with interactive step selection.
-
-```bash
-maestro install                           # Interactive install
-maestro install --force                   # Non-interactive batch install
-maestro install components                # Install file components
-maestro install hooks                     # Install hooks
-maestro install mcp                       # Register MCP server
-```
-
-| Option | Description |
-|--------|-------------|
-| `--force` | Non-interactive batch install of all components |
-| `--global` | Install global assets only |
-| `--path <dir>` | Install to specified project directory |
-| `--hooks <level>` | Hook level: none / minimal / standard / full |
-
----
-
-### maestro uninstall
-
-Remove installed Maestro assets.
-
-```bash
-maestro uninstall              # Interactive uninstall
-maestro uninstall --all        # Uninstall all recorded installations
-maestro uninstall --all -y     # Skip confirmation
-```
-
----
-
-### maestro view
-
-Launch the Dashboard kanban board (browser or TUI).
-
-```bash
-maestro view                   # Launch board (auto-open browser)
-maestro view --tui             # Terminal UI mode
-maestro view --dev             # Vite dev mode (HMR)
-maestro view --port 8080       # Custom port
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--port`, `-p` | `3001` | Server port |
-| `--host` | `127.0.0.1` | Bind host |
-| `--path <dir>` | CWD | Workspace root (containing `.workflow/`) |
-| `--no-browser` | — | Don't auto-open browser |
-| `--tui` | — | Terminal UI mode |
-| `--dev` | — | Vite dev server mode |
-
----
-
-### maestro stop
-
-Stop the Dashboard server. 3-stage strategy: graceful shutdown → port lookup kill → force kill.
-
-```bash
-maestro stop                   # Graceful stop
-maestro stop --force           # Force kill
-maestro stop --port 8080       # Custom port
-```
-
----
-
-### maestro update
-
-Check for and install the latest version.
-
-```bash
-maestro update                 # Check and prompt to install
-maestro update --check         # Check only, don't install
-```
-
----
-
-### maestro delegate
-
-Delegate tasks to AI agent tools (gemini/qwen/codex/claude/opencode). Supports sync, async, and session resume.
-
-```bash
-# Synchronous execution
-maestro delegate "analyze auth module" --to gemini
-
-# Async background execution
-maestro delegate "fix bug in auth" --to gemini --async
-
-# Inspect execution
-maestro delegate show
-maestro delegate status gem-143022-a7f2
-maestro delegate output gem-143022-a7f2
-
-# Message injection
-maestro delegate message gem-143022-a7f2 "also check utils"
-
-# Resume session
-maestro delegate "continue" --to gemini --resume gem-143022-a7f2
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--to <tool>` | First enabled tool | Target tool (gemini/qwen/codex/claude/opencode) |
-| `--mode <mode>` | `analysis` | Execution mode: analysis (read-only) / write |
-| `--model <model>` | Tool default | Model override |
-| `--cd <dir>` | CWD | Working directory |
-| `--rule <template>` | — | Protocol + template loading |
-| `--id <id>` | Auto-generated | Execution ID |
-| `--resume [id]` | — | Resume last/specific session |
-| `--async` | — | Run detached in background |
-| `--backend <type>` | `direct` | Adapter backend: direct / terminal |
-
-**Subcommands:**
-
-| Subcommand | Description |
-|------------|-------------|
-| `show [--all]` | List execution history |
-| `output <id> [--verbose]` | Get output |
-| `status <id> [--events N]` | View status |
-| `tail <id>` | Recent events + history |
-| `cancel <id>` | Request cancellation |
-| `message <id> <text> [--delivery inject\|after_complete]` | Inject message |
-| `messages <id>` | View message queue |
-
----
-
-### maestro coordinate
-
-Graph workflow coordinator with step mode (execute one node at a time) and auto mode (full graph traversal).
-
-```bash
-# List available chain graphs
-maestro coordinate list
-
-# Auto run (full graph traversal)
-maestro coordinate run "implement auth" --chain default -y
-
-# Step mode
-maestro coordinate start "implement auth" --chain default
-maestro coordinate next <sessionId>
-maestro coordinate status <sessionId>
-
-# Report node result
-maestro coordinate report --session <id> --node <id> --status SUCCESS
-```
-
-| Option | Description |
-|--------|-------------|
-| `--chain <name>` | Specify chain graph |
-| `--tool <tool>` | Agent tool (default: `claude`) |
-| `-y`, `--yes` | Auto-confirm mode |
-| `--parallel` | Enable fork/join parallel execution |
-| `--dry-run` | Preview execution plan |
-| `--continue`, `-c` | Resume session |
-
----
-
-### maestro cli
-
-Unified CLI agent tool interface (gemini/qwen/codex/claude/opencode).
-
-```bash
-maestro cli -p "analyze code" --tool gemini --mode analysis
-maestro cli -p "fix bug" --tool gemini --mode write
-maestro cli show                    # View execution history
-maestro cli output <id>             # Get output
-maestro cli watch <id>              # Stream output in real-time
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `-p`, `--prompt` | **required** | Prompt text |
-| `--tool <name>` | First enabled tool | CLI tool |
-| `--mode <mode>` | `analysis` | Execution mode |
-| `--model <model>` | Tool default | Model override |
-| `--cd <dir>` | CWD | Working directory |
-| `--rule <template>` | — | Template loading |
-| `--id <id>` | Auto-generated | Execution ID |
-| `--resume [id]` | — | Resume session |
-
----
-
-### maestro launcher
-
-Unified Claude Code launcher with workflow profile and settings switching.
-
-```bash
-maestro launcher -w my-project -s dev    # Launch with profile
-maestro launcher list                    # List all profiles
-maestro launcher status                  # Show active profile
-maestro launcher add-workflow my-proj --claude-md ./CLAUDE.md
-```
-
----
-
-### maestro spec
-
-Project spec management (init, load, list, status).
-
-```bash
-maestro spec init                 # Initialize spec system
-maestro spec load --category coding --keyword auth
-maestro spec list                 # List spec files
-maestro spec status               # Show spec status
-```
-
----
-
-### maestro wiki
-
-Wiki knowledge graph queries and mutations. Offline by default, `--live` for HTTP API.
-
-```bash
-maestro wiki list --type spec     # List by type
-maestro wiki search "auth"        # BM25 full-text search
-maestro wiki get <id>             # Get single entry
-maestro wiki health               # Graph health score
-maestro wiki orphans              # Orphan entries
-maestro wiki hubs --limit 5       # Top-N hub nodes
-maestro wiki create --type note --slug my-note --title "My Note"
-```
-
----
-
-### maestro hooks
-
-Hook management and evaluator execution.
-
-```bash
-maestro hooks install --level full     # Install hooks
-maestro hooks status                   # View installation status
-maestro hooks list                     # List all hooks
-maestro hooks toggle spec-injector on  # Toggle hook
-maestro hooks run spec-injector        # Run evaluator
-```
-
-Available hooks: `context-monitor`, `spec-injector`, `delegate-monitor`, `team-monitor`, `telemetry`, `session-context`, `skill-context`, `coordinator-tracker`, `preflight-guard`, `spec-validator`, `keyword-spec-injector`, `workflow-guard`
-
----
-
-### maestro overlay
-
-Command overlay management — non-invasive patches for `.claude/commands`.
-
-```bash
-maestro overlay list                    # View and manage overlays
-maestro overlay apply                   # Reapply all overlays (idempotent)
-maestro overlay add my-overlay.json     # Install overlay
-maestro overlay remove my-overlay       # Remove overlay
-maestro overlay bundle -o bundle.json   # Pack into portable file
-maestro overlay import-bundle bundle.json  # Import bundle
-```
-
----
-
-### maestro collab (alias: team)
-
-Human team collaboration — join, report, and view activity.
-
-```bash
-maestro collab join                    # Register as team member
-maestro collab whoami                  # Show current identity
-maestro collab status                  # View team activity
-maestro collab sync                    # Sync with remote
-maestro collab preflight --phase 1     # Conflict preflight check
-maestro collab guard                   # Show namespace boundaries
-maestro collab task create --title "task"
-maestro collab task list --status open
-```
-
----
-
-### maestro agent-msg (alias: msg)
-
-Agent team message bus.
-
-```bash
-maestro msg send "task done" -s <session> --from worker --to coordinator
-maestro msg list -s <session> --last 10
-maestro msg status -s <session>
-maestro msg broadcast "meeting" -s <session> --from coordinator
-```
-
----
-
-### maestro core-memory (alias: cm)
-
-Persistent memory management.
-
-```bash
-maestro cm list --tags auth             # List by tag
-maestro cm import "auth uses JWT" --tags auth,security
-maestro cm export CMEM-20260421-143000  # Export
-maestro cm search "auth token"          # Search
-```
-
----
-
-### maestro brainstorm-visualize (alias: bv)
-
-Brainstorm HTML prototype visualization server.
-
-```bash
-maestro bv start --dir ./prototypes     # Start visualizer
-maestro bv status <execId>              # View status
-maestro bv stop <execId>                # Stop server
-```
-
----
-
-### maestro ext / maestro tool
-
-Extension and tool management.
-
-```bash
-maestro ext list                        # List installed extensions
-maestro tool list                       # List available tools
-maestro tool exec read_file '{"path":"README.md"}'  # Execute tool
 ```
 
 ---

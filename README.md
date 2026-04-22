@@ -324,6 +324,7 @@ maestro/
 - **[Collab — User Guide](guide/team-lite-guide.md)** — Multi-person collaboration for 2-8 person teams: join, sync, activity awareness, conflict preflight, task management, namespace isolation
 - **[Collab — Design](guide/team-lite-design.md)** — Architecture, data model, namespace boundary between human-collab (`.workflow/collab/`) and agent-pipeline (`.workflow/.team/`) domains
 - **[MCP Tools Reference](guide/mcp-tools-guide.en.md)** — All 9 MCP endpoint tools: file ops (edit/write/read), team collaboration (msg/mailbox/task/agent), and persistent memory
+- **[CLI Commands Reference](guide/cli-commands-guide.en.md)** — All 21 terminal commands — install, delegate, coordinate, wiki, hooks, overlay, collab, and more
 
 ---
 

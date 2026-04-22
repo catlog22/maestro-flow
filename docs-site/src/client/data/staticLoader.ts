@@ -162,6 +162,16 @@ export const guideRegistry: Array<{
     description_zh: '全部 9 个 MCP 工具的完整参考 — 文件操作、团队协作和持久记忆',
     icon: 'wrench',
   },
+  {
+    slug: 'cli-commands',
+    file: 'cli-commands-guide.md',
+    file_en: 'cli-commands-guide.en.md',
+    title: 'CLI Commands Reference',
+    description: 'All 21 terminal commands — install, delegate, coordinate, wiki, hooks, overlay, collab, and more',
+    title_zh: 'CLI 命令参考',
+    description_zh: '全部 21 个终端命令 — 安装、委派、协调、Wiki、Hook、Overlay、协作等',
+    icon: 'terminal',
+  },
 ];
 
 // Use import.meta.glob to load all markdown files
