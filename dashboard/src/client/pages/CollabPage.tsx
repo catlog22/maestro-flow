@@ -12,7 +12,7 @@ import type { CollabPreflightResult } from '@/shared/collab-types.js';
 // CollabPage — collaboration hub with setup flow + 3-tab workspace
 // ---------------------------------------------------------------------------
 
-type CollabTab = 'overview' | 'analysis' | 'history';
+type CollabTab = 'overview' | 'analysis' | 'history' | 'tasks';
 
 const TAB_ITEMS = [
   { label: 'Overview', key: 'overview' as const, shortcut: '1' },

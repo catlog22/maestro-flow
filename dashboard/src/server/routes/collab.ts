@@ -15,6 +15,10 @@ import type {
   CollabPresence,
   CollabAggregatedActivity,
   CollabPreflightResult,
+  CollabTask,
+  CollabTaskStatus,
+  CollabTaskPriority,
+  CollabCheckAction,
 } from '../../shared/collab-types.js';
 
 // ---------------------------------------------------------------------------
@@ -452,6 +456,138 @@ export function createCollabRoutes(
         memberCount,
         hasActivity,
       } as CollabPreflightResult);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // GET /api/collab/tasks — list all tasks
+  app.get('/api/collab/tasks', async (c) => {
+    try {
+      const tasksDir = join(getCollabDir(), 'tasks');
+      if (!existsSync(tasksDir)) return c.json([]);
+
+      const tasks: CollabTask[] = [];
+      for (const entry of readdirSync(tasksDir)) {
+        if (!entry.endsWith('.json')) continue;
+        const data = readJsonSafe(join(tasksDir, entry));
+        if (data) tasks.push(data as unknown as CollabTask);
+      }
+      tasks.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      return c.json(tasks);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // POST /api/collab/tasks — create task
+  app.post('/api/collab/tasks', async (c) => {
+    try {
+      const tasksDir = join(getCollabDir(), 'tasks');
+      mkdirSync(tasksDir, { recursive: true });
+
+      const body = await c.req.json<{
+        title?: string;
+        description?: string;
+        priority?: CollabTaskPriority;
+        tags?: string[];
+      }>();
+
+      const title = (body.title || '').trim();
+      if (!title) return c.json({ error: 'title is required' }, 400);
+
+      const id = `task-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
+      const now = new Date().toISOString();
+      const task: CollabTask = {
+        id,
+        title,
+        description: (body.description || '').trim(),
+        status: 'backlog',
+        priority: body.priority || 'medium',
+        assignee: null,
+        reporter: userInfo().username || null,
+        tags: body.tags || [],
+        check_log: [],
+        created_at: now,
+        updated_at: now,
+      };
+
+      writeFileSync(join(tasksDir, `${id}.json`), JSON.stringify(task, null, 2));
+      return c.json(task, 201);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // PATCH /api/collab/tasks/:id — update task (status, assignee, title, description)
+  app.patch('/api/collab/tasks/:id', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const tasksDir = join(getCollabDir(), 'tasks');
+      const taskPath = join(tasksDir, `${id}.json`);
+
+      if (!existsSync(taskPath)) return c.json({ error: 'Task not found' }, 404);
+
+      const task = readJsonSafe(taskPath) as unknown as CollabTask;
+      const body = await c.req.json<Partial<Pick<CollabTask, 'status' | 'assignee' | 'title' | 'description'>>>();
+
+      if (body.status !== undefined) task.status = body.status;
+      if (body.assignee !== undefined) task.assignee = body.assignee;
+      if (body.title !== undefined) task.title = body.title;
+      if (body.description !== undefined) task.description = body.description;
+      task.updated_at = new Date().toISOString();
+
+      writeFileSync(taskPath, JSON.stringify(task, null, 2));
+      return c.json(task);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // DELETE /api/collab/tasks/:id — delete task
+  app.delete('/api/collab/tasks/:id', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const tasksDir = join(getCollabDir(), 'tasks');
+      const taskPath = join(tasksDir, `${id}.json`);
+
+      if (!existsSync(taskPath)) return c.json({ error: 'Task not found' }, 404);
+
+      const { unlinkSync } = await import('node:fs');
+      unlinkSync(taskPath);
+      return c.json({ success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  // POST /api/collab/tasks/:id/checks — add check log entry
+  app.post('/api/collab/tasks/:id/checks', async (c) => {
+    try {
+      const id = c.req.param('id');
+      const tasksDir = join(getCollabDir(), 'tasks');
+      const taskPath = join(tasksDir, `${id}.json`);
+
+      if (!existsSync(taskPath)) return c.json({ error: 'Task not found' }, 404);
+
+      const task = readJsonSafe(taskPath) as unknown as CollabTask;
+      const body = await c.req.json<{ action: CollabCheckAction; comment?: string }>();
+
+      task.check_log.push({
+        ts: new Date().toISOString(),
+        author: userInfo().username || 'unknown',
+        action: body.action,
+        comment: body.comment,
+      });
+      task.updated_at = new Date().toISOString();
+
+      writeFileSync(taskPath, JSON.stringify(task, null, 2));
+      return c.json(task);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return c.json({ error: message }, 500);

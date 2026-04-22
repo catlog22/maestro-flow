@@ -6,13 +6,17 @@ import type {
   CollabPresence,
   CollabAggregatedActivity,
   CollabPreflightResult,
+  CollabTask,
+  CollabTaskStatus,
+  CollabTaskPriority,
+  CollabCheckAction,
 } from '@/shared/collab-types.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type CollabTab = 'overview' | 'analysis' | 'history';
+type CollabTab = 'overview' | 'analysis' | 'history' | 'tasks';
 
 interface CollabStoreState {
   // State
@@ -20,12 +24,16 @@ interface CollabStoreState {
   activity: CollabActivityEntry[];
   presence: CollabPresence[];
   aggregated: CollabAggregatedActivity[];
+  tasks: CollabTask[];
   loading: boolean;
   error: string | null;
   activeTab: CollabTab;
   statusFilter: string;
   typeFilter: string;
   memberFilter: string;
+  taskStatusFilter: string;
+  taskAssigneeFilter: string;
+  selectedTaskId: string | null;
 
   // Async fetch actions
   fetchMembers: () => Promise<void>;
@@ -33,6 +41,14 @@ interface CollabStoreState {
   fetchPresence: () => Promise<void>;
   fetchAggregated: () => Promise<void>;
   fetchPreflight: () => Promise<CollabPreflightResult | null>;
+
+  // Task actions
+  fetchTasks: () => Promise<void>;
+  createTask: (title: string, description: string, priority: CollabTaskPriority, tags: string[]) => Promise<{ success: boolean; error?: string }>;
+  updateTaskStatus: (taskId: string, status: CollabTaskStatus) => Promise<void>;
+  assignTask: (taskId: string, assignee: string | null) => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
+  addTaskCheck: (taskId: string, action: CollabCheckAction, comment: string) => Promise<void>;
 
   // Write actions
   initCollab: () => Promise<{ success: boolean; error?: string }>;
@@ -45,11 +61,15 @@ interface CollabStoreState {
   setStatusFilter: (filter: string) => void;
   setTypeFilter: (filter: string) => void;
   setMemberFilter: (filter: string) => void;
+  setTaskStatusFilter: (filter: string) => void;
+  setTaskAssigneeFilter: (filter: string) => void;
+  setSelectedTaskId: (id: string | null) => void;
 
   // Derived
   filteredMembers: () => CollabMember[];
   filteredActivity: () => CollabActivityEntry[];
   recentActivity: (limit: number) => CollabActivityEntry[];
+  tasksByColumn: () => Map<string, CollabTask[]>;
 
   // Cleanup
   clearAll: () => void;
@@ -64,12 +84,16 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
   activity: [],
   presence: [],
   aggregated: [],
+  tasks: [],
   loading: false,
   error: null,
   activeTab: 'overview',
   statusFilter: 'all',
   typeFilter: 'all',
   memberFilter: 'all',
+  taskStatusFilter: 'all',
+  taskAssigneeFilter: 'all',
+  selectedTaskId: null,
 
   // -- Async fetch actions ---------------------------------------------------
 
@@ -141,6 +165,73 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
     }
   },
 
+  // -- Task actions -----------------------------------------------------------
+
+  fetchTasks: async () => {
+    try {
+      const res = await fetch('/api/collab/tasks');
+      if (!res.ok) throw new Error(`Failed: ${res.status}`);
+      const data = (await res.json()) as CollabTask[];
+      set({ tasks: data });
+    } catch { /* silent */ }
+  },
+
+  createTask: async (title, description, priority, tags) => {
+    try {
+      const res = await fetch('/api/collab/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, description, priority, tags }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.error ?? `HTTP ${res.status}` };
+      await get().fetchTasks();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  updateTaskStatus: async (taskId, status) => {
+    try {
+      await fetch(`/api/collab/tasks/${encodeURIComponent(taskId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      await get().fetchTasks();
+    } catch { /* silent */ }
+  },
+
+  assignTask: async (taskId, assignee) => {
+    try {
+      await fetch(`/api/collab/tasks/${encodeURIComponent(taskId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignee }),
+      });
+      await get().fetchTasks();
+    } catch { /* silent */ }
+  },
+
+  deleteTask: async (taskId) => {
+    try {
+      await fetch(`/api/collab/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' });
+      await get().fetchTasks();
+    } catch { /* silent */ }
+  },
+
+  addTaskCheck: async (taskId, action, comment) => {
+    try {
+      await fetch(`/api/collab/tasks/${encodeURIComponent(taskId)}/checks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, comment }),
+      });
+      await get().fetchTasks();
+    } catch { /* silent */ }
+  },
+
   // -- Write actions -----------------------------------------------------------
 
   initCollab: async () => {
@@ -203,6 +294,9 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
   setStatusFilter: (filter) => set({ statusFilter: filter }),
   setTypeFilter: (filter) => set({ typeFilter: filter }),
   setMemberFilter: (filter) => set({ memberFilter: filter }),
+  setTaskStatusFilter: (filter) => set({ taskStatusFilter: filter }),
+  setTaskAssigneeFilter: (filter) => set({ taskAssigneeFilter: filter }),
+  setSelectedTaskId: (id) => set({ selectedTaskId: id }),
 
   // -- Derived ---------------------------------------------------------------
 
@@ -229,6 +323,20 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
     return activity.slice(-limit);
   },
 
+  tasksByColumn: () => {
+    const { tasks, taskStatusFilter, taskAssigneeFilter } = get();
+    const map = new Map<string, CollabTask[]>();
+    for (const task of tasks) {
+      if (taskStatusFilter !== 'all' && task.status !== taskStatusFilter) continue;
+      if (taskAssigneeFilter === '' && task.assignee !== null) continue;
+      if (taskAssigneeFilter !== 'all' && taskAssigneeFilter !== '' && task.assignee !== taskAssigneeFilter) continue;
+      const list = map.get(task.status);
+      if (list) list.push(task);
+      else map.set(task.status, [task]);
+    }
+    return map;
+  },
+
   // -- Cleanup ---------------------------------------------------------------
 
   clearAll: () =>
@@ -237,11 +345,15 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
       activity: [],
       presence: [],
       aggregated: [],
+      tasks: [],
       loading: false,
       error: null,
       activeTab: 'overview',
       statusFilter: 'all',
       typeFilter: 'all',
       memberFilter: 'all',
+      taskStatusFilter: 'all',
+      taskAssigneeFilter: 'all',
+      selectedTaskId: null,
     }),
 }));
