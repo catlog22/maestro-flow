@@ -113,6 +113,16 @@ export const guideRegistry: Array<{
     icon: 'hook',
   },
   {
+    slug: 'quick-start',
+    file: 'quick-start-guide.md',
+    file_en: 'quick-start-guide.en.md',
+    title: 'Quick Start Guide',
+    description: 'Get started with Maestro Flow in 10 minutes — core features and common workflows',
+    title_zh: '快速入门指南',
+    description_zh: '10 分钟了解 Maestro Flow 核心功能 — 安装、管线、Issue、委托、规范、Overlay、Hook、并行开发',
+    icon: 'rocket',
+  },
+  {
     slug: 'introduction',
     file: 'maestro-flow-introduction.md',
     file_en: 'maestro-flow-introduction.en.md',

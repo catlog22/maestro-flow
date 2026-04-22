@@ -172,24 +172,25 @@ describe('ComponentGrid.logic', () => {
   // ---------------------------------------------------------------------------
   describe('navigation + toggling scenario', () => {
     const ids = ['workflows', 'templates', 'chains', 'overlays', 'commands',
-                 'agents', 'skills', 'claude-md', 'codex-skills'];
+                 'agents', 'skills', 'claude-md', 'codex-agents-md',
+                 'codex-agents', 'codex-skills'];
 
-    it('simulates full navigation cycle with 9 items', () => {
+    it('simulates full navigation cycle with 11 items', () => {
       let idx = 0;
-      // Move down through all 9 items and wrap back to 0
-      for (let i = 0; i < 9; i++) {
-        idx = moveDown(idx, 9);
+      // Move down through all 11 items and wrap back to 0
+      for (let i = 0; i < 11; i++) {
+        idx = moveDown(idx, 11);
       }
       assert.equal(idx, 0);
     });
 
-    it('simulates full navigation cycle up with 9 items', () => {
-      let idx = 8;
-      // Move up through all 9 items and wrap back to 8
-      for (let i = 0; i < 9; i++) {
-        idx = moveUp(idx, 9);
+    it('simulates full navigation cycle up with 11 items', () => {
+      let idx = 10;
+      // Move up through all 11 items and wrap back to 10
+      for (let i = 0; i < 11; i++) {
+        idx = moveUp(idx, 11);
       }
-      assert.equal(idx, 8);
+      assert.equal(idx, 10);
     });
 
     it('toggles selection state consistently', () => {
@@ -205,15 +206,16 @@ describe('ComponentGrid.logic', () => {
       assert.deepEqual(selected, [ids[4]]);
       // Select all
       selected = selectAllAvailable(ids);
-      assert.equal(selected.length, 9);
+      assert.equal(selected.length, 11);
       // Deselect all
       selected = deselectAll();
       assert.equal(selected.length, 0);
     });
 
-    it('number keys cover all 9 components', () => {
+    it('number keys cover first 9 of 11 components', () => {
+      // parseNumberKey only supports keys 1-9, so 11 components means keys 0-9 cover indices 0-8
       for (let i = 1; i <= 9; i++) {
-        const idx = parseNumberKey(String(i), 9);
+        const idx = parseNumberKey(String(i), 11);
         assert.equal(idx, i - 1, `Key '${i}' should map to index ${i - 1}`);
       }
     });

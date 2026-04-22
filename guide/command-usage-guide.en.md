@@ -1,12 +1,12 @@
 # Maestro-Flow Command Usage Guide
 
-The Maestro-Flow command system includes 51 slash commands, organized into 6 major categories. This document covers the main pipeline command sequencing, quick channels, the Issue closed-loop workflow, learning toolkit, and the usage scenarios for each command.
+The Maestro-Flow command system includes 49 slash commands, organized into 6 major categories. This document covers the main pipeline command sequencing, quick channels, the Issue closed-loop workflow, learning toolkit, and the usage scenarios for each command.
 
 ## Command Overview
 
 | Category | Count | Prefix | Responsibility |
 |----------|-------|--------|----------------|
-| **Core Workflow** | 20 | `maestro-*` | Project initialization, planning, execution, verification, phase progression, coordination, milestones, overlays |
+| **Core Workflow** | 16 | `maestro-*` | Project initialization, planning, execution, verification, coordination, milestones, overlays |
 | **Management** | 12 | `manage-*` | Issue lifecycle, codebase documentation, knowledge capture, memory, harvest, status |
 | **Quality** | 9 | `quality-*` | Code review, business testing, UAT, debugging, refactoring, retrospective, sync |
 | **Specification** | 3 | `spec-*` | Project spec initialization, loading, entry |
@@ -80,16 +80,19 @@ graph TB
     SG --> PL
     UID -.->|"Optional"| PL
 
+    AN -->|"Multiple"| AN
     AN --> PL
-    PL --> EX
+    PL -->|"Multiple revise<br>collision detection"| PL
+    PL -->|"Execute one-by-one<br>wave parallel within plan"| EX
     EX --> VF
     VF --> QBT
     QBT --> QR
     QR --> QT
     QT -->|"All Phases completed"| MA
 
+    %% Feedback loops
+    VF -->|"gaps"| AN
     QBT -->|"Failure"| PL
-    VF -->|gaps| PL
     QT -->|"Failure"| QD
     QD -->|"Fix"| PL
 
@@ -109,8 +112,9 @@ graph TB
 graph TB
     subgraph phase_pipeline["Main Phase Pipeline"]
         direction LR
-        AN["analyze"] --> PL["plan"] --> EX["execute"] --> VF["verify"]
-        VF --> QBT["business-test"] --> QR["review"] --> QT["test"] --> PT["transition"]
+        AN["analyze"] -->|"Multiple"| AN
+        AN --> PL["plan"] -->|"revise"| PL -->|"Execute one-by-one"| EX["execute"] --> VF["verify"]
+        VF --> QBT["business-test"] --> QR["review"] --> QT["test"] --> MA["milestone-audit"]
     end
 
     subgraph issue_loop["Issue Closed-Loop"]
@@ -150,7 +154,7 @@ graph TB
     classDef issueNode fill:#4a3a6a,color:#fff,stroke:#2d2245
     classDef sharedNode fill:#3a4a5a,color:#fff,stroke:#252f3a
 
-    class AN,PL,EX,VF,QR,QT,PT phaseNode
+    class AN,PL,EX,VF,QR,QT,MA phaseNode
     class ID,IC,IA,IP,IE,ICL issueNode
     class JSONL,CMD,SCHED,WS sharedNode
 ```
@@ -169,10 +173,10 @@ The Issue `path` field distinguishes two processing paths:
 | path | Meaning | Source | Lifecycle |
 |------|---------|--------|-----------|
 | `standalone` | Independent Issue, not bound to a Phase | Manual creation, `/manage-issue-discover`, external import | Independent closed-loop, does not affect Phase progression |
-| `workflow` | Phase-linked Issue | `quality-review` auto-create, `quality-business-test` failure, Phase verification output | May block Phase transition |
+| `workflow` | Phase-linked Issue | `quality-review` auto-create, `quality-business-test` failure, Phase verification output | May block milestone completion |
 
 - `standalone` Issues are displayed independently on the kanban board, resolved through the Issue closed-loop (analyze, plan, execute)
-- `workflow` Issues carry a `phase_id` and are displayed alongside their corresponding Phase column on the kanban board; their resolution status may affect whether the Phase can transition
+- `workflow` Issues carry a `phase_id` and are displayed alongside their corresponding Phase column on the kanban board; their resolution status may affect milestone completion
 
 ```mermaid
 graph LR
@@ -217,24 +221,32 @@ stateDiagram-v2
     end note
 ```
 
-### Main Phase State Machine
+### Milestone Workflow State (Artifact Registry)
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: Phase created
+    [*] --> no_artifacts: Milestone starts
     no_artifacts --> analyzed: /maestro-analyze → ANL artifact
+    analyzed --> analyzed: Re-analyze (multiple)
     analyzed --> planned: /maestro-plan → PLN artifact
+    planned --> planned: Plan revise / collision check
     planned --> executed: /maestro-execute → EXC artifact
     executed --> verified: /maestro-verify → VRF artifact
     verified --> audited: /maestro-milestone-audit
     audited --> completed: /maestro-milestone-complete
     completed --> [*]
 
+    verified --> analyzed: Gaps found → re-analyze
     verified --> planned: Gaps found → plan --gaps
     executed --> planned: Failure → debug → plan --gaps
+
+    note right of analyzed: scratch/analyze-{slug}-{date}/<br/>Multiple analyze with different scopes
+    note right of planned: scratch/plan-{slug}-{date}/<br/>Collision detection: file overlap warning
+    note right of executed: .summaries/ written to plan dir<br/>Execute plans one-by-one, wave parallel within plan
+    note right of verified: verification.json written to plan dir
 ```
 
-**Core change**: Phase = label, not directory. All artifacts live in `.workflow/scratch/`, tracked by `state.json.artifacts[]`. Each step produces an artifact entry (ANL/PLN/EXC/VRF) forming a dependency chain.
+**Core design**: Phase = label, not directory. All artifacts live in `.workflow/scratch/`, tracked by `state.json.artifacts[]`. Each step produces an artifact entry (ANL/PLN/EXC/VRF) forming a dependency chain. Supports multiple analyze → multiple plan (with collision detection) → execute one-by-one (serial between plans, wave parallel within plan).
 
 ---
 
@@ -278,6 +290,71 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 
 **Scope routing**: No args = entire milestone; number = specific phase; text = adhoc/standalone.
 
+#### Scope Routing Details
+
+Each pipeline command (analyze/plan/execute/verify) supports 4 scopes:
+
+| Invocation | Prerequisites | scope | Description |
+|------------|--------------|-------|-------------|
+| `analyze` (no args) | init + roadmap | `milestone` | Covers all phases in current milestone |
+| `analyze 1` | init + roadmap | `phase` | Only process phase 1 |
+| `analyze "topic"` (with milestone) | None | `adhoc` | Analyze any topic, linked to current milestone |
+| `analyze "topic"` (no milestone) | None | `standalone` | Analyze any topic, not linked to milestone |
+| `plan --dir scratch/xxx` | None | Inherits upstream scope | Specify analyze output path directly |
+| `execute --dir scratch/xxx` | None | Inherits upstream scope | Execute specified plan directly |
+
+**Scope determination**: When a text argument is provided, if `state.json.current_milestone` is non-null → `adhoc`, otherwise → `standalone`.
+No-argument invocation without roadmap → error, prompting for a topic argument or roadmap creation first.
+
+#### Five Usage Modes
+
+**Mode A — One-shot (full milestone)**
+
+Each step covers all phases in the current milestone by default. One plan contains all phases' tasks.
+
+```
+analyze → plan → execute → verify
+```
+
+**Mode B — Per-phase analyze/plan, per-phase execute**
+
+Each plan is executed independently, no aggregation.
+
+```
+analyze 1 → plan 1 → execute 1
+analyze 2 → plan 2 → execute 2
+verify
+```
+
+**Mode C — Mixed**
+
+```
+analyze                  ← full milestone analysis
+plan 1 → execute 1       ← do phase 1 first
+plan 2 → execute 2       ← then phase 2
+analyze "hotfix" → plan --dir → execute --dir   ← ad-hoc mid-stream
+verify
+```
+
+**Mode D — Analyze first, unified plan/execute**
+
+```
+analyze 1
+analyze 2
+plan                     ← full milestone plan (consumes all analyze outputs)
+execute                  ← execute that plan
+```
+
+**Mode E — No init / no roadmap (pure scratch)**
+
+No init or roadmap needed. All commands work independently. state.json is auto-created on demand.
+
+```
+analyze "implement auth"         ← scope=standalone
+plan --dir scratch/analyze-xxx   ← specify analyze output directly
+execute --dir scratch/plan-xxx   ← execute directly
+```
+
 ### 1.3 Gap Fix Loop
 
 When verification or testing finds gaps:
@@ -315,7 +392,7 @@ All of the above sequencing can be orchestrated automatically via `/maestro`:
 
 | Chain Name | Command Sequence | Use Case |
 |------------|------------------|----------|
-| `full-lifecycle` | init→spec-generate→plan→execute→verify→review→test→transition | Brand new project |
+| `full-lifecycle` | init→spec-generate→plan→execute→verify→review→test→milestone-audit | Brand new project |
 | `spec-driven` | init→spec-generate→... | Requires full specification |
 | `roadmap-driven` | init→roadmap→... | Lightweight roadmap |
 | `brainstorm-driven` | brainstorm→init→roadmap→... | Start from brainstorming |
@@ -362,6 +439,28 @@ A lighter plan-execute chain via the Skill system's `workflow-lite-plan`:
 
 Automatic chaining: `lite-plan → lite-execute → lite-test-review`, managed entirely under `.workflow/.lite-plan/`.
 
+### 2.4 Standalone Mode (No Init Required)
+
+No `maestro-init` or `maestro-roadmap` needed. Just run commands directly. state.json is auto-created.
+
+```bash
+/maestro-analyze "Implement JWT authentication"              # scope=standalone, state.json auto-bootstraps
+/maestro-plan --dir scratch/analyze-jwt-...                  # Plan against analyze output
+/maestro-execute --dir scratch/plan-jwt-...                  # Execute directly
+```
+
+Standalone artifacts are not linked to any milestone and do not affect the main pipeline.
+
+### 2.5 Scratch Cleanup
+
+```bash
+maestro scratch gc                # Clean up standalone scratch dirs older than 30 days
+maestro scratch gc --days 7       # Clean up older than 7 days
+maestro scratch gc --dry-run      # Preview directories to be cleaned
+```
+
+**Cleanup conditions**: `scope=standalone` + `status=completed` + `harvested=true` (experience extracted) + older than specified days.
+
 ---
 
 ## 3. Issue Closed-Loop Workflow
@@ -370,7 +469,7 @@ The Issue system runs in parallel with the Phase pipeline. It can operate as an 
 
 **Relationship with the main pipeline** (see "Interaction Between Main Pipeline and Issues" in the Command Panorama):
 - **Phase produces Issues**: `quality-review` automatically creates Issues for critical/high findings during review (auto-issue creation); `quality-business-test` creates Issues on business rule failures (with REQ traceability); `quality-test` creates Issues on failure; gaps from `maestro-verify` can also be converted to Issues
-- **Issue fixes inject back into Phase**: Issues with `phase_id` (`path=workflow`) serve the Phase after fix execution; re-verify and re-test are required before transition
+- **Issue fixes inject back into Phase**: Issues with `phase_id` (`path=workflow`) serve the Phase after fix execution; re-verify and re-test are required before milestone-audit
 - **Standalone Issues do not block Phases**: `path=standalone` Issues are resolved through the Issue closed-loop independently, without affecting Phase progression
 - **Commander unified scheduling**: Commander Agent drives both Phase tasks and Issue closed-loop, auto-scheduling with priority order `execute > analyze > plan`
 
@@ -490,7 +589,7 @@ Quality commands typically run after Phase execution, but can also be used indep
 ### 4.1 Standard Quality Flow
 
 ```
-/maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test-gen → /quality-test → /maestro-phase-transition
+/maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test-gen → /quality-test → /maestro-milestone-audit
 ```
 
 ### 4.2 Command Descriptions
@@ -568,20 +667,21 @@ Types: `bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `
 
 ### Main Phase Pipeline
 
-```mermaid
 graph LR
     INIT[init] --> RM["roadmap /<br>spec-generate"]
     RM -.-> UID["ui-design<br>(Optional)"]
     RM --> AN[analyze]
     UID -.-> AN
+    AN -->|"Multiple"| AN
     AN --> PL[plan]
-    PL --> EX[execute]
+    PL -->|"revise / collision check"| PL
+    PL -->|"Execute one-by-one"| EX[execute]
     EX --> VF[verify]
     VF --> QBT[business-test]
     QBT --> QR[review]
     QR --> QT[test]
-    QT --> PT[phase-transition]
-    VF -->|"gaps"| PL
+    QT --> MA[milestone-audit]
+    VF -->|"gaps"| AN
     QBT -->|"Failure"| PL
     QT -->|"Failure"| PL
 ```
@@ -611,7 +711,7 @@ graph LR
     VF --> QR[review]
     QR --> TG[test-gen]
     TG --> QT[test]
-    QT --> PT[phase-transition]
+    QT --> MA[milestone-audit]
     QT -->|"Failure"| QD[debug]
     QD --> PL["plan --gaps"]
     PL --> EX2[execute]
@@ -620,7 +720,6 @@ graph LR
 
 ### Quick Channel
 
-```mermaid
 graph LR
     subgraph quick["Quick Task"]
         MQ["/maestro-quick"]
@@ -634,6 +733,11 @@ graph LR
     subgraph lite["Lite Chain"]
         LP["/workflow-lite-plan"] --> LE[lite-execute]
         LE --> LT[lite-test-review]
+    end
+
+    subgraph standalone["Standalone (no init)"]
+        SA["analyze topic"] --> SP["plan --dir"]
+        SP --> SE["execute --dir"]
     end
 ```
 
@@ -650,14 +754,15 @@ graph LR
 /maestro-plan 1
 /maestro-execute 1
 /maestro-verify 1
-/maestro-phase-transition
+/maestro-milestone-audit
+/maestro-milestone-complete
 ```
 
 ### One-Click Fully Automatic
 
 ```bash
 /maestro -y "Implement user authentication system"
-# Auto-executes: init → roadmap → plan → execute → verify → review → test → transition
+# Auto-executes: init → roadmap → plan → execute → verify → review → test → milestone-audit
 ```
 
 ### Discover and Fix Problems
@@ -686,5 +791,5 @@ graph LR
 /maestro-plan 3 --gaps              # Generate fix plan
 /maestro-execute 3                  # Execute fix
 /quality-business-test 3 --re-run   # Re-run only failed scenarios
-/maestro-phase-transition           # Advance after passing
+/maestro-milestone-audit            # Audit milestone after passing
 ```

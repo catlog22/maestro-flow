@@ -99,7 +99,7 @@ function ConversationList() {
     }
 
     // Use getState() to read latest entries (avoid stale closure)
-    const { entries, addEntry } = useAgentStore.getState();
+    const { entries, setEntries } = useAgentStore.getState();
     const existing = entries[processId];
     // Skip fetch only if we already have content entries (user/assistant messages)
     if (existing && existing.some((e) => e.type === 'user_message' || e.type === 'assistant_message')) return;
@@ -174,9 +174,7 @@ function ConversationList() {
             merged.unshift(userEntry);
           }
         }
-        for (const entry of merged) {
-          addEntry(processId, entry);
-        }
+        setEntries(processId, merged);
       }
     } catch { /* silent */ }
     setLoadingId(null);

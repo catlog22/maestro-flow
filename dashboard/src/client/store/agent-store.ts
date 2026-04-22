@@ -31,6 +31,8 @@ export interface AgentStore {
   removeProcess: (processId: string) => void;
   updateProcessStatus: (processId: string, status: AgentProcessStatus) => void;
   addEntry: (processId: string, entry: NormalizedEntry) => void;
+  /** Bulk-set all entries for a process in a single state update (avoids O(n) re-renders) */
+  setEntries: (processId: string, entries: NormalizedEntry[]) => void;
   setApproval: (approval: ApprovalRequest) => void;
   clearApproval: (approvalId: string) => void;
   setActiveProcessId: (processId: string | null) => void;
@@ -128,6 +130,16 @@ export const useAgentStore = create<AgentStore>((set) => ({
         },
       };
     }),
+
+  setEntries: (processId, entries) =>
+    set((state) => ({
+      entries: {
+        ...state.entries,
+        [processId]: entries.length > MAX_ENTRIES_PER_PROCESS
+          ? entries.slice(-MAX_ENTRIES_PER_PROCESS)
+          : entries,
+      },
+    })),
 
   setApproval: (approval) =>
     set((state) => ({

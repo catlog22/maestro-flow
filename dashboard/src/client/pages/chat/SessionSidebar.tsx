@@ -230,7 +230,7 @@ export function HistoryPanel({ open }: { open: boolean }) {
 // ---------------------------------------------------------------------------
 
 function HistoryCard({ meta, onRemove }: { meta: CliHistoryMeta; onRemove: (execId: string) => void }) {
-  const { addProcess, addEntry, setActiveProcessId } = useAgentStore.getState();
+  const { addProcess, setEntries, setActiveProcessId } = useAgentStore.getState();
 
   const agentType = (meta.tool === 'claude' ? 'claude-code' : meta.tool) as AgentType;
   const dotColor = AGENT_DOT_COLORS[agentType] ?? 'var(--color-text-tertiary)';
@@ -273,13 +273,14 @@ function HistoryCard({ meta, onRemove }: { meta: CliHistoryMeta; onRemove: (exec
           : Promise.resolve(null),
       ]);
 
+      const merged: NormalizedEntry[] = [];
+
       if (entriesRes.ok) {
         const raw = (await entriesRes.json()) as NormalizedEntry[];
         // Post-process history entries:
         // 1. Consolidate consecutive assistant_message fragments into single messages
         // 2. Clear partial flag on assistant messages (session is complete)
         // 3. Merge tool_use running→completed pairs (adapter emits two entries per tool call)
-        const merged: NormalizedEntry[] = [];
         for (const entry of raw) {
           const fixed = { ...entry, processId } as NormalizedEntry;
           if (fixed.type === 'assistant_message') {
@@ -309,17 +310,17 @@ function HistoryCard({ meta, onRemove }: { meta: CliHistoryMeta; onRemove: (exec
           }
           merged.push(fixed);
         }
-        for (const entry of merged) {
-          addEntry(processId, entry);
-        }
       }
 
       if (messagesRes?.ok) {
         const messages = (await messagesRes.json()) as CliHistoryQueuedMessage[];
-        for (const entry of buildQueuedMessageEntries(processId, messages)) {
-          addEntry(processId, entry);
+        const msgEntries = buildQueuedMessageEntries(processId, messages);
+        if (msgEntries.length > 0) {
+          merged.push(...msgEntries);
         }
       }
+
+      setEntries(processId, merged);
     } catch {
       // Silent fail
     }

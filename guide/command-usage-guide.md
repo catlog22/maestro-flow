@@ -1,12 +1,12 @@
 # Maestro 命令使用指南
 
-Maestro 命令系统包含 51 个 slash 命令，分为 6 大类。本文档说明主干工作流的命令衔接、快速渠道、Issue 闭环工作流、学习工具集，以及各命令的使用场景。
+Maestro 命令系统包含 49 个 slash 命令，分为 6 大类。本文档说明主干工作流的命令衔接、快速渠道、Issue 闭环工作流、学习工具集，以及各命令的使用场景。
 
 ## 命令总览
 
 | 类别 | 命令数 | 前缀 | 职责 |
 |------|--------|------|------|
-| **核心工作流** | 18 | `maestro-*` | 项目初始化、规划、执行、验证、coordinate、milestones、overlays |
+| **核心工作流** | 16 | `maestro-*` | 项目初始化、规划、执行、验证、coordinate、milestones、overlays |
 | **管理** | 12 | `manage-*` | Issue 生命周期、代码库文档、知识捕获、记忆管理、harvest、status |
 | **质量** | 9 | `quality-*` | 代码审查、业务测试、UAT、调试、重构、复盘、同步 |
 | **规范** | 3 | `spec-*` | 项目规范初始化、加载、录入 |
@@ -80,18 +80,22 @@ graph TB
     SG --> PL
     UID -.->|可选| PL
 
+    %% 主干管线：多次 analyze → 多次 plan → 逐个 execute
+    AN -->|"多次"| AN
     AN --> PL
-    PL --> EX
+    PL -->|"多次 revise<br>碰撞检测"| PL
+    PL -->|"逐个执行<br>plan 内 wave 并行"| EX
     EX --> VF
     VF --> QBT
     QBT --> QR
     QR --> QT
     QT -->|所有 Phase 完成| MA
 
-    VF -->|gaps| PL
-    QBT -->|失败| PL
-    QT -->|失败| QD
-    QD -->|修复| PL
+    %% 循环反馈
+    VF -->|"gaps"| AN
+    QBT -->|"失败"| PL
+    QT -->|"失败"| QD
+    QD -->|"修复"| PL
 
     ID --> IC
     IC --> IA
@@ -109,7 +113,8 @@ graph TB
 graph TB
     subgraph phase_pipeline["主干 Milestone 管线"]
         direction LR
-        AN["analyze"] --> PL["plan"] --> EX["execute"] --> VF["verify"]
+        AN["analyze"] -->|"多次"| AN
+        AN --> PL["plan"] -->|"revise"| PL -->|"逐个执行"| EX["execute"] --> VF["verify"]
         VF --> QBT["business-test"] --> QR["review"] --> QT["test"] --> MA["milestone-audit"]
     end
 
@@ -170,10 +175,10 @@ Issue 的 `path` 字段区分两种处理路径：
 | path | 含义 | 来源 | 生命周期 |
 |------|------|------|----------|
 | `standalone` | 独立 Issue，不绑定 Phase | 手动创建、`/manage-issue-discover`、外部导入 | 独立闭环，不影响 Phase 推进 |
-| `workflow` | Phase 关联 Issue | `quality-review` auto-create、`quality-business-test` 失败产生、Phase 验证产生 | 可能阻塞 Phase transition |
+| `workflow` | Phase 关联 Issue | `quality-review` auto-create、`quality-business-test` 失败产生、Phase 验证产生 | 可能阻塞 milestone 完成 |
 
 - `standalone` Issue 在看板上独立显示，通过 Issue 闭环（analyze --gaps→plan --gaps→execute）自行解决
-- `workflow` Issue 带有 `phase_id`，在看板中与对应 Phase 同列展示，其解决状态可能影响 Phase 是否可以 transition
+- `workflow` Issue 带有 `phase_id`，在看板中与对应 Phase 同列展示，其解决状态可能影响 milestone 是否可以 complete
 
 ```mermaid
 graph LR
@@ -224,23 +229,26 @@ stateDiagram-v2
 stateDiagram-v2
     [*] --> no_artifacts: Milestone 开始
     no_artifacts --> analyzed: /maestro-analyze → ANL artifact
+    analyzed --> analyzed: 再次 analyze（多次分析）
     analyzed --> planned: /maestro-plan → PLN artifact
+    planned --> planned: plan revise / 碰撞检测通过
     planned --> executed: /maestro-execute → EXC artifact
     executed --> verified: /maestro-verify → VRF artifact
     verified --> audited: /maestro-milestone-audit
     audited --> completed: /maestro-milestone-complete
     completed --> [*]
 
+    verified --> analyzed: gaps 发现 → re-analyze
     verified --> planned: gaps 发现 → plan --gaps
     executed --> planned: 失败 → debug → plan --gaps
 
-    note right of analyzed: scratch/analyze-{slug}-{date}/
-    note right of planned: scratch/plan-{slug}-{date}/
-    note right of executed: .summaries/ 写入 plan dir
+    note right of analyzed: scratch/analyze-{slug}-{date}/<br/>可多次 analyze 不同 scope
+    note right of planned: scratch/plan-{slug}-{date}/<br/>碰撞检测: 文件重叠预警
+    note right of executed: .summaries/ 写入 plan dir<br/>逐个 plan 执行，plan 内 wave 并行
     note right of verified: verification.json 写入 plan dir
 ```
 
-**核心变化**：Phase 是标签而非目录。所有工作产物存放在 `.workflow/scratch/`，通过 `state.json.artifacts[]` 注册追踪。每步产生一个 artifact 条目（ANL/PLN/EXC/VRF），形成依赖链。
+**核心设计**：Phase 是标签而非目录。所有工作产物存放在 `.workflow/scratch/`，通过 `state.json.artifacts[]` 注册追踪。每步产生一个 artifact 条目（ANL/PLN/EXC/VRF），形成依赖链。支持多次 analyze → 多次 plan（含碰撞检测）→ 逐个 execute（plan 间串行，plan 内 wave 并行）。
 
 ---
 
@@ -284,6 +292,71 @@ stateDiagram-v2
 
 **Scope 路由**: 无参数 = milestone 全量；数字 = 指定 phase；文本 = adhoc/standalone。
 
+#### Scope 路由详解
+
+每个管线命令（analyze/plan/execute/verify）支持 4 种 scope：
+
+| 调用方式 | 前置条件 | scope | 说明 |
+|---------|---------|-------|------|
+| `analyze`（无参数） | init + roadmap | `milestone` | 覆盖当前里程碑所有 phases |
+| `analyze 1` | init + roadmap | `phase` | 只处理 phase 1 |
+| `analyze "topic"`（有 milestone） | 无 | `adhoc` | 分析任意主题，归属当前 milestone |
+| `analyze "topic"`（无 milestone） | 无 | `standalone` | 分析任意主题，不归属 milestone |
+| `plan --dir scratch/xxx` | 无 | 继承上游 scope | 直接指定 analyze 产物路径 |
+| `execute --dir scratch/xxx` | 无 | 继承上游 scope | 直接执行指定 plan |
+
+**Scope 判定**: 传文本参数时，若 `state.json.current_milestone` 非空 → `adhoc`，否则 → `standalone`。
+无参数调用且无 roadmap → 报错，提示需要 topic 参数或先创建 roadmap。
+
+#### 五种使用模式
+
+**模式 A — 一步到位（milestone 全量）**
+
+每步默认覆盖当前里程碑所有 phases，一个 plan 包含所有 phases 的 tasks。
+
+```
+analyze → plan → execute → verify
+```
+
+**模式 B — 逐 phase 分析/规划，逐个执行**
+
+每个 plan 独立执行，不聚合。
+
+```
+analyze 1 → plan 1 → execute 1
+analyze 2 → plan 2 → execute 2
+verify
+```
+
+**模式 C — 混合模式**
+
+```
+analyze                  ← milestone 全量分析
+plan 1 → execute 1       ← 先做 phase 1
+plan 2 → execute 2       ← 再做 phase 2
+analyze "hotfix" → plan --dir → execute --dir   ← 中途 ad-hoc
+verify
+```
+
+**模式 D — 分析后统一规划执行**
+
+```
+analyze 1
+analyze 2
+plan                     ← milestone 全量规划（消费所有 analyze 产出）
+execute                  ← 执行该 plan
+```
+
+**模式 E — 无 init / 无 roadmap（纯 scratch）**
+
+不需要 init、不需要 roadmap，所有命令独立可用。state.json 自动按需创建。
+
+```
+analyze "implement auth"         ← scope=standalone
+plan --dir scratch/analyze-xxx   ← 直接指定 analyze 产物
+execute --dir scratch/plan-xxx   ← 直接执行
+```
+
 ### 1.3 Gap 修复循环
 
 当验证或测试发现缺口时：
@@ -322,7 +395,7 @@ stateDiagram-v2
 
 | 链名 | 命令序列 | 适用场景 |
 |------|----------|----------|
-| `full-lifecycle` | init→spec-generate→plan→execute→verify→review→test→transition | 全新项目 |
+| `full-lifecycle` | init→spec-generate→plan→execute→verify→review→test→milestone-audit | 全新项目 |
 | `spec-driven` | init→spec-generate→... | 需要完整规范 |
 | `roadmap-driven` | init→roadmap→... | 轻量路线图 |
 | `brainstorm-driven` | brainstorm→init→roadmap→... | 从头脑风暴开始 |
@@ -370,6 +443,28 @@ stateDiagram-v2
 
 自动链接：`lite-plan → lite-execute → lite-test-review`，全程在 `.workflow/.lite-plan/` 下管理。
 
+### 2.4 Standalone 模式（无需 init）
+
+不需要 `maestro-init` 或 `maestro-roadmap`，直接运行命令即可。state.json 自动创建。
+
+```bash
+/maestro-analyze "实现 JWT 认证"              # scope=standalone，state.json 自动 bootstrap
+/maestro-plan --dir scratch/analyze-jwt-...   # 对 analyze 产出规划
+/maestro-execute --dir scratch/plan-jwt-...   # 直接执行
+```
+
+Standalone artifacts 不归属 milestone，不影响主干管线。
+
+### 2.5 Scratch 清理
+
+```bash
+maestro scratch gc                # 清理 30 天前的 standalone scratch 目录
+maestro scratch gc --days 7       # 清理 7 天前的
+maestro scratch gc --dry-run      # 预览将清理的目录
+```
+
+**清理条件**: `scope=standalone` + `status=completed` + `harvested=true`（经验已提取）+ 超过指定天数。
+
 ---
 
 ## 三、Issue 闭环工作流
@@ -378,7 +473,7 @@ Issue 系统与 Phase 管线并行运行，既可独立闭环，也可与 Phase 
 
 **与主干的关系**（详见命令全景图中的"主干与 Issue 的交互关系"）：
 - **Phase 产出 Issue**：`quality-review` 在审查时自动为 critical/high 发现创建 Issue（auto-issue creation）；`quality-business-test` 业务规则失败时创建 Issue（带 REQ 追溯）；`quality-test` 失败时创建 Issue；`maestro-verify` 的 gap 也可转化为 Issue
-- **Issue 修复回注 Phase**：带 `phase_id` 的 Issue（`path=workflow`）执行修复后，代码变更服务于该 Phase，需重新 verify 和 test 才能 transition
+- **Issue 修复回注 Phase**：带 `phase_id` 的 Issue（`path=workflow`）执行修复后，代码变更服务于该 Phase，需重新 verify 和 test 才能通过 milestone-audit
 - **独立 Issue 不阻塞 Phase**：`path=standalone` 的 Issue 通过 Issue 闭环自行解决，不影响 Phase 推进
 - **Commander 统一调度**：Commander Agent 同时驱动 Phase 任务和 Issue 闭环，按 `execute > analyze > plan` 优先级自动调度
 
@@ -498,7 +593,7 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 ### 4.1 标准质量流程
 
 ```
-/maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test-gen → /quality-test → /maestro-phase-transition
+/maestro-execute → /maestro-verify → /quality-business-test → /quality-review → /quality-test-gen → /quality-test → /maestro-milestone-audit
 ```
 
 ### 4.2 各命令说明
@@ -577,20 +672,22 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 ### 主干 Phase 管线
 
 ```mermaid
-graph LR
-    INIT[init] --> RM["roadmap /<br>spec-generate"]
-    RM -.-> UID["ui-design<br>(可选)"]
-    RM --> AN[analyze]
-    UID -.-> AN
-    AN --> PL[plan]
-    PL --> EX[execute]
-    EX --> VF[verify]
-    VF --> QR[review]
-    QR --> QT[test]
-    QT --> PT[phase-transition]
-    VF -->|"gaps"| PL
-    QT -->|"失败"| PL
-```
+	graph LR
+	    INIT[init] --> RM["roadmap /<br>spec-generate"]
+	    RM -.-> UID["ui-design<br>(可选)"]
+	    RM --> AN[analyze]
+	    UID -.-> AN
+	    AN -->|"多次"| AN
+	    AN --> PL[plan]
+	    PL -->|"revise / 碰撞检测"| PL
+	    PL -->|"逐个执行"| EX[execute]
+	    EX --> VF[verify]
+	    VF --> QR[review]
+	    QR --> QT[test]
+	    QT --> MA[milestone-audit]
+	    VF -->|"gaps"| AN
+	    QT -->|"失败"| PL
+	```
 
 ### Issue 闭环
 
@@ -612,17 +709,17 @@ graph LR
 ### 质量管线
 
 ```mermaid
-graph LR
-    EX[execute] --> VF[verify]
-    VF --> QR[review]
-    QR --> TG[test-gen]
-    TG --> QT[test]
-    QT --> PT[phase-transition]
-    QT -->|"失败"| QD[debug]
-    QD --> PL["plan --gaps"]
-    PL --> EX2[execute]
-    EX2 --> VF2[verify]
-```
+	graph LR
+	    EX[execute] --> VF[verify]
+	    VF --> QR[review]
+	    QR --> TG[test-gen]
+	    TG --> QT[test]
+	    QT --> MA[milestone-audit]
+	    QT -->|"失败"| QD[debug]
+	    QD --> PL["plan --gaps"]
+	    PL --> EX2[execute]
+	    EX2 --> VF2[verify]
+	```
 
 ### 快速渠道
 
@@ -641,6 +738,11 @@ graph LR
         LP["/workflow-lite-plan"] --> LE[lite-execute]
         LE --> LT[lite-test-review]
     end
+
+    subgraph standalone["Standalone（无需 init）"]
+        SA["analyze 'topic'"] --> SP["plan --dir"]
+        SP --> SE["execute --dir"]
+    end
 ```
 
 ---
@@ -656,14 +758,15 @@ graph LR
 /maestro-plan 1
 /maestro-execute 1
 /maestro-verify 1
-/maestro-phase-transition
+/maestro-milestone-audit
+/maestro-milestone-complete
 ```
 
 ### 一键全自动
 
 ```bash
 /maestro -y "实现用户认证系统"
-# 自动执行: init → roadmap → plan → execute → verify → review → test → transition
+# 自动执行: init → roadmap → plan → execute → verify → review → test → milestone-audit
 ```
 
 ### 发现并修复问题
@@ -692,7 +795,7 @@ graph LR
 /maestro-plan 3 --gaps              # 生成修复计划
 /maestro-execute 3                  # 执行修复
 /quality-business-test 3 --re-run   # 只重跑失败场景
-/maestro-phase-transition           # 通过后推进
+/maestro-milestone-audit            # 审计里程碑
 ```
 
 ---

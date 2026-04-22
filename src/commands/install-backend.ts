@@ -136,6 +136,28 @@ export const COMPONENT_DEFS: ComponentDef[] = [
     alwaysGlobal: false,
   },
   {
+    id: 'codex-agents-md',
+    label: 'Codex AGENTS.md',
+    description: 'Codex project instructions file',
+    sourcePath: join('.codex', 'AGENTS.md'),
+    target: (mode, projectPath) =>
+      mode === 'global'
+        ? join(homedir(), '.codex', 'AGENTS.md')
+        : join(projectPath, '.codex', 'AGENTS.md'),
+    alwaysGlobal: false,
+  },
+  {
+    id: 'codex-agents',
+    label: 'Codex Agents',
+    description: 'Codex agent definitions',
+    sourcePath: join('.codex', 'agents'),
+    target: (mode, projectPath) =>
+      mode === 'global'
+        ? join(homedir(), '.codex', 'agents')
+        : join(projectPath, '.codex', 'agents'),
+    alwaysGlobal: false,
+  },
+  {
     id: 'codex-skills',
     label: 'Codex Skills',
     description: 'Codex skill definitions',
@@ -193,6 +215,8 @@ export function scanDisabledItems(targetBase: string): DisabledItem[] {
   scanDir(join(targetBase, '.claude', 'skills'), '', 'skill', true);
   scanDir(join(targetBase, '.claude', 'commands'), '.md.disabled', 'command', false);
   scanDir(join(targetBase, '.claude', 'agents'), '.md.disabled', 'agent', false);
+  scanDir(join(targetBase, '.codex', 'skills'), '', 'skill', true);
+  scanDir(join(targetBase, '.codex', 'agents'), '.md.disabled', 'agent', false);
 
   return items;
 }
@@ -200,21 +224,11 @@ export function scanDisabledItems(targetBase: string): DisabledItem[] {
 export function restoreDisabledState(items: DisabledItem[], targetBase: string): number {
   let restored = 0;
   for (const item of items) {
-    if (item.type === 'skill') {
-      const enabledPath = join(targetBase, '.claude', 'skills', item.name, 'SKILL.md');
-      const disabledPath = enabledPath + '.disabled';
-      if (existsSync(enabledPath) && !existsSync(disabledPath)) {
-        renameSync(enabledPath, disabledPath);
-        restored++;
-      }
-    } else {
-      const subdir = item.type === 'command' ? 'commands' : 'agents';
-      const enabledPath = join(targetBase, '.claude', subdir, `${item.name}.md`);
-      const disabledPath = enabledPath + '.disabled';
-      if (existsSync(enabledPath) && !existsSync(disabledPath)) {
-        renameSync(enabledPath, disabledPath);
-        restored++;
-      }
+    const disabledPath = join(targetBase, item.relativePath);
+    const enabledPath = disabledPath.replace(/\.disabled$/, '');
+    if (existsSync(enabledPath) && !existsSync(disabledPath)) {
+      renameSync(enabledPath, disabledPath);
+      restored++;
     }
   }
   return restored;
@@ -511,8 +525,8 @@ export function createTargetBackup(
     if (options.backupAll) {
       // Backup everything in this target
       backupDirRecursive(targetDir, home);
-    } else if (options.backupClaudeMd && comp.def.id === 'claude-md') {
-      // Only backup CLAUDE.md
+    } else if (options.backupClaudeMd && (comp.def.id === 'claude-md' || comp.def.id === 'codex-agents-md')) {
+      // Backup instruction files (CLAUDE.md and AGENTS.md)
       backupFile(targetDir, home);
     }
   }
