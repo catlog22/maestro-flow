@@ -468,5 +468,73 @@ describe('ClaudeCodeAdapter', () => {
       expect(statusEntries).toHaveLength(1);
       expect(statusEntries[0].status).toBe('stopped');
     });
+
+    it('emits stopped on child close event (Windows fallback)', async () => {
+      const config = baseConfig({ interactive: true });
+      const proc = await adapter.spawn(config);
+
+      const entries: Array<Record<string, unknown>> = [];
+      adapter.onEntry(proc.id, (entry) => {
+        entries.push(entry as unknown as Record<string, unknown>);
+      });
+
+      // Only 'close' fires, not 'exit' (Windows process tree edge case)
+      fakeChild.emit('close', 0, null);
+      await new Promise((r) => setTimeout(r, 10));
+
+      const statusEntries = entries.filter((e) => e.type === 'status_change');
+      expect(statusEntries).toHaveLength(1);
+      expect(statusEntries[0].status).toBe('stopped');
+    });
+
+    it('emits stopped only once when both exit and close fire', async () => {
+      const config = baseConfig({ interactive: true });
+      const proc = await adapter.spawn(config);
+
+      const entries: Array<Record<string, unknown>> = [];
+      adapter.onEntry(proc.id, (entry) => {
+        entries.push(entry as unknown as Record<string, unknown>);
+      });
+
+      fakeChild.emit('exit', 0, null);
+      fakeChild.emit('close', 0, null);
+      await new Promise((r) => setTimeout(r, 10));
+
+      const stoppedEntries = entries.filter(
+        (e) => e.type === 'status_change' && e.status === 'stopped',
+      );
+      expect(stoppedEntries).toHaveLength(1);
+    });
+
+    it('readline close fallback emits stopped when exit/close are missed', async () => {
+      const config = baseConfig({ interactive: true });
+      const proc = await adapter.spawn(config);
+
+      const entries: Array<Record<string, unknown>> = [];
+      adapter.onEntry(proc.id, (entry) => {
+        entries.push(entry as unknown as Record<string, unknown>);
+      });
+
+      // Simulate stdout ending without exit/close events on the child process
+      fakeChild.stdout.push(null);
+      // readline 'close' handler has 500ms delay
+      await new Promise((r) => setTimeout(r, 700));
+
+      const stoppedEntries = entries.filter(
+        (e) => e.type === 'status_change' && e.status === 'stopped',
+      );
+      expect(stoppedEntries).toHaveLength(1);
+    });
+
+    it('doStop closes stdin before sending SIGTERM', async () => {
+      const config = baseConfig({ interactive: true });
+      const proc = await adapter.spawn(config);
+
+      const stdin = fakeChild.stdin as FakeStdin;
+      await adapter.stop(proc.id);
+
+      expect(stdin.end).toHaveBeenCalled();
+      expect(fakeChild.kill).toHaveBeenCalledWith('SIGTERM');
+    });
   });
 });

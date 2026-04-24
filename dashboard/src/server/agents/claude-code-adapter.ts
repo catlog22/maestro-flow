@@ -119,6 +119,7 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     { resolve: (allowed: boolean) => void }
   >();
   private readonly streamMonitors = new Map<string, StreamMonitor>();
+  private readonly stoppedEmitted = new Set<string>();
 
   // --- Lifecycle hooks -----------------------------------------------------
 
@@ -204,12 +205,17 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       child.stdin.end();
     }
 
-    // Heartbeat monitor: detect stale streams (60s silence)
+    // Heartbeat monitor: detect stale streams (60s silence).
+    // When stale, emit error and actively close stdin to let the process exit.
     const monitor = new StreamMonitor(() => {
       this.emitEntry(
         processId,
         EntryNormalizer.error(processId, 'Stream stale: no output for 60s', 'stream_stale'),
       );
+      // Close stdin to signal the process to exit naturally
+      if (child.stdin?.writable) {
+        child.stdin.end();
+      }
     });
     this.streamMonitors.set(processId, monitor);
 
@@ -218,6 +224,15 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     rl.on('line', (line: string) => {
       monitor.heartbeat();
       this.parseClaudeMessage(line, processId);
+    });
+
+    // Last-resort fallback: if stdout closes but neither 'exit' nor 'close'
+    // fire on the child (Windows shell: true + process tree edge case),
+    // emit stopped after a short delay to let the primary handlers run first.
+    rl.on('close', () => {
+      setTimeout(() => {
+        this.emitStopped(processId, 'stdout closed (readline fallback)');
+      }, 500);
     });
 
     // Stderr => error entries
@@ -262,6 +277,11 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       );
     }
 
+    // Close stdin first to let the process exit naturally
+    if (child.stdin?.writable) {
+      child.stdin.end();
+    }
+
     // Graceful SIGTERM
     child.kill('SIGTERM');
 
@@ -270,6 +290,11 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       if (!child.killed) {
         child.kill('SIGKILL');
       }
+      // Final fallback: if neither exit nor close events fire (Windows),
+      // force-emit stopped after kill attempt.
+      setTimeout(() => {
+        this.emitStopped(processId, 'Force stopped (kill fallback)');
+      }, 2000);
     }, 5000);
 
     // Wait for exit, then clean up timer
@@ -277,7 +302,8 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       clearTimeout(killTimer);
     });
 
-    this.cleanup(processId);
+    // Do NOT call cleanup() here — let exit/close/readline handlers do it
+    // via emitStopped() to ensure status_change:stopped is emitted first.
   }
 
   /** Close stdin to signal no more input — process exits naturally after finishing current work */
@@ -488,24 +514,39 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     this.emitApproval(processId, request);
   }
 
+  private emitStopped(processId: string, reason: string): void {
+    if (this.stoppedEmitted.has(processId)) return;
+    this.stoppedEmitted.add(processId);
+
+    this.emitEntry(
+      processId,
+      EntryNormalizer.statusChange(processId, 'stopped', reason),
+    );
+
+    const proc = this.getProcess(processId);
+    if (proc) {
+      proc.status = 'stopped';
+    }
+
+    this.cleanup(processId);
+    this.removeProcess(processId);
+  }
+
   private setupProcessListeners(child: ChildProcess, processId: string): void {
     child.on('exit', (code: number | null, signal: string | null) => {
       const reason = signal
         ? `Terminated by signal: ${signal}`
         : `Exited with code: ${code ?? 'unknown'}`;
+      this.emitStopped(processId, reason);
+    });
 
-      this.emitEntry(
-        processId,
-        EntryNormalizer.statusChange(processId, 'stopped', reason),
-      );
-
-      const proc = this.getProcess(processId);
-      if (proc) {
-        proc.status = 'stopped';
-      }
-
-      this.cleanup(processId);
-      this.removeProcess(processId);
+    // Fallback: 'close' fires after exit + stdio close — covers edge cases
+    // where 'exit' is missed on Windows process trees (shell: true).
+    child.on('close', (code: number | null, signal: string | null) => {
+      const reason = signal
+        ? `Terminated by signal: ${signal}`
+        : `Exited with code: ${code ?? 'unknown'}`;
+      this.emitStopped(processId, reason);
     });
 
     child.on('error', (err: Error) => {
@@ -539,5 +580,7 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       pending.resolve(false);
       this.pendingApprovals.delete(id);
     });
+    // Note: stoppedEmitted is intentionally NOT cleared here — it must persist
+    // to guard against the readline close fallback timer firing after cleanup.
   }
 }
