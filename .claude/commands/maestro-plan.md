@@ -20,7 +20,7 @@ Supports three modes:
 - **Revise** (`--revise`): Incrementally modify existing plan — edit tasks, adjust waves, add/remove tasks
 - **Check** (`--check`): Standalone plan verification — run plan-checker against existing plan
 
-All plan output goes to `.workflow/scratch/plan-{slug}-{date}/`. Registers PLN artifact in state.json. Performs collision detection against other plans in same milestone.
+All plan output goes to `.workflow/scratch/{YYYYMMDD}-plan-[P{N}-|M{N}-]{slug}/`. Date-first ordering enables chronological sorting. Scope prefix in directory name (`P{N}` for phase, `M{N}` for milestone, omit for adhoc/standalone) enables fallback identification. Registers PLN artifact in state.json. Performs collision detection against other plans in same milestone.
 </purpose>
 
 <required_reading>
@@ -60,11 +60,17 @@ $ARGUMENTS — phase number, or no args for milestone-wide planning, with option
 - Reads `context.md` from prior analyze artifact (auto-discovered from state.json or via --dir)
 - Reads `conclusions.json` if available (implementation_scope seeds task generation)
 
-**Output directory**: `scratch/plan-{slug}-{date}/` (relative to `.workflow/`)
+**Output directory** (relative to `.workflow/`):
+
+| Scope | Directory format | Example |
+|-------|-----------------|---------|
+| Phase | `scratch/{YYYYMMDD}-plan-P{N}-{slug}/` | `20260420-plan-P1-auth` |
+| Milestone | `scratch/{YYYYMMDD}-plan-M{N}-{slug}/` | `20260420-plan-M1-mvp` |
+| Adhoc/Standalone | `scratch/{YYYYMMDD}-plan-{slug}/` | `20260420-plan-caching` |
 
 **Output structure:**
 ```
-scratch/plan-{slug}-{date}/
+{YYYYMMDD}-plan-P{N}-{slug}/
 ├── plan.json            # summary, task_ids[], waves[] with phase labels
 └── .task/
     ├── TASK-001.json    # { phase: 1, phase_slug: "auth", ... }
@@ -82,7 +88,7 @@ scratch/plan-{slug}-{date}/
   "milestone": "{current_milestone or null}",
   "phase": "{phase_number or null}",
   "scope": "{milestone|phase|adhoc|standalone}",
-  "path": "scratch/plan-{slug}-{date}",
+  "path": "scratch/{YYYYMMDD}-plan-P{N}-{slug}",  // P{N} for phase, M{N} for milestone, omit for adhoc/standalone
   "status": "completed",
   "depends_on": "{ANL-NNN or null}",
   "harvested": false,
@@ -143,8 +149,8 @@ Tasks: {task_count} tasks in {wave_count} waves
 Check: {checker_status} (iteration {check_count}/{max_checks})
 Collision: {collision_status}
 
-Plan: {scratch_dir}/plan.json
-Tasks: {scratch_dir}/.task/TASK-*.json
+Plan: scratch/{YYYYMMDD}-plan-P{N}-{slug}/plan.json
+Tasks: scratch/{YYYYMMDD}-plan-P{N}-{slug}/.task/TASK-*.json
 
 Next steps:
   /maestro-execute              -- Execute the plan

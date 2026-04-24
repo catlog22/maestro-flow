@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
-import type { HookLevel, StatuslineStyle } from '../hooks.js';
+import type { HookLevel } from '../hooks.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
@@ -14,8 +14,6 @@ export interface InstallFlowConfig {
   installHooks: boolean;
   installMcp: boolean;
   installStatusline: boolean;
-  statuslineStyle: StatuslineStyle;
-  statuslineNerdFont: boolean;
   hookLevel: HookLevel;
   componentCount: number;
   fileCount: number;
@@ -93,7 +91,7 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
         <Row
           label={t.install.confirmLabelStatusline}
           value={config.installStatusline
-            ? `${t.install.statuslineEnabled} (${config.statuslineStyle}${config.statuslineNerdFont ? ' + nerd font' : ''})`
+            ? t.install.statuslineEnabled
             : t.install.confirmSkipped}
           valueColor={config.installStatusline ? 'green' : 'gray'}
         />

@@ -51,7 +51,7 @@ $ARGUMENTS — phase number or no args for milestone-wide, with optional flags.
 | `verify --dir scratch/plan-xxx` | Single plan: verify specific plan directory |
 
 **Single plan output**: `verification.json` appended to plan's scratch dir
-**Milestone output**: `scratch/verify-{milestone-slug}-{date}/milestone-verification.json`
+**Milestone output**: `scratch/{YYYYMMDD}-verify-M{N}-{slug}/milestone-verification.json`
 
 **Artifact registration**: On completion, register VRF artifact:
 ```jsonc
@@ -61,7 +61,7 @@ $ARGUMENTS — phase number or no args for milestone-wide, with optional flags.
   "milestone": "{current_milestone or null}",
   "phase": null,
   "scope": "milestone",
-  "path": "scratch/verify-{milestone-slug}-{date}",
+  "path": "scratch/{YYYYMMDD}-verify-M{N}-{slug}",  // M{N} = milestone number
   "status": "completed",
   "depends_on": ["EXC-001", "EXC-002", ...],
   "harvested": false,

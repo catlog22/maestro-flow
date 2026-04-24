@@ -242,8 +242,8 @@ stateDiagram-v2
     verified --> planned: gaps 发现 → plan --gaps
     executed --> planned: 失败 → debug → plan --gaps
 
-    note right of analyzed: scratch/analyze-{slug}-{date}/<br/>可多次 analyze 不同 scope
-    note right of planned: scratch/plan-{slug}-{date}/<br/>碰撞检测: 文件重叠预警
+    note right of analyzed: scratch/{YYYYMMDD}-analyze-P{N}-{slug}/<br/>可多次 analyze 不同 scope
+    note right of planned: scratch/{YYYYMMDD}-plan-P{N}-{slug}/<br/>碰撞检测: 文件重叠预警
     note right of executed: .summaries/ 写入 plan dir<br/>逐个 plan 执行，plan 内 wave 并行
     note right of verified: verification.json 写入 plan dir
 ```
@@ -284,11 +284,13 @@ stateDiagram-v2
 | 规划 | `/maestro-plan` | context.md (from ANL) | plan.json + TASK-*.json | PLN-{NNN} |
 | 执行 | `/maestro-execute` | plan.json | .summaries/, 代码变更 | EXC-{NNN} |
 | 验证 | `/maestro-verify` | .summaries/ | verification.json | VRF-{NNN} |
-| 审查 | `/quality-review` | 代码变更 | review.json | — |
+| 审查 | `/quality-review` | 代码变更 | review.json | REV-{NNN} |
+| 调试 | `/quality-debug` | review findings / 用户反馈 | understanding.md | DBG-{NNN} |
+| 测试 | `/quality-test` | verification criteria | uat.md | TST-{NNN} |
 | 审计 | `/maestro-milestone-audit` | artifact registry | audit-report.md | — |
 | 完成 | `/maestro-milestone-complete` | audit passed | 归档到 milestones/ | — |
 
-**所有产出路径**: `scratch/{type}-{slug}-{date}/` — 不再有 `.workflow/phases/` 目录。
+**所有产出路径**: `scratch/{YYYYMMDD}-{type}[-P{N}|-M{N}]-{slug}/` — 日期前置便于排序，scope 前缀 P{N}/M{N} 作为 state.json 的备用标识。不再有 `.workflow/phases/` 目录。
 
 **Scope 路由**: 无参数 = milestone 全量；数字 = 指定 phase；文本 = adhoc/standalone。
 
@@ -449,8 +451,8 @@ execute --dir scratch/plan-xxx   ← 直接执行
 
 ```bash
 /maestro-analyze "实现 JWT 认证"              # scope=standalone，state.json 自动 bootstrap
-/maestro-plan --dir scratch/analyze-jwt-...   # 对 analyze 产出规划
-/maestro-execute --dir scratch/plan-jwt-...   # 直接执行
+/maestro-plan --dir scratch/20260420-analyze-jwt-...   # 对 analyze 产出规划
+/maestro-execute --dir scratch/20260420-plan-jwt-...   # 直接执行
 ```
 
 Standalone artifacts 不归属 milestone，不影响主干管线。

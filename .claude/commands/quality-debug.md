@@ -39,23 +39,54 @@ User's issue: $ARGUMENTS
 - `--from-uat <phase>` -- Read gaps from phase's uat.md as pre-filled symptoms
 - `--parallel` -- Spawn parallel debug agents (one per gap cluster)
 
-**State files:**
-- Phase UAT/debug artifacts (resolve via `state.json.artifacts[]` → scratch paths):
-  - uat.md -- UAT gaps (if --from-uat)
-  - .debug/ -- Phase-scoped debug sessions
-- `.workflow/scratch/debug-*/` -- Standalone debug sessions
+**All context via state.json.artifacts[]:**
+
+```
+related = artifacts.filter(a =>
+  a.phase === target_phase && a.milestone === current_milestone
+).sort_by(completed_at asc)
+```
+
+Each artifact's type determines its outputs at `.workflow/{a.path}/`:
+- **execute** → .summaries/, .task/ (source of code changes)
+- **review** → review.json (findings guide hypothesis formation)
+- **debug** → understanding.md, evidence.ndjson (prior investigations, avoid re-investigation)
+- **test** → uat.md (--from-uat gap source), .tests/
+
+Extract conclusions from related artifacts that may affect this debug session — review findings guide investigation direction, prior debug avoids redundant work.
+
+**Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone)
 </context>
 
 <execution>
 Follow '~/.maestro/workflows/debug.md' completely.
+
+**Output writes to DEBUG_DIR** (`scratch/{YYYYMMDD}-debug-P{N}-{slug}/`):
+- understanding.md, evidence.ndjson, diagnosis-summary.json
+
+**Register artifact on completion (phase-scoped only):**
+```
+Append to state.json.artifacts[]:
+{
+  id: nextArtifactId(artifacts, "debug"),  // DBG-001
+  type: "debug",
+  milestone: current_milestone,
+  phase: target_phase,
+  scope: "phase",
+  path: "scratch/{YYYYMMDD}-debug-P{N}-{slug}",  // or {YYYYMMDD}-debug-{slug} for standalone
+  status: all_diagnosed ? "completed" : "failed",
+  depends_on: triggering_review_id || exec_art.id,
+  harvested: false,
+  created_at: start_time,
+  completed_at: now()
+}
+```
 
 **Next-step routing on completion:**
 - Root cause found, fix needed → `/maestro-plan {phase} --gaps`
 - Root cause found (from UAT), auto-fix → `/quality-test {phase} --auto-fix`
 - Inconclusive, need more info → `/quality-debug {issue} -c` (resume session)
 - Standalone fix already applied → `/maestro-verify {phase}`
-
-Note: Debug output (.debug/) is auto-loaded by maestro-plan --gaps.
 </execution>
 
 <error_codes>

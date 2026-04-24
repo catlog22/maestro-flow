@@ -171,17 +171,12 @@ export function detectStatusline(opts: { project?: boolean } = {}): string | nul
   return settings.statusLine?.command ?? null;
 }
 
-export type StatuslineStyle = 'powerline' | 'text';
-
 /**
- * Install the statusline into Claude Code settings.json
- * and persist style preference to maestro config.
+ * Install the statusline into Claude Code settings.json.
  */
 export function installStatusline(opts: {
   project?: boolean;
   settingsPath?: string;
-  style?: StatuslineStyle;
-  nerdFont?: boolean;
 } = {}): string {
   const settingsPath = opts.settingsPath
     ?? (opts.project
@@ -191,18 +186,6 @@ export function installStatusline(opts: {
   settings.statusLine = { type: 'command', command: 'maestro-statusline' };
   paths.ensure(join(settingsPath, '..'));
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-
-  // Persist style preference to maestro config
-  if (opts.style) {
-    try {
-      const config = loadConfig();
-      config.statusline = {
-        style: opts.style,
-        nerdFont: opts.nerdFont ?? false,
-      };
-      saveConfig(config);
-    } catch { /* best-effort */ }
-  }
 
   return settingsPath;
 }

@@ -49,7 +49,7 @@ Wave-based test generation using `spawn_agents_on_csv`. Each source file/module 
 $quality-test-gen "3"
 $quality-test-gen -c 4 "3 --type unit"
 $quality-test-gen -y "3 --type e2e --framework vitest"
-$quality-test-gen --continue "test-gen-phase3-20260318"
+$quality-test-gen --continue "20260318-testgen-P3-auth"
 ```
 
 **Flags**:
@@ -113,7 +113,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column (empty for w
 ### Session Structure
 
 ```
-.workflow/.csv-wave/test-gen-{phase}-{date}/
+.workflow/.csv-wave/{YYYYMMDD}-testgen-P{N}-{slug}/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -158,7 +158,7 @@ const phaseArg = $ARGUMENTS
   .trim()
 
 const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `test-gen-phase${phaseArg}-${dateStr}`
+const sessionId = `${dateStr}-testgen-P${phaseArg}-${phaseSlug}`  // phaseSlug from index.json or roadmap
 const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
@@ -170,9 +170,11 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Decomposition Rules**:
 
-1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{type}-{slug}-{date}/`
+1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
 
-2. **Test infrastructure discovery**:
+2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: review → review.json (critical findings become focused test targets), debug → understanding.md (confirmed root causes become regression test targets), test → uat.md (UAT gaps inform which behaviors need tests). Extract conclusions that may affect test generation priorities.
+
+3. **Test infrastructure discovery**:
    - Find config files: `jest.config.*`, `vitest.config.*`, `pytest.ini`, `.mocharc.*`
    - Find existing test files: `*.test.*`, `*.spec.*`, `test_*`
    - Find test utilities: `test-utils.*`, `testHelper*`, `conftest.py`
@@ -362,7 +364,9 @@ Each agent receives:
 
 8. Copy `test-gen-report.json` to phase `.tests/` directory.
 
-9. Display summary.
+9. **Register artifact**: Append to `state.json.artifacts[]` with `type: "test"`, `id: TST-NNN`, `path: "scratch/{YYYYMMDD}-testgen-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch.
+
+10. Display summary.
 
 **Next step routing**:
 

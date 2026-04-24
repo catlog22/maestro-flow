@@ -36,23 +36,56 @@ Phase or task: $ARGUMENTS (optional)
 - `--smoke` -- Run cold-start smoke tests before UAT (basic sanity: app starts, routes respond, no crash)
 - `--auto-fix` -- After diagnosis, auto-trigger gap-fix loop instead of asking user
 
-Context files resolved from target directory:
-- verification.json (must_haves, gaps from maestro-verify)
-- validation.json (coverage, requirement mapping)
-- review.json (findings from quality-review, if exists)
-- index.json (success_criteria, execution results)
-- plan.json (task overview)
-- .summaries/TASK-*.md (execution summaries)
-- uat.md (existing session, if resuming)
+**All context via state.json.artifacts[]:**
+
+```
+related = artifacts.filter(a =>
+  a.phase === target_phase && a.milestone === current_milestone
+).sort_by(completed_at asc)
+```
+
+Each artifact's type determines its outputs at `.workflow/{a.path}/`:
+- **execute** → .summaries/, .task/, verification.json, plan.json (test target source)
+- **verify** → verification.json (must_haves, gaps)
+- **review** → review.json (findings become additional test scenarios)
+- **debug** → understanding.md (confirmed root causes become regression tests)
+- **test** → uat.md (existing session, resumable)
+
+Extract conclusions from related artifacts that may affect this test session — review findings generate additional scenarios, debug root causes generate regression tests.
+
+**Output**: `TEST_DIR = .workflow/scratch/{YYYYMMDD}-test-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
 </context>
 
 <execution>
 Follow '~/.maestro/workflows/test.md' completely.
 
-**Review findings integration (when review.json exists):**
-- Extract critical/high findings from review.json.findings_by_dimension as additional test scenarios
-- These review-derived scenarios are prioritized and marked `source: "review_finding"`
-- When review.json verdict is "BLOCK" and review-finding tests fail, auto-enter gap-fix loop without user confirmation (Step 12 auto-fix condition)
+**Output writes to TEST_DIR** (`scratch/{YYYYMMDD}-test-P{N}-{slug}/`):
+- uat.md, test-plan.json, .tests/test-results.json, .tests/coverage-report.json
+
+**Review findings integration** (from related review artifacts):
+- Extract critical/high findings as additional test scenarios, marked `source: "review_finding"`
+- When review verdict is "BLOCK" and review-finding tests fail, auto-enter gap-fix loop
+
+**Debug root cause integration** (from related debug artifacts):
+- Generate regression test scenarios from confirmed root causes, marked `source: "debug_root_cause"`
+
+**Register artifact on completion:**
+```
+Append to state.json.artifacts[]:
+{
+  id: nextArtifactId(artifacts, "test"),  // TST-001
+  type: "test",
+  milestone: current_milestone,
+  phase: target_phase,
+  scope: "phase",
+  path: "scratch/{YYYYMMDD}-test-P{N}-{slug}",
+  status: issues == 0 ? "completed" : "failed",
+  depends_on: exec_art.id,
+  harvested: false,
+  created_at: start_time,
+  completed_at: now()
+}
+```
 
 **Next-step routing on completion:**
 - All tests pass → `/maestro-phase-transition {phase}`

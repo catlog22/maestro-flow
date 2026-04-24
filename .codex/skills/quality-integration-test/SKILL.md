@@ -62,7 +62,7 @@ Linear pipeline test execution using `spawn_agents_on_csv`. Progressive L0 -> L1
 $quality-integration-test "3"
 $quality-integration-test -c 4 "3 --max-iterations 8"
 $quality-integration-test -y "3 --target-coverage 90"
-$quality-integration-test --continue "integration-test-phase3-20260318"
+$quality-integration-test --continue "20260318-integration-test-P3-auth"
 ```
 
 **Flags**:
@@ -129,7 +129,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 ### Session Structure
 
 ```
-.workflow/.csv-wave/integration-test-{phase}-{date}/
+.workflow/.csv-wave/{YYYYMMDD}-integration-test-P{N}-{slug}/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -183,7 +183,7 @@ const phaseArg = $ARGUMENTS
   .trim()
 
 const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `integration-test-phase${phaseArg}-${dateStr}`
+const sessionId = `${dateStr}-integration-test-P${phaseArg}-${phaseSlug}`  // phaseSlug from index.json or roadmap
 const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
@@ -213,9 +213,11 @@ Write(`${sessionFolder}/reflection-log.md`,
 
 **Decomposition Rules**:
 
-1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{type}-{slug}-{date}/`
+1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
 
-2. **Codebase exploration**:
+2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: review → review.json (critical findings inform integration test focus), debug → understanding.md (root causes guide regression test layers), test → uat.md/.tests/ (prior results inform layer priorities). Extract conclusions that may affect integration test strategy.
+
+3. **Codebase exploration**:
    - Cross-module imports and dependencies
    - API endpoints and route definitions
    - Database interactions and queries
@@ -455,7 +457,9 @@ Update `state.json` with new strategy and iteration count.
 
 6. Update `index.json` with integration test status.
 
-7. Display summary.
+7. **Register artifact**: Append to `state.json.artifacts[]` with `type: "test"`, `id: TST-NNN`, `path: "scratch/{YYYYMMDD}-integration-test-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch.
+
+8. Display summary.
 
 **Next step routing**:
 

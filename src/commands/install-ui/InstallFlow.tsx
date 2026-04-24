@@ -12,7 +12,7 @@ import { InstallConfirm, type InstallFlowConfig } from './InstallConfirm.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
 import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS } from '../install-backend.js';
-import { detectStatusline, type HookLevel, type StatuslineStyle } from '../hooks.js';
+import { detectStatusline, type HookLevel } from '../hooks.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
@@ -73,10 +73,8 @@ export function InstallFlow({
   const [mcpTools, setMcpTools] = useState<string[]>([...MCP_TOOLS]);
   const [mcpProjectRoot, setMcpProjectRoot] = useState('');
 
-  // Statusline — detect existing config + style selection
+  // Statusline — detect existing config
   const [installStatusline, setInstallStatusline] = useState(false);
-  const [statuslineStyle, setStatuslineStyle] = useState<StatuslineStyle>('text');
-  const [statuslineNerdFont, setStatuslineNerdFont] = useState(false);
   const statuslineDetected = useMemo(
     () => detectStatusline({ project: mode === 'project' }),
     [mode],
@@ -112,8 +110,6 @@ export function InstallFlow({
     installHooks: enabledSteps.hooks,
     installMcp: enabledSteps.mcp && mcpEnabled,
     installStatusline: enabledSteps.statusline && installStatusline,
-    statuslineStyle,
-    statuslineNerdFont,
     hookLevel,
     componentCount: selectedComponents.length,
     fileCount,
@@ -125,7 +121,7 @@ export function InstallFlow({
     backupAll: enabledSteps.backup && backupAll,
   }), [mode, projectPath, enabledSteps, hookLevel, selectedComponents.length,
     fileCount, mcpTools, mcpEnabled, selectedComponentIds, mcpProjectRoot,
-    installStatusline, statuslineStyle, statuslineNerdFont, backupClaudeMd, backupAll]);
+    installStatusline, backupClaudeMd, backupAll]);
 
   // Hub items with live summary
   const hubItems = useMemo(() => buildHubItems(
@@ -318,12 +314,8 @@ export function InstallFlow({
         {step === 'statusline_config' && (
           <StatuslineConfig
             enabled={installStatusline}
-            style={statuslineStyle}
-            nerdFont={statuslineNerdFont}
             detected={statuslineDetected}
             onToggle={setInstallStatusline}
-            onStyleChange={setStatuslineStyle}
-            onNerdFontChange={setStatuslineNerdFont}
           />
         )}
 

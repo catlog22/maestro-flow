@@ -146,8 +146,6 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           setStatus(t.install.execInstallingStatusline);
           installStatuslineFn({
             project: config.mode === 'project',
-            style: config.statuslineStyle,
-            nerdFont: config.statuslineNerdFont,
           });
           statuslineInstalled = true;
         }

@@ -4,12 +4,13 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-/**
- * Read statusline config from maestro config file.
- * Falls back to env vars, then defaults.
- */
-function readStatuslineConfig(): { style: 'powerline' | 'text'; nerdFont: boolean } {
-  // 1. Try maestro config file
+/** Read nerdFont preference from config. Default: true (Nerd Font enabled) */
+function readNerdFontConfig(): boolean {
+  // Env override takes priority
+  if (process.env.MAESTRO_NERD_FONT === '0') return false;
+  if (process.env.MAESTRO_NERD_FONT === '1') return true;
+
+  // Config file
   try {
     const configPath = join(
       process.env.MAESTRO_HOME || join(homedir(), '.maestro'),
@@ -17,23 +18,15 @@ function readStatuslineConfig(): { style: 'powerline' | 'text'; nerdFont: boolea
     );
     if (existsSync(configPath)) {
       const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
-      if (cfg.statusline) {
-        return {
-          style: cfg.statusline.style === 'powerline' ? 'powerline' : 'text',
-          nerdFont: cfg.statusline.nerdFont === true,
-        };
-      }
+      if (cfg.statusline?.nerdFont === true) return true;
+      if (cfg.statusline?.nerdFont === false) return false;
     }
   } catch { /* ignore */ }
 
-  // 2. Fall back to env vars
-  const envStyle = process.env.MAESTRO_STATUSLINE_STYLE?.toLowerCase();
-  const style = (envStyle === 'powerline' || envStyle === 'pl') ? 'powerline' : 'text';
-  const nerdFont = process.env.MAESTRO_NERD_FONT === '1';
-  return { style, nerdFont };
+  return false; // default: Unicode (safe for all environments)
 }
 
-const _slConfig = readStatuslineConfig();
+const _nerdFont = readNerdFontConfig();
 
 /** Remaining context % at which WARNING is emitted */
 export const WARNING_THRESHOLD = 35;
@@ -66,84 +59,42 @@ export const SPEC_KW_BRIDGE_PREFIX = 'maestro-spec-kw-';
 export const STDIN_TIMEOUT_MS = 3000;
 
 // ---------------------------------------------------------------------------
-// Powerline statusline — Notion-inspired muted palette
+// Statusline icons — Nerd Font (default) with Unicode fallback
 // ---------------------------------------------------------------------------
 
-/** Powerline right-arrow separator (E0B0 needs Powerline font, fallback to V-chevron) */
-export const PL_SEP = _slConfig.nerdFont ? '\uE0B0' : '\u276F';
-
-/** Icon sets — Nerd Font (rich) vs Unicode (safe fallback) */
 const ICONS_NERD = {
-  model:     '\u{F0BA9}',  // 󰮩 nf-md-robot
-  milestone: '\u{F0F4E}',  // 󰽎 nf-md-flag_checkered
-  phase:     '\uF0E3',     //  nf-oct-milestone
+  model:     '\uF0E7',     //  nf-fa-bolt
+  milestone: '\uF11E',     //  nf-fa-flag_checkered
+  phase:     '\u25C6',     // ◆ BLACK DIAMOND
   coord:     '\u{F044C}',  // 󰑌 nf-md-check_circle_outline
   task:      '\uEACB',     //  nf-cod-terminal_cmd
   team:      '\u{F0849}',  // 󰡉 nf-md-account_group
   dir:       '\uEA83',     //  nf-cod-folder
   git:       '\uE725',     //  nf-dev-git_branch
-  ctx:       '\u{F0425}',  // 󰐥 nf-md-gauge
+  ctx:       '\uF201',     //  nf-fa-line_chart
 } as const;
 
 const ICONS_UNICODE = {
-  model:     '\u270E',  // ✎ pencil
-  milestone: '\u2691',  // ⚑ flag
-  phase:     '\u25C6',  // ◆ diamond
-  coord:     '\u2699',  // ⚙ gear
-  task:      '\u25B8',  // ▸ triangle
+  model:     '\u270E',    // ✎ pencil
+  milestone: '\u2691',    // ⚑ flag
+  phase:     '\u25C6',    // ◆ diamond
+  coord:     '\u2699',    // ⚙ gear
+  task:      '\u25B8',    // ▸ triangle
   team:      '\u{1F465}', // 👥 people
-  dir:       '\u25A0',  // ■ square
-  git:       '\u25C6',  // ◆ diamond (git branch)
-  ctx:       '\u25D4',  // ◔ circle with quarter
+  dir:       '\u25A0',    // ■ square
+  git:       '\u2387',    // ⎇ branch (alternative key symbol)
+  ctx:       '\u25D4',    // ◔ circle with quarter
 } as const;
 
-/** Select icon set based on config */
-export const ICONS = _slConfig.nerdFont ? ICONS_NERD : ICONS_UNICODE;
+export const ICONS = _nerdFont ? ICONS_NERD : ICONS_UNICODE;
 
 /** Git status icons */
 export const GIT_ICONS = {
   clean:    '✓',
-  dirty:    '●',
+  dirty:    '△',
   conflict: '⚠',
   ahead:    '↑',
   behind:   '↓',
-} as const;
-
-/**
- * RGB background colors — muted Notion-inspired palette.
- * Each entry: [R, G, B]
- */
-export const SEGMENT_BG = {
-  model:     [63, 75, 91]    as const,  // slate
-  milestone: [160, 82, 45]  as const,  // warm brown
-  phase:     [180, 142, 46]  as const,  // gold (muted)
-  coord:     [58, 126, 200]  as const,  // blue
-  task:      [55, 55, 60]    as const,  // charcoal
-  team:      [123, 94, 167]  as const,  // purple
-  dir:       [45, 134, 89]   as const,  // green
-  ctxOk:    [45, 134, 89]   as const,  // green  (0–49%)
-  ctxWarn:  [180, 142, 46]  as const,  // gold   (50–64%)
-  ctxAlert: [200, 122, 42]  as const,  // orange (65–79%)
-  ctxCrit:  [196, 64, 64]   as const,  // red    (80%+)
-} as const;
-
-/** Foreground color per segment: white or dark */
-const WHITE = [255, 255, 255] as const;
-const DARK  = [30, 30, 30]    as const;
-const LIGHT = [224, 224, 224] as const;
-
-export const SEGMENT_FG = {
-  model:     WHITE,
-  milestone: WHITE,
-  phase:     DARK,
-  coord:     WHITE,
-  task:      LIGHT,
-  team:      WHITE,
-  dir:       WHITE,
-  ctxOk:    WHITE,
-  ctxWarn:  DARK,
-  ctxAlert: WHITE,
-  ctxCrit:  WHITE,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -178,20 +129,10 @@ export const ANSI_CYAN = '\x1b[36m';
 export const ANSI_BLINK = '\x1b[5m';
 
 // ---------------------------------------------------------------------------
-// Rendering mode: "powerline" (bg+arrows) or "text" (colored text + pipes)
-// Set via MAESTRO_STATUSLINE_STYLE env var. Default: text
+// Segment colors — colored text on transparent background
 // ---------------------------------------------------------------------------
 
-export type StatuslineStyle = 'powerline' | 'text';
-
-export function getStatuslineStyle(): StatuslineStyle {
-  return _slConfig.style;
-}
-
-/**
- * Text-mode segment colors — used as foreground on transparent background.
- * Each color is the "accent" for that segment type.
- */
+/** Segment accent colors — used as foreground on transparent background */
 export const TEXT_COLORS = {
   model:     [86, 182, 194]  as const,   // cyan
   milestone: [224, 175, 104] as const,   // warm gold

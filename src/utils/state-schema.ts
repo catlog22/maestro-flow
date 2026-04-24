@@ -8,12 +8,21 @@
 import { readFileSync, writeFileSync, renameSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** Local-time ISO 8601 string with timezone offset, e.g. "2026-04-24T14:30:00+08:00" */
+function localISO(): string {
+  const d = new Date();
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${sign}${p(Math.floor(Math.abs(off) / 60))}:${p(Math.abs(off) % 60)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export type ProjectStatus = 'idle' | 'active' | 'executing' | 'completed';
-export type ArtifactType = 'analyze' | 'plan' | 'execute' | 'verify' | 'brainstorm' | 'spec';
+export type ArtifactType = 'analyze' | 'plan' | 'execute' | 'verify' | 'brainstorm' | 'spec' | 'review' | 'debug' | 'test';
 export type ArtifactScope = 'milestone' | 'phase' | 'adhoc' | 'standalone';
 export type ArtifactStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
@@ -160,6 +169,9 @@ const TYPE_PREFIX: Record<ArtifactType, string> = {
   verify: 'VRF',
   brainstorm: 'BST',
   spec: 'SPC',
+  review: 'REV',
+  debug: 'DBG',
+  test: 'TST',
 };
 
 export function nextArtifactId(artifacts: ArtifactEntry[], type: ArtifactType): string {
@@ -210,7 +222,7 @@ function harvestLegacyPhaseArtifacts(workflowRoot: string, currentMilestone: str
 
   const entries: ArtifactEntry[] = [];
   let idCounters: Record<string, number> = { ANL: 0, PLN: 0, EXC: 0, VRF: 0 };
-  const now = new Date().toISOString();
+  const now = localISO();
 
   let dirs: string[];
   try { dirs = readdirSync(phasesDir); } catch { return []; }
@@ -362,7 +374,7 @@ export function migrateV1toV2(raw: V1State, workflowRoot?: string): StateJsonV2 
     },
     transition_history: raw.transition_history ?? [],
     milestone_history: (raw.milestone_history ?? []) as MilestoneHistoryEntry[],
-    last_updated: raw.last_updated ?? new Date().toISOString(),
+    last_updated: raw.last_updated ?? localISO(),
   };
 }
 
@@ -395,7 +407,7 @@ export function writeStateJson(workflowRoot: string, state: StateJsonV2): void {
   const statePath = join(workflowRoot, '.workflow', 'state.json');
   const tmpPath = statePath + '.tmp';
 
-  state.last_updated = new Date().toISOString();
+  state.last_updated = localISO();
 
   writeFileSync(tmpPath, JSON.stringify(state, null, 2), 'utf8');
   renameSync(tmpPath, statePath);

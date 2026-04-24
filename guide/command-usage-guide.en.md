@@ -240,8 +240,8 @@ stateDiagram-v2
     verified --> planned: Gaps found → plan --gaps
     executed --> planned: Failure → debug → plan --gaps
 
-    note right of analyzed: scratch/analyze-{slug}-{date}/<br/>Multiple analyze with different scopes
-    note right of planned: scratch/plan-{slug}-{date}/<br/>Collision detection: file overlap warning
+    note right of analyzed: scratch/{YYYYMMDD}-analyze-P{N}-{slug}/<br/>Multiple analyze with different scopes
+    note right of planned: scratch/{YYYYMMDD}-plan-P{N}-{slug}/<br/>Collision detection: file overlap warning
     note right of executed: .summaries/ written to plan dir<br/>Execute plans one-by-one, wave parallel within plan
     note right of verified: verification.json written to plan dir
 ```
@@ -282,11 +282,13 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 | Plan | `/maestro-plan` | context.md (from ANL) | plan.json + TASK-*.json | PLN-{NNN} |
 | Execute | `/maestro-execute` | plan.json | .summaries/, code changes | EXC-{NNN} |
 | Verify | `/maestro-verify` | .summaries/ | verification.json | VRF-{NNN} |
-| Review | `/quality-review` | code changes | review.json | — |
+| Review | `/quality-review` | code changes | review.json | REV-{NNN} |
+| Debug | `/quality-debug` | review findings / user feedback | understanding.md | DBG-{NNN} |
+| Test | `/quality-test` | verification criteria | uat.md | TST-{NNN} |
 | Audit | `/maestro-milestone-audit` | artifact registry | audit-report.md | — |
 | Complete | `/maestro-milestone-complete` | audit passed | archived to milestones/ | — |
 
-**All output paths**: `scratch/{type}-{slug}-{date}/` — no more `.workflow/phases/` directories.
+**All output paths**: `scratch/{YYYYMMDD}-{type}[-P{N}|-M{N}]-{slug}/` — date-first for chronological sorting, scope prefix P{N}/M{N} as state.json fallback identifier. No more `.workflow/phases/` directories.
 
 **Scope routing**: No args = entire milestone; number = specific phase; text = adhoc/standalone.
 
@@ -445,8 +447,8 @@ No `maestro-init` or `maestro-roadmap` needed. Just run commands directly. state
 
 ```bash
 /maestro-analyze "Implement JWT authentication"              # scope=standalone, state.json auto-bootstraps
-/maestro-plan --dir scratch/analyze-jwt-...                  # Plan against analyze output
-/maestro-execute --dir scratch/plan-jwt-...                  # Execute directly
+/maestro-plan --dir scratch/20260420-analyze-jwt-...         # Plan against analyze output
+/maestro-execute --dir scratch/20260420-plan-jwt-...         # Execute directly
 ```
 
 Standalone artifacts are not linked to any milestone and do not affect the main pipeline.

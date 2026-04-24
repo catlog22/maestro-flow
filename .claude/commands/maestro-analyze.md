@@ -53,7 +53,15 @@ $ARGUMENTS -- phase number for milestone-scoped, topic text for adhoc/standalone
 
 **Scope detection rule**: Text argument + `state.json.current_milestone` non-null → adhoc. Text argument + no milestone → standalone. No args + no roadmap → error (need topic or roadmap). `--gaps` → gaps scope (bypasses standard scope routing).
 
-**Output directory**: `scratch/analyze-{slug}-{date}/` (relative to `.workflow/`)
+**Output directory** (relative to `.workflow/`):
+
+| Scope | Directory format | Example |
+|-------|-----------------|---------|
+| Phase | `scratch/{YYYYMMDD}-analyze-P{N}-{slug}/` | `20260420-analyze-P1-auth` |
+| Milestone | `scratch/{YYYYMMDD}-analyze-M{N}-{slug}/` | `20260420-analyze-M1-mvp` |
+| Adhoc/Standalone | `scratch/{YYYYMMDD}-analyze-{slug}/` | `20260420-analyze-caching` |
+
+Scope prefix (`P{N}` / `M{N}`) enables directory-level identification as fallback when state.json is unavailable.
 
 **Artifact registration**: On completion, register artifact in `state.json.artifacts[]`:
 ```jsonc
@@ -63,7 +71,7 @@ $ARGUMENTS -- phase number for milestone-scoped, topic text for adhoc/standalone
   "milestone": "{current_milestone or null}",
   "phase": "{phase_number or null}",
   "scope": "{milestone|phase|adhoc|standalone}",
-  "path": "scratch/analyze-{slug}-{date}",
+  "path": "scratch/{YYYYMMDD}-analyze-P{N}-{slug}",  // P{N} for phase, M{N} for milestone, omit for adhoc/standalone
   "status": "completed",
   "depends_on": null,
   "harvested": false,

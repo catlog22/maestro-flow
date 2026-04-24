@@ -52,7 +52,7 @@ Wave-based hypothesis-driven debugging using `spawn_agents_on_csv`. Wave 1 explo
 $quality-debug "Login button throws 500 error on click"
 $quality-debug -y "JWT token not refreshed --from-uat 3"
 $quality-debug -c 4 "Navigation crash --from-uat 3 --parallel"
-$quality-debug --continue "debug-jwt-expiry-20260318"
+$quality-debug --continue "20260318-debug-P3-jwt-expiry"
 ```
 
 **Flags**:
@@ -115,7 +115,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 ### Session Structure
 
 ```
-.workflow/.csv-wave/debug-{slug}-{date}/
+.workflow/.csv-wave/{YYYYMMDD}-debug-P{N}-{slug}/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -159,7 +159,7 @@ const bugDescription = $ARGUMENTS
 
 const slug = bugDescription.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
 const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `debug-${slug}-${dateStr}`
+const sessionId = fromUatMatch ? `${dateStr}-debug-P${fromUatMatch[1]}-${slug}` : `${dateStr}-debug-${slug}`
 const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
@@ -179,13 +179,15 @@ Bash(`mkdir -p ${sessionFolder}`)
 | `--parallel` flag present | parallel (implies from-uat, one agent per gap cluster) |
 | Neither flag | standalone (gather symptoms interactively) |
 
-2. **Symptom collection**:
+2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: execute → .summaries/.task/, review → review.json (findings guide hypothesis formation), debug → understanding.md (avoid re-investigation), test → uat.md. Extract conclusions that may affect this debug session.
+
+3. **Symptom collection**:
 
 | Mode | Source | Action |
 |------|--------|--------|
 | standalone | User input | Ask 5 questions: expected, actual, errors, timeline, reproduction |
-| from-uat | `{artifact_dir}/uat.md` | Parse Gaps section, cluster by component |
-| parallel | `{artifact_dir}/uat.md` | Same as from-uat, one investigation per cluster |
+| from-uat | test artifact's uat.md (via registry) | Parse Gaps section, cluster by component |
+| parallel | test artifact's uat.md (via registry) | Same as from-uat, one investigation per cluster |
 
 3. **Hypothesis generation**: For each symptom cluster or bug description:
    - Analyze code patterns around affected area
@@ -327,7 +329,9 @@ spawn_agents_on_csv({
 5. **Issue update**: If `.workflow/issues/issues.jsonl` exists:
    - Update matching issues with status `diagnosed`, add `context.suggested_fix` and `context.notes`
 
-6. **Next step routing**:
+6. **Register artifact** (phase-scoped only): Append to `state.json.artifacts[]` with `type: "debug"`, `id: DBG-NNN`, `path: "scratch/{YYYYMMDD}-debug-P{N}-{slug}"`, `depends_on: triggering_review_id || exec_art.id`. Output directory is independent scratch.
+
+7. **Next step routing**:
 
 | Result | Suggestion |
 |--------|------------|

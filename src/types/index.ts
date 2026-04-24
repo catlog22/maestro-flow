@@ -10,8 +10,7 @@ export interface SpecInjectionConfig {
 }
 
 export interface StatuslineConfig {
-  style: 'powerline' | 'text';
-  nerdFont?: boolean;
+  style?: string;
 }
 
 export interface MaestroConfig {

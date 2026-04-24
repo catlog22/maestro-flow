@@ -52,7 +52,7 @@ Wave-based multi-dimensional code review using `spawn_agents_on_csv`. Decomposes
 $quality-review "3"
 $quality-review -c 6 "3 --level deep"
 $quality-review -y "3 --dimensions security,performance"
-$quality-review --continue "review-phase3-20260318"
+$quality-review --continue "20260318-review-P3-auth"
 ```
 
 **Flags**:
@@ -119,7 +119,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 ### Session Structure
 
 ```
-.workflow/.csv-wave/review-{phase}-{date}/
+.workflow/.csv-wave/{YYYYMMDD}-review-P{N}-{slug}/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -163,7 +163,7 @@ const phaseArg = $ARGUMENTS
   .trim()
 
 const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `review-phase${phaseArg}-${dateStr}`
+const sessionId = `${dateStr}-review-P${phaseArg}-${phaseSlug}`  // phaseSlug from index.json or roadmap
 const sessionFolder = `.workflow/.csv-wave/${sessionId}`
 
 Bash(`mkdir -p ${sessionFolder}`)
@@ -175,8 +175,9 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Decomposition Rules**:
 
-1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{type}-{slug}-{date}/`
-2. **File collection**: Read `.task/TASK-*.json` -> collect all `files[].path` where action != "read"
+1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
+2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: execute → .summaries/.task/, review → review.json, debug → understanding.md, test → uat.md. Extract conclusions that may affect this review (prior verdicts, root causes, UAT gaps) and pass as prior quality context to reviewer agents.
+3. **File collection**: Read `.task/TASK-*.json` -> collect all `files[].path` where action != "read"
 3. **Level detection**:
 
 | Condition | Level |
@@ -334,7 +335,9 @@ spawn_agents_on_csv({
 
 7. **Phase index update**: Update `{artifact_dir}/index.json` with review status.
 
-8. Display summary.
+8. **Register artifact**: Append to `state.json.artifacts[]` with `type: "review"`, `id: REV-NNN`, `path: "scratch/{YYYYMMDD}-review-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch, not shared with plan.
+
+9. Display summary.
 
 ### Shared Discovery Board Protocol
 

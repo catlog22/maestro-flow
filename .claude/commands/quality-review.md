@@ -53,16 +53,48 @@ Phase: $ARGUMENTS (required — phase number or slug)
 - `--dimensions <list>` — Comma-separated subset of dimensions to review (overrides level defaults)
 - `--skip-specs` — Skip loading project specs as review context
 
-Context files resolved via `state.json.artifacts[]` → scratch path:
-- index.json (phase metadata, execution results)
-- plan.json (task overview)
-- .task/TASK-{NNN}.json (task definitions with file lists)
-- .summaries/TASK-{NNN}-summary.md (execution results)
-- verification.json (if exists — incorporate verification gaps as review context)
+**All context via state.json.artifacts[]:**
+
+```
+related = artifacts.filter(a =>
+  a.phase === target_phase && a.milestone === current_milestone
+).sort_by(completed_at asc)
+```
+
+Each artifact's type determines its outputs at `.workflow/{a.path}/`:
+- **execute** → .summaries/, .task/, verification.json, plan.json (source of files to review)
+- **review** → review.json (prior verdict, findings — for delta comparison)
+- **debug** → understanding.md, evidence.ndjson (confirmed root causes)
+- **test** → uat.md, .tests/ (user-observable gaps)
+
+Extract conclusions from related artifacts that may affect this review. Pass as prior quality context to reviewer agents — avoid redundant work, focus on gaps and regressions.
+
+**Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
 </context>
 
 <execution>
 Follow '~/.maestro/workflows/review.md' completely.
+
+**Output writes to REVIEW_DIR** (not EXEC_DIR):
+- `REVIEW_DIR/review.json` — findings, severity distribution, verdict
+
+**Register artifact on completion:**
+```
+Append to state.json.artifacts[]:
+{
+  id: nextArtifactId(artifacts, "review"),  // REV-001
+  type: "review",
+  milestone: current_milestone,
+  phase: target_phase,
+  scope: "phase",
+  path: "scratch/{YYYYMMDD}-review-P{N}-{slug}",    // relative to .workflow/
+  status: "completed",
+  depends_on: exec_art.id,                 // or prior debug/review if re-review
+  harvested: false,
+  created_at: start_time,
+  completed_at: now()
+}
+```
 
 **Report format on completion:**
 
@@ -87,7 +119,7 @@ Verdict: {PASS | WARN | BLOCK}
 Issues Created: {issue_count}
 
 Files:
-  {artifact_dir}/review.json
+  {REVIEW_DIR}/review.json
 
 Next steps:
   {verdict_based_routing}

@@ -71,8 +71,9 @@ $quality-business-test "3 --auto"                   # skip plan confirmation
 ### Step 1: Resolve Target & Load Spec Package
 
 1. Parse `$ARGUMENTS` for phase number and flags
-2. Resolve `PHASE_DIR` via artifact registry in `state.json` to `.workflow/scratch/{type}-{slug}-{date}/`
-3. Load `index.json` -> find `spec_ref` -> locate `.workflow/.spec/SPEC-xxx/`
+2. Resolve `PHASE_DIR` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
+3. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: review → review.json (findings inform which business rules need extra scrutiny), debug → understanding.md (root causes map to specific requirement failures), test → uat.md (prior UAT gaps identify untested business scenarios). Extract conclusions that may affect business test scenario priorities.
+4. Load `index.json` -> find `spec_ref` -> locate `.workflow/.spec/SPEC-xxx/`
 4. **Full mode**: Read `requirements/_index.md` + all `REQ-*.md` + `NFR-*.md` + `architecture/_index.md` + `epics/EPIC-*.md`
 5. **Degraded mode** (no spec package): Read `index.json.success_criteria` + `plan.json` convergence criteria + `.summaries/TASK-*.md`
 6. If `--re-run`: load previous `business-test-report.json`, filter to failed/blocked scenarios
@@ -190,7 +191,8 @@ FOR each REQ:
 
 1. Auto-create issues from failures in `.workflow/issues/issues.jsonl` (each with `req_ref`, `source: "business-test"`)
 2. Report results
-3. Route next step:
+3. **Register artifact**: Append to `state.json.artifacts[]` with `type: "test"`, `id: TST-NNN`, `path: "scratch/{YYYYMMDD}-business-test-P{N}-{slug}"`, `depends_on: exec_art.id`.
+4. Route next step:
 
 | Result | Suggestion |
 |--------|------------|

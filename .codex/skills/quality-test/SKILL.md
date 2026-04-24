@@ -49,7 +49,7 @@ No auto mode -- UAT is inherently interactive. `--auto-fix` only automates gap c
 ### Step 1: Resolve Target
 
 1. Parse `$ARGUMENTS` for phase number, scratch task ID, or flags
-2. **Phase mode**: resolve `PHASE_DIR` via artifact registry in `state.json` to `.workflow/scratch/{type}-{slug}-{date}/`
+2. **Phase mode**: resolve `PHASE_DIR` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
 3. **Scratch mode**: set `SCRATCH_DIR = .workflow/scratch/{id}/`
 4. Validate target exists and has `verification.json` -- if missing: **E002**
 
@@ -71,7 +71,11 @@ If any smoke fails: **E003** -- abort, suggest Skill({ skill: "quality-debug" })
 
 ### Step 4: Load Verification Context
 
-Read from target directory: verification.json, validation.json, index.json, plan.json, `.summaries/TASK-*.md`. Build testable list from user-observable outcomes.
+Read from target directory (resolved via artifact registry): verification.json, validation.json, index.json, plan.json, `.summaries/TASK-*.md`. Build testable list from user-observable outcomes.
+
+### Step 4.5: Load Quality Context
+
+Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: review → review.json (findings become additional test scenarios), debug → understanding.md (confirmed root causes become regression tests). Extract conclusions that may affect test scenario design.
 
 ### Step 5: Design Test Scenarios
 
@@ -132,8 +136,9 @@ Read `uat.md`, find first `result: [pending]` test, announce progress, continue 
 2. Archive previous result artifacts to `.history/`
 3. Write `.tests/test-results.json` and `.tests/coverage-report.json`
 4. Update `index.json` with UAT results
-5. If no issues: go to Step 13
-6. If issues found: go to Step 11
+5. **Register artifact**: Append to `state.json.artifacts[]` with `type: "test"`, `id: TST-NNN`, `path: "scratch/{YYYYMMDD}-test-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch.
+6. If no issues: go to Step 13
+7. If issues found: go to Step 11
 
 ### Step 11: Auto-Diagnose
 

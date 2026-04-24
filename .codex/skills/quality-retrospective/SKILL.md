@@ -74,10 +74,19 @@ When `--auto-yes`: Accept all routing recommendations without prompting. Route a
 - `.workflow/learning/lessons.jsonl` -- append-only insight log
 - `.workflow/learning/learning-index.json` -- updated searchable index
 
-**Storage read (never modified)**:
-- `{target_dir}/index.json`, `plan.json`, `verification.json`, `review.json`, `uat.md`
-- `{target_dir}/.task/TASK-*.json`, `.summaries/TASK-*-summary.md`
-- `.workflow/issues/issues.jsonl`, `.workflow/state.json`
+**Storage read (never modified)** — all resolved via `state.json.artifacts[]`:
+```
+related = artifacts.filter(a =>
+  a.phase === target_phase && a.milestone === current_milestone
+).sort_by(completed_at asc)
+```
+Each artifact's type determines its outputs at `.workflow/{a.path}/`:
+- **execute** → index.json, plan.json, .task/TASK-*.json, .summaries/TASK-*-summary.md
+- **verify** → verification.json
+- **review** → review.json (findings, verdict, severity distribution)
+- **debug** → understanding.md, evidence.ndjson (root causes, fix directions)
+- **test** → uat.md, .tests/ (UAT results, gaps, coverage)
+- Also reads: `.workflow/issues/issues.jsonl`, `.workflow/state.json`
 
 ### Agent Registry
 
@@ -190,13 +199,18 @@ spawn_agent({
 ---
 
 Goal: Load and summarize all phase artifacts for retrospective analysis.
-Phase: ${phaseDir}
+Phase: ${targetPhase}
 
 TASK:
-1. Read ${phaseDir}/index.json, plan.json, verification.json, review.json, uat.md
-2. Read all .task/TASK-*.json and .summaries/TASK-*-summary.md
+1. Read .workflow/state.json -- query artifacts[] for all entries matching phase === ${targetPhase} && milestone === current_milestone
+2. For each artifact, load outputs from .workflow/{artifact.path}/:
+   - execute artifacts → index.json, plan.json, .task/TASK-*.json, .summaries/TASK-*-summary.md
+   - verify artifacts → verification.json
+   - review artifacts → review.json (findings, verdict, severity distribution)
+   - debug artifacts → understanding.md, evidence.ndjson (root causes, fix directions)
+   - test artifacts → uat.md, .tests/ (UAT results, gaps, coverage)
 3. Read .workflow/issues/issues.jsonl -- filter rows with phase link to this phase
-4. Read .workflow/state.json for project context
+4. Read .workflow/state.json for project context (milestones, accumulated_context)
 
 EXPECTED: Comprehensive artifact summary covering:
 - Phase goals and outcomes (from plan.json vs verification.json)

@@ -34,7 +34,7 @@ $ARGUMENTS — phase number, or no args for milestone-wide execution, with optio
 - `--auto-commit` -- Automatically commit after each task completion
 - `--method agent|cli|auto` -- Override execution method (default: from config.json)
 - `--executor <tool>` -- Default CLI tool: gemini|codex|qwen|opencode|claude
-- `--dir <path>` -- Execute specific plan directory (e.g., `scratch/plan-auth-2026-04-20`)
+- `--dir <path>` -- Execute specific plan directory (e.g., `scratch/20260420-plan-auth`)
 
 **Scope routing:**
 
@@ -55,7 +55,9 @@ $ARGUMENTS — phase number, or no args for milestone-wide execution, with optio
 
 **Output**: Task summaries written to plan's scratch dir:
 ```
-scratch/plan-{slug}-{date}/
+{YYYYMMDD}-plan-P{N}-{slug}/            # phase-scoped
+{YYYYMMDD}-plan-M{N}-{slug}/           # milestone-wide
+{YYYYMMDD}-plan-{slug}/                # adhoc/standalone
 ├── plan.json
 ├── .task/
 │   ├── TASK-001.json    # status updated to completed|blocked
@@ -75,7 +77,7 @@ scratch/plan-{slug}-{date}/
   "milestone": "{current_milestone or null}",
   "phase": "{phase or null}",
   "scope": "{inherited from plan}",
-  "path": "{same as plan path}",
+  "path": "{same as plan path}",  // inherits plan directory name with scope prefix
   "status": "completed",
   "depends_on": "PLN-{NNN}",
   "harvested": false,

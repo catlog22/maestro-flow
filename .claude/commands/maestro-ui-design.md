@@ -49,7 +49,7 @@ $ARGUMENTS — phase number for phase mode, topic text for scratch mode, with op
 - Flags `--layouts N` and `--refine` are only effective with `ui-design.md` (full pipeline)
 
 **Phase mode** (number): resolves phase directory, reads context.md/brainstorm for requirements.
-**Scratch mode** (text): creates `.workflow/scratch/ui-design-{slug}-{date}/` for standalone exploration.
+**Scratch mode** (text): creates `.workflow/scratch/{YYYYMMDD}-ui-design-{slug}/` for standalone exploration.
 
 **Output artifacts (in phase or scratch directory):**
 | Artifact | Description |
