@@ -416,6 +416,32 @@ export function registerDelegateCommand(program: Command): void {
             process.stdout.write(output);
             if (!output.endsWith('\n')) process.stdout.write('\n');
           }
+
+          // Publish final broker event so `delegate status` reflects completion.
+          // The runner skips broker events in sync mode, so we emit it here.
+          try {
+            const broker = new DelegateBrokerClient();
+            const finalStatus = exitCode === 130 ? 'cancelled' : exitCode === 0 ? 'completed' : 'failed';
+            broker.publishEvent({
+              jobId: execId,
+              type: finalStatus,
+              status: finalStatus,
+              payload: {
+                summary: `${toolName}/${mode} ${finalStatus}`,
+                exitCode,
+                completedAt: new Date().toISOString(),
+              },
+              jobMetadata: {
+                tool: toolName,
+                mode,
+                workDir,
+                backend,
+                ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+              },
+            });
+          } catch {
+            // Best-effort; sync execution already succeeded.
+          }
         }
 
         process.exit(exitCode);
