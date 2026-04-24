@@ -121,6 +121,47 @@ Before starting work, scan recent sessions (7 days) to avoid conflicts and reuse
 - Complementary findings → feed into current task context
 
 
+## Knowledge Capture Discipline
+
+### Spec Format Enforcement
+
+- All writes to `.workflow/specs/` **must** use `<spec-entry>` closed-tag format:
+  ```markdown
+  <spec-entry category="{cat}" keywords="{kw1},{kw2}" date="{YYYY-MM-DD}" source="{origin}">
+
+  ### {title}
+
+  {content}
+
+  </spec-entry>
+  ```
+- Valid categories: `coding`, `arch`, `quality`, `debug`, `test`, `review`, `learning`
+- Never write unstructured Markdown to spec files (legacy heading format is read-only)
+- Manual writes go through `spec-add`; automated writes follow `workflows/specs-add.md` template
+
+### Inquiry Triggers
+
+At these key moments, **proactively ask** the user whether knowledge should be captured:
+
+| Trigger | Question | Target |
+|---------|----------|--------|
+| Task deviates from plan (approach change, dep swap) | "Should this decision be recorded as an architecture constraint?" | `arch` |
+| Task succeeds after ≥2 retries | "Should this fix pattern be documented in debug-notes?" | `debug` |
+| Verify finds anti-patterns or constraint violations | "Should quality-rules or architecture-constraints be updated?" | `quality`/`arch` |
+| Debug confirms root cause | "Should this root cause pattern be recorded to prevent recurrence?" | `learning`/`debug` |
+| Milestone completion | "Were any conventions bypassed? Should coding-conventions be updated?" | `coding` |
+
+### Knowledge Promotion
+
+- At milestone retrospective, scan `learnings.md` for high-frequency patterns (keywords in ≥2 entries) and suggest promoting to formal conventions (`coding`/`arch`/`quality`)
+- When promoting, preserve original `date` and source traceability
+- Harvest routing: universal patterns → `coding`/`arch`, component pitfalls → `learning`, quality rules → `quality`
+
+### Evidence Chain
+
+- Each spec entry should include at least one traceable source: `file:line`, `INS-{id}`, `HRV-{id}`, commit hash, or phase/plan path
+- `source` attribute marks write origin: `manual`/`execute`/`retrospective`/`milestone-complete`/`harvest`/`debug`
+
 ## Execution Checklist
 
 **Before**:
@@ -140,3 +181,4 @@ Before starting work, scan recent sessions (7 days) to avoid conflicts and reuse
 - [ ] Coverage meets target
 - [ ] Build succeeds
 - [ ] All EXPECTED deliverables met
+- [ ] Knowledge inquiry triggers evaluated (spec-add if applicable)
