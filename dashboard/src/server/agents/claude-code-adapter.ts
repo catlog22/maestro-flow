@@ -119,6 +119,7 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     { resolve: (allowed: boolean) => void }
   >();
   private readonly streamMonitors = new Map<string, StreamMonitor>();
+  private readonly resultTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly stoppedEmitted = new Set<string>();
 
   // --- Lifecycle hooks -----------------------------------------------------
@@ -206,7 +207,8 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     }
 
     // Heartbeat monitor: detect stale streams (60s silence).
-    // When stale, emit error and actively close stdin to let the process exit.
+    // When stale, close stdin and kill the process — Claude CLI keeps stdout
+    // open indefinitely even after finishing, so passive detection doesn't work.
     const monitor = new StreamMonitor(() => {
       this.emitEntry(
         processId,
@@ -216,6 +218,22 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       if (child.stdin?.writable) {
         child.stdin.end();
       }
+      // If the process still doesn't exit after 5s, force kill it.
+      // The exit/close/readline handlers will then emit stopped.
+      setTimeout(() => {
+        if (!this.stoppedEmitted.has(processId)) {
+          child.kill('SIGTERM');
+          setTimeout(() => {
+            if (!this.stoppedEmitted.has(processId)) {
+              child.kill('SIGKILL');
+              // Last resort: force emit stopped if kill signals are ignored (Windows)
+              setTimeout(() => {
+                this.emitStopped(processId, 'Force stopped (stale stream fallback)');
+              }, 2000);
+            }
+          }, 3000);
+        }
+      }, 5000);
     });
     this.streamMonitors.set(processId, monitor);
 
@@ -429,6 +447,11 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
             ),
           );
         }
+        // 'result' with usage = final message from Claude CLI.
+        // Start a completion timer: if the process doesn't exit within 10s,
+        // force-kill it. Claude CLI sometimes keeps running after completion
+        // (waiting for MCP connections, stdin, etc.) especially on Windows.
+        this.startResultTimer(processId);
         break;
       }
 
@@ -514,6 +537,41 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     this.emitApproval(processId, request);
   }
 
+  /**
+   * After receiving a 'result' message, give the process 10s to exit naturally.
+   * If it doesn't, force-kill it. This handles Claude CLI hanging after
+   * completion (stdin closed but process doesn't exit on Windows).
+   */
+  private startResultTimer(processId: string): void {
+    // Clear any existing timer (in case of multiple result messages)
+    const existing = this.resultTimers.get(processId);
+    if (existing) clearTimeout(existing);
+
+    const timer = setTimeout(() => {
+      this.resultTimers.delete(processId);
+      if (this.stoppedEmitted.has(processId)) return;
+
+      const child = this.childProcesses.get(processId);
+      if (!child) {
+        this.emitStopped(processId, 'Process lost after result');
+        return;
+      }
+
+      // Force kill — exit/close/readline handlers will emit stopped
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        if (!this.stoppedEmitted.has(processId)) {
+          child.kill('SIGKILL');
+          setTimeout(() => {
+            this.emitStopped(processId, 'Force stopped after result (kill fallback)');
+          }, 2000);
+        }
+      }, 3000);
+    }, 10_000);
+
+    this.resultTimers.set(processId, timer);
+  }
+
   private emitStopped(processId: string, reason: string): void {
     if (this.stoppedEmitted.has(processId)) return;
     this.stoppedEmitted.add(processId);
@@ -572,6 +630,11 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     if (monitor) {
       monitor.dispose();
       this.streamMonitors.delete(processId);
+    }
+    const resultTimer = this.resultTimers.get(processId);
+    if (resultTimer) {
+      clearTimeout(resultTimer);
+      this.resultTimers.delete(processId);
     }
     this.childProcesses.delete(processId);
 
