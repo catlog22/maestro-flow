@@ -12,7 +12,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Capture session working memory into `.workflow/memory/` for cross-session recovery. Compact mode only: full session compression for recovery. Maintains a `memory-index.json` for search and retrieval. Invoked when saving session state before context loss.
+Capture session working memory into `.workflow/memory/` for cross-session recovery. Compact mode only: full session compression for recovery. Entries are created via `maestro wiki create --type memory` and automatically indexed in `.workflow/wiki-index.json`. Invoked when saving session state before context loss.
 
 **Note:** Quick tips/notes have been moved to `manage-learn tip <text>`. Use that command for atomic knowledge capture.
 </purpose>
@@ -29,8 +29,8 @@ Arguments: $ARGUMENTS
 - No arguments — Defaults to compact mode
 
 **Storage:**
-- `.workflow/memory/` — Memory entries directory
-- `.workflow/memory/memory-index.json` — Searchable index of all entries
+- `.workflow/memory/` — Memory entries directory (via `maestro wiki create --type memory`)
+- `.workflow/wiki-index.json` — Unified wiki index (auto-updated on create)
 </context>
 
 <execution>
@@ -49,7 +49,7 @@ Follow '~/.maestro/workflows/memory.md' Part B (Memory Capture) completely.
 <success_criteria>
 - [ ] Compact mode executed
 - [ ] Entry markdown file written to `.workflow/memory/`
-- [ ] `memory-index.json` updated with new entry metadata
+- [ ] `wiki-index.json` auto-updated via wiki create
 - [ ] All session fields populated (objective, files, decisions, plan)
 - [ ] Execution plan preserved VERBATIM (not summarized)
 - [ ] All file paths are ABSOLUTE

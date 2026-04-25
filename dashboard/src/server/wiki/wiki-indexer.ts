@@ -1,4 +1,4 @@
-import { readFile, readdir, stat, lstat } from 'node:fs/promises';
+import { readFile, readdir, stat, lstat, writeFile, mkdir } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path';
 
 import { toForwardSlash } from '../../shared/utils.js';
@@ -10,6 +10,8 @@ import type {
   WikiIndex,
   WikiStatus,
   WikiNodeType,
+  PersistedWikiIndex,
+  PersistedEntry,
 } from './wiki-types.js';
 import { buildGraph, type WikiGraph } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, type InvertedIndex } from './search.js';
@@ -73,7 +75,6 @@ export class WikiIndexer {
         project: [],
         roadmap: [],
         spec: [],
-        phase: [],
         issue: [],
         lesson: [],
         memory: [],
@@ -96,6 +97,10 @@ export class WikiIndexer {
       this.cache = index;
       this.graphCache = null;
       this.searchCache = null;
+
+      // Persist lightweight index to disk (fire-and-forget).
+      this.persistIndex(index).catch(() => {});
+
       return index;
     })();
 
@@ -135,7 +140,6 @@ export class WikiIndexer {
       project: [],
       roadmap: [],
       spec: [],
-      phase: [],
       issue: [],
       lesson: [],
       memory: [],
@@ -191,26 +195,6 @@ export class WikiIndexer {
       if (entry) out.push(entry);
     }
 
-    // phases/NN-slug/*.md
-    const phasesRoot = join(this.workflowRoot, 'phases');
-    for (const phaseDir of await safeReaddir(phasesRoot)) {
-      const abs = join(phasesRoot, phaseDir);
-      let isDir = false;
-      try {
-        const s = await stat(abs);
-        isDir = s.isDirectory();
-      } catch {
-        continue;
-      }
-      if (!isDir) continue;
-      const phaseRef = parsePhaseRef(phaseDir);
-      for (const name of await safeReaddir(abs)) {
-        if (extname(name).toLowerCase() !== '.md') continue;
-        const entry = await this.parseFileEntry(join(abs, name), 'phase', { phaseRef });
-        if (entry) out.push(entry);
-      }
-    }
-
     // memory/*.md  (MEM-* → memory, TIP-* → note, others → memory)
     for (const name of await safeReaddir(join(this.workflowRoot, 'memory'))) {
       if (extname(name).toLowerCase() !== '.md') continue;
@@ -248,7 +232,6 @@ export class WikiIndexer {
   private async parseFileEntry(
     absPath: string,
     type: WikiNodeType,
-    opts: { phaseRef?: number | null } = {},
   ): Promise<WikiEntry | null> {
     if (!this.isInsideRoot(absPath)) return null;
     try {
@@ -277,8 +260,13 @@ export class WikiIndexer {
     const tags = extractTags(data);
     const status = asStatus(data.status) ?? inferStatus(type);
     const related = normalizeRelated(data.related);
-    const phaseRef = opts.phaseRef ?? parsePhaseRef(basename(dirname(absPath)));
     const ext = extractExt(data);
+
+    // Enrichment fields from frontmatter
+    const category = asString(data.category) || null;
+    const createdBy = asString(data.createdBy) || null;
+    const sourceRef = asString(data.sourceRef) || null;
+    const parent = asString(data.parent) || null;
 
     const rel = toForwardSlash(relative(this.workflowRoot, absPath));
     // Memory/note files live under memory/ with MEM-<slug>.md or TIP-<slug>.md
@@ -298,11 +286,14 @@ export class WikiIndexer {
       status,
       created: new Date(stats.birthtimeMs || stats.mtimeMs).toISOString(),
       updated: new Date(stats.mtimeMs).toISOString(),
-      phaseRef: phaseRef ?? null,
       related,
       source: { kind: 'file', path: rel },
       body: content,
       ext,
+      category,
+      createdBy,
+      sourceRef,
+      parent,
     };
   }
 
@@ -330,6 +321,36 @@ export class WikiIndexer {
       }
     }
     return bl;
+  }
+
+  /**
+   * Write a lightweight persistent index to `.workflow/wiki-index.json`.
+   * Strips body/raw/ext to keep the file small and fast to parse externally.
+   */
+  private async persistIndex(index: WikiIndex): Promise<void> {
+    const persisted: PersistedWikiIndex = {
+      version: 2,
+      generatedAt: index.generatedAt,
+      entries: index.entries.map((e): PersistedEntry => ({
+        id: e.id,
+        type: e.type,
+        title: e.title,
+        summary: e.summary,
+        tags: e.tags,
+        status: e.status,
+        created: e.created,
+        updated: e.updated,
+        category: e.category,
+        createdBy: e.createdBy,
+        sourceRef: e.sourceRef,
+        parent: e.parent,
+        related: e.related,
+        source: e.source,
+      })),
+    };
+    const target = join(this.workflowRoot, 'wiki-index.json');
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, JSON.stringify(persisted, null, 2), 'utf-8');
   }
 
   isInsideRoot(absPath: string): boolean {
@@ -390,17 +411,15 @@ function normalizeRelated(value: unknown): string[] {
 }
 
 function extractExt(data: Record<string, unknown>): Record<string, unknown> {
-  const known = new Set(['title', 'summary', 'tags', 'status', 'related']);
+  const known = new Set([
+    'title', 'summary', 'tags', 'status', 'related',
+    'category', 'createdBy', 'sourceRef', 'parent',
+  ]);
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(data)) {
     if (!known.has(k)) out[k] = v;
   }
   return out;
-}
-
-function parsePhaseRef(dirName: string): number | null {
-  const m = dirName.match(/^(\d+)-/);
-  return m ? Number(m[1]) : null;
 }
 
 function slugify(input: string): string {
@@ -432,8 +451,9 @@ export function filterEntries(entries: WikiEntry[], filters: WikiFilters): WikiE
   return entries.filter((d) => {
     if (filters.type && d.type !== filters.type) return false;
     if (filters.tag && !d.tags.includes(filters.tag)) return false;
-    if (filters.phase !== undefined && d.phaseRef !== filters.phase) return false;
     if (filters.status && d.status !== filters.status) return false;
+    if (filters.category && d.category !== filters.category) return false;
+    if (filters.createdBy && d.createdBy !== filters.createdBy) return false;
     if (filters.q) {
       const q = filters.q.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !d.summary.toLowerCase().includes(q)) {

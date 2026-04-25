@@ -10,7 +10,6 @@ export type WikiNodeType =
   | 'project'
   | 'roadmap'
   | 'spec'
-  | 'phase'
   | 'issue'
   | 'lesson'
   | 'memory'
@@ -32,12 +31,15 @@ export interface WikiEntry {
   status: WikiStatus;
   created: string;
   updated: string;
-  phaseRef: number | null;
   related: string[];
   source: { kind: 'file' | 'virtual'; path: string; line?: number };
   body: string;
   raw?: unknown;
   ext: Record<string, unknown>;
+  category: string | null;
+  createdBy: string | null;
+  sourceRef: string | null;
+  parent: string | null;
 }
 
 export interface BrokenLink {
@@ -70,15 +72,18 @@ export interface WikiGraph {
   brokenLinks: BrokenLink[];
 }
 
-export type WritableWikiType = 'spec' | 'phase' | 'memory' | 'note';
+export type WritableWikiType = 'spec' | 'memory' | 'note';
 
 export interface CreateWikiReq {
   type: WritableWikiType;
   slug: string;
-  phaseRef?: number;
   title: string;
   body: string;
   frontmatter?: Record<string, unknown>;
+  category?: string;
+  createdBy?: string;
+  sourceRef?: string;
+  parent?: string;
 }
 
 export interface UpdateWikiReq {
@@ -96,7 +101,7 @@ export interface WikiStore {
 
   typeFilter: WikiNodeType | 'all';
   tagFilter: string;
-  phaseFilter: number | null;
+  categoryFilter: string | 'all';
   statusFilter: WikiStatus | 'all';
   search: string;
   selectedId: string | null;
@@ -107,7 +112,7 @@ export interface WikiStore {
 
   setTypeFilter: (t: WikiNodeType | 'all') => void;
   setTagFilter: (tag: string) => void;
-  setPhaseFilter: (n: number | null) => void;
+  setCategoryFilter: (cat: string | 'all') => void;
   setStatusFilter: (s: WikiStatus | 'all') => void;
   setSearch: (q: string) => void;
   setSelected: (id: string | null) => void;
@@ -131,7 +136,6 @@ const EMPTY_GROUPS: Record<WikiNodeType, WikiEntry[]> = {
   project: [],
   roadmap: [],
   spec: [],
-  phase: [],
   issue: [],
   lesson: [],
   memory: [],
@@ -146,7 +150,7 @@ export const useWikiStore = create<WikiStore>((set, get) => ({
 
   typeFilter: 'all',
   tagFilter: 'all',
-  phaseFilter: null,
+  categoryFilter: 'all',
   statusFilter: 'all',
   search: '',
   selectedId: null,
@@ -157,7 +161,7 @@ export const useWikiStore = create<WikiStore>((set, get) => ({
 
   setTypeFilter: (t) => set({ typeFilter: t }),
   setTagFilter: (tag) => set({ tagFilter: tag }),
-  setPhaseFilter: (n) => set({ phaseFilter: n }),
+  setCategoryFilter: (cat) => set({ categoryFilter: cat }),
   setStatusFilter: (s) => set({ statusFilter: s }),
   setSearch: (q) => set({ search: q }),
   setSelected: (id) => {
@@ -262,13 +266,13 @@ export const useWikiStore = create<WikiStore>((set, get) => ({
   },
 
   filteredEntries: () => {
-    const { entries, typeFilter, tagFilter, phaseFilter, statusFilter } = get();
+    const { entries, typeFilter, tagFilter, categoryFilter, statusFilter } = get();
     // Server applies BM25 when `search` is set, so client-side substring match
-    // is only used for local tag/type/phase/status narrowing.
+    // is only used for local tag/type/category/status narrowing.
     return entries.filter((d) => {
       if (typeFilter !== 'all' && d.type !== typeFilter) return false;
       if (tagFilter !== 'all' && !d.tags.includes(tagFilter)) return false;
-      if (phaseFilter !== null && d.phaseRef !== phaseFilter) return false;
+      if (categoryFilter !== 'all' && d.category !== categoryFilter) return false;
       if (statusFilter !== 'all' && d.status !== statusFilter) return false;
       return true;
     });
@@ -280,7 +284,6 @@ export const useWikiStore = create<WikiStore>((set, get) => ({
       project: [],
       roadmap: [],
       spec: [],
-      phase: [],
       issue: [],
       lesson: [],
       memory: [],

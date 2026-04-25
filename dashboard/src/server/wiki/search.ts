@@ -54,6 +54,7 @@ function documentText(entry: WikiEntry): string {
     entry.title,
     entry.summary,
     entry.tags.join(' '),
+    entry.category ?? '',
     entry.body,
   ].join(' ');
 }

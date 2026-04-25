@@ -25,11 +25,14 @@ function makeEntry(
     status: 'active',
     created: '',
     updated: '',
-    phaseRef: null,
     related,
     source: { kind: 'file', path: `specs/${id}.md` },
     body,
     ext: {},
+    category: null,
+    createdBy: null,
+    sourceRef: null,
+    parent: null,
   };
 }
 
@@ -39,7 +42,6 @@ function makeIndex(entries: WikiEntry[]): WikiIndex {
     project: [],
     roadmap: [],
     spec: [],
-    phase: [],
     issue: [],
     lesson: [],
     memory: [],

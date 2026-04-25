@@ -41,9 +41,9 @@ export function WikiReaderPanel() {
       parts.push('');
     }
 
-    // Phase reference
-    if (entry.phaseRef !== null) {
-      parts.push(`**Phase:** ${entry.phaseRef}`);
+    // Category
+    if (entry.category) {
+      parts.push(`**Category:** ${entry.category}`);
       parts.push('');
     }
 

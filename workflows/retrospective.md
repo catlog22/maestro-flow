@@ -524,7 +524,7 @@ Capture the returned TIP-{id} from the skill output.
 insight.routed_id = "TIP-{captured_id}"
 ```
 
-If the skill call cannot be intercepted to capture the ID, fall back to writing the tip file directly using the schema in `workflows/memory.md` Part B Step 3 (Tip mode), and update `memory-index.json` per Step 4.
+If the skill call cannot be intercepted to capture the ID, fall back to writing the tip file directly using the schema in `workflows/memory.md` Part B Step 3 (Tip mode), and update `wiki-index.json` per Step 4.
 
 #### Target: issue
 

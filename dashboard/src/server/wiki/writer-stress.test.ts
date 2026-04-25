@@ -25,7 +25,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(tmpRoot, { recursive: true, force: true });
+  await rm(tmpRoot, { recursive: true, force: true, maxRetries: 3 });
 });
 
 describe('WikiWriter security — path traversal', () => {
@@ -82,25 +82,12 @@ describe('WikiWriter security — path traversal', () => {
     ).rejects.toThrow(WikiWriteError);
   });
 
-  it('phase requires phaseRef', async () => {
+  it('rejects phase type (removed)', async () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
     await expect(
-      writer.create({ type: 'phase', slug: 'ok', title: 'T', body: 'x' }),
+      writer.create({ type: 'phase' as any, slug: 'ok', title: 'T', body: 'x' }),
     ).rejects.toThrow(WikiWriteError);
-  });
-
-  it('phase writes to phases/NN-slug/slug.md', async () => {
-    const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
-    const writer = new WikiWriter(tmpRoot, indexer);
-    const entry = await writer.create({
-      type: 'phase',
-      slug: 'setup',
-      phaseRef: 3,
-      title: 'Setup Phase',
-      body: '# Setup',
-    });
-    expect(entry.source.path).toBe('phases/03-setup/setup.md');
   });
 
   it('memory writes to memory/MEM-slug.md', async () => {

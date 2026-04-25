@@ -75,11 +75,11 @@ Turbovault-inspired knowledge-graph view of `.workflow/` treating markdown files
 | GET | `/api/wiki/:id` | Single entry |
 | GET | `/api/wiki/:id/backlinks` | Incoming edges |
 | GET | `/api/wiki/:id/forward` | Outgoing resolved edges |
-| POST | `/api/wiki` | Create `.md` entry — body: `{ type, slug, title, body, phaseRef?, frontmatter? }` |
+| POST | `/api/wiki` | Create `.md` entry — body: `{ type, slug, title, body, category?, createdBy?, sourceRef?, parent?, frontmatter? }` |
 | PUT | `/api/wiki/:id` | Update `.md` entry — body: `{ title?, body?, frontmatter?, expectedHash? }` |
 | DELETE | `/api/wiki/:id` | Remove `.md` entry |
 
-Writes are restricted to real markdown files under `specs/`, `phases/NN-*/`, and `memory/`. Virtual JSONL rows, `project.md`, and `roadmap.md` are read-only. `expectedHash` provides sha256 optimistic concurrency (409 on mismatch). Per-path mutex serializes concurrent updates so race conditions return deterministic conflicts.
+Writes are restricted to real markdown files under `specs/` and `memory/`. Virtual JSONL rows, `project.md`, and `roadmap.md` are read-only. `expectedHash` provides sha256 optimistic concurrency (409 on mismatch). Per-path mutex serializes concurrent updates so race conditions return deterministic conflicts.
 
 ### Capabilities
 

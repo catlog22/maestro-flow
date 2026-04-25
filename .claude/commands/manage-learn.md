@@ -49,7 +49,7 @@ Arguments: $ARGUMENTS
 
 **Storage:**
 - `.workflow/learning/lessons.jsonl` — append-only JSONL row per insight (shared with `quality-retrospective` output)
-- `.workflow/learning/learning-index.json` — searchable index (mirrors `memory-index.json` schema)
+- `.workflow/learning/learning-index.json` — searchable index
 
 **Shared store rationale:** Manual captures (`source: "manual"`), tips (`source: "tip"`), retrospective-distilled insights (`source: "retrospective"`, `lens: <name>` from `quality-retrospective`), and learn-retro insights (`source: "retro-git"` or `source: "retro-decision"` from `learn-retro`) all live in the same store so search and list see the entire knowledge corpus. The `source` field disambiguates origin.
 </context>
@@ -59,7 +59,7 @@ Follow `~/.maestro/workflows/learn.md` Stages 1–5 in order. Key invariants:
 
 1. **No agent or CLI calls** — this is a pure file operation: parse → infer → append → confirm. Category inference is keyword-based, not LLM-based.
 2. **Auto-link phase** — read `.workflow/state.json` for `current_phase` and derive phase context from artifact registry (`state.json.artifacts[]`). `--phase 0` forces no link.
-3. **Match memory-index pattern** — `learning-index.json` schema mirrors `memory-index.json` from `workflows/memory.md` (entries[] with id, type, timestamp, file, summary, tags, plus learn-specific fields: lens, category, phase, phase_slug, confidence, routed_to, routed_id).
+3. **Index schema** — `learning-index.json` entries[] with id, type, timestamp, file, summary, tags, plus learn-specific fields: lens, category, confidence, routed_to, routed_id.
 4. **Stable INS ids** — `INS-{8 lowercase hex}` from `hash(insight_text + category + phase)`. Deterministic: same content in same context always produces the same ID.
 5. **Append-only lessons.jsonl** — never rewrite existing rows; duplicate detection is the user's job at search time.
 6. **Bootstrap on demand** — create `.workflow/learning/`, `lessons.jsonl`, `learning-index.json` on first use; do not require them to exist upfront.

@@ -63,6 +63,13 @@ export function buildGraph(index: WikiIndex): WikiGraph {
       if (hit) pushFwd(d.id, hit);
       else broken.push({ sourceId: d.id, target: rel });
     }
+    // `parent` → child-to-parent forward link
+    if (d.parent) {
+      const hit = resolve(d.parent);
+      if (hit) pushFwd(d.id, hit);
+      // broken parent refs are not tracked as broken links — they are
+      // informational only and may reference entries outside the wiki.
+    }
     // inline body wikilinks
     if (d.body) {
       LINK_RE.lastIndex = 0;

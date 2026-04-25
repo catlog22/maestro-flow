@@ -8,7 +8,7 @@ Two memory stores with different purposes:
 
 | Store | Path | Format | Index |
 |-------|------|--------|-------|
-| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` | `memory-index.json` |
+| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` | `wiki-index.json` |
 | `system` | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
 
 **System memory path detection:**
@@ -30,7 +30,7 @@ Detect both memory store paths:
 ```bash
 # Workflow memory
 WF_MEMORY_DIR=".workflow/memory"
-WF_INDEX_FILE="$WF_MEMORY_DIR/memory-index.json"
+WF_INDEX_FILE="$WF_MEMORY_DIR/wiki-index.json"
 
 # System memory — derive from project git root or cwd
 PROJECT_ROOT=$(pwd)
@@ -69,7 +69,7 @@ Parse arguments and detect subcommand:
 List entries from targeted stores.
 
 **Workflow store** (if exists):
-1. Read `memory-index.json`
+1. Read `wiki-index.json`
 2. Apply filters (--tag, --type, --before, --after)
 3. Sort by timestamp descending
 
@@ -108,7 +108,7 @@ Hints:
 Full-text search across both stores.
 
 **Workflow store:**
-1. Search `memory-index.json` fields: `summary`, `tags`, `id`
+1. Search `wiki-index.json` fields: `summary`, `tags`, `id`
 2. For deeper matches, read individual `.md` files and search content
 
 **System store:**
@@ -138,7 +138,7 @@ View: /manage-memory view <ID|filename>
 Display full content of a memory entry.
 
 **Workflow entry** (ID matches `MEM-*` or `TIP-*`):
-1. Validate ID exists in `memory-index.json`
+1. Validate ID exists in `wiki-index.json`
 2. Read the corresponding `.md` file
 3. Display with metadata header
 
@@ -188,7 +188,7 @@ Changes: {summary of edits}
 Remove a memory entry or file.
 
 **Workflow entry:**
-1. Validate ID in `memory-index.json`
+1. Validate ID in `wiki-index.json`
 2. Show summary, confirm with AskUserQuestion (unless --confirm)
 3. Remove `.md` file + index entry
 
@@ -213,7 +213,7 @@ Bulk cleanup — workflow store only.
 
 At least one filter required: --tag, --type, --before, --after.
 
-1. Read `memory-index.json`, apply filters
+1. Read `wiki-index.json`, apply filters
 2. Display candidates table
 3. If `--dry-run`, stop after display
 4. Confirm with AskUserQuestion
@@ -232,7 +232,7 @@ Post-operation integrity check.
 
 **Workflow store:**
 1. Scan `.workflow/memory/` for `.md` files
-2. Compare with `memory-index.json` entries
+2. Compare with `wiki-index.json` entries
 3. Report orphaned files or dangling references
 4. Offer to fix inconsistencies
 
@@ -260,7 +260,7 @@ Parse arguments and detect execution mode:
 
 ```bash
 MEMORY_DIR=".workflow/memory"
-INDEX_FILE="$MEMORY_DIR/memory-index.json"
+INDEX_FILE="$MEMORY_DIR/wiki-index.json"
 mkdir -p "$MEMORY_DIR"
 
 # Initialize index if not exists
@@ -357,9 +357,9 @@ Write entry file with sections:
 
 ### Step 4: Update Index
 
-Append entry metadata to memory-index.json.
+Append entry metadata to wiki-index.json.
 
-Read `memory-index.json`, append new entry to `entries[]`:
+Read `wiki-index.json`, append new entry to `entries[]`:
 
 ```json
 {
@@ -400,7 +400,7 @@ Type:    compact
 Plan:    {plan_source} ({plan_line_count} lines preserved)
 
 To restore: Read .workflow/memory/{ENTRY_ID}.md
-To search:  Read .workflow/memory/memory-index.json
+To search:  Read .workflow/memory/wiki-index.json
 ```
 
 **Tip mode:**
@@ -410,7 +410,7 @@ Entry:   {ENTRY_ID}
 File:    .workflow/memory/{ENTRY_ID}.md
 Tags:    {tags}
 
-To search: Read .workflow/memory/memory-index.json
+To search: Read .workflow/memory/wiki-index.json
 ```
 
 ---
@@ -492,5 +492,5 @@ Quick note for ideas, snippets, reminders.
 
 ## Retrieval
 
-Read `.workflow/memory/memory-index.json` to find entries by type, tags, or date.
+Read `.workflow/memory/wiki-index.json` to find entries by type, tags, or date.
 Read individual `.md` files for full content.

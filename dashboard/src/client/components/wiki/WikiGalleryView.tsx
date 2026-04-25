@@ -5,7 +5,6 @@ const TYPE_COLORS: Record<WikiNodeType, string> = {
   project: 'var(--color-accent-blue, #3b82f6)',
   roadmap: 'var(--color-accent-purple, #8b5cf6)',
   spec: 'var(--color-accent-green, #16a34a)',
-  phase: 'var(--color-accent-orange, #ea580c)',
   issue: 'var(--color-accent-red, #dc2626)',
   lesson: 'var(--color-accent-yellow, #ca8a04)',
   memory: 'var(--color-accent-cyan, #0891b2)',
@@ -24,7 +23,7 @@ export function WikiGalleryView() {
   const rawEntries = useWikiStore((s) => s.entries);
   const typeFilter = useWikiStore((s) => s.typeFilter);
   const tagFilter = useWikiStore((s) => s.tagFilter);
-  const phaseFilter = useWikiStore((s) => s.phaseFilter);
+  const categoryFilter = useWikiStore((s) => s.categoryFilter);
   const statusFilter = useWikiStore((s) => s.statusFilter);
   const setSelected = useWikiStore((s) => s.setSelected);
   const selectedId = useWikiStore((s) => s.selectedId);
@@ -33,11 +32,11 @@ export function WikiGalleryView() {
     return rawEntries.filter((d) => {
       if (typeFilter !== 'all' && d.type !== typeFilter) return false;
       if (tagFilter !== 'all' && !d.tags.includes(tagFilter)) return false;
-      if (phaseFilter !== null && d.phaseRef !== phaseFilter) return false;
+      if (categoryFilter !== 'all' && d.category !== categoryFilter) return false;
       if (statusFilter !== 'all' && d.status !== statusFilter) return false;
       return true;
     });
-  }, [rawEntries, typeFilter, tagFilter, phaseFilter, statusFilter]);
+  }, [rawEntries, typeFilter, tagFilter, categoryFilter, statusFilter]);
 
   if (filtered.length === 0) {
     return (

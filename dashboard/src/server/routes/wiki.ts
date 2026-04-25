@@ -9,7 +9,7 @@ import { WikiWriter, WikiWriteError } from '../wiki/writer.js';
 /**
  * /api/wiki — unified wiki endpoint backed by WikiIndexer.
  *
- * Reads files under `.workflow/` (specs, phases, project.md, roadmap.md,
+ * Reads files under `.workflow/` (specs, project.md, roadmap.md,
  * memory/) plus virtual entries adapted from JSONL sources (issues,
  * learning). JSONL rows are read-only reflections; never mutated by this
  * route.
@@ -72,7 +72,6 @@ export function createWikiRoutes(
       project: 0,
       roadmap: 0,
       spec: 0,
-      phase: 0,
       issue: 0,
       lesson: 0,
       memory: 0,
@@ -203,12 +202,10 @@ function parseFilters(q: Record<string, string>): WikiFilters {
   const out: WikiFilters = {};
   if (q.type) out.type = q.type as WikiNodeType;
   if (q.tag) out.tag = q.tag;
-  if (q.phase !== undefined && q.phase !== '') {
-    const n = Number(q.phase);
-    if (Number.isFinite(n)) out.phase = n;
-  }
   if (q.status) out.status = q.status as WikiStatus;
   if (q.q) out.q = q.q;
+  if (q.category) out.category = q.category;
+  if (q.createdBy) out.createdBy = q.createdBy;
   return out;
 }
 

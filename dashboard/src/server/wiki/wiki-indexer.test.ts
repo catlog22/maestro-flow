@@ -22,7 +22,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(tmpRoot, { recursive: true, force: true });
+  await rm(tmpRoot, { recursive: true, force: true, maxRetries: 3 });
 });
 
 describe('WikiIndexer', () => {

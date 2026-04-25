@@ -76,7 +76,7 @@ Follow '~/.maestro/workflows/harvest.md' Stages 1–8 in order. Key invariants:
 2. **Dedup before write** — Stage 7 (dedup_check) runs BEFORE each write in Stage 6. Check harvest-log.jsonl, wiki search, issues.jsonl, and learnings.md for existing matches.
 3. **Stable fragment IDs** — `HRV-{8 hex}` from `hash(source_id + content_hash)` so re-runs on same artifacts do not create duplicates.
 4. **Reuse existing routing infrastructure**:
-   - Wiki: `maestro wiki create --type <type> --slug harvest-<source_type>-<short_id>`
+   - Wiki: `maestro wiki create --type <type> --slug harvest-<source_type>-<short_id> --created-by manage-harvest --source-ref HRV-<fragment_id> --category <fragment_category>`
    - Spec: `Skill({ skill: "spec-add", args: "<category> <content>" })`
    - Issue: append to `issues.jsonl` matching canonical schema from `workflows/issue.md`
 5. **Never modify source artifacts** — harvest is purely extractive. Source files remain untouched.

@@ -56,7 +56,7 @@ If absent or ambiguous, ask user via AskUserQuestion.
 
 ### Step 4: Update Index
 
-Read or create `.workflow/memory/memory-index.json`.
+Read or create `.workflow/memory/wiki-index.json`.
 Append new entry metadata:
 
 ```json

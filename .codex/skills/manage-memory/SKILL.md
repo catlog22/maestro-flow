@@ -37,7 +37,7 @@ $manage-memory "prune --before 2026-01-01 --type tip --dry-run"
 
 ### Step 1: Resolve Store Paths
 
-- **Workflow store**: `.workflow/memory/` (entries: `MEM-*.md`, `TIP-*.md`, index: `memory-index.json`)
+- **Workflow store**: `.workflow/memory/` (entries: `MEM-*.md`, `TIP-*.md`, index: `wiki-index.json`)
 - **System store**: `~/.claude/projects/{project}/memory/` (files: `MEMORY.md` + topic `.md` files)
 
 Derive system path from project root (replace path separators with `--`, prefix drive letter).
@@ -49,7 +49,7 @@ Default to `list` if no arguments. Parse first token as subcommand.
 ### Step 3: Execute Subcommand
 
 **list**: Show entries from both stores (or filtered by `--store`, `--tag`, `--type`).
-- Workflow: read `memory-index.json`, display ID, type, date, tags, title
+- Workflow: read `wiki-index.json`, display ID, type, date, tags, title
 - System: list `.md` files in system memory directory
 
 **search `<query>`**: Full-text grep across both stores. Rank by match count.
@@ -58,7 +58,7 @@ Default to `list` if no arguments. Parse first token as subcommand.
 
 **edit `<file>`**: Edit a system memory file. Read current content, apply changes. Warn if MEMORY.md exceeds 200 lines (W003).
 
-**delete `<id|file>`**: Require confirmation (or `--confirm` flag). MEMORY.md cannot be deleted (E004). Remove entry file and update `memory-index.json`.
+**delete `<id|file>`**: Require confirmation (or `--confirm` flag). MEMORY.md cannot be deleted (E004). Remove entry file and update `wiki-index.json`.
 
 **prune**: Requires at least one filter (`--tag`, `--type`, `--before`, `--after`). Workflow store only. `--dry-run` previews without deleting.
 

@@ -34,7 +34,6 @@ const TYPE_FILTERS: Array<{ value: WikiNodeType | 'all'; label: string }> = [
   { value: 'project', label: 'Project' },
   { value: 'roadmap', label: 'Roadmap' },
   { value: 'spec', label: 'Specs' },
-  { value: 'phase', label: 'Phases' },
   { value: 'issue', label: 'Issues' },
   { value: 'lesson', label: 'Lessons' },
   { value: 'memory', label: 'Memory' },

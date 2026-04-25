@@ -9,15 +9,22 @@ import { parseFrontmatter } from './frontmatter-util.js';
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 const ID_RE = /^[\w.-]+$/;
 
-export type WritableType = 'spec' | 'phase' | 'memory' | 'note';
+export type WritableType = 'spec' | 'memory' | 'note';
 
 export interface CreateWikiReq {
   type: WritableType;
   slug: string;
-  phaseRef?: number;
   title: string;
   body: string;
   frontmatter?: Record<string, unknown>;
+  /** Content category (persisted to frontmatter). */
+  category?: string;
+  /** Creating command/skill name (persisted to frontmatter). */
+  createdBy?: string;
+  /** Source anchor: session ID, harvest fragment ID, etc. (persisted to frontmatter). */
+  sourceRef?: string;
+  /** Parent entry ID (persisted to frontmatter). */
+  parent?: string;
 }
 
 export interface UpdateWikiReq {
@@ -38,7 +45,7 @@ export class WikiWriteError extends Error {
 /**
  * WikiWriter — safe CRUD for real markdown wiki entries.
  *
- * Scope: only `spec | phase | memory | note` entries backed by real `.md`
+ * Scope: only `spec | memory | note` entries backed by real `.md`
  * files. Virtual entries (issue/lesson), and the top-level `project.md` /
  * `roadmap.md` narratives are rejected.
  *
@@ -93,16 +100,17 @@ export class WikiWriter {
     if (!req.title || !req.title.trim()) {
       throw new WikiWriteError('BAD_REQUEST', 'title is required');
     }
-    if (req.type === 'phase' && (req.phaseRef === undefined || !Number.isFinite(req.phaseRef))) {
-      throw new WikiWriteError('BAD_REQUEST', 'phaseRef is required for type=phase');
-    }
 
-    const targetPath = this.resolveTargetPath(req.type, req.slug, req.phaseRef);
+    const targetPath = this.resolveTargetPath(req.type, req.slug);
     if (await pathExists(targetPath)) {
       throw new WikiWriteError('CONFLICT', `file already exists: ${targetPath}`);
     }
 
     const fm: Record<string, unknown> = { title: req.title, ...(req.frontmatter ?? {}) };
+    if (req.category) fm.category = req.category;
+    if (req.createdBy) fm.createdBy = req.createdBy;
+    if (req.sourceRef) fm.sourceRef = req.sourceRef;
+    if (req.parent) fm.parent = req.parent;
     const serialized = serializeFrontmatter(fm);
     const content = `${serialized}\n${req.body}`;
 
@@ -202,18 +210,15 @@ export class WikiWriter {
   // -------------------------------------------------------------------------
 
   private assertWritableType(type: string): asserts type is WritableType {
-    if (type !== 'spec' && type !== 'phase' && type !== 'memory' && type !== 'note') {
+    if (type !== 'spec' && type !== 'memory' && type !== 'note') {
       throw new WikiWriteError('BAD_REQUEST', `type '${type}' is not writable`);
     }
   }
 
-  private resolveTargetPath(type: WritableType, slug: string, phaseRef?: number): string {
+  private resolveTargetPath(type: WritableType, slug: string): string {
     let rel: string;
     if (type === 'spec') {
       rel = `specs/${slug}.md`;
-    } else if (type === 'phase') {
-      const n = String(phaseRef).padStart(2, '0');
-      rel = `phases/${n}-${slug}/${slug}.md`;
     } else {
       // memory | note → memory/<PREFIX>-<slug>.md
       const prefix = type === 'note' ? 'TIP' : 'MEM';
@@ -237,7 +242,7 @@ export class WikiWriter {
     const segs = rel.split(sep);
     if (segs.length === 0) return false;
     const top = segs[0];
-    return top === 'specs' || top === 'phases' || top === 'memory';
+    return top === 'specs' || top === 'memory';
   }
 }
 

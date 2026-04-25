@@ -47,10 +47,11 @@ export function registerWikiCommand(program: Command): void {
     .command('list')
     .alias('ls')
     .description('List wiki entries with optional filters')
-    .option('--type <type>', 'Filter by type: project|roadmap|spec|phase|issue|lesson|memory|note')
+    .option('--type <type>', 'Filter by type: project|roadmap|spec|issue|lesson|memory|note')
     .option('--tag <tag>', 'Filter by tag')
-    .option('--phase <n>', 'Filter by phase ref')
     .option('--status <status>', 'Filter by status')
+    .option('--category <cat>', 'Filter by category')
+    .option('--created-by <cmd>', 'Filter by creating command/skill')
     .option('-q, --query <q>', 'BM25 full-text query')
     .option('--group', 'Return results grouped by type')
     .option('--json', 'Output as JSON')
@@ -62,8 +63,9 @@ export function registerWikiCommand(program: Command): void {
         const qs = new URLSearchParams();
         if (opts.type) qs.set('type', opts.type);
         if (opts.tag) qs.set('tag', opts.tag);
-        if (opts.phase) qs.set('phase', opts.phase);
         if (opts.status) qs.set('status', opts.status);
+        if (opts.category) qs.set('category', opts.category);
+        if (opts.createdBy) qs.set('createdBy', opts.createdBy);
         if (opts.query) qs.set('q', opts.query);
         if (opts.group) qs.set('group', 'true');
         const data = await apiGet(base, `/api/wiki?${qs.toString()}`);
@@ -91,8 +93,9 @@ export function registerWikiCommand(program: Command): void {
       const filters: WikiFilters = {};
       if (opts.type) filters.type = opts.type as WikiNodeType;
       if (opts.tag) filters.tag = opts.tag;
-      if (opts.phase) filters.phase = Number(opts.phase);
       if (opts.status) filters.status = opts.status;
+      if (opts.category) filters.category = opts.category;
+      if (opts.createdBy) filters.createdBy = opts.createdBy;
       if (opts.query) filters.q = opts.query;
 
       if (opts.group) {
@@ -403,12 +406,15 @@ export function registerWikiCommand(program: Command): void {
   wiki
     .command('create')
     .description('Create a new markdown wiki entry')
-    .requiredOption('--type <type>', 'spec|phase|memory|note')
+    .requiredOption('--type <type>', 'spec|memory|note')
     .requiredOption('--slug <slug>', 'kebab-case slug')
     .requiredOption('--title <title>', 'Entry title')
     .option('--body <text>', 'Inline body text')
     .option('--body-file <path>', 'Read body from file')
-    .option('--phase-ref <n>', 'Required when type=phase')
+    .option('--category <cat>', 'Content category')
+    .option('--created-by <cmd>', 'Creating command/skill name')
+    .option('--source-ref <ref>', 'Source anchor (session ID, commit, etc.)')
+    .option('--parent <id>', 'Parent entry ID')
     .option('--frontmatter <json>', 'Extra frontmatter as JSON object')
     .action(async (opts, cmd) => {
       const live = cmd.parent!.opts().live as boolean | undefined;
@@ -425,7 +431,10 @@ export function registerWikiCommand(program: Command): void {
           title: opts.title,
           body,
         };
-        if (opts.phaseRef !== undefined) payload.phaseRef = Number(opts.phaseRef);
+        if (opts.category) payload.category = opts.category;
+        if (opts.createdBy) payload.createdBy = opts.createdBy;
+        if (opts.sourceRef) payload.sourceRef = opts.sourceRef;
+        if (opts.parent) payload.parent = opts.parent;
         if (opts.frontmatter) {
           try {
             payload.frontmatter = JSON.parse(opts.frontmatter);
@@ -457,7 +466,10 @@ export function registerWikiCommand(program: Command): void {
           slug: opts.slug,
           title: opts.title,
           body,
-          phaseRef: opts.phaseRef !== undefined ? Number(opts.phaseRef) : undefined,
+          category: opts.category,
+          createdBy: opts.createdBy,
+          sourceRef: opts.sourceRef,
+          parent: opts.parent,
           frontmatter,
         });
         console.log(`Created: ${entry.id}`);

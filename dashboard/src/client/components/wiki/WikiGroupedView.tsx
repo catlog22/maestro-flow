@@ -5,7 +5,6 @@ const TYPE_LABELS: Record<WikiNodeType, string> = {
   project: 'Project',
   roadmap: 'Roadmap',
   spec: 'Specs',
-  phase: 'Phases',
   issue: 'Issues',
   lesson: 'Lessons',
   memory: 'Memory',
@@ -16,7 +15,6 @@ const TYPE_COLORS: Record<WikiNodeType, string> = {
   project: 'var(--color-accent-blue, #3b82f6)',
   roadmap: 'var(--color-accent-purple, #8b5cf6)',
   spec: 'var(--color-accent-green, #16a34a)',
-  phase: 'var(--color-accent-orange, #ea580c)',
   issue: 'var(--color-accent-red, #dc2626)',
   lesson: 'var(--color-accent-yellow, #ca8a04)',
   memory: 'var(--color-accent-cyan, #0891b2)',
@@ -27,7 +25,6 @@ const TYPE_ORDER: WikiNodeType[] = [
   'project',
   'roadmap',
   'spec',
-  'phase',
   'issue',
   'lesson',
   'memory',
@@ -46,25 +43,25 @@ export function WikiGroupedView() {
   const rawEntries = useWikiStore((s) => s.entries);
   const typeFilter = useWikiStore((s) => s.typeFilter);
   const tagFilter = useWikiStore((s) => s.tagFilter);
-  const phaseFilter = useWikiStore((s) => s.phaseFilter);
+  const categoryFilter = useWikiStore((s) => s.categoryFilter);
   const statusFilter = useWikiStore((s) => s.statusFilter);
   const selectedId = useWikiStore((s) => s.selectedId);
   const setSelected = useWikiStore((s) => s.setSelected);
 
   const groups = useMemo(() => {
     const out: Record<WikiNodeType, WikiEntry[]> = {
-      project: [], roadmap: [], spec: [], phase: [],
+      project: [], roadmap: [], spec: [],
       issue: [], lesson: [], memory: [], note: [],
     };
     for (const d of rawEntries) {
       if (typeFilter !== 'all' && d.type !== typeFilter) continue;
       if (tagFilter !== 'all' && !d.tags.includes(tagFilter)) continue;
-      if (phaseFilter !== null && d.phaseRef !== phaseFilter) continue;
+      if (categoryFilter !== 'all' && d.category !== categoryFilter) continue;
       if (statusFilter !== 'all' && d.status !== statusFilter) continue;
       out[d.type].push(d);
     }
     return out;
-  }, [rawEntries, typeFilter, tagFilter, phaseFilter, statusFilter]);
+  }, [rawEntries, typeFilter, tagFilter, categoryFilter, statusFilter]);
 
   return (
     <div className="flex flex-col gap-1 py-1 overflow-y-auto h-full">

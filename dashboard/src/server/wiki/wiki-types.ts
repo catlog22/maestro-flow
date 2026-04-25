@@ -2,7 +2,6 @@ export type WikiNodeType =
   | 'project'
   | 'roadmap'
   | 'spec'
-  | 'phase'
   | 'issue'
   | 'lesson'
   | 'memory'
@@ -35,8 +34,6 @@ export interface WikiEntry {
   created: string;
   /** ISO string from fs.stat.mtimeMs (or JSONL updated_at). */
   updated: string;
-  /** Parsed from `phases/(\d+)-` directory pattern. */
-  phaseRef: number | null;
   /** Normalized wikilink ids declared via frontmatter `related`. */
   related: string[];
   source: WikiSource;
@@ -46,9 +43,19 @@ export interface WikiEntry {
   raw?: unknown;
   /**
    * Preserves non-standard frontmatter fields so existing specs keep their
-   * `category`, `readMode`, `priority`, `keywords` etc. intact.
+   * `readMode`, `priority`, `keywords` etc. intact.
    */
   ext: Record<string, unknown>;
+
+  // ── Enrichment fields ────────────────────────────────────────────────
+  /** Content category: arch|coding|debug|learning|quality|execution|design|security|decision|... */
+  category: string | null;
+  /** Command/skill that created this entry, e.g. "manage-harvest", "memory-capture", "manual". */
+  createdBy: string | null;
+  /** Source anchor: session ID, harvest fragment ID, commit hash, issue ID, etc. */
+  sourceRef: string | null;
+  /** Parent entry ID for hierarchical relationships (child→parent). */
+  parent: string | null;
 }
 
 export interface WikiIndex {
@@ -63,8 +70,41 @@ export interface WikiIndex {
 export interface WikiFilters {
   type?: WikiNodeType;
   tag?: string;
-  phase?: number;
   status?: WikiStatus;
   /** BM25 query string — tokenized against title + summary + tags + body. */
   q?: string;
+  /** Filter by content category. */
+  category?: string;
+  /** Filter by creating command/skill. */
+  createdBy?: string;
+}
+
+// ── Persisted index (written to .workflow/wiki-index.json) ────────────
+
+/** Lightweight entry for the persisted index (no body/raw/ext). */
+export interface PersistedEntry {
+  id: string;
+  type: WikiNodeType;
+  title: string;
+  summary: string;
+  tags: string[];
+  status: WikiStatus;
+  created: string;
+  updated: string;
+  category: string | null;
+  createdBy: string | null;
+  sourceRef: string | null;
+  parent: string | null;
+  related: string[];
+  source: WikiSource;
+}
+
+export interface PersistedWikiIndex {
+  version: 2;
+  generatedAt: number;
+  entries: PersistedEntry[];
+  graph?: {
+    forwardLinks: Record<string, string[]>;
+    backlinks: Record<string, string[]>;
+  };
 }

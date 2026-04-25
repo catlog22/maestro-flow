@@ -72,7 +72,6 @@ export function adaptIssueRow(
     status: mapIssueStatus(r.status),
     created: toIso(r.created_at),
     updated: toIso(r.updated_at),
-    phaseRef: null,
     related: [],
     source: { kind: 'virtual', path: sourcePath, line },
     body: '',
@@ -83,6 +82,10 @@ export function adaptIssueRow(
       rawStatus: r.status,
       execution: r.execution,
     },
+    category: issueType || null,
+    createdBy: null,
+    sourceRef: id,
+    parent: null,
   };
 }
 
@@ -126,7 +129,6 @@ export function adaptLessonRow(
     status: 'active',
     created: lastUsed,
     updated: lastUsed,
-    phaseRef: null,
     related: [],
     source: { kind: 'virtual', path: sourcePath, line },
     body: '',
@@ -138,6 +140,10 @@ export function adaptLessonRow(
       avgDuration,
       contexts,
     },
+    category: 'learning',
+    createdBy: null,
+    sourceRef: null,
+    parent: null,
   };
 }
 

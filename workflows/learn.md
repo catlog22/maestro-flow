@@ -4,7 +4,7 @@ Atomic insight capture, search, and retrieval. Lightweight gstack-style "eureka 
 
 Storage:
 - `.workflow/learning/lessons.jsonl` — append-only JSONL row per insight (shared with retrospective output)
-- `.workflow/learning/learning-index.json` — searchable index (mirrors `memory-index.json` schema)
+- `.workflow/learning/learning-index.json` — searchable index (searchable index)
 
 This workflow does NOT spawn agents or call CLI tools. It is a thin file operation: parse → infer → append → confirm.
 

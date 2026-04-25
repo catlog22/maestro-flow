@@ -27,7 +27,7 @@ Arguments: $ARGUMENTS
 **Scope resolution (auto-detected):**
 - `<topic>` — Search wiki for entries matching the topic via `maestro wiki search`
 - `--recent N` — Entries updated in the last N days
-- `--type <type>` — Filter by wiki type (spec, phase, memory, note, lesson, issue)
+- `--type <type>` — Filter by wiki type (spec, memory, note, lesson, issue)
 - No arguments — digest of the entire wiki
 
 **Flags:**
@@ -101,7 +101,6 @@ Build a matrix showing knowledge density by type × theme:
 ```
               Theme 1    Theme 2    Theme 3    Theme 4    Theme 5
 spec          ███░░      ░░░░░      █████      ██░░░      ░░░░░
-phase         ████░      ███░░      ░░░░░      █████      ██░░░
 memory        ░░░░░      ████░      ██░░░      ░░░░░      ███░░
 lesson        █░░░░      ██░░░      ████░      █░░░░      ░░░░░
 issue         ██░░░      ░░░░░      █░░░░      ███░░      ░░░░░
@@ -166,7 +165,7 @@ For each knowledge gap identified in Stage 5:
 1. Write digest file
 2. Append meta-insights to `lessons.jsonl`:
    - `source: "wiki-digest"`, `category: "technique"`
-   - e.g., "Auth knowledge is concentrated in specs but lacks lessons", "Phase 2 has no decision entries"
+   - e.g., "Auth knowledge is concentrated in specs but lacks lessons", "Security category has no decision entries"
 3. Update `learning-index.json`
 4. Display summary with key findings
 

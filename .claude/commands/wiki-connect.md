@@ -21,7 +21,7 @@ Leverages maestro's unique wiki graph infrastructure (BM25 search, backlinks, he
 Arguments: $ARGUMENTS
 
 **Flags:**
-- `--scope <type>` — Limit analysis to a wiki type (spec, phase, memory, note, lesson, issue). Default: all types.
+- `--scope <type>` — Limit analysis to a wiki type (spec, memory, note, lesson, issue). Default: all types.
 - `--min-similarity N` — Minimum similarity score threshold 0.0-1.0 (default: 0.3)
 - `--fix` — Auto-apply the top suggestions by updating wiki entries with new `related` links
 - `--max N` — Maximum number of suggestions to generate (default: 20)
@@ -66,13 +66,13 @@ For each entry, compute potential connections:
 For each orphan entry, search for related entries using:
 - `maestro wiki search "<orphan title>"` — BM25 match by title
 - Tag overlap: entries sharing 2+ tags with the orphan
-- Same phase: entries with matching `phaseRef`
+- Same category: entries with matching `category`
 
 **2b. Missing Bidirectional Links:**
 For entries that have forward links but no corresponding backlink (A links to B, but B doesn't link to A), suggest adding the reverse link.
 
 **2c. Transitive Closure:**
-If A → B and B → C, but A has no link to C, and A and C share tags or are in the same phase, suggest A → C.
+If A → B and B → C, but A has no link to C, and A and C share tags or category, suggest A → C.
 
 **2d. Type Bridge:**
 Entries of different types that reference the same concept (e.g., a `spec-auth` and a `lesson-auth-gotcha`) but aren't linked.
@@ -83,13 +83,13 @@ For each candidate connection (source → target), compute similarity:
 ```
 score = 0.4 × tag_overlap_ratio
       + 0.3 × title_bm25_similarity
-      + 0.2 × same_phase_bonus
+      + 0.2 × same_category_bonus
       + 0.1 × type_bridge_bonus
 ```
 
 - `tag_overlap_ratio`: shared_tags / max(source_tags, target_tags)
 - `title_bm25_similarity`: normalized BM25 score from wiki search
-- `same_phase_bonus`: 1.0 if same phaseRef, else 0.0
+- `same_category_bonus`: 1.0 if same category, else 0.0
 - `type_bridge_bonus`: 1.0 if different types, else 0.0
 
 Filter by `--min-similarity`, rank descending, limit to `--max`.
