@@ -27,12 +27,12 @@
     },
     "merge_decision": {
       "type": "decision",
-      "description": "Check if all milestone phases are completed",
-      "condition": "all_phases_completed",
-      "branches": {
-        "true": "merge",
-        "false": "lifecycle_in_worktree"
-      }
+      "strategy": "expr",
+      "eval": "all_phases_completed",
+      "edges": [
+        { "value": true, "target": "merge", "description": "All phases completed — merge back" },
+        { "value": false, "target": "lifecycle_in_worktree", "default": true, "description": "Phases remaining — continue lifecycle" }
+      ]
     },
     "merge": {
       "type": "command",
