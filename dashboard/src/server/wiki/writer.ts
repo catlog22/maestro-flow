@@ -35,6 +35,17 @@ export interface UpdateWikiReq {
   expectedHash?: string;
 }
 
+export interface AppendEntryReq {
+  /** Container entry ID, e.g. "spec-learnings". */
+  containerId: string;
+  /** Entry category (coding, arch, debug, learning, etc.). */
+  category: string;
+  /** Entry content (markdown body, without the <spec-entry> wrapper). */
+  content: string;
+  /** Optional keywords (comma-separated or array). */
+  keywords?: string[] | string;
+}
+
 export class WikiWriteError extends Error {
   constructor(public code: 'BAD_REQUEST' | 'NOT_FOUND' | 'CONFLICT' | 'FORBIDDEN', message: string, public details?: unknown) {
     super(message);
@@ -143,6 +154,12 @@ export class WikiWriter {
     if (!this.isInsideRoot(absPath) || !this.isWritablePath(absPath)) {
       throw new WikiWriteError('FORBIDDEN', `entry path not writable: ${current.source.path}`);
     }
+    // Spec files are multi-entry containers managed by the spec API.
+    // Only frontmatter updates are safe; body overwrites would destroy
+    // <spec-entry> blocks. Block body updates on specs/ paths.
+    if (this.isSpecPath(absPath) && req.body !== undefined) {
+      throw new WikiWriteError('FORBIDDEN', 'spec files cannot be body-updated via wiki — use spec-add / spec API instead');
+    }
 
     return this.withLock(absPath, async () => {
       const ls = await safeLstat(absPath);
@@ -205,6 +222,158 @@ export class WikiWriter {
     await this.indexer.rebuild();
   }
 
+  /**
+   * Append a `<spec-entry>` block to an existing spec container file.
+   * Uses per-path locking, surfaces keywords to frontmatter, and
+   * invalidates the wiki index. Returns the new sub-node WikiEntry.
+   */
+  async appendEntry(req: AppendEntryReq): Promise<WikiEntry> {
+    const index = await this.indexer.get();
+    const container = index.byId[req.containerId];
+    if (!container) {
+      throw new WikiWriteError('NOT_FOUND', `container not found: ${req.containerId}`);
+    }
+    if (container.source.kind !== 'file') {
+      throw new WikiWriteError('FORBIDDEN', `cannot append to virtual entry: ${req.containerId}`);
+    }
+    const absPath = resolve(join(this.workflowRoot, container.source.path));
+    if (!this.isInsideRoot(absPath) || !this.isSpecPath(absPath)) {
+      throw new WikiWriteError('FORBIDDEN', `appendEntry only works on spec container files`);
+    }
+
+    const kws = Array.isArray(req.keywords)
+      ? req.keywords
+      : typeof req.keywords === 'string'
+        ? req.keywords.split(',').map((k) => k.trim()).filter(Boolean)
+        : [];
+
+    const date = new Date().toISOString().slice(0, 10);
+    const firstLine = req.content.trim().split('\n')[0].substring(0, 80);
+    const kwStr = kws.length > 0 ? kws.join(',') : firstLine.toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fff_-]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 3)
+      .slice(0, 5)
+      .join(',');
+
+    const entryBlock = `\n<spec-entry category="${req.category}" keywords="${kwStr}" date="${date}">\n\n### ${firstLine}\n\n${req.content.trim()}\n\n</spec-entry>\n`;
+
+    return this.withLock(absPath, async () => {
+      let existing: string;
+      try {
+        existing = (await readFile(absPath, 'utf-8'));
+      } catch {
+        throw new WikiWriteError('NOT_FOUND', `container file missing: ${absPath}`);
+      }
+
+      const updated = existing.trimEnd() + '\n' + entryBlock;
+
+      // Surface keywords to frontmatter
+      const surfaced = surfaceKeywords(updated, kwStr.split(','));
+      await writeFile(absPath, surfaced, 'utf-8');
+
+      this.indexer.invalidate(absPath);
+      const rebuilt = await this.indexer.rebuild();
+
+      // Find the new sub-node (last entry under this container)
+      const children = rebuilt.entries
+        .filter((e) => e.parent === req.containerId)
+        .sort((a, b) => a.id.localeCompare(b.id));
+      const newest = children[children.length - 1];
+      if (!newest) {
+        throw new WikiWriteError('NOT_FOUND', `appended entry not found in rebuilt index`);
+      }
+      return newest;
+    });
+  }
+
+  /**
+   * Remove a spec sub-entry by its ID (e.g. `spec-learnings-003`).
+   * Locates the `<spec-entry>` block or heading section in the container
+   * file and surgically removes it.
+   */
+  async removeEntry(entryId: string): Promise<void> {
+    if (!ID_RE.test(entryId)) {
+      throw new WikiWriteError('BAD_REQUEST', `invalid entry id '${entryId}'`);
+    }
+    const index = await this.indexer.get();
+    const entry = index.byId[entryId];
+    if (!entry) {
+      throw new WikiWriteError('NOT_FOUND', `entry not found: ${entryId}`);
+    }
+    if (!entry.parent) {
+      throw new WikiWriteError('BAD_REQUEST', `${entryId} is a container — use remove() to delete the whole file`);
+    }
+    const container = index.byId[entry.parent];
+    if (!container || container.source.kind !== 'file') {
+      throw new WikiWriteError('NOT_FOUND', `parent container not found: ${entry.parent}`);
+    }
+    const absPath = resolve(join(this.workflowRoot, container.source.path));
+    if (!this.isInsideRoot(absPath)) {
+      throw new WikiWriteError('FORBIDDEN', `path not inside root`);
+    }
+
+    await this.withLock(absPath, async () => {
+      let raw: string;
+      try {
+        raw = await readFile(absPath, 'utf-8');
+      } catch {
+        throw new WikiWriteError('NOT_FOUND', `container file missing`);
+      }
+
+      // Strategy 1: remove <spec-entry> block containing the entry title
+      const tagRe = /<spec-entry\s+[^>]+>[\s\S]*?<\/spec-entry>/g;
+      let matched = false;
+      const cleaned = raw.replace(tagRe, (block) => {
+        if (matched) return block;
+        if (block.includes(entry.title)) {
+          matched = true;
+          return '';
+        }
+        return block;
+      });
+
+      // Strategy 2: heading-based removal fallback
+      let result = cleaned;
+      if (!matched) {
+        const lines = raw.split('\n');
+        const headingRe = /^(#{2,3})\s+(.+)$/;
+        let startLine = -1;
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(headingRe);
+          if (m && m[2].includes(entry.title)) {
+            startLine = i;
+            break;
+          }
+        }
+        if (startLine >= 0) {
+          const startMatch = lines[startLine].match(headingRe);
+          const startLevel = startMatch ? startMatch[1].length : 3;
+          let endLine = lines.length;
+          for (let i = startLine + 1; i < lines.length; i++) {
+            const m = lines[i].match(headingRe);
+            if (m && m[1].length <= startLevel) { endLine = i; break; }
+          }
+          const before = lines.slice(0, startLine);
+          while (before.length > 0 && before[before.length - 1].trim() === '') before.pop();
+          const after = lines.slice(endLine);
+          result = before.join('\n') + '\n' + (after.length > 0 ? '\n' + after.join('\n') : '\n');
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        throw new WikiWriteError('NOT_FOUND', `could not locate entry block for: ${entryId}`);
+      }
+
+      // Clean up consecutive blank lines
+      result = result.replace(/\n{3,}/g, '\n\n');
+      await writeFile(absPath, result, 'utf-8');
+      this.indexer.invalidate(absPath);
+      await this.indexer.rebuild();
+    });
+  }
+
   // -------------------------------------------------------------------------
   // Internal
   // -------------------------------------------------------------------------
@@ -243,6 +412,12 @@ export class WikiWriter {
     if (segs.length === 0) return false;
     const top = segs[0];
     return top === 'specs' || top === 'memory';
+  }
+
+  private isSpecPath(absPath: string): boolean {
+    const abs = resolve(absPath);
+    const rel = abs.slice(this.workflowRoot.length + 1);
+    return rel.split(sep)[0] === 'specs';
   }
 }
 
@@ -317,4 +492,21 @@ async function safeLstat(absPath: string) {
 
 function sha256(data: Buffer | string): string {
   return createHash('sha256').update(data).digest('hex');
+}
+
+/**
+ * Merge entry-level keywords into the file's frontmatter `keywords` array
+ * so the wiki index can filter by tag at the file level.
+ */
+function surfaceKeywords(raw: string, newKeywords: string[]): string {
+  const { data, content } = parseFrontmatter(raw);
+  const existing: string[] = Array.isArray(data.keywords)
+    ? data.keywords.map(String)
+    : [];
+  const merged = [...new Set([...existing, ...newKeywords.filter((k) => k.length > 0)])];
+  if (merged.length === existing.length && merged.every((k, i) => k === existing[i])) {
+    return raw;
+  }
+  data.keywords = merged;
+  return serializeFrontmatter(data) + '\n' + content;
 }

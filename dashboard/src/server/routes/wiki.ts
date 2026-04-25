@@ -198,6 +198,33 @@ export function createWikiRoutes(
   return app;
 }
 
+/**
+ * Factory that creates wiki routes AND exposes a shared WikiWriter for use
+ * by other route modules (e.g. specs). This avoids creating duplicate
+ * WikiIndexer/WikiWriter instances.
+ */
+export function createSharedWikiWriter(
+  workflowRoot: () => string,
+  eventBus: DashboardEventBus,
+): { routes: Hono; getWriter: () => WikiWriter } {
+  // Create shared instances
+  let indexer = new WikiIndexer({ workflowRoot: workflowRoot() });
+  let sharedWriter = new WikiWriter(workflowRoot(), indexer);
+
+  eventBus.on('workspace:switched', () => {
+    indexer = new WikiIndexer({ workflowRoot: workflowRoot() });
+    sharedWriter = new WikiWriter(workflowRoot(), indexer);
+  });
+
+  // Build wiki routes using the shared instances
+  const routes = createWikiRoutes(workflowRoot, eventBus);
+
+  return {
+    routes,
+    getWriter: () => sharedWriter,
+  };
+}
+
 function parseFilters(q: Record<string, string>): WikiFilters {
   const out: WikiFilters = {};
   if (q.type) out.type = q.type as WikiNodeType;

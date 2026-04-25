@@ -802,6 +802,131 @@ graph LR
 
 ---
 
+## Wiki 知识图谱系统
+
+Wiki 系统是 Maestro 的知识索引核心，把 `.workflow/` 下的 markdown 文件和 JSONL 行统一抽象为 `WikiEntry` 节点，支持 BM25 搜索、图谱分析和持久化索引。
+
+### 节点类型
+
+| 类型 | 来源 | 写入权限 | 说明 |
+|------|------|---------|------|
+| `project` | `project.md` | 只读 | 项目描述 |
+| `roadmap` | `roadmap.md` | 只读 | 路线图 |
+| `spec` | `specs/<slug>.md` | 可写 | 规范文档 |
+| `memory` | `memory/MEM-<slug>.md` | 可写 | 会话记忆（由 `/manage-memory-capture` 创建） |
+| `note` | `memory/TIP-<slug>.md` | 可写 | 快速笔记 |
+| `issue` | `issues/*.jsonl` 行 | 只读（虚拟） | 问题追踪 |
+| `lesson` | `learning/*.jsonl` 行 | 只读（虚拟） | 学习洞察 |
+
+### 条目字段
+
+每个 WikiEntry 除基础字段（id, title, tags, status, related）外，还支持 4 个溯源字段：
+
+| 字段 | 用途 | 示例 |
+|------|------|------|
+| `category` | 内容分类 | `security`, `debug`, `learning`, `arch` |
+| `createdBy` | 创建该条目的命令 | `memory-capture`, `manage-harvest`, `manual` |
+| `sourceRef` | 来源锚点 | `WFS-auth-001`, `HRV-a1b2c3d4`, `commit:abc123` |
+| `parent` | 父条目 ID（层级关系） | `spec-auth-patterns` |
+
+### CLI 命令
+
+```bash
+# 列表 + 过滤
+maestro wiki list                                    # 全部条目
+maestro wiki list --type spec                        # 按类型
+maestro wiki list --category security                # 按分类
+maestro wiki list --created-by manage-harvest        # 按创建来源
+maestro wiki list --tag auth --status active          # 组合过滤
+maestro wiki list --group                            # 按类型分组
+
+# 搜索（BM25 全文）
+maestro wiki search "authentication token"
+
+# 创建（spec/memory/note）
+maestro wiki create --type spec --slug auth-patterns \
+  --title "Auth Patterns" --body "# Auth\n..." \
+  --category security --created-by manual \
+  --source-ref "session-001" --parent "spec-coding-conventions" \
+  --frontmatter '{"tags":["auth"]}'
+
+# 创建 memory（模拟 memory-capture）
+maestro wiki create --type memory --slug session-2026-04-25 \
+  --title "Debug Session" --body "..." \
+  --created-by memory-capture --source-ref "WFS-debug-001"
+
+# Spec 条目级操作（统一写入路径）
+maestro wiki append spec-learnings --category bug --body "Cache invalidation issue"
+maestro wiki append spec-coding-conventions --category coding \
+  --body "Use named exports for utility functions" --keywords "exports,module"
+maestro wiki remove-entry spec-learnings-003         # 按 ID 精确移除子条目
+
+# 更新 / 删除
+maestro wiki update spec-auth-patterns --title "New Title"  # frontmatter only
+maestro wiki delete spec-auth-patterns
+
+# 图谱分析
+maestro wiki health                                  # 健康评分
+maestro wiki orphans                                 # 孤立节点
+maestro wiki hubs --limit 10                         # 中心节点
+maestro wiki backlinks spec-auth                     # 谁引用了它
+maestro wiki forward spec-auth                       # 它引用了谁
+maestro wiki graph                                   # 完整图谱 JSON
+```
+
+### 持久化索引
+
+每次 create/update/delete 后，系统自动生成 `.workflow/wiki-index.json`（轻量版，不含 body）：
+
+```json
+{
+  "version": 2,
+  "generatedAt": 1777096303681,
+  "entries": [
+    {
+      "id": "spec-auth-patterns",
+      "type": "spec",
+      "title": "Auth Patterns",
+      "category": "security",
+      "createdBy": "manual",
+      "sourceRef": "session-001",
+      "parent": null,
+      "tags": ["auth"],
+      "status": "active",
+      "related": [],
+      "source": { "kind": "file", "path": "specs/auth-patterns.md" }
+    }
+  ]
+}
+```
+
+### Spec 原子节点索引
+
+WikiIndexer 扫描 `specs/*.md` 时，每个 `<spec-entry>` 块被解析为独立的 WikiEntry 子节点（如 `spec-learnings-001`），通过 `parent` 指向容器节点（如 `spec-learnings`）。这意味着：
+
+- **BM25 搜索**可定位到具体条目（而非整个文件）
+- **图谱分析**的粒度为条目级（子节点可被链接、分析）
+- **keywords 上浮**：子节点的 keywords 自动合并到容器的 frontmatter，使 `--tag` 过滤可达
+
+### Spec 写保护
+
+`wiki update` 对 `specs/*.md` 文件的 body 更新返回 403（FORBIDDEN）。条目级操作使用：
+
+- `maestro wiki append <containerId>` — 追加 `<spec-entry>` 块
+- `maestro wiki remove-entry <entryId>` — 精确移除子条目
+
+### 图谱连接
+
+条目之间通过三种机制建立连接：
+
+- **`related` frontmatter** — 显式声明的双向关联：`related: ["[[spec-auth]]"]`
+- **`[[wikilink]]`** — body 中的内联引用，自动解析为 forward link
+- **`parent`** — 层级关系，自动计入 child → parent 的 forward link
+
+健康评分公式：`score = max(0, 100 − 2×brokenLinks − 1×orphans − 3×missingTitles)`
+
+---
+
 ## 学习工具集 (learn-* / wiki-*)
 
 基于 Wiki 知识图谱和 Spec 系统构建的主动学习引擎。吸收了 [gstack](https://github.com/AgeofIA/gstack) 的 `/retro`、`/codex`、`/investigate` 等优势，并充分利用 Maestro 独有的 Wiki 知识图谱（BM25 搜索、反向链接、健康评分）。

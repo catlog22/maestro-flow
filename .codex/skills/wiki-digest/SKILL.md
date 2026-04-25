@@ -48,7 +48,7 @@ Type × theme matrix showing knowledge density:
 ```
               Theme 1    Theme 2    Theme 3
 spec          ███░░      ░░░░░      █████
-phase         ████░      ███░░      ░░░░░
+memory        ████░      ███░░      ░░░░░
 lesson        █░░░░      ██░░░      ████░
 ```
 Empty cells = knowledge gaps.

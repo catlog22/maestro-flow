@@ -21,7 +21,7 @@ import { createCliHistoryRoutes } from './cli-history.js';
 import { createMcpRoutes } from './mcp.js';
 import { createInstallRoutes } from './install.js';
 import { createSpecsRoutes } from './specs.js';
-import { createWikiRoutes } from './wiki.js';
+import { createWikiRoutes, createSharedWikiWriter } from './wiki.js';
 import { createLinearRoutes } from './linear.js';
 import { createTeamRoutes } from './teams.js';
 import { createCollabRoutes } from './collab.js';
@@ -106,11 +106,12 @@ export function createRoutes(
   // CLI history routes (reads from ~/.maestro/cli-history/)
   routes.route('/', createCliHistoryRoutes());
 
-  // Specs CRUD routes (dynamic root for workspace switch)
-  routes.route('/', createSpecsRoutes(getRoot));
-
   // Unified wiki endpoint (graph-aware view + scoped writes across .workflow/)
-  routes.route('/', createWikiRoutes(getRoot, eventBus));
+  const { routes: wikiRoutes, getWriter } = createSharedWikiWriter(getRoot, eventBus);
+  routes.route('/', wikiRoutes);
+
+  // Specs CRUD routes — delegate writes to shared WikiWriter
+  routes.route('/', createSpecsRoutes(getRoot, getWriter()));
 
   // MCP server management routes
   routes.route('/', createMcpRoutes());

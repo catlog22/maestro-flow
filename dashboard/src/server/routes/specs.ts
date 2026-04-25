@@ -21,24 +21,19 @@ import { join, extname, basename } from 'node:path';
 import { Hono } from 'hono';
 
 import { parseFrontmatter, type ParsedFrontmatter } from '../wiki/frontmatter-util.js';
+import {
+  parseSpecEntries,
+  type SpecEntry,
+  FILE_CATEGORY_MAP,
+  HEADING_RE,
+  detectEntryType,
+  extractCleanTitle,
+} from '../wiki/spec-entry-parser.js';
+import { WikiWriter, WikiWriteError } from '../wiki/writer.js';
+
 // Re-exported for legacy imports that expect these symbols from specs.ts
-export { parseFrontmatter };
-export type { ParsedFrontmatter };
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface SpecEntry {
-  id: string;
-  type: string;
-  title: string;
-  content: string;
-  file: string;
-  timestamp: string;
-  category: string;
-  keywords: string[];
-}
+export { parseFrontmatter, parseSpecEntries };
+export type { ParsedFrontmatter, SpecEntry };
 
 interface SpecFileMeta {
   name: string;
@@ -48,162 +43,11 @@ interface SpecFileMeta {
   entryCount: number;
 }
 
-// ---------------------------------------------------------------------------
-// Entry type detection
-// ---------------------------------------------------------------------------
-
-const ENTRY_TYPES = ['coding', 'arch', 'quality', 'debug', 'test', 'review', 'learning'] as const;
-type EntryType = typeof ENTRY_TYPES[number];
-
-/** Map file basenames to default entry types when heading lacks a marker. */
-const FILE_TYPE_MAP: Record<string, EntryType> = {
-  'learnings': 'learning',
-  'coding-conventions': 'coding',
-  'architecture-constraints': 'arch',
-  'quality-rules': 'quality',
-  'debug-notes': 'debug',
-  'test-conventions': 'test',
-  'review-standards': 'review',
-};
-
-/** Map file basenames to default category when frontmatter lacks one. */
-const FILE_CATEGORY_MAP: Record<string, string> = {
-  'learnings': 'learning',
-  'coding-conventions': 'coding',
-  'architecture-constraints': 'arch',
-  'quality-rules': 'quality',
-  'debug-notes': 'debug',
-  'test-conventions': 'test',
-  'review-standards': 'review',
-};
-
-/** Detect entry type from heading text or fall back to file-based default. */
-function detectEntryType(heading: string, fileName: string): SpecEntry['type'] {
-  const lower = heading.toLowerCase();
-  // 1. Check [type] bracket format (exact, no substring issues)
-  for (const t of ENTRY_TYPES) {
-    if (lower.includes(`[${t}]`)) return t;
-  }
-  // 2. Check "type:" prefix with word boundary to avoid substring collisions
-  //    (e.g. "debug:" should not match "bug:", "preview:" should not match "review:")
-  for (const t of ENTRY_TYPES) {
-    if (new RegExp(`\\b${t}\\s*:`).test(lower)) return t;
-  }
-  const stem = basename(fileName, extname(fileName));
-  return FILE_TYPE_MAP[stem] ?? 'learning';
-}
-
-/** Strip [type], [date], and legacy "type:" prefix from heading to get clean title. */
-function extractCleanTitle(heading: string): string {
-  return heading
-    .replace(/\[(coding|arch|quality|debug|test|review|learning|bug|pattern|decision|rule|validation)\]\s*/gi, '')
-    .replace(/\[\d{4}-\d{2}-\d{2}\]\s*/g, '')
-    .replace(/\d{4}-\d{2}-\d{2}T[\d:.Z+-]*/g, '')
-    .replace(/^(coding|arch|quality|debug|test|review|learning|bug|pattern|decision|rule|validation)\s*:\s*/i, '')
-    .trim();
-}
-
-// Frontmatter parser now lives in ../docs/frontmatter-util.ts and is imported
-// at the top of this file; removing duplicate declaration here.
-
-// ---------------------------------------------------------------------------
-// Markdown entry parser
-// ---------------------------------------------------------------------------
-
-/** Heading regex: matches ## or ### at start of line. */
-const HEADING_RE = /^(#{2,3})\s+(.+)$/;
-
-/** Regex for <spec-entry> closed-tag blocks */
-const SPEC_ENTRY_TAG_RE = /<spec-entry\s+([^>]+)>([\s\S]*?)<\/spec-entry>/g;
-const TAG_ATTR_RE = /([\w-]+)="([^"]*)"/g;
-
-/**
- * Parse markdown body into SpecEntry objects.
- * First extracts <spec-entry> closed-tag blocks, then parses remaining text
- * with legacy heading-based parser.
- */
-function parseEntries(body: string, fileName: string, frontmatter?: Record<string, unknown>): SpecEntry[] {
-  const stem = basename(fileName, extname(fileName));
-  const entries: SpecEntry[] = [];
-  let entryIndex = 0;
-
-  // Pass 1: Extract <spec-entry> closed-tag blocks
-  const consumedRanges: Array<{ start: number; end: number }> = [];
-  let tagMatch: RegExpExecArray | null;
-  SPEC_ENTRY_TAG_RE.lastIndex = 0;
-
-  while ((tagMatch = SPEC_ENTRY_TAG_RE.exec(body)) !== null) {
-    const attrStr = tagMatch[1];
-    const innerContent = tagMatch[2].trim();
-    consumedRanges.push({ start: tagMatch.index, end: tagMatch.index + tagMatch[0].length });
-
-    // Parse attributes
-    const attrs: Record<string, string> = {};
-    let attrMatch: RegExpExecArray | null;
-    TAG_ATTR_RE.lastIndex = 0;
-    while ((attrMatch = TAG_ATTR_RE.exec(attrStr)) !== null) {
-      attrs[attrMatch[1]] = attrMatch[2];
-    }
-
-    // Extract title from first ### heading
-    const titleMatch = innerContent.match(/^###\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1].trim() : innerContent.split('\n')[0].trim();
-    const type = attrs.category ?? detectEntryType(title, fileName);
-    const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
-    const kws = attrs.keywords ? attrs.keywords.split(',').map(k => k.trim()) : [];
-
-    entries.push({
-      id,
-      type,
-      title,
-      content: innerContent,
-      file: fileName,
-      timestamp: attrs.date ?? '',
-      category: attrs.category ?? (typeof frontmatter?.category === 'string' ? frontmatter.category : (FILE_CATEGORY_MAP[stem] ?? 'general')),
-      keywords: kws,
-    });
-  }
-
-  // Pass 2: Parse remaining text with legacy heading-based parser
-  // Remove consumed <spec-entry> blocks from body
-  let remaining = body;
-  for (const range of consumedRanges.reverse()) {
-    remaining = remaining.substring(0, range.start) + remaining.substring(range.end);
-  }
-
-  const lines = remaining.split('\n');
-  const sections: { heading: string; level: number; bodyLines: string[] }[] = [];
-  let current: { heading: string; level: number; bodyLines: string[] } | null = null;
-
-  for (const line of lines) {
-    const m = line.match(HEADING_RE);
-    if (m) {
-      if (current) sections.push(current);
-      current = { heading: m[2].trim(), level: m[1].length, bodyLines: [] };
-    } else if (current) {
-      current.bodyLines.push(line);
-    }
-  }
-  if (current) sections.push(current);
-
-  for (const sec of sections) {
-    const content = sec.bodyLines.join('\n').trim();
-    if (!content) continue;
-
-    const type = detectEntryType(sec.heading, fileName);
-    const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
-    const dateMatch = sec.heading.match(/\[(\d{4}-\d{2}-\d{2})\]/) ?? sec.heading.match(/(\d{4}-\d{2}-\d{2})/);
-    const timestamp = dateMatch ? dateMatch[1] : '';
-    const title = extractCleanTitle(sec.heading) || sec.heading;
-    const category = typeof frontmatter?.category === 'string'
-      ? frontmatter.category
-      : (FILE_CATEGORY_MAP[stem] ?? 'general');
-    const keywords = Array.isArray(frontmatter?.keywords) ? frontmatter.keywords.map(String) : [];
-    entries.push({ id, type, title, content, file: fileName, timestamp, category, keywords });
-  }
-
-  return entries;
-}
+const ENTRY_TYPES = [
+  'coding', 'arch', 'quality', 'debug', 'test', 'review', 'learning',
+  'bug', 'pattern', 'decision', 'rule', 'validation',
+] as const;
+type EntryType = (typeof ENTRY_TYPES)[number];
 
 // ---------------------------------------------------------------------------
 // File I/O helpers
@@ -229,6 +73,37 @@ async function readSpecFile(specsDir: string, fileName: string): Promise<string>
 async function writeSpecFile(specsDir: string, fileName: string, content: string): Promise<void> {
   await mkdir(specsDir, { recursive: true });
   await writeFile(join(specsDir, fileName), content, 'utf-8');
+}
+
+/**
+ * Merge entry-level keywords into the file's frontmatter `keywords` array.
+ * This surfaces spec-entry keywords to the wiki index (which reads frontmatter
+ * tags/keywords), bridging the Spec→Wiki search gap.
+ */
+function surfaceKeywordsToFrontmatter(raw: string, newKeywords: string[]): string {
+  const { data, content } = parseFrontmatter(raw);
+  const existing: string[] = Array.isArray(data.keywords)
+    ? data.keywords.map(String)
+    : [];
+  const merged = [...new Set([...existing, ...newKeywords.filter(k => k.length > 0)])];
+  if (merged.length === existing.length && merged.every((k, i) => k === existing[i])) {
+    return raw; // no change
+  }
+  data.keywords = merged;
+  // Rebuild frontmatter block
+  const lines = ['---'];
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined || v === null) continue;
+    if (Array.isArray(v)) {
+      if (v.length === 0) { lines.push(`${k}: []`); }
+      else { lines.push(`${k}:`); for (const item of v) lines.push(`  - ${item}`); }
+    } else {
+      const s = String(v);
+      lines.push((/[:#\n"']/.test(s) || s.trim() !== s) ? `${k}: ${JSON.stringify(s)}` : `${k}: ${s}`);
+    }
+  }
+  lines.push('---');
+  return lines.join('\n') + '\n' + content;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +132,10 @@ function withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
  * POST   /api/specs           - add a new entry to a spec file
  * DELETE /api/specs/:id       - remove an entry by ID
  */
-export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
+export function createSpecsRoutes(
+  workflowRoot: string | (() => string),
+  writer?: WikiWriter,
+): Hono {
   const app = new Hono();
   const resolveRoot = () => typeof workflowRoot === 'function' ? workflowRoot() : workflowRoot;
 
@@ -274,7 +152,7 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
       for (const fileName of files) {
         const raw = await readSpecFile(specsDir, fileName);
         const { data, content } = parseFrontmatter(raw);
-        const entries = parseEntries(content, fileName, data);
+        const entries = parseSpecEntries(content, fileName, data);
         allEntries.push(...entries);
       }
 
@@ -298,7 +176,7 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
       for (const fileName of fileNames) {
         const raw = await readSpecFile(specsDir, fileName);
         const { data, content } = parseFrontmatter(raw);
-        const entries = parseEntries(content, fileName);
+        const entries = parseSpecEntries(content, fileName);
         files.push({
           name: fileName,
           path: `specs/${fileName}`,
@@ -336,7 +214,7 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
       }
 
       const { data, content } = parseFrontmatter(raw);
-      const entries = parseEntries(content, name, data);
+      const entries = parseSpecEntries(content, name, data);
 
       return c.json({ name, content: raw, entries });
     } catch (err) {
@@ -360,16 +238,39 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
       if (typeof file !== 'string' || !file.trim()) {
         return c.json({ error: 'file is required' }, 400);
       }
-      // Sanitize filename
       const fileName = file.endsWith('.md') ? file : `${file}.md`;
       if (!/^[\w-]+\.md$/i.test(fileName)) {
         return c.json({ error: 'Invalid file name' }, 400);
       }
 
       const entryCategory = typeof type === 'string' && ENTRY_TYPES.includes(type as EntryType) ? type : 'learning';
+      const stem = basename(fileName, extname(fileName));
+      const containerId = `spec-${stem}`;
+
+      // Delegate to WikiWriter when available (unified write path)
+      if (writer) {
+        try {
+          const entry = await writer.appendEntry({
+            containerId,
+            category: entryCategory,
+            content: content.trim(),
+            keywords: typeof body.keywords === 'string' ? body.keywords : undefined,
+          });
+          return c.json({ success: true, id: entry.id }, 201);
+        } catch (err) {
+          if (err instanceof WikiWriteError) {
+            const statusMap: Record<string, 400 | 403 | 404 | 409> = {
+              BAD_REQUEST: 400, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409,
+            };
+            return c.json({ error: err.message }, statusMap[err.code] ?? 500);
+          }
+          throw err;
+        }
+      }
+
+      // Fallback: direct file write (when no writer injected, e.g. in tests)
       const date = new Date().toISOString().slice(0, 10);
       const firstLine = content.trim().split('\n')[0].substring(0, 80);
-      // Extract keywords: take meaningful words from first line (3-5 terms)
       const kwCandidates = firstLine.toLowerCase()
         .replace(/[^a-z0-9\u4e00-\u9fff_-]/g, ' ')
         .split(/\s+/)
@@ -385,17 +286,15 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
         try {
           existing = await readSpecFile(specsDir, fileName);
         } catch {
-          // File does not exist -- create with minimal frontmatter
-          const stem = basename(fileName, extname(fileName));
           existing = `---\ntitle: "${stem}"\nreadMode: optional\npriority: medium\ncategory: general\nkeywords: []\n---\n\n# ${stem}\n`;
         }
 
         const updated = existing.trimEnd() + '\n' + entryBlock;
-        await writeSpecFile(specsDir, fileName, updated);
+        const surfaced = surfaceKeywordsToFrontmatter(updated, keywords.split(','));
+        await writeSpecFile(specsDir, fileName, surfaced);
 
-        // Parse to get the new entry ID
-        const { data: fm, content: body } = parseFrontmatter(updated);
-        const entries = parseEntries(body, fileName, fm);
+        const { data: fm, content: parsedBody } = parseFrontmatter(surfaced);
+        const entries = parseSpecEntries(parsedBody, fileName, fm);
         if (entries.length > 0) {
           newId = entries[entries.length - 1].id;
         }
@@ -415,7 +314,26 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
   app.delete('/api/specs/:id', async (c) => {
     try {
       const targetId = c.req.param('id');
-      // ID format: <stem>-<nnn>  e.g. "learnings-003"
+
+      // Delegate to WikiWriter when available (unified write path).
+      // Wiki entry IDs are prefixed: "spec-learnings-003" vs spec API "learnings-003".
+      if (writer) {
+        const wikiEntryId = targetId.startsWith('spec-') ? targetId : `spec-${targetId}`;
+        try {
+          await writer.removeEntry(wikiEntryId);
+          return c.json({ success: true });
+        } catch (err) {
+          if (err instanceof WikiWriteError) {
+            const statusMap: Record<string, 400 | 403 | 404 | 409> = {
+              BAD_REQUEST: 400, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT: 409,
+            };
+            return c.json({ error: err.message }, statusMap[err.code] ?? 500);
+          }
+          throw err;
+        }
+      }
+
+      // Fallback: direct file manipulation (when no writer injected)
       const dashIdx = targetId.lastIndexOf('-');
       if (dashIdx === -1) {
         return c.json({ error: `Invalid entry ID format: ${targetId}` }, 400);
@@ -438,7 +356,7 @@ export function createSpecsRoutes(workflowRoot: string | (() => string)): Hono {
         }
 
         const { data: fm2, content: body } = parseFrontmatter(raw);
-        const entries = parseEntries(body, fileName, fm2);
+        const entries = parseSpecEntries(body, fileName, fm2);
         const target = entries.find(e => e.id === targetId);
         if (!target) return;
 

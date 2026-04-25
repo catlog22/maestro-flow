@@ -54,20 +54,14 @@ If absent or ambiguous, ask user via AskUserQuestion.
 2. Generate entry ID: `TIP-{YYYYMMDD}-{NNN}`
 3. Write `.workflow/memory/TIP-{id}.md` with: content, tags, timestamp, context
 
-### Step 4: Update Index
+### Step 4: Wiki Index Invalidation
 
-Read or create `.workflow/memory/wiki-index.json`.
-Append new entry metadata:
+Memory files are automatically indexed by WikiIndexer. No manual index update needed — the persistent `wiki-index.json` at `.workflow/` root is regenerated on next `maestro wiki` access.
 
-```json
-{
-  "id": "{entry_id}",
-  "type": "compact|tip",
-  "date": "{ISO}",
-  "title": "{short title}",
-  "tags": ["tag1", "tag2"],
-  "file": "{filename}"
-}
+For immediate visibility, use:
+```bash
+maestro wiki get memory-{slug}         # verify entry exists in wiki
+maestro wiki list --type memory        # list all memory entries
 ```
 
 ### Step 5: Confirm

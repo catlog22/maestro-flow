@@ -180,12 +180,13 @@ describe('WikiWriter virtual entries — read-only', () => {
 
 describe('WikiWriter concurrency', () => {
   it('concurrent PUTs — one wins, others see CONFLICT with stale hash', async () => {
-    await seed('specs/s.md', `---\ntitle: Initial\n---\n# s\nv0`);
+    // Use memory path (not specs/) since spec body updates are blocked
+    await seed('memory/MEM-s.md', `---\ntitle: Initial\n---\n# s\nv0`);
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
 
     // Capture the initial hash
-    const raw = await readFile(join(tmpRoot, 'specs', 's.md'));
+    const raw = await readFile(join(tmpRoot, 'memory', 'MEM-s.md'));
     const initialHash = createHash('sha256').update(raw).digest('hex');
 
     // Fire 5 concurrent PUTs all providing the SAME stale hash. Each update
@@ -193,7 +194,7 @@ describe('WikiWriter concurrency', () => {
     // hash on disk changes, so the remaining 4 must see CONFLICT.
     const results = await Promise.allSettled(
       Array.from({ length: 5 }, (_, i) =>
-        writer.update('spec-s', {
+        writer.update('memory-s', {
           body: `v${i + 1}`,
           expectedHash: initialHash,
         }),
@@ -210,30 +211,42 @@ describe('WikiWriter concurrency', () => {
     expect(conflicts.length).toBe(4);
   });
 
+  it('spec body update is blocked — use spec API instead', async () => {
+    await seed('specs/s.md', `---\ntitle: Protected\n---\n# Protected\nbody`);
+    const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
+    const writer = new WikiWriter(tmpRoot, indexer);
+    await expect(
+      writer.update('spec-s', { body: 'overwritten' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // Frontmatter-only updates should still work
+    const updated = await writer.update('spec-s', { title: 'New Title' });
+    expect(updated.title).toBe('New Title');
+  });
+
   it('rapid create → update → delete round-trip keeps index consistent', async () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
 
     const created = await writer.create({
-      type: 'spec',
+      type: 'memory',
       slug: 'rt',
       title: 'Initial',
       body: '# body',
     });
-    expect(created.id).toBe('spec-rt');
+    expect(created.id).toBe('memory-rt');
 
-    const updated = await writer.update('spec-rt', {
+    const updated = await writer.update('memory-rt', {
       title: 'Updated',
       body: '# updated',
     });
     expect(updated.title).toBe('Updated');
 
-    await writer.remove('spec-rt');
+    await writer.remove('memory-rt');
     const index = await indexer.get();
-    expect(index.byId['spec-rt']).toBeUndefined();
+    expect(index.byId['memory-rt']).toBeUndefined();
 
     // File should be gone from disk too
-    await expect(stat(join(tmpRoot, 'specs', 'rt.md'))).rejects.toThrow();
+    await expect(stat(join(tmpRoot, 'memory', 'MEM-rt.md'))).rejects.toThrow();
   });
 
   it('create with frontmatter serializes arrays and strings correctly', async () => {

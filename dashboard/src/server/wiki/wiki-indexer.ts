@@ -3,6 +3,7 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 
 import { toForwardSlash } from '../../shared/utils.js';
 import { parseFrontmatter } from './frontmatter-util.js';
+import { parseSpecEntries } from './spec-entry-parser.js';
 import { loadVirtualEntries } from './virtual-wiki-adapters.js';
 import type {
   WikiEntry,
@@ -188,11 +189,39 @@ export class WikiIndexer {
       if (entry) out.push(entry);
     }
 
-    // specs/*.md
+    // specs/*.md — container node + sub-nodes from <spec-entry> blocks
     for (const name of await safeReaddir(join(this.workflowRoot, 'specs'))) {
       if (extname(name).toLowerCase() !== '.md') continue;
-      const entry = await this.parseFileEntry(join(this.workflowRoot, 'specs', name), 'spec');
-      if (entry) out.push(entry);
+      const absPath = join(this.workflowRoot, 'specs', name);
+      const container = await this.parseFileEntry(absPath, 'spec');
+      if (!container) continue;
+      out.push(container);
+
+      // Parse <spec-entry> blocks into sub-node WikiEntries
+      const specEntries = parseSpecEntries(container.body, name, {
+        category: container.category ?? undefined,
+        keywords: container.tags,
+      });
+      for (const se of specEntries) {
+        out.push({
+          id: `spec-${se.id}`,
+          type: 'spec',
+          title: se.title,
+          summary: se.content.slice(0, 240).replace(/\s+/g, ' '),
+          tags: se.keywords,
+          status: 'active',
+          created: container.created,
+          updated: container.updated,
+          related: [],
+          source: container.source,
+          body: se.content,
+          ext: { entryType: se.type, timestamp: se.timestamp },
+          category: se.category || container.category,
+          createdBy: container.createdBy,
+          sourceRef: container.sourceRef,
+          parent: container.id,
+        });
+      }
     }
 
     // memory/*.md  (MEM-* → memory, TIP-* → note, others → memory)

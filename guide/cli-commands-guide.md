@@ -296,16 +296,63 @@ maestro spec status                            # 状态
 Wiki 知识图谱查询和变更。默认离线，`--live` 使用 HTTP API。
 
 ```bash
-maestro wiki list --type spec          # 按类型列出
-maestro wiki search "auth"             # BM25 全文搜索
-maestro wiki get <id>                  # 获取单条
-maestro wiki health                    # 图谱健康评分
-maestro wiki orphans                   # 孤立条目
-maestro wiki hubs --limit 5            # Top-N 枢纽节点
-maestro wiki create --type note --slug my-note --title "My Note"
-maestro wiki update <id> --title "New Title"
-maestro wiki delete <id>
+# 列表 + 过滤
+maestro wiki list --type spec                        # 按类型
+maestro wiki list --category security                # 按分类
+maestro wiki list --created-by manage-harvest        # 按创建来源
+maestro wiki list --tag auth --status active          # 组合过滤
+maestro wiki list --group                            # 按类型分组
+maestro wiki list -q "authentication"                # BM25 内联搜索
+maestro wiki list --json                             # JSON 输出
+
+# 搜索
+maestro wiki search "auth token"                     # BM25 全文搜索
+maestro wiki get <id>                                # 获取单条
+
+# 创建（spec / memory / note）
+maestro wiki create --type spec --slug auth --title "Auth" --body "# Auth\n..."
+maestro wiki create --type memory --slug debug-01 --title "Debug" --body "..."
+maestro wiki create --type note --slug tip-01 --title "Tip" --body "..."
+  # 可选: --category, --created-by, --source-ref, --parent, --frontmatter '{}'
+
+# Spec 条目追加（统一写入路径）
+maestro wiki append <containerId> --category coding --body "Use named exports"
+maestro wiki append spec-learnings --category learning --body "Token rotation..." --keywords "auth,token"
+
+# Spec 条目移除
+maestro wiki remove-entry <entryId>                  # 按 ID 精确删除子条目
+
+# 更新 / 删除
+maestro wiki update <id> --title "New Title"         # 更新 frontmatter
+maestro wiki delete <id>                             # 删除整个文件
+
+# 图谱分析
+maestro wiki health                                  # 健康评分（0-100）
+maestro wiki orphans                                 # 孤立节点
+maestro wiki hubs --limit 10                         # Top-N 枢纽节点
+maestro wiki backlinks <id>                          # 谁引用了它
+maestro wiki forward <id>                            # 它引用了谁
+maestro wiki graph                                   # 完整图谱 JSON
 ```
+
+| 子命令 | 用途 |
+|--------|------|
+| `list` / `ls` | 列表+过滤（type, tag, status, category, created-by, q） |
+| `get` | 获取单条目（含 body） |
+| `search` | BM25 全文搜索 |
+| `create` | 创建 spec/memory/note 文件 |
+| `append` | 向 spec 容器追加 `<spec-entry>` 条目 |
+| `remove-entry` | 从 spec 容器中精确移除子条目 |
+| `update` | 更新 frontmatter（spec body 受保护） |
+| `delete` / `rm` | 删除整个条目文件 |
+| `health` | 图谱健康评分 |
+| `orphans` | 孤立节点列表 |
+| `hubs` | 中心节点排名 |
+| `backlinks` | 反向链接 |
+| `forward` | 正向链接 |
+| `graph` | 完整图谱 JSON |
+
+> **写保护模型**：`specs/*.md` 的 body 通过 `wiki update` 禁止修改（返回 403），需使用 `wiki append` / `wiki remove-entry` 进行条目级操作。`memory/*.md` 支持完整 CRUD。虚拟条目（issue/lesson）完全只读。
 
 ---
 

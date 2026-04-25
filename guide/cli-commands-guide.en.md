@@ -296,16 +296,63 @@ maestro spec status                            # Status
 Wiki knowledge graph queries and mutations. Offline by default, `--live` for HTTP API.
 
 ```bash
-maestro wiki list --type spec          # List by type
-maestro wiki search "auth"             # BM25 full-text search
-maestro wiki get <id>                  # Get single entry
-maestro wiki health                    # Graph health score
-maestro wiki orphans                   # Orphan entries
-maestro wiki hubs --limit 5            # Top-N hub nodes
-maestro wiki create --type note --slug my-note --title "My Note"
-maestro wiki update <id> --title "New Title"
-maestro wiki delete <id>
+# Listing + filters
+maestro wiki list --type spec                        # Filter by type
+maestro wiki list --category security                # Filter by category
+maestro wiki list --created-by manage-harvest        # Filter by creator
+maestro wiki list --tag auth --status active          # Combined filters
+maestro wiki list --group                            # Group by type
+maestro wiki list -q "authentication"                # Inline BM25 search
+maestro wiki list --json                             # JSON output
+
+# Search
+maestro wiki search "auth token"                     # BM25 full-text search
+maestro wiki get <id>                                # Get single entry
+
+# Create (spec / memory / note)
+maestro wiki create --type spec --slug auth --title "Auth" --body "# Auth\n..."
+maestro wiki create --type memory --slug debug-01 --title "Debug" --body "..."
+maestro wiki create --type note --slug tip-01 --title "Tip" --body "..."
+  # Optional: --category, --created-by, --source-ref, --parent, --frontmatter '{}'
+
+# Spec entry append (unified write path)
+maestro wiki append <containerId> --category coding --body "Use named exports"
+maestro wiki append spec-learnings --category learning --body "Token rotation..." --keywords "auth,token"
+
+# Spec entry removal
+maestro wiki remove-entry <entryId>                  # Remove sub-entry by ID
+
+# Update / delete
+maestro wiki update <id> --title "New Title"         # Frontmatter update
+maestro wiki delete <id>                             # Delete entire file
+
+# Graph analysis
+maestro wiki health                                  # Health score (0-100)
+maestro wiki orphans                                 # Orphan nodes
+maestro wiki hubs --limit 10                         # Top-N hub nodes
+maestro wiki backlinks <id>                          # Incoming links
+maestro wiki forward <id>                            # Outgoing links
+maestro wiki graph                                   # Full graph JSON
 ```
+
+| Subcommand | Purpose |
+|------------|---------|
+| `list` / `ls` | List + filter (type, tag, status, category, created-by, q) |
+| `get` | Get single entry (with body) |
+| `search` | BM25 full-text search |
+| `create` | Create spec/memory/note file |
+| `append` | Append `<spec-entry>` block to spec container |
+| `remove-entry` | Remove sub-entry from spec container by ID |
+| `update` | Update frontmatter (spec body is protected) |
+| `delete` / `rm` | Delete entire entry file |
+| `health` | Graph health score |
+| `orphans` | Orphan node list |
+| `hubs` | Hub node ranking |
+| `backlinks` | Incoming links |
+| `forward` | Outgoing links |
+| `graph` | Full graph JSON |
+
+> **Write protection**: `specs/*.md` body updates via `wiki update` are forbidden (403) — use `wiki append` / `wiki remove-entry` for entry-level operations. `memory/*.md` supports full CRUD. Virtual entries (issue/lesson) are read-only.
 
 ---
 

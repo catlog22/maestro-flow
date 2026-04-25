@@ -78,7 +78,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(workflowRoot, { recursive: true, force: true });
+  await rm(workflowRoot, { recursive: true, force: true, maxRetries: 3 });
 });
 
 // ---------------------------------------------------------------------------
@@ -345,12 +345,12 @@ describe('POST /api/wiki', () => {
 // ---------------------------------------------------------------------------
 
 describe('PUT /api/wiki/:id', () => {
-  it('updates an existing spec preserving frontmatter', async () => {
+  it('updates spec title (frontmatter-only) preserving tags', async () => {
     await seed('specs/s.md', `---\ntitle: Old\ntags:\n  - a\n---\n# Old\nbody`);
     const res = await req('/api/wiki/spec-s', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'New', body: 'new body' }),
+      body: JSON.stringify({ title: 'New' }),
     });
     expect(res.status).toBe(200);
     const { entry } = (await res.json()) as { entry: WikiEntry };
@@ -358,9 +358,32 @@ describe('PUT /api/wiki/:id', () => {
     expect(entry.tags).toEqual(['a']);
   });
 
-  it('returns 409 on stale expectedHash', async () => {
+  it('rejects spec body update with 403 (use spec API)', async () => {
     await seed('specs/s.md', `---\ntitle: S\n---\n# S\norig`);
     const res = await req('/api/wiki/spec-s', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ body: 'overwritten' }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('updates memory entry with body + title', async () => {
+    await seed('memory/MEM-m.md', `---\ntitle: Old Mem\n---\n# Old\nmemory body`);
+    const res = await req('/api/wiki/memory-m', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'New Mem', body: 'new memory body' }),
+    });
+    expect(res.status).toBe(200);
+    const { entry } = (await res.json()) as { entry: WikiEntry };
+    expect(entry.title).toBe('New Mem');
+    expect(entry.body).toContain('new memory body');
+  });
+
+  it('returns 409 on stale expectedHash', async () => {
+    await seed('memory/MEM-h.md', `---\ntitle: Hash Test\n---\n# H\norig`);
+    const res = await req('/api/wiki/memory-h', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ body: 'updated', expectedHash: 'deadbeef' }),
@@ -458,8 +481,8 @@ describe('workspace:switched', () => {
       expect(ids).toContain('spec-b');
       expect(ids).not.toContain('spec-a');
     } finally {
-      await rm(newRoot, { recursive: true, force: true });
-      await rm(originalRoot, { recursive: true, force: true });
+      await rm(newRoot, { recursive: true, force: true, maxRetries: 3 });
+      await rm(originalRoot, { recursive: true, force: true, maxRetries: 3 });
       // Restore so afterEach's rm is a no-op
       workflowRoot = newRoot;
     }

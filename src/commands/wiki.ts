@@ -483,6 +483,53 @@ export function registerWikiCommand(program: Command): void {
       }
     });
 
+  // ── append ────────────────────────────────────────────────────────────
+  wiki
+    .command('append <containerId>')
+    .description('Append a <spec-entry> to a container file (e.g. spec-learnings)')
+    .requiredOption('--category <cat>', 'Entry category (coding, arch, debug, learning, ...)')
+    .requiredOption('--body <text>', 'Entry content')
+    .option('--keywords <kw>', 'Comma-separated keywords')
+    .action(async (containerId, opts, cmd) => {
+      // Offline mode only — no live mode for append
+      const { writer } = getOfflineClients();
+      try {
+        const entry = await writer.appendEntry({
+          containerId,
+          category: opts.category,
+          content: opts.body,
+          keywords: opts.keywords,
+        });
+        console.log(`Appended: ${entry.id}`);
+        console.log(`  Container: ${containerId}`);
+        console.log(`  Title: ${entry.title}`);
+      } catch (err) {
+        if (err instanceof WikiWriteError) {
+          console.error(`${err.code}: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    });
+
+  // ── remove-entry ─────────────────────────────────────────────────────
+  wiki
+    .command('remove-entry <entryId>')
+    .description('Remove a spec sub-entry by ID (e.g. spec-learnings-003)')
+    .action(async (entryId, _opts, cmd) => {
+      const { writer } = getOfflineClients();
+      try {
+        await writer.removeEntry(entryId);
+        console.log(`Removed: ${entryId}`);
+      } catch (err) {
+        if (err instanceof WikiWriteError) {
+          console.error(`${err.code}: ${err.message}`);
+          process.exit(1);
+        }
+        throw err;
+      }
+    });
+
   // ── update ────────────────────────────────────────────────────────────
   wiki
     .command('update <id>')

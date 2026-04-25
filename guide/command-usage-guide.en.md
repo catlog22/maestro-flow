@@ -777,6 +777,128 @@ graph LR
 /manage-issue close ISS-xxx --resolution "Fixed"
 ```
 
+---
+
+## Wiki Knowledge Graph System
+
+The Wiki system is Maestro's knowledge indexing core. It unifies markdown files and JSONL rows under `.workflow/` as `WikiEntry` nodes, supporting BM25 search, graph analysis, and persistent indexing.
+
+### Node Types
+
+| Type | Source | Write Permission | Description |
+|------|--------|-----------------|-------------|
+| `project` | `project.md` | Read-only | Project description |
+| `roadmap` | `roadmap.md` | Read-only | Roadmap |
+| `spec` | `specs/<slug>.md` | Writable | Spec documents |
+| `memory` | `memory/MEM-<slug>.md` | Writable | Session memory (created by `/manage-memory-capture`) |
+| `note` | `memory/TIP-<slug>.md` | Writable | Quick notes |
+| `issue` | `issues/*.jsonl` rows | Read-only (virtual) | Issue tracking |
+| `lesson` | `learning/*.jsonl` rows | Read-only (virtual) | Learning insights |
+
+### Entry Fields
+
+Each WikiEntry has 4 provenance fields beyond the basics (id, title, tags, status, related):
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `category` | Content classification | `security`, `debug`, `learning`, `arch` |
+| `createdBy` | Command that created the entry | `memory-capture`, `manage-harvest`, `manual` |
+| `sourceRef` | Source anchor | `WFS-auth-001`, `HRV-a1b2c3d4`, `commit:abc123` |
+| `parent` | Parent entry ID (hierarchy) | `spec-auth-patterns` |
+
+### CLI Commands
+
+```bash
+# Listing + filters
+maestro wiki list                                    # All entries
+maestro wiki list --type spec                        # By type
+maestro wiki list --category security                # By category
+maestro wiki list --created-by manage-harvest        # By creator
+maestro wiki list --tag auth --status active          # Combined filters
+maestro wiki list --group                            # Group by type
+
+# Search (BM25 full-text)
+maestro wiki search "authentication token"
+
+# Create (spec / memory / note)
+maestro wiki create --type spec --slug auth-patterns \
+  --title "Auth Patterns" --body "# Auth\n..." \
+  --category security --created-by manual \
+  --source-ref "session-001" --parent "spec-coding-conventions" \
+  --frontmatter '{"tags":["auth"]}'
+
+# Spec entry operations (unified write path)
+maestro wiki append spec-learnings --category bug --body "Cache invalidation issue"
+maestro wiki append spec-coding-conventions --category coding \
+  --body "Use named exports for utility functions" --keywords "exports,module"
+maestro wiki remove-entry spec-learnings-003         # Remove sub-entry by ID
+
+# Update / delete
+maestro wiki update spec-auth-patterns --title "New Title"  # frontmatter only
+maestro wiki delete spec-auth-patterns
+
+# Graph analysis
+maestro wiki health                                  # Health score (0-100)
+maestro wiki orphans                                 # Orphan nodes
+maestro wiki hubs --limit 10                         # Hub nodes
+maestro wiki backlinks spec-auth                     # Who references it
+maestro wiki forward spec-auth                       # What it references
+maestro wiki graph                                   # Full graph JSON
+```
+
+### Spec Atomic Node Indexing
+
+WikiIndexer parses each `<spec-entry>` block into an independent WikiEntry sub-node (e.g. `spec-learnings-001`), with `parent` pointing to the container node (e.g. `spec-learnings`). This means:
+
+- **BM25 search** locates specific entries (not whole files)
+- **Graph analysis** operates at entry granularity (sub-nodes can be linked and analyzed)
+- **Keyword surfacing**: sub-node keywords are automatically merged into the container's frontmatter, making `--tag` filtering work
+
+### Spec Write Protection
+
+`wiki update` returns 403 (FORBIDDEN) for body updates on `specs/*.md` files. Use entry-level operations:
+
+- `maestro wiki append <containerId>` — append a `<spec-entry>` block
+- `maestro wiki remove-entry <entryId>` — surgically remove a sub-entry
+
+### Persistent Index
+
+After every create/update/delete, the system generates `.workflow/wiki-index.json` (lightweight, no body):
+
+```json
+{
+  "version": 2,
+  "generatedAt": 1777096303681,
+  "entries": [
+    {
+      "id": "spec-auth-patterns",
+      "type": "spec",
+      "title": "Auth Patterns",
+      "category": "security",
+      "createdBy": "manual",
+      "sourceRef": "session-001",
+      "parent": null,
+      "tags": ["auth"],
+      "status": "active",
+      "related": [],
+      "source": { "kind": "file", "path": "specs/auth-patterns.md" }
+    }
+  ]
+}
+```
+
+### Graph Connections
+
+Entries are connected through three mechanisms:
+
+- **`related` frontmatter** — explicitly declared bidirectional links: `related: ["[[spec-auth]]"]`
+- **`[[wikilink]]`** — inline references in body, automatically resolved as forward links
+- **`parent`** — hierarchical relationship, automatically counted as child → parent forward link
+
+Health score formula: `score = max(0, 100 − 2×brokenLinks − 1×orphans − 3×missingTitles)`
+
+---
+
 ### Quick Fix a Bug
 
 ```bash

@@ -15,7 +15,7 @@ optionally auto-applies new `related` links to improve graph connectivity.
 $ARGUMENTS — optional flags.
 
 **Flags:**
-- `--scope <type>` — Limit to wiki type (spec, phase, memory, note, lesson, issue). Default: all.
+- `--scope <type>` — Limit to wiki type (spec, memory, note, lesson, issue). Default: all.
 - `--min-similarity N` — Threshold 0.0-1.0 (default: 0.3)
 - `--fix` — Auto-apply top suggestions
 - `--max N` — Max suggestions (default: 20)
@@ -29,14 +29,15 @@ $ARGUMENTS — optional flags.
 Parallel `maestro wiki` commands: `list --json`, `health`, `orphans`, `hubs --top 10`.
 
 ### Stage 2: Identify Connection Candidates
-- **Orphan rescue**: BM25 search by title, tag overlap, same phase
+- **Orphan rescue**: BM25 search by title, tag overlap, same category/parent
 - **Missing bidirectional**: A→B exists but B→A missing
-- **Transitive closure**: A→B and B→C but no A→C (with shared tags/phase)
+- **Transitive closure**: A→B and B→C but no A→C (with shared tags/category)
 - **Type bridge**: Different types referencing same concept but unlinked
+- **Parent cluster**: Entries sharing the same parent but not linked to each other
 
 ### Stage 3: Score Candidates
 ```
-score = 0.4 × tag_overlap + 0.3 × title_bm25 + 0.2 × same_phase + 0.1 × type_bridge
+score = 0.4 × tag_overlap + 0.3 × title_bm25 + 0.2 × same_category + 0.1 × type_bridge
 ```
 Filter by `--min-similarity`, rank desc, limit by `--max`.
 
