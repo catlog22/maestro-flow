@@ -760,8 +760,8 @@ mkdir -p "${SESSION_DIR}"
   "intent": "{original_intent}",
   "task_type": "{task_type}",
   "chain_name": "{chain_name}",
-  "phase": "{resolved_phase}",
-  "auto_mode": "{autoYes}",
+  "phase": {resolved_phase},
+  "auto_mode": {autoYes},
   "steps": [
     {
       "index": 0,

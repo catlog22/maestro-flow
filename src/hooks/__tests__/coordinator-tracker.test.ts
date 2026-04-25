@@ -57,6 +57,25 @@ describe('readMaestroSession', () => {
     assert.strictEqual(result.current_step?.skill, 'maestro-execute');
     assert.strictEqual(result.next_step?.skill, 'maestro-verify');
     assert.strictEqual(result.status, 'running');
+    assert.strictEqual(result.auto_mode, false);
+  });
+
+  it('propagates auto_mode from status.json', () => {
+    const sessionDir = join(TEST_DIR, '.workflow', '.maestro', 'session-auto');
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(join(sessionDir, 'status.json'), JSON.stringify({
+      session_id: 'session-auto',
+      chain_name: 'quick',
+      intent: 'fix bug',
+      auto_mode: true,
+      steps: [{ index: 0, skill: 'maestro-execute', args: '', status: 'running' }],
+      current_step: 0,
+      status: 'running',
+    }));
+
+    const result = readMaestroSession(TEST_DIR);
+    assert.ok(result);
+    assert.strictEqual(result.auto_mode, true);
   });
 
   it('returns null when .maestro dir missing', () => {

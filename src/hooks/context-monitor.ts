@@ -24,6 +24,7 @@ import {
   BRIDGE_PREFIX,
 } from './constants.js';
 import { resolveWorkspace } from './workspace.js';
+import { isAutoMode } from './auto-mode.js';
 
 interface MonitorInput {
   session_id?: string;
@@ -49,8 +50,18 @@ interface HookOutput {
   };
 }
 
-/** Build the warning message based on severity and workflow presence */
-function buildMessage(usedPct: number, remaining: number, isCritical: boolean, hasWorkflow: boolean): string {
+/** Build the warning message based on severity, workflow presence, and auto mode */
+function buildMessage(usedPct: number, remaining: number, isCritical: boolean, hasWorkflow: boolean, autoMode: boolean): string {
+  // Auto mode (-y): never instruct the model to stop — let the chain finish
+  if (autoMode) {
+    return isCritical
+      ? `CONTEXT CRITICAL: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
+        'Finish current chain step. Progress tracked in status.json. ' +
+        'Chain can resume with /maestro -c in a new session.'
+      : `CONTEXT WARNING: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
+        'Finish current chain step, then stop chain. Resume with /maestro -c.';
+  }
+
   if (isCritical) {
     return hasWorkflow
       ? `CONTEXT CRITICAL: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
@@ -126,8 +137,9 @@ export function evaluateContext(data: MonitorInput): HookOutput | null {
 
   // Detect maestro workflow state via workspace resolver
   const hasWorkflow = resolveWorkspace(data) !== null;
+  const autoMode = hasWorkflow && isAutoMode(data);
 
-  const message = buildMessage(usedPct, remaining, isCritical, hasWorkflow);
+  const message = buildMessage(usedPct, remaining, isCritical, hasWorkflow, autoMode);
 
   return {
     hookSpecificOutput: {

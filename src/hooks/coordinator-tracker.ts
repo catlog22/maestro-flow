@@ -41,6 +41,7 @@ export interface CoordBridgeData {
   next_step: CoordStep | null;
   remaining_steps: Array<{ skill: string; args: string }>;
   status: string;
+  auto_mode?: boolean;
   updated_at: number;
 }
 
@@ -136,6 +137,7 @@ function parseMaestroStatus(raw: MaestroStatusJson, mtime: number, dirName?: str
     next_step: nextStep,
     remaining_steps: remaining,
     status: raw.status ?? 'unknown',
+    auto_mode: raw.auto_mode ?? false,
     updated_at: Math.floor(mtime),
   };
 }
@@ -212,6 +214,7 @@ export function readWalkerState(workspaceRoot: string, coordSessionId: string): 
       next_step: nextNode ? { index: completed + 1, skill: nextNode.skill, args: nextNode.args } : null,
       remaining_steps: nextNode ? [{ skill: nextNode.skill, args: nextNode.args }] : [],
       status: raw.status ?? 'unknown',
+      auto_mode: raw.auto_mode ?? false,
       updated_at: Math.floor(statSync(statePath).mtimeMs),
     };
   } catch {
@@ -352,15 +355,27 @@ function readLatestCoordinateSession(workspaceRoot: string): CoordBridgeData | n
     const sessions = readdirSync(coordDir)
       .filter(name => name.startsWith('coord-'))
       .map(name => {
-        const statePath = join(coordDir, name, 'walker-state.json');
-        if (!existsSync(statePath)) return null;
-        try { return { name, mtime: statSync(statePath).mtimeMs }; } catch { return null; }
+        // Try walker-state.json (link-coordinate) then status.json (maestro-coordinate)
+        for (const file of ['walker-state.json', 'status.json']) {
+          const statePath = join(coordDir, name, file);
+          if (existsSync(statePath)) {
+            try { return { name, mtime: statSync(statePath).mtimeMs, file }; } catch { /* skip */ }
+          }
+        }
+        return null;
       })
       .filter((s): s is NonNullable<typeof s> => s !== null)
       .sort((a, b) => b.mtime - a.mtime);
 
     if (sessions.length === 0) return null;
-    return readWalkerState(workspaceRoot, sessions[0].name);
+
+    const latest = sessions[0];
+    if (latest.file === 'walker-state.json') {
+      return readWalkerState(workspaceRoot, latest.name);
+    }
+    // status.json uses same format as maestro status.json
+    const raw = JSON.parse(readFileSync(join(coordDir, latest.name, 'status.json'), 'utf8'));
+    return parseMaestroStatus(raw, latest.mtime, latest.name);
   } catch {
     return null;
   }

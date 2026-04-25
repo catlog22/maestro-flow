@@ -22,7 +22,7 @@ const intent = args
 ```
 
 **If resumeMode:**
-1. Find latest `state.json` in `.workflow/.maestro-coordinate/`
+1. Find latest `status.json` in `.workflow/.maestro-coordinate/`
 2. Load state → set `current_step` to first non-completed step
 3. Jump to **Step 6**
 
@@ -305,11 +305,11 @@ const state = {
   gemini_session_id: null,
   step_analyses: [],
   steps: chain.map((s, i) => ({
-    index: i, cmd: s.cmd, args: s.args || '',
+    index: i, skill: s.cmd, args: s.args || '',
     status: 'pending', exec_id: null, analysis: null
   }))
 };
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
 
 const context = { resolved_phase: resolvedPhase, user_intent: intent, issue_id: resolvedIssueId, spec_session_id: null };
 ```
@@ -385,7 +385,7 @@ const prompt = template
 ```javascript
 state.steps[state.current_step].status = 'running';
 state.steps[state.current_step].started_at = new Date().toISOString();
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
 
 Bash({
   command: `codex delegate ${escapeForShell(prompt)} --to ${state.tool} --mode write`,
@@ -429,7 +429,7 @@ if (!failed) {
 
 // Save output for analysis
 Write(`${sessionDir}/step-${stepIdx + 1}-output.txt`, output);
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
 
 // → Step 7b: Gemini analysis (skip if step failed/skipped or single-step chain)
 if (step.status === 'completed' && state.steps.length > 1) {
@@ -437,7 +437,7 @@ if (step.status === 'completed' && state.steps.length > 1) {
 } else {
   // Skip analysis, advance directly
   state.current_step = stepIdx + 1;
-  Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+  Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
   if (state.current_step < state.steps.length) { /* → Step 6 */ }
   else { /* → Step 8 */ }
 }
@@ -511,7 +511,7 @@ Write(`${sessionDir}/step-${stepIdx + 1}-analysis.json`, JSON.stringify(analysis
 
 // Advance
 state.current_step = stepIdx + 1;
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
 
 if (state.current_step < state.steps.length) {
   // → Back to Step 6
@@ -528,7 +528,7 @@ if (state.current_step < state.steps.length) {
 const done = state.steps.filter(s => s.status === 'completed').length;
 state.status = state.steps.some(s => s.status === 'failed') ? 'completed_with_errors' : 'completed';
 state.completed_at = new Date().toISOString();
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
 ```
 
 ```
@@ -560,7 +560,7 @@ Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
 6. **Quality gates** — issue chains auto-include review; `issue-full` is default for issue execution
 7. **Tool fallback** — if `codex delegate` fails: retry with same tool once, then try `gemini` → `qwen`
 8. **Auto-confirm injection** — `{{AUTO_DIRECTIVE}}` in template prevents blocking during background execution
-9. **Resumable** — `-c` reads `state.json`, jumps to first pending step
+9. **Resumable** — `-c` reads `status.json`, jumps to first pending step
 10. **Gemini analysis after each step** — evaluate output quality via `codex delegate --to gemini --mode analysis`, chained via `--resume`. Analysis generates `next_step_hints` injected into next step's prompt as `{{ANALYSIS_HINTS}}`
 11. **Session capture** — after each gemini callback, capture exec_id → `gemini_session_id` for resume chain
 12. **Analysis skip conditions** — skip gemini analysis for: failed/skipped steps, single-step chains
