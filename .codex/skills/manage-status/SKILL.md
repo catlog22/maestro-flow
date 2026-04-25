@@ -21,6 +21,7 @@ Reads from:
 - `.workflow/roadmap.md` — milestone and phase structure
 - `.workflow/scratch/*/index.json` — per-phase metadata and progress (resolved via state.json artifact registry)
 - `.workflow/scratch/*/.task/TASK-*.json` — individual task statuses (resolved via state.json artifact registry)
+- `.workflow/wiki-index.json` — unified wiki graph index (entry counts, health)
 </context>
 
 <execution>
@@ -66,6 +67,10 @@ Project: {name} | Status: {state}
 Phase {N}: {title}
   In-progress: {list}
   Blocked: {list}
+
+--- Knowledge Graph ---
+Wiki entries: {total} (spec: {N}, memory: {N}, note: {N}, lesson: {N}, issue: {N})
+Health: {score}/100 | Orphans: {N}
 
 --- Next Steps ---
 Based on current state: {suggestion with Skill() reference}

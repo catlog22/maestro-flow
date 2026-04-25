@@ -52,7 +52,7 @@ Re-run `maestro wiki health` for delta.
 ### Stage 6: Persist
 Write `wiki-connections-{date}.md`. Append graph insights to `lessons.jsonl` (source: "wiki-connect").
 
-**Next steps:** `/wiki-digest <topic>`, `/learn-follow <wiki-id>`, `maestro wiki graph`
+**Next steps:** `/wiki-digest <topic>`, `/manage-wiki health`, `/learn-follow <wiki-id>`, `maestro wiki graph`
 </execution>
 
 <error_codes>

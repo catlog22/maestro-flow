@@ -65,6 +65,9 @@ Created:
 
 Next: Run Skill({ skill: "spec-add", args: "<category> <content>" }) to add entries
 Categories: coding, arch, quality, debug, test, review, learning
+Extended:   bug, pattern, decision, rule, validation (stored in closest core category file)
+Remove:  /spec-remove <entry-id>
+Wiki:    maestro wiki list --type spec (entries auto-indexed in wiki graph)
 ```
 
 </execution>

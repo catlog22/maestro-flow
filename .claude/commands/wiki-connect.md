@@ -11,6 +11,10 @@ allowed-tools:
   - Agent
   - AskUserQuestion
 ---
+<required_reading>
+@~/.maestro/workflows/wiki-connect.md
+</required_reading>
+
 <purpose>
 Knowledge graph link discovery and health improvement. Analyzes the wiki index to find orphaned entries, missing connections, and transitive link gaps, then suggests or auto-applies new `related` links to improve graph connectivity.
 

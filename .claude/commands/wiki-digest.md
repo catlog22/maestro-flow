@@ -17,6 +17,10 @@ Knowledge synthesis command that generates actionable digests from the wiki know
 Unlike `maestro wiki list` which shows raw entries, this command synthesizes and interprets the knowledge base, producing a curated summary with gap analysis and recommended next actions.
 </purpose>
 
+<required_reading>
+@~/.maestro/workflows/wiki-digest.md
+</required_reading>
+
 <deferred_reading>
 - @~/.maestro/workflows/issue.md (issues.jsonl canonical schema for `--create-issues` routing)
 </deferred_reading>

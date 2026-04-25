@@ -8,7 +8,7 @@ Two memory stores with different purposes:
 
 | Store | Path | Format | Index |
 |-------|------|--------|-------|
-| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` | `wiki-index.json` |
+| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` | `.workflow/wiki-index.json` (unified, auto-managed by WikiIndexer) |
 | `system` | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
 
 **System memory path detection:**
@@ -30,7 +30,7 @@ Detect both memory store paths:
 ```bash
 # Workflow memory
 WF_MEMORY_DIR=".workflow/memory"
-WF_INDEX_FILE="$WF_MEMORY_DIR/wiki-index.json"
+WF_INDEX_FILE=".workflow/wiki-index.json"  # unified index (auto-managed by WikiIndexer)
 
 # System memory — derive from project git root or cwd
 PROJECT_ROOT=$(pwd)
@@ -40,7 +40,7 @@ SYS_MEMORY_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's|[/\\:]|-|
 ```
 
 Verify which stores exist:
-- Workflow: check `$WF_INDEX_FILE` exists
+- Workflow: check `.workflow/memory/` directory exists (index is auto-managed)
 - System: check `$SYS_MEMORY_DIR/MEMORY.md` exists
 
 If neither exists, report E001.
@@ -69,7 +69,7 @@ Parse arguments and detect subcommand:
 List entries from targeted stores.
 
 **Workflow store** (if exists):
-1. Read `wiki-index.json`
+1. Use `maestro wiki list --type memory --json` (reads unified `.workflow/wiki-index.json`)
 2. Apply filters (--tag, --type, --before, --after)
 3. Sort by timestamp descending
 
@@ -108,7 +108,7 @@ Hints:
 Full-text search across both stores.
 
 **Workflow store:**
-1. Search `wiki-index.json` fields: `summary`, `tags`, `id`
+1. Use `maestro wiki search "<query>" --json` or filter `.workflow/wiki-index.json` fields: `summary`, `tags`, `id`
 2. For deeper matches, read individual `.md` files and search content
 
 **System store:**
@@ -138,7 +138,7 @@ View: /manage-memory view <ID|filename>
 Display full content of a memory entry.
 
 **Workflow entry** (ID matches `MEM-*` or `TIP-*`):
-1. Validate ID exists in `wiki-index.json`
+1. Validate ID exists via `maestro wiki get <id>` or in `.workflow/wiki-index.json`
 2. Read the corresponding `.md` file
 3. Display with metadata header
 
@@ -188,9 +188,9 @@ Changes: {summary of edits}
 Remove a memory entry or file.
 
 **Workflow entry:**
-1. Validate ID in `wiki-index.json`
+1. Validate ID via `maestro wiki get <id>` or in `.workflow/wiki-index.json`
 2. Show summary, confirm with AskUserQuestion (unless --confirm)
-3. Remove `.md` file + index entry
+3. Remove `.md` file (WikiIndexer auto-updates index on next access)
 
 **System file:**
 1. Validate file exists (NEVER allow deleting MEMORY.md — only topic files)
@@ -213,7 +213,7 @@ Bulk cleanup — workflow store only.
 
 At least one filter required: --tag, --type, --before, --after.
 
-1. Read `wiki-index.json`, apply filters
+1. Read `.workflow/wiki-index.json`, apply filters
 2. Display candidates table
 3. If `--dry-run`, stop after display
 4. Confirm with AskUserQuestion
@@ -232,9 +232,9 @@ Post-operation integrity check.
 
 **Workflow store:**
 1. Scan `.workflow/memory/` for `.md` files
-2. Compare with `wiki-index.json` entries
+2. Compare with `.workflow/wiki-index.json` entries (type=memory)
 3. Report orphaned files or dangling references
-4. Offer to fix inconsistencies
+4. Offer to fix inconsistencies (WikiIndexer re-indexes on next write)
 
 **System store:**
 1. Check MEMORY.md links to topic files
@@ -260,13 +260,9 @@ Parse arguments and detect execution mode:
 
 ```bash
 MEMORY_DIR=".workflow/memory"
-INDEX_FILE="$MEMORY_DIR/wiki-index.json"
 mkdir -p "$MEMORY_DIR"
-
-# Initialize index if not exists
-if [ ! -f "$INDEX_FILE" ]; then
-  echo '{"entries":[],"_metadata":{"created":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","version":"1.0"}}' > "$INDEX_FILE"
-fi
+# Note: wiki-index.json is auto-managed by WikiIndexer at .workflow/wiki-index.json
+# No manual index initialization needed
 ```
 
 When ambiguous, use AskUserQuestion:
@@ -355,36 +351,14 @@ Write entry file with sections:
 - Tags (from --tag flag)
 - Context (auto-detected from recent conversation files)
 
-### Step 4: Update Index
+### Step 4: Wiki Index (Auto-managed)
 
-Append entry metadata to wiki-index.json.
+Memory files are automatically indexed by WikiIndexer into the unified `.workflow/wiki-index.json`. No manual index update is needed — the persistent index is regenerated on next `maestro wiki` access or any write operation.
 
-Read `wiki-index.json`, append new entry to `entries[]`:
-
-```json
-{
-  "id": "MEM-20260315-143022",
-  "type": "compact",
-  "timestamp": "2026-03-15T14:30:22Z",
-  "file": "MEM-20260315-143022.md",
-  "summary": "Session objective in one line",
-  "tags": [],
-  "project_root": "/path/to/project",
-  "session_id": "WFS-001"
-}
-```
-
-For tips:
-```json
-{
-  "id": "TIP-20260315-143022",
-  "type": "tip",
-  "timestamp": "2026-03-15T14:30:22Z",
-  "file": "TIP-20260315-143022.md",
-  "summary": "First 80 chars of note content",
-  "tags": ["config", "redis"],
-  "project_root": "/path/to/project"
-}
+For immediate visibility after capture:
+```bash
+maestro wiki get memory-{slug}         # verify entry exists in wiki
+maestro wiki list --type memory        # list all memory entries
 ```
 
 ### Step 5: Report
@@ -400,7 +374,7 @@ Type:    compact
 Plan:    {plan_source} ({plan_line_count} lines preserved)
 
 To restore: Read .workflow/memory/{ENTRY_ID}.md
-To search:  Read .workflow/memory/wiki-index.json
+To search:  maestro wiki list --type memory
 ```
 
 **Tip mode:**
@@ -410,33 +384,14 @@ Entry:   {ENTRY_ID}
 File:    .workflow/memory/{ENTRY_ID}.md
 Tags:    {tags}
 
-To search: Read .workflow/memory/wiki-index.json
+To search: maestro wiki list --type memory --tag {tags}
 ```
 
 ---
 
-## Index Schema
+## Index
 
-```json
-{
-  "entries": [
-    {
-      "id": "MEM-20260315-143022",
-      "type": "compact | tip",
-      "timestamp": "2026-03-15T14:30:22Z",
-      "file": "MEM-20260315-143022.md",
-      "summary": "One-line description",
-      "tags": [],
-      "project_root": "D:\\project",
-      "session_id": "WFS-001 | null"
-    }
-  ],
-  "_metadata": {
-    "created": "2026-03-15T00:00:00Z",
-    "version": "1.0"
-  }
-}
-```
+Memory entries are indexed in the unified `.workflow/wiki-index.json` by WikiIndexer. Each memory file becomes a wiki entry of type `memory` with fields derived from frontmatter (id, title, tags, summary). Use `maestro wiki list --type memory --json` to query the index programmatically.
 
 ## Compact Entry Structure
 
@@ -492,5 +447,5 @@ Quick note for ideas, snippets, reminders.
 
 ## Retrieval
 
-Read `.workflow/memory/wiki-index.json` to find entries by type, tags, or date.
-Read individual `.md` files for full content.
+Use `maestro wiki list --type memory` to find entries by type, tags, or date.
+Use `maestro wiki get <id>` or read individual `.md` files for full content.

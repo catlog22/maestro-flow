@@ -64,7 +64,7 @@ Follow '~/.maestro/workflows/harvest.md' Stages 1–8.
 - Spec: `maestro wiki append spec-<file> --category <category> --body "<content>" --keywords "<kws>"` (unified write path) or `Skill({ skill: "spec-add", args: "<category> <content>" })`
 - Issue: append to `issues.jsonl` matching canonical schema
 
-**Next steps:** `maestro wiki list --type note`, `maestro wiki list --category learning`, `/wiki-connect --fix`, `/manage-issue list --source harvest`
+**Next steps:** `/manage-wiki health`, `maestro wiki list --type note`, `/wiki-connect --fix`, `/wiki-digest`, `/manage-issue list --source harvest`
 </execution>
 
 <error_codes>

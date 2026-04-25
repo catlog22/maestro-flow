@@ -62,7 +62,7 @@ For each gap: dedup against issues.jsonl, append with `type: "knowledge-gap"`, `
 ### Stage 8: Persist
 Append meta-insights to `lessons.jsonl` (source: "wiki-digest"). Display summary.
 
-**Next steps:** `/learn-follow <wiki-id>`, `/wiki-connect --fix`, `/learn-decompose <path>`
+**Next steps:** `/learn-follow <wiki-id>`, `/wiki-connect --fix`, `/manage-wiki cleanup`, `/learn-decompose <path>`
 </execution>
 
 <error_codes>

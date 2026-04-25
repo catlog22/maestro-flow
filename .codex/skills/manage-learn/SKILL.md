@@ -164,6 +164,7 @@ Confidence: medium
 Tags:       manual, zod, typescript
 
 Next: $manage-learn "list"  or  $manage-learn "search zod"
+Wiki: maestro wiki list --type lesson  (lessons auto-indexed in wiki graph)
 ```
 </execution>
 

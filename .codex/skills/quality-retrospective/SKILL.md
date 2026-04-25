@@ -497,6 +497,8 @@ Next:
   $manage-status
   $manage-issue "list --source retrospective"
   $manage-learn "list --phase <N>"
+  $manage-wiki health
+  $wiki-digest "<phase-topic>"
 ```
 </execution>
 

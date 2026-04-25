@@ -85,6 +85,7 @@ Append `<spec-entry>` closed-tag block to target file:
 Added [{category}] to {target_file}
 Keywords: {kw1}, {kw2}, {kw3}
 Verify: /spec-load --keyword {kw1}
+Remove: /spec-remove <entry-id>
 ```
 </execution>
 

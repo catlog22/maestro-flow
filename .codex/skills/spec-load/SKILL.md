@@ -30,7 +30,14 @@ $spec-load "--category coding --keyword naming"
 | `test` | `test-conventions.md` |
 | `review` | `review-standards.md` |
 | `learning` | `learnings.md` |
+| `bug` | `learnings.md` |
+| `pattern` | `coding-conventions.md` |
+| `decision` | `architecture-constraints.md` |
+| `rule` | `quality-rules.md` |
+| `validation` | `quality-rules.md` |
 | `all` (default) | All spec files |
+
+Extended types (`bug`, `pattern`, `decision`, `rule`, `validation`) are stored in their closest core category's file but retain their specific category in the `<spec-entry>` tag.
 
 **Keyword filtering**: When `--keyword` is provided, only entries with matching keyword in their `<spec-entry keywords="...">` attribute are returned. Legacy entries (heading format) are filtered by text grep.
 </context>

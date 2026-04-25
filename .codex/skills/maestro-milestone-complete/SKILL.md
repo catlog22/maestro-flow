@@ -145,6 +145,8 @@ Next steps:
   $maestro-milestone-release  -- Cut release
   $maestro-analyze            -- Start next milestone
   $manage-status              -- View state
+  $manage-wiki health         -- Check wiki graph health
+  $wiki-digest                -- Generate knowledge digest
 ```
 
 </execution>
