@@ -83,16 +83,6 @@ export const guideRegistry: Array<{
     icon: 'layers',
   },
   {
-    slug: 'team-lite',
-    file: 'team-lite-design.md',
-    file_en: 'team-lite-design.en.md',
-    title: 'Team Lite Collaboration',
-    description: 'Git-native team collaboration for 2-8 person teams with zero infrastructure',
-    title_zh: 'Team Lite 协作方案',
-    description_zh: '面向 2-8 人小团队的 Git-native 协作方案，零基础设施',
-    icon: 'users',
-  },
-  {
     slug: 'worktree',
     file: 'worktree-guide.md',
     file_en: 'worktree-guide.en.md',
@@ -121,16 +111,6 @@ export const guideRegistry: Array<{
     title_zh: '快速入门指南',
     description_zh: '10 分钟了解 Maestro Flow 核心功能 — 安装、管线、Issue、委托、规范、Overlay、Hook、并行开发',
     icon: 'rocket',
-  },
-  {
-    slug: 'introduction',
-    file: 'maestro-flow-introduction.md',
-    file_en: 'maestro-flow-introduction.en.md',
-    title: 'Maestro Flow Introduction',
-    description: 'Overview of Maestro Flow philosophy and command landscape',
-    title_zh: 'Maestro Flow 介绍',
-    description_zh: 'Maestro Flow 设计理念和命令全景概览',
-    icon: 'sparkles',
   },
   {
     slug: 'hooks',
