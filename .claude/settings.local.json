@@ -1,1 +1,7 @@
-{}
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)"
+    ]
+  }
+}

@@ -6,6 +6,11 @@ import type { AgentConfig, AgentProcess, AgentType, NormalizedEntry, ApprovalReq
 import type { CommanderConfig } from './commander-types.js';
 import type { SupervisorConfig, SupervisorStatus } from './execution-types.js';
 import type { ExpansionDepth } from './requirement-types.js';
+import type {
+  RoomAgentStatus,
+  RoomTaskCreate,
+  RoomTaskUpdate,
+} from './team-types.js';
 
 // ---------------------------------------------------------------------------
 // WS event types — discriminator values for server messages
@@ -70,7 +75,19 @@ export type WsEventType =
   | 'team:message'
   | 'team:dispatch'
   | 'team:phase'
-  | 'team:agent_status';
+  | 'team:agent_status'
+  // Room events
+  | 'room:created'
+  | 'room:closed'
+  | 'room:agent_joined'
+  | 'room:agent_left'
+  | 'room:agent_status'
+  | 'room:message'
+  | 'room:broadcast'
+  | 'room:task_created'
+  | 'room:task_updated'
+  | 'room:phase_changed'
+  | 'room:snapshot';
 
 // ---------------------------------------------------------------------------
 // Server → Client messages
@@ -125,7 +142,19 @@ export type WsClientMessage =
   | WsClientTeamMessageAction
   | WsClientTeamBroadcastAction
   | WsClientTeamSetModeAction
-  | WsClientTeamApproveAction;
+  | WsClientTeamApproveAction
+  | WsClientRoomCreateAction
+  | WsClientRoomCloseAction
+  | WsClientRoomSubscribeAction
+  | WsClientRoomUnsubscribeAction
+  | WsClientRoomAddAgentAction
+  | WsClientRoomRemoveAgentAction
+  | WsClientRoomSetAgentStatusAction
+  | WsClientRoomSendMessageAction
+  | WsClientRoomBroadcastAction
+  | WsClientRoomCreateTaskAction
+  | WsClientRoomUpdateTaskAction
+  | WsClientRoomSnapshotAction;
 
 export interface WsClientSpawnMessage {
   action: 'spawn';
@@ -330,6 +359,95 @@ export interface WsClientTeamApproveAction {
   sessionId: string;
   requestId: string;
   allow: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Room client messages
+// ---------------------------------------------------------------------------
+
+/** Create a new meeting room session */
+export interface WsClientRoomCreateAction {
+  action: 'room:create';
+  sessionId: string;
+}
+
+/** Close (destroy) a meeting room session */
+export interface WsClientRoomCloseAction {
+  action: 'room:close';
+  sessionId: string;
+}
+
+/** Subscribe to real-time events for a specific room session */
+export interface WsClientRoomSubscribeAction {
+  action: 'room:subscribe';
+  sessionId: string;
+}
+
+/** Unsubscribe from a specific room session's events */
+export interface WsClientRoomUnsubscribeAction {
+  action: 'room:unsubscribe';
+  sessionId: string;
+}
+
+/** Add an agent to a room session */
+export interface WsClientRoomAddAgentAction {
+  action: 'room:add_agent';
+  sessionId: string;
+  role: string;
+  processId?: string;
+}
+
+/** Remove an agent from a room session */
+export interface WsClientRoomRemoveAgentAction {
+  action: 'room:remove_agent';
+  sessionId: string;
+  role: string;
+}
+
+/** Update an agent's status in a room session */
+export interface WsClientRoomSetAgentStatusAction {
+  action: 'room:set_agent_status';
+  sessionId: string;
+  role: string;
+  status: RoomAgentStatus;
+}
+
+/** Send a message to a specific agent in a room session */
+export interface WsClientRoomSendMessageAction {
+  action: 'room:send_message';
+  sessionId: string;
+  to: string;
+  content: string;
+  priority?: 'normal' | 'high' | 'urgent';
+}
+
+/** Broadcast a message to all agents in a room session */
+export interface WsClientRoomBroadcastAction {
+  action: 'room:broadcast';
+  sessionId: string;
+  content: string;
+  priority?: 'normal' | 'high' | 'urgent';
+}
+
+/** Create a task in a room session */
+export interface WsClientRoomCreateTaskAction {
+  action: 'room:create_task';
+  sessionId: string;
+  task: RoomTaskCreate;
+}
+
+/** Update a task in a room session */
+export interface WsClientRoomUpdateTaskAction {
+  action: 'room:update_task';
+  sessionId: string;
+  taskId: string;
+  patch: RoomTaskUpdate;
+}
+
+/** Request the current snapshot of a room session */
+export interface WsClientRoomSnapshotAction {
+  action: 'room:snapshot';
+  sessionId: string;
 }
 
 // ---------------------------------------------------------------------------

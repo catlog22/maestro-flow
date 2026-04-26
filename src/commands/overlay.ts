@@ -63,10 +63,11 @@ function discoverScopes(): Scope[] {
     seen.add(key);
     scopes.push({ scope: m.scope, targetBase });
   }
-  // Fallback: if no manifests but global commands dir exists, treat as global.
+  // Fallback: if no manifests but global commands/skills dir exists, treat as global.
   if (scopes.length === 0) {
     const globalCmds = join(homedir(), '.claude', 'commands');
-    if (existsSync(globalCmds)) {
+    const globalSkills = join(homedir(), '.codex', 'skills');
+    if (existsSync(globalCmds) || existsSync(globalSkills)) {
       scopes.push({ scope: 'global', targetBase: homedir() });
     }
   }
@@ -311,7 +312,7 @@ function runOverlayPush(opts: { names?: string[] }): void {
 export function registerOverlayCommand(program: Command): void {
   const overlay = program
     .command('overlay')
-    .description('Manage command overlays — non-invasive patches for .claude/commands');
+    .description('Manage command overlays — non-invasive patches for .claude/commands and .codex/skills');
 
   overlay
     .command('list')

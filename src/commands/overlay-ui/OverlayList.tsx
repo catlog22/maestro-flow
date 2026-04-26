@@ -31,6 +31,8 @@ export interface TargetSection {
 
 export interface TargetInfo {
   name: string;
+  /** Which CLI this target belongs to. */
+  cli: 'claude' | 'codex';
   sections: TargetSection[];
   markers: SectionMarker[];
 }
@@ -85,6 +87,7 @@ function OverlayInfo({
     applied && applied.appliedScopes.length > 0
       ? `applied[${applied.appliedScopes.join(',')}]`
       : 'pending';
+  const cli = overlay.meta.cli ?? 'claude';
   const desc = overlay.meta.description ?? '';
   const targets = overlay.meta.targets.join(', ');
 
@@ -100,7 +103,7 @@ function OverlayInfo({
         </Text>
         <Text dimColor>{headerExtra}</Text>
       </Box>
-      <Text dimColor>    targets: {targets}</Text>
+      <Text dimColor>    targets: {targets}  cli={cli}</Text>
       {desc ? <Text dimColor>    {truncate(desc, maxWidth - 4)}</Text> : null}
     </Box>
   );
@@ -135,11 +138,15 @@ function SectionMapView({
           sectionMarkers.set(sectionName, list);
         }
 
+        const cliBadge = t.cli === 'codex' ? ' [codex]' : ' [claude]';
+        const fileName = t.cli === 'codex' ? `${t.name}/SKILL.md` : `${t.name}.md`;
+
         return (
-          <Box key={t.name} flexDirection="column" marginTop={1}>
+          <Box key={`${t.cli}:${t.name}`} flexDirection="column" marginTop={1}>
             <Text bold>
               {'=== '}
-              {t.name}.md
+              {fileName}
+              <Text color={t.cli === 'codex' ? 'magenta' : 'blue'}>{cliBadge}</Text>
               {` (${overlayNames.size} overlay${overlayNames.size !== 1 ? 's' : ''}) ===`}
             </Text>
             {t.sections.map((sec) => {

@@ -27,6 +27,7 @@ import {
   OVERLAY_MANIFEST_VERSION,
   type AppliedOverlay,
   type AppliedTarget,
+  type OverlayCli,
   type OverlayFile,
   type OverlayMeta,
   type OverlayManifest,
@@ -77,11 +78,42 @@ export function deleteOverlayManifest(
 }
 
 // ---------------------------------------------------------------------------
+// Target path resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a target name to file path(s) based on the overlay's `cli` field.
+ * - claude → `.claude/commands/{name}.md`
+ * - codex  → `.codex/skills/{name}/SKILL.md`
+ * - both   → both paths
+ */
+function resolveTargetPaths(
+  targetBase: string,
+  targetName: string,
+  cli: OverlayCli,
+): { path: string; cli: 'claude' | 'codex' }[] {
+  const result: { path: string; cli: 'claude' | 'codex' }[] = [];
+  if (cli === 'claude' || cli === 'both') {
+    result.push({
+      path: join(targetBase, '.claude', 'commands', `${targetName}.md`),
+      cli: 'claude',
+    });
+  }
+  if (cli === 'codex' || cli === 'both') {
+    result.push({
+      path: join(targetBase, '.codex', 'skills', targetName, 'SKILL.md'),
+      cli: 'codex',
+    });
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Apply
 // ---------------------------------------------------------------------------
 
 export interface ApplyOptions {
-  /** Root dir where `.claude/commands/` lives (homedir for global, project dir for project). */
+  /** Root dir where `.claude/commands/` and `.codex/skills/` live (homedir for global, project dir for project). */
   targetBase: string;
   scope: 'global' | 'project';
   /** Directory containing overlay JSON files (usually `~/.maestro/overlays/`). */
@@ -103,7 +135,6 @@ export interface ApplyReport {
 
 export function applyOverlays(opts: ApplyOptions): ApplyReport {
   const log = opts.logger ?? ((msg) => console.error(msg));
-  const commandsDir = join(opts.targetBase, '.claude', 'commands');
 
   const { overlays, errors: loadErrors } = loadAllOverlays(opts.overlayDir);
   const enabledOverlays = overlays.filter((o) => o.meta.enabled !== false);
@@ -117,20 +148,23 @@ export function applyOverlays(opts: ApplyOptions): ApplyReport {
   // per applyOverlays invocation.
   const byTarget = new Map<string, { overlay: OverlayFile; cmdPath: string }[]>();
   for (const overlay of enabledOverlays) {
+    const cli = overlay.meta.cli ?? 'claude';
     for (const target of overlay.meta.targets) {
-      const cmdPath = join(commandsDir, `${target}.md`);
-      const disabledPath = cmdPath + '.disabled';
-      if (!existsSync(cmdPath)) {
-        if (existsSync(disabledPath)) {
-          skipped.push({ overlay: overlay.meta.name, target, reason: 'disabled' });
-        } else {
-          skipped.push({ overlay: overlay.meta.name, target, reason: 'missing' });
+      const resolved = resolveTargetPaths(opts.targetBase, target, cli);
+      for (const { path: cmdPath } of resolved) {
+        const disabledPath = cmdPath + '.disabled';
+        if (!existsSync(cmdPath)) {
+          if (existsSync(disabledPath)) {
+            skipped.push({ overlay: overlay.meta.name, target, reason: 'disabled' });
+          } else {
+            skipped.push({ overlay: overlay.meta.name, target, reason: 'missing' });
+          }
+          continue;
         }
-        continue;
+        const list = byTarget.get(cmdPath) ?? [];
+        list.push({ overlay, cmdPath });
+        byTarget.set(cmdPath, list);
       }
-      const list = byTarget.get(cmdPath) ?? [];
-      list.push({ overlay, cmdPath });
-      byTarget.set(cmdPath, list);
     }
   }
 

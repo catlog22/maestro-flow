@@ -6,6 +6,7 @@ import type { SSEEvent } from '../../shared/types.js';
 import type { WsServerMessage, WsClientMessage, WsEventType } from '../../shared/ws-protocol.js';
 import type { DashboardEventBus } from '../state/event-bus.js';
 import type { WsHandler } from './ws-handler.js';
+import type { SessionScopedEventFilter } from './session-scoped-event-filter.js';
 
 // ---------------------------------------------------------------------------
 // WebSocketManager — manages WS clients, bridges EventBus to WS broadcast
@@ -20,6 +21,7 @@ export class WebSocketManager {
   constructor(
     private readonly eventBus: DashboardEventBus,
     handlers: WsHandler[],
+    private readonly sessionFilter?: SessionScopedEventFilter,
   ) {
     // Build routing table from handlers
     for (const handler of handlers) {
@@ -30,9 +32,25 @@ export class WebSocketManager {
 
     this.wss = new WebSocketServer({ noServer: true });
 
-    // Subscribe to all EventBus events and broadcast as WsServerMessage
+    // Subscribe to all EventBus events and broadcast as WsServerMessage.
+    // Session-scoped room events are only sent to subscribed clients;
+    // lifecycle events (room:created, room:closed) and all non-room events
+    // continue broadcasting to every connected client.
     this.eventListener = (event: SSEEvent) => {
-      this.broadcast(event.type , event.data);
+      if (
+        this.sessionFilter &&
+        event.type.startsWith('room:') &&
+        event.type !== 'room:created' &&
+        event.type !== 'room:closed'
+      ) {
+        const payload = event.data as Record<string, unknown> | null;
+        const sessionId = payload?.sessionId as string | undefined;
+        if (sessionId) {
+          this.broadcastToSubscribed(event.type, event.data, sessionId);
+          return;
+        }
+      }
+      this.broadcast(event.type, event.data);
     };
     this.eventBus.onAny(this.eventListener);
 
@@ -62,10 +80,12 @@ export class WebSocketManager {
       // Clean up on close
       ws.on('close', () => {
         this.clients.delete(ws);
+        this.sessionFilter?.unsubscribeAll(ws);
       });
 
       ws.on('error', () => {
         this.clients.delete(ws);
+        this.sessionFilter?.unsubscribeAll(ws);
       });
     });
   }
@@ -98,6 +118,29 @@ export class WebSocketManager {
 
     for (const client of this.clients) {
       if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    }
+  }
+
+  /**
+   * Broadcast a session-scoped message only to clients subscribed to that session.
+   */
+  private broadcastToSubscribed(type: WsEventType, data: unknown, sessionId: string): void {
+    if (this.clients.size === 0 || !this.sessionFilter) return;
+
+    const msg: WsServerMessage = {
+      type,
+      data,
+      timestamp: new Date().toISOString(),
+    };
+    const payload = JSON.stringify(msg);
+
+    for (const client of this.clients) {
+      if (
+        client.readyState === WebSocket.OPEN &&
+        this.sessionFilter.isSubscribed(client, sessionId)
+      ) {
         client.send(payload);
       }
     }

@@ -207,6 +207,18 @@ export const WS_EVENT_TYPES: Record<string, WsEventType> = {
   TEAM_DISPATCH: 'team:dispatch',
   TEAM_PHASE: 'team:phase',
   TEAM_AGENT_STATUS: 'team:agent_status',
+  // Room events
+  ROOM_CREATED: 'room:created',
+  ROOM_CLOSED: 'room:closed',
+  ROOM_AGENT_JOINED: 'room:agent_joined',
+  ROOM_AGENT_LEFT: 'room:agent_left',
+  ROOM_AGENT_STATUS: 'room:agent_status',
+  ROOM_MESSAGE: 'room:message',
+  ROOM_BROADCAST: 'room:broadcast',
+  ROOM_TASK_CREATED: 'room:task_created',
+  ROOM_TASK_UPDATED: 'room:task_updated',
+  ROOM_PHASE_CHANGED: 'room:phase_changed',
+  ROOM_SNAPSHOT: 'room:snapshot',
 } as const;
 
 // ---------------------------------------------------------------------------

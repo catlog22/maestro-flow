@@ -33,7 +33,18 @@ export type ProjectStatus = 'planning' | 'executing' | 'verifying' | 'idle';
 import type { LinearIssue } from './linear-types.js';
 import type { Issue } from './issue-types.js';
 
-import type { TeamMailboxMessage, TeamPhaseState, TeamAgentStatus } from './team-types.js';
+import type {
+  TeamMailboxMessage,
+  TeamPhaseState,
+  TeamAgentStatus,
+  RoomSessionSnapshot,
+  RoomSessionSummary,
+  RoomAgent,
+  RoomAgentStatus,
+  RoomMailboxMessage,
+  RoomTask,
+  RoomSessionStatus,
+} from './team-types.js';
 
 export type SelectedKanbanItem =
   | { type: 'phase'; phaseId: number }
@@ -107,7 +118,18 @@ export type SSEEventType =
   | 'team:message'
   | 'team:dispatch'
   | 'team:phase'
-  | 'team:agent_status';
+  | 'team:agent_status'
+  | 'room:created'
+  | 'room:closed'
+  | 'room:agent_joined'
+  | 'room:agent_left'
+  | 'room:agent_status'
+  | 'room:message'
+  | 'room:broadcast'
+  | 'room:task_created'
+  | 'room:task_updated'
+  | 'room:phase_changed'
+  | 'room:snapshot';
 
 // ---------------------------------------------------------------------------
 // Core interfaces — derived from fusion-design.md JSON schemas
@@ -268,6 +290,6 @@ export interface BoardState {
 /** SSE event envelope */
 export interface SSEEvent {
   type: SSEEventType;
-  data: BoardState | PhaseCard | TaskCard | ScratchCard | ProjectState | AgentProcess | NormalizedEntry | ApprovalRequest | AgentStatusPayload | AgentStoppedPayload | AgentTurnCompletedPayload | ExecutionStartedPayload | ExecutionCompletedPayload | ExecutionFailedPayload | SupervisorStatus | CommanderState | Decision | CommanderConfig | AssessMetrics | CoordinateStatusPayload | CoordinateStepPayload | CoordinateAnalysisPayload | CoordinateClarificationPayload | RequirementProgressPayload | RequirementExpandedPayload | RequirementCommittedPayload | RequirementErrorPayload | LearningStats | { taskId: string; taskName: string; taskType: string } | { tasks: ScheduledTask[] } | { extensions: ExtensionInfo[] } | { name: string; error: string } | { workspace: string } | { at: number; path?: string } | CollabMember[] | CollabActivityEntry | TeamMailboxMessage | TeamPhaseState | TeamAgentStatus | string | null;
+  data: BoardState | PhaseCard | TaskCard | ScratchCard | ProjectState | AgentProcess | NormalizedEntry | ApprovalRequest | AgentStatusPayload | AgentStoppedPayload | AgentTurnCompletedPayload | ExecutionStartedPayload | ExecutionCompletedPayload | ExecutionFailedPayload | SupervisorStatus | CommanderState | Decision | CommanderConfig | AssessMetrics | CoordinateStatusPayload | CoordinateStepPayload | CoordinateAnalysisPayload | CoordinateClarificationPayload | RequirementProgressPayload | RequirementExpandedPayload | RequirementCommittedPayload | RequirementErrorPayload | LearningStats | { taskId: string; taskName: string; taskType: string } | { tasks: ScheduledTask[] } | { extensions: ExtensionInfo[] } | { name: string; error: string } | { workspace: string } | { at: number; path?: string } | CollabMember[] | CollabActivityEntry | TeamMailboxMessage | TeamPhaseState | TeamAgentStatus | RoomSessionSnapshot | RoomSessionSummary | { sessionId: string } | { sessionId: string; agent: RoomAgent } | { sessionId: string; role: string } | { sessionId: string; role: string; status: RoomAgentStatus } | { sessionId: string; message: RoomMailboxMessage } | { sessionId: string; task: RoomTask } | { sessionId: string; status: RoomSessionStatus } | string | null;
   timestamp: string;
 }

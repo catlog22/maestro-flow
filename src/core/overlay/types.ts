@@ -4,7 +4,10 @@
 
 export type OverlayMode = 'append' | 'prepend' | 'replace' | 'new-section';
 
-/** XML-tagged sections recognised in `.claude/commands/*.md` files. */
+/** Target CLI tool for overlay application. */
+export type OverlayCli = 'claude' | 'codex' | 'both';
+
+/** XML-tagged sections recognised in command and skill files. */
 export const KNOWN_SECTIONS = [
   'purpose',
   'required_reading',
@@ -34,6 +37,8 @@ export interface OverlayMeta {
   priority?: number;
   enabled?: boolean;
   scope?: 'global' | 'project' | 'any';
+  /** Target CLI: 'claude' (default) | 'codex' | 'both'. */
+  cli?: OverlayCli;
   docs?: string[];
   patches: OverlayPatch[];
 }

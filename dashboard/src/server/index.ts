@@ -37,7 +37,10 @@ import { TaskSchedulerService } from './supervisor/task-scheduler-service.js';
 import { ExtensionManager } from './supervisor/extension-manager.js';
 import { SupervisorWsHandler } from './ws/handlers/supervisor-handler.js';
 import { TeamWsHandler } from './ws/handlers/team-handler.js';
+import { RoomWsHandler } from './ws/handlers/room-handler.js';
+import { SessionScopedEventFilter } from './ws/session-scoped-event-filter.js';
 import { ObservabilityService } from './observability/observability-service.js';
+import { RoomSessionManager } from './rooms/room-session-manager.js';
 import { createRoutes } from './routes/index.js';
 
 async function main(): Promise<void> {
@@ -80,6 +83,11 @@ async function main(): Promise<void> {
   agentManager.registerAdapter(new AgentSdkAdapter(workflowRoot));
   const delegateBrokerMonitor = new DelegateBrokerMonitor({ agentManager, eventBus });
   delegateBrokerMonitor.start();
+
+  // ---------------------------------------------------------------------------
+  // Room Session Manager — multi-CLI meeting room coordination
+  // ---------------------------------------------------------------------------
+  const roomSessionManager = new RoomSessionManager(agentManager, eventBus);
 
   // ---------------------------------------------------------------------------
   // Execution Scheduler — orchestrates issue execution via agent processes
@@ -158,6 +166,9 @@ async function main(): Promise<void> {
   const supervisorHandler = new SupervisorWsHandler(learningService, taskSchedulerService);
   const teamHandler = new TeamWsHandler(eventBus);
 
+  const sessionFilter = new SessionScopedEventFilter();
+  const roomHandler = new RoomWsHandler(roomSessionManager, eventBus, sessionFilter);
+
   const wsManager = new WebSocketManager(eventBus, [
     agentHandler,
     executionHandler,
@@ -166,7 +177,8 @@ async function main(): Promise<void> {
     requirementHandler,
     supervisorHandler,
     teamHandler,
-  ]);
+    roomHandler,
+  ], sessionFilter);
 
   // ---------------------------------------------------------------------------
   // Hono application
@@ -246,6 +258,7 @@ async function main(): Promise<void> {
     coordinateRunner.destroy();
     commanderAgent.stop();
     await executionScheduler.destroy();
+    await roomSessionManager.destroyAll();
     await agentManager.stopAll();
     delegateBrokerMonitor.stop();
     wsManager.destroy();

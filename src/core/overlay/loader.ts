@@ -107,6 +107,14 @@ export function validateOverlayMeta(input: unknown): string[] {
   ) {
     errors.push('`scope` must be one of: global | project | any');
   }
+  if (
+    obj.cli !== undefined &&
+    obj.cli !== 'claude' &&
+    obj.cli !== 'codex' &&
+    obj.cli !== 'both'
+  ) {
+    errors.push('`cli` must be one of: claude | codex | both');
+  }
   if (obj.docs !== undefined) {
     if (!Array.isArray(obj.docs)) {
       errors.push('`docs` must be a string array');

@@ -39,7 +39,18 @@ import type {
   ExecutionFailedPayload,
 } from '../../shared/ws-protocol.js';
 import type { CollabMember, CollabActivityEntry } from '../../shared/collab-types.js';
-import type { TeamMailboxMessage, TeamPhaseState, TeamAgentStatus } from '../../shared/team-types.js';
+import type {
+  TeamMailboxMessage,
+  TeamPhaseState,
+  TeamAgentStatus,
+  RoomSessionSnapshot,
+  RoomSessionSummary,
+  RoomAgent,
+  RoomAgentStatus as RoomAgentStatusType,
+  RoomMailboxMessage,
+  RoomTask,
+  RoomSessionStatus,
+} from '../../shared/team-types.js';
 
 // ---------------------------------------------------------------------------
 // All event types — single source of truth for onAny / offAny
@@ -95,6 +106,18 @@ const ALL_EVENT_TYPES: SSEEventType[] = [
   'team:dispatch',
   'team:phase',
   'team:agent_status',
+  // Room events
+  'room:created',
+  'room:closed',
+  'room:agent_joined',
+  'room:agent_left',
+  'room:agent_status',
+  'room:message',
+  'room:broadcast',
+  'room:task_created',
+  'room:task_updated',
+  'room:phase_changed',
+  'room:snapshot',
 ];
 
 // ---------------------------------------------------------------------------
@@ -159,6 +182,18 @@ export interface DashboardEventMap {
   'team:dispatch': TeamMailboxMessage;
   'team:phase': TeamPhaseState;
   'team:agent_status': TeamAgentStatus;
+  // Room events
+  'room:created': RoomSessionSummary;
+  'room:closed': { sessionId: string };
+  'room:agent_joined': { sessionId: string; agent: RoomAgent };
+  'room:agent_left': { sessionId: string; role: string };
+  'room:agent_status': { sessionId: string; role: string; status: RoomAgentStatusType };
+  'room:message': { sessionId: string; message: RoomMailboxMessage };
+  'room:broadcast': { sessionId: string; message: RoomMailboxMessage };
+  'room:task_created': { sessionId: string; task: RoomTask };
+  'room:task_updated': { sessionId: string; task: RoomTask };
+  'room:phase_changed': { sessionId: string; status: RoomSessionStatus };
+  'room:snapshot': RoomSessionSnapshot;
 }
 
 // ---------------------------------------------------------------------------

@@ -35,7 +35,8 @@ function discoverScopes(): Scope[] {
   }
   if (scopes.length === 0) {
     const globalCmds = join(homedir(), '.claude', 'commands');
-    if (existsSync(globalCmds)) {
+    const globalSkills = join(homedir(), '.codex', 'skills');
+    if (existsSync(globalCmds) || existsSync(globalSkills)) {
       scopes.push({ scope: 'global', targetBase: homedir() });
     }
   }
@@ -74,62 +75,91 @@ function collectAppliedState(scopes: Scope[]): Map<string, OverlayAppliedState> 
 
 const MARKER_RE = /^<!-- maestro-overlay:([^#]+)#(\d+)\s+hash=\S+\s*-->$/;
 
+/** Resolve potential file paths for a target, checking both Claude and Codex locations. */
+function resolveTargetFiles(
+  targetBase: string,
+  targetName: string,
+  cli: 'claude' | 'codex' | 'both',
+): { path: string; cli: 'claude' | 'codex' }[] {
+  const result: { path: string; cli: 'claude' | 'codex' }[] = [];
+  if (cli === 'claude' || cli === 'both') {
+    const p = join(targetBase, '.claude', 'commands', `${targetName}.md`);
+    if (existsSync(p)) result.push({ path: p, cli: 'claude' });
+  }
+  if (cli === 'codex' || cli === 'both') {
+    const p = join(targetBase, '.codex', 'skills', targetName, 'SKILL.md');
+    if (existsSync(p)) result.push({ path: p, cli: 'codex' });
+  }
+  return result;
+}
+
 function collectTargets(dir: string, scopes: Scope[]): TargetInfo[] {
   const { overlays } = loadAllOverlays(dir);
-  const targetNames = new Set<string>();
+
+  // Collect target → cli mapping from overlays
+  const targetCli = new Map<string, 'claude' | 'codex' | 'both'>();
   for (const o of overlays) {
     if (o.meta.enabled === false) continue;
-    for (const t of o.meta.targets) targetNames.add(t);
+    const cli = o.meta.cli ?? 'claude';
+    for (const t of o.meta.targets) {
+      const existing = targetCli.get(t);
+      if (!existing) {
+        targetCli.set(t, cli);
+      } else if (existing !== cli) {
+        targetCli.set(t, 'both');
+      }
+    }
   }
 
   const results: TargetInfo[] = [];
+  const seen = new Set<string>();
 
   for (const s of scopes) {
-    const cmdsDir = join(s.targetBase, '.claude', 'commands');
-    if (!existsSync(cmdsDir)) continue;
+    for (const [target, cli] of targetCli) {
+      const files = resolveTargetFiles(s.targetBase, target, cli);
+      for (const { path: filePath, cli: fileCli } of files) {
+        const key = `${fileCli}:${target}:${s.targetBase}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
 
-    for (const target of targetNames) {
-      const filePath = join(cmdsDir, `${target}.md`);
-      if (!existsSync(filePath)) continue;
+        const content = readFileSync(filePath, 'utf-8');
+        const parsed = parseSections(content);
 
-      const content = readFileSync(filePath, 'utf-8');
-      const parsed = parseSections(content);
-
-      const markers: SectionMarker[] = [];
-      for (let i = 0; i < parsed.lines.length; i++) {
-        const m = MARKER_RE.exec(parsed.lines[i]);
-        if (m) {
-          let desc = '';
-          for (let j = i + 1; j < parsed.lines.length && j < i + 5; j++) {
-            const line = parsed.lines[j].trim();
-            if (line.startsWith('<!-- /maestro-overlay:')) break;
-            if (line.startsWith('#')) {
-              desc = line.replace(/^#+\s*/, '').trim();
-              break;
+        const markers: SectionMarker[] = [];
+        for (let i = 0; i < parsed.lines.length; i++) {
+          const m = MARKER_RE.exec(parsed.lines[i]);
+          if (m) {
+            let desc = '';
+            for (let j = i + 1; j < parsed.lines.length && j < i + 5; j++) {
+              const line = parsed.lines[j].trim();
+              if (line.startsWith('<!-- /maestro-overlay:')) break;
+              if (line.startsWith('#')) {
+                desc = line.replace(/^#+\s*/, '').trim();
+                break;
+              }
+              if (line && !line.startsWith('<!--')) {
+                desc = line.slice(0, 50);
+                break;
+              }
             }
-            if (line && !line.startsWith('<!--')) {
-              desc = line.slice(0, 50);
-              break;
-            }
+            markers.push({
+              overlayName: m[1],
+              patchIdx: parseInt(m[2], 10),
+              line: i,
+              description: desc,
+            });
           }
-          markers.push({
-            overlayName: m[1],
-            patchIdx: parseInt(m[2], 10),
-            line: i,
-            description: desc,
-          });
         }
-      }
 
-      const sections: TargetSection[] = parsed.sections.map((sec) => ({
-        name: sec.name,
-        openLine: sec.openLine,
-        closeLine: sec.closeLine,
-      }));
+        const sections: TargetSection[] = parsed.sections.map((sec) => ({
+          name: sec.name,
+          openLine: sec.openLine,
+          closeLine: sec.closeLine,
+        }));
 
-      // Only add if there are markers or sections
-      if (markers.length > 0 || sections.length > 0) {
-        results.push({ name: target, sections, markers });
+        if (markers.length > 0 || sections.length > 0) {
+          results.push({ name: target, cli: fileCli, sections, markers });
+        }
       }
     }
   }
