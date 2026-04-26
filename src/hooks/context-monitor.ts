@@ -67,7 +67,7 @@ function buildMessage(usedPct: number, remaining: number, isCritical: boolean, h
       ? `CONTEXT CRITICAL: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
         'Context is nearly exhausted. Do NOT start new complex work. ' +
         'State is tracked in .workflow/state.json. Inform the user so they can ' +
-        'decide how to proceed (e.g. /maestro-phase-transition or pause).'
+        'decide how to proceed (e.g. /maestro -c or pause).'
       : `CONTEXT CRITICAL: Usage at ${usedPct}%. Remaining: ${remaining}%. ` +
         'Context is nearly exhausted. Inform the user that context is low and ask how they ' +
         'want to proceed. Do NOT autonomously save state or write handoff files unless asked.';

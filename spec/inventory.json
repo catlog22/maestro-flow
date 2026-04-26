@@ -87,12 +87,6 @@
       "parameters": "<idea or @file> [-y] [-c] [--count N]"
     },
     {
-      "name": "maestro-phase-transition",
-      "description": "Coordinate phase transition with validation and artifact handoff",
-      "category": "maestro",
-      "parameters": "<from-phase> <to-phase> [--force]"
-    },
-    {
       "name": "maestro-phase-add",
       "description": "Add new phase to project roadmap",
       "category": "maestro",

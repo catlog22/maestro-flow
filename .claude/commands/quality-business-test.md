@@ -70,7 +70,7 @@ Context files:
 Follow '~/.maestro/workflows/business-test.md' completely.
 
 **Next-step routing on completion:**
-- All requirements verified → `/maestro-phase-transition {phase}`
+- All requirements verified → `/maestro-milestone-audit`
 - Failures found → `/quality-debug --from-business-test {phase}`
 - Re-run all pass → `/maestro-verify {phase}`
 - Low coverage → `/quality-test-gen {phase}`

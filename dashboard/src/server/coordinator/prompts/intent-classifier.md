@@ -26,7 +26,7 @@ Given a user intent string and the current workflow state snapshot, classify the
 | integration_test | quality-integration-test {phase} | Run integration tests |
 | refactor | quality-refactor "{description}" | Refactor/tech debt |
 | sync | quality-sync {phase} | Sync documentation |
-| phase_transition | maestro-phase-transition | Move to next phase |
+| phase_transition | maestro-milestone-audit → maestro-milestone-complete | Move to next phase |
 | phase_add | maestro-phase-add "{description}" | Add new phase |
 | milestone_audit | maestro-milestone-audit | Audit milestone |
 | milestone_complete | maestro-milestone-complete | Complete milestone |

@@ -554,8 +554,8 @@ Next steps:
 
 | Result | Suggestion |
 |--------|------------|
-| All passed, no gaps | Skill({ skill: "maestro-phase-transition" }) |
-| Gaps auto-fixed | Skill({ skill: "maestro-phase-transition" }) |
+| All passed, no gaps | Skill({ skill: "maestro-milestone-audit" }) |
+| Gaps auto-fixed | Skill({ skill: "maestro-milestone-audit" }) |
 | Gaps remain, diagnosed | Skill({ skill: "quality-debug" }) or Skill({ skill: "maestro-plan", args: "--gaps" }) |
 | Low coverage | Skill({ skill: "quality-test-gen", args: "{phase}" }) to generate missing tests |
 

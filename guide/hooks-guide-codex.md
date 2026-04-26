@@ -438,7 +438,7 @@ resolveWorkspace({ cwd }) ──→ null → 不输出（正常停止）
 "Task {task_id} ({task_title}) is still in_progress. Continue to complete it."
 
 // 阶段转换
-"Phase {N} completed. Phase {N+1} has {count} tasks pending. Run /maestro-phase-transition first."
+"Phase {N} completed. Phase {N+1} has {count} tasks pending. Run /maestro-milestone-audit first."
 ```
 
 ---

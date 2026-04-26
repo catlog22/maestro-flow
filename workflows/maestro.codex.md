@@ -178,7 +178,7 @@ function detectNextAction(s) {
     if (s.verification_status === 'passed') {
       if (!s.review_verdict)          return { chain: 'review',           steps: [{ cmd: 'quality-review',   args: '{phase}' }] };
       if (s.uat_status === 'pending') return { chain: 'test',             steps: [{ cmd: 'quality-test',     args: '{phase}' }] };
-      if (s.uat_status === 'passed')  return { chain: 'phase-transition', steps: [{ cmd: 'maestro-phase-transition' }] };
+      if (s.uat_status === 'passed')  return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
       return { chain: 'debug', steps: [{ cmd: 'quality-debug', args: '--from-uat {phase}' }] };
     }
     return { chain: 'quality-loop-partial', steps: [
@@ -188,13 +188,13 @@ function detectNextAction(s) {
     ]};
   }
   if (ps === 'testing') {
-    if (s.uat_status === 'passed') return { chain: 'phase-transition', steps: [{ cmd: 'maestro-phase-transition' }] };
+    if (s.uat_status === 'passed') return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
     return { chain: 'debug', steps: [{ cmd: 'quality-debug', args: '--from-uat {phase}' }] };
   }
   if (ps === 'completed') {
     if (s.phases_completed >= s.phases_total)
       return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
-    return { chain: 'phase-transition', steps: [{ cmd: 'maestro-phase-transition' }] };
+    return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
   }
   if (ps === 'blocked') return { chain: 'debug', steps: [{ cmd: 'quality-debug' }] };
   return { chain: 'status', steps: [{ cmd: 'manage-status' }] };
@@ -222,7 +222,7 @@ const chainMap = {
   'retrospective':      [{ cmd: 'quality-retrospective',   args: '{phase}' }],
   'learn':              [{ cmd: 'manage-learn',            args: '"{description}"' }],
   'sync':               [{ cmd: 'quality-sync',            args: '{phase}' }],
-  'phase_transition':   [{ cmd: 'maestro-phase-transition' }],
+  'phase_transition':   [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'phase_add':          [{ cmd: 'maestro-phase-add',       args: '"{description}"' }],
   'milestone_audit':    [{ cmd: 'maestro-milestone-audit' }],
   'milestone_complete': [{ cmd: 'maestro-milestone-complete' }],
@@ -266,7 +266,8 @@ const chainMap = {
     { cmd: 'maestro-verify',        args: '{phase}' },
     { cmd: 'quality-review',        args: '{phase}' },
     { cmd: 'quality-test',          args: '{phase}' },
-    { cmd: 'maestro-phase-transition' }
+    { cmd: 'maestro-milestone-audit' },
+    { cmd: 'maestro-milestone-complete' }
   ],
   'execute-verify': [
     { cmd: 'maestro-execute', args: '{phase}' },

@@ -16,7 +16,7 @@ const STATUS_NEXT_COMMAND: Record<string, string> = {
   executing: '/maestro-execute {N}',
   verifying: '/quality-review {N}',
   testing: '/quality-test {N}',
-  completed: '/maestro-phase-transition',
+  completed: '/maestro-milestone-audit',
   blocked: '/quality-debug',
 };
 

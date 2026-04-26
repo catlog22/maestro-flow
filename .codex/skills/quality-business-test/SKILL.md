@@ -196,7 +196,7 @@ FOR each REQ:
 
 | Result | Suggestion |
 |--------|------------|
-| All requirements verified | Skill({ skill: "maestro-phase-transition", args: "{phase}" }) |
+| All requirements verified | Skill({ skill: "maestro-milestone-audit" }) |
 | Failures found | Skill({ skill: "quality-debug", args: "--from-business-test {phase}" }) |
 | `--re-run` all pass | Skill({ skill: "maestro-verify", args: "{phase}" }) |
 | Low coverage (< 60%) | Skill({ skill: "quality-test-gen", args: "{phase}" }) |

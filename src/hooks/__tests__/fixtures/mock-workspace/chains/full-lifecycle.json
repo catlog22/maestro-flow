@@ -58,11 +58,16 @@
       "type": "command",
       "cmd": "quality-test",
       "args": "{phase}",
-      "next": "transition"
+      "next": "milestone_audit"
     },
-    "transition": {
+    "milestone_audit": {
       "type": "command",
-      "cmd": "maestro-phase-transition",
+      "cmd": "maestro-milestone-audit",
+      "next": "milestone_complete"
+    },
+    "milestone_complete": {
+      "type": "command",
+      "cmd": "maestro-milestone-complete",
       "next": "done"
     },
     "done": {

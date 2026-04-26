@@ -92,7 +92,7 @@ const SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
   { pattern: /\/maestro-plan\s+(\d+)/, skill: 'maestro-plan' },
   { pattern: /\/maestro-verify\s+(\d+)/, skill: 'maestro-verify' },
   { pattern: /\/maestro-analyze\s+(\d+)/, skill: 'maestro-analyze' },
-  { pattern: /\/maestro-phase-transition(?:\s+(\d+))?/, skill: 'maestro-phase-transition' },
+  { pattern: /\/maestro-milestone-audit(?:\s+(\d+))?/, skill: 'maestro-milestone-audit' },
   { pattern: /\/quality-review\s+(\d+)/, skill: 'quality-review' },
   { pattern: /\/quality-test\s+(\d+)/, skill: 'quality-test' },
   { pattern: /\/maestro(?:\s|$)/, skill: 'maestro' },

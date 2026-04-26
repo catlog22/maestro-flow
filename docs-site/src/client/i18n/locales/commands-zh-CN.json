@@ -51,7 +51,7 @@
       "workflow": "execute → **verify** → [quality-review] → phase-transition",
       "workflow_zh": "执行完成后验证，通过后继续 quality-review 或直接 phase-transition",
       "prev_commands": ["maestro-execute"],
-      "next_commands": ["quality-review", "maestro-phase-transition"],
+      "next_commands": ["quality-review", "maestro-milestone-audit"],
       "flags": ["<phase> (必填)", "--skip-tests (跳过测试检查)", "--skip-antipattern (跳过反模式扫描)"]
     },
     "maestro-quick": {
@@ -183,7 +183,7 @@
       "workflow": "verify → **quality-review** → [phase-transition | quality-test-gen]",
       "workflow_zh": "验证通过后执行，发现问题可继续 quality-test-gen 或直接 phase-transition",
       "prev_commands": ["maestro-verify"],
-      "next_commands": ["maestro-phase-transition", "quality-test-gen"],
+      "next_commands": ["maestro-milestone-audit", "quality-test-gen"],
       "flags": ["<phase> (必填)", "--level quick|standard|deep (审查级别)", "--dimensions security,architecture,... (审查维度)", "--skip-specs (跳过规格检查)"]
     },
     "quality-test": {
@@ -227,7 +227,7 @@
       "workflow": "quality-test → **quality-integration-test** (跨组件集成验证)",
       "workflow_zh": "在单元测试通过后进行集成验证",
       "prev_commands": ["quality-test", "maestro-execute"],
-      "next_commands": ["maestro-phase-transition"],
+      "next_commands": ["maestro-milestone-audit"],
       "flags": ["<phase> (必填)", "--max-iter <N> (最大迭代次数)", "--layer <L0|L1|L2|L3> (测试层级)"]
     },
     "quality-refactor": {
@@ -280,7 +280,7 @@
       "description": "Capture session memory (compact or tips) into .workflow/memory/ with JSON index",
       "description_zh": "将当前会话的经验捕获为记忆：compact（会话压缩摘要）或 tip（单个专业提示）。带 JSON 索引便于后续检索",
       "workflow": "阶段或会话结束时使用，沉淀经验",
-      "workflow_zh": "在 maestro-phase-transition 或会话结束时使用",
+      "workflow_zh": "在阶段完成或会话结束时使用",
       "prev_commands": [],
       "next_commands": [],
       "flags": ["[compact|tip] (记忆类型)", "[description] (描述)", "--tag tag1,tag2 (标签)"]

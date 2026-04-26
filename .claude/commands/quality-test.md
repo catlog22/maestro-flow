@@ -66,7 +66,7 @@ Append to state.json.artifacts[]:
 ```
 
 **Next-step routing on completion:**
-- All tests pass → `/maestro-phase-transition {phase}`
+- All tests pass → `/maestro-milestone-audit`
 - Issues found, --auto-fix ran and succeeded → `/maestro-verify {phase}`
 - Issues found, --auto-fix ran but gaps remain → `/quality-debug --from-uat {phase}`
 - Issues found, manual fix needed → `/quality-debug --from-uat {phase}`

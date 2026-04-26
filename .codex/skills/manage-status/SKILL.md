@@ -87,7 +87,7 @@ Use this decision table to suggest the next action:
 | Phase executed, not verified | `Skill({ skill: "maestro-verify", args: "<N>" })` |
 | Phase verified with gaps | `Skill({ skill: "maestro-plan", args: "<N> --gaps" })` |
 | Phase reviewed PASS/WARN | `Skill({ skill: "quality-test", args: "<N>" })` |
-| UAT passed | `Skill({ skill: "maestro-phase-transition" })` |
+| UAT passed | `Skill({ skill: "maestro-milestone-audit" })` |
 | All milestone phases done | `Skill({ skill: "maestro-milestone-audit" })` |
 </execution>
 

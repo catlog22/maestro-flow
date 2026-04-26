@@ -61,10 +61,11 @@ describe('Scenario A: maestro status.json tracking', () => {
     assert.strictEqual(result.next_step.skill, 'quality-test');
     assert.strictEqual(result.next_step.args, '2');
 
-    // Remaining: quality-test, maestro-phase-transition
-    assert.strictEqual(result.remaining_steps.length, 2);
+    // Remaining: quality-test, maestro-milestone-audit, maestro-milestone-complete
+    assert.strictEqual(result.remaining_steps.length, 3);
     assert.strictEqual(result.remaining_steps[0].skill, 'quality-test');
-    assert.strictEqual(result.remaining_steps[1].skill, 'maestro-phase-transition');
+    assert.strictEqual(result.remaining_steps[1].skill, 'maestro-milestone-audit');
+    assert.strictEqual(result.remaining_steps[2].skill, 'maestro-milestone-complete');
   });
 
   it('generates correct next-step hint for paused A类 session', () => {
@@ -81,7 +82,7 @@ describe('Scenario A: maestro status.json tracking', () => {
     assert.ok(hint.includes('paused'));
     assert.ok(hint.includes('Last: quality-review'));
     assert.ok(hint.includes('Next: quality-test 2'));
-    assert.ok(hint.includes('Then: maestro-phase-transition'));
+    assert.ok(hint.includes('Then: maestro-milestone-audit'));
     assert.ok(hint.includes('Resume: /maestro -c'));
   });
 });

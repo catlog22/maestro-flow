@@ -122,17 +122,17 @@ describe('parseSkillInvocation', () => {
     assert.strictEqual(result.phaseNum, 3);
   });
 
-  it('matches /maestro-phase-transition without number', () => {
-    const result = parseSkillInvocation('/maestro-phase-transition');
+  it('matches /maestro-milestone-audit without number', () => {
+    const result = parseSkillInvocation('/maestro-milestone-audit');
     assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-phase-transition');
+    assert.strictEqual(result.skill, 'maestro-milestone-audit');
     assert.strictEqual(result.phaseNum, undefined);
   });
 
-  it('matches /maestro-phase-transition with number', () => {
-    const result = parseSkillInvocation('/maestro-phase-transition 2');
+  it('matches /maestro-milestone-audit with number', () => {
+    const result = parseSkillInvocation('/maestro-milestone-audit 2');
     assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-phase-transition');
+    assert.strictEqual(result.skill, 'maestro-milestone-audit');
     assert.strictEqual(result.phaseNum, 2);
   });
 

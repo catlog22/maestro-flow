@@ -34,7 +34,7 @@ L0-L3 layer definitions, state file formats, and strategy engine rules defined i
 Follow '~/.maestro/workflows/integration-test.md' completely.
 
 **Next-step routing on completion:**
-- Converged (pass rate met) → `/maestro-phase-transition {phase}`
+- Converged (pass rate met) → `/maestro-milestone-audit`
 - Max iterations, pass rate close → `/quality-debug {phase}` (investigate remaining failures)
 - Regressions detected → `/quality-debug {phase}`
 - Stuck 3+ iterations → `/maestro-analyze {phase} -q` (reassess approach)

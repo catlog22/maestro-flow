@@ -115,7 +115,7 @@ Both endpoints can safely operate on the same file because specs writes go throu
 | `executing` | Execute | *(running)* |
 | `verifying` | Verify | `/quality-review {N}` |
 | `testing` | Test | `/quality-test {N}` |
-| `completed` | Done | `/maestro-phase-transition` |
+| `completed` | Done | `/maestro-milestone-audit` |
 | `blocked` | Blocked | `/quality-debug` |
 
 ## Pre-Pipeline Setup

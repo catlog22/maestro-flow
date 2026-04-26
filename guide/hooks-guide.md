@@ -313,7 +313,7 @@ evaluateContextBudget(content, sessionId)
 | `/maestro-plan {N}` | `/maestro-plan 1` |
 | `/maestro-verify {N}` | `/maestro-verify 3` |
 | `/maestro-analyze {N}` | `/maestro-analyze 2` |
-| `/maestro-phase-transition [N]` | `/maestro-phase-transition` |
+| `/maestro-milestone-audit [N]` | `/maestro-milestone-audit` |
 | `/quality-review {N}` | `/quality-review 2` |
 | `/quality-test {N}` | `/quality-test 1` |
 | `/maestro` | `/maestro "build OAuth2"` |
@@ -329,7 +329,7 @@ evaluateContextBudget(content, sessionId)
 Chain: full-lifecycle [3/6] | Status: paused
 Last: maestro-verify
 Next: quality-review 2
-Then: quality-test 2 → maestro-phase-transition
+Then: quality-test 2 → maestro-milestone-audit → maestro-milestone-complete
 Resume: /maestro -c
 ```
 
@@ -402,7 +402,8 @@ index.json | plan.json | analysis.md
   "next_step": { "index": 4, "skill": "quality-test", "args": "2" },
   "remaining_steps": [
     { "skill": "quality-test", "args": "2" },
-    { "skill": "maestro-phase-transition", "args": "" }
+    { "skill": "maestro-milestone-audit", "args": "" },
+    { "skill": "maestro-milestone-complete", "args": "" }
   ],
   "status": "paused",
   "updated_at": 1744668285953
@@ -605,7 +606,7 @@ echo '{"tool_name":"Agent","tool_input":{"subagent_type":"code-developer","promp
 
 | 触发点 | type | trigger |
 |--------|------|---------|
-| `/maestro-phase-transition` 完成 | `phase` | `phase-transition` |
+| `/maestro-milestone-complete` 完成 | `phase` | `milestone-complete` |
 | `/maestro-milestone-complete` 完成 | `milestone` | `milestone-complete` |
 
 ### 工具函数
