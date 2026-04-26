@@ -333,3 +333,105 @@ Next steps:
   Skill({ skill: "maestro-brainstorm", args: "1" })   -- Explore first phase ideas
   Skill({ skill: "manage-status" })                    -- View project dashboard
 ```
+
+---
+
+## Mode: Revise (`--revise [instructions]`)
+
+Revise an existing roadmap while preserving completed phase progress.
+
+**Pre-conditions:**
+- `.workflow/roadmap.md` exists
+- `.workflow/state.json` exists (for progress tracking)
+
+**Execution flow:**
+
+1. **Load current state**
+   - Read `.workflow/roadmap.md` — parse milestones, phases, dependencies, progress markers
+   - Read `.workflow/state.json` — get artifact registry, current milestone
+   - Identify completed vs in-progress vs pending phases
+
+2. **Obtain revision instructions**
+   - If `--revise "instructions text"` provided → use directly as change directive
+   - If `--revise` without instructions → use AskUserQuestion to ask user what to change
+     - Show current roadmap summary with phase statuses
+     - Present options: add/remove/reorder phases, modify scope/criteria/deps, move between milestones
+     - Capture change instructions from response
+
+3. **Impact analysis**
+   - For each proposed change, assess impact on:
+     - Phase dependency chain (re-validate no circular deps)
+     - Requirement coverage (every Active requirement still mapped)
+     - Completed phases (warn if change invalidates completed work)
+     - Existing plan artifacts (warn if plan exists for affected phase)
+   - Present impact summary for confirmation
+
+4. **Apply revisions**
+   - Update `.workflow/roadmap.md` preserving:
+     - Completed phase progress markers (checkmarks, completion dates)
+     - Phase numbering for completed phases (renumber only pending phases)
+     - Cross-references from state.json artifacts
+   - Update `state.json` if milestone structure changed
+   - Add revision log entry to roadmap.md metadata section
+
+5. **Post-revision validation**
+   - Re-check dependency integrity (no circular deps)
+   - Re-check requirement coverage (every Active req mapped)
+   - Verify completed phases unaffected
+
+**Next-step routing on completion:**
+- Phases changed, need re-analysis → `/maestro-analyze {phase}`
+- Phases changed, ready to plan → `/maestro-plan {phase}`
+- Only pending phases adjusted → `/maestro-plan` (continue from where left off)
+
+---
+
+## Mode: Review (`--review`)
+
+Read-only health assessment of the current roadmap.
+
+**Pre-conditions:**
+- `.workflow/roadmap.md` exists
+
+**Execution flow:**
+
+1. **Load roadmap + execution history**
+   - Read `.workflow/roadmap.md` — full structure
+   - Read `.workflow/state.json` — artifact registry, milestone progress
+   - Cross-reference: for each phase, check ANL/PLN/EXC/VRF artifact status
+
+2. **Assessment dimensions**
+   - **Progress tracking**: Actual vs planned per phase, milestone velocity
+   - **Drift detection**: Completed phases deviating from original scope (via verify/audit findings)
+   - **Relevance check**: Pending phases still aligned with current project goals (from project.md)
+   - **Dependency health**: Pending phase dependencies still valid given completed work
+   - **Risk assessment**: Identify phases at risk (blocked, scope creep, dependency failures)
+
+3. **Produce review report**
+   - Write to `.workflow/scratch/{YYYYMMDD}-roadmap-review.md`
+   - Format:
+     ```
+     === ROADMAP REVIEW ===
+     Date: {date}
+     Milestone: {current}
+
+     Progress: {completed}/{total} phases ({percentage}%)
+     Drift: {none|minor|significant}
+     Risk: {low|medium|high}
+
+     Phase Assessment:
+       [done] Phase 1: {name} — completed, on-scope
+       [~] Phase 2: {name} — in-progress, {status notes}
+       [ ] Phase 3: {name} — pending, {risk/notes}
+
+     Recommendations:
+       1. {actionable recommendation}
+       2. ...
+
+     Suggested actions:
+       /maestro-roadmap --revise   — Apply recommended changes
+       /maestro-plan {phase}       — Plan next phase
+       /manage-status              — View full dashboard
+     ```
+
+**No state modifications.** Pure assessment + recommendations.

@@ -32,35 +32,13 @@ Key mechanisms from GSD verify-work:
 <context>
 Phase or task: $ARGUMENTS (optional)
 
-**Flags:**
-- `--smoke` -- Run cold-start smoke tests before UAT (basic sanity: app starts, routes respond, no crash)
-- `--auto-fix` -- After diagnosis, auto-trigger gap-fix loop instead of asking user
-
-**All context via state.json.artifacts[]:**
-
-```
-related = artifacts.filter(a =>
-  a.phase === target_phase && a.milestone === current_milestone
-).sort_by(completed_at asc)
-```
-
-Each artifact's type determines its outputs at `.workflow/{a.path}/`:
-- **execute** → .summaries/, .task/, verification.json, plan.json (test target source)
-- **verify** → verification.json (must_haves, gaps)
-- **review** → review.json (findings become additional test scenarios)
-- **debug** → understanding.md (confirmed root causes become regression tests)
-- **test** → uat.md (existing session, resumable)
-
-Extract conclusions from related artifacts that may affect this test session — review findings generate additional scenarios, debug root causes generate regression tests.
-
-**Output**: `TEST_DIR = .workflow/scratch/{YYYYMMDD}-test-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
+Flags, artifact context resolution, and output directory format defined in workflow test.md.
 </context>
 
 <execution>
 Follow '~/.maestro/workflows/test.md' completely.
 
-**Output writes to TEST_DIR** (`scratch/{YYYYMMDD}-test-P{N}-{slug}/`):
-- uat.md, test-plan.json, .tests/test-results.json, .tests/coverage-report.json
+**Command-specific extensions (not in workflow):**
 
 **Review findings integration** (from related review artifacts):
 - Extract critical/high findings as additional test scenarios, marked `source: "review_finding"`

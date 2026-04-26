@@ -37,38 +37,7 @@ Registers VRF artifact in state.json on completion.
 <context>
 $ARGUMENTS — phase number or no args for milestone-wide, with optional flags.
 
-**Flags:**
-- `--skip-tests` -- Skip Nyquist test coverage validation, only run Goal-Backward
-- `--skip-antipattern` -- Skip anti-pattern scan
-- `--dir <path>` -- Verify specific plan directory
-
-**Scope routing:**
-
-| Invocation | Behavior |
-|-----------|----------|
-| `verify` (no args) | Milestone-level: verify all executed plans, aggregate results |
-| `verify 1` | Phase-level: verify all executed plans for phase 1 |
-| `verify --dir scratch/plan-xxx` | Single plan: verify specific plan directory |
-
-**Single plan output**: `verification.json` appended to plan's scratch dir
-**Milestone output**: `scratch/{YYYYMMDD}-verify-M{N}-{slug}/milestone-verification.json`
-
-**Artifact registration**: On completion, register VRF artifact:
-```jsonc
-{
-  "id": "VRF-{NNN}",
-  "type": "verify",
-  "milestone": "{current_milestone or null}",
-  "phase": null,
-  "scope": "milestone",
-  "path": "scratch/{YYYYMMDD}-verify-M{N}-{slug}",  // M{N} = milestone number
-  "status": "completed",
-  "depends_on": ["EXC-001", "EXC-002", ...],
-  "harvested": false,
-  "created_at": "...",
-  "completed_at": "..."
-}
-```
+Flags (`--skip-tests`, `--skip-antipattern`, `--dir`), scope routing, output paths, and VRF artifact registration schema are defined in workflow `verify.md`.
 </context>
 
 <execution>

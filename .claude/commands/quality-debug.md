@@ -13,19 +13,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Debug issues using scientific method with subagent isolation and persistent debug state. Supports three entry modes:
-
-1. **Standalone**: User describes an issue, gather symptoms interactively
-2. **From UAT**: `--from-uat` reads uat.md gaps as pre-filled symptoms (skip gathering)
-3. **Parallel**: `--parallel` spawns one debug agent per gap cluster concurrently
-
-When root causes are found, updates the originating uat.md with diagnosis artifacts (root_cause, fix_direction, affected_files) so the UAT -> debug -> fix pipeline stays connected.
-
-Key mechanisms from GSD diagnose-issues:
-- **Pre-filled symptoms from UAT**: Skip 5-question gathering when gaps already documented
-- **Parallel debug agents**: One agent per gap cluster for concurrent investigation
-- **Structured root cause collection**: Standardized output format across all agents
-- **UAT feedback loop**: Auto-update uat.md gaps with diagnosis results
+Debug issues using scientific method with subagent isolation and persistent debug state. Three entry modes (standalone, from-UAT, parallel) and structured root cause collection with UAT feedback loop. Full algorithm defined in workflow debug.md.
 </purpose>
 
 <required_reading>
@@ -55,14 +43,11 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 
 Extract conclusions from related artifacts that may affect this debug session — review findings guide investigation direction, prior debug avoids redundant work.
 
-**Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone)
+**Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
 </context>
 
 <execution>
 Follow '~/.maestro/workflows/debug.md' completely.
-
-**Output writes to DEBUG_DIR** (`scratch/{YYYYMMDD}-debug-P{N}-{slug}/`):
-- understanding.md, evidence.ndjson, diagnosis-summary.json
 
 **Register artifact on completion (phase-scoped only):**
 ```
@@ -73,7 +58,7 @@ Append to state.json.artifacts[]:
   milestone: current_milestone,
   phase: target_phase,
   scope: "phase",
-  path: "scratch/{YYYYMMDD}-debug-P{N}-{slug}",  // or {YYYYMMDD}-debug-{slug} for standalone
+  path: "scratch/{YYYYMMDD}-debug-P{N}-{slug}",
   status: all_diagnosed ? "completed" : "failed",
   depends_on: triggering_review_id || exec_art.id,
   harvested: false,

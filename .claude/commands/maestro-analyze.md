@@ -40,55 +40,7 @@ $ARGUMENTS -- phase number for milestone-scoped, topic text for adhoc/standalone
 - `-q` / `--quick`: Quick mode — skip exploration + scoring, go straight to decision extraction (context.md only)
 - `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl.
 
-**Scope routing (per architecture):**
-
-| Invocation | Precondition | Scope | Behavior |
-|-----------|-------------|-------|----------|
-| `analyze` (no args) | init + roadmap | milestone | Analyze current milestone's all phases |
-| `analyze 1` | init + roadmap | phase | Analyze phase 1 only |
-| `analyze "topic"` (has milestone) | none | adhoc | Analyze topic, affiliated with current milestone |
-| `analyze "topic"` (no milestone) | none | standalone | Analyze topic, no milestone affiliation |
-| `analyze --gaps` | issues.jsonl exists | gaps | Load open issues, explore root causes, write analysis records |
-| `analyze --gaps ISS-xxx` | issue exists | gaps | Analyze single issue root cause |
-
-**Scope detection rule**: Text argument + `state.json.current_milestone` non-null → adhoc. Text argument + no milestone → standalone. No args + no roadmap → error (need topic or roadmap). `--gaps` → gaps scope (bypasses standard scope routing).
-
-**Output directory** (relative to `.workflow/`):
-
-| Scope | Directory format | Example |
-|-------|-----------------|---------|
-| Phase | `scratch/{YYYYMMDD}-analyze-P{N}-{slug}/` | `20260420-analyze-P1-auth` |
-| Milestone | `scratch/{YYYYMMDD}-analyze-M{N}-{slug}/` | `20260420-analyze-M1-mvp` |
-| Adhoc/Standalone | `scratch/{YYYYMMDD}-analyze-{slug}/` | `20260420-analyze-caching` |
-
-Scope prefix (`P{N}` / `M{N}`) enables directory-level identification as fallback when state.json is unavailable.
-
-**Artifact registration**: On completion, register artifact in `state.json.artifacts[]`:
-```jsonc
-{
-  "id": "ANL-{NNN}",
-  "type": "analyze",
-  "milestone": "{current_milestone or null}",
-  "phase": "{phase_number or null}",
-  "scope": "{milestone|phase|adhoc|standalone}",
-  "path": "scratch/{YYYYMMDD}-analyze-P{N}-{slug}",  // P{N} for phase, M{N} for milestone, omit for adhoc/standalone
-  "status": "completed",
-  "depends_on": null,
-  "harvested": false,
-  "created_at": "...",
-  "completed_at": "..."
-}
-```
-
-**Output artifacts:**
-| Artifact | Mode | Description |
-|----------|------|-------------|
-| `context.md` | both | Locked/Free/Deferred decisions for downstream plan |
-| `discussion.md` | full | Full discussion timeline with TOC, Current Understanding, rounds, decisions, intent coverage |
-| `analysis.md` | full | Executive summary with 6-dimension scores and risk matrix |
-| `conclusions.json` | full | Final synthesis with recommendations, decision trail, intent coverage |
-| `explorations.json` | full | Codebase exploration findings (single perspective) |
-| `perspectives.json` | full | Multi-perspective findings with synthesis (if multi-perspective) |
+Scope routing, output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Scope Routing and Output Structure sections).
 </context>
 
 <execution>

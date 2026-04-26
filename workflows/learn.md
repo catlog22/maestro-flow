@@ -4,7 +4,9 @@ Atomic insight capture, search, and retrieval. Lightweight gstack-style "eureka 
 
 Storage:
 - `.workflow/learning/lessons.jsonl` — append-only JSONL row per insight (shared with retrospective output)
-- `.workflow/learning/learning-index.json` — searchable index (searchable index)
+- `.workflow/learning/learning-index.json` — searchable index
+
+**Shared store rationale:** Manual captures (`source: "manual"`), tips (`source: "tip"`), retrospective-distilled insights (`source: "retrospective"`, `lens: <name>` from `quality-retrospective`), and learn-retro insights (`source: "retro-git"` or `source: "retro-decision"` from `learn-retro`) all live in the same store so search and list see the entire knowledge corpus. The `source` field disambiguates origin.
 
 This workflow does NOT spawn agents or call CLI tools. It is a thin file operation: parse → infer → append → confirm.
 
@@ -30,10 +32,12 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 
 | Flag | Effect |
 |------|--------|
-| `--category <name>` | One of: pattern, antipattern, decision, tool, gotcha, technique. Default: inferred. |
-| `--tag t1,t2` | Comma-separated tags. Always implicitly adds `manual` for capture mode. |
+| `--category <name>` | One of: pattern, antipattern, decision, tool, gotcha, technique, tip. Default: inferred (tip mode defaults to `tip`). |
+| `--tag t1,t2` | Comma-separated tags. Insight mode implicitly adds `manual`, tip mode implicitly adds `tip`. |
 | `--phase <N>` | Override auto-detected phase link. Use `--phase 0` to force "no phase". |
-| `--confidence <level>` | high / medium / low. Default: medium. |
+| `--confidence <level>` | high / medium / low. Default: medium (insight), low (tip). |
+| `--lens <name>` | Filter by retrospective lens: technical, process, quality, decision, git (list/search only). |
+| `--limit <N>` | List mode row limit (default 20). |
 
 ---
 
@@ -46,6 +50,7 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
        "list"   → list mode
        "search" → search mode (next token = query)
        "show"   → show mode (next token = INS-id)
+       "tip"    → tip capture mode (remaining tokens = note text; set source="tip", category="tip", confidence="low", implicit tag "tip")
        anything else → capture mode (entire quoted text = insight body)
 3. If empty arguments → AskUserQuestion: prompt for insight text.
 4. Validate --category against allowed set; unknown → error E002.

@@ -13,16 +13,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Generate missing automated tests for a phase based on gap analysis from maestro-verify (Nyquist audit) and quality-test (UAT coverage gaps). Classifies changed files into unit test vs E2E vs skip categories, discovers existing test infrastructure, generates a test plan for user approval, then writes tests using RED-GREEN methodology.
-
-Key mechanisms from GSD add-tests:
-- **TDD/E2E/Skip classification**: Categorize changed files by appropriate test type
-- **Test structure discovery**: Find existing test patterns, frameworks, conventions
-- **Test plan with user approval**: Present plan before writing any tests
-- **RED-GREEN generation**: Write failing test first, verify it targets the right behavior
-- **Bug discovery, not fix**: Tests expose bugs; fixing is for quality-debug or maestro-execute
-
-This command is the "test gap filler" -- it bridges the gap between verification (maestro-verify finds MISSING coverage) and testing (quality-test runs UAT). It produces the automated tests that make Nyquist coverage pass.
+Generate missing automated tests for a phase based on gap analysis from maestro-verify (Nyquist audit) and quality-test (UAT coverage gaps). Bridges verification (finds MISSING coverage) and testing (runs UAT) by producing the automated tests that make Nyquist coverage pass. TDD/E2E classification, test discovery, plan approval, and RED-GREEN methodology defined in workflow test-gen.md.
 </purpose>
 
 <required_reading>

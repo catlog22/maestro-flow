@@ -29,32 +29,8 @@ This is the heavy-path entry for structured decomposition: idea → spec-generat
 <context>
 $ARGUMENTS -- idea text, @file reference to requirements document, or brainstorm session reference.
 
-**Flags:**
-- `-y` / `--yes`: Auto mode — skip interactive questions, use recommended defaults
-- `-c` / `--continue`: Resume from last checkpoint (reads spec-config.json)
-- `--count N`: Limit number of exploration dimensions (default 5)
-- `--from-brainstorm SESSION-ID`: Import guidance-specification.md from a brainstorm session as seed
+Flags, input types, output location, and pipeline position defined in workflow spec-generate.md.
 
-**Input types:**
-- Direct text: `"Build a real-time collaboration platform"`
-- File reference: `@requirements.md` or `@design-brief.txt`
-- Brainstorm import: `--from-brainstorm WFS-xxx` (reads `.workflow/scratch/brainstorm-*/`)
-
-**Output location:** `.workflow/.spec/SPEC-{slug}-{YYYY-MM-DD}/`
-
-**Relationship to pipeline:**
-```
-maestro-brainstorm (optional upstream)
-        ↓ guidance-specification.md
-maestro-init (REQUIRED first step — project setup)
-        ↓ project.md, state.json, config.json
-maestro-spec-generate (this command — heavy path)
-        ↓ spec package + roadmap.md → .workflow/roadmap.md
-maestro-plan → maestro-execute → maestro-verify
-
-Alternative light path (skip spec-generate):
-maestro-init → maestro-roadmap → roadmap.md directly
-```
 **Note:** `maestro-init` MUST run before this command. It creates the `.workflow/` directory and project context that spec-generate builds upon.
 </context>
 

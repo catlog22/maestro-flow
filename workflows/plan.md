@@ -72,6 +72,23 @@ mkdir -p {OUTPUT_DIR}/.task/
 | `--auto` | Skip P2 (clarification), proceed directly to P3 |
 | `--gaps` | Load verification.json gaps, skip P1 exploration, plan only gap fixes |
 | `--dir <path>` | Use arbitrary directory instead of phase resolution (skip roadmap validation) |
+| `--revise [instructions]` | Revise existing plan (skip P1-P3, load → modify → P4). Auto-discovers latest plan or use `--dir` |
+| `--check <plan-dir>` | Standalone plan verification (P4 only, read-only) |
+
+---
+
+## Mode Routing
+
+```
+IF --check <plan-dir>:
+  → Jump to "Check Mode" section (P4 only, read-only)
+
+IF --revise [instructions]:
+  → Jump to "Revise Mode" section (load → modify → P4)
+
+ELSE:
+  → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
+```
 
 ---
 
@@ -575,6 +592,9 @@ ELSE:
 
 | Error | Action |
 |-------|--------|
+| E001: No args and no roadmap | Provide phase number or topic, or create roadmap |
+| E004: No plan found to revise | Use --dir to specify plan, or create plan first |
+| E005: Plan directory not found (--check) | Check path, use --dir |
 | Phase directory not found | Abort with message: "Phase {phase} not found. Run /workflow:init first." |
 | No context.md | Warn, proceed with exploration only |
 | Exploration agent fails | Log error, continue with available explorations |
@@ -592,3 +612,98 @@ ELSE:
 | P3 complete | index.json.plan.* | Plan metadata |
 | P4 pass | index.json.updated_at | Current timestamp |
 | P5 "Execute now" | (handoff, no write) | executionContext in memory |
+
+---
+
+## Revise Mode (`--revise`)
+
+Incrementally modify an existing plan without rebuilding from scratch.
+
+### Plan Discovery
+
+```
+IF --dir specified:
+  PLAN_DIR = --dir value
+ELSE:
+  PLAN_DIR = state.json.artifacts
+    .filter(a => a.type == "plan" && a.status == "completed" && a.phase == PHASE_NUM)
+    .sort(by completed_at desc)
+    .first().path
+
+IF PLAN_DIR not found:
+  ERROR E004 "No plan found to revise. Use --dir to specify plan, or create plan first."
+```
+
+### Execution Flow
+
+1. **Load existing plan**
+   - Read `plan.json` + all `.task/TASK-*.json` from PLAN_DIR
+   - Show current plan summary: task count, waves, status per task
+
+2. **Obtain revision instructions**
+   - If `--revise "instructions"` provided → parse as change directive
+   - If `--revise` without instructions → AskUserQuestion for what to change:
+     - Add/remove tasks
+     - Modify task scope, action, implementation
+     - Reorder waves or adjust dependencies
+     - Update convergence criteria
+   - Parse instructions into concrete changes
+
+3. **Apply targeted changes**
+   - Modify affected TASK files in-place
+   - If tasks added/removed: re-sequence task IDs, regenerate wave assignments
+   - Update plan.json summary (task count, wave structure)
+   - Preserve unmodified tasks completely
+
+4. **Re-run plan-checker (P4)**
+   - Validate modified plan with same checker as create mode
+   - Re-run collision detection against same-milestone plans
+   - Present check results for confirmation
+
+5. **Update artifact**
+   - Overwrite plan files in existing scratch directory
+   - Update artifact timestamp in state.json (no new artifact created)
+
+---
+
+## Check Mode (`--check`)
+
+Read-only plan verification without modification.
+
+### Execution Flow
+
+1. **Load plan**
+   ```
+   PLAN_DIR = --check argument
+   IF PLAN_DIR not found:
+     ERROR E005 "Plan directory not found. Check path, use --dir."
+
+   Read plan.json + .task/TASK-*.json from PLAN_DIR
+   Read .workflow/roadmap.md for consistency comparison
+   ```
+
+2. **Run checks**
+   - Plan-checker (P4 pipeline stage) — task quality, convergence criteria
+   - Roadmap consistency — plan tasks align with phase scope and requirements
+   - Collision detection — file overlaps with other plans in same milestone
+   - Dependency integrity — no broken cross-task dependencies
+
+3. **Produce check report**
+   ```
+   === PLAN CHECK ===
+   Plan: {plan_dir}/plan.json
+   Tasks: {total} ({completed} done, {pending} pending)
+
+   Checker: {PASS|WARN|FAIL} ({issues} issues)
+   Roadmap: {aligned|drift detected}
+   Collision: {clear|{N} overlaps}
+
+   Issues:
+     1. [{severity}] {description}
+
+   Suggested actions:
+     /maestro-plan --revise "fix instructions"  -- Apply fixes
+     /maestro-execute --dir {plan_dir}          -- Execute as-is
+   ```
+
+**No file modifications.** Pure verification + report.

@@ -13,15 +13,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Run a self-iterating integration test cycle that combines exploration, test design, test execution, reflection, and adaptive strategy adjustment. Unlike quality-test (UAT with user) or quality-test-gen (generate missing tests), this command runs automated integration tests in a closed loop that self-corrects until convergence.
-
-Key mechanisms from DMS3 integration-test-cycle:
-- **6-phase cycle**: Explore -> Design -> Develop -> Test -> Reflect -> Adjust
-- **Reflection-driven**: After each iteration, reflect on what worked/failed and adjust strategy
-- **Adaptive strategy engine**: Conservative (iter 1-2) -> Aggressive (>80% similar) -> Surgical (regression) -> Reflective (stuck 3+)
-- **L0-L3 progressive layers**: Static Analysis -> Unit -> Integration -> E2E
-- **Self-iterating**: Loop continues until pass rate threshold met or max iterations reached
-- **State persistence**: state.json + reflection-log.md survive context resets
+Run a self-iterating integration test cycle that combines exploration, test design, test execution, reflection, and adaptive strategy adjustment. Unlike quality-test (UAT with user) or quality-test-gen (generate missing tests), this command runs automated integration tests in a closed loop that self-corrects until convergence. Full 6-phase cycle, adaptive strategy engine, and L0-L3 progressive layers defined in workflow integration-test.md.
 </purpose>
 
 <required_reading>
@@ -35,19 +27,7 @@ Phase: $ARGUMENTS (required -- phase number)
 - `--max-iter <N>` -- Maximum iterations (default: 5)
 - `--layer <L0|L1|L2|L3>` -- Start from specific layer (default: auto-detect)
 
-**L0-L3 Progressive Test Layers:**
-
-| Layer | Name | What | Tools |
-|-------|------|------|-------|
-| L0 | Static Analysis | Type checking, lint, dead code | `tsc --noEmit`, `eslint`, `ruff` |
-| L1 | Unit Tests | Function-level isolation tests | jest, vitest, pytest |
-| L2 | Integration Tests | Cross-module, API, DB tests | supertest, pytest + fixtures |
-| L3 | E2E Tests | Full user flow tests | playwright, cypress, selenium |
-
-**State files (in `.tests/integration/`):**
-- `state.json` -- iteration state, pass rates, strategy
-- `reflection-log.md` -- per-iteration reflections
-- `test-results-iter-{N}.json` -- results per iteration
+L0-L3 layer definitions, state file formats, and strategy engine rules defined in workflow integration-test.md.
 </context>
 
 <execution>

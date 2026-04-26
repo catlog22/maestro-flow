@@ -30,34 +30,7 @@ Post-execution multi-perspective retrospective (复盘) for completed phases. Co
 <context>
 Arguments: $ARGUMENTS
 
-**Modes (auto-detected from first non-flag token):**
-- No phase argument → `scan` mode: report unreviewed completed phases, prompt selection
-- `<N>` → `single` mode: retrospect phase N
-- `<N>..<M>` → `range` mode: retrospect phases N through M (inclusive)
-- `--all` → batch mode: re-run for every completed phase (archives existing retrospective.json)
-
-**Flags:**
-- `--lens <name>` — restrict to one lens; allowed: technical, process, quality, decision (repeatable)
-- `--no-route` — produce retrospective.{md,json} only; skip auto-creation of spec/note/issue
-- `--compare <M>` — emit a delta section vs phase M's prior retrospective
-- `--auto-yes` — accept all routing recommendations without prompting
-
-**Storage written:**
-- Retrospective output (resolve via `state.json.artifacts[]` → `.workflow/scratch/` path):
-  - retrospective.md — human-readable record
-  - retrospective.json — structured record
-- `.workflow/specs/{category-file}.md` — `<spec-entry>` entries appended to matching category files (one per spec-routed insight)
-- `.workflow/issues/issues.jsonl` — appended issue rows (`source: "retrospective"`)
-- `.workflow/learning/lessons.jsonl` — tips routed via `manage-learn tip` (formerly manage-memory-capture)
-- `.workflow/learning/lessons.jsonl` — append-only insight log
-- `.workflow/learning/learning-index.json` — searchable index
-
-**Storage read (never modified):**
-- Phase artifacts (resolve via `state.json.artifacts[]` → scratch paths):
-  - index.json, plan.json, verification.json, review.json, uat.md
-  - .task/TASK-*.json, .summaries/TASK-*-summary.md
-- `.workflow/issues/issues.jsonl`, `.workflow/issues/issue-history.jsonl`
-- `.workflow/state.json`
+Modes (scan/single/range/all), flags (--lens, --no-route, --compare, --auto-yes), and storage paths defined in workflow retrospective.md Argument Shape and Stages 1-7.
 </context>
 
 <execution>

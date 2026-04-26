@@ -34,13 +34,7 @@ Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json
 <execution>
 Follow '~/.maestro/workflows/milestone-complete.md' completely.
 
-**Archive flow:**
-1. Validate audit passed + all artifacts completed
-2. Move scratch dirs to `milestones/{M}/artifacts/`
-3. Move artifact entries to `milestone_history[M].archived_artifacts`
-4. Extract learnings from summaries → `specs/learnings.md`
-5. Update state.json: advance to next milestone, clear artifacts[]
-6. Clean scratch dirs
+Archive flow steps (validation, directory archival, artifact history, learning extraction, state advancement, cleanup) are defined in workflow `milestone-complete.md`.
 
 ### Knowledge Promotion Inquiry
 

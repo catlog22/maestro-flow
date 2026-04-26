@@ -20,22 +20,7 @@ Supports filtering by category (file-level) and keyword (entry-level via `<spec-
 <context>
 $ARGUMENTS -- optional flags and keyword
 
-**Category-to-file mapping (1:1, same as spec-add):**
-| Category | File loaded |
-|----------|------------|
-| `coding` | `coding-conventions.md` |
-| `arch` | `architecture-constraints.md` |
-| `quality` | `quality-rules.md` |
-| `debug` | `debug-notes.md` |
-| `test` | `test-conventions.md` |
-| `review` | `review-standards.md` |
-| `learning` | `learnings.md` |
-| `all` (default) | All spec files |
-
-**Flags:**
-- `--category <type>` — Filter by file category (loads one file)
-- `--keyword <word>` — Filter entries by keyword attribute in `<spec-entry>` tags. Searches across all files (or within category if combined)
-- `--with-lessons` — Also search `.workflow/learning/lessons.jsonl`
+Category-to-file mapping (1:1) and flag details defined in workflow specs-load.md.
 
 **Examples:**
 ```

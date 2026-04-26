@@ -23,33 +23,9 @@ Includes registry health check, pre-merge rebase (pull main into worktree to min
 </required_reading>
 
 <context>
-$ARGUMENTS -- milestone name and optional flags.
+$ARGUMENTS -- milestone number and optional flags.
 
-**Flags:**
-- `-m <N>` or bare `<N>`: Milestone number (1-based, maps to registry)
-- `--force`: Merge even if milestone has incomplete artifacts
-- `--dry-run`: Show what would be merged without executing
-- `--no-cleanup`: Keep worktree and branch after merge (for inspection)
-- `--continue`: Resume a merge that was paused due to git conflict
-
-**Merge sequence:**
-1. Registry health check (remove stale worktree entries)
-2. Validate milestone artifact completeness (all EXC artifacts completed)
-3. Pre-merge rebase (`git merge main` in worktree)
-4. Phase 1: Git merge (source code only)
-5. Phase 2: Scratch artifact sync (only after git merge succeeds)
-6. Atomic artifact registry reconciliation
-7. Cleanup (worktree remove + branch delete)
-
-**Phase 2 — Artifact sync detail:**
-- Copy worktree `scratch/*` dirs back to main `.workflow/scratch/`
-- Merge worktree `state.json.artifacts[]` entries into main `state.json.artifacts[]`
-  - Dedup by artifact id; worktree version wins for same id
-- Update milestone status in main `state.json.milestones[]` (remove "forked" flag)
-- Mark `harvested` status from worktree artifacts
-
-**Conflict handling:**
-If git merge fails, the command saves state to `.workflow/.merge-state.json` and exits. User resolves conflicts, then runs `maestro-merge --continue` to resume artifact sync.
+Flags (`-m`, `--force`, `--dry-run`, `--no-cleanup`, `--continue`), merge sequence, artifact sync detail, and conflict handling are defined in workflow `merge.md`.
 </context>
 
 <execution>

@@ -21,27 +21,7 @@ Each category maps 1:1 to a single target file — no dual-write.
 <context>
 $ARGUMENTS -- expects `<category> <content>`
 
-**Category-to-file mapping (1:1, same as spec-load):**
-| Category | Target file |
-|----------|------------|
-| `coding` | `coding-conventions.md` |
-| `arch` | `architecture-constraints.md` |
-| `quality` | `quality-rules.md` |
-| `debug` | `debug-notes.md` |
-| `test` | `test-conventions.md` |
-| `review` | `review-standards.md` |
-| `learning` | `learnings.md` |
-
-**Entry format (closed-tag):**
-```markdown
-<spec-entry category="{category}" keywords="{auto-extracted}" date="{YYYY-MM-DD}">
-
-### {title}
-
-{content}
-
-</spec-entry>
-```
+Category-to-file mapping (1:1) and entry format defined in workflow specs-add.md.
 </context>
 
 <execution>

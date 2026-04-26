@@ -41,11 +41,7 @@ Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json
 <execution>
 Follow '~/.maestro/workflows/milestone-audit.md' completely.
 
-**Audit checklist (from architecture):**
-1. Phase coverage: each phase in roadmap has analyze → plan → execute chain
-2. Ad-hoc completeness: all adhoc artifacts completed or skipped
-3. Execution completeness: all tasks in executed plans completed
-4. Cross-artifact integration: interface compatibility, data contracts, config consistency
+Audit checklist steps (phase coverage, ad-hoc completeness, execution completeness, cross-artifact integration) are defined in workflow `milestone-audit.md`.
 
 **Next-step routing on completion:**
 - Verdict PASS → `/maestro-milestone-complete {milestone}`

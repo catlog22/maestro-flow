@@ -37,55 +37,18 @@ Arguments: $ARGUMENTS
 - `<session-id>` (e.g., `ANL-auth-20260410`, `WFS-xxx`) → `session` mode: harvest specific session
 - `<path>` (e.g., `.workflow/.analysis/ANL-auth-20260410/`) → `path` mode: harvest from explicit directory
 
-**Flags:**
-- `--to <target>` — Force routing: `wiki`, `spec`, `issue`, `auto` (default: `auto`)
-- `--source <type>` — Filter source type: `analysis`, `brainstorm`, `debug`, `lite-plan`, `lite-fix`, `scratchpad`, `session`, `learning`, `all` (default: `all`)
-- `--recent N` — Only artifacts updated within last N days (default: 30)
-- `--dry-run` — Preview extraction and routing without writing
-- `-y` / `--yes` — Skip confirmation prompts
-- `--min-confidence N` — Minimum extraction confidence 0.0-1.0 (default: 0.5)
-
-**Source registry (scan paths):**
-| Source Type | Scan Path | Key Files |
-|-------------|-----------|-----------|
-| `analysis` | `.workflow/.analysis/ANL-*/` | `conclusions.json`, `*.md` |
-| `brainstorm` | `.workflow/scratch/brainstorm-*/` | `guidance-specification.md` |
-| `lite-plan` | `.workflow/.lite-plan/*/` | `plan.json`, `plan-overview.md` |
-| `lite-fix` | `.workflow/.lite-fix/*/` | `fix-plan.json` |
-| `debug` | `.workflow/.debug/*/` | `debug-log.md`, `hypothesis-*.md` |
-| `scratchpad` | `.workflow/.scratchpad/` | `*.md`, `*.json` |
-| `session` | `.workflow/active/WFS-*/` | `workflow-session.json` |
-| `learning` | `.workflow/learning/` | `lessons.jsonl`, `digest-*.md` |
-
-**Storage written:**
-- `.workflow/harvest/harvest-log.jsonl` — provenance log (prevents duplicate harvesting)
-- `.workflow/harvest/harvest-report-{date}.md` — per-run report
-- Wiki entries via `maestro wiki create`
-- Spec entries via `Skill({ skill: "spec-add" })`
-- Issue entries appended to `.workflow/issues/issues.jsonl`
-
-**Storage read (never modified):**
-- All artifact source files (read-only until routing stage)
-- `.workflow/harvest/harvest-log.jsonl` (dedup check)
+Flags, source registry (scan paths), and storage locations defined in workflow harvest.md.
 </context>
 
 <execution>
-Follow '~/.maestro/workflows/harvest.md' Stages 1–8 in order. Key invariants:
+Follow '~/.maestro/workflows/harvest.md' Stages 1-8 in order.
 
-1. **Read-only until Stage 6** — Stages 1–5 must not write anything. All extraction and classification happens in-memory.
-2. **Dedup before write** — Stage 7 (dedup_check) runs BEFORE each write in Stage 6. Check harvest-log.jsonl, wiki search, issues.jsonl, and learnings.md for existing matches.
-3. **Stable fragment IDs** — `HRV-{8 hex}` from `hash(source_id + content_hash)` so re-runs on same artifacts do not create duplicates.
-4. **Reuse existing routing infrastructure**:
-   - Wiki: `maestro wiki create --type <type> --slug harvest-<source_type>-<short_id> --created-by manage-harvest --source-ref HRV-<fragment_id> --category <fragment_category>`
-   - Spec: `Skill({ skill: "spec-add", args: "<category> <content>" })`
-   - Issue: append to `issues.jsonl` matching canonical schema from `workflows/issue.md`
-5. **Never modify source artifacts** — harvest is purely extractive. Source files remain untouched.
-6. **Confidence filtering** — fragments below `--min-confidence` are logged but not routed.
-7. **Provenance tracking** — every routed item logged to `harvest-log.jsonl` with fragment_id, source reference, and target reference.
+**Key invariants:**
+1. **Read-only until Stage 6** — extraction and classification happen in-memory.
+2. **Dedup before write** — check harvest-log.jsonl and existing stores before each write.
+3. **Never modify source artifacts** — harvest is purely extractive.
 
-**Fragment extraction uses source-specific parsing** (see harvest.md Stage 3b for per-source patterns). The agent should read each artifact file and identify discrete knowledge items: findings, decisions, patterns, bugs, risks, tasks, lessons, recommendations.
-
-**Classification uses category-to-target mapping** (see harvest.md Stage 4). Override with `--to` flag if user wants all items in one store.
+Extraction patterns, classification rules, routing infrastructure, and fragment ID scheme defined in workflow harvest.md.
 
 **Next-step routing on completion:**
 - Review wiki entries → `maestro wiki list --type note`

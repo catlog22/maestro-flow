@@ -13,28 +13,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Run multi-dimensional code review on a completed phase's changed files. Answers the question "is this code good?" — complementing maestro-verify ("is the goal met?") and quality-test ("does it work for users?").
-
-Supports three review levels that scale with task depth:
-
-**Quick** — Single-pass inline scan, no agents. For small changes (≤3 files) or scratch tasks.
-  - Dimensions: correctness + security only
-  - No deep-dive, issues created for critical only
-
-**Standard** — Parallel agent review across all dimensions. Default for most phases.
-  - Dimensions: all 6 (correctness, security, performance, architecture, maintainability, best-practices)
-  - Auto deep-dive if critical findings > 0
-  - Issues created for critical + high
-
-**Deep** — Full agent review with forced multi-iteration deep-dive and cross-file impact analysis. For complex/critical phases.
-  - Dimensions: all 6
-  - Forced deep-dive (max 3 iterations) with impact radius analysis
-  - Issues created for critical + high + medium
-
-Level auto-detection when not specified:
-  - ≤3 changed files → quick
-  - 4-19 changed files → standard
-  - ≥20 changed files OR phase marked critical in index.json → deep
+Run multi-dimensional code review on a completed phase's changed files. Answers the question "is this code good?" -- complementing maestro-verify ("is the goal met?") and quality-test ("does it work for users?"). Three review levels (quick/standard/deep) scale with task depth, auto-detected from file count. Level definitions, dimension lists, deep-dive rules, and issue creation thresholds defined in workflow review.md.
 </purpose>
 
 <required_reading>
@@ -96,38 +75,10 @@ Append to state.json.artifacts[]:
 }
 ```
 
-**Report format on completion:**
+Report format and next-step routing by verdict defined in workflow review.md Report Format and Next Step Routing sections.
 
-```
-=== CODE REVIEW RESULTS ===
-Phase:     {phase_name}
-Level:     {quick | standard | deep}
-Files:     {files_reviewed} files across {dimensions_count} dimensions
-Duration:  {duration}
-
-Severity Distribution:
-  Critical: {critical_count}
-  High:     {high_count}
-  Medium:   {medium_count}
-  Low:      {low_count}
-
-Top Issues:
-  1. [{severity}] {finding_id}: {title} ({file}:{line})
-  2. ...
-
-Verdict: {PASS | WARN | BLOCK}
-Issues Created: {issue_count}
-
-Files:
-  {REVIEW_DIR}/review.json
-
-Next steps:
-  {verdict_based_routing}
-```
-
-**Next-step routing by verdict:**
+**Next-step routing summary:**
 - PASS → `/quality-test {phase}`
-- PASS + low test coverage → `/quality-test-gen {phase}`
 - WARN → `/quality-test {phase}` (proceed with caveats)
 - BLOCK → `/maestro-plan {phase} --gaps` (fix critical findings first)
 </execution>

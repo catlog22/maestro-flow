@@ -30,61 +30,7 @@ Invoked after /maestro-plan produces a confirmed plan. When called without args 
 <context>
 $ARGUMENTS — phase number, or no args for milestone-wide execution, with optional flags.
 
-**Flags:**
-- `--auto-commit` -- Automatically commit after each task completion
-- `--method agent|cli|auto` -- Override execution method (default: from config.json)
-- `--executor <tool>` -- Default CLI tool: gemini|codex|qwen|opencode|claude
-- `--dir <path>` -- Execute specific plan directory (e.g., `scratch/20260420-plan-auth`)
-
-**Scope routing:**
-
-| Invocation | Behavior |
-|-----------|----------|
-| `execute` (no args) | Find all pending plans for current milestone, execute sequentially |
-| `execute 1` | Find pending plans for phase 1, execute sequentially |
-| `execute --dir scratch/plan-xxx` | Execute the specific plan |
-
-**Resolution logic (no-args / phase):**
-```
-1. Read state.json.artifacts
-2. Filter: milestone=target, type=plan, status=completed, AND no corresponding EXC artifact
-3. If phase specified: further filter by phase=target
-4. Sort by phase dependency order (roadmap phase order), adhoc last
-5. Execute each plan sequentially
-```
-
-**Output**: Task summaries written to plan's scratch dir:
-```
-{YYYYMMDD}-plan-P{N}-{slug}/            # phase-scoped
-{YYYYMMDD}-plan-M{N}-{slug}/           # milestone-wide
-{YYYYMMDD}-plan-{slug}/                # adhoc/standalone
-├── plan.json
-├── .task/
-│   ├── TASK-001.json    # status updated to completed|blocked
-│   └── TASK-002.json
-└── .summaries/          ← execute writes here
-    ├── TASK-001-summary.md
-    └── TASK-002-summary.md
-```
-
-**Incremental learning extraction**: After each plan completes, extract strategy adjustments / patterns / pitfalls from `.summaries/` and append to `specs/learnings.md` using `<spec-entry>` closed-tag format (category=`learning`, auto-extract keywords, date=today, source=`execute`). Mark artifact `harvested: true`.
-
-**Artifact registration**: For each plan executed, register in `state.json.artifacts[]`:
-```jsonc
-{
-  "id": "EXC-{NNN}",
-  "type": "execute",
-  "milestone": "{current_milestone or null}",
-  "phase": "{phase or null}",
-  "scope": "{inherited from plan}",
-  "path": "{same as plan path}",  // inherits plan directory name with scope prefix
-  "status": "completed",
-  "depends_on": "PLN-{NNN}",
-  "harvested": false,
-  "created_at": "...",
-  "completed_at": "..."
-}
-```
+Scope routing, flags, resolution logic, output directory format, artifact registration schema, and incremental learning extraction are defined in workflow `execute.md`.
 </context>
 
 <execution>

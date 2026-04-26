@@ -248,32 +248,36 @@ If by_status.registered > 0:
 
 ### Step 5.1: Status-Based Routing
 
-Based on current project status, suggest the next command:
+Based on current project state, suggest the next command:
 
 ```
-STATUS ROUTING TABLE:
+NEXT-STEP DECISION TABLE:
 -------------------------------------------------------------
-Current Status    | Suggested Command           | Reason
+Current State                        | Suggested Command                  | Reason
 -------------------------------------------------------------
-idle              | /workflow:init              | Project needs initialization
-exploring         | /maestro-analyze -q        | Continue exploration, lock decisions
-                  | /workflow:plan {phase}      | Ready to plan
-planning          | /workflow:plan {phase}      | Resume planning
-executing         | /workflow:execute {phase}   | Resume execution
-verifying         | /workflow:verify {phase}    | Complete verification
-                  | /workflow:review {phase}    | Code quality review
-                  | /workflow:test {phase}      | Run tests
-reviewing         | /workflow:review {phase}    | Complete review
-testing           | /workflow:test {phase}      | Complete testing
-completed (phase) | /workflow:phase-transition  | Move to next phase
-completed (all)   | /workflow:milestone-audit   | Audit milestone
-blocked           | /workflow:debug             | Resolve blockers
+No phases planned                    | /maestro-brainstorm 1 or /maestro-plan 1 | Explore ideas or start planning first phase
+Phase pending, needs analysis        | /maestro-analyze <N>               | Evaluate feasibility before planning
+Phase pending, needs decisions       | /maestro-analyze <N> -q            | Quick decision extraction
+Phase planned, not executed          | /maestro-execute <N>               | Execute the planned phase
+Phase executing, tasks blocked       | /quality-debug <N>                 | Unblock stuck tasks
+Phase executed, not verified         | /maestro-verify <N>                | Verify execution results
+Phase verified with gaps             | /maestro-plan <N> --gaps           | Plan gap fixes
+Phase verified, not reviewed         | /quality-review <N>                | Code quality review before UAT
+Phase reviewed, verdict BLOCK        | /maestro-plan <N> --gaps           | Fix critical review findings first
+Phase reviewed, verdict PASS/WARN    | /quality-test <N>                  | Proceed to UAT testing
+Phase verified, low test coverage    | /quality-test-gen <N>              | Generate missing automated tests
+UAT passed, all phases done          | /maestro-milestone-audit           | Cross-phase integration check
+UAT has failures                     | /quality-debug --from-uat <N>      | Debug UAT gaps with parallel agents
+Need integration test cycle          | /quality-integration-test <N>      | Self-iterating integration tests
+All phases in milestone complete     | /maestro-milestone-audit           | Cross-phase integration check
+Milestone audit passed               | /maestro-milestone-complete        | Archive milestone, advance
+Ad-hoc small task                    | /maestro-quick <task>              | Quick execute without full pipeline
 -------------------------------------------------------------
 ```
 
 Display:
 ```
-NEXT STEP: /workflow:{suggested_command}
+NEXT STEP: {suggested_command}
   {reason}
 ```
 

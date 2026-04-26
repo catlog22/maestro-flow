@@ -26,18 +26,7 @@ Provides list/search/view/edit/delete/prune operations. Default store is `all` (
 <context>
 Arguments: $ARGUMENTS
 
-**Stores:**
-
-| Store | Path | Format | Index |
-|-------|------|--------|-------|
-| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` (legacy only — new tips go to `manage-learn tip`) | `.workflow/wiki-index.json` (unified) |
-| `system` | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
-
-**System memory path detection:**
-```bash
-# Derive from project root — replace path separators with '--', prefix drive letter
-# e.g., D:\maestro2 → ~/.claude/projects/D--maestro2/memory/
-```
+Dual store architecture (paths, formats, index) defined in workflow memory.md.
 
 **Subcommands:**
 - `list` — List entries from both stores (default if no arguments)
