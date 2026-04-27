@@ -135,7 +135,8 @@ export function registerInstallCommand(program: Command): void {
     .option('--global', 'Install global assets only (with --force)')
     .option('--path <dir>', 'Install to project directory (with --force)')
     .option('--hooks <level>', 'Hook level for --force mode: none, minimal, standard, full')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string }) => {
+    .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
+    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; components?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -178,7 +179,7 @@ export function registerInstallCommand(program: Command): void {
 function forceInstall(
   pkgRoot: string,
   version: string,
-  opts: { global?: boolean; path?: string; hooks?: string },
+  opts: { global?: boolean; path?: string; hooks?: string; components?: string },
 ): void {
   console.error(t.install.forceVersion.replace('{version}', version));
   console.error('');
@@ -194,6 +195,12 @@ function forceInstall(
   const components = scanComponents(pkgRoot, mode, projectPath);
   const available = components.filter((c) => c.available);
 
+  // Filter by --components if specified (used by `maestro update` to preserve selection)
+  const componentIds = opts.components?.split(',');
+  const toInstall = componentIds
+    ? available.filter(c => componentIds.includes(c.def.id))
+    : available;
+
   // Determine what to install based on mode
   const targetPath = mode === 'global' ? paths.home : projectPath;
   const targetBase = mode === 'global' ? homedir() : projectPath;
@@ -202,7 +209,7 @@ function forceInstall(
   const disabledItems = scanDisabledItems(targetBase);
 
   // Backup CLAUDE.md by default before overwrite
-  const backupPath = createTargetBackup(available, { backupClaudeMd: true, backupAll: false });
+  const backupPath = createTargetBackup(toInstall, { backupClaudeMd: true, backupAll: false });
   if (backupPath) {
     console.error(`  Backup: ${backupPath}`);
   }
@@ -224,11 +231,11 @@ function forceInstall(
 
   const manifest = createManifest(mode, targetPath, {
     hookLevel,
-    selectedComponentIds: available.map(c => c.def.id),
+    selectedComponentIds: toInstall.map(c => c.def.id),
   });
   const totalStats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
 
-  for (const comp of available) {
+  for (const comp of toInstall) {
     console.error(`  ${comp.def.label} → ${comp.targetDir}`);
     copyRecursive(comp.sourceFull, comp.targetDir, totalStats, manifest);
   }
