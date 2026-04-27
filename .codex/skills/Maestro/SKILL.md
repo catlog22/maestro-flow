@@ -53,7 +53,14 @@ $ARGUMENTS — user intent text, or special flags.
 | refactor, cleanup, debt | `quality-refactor` | $quality-refactor |
 | feature, implement, add, build | `feature` | $maestro-plan → $maestro-execute → $maestro-verify |
 | review, check, audit | `quality-review` | $quality-review |
-| deploy, release, ship | `deploy` | $maestro-verify → $maestro-execute |
+| deploy, release, ship | `deploy` | $maestro-verify → $maestro-milestone-release |
+| brainstorm, explore, ideate | `brainstorm-driven` | $maestro-brainstorm → $maestro-plan → $maestro-execute → $maestro-verify |
+| plan, design, architect | `plan` | $maestro-plan |
+| debug, diagnose, troubleshoot | `debug` | $quality-debug |
+| continue, next, go | `state_continue` | (from project state) |
+| status, dashboard | `status` | $manage-status |
+
+Full chain map with 40+ chains: see `@~/.maestro/workflows/maestro.codex.md` §3c
 </chain_map>
 
 <barrier_skills>

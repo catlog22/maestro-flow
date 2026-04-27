@@ -144,6 +144,9 @@ Extract a structured intent tuple from user input. Leverages LLM semantic unders
 | `merge` | Merge back — merge worktree, 合并工作树 |
 | `learn` | Capture — learn, insight, eureka, 记录洞察 |
 | `retrospect` | Post-mortem — retrospective, retro, 复盘 |
+| `release` | Publish — release, publish, ship, tag, 发布 |
+| `amend` | Revise — amend workflow, fix command, 修正流程 |
+| `compose` | Design workflow — compose, build workflow, 编排流程 |
 
 **Object enum:**
 
@@ -201,7 +204,7 @@ function routeIntent(intent, projectState) {
   // Action × Object matrix
   const matrix = {
     'fix':       { 'bug': 'debug', 'issue': 'issue', 'code': 'debug', 'performance': 'debug', 'security': 'debug', 'test': 'debug', '_default': 'debug' },
-    'create':    { 'feature': 'quick', 'issue': 'issue', 'test': 'test_gen', 'spec': 'spec_generate', 'ui': 'ui_design', 'config': 'init', 'phase': 'phase_add', '_default': 'quick' },
+    'create':    { 'feature': 'quick', 'issue': 'issue', 'test': 'test_gen', 'spec': 'spec_generate', 'ui': 'ui_design', 'config': 'init', '_default': 'quick' },
     'analyze':   { 'bug': 'analyze', 'issue': 'issue_analyze', 'code': 'analyze', 'performance': 'analyze', 'security': 'analyze', 'feature': 'analyze', 'codebase': 'spec_map', '_default': 'analyze' },
     'explore':   { 'issue': 'issue_discover', 'feature': 'brainstorm', 'ui': 'ui_design', '_default': 'brainstorm' },
     'plan':      { 'issue': 'issue_plan', 'spec': 'spec_generate', 'phase': 'plan', 'milestone': 'plan', '_default': 'plan' },
@@ -219,6 +222,9 @@ function routeIntent(intent, projectState) {
     'merge':     { '_default': 'merge' },
     'learn':     { '_default': 'learn' },
     'retrospect':{ '_default': 'retrospective' },
+    'release':   { '_default': 'release' },
+    'amend':     { '_default': 'amend' },
+    'compose':   { '_default': 'compose' },
   };
 
   const actionMap = matrix[action];
@@ -266,7 +272,7 @@ Display:
 
 **Resolution order:**
 1. `forcedChain` → `chainMap[forcedChain]`
-2. `state_continue` → `detectNextAction(projectState)` (see [State Detection](#state-detection-detectnextaction))
+2. `state_continue` → `detectNextAction(projectState)` → returns `{ chain, argsOverride? }`. Use `chainMap[chain]` for steps. If `argsOverride` present, apply to step args before template substitution.
 3. `taskToChain[taskType]` → named multi-step chain
 4. `chainMap[taskType]` → direct lookup
 
@@ -608,7 +614,7 @@ const chainMap = {
   'review':             [{ cmd: 'quality-review', args: '{phase}' }],
   'retrospective':      [{ cmd: 'quality-retrospective', args: '{phase}' }],
   'learn':              [{ cmd: 'manage-learn', args: '"{description}"' }],
-  'sync':               [{ cmd: 'quality-sync', args: '{phase}' }],
+  'sync':               [{ cmd: 'quality-sync' }],
   'milestone_close':    [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'milestone_audit':    [{ cmd: 'maestro-milestone-audit' }],
   'milestone_complete': [{ cmd: 'maestro-milestone-complete' }],
@@ -616,7 +622,7 @@ const chainMap = {
   'codebase_refresh':   [{ cmd: 'manage-codebase-refresh' }],
   'spec_setup':         [{ cmd: 'spec-setup' }],
   'spec_add':           [{ cmd: 'spec-add', args: '"{description}"' }],
-  'spec_load':          [{ cmd: 'spec-load', args: '"{description}"' }],
+  'spec_load':          [{ cmd: 'spec-load' }],
   'spec_map':           [{ cmd: 'manage-codebase-rebuild' }],
   'memory_capture':     [{ cmd: 'manage-memory-capture', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],
@@ -632,7 +638,7 @@ const chainMap = {
   // ── Team skills ──
   'team_lifecycle':     [{ cmd: 'team-lifecycle-v4', args: '"{description}"' }],
   'team_coordinate':    [{ cmd: 'team-coordinate', args: '"{description}"' }],
-  'team_design':        [{ cmd: 'team-designer', args: '"{description}"' }],
+  'team_design':        [{ cmd: 'team-coordinate', args: '"{description}"' }],
   'team_execute':       [{ cmd: 'team-executor', args: '"{description}"' }],
   'team_qa':            [{ cmd: 'team-quality-assurance', args: '"{description}"' }],
   'team_test':          [{ cmd: 'team-testing', args: '"{description}"' }],
@@ -650,8 +656,26 @@ const chainMap = {
   'quality-loop':         [{ cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test-gen', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'quality-debug', args: '--from-uat {phase}' }, { cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'milestone-close':      [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'next-milestone':       [{ cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'issue-full':           [{ cmd: 'maestro-analyze', args: '--gaps {issue_id}' }, { cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'quality-review', args: '--scope {affected_files}' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
+  'review-fix':           [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }],
+  'quality-loop-partial': [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'issue-full':           [{ cmd: 'maestro-analyze', args: '--gaps {issue_id}' }, { cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
   'issue-quick':          [{ cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
+  'milestone-release':    [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-release' }],
+
+  'learn':                [{ cmd: 'maestro-learn', args: '"{description}"' }],
+  'harvest':              [{ cmd: 'manage-harvest', args: '"{description}"' }],
+  'wiki':                 [{ cmd: 'manage-wiki' }],
+  'wiki_connect':         [{ cmd: 'wiki-connect' }],
+  'wiki_digest':          [{ cmd: 'wiki-digest' }],
+  'business_test':        [{ cmd: 'quality-business-test', args: '{phase}' }],
+  'spec_remove':          [{ cmd: 'spec-remove', args: '"{description}"' }],
+  'amend':                [{ cmd: 'maestro-amend', args: '"{description}"' }],
+  'release':              [{ cmd: 'maestro-milestone-release' }],
+  'compose':              [{ cmd: 'maestro-composer', args: '"{description}"' }],
+  'play':                 [{ cmd: 'maestro-player', args: '"{description}"' }],
+  'update':               [{ cmd: 'maestro-update' }],
+  'overlay':              [{ cmd: 'maestro-overlay', args: '"{description}"' }],
+  'link_coordinate':      [{ cmd: 'maestro-link-coordinate', args: '"{description}"' }],
 };
 ```
 
@@ -660,8 +684,10 @@ const chainMap = {
 Used when `task_type == state_continue`. Routes based on `phase_status` and artifact presence:
 
 ```javascript
+// Returns { chain: string, argsOverride?: Record<string, string> }
+// Steps are always resolved from chainMap[chain] — never inline.
 function detectNextAction(state) {
-  if (!state.initialized) return { chain: 'init', steps: ['maestro-init'] };
+  if (!state.initialized) return { chain: 'init' };
 
   const ps = state.phase_status;
   const art = state.phase_artifacts;
@@ -678,63 +704,60 @@ function detectNextAction(state) {
       deferred ? `Deferred from previous milestone: ${deferred}` : '',
       decisions ? `Key decisions carried forward: ${decisions}` : ''
     ].filter(Boolean).join('. ');
-    return { chain: 'next-milestone', steps: [{ cmd: 'maestro-roadmap', args: `"Plan next milestone. ${context}"` }] };
+    return { chain: 'next-milestone', argsOverride: { '{description}': `"Plan next milestone. ${context}"` } };
   }
 
   // No phases, no context → fresh start
-  if (state.phases_total === 0)
-    return { chain: 'brainstorm-driven', steps: ['maestro-brainstorm', 'maestro-plan', 'maestro-execute', 'maestro-verify'] };
+  if (state.phases_total === 0) return { chain: 'brainstorm-driven' };
 
   // ── Route by phase_status ──
 
   if (ps === 'pending') {
-    if (art.context) return { chain: 'plan', steps: ['maestro-plan'] };
-    if (art.analysis) return { chain: 'analyze-quick', steps: ['maestro-analyze -q'] };
-    return { chain: 'analyze', steps: ['maestro-analyze'] };
+    if (art.context) return { chain: 'plan' };
+    if (art.analysis) return { chain: 'analyze-quick' };
+    return { chain: 'analyze' };
   }
 
   if (ps === 'exploring' || ps === 'planning') {
-    if (art.plan) return { chain: 'execute-verify', steps: ['maestro-execute', 'maestro-verify'] };
-    return { chain: 'plan', steps: ['maestro-plan'] };
+    if (art.plan) return { chain: 'execute-verify' };
+    return { chain: 'plan' };
   }
 
   if (ps === 'executing') {
     if (exec.tasks_completed >= exec.tasks_total && exec.tasks_total > 0)
-      return { chain: 'verify', steps: ['maestro-verify'] };
-    if (state.has_blockers) return { chain: 'debug', steps: ['quality-debug'] };
-    return { chain: 'execute', steps: ['maestro-execute'] };
+      return { chain: 'verify' };
+    if (state.has_blockers) return { chain: 'debug' };
+    return { chain: 'execute' };
   }
 
   if (ps === 'verifying') {
     const rev = state.review_verdict;  // "PASS" | "WARN" | "BLOCK" | null
     if (ver === 'passed') {
-      if (!rev) return { chain: 'review', steps: ['quality-review'] };
-      if (rev === 'BLOCK') return { chain: 'review-fix', steps: ['maestro-plan --gaps', 'maestro-execute', 'quality-review'] };
-      if (uat === 'pending') return { chain: 'test', steps: ['quality-test'] };
-      if (uat === 'passed') return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
-      if (uat === 'failed') return { chain: 'debug', steps: ['quality-debug --from-uat {phase}'] };
-      return { chain: 'test', steps: ['quality-test'] };
+      if (!rev) return { chain: 'review' };
+      if (rev === 'BLOCK') return { chain: 'review-fix' };
+      if (uat === 'pending') return { chain: 'test' };
+      if (uat === 'passed') return { chain: 'milestone-close' };
+      if (uat === 'failed') return { chain: 'debug' };
+      return { chain: 'test' };
     }
-    return { chain: 'quality-loop-partial', steps: ['maestro-plan --gaps', 'maestro-execute', 'maestro-verify'] };
+    return { chain: 'quality-loop-partial' };
   }
 
   if (ps === 'testing') {
-    if (uat === 'passed') return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
-    return { chain: 'debug', steps: ['quality-debug --from-uat {phase}'] };
+    if (uat === 'passed') return { chain: 'milestone-close' };
+    return { chain: 'debug' };
   }
 
-  if (ps === 'completed') {
-    return { chain: 'milestone-close', steps: ['maestro-milestone-audit', 'maestro-milestone-complete'] };
-  }
+  if (ps === 'completed') return { chain: 'milestone-close' };
 
   if (ps === 'forked') {
-    if (fileExists('.workflow/worktrees.json')) return { chain: 'merge', steps: ['maestro-merge'] };
-    return { chain: 'status', steps: ['manage-status'] };
+    if (fileExists('.workflow/worktrees.json')) return { chain: 'merge' };
+    return { chain: 'status' };
   }
 
-  if (ps === 'blocked') return { chain: 'debug', steps: ['quality-debug'] };
+  if (ps === 'blocked') return { chain: 'debug' };
 
-  return { chain: 'status', steps: ['manage-status'] };
+  return { chain: 'status' };
 }
 ```
 
@@ -749,8 +772,11 @@ function detectNextAction(state) {
 | `ui-design-driven` | ui-design → plan → execute → verify | From UI prototypes |
 | `analyze-plan-execute` | analyze -q → plan --dir → execute --dir | Fast track (scratch mode) |
 | `execute-verify` | execute → verify | Resume after planning |
+| `review-fix` | plan --gaps → execute → review | Fix review-blocked issues |
 | `quality-loop` | verify → review → test-gen → test → debug → plan --gaps → execute | Fix quality issues |
+| `quality-loop-partial` | plan --gaps → execute → verify | Partial quality fix cycle |
 | `milestone-close` | audit → complete | Close a milestone |
+| `milestone-release` | audit → release | Release with version tag |
 | `next-milestone` | roadmap → plan → execute → verify | Next milestone (auto-loads deferred) |
 | `issue-full` | analyze → plan → execute → review → close | Issue with quality gate |
 | `issue-quick` | plan → execute → close | Issue fast path |
@@ -779,6 +805,9 @@ function detectNextAction(state) {
 | `"team review code"` | `{review, team}` | team_review | team-review |
 | `"next phase"` | `{transition, milestone}` | milestone_close | audit → complete |
 | `-y "implement X"` | `{execute, feature}` | execute | maestro-execute (auto) |
+| `"release v1.2"` | `{release, milestone}` | release | maestro-milestone-release |
+| `"amend plan command"` | `{amend, config}` | amend | maestro-amend |
+| `"compose deploy flow"` | `{compose, config}` | compose | maestro-composer |
 
 ### Error Codes
 
