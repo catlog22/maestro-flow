@@ -147,6 +147,12 @@ default             → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
 
 Spawn `workflow-planner` agent with: context.md, spec-ref, doc-index.json, explorationContext (incl. implementationScope), clarificationContext, phase goal + success_criteria, templates (plan.json, task.json).
 
+**Task count guard**: Before spawning, assess scope complexity:
+- Single feature / simple change → expect **1-2 tasks** max
+- Medium feature (multiple files, one module) → expect **2-4 tasks** max
+- Large feature (cross-module) → expect **4-8 tasks** max
+- If planner outputs more tasks than these thresholds, re-prompt with explicit instruction to merge.
+
 Agent responsibilities:
 1. Decompose goal into tasks (when implementationScope exists: 1 scope item → 1 task)
 2. Assign task IDs (TASK-001, TASK-002, ...), determine dependencies
@@ -156,6 +162,12 @@ Agent responsibilities:
 6. Identify files per task (from scope.target_files when available), populate `read_first[]`
 
 Output: `plan.json` (summary, approach, task_ids[], task_count, complexity, waves[]) + `.task/TASK-{NNN}.json` per task.
+
+**Anti-splitting rules** (pass to planner; re-prompt if violated):
+- One feature = one task (even if 3-5 files); never split a feature into per-file tasks
+- Group simple unrelated changes into a batch task to minimize agent spawns
+- depends_on only for genuine output dependencies; most tasks should be parallel
+- Each task must be substantial (15-60 min); sub-5-min changes must be merged
 
 ### Deep Work Rules (MANDATORY for all modes)
 
