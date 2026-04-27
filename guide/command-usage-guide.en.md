@@ -240,8 +240,8 @@ stateDiagram-v2
     verified --> planned: Gaps found → plan --gaps
     executed --> planned: Failure → debug → plan --gaps
 
-    note right of analyzed: scratch/{YYYYMMDD}-analyze-P{N}-{slug}/<br/>Multiple analyze with different scopes
-    note right of planned: scratch/{YYYYMMDD}-plan-P{N}-{slug}/<br/>Collision detection: file overlap warning
+    note right of analyzed: scratch/YYYYMMDD-analyze-PN-slug/<br/>Multiple analyze with different scopes
+    note right of planned: scratch/YYYYMMDD-plan-PN-slug/<br/>Collision detection: file overlap warning
     note right of executed: .summaries/ written to plan dir<br/>Execute plans one-by-one, wave parallel within plan
     note right of verified: verification.json written to plan dir
 ```
@@ -288,7 +288,7 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 | Audit | `/maestro-milestone-audit` | artifact registry | audit-report.md | — |
 | Complete | `/maestro-milestone-complete` | audit passed | archived to milestones/ | — |
 
-**All output paths**: `scratch/{YYYYMMDD}-{type}[-P{N}|-M{N}]-{slug}/` — date-first for chronological sorting, scope prefix P{N}/M{N} as state.json fallback identifier. No more `.workflow/phases/` directories.
+**All output paths**: `scratch/YYYYMMDD-{type}[-P{N}|-M{N}]-{slug}/` — date-first for chronological sorting, scope prefix P{N}/M{N} as state.json fallback identifier. No more `.workflow/phases/` directories.
 
 **Scope routing**: No args = entire milestone; number = specific phase; text = adhoc/standalone.
 
