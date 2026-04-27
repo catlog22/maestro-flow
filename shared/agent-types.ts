@@ -36,6 +36,8 @@ export interface AgentConfig {
   envFile?: string;
   /** When true, spawn in interactive mode (stdin kept open for follow-up messages) */
   interactive?: boolean;
+  /** Path to MCP config JSON file for CLI agents (claude-code --mcp-config) */
+  mcpConfigPath?: string;
   /** Opaque metadata bag — used to pass team session context through the spawn pipeline */
   metadata?: Record<string, unknown>;
 }

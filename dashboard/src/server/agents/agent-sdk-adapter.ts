@@ -199,6 +199,12 @@ export class AgentSdkAdapter extends BaseAgentAdapter {
       options.mcpServers = { 'issue-monitor': issueMcp };
     }
 
+    // Inject room MCP server if agent is part of a meeting room
+    const roomMcp = config.metadata?.roomMcpServer as McpSdkServerConfigWithInstance | undefined;
+    if (roomMcp) {
+      options.mcpServers = { ...options.mcpServers, 'meeting-room': roomMcp };
+    }
+
     // Start the query
     const queryInstance: Query = query({ prompt: config.prompt, options });
 

@@ -11,6 +11,7 @@
     "collab": "多用户协作",
     "requirement": "需求扩展",
     "supervisor": "调度中心",
+    "rooms": "会议室",
     "views": "视图"
   },
   "sidebar": {
@@ -30,6 +31,7 @@
     "collab_tooltip": "多用户协作",
     "requirement_tooltip": "需求",
     "supervisor_tooltip": "调度管理中心",
+    "rooms_tooltip": "会议室",
     "views_label": "视图",
     "phases_label": "阶段",
     "phase_dot_aria": "阶段 {{phase}}：{{title}} — {{status}}"

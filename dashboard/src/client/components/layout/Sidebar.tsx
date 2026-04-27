@@ -24,6 +24,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Agents Team', path: '/teams', labelKey: 'nav.teams' },
   { label: 'Multi-User Collab', path: '/collab', labelKey: 'nav.collab' },
   { label: 'Requirement', path: '/requirement', labelKey: 'nav.requirement' },
+  { label: 'Meeting Room', path: '/rooms', labelKey: 'nav.rooms' },
 ];
 
 const EMPTY_PHASES: PhaseCard[] = [];

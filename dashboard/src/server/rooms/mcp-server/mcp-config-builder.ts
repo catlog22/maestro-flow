@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { resolve, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
@@ -16,12 +17,18 @@ import type { MeetingRoomSession } from '../meeting-room-session.js';
 import type { MeetingRoomMcpServerInfo } from './meeting-room-mcp-server.js';
 
 // ---------------------------------------------------------------------------
-// Resolve path to the compiled stdio-bridge script
+// Resolve path to the stdio-bridge script (compiled .js or dev .ts)
 // ---------------------------------------------------------------------------
 
 const CURRENT_DIR = resolve(fileURLToPath(import.meta.url), '..');
-// In compiled output, stdio-bridge.js lives next to this file
-const STDIO_BRIDGE_PATH = join(CURRENT_DIR, 'stdio-bridge.js');
+const JS_PATH = join(CURRENT_DIR, 'stdio-bridge.js');
+const TS_PATH = join(CURRENT_DIR, 'stdio-bridge.ts');
+// Use .js in production (compiled), fall back to .ts in dev (tsx)
+const IS_DEV = !existsSync(JS_PATH) && existsSync(TS_PATH);
+const STDIO_BRIDGE_PATH = IS_DEV ? TS_PATH : JS_PATH;
+// In dev mode, use tsx to run .ts files; in production, use node
+const STDIO_BRIDGE_COMMAND = IS_DEV ? 'npx' : process.execPath;
+const STDIO_BRIDGE_ARGS = IS_DEV ? ['tsx', STDIO_BRIDGE_PATH] : [STDIO_BRIDGE_PATH];
 
 // ---------------------------------------------------------------------------
 // Stdio config (for Claude Code, Codex, and other CLI adapters)
@@ -42,8 +49,8 @@ export function getStdioConfig(
   serverInfo: MeetingRoomMcpServerInfo,
 ): StdioMcpConfig {
   return {
-    command: process.execPath, // node
-    args: [STDIO_BRIDGE_PATH],
+    command: STDIO_BRIDGE_COMMAND,
+    args: [...STDIO_BRIDGE_ARGS],
     env: {
       MEETING_ROOM_MCP_PORT: String(serverInfo.port),
       MEETING_ROOM_MCP_TOKEN: serverInfo.token,
@@ -63,8 +70,8 @@ export function getClaudeCodeConfig(
 ): McpStdioServerConfig {
   return {
     type: 'stdio',
-    command: process.execPath,
-    args: [STDIO_BRIDGE_PATH],
+    command: STDIO_BRIDGE_COMMAND,
+    args: [...STDIO_BRIDGE_ARGS],
     env: {
       MEETING_ROOM_MCP_PORT: String(serverInfo.port),
       MEETING_ROOM_MCP_TOKEN: serverInfo.token,

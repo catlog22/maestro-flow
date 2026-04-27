@@ -157,7 +157,7 @@ async function main(): Promise<void> {
   // ---------------------------------------------------------------------------
   // WebSocket Handlers + Manager
   // ---------------------------------------------------------------------------
-  const agentHandler = new AgentWsHandler(agentManager, eventBus, workflowRoot);
+  const agentHandler = new AgentWsHandler(agentManager, eventBus, workflowRoot, undefined, roomSessionManager);
   const executionHandler = new ExecutionWsHandler(executionScheduler, waveExecutor, agentManager, eventBus, workflowRoot, agentHandler);
   const commanderHandler = new CommanderWsHandler(commanderAgent);
   const coordinateHandler = new CoordinateWsHandler(coordinateRunner);
@@ -195,7 +195,7 @@ async function main(): Promise<void> {
     schedulerService: taskSchedulerService,
     extensionManager,
     promptRegistry,
-  });
+  }, roomSessionManager);
   app.route('/', routes);
 
   // Resolve dashboard root relative to this file

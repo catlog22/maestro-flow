@@ -16,6 +16,7 @@ import type { CoordinateStatusPayload, CoordinateStepPayload, CoordinateAnalysis
 import type { RequirementProgressPayload, RequirementExpandedPayload, RequirementCommittedPayload, RequirementErrorPayload } from '@/shared/requirement-types.js';
 import type { TeamMailboxMessage, TeamPhaseState, TeamAgentStatus, RoomSessionSnapshot, RoomAgent, RoomAgentStatus, RoomMailboxMessage, RoomTask } from '@/shared/team-types.js';
 import { useMeetingRoomStore } from '@/client/store/meeting-room-store.js';
+import { useRoomListStore } from '@/client/store/room-list-store.js';
 
 // ---------------------------------------------------------------------------
 // useWebSocket — connect to /ws, dispatch to stores, auto-reconnect
@@ -155,6 +156,10 @@ export function useWebSocket(): void {
       handleTaskUpdated: roomHandleTaskUpdated,
       handleRoomClosed: roomHandleRoomClosed,
     } = useMeetingRoomStore.getState();
+    const {
+      handleRoomCreated: roomListHandleCreated,
+      handleRoomClosed: roomListHandleClosed,
+    } = useRoomListStore.getState();
 
     function connect() {
       if (disposed) return;
@@ -460,6 +465,10 @@ export function useWebSocket(): void {
             break;
 
           // --- Room events ---
+          case WS_EVENT_TYPES.ROOM_CREATED:
+            roomListHandleCreated(msg.data as import('@/shared/team-types.js').RoomSessionSummary);
+            break;
+
           case WS_EVENT_TYPES.ROOM_SNAPSHOT:
             roomHandleSnapshot(msg.data as RoomSessionSnapshot);
             break;
@@ -501,9 +510,12 @@ export function useWebSocket(): void {
             break;
           }
 
-          case WS_EVENT_TYPES.ROOM_CLOSED:
+          case WS_EVENT_TYPES.ROOM_CLOSED: {
+            const closedRoomData = msg.data as { sessionId: string };
             roomHandleRoomClosed();
+            roomListHandleClosed(closedRoomData.sessionId);
             break;
+          }
 
           default:
             // Ignore unknown event types

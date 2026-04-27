@@ -25,6 +25,7 @@ import { createWikiRoutes, createSharedWikiWriter } from './wiki.js';
 import { createLinearRoutes } from './linear.js';
 import { createTeamRoutes } from './teams.js';
 import { createCollabRoutes } from './collab.js';
+import { createRoomRoutes } from './rooms.js';
 import { createCommanderRoutes } from '../commander/commander-routes.js';
 import { createCoordinatorRoutes } from '../coordinator/coordinator-routes.js';
 import { createRequirementRoutes } from './requirements.js';
@@ -37,6 +38,7 @@ import type { SelfLearningService } from '../supervisor/self-learning-service.js
 import type { TaskSchedulerService } from '../supervisor/task-scheduler-service.js';
 import type { ExtensionManager } from '../supervisor/extension-manager.js';
 import type { PromptRegistry } from '../prompt/prompt-registry.js';
+import type { RoomSessionManager } from '../rooms/room-session-manager.js';
 
 /**
  * Aggregate all route modules into a single Hono app.
@@ -63,6 +65,7 @@ export function createRoutes(
     extensionManager: ExtensionManager;
     promptRegistry: PromptRegistry;
   },
+  roomSessionManager?: RoomSessionManager,
 ): Hono {
   const routes = new Hono();
 
@@ -127,6 +130,11 @@ export function createRoutes(
 
   // Collab routes (human collaboration, dynamic root for workspace switch)
   routes.route('/', createCollabRoutes(getRoot, eventBus));
+
+  // Room session routes (in-memory meeting room management)
+  if (roomSessionManager) {
+    routes.route('/', createRoomRoutes(roomSessionManager));
+  }
 
   // EventBus recent events endpoint (ring buffer audit)
   routes.get('/api/events/recent', (c) => {

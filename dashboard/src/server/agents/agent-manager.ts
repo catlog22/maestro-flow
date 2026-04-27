@@ -147,17 +147,8 @@ export class AgentManager {
 
     this.unsubscribers.set(process.id, unsubs);
 
-    // Emit spawned event
+    // Emit spawned event (client synthesizes user_message from config.prompt)
     this.eventBus.emit('agent:spawned', process);
-
-    // Emit user's initial prompt as a user_message entry so it appears in chat
-    if (config.prompt) {
-      const userEntry = EntryNormalizer.userMessage(process.id, config.prompt);
-      const history = this.entryHistory.get(process.id);
-      if (history) history.push(userEntry);
-      this.persistEntry(process.id, userEntry);
-      this.eventBus.emit('agent:entry', userEntry);
-    }
 
     return process;
   }

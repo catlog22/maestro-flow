@@ -11,6 +11,7 @@
     "collab": "Multi-User Collab",
     "requirement": "Requirement",
     "supervisor": "Supervisor",
+    "rooms": "Meeting Room",
     "views": "Views"
   },
   "sidebar": {
@@ -30,6 +31,7 @@
     "collab_tooltip": "Multi-User Collab",
     "requirement_tooltip": "Requirement",
     "supervisor_tooltip": "Supervisor management",
+    "rooms_tooltip": "Meeting Room",
     "views_label": "Views",
     "phases_label": "Phases",
     "phase_dot_aria": "Phase {{phase}}: {{title}} — {{status}}"

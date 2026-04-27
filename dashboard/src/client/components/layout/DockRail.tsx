@@ -10,6 +10,7 @@ import Bot from 'lucide-react/dist/esm/icons/bot.js';
 import ListChecks from 'lucide-react/dist/esm/icons/list-checks.js';
 import Activity from 'lucide-react/dist/esm/icons/activity.js';
 import UsersRound from 'lucide-react/dist/esm/icons/users-round.js';
+import Presentation from 'lucide-react/dist/esm/icons/presentation.js';
 import PanelLeft from 'lucide-react/dist/esm/icons/panel-left.js';
 import Plus from 'lucide-react/dist/esm/icons/plus.js';
 import X from 'lucide-react/dist/esm/icons/x.js';
@@ -32,7 +33,7 @@ interface DockNavItem {
   labelKey: string;
   tooltipKey: string;
   path: string;
-  icon: 'kanban' | 'artifacts' | 'chat' | 'workflow' | 'mcp' | 'specs' | 'teams' | 'requirement' | 'supervisor' | 'collab';
+  icon: 'kanban' | 'artifacts' | 'chat' | 'workflow' | 'mcp' | 'specs' | 'teams' | 'requirement' | 'supervisor' | 'collab' | 'rooms';
   shortcut?: string;
 }
 
@@ -47,6 +48,7 @@ const NAV_ITEMS: DockNavItem[] = [
   { labelKey: 'nav.collab', tooltipKey: 'dock.collab_tooltip', path: '/collab', icon: 'collab', shortcut: 'L' },
   { labelKey: 'nav.requirement', tooltipKey: 'dock.requirement_tooltip', path: '/requirement', icon: 'requirement', shortcut: 'R' },
   { labelKey: 'nav.supervisor', tooltipKey: 'dock.supervisor_tooltip', path: '/supervisor', icon: 'supervisor', shortcut: 'V' },
+  { labelKey: 'nav.rooms', tooltipKey: 'dock.rooms_tooltip', path: '/rooms', icon: 'rooms', shortcut: 'O' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -376,6 +378,7 @@ const NAV_ICON_MAP = {
   requirement: ListChecks,
   supervisor: Activity,
   collab: UsersRound,
+  rooms: Presentation,
 } as const;
 
 function NavIcon({ icon }: { icon: DockNavItem['icon'] }) {

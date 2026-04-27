@@ -153,6 +153,11 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
           config.prompt,
         ];
 
+    // Inject MCP config for meeting room tools
+    if (config.mcpConfigPath) {
+      args.push('--mcp-config', config.mcpConfigPath);
+    }
+
     // Map approvalMode to Claude Code permission flags.
     // 'auto' → bypass all permission prompts (yolo) — required for non-interactive
     // --print mode where stdin is closed and no approval responder exists.

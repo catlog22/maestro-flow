@@ -62,6 +62,8 @@ export class RoomWsHandler implements WsHandler {
     switch (action) {
       case 'room:create': {
         const session = this.sessionManager.createSession(sessionId);
+        // Start MCP TCP server for this room (agents will connect to it)
+        await session.startMcp();
         // Auto-subscribe the creator so they receive room:created and all subsequent events
         this.filter.subscribe(ws, sessionId);
         const snapshot = session.getSnapshot();

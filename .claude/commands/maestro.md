@@ -1,10 +1,11 @@
 ---
 name: maestro
-description: Intelligent coordinator - analyze intent + read project state → select optimal command chain → execute via Skill()
-argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>]"
+description: Intelligent coordinator - analyze intent + read project state → select optimal command chain → execute via Skill() or CLI delegate
+argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--exec auto|cli|skill] [--tool <name>]"
 allowed-tools:
   - Read
   - Write
+  - Edit
   - Bash
   - Glob
   - Grep
@@ -16,6 +17,10 @@ Orchestrate all maestro commands automatically based on user intent and current 
 Two routing modes:
 1. **Intent-based**: User describes a goal → classify task type → select/compose command chain → confirm → execute
 2. **State-based**: Read .workflow/state.json → determine next logical step → suggest/execute (triggered by `continue`/`next`)
+
+Per-step execution engine (default: auto):
+- **Skill()**: Observable steps — output visible in conversation, synchronous, user can intervene
+- **CLI delegate**: Heavy execution steps — context isolation, template-driven prompts, gemini quality analysis
 
 Produces session directory at `.workflow/.maestro/{session_id}/` with status.json tracking chain progress.
 Executes commands sequentially via Skill() with artifact propagation between steps.
@@ -37,6 +42,8 @@ $ARGUMENTS — user intent text, or special keywords.
 - `-c` / `--continue` — Resume previous coordinator session from `.workflow/.maestro/*/status.json`
 - `--dry-run` — Show planned chain without executing
 - `--chain <name>` — Force a specific chain (bypass intent detection). Valid: full-lifecycle, spec-driven, brainstorm-driven, execute-verify, quality-loop, milestone-close, quick, review
+- `--exec <mode>` — Execution engine: `auto` (default), `cli`, `skill`. Auto selects per step based on command complexity.
+- `--tool <name>` — CLI tool for delegate execution (default: claude). Only used when engine=cli.
 
 **State files read:**
 - `.workflow/state.json` — project state machine + artifact registry
@@ -96,10 +103,11 @@ Context cleanup hints, context window reminders, and completion report format ar
 - [ ] Intent classified with task_type, complexity, clarity_score
 - [ ] Project state read and incorporated into routing
 - [ ] Command chain selected and confirmed (or auto-confirmed with -y)
+- [ ] Per-step engine selected (auto routes heavy steps to CLI, observable steps to Skill)
 - [ ] Auto flags correctly propagated to supporting commands only
 - [ ] Session directory created at .workflow/.maestro/{session_id}/
-- [ ] status.json tracks per-step progress
-- [ ] All chain steps executed via Skill() with proper argument propagation
+- [ ] status.json tracks per-step progress and execution engine
+- [ ] All chain steps executed via Skill() or CLI delegate with proper argument propagation
 - [ ] Phase numbers auto-detected and passed to downstream commands
 - [ ] Error handling: retry/skip/abort per step (auto-skip in -y mode)
 - [ ] Session summary displayed on completion

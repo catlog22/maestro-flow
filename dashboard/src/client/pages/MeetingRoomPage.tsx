@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import MessageSquare from 'lucide-react/dist/esm/icons/message-square.js';
 import Terminal from 'lucide-react/dist/esm/icons/terminal.js';
 import Columns from 'lucide-react/dist/esm/icons/columns.js';
@@ -7,6 +7,8 @@ import Send from 'lucide-react/dist/esm/icons/send.js';
 import Radio from 'lucide-react/dist/esm/icons/radio.js';
 import User from 'lucide-react/dist/esm/icons/user.js';
 import AtSign from 'lucide-react/dist/esm/icons/at-sign.js';
+import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left.js';
+import UserPlus from 'lucide-react/dist/esm/icons/user-plus.js';
 import { useBoardStore } from '@/client/store/board-store.js';
 import { useMeetingRoomStore } from '@/client/store/meeting-room-store.js';
 import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
@@ -15,6 +17,7 @@ import { ChatTimeline } from '@/client/components/meeting-room/ChatTimeline.js';
 import { TerminalPanelGrid } from '@/client/components/meeting-room/TerminalPanelGrid.js';
 import { AgentStatusBar } from '@/client/components/meeting-room/AgentStatusBar.js';
 import { ResizableChatTerminalSplit } from '@/client/components/meeting-room/ResizableChatTerminalSplit.js';
+import { AddAgentDialog } from '@/client/components/rooms/AddAgentDialog.js';
 import type { LayoutMode } from '@/client/store/meeting-room-store.js';
 
 // ---------------------------------------------------------------------------
@@ -29,10 +32,12 @@ const LAYOUT_TABS: { mode: LayoutMode; icon: typeof MessageSquare; label: string
 
 export function MeetingRoomPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [input, setInput] = useState('');
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [addAgentOpen, setAddAgentOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const setSessionId = useMeetingRoomStore((s) => s.setSessionId);
@@ -160,6 +165,14 @@ export function MeetingRoomPage() {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-2 border-b border-border-divider bg-bg-secondary shrink-0">
+        <button
+          type="button"
+          onClick={() => navigate('/rooms')}
+          className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          title="Back to rooms"
+        >
+          <ArrowLeft size={14} />
+        </button>
         <span className="text-[length:var(--font-size-sm)] font-semibold text-text-primary">
           Meeting Room
         </span>
@@ -167,6 +180,17 @@ export function MeetingRoomPage() {
           {sessionId}
         </span>
         <div className="flex-1" />
+
+        {/* Add Agent */}
+        <button
+          type="button"
+          onClick={() => setAddAgentOpen(true)}
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          title="Add agent to room"
+        >
+          <UserPlus size={12} />
+          <span>Add Agent</span>
+        </button>
 
         {/* Layout mode tabs */}
         <div className="flex items-center gap-0.5 bg-bg-primary rounded-lg p-0.5">
@@ -307,6 +331,8 @@ export function MeetingRoomPage() {
 
       {/* Agent status bar */}
       <AgentStatusBar />
+
+      <AddAgentDialog open={addAgentOpen} onOpenChange={setAddAgentOpen} />
     </div>
   );
 }

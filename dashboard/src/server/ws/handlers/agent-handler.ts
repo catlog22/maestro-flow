@@ -1,4 +1,7 @@
 import { WebSocket } from 'ws';
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import type { WsHandler } from '../ws-handler.js';
 import type { WsEventType } from '../../../shared/ws-protocol.js';
@@ -8,6 +11,8 @@ import type { DashboardEventBus } from '../../state/event-bus.js';
 import { loadDashboardAgentSettings } from '../../config.js';
 import { EntryNormalizer } from '../../agents/entry-normalizer.js';
 import { handleDelegateMessage } from '../../../../../src/async/delegate-control.js';
+import type { RoomSessionManager } from '../../rooms/room-session-manager.js';
+import type { RoomMcpAgentType } from '../../rooms/meeting-room-session.js';
 
 type DelegateMessageHandler = typeof handleDelegateMessage;
 
@@ -32,6 +37,7 @@ export class AgentWsHandler implements WsHandler {
     private readonly eventBus: DashboardEventBus,
     private readonly workflowRoot: string,
     private readonly delegateMessage: DelegateMessageHandler = handleDelegateMessage,
+    private readonly roomSessionManager?: RoomSessionManager,
   ) {}
 
   async handle(
@@ -138,7 +144,58 @@ export class AgentWsHandler implements WsHandler {
       settingsFile: (config.settingsFile ?? saved?.settingsFile) || undefined,
       envFile: (config.envFile ?? saved?.envFile) || undefined,
     };
+    // Inject MCP config if agent is being added to a meeting room
+    const roomSessionId = mergedConfig.metadata?.roomSessionId as string | undefined;
+    const roomRole = mergedConfig.metadata?.roomRole as string | undefined;
+    if (roomSessionId && roomRole && this.roomSessionManager) {
+      const session = this.roomSessionManager.getSession(roomSessionId);
+      if (session) {
+        // Ensure MCP TCP server is running (idempotent)
+        await session.startMcp();
+
+        // Inject MCP config based on agent type
+        const MCP_AGENT_TYPES: Record<string, RoomMcpAgentType> = {
+          'claude-code': 'claude-code',
+          'agent-sdk': 'agent-sdk',
+          'codex': 'codex',
+        };
+        const mcpAgentType = MCP_AGENT_TYPES[mergedConfig.type];
+        if (mcpAgentType) {
+          if (mcpAgentType === 'claude-code') {
+            const mcpConfig = session.getMcpConfig('claude-code', roomRole);
+            const tmpPath = join(tmpdir(), `mr-mcp-${roomSessionId}-${roomRole}.json`);
+            writeFileSync(tmpPath, JSON.stringify({ mcpServers: { 'meeting-room': mcpConfig } }));
+            mergedConfig.mcpConfigPath = tmpPath;
+          } else if (mcpAgentType === 'agent-sdk') {
+            const mcpServer = session.getMcpConfig('agent-sdk', roomRole);
+            mergedConfig.metadata = { ...mergedConfig.metadata, roomMcpServer: mcpServer };
+          }
+          // codex uses stdio config via env vars (handled by adapter)
+        }
+
+        // Claude Code in room → force interactive mode for follow-up wake messages
+        if (mergedConfig.type === 'claude-code') {
+          mergedConfig.interactive = true;
+        }
+
+        // Leader → auto bypass permissions (needs free MCP tool access)
+        if (roomRole === 'leader') {
+          mergedConfig.approvalMode = mergedConfig.approvalMode ?? 'auto';
+        }
+      }
+    }
+
     const proc = await this.agentManager.spawn(mergedConfig.type, mergedConfig);
+
+    // Auto-link to meeting room if metadata contains room context
+    if (roomSessionId && roomRole && this.roomSessionManager) {
+      const session = this.roomSessionManager.getSession(roomSessionId);
+      if (session) {
+        const agent = session.addAgent(roomRole, proc.id);
+        this.eventBus.emit('room:agent_joined', { sessionId: roomSessionId, agent });
+      }
+    }
+
     const response = {
       type: 'agent:spawned' as const,
       data: proc,

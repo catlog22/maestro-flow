@@ -2,14 +2,21 @@ import { useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAgentStore } from '@/client/store/agent-store.js';
 import { useMeetingRoomStore } from '@/client/store/meeting-room-store.js';
-import { EntryRenderer } from '@/client/pages/chat/entries/index.js';
 import { AGENT_STATUS_COLORS } from '@/shared/team-types.js';
 import type { NormalizedEntry } from '@/shared/agent-types.js';
 import type { RoomAgent, RoomMailboxMessage } from '@/shared/team-types.js';
 
 // ---------------------------------------------------------------------------
-// ChatTimeline — Merged chronological timeline of room messages + agent entries
+// ChatTimeline — Conversation view: mailbox messages + agent final replies
+//   Left panel shows only the "conversation" layer:
+//     - Room mailbox messages (user ↔ agent direct/broadcast)
+//     - Agent assistant_message entries (final LLM output)
+//   All other entry types (stderr, status, token_usage, tool_use, etc.)
+//   are shown only in the right-side TerminalPanelGrid.
 // ---------------------------------------------------------------------------
+
+/** Entry types shown in the chat conversation view */
+const CHAT_ENTRY_TYPES = new Set(['user_message', 'assistant_message']);
 
 /** Role badge color lookup */
 function getRoleBadgeColor(role: string, agents: RoomAgent[]): string {
@@ -51,8 +58,16 @@ function renderContentWithMentions(content: string, agents: RoomAgent[]): React.
   return parts.length > 0 ? parts : content;
 }
 
+/** Extract text content from an assistant_message entry */
+function getEntryContent(entry: NormalizedEntry): string {
+  if (entry.type === 'assistant_message' || entry.type === 'user_message') {
+    return (entry as { content: string }).content ?? '';
+  }
+  return '';
+}
+
 type TimelineItem =
-  | { kind: 'entry'; entry: NormalizedEntry; role: string; ts: number }
+  | { kind: 'reply'; entry: NormalizedEntry; role: string; processId: string; ts: number }
   | { kind: 'message'; message: RoomMailboxMessage; ts: number };
 
 export function ChatTimeline() {
@@ -61,7 +76,7 @@ export function ChatTimeline() {
   const messages = useMeetingRoomStore((s) => s.messages);
   const allEntries = useAgentStore((s) => s.entries);
 
-  // Build role -> processId mapping from room agents
+  // Build processId -> role mapping from room agents
   const roleProcessMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const agent of agents) {
@@ -72,21 +87,22 @@ export function ChatTimeline() {
     return map;
   }, [agents]);
 
-  // Merge mailbox messages + agent entries into one timeline
+  // Merge mailbox messages + agent assistant_message entries into conversation view
   const mergedItems = useMemo(() => {
     const items: TimelineItem[] = [];
 
-    // Add room mailbox messages
+    // Mailbox messages
     for (const msg of messages) {
       items.push({ kind: 'message', message: msg, ts: new Date(msg.createdAt).getTime() });
     }
 
-    // Add agent process entries
+    // Only assistant_message entries from agent processes
     for (const [processId, role] of roleProcessMap) {
       const entries = allEntries[processId];
       if (!entries) continue;
       for (const entry of entries) {
-        items.push({ kind: 'entry', entry, role, ts: new Date(entry.timestamp).getTime() });
+        if (!CHAT_ENTRY_TYPES.has(entry.type)) continue;
+        items.push({ kind: 'reply', entry, role, processId, ts: new Date(entry.timestamp).getTime() });
       }
     }
 
@@ -123,7 +139,7 @@ export function ChatTimeline() {
   return (
     <div
       ref={timelineRef}
-      className="flex-1 overflow-y-auto flex flex-col gap-0.5 p-3"
+      className="flex-1 overflow-y-auto flex flex-col gap-1 p-3"
     >
       <AnimatePresence initial={false}>
         {mergedItems.map((item) => {
@@ -139,6 +155,7 @@ export function ChatTimeline() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="mt-1"
               >
                 <div className={`flex items-start gap-2 ${isUser ? 'flex-row-reverse' : ''}`}>
                   {/* From badge */}
@@ -156,12 +173,11 @@ export function ChatTimeline() {
                     className={`flex flex-col gap-0.5 max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}
                   >
                     {/* Routing indicator */}
-                    {!isBroadcast && (
+                    {!isBroadcast ? (
                       <span className="text-[8px] text-text-placeholder">
-                        {isUser ? `to @${msg.to}` : `to @${msg.to}`}
+                        to @{msg.to}
                       </span>
-                    )}
-                    {isBroadcast && (
+                    ) : (
                       <span className="text-[8px] text-text-placeholder">
                         broadcast
                       </span>
@@ -185,9 +201,11 @@ export function ChatTimeline() {
             );
           }
 
-          // Agent process entry
-          const { entry, role } = item;
+          // Agent entry (user_message or assistant_message)
+          const { entry, role, processId } = item;
           const badgeColor = getRoleBadgeColor(role, agents);
+          const content = getEntryContent(entry);
+          const isUserEntry = entry.type === 'user_message';
           return (
             <motion.div
               key={entry.id}
@@ -195,19 +213,35 @@ export function ChatTimeline() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="mt-1"
             >
-              <div className="flex items-start gap-2">
+              <div className={`flex items-start gap-2 ${isUserEntry ? 'flex-row-reverse' : ''}`}>
                 <span
                   className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 whitespace-nowrap"
                   style={{
-                    background: `${badgeColor}18`,
-                    color: badgeColor,
+                    background: isUserEntry ? 'var(--color-accent-muted)' : `${badgeColor}18`,
+                    color: isUserEntry ? 'var(--color-text-on-accent, #fff)' : badgeColor,
                   }}
                 >
-                  {role}
+                  {isUserEntry ? 'You' : role}
                 </span>
-                <div className="flex-1 min-w-0">
-                  <EntryRenderer entry={entry} />
+                <div className={`flex flex-col gap-0.5 max-w-[75%] ${isUserEntry ? 'items-end' : 'items-start'}`}>
+                  {!isUserEntry && (
+                    <span className="text-[8px] text-text-placeholder font-mono">
+                      {processId.slice(0, 8)}
+                    </span>
+                  )}
+                  <div className={[
+                    'text-[12px] px-2.5 py-1.5 rounded-lg leading-relaxed whitespace-pre-wrap',
+                    isUserEntry
+                      ? 'bg-accent-muted/15 text-text-primary'
+                      : 'bg-bg-secondary text-text-primary',
+                  ].join(' ')}>
+                    {content}
+                  </div>
+                  <span className="text-[8px] text-text-placeholder">
+                    {new Date(entry.timestamp).toLocaleTimeString()}
+                  </span>
                 </div>
               </div>
             </motion.div>
