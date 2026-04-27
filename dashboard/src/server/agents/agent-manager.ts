@@ -276,6 +276,19 @@ export class AgentManager {
     }
   }
 
+  /** Remove a process from memory (dismiss from dashboard) */
+  removeProcess(processId: string): void {
+    this.cliProcesses.delete(processId);
+    this.entryHistory.delete(processId);
+    const timer = this.cliCleanupTimers.get(processId);
+    if (timer) { clearTimeout(timer); this.cliCleanupTimers.delete(processId); }
+    this.processToAdapter.delete(processId);
+    this.processExecIds.delete(processId);
+    this.processConfigs.delete(processId);
+    const unsubs = this.unsubscribers.get(processId);
+    if (unsubs) { unsubs.forEach(fn => fn()); this.unsubscribers.delete(processId); }
+  }
+
   /** List all active processes across all adapters + CLI bridge */
   listProcesses(): AgentProcess[] {
     const all: AgentProcess[] = [];

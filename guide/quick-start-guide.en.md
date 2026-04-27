@@ -307,7 +307,7 @@ Displays Phase progress, Issue status (Backlog → In Progress → Review → Do
 | `maestro spec load --category coding` | Load specs |
 | `maestro view` | Dashboard |
 | `maestro launcher -w my-project` | Claude Code launcher |
-| `maestro core-memory search "auth"` | Search persistent memory |
+| `maestro knowhow search "auth"` | Search persistent memory |
 
 ---
 

@@ -655,10 +655,10 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 ### 5.3 内存管理
 
 ```bash
-/manage-memory-capture compact       # 压缩当前会话记忆
+/manage-knowhow-capture compact       # 压缩当前知识复用条目
 /manage-learn tip "总是用 bun 而不是 npm" --tag tooling
-/manage-memory list --store workflow --tag tooling
-/manage-memory search "认证"
+/manage-knowhow list --store workflow --tag tooling
+/manage-knowhow search "认证"
 ```
 
 ### 5.4 状态查看
@@ -813,7 +813,7 @@ Wiki 系统是 Maestro 的知识索引核心，把 `.workflow/` 下的 markdown 
 | `project` | `project.md` | 只读 | 项目描述 |
 | `roadmap` | `roadmap.md` | 只读 | 路线图 |
 | `spec` | `specs/<slug>.md` | 可写 | 规范文档 |
-| `memory` | `memory/MEM-<slug>.md` | 可写 | 会话记忆（由 `/manage-memory-capture` 创建） |
+| `knowhow` | `knowhow/KNW-<slug>.md` | 可写 | 知识复用条目（由 `/manage-knowhow-capture` 创建） |
 | `note` | `memory/TIP-<slug>.md` | 可写 | 快速笔记 |
 | `issue` | `issues/*.jsonl` 行 | 只读（虚拟） | 问题追踪 |
 | `lesson` | `learning/*.jsonl` 行 | 只读（虚拟） | 学习洞察 |

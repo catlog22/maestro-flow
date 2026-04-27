@@ -651,10 +651,10 @@ Types: `bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `
 ### 5.3 Memory Management
 
 ```bash
-/manage-memory-capture compact       # Compact current session memory
+/manage-knowhow-capture compact       # Compact current knowhow
 /manage-learn tip "Always use bun instead of npm" --tag tooling
-/manage-memory list --store workflow --tag tooling
-/manage-memory search "authentication"
+/manage-knowhow list --store workflow --tag tooling
+/manage-knowhow search "authentication"
 ```
 
 ### 5.4 Status View
@@ -790,7 +790,7 @@ The Wiki system is Maestro's knowledge indexing core. It unifies markdown files 
 | `project` | `project.md` | Read-only | Project description |
 | `roadmap` | `roadmap.md` | Read-only | Roadmap |
 | `spec` | `specs/<slug>.md` | Writable | Spec documents |
-| `memory` | `memory/MEM-<slug>.md` | Writable | Session memory (created by `/manage-memory-capture`) |
+| `knowhow` | `knowhow/KNW-<slug>.md` | Writable | Knowhow entry (created by `/manage-knowhow-capture`) |
 | `note` | `memory/TIP-<slug>.md` | Writable | Quick notes |
 | `issue` | `issues/*.jsonl` rows | Read-only (virtual) | Issue tracking |
 | `lesson` | `learning/*.jsonl` rows | Read-only (virtual) | Learning insights |

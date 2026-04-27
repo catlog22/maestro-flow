@@ -20,7 +20,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
   - [team_task](#team_task)
   - [team_agent](#team_agent)
 - [Persistent Memory](#persistent-memory)
-  - [core_memory](#core_memory)
+  - [store_knowhow](#store_knowhow)
 - [CLI Terminal Commands](#cli-terminal-commands)
 
 ---
@@ -37,7 +37,7 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 | `team_mailbox` | Team | Mailbox-style message delivery with tracking |
 | `team_task` | Team | Task CRUD with state machine management |
 | `team_agent` | Team | Agent lifecycle management (spawn/shutdown) |
-| `core_memory` | Memory | Cross-session JSON memory storage |
+| `store_knowhow` | Memory | Knowhow knowledge entry storage (6 types) |
 
 ---
 
@@ -337,42 +337,53 @@ Agent lifecycle management — spawn, shutdown, and remove agents via the Delega
 
 ---
 
-## Persistent Memory
+## Knowhow
 
-### core_memory
+### store_knowhow
 
-Cross-session JSON memory storage at `~/.maestro/data/core-memory/`. Provides 4 operations: list, import, export, search.
+Project-level knowledge reuse management, stored in `.workflow/knowhow/`. Provides 2 operations: add, search. Supports 6 content types with type-specific metadata.
 
-**Storage**: `~/.maestro/data/core-memory/{md5-hash-of-project-path}.json`
+**Storage**: `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{HHMM}.md`
 
-**ID format**: `CMEM-YYYYMMDD-HHMMSS`
+**6 types**: session(KNW-), tip(TIP-), template(TPL-), recipe(RCP-), reference(REF-), decision(DCS-)
 
-#### core_memory Parameters
+**Auto-indexed**: WikiIndexer indexes entries as `type=knowhow`. Query via `maestro wiki list --type knowhow`.
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `operation` | `"list"` \| `"import"` \| `"export"` \| `"search"` | Yes | — | Operation type |
-| `path` | string | No | auto-detected | Project path override |
-| `text` | string | import | — | Content to import |
-| `id` | string | export | — | Memory ID |
-| `query` | string | search | — | Search keywords |
-| `limit` | number | No | `100` | Max results |
-| `tags` | string[] | No | — | Tag filter (AND logic) |
+#### store_knowhow Parameters
 
-#### core_memory Examples
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `operation` | `"add"` \| `"search"` | Yes | Operation type |
+| `type` | string | add | Content type: session\|tip\|template\|recipe\|reference\|decision |
+| `title` | string | add | Entry title |
+| `body` | string | add | Entry body (markdown) |
+| `tags` | string[] | No | Categorization tags |
+| `lang` | string | No | [template] Programming language |
+| `source` | string | No | [reference] Original URL |
+| `status` | string | No | [decision] proposed\|accepted\|superseded |
+| `query` | string | search | Search keywords |
+| `limit` | number | No | Max results (default: 20) |
+
+#### store_knowhow Examples
 
 ```jsonc
-// Import memory
-{ "operation": "import", "text": "Auth module uses bcrypt + JWT", "tags": ["auth", "security"] }
+// Add a code template
+{ "operation": "add", "type": "template", "title": "React Hook Form",
+  "body": "import { useForm } from 'react-hook-form'; ...",
+  "lang": "typescript", "tags": ["react", "form"] }
 
-// Search
-{ "operation": "search", "query": "auth token" }
+// Add an architecture decision
+{ "operation": "add", "type": "decision", "title": "Use PostgreSQL",
+  "body": "ADR: PostgreSQL as primary database...",
+  "status": "accepted", "tags": ["database", "architecture"] }
 
-// Export
-{ "operation": "export", "id": "CMEM-20260421-143000" }
+// Add an external reference
+{ "operation": "add", "type": "reference", "title": "Stripe API",
+  "body": "Key endpoints for payment processing...",
+  "source": "https://docs.stripe.com/api", "tags": ["stripe", "api"] }
 
-// List with tag filter
-{ "operation": "list", "tags": ["auth"], "limit": 10 }
+// Full-text search
+{ "operation": "search", "query": "authentication middleware" }
 ```
 
 ---
@@ -390,7 +401,7 @@ MCP Server (stdio)
        ├─ team_mailbox    ─ Mailbox delivery
        ├─ team_task       ─ Task management
        ├─ team_agent      ─ Agent lifecycle
-       └─ core_memory     ─ Persistent memory
+       └─ store_knowhow   ─ Knowhow
 ```
 
 **Adapter**: Tools use Zod schemas internally and return `{success, result, error}` format. The `ccwResultToMcp()` adapter converts this to the MCP standard `{content, isError}` format.

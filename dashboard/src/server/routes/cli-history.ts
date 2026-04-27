@@ -7,7 +7,7 @@
 import { Hono } from 'hono';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { CLI_HISTORY_DIR_NAME } from '../../shared/constants.js';
 import { DelegateBrokerClient } from '../../../../src/async/index.js';
 
@@ -124,6 +124,22 @@ export function createCliHistoryRoutes(): Hono {
     } catch {
       return c.json({ error: 'Execution not found' }, 404);
     }
+  });
+
+  // DELETE /api/cli-history/:id
+  app.delete('/api/cli-history/:id', (c) => {
+    const id = c.req.param('id');
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id)) {
+      return c.json({ error: 'Invalid execution ID' }, 400);
+    }
+
+    const dir = getCliHistoryDir();
+    let deleted = 0;
+    for (const ext of ['.meta.json', '.jsonl']) {
+      try { unlinkSync(join(dir, `${id}${ext}`)); deleted++; } catch { /* ignore missing */ }
+    }
+    if (deleted === 0) return c.json({ error: 'Execution not found' }, 404);
+    return c.json({ ok: true });
   });
 
   // GET /api/cli-history/:id/messages

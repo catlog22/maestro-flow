@@ -2,7 +2,7 @@
 
 Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers installation, delegation, coordination, wiki, hooks, collaboration, and more.
 
-> **Aliases**: Some commands have short aliases: `coord` → `coordinate`, `msg` → `agent-msg`, `cm` → `core-memory`, `bv` → `brainstorm-visualize`, `team` → `collab`.
+> **Aliases**: Some commands have short aliases: `coord` → `coordinate`, `msg` → `agent-msg`, `kh` → `knowhow`, `bv` → `brainstorm-visualize`, `team` → `collab`.
 
 ---
 
@@ -32,7 +32,7 @@ Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers in
   - [maestro collab](#maestro-collab)
   - [maestro agent-msg](#maestro-agent-msg)
 - [Memory & Extensions](#memory--extensions)
-  - [maestro core-memory](#maestro-core-memory)
+  - [maestro knowhow](#maestro-knowhow)
   - [maestro brainstorm-visualize](#maestro-brainstorm-visualize)
   - [maestro ext / maestro tool](#maestro-ext--maestro-tool)
 
@@ -59,7 +59,7 @@ Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers in
 | `maestro overlay` | — | Command overlay management |
 | `maestro collab` | `team` | Human team collaboration |
 | `maestro agent-msg` | `msg` | Agent team message bus |
-| `maestro core-memory` | `cm` | Persistent memory management |
+| `maestro knowhow` | `kh` | Knowhow knowledge management |
 | `maestro brainstorm-visualize` | `bv` | Brainstorm visualization server |
 | `maestro ext` | — | Extension management |
 | `maestro tool` | — | Tool interaction (list/exec) |
@@ -424,15 +424,18 @@ maestro msg broadcast "meeting" -s <session> --from coordinator
 
 ## Memory & Extensions
 
-### maestro core-memory
+### maestro knowhow
 
-Persistent memory management (alias: `cm`).
+Knowhow knowledge management (alias: `kh`). 6 types: session, tip, template, recipe, reference, decision.
 
 ```bash
-maestro cm list --tags auth             # List by tag
-maestro cm import "auth uses JWT" --tags auth,security
-maestro cm export CMEM-20260421-143000  # Export
-maestro cm search "auth token"          # Search
+maestro kh add --type template --title "React Hook Form" --body "..." --lang typescript
+maestro kh add --type recipe --title "Deploy" --body "Steps: ..." --tags deploy
+maestro kh add --type decision --title "Use PG" --body "ADR: ..." --status accepted
+maestro kh list                           # List all
+maestro kh list --type template           # Filter by type
+maestro kh search "deploy"                # Keyword search
+maestro kh get knowhow-20260427-1912      # View detail
 ```
 
 ---

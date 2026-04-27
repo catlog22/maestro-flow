@@ -307,7 +307,7 @@ maestro stop              # 停止服务
 | `maestro spec load --category coding` | 加载规范 |
 | `maestro view` | Dashboard 看板 |
 | `maestro launcher -w my-project` | Claude Code 启动器 |
-| `maestro core-memory search "auth"` | 搜索持久记忆 |
+| `maestro knowhow search "auth"` | 搜索持久记忆 |
 
 ---
 

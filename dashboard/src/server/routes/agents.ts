@@ -124,6 +124,13 @@ export function createAgentRoutes(agentManager: AgentManager): Hono {
     }
   });
 
+  // DELETE /api/agents/:id — remove a process from memory (dismiss)
+  app.delete('/api/agents/:id', (c) => {
+    const id = c.req.param('id');
+    agentManager.removeProcess(id);
+    return c.json({ ok: true });
+  });
+
   // GET /api/agents
   app.get('/api/agents', (c) => {
     return c.json(agentManager.listProcesses());

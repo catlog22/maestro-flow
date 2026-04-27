@@ -268,6 +268,12 @@ export const useAgentStore = create<AgentStore>((set) => ({
       clearTimeout(pendingTimer);
       ttlTimers.delete(processId);
     }
+    // Delete from server — agent memory + CLI history files
+    if (processId.startsWith('cli-history-')) {
+      const execId = processId.slice('cli-history-'.length);
+      fetch(`/api/cli-history/${encodeURIComponent(execId)}`, { method: 'DELETE' }).catch(() => {});
+    }
+    fetch(`/api/agents/${encodeURIComponent(processId)}`, { method: 'DELETE' }).catch(() => {});
     set((state) => {
       const { [processId]: _p, ...remainingProcesses } = state.processes;
       const { [processId]: _e, ...remainingEntries } = state.entries;
