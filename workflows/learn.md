@@ -44,16 +44,11 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 ## Stage 1: parse_input
 
 ```
-1. Verify .workflow/ exists; else error E001.
-2. Tokenize $ARGUMENTS:
-   - First token determines mode:
-       "list"   → list mode
-       "search" → search mode (next token = query)
-       "show"   → show mode (next token = INS-id)
-       "tip"    → tip capture mode (remaining tokens = note text; set source="tip", category="tip", confidence="low", implicit tag "tip")
-       anything else → capture mode (entire quoted text = insight body)
-3. If empty arguments → AskUserQuestion: prompt for insight text.
-4. Validate --category against allowed set; unknown → error E002.
+Verify .workflow/ exists (else E001). Route by first token:
+  "list" → list | "search" → search (next token = query) | "show" → show (next token = INS-id)
+  "tip"  → tip capture (source="tip", category="tip", confidence="low", implicit tag "tip")
+  else   → capture mode (full quoted text = insight body)
+Empty args → AskUserQuestion. Invalid --category → E002.
 ```
 
 ---
@@ -83,26 +78,11 @@ fi
 
 Unless `--phase` is set:
 ```
-phase = null
-phase_slug = null
-
-IF .workflow/state.json exists:
-  state = read JSON
-  artifacts = state.artifacts ?? []
-
-  # Derive current phase from artifacts (first phase with in_progress, or first without completed execute)
-  phase = null
-  inProgressArt = artifacts.find(a => a.type === 'execute' && a.status === 'in_progress')
-  IF inProgressArt:
-    phase = inProgressArt.phase
-  ELSE:
-    phaseNums = [...new Set(artifacts.map(a => a.phase).filter(Boolean))].sort()
-    phase = phaseNums.find(p => !artifacts.some(a => a.phase === p && a.type === 'execute' && a.status === 'completed'))
-
-  IF phase is not null:
-    # Resolve slug from artifact registry
-    art = artifacts.find(a => a.phase === phase)
-    phase_slug = art?.slug ?? "phase-" + phase
+From .workflow/state.json artifacts, detect current phase:
+  1. Find first artifact with type=execute, status=in_progress
+  2. Else find first phase without a completed execute artifact
+  3. Resolve phase_slug from matching artifact (fallback: "phase-{N}")
+If no state.json → phase=null, phase_slug=null
 ```
 
 If `--phase 0` is passed, force `phase = null, phase_slug = null` regardless.
@@ -143,53 +123,15 @@ row = {
 }
 ```
 
-### Step 2.6: Append to lessons.jsonl
+### Step 2.6: Persist
 
-```
-Serialize row as single JSON line (no pretty print)
-Append to .workflow/learning/lessons.jsonl
-```
+Append row as single JSON line to `.workflow/learning/lessons.jsonl`.
 
-### Step 2.7: Update learning-index.json
+Update `.workflow/learning/learning-index.json` — append an index entry mirroring key row fields: `id`, `type:"insight"`, `timestamp`, `file:"lessons.jsonl"`, `summary` (=title), `tags`, `lens`, `category`, `phase`, `phase_slug`, `confidence`, `routed_to:"none"`, `routed_id:null`.
 
-```
-Read .workflow/learning/learning-index.json
-Append to entries[]:
-  {
-    id: row.id,
-    type: "insight",
-    timestamp: row.captured_at,
-    file: "lessons.jsonl",
-    summary: row.title,
-    tags: row.tags,
-    lens: null,
-    category: row.category,
-    phase: row.phase,
-    phase_slug: row.phase_slug,
-    confidence: row.confidence,
-    routed_to: "none",
-    routed_id: null
-  }
-Write .workflow/learning/learning-index.json
-```
+### Step 2.7: Confirmation banner
 
-### Step 2.8: Confirmation banner
-
-```
-=== INSIGHT CAPTURED ===
-ID:         {INS-id}
-Category:   {category}
-Confidence: {confidence}
-Tags:       {tags joined by ", "}
-Phase:      {phase or "none"}{IF phase_slug: " ({phase_slug})"}
-
-  {title}
-
-File: .workflow/learning/lessons.jsonl
-
-To browse: Skill({ skill: "manage-learn", args: "list" })
-To search: Skill({ skill: "manage-learn", args: "search <query>" })
-```
+Display: ID, category, confidence, tags, phase (+slug if present), title, file path, and hints for `list` / `search` commands.
 
 ---
 
@@ -197,19 +139,7 @@ To search: Skill({ skill: "manage-learn", args: "search <query>" })
 
 ### Step 3.1: Read entries
 
-```
-Read .workflow/learning/learning-index.json
-entries = index.entries
-
-Apply filters from flags:
-  --tag t1,t2  → keep entries where any tag matches any filter tag
-  --category X → keep entries where category == X
-  --phase N    → keep entries where phase == N
-  --lens X     → keep entries where lens == X (retrospective insights only)
-
-Sort by timestamp DESCENDING
-Default limit: 20 (override with --limit N)
-```
+Read `.workflow/learning/learning-index.json`. Filter by `--tag`, `--category`, `--phase`, `--lens` flags. Sort by timestamp descending. Limit to 20 (or `--limit N`).
 
 ### Step 3.2: Display table
 
@@ -242,29 +172,11 @@ Capture your first: Skill({ skill: "manage-learn", args: "\"...\"" })
 
 ### Step 4.1: Validate query
 
-```
-query = next token after "search"
-If empty → AskUserQuestion: "What text to search for?"
-```
+Next token after "search". Empty → AskUserQuestion.
 
 ### Step 4.2: Scan lessons.jsonl
 
-```
-matches = []
-FOR each line in .workflow/learning/lessons.jsonl:
-  row = JSON.parse(line)
-  haystack = lower(row.title + " " + row.summary + " " + row.tags.join(" ") + " " + row.category + " " + (row.lens or ""))
-  needle = lower(query)
-  IF haystack contains needle:
-    # Compute simple match rank
-    rank = 0
-    IF row.title contains needle: rank += 3
-    IF row.tags contains needle:  rank += 2
-    IF row.summary contains needle: rank += 1
-    matches.push({ row, rank })
-
-Sort matches by rank DESCENDING, then by captured_at DESCENDING
-```
+Case-insensitive search across each row's `title`, `summary`, `tags`, `category`, `lens`. Rank matches: title match +3, tags +2, summary +1. Sort by rank desc, then captured_at desc.
 
 ### Step 4.3: Display results
 
@@ -294,52 +206,15 @@ List all: Skill({ skill: "manage-learn", args: "list" })
 
 ### Step 5.1: Locate row
 
-```
-target_id = next token after "show"
-If missing → error E003: "Provide an INS-id (e.g. INS-a1b2c3d4)"
-
-row = null
-FOR each line in .workflow/learning/lessons.jsonl:
-  parsed = JSON.parse(line)
-  IF parsed.id == target_id:
-    row = parsed
-    break
-
-IF row is null → error E004: "Insight {target_id} not found"
-```
+Find row matching target INS-id in `lessons.jsonl`. Missing arg → E003. Not found → E004.
 
 ### Step 5.2: Resolve linked phase context (if any)
 
-```
-phase_context = null
-IF row.phase_slug is not null:
-  // Resolve phase dir from artifact registry
-  Read .workflow/state.json → state
-  artifacts = state.artifacts ?? []
-  phase_dir = null
-  art = artifacts.find(a => a.phase === row.phase && a.path)
-  IF art: phase_dir = ".workflow/" + art.path
-
-  IF phase_dir AND directory exists:
-    phase_context = {
-      title: read index.json.title from phase_dir,
-      status: read index.json.status,
-      retrospective_exists: file exists at phase_dir + "/retrospective.md"
-    }
-```
+If `row.phase_slug` set: look up phase directory from `state.json` artifacts, read its `index.json` for title/status, check for `retrospective.md`.
 
 ### Step 5.3: Resolve routed artifact (if any)
 
-```
-routed_path = null
-IF row.routed_id is not null:
-  IF row.routed_to == "spec":
-    routed_path = ".workflow/specs/" + row.routed_id
-  ELIF row.routed_to == "issue":
-    routed_path = ".workflow/issues/issues.jsonl#" + row.routed_id
-  ELIF row.routed_to == "note":
-    routed_path = ".workflow/memory/" + row.routed_id + ".md"
-```
+Map `routed_to` → path: `spec` → `.workflow/specs/{id}`, `issue` → `.workflow/issues/issues.jsonl#{id}`, `note` → `.workflow/memory/{id}.md`.
 
 ### Step 5.4: Display
 
@@ -377,33 +252,6 @@ PHASE CONTEXT:
   Retrospective: {phase_context.retrospective_exists ? "yes" : "no"}
 =========================================
 ```
-
----
-
-## Error Codes
-
-| Code | Severity | Description |
-|------|----------|-------------|
-| E001 | error | `.workflow/` not initialized — run `Skill({ skill: "maestro-init" })` first |
-| E002 | error | Unknown `--category` (allowed: pattern, antipattern, decision, tool, gotcha, technique) |
-| E003 | error | `show` mode requires an INS-id argument |
-| E004 | error | Insight id not found in lessons.jsonl |
-| W001 | warning | Auto-phase detection found no matching artifact in registry; phase set to null |
-| W002 | warning | learning-index.json out of sync with lessons.jsonl (different row count); offer to rebuild |
-
----
-
-## Success Criteria
-
-- [ ] Mode correctly routed (capture / list / search / show)
-- [ ] Capture mode: `lessons.jsonl` row appended, valid JSON, all required fields present
-- [ ] Capture mode: `learning-index.json` updated with matching entry
-- [ ] Capture mode: phase auto-link resolves correctly from artifact registry
-- [ ] Capture mode: category inference produces a sensible default when --category absent
-- [ ] List mode: filters apply; output sorted newest-first
-- [ ] Search mode: results ranked by title > tags > summary match
-- [ ] Show mode: full insight displayed with phase context and routed artifact link if any
-- [ ] No file modifications outside `.workflow/learning/`
 
 ---
 

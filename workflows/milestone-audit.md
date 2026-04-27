@@ -12,65 +12,27 @@ Cross-phase integration audit for milestone completion. Based on artifact regist
 
 2. Parse `.workflow/roadmap.md` to identify all phases belonging to this milestone
 
-3. Group artifacts by type for this milestone:
-   ```
-   FROM state.json.artifacts
-   WHERE milestone = target_milestone
-   GROUP BY type
-
-   → analyze_artifacts: [ANL-001, ANL-002, ...]
-   → plan_artifacts:    [PLN-001, PLN-002, ...]
-   → execute_artifacts: [EXC-001, EXC-002, ...]
-   → verify_artifacts:  [VRF-001, ...]
-   ```
+3. Group milestone artifacts by type → `analyze_artifacts`, `plan_artifacts`, `execute_artifacts`, `verify_artifacts`
 
 ---
 
 ## Step 2: Phase Coverage Check
 
-For each phase defined in roadmap for this milestone:
+Parse roadmap.md phases for this milestone. For each phase, verify completed artifacts exist for analyze, plan, and execute types.
 
-```
-phases_from_roadmap = parse roadmap.md → list of { number, slug, title }
-
-coverage = {}
-FOR each phase IN phases_from_roadmap:
-  has_analyze = artifacts.some(a => a.type == "analyze" && a.phase == phase.number && a.status == "completed")
-  has_plan = artifacts.some(a => a.type == "plan" && a.phase == phase.number && a.status == "completed")
-  has_execute = artifacts.some(a => a.type == "execute" && a.phase == phase.number && a.status == "completed")
-
-  coverage[phase.number] = { has_analyze, has_plan, has_execute }
-
-  IF NOT has_execute:
-    WARN: "Phase {phase.number} ({phase.title}) missing execute artifact"
-```
+WARN if any phase is missing its execute artifact: "Phase {number} ({title}) missing execute artifact"
 
 ---
 
 ## Step 3: Ad-hoc Completeness Check
 
-```
-adhoc_artifacts = artifacts.filter(a => a.scope == "adhoc" && a.milestone == target_milestone)
-
-incomplete_adhoc = adhoc_artifacts.filter(a => a.status != "completed")
-IF incomplete_adhoc.length > 0:
-  WARN: "Ad-hoc artifacts incomplete: {list ids}"
-```
+Check all ad-hoc artifacts (`scope == "adhoc"`) for this milestone are completed. WARN if any incomplete (list ids).
 
 ---
 
 ## Step 4: Execution Completeness Check
 
-For each execute artifact, verify all tasks completed:
-
-```
-FOR each exc IN execute_artifacts:
-  plan_dir = exc.path
-  tasks = read all ${plan_dir}/.task/TASK-*.json
-  incomplete = tasks.filter(t => t.status != "completed" && t.status != "skipped")
-  IF incomplete.length > 0:
-    WARN: "Plan {plan_dir}: {incomplete.length} tasks not completed"
-```
+For each execute artifact, read `{path}/.task/TASK-*.json` and verify all tasks are completed or skipped. WARN if any tasks remain incomplete: "Plan {plan_dir}: {N} tasks not completed"
 
 ---
 

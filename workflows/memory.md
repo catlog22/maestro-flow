@@ -26,24 +26,10 @@ Operations: list, search, view, edit, delete, prune across both stores.
 ### Step 1: Resolve Paths
 
 Detect both memory store paths:
+- **Workflow**: `.workflow/memory/` (index: `.workflow/wiki-index.json`, auto-managed by WikiIndexer)
+- **System**: `~/.claude/projects/{project-path}/memory/` where project-path derives from project root (e.g., `D:\maestro2` → `D--maestro2`)
 
-```bash
-# Workflow memory
-WF_MEMORY_DIR=".workflow/memory"
-WF_INDEX_FILE=".workflow/wiki-index.json"  # unified index (auto-managed by WikiIndexer)
-
-# System memory — derive from project git root or cwd
-PROJECT_ROOT=$(pwd)
-# Convert to ~/.claude/projects/ path format:
-# D:\maestro2 → D--maestro2
-SYS_MEMORY_DIR="$HOME/.claude/projects/$(echo "$PROJECT_ROOT" | sed 's|[/\\:]|-|g; s|^-*||')/memory"
-```
-
-Verify which stores exist:
-- Workflow: check `.workflow/memory/` directory exists (index is auto-managed)
-- System: check `$SYS_MEMORY_DIR/MEMORY.md` exists
-
-If neither exists, report E001.
+Verify which stores exist (workflow: directory exists; system: `MEMORY.md` exists). Neither → E001.
 
 ### Step 2: Parse Input
 
@@ -68,94 +54,28 @@ Parse arguments and detect subcommand:
 
 List entries from targeted stores.
 
-**Workflow store** (if exists):
-1. Use `maestro wiki list --type memory --json` (reads unified `.workflow/wiki-index.json`)
-2. Apply filters (--tag, --type, --before, --after)
-3. Sort by timestamp descending
+**Workflow store**: `maestro wiki list --type memory --json`, apply filters (`--tag`, `--type`, `--before`, `--after`), sort by timestamp descending.
 
-**System store** (if exists):
-1. Glob `$SYS_MEMORY_DIR/*.md`
-2. For each file: read first 5 lines to extract title/purpose
-3. Show file size and modification date
+**System store**: Glob `*.md` files, extract title from first 5 lines, show size and modification date.
 
-Display combined:
-
-```
-=== WORKFLOW MEMORY (.workflow/memory/) — {count} entries ===
-
-  ID                    Type     Date        Tags              Summary
-  ───────────────────── ──────── ────────── ───────────────── ─────────────────────────
-  MEM-20260315-143022   compact  2026-03-15  —                 Implement auth module...
-  TIP-20260314-091500   tip      2026-03-14  config, redis     Redis config pattern...
-
-=== SYSTEM MEMORY (~/.claude/projects/.../memory/) — {count} files ===
-
-  File                          Lines   Modified     Description
-  ───────────────────────────── ─────── ──────────── ────────────────────────────
-  MEMORY.md                     38      2026-03-15   Project Memory (auto-loaded)
-  claude-code-skills-guide.md   120     2026-03-10   Claude Code Skills 构建指南
-
-Hints:
-  View:    /manage-memory view <ID|filename>
-  Edit:    /manage-memory edit <filename>
-  Search:  /manage-memory search <query>
-  Capture: /manage-memory-capture compact
-  Tips:    /manage-learn tip <text>
-```
+Display combined table per store (ID/File, Type, Date, Tags/Lines, Summary/Description) with navigation hints for view/edit/search/capture.
 
 ### Step 4: Execute Search (search mode)
 
-Full-text search across both stores.
+Full-text case-insensitive search across both stores.
 
-**Workflow store:**
-1. Use `maestro wiki search "<query>" --json` or filter `.workflow/wiki-index.json` fields: `summary`, `tags`, `id`
-2. For deeper matches, read individual `.md` files and search content
+**Workflow**: Search via `maestro wiki search` or filter `wiki-index.json` fields (`summary`, `tags`, `id`); for deeper matches, read individual `.md` files.
 
-**System store:**
-1. Read each `.md` file in `$SYS_MEMORY_DIR/`
-2. Search content for query string (case-insensitive)
+**System**: Read each `.md` file and search content.
 
-Rank results: exact match > heading match > content match. Display with store label:
-
-```
-=== SEARCH RESULTS for "{query}" ({count} matches) ===
-
-  [workflow] MEM-20260315-143022  compact  2026-03-15
-      Summary: Implement auth module with JWT tokens
-      Match:   ...configured JWT refresh token rotation for **auth** module...
-
-  [system]  MEMORY.md:22
-      Match:   ...`manage-*` (4) — status, **memory**, codebase-rebuild...
-
-  [system]  claude-code-skills-guide.md:9
-      Match:   ...旧 commands 文件继续兼容，推荐使用 **Skills**...
-
-View: /manage-memory view <ID|filename>
-```
+Rank: exact match > heading match > content match. Display each result with store label (`[workflow]`/`[system]`), ID/file, and matching context snippet.
 
 ### Step 5: Execute View (view mode)
 
-Display full content of a memory entry.
+Display full content of a memory entry with metadata header (store, file path, modified date, line count).
 
-**Workflow entry** (ID matches `MEM-*` or `TIP-*`):
-1. Validate ID exists via `maestro wiki get <id>` or in `.workflow/wiki-index.json`
-2. Read the corresponding `.md` file
-3. Display with metadata header
-
-**System file** (filename):
-1. Validate file exists in `$SYS_MEMORY_DIR/`
-2. Read full content
-
-```
-=== MEMORY: {ID or filename} ===
-Store:     {workflow | system}
-File:      {full path}
-Modified:  {date}
-Lines:     {count}
-─────────────────────────────────
-
-{full content}
-```
+- **Workflow** (`MEM-*`/`TIP-*`): validate via `maestro wiki get <id>` or `wiki-index.json`, read `.md` file
+- **System** (filename): validate exists in system memory dir, read full content
 
 If not found, suggest similar entries/files.
 
@@ -163,19 +83,7 @@ If not found, suggest similar entries/files.
 
 Edit a system memory file interactively. Only for system store files (`MEMORY.md`, topic files).
 
-1. Validate file exists in `$SYS_MEMORY_DIR/`
-2. Read current content, display to user
-3. Use AskUserQuestion to gather edit instructions:
-   - "What changes to make? (add/update/remove sections, or provide new content)"
-4. Apply edits using Edit tool
-5. Display diff summary
-
-```
-=== MEMORY UPDATED ===
-File:    {filename}
-Path:    {full path}
-Changes: {summary of edits}
-```
+Validate file exists → display current content → AskUserQuestion for edit instructions → apply via Edit tool → display diff summary.
 
 **Rules for MEMORY.md edits:**
 - Keep under 200 lines (content after line 200 is truncated at load)
@@ -185,60 +93,24 @@ Changes: {summary of edits}
 
 ### Step 7: Execute Delete (delete mode)
 
-Remove a memory entry or file.
+Remove a memory entry or file. Confirm via AskUserQuestion (unless `--confirm`).
 
-**Workflow entry:**
-1. Validate ID via `maestro wiki get <id>` or in `.workflow/wiki-index.json`
-2. Show summary, confirm with AskUserQuestion (unless --confirm)
-3. Remove `.md` file (WikiIndexer auto-updates index on next access)
+- **Workflow**: validate ID, show summary, remove `.md` file (WikiIndexer auto-updates index)
+- **System**: validate file exists, show preview, remove file. Warn if `MEMORY.md` references deleted file.
 
-**System file:**
-1. Validate file exists (NEVER allow deleting MEMORY.md — only topic files)
-2. Show content preview, confirm
-3. Remove file
-4. If MEMORY.md references the deleted file, warn user to update links
-
-```
-=== ENTRY DELETED ===
-Store:   {workflow | system}
-ID/File: {id or filename}
-Path:    {full path} (removed)
-```
-
-**Safety:** MEMORY.md cannot be deleted, only edited. Use `edit` subcommand instead.
+**Safety:** `MEMORY.md` cannot be deleted, only edited.
 
 ### Step 8: Execute Prune (prune mode)
 
-Bulk cleanup — workflow store only.
+Bulk cleanup — workflow store only. At least one filter required (`--tag`, `--type`, `--before`, `--after`).
 
-At least one filter required: --tag, --type, --before, --after.
-
-1. Read `.workflow/wiki-index.json`, apply filters
-2. Display candidates table
-3. If `--dry-run`, stop after display
-4. Confirm with AskUserQuestion
-5. Remove files + update index
-
-```
-=== PRUNE COMPLETE ===
-Removed:   {count} entries
-Remaining: {remaining} entries
-Criteria:  {filters}
-```
+Read `wiki-index.json` → apply filters → display candidates → `--dry-run` stops here → confirm → remove files (index auto-updates). Report removed/remaining counts.
 
 ### Step 9: Integrity Check (after delete/prune only)
 
-Post-operation integrity check.
-
-**Workflow store:**
-1. Scan `.workflow/memory/` for `.md` files
-2. Compare with `.workflow/wiki-index.json` entries (type=memory)
-3. Report orphaned files or dangling references
-4. Offer to fix inconsistencies (WikiIndexer re-indexes on next write)
-
-**System store:**
-1. Check MEMORY.md links to topic files
-2. Report broken links (referenced files that don't exist)
+Post-operation integrity check:
+- **Workflow**: compare `.workflow/memory/*.md` files against `wiki-index.json` entries (type=memory). Report orphans/dangling refs. WikiIndexer re-indexes on next write.
+- **System**: check `MEMORY.md` links to topic files, report broken links.
 
 ---
 
@@ -258,98 +130,27 @@ Parse arguments and detect execution mode:
 | Short text (<100 chars) + no session keywords | Tips mode |
 | No arguments or ambiguous | AskUserQuestion |
 
-```bash
-MEMORY_DIR=".workflow/memory"
-mkdir -p "$MEMORY_DIR"
-# Note: wiki-index.json is auto-managed by WikiIndexer at .workflow/wiki-index.json
-# No manual index initialization needed
-```
+Bootstrap: `mkdir -p .workflow/memory` (wiki-index.json is auto-managed by WikiIndexer).
 
-When ambiguous, use AskUserQuestion:
-- Option 1: Compact — 压缩当前完整会话记忆（用于会话恢复）
-- Option 2: Tip — 快速记录一条笔记/想法/提示
+When ambiguous, AskUserQuestion with two options: Compact (full session compression) or Tip (quick note).
 
 ### Step 2: Analyze Session (compact mode only)
 
 Extract session state from conversation history. Skip if tip mode.
 
-Analyze conversation to extract:
+Extract session state into `sessionAnalysis` with fields: `projectRoot` (absolute), `objective`, `executionPlan` (source + complete content), `workingFiles` [{absolutePath, role}], `referenceFiles`, `lastAction`, `decisions` [{decision, reasoning}], `constraints`, `dependencies`, `knownIssues`, `changesMade`, `pending`, `notes`.
 
-```javascript
-sessionAnalysis = {
-  projectRoot: "",        // Absolute path to project root
-  objective: "",          // High-level goal (1-2 sentences)
-  executionPlan: {
-    source: "workflow" | "todo" | "user-stated" | "inferred",
-    content: ""           // COMPLETE plan — never summarize
-  },
-  workingFiles: [],       // [{absolutePath, role}] — modified files
-  referenceFiles: [],     // [{absolutePath, role}] — read-only context
-  lastAction: "",         // Last significant action + result
-  decisions: [],          // [{decision, reasoning}]
-  constraints: [],        // User-specified limitations
-  dependencies: [],       // Added/changed packages
-  knownIssues: [],        // Deferred bugs
-  changesMade: [],        // Completed modifications
-  pending: [],            // Next steps
-  notes: ""               // Unstructured thoughts
-}
-```
+**Plan Detection Priority:** workflow session (IMPL_PLAN.md) > TodoWrite items > user-stated > inferred.
 
-**Plan Detection Priority:**
-
-| Priority | Source | Detection |
-|----------|--------|-----------|
-| 1 | Workflow session | `.workflow/active/WFS-*/IMPL_PLAN.md` exists |
-| 2 | TodoWrite | Todo items in current conversation |
-| 3 | User-stated | Explicit plan statements in user messages |
-| 4 | Inferred | Sequence of actions and outstanding work |
-
-**Core Rules:**
-- Preserve complete plan content VERBATIM — never abbreviate
-- All file paths must be ABSOLUTE
-- Last Action captures final state (success/failure)
-- Decisions include reasoning, not just choices
+**Core Rules:** preserve plan VERBATIM, absolute paths only, last action captures final state, decisions include reasoning.
 
 ### Step 3: Generate Content
 
 Generate structured markdown content.
 
-**Compact mode** — Full session memory:
+**Compact mode**: Generate `MEM-{YYYYMMDD-HHMMSS}.md` with all `sessionAnalysis` fields as markdown sections (Session ID, Project Root, Objective, Execution Plan in details block, Working/Reference Files, Last Action, Decisions, Constraints, Dependencies, Known Issues, Changes Made, Pending, Notes).
 
-```bash
-TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
-ENTRY_ID="MEM-${TIMESTAMP}"
-ENTRY_FILE="$MEMORY_DIR/${ENTRY_ID}.md"
-```
-
-Write entry file with sections:
-- Session ID (WFS-* if active, none otherwise)
-- Project Root (absolute path)
-- Objective
-- Execution Plan (source + full content in details block)
-- Working Files (modified, with roles)
-- Reference Files (read-only context)
-- Last Action
-- Decisions (with reasoning)
-- Constraints, Dependencies, Known Issues
-- Changes Made, Pending
-- Notes
-
-**Tip mode** — Quick note:
-
-```bash
-TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
-ENTRY_ID="TIP-${TIMESTAMP}"
-ENTRY_FILE="$MEMORY_DIR/${ENTRY_ID}.md"
-```
-
-Write entry file with sections:
-- Tip ID
-- Timestamp
-- Content (the note text)
-- Tags (from --tag flag)
-- Context (auto-detected from recent conversation files)
+**Tip mode**: Generate `TIP-{YYYYMMDD-HHMMSS}.md` with sections: Tip ID, Timestamp, Content, Tags (from `--tag`), Context (auto-detected from recent conversation files).
 
 ### Step 4: Wiki Index (Auto-managed)
 
@@ -363,29 +164,7 @@ maestro wiki list --type memory        # list all memory entries
 
 ### Step 5: Report
 
-Display confirmation with entry ID and retrieval instructions.
-
-**Compact mode:**
-```
-=== SESSION MEMORY SAVED ===
-Entry:   {ENTRY_ID}
-File:    .workflow/memory/{ENTRY_ID}.md
-Type:    compact
-Plan:    {plan_source} ({plan_line_count} lines preserved)
-
-To restore: Read .workflow/memory/{ENTRY_ID}.md
-To search:  maestro wiki list --type memory
-```
-
-**Tip mode:**
-```
-=== TIP SAVED ===
-Entry:   {ENTRY_ID}
-File:    .workflow/memory/{ENTRY_ID}.md
-Tags:    {tags}
-
-To search: maestro wiki list --type memory --tag {tags}
-```
+Display confirmation: entry ID, file path, type. Compact adds plan source and line count preserved. Tip adds tags. Both include retrieval hints (`Read` path, `maestro wiki list --type memory`).
 
 ---
 

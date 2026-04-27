@@ -8,59 +8,21 @@ CSV wave coordinator version of the intelligent coordinator. Replaces `spawn_age
 
 ## Step 1: Parse Arguments
 
-```javascript
-const args = $ARGUMENTS.trim();
-const AUTO_YES   = new RegExp('\\b(-y|--yes)\\b').test(args);
-const RESUME     = new RegExp('\\b(-c|--continue)\\b').test(args);
-const DRY_RUN    = new RegExp('\\b--dry-run\\b').test(args);
-const forceChain = args.match(new RegExp('--chain\\s+(\\S+)'))?.[1] ?? null;
-const intent = args
-  .replace(new RegExp('\\b(-y|--yes|-c|--continue|--dry-run)\\b', 'g'), '')
-  .replace(new RegExp('--(chain)\\s+\\S+', 'g'), '')
-  .trim();
-```
+Extract from `$ARGUMENTS`:
+- Flags: `-y`/`--yes` (AUTO_YES), `-c`/`--continue` (RESUME), `--dry-run`, `--chain <name>`
+- `intent` = remaining text after flag removal
 
-**Resume mode**: If `RESUME`:
-1. Glob `.workflow/.maestro-coordinate/coord-*/state.json`, sort desc by name, load latest
-2. Set `current_step` to index of first step where `status === "pending"`
-3. Jump to **Step 6**
+**Resume mode**: If RESUME, load latest `.workflow/.maestro-coordinate/coord-*/state.json`, set `current_step` to first pending step, jump to **Step 6**.
 
 ---
 
 ## Step 2: Read Project State
 
-```javascript
-const stateFile = '.workflow/state.json';
-let projectState = { initialized: false };
+Read `.workflow/state.json` if present. Derive `projectState`:
+- `current_phase`: first in-progress execute artifact, else first phase without completed execute
+- Fields: `phase_slug`, `phase_status` (pending|exploring|planning|executing|verifying|testing|completed|blocked), `phase_artifacts`, `execution` (tasks_completed/total), `verification_status`, `review_verdict`, `uat_status`, `phases_total/completed`, `has_blockers`, `accumulated_context`
 
-if (fileExists(stateFile)) {
-  const raw = JSON.parse(Read(stateFile));
-  projectState = {
-    initialized: true,
-    // Derive current_phase from artifacts (first in_progress execute, or first without completed execute)
-    current_phase: (() => {
-      const arts = raw.artifacts ?? [];
-      const ip = arts.find(a => a.type === 'execute' && a.status === 'in_progress');
-      if (ip) return ip.phase;
-      const phases = [...new Set(arts.map(a => a.phase).filter(Boolean))].sort((a,b) => a - b);
-      return phases.find(p => !arts.some(a => a.phase === p && a.type === 'execute' && a.status === 'completed')) ?? raw.current_phase ?? null;
-    })(),
-    phase_slug: raw.phase_slug,
-    phase_status: raw.phase_status,   // pending|exploring|planning|executing|verifying|testing|completed|blocked
-    phase_artifacts: raw.phase_artifacts ?? {},
-    execution: raw.execution ?? { tasks_completed: 0, tasks_total: 0 },
-    verification_status: raw.verification_status ?? 'pending',
-    review_verdict: raw.review_verdict ?? null,
-    uat_status: raw.uat_status ?? 'pending',
-    phases_total: raw.phases_total ?? 0,
-    phases_completed: raw.phases_completed ?? 0,
-    has_blockers: raw.has_blockers ?? false,
-    accumulated_context: raw.accumulated_context ?? null
-  };
-}
-
-if (!projectState.initialized && !intent) throw new Error('E001: No project state and no intent. Run $maestro-init first.');
-```
+If not initialized and no intent → Error E001.
 
 ---
 
@@ -70,18 +32,7 @@ if (!projectState.initialized && !intent) throw new Error('E001: No project stat
 
 If `forceChain` is set → validate against chainMap and jump to **3c**.
 
-```javascript
-const exactMatch = {
-  'continue': 'state_continue', 'next': 'state_continue', 'go': 'state_continue',
-  '继续': 'state_continue', '下一步': 'state_continue',
-  'status': 'status', '状态': 'status', 'dashboard': 'status',
-};
-const normalized = intent.toLowerCase().trim();
-if (exactMatch[normalized]) {
-  taskType = exactMatch[normalized];
-  // → skip to 3c
-}
-```
+Exact-match keywords: `continue`/`next`/`go`/`继续`/`下一步` → `state_continue`; `status`/`状态`/`dashboard` → `status`. If matched, skip to **3c**.
 
 ### 3a-2: Structured intent extraction (LLM-native)
 
@@ -102,101 +53,49 @@ Instead of regex, extract a structured intent tuple using LLM semantic understan
 
 ### 3a-3: Route via action × object matrix
 
-```javascript
-function routeIntent(intent, projectState) {
-  const { action, object, issue_id } = intent;
+Route via `action × object` matrix. If `issue_id` present → issue pipeline directly.
 
-  // Hard signal: explicit issue ID → issue pipeline
-  if (issue_id) {
-    const issueRoutes = { 'analyze': 'issue_analyze', 'plan': 'issue_plan', 'fix': 'issue_execute', 'execute': 'issue_execute', 'debug': 'issue_analyze', 'manage': 'issue' };
-    return issueRoutes[action] || 'issue';
-  }
-
-  // Action × Object matrix
-  const matrix = {
-    'fix':       { 'bug': 'debug', 'issue': 'issue', 'code': 'debug', 'performance': 'debug', 'security': 'debug', '_default': 'debug' },
-    'create':    { 'feature': 'quick', 'issue': 'issue', 'test': 'test_gen', 'spec': 'spec_generate', 'ui': 'ui_design', 'config': 'init', '_default': 'quick' },
-    'analyze':   { 'bug': 'analyze', 'issue': 'issue_analyze', 'code': 'analyze', 'codebase': 'spec_map', '_default': 'analyze' },
-    'explore':   { 'issue': 'issue_discover', 'feature': 'brainstorm', 'ui': 'ui_design', '_default': 'brainstorm' },
-    'plan':      { 'issue': 'issue_plan', 'spec': 'spec_generate', '_default': 'plan' },
-    'execute':   { 'issue': 'issue_execute', '_default': 'execute' },
-    'verify':    { '_default': 'verify' },
-    'review':    { '_default': 'review' },
-    'test':      { '_default': 'test' },
-    'debug':     { '_default': 'debug' },
-    'refactor':  { '_default': 'refactor' },
-    'manage':    { 'issue': 'issue', 'milestone': 'milestone_audit', 'phase': 'phase_transition', 'memory': 'memory', 'doc': 'sync', 'codebase': 'codebase_refresh', '_default': 'status' },
-    'transition':{ 'phase': 'phase_transition', 'milestone': 'milestone_complete', '_default': 'phase_transition' },
-    'continue':  { '_default': 'state_continue' },
-    'sync':      { '_default': 'sync' },
-    'learn':     { '_default': 'learn' },
-    'retrospect':{ '_default': 'retrospective' },
-    'release':   { '_default': 'release' },
-    'amend':     { '_default': 'amend' },
-    'compose':   { '_default': 'compose' },
-  };
-
-  const actionMap = matrix[action] || matrix['fix'];
-  return actionMap[object] || actionMap['_default'] || 'quick';
-}
-```
+| action | object-specific overrides | default |
+|--------|--------------------------|---------|
+| fix | bug/code/perf/security→debug, issue→issue | debug |
+| create | feature→quick, issue→issue, test→test_gen, spec→spec_generate, ui→ui_design, config→init | quick |
+| analyze | bug/code→analyze, issue→issue_analyze, codebase→spec_map | analyze |
+| explore | issue→issue_discover, feature/ui→brainstorm/ui_design | brainstorm |
+| plan | issue→issue_plan, spec→spec_generate | plan |
+| execute | issue→issue_execute | execute |
+| manage | issue→issue, milestone→milestone_audit, phase→phase_transition, memory/doc/codebase→memory/sync/codebase_refresh | status |
+| transition | phase→phase_transition, milestone→milestone_complete | phase_transition |
+| verify, review, test, debug, refactor, continue, sync, learn, retrospect, release, amend, compose | — | self-named |
 
 **Clarity scoring**: 3 = action+object+scope, 2 = action+object, 1 = action only, 0 = empty.
-If `clarity < 2` and not `AUTO_YES`: call `functions.request_user_input` with one focused question (max 2 rounds).
+If `clarity < 2` and not `AUTO_YES`: request user input (max 2 rounds).
 
 ### 3b: State-based routing (when `taskType === 'state_continue'`)
 
-```javascript
-// Returns { chain: string, argsOverride?: Record<string, string> }
-// Steps are always resolved from chainMap[chain] — never inline.
-function detectNextAction(s) {
-  if (!s.initialized) return { chain: 'init' };
-  const ps = s.phase_status, art = s.phase_artifacts, exec = s.execution;
+Returns `{ chain, argsOverride? }`. Steps resolved from `chainMap[chain]`.
 
-  if (s.phases_total === 0 && !fileExists('.workflow/roadmap.md') && s.accumulated_context) {
-    const deferred = (s.accumulated_context.deferred || []).join('; ');
-    const decisions = (s.accumulated_context.key_decisions || []).join('; ');
-    const context = [
-      deferred ? `Deferred: ${deferred}` : '',
-      decisions ? `Decisions: ${decisions}` : ''
-    ].filter(Boolean).join('. ');
-    return { chain: 'next-milestone', argsOverride: { '{description}': `"Plan next milestone. ${context}"` } };
-  }
-  if (s.phases_total === 0) return { chain: 'brainstorm-driven' };
-
-  if (ps === 'pending') {
-    if (art.context) return { chain: 'plan' };
-    return { chain: 'analyze' };
-  }
-  if (ps === 'exploring' || ps === 'planning') {
-    if (art.plan) return { chain: 'execute-verify' };
-    return { chain: 'plan' };
-  }
-  if (ps === 'executing') {
-    if (exec.tasks_completed >= exec.tasks_total && exec.tasks_total > 0)
-      return { chain: 'verify' };
-    return { chain: 'execute' };
-  }
-  if (ps === 'verifying') {
-    if (s.verification_status === 'passed') {
-      if (!s.review_verdict)                return { chain: 'review' };
-      if (s.review_verdict === 'BLOCK')     return { chain: 'review-fix' };
-      if (s.uat_status === 'pending')       return { chain: 'test' };
-      if (s.uat_status === 'passed')        return { chain: 'milestone-close' };
-      if (s.uat_status === 'failed')        return { chain: 'debug' };
-      return { chain: 'test' };
-    }
-    return { chain: 'quality-loop-partial' };
-  }
-  if (ps === 'testing') {
-    if (s.uat_status === 'passed') return { chain: 'milestone-close' };
-    return { chain: 'debug' };
-  }
-  if (ps === 'completed') return { chain: 'milestone-close' };
-  if (ps === 'blocked') return { chain: 'debug' };
-  return { chain: 'status' };
-}
-```
+| Condition | Chain |
+|-----------|-------|
+| Not initialized | `init` |
+| No phases, no roadmap, has accumulated_context | `next-milestone` (with deferred/decisions context) |
+| No phases | `brainstorm-driven` |
+| pending + has context | `plan` |
+| pending, no context | `analyze` |
+| exploring/planning + has plan | `execute-verify` |
+| exploring/planning, no plan | `plan` |
+| executing, all tasks done | `verify` |
+| executing, tasks remain | `execute` |
+| verifying, passed + no review | `review` |
+| verifying, passed + BLOCK | `review-fix` |
+| verifying, passed + UAT pending | `test` |
+| verifying, passed + UAT passed | `milestone-close` |
+| verifying, passed + UAT failed | `debug` |
+| verifying, not passed | `quality-loop-partial` |
+| testing, UAT passed | `milestone-close` |
+| testing, UAT not passed | `debug` |
+| completed | `milestone-close` |
+| blocked | `debug` |
+| fallback | `status` |
 
 ### 3c: Intent-based chain map
 
@@ -378,33 +277,10 @@ const taskToChain = {
 
 ### 3d: Resolve phase, description, and issue ID
 
-```javascript
-function resolvePhase() {
-  // From structured extraction
-  if (intentAnalysis.phase_ref) return intentAnalysis.phase_ref;
-  // Fallback regex
-  const m = intent.match(new RegExp('^(\\d+)$')) ?? intent.match(new RegExp('phase\\s*(\\d+)', 'i'));
-  if (m) return m[1] ?? m[2];
-  if (projectState.initialized) return projectState.current_phase;
-  return null;
-}
+**Phase**: from structured extraction → fallback regex (`phase N` or bare number) → `projectState.current_phase`.
+**Issue ID**: from structured extraction → regex match `ISS-*-NNN`.
 
-function resolveIssueId() {
-  if (intentAnalysis.issue_id) return intentAnalysis.issue_id;
-  const m = intent.match(new RegExp('ISS-[\\w]+-\\d+', 'i'));
-  return m ? m[0] : null;
-}
-
-const resolvedPhase = resolvePhase();
-const resolvedIssueId = resolveIssueId();
-const context = {
-  current_phase: resolvedPhase,
-  user_intent: intent,
-  issue_id: resolvedIssueId,
-  spec_session_id: null,
-  scratch_dir: null
-};
-```
+Build context: `{ current_phase, user_intent, issue_id, spec_session_id: null, scratch_dir: null }`.
 
 ---
 
@@ -428,59 +304,13 @@ MAESTRO-COORDINATE: {chain_name}  (dry run)
 
 ## Step 5: Setup Session
 
-```javascript
-const ts = new Date().toISOString().replaceAll('-', '').replaceAll(':', '').replaceAll('T', '').slice(0, 15);
-const sessionId = `coord-${ts}`;
-const sessionDir = `.workflow/.maestro-coordinate/${sessionId}`;
-Bash(`mkdir -p "${sessionDir}"`);
+Create session directory `.workflow/.maestro-coordinate/coord-{timestamp}/`.
 
-const BARRIER_SKILLS = new Set([
-  'maestro-analyze', 'maestro-plan', 'maestro-brainstorm',
-  'maestro-spec-generate', 'maestro-execute'
-]);
+**Barrier skills** (solo wave, coordinator analyzes artifacts after): `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`.
 
-const AUTO_FLAG_MAP = {
-  'maestro-analyze':        '-y',
-  'maestro-brainstorm':     '-y',
-  'maestro-ui-design':      '-y',
-  'maestro-plan':           '--auto',
-  'maestro-spec-generate':  '-y',
-  'quality-test':           '--auto-fix',
-  'quality-retrospective':  '--auto-yes',
-};
+**Auto-flag injection** (when AUTO_YES): `maestro-analyze/-brainstorm/-ui-design/-spec-generate` → `-y`, `maestro-plan` → `--auto`, `quality-test` → `--auto-fix`, `quality-retrospective` → `--auto-yes`.
 
-const context = {
-  phase: resolvedPhase,
-  plan_dir: null,
-  analysis_dir: null,
-  brainstorm_dir: null,
-  spec_session_id: null,
-  issue_id: resolvedIssueId,
-  gaps: null
-};
-
-const state = {
-  session_id: sessionId,
-  status: 'running',
-  created_at: new Date().toISOString(),
-  intent,
-  task_type: taskType,
-  chain_name: chainName,
-  auto_yes: AUTO_YES,
-  context,
-  waves: [],
-  steps: chain.map((s, i) => ({
-    index: i,
-    cmd: s.cmd,
-    args: s.args ?? '',
-    status: 'pending',
-    wave_n: null,
-    findings: null,
-    artifacts: null
-  }))
-};
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-```
+Initialize `state.json` with: session_id, intent, chain_name, auto_yes, context (phase, dirs, issue_id, gaps), waves[], and steps[] (each with index, cmd, args, status=pending).
 
 ---
 
@@ -488,132 +318,26 @@ Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
 
 ### 6a: Helper functions
 
-```javascript
-function buildSkillCall(step, ctx) {
-  let a = (step.args ?? '')
-    .replaceAll('{phase}',           ctx.phase ?? '')
-    .replaceAll('{description}',     state.intent ?? '')
-    .replaceAll('{issue_id}',        ctx.issue_id ?? '')
-    .replaceAll('{plan_dir}',        ctx.plan_dir ?? '')
-    .replaceAll('{analysis_dir}',    ctx.analysis_dir ?? '')
-    .replaceAll('{brainstorm_dir}',  ctx.brainstorm_dir ?? '')
-    .replaceAll('{spec_session_id}', ctx.spec_session_id ?? '')
-    .replaceAll('{scratch_dir}',     ctx.scratch_dir ?? '');
+**buildSkillCall**: Replace template placeholders (`{phase}`, `{description}`, `{issue_id}`, `{plan_dir}`, `{analysis_dir}`, `{brainstorm_dir}`, `{spec_session_id}`, `{scratch_dir}`) from context. Inject auto-flag if AUTO_YES. Return `$<cmd> <args>`.
 
-  if (state.auto_yes) {
-    const flag = AUTO_FLAG_MAP[step.cmd];
-    if (flag && !a.includes(flag)) a = a ? `${a} ${flag}` : flag;
-  }
-  return `$${step.cmd} ${a}`.trim();
-}
+**buildNextWave**: Take first pending step. If barrier → solo wave. Otherwise group consecutive non-barrier steps into one wave.
 
-function buildNextWave(steps) {
-  const pending = steps.filter(s => s.status === 'pending');
-  if (!pending.length) return [];
-  const first = pending[0];
-  // Barrier skill → solo wave
-  if (BARRIER_SKILLS.has(first.cmd)) return [first];
-  // Group consecutive non-barriers
-  const wave = [first];
-  for (let i = 1; i < pending.length; i++) {
-    if (BARRIER_SKILLS.has(pending[i].cmd)) break;
-    wave.push(pending[i]);
-  }
-  return wave;
-}
-```
+### 6b: Wave instruction template
 
-### 6b: Wave instruction template (simple)
+Sub-agent instruction: execute `{skill_call}`, complete `{topic}`, do not modify state files, call `report_agent_job_result` with result JSON.
 
-```javascript
-const WAVE_INSTRUCTION = `你是 CSV job 子 agent。
-
-先原样执行这一段技能调用：
-{skill_call}
-
-然后基于结果完成这一行任务说明：
-{topic}
-
-限制：
-- 不要修改 .workflow/.maestro-coordinate/ 下的 state 文件
-- skill 内部有自己的 session 管理，按 skill SKILL.md 执行即可
-
-最后必须调用 report_agent_job_result，返回 JSON：
-{"status":"completed|failed","skill_call":"{skill_call}","summary":"一句话结果","artifacts":"产物路径或空字符串","error":"失败原因或空字符串"}`;
-
-const RESULT_SCHEMA = {
-  type: "object",
-  properties: {
-    status: { type: "string", enum: ["completed", "failed"] },
-    skill_call: { type: "string" },
-    summary: { type: "string" },
-    artifacts: { type: "string" },
-    error: { type: "string" }
-  },
-  required: ["status", "skill_call", "summary", "artifacts", "error"]
-};
-```
+Result schema: `{ status: "completed"|"failed", skill_call, summary, artifacts, error }` (all required).
 
 ### 6c: Main loop
 
-```javascript
-let waveNum = 0;
-
-while (state.steps.some(s => s.status === 'pending')) {
-  waveNum++;
-  const waveSteps = buildNextWave(state.steps);
-  if (!waveSteps.length) break;
-
-  // Build wave CSV — skill_call assembled with latest context
-  const csvRows = waveSteps.map(step => {
-    const skillCall = buildSkillCall(step, context);
-    const topic = `Chain "${state.chain_name}" step ${step.index + 1}/${state.steps.length}`;
-    return `"${step.index + 1}","${skillCall.replace(/"/g, '""')}","${topic.replace(/"/g, '""')}"`;
-  });
-  Write(`${sessionDir}/wave-${waveNum}.csv`, 'id,skill_call,topic\n' + csvRows.join('\n'));
-
-  // Execute wave
-  spawn_agents_on_csv({
-    csv_path: `${sessionDir}/wave-${waveNum}.csv`,
-    id_column: "id",
-    instruction: WAVE_INSTRUCTION,
-    max_workers: waveSteps.length,   // parallel for non-barriers, 1 for barriers
-    max_runtime_seconds: 1800,
-    output_csv_path: `${sessionDir}/wave-${waveNum}-results.csv`,
-    output_schema: RESULT_SCHEMA
-  });
-
-  // Read results
-  const results = parseCSV(Read(`${sessionDir}/wave-${waveNum}-results.csv`));
-
-  // Update step status
-  for (const row of results) {
-    const step = state.steps[parseInt(row.id) - 1];
-    step.status = row.status;
-    step.findings = row.summary;
-    step.artifacts = row.artifacts;
-    step.wave_n = waveNum;
-    step.completed_at = new Date().toISOString();
-  }
-
-  // Barrier analysis — coordinator reads artifacts, updates context
-  if (waveSteps.length === 1 && BARRIER_SKILLS.has(waveSteps[0].cmd)) {
-    analyzeBarrierArtifacts(waveSteps[0], results[0], context);
-  }
-
-  // Record wave
-  state.waves.push({ wave_n: waveNum, step_ids: waveSteps.map(s => s.index + 1) });
-  Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-
-  // Abort on failure
-  if (results.some(r => r.status === 'failed')) {
-    state.status = 'aborted';
-    state.steps.filter(s => s.status === 'pending').forEach(s => { s.status = 'skipped'; });
-    Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-    break;
-  }
-}
-```
+While pending steps remain:
+1. Build next wave via `buildNextWave` (barrier → solo, non-barriers → grouped)
+2. Write wave CSV (`id, skill_call, topic`) to session dir
+3. Execute via `spawn_agents_on_csv` (max_workers = wave size, timeout 1800s)
+4. Read results CSV, update each step's status/findings/artifacts
+5. If barrier wave → run `analyzeBarrierArtifacts` to update context
+6. Record wave in state, persist `state.json`
+7. On any failure → abort (mark remaining steps skipped, break)
 
 ---
 
@@ -621,112 +345,27 @@ while (state.steps.some(s => s.status === 'pending')) {
 
 After a barrier skill completes, the coordinator reads its artifacts and updates `context` for subsequent waves:
 
-```javascript
-function analyzeBarrierArtifacts(step, result, ctx) {
-  const artifactPath = result.artifacts;
-  if (!artifactPath) return;
+Context updates per barrier skill:
 
-  switch (step.cmd) {
-    case 'maestro-analyze': {
-      // Read analysis conclusions → extract gaps, phase
-      ctx.analysis_dir = artifactPath;
-      const contextMd = Read(`${artifactPath}/context.md`);
-      // Extract gap markers
-      const gapLines = contextMd.match(/^[-*]\s.*gap|issue|problem.*/gmi);
-      if (gapLines) ctx.gaps = gapLines.join('; ').slice(0, 500);
-      // Extract phase if detected
-      const phaseMatch = contextMd.match(/phase\s*[:=]\s*(\d+)/i);
-      if (phaseMatch && !ctx.phase) ctx.phase = phaseMatch[1];
-      break;
-    }
-    case 'maestro-plan': {
-      // Read plan.json → know task count and structure
-      ctx.plan_dir = artifactPath;
-      if (fileExists(`${artifactPath}/plan.json`)) {
-        const plan = JSON.parse(Read(`${artifactPath}/plan.json`));
-        ctx.task_count = plan.tasks?.length ?? 0;
-        ctx.wave_count = plan.waves?.length ?? 0;
-      }
-      break;
-    }
-    case 'maestro-brainstorm': {
-      ctx.brainstorm_dir = artifactPath;
-      break;
-    }
-    case 'maestro-spec-generate': {
-      ctx.spec_session_id = artifactPath.match(/SPEC-[\w-]+/)?.[0] ?? artifactPath;
-      break;
-    }
-    case 'maestro-execute': {
-      // Read execution results for verify context
-      if (fileExists(`${artifactPath}/results.csv`)) {
-        const execResults = parseCSV(Read(`${artifactPath}/results.csv`));
-        ctx.exec_completed = execResults.filter(r => r.status === 'completed').length;
-        ctx.exec_failed = execResults.filter(r => r.status === 'failed').length;
-      }
-      break;
-    }
-  }
-}
-```
+| Barrier | Extracts |
+|---------|----------|
+| `maestro-analyze` | `analysis_dir`, gaps (from context.md markers), phase (if detected) |
+| `maestro-plan` | `plan_dir`, task/wave count (from plan.json) |
+| `maestro-brainstorm` | `brainstorm_dir` |
+| `maestro-spec-generate` | `spec_session_id` (SPEC-* pattern) |
+| `maestro-execute` | `exec_completed`/`exec_failed` counts (from results.csv) |
 
-**Key principle**: The coordinator owns all context assembly. Sub-agents receive a fully-resolved `skill_call` — they don't need to discover or resolve anything themselves.
+**Key principle**: The coordinator owns all context assembly. Sub-agents receive a fully-resolved `skill_call`.
 
 ---
 
 ## Step 8: Completion Report
 
-```javascript
-const done = state.steps.filter(s => s.status === 'completed').length;
-const failed = state.steps.filter(s => s.status === 'failed').length;
-const total = state.steps.length;
+Finalize `state.json` (status: completed or current, completed_at timestamp).
 
-state.status = state.steps.every(s => s.status === 'completed') ? 'completed' : state.status;
-state.completed_at = new Date().toISOString();
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-```
+Generate `context.md` report: session ID, chain name, waves executed, steps completed/failed, per-wave result table with context updates.
 
-Generate `context.md`:
-
-```markdown
-# Coordinate Report — {chainName}
-
-## Summary
-- Session: {sessionId}
-- Chain: {chainName}
-- Waves: {waveNum} executed
-- Steps: {done}/{total} completed, {failed} failed
-
-## Wave Results
-### Wave {N}
-| Step | Skill Call | Status | Summary |
-|------|-----------|--------|---------|
-| {index+1} | {skill_call} | {status} | {summary} |
-
-Context update: {what changed in ctx}
-```
-
-Display:
-
-```
-============================================================
-  MAESTRO-COORDINATE COMPLETE
-============================================================
-  Session:  {session_id}
-  Chain:    {chain_name}
-  Waves:    {waveNum} executed
-  Steps:    {done}/{total}
-
-  WAVE RESULTS:
-    [W1] $maestro-analyze --gaps  →  ✓  found 3 gaps
-    [W2] $maestro-plan --gaps     →  ✓  12 tasks in 3 waves
-    [W3] $maestro-execute         →  ✓  12/12 tasks done
-    [W4] $maestro-verify          →  ✓  all criteria met
-
-  Artifacts:  .workflow/.maestro-coordinate/{session_id}/
-  Resume:     $maestro --continue
-============================================================
-```
+Display completion banner: session, chain, wave results (per-step status + summary), artifacts path, resume command.
 
 ---
 

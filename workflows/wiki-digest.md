@@ -59,18 +59,9 @@ Run `maestro wiki health` for baseline health metrics.
 
 ## Stage 2: Theme Clustering
 
-Group entries into 3-5 semantic themes using:
+Group entries into 3-5 semantic themes by: tag co-occurrence (2+ shared tags), title BM25 similarity, relationship proximity (`related` links), and type sub-clustering.
 
-1. **Tag co-occurrence**: entries sharing 2+ tags → same cluster
-2. **Title BM25 similarity**: entries whose titles match each other's keywords
-3. **Relationship proximity**: entries connected by `related` links → same cluster
-4. **Type sub-clustering**: if all same type, sub-cluster by content/category
-
-Per theme, record:
-- Theme name: dominant tag or keyword
-- Entry count and IDs
-- Type distribution within theme
-- Status distribution (draft/active/completed/archived)
+Per theme: name (dominant tag), entry count/IDs, type distribution, status distribution.
 
 ---
 
@@ -100,10 +91,7 @@ Per-theme health adapted from wiki health formula (entries, connectivity, comple
 
 ## Stage 4: Cross-Reference with Lessons
 
-1. Read `.workflow/learning/lessons.jsonl`
-2. For each theme, search lessons by keyword match
-3. Identify **unlinked insights**: lessons that match a theme's keywords but are not referenced by any wiki entry in that theme
-4. Flag as "knowledge not yet connected to the graph"
+Search `.workflow/learning/lessons.jsonl` for keyword matches against each theme. Flag **unlinked insights** -- lessons matching a theme but not referenced by any wiki entry in that theme.
 
 If `lessons.jsonl` not found, skip with W002 warning.
 
@@ -166,35 +154,15 @@ Produce `.workflow/learning/digest-{slug}-{YYYY-MM-DD}.md`:
 
 ## Stage 7: Gap → Issue Routing (if --create-issues)
 
-For each knowledge gap from Stage 5:
-1. Dedup: check `.workflow/issues/issues.jsonl` for existing gap with same theme + type
-2. If new, append to `issues.jsonl` using canonical schema (see `~/.maestro/workflows/issue.md` Step 4):
-   - `type`: "knowledge-gap"
-   - `status`: "open"
-   - `severity`: "low"
-   - `source`: "wiki-digest"
-   - `tags`: ["knowledge-gap", "{theme-slug}"]
-3. Report created issue count
+For each knowledge gap from Stage 5: dedup against `.workflow/issues/issues.jsonl` (same theme + type). If new, append with `type: "knowledge-gap"`, `status: "open"`, `severity: "low"`, `source: "wiki-digest"`, `tags: ["knowledge-gap", "{theme-slug}"]`. Report created count.
 
 ---
 
 ## Stage 8: Persist
 
 1. Write digest file to `.workflow/learning/`
-2. Append meta-insights to `.workflow/learning/lessons.jsonl`:
-   - `source: "wiki-digest"`, `category: "technique"`
-   - e.g., "Auth knowledge concentrated in specs, lacks lessons"
-3. Display summary:
-
-```
-== Wiki Digest Complete ==
-Scope:     {topic or "all"}
-Entries:   {count}
-Themes:    {theme_count}
-Gaps:      {gap_count} identified
-Issues:    {created_count} created (if --create-issues)
-Report:    .workflow/learning/digest-{slug}-{date}.md
-```
+2. Append meta-insights to `.workflow/learning/lessons.jsonl` (`source: "wiki-digest"`, `category: "technique"`)
+3. Display summary: scope, entry count, theme count, gap count, created issues (if applicable), report path.
 
 ---
 
@@ -208,14 +176,3 @@ Report:    .workflow/learning/digest-{slug}-{date}.md
 | Create missing entries | `maestro wiki create --type <type> --slug <slug>` |
 | Triage gap issues | `/manage-issue list --source wiki-digest` |
 
----
-
-## Error Codes
-
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No wiki entries found (empty index) | Initialize wiki content |
-| E002 | error | Topic search returned 0 results | Broaden topic or check wiki |
-| W001 | warning | Too few entries (<5) for meaningful clustering | Themes may be trivial |
-| W002 | warning | `lessons.jsonl` not found | Skip cross-reference |
-| W003 | warning | Some entry bodies failed to load | Partial summaries |

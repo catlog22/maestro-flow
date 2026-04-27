@@ -38,7 +38,7 @@ export function AddAgentDialog({ open, onOpenChange }: AddAgentDialogProps) {
   const sessionId = useMeetingRoomStore((s) => s.sessionId);
 
   const [role, setRole] = useState('');
-  const [agentType, setAgentType] = useState<AgentType>('gemini');
+  const [agentType, setAgentType] = useState<AgentType>('claude-code');
   const [model, setModel] = useState('');
   const [isLeader, setIsLeader] = useState(false);
   const [prompt, setPrompt] = useState('');

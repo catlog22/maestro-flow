@@ -126,16 +126,7 @@ Parse $ARGUMENTS to determine execution mode:
 - None + single role mode → error E002
 
 **Output Directory Resolution**:
-- Phase mode (number):
-  ```
-  Read .workflow/state.json → state
-  artifacts = state.artifacts ?? []
-  art = artifacts.find(a => a.phase === phaseNum)
-  IF art:
-    output_dir = ".workflow/" + art.path + "/.brainstorming/"
-  ELSE:
-    ERROR "Phase {phaseNum} not found in artifact registry"
-  ```
+- Phase mode (number): resolve `state.json.artifacts[phase == phaseNum].path` → `.workflow/{path}/.brainstorming/` (ERROR if phase not found)
 - All output: `.workflow/scratch/brainstorm-{slug}-{date}/`
 - Existing session: use existing session directory
 
@@ -210,19 +201,8 @@ If research fails (W005): `designResearchContext = null`, continue without exter
 
 Load existing project history to ground brainstorming in what's already been built:
 
-```
-IF .workflow/project.md exists:
-  Read project.md:
-    - "### Validated" → already_shipped (features already delivered)
-    - "### Active" → current_scope
-    - "## Context" → project_history (milestone summaries)
-
-IF .workflow/state.json exists:
-  Read state.json.accumulated_context:
-    - deferred[] → deferred_items (candidates for brainstorming focus)
-    - key_decisions[] → existing_constraints
-
-```
+- From `.workflow/project.md`: `### Validated` → already_shipped, `### Active` → current_scope, `## Context` → project_history
+- From `.workflow/state.json.accumulated_context`: `deferred[]` → deferred_items, `key_decisions[]` → existing_constraints
 
 Pass `project_context` into Step 2 (terminology) and Step 3 (framework generation):
 - `already_shipped` informs what exists — brainstorm should explore extensions, not re-invent

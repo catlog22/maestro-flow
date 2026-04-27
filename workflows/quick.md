@@ -38,38 +38,14 @@ AskUserQuestion(
 Store response as `$DESCRIPTION`.
 If still empty, re-prompt: "Please provide a task description."
 
-Display banner based on active flags:
+Display banner: `WORKFLOW > QUICK TASK` with active flag suffix:
 
-If `$DISCUSS_MODE` and `$FULL_MODE`:
-```
-------------------------------------------------------------
-  WORKFLOW > QUICK TASK (DISCUSS + FULL)
-------------------------------------------------------------
-Discussion + plan checking + verification enabled
-```
-
-If `$DISCUSS_MODE` only:
-```
-------------------------------------------------------------
-  WORKFLOW > QUICK TASK (DISCUSS)
-------------------------------------------------------------
-Discussion phase enabled -- surfacing gray areas before planning
-```
-
-If `$FULL_MODE` only:
-```
-------------------------------------------------------------
-  WORKFLOW > QUICK TASK (FULL MODE)
-------------------------------------------------------------
-Plan checking + verification enabled
-```
-
-Default (no flags):
-```
-------------------------------------------------------------
-  WORKFLOW > QUICK TASK
-------------------------------------------------------------
-```
+| Flags | Banner Suffix | Subtitle |
+|-------|--------------|----------|
+| --discuss + --full | `(DISCUSS + FULL)` | Discussion + plan checking + verification enabled |
+| --discuss only | `(DISCUSS)` | Discussion phase enabled -- surfacing gray areas before planning |
+| --full only | `(FULL MODE)` | Plan checking + verification enabled |
+| none | _(no suffix)_ | _(no subtitle)_ |
 
 ---
 
@@ -239,43 +215,11 @@ Passed inline to planner agent in Step 5.
 
 **Spawn workflow-planner in quick mode:**
 
-```
-Task(
-  prompt="
-<planning_context>
+Spawn `workflow-planner` agent with:
 
-**Mode:** ${FULL_MODE ? 'quick-full' : 'quick'}
-**Directory:** ${QUICK_DIR}
-**Description:** ${DESCRIPTION}
-
-Read these files:
-- .workflow/state.json (Project state)
-- ./CLAUDE.md (Project instructions, if exists)
-
-Project specs (pre-loaded in Step 4.5):
-${specs_content || 'No specs found.'}
-${DISCUSS_MODE ? '- ' + QUICK_DIR + '/context.md (User decisions -- locked)' : ''}
-
-</planning_context>
-
-<constraints>
-- Create a SINGLE plan with 1-3 focused tasks
-- Quick tasks should be atomic and self-contained
-- No research phase
-${FULL_MODE ? '- Target ~40% context usage (structured for verification)' : '- Target ~30% context usage (simple, focused)'}
-${FULL_MODE ? '- Each task MUST have files, action, convergence.criteria, implementation fields' : ''}
-</constraints>
-
-<output>
-Write plan to: ${QUICK_DIR}/plan.json
-Write tasks to: ${QUICK_DIR}/.task/TASK-{NNN}.json
-Return: ## PLANNING COMPLETE with plan path
-</output>
-",
-  subagent_type="workflow-planner",
-  description="Quick plan: ${DESCRIPTION}"
-)
-```
+- **Context**: mode (`quick` or `quick-full`), directory, description, state.json, CLAUDE.md, specs, context.md (if discuss mode)
+- **Constraints**: single plan with 1-3 atomic tasks, no research phase. Full mode: ~40% context usage + require files/action/convergence.criteria/implementation per task. Default: ~30% context usage.
+- **Output**: `${QUICK_DIR}/plan.json`, `${QUICK_DIR}/.task/TASK-{NNN}.json`. Return `## PLANNING COMPLETE` with plan path.
 
 After planner returns:
 1. Verify plan.json exists at `${QUICK_DIR}/plan.json`
@@ -299,27 +243,10 @@ Skip entirely if NOT $FULL_MODE.
 Spawning plan checker...
 ```
 
-```
-Task(
-  prompt="
-Verify quick task plan.
+Spawn `workflow-plan-checker` agent to verify plan.json and TASK-*.json:
 
-Read: ${QUICK_DIR}/plan.json and ${QUICK_DIR}/.task/TASK-*.json
-
-Check dimensions:
-- Requirement coverage: Does the plan address the task description?
-- Task completeness: Do tasks have files, action, convergence.criteria, implementation?
-- Scope sanity: Appropriately sized for quick task (1-3 tasks)?
-${DISCUSS_MODE ? '- Context compliance: Does plan honor decisions from context.md?' : ''}
-
-Return one of:
-- ## VERIFICATION PASSED
-- ## ISSUES FOUND -- structured issue list
-",
-  subagent_type="workflow-plan-checker",
-  description="Check quick plan: ${DESCRIPTION}"
-)
-```
+- **Check dimensions**: requirement coverage, task completeness (files/action/convergence.criteria/implementation), scope sanity (1-3 tasks), context compliance (if discuss mode).
+- **Return**: `## VERIFICATION PASSED` or `## ISSUES FOUND` with structured issue list.
 
 **Handle checker return:**
 
@@ -344,26 +271,10 @@ If iteration_count >= 2:
 
 **Spawn workflow-executor:**
 
-```
-Task(
-  prompt="
-Execute quick task.
+Spawn `workflow-executor` agent:
 
-Read:
-- ${QUICK_DIR}/plan.json (Plan)
-- ${QUICK_DIR}/.task/TASK-*.json (Tasks)
-- .workflow/state.json (Project state)
-- ./CLAUDE.md (Project instructions, if exists)
-
-Constraints:
-- Execute all tasks in the plan
-- Commit each task atomically
-- Create summary for each task at: ${QUICK_DIR}/.summaries/TASK-{NNN}-summary.md
-",
-  subagent_type="workflow-executor",
-  description="Execute: ${DESCRIPTION}"
-)
-```
+- **Read**: plan.json, TASK-*.json, state.json, CLAUDE.md
+- **Constraints**: execute all tasks, atomic commits per task, write summaries to `${QUICK_DIR}/.summaries/TASK-{NNN}-summary.md`
 
 After executor returns:
 1. Verify summaries exist
@@ -385,22 +296,7 @@ Skip entirely if NOT $FULL_MODE.
 Spawning verifier...
 ```
 
-```
-Task(
-  prompt="
-Verify quick task goal achievement.
-Task directory: ${QUICK_DIR}
-Task goal: ${DESCRIPTION}
-
-Read: ${QUICK_DIR}/plan.json and ${QUICK_DIR}/.summaries/
-
-Check plan objectives against actual codebase.
-Write verification result to: ${QUICK_DIR}/verification.json
-",
-  subagent_type="workflow-verifier",
-  description="Verify: ${DESCRIPTION}"
-)
-```
+Spawn `workflow-verifier` agent: check plan objectives against actual codebase using plan.json and summaries. Write result to `${QUICK_DIR}/verification.json`.
 
 Read verification result:
 | Status | Action |
@@ -445,53 +341,8 @@ git commit -m "quick({slug}): ${DESCRIPTION}"
 
 Display completion:
 
-If $FULL_MODE:
-```
-------------------------------------------------------------
-  WORKFLOW > QUICK TASK COMPLETE (FULL MODE)
-------------------------------------------------------------
+Display completion banner `WORKFLOW > QUICK TASK COMPLETE` (with `(FULL MODE)` suffix if applicable):
+- Show: Quick Task name, Summary path (`${QUICK_DIR}/.summaries/`), Directory path
+- Full mode also shows: Verification path + status (`${QUICK_DIR}/verification.json`)
+- Footer: `Ready for next task: /workflow:quick`
 
-Quick Task: {$DESCRIPTION}
-
-Summary: ${QUICK_DIR}/.summaries/
-Verification: ${QUICK_DIR}/verification.json ({status})
-Directory: ${QUICK_DIR}
-
-------------------------------------------------------------
-Ready for next task: /workflow:quick
-```
-
-If NOT $FULL_MODE:
-```
-------------------------------------------------------------
-  WORKFLOW > QUICK TASK COMPLETE
-------------------------------------------------------------
-
-Quick Task: {$DESCRIPTION}
-
-Summary: ${QUICK_DIR}/.summaries/
-Directory: ${QUICK_DIR}
-
-------------------------------------------------------------
-Ready for next task: /workflow:quick
-```
-
----
-
-## Success Criteria
-
-- [ ] --full and --discuss flags parsed from arguments when present
-- [ ] Flags are composable (--discuss --full works)
-- [ ] User provides task description (prompted if missing)
-- [ ] Project validated (state.json exists)
-- [ ] Scratch directory created at .workflow/scratch/quick-{slug}-{date}/
-- [ ] index.json created in scratch dir
-- [ ] (--discuss) Gray areas identified, decisions captured in context.md
-- [ ] (--discuss) context.md honors "All clear" skip and "You decide" discretion
-- [ ] plan.json + .task/TASK-*.json created by planner
-- [ ] (--full) Plan checker validates plan, revision loop capped at 2
-- [ ] .summaries/TASK-*-summary.md created by executor
-- [ ] (--full) verification.json created by verifier
-- [ ] state.json updated with quick task record
-- [ ] Artifacts committed
-- [ ] index.json status set to "completed"

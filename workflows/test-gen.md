@@ -18,32 +18,14 @@ Follow project test conventions in Step 4 (Generate Test Plan) and Step 5 (Write
 
 ### Step 1: Discover Test Infrastructure
 
-Detect existing test framework and patterns.
+Detect existing test framework and patterns by scanning for:
+- **Config files**: `jest.config.*`, `vitest.config.*`, `pytest.ini`, `pyproject.toml`, `.mocharc.*`
+- **Existing tests**: `*.test.*`, `*.spec.*`, `test_*` (exclude node_modules, .git)
+- **Utilities**: `test-utils.*`, `testHelper*`, `conftest.py`, `setup.*`
 
-```bash
-# Find test config files
-find . -name "jest.config.*" -o -name "vitest.config.*" -o -name "pytest.ini" -o -name "pyproject.toml" -o -name ".mocharc.*" 2>/dev/null | head -10
+Extract: framework, directory structure, naming convention, test utilities, run command.
 
-# Find existing test files
-find . \( -name "*.test.*" -o -name "*.spec.*" -o -name "test_*" \) -not -path "*/node_modules/*" -not -path "*/.git/*" 2>/dev/null | head -40
-
-# Find test utilities and helpers
-find . \( -name "test-utils.*" -o -name "testHelper*" -o -name "conftest.py" -o -name "setup.*" \) -not -path "*/node_modules/*" 2>/dev/null | head -10
-```
-
-Extract:
-- **Framework**: Jest, Vitest, pytest, Mocha, etc.
-- **Test directory structure**: `__tests__/`, `tests/`, co-located, etc.
-- **Naming convention**: `*.test.ts`, `*.spec.ts`, `test_*.py`
-- **Test utilities**: shared helpers, fixtures, factories
-- **Run command**: `npm test`, `pytest`, etc.
-
-Read 2-3 existing test files to learn patterns:
-- Import style
-- Describe/it nesting
-- Assertion library
-- Mock/stub patterns
-- Setup/teardown conventions
+Read 2-3 existing test files to learn: import style, describe/it nesting, assertion library, mock patterns, setup/teardown.
 
 If no test framework detected: Error E003.
 
@@ -51,52 +33,26 @@ If no test framework detected: Error E003.
 
 ### Step 2: Identify Gaps
 
-Identify what needs tests from verification artifacts:
+Sources: validation.json (`gaps[]` MISSING/PARTIAL), coverage-report.json (`requirements_uncovered[]`), task summaries (modified files).
 
-1. **From validation.json** (Nyquist audit):
-   - `gaps[]` where status = "MISSING" or "PARTIAL"
-   - Each gap has requirement_ref and description
-
-2. **From coverage-report.json** (UAT):
-   - `requirements_uncovered[]` -- requirements without test evidence
-
-3. **From task summaries**:
-   - Files modified/created in this phase
-   - Functionality added
-
-Build gap list with priority:
-- MISSING (no test at all) -> HIGH priority
-- Uncovered requirement -> HIGH priority
-- PARTIAL (test exists but incomplete) -> MEDIUM priority
+Priority: MISSING or uncovered requirement → HIGH; PARTIAL → MEDIUM.
 
 ---
 
 ### Step 3: Classify Files
 
-Classify changed files into test categories.
+Classify each changed file into test categories:
 
-For each file modified in this phase:
-
-| File Type | Test Category | Rationale |
-|-----------|---------------|-----------|
+| File Type | Category | Rationale |
+|-----------|----------|-----------|
 | Pure function / utility | unit | Isolated, no side effects |
 | React component | unit + e2e | Unit for logic, E2E for rendering |
 | API route / handler | integration | Needs request context |
 | Database model / query | integration | Needs DB connection |
 | CLI command | e2e | Needs process execution |
-| Config / types / constants | skip | No behavior to test |
-| CSS / styles | skip | Visual, not testable with code |
-| Test files themselves | skip | Don't test tests |
+| Config / types / constants / CSS / test files | skip | No testable behavior |
 
-Output classification:
-```json
-{
-  "unit": ["src/utils/validate.ts", "src/hooks/useChat.ts"],
-  "integration": ["src/api/comments.ts", "src/db/queries.ts"],
-  "e2e": ["src/components/ChatWindow.tsx"],
-  "skip": ["src/types/index.ts", "src/styles/theme.css"]
-}
-```
+Output: `{ "unit": [...], "integration": [...], "e2e": [...], "skip": [...] }`
 
 Apply --layer filter if set.
 
@@ -156,25 +112,14 @@ Wait for user approval via AskUserQuestion.
 
 For each approved test entry:
 
-1. **RED phase** -- Write the test first:
-   - Follow existing test patterns (imports, describe/it, assertions)
-   - Write test cases that verify the expected behavior
-   - Tests should FAIL if the behavior is broken (not trivially pass)
+1. **RED** -- Write test following existing patterns; tests must fail if behavior is broken (not trivially pass)
+2. **Verify RED** -- Run `{test_run_command} {test_file}`:
+   - Passes → may be trivial, strengthen it
+   - Fails expected → good, targets real behavior
+   - Fails unexpected → fix test setup, not source code
+3. **GREEN assessment** -- Passes = gap was missing test; Fails = bug discovery (do NOT fix source)
 
-2. **Verify RED** -- Run the test:
-   ```bash
-   {test_run_command} {test_file} 2>&1 | tail -20
-   ```
-   - If test passes: the test may be trivial, review and strengthen
-   - If test fails with expected error: good, test targets real behavior
-   - If test fails with unexpected error: fix test setup, not source code
-
-3. **GREEN assessment** -- Check if source already satisfies:
-   - If tests pass: coverage gap was about missing tests, not missing code
-   - If tests fail: record as bug discovery (NOT fix -- that's for quality-debug)
-
-**Important**: This command generates tests, it does NOT fix source code.
-Failing tests are valuable -- they document missing behavior.
+**Important**: This command generates tests only. Failing tests document missing behavior -- fixing is for quality-debug.
 
 Write each test file to the discovered test directory structure.
 
@@ -199,13 +144,7 @@ If regressions found, flag as blocker. (W002)
 
 ### Step 7: Write Artifacts
 
-**Archive previous test-gen artifacts** before writing:
-```
-IF file exists "$OUTPUT_DIR/.tests/test-gen-report.json":
-  mkdir -p "$OUTPUT_DIR/.history"
-  TIMESTAMP = current timestamp formatted as "YYYY-MM-DDTHH-mm-ss"
-  mv "$OUTPUT_DIR/.tests/test-gen-report.json" "$OUTPUT_DIR/.history/test-gen-report-${TIMESTAMP}.json"
-```
+Archive existing `.tests/test-gen-report.json` → `.history/test-gen-report-{timestamp}.json` if present.
 
 Write `.tests/test-gen-report.json`:
 ```json
@@ -245,24 +184,8 @@ Update validation.json gaps: change MISSING -> COVERED for gaps that now have te
 ### Step 8: Report
 
 ```
-=== TEST GENERATION RESULTS ===
-Phase:       {phase_name}
-Framework:   {framework}
-
-Generated:   {files_generated} test files, {test_cases_total} test cases
-  Passing:   {passing} (coverage gaps filled)
-  Failing:   {failing} (bugs discovered)
-
-Bugs Found:  {bugs_discovered}
-  {list of failing tests with brief description}
-
-Coverage:    {old_pct}% -> {new_pct}% (if measurable)
-
-Files:
-  {target_dir}/.tests/test-gen-report.json
-
-Next steps:
-  {suggested_next_command}
+Display: phase, framework, files/cases generated, passing/failing counts,
+  bugs found (with descriptions), coverage delta, report path, next step suggestion
 ```
 
 **Next step routing:**

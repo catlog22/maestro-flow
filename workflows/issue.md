@@ -12,12 +12,9 @@ CRUD operations and lifecycle management for project issues.
 ### Step 1: Parse Subcommand
 
 ```
-1. Extract first token from $ARGUMENTS as SUBCOMMAND
-2. If empty → error E_NO_SUBCOMMAND, display usage:
-     /manage-issue <create|list|status|update|close|link> [options]
-3. Validate SUBCOMMAND is one of: create, list, status, update, close, link
-   If not → error E_INVALID_SUBCOMMAND
-4. Remaining tokens are ARGS (subcommand-specific options)
+Extract SUBCOMMAND (first token) and ARGS (remaining) from $ARGUMENTS.
+Valid: create | list | status | update | close | link
+Missing/invalid → error with usage: /manage-issue <create|list|status|update|close|link> [options]
 ```
 
 ---
@@ -25,20 +22,8 @@ CRUD operations and lifecycle management for project issues.
 ### Step 2: Validate Issues Directory
 
 ```
-1. Check .workflow/ exists
-   If not → fatal: "No project initialized. Run /maestro-init first."
-
-2. Check .workflow/issues/ exists
-   If not → create directory:
-     mkdir -p .workflow/issues/
-
-3. Check .workflow/issues/issues.jsonl exists
-   If not → create empty file:
-     touch .workflow/issues/issues.jsonl
-
-4. Check .workflow/issues/issue-history.jsonl exists
-   If not → create empty file:
-     touch .workflow/issues/issue-history.jsonl
+Require .workflow/ exists → fatal if missing: "No project initialized. Run /maestro-init first."
+Auto-create if missing: .workflow/issues/, issues.jsonl, issue-history.jsonl
 ```
 
 ---
@@ -46,13 +31,7 @@ CRUD operations and lifecycle management for project issues.
 ### Step 3: Route to Subcommand Handler
 
 ```
-Route based on SUBCOMMAND:
-  create  → Step 4
-  list    → Step 5
-  status  → Step 6
-  update  → Step 7
-  close   → Step 8
-  link    → Step 9
+Route: create→Step 4, list→Step 5, status→Step 6, update→Step 7, close→Step 8, link→Step 9
 ```
 
 ---
@@ -85,12 +64,8 @@ Derive milestone_ref if not provided:
 Generate issue ID:
 
 ```
-1. Get current date as YYYYMMDD
-2. Read issues.jsonl + issue-history.jsonl
-3. Find all IDs matching ISS-{YYYYMMDD}-NNN
-4. Extract max NNN value (or 0 if none found today)
-5. New NNN = max + 1, zero-padded to 3 digits
-6. ID = ISS-{YYYYMMDD}-{NNN}
+ID = ISS-{YYYYMMDD}-{NNN} where NNN = next available 3-digit sequence for today
+Scan both issues.jsonl and issue-history.jsonl to avoid collisions.
 ```
 
 Build issue record from template:
@@ -135,69 +110,30 @@ Build issue record from template:
 Write to storage:
 
 ```
-1. Serialize record as single JSON line (no pretty-print)
-2. Append to .workflow/issues/issues.jsonl
-3. Display confirmation:
-
-   Created: {ID}
-   Title:   {TITLE}
-   Status:  open
-   Severity: {SEVERITY}
+Append record as single JSONL line to .workflow/issues/issues.jsonl.
+Display confirmation: ID, title, status, severity.
 ```
 
 Ask for supplementary information:
 
 ```
-4. Ask user for supplementary context:
-   AskUserQuestion({
-     question: "Do you have any supplementary information for this issue?\n1. Additional context or background?\n2. Reproduction steps or affected files?\n3. Related issues or tasks?\n4. Other notes?\n\n(Press Enter to skip)"
-   })
-
-5. Process user response:
-   - If response is non-empty:
-     a. Build supplement entry:
-        {
-          "content": "{RESPONSE_TEXT}",
-          "stage": "post_creation",
-          "author": "user",
-          "created_at": "{NOW_ISO}"
-        }
-     b. Read issues.jsonl
-     c. Find the just-created issue by {ID}
-     d. Initialize supplements as [] if not present
-     e. Append the supplement entry
-     f. Set updated_at = NOW_ISO
-     g. Rewrite issues.jsonl with updated record
-     h. Display: "Added supplement to {ID}"
-   - If response is empty: skip supplement step
+Prompt user for supplementary context (background, repro steps, related issues, notes).
+If provided → append supplement entry {content, stage:"post_creation", author:"user", created_at} to issue record.
+If empty → skip.
 ```
 
 Cross-milestone conflict check (for supplement issues):
 
 ```
-6. IF source == "supplement" AND milestone_ref is not null:
-   a. Read .workflow/roadmap.md
-   b. Identify phases belonging to OTHER milestones (not milestone_ref)
-   c. For each other-milestone phase, resolve phase dir and check if plan.json exists:
-      Read .workflow/state.json → state; artifacts = state.artifacts ?? []
-      art = artifacts.find(a => a.type === 'plan' && a.phase === phaseNum)
-      IF art: Read .workflow/{art.path}/plan.json (if exists)
-      Collect files_to_create[] as planned_files
-   d. IF affected_components in the new issue overlap with planned_files:
-      WARNING: "Conflict detected: this supplement issue affects components planned in milestone {other_milestone}"
-      Display:
-        "  Issue affects: {overlapping_components}"
-        "  Planned in: Phase {NN} ({milestone})"
-      Display: "Consider: minimal fix now (supplement), or defer to {other_milestone} for full rework"
+IF source == "supplement" AND milestone_ref set:
+  Scan other milestones' plan.json for files_to_create[] that overlap with affected_components.
+  If overlap found → warn about cross-milestone conflict, suggest minimal fix vs deferral.
 ```
 
 Suggest next steps:
 
 ```
-7. Suggest next steps:
-   - Skill({ skill: "manage-issue", args: "status {ID}" }) -- View full details
-   - Skill({ skill: "manage-issue", args: "link {ID} --task TASK-NNN" }) -- Link to a task
-   - Skill({ skill: "manage-issue", args: "list" }) -- List all issues
+Suggest: status {ID}, link {ID} --task TASK-NNN, list
 ```
 
 ---
@@ -219,16 +155,9 @@ Options:
 Read and filter:
 
 ```
-1. Read .workflow/issues/issues.jsonl line by line
-2. If --all: also read .workflow/issues/issue-history.jsonl
-3. Parse each line as JSON
-4. Apply filters:
-   - If --status: match record.status == VALUE
-   - If --phase: match record.phase_ref contains VALUE
-   - If --severity: match record.severity == VALUE
-   - If --milestone: match record.milestone_ref == VALUE
-   - If --source: match record.source == VALUE
-5. Sort by priority (ascending), then severity order (critical > high > medium > low)
+Read issues.jsonl (+ issue-history.jsonl if --all).
+Apply matching filters: status, phase_ref (contains), severity, milestone_ref, source.
+Sort by priority (ascending), then severity (critical > high > medium > low).
 ```
 
 Display tabular output:
@@ -261,11 +190,8 @@ Discover issues: Skill({ skill: "manage-issue-discover" })
 Parse issue ID from ARGS:
 
 ```
-1. Extract issue ID (ISS-XXXXXXXX-NNN) from ARGS
-   If missing → prompt: "Which issue? Provide ISS-XXXXXXXX-NNN"
-2. Search issues.jsonl for matching ID
-3. If not found → search issue-history.jsonl
-4. If still not found → error: "Issue {ID} not found"
+Extract ISS-XXXXXXXX-NNN from ARGS (prompt if missing).
+Lookup in issues.jsonl, fallback to issue-history.jsonl → error if not found.
 ```
 
 Display full detail view:
@@ -317,16 +243,9 @@ RESOLUTION:
 Suggest next steps based on status:
 
 ```
-If status == "open":
-  - Skill({ skill: "manage-issue", args: "update {id} --status in_progress" }) -- Start working on it
-  - Skill({ skill: "manage-issue", args: "link {id} --task TASK-NNN" }) -- Link to a task
-
-If status == "in_progress":
-  - Skill({ skill: "manage-issue", args: "close {id} --resolution \"...\"" }) -- Close with resolution
-  - Skill({ skill: "manage-issue", args: "update {id} --status deferred" }) -- Defer to later
-
-If status in (completed, failed, deferred):
-  - "This issue is archived."
+open → suggest: update --status in_progress, link --task
+in_progress → suggest: close --resolution, update --status deferred
+completed/failed/deferred → "This issue is archived."
 ```
 
 ---
@@ -353,36 +272,11 @@ Options:
 Process update:
 
 ```
-1. Read issues.jsonl, find record matching ID
-   If not found → error: "Issue {ID} not found in active issues"
-
-2. For each provided option:
-   - Update the corresponding field in the record
-   - If --status changed: add issue_history entry:
-     {
-       "timestamp": "{NOW_ISO}",
-       "from_status": "{old_status}",
-       "to_status": "{new_status}",
-       "actor": "user",
-       "note": "Status updated"
-     }
-   - If --note provided: add feedback entry:
-     {
-       "timestamp": "{NOW_ISO}",
-       "type": "clarification",
-       "content": "{NOTE_TEXT}"
-     }
-
-3. Set updated_at = NOW_ISO
-
-4. Rewrite issues.jsonl:
-   - Read all lines
-   - Replace the matching line with updated record
-   - Write all lines back
-
-5. Display confirmation:
-   Updated: {ID}
-   Changed: {list of changed fields}
+Find record by ID in issues.jsonl → error if not found.
+Apply each provided option to the corresponding field.
+If --status changed → append issue_history entry {timestamp, from_status, to_status, actor:"user"}.
+If --note provided → append feedback entry {timestamp, type:"clarification", content}.
+Set updated_at, rewrite issues.jsonl, display changed fields.
 ```
 
 ---
@@ -401,35 +295,11 @@ Options:
 Process close:
 
 ```
-1. Read issues.jsonl, find record matching ID
-   If not found → error: "Issue {ID} not found in active issues"
-
-2. If --resolution missing:
-   AskUserQuestion({ question: "What is the resolution for {ID}?" })
-
-3. Update record:
-   - status = {STATUS or "completed"}
-   - resolved_at = NOW_ISO
-   - updated_at = NOW_ISO
-   - resolution = {RESOLUTION_TEXT}
-   - Add issue_history entry:
-     {
-       "timestamp": "{NOW_ISO}",
-       "from_status": "{old_status}",
-       "to_status": "{new_status}",
-       "actor": "user",
-       "note": "Issue closed: {RESOLUTION_TEXT}"
-     }
-
-4. Move record from issues.jsonl to issue-history.jsonl:
-   - Read all lines from issues.jsonl
-   - Remove the matching line, write remaining lines back
-   - Append closed record as new line to issue-history.jsonl
-
-5. Display confirmation:
-   Closed: {ID}
-   Status: {new_status}
-   Resolution: {RESOLUTION_TEXT}
+Find record by ID in issues.jsonl → error if not found.
+Prompt for --resolution if missing.
+Set status (default "completed"), resolved_at, resolution; append issue_history entry.
+Move record from issues.jsonl → issue-history.jsonl.
+Display: ID, final status, resolution.
 ```
 
 ---
@@ -447,43 +317,15 @@ Options:
 Process bidirectional link:
 
 ```
-1. Read issues.jsonl, find record matching issue ID
-   If not found → error: "Issue {ID} not found"
+Find issue by ID in issues.jsonl → error if not found.
+Locate task file via artifact registry (.workflow/{path}/.task/{TASK_ID}.json)
+  or scratch fallback (.workflow/scratch/*/.task/{TASK_ID}.json) → error if not found.
 
-2. Locate task file:
-   - Read .workflow/state.json → state
-   - artifacts = state.artifacts ?? []
-   - Search artifact registry paths: .workflow/{artifact.path}/.task/{TASK_ID}.json
-   - Also search .workflow/scratch/*/.task/{TASK_ID}.json (standalone scratch tasks)
-   - If still not found → error: "Task {TASK_ID} not found"
+Update issue: set gap_ref (if null), add TASK_ID to affected_components, append issue_history entry.
+Update task: append issue ID to "issue_refs" field.
 
-3. Update issue record:
-   - If gap_ref is null: set gap_ref = TASK_ID
-   - Add TASK_ID to affected_components if not present
-   - Add issue_history entry:
-     {
-       "timestamp": "{NOW_ISO}",
-       "from_status": "{status}",
-       "to_status": "{status}",
-       "actor": "user",
-       "note": "Linked to task {TASK_ID}"
-     }
-   - Set updated_at = NOW_ISO
-   - Rewrite issues.jsonl with updated record
-
-4. Update task JSON:
-   - Read task file
-   - Add or update "issue_refs" field: append issue ID if not present
-   - Write task file back
-
-5. Display confirmation:
-   Linked: {ISSUE_ID} <-> {TASK_ID}
-   Issue: {issue.title}
-   Task:  {task file path}
-
-6. Suggest next steps:
-   - Skill({ skill: "manage-issue", args: "status {ISSUE_ID}" }) -- View updated issue
-   - Skill({ skill: "manage-issue", args: "update {ISSUE_ID} --status in_progress" }) -- Start working
+Display: linked pair, issue title, task path.
+Suggest: status {ISSUE_ID}, update --status in_progress.
 ```
 
 ---

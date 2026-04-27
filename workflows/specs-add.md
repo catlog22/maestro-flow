@@ -32,18 +32,9 @@ content  -- free-text description of the entry
 ### Step 1: Parse Arguments
 
 ```
-Split $ARGUMENTS into:
-  category = first word
-  content  = remaining text
-
-Validate:
-  - category must be one of: coding, arch, quality, debug, test, review, learning
-  - content must not be empty
-
-On validation failure:
-  - Display usage: `/spec-add <category> <content>`
-  - List valid categories
-  - Exit
+Parse: category = first word, content = remaining text
+Validate: category ∈ {coding, arch, quality, debug, test, review, learning}, content non-empty
+On failure: show usage `/spec-add <category> <content>` with valid categories, exit
 ```
 
 ### Step 2: Resolve Target File
@@ -65,16 +56,11 @@ Auto-extract 3-5 relevant keywords from the content:
 ### Step 4: Format Entry
 
 ```
-Generate timestamp: YYYY-MM-DD (local date)
-Generate title from first meaningful phrase of content.
+Entry format (closed-tag), date = YYYY-MM-DD, title = first meaningful phrase:
 
-Entry format (closed-tag):
 <spec-entry category="{category}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}">
-
 ### {title}
-
 {content}
-
 </spec-entry>
 ```
 
@@ -84,13 +70,7 @@ Read target file. Append the formatted `<spec-entry>` block at the end. Write fi
 
 ### Step 6: Confirm
 
-```
-== spec-add complete ==
-Category: <category>
-Added to: .workflow/specs/<target_file>
-Keywords: <kw1>, <kw2>, <kw3>
-Verify: /spec-load --keyword <kw1>
-```
+Display: category, target file, keywords, and verify command (`/spec-load --keyword <kw1>`).
 
 ## Output
 

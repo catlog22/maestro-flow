@@ -6,35 +6,16 @@ Interactive roadmap creation with iterative refinement. Lightweight path from re
 
 ## Worktree Guard
 
-```
-# Block in worktree
-IF file_exists(".workflow/worktree-scope.json"):
-  ERROR "Cannot run maestro-roadmap inside a worktree. Run from the main worktree."
-  EXIT
-```
+Block if `.workflow/worktree-scope.json` exists — must run from main worktree.
 
 ## Step 1: Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
-
-// Parse flags
-const autoYes = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue') || $ARGUMENTS.includes('-c')
-const modeMatch = $ARGUMENTS.match(/(?:--mode|-m)\s+(progressive|direct|auto)/)
-const requestedMode = modeMatch ? modeMatch[1] : 'auto'
-const brainstormMatch = $ARGUMENTS.match(/--from-brainstorm\s+(\S+)/)
-
-// Clean requirement text
-const requirement = $ARGUMENTS
-  .replace(/--yes|-y|--continue|-c|--mode\s+\w+|-m\s+\w+|--from-brainstorm\s+\S+/g, '')
-  .trim()
-
-const slug = requirement.toLowerCase()
-  .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
-  .substring(0, 40)
-const dateStr = getUtc8ISOString().substring(0, 10)
-```
+Parse flags from `$ARGUMENTS`:
+- `--yes` / `-y` → auto mode
+- `--continue` / `-c` → resume from last state
+- `--mode` / `-m` → `progressive|direct|auto` (default: auto)
+- `--from-brainstorm <SESSION-ID>` → import brainstorm session
+- Remaining text → requirement (slugified for directory name)
 
 **Session directory**: `.workflow/.roadmap/RMAP-{slug}-{date}/`
 
@@ -56,23 +37,9 @@ Ensure phases in Step 2 respect architectural constraints.
 
 Read project artifacts to understand what has already been built and what carries forward:
 
-```
-IF .workflow/project.md exists:
-  Read project.md:
-    - "### Validated" section → already_shipped (completed features, DO NOT re-plan)
-    - "### Active" section → current_scope (features to plan for)
-    - "## Context" section → project_history (milestone summaries, prior work)
-    - "## Key Decisions" section → locked_decisions (constraints on new phases)
-
-IF .workflow/state.json exists:
-  Read state.json.accumulated_context:
-    - deferred[] → candidate_requirements (explicitly pushed to this milestone)
-    - key_decisions[] → architectural_constraints
-    - blockers[] → known_risks
-
-IF .workflow/codebase/ exists (from codebase-rebuild or codebase-refresh):
-  Read available codebase docs for feature inventory
-```
+- `project.md` → already_shipped (Validated), current_scope (Active), project_history (Context), locked_decisions (Key Decisions)
+- `state.json.accumulated_context` → deferred[] (candidate reqs), key_decisions[] (constraints), blockers[] (risks)
+- `.workflow/codebase/` → feature inventory from codebase docs
 
 **Context assembly** — pass to Step 2 as `project_context`:
 ```json
@@ -119,42 +86,14 @@ IF .workflow/codebase/ exists (from codebase-rebuild or codebase-refresh):
 
    **Trigger**: Technology keywords detected in requirement or codebase exploration found external dependencies. Auto-trigger in auto mode (`-y`). Skip if requirement is purely organizational.
 
-   ```
-   // Extract technology keywords from requirement + codebase exploration
-   researchTopics = extract named technologies, APIs, frameworks, protocols
+   Extract named technologies/APIs/frameworks/protocols from requirement + codebase exploration.
 
-   IF researchTopics is not empty:
-     Agent(
-       subagent_type="workflow-external-researcher",
-       prompt="""
-   <objective>
-   Research API details and technology specifics for: {requirement}
-   Mode: API Research
-   </objective>
+   If topics found → spawn `workflow-external-researcher` agent for API research:
+   - Per technology: stable version, core API surface, auth model, integration patterns, limitations, effort signals
+   - Focus on details affecting phase decomposition and dependency ordering
+   - Output → `apiResearchContext` (in-memory)
 
-   <context>
-   Technologies identified: {researchTopics}
-   Codebase tech stack: {codebase_exploration.tech_stack or "none"}
-   </context>
-
-   <task>
-   For each identified technology/API:
-   1. Current stable version and key capabilities
-   2. Core API surface: key endpoints/methods, auth model
-   3. Integration patterns and recommended setup
-   4. Known limitations, breaking changes, or deprecations
-   5. Effort estimation signals (simple wrapper vs complex integration)
-
-   Focus on details that affect phase decomposition and dependency ordering.
-   Be prescriptive. Return structured markdown only — do NOT write files.
-   </task>
-       """,
-       run_in_background=false
-     )
-     apiResearchContext = agent_output
-   ELSE:
-     apiResearchContext = null
-   ```
+   If no topics or research fails → `apiResearchContext = null`, continue.
 
    `apiResearchContext` is passed into:
    - Step 3 (Decomposition): technology complexity informs phase sizing and ordering
@@ -163,12 +102,8 @@ IF .workflow/codebase/ exists (from codebase-rebuild or codebase-refresh):
    If research fails: `apiResearchContext = null`, continue without external context.
 
 4. **Assess Uncertainty**
-   ```
-   Factors: scope_clarity, technical_risk, dependency_unknown,
-            domain_familiarity, requirement_stability
-   Each: low | medium | high
-   ≥3 high → progressive, ≥3 low → direct, else → ask
-   ```
+   - Factors: scope_clarity, technical_risk, dependency_unknown, domain_familiarity, requirement_stability (each: low/medium/high)
+   - >=3 high → progressive, >=3 low → direct, else → ask
 
 5. **Strategy Selection** (skip if `-m` specified or `-y`)
    - Present uncertainty assessment
@@ -321,18 +256,11 @@ Phase directories use `{NN}-{slug}` format (e.g., `01-auth`, `02-api`).
 
 Display summary and offer next steps:
 
-```
-=== ROADMAP CREATED ===
-Strategy: {progressive|direct}
-Phases:   {phase_count} across {milestone_count} milestones
-Roadmap:  .workflow/roadmap.md
-
-Next steps:
-  Skill({ skill: "maestro-init" })                    -- Set up project (if not yet initialized)
-  Skill({ skill: "maestro-plan", args: "1" })         -- Plan first phase
-  Skill({ skill: "maestro-brainstorm", args: "1" })   -- Explore first phase ideas
-  Skill({ skill: "manage-status" })                    -- View project dashboard
-```
+Display summary (strategy, phase count, milestones, roadmap path) and offer next steps:
+- `maestro-init` — set up project (if not yet initialized)
+- `maestro-plan 1` — plan first phase
+- `maestro-brainstorm 1` — explore first phase ideas
+- `manage-status` — view project dashboard
 
 ---
 
@@ -412,26 +340,16 @@ Read-only health assessment of the current roadmap.
    - Format:
      ```
      === ROADMAP REVIEW ===
-     Date: {date}
      Milestone: {current}
-
      Progress: {completed}/{total} phases ({percentage}%)
-     Drift: {none|minor|significant}
-     Risk: {low|medium|high}
+     Drift: {none|minor|significant} | Risk: {low|medium|high}
 
      Phase Assessment:
        [done] Phase 1: {name} — completed, on-scope
-       [~] Phase 2: {name} — in-progress, {status notes}
-       [ ] Phase 3: {name} — pending, {risk/notes}
+       [~]    Phase 2: {name} — in-progress, {notes}
+       [ ]    Phase 3: {name} — pending, {risk/notes}
 
-     Recommendations:
-       1. {actionable recommendation}
-       2. ...
-
-     Suggested actions:
-       /maestro-roadmap --revise   — Apply recommended changes
-       /maestro-plan {phase}       — Plan next phase
-       /manage-status              — View full dashboard
+     Suggested: /maestro-roadmap --revise | /maestro-plan {phase} | /manage-status
      ```
 
 **No state modifications.** Pure assessment + recommendations.

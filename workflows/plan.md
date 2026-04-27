@@ -20,45 +20,18 @@ All output goes to `.workflow/scratch/plan-{slug}-{date}/`.
 ```
 Input: [phase] argument OR --dir <path>
 
-# Worktree scope check
-IF file_exists(".workflow/worktree-scope.json"):
-  scope = read(".workflow/worktree-scope.json")
-  IF <phase> is a number AND <phase> NOT IN scope.owned_phases:
-    ERROR "Phase {phase} not owned by this worktree. Owned: {scope.owned_phases}"
-    EXIT
+Worktree guard: reject if phase not in .workflow/worktree-scope.json owned_phases
+Auto-bootstrap: create minimal state.json if missing
 
-# Auto-bootstrap state.json if missing
-IF NOT file_exists(".workflow/state.json"):
-  mkdir -p .workflow/scratch/
-  Write minimal state.json: { project: null, status: "active", current_milestone: null,
-    current_task_id: null, milestones: [], artifacts: [], last_updated: now() }
+Resolution priority:
+  --dir <path>   → CONTEXT_DIR = path, scope from state.json artifact or "standalone"
+  no arguments   → scope = "milestone", CONTEXT_DIR = latest analyze artifact for current_milestone
+                   (ERROR E001 if no roadmap)
+  numeric arg    → scope = "phase", resolve PHASE_SLUG from roadmap.md,
+                   CONTEXT_DIR = latest analyze artifact for phase
+                   (ERROR if no init + roadmap)
 
-IF --dir <path> is provided:
-  1. Set CONTEXT_DIR = <path> (absolute or relative to .workflow/)
-  2. Validate directory exists (context.md or conclusions.json present)
-  3. Determine scope from parent artifact in state.json (if registered), else "standalone"
-  4. Set PHASE_NUM = null, PHASE_SLUG = directory basename
-
-ELSE IF no arguments:
-  IF state.json.current_milestone AND roadmap.md exists:
-    scope = "milestone"
-    milestone_slug = slugify(current_milestone name)
-    CONTEXT_DIR = find latest analyze artifact for this milestone from state.json.artifacts[]
-  ELSE:
-    ERROR E001 "No args and no roadmap — provide phase number or create roadmap"
-
-ELSE IF argument is a number:
-  IF state.json.current_milestone AND roadmap.md exists:
-    scope = "phase"
-    PHASE_NUM = parsed number
-    PHASE_SLUG = resolve from roadmap.md
-    CONTEXT_DIR = find latest analyze artifact for this phase from state.json.artifacts[]
-  ELSE:
-    ERROR "Phase number requires init + roadmap"
-
-# Output directory (always scratch)
 OUTPUT_DIR = .workflow/scratch/plan-{PHASE_SLUG or milestone_slug}-{date}/
-mkdir -p {OUTPUT_DIR}/.task/
 ```
 
 ---
@@ -80,14 +53,9 @@ mkdir -p {OUTPUT_DIR}/.task/
 ## Mode Routing
 
 ```
-IF --check <plan-dir>:
-  → Jump to "Check Mode" section (P4 only, read-only)
-
-IF --revise [instructions]:
-  → Jump to "Revise Mode" section (load → modify → P4)
-
-ELSE:
-  → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
+--check <plan-dir>  → Check Mode (P4 only, read-only)
+--revise            → Revise Mode (load → modify → P4)
+default             → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
 ```
 
 ---
@@ -99,21 +67,10 @@ ELSE:
 ### Steps
 
 1. **Load user decisions**
-   ```
-   IF CONTEXT_DIR exists:
-     Read ${CONTEXT_DIR}/context.md
-   ELSE:
-     warn "No upstream analyze found. Run /maestro-analyze first or proceed with defaults."
-   ```
+   - Read `${CONTEXT_DIR}/context.md` if exists, else warn (no upstream analyze)
 
 2. **Load spec reference** (if `--spec` flag or index.json has spec_ref)
-   ```
-   spec_ref = --spec argument || index.json.spec_ref
-   If spec_ref:
-     Read .workflow/task-specs/${spec_ref}/spec-summary.md
-     Read .workflow/task-specs/${spec_ref}/requirements/_index.md
-     Read .workflow/task-specs/${spec_ref}/epics/_index.md
-   ```
+   - Read from `.workflow/task-specs/${spec_ref}/`: spec-summary.md, requirements/_index.md, epics/_index.md
 
 3. **Load project specs**
    ```
@@ -122,120 +79,38 @@ ELSE:
    Pass to planner agent as project constraints context.
 
 4. **Load codebase context**
-   ```
-   If exists .workflow/codebase/doc-index.json:
-     Read doc-index.json -> extract relevant features, components, requirements
-   ```
+   - Read `.workflow/codebase/doc-index.json` if exists → extract relevant features, components, requirements
 
 4b. **Load design reference** (if available)
-   ```
-   IF file exists "${PHASE_DIR}/design-ref/MASTER.md":
-     designRef = read("${PHASE_DIR}/design-ref/MASTER.md")
-     designTokens = read_json("${PHASE_DIR}/design-ref/design-tokens.json")
-     animationTokens = read_json("${PHASE_DIR}/design-ref/animation-tokens.json") // optional
-     layoutTemplates = list("${PHASE_DIR}/design-ref/layout-templates/layout-*.json")
-     display "Found design reference from maestro-ui-design. Including in plan context."
-     // Pass to planner: MASTER.md, tokens, animation tokens, layout templates, prototype paths
-     // Ensure every UI task includes in read_first[]:
-     //   - design-ref/design-tokens.json (colors, typography, component_styles)
-     //   - design-ref/animation-tokens.json (transitions, keyframes)
-     //   - design-ref/layout-templates/layout-{target}-*.json (relevant target layout)
-     //   - design-ref/MASTER.md (overall design system reference)
-   ELSE IF phase goal matches UI keywords (landing|page|dashboard|frontend|UI|component|界面):
-     display "This phase has UI work but no design reference."
-     display "Consider: Skill({ skill: \"maestro-ui-design\", args: \"{phase}\" })"
-     // Continue without design ref — non-blocking suggestion
-   ```
+   - If `${PHASE_DIR}/design-ref/MASTER.md` exists: load MASTER.md, design-tokens.json, animation-tokens.json (optional), layout-templates/layout-*.json
+     - Every UI task must include in `read_first[]`: design-tokens.json, animation-tokens.json, relevant layout-*.json, MASTER.md
+   - Else if phase goal matches UI keywords (`landing|page|dashboard|frontend|UI|component|界面`): suggest running `maestro-ui-design` (non-blocking)
 
 5. **Load upstream analysis** (if available)
-   ```
-   IF file exists "${PHASE_DIR}/conclusions.json":
-     conclusions = read_json("${PHASE_DIR}/conclusions.json")
-     IF conclusions.status is not empty:
-       display "Found existing analysis from maestro-analyze. Reusing exploration context."
-       explorationContext = { conclusions: conclusions }
-       IF file exists "${PHASE_DIR}/explorations.json":
-         explorationContext.explorations = read_json("${PHASE_DIR}/explorations.json")
-       IF file exists "${PHASE_DIR}/perspectives.json":
-         explorationContext.perspectives = read_json("${PHASE_DIR}/perspectives.json")
-
-       // Extract implementation scope (from analyze Step 9 scoping)
-       IF conclusions.implementation_scope is not empty:
-         explorationContext.implementationScope = conclusions.implementation_scope
-         display "Found implementation scope: ${conclusions.implementation_scope.length} scoped items with acceptance criteria"
-         // Planner MUST use these as primary input:
-         //   scope.objective → task title/description
-         //   scope.acceptance_criteria → convergence.criteria (make grep-verifiable)
-         //   scope.target_files → files[] + read_first[]
-         //   scope.priority → task/wave ordering
-
-       Skip step 5 (parallel exploration).
-   ```
+   - If `${PHASE_DIR}/conclusions.json` exists with non-empty status: load as explorationContext (conclusions + explorations.json + perspectives.json)
+     - If `conclusions.implementation_scope` exists: use as primary planner input:
+       - `scope.objective` → task title/description
+       - `scope.acceptance_criteria` → convergence.criteria (grep-verifiable)
+       - `scope.target_files` → files[] + read_first[]
+       - `scope.priority` → task/wave ordering
+     - Skip parallel exploration
 
 5. **Parallel exploration** (skip if `--gaps` or upstream analysis loaded)
-   ```
-   Determine exploration angles based on phase goal + context complexity:
-     - architecture: How does this fit into existing codebase?
-     - implementation: What patterns/libraries to use?
-     - integration: What existing code needs modification?
-     - risk: What could go wrong?
-
-   Spawn 1-4 cli-explore-agent in parallel (based on complexity):
-     Each agent:
-       Input: phase goal + success_criteria + one exploration angle
-       Output: .process/exploration-{angle}.json
-
-   Write .process/explorations-manifest.json:
-     { "explorations": [{ "angle": "...", "file": "...", "status": "completed" }] }
-
-   Write .process/context-package.json:
-     Aggregated exploration results for downstream consumption
-   ```
+   - Exploration angles (1-4 based on complexity): architecture, implementation, integration, risk
+   - Spawn 1-4 `cli-explore-agent` in parallel, each with phase goal + success_criteria + one angle
+   - Output: `.process/exploration-{angle}.json`, `.process/explorations-manifest.json`, `.process/context-package.json`
 
 6. **Gap-mode context** (if `--gaps`)
-   ```
-   all_gaps = []
 
-   // Primary source: issues registry
-   IF file exists ".workflow/issues/issues.jsonl":
-     issues = read_ndjson(".workflow/issues/issues.jsonl")
-     phase_issues = issues.filter(i => i.phase_ref == PHASE_SLUG
-                                    AND i.status in ["registered", "diagnosed"])
-     FOR each issue in phase_issues:
-       all_gaps.push({
-         issue_id: issue.id,
-         description: issue.description,
-         fix_direction: issue.fix_direction,
-         severity: issue.severity,
-         source: "issue",
-         context: issue.context
-       })
-       Update issue in issues.jsonl: status = "planning"
+   Gap sources (in priority order, first non-empty wins, then additionals merged):
+   - **Primary**: `.workflow/issues/issues.jsonl` — filter by phase_ref + status in ["registered","diagnosed"], mark as "planning"
+   - **Fallback**: `${PHASE_DIR}/verification.json` gaps (when no issues found)
+   - **Additional**: `${PHASE_DIR}/uat.md` "Gaps" section — deduplicate against existing gaps
+   - **Enrichment**: `${PHASE_DIR}/.debug/*/understanding.md` — enrich matched gaps with root_cause, fix_direction, affected_files
 
-   // Fallback source: verification gaps (when no issues registry)
-   IF all_gaps is empty AND file exists "${PHASE_DIR}/verification.json":
-     verification = read_json("${PHASE_DIR}/verification.json")
-     all_gaps.extend(verification.gaps)
+   Each gap: `{ issue_id, description, fix_direction, severity, source, context }`
 
-   // Additional source: UAT human-found gaps
-   IF file exists "${PHASE_DIR}/uat.md":
-     Parse uat.md "Gaps" section into structured gap objects.
-     FOR each uat_gap:
-       IF not already covered in all_gaps (match by test/truth):
-         all_gaps.push({ ...uat_gap, source: "uat" })
-
-   // Enrichment source: debug diagnosis (enrich existing gaps)
-   FOR each debug_dir IN "${PHASE_DIR}/.debug/*/":
-     IF file exists "${debug_dir}/understanding.md":
-       Parse root_cause and fix_direction from understanding.md.
-       Match to existing gap by affected area/test_id.
-       IF matched: enrich gap with root_cause, fix_direction, affected_files.
-
-   IF all_gaps is empty:
-     Error: "--gaps mode requires issues.jsonl, verification.json, or uat.md with identified gaps."
-
-   Set explorationContext = all_gaps (skip exploration agents)
-   ```
+   ERROR if all sources empty. Set `explorationContext = all_gaps` (skip exploration agents).
 
 ### Output
 - `.process/exploration-{angle}.json` (1-4 files, skipped if upstream analysis loaded)
@@ -252,30 +127,12 @@ ELSE:
 ### Steps
 
 1. **Aggregate clarification needs**
-   ```
-   For each exploration-{angle}.json:
-     Extract clarification_needs[] field
-   Deduplicate similar questions
-   Sort by priority (blocking > important > nice-to-have)
-   ```
+   - Extract `clarification_needs[]` from each exploration, deduplicate, sort by priority (blocking > important > nice-to-have)
 
-2. **Interactive clarification rounds**
-   ```
-   While unresolved_questions > 0 AND round <= 3:
-     Present max 4 questions per round via AskUserQuestion
-     Record answers
-     Mark questions as resolved
-     Check if answers trigger follow-up questions
-   ```
+2. **Interactive clarification rounds** (max 3 rounds, max 4 questions each)
+   - Present via AskUserQuestion, record answers, check for follow-ups
 
-3. **Build clarification context**
-   ```
-   clarificationContext = {
-     questions_asked: [...],
-     answers: [...],
-     decisions_made: [...]
-   }
-   ```
+3. **Build clarification context** → `{ questions_asked, answers, decisions_made }`
 
 ### Output
 - In-memory: clarificationContext
@@ -288,38 +145,17 @@ ELSE:
 
 ### Standard Mode (default)
 
-```
-Spawn workflow-planner Agent:
-  Input:
-    - context.md (user decisions)
-    - spec-ref (if available)
-    - doc-index.json (if available)
-    - explorationContext (from P1)
-    - explorationContext.implementationScope (from P1, if present)
-    - clarificationContext (from P2)
-    - Phase goal + success_criteria from index.json
-    - Templates: @templates/plan.json, @templates/task.json
+Spawn `workflow-planner` agent with: context.md, spec-ref, doc-index.json, explorationContext (incl. implementationScope), clarificationContext, phase goal + success_criteria, templates (plan.json, task.json).
 
-  Agent responsibilities:
-    1. Decompose goal into concrete tasks
-       - **When implementationScope exists**: use each scope item as primary task seed
-         (1 scope item → 1 task, group only if tightly coupled)
-    2. Assign task IDs (TASK-001, TASK-002, ...)
-    3. Determine dependencies between tasks
-    4. Group tasks into execution waves
-       - **When implementationScope exists**: order by scope.priority (high first)
-    5. Estimate complexity and time
-    6. Set convergence.criteria (grep-verifiable) for each task
-       - **When implementationScope exists**: use scope.acceptance_criteria as seed,
-         then refine into grep-verifiable form
-    7. Identify files to create/modify per task
-       - **When implementationScope exists**: use scope.target_files as starting point
-    8. Populate read_first[] for each task
+Agent responsibilities:
+1. Decompose goal into tasks (when implementationScope exists: 1 scope item → 1 task)
+2. Assign task IDs (TASK-001, TASK-002, ...), determine dependencies
+3. Group into execution waves (implementationScope: order by scope.priority)
+4. Estimate complexity/time
+5. Set grep-verifiable `convergence.criteria` (from scope.acceptance_criteria when available)
+6. Identify files per task (from scope.target_files when available), populate `read_first[]`
 
-  Output:
-    - plan.json (summary, approach, task_ids[], task_count, complexity, waves[])
-    - .task/TASK-{NNN}.json per task (using task.json template)
-```
+Output: `plan.json` (summary, approach, task_ids[], task_count, complexity, waves[]) + `.task/TASK-{NNN}.json` per task.
 
 ### Deep Work Rules (MANDATORY for all modes)
 
@@ -353,53 +189,17 @@ Every TASK-*.json MUST include these fields — they are NOT optional:
 
 ### Collaborative Mode (`--collab`)
 
-```
-Determine planner count (2-5 based on task scope)
-
-Pre-allocate TASK ID ranges:
-  Planner 1: TASK-001..010
-  Planner 2: TASK-011..020
-  (etc.)
-
-Create plan-note.md for coordination:
-  - Shared context summary
-  - ID range assignments
-  - Coordination rules (no overlapping files)
-
-Spawn N workflow-collab-planner agents in parallel:
-  Each agent:
-    - Assigned ID range
-    - Read/append plan-note.md for coordination
-    - Output: .task/TASK-{NNN}.json within assigned range
-
-Merge results:
-  - Collect all task files
-  - Build unified plan.json with merged waves
-  - Resolve cross-planner dependencies
-```
+- Pre-allocate TASK ID ranges per planner (2-5 planners based on scope): TASK-001..010, TASK-011..020, etc.
+- Create `plan-note.md` for coordination (shared context, ID ranges, no-overlap rules)
+- Spawn N `workflow-collab-planner` agents in parallel, each writing `.task/TASK-{NNN}.json` within assigned range
+- Merge: collect all task files, build unified plan.json with merged waves, resolve cross-planner dependencies
 
 ### Gap Mode (`--gaps`)
 
-```
-Skip exploration, load gaps from explorationContext (populated in P1 Step 6):
-  For each gap:
-    Create TASK-{NNN}.json with:
-      type: "fix"
-      description: gap.description
-      action: gap.fix_direction (with concrete values, not vague references)
-      read_first: [affected files from gap context]
-      convergence.criteria: [grep-verifiable conditions derived from gap description]
-      issue_id: gap.issue_id (if source == "issue", else null)
+For each gap from explorationContext (P1 Step 6), create `TASK-{NNN}.json`:
+- `type: "fix"`, `description`, `action` (concrete fix_direction), `read_first` (affected files), `convergence.criteria` (grep-verifiable), `issue_id` (if source == "issue")
 
-  Link tasks to issues (bidirectional):
-    For each created TASK-{NNN}.json that has issue_id:
-      Update corresponding issue in .workflow/issues/issues.jsonl:
-        status: "planned"
-        updated_at: now()
-      Display: "TASK-{NNN} <-> {issue_id}"
-
-Build plan.json with gap-fix tasks
-```
+Bidirectional linking: update matching issues in `.workflow/issues/issues.jsonl` → `status: "planned"`. Build plan.json with gap-fix tasks.
 
 ### Output
 - `plan.json` in PHASE_DIR
@@ -415,44 +215,16 @@ Build plan.json with gap-fix tasks
 ### Steps
 
 1. **Spawn workflow-plan-checker agent**
-   ```
-   Input: plan.json + all .task/TASK-*.json + index.json (success_criteria)
-
-   Check dimensions:
-     - Requirements coverage: Every success_criterion maps to at least one task
-     - Feasibility: Files referenced exist or can be created
-     - Dependency correctness: No circular deps, deps exist, wave ordering valid
-     - Convergence criteria quality: Each task has grep-verifiable convergence.criteria (no subjective language)
-     - read_first completeness: Every task has read_first[] with at least the file being modified
-     - Action concreteness: No vague "align X with Y" — every action has exact values
-     - Wave structure: Parallel tasks have no conflicting file modifications
-     - Completeness: No orphan tasks (not in any wave)
-   ```
+   - Input: plan.json + all .task/TASK-*.json + index.json (success_criteria)
+   - Check dimensions: requirements coverage, feasibility, dependency correctness (no circular deps), convergence criteria quality (grep-verifiable, no subjective language), read_first completeness, action concreteness (no vague references), wave structure (no conflicting files), completeness (no orphan tasks)
 
 2. **Revision loop** (max 3 rounds)
-   ```
-   While issues_found AND round <= 3:
-     checker returns issues[] with severity + fix_suggestion
-     If critical issues:
-       Re-spawn workflow-planner with issues as additional input
-       Planner revises plan.json + affected .task/ files
-       Re-check
-     If only warnings:
-       Log warnings, proceed
-   ```
+   - Critical issues → re-spawn planner with issues, revise, re-check
+   - Warnings only → log and proceed
 
 3. **Update index.json**
-   ```
-   index.json.plan = {
-     task_ids: [extracted from plan.json],
-     task_count: plan.json.task_count,
-     complexity: plan.json.complexity,
-     waves: plan.json.waves,
-     executor_assignments: {}  # populated by user override or auto-assignment in P5
-   }
-   index.json.status = "planning"
-   index.json.updated_at = now()
-   ```
+   - Set `index.json.plan` = `{ task_ids, task_count, complexity, waves, executor_assignments: {} }`
+   - Set `status: "planning"`, `updated_at: now()`
 
 ### Output
 - Updated plan.json (if revised)
@@ -468,40 +240,11 @@ Build plan.json with gap-fix tasks
 **Skip if:** scope == "standalone" (no milestone context to compare against)
 
 ```
-// 1. Collect existing plan file sets
-existing_plans = state.json.artifacts
-  .filter(a => a.milestone == current_milestone
-           && a.type == "plan"
-           && a.status == "completed")
-
-existing_files = {}  // { file_path: [plan_id, ...] }
-FOR each plan IN existing_plans:
-  tasks = load_all_tasks(plan.path + "/.task/")
-  FOR each task IN tasks:
-    FOR each file IN task.files:
-      existing_files[file].push(plan.id)
-
-// 2. Collect new plan's file set
-new_tasks = load_all_tasks(OUTPUT_DIR + "/.task/")
-new_files = Set()
-FOR each task IN new_tasks:
-  FOR each file IN task.files:
-    new_files.add(file)
-
-// 3. Check intersection
-collisions = []
-FOR each file IN new_files:
-  IF file IN existing_files:
-    collisions.push({ file, existing_plans: existing_files[file] })
-
-// 4. Report (non-blocking)
-IF collisions.length > 0:
-  WARN: "碰撞检测发现 {collisions.length} 个文件重叠:"
-  FOR each c IN collisions:
-    "  {c.file} ← 已在 {c.existing_plans.join(', ')} 中规划"
-  "建议: 确认是否有意覆盖，或调整 task 范围"
-ELSE:
-  "碰撞检测通过: 无文件重叠"
+1. Collect task.files[] from all completed plans in current milestone
+2. Collect task.files[] from new plan
+3. Intersect → collisions (non-blocking warning)
+   碰撞 → WARN "{file} ← 已在 {plan_ids} 中规划"
+   无重叠 → "碰撞检测通过"
 ```
 
 **Note:** Only checks `task.files[]` (write targets). `task.read_first[]` (read-only references) are excluded.
@@ -514,77 +257,33 @@ ELSE:
 
 ### Steps
 
-1. **Display plan summary**
-   ```
-   Show:
-     - Plan summary and approach
-     - Task count and wave structure
-     - Complexity estimate
-     - Key dependencies
-   ```
+1. **Display plan summary** — summary, approach, task count, wave structure, complexity, key dependencies
 
-2. **Present options via AskUserQuestion** (skip if `config.gates.confirm_plan == false`, auto-proceed to Execute)
-   ```
-   "Plan ready ({task_count} tasks in {wave_count} waves). What next?"
-
-   Options:
-     1. Execute now       -> Build executionContext, hand off to /workflow:execute
-     2. Verify plan quality -> Re-run P4 with stricter checks
-     3. Just view          -> Display full plan details, exit
-     4. Modify             -> Open specific task for editing, return to P4
-   ```
+2. **Present options via AskUserQuestion** (skip if `config.gates.confirm_plan == false`, auto-proceed)
+   - Execute now → build executionContext, hand off to /workflow:execute
+   - Verify plan quality → re-run P4 with stricter checks
+   - Just view → display full plan details, exit
+   - Modify → open specific task for editing, return to P4
 
 3. **executionContext handoff** (if "Execute now")
-   ```
-   executionMethod = config.json.execution.method || "agent"
-   defaultExecutor = config.json.execution.default_executor || "gemini"
-   executorAssignments = index.json.plan.executor_assignments || {}
-
-   executionContext = {
-     planObject: {
-       plan: plan.json contents,
-       tasks: { "TASK-001": task-001.json, ... }
-     },
-     explorations: [ exploration-*.json contents ],
-     clarifications: clarificationContext,
-     executionMethod: executionMethod,
-     defaultExecutor: defaultExecutor,
-     executorAssignments: executorAssignments,
-     phaseIndex: index.json contents,
-     specRef: spec-ref contents (if loaded)
+   ```json
+   {
+     "planObject": { "plan": "plan.json contents", "tasks": { "TASK-001": "..." } },
+     "explorations": ["exploration-*.json contents"],
+     "clarifications": "clarificationContext",
+     "executionMethod": "config.json.execution.method || 'agent'",
+     "defaultExecutor": "config.json.execution.default_executor || 'gemini'",
+     "executorAssignments": "index.json.plan.executor_assignments || {}",
+     "phaseIndex": "index.json contents",
+     "specRef": "spec-ref contents (if loaded)"
    }
-
-   Hand off to /workflow:execute with executionContext in memory
    ```
+   Hand off to /workflow:execute with executionContext in memory.
 
 4. **Register artifact in state.json**
-   ```
-   Read .workflow/state.json
-   // Find upstream analyze artifact
-   upstream_analyze = state.json.artifacts
-     .filter(a => a.type == "analyze" && a.path == CONTEXT_DIR relative path)
-     .last()  // most recent
-
-   next_id = max(artifacts.filter(a => a.type == "plan").map(a => parseInt(a.id.replace("PLN-","")))) + 1
-
-   artifact = {
-     id: "PLN-{next_id padded to 3}",
-     type: "plan",
-     milestone: state.json.current_milestone,
-     phase: PHASE_NUM,
-     scope: scope,
-     path: OUTPUT_DIR relative to .workflow/,
-     status: "completed",
-     depends_on: upstream_analyze?.id || null,
-     harvested: false,
-     created_at: plan_start_time,
-     completed_at: now()
-   }
-
-   state.json.artifacts.push(artifact)
-   state.json.last_updated = now()
-   Write state.json (atomic: write tmp + rename)
-   ```
+   - Find upstream analyze artifact by CONTEXT_DIR path
+   - Create artifact: `{ id: "PLN-{NNN}", type: "plan", milestone, phase, scope, path, status: "completed", depends_on, harvested: false, created_at, completed_at }`
+   - Append to `state.json.artifacts`, atomic write
 
 ---
 
@@ -621,18 +320,9 @@ Incrementally modify an existing plan without rebuilding from scratch.
 
 ### Plan Discovery
 
-```
-IF --dir specified:
-  PLAN_DIR = --dir value
-ELSE:
-  PLAN_DIR = state.json.artifacts
-    .filter(a => a.type == "plan" && a.status == "completed" && a.phase == PHASE_NUM)
-    .sort(by completed_at desc)
-    .first().path
-
-IF PLAN_DIR not found:
-  ERROR E004 "No plan found to revise. Use --dir to specify plan, or create plan first."
-```
+- `--dir` specified → use directly
+- Else → latest completed plan artifact for current phase from state.json
+- Not found → ERROR E004
 
 ### Execution Flow
 
@@ -672,38 +362,22 @@ Read-only plan verification without modification.
 
 ### Execution Flow
 
-1. **Load plan**
-   ```
-   PLAN_DIR = --check argument
-   IF PLAN_DIR not found:
-     ERROR E005 "Plan directory not found. Check path, use --dir."
+1. **Load plan** — read plan.json + .task/TASK-*.json from `--check` path (ERROR E005 if not found), plus roadmap.md
 
-   Read plan.json + .task/TASK-*.json from PLAN_DIR
-   Read .workflow/roadmap.md for consistency comparison
-   ```
-
-2. **Run checks**
-   - Plan-checker (P4 pipeline stage) — task quality, convergence criteria
-   - Roadmap consistency — plan tasks align with phase scope and requirements
-   - Collision detection — file overlaps with other plans in same milestone
-   - Dependency integrity — no broken cross-task dependencies
+2. **Run checks** — plan-checker (task quality, convergence criteria), roadmap consistency, collision detection, dependency integrity
 
 3. **Produce check report**
    ```
    === PLAN CHECK ===
    Plan: {plan_dir}/plan.json
    Tasks: {total} ({completed} done, {pending} pending)
-
    Checker: {PASS|WARN|FAIL} ({issues} issues)
    Roadmap: {aligned|drift detected}
    Collision: {clear|{N} overlaps}
 
-   Issues:
-     1. [{severity}] {description}
-
    Suggested actions:
-     /maestro-plan --revise "fix instructions"  -- Apply fixes
-     /maestro-execute --dir {plan_dir}          -- Execute as-is
+     /maestro-plan --revise "fix instructions"
+     /maestro-execute --dir {plan_dir}
    ```
 
 **No file modifications.** Pure verification + report.

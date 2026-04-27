@@ -18,13 +18,7 @@ Archive completed milestone, move artifacts to history, and prepare for next.
      - If NO → exit
    - If verdict is FAIL: ERROR E002
 
-3. Verify all artifacts completed:
-   ```
-   milestone_artifacts = state.json.artifacts.filter(a => a.milestone == target_milestone)
-   incomplete = milestone_artifacts.filter(a => a.status != "completed")
-   IF incomplete.length > 0:
-     ERROR E003: "Incomplete artifacts: {list ids and statuses}"
-   ```
+3. Verify all milestone artifacts have status "completed" → ERROR E003 if any incomplete (list ids and statuses)
 
 ---
 
@@ -40,12 +34,7 @@ Archive completed milestone, move artifacts to history, and prepare for next.
    cp .workflow/roadmap.md .workflow/milestones/{milestone}/roadmap-snapshot.md
    ```
 
-3. Archive scratch directories:
-   ```
-   FOR each artifact IN milestone_artifacts:
-     IF directory exists at .workflow/{artifact.path}:
-       cp -r .workflow/{artifact.path} .workflow/milestones/{milestone}/artifacts/{basename}/
-   ```
+3. Archive scratch directories: copy each milestone artifact's `.workflow/{artifact.path}` to `.workflow/milestones/{milestone}/artifacts/{basename}/`
 
 ---
 
@@ -66,37 +55,16 @@ Check existing entries to avoid duplicates when appending in Step 3.
    - Extract patterns discovered
    - Extract pitfalls encountered
 
-2. Aggregate learnings and append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format:
+2. Aggregate learnings and append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format. Each entry (strategy adjustment, pattern, or pitfall) follows this template:
    ```
-   For each strategy adjustment:
-     <spec-entry category="learning" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="milestone-complete">
+   <spec-entry category="learning" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="milestone-complete">
 
-     ### {summary}
+   ### {summary}
 
-     {content}
-     Milestone: {milestone}
+   {content}
+   Milestone: {milestone}
 
-     </spec-entry>
-
-   For each pattern:
-     <spec-entry category="learning" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="milestone-complete">
-
-     ### {summary}
-
-     {content}
-     Milestone: {milestone}
-
-     </spec-entry>
-
-   For each pitfall:
-     <spec-entry category="learning" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="milestone-complete">
-
-     ### {summary}
-
-     {content}
-     Milestone: {milestone}
-
-     </spec-entry>
+   </spec-entry>
    ```
 
    **Keyword extraction**: Extract 3-5 domain-specific terms from the content (same rules as `spec-add`).
@@ -121,21 +89,9 @@ Check existing entries to avoid duplicates when appending in Step 3.
    }
    ```
 
-2. Clear artifacts array (remove milestone-affiliated entries):
-   ```
-   state.json.artifacts = state.json.artifacts.filter(a => a.milestone != target_milestone)
-   ```
+2. Clear artifacts array: remove all entries where `milestone == target_milestone`
 
-3. Advance to next milestone:
-   ```
-   next_milestone = state.json.milestones.find(m => m.status == "pending")
-   IF next_milestone:
-     state.json.current_milestone = next_milestone.id
-     next_milestone.status = "active"
-   ELSE:
-     state.json.current_milestone = null
-     state.json.status = "completed"
-   ```
+3. Advance to next milestone: activate first pending milestone → set as `current_milestone`. If none pending → set `current_milestone = null`, `status = "completed"`
 
 4. Write state.json (atomic)
 
@@ -143,12 +99,7 @@ Check existing entries to avoid duplicates when appending in Step 3.
 
 ## Step 5: Clean Scratch
 
-Remove archived scratch directories:
-```
-FOR each artifact IN archived_artifacts:
-  IF directory exists at .workflow/{artifact.path}:
-    rm -rf .workflow/{artifact.path}
-```
+Remove archived scratch directories: delete `.workflow/{artifact.path}` for each archived artifact.
 
 ---
 

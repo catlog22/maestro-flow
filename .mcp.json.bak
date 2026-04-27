@@ -2,9 +2,7 @@
   "mcpServers": {
     "maestro": {
       "command": "node",
-      "args": [
-        "bin/maestro-mcp.js"
-      ],
+      "args": ["bin/maestro-mcp.js"],
       "env": {
         "MAESTRO_ENABLED_TOOLS": "write_file,edit_file,read_file,read_many_files,team_msg,core_memory"
       }

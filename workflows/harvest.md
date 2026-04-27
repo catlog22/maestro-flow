@@ -43,20 +43,11 @@ Unlike `retrospective.md` which is phase-scoped and post-execution, harvest oper
 ## Stage 1: parse_input
 
 ```
-1. Verify .workflow/ exists; else error E001.
-2. Tokenize $ARGUMENTS:
-   - First non-flag token: session ID, path, or empty (scan mode)
-   - Flags: --to, --source, --recent, --dry-run, -y, --min-confidence
-3. Build:
-     mode = "scan" | "session" | "path"
-     target_filter = "auto" | "wiki" | "spec" | "issue"
-     source_filter = "all" | specific source type
-     recent_days = 30 (or --recent value)
-     dry_run = false
-     auto_yes = false
-     min_confidence = 0.5
-4. Validate --to value. Unknown target → error E002.
-5. Validate --source value. Unknown source → error E003.
+Verify .workflow/ exists (else E001). Parse flags and first non-flag token:
+  mode: "scan" (no target) | "session" (ID match) | "path" (explicit path)
+  Defaults: target_filter=auto, source_filter=all, recent_days=30,
+            dry_run=false, auto_yes=false, min_confidence=0.5
+Invalid --to → E002. Invalid --source → E003.
 ```
 
 ---
@@ -78,22 +69,7 @@ Scan `.workflow/` for harvestable artifacts. Each source type has a known struct
 | `session` | `.workflow/active/WFS-*/` | `workflow-session.json` | `WFS-*` |
 | `learning` | `.workflow/learning/` | `lessons.jsonl`, `digest-*.md`, `*.md` | filename |
 
-```
-candidates = []
-FOR each source_type in source_registry:
-  IF source_filter != "all" AND source_filter != source_type: SKIP
-  Glob for directories/files matching scan_path
-  FOR each match:
-    stat = file modification time
-    IF stat.mtime < (now - recent_days): SKIP
-    Read key files, extract:
-      - session_id or directory name
-      - title (from JSON title field or markdown H1)
-      - created_at / updated_at
-      - summary (first paragraph or JSON summary field)
-      - file_count (number of artifact files)
-    candidates.push({ source_type, id, path, title, updated_at, summary, file_count })
-```
+Scan each source type (filtered by `--source`). For each matching directory/file within `--recent` window, extract: `source_type`, `id`, `path`, `title` (from JSON or H1), `updated_at`, `summary`, `file_count`.
 
 ### Display candidates
 
@@ -219,20 +195,11 @@ For each fragment, determine the best routing target (unless `--to` forces a spe
 
 ### Override with `--to`
 
-If `--to wiki`: all fragments → wiki entries
-If `--to spec`: all fragments → spec entries
-If `--to issue`: all fragments → issue entries
-If `--to auto`: use classification rules above
+`--to wiki|spec|issue` forces all fragments to that target. `--to auto` (default) uses classification rules above.
 
 ### Build routing plan
 
-```
-routing_plan = {
-  wiki: [{ fragment, wiki_type, slug, title, tags, body }],
-  spec: [{ fragment, spec_type, content }],
-  issue: [{ fragment, title, severity, description }]
-}
-```
+Group fragments into three buckets: `wiki` (fragment, wiki_type, slug, title, tags, body), `spec` (fragment, spec_type, content), `issue` (fragment, title, severity, description).
 
 ---
 
@@ -262,11 +229,7 @@ Fragments extracted: 8 (filtered from 12 by confidence ≥ 0.5)
   Total: 3 wiki + 2 spec + 3 issue = 8 routed items
 ```
 
-If `--dry-run`: display and exit.
-If NOT `--dry-run` AND NOT `-y`:
-  AskUserQuestion: "Apply this routing plan? (yes/edit/skip)" with options.
-  - `edit`: re-display with per-item accept/reject
-  - `skip`: exit without writing
+`--dry-run` → display and exit. Otherwise (unless `-y`), AskUserQuestion: "yes" (apply), "edit" (per-item accept/reject), "skip" (abort).
 
 ---
 
@@ -276,32 +239,11 @@ Execute the routing plan. Each target uses existing infrastructure:
 
 ### 6a. Wiki routing
 
-For each wiki item:
-```bash
-maestro wiki create --type <wiki_type> --slug harvest-<source_type>-<short_id> \
-  --title "<title>" --tags "<tags>" --body "<body>"
-```
-
-Wiki types mapping:
-- `note` → `--type note`
-- `lesson` → `--type lesson`
-- `spec` → `--type spec`
-
-If `maestro wiki create` fails, fall back to writing `.workflow/harvest/wiki-pending-{id}.md` with frontmatter.
+Create via `maestro wiki create --type <wiki_type> --slug harvest-<source_type>-<short_id> --title --tags --body`. Types: note/lesson/spec. Fallback on failure: write `.workflow/harvest/wiki-pending-{id}.md` with frontmatter.
 
 ### 6b. Spec routing
 
-For each spec item, use the same mechanism as `quality-retrospective` Stage 6:
-
-```
-Skill({ skill: "spec-add", args: "<spec_type> <content>" })
-```
-
-Where `spec_type` maps from fragment category:
-- `pattern` → `pattern`
-- `decision` → `decision`
-- `bug` → `bug`
-- `lesson` → `rule` (if it prescribes a rule)
+Route via `Skill({ skill: "spec-add", args: "<spec_type> <content>" })`. Category mapping: pattern→pattern, decision→decision, bug→bug, lesson→rule.
 
 ### 6c. Issue routing
 
@@ -345,16 +287,7 @@ This log prevents duplicate harvesting in future runs.
 
 ## Stage 7: dedup_check
 
-Before writing any item in Stage 6, check for duplicates:
-
-1. **harvest-log.jsonl**: Has this fragment_id already been routed?
-2. **Wiki**: `maestro wiki search "<title>"` — does a similar entry exist?
-3. **Issues**: Search `issues.jsonl` for matching title/description
-4. **Specs**: Search `learnings.md` for similar content
-
-If duplicate found:
-- Skip with `[SKIP-DUP]` marker
-- Log to harvest report
+Before writing any item in Stage 6, check for duplicates across `harvest-log.jsonl` (by fragment_id), wiki (by title search), `issues.jsonl` (by title/description), and `learnings.md` (by content). Duplicates are skipped with `[SKIP-DUP]` marker and logged to harvest report.
 
 ---
 

@@ -1,4 +1,6 @@
 import { WebSocket } from 'ws';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import type { WsHandler } from '../ws-handler.js';
 import type { WsEventType } from '../../../shared/ws-protocol.js';
@@ -48,6 +50,7 @@ export class RoomWsHandler implements WsHandler {
     private readonly sessionManager: RoomSessionManager,
     private readonly eventBus: DashboardEventBus,
     private readonly filter: SessionScopedEventFilter,
+    private readonly workflowRoot?: string,
   ) {}
 
   async handle(
@@ -82,6 +85,8 @@ export class RoomWsHandler implements WsHandler {
         const destroyed = await this.sessionManager.destroySession(sessionId);
         if (destroyed) {
           this.eventBus.emit('room:closed', { sessionId });
+          // Clean up meeting-room entry from .mcp.json
+          this.cleanupMcpJson();
         }
         break;
       }
@@ -203,6 +208,23 @@ export class RoomWsHandler implements WsHandler {
         }
         break;
       }
+    }
+  }
+
+  /** Remove the meeting-room entry from .mcp.json after room destruction. */
+  private cleanupMcpJson(): void {
+    if (!this.workflowRoot) return;
+    const projectRoot = resolve(this.workflowRoot, '..');
+    const mcpJsonPath = join(projectRoot, '.mcp.json');
+    try {
+      if (!existsSync(mcpJsonPath)) return;
+      const config = JSON.parse(readFileSync(mcpJsonPath, 'utf-8'));
+      if (config.mcpServers?.['meeting-room']) {
+        delete config.mcpServers['meeting-room'];
+        writeFileSync(mcpJsonPath, JSON.stringify(config, null, 2));
+      }
+    } catch {
+      // Best-effort cleanup
     }
   }
 }

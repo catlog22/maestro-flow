@@ -16,40 +16,18 @@ System specs initialization -- scan project structure, detect tech stack, genera
 
 ### Step 1: Ensure Directory Structure
 
-```
-Create directories if not present:
-  .workflow/
-  .workflow/specs/
-```
+Ensure `.workflow/` and `.workflow/specs/` exist (create if missing).
 
 ### Step 2: Scan Project Structure
 
-Scan the project root for tech stack indicators:
+Scan project root for tech stack indicators:
 
 ```
-Detection targets:
-  package.json        --> Node.js ecosystem (read dependencies for framework detection)
-  tsconfig.json       --> TypeScript
-  pyproject.toml      --> Python (modern)
-  requirements.txt    --> Python (legacy)
-  go.mod              --> Go
-  Cargo.toml          --> Rust
-  pom.xml             --> Java (Maven)
-  build.gradle        --> Java/Kotlin (Gradle)
-  composer.json        --> PHP
-  Gemfile             --> Ruby
-  .csproj / .sln      --> .NET/C#
-  Dockerfile          --> Container deployment
-  docker-compose.yml  --> Multi-container orchestration
+Manifest files → runtime: package.json (Node), tsconfig.json (TS), pyproject.toml/requirements.txt (Python),
+  go.mod (Go), Cargo.toml (Rust), pom.xml (Maven), build.gradle (Gradle), composer.json (PHP),
+  Gemfile (Ruby), .csproj/.sln (.NET), Dockerfile/docker-compose.yml (containers)
 
-Framework detection (from dependency files):
-  react / next        --> React / Next.js
-  vue                 --> Vue.js
-  angular             --> Angular
-  express / fastify   --> Node.js server
-  django / flask      --> Python web
-  gin / echo          --> Go web
-  spring              --> Java Spring
+Dependency analysis → frameworks: react/next, vue, angular, express/fastify, django/flask, gin/echo, spring
 ```
 
 ### Step 3: Detect Code Patterns
@@ -57,11 +35,9 @@ Framework detection (from dependency files):
 Scan source files for coding conventions:
 
 ```
-Indentation:  Count leading spaces/tabs in first 20 source files
-Naming:       Scan exports for camelCase / PascalCase / snake_case patterns
-Imports:      Check import style (named vs default, path aliases, barrel exports)
-Formatting:   Check for .prettierrc, .editorconfig, eslint config
-File naming:  kebab-case vs camelCase vs PascalCase for source files
+Detect from first 20 source files: indentation style, naming conventions (camelCase/PascalCase/snake_case),
+import style (named/default, aliases, barrels), formatter configs (.prettierrc, .editorconfig, eslint),
+file naming pattern (kebab/camel/Pascal)
 ```
 
 ### Step 4: Generate Core Files (always created)
@@ -210,19 +186,7 @@ These are NOT created during setup. They are created on demand when `spec-add de
 
 ### Step 6: Summary
 
-Display what was created:
-```
-Specs initialized:
-  .workflow/specs/coding-conventions.md          (category: coding)
-  .workflow/specs/architecture-constraints.md    (category: arch)
-  .workflow/specs/learnings.md                   (category: learning)
-  {if created:}
-  .workflow/specs/quality-rules.md               (category: quality)
-  .workflow/specs/test-conventions.md            (category: test)
-
-Categories: coding, arch, quality, debug, test, review, learning
-  debug-notes.md and review-standards.md created on demand via /spec-add
-```
+Display list of created files with categories. Note that `debug-notes.md` and `review-standards.md` are created on demand via `/spec-add`.
 
 ## Output
 

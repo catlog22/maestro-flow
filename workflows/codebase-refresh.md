@@ -28,40 +28,25 @@ Detects which files have changed (via git diff), identifies which codebase docs 
 ### Step 1: Parse Input and Validate
 
 ```
-Parse $ARGUMENTS for --since and --deep flags.
-
-Verify .workflow/ directory exists and is initialized (project.md, state.json present).
-  If not initialized: abort with E001.
-
-Verify .workflow/codebase/doc-index.json exists.
-  If not: abort with E002 (suggest using codebase-rebuild instead).
+Parse --since and --deep flags from $ARGUMENTS.
+Verify .workflow/ initialized (E001 if not) and doc-index.json exists (E002 if not).
 ```
 
 ### Step 2: Detect Changes
 
 ```
-Determine the change detection window:
-  If --since provided: use that date/ref
-  Otherwise: use codebase_last_rebuilt or codebase_last_refreshed from state.json
-
-Run git diff --name-only since the determined date to get list of changed files.
-
-If no changes detected: emit W001 and exit gracefully ("No changes detected since last refresh").
+Change window: --since value, else codebase_last_rebuilt/codebase_last_refreshed from state.json.
+Run git diff --name-only to get changed files.
+If no changes: emit W001 and exit.
 ```
 
 ### Step 3: Identify Affected Documentation
 
 ```
-Read .workflow/codebase/doc-index.json to map changed files to documentation entries.
-
-For each changed file, identify which doc-index entries reference it:
-  - Which tech-registry components are affected (via code_locations matching)
-  - Which feature-map entries need updating (via component -> feature chain)
-  - Which requirements or ADRs reference changed code
-
-Build a list of affected documentation sections:
-  affected_components = [component entries whose code_locations include changed files]
-  affected_features = [features whose component_ids include affected components]
+Map changed files to doc-index.json entries via code_locations matching.
+Build affected sets:
+  affected_components = components whose code_locations include changed files
+  affected_features = features whose component_ids include affected components
 ```
 
 ### Step 3.5: Load Project Specs
@@ -77,138 +62,55 @@ Used in Step 4-5 to validate refreshed docs against architectural expectations.
 ### Step 4: Re-scan Affected Components
 
 ```
-For each component in affected_components:
-  For each file_path in component.code_locations:
-    a. Check if file still exists
-       If not: mark for removal from code_locations, log warning
+For each affected component:
+  - Verify code_locations still exist (remove missing, log warning)
+  - Re-extract exported symbols (ESM export + CJS module.exports patterns)
+  - Update symbols[] and last_updated timestamp
 
-    b. Read file content
-       Extract exported symbols:
-         - export class {Name}
-         - export function {name}
-         - export interface {Name}
-         - export type {Name}
-         - export const {NAME}
-         - export default {name/class}
-         - module.exports patterns (for CJS)
+If --deep: follow reverse dependency chain to find additional affected components.
 
-    c. Update component entry:
-       - symbols = [newly extracted symbols]
-       - last_updated = current ISO timestamp
-
-  If --deep is set, also re-scan files that import/require the changed files
-  (follow reverse dependency chain to find additional affected components).
-
-  Check for new files that should belong to this component:
-    - Scan same directory as existing code_locations
-    - If new files match the component's naming pattern:
-      Log: "Potential new file for {component.id}: {file}"
-      (Do not auto-add; report for manual review)
+Report new files matching component naming patterns (do not auto-add).
 ```
 
 ### Step 5: Check Relationship Changes
 
 ```
 For each refreshed component:
-  Read import statements from code_locations files
-  Identify imported modules that map to other components
-
-  Compare with current feature_ids:
-    If a component imports from a different feature's components:
-      Log: "Cross-feature dependency detected: {component.id} -> {other_component.id}"
+  Analyze imports to detect cross-feature dependencies (log if found).
 
 For each refreshed feature:
-  Verify all component_ids still exist in components[]
-  Remove any stale component_ids
-  Check if new components should be added (by directory proximity)
+  Remove stale component_ids, check for new components by directory proximity.
 ```
 
 ### Step 6: Update Doc Index
 
 ```
-Write updated entries back to doc-index.json:
-  - Updated component entries (symbols, code_locations, last_updated)
-  - Updated feature entries (component_ids, last_updated)
-  - Update top-level last_updated timestamp
-  - Update global last_refreshed timestamp
-
-Write: .workflow/codebase/doc-index.json
+Write updated component/feature entries + timestamps to .workflow/codebase/doc-index.json.
 ```
 
 ### Step 7: Regenerate Affected Docs
 
 ```
-For each refreshed component:
-  Compute slug from component.name
-  Regenerate: .workflow/codebase/tech-registry/{slug}.md
+For each refreshed component: regenerate tech-registry/{slug}.md
+  (header table + Code Locations + Exported Symbols + refresh timestamp).
 
-    # {component.name}
+For each refreshed feature: regenerate feature-maps/{slug}.md
+  (header table + Components table + Requirements + refresh timestamp).
 
-    | Field | Value |
-    |-------|-------|
-    | **ID** | {id} |
-    | **Type** | {type} |
-    | **Features** | {feature_ids joined} |
-
-    ## Code Locations
-    {bullet list of code_locations}
-
-    ## Exported Symbols
-    {bullet list of symbols}
-
-    ---
-    *Refreshed at {timestamp}*
-
-For each refreshed feature:
-  Compute slug from feature.name
-  Regenerate: .workflow/codebase/feature-maps/{slug}.md
-
-    # {feature.name}
-
-    | Field | Value |
-    |-------|-------|
-    | **ID** | {id} |
-    | **Status** | {status} |
-    | **Phase** | {phase or "unassigned"} |
-
-    ## Components
-    | ID | Name | Type |
-    |----|------|------|
-    {table row per component}
-
-    ## Requirements
-    {bullet list of requirement_ids with titles}
-
-    ---
-    *Refreshed at {timestamp}*
-
-Update _index.md files if any entries changed:
-  Regenerate tech-registry/_index.md
-  Regenerate feature-maps/_index.md
+If entries changed: regenerate tech-registry/_index.md and feature-maps/_index.md.
 ```
 
 ### Step 8: Update Timestamps
 
 ```
-Update .workflow/state.json:
-  - Set codebase_last_refreshed timestamp
-  - Update last_updated timestamp
+Update .workflow/state.json: set codebase_last_refreshed and last_updated timestamps.
 ```
 
 ### Step 9: Report
 
 ```
-Display summary:
-  Refresh complete:
-    Changed files detected: {count}
-    Components refreshed: {count} ({IDs})
-    Features refreshed: {count} ({IDs})
-    Symbols updated: {count new} added, {count removed} removed
-    Files updated in .workflow/codebase/: {list}
-    Warnings: {any warnings from Steps 4-5}
-    If W001: "No changes detected since last refresh"
-
-  Suggest next: Skill({ skill: "manage-status" }) to review
+Display summary: changed files, components/features refreshed, symbols added/removed, warnings.
+Suggest next: manage-status to review.
 ```
 
 ---

@@ -31,11 +31,7 @@ Each category loads exactly one file. Same mapping as spec-add.
 
 ### Step 1: Parse Arguments
 
-```
-Parse $ARGUMENTS:
-  --category <type>  -> category filter
-  remaining text     -> keyword for grep filtering
-```
+Extract `--category <type>` (filter) and remaining text (keyword for grep).
 
 ### Step 2: Load Specs via CLI
 

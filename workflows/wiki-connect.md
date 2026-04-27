@@ -37,20 +37,9 @@ Knowledge graph link discovery and health improvement. Analyzes the unified wiki
 
 ## Stage 1: Load Wiki State
 
-Run these `maestro wiki` commands in parallel to gather baseline:
+Gather baseline in parallel via `maestro wiki list --json`, `health`, `orphans`, `hubs --top 10`.
 
-```bash
-maestro wiki list --json           # all entries with metadata
-maestro wiki health                # composite health score
-maestro wiki orphans               # entries with 0 in/out links
-maestro wiki hubs --top 10         # most-referenced entries
-```
-
-Parse into working state:
-- Entry count and type distribution (spec, memory, note, lesson, issue)
-- Baseline health score (numeric, from health command)
-- Orphan list with entry IDs and titles
-- Hub list with in-degree counts
+Working state: entry count by type, baseline health score, orphan IDs, hub in-degree counts.
 
 Apply `--scope` filter if provided — restrict all subsequent analysis to matching type.
 
@@ -87,23 +76,15 @@ Detect entries of different types referencing the same concept:
 
 ## Stage 3: Score Candidates
 
-For each candidate connection (source → target):
+Score each candidate connection (source → target):
 
 ```
-score = 0.4 × tag_overlap_ratio
-      + 0.3 × title_bm25_similarity
-      + 0.2 × same_category_bonus
-      + 0.1 × type_bridge_bonus
+score = 0.4 × tag_overlap_ratio + 0.3 × title_bm25_similarity + 0.2 × same_category_bonus + 0.1 × type_bridge_bonus
 ```
 
-- `tag_overlap_ratio`: shared_tags / max(source_tags, target_tags)
-- `title_bm25_similarity`: normalized BM25 score from `maestro wiki search`
-- `same_category_bonus`: 1.0 if same category, else 0.0
-- `type_bridge_bonus`: 1.0 if different types, else 0.0
+Ratios: tag_overlap = shared/max(source,target) tags, BM25 = normalized wiki search, category/type bonuses = 1.0 if match/bridge.
 
-Filter: score >= `--min-similarity`
-Sort: descending by score
-Limit: top `--max` entries
+Filter: score >= `--min-similarity`, sort descending, limit to `--max`.
 
 ---
 
@@ -131,16 +112,9 @@ If `--fix`: proceed to Stage 5.
 
 ## Stage 5: Apply Connections (--fix only)
 
-For each accepted suggestion:
-1. `maestro wiki get <source-id> --json` — get current entry
-2. Extract existing `related` list from frontmatter
-3. Append target-id to `related` if not already present
-4. `maestro wiki update <source-id> --frontmatter '{"related": ["existing...", "new-target"]}'`
-5. Log success/failure per entry
+For each accepted suggestion: fetch entry, append target-id to `related` list (dedup), update via `maestro wiki update <source-id> --frontmatter`.
 
-After all updates:
-- Re-run `maestro wiki health` → compute delta
-- Report applied count, skipped count, and health improvement
+After all updates: re-run `maestro wiki health`, report applied/skipped counts and health delta.
 
 ---
 
@@ -175,14 +149,3 @@ Report:       .workflow/learning/wiki-connections-{date}.md
 | View full graph | `maestro wiki graph` |
 | Run harvest for new content | `/manage-harvest --recent 7` |
 
----
-
-## Error Codes
-
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No wiki entries found (empty index) | Run `/maestro-init` or create wiki content |
-| E002 | error | `maestro wiki` CLI not available | Check maestro installation |
-| W001 | warning | No candidates above threshold | Lower `--min-similarity` or verify graph connectivity |
-| W002 | warning | Some wiki updates failed during `--fix` | Retry failed entries manually |
-| W003 | warning | Health score unchanged after fix | Connections may not affect specific health metrics |

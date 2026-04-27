@@ -6,20 +6,9 @@ Chain-graph coordinator via `maestro coordinate` CLI endpoint. Loads a chain gra
 
 ### Step 1: Parse Arguments
 
-```javascript
-const args = $ARGUMENTS.trim();
-const listMode = /\b--list\b/.test(args);
-const autoYes = /\b(-y|--yes)\b/.test(args);
-const resumeMode = /\b(-c|--continue)\b/.test(args);
-const resumeId = args.match(/(?:-c|--continue)\s+(\S+)/)?.[1] || null;
-const forcedChain = args.match(/--chain\s+(\S+)/)?.[1] || null;
-const cliTool = args.match(/--tool\s+(\S+)/)?.[1] || 'claude';
-const intent = args
-  .replace(/\b(-y|--yes|--list|-c|--continue)\b/g, '')
-  .replace(/(?:-c|--continue)\s+\S+/g, '')
-  .replace(/--(chain|tool)\s+\S+/g, '')
-  .trim();
-```
+Extract from `$ARGUMENTS`:
+- Flags: `--list`, `-y`/`--yes`, `-c`/`--continue [id]`, `--chain <name>`, `--tool <name>` (default: claude)
+- `intent` = remaining text after flag removal
 
 ---
 
@@ -37,72 +26,34 @@ Exit after display.
 
 #### 3a: New session (step mode)
 
-Build command dynamically — only include flags when values are present:
-
 ```bash
 maestro coordinate start "{intent}" --tool {cliTool} [--chain {forcedChain}] [-y]
 ```
 
-- Append `--chain {forcedChain}` only if `forcedChain` is not null
-- Append `-y` only if `autoYes` is true
-
-Outputs JSON to stdout:
-
-```json
-{
-  "session_id": "coord-1711612800-a1b2",
-  "status": "step_paused",
-  "graph_id": "full-lifecycle",
-  "current_node": "plan",
-  "steps_completed": 1,
-  "last_step": { "node_id": "plan", "outcome": "success", "summary": "..." },
-  "history": [...]
-}
-```
-
-Capture `session_id` from output.
+Include `--chain` and `-y` only when set. Returns JSON with `session_id`, `status`, `graph_id`, `current_node`, `last_step`, `history`.
 
 #### 3b: Resume existing session
-
-Use `coordinate next` for step_paused sessions:
 
 ```bash
 maestro coordinate next {resumeId}
 ```
 
-If `resumeId` is null (bare `-c`), omit the session ID — `next` resumes the latest step_paused session.
-
-Same JSON output format.
+If bare `-c` (no ID), omit session ID to resume latest step_paused session. Same JSON output format.
 
 ---
 
 ### Step 4: Step Loop
 
-Parse JSON output from start/next. While `status === "step_paused"`:
-
-```bash
-maestro coordinate next {session_id}
-```
-
-After each call:
-- Parse JSON output
-- Log step result: `[Step N] /{cmd} — {outcome} — {summary}`
-- If `status === "step_paused"` → continue loop
-- If `status === "completed"` → **Step 5**
-- If `status === "failed"` → **Step 5**
+Loop `maestro coordinate next {session_id}` while `status === "step_paused"`. Log each step: `[Step N] /{cmd} — {outcome} — {summary}`. Exit loop on `completed` or `failed` → **Step 5**.
 
 The walker handles internally:
-- Prompt assembly from `coordinate-step` template (command nodes) and inline `buildDecisionPrompt` (decision nodes) — **the walker owns all prompt construction**
+- Prompt assembly (command nodes via `coordinate-step` template, decision nodes inline)
 - CLI execution via `maestro delegate --to {tool} --mode {write|analysis}`
-- Decision/gate/eval node auto-resolution:
-  - `strategy: 'expr'` — static expression, instant
-  - `strategy: 'llm'` — spawns the configured CLI tool via a thin `DefaultLLMDecider`, expects a `DECISION: <target>\nREASONING: <text>` response
-  - **Expr fallback**: when an `expr` decision has no matching edge and no `default` edge, the walker automatically asks the LLM decider before failing
-- max_visits loop prevention
-- State persistence to `.workflow/.maestro-coordinate/{session_id}/`
-- **Channel telemetry**: every walker event is published to a file/SQLite broker under `~/.maestro/data/async/`, keyed by `session_id`. External observers tail it via `maestro coordinate watch {sessionId} [--follow]` without affecting the stdout JSON protocol.
+- Decision auto-resolution: `expr` (static, instant) or `llm` (CLI spawn, expects `DECISION: <target>\nREASONING: <text>`). Expr fallback to LLM when no matching/default edge.
+- max_visits loop prevention, state persistence to `.workflow/.maestro-coordinate/{session_id}/`
+- Channel telemetry published to `~/.maestro/data/async/` broker, observable via `maestro coordinate watch`
 
-> **Step-mode latency note**: in step mode, an LLM-driven decision fires a real CLI spawn inside the `next` process. This is synchronous and can take several seconds. The outer step loop should not impose tight per-step deadlines. Static `expr` decisions remain instant.
+> **Step-mode latency note**: LLM-driven decisions fire synchronous CLI spawns (several seconds). Do not impose tight per-step deadlines. Static `expr` decisions remain instant.
 
 ---
 

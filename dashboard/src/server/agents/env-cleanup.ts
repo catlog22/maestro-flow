@@ -32,6 +32,15 @@ export function cleanSpawnEnv(
     if (INTERFERENCE_KEYS.has(key)) continue;
     env[key] = value;
   }
+  // Ensure localhost/loopback is excluded from proxy — MCP HTTP servers
+  // on 127.0.0.1 must not be routed through corporate proxies.
+  const existing = env.NO_PROXY || env.no_proxy || '';
+  if (!existing.includes('127.0.0.1')) {
+    const parts = existing ? [existing, '127.0.0.1', 'localhost'] : ['127.0.0.1', 'localhost'];
+    env.NO_PROXY = parts.join(',');
+    env.no_proxy = parts.join(',');
+  }
+
   if (overrides) Object.assign(env, overrides);
   return env;
 }

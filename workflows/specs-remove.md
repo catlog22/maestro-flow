@@ -102,14 +102,3 @@ To verify:  maestro wiki list --type spec --category {category}
 To re-add:  /spec-add {category} {content}
 ```
 
----
-
-## Error Codes
-
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | fatal | Entry ID required | Usage: `/spec-remove <entry-id>` |
-| E002 | fatal | `.workflow/specs/` not initialized | Run `/spec-setup` first |
-| E003 | fatal | Entry ID not found in wiki index | Check ID with `maestro wiki list --type spec` |
-| E004 | fatal | Entry is not a spec sub-node | Only `<spec-entry>` sub-nodes can be removed this way |
-| W001 | warning | Container file empty after removal | File kept but has no entries |

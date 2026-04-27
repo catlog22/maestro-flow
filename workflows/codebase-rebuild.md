@@ -27,58 +27,35 @@ Full rebuild of the `.workflow/codebase/` documentation system.
 ### Step 1: Prepare Directory Structure
 
 ```
-Create (or clear if --force) the codebase directory:
+Create (or clear if --force) .workflow/codebase/:
+  doc-index.json, tech-registry/_index.md, feature-maps/_index.md, action-logs/
 
-.workflow/codebase/
-  doc-index.json
-  tech-registry/
-    _index.md
-  feature-maps/
-    _index.md
-  action-logs/
-
-If directories exist and --force not set:
-  AskUserQuestion: "Codebase docs already exist. Rebuild will overwrite. Continue? [y/N]"
-  If no: exit
+If exists and not --force: confirm overwrite or exit.
 ```
 
 ### Step 2: Scan Project Structure — Components
 
 ```
-Scan src/ (and other source directories) for components:
+Scan source directories (src/, lib/, app/, packages/) for components.
+Use project.md Tech Stack for context if available.
 
-a. Identify source directories:
-   - Check for: src/, lib/, app/, packages/
-   - Read project.md Tech Stack section if available for context
+Classify files by naming pattern:
+  Models (*model*, *entity*, *schema*), Services (*service*, *provider*),
+  Controllers (*controller*, *handler*, *route*), Utils (*util*, *helper*),
+  Types (*type*, *interface*, *.d.ts), Config (*config*, *constant*),
+  Middleware (*middleware*, *guard*, *interceptor*), Core (*core*, *registry*, *loader*)
 
-b. For each source directory, scan for component-forming files:
-   - Directories that represent modules (contain index.ts/index.js or multiple files)
-   - Key file patterns:
-     - Models: *model*, *entity*, *schema* files
-     - Services: *service*, *provider* files
-     - Controllers: *controller*, *handler*, *route* files
-     - Utils: *util*, *helper*, *common* files
-     - Types: *type*, *interface*, *.d.ts files
-     - Config: *config*, *constant* files
-     - Middleware: *middleware*, *guard*, *interceptor* files
-     - Core: *core*, *registry*, *loader* files
-
-c. For each identified component:
-   - Read the file(s)
-   - Extract exported symbols (classes, functions, interfaces, types, constants)
-   - Determine component type (model, service, controller, util, config, middleware, core)
-   - Build component entry:
-     {
-       "id": "TC-{NNN}",          // Sequential, zero-padded 3 digits
-       "name": "{PascalCase name}",
-       "type": "{type}",
-       "code_locations": ["{relative paths}"],
-       "feature_ids": [],          // Populated in Step 3
-       "symbols": ["{exported symbol names}"],
-       "last_updated": "{ISO timestamp}"
-     }
-
-d. ID assignment: TC-001, TC-002, ... in discovery order
+For each component: read files, extract exported symbols, determine type.
+Build component entry:
+  {
+    "id": "TC-{NNN}",              // Sequential TC-001, TC-002, ...
+    "name": "{PascalCase name}",
+    "type": "{type}",
+    "code_locations": ["{relative paths}"],
+    "feature_ids": [],              // Populated in Step 3
+    "symbols": ["{exported symbol names}"],
+    "last_updated": "{ISO timestamp}"
+  }
 ```
 
 ### Step 2.5: Load Project Specs
@@ -94,71 +71,54 @@ Used in Step 2-4 to produce architecture-aware documentation.
 ### Step 3: Scan Project Structure — Features
 
 ```
-Group components by domain/functional area:
+Group components into features by:
+  directory proximity, naming patterns, import relationships, task-specs/ mapping.
 
-a. Heuristics for grouping:
-   - Directory proximity (components in same directory = likely same feature)
-   - Naming patterns (auth.service + auth.controller + auth.model = "Authentication")
-   - Import relationships (files that import each other = related)
-   - task-specs/ requirements mapping (if available)
+For each feature group: derive name, collect component IDs, map requirements and phase.
+Build feature entry:
+  {
+    "id": "FT-{NNN}",
+    "name": "{Feature Name}",
+    "status": "active",
+    "requirement_ids": [],        // From task-specs mapping
+    "component_ids": ["TC-001", "TC-002"],
+    "phase": null                 // From roadmap mapping
+  }
 
-b. For each identified feature group:
-   - Determine feature name from common prefix or directory name
-   - Collect component IDs
-   - Map to requirements if task-specs/ REQ-* files exist
-   - Determine phase association from roadmap.md if available
-   - Build feature entry:
-     {
-       "id": "FT-{NNN}",
-       "name": "{Feature Name}",
-       "status": "active",
-       "requirement_ids": [],      // From task-specs mapping
-       "component_ids": ["TC-001", "TC-002"],
-       "phase": null               // From roadmap mapping
-     }
-
-c. Back-fill component.feature_ids with the feature IDs
+Back-fill component.feature_ids with assigned feature IDs.
 ```
 
 ### Step 4: Map Requirements (if task-specs exist)
 
 ```
-If .workflow/task-specs/ directories exist:
-  For each SPEC-*/requirements/REQ-*.md:
-    - Parse requirement metadata (title, priority, acceptance_criteria)
-    - Match to features by keyword/domain analysis
-    - Build requirement entry:
-      {
-        "id": "REQ-{NNN}",
-        "title": "{requirement title}",
-        "priority": "must|should|could|wont",
-        "feature_id": "FT-{NNN}",
-        "status": "pending|in_progress|completed",
-        "acceptance_criteria": ["{criteria}"]
-      }
+If .workflow/task-specs/ exist: parse each SPEC-*/requirements/REQ-*.md,
+match to features by keyword analysis. Build requirement entry:
+  {
+    "id": "REQ-{NNN}",
+    "title": "{requirement title}",
+    "priority": "must|should|could|wont",
+    "feature_id": "FT-{NNN}",
+    "status": "pending|in_progress|completed",
+    "acceptance_criteria": ["{criteria}"]
+  }
 
-If no task-specs exist:
-  requirements = []  (empty, populated later by spec-generate)
+If no task-specs: requirements = [] (populated later by spec-generate).
 ```
 
 ### Step 5: Record Architecture Decisions (if ADRs exist)
 
 ```
-If .workflow/task-specs/*/architecture/ADR-*.md exist:
-  For each ADR file:
-    - Parse ADR metadata (title, decision, rationale)
-    - Map to components by keyword analysis
-    - Build ADR entry:
-      {
-        "id": "ADR-{NNN}",
-        "title": "{ADR title}",
-        "component_ids": ["TC-{NNN}"],
-        "decision": "{decision summary}",
-        "rationale": "{rationale summary}"
-      }
+If .workflow/task-specs/*/architecture/ADR-*.md exist: parse each ADR,
+map to components by keyword analysis. Build ADR entry:
+  {
+    "id": "ADR-{NNN}",
+    "title": "{ADR title}",
+    "component_ids": ["TC-{NNN}"],
+    "decision": "{decision summary}",
+    "rationale": "{rationale summary}"
+  }
 
-If no ADRs exist:
-  architecture_decisions = []
+If no ADRs: architecture_decisions = [].
 ```
 
 ### Step 6: Write doc-index.json
@@ -184,118 +144,46 @@ Write to: .workflow/codebase/doc-index.json
 ### Step 7: Generate Tech Registry Docs
 
 ```
-For each component in doc-index.json:
-  Compute slug: lowercase(name), replace spaces with hyphens
+For each component (slug = lowercase-hyphenated name):
 
-  Write .workflow/codebase/tech-registry/{slug}.md:
-
-    # {component.name}
-
-    | Field | Value |
-    |-------|-------|
-    | **ID** | {id} |
-    | **Type** | {type} |
-    | **Features** | {feature_ids joined with ", "} |
-
-    ## Code Locations
-    {bullet list of code_locations}
-
-    ## Exported Symbols
-    {bullet list of symbols}
-
-    ## Dependencies
-    {extracted from import statements in code_locations}
-
-    ---
-    *Auto-generated by codebase-rebuild at {timestamp}*
+Write .workflow/codebase/tech-registry/{slug}.md:
+  Header table (ID, Type, Features) + sections: Code Locations, Exported Symbols, Dependencies.
+  Footer: *Auto-generated by codebase-rebuild at {timestamp}*
 
 Write .workflow/codebase/tech-registry/_index.md:
-  # Tech Registry
-
-  | ID | Name | Type | Locations |
-  |----|------|------|-----------|
-  {table row per component}
-
-  ---
-  *{count} components registered*
+  Summary table (ID, Name, Type, Locations) + component count footer.
 ```
 
 ### Step 8: Generate Feature Map Docs
 
 ```
-For each feature in doc-index.json:
-  Compute slug: lowercase(name), replace spaces with hyphens
+For each feature (slug = lowercase-hyphenated name):
 
-  Write .workflow/codebase/feature-maps/{slug}.md:
-
-    # {feature.name}
-
-    | Field | Value |
-    |-------|-------|
-    | **ID** | {id} |
-    | **Status** | {status} |
-    | **Phase** | {phase or "unassigned"} |
-
-    ## Requirements
-    {bullet list of requirement_ids with titles}
-
-    ## Components
-    | ID | Name | Type |
-    |----|------|------|
-    {table row per component in component_ids}
-
-    ---
-    *Auto-generated by codebase-rebuild at {timestamp}*
+Write .workflow/codebase/feature-maps/{slug}.md:
+  Header table (ID, Status, Phase) + sections: Requirements, Components table.
+  Footer: *Auto-generated by codebase-rebuild at {timestamp}*
 
 Write .workflow/codebase/feature-maps/_index.md:
-  # Feature Maps
-
-  | ID | Name | Status | Components | Requirements |
-  |----|------|--------|------------|--------------|
-  {table row per feature}
-
-  ---
-  *{count} features mapped*
+  Summary table (ID, Name, Status, Components, Requirements) + feature count footer.
 ```
 
 ### Step 8.5: Update State and Project Artifacts
 
 ```
-a. Update state.json:
-   Read .workflow/state.json
-   Set last_codebase_rebuild: "{ISO timestamp}"
-   Set last_updated: "{ISO timestamp}"
-   Write updated state.json
+a. Update state.json: set last_codebase_rebuild and last_updated timestamps.
 
 b. Update project.md Tech Stack (if exists):
-   Read .workflow/project.md
-   Compare "## Tech Stack" section against detected stack from Step 2
-   If new entries or changes detected:
-     Update the Tech Stack section with current values
-     Update the "Last updated" footer timestamp
-     Write updated project.md
-     Display: "project.md: Tech Stack section refreshed"
+   Compare "## Tech Stack" against detected stack from Step 2.
+   If changes detected: update section + footer timestamp.
 ```
 
 ### Step 9: Report and Commit
 
 ```
-Display summary:
-  Codebase rebuild complete:
-    Components: {count}
-    Features: {count}
-    Requirements: {count}
-    ADRs: {count}
-    Files generated: {count}
-
-If any mapper agents failed: log W001 with the failed mapper name.
-
-If not --skip-commit:
-  Suggest committing the generated docs
-
-Suggest next:
-  - Skill({ skill: "manage-status" }) to review
-  - Skill({ skill: "manage-codebase-refresh" }) for future incremental updates
+Display summary: component/feature/requirement/ADR/file counts.
+If mapper agents failed: log W001.
+If not --skip-commit: suggest committing generated docs.
+Suggest next: manage-status (review) or manage-codebase-refresh (incremental updates).
 ```
 
 ---

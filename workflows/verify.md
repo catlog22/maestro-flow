@@ -17,45 +17,15 @@ Dual verification: Goal-Backward structural verification + Nyquist test coverage
 ```
 Input: [phase] argument OR --dir <path>
 
-# Worktree scope check
-IF file_exists(".workflow/worktree-scope.json"):
-  scope = read(".workflow/worktree-scope.json")
-  IF <phase> is a number AND <phase> NOT IN scope.owned_phases:
-    ERROR "Phase {phase} not owned by this worktree. Owned: {scope.owned_phases}"
-    EXIT
+Worktree scope check: if .workflow/worktree-scope.json exists, reject phases not in scope.owned_phases.
 
-IF --dir <path> is provided:
-  // Single plan verification
-  PLAN_DIRS = [<path>]
-  VERIFY_MODE = "single"
-  VERIFY_OUTPUT_DIR = <path>  // verification.json written into plan dir
+Resolve PLAN_DIRS and VERIFY_MODE by input type:
+  --dir <path>    → single mode, PLAN_DIRS=[path], output into plan dir
+  no arguments    → milestone mode, collect completed execute artifacts for current milestone from state.json
+  numeric arg     → phase mode, collect completed execute artifacts for that phase from state.json
 
-ELSE IF no arguments:
-  // Milestone-level verification
-  Read state.json.artifacts
-  PLAN_DIRS = artifacts.filter(a =>
-    a.milestone == current_milestone &&
-    a.type == "execute" &&
-    a.status == "completed"
-  ).map(a => a.path)
-  IF PLAN_DIRS is empty: ERROR E001
-  VERIFY_MODE = "milestone"
-  milestone_slug = slugify(current_milestone name)
-  VERIFY_OUTPUT_DIR = .workflow/scratch/verify-{milestone_slug}-{date}/
-  mkdir -p VERIFY_OUTPUT_DIR
-
-ELSE IF argument is a number:
-  // Phase-level verification
-  Read state.json.artifacts
-  PLAN_DIRS = artifacts.filter(a =>
-    a.milestone == current_milestone &&
-    a.type == "execute" &&
-    a.phase == arg &&
-    a.status == "completed"
-  ).map(a => a.path)
-  IF PLAN_DIRS is empty: ERROR E001
-  VERIFY_MODE = "phase"
-  VERIFY_OUTPUT_DIR = first plan dir  // single plan → write there
+If no matching artifacts found: ERROR E001.
+Milestone mode creates output dir: .workflow/scratch/verify-{milestone_slug}-{date}/
 ```
 
 ---
@@ -88,118 +58,44 @@ Pass specs_content to verifier agent as quality standards context.
 ### Step 1: Extract Constraints from Specs
 
 ```
-constraints = {
-  allowed_libs: [],
-  disallowed_imports: [],
-  required_patterns: []
-}
+Extract from specs_content into constraints object:
+  allowed_libs[]        ← "tech_stack" / "technology" sections
+  disallowed_imports[]  ← "constraints" / "disallowed" / "forbidden" sections
+  required_patterns[]   ← "required_patterns" / "conventions" sections
 
-Parse specs_content for constraint definitions:
-  - "tech_stack" / "technology" sections -> extract allowed libraries/frameworks
-  - "constraints" / "disallowed" / "forbidden" sections -> extract disallowed imports
-  - "required_patterns" / "conventions" sections -> extract required patterns
-
-IF constraints.allowed_libs is empty AND constraints.disallowed_imports is empty:
-  Print: "V0.5: No tech stack constraints found in specs, skipping."
-  constraint_violations = []
-  SKIP to V1
+If no allowed_libs and no disallowed_imports found: skip to V1.
 ```
 
 ### Step 2: Collect Modified Files
 
 ```
-modified_files = []
-
-# Method 1: Extract from task summaries
-FOR each summary IN ${PHASE_DIR}/.summaries/TASK-*-summary.md:
-  Parse "Files Modified" section
-  Extract file paths -> add to modified_files[]
-
-# Method 2: Fallback to git diff if no summaries or empty list
-IF modified_files is empty:
-  modified_files = git diff --name-only HEAD~{tasks_completed} -- "*.ts" "*.tsx" "*.js" "*.jsx" "*.py" "*.java" "*.go"
-
-# Deduplicate and filter to source files only
-modified_files = unique(modified_files).filter(f => !f.includes("node_modules") && !f.includes(".test.") && !f.includes(".spec."))
+Collect modified_files from task summaries ("Files Modified" sections).
+Fallback: git diff --name-only HEAD~{tasks_completed} -- "*.ts" "*.tsx" "*.js" "*.jsx" "*.py" "*.java" "*.go"
+Deduplicate, exclude node_modules and test/spec files.
 ```
 
 ### Step 3: Scan Imports Against Constraints
 
 ```
-constraint_violations = []
+For each modified file, extract import statements (language-aware: TS/JS, Python, Go, Java).
 
-FOR each file IN modified_files:
-  IF file does not exist: SKIP
-
-  # Extract import statements based on file type
-  IF file ends with .ts/.tsx/.js/.jsx:
-    imports = grep -n "^import .* from ['\"]" {file}
-    imports += grep -n "require(['\"]" {file}
-  ELSE IF file ends with .py:
-    imports = grep -n "^import \|^from .* import" {file}
-  ELSE IF file ends with .go:
-    imports = grep -n "\".*\"" {file}  # inside import block
-  ELSE IF file ends with .java:
-    imports = grep -n "^import " {file}
-
-  FOR each import_line IN imports:
-    # Check against disallowed imports
-    FOR each disallowed IN constraints.disallowed_imports:
-      IF import_line contains disallowed:
-        constraint_violations.push({
-          id: "CV-{NNN}",
-          type: "disallowed_import",
-          severity: "high",
-          file: file,
-          line: import_line.line_number,
-          import: import_line.text,
-          constraint: "Disallowed: " + disallowed,
-          fix_direction: "Replace " + disallowed + " with an allowed alternative"
-        })
-
-    # Check against allowed_libs (if allowlist is defined)
-    IF constraints.allowed_libs is not empty:
-      package_name = extract package/module name from import_line
-      IF package_name is external AND package_name NOT IN constraints.allowed_libs:
-        constraint_violations.push({
-          id: "CV-{NNN}",
-          type: "unlisted_dependency",
-          severity: "medium",
-          file: file,
-          line: import_line.line_number,
-          import: import_line.text,
-          constraint: "Not in allowed tech stack",
-          fix_direction: "Verify if " + package_name + " is approved, add to tech stack or replace"
-        })
+Check each import against constraints:
+  disallowed_imports match → violation {id: "CV-{NNN}", type: "disallowed_import", severity: "high", file, line, import, constraint, fix_direction}
+  allowed_libs allowlist defined + external package not listed → violation {id: "CV-{NNN}", type: "unlisted_dependency", severity: "medium", file, line, import, constraint, fix_direction}
 ```
 
 ### Step 4: Check Required Patterns
 
 ```
-FOR each pattern IN constraints.required_patterns:
-  FOR each file IN modified_files matching pattern.file_glob:
-    IF file does not contain pattern.regex:
-      constraint_violations.push({
-        id: "CV-{NNN}",
-        type: "missing_required_pattern",
-        severity: pattern.severity || "medium",
-        file: file,
-        line: null,
-        import: null,
-        constraint: "Required pattern missing: " + pattern.description,
-        fix_direction: pattern.fix_hint || "Add required pattern to file"
-      })
+For each required_pattern, scan matching files (by file_glob) for pattern.regex.
+Missing match → violation {id: "CV-{NNN}", type: "missing_required_pattern", severity: pattern.severity || "medium", file, constraint, fix_direction}
 ```
 
 ### Step 5: Report
 
 ```
-IF constraint_violations.length > 0:
-  Print: "V0.5: {constraint_violations.length} constraint violation(s) found"
-  FOR each violation IN constraint_violations:
-    Print: "  [{violation.severity}] {violation.file}:{violation.line} - {violation.constraint}"
-ELSE:
-  Print: "V0.5: All modified files comply with tech stack constraints"
+Report constraint_violations count and details: [{severity}] {file}:{line} - {constraint}
+If none: "V0.5: All modified files comply with tech stack constraints"
 ```
 
 The `constraint_violations[]` array is included in the final `verification.json` output in V3 aggregation.
@@ -225,17 +121,8 @@ Build a verification context object mapping:
 
 **Load UAT human findings** (if available):
 ```
-uat_gaps = []
-IF file exists "${PHASE_DIR}/uat.md":
-  Parse uat.md "Gaps" section.
-  FOR each gap in uat.md:
-    uat_gaps.push({
-      id: "GAP-UAT-{NNN}",
-      type: "human_verified_failure",
-      severity: gap.severity,
-      description: "From UAT: " + gap.reason,
-      fix_direction: "Address user-reported issue: " + gap.truth
-    })
+If ${PHASE_DIR}/uat.md exists, parse "Gaps" section into uat_gaps[]:
+  {id: "GAP-UAT-{NNN}", type: "human_verified_failure", severity, description, fix_direction}
 ```
 These `uat_gaps` are merged into the final `gaps[]` in V3 aggregation.
 
@@ -323,65 +210,22 @@ must_haves = {
 ### Identify gaps
 
 ```
-gaps = []
-For each failed truth:
-  gaps.push({
-    id: "GAP-{NNN}",
-    type: "missing_feature" | "incomplete_implementation" | "broken_integration",
-    severity: "critical" | "high" | "medium" | "low",
-    description: "What is missing or broken",
-    fix_direction: "Suggested approach to fix"
-  })
-
-For each missing/non-substantive artifact:
-  gaps.push({ ... })
-
-For each broken link:
-  gaps.push({ ... })
+Collect gaps from failed truths, missing/stub artifacts, and broken links.
+Each gap: {id: "GAP-{NNN}", type: "missing_feature"|"incomplete_implementation"|"broken_integration",
+           severity: "critical"|"high"|"medium"|"low", description, fix_direction}
 ```
 
 ### Auto-create Issues from Gaps
 
 ```
-IF gaps.length > 0:
-  mkdir -p ".workflow/issues"
-  existing_ids = []
-  IF file exists ".workflow/issues/issues.jsonl":
-    Read .workflow/issues/issues.jsonl
-    Extract all id fields matching today's date prefix ISS-YYYYMMDD-*
-    existing_ids = collected IDs
-
-  today = format(now(), "YYYYMMDD")
-  counter = max sequence number from existing_ids for today + 1 (start at 1 if none)
-
-  FOR each gap IN gaps[]:
-    issue_id = "ISS-{today}-{counter padded to 3 digits}"
-    issue = {
-      id: issue_id,
-      title: gap.description (truncated to 100 chars),
-      status: "registered",
-      priority: severity_to_priority(gap.severity),
-      severity: gap.severity,
-      source: "verification",
-      phase_ref: PHASE_NUM,
-      gap_ref: gap.id,
-      description: gap.description,
-      fix_direction: gap.fix_direction,
-      context: { location: "", suggested_fix: gap.fix_direction, notes: "" },
-      tags: [],
-      affected_components: [],
-      feedback: [],
-      issue_history: [],
-      created_at: now(),
-      updated_at: now(),
-      resolved_at: null,
-      resolution: null
-    }
-    Append JSON line to .workflow/issues/issues.jsonl
-    gap.issue_id = issue_id   // back-reference on gap object
-    counter++
-
-  Print: "Created {gaps.length} issues from verification gaps"
+For each gap, create an issue in .workflow/issues/issues.jsonl:
+  id: "ISS-{YYYYMMDD}-{NNN}" (auto-incrementing from existing today's IDs)
+  Fields: title (gap.description truncated 100 chars), status: "registered",
+    priority: severity_to_priority(gap.severity), severity, source: "verification",
+    phase_ref: PHASE_NUM, gap_ref: gap.id, description, fix_direction,
+    context: {location, suggested_fix, notes}, tags[], affected_components[],
+    feedback[], issue_history[], created_at, updated_at, resolved_at: null, resolution: null
+  Back-reference: gap.issue_id = issue_id
 ```
 
 ### Write verification.json
@@ -422,47 +266,13 @@ Write anti-patterns into verification.json `antipatterns[]` array.
 ### Auto-create Issues from Blocker Anti-Patterns
 
 ```
-blocker_patterns = antipatterns.filter(ap => ap.severity == "Blocker")
-
-IF blocker_patterns.length > 0:
-  mkdir -p ".workflow/issues"
-  existing_ids = []
-  IF file exists ".workflow/issues/issues.jsonl":
-    Read .workflow/issues/issues.jsonl
-    Extract all id fields matching today's date prefix ISS-YYYYMMDD-*
-    existing_ids = collected IDs
-
-  today = format(now(), "YYYYMMDD")
-  counter = max sequence number from existing_ids for today + 1 (start at 1 if none)
-
-  FOR each pattern IN blocker_patterns:
-    issue_id = "ISS-{today}-{counter padded to 3 digits}"
-    issue = {
-      id: issue_id,
-      title: "Anti-pattern: " + pattern.pattern_name (truncated to 100 chars),
-      status: "registered",
-      priority: 1,
-      severity: "critical",
-      source: "antipattern",
-      phase_ref: PHASE_NUM,
-      gap_ref: null,
-      description: "Blocker anti-pattern detected: " + pattern.pattern_name + " at " + pattern.file_line,
-      fix_direction: "Remove " + pattern.pattern_name + " from " + pattern.file_line,
-      context: { location: pattern.file_line, suggested_fix: "", notes: "" },
-      tags: ["antipattern"],
-      affected_components: [],
-      feedback: [],
-      issue_history: [],
-      created_at: now(),
-      updated_at: now(),
-      resolved_at: null,
-      resolution: null
-    }
-    Append JSON line to .workflow/issues/issues.jsonl
-    pattern.issue_id = issue_id   // back-reference on anti-pattern object
-    counter++
-
-  Print: "Created {blocker_patterns.length} issues from blocker anti-patterns"
+For each Blocker anti-pattern, create an issue in .workflow/issues/issues.jsonl:
+  id: "ISS-{YYYYMMDD}-{NNN}" (auto-incrementing from existing today's IDs)
+  Fields: title: "Anti-pattern: {pattern_name}", status: "registered",
+    priority: 1, severity: "critical", source: "antipattern",
+    phase_ref: PHASE_NUM, description, fix_direction,
+    context: {location: pattern.file_line}, tags: ["antipattern"]
+  Back-reference: pattern.issue_id = issue_id
 ```
 
 ---
@@ -538,14 +348,7 @@ If gaps exist from any verification layer:
 
 3. **Order by dependency**: Fix missing -> fix stubs -> fix wiring -> verify.
 
-Enrich fix plan entries with issue references:
-```
-FOR each fix_plan IN fix_plans[]:
-  fix_plan.issue_ids = []
-  FOR each gap IN fix_plan.related_gaps:
-    IF gap.issue_id exists:
-      fix_plan.issue_ids.push(gap.issue_id)
-```
+Enrich each fix_plan with issue_ids[] collected from its related_gaps' issue references.
 
 Write fix plans into verification.json `fix_plans[]` array.
 
@@ -566,19 +369,8 @@ Combine goal-backward, constraint validation, anti-pattern scan, and Nyquist res
 
 **Archive previous verification artifacts** before writing:
 ```
-ARCHIVE_TARGETS = ["verification.json", "validation.json"]
-has_existing = false
-FOR artifact IN ARCHIVE_TARGETS:
-  IF file exists "${PHASE_DIR}/${artifact}":
-    has_existing = true
-    break
-
-IF has_existing:
-  mkdir -p "${PHASE_DIR}/.history"
-  TIMESTAMP = current timestamp formatted as "YYYY-MM-DDTHH-mm-ss"
-  FOR artifact IN ARCHIVE_TARGETS:
-    IF file exists "${PHASE_DIR}/${artifact}":
-      mv "${PHASE_DIR}/${artifact}" "${PHASE_DIR}/.history/${name}-${TIMESTAMP}.${ext}"
+If any of ["verification.json", "validation.json"] exist in ${PHASE_DIR}:
+  Move each to ${PHASE_DIR}/.history/{name}-{YYYY-MM-DDTHH-mm-ss}.{ext}
 ```
 
 Write verification.json:
@@ -593,22 +385,9 @@ Write verification.json:
 ### Update index.json
 
 ```
-index.json.status = "verifying"
-index.json.updated_at = now()
-
-index.json.verification = {
-  status: verification.json.status,
-  verified_at: verification.json.verified_at,
-  must_haves: summary of must_haves,
-  gaps: verification.json.gaps
-}
-
-If validation.json exists:
-  index.json.validation = {
-    status: validation.json.status,
-    test_coverage: validation.json.coverage,
-    gaps: validation.json.gaps
-  }
+Set index.json.status = "verifying", updated_at = now()
+Set index.json.verification = {status, verified_at, must_haves summary, gaps} from verification.json
+If validation.json exists: set index.json.validation = {status, test_coverage, gaps} from validation.json
 ```
 
 ### Report Format

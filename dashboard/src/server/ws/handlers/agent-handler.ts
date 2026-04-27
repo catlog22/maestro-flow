@@ -1,6 +1,6 @@
 import { WebSocket } from 'ws';
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import type { WsHandler } from '../ws-handler.js';
@@ -153,6 +153,8 @@ export class AgentWsHandler implements WsHandler {
         // Ensure MCP TCP server is running (idempotent)
         await session.startMcp();
 
+        const projectRoot = resolve(this.workflowRoot, '..');
+
         // Inject MCP config based on agent type
         const MCP_AGENT_TYPES: Record<string, RoomMcpAgentType> = {
           'claude-code': 'claude-code',
@@ -162,13 +164,29 @@ export class AgentWsHandler implements WsHandler {
         const mcpAgentType = MCP_AGENT_TYPES[mergedConfig.type];
         if (mcpAgentType) {
           if (mcpAgentType === 'claude-code') {
-            const mcpConfig = session.getMcpConfig('claude-code', roomRole) as Record<string, unknown>;
-            // Strip 'type' field — Claude Code CLI --mcp-config doesn't expect it
-            // (the SDK uses it for in-process vs stdio distinction, but CLI always uses stdio)
-            const { type: _type, ...cliConfig } = mcpConfig;
-            const tmpPath = join(tmpdir(), `mr-mcp-${roomSessionId}-${roomRole}.json`);
-            writeFileSync(tmpPath, JSON.stringify({ mcpServers: { 'meeting-room': cliConfig } }));
-            mergedConfig.mcpConfigPath = tmpPath;
+            // Use HTTP transport — Claude Code --print mode doesn't connect
+            // stdio MCP servers (stays "pending" forever). HTTP servers connect
+            // immediately since the dashboard HTTP server is already running.
+            const mcpInfo = session.getMcpInfo();
+            const httpUrl = `http://127.0.0.1:3001/api/rooms/${roomSessionId}/mcp?token=${mcpInfo?.token ?? ''}&agentId=${roomRole}`;
+            const mcpJsonPath = join(projectRoot, '.mcp.json');
+            try {
+              const existing = existsSync(mcpJsonPath)
+                ? JSON.parse(readFileSync(mcpJsonPath, 'utf-8'))
+                : { mcpServers: {} };
+              existing.mcpServers['meeting-room'] = {
+                type: 'http',
+                url: httpUrl,
+              };
+              writeFileSync(mcpJsonPath, JSON.stringify(existing, null, 2));
+            } catch {
+              // Fallback to --mcp-config tmp file
+              const tmpPath = join(tmpdir(), `mr-mcp-${roomSessionId}-${roomRole}.json`);
+              writeFileSync(tmpPath, JSON.stringify({
+                mcpServers: { 'meeting-room': { type: 'http', url: httpUrl } },
+              }));
+              mergedConfig.mcpConfigPath = tmpPath;
+            }
           } else if (mcpAgentType === 'agent-sdk') {
             const mcpServer = session.getMcpConfig('agent-sdk', roomRole);
             mergedConfig.metadata = { ...mergedConfig.metadata, roomMcpServer: mcpServer };
@@ -177,8 +195,10 @@ export class AgentWsHandler implements WsHandler {
         }
 
         // Claude Code in room → force interactive mode for follow-up wake messages
+        // Also set workDir to project root so it finds .mcp.json
         if (mergedConfig.type === 'claude-code') {
           mergedConfig.interactive = true;
+          mergedConfig.workDir = projectRoot;
         }
 
         // Leader → auto bypass permissions (needs free MCP tool access)

@@ -54,47 +54,19 @@ $ARGUMENTS: "[phase|topic] [-y] [-c] [-q]"
 ## Scope Routing
 
 ```
-// Worktree scope check
-IF file_exists(".workflow/worktree-scope.json"):
-  scope = read(".workflow/worktree-scope.json")
-  IF $ARGUMENTS matches /^\d+$/ AND parseInt($ARGUMENTS) NOT IN scope.owned_phases:
-    ERROR "Phase {$ARGUMENTS} not owned by this worktree. Owned: {scope.owned_phases}"
-    EXIT
+Worktree guard: If .workflow/worktree-scope.json exists, reject phase args not in owned_phases.
 
-// Auto-bootstrap state.json if missing
-IF NOT file_exists(".workflow/state.json"):
-  mkdir -p .workflow/scratch/
-  Write minimal state.json: { project: null, status: "active", current_milestone: null,
-    current_task_id: null, milestones: [], artifacts: [], last_updated: now() }
+Auto-bootstrap: Create minimal .workflow/state.json if missing.
 
-// Scope determination
-IF $ARGUMENTS is empty:
-  IF state.json.current_milestone is non-null AND roadmap.md exists:
-    → scope = "milestone"
-    → milestone_slug = slugify(current_milestone name)
-    → Set OUTPUT_DIR = .workflow/scratch/analyze-{milestone_slug}-{date}/
-  ELSE:
-    → ERROR E001 "No args and no roadmap — provide topic text or create roadmap first"
+Scope determination → OUTPUT_DIR:
+  (no args) + milestone + roadmap → scope="milestone", OUTPUT_DIR=.workflow/scratch/analyze-{milestone_slug}-{date}/
+  (no args) without milestone/roadmap → ERROR E001
+  (number) + milestone + roadmap   → scope="phase", OUTPUT_DIR=.workflow/scratch/analyze-{phase_slug}-{date}/
+  (number) without milestone/roadmap → ERROR
+  (text) + milestone               → scope="adhoc", OUTPUT_DIR=.workflow/scratch/analyze-{topic_slug}-{date}/
+  (text) without milestone         → scope="standalone", OUTPUT_DIR=.workflow/scratch/analyze-{topic_slug}-{date}/
 
-ELSE IF $ARGUMENTS matches /^\d+$/:
-  IF state.json.current_milestone is non-null AND roadmap.md exists:
-    → scope = "phase"
-    → phase_num = parsed number
-    → phase_slug = resolve from roadmap.md
-    → Set OUTPUT_DIR = .workflow/scratch/analyze-{phase_slug}-{date}/
-  ELSE:
-    → ERROR "Phase number requires init + roadmap"
-
-ELSE (text argument):
-  → topic_slug = slugify(text, max 40 chars)
-  IF state.json.current_milestone is non-null:
-    → scope = "adhoc"
-  ELSE:
-    → scope = "standalone"
-  → Set OUTPUT_DIR = .workflow/scratch/analyze-{topic_slug}-{date}/
-
-// Create output directory
-mkdir -p {OUTPUT_DIR}
+Create OUTPUT_DIR.
 ```
 
 ## Output Structure
@@ -152,20 +124,8 @@ Before writing any new artifacts, archive existing ones to preserve history:
 ```
 ARCHIVE_TARGETS = ["discussion.md", "analysis.md", "explorations.json", "perspectives.json", "conclusions.json", "exploration-codebase.json"]
 
-has_existing = false
-FOR artifact IN ARCHIVE_TARGETS:
-  IF file exists "$OUTPUT_DIR/${artifact}":
-    has_existing = true
-    break
-
-IF has_existing:
-  mkdir -p "$OUTPUT_DIR/.history"
-  TIMESTAMP = current timestamp formatted as "YYYY-MM-DDTHH-mm-ss"
-  FOR artifact IN ARCHIVE_TARGETS:
-    IF file exists "$OUTPUT_DIR/${artifact}":
-      // Extract name and extension: "analysis.md" → "analysis" + "md"
-      mv "$OUTPUT_DIR/${artifact}" "$OUTPUT_DIR/.history/${name}-${TIMESTAMP}.${ext}"
-  display "Archived previous analysis artifacts to .history/"
+If any ARCHIVE_TARGETS exist in OUTPUT_DIR:
+  Move each existing target to OUTPUT_DIR/.history/{name}-{YYYY-MM-DDTHH-mm-ss}.{ext}
 ```
 
 ### Step 2: Scoping & Dimension Selection
@@ -222,47 +182,18 @@ Codebase exploration FIRST, then (optionally) external research, then CLI analys
 Orchestrator performs targeted web searches, then hands results to `workflow-phase-researcher` agent for synthesis.
 
 ```
-// Step 4.0.1: Orchestrator web searches (2-3 focused queries)
-queries = [
-  "{phase_goal} standard library stack {current_year}",
-  "{phase_goal} architecture patterns best practices",
-  "{phase_goal} common pitfalls mistakes"
-]
+1. WebSearch 2-3 queries: "{phase_goal} standard library stack", "architecture patterns best practices", "common pitfalls mistakes"
+   Fetch top 1-2 results per query for official docs.
 
-For each query:
-  results = WebSearch(query)
-  // For top 1-2 results: WebFetch(url) to get official docs / README
+2. Hand raw search output to workflow-phase-researcher agent to synthesize into:
+   - ## Standard Stack: concrete library recommendations with versions
+   - ## Architecture Patterns: recommended patterns
+   - ## Don't Hand-Roll: problems with existing solutions
+   - ## Common Pitfalls: mistakes to avoid
+   Style: prescriptive ("use X"), cite sources, confidence levels (HIGH/MEDIUM/LOW).
+   Agent returns structured markdown only (no file writes).
 
-// Step 4.0.2: Hand raw search output to researcher agent
-Agent(
-  subagent_type="workflow-phase-researcher",
-  prompt="""
-<objective>
-Synthesize the following web search results for Phase {PHASE_NUM}: {phase_name}.
-Goal: {phase_goal}
-</objective>
-
-<search_results>
-{raw_search_output}
-</search_results>
-
-<task>
-From the search results above, extract and structure:
-- ## Standard Stack: concrete library recommendations with versions
-- ## Architecture Patterns: recommended patterns for this type of work
-- ## Don't Hand-Roll: problems with existing solutions (don't build custom)
-- ## Common Pitfalls: mistakes to avoid
-
-Be prescriptive ("use X") not exploratory ("consider X or Y").
-Cite sources. Assign confidence levels (HIGH/MEDIUM/LOW).
-Do NOT write any files — return structured markdown only.
-</task>
-  """,
-  run_in_background=false
-)
-
-// Step 4.0.3: Store as researchContext (in-memory, no file written)
-researchContext = agent_output
+3. Store agent output as researchContext (in-memory).
 ```
 
 `researchContext` is passed into Step 4.2 CLI Analysis and Step 8 Decision Extraction.
@@ -550,75 +481,34 @@ Write to `OUTPUT_DIR/context.md`:
 **8.6: Update project.md Key Decisions** (phase mode only)
 
 ```
-IF phase mode AND Locked decisions exist:
-  Read .workflow/project.md
-  Find "## Key Decisions" table
-
-  For each Locked decision from Step 8.4:
-    Check if decision already exists in Key Decisions table (by title match)
-    If not duplicate:
-      Append row to Key Decisions table:
-        | {decision title} | {rationale summary} | Phase {NN} — {date} |
-
-  Write updated project.md
-  Display: "project.md: {count} key decisions recorded"
+Phase mode only: Append each new Locked decision to .workflow/project.md "## Key Decisions" table.
+Row format: | {decision title} | {rationale summary} | Phase {NN} — {date} |
+Skip duplicates (match by title).
 ```
 
 **8.7: Auto-create Issues from Deferred Items**
 
 ```
-deferred_items = decisions.filter(d => d.classification == "Deferred")
-
-IF deferred_items.length > 0:
-  mkdir -p ".workflow/issues"
-  today = format(now(), "YYYYMMDD")
-  counter = next sequence number for today
-
-  FOR each item IN deferred_items:
-    issue_id = "ISS-{today}-{counter padded to 3 digits}"
-    issue = {
-      id: issue_id,
-      title: "Deferred: " + item.title,
-      status: "deferred",
-      priority: 5,
-      severity: "low",
-      source: "analyze",
-      phase_ref: PHASE_NUM,
-      description: item.context + " -- Chosen to defer: " + item.reason,
-      tags: ["deferred", "analyze"],
-      created_at: now()
-    }
-    Append JSON line to .workflow/issues/issues.jsonl
-    counter++
-
-  Print: "Created {deferred_items.length} deferred issues for tracking"
+For each Deferred decision, create an issue in .workflow/issues/issues.jsonl:
+  id: "ISS-{YYYYMMDD}-{NNN}"
+  title: "Deferred: {item.title}"
+  status: "deferred", priority: 5, severity: "low"
+  source: "analyze", phase_ref: PHASE_NUM
+  description: "{item.context} -- Chosen to defer: {item.reason}"
+  tags: ["deferred", "analyze"]
 ```
 
 ### Step 8.8: Register Artifact
 
 ```
-// Register in state.json artifact registry
-Read .workflow/state.json
-next_id = max(artifacts.filter(a => a.type == "analyze").map(a => parseInt(a.id.replace("ANL-","")))) + 1
-  // If no analyze artifacts exist: next_id = 1
-
-artifact = {
-  id: "ANL-{next_id padded to 3}",
-  type: "analyze",
-  milestone: state.json.current_milestone,  // null if standalone
-  phase: phase_num,                          // null if milestone/adhoc/standalone
-  scope: scope,                              // "milestone"|"phase"|"adhoc"|"standalone"
-  path: OUTPUT_DIR relative to .workflow/,   // e.g. "scratch/analyze-auth-2026-04-20"
-  status: "completed",
-  depends_on: null,
-  harvested: false,
-  created_at: session_start_time,
-  completed_at: now()
-}
-
-state.json.artifacts.push(artifact)
-state.json.last_updated = now()
-Write state.json (atomic: write tmp + rename)
+Register artifact in .workflow/state.json:
+  id: "ANL-{next sequential 3-digit id}"
+  type: "analyze", scope: scope, status: "completed"
+  milestone: current_milestone (null if standalone)
+  phase: phase_num (null if milestone/adhoc/standalone)
+  path: OUTPUT_DIR relative to .workflow/
+  harvested: false, created_at: session_start_time, completed_at: now()
+Atomic write (tmp + rename).
 ```
 
 ### Step 9: Report & Next Step
@@ -649,36 +539,22 @@ Handle selection:
 Before invoking maestro-plan, build and persist `implementation_scope` so the planner has concrete "what + done-when" specs:
 
 ```
-// Step A: Build implementation scope from accepted/modified recommendations
-actionableRecs = conclusions.recommendations
-  .filter(r => r.review_status in ["accepted", "modified"])
-  .sort by priority (high first)
+// Step A: Build implementation_scope from accepted/modified recommendations (sorted by priority)
+Each scope item:
+  objective: rec.action          // WHAT
+  rationale: rec.rationale       // WHY
+  priority: rec.priority
+  target_files: from rec.steps targets + matching code_anchors  // WHERE
+  acceptance_criteria: from rec.steps verification/description  // DONE WHEN
+  change_summary: "{target}: {description}" per step            // HOW
 
-implementation_scope = actionableRecs.map(rec => ({
-  objective: rec.action,                         // WHAT to do
-  rationale: rec.rationale,                       // WHY
-  priority: rec.priority,
-  target_files: rec.steps.flatMap(s => s.target)  // WHERE (from steps + code_anchors)
-    .concat(code_anchors matching rec),
-  acceptance_criteria: rec.steps.map(s =>         // DONE WHEN
-    s.verification || s.description),
-  change_summary: rec.steps.map(s =>              // HOW (brief)
-    "${s.target}: ${s.description}").join('; ')
-}))
+// Step B: User scope confirmation (skip in auto/quick mode)
+AskUserQuestion (single-select, header: "Scope确认"):
+  - "确认执行": Proceed to planning
+  - "调整范围": Narrow or expand scope
+  - "补充标准": Add/refine acceptance criteria
 
-// Step B: User scope confirmation (skip in auto mode / quick mode)
-IF NOT AUTO_MODE:
-  Display implementation scope summary:
-    For each item: objective [priority], target files, "Done when: ..."
-  AskUserQuestion (single-select, header: "Scope确认"):
-    - "确认执行": Scope is clear, proceed to planning
-    - "调整范围": Narrow or expand scope
-    - "补充标准": Add/refine acceptance criteria
-  Handle adjustments, re-confirm if needed
-
-// Step C: Persist to conclusions.json
-conclusions.implementation_scope = implementation_scope
-Write updated conclusions.json to OUTPUT_DIR
+// Step C: Persist implementation_scope to conclusions.json
 
 // Step D: Invoke plan
 Phase mode: Skill({ skill: "maestro-plan", args: "{phase}" })

@@ -26,6 +26,7 @@ import { createLinearRoutes } from './linear.js';
 import { createTeamRoutes } from './teams.js';
 import { createCollabRoutes } from './collab.js';
 import { createRoomRoutes } from './rooms.js';
+import { createRoomMcpRoutes } from './room-mcp.js';
 import { createCommanderRoutes } from '../commander/commander-routes.js';
 import { createCoordinatorRoutes } from '../coordinator/coordinator-routes.js';
 import { createRequirementRoutes } from './requirements.js';
@@ -134,6 +135,7 @@ export function createRoutes(
   // Room session routes (in-memory meeting room management)
   if (roomSessionManager) {
     routes.route('/', createRoomRoutes(roomSessionManager));
+    routes.route('/', createRoomMcpRoutes(roomSessionManager));
   }
 
   // EventBus recent events endpoint (ring buffer audit)
@@ -173,3 +175,4 @@ export function createRoutes(
 
   return routes;
 }
+

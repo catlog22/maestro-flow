@@ -387,6 +387,8 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
     this.pendingApprovals.delete(decision.id);
   }
 
+
+
   // --- Stream-json parsing -------------------------------------------------
 
   private parseClaudeMessage(line: string, processId: string): void {

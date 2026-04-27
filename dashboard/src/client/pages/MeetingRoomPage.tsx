@@ -38,6 +38,7 @@ export function MeetingRoomPage() {
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionIndex, setMentionIndex] = useState(0);
   const [addAgentOpen, setAddAgentOpen] = useState(false);
+  const [roomNotFound, setRoomNotFound] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const setSessionId = useMeetingRoomStore((s) => s.setSessionId);
@@ -47,6 +48,7 @@ export function MeetingRoomPage() {
   const setInputTarget = useMeetingRoomStore((s) => s.setInputTarget);
   const sendMessage = useMeetingRoomStore((s) => s.sendMessage);
   const agents = useMeetingRoomStore((s) => s.agents);
+  const sessionStatus = useMeetingRoomStore((s) => s.sessionStatus);
   const reset = useMeetingRoomStore((s) => s.reset);
   const connected = useBoardStore((s) => s.connected);
 
@@ -67,10 +69,18 @@ export function MeetingRoomPage() {
   useEffect(() => {
     if (!sessionId || !connected) return;
 
+    setRoomNotFound(false);
     sendWsMessage({ action: 'room:subscribe', sessionId });
     sendWsMessage({ action: 'room:snapshot', sessionId });
 
+    // If sessionStatus is still null after 2s, room likely doesn't exist
+    const timer = setTimeout(() => {
+      const status = useMeetingRoomStore.getState().sessionStatus;
+      if (!status) setRoomNotFound(true);
+    }, 2000);
+
     return () => {
+      clearTimeout(timer);
       sendWsMessage({ action: 'room:unsubscribe', sessionId });
     };
   }, [sessionId, connected]);
@@ -157,6 +167,23 @@ export function MeetingRoomPage() {
     return (
       <div className="flex items-center justify-center h-full text-text-tertiary text-[length:var(--font-size-sm)]">
         No session ID provided
+      </div>
+    );
+  }
+
+  if (roomNotFound) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3">
+        <span className="text-text-tertiary text-[length:var(--font-size-sm)]">
+          Room &quot;{sessionId}&quot; not found
+        </span>
+        <button
+          type="button"
+          onClick={() => navigate('/rooms')}
+          className="px-3 py-1.5 text-[length:var(--font-size-sm)] bg-bg-accent text-text-on-accent rounded hover:opacity-90 transition-opacity"
+        >
+          Back to Rooms
+        </button>
       </div>
     );
   }

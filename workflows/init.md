@@ -7,10 +7,7 @@ Project initialization with automatic state detection. Creates project infrastru
 ## Worktree Guard
 
 ```
-# Block in worktree
-IF file_exists(".workflow/worktree-scope.json"):
-  ERROR "Cannot run maestro-init inside a worktree. Run from the main worktree."
-  EXIT
+If .workflow/worktree-scope.json exists: error "Cannot run maestro-init inside a worktree." and exit.
 ```
 
 ## Step 1: State Detection
@@ -18,11 +15,7 @@ IF file_exists(".workflow/worktree-scope.json"):
 Detect current project state to determine initialization path.
 
 ```
-CHECK .workflow/state.json exists?
-  YES → Path C (existing project)
-  NO  → CHECK if directory has source code files (*.ts, *.js, *.py, *.java, *.go, etc.)
-    YES → Path B (brownfield)
-    NO  → Path A (greenfield)
+state.json exists → Path C (existing) | source files exist → Path B (brownfield) | else → Path A (greenfield)
 ```
 
 ### Path A: Empty/Greenfield Project
@@ -73,14 +66,7 @@ CHECK .workflow/state.json exists?
    Write `.workflow/config.json` from template + user selections.
    If `--auto`: use defaults (standard, parallel, commit, all agents on).
 
-3. **Research** (optional, based on config.workflow.research) -- Spawn 4 parallel `workflow-project-researcher` agents:
-   ```
-   Agent 1: Stack      → .workflow/research/STACK.md (standard tech stack for domain)
-   Agent 2: Features   → .workflow/research/FEATURES.md (table stakes vs differentiators)
-   Agent 3: Arch       → .workflow/research/ARCHITECTURE.md (component boundaries, data flow)
-   Agent 4: Pitfalls   → .workflow/research/PITFALLS.md (common mistakes, prevention)
-   ```
-   Each agent writes directly to `.workflow/research/` -- orchestrator receives confirmation only.
+3. **Research** (optional, based on config.workflow.research) -- Spawn 4 parallel `workflow-project-researcher` agents writing to `.workflow/research/`: STACK.md, FEATURES.md, ARCHITECTURE.md, PITFALLS.md.
 
 4. **Synthesize** -- Spawn `workflow-research-synthesizer` agent:
    - Input: all `.workflow/research/` documents

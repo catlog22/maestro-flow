@@ -1,5 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import X from 'lucide-react/dist/esm/icons/x.js';
 import { useMeetingRoomStore } from '@/client/store/meeting-room-store.js';
+import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
 import { AGENT_STATUS_COLORS } from '@/shared/team-types.js';
 import type { RoomAgentStatus } from '@/shared/team-types.js';
 
@@ -15,11 +17,11 @@ const STATUS_LABELS: Record<RoomAgentStatus, string> = {
   offline: 'Offline',
 };
 
-function StatusBadge({ role, status }: { role: string; status: RoomAgentStatus }) {
+function StatusBadge({ role, status, onRemove }: { role: string; status: RoomAgentStatus; onRemove?: () => void }) {
   const color = AGENT_STATUS_COLORS[status];
 
   return (
-    <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-secondary">
+    <div className="group inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-bg-secondary">
       {/* Status dot */}
       <div
         className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -41,12 +43,24 @@ function StatusBadge({ role, status }: { role: string; status: RoomAgentStatus }
           {STATUS_LABELS[status]}
         </motion.span>
       </AnimatePresence>
+      {/* Remove button — shown on hover */}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          className="hidden group-hover:flex w-3.5 h-3.5 items-center justify-center rounded-full text-text-tertiary hover:text-red-500 hover:bg-red-500/10 transition-colors"
+          title={`Remove ${role}`}
+        >
+          <X size={9} />
+        </button>
+      )}
     </div>
   );
 }
 
 export function AgentStatusBar() {
   const agents = useMeetingRoomStore((s) => s.agents);
+  const sessionId = useMeetingRoomStore((s) => s.sessionId);
   const sessionStatus = useMeetingRoomStore((s) => s.sessionStatus);
 
   return (
@@ -81,7 +95,16 @@ export function AgentStatusBar() {
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.15 }}
             >
-              <StatusBadge role={agent.role} status={agent.status} />
+              <StatusBadge
+                role={agent.role}
+                status={agent.status}
+                onRemove={sessionId ? () => {
+                  sendWsMessage({ action: 'room:remove_agent', sessionId, role: agent.role });
+                  if (agent.processId) {
+                    sendWsMessage({ action: 'stop', processId: agent.processId });
+                  }
+                } : undefined}
+              />
             </motion.div>
           ))}
         </AnimatePresence>

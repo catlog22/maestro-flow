@@ -22,16 +22,7 @@ Determine test target from $ARGUMENTS:
 
 **If phase number provided** (e.g., "3"):
 - Set `$TARGET_TYPE = "phase"`
-- Resolve phase dir:
-  ```
-  Read .workflow/state.json → state
-  artifacts = state.artifacts ?? []
-  art = artifacts.find(a => a.type === 'execute' && a.phase === phaseNum)
-  IF art:
-    PHASE_DIR = ".workflow/" + art.path
-  ELSE:
-    ERROR "Phase {phaseNum} not found in artifact registry"
-  ```
+- Resolve phase dir: look up `phaseNum` in `.workflow/state.json` artifacts (type=execute), derive `PHASE_DIR = ".workflow/" + art.path`. Error if not found.
 - Load `$PHASE_DIR/index.json` for context
 
 **If scratch task ID provided:**
@@ -157,14 +148,7 @@ Skip internal/non-observable items (refactors, type changes).
 
 ### Step 6: Create UAT File
 
-**Archive previous UAT artifacts** before writing:
-```
-ARCHIVE_TARGETS = ["uat.md"]
-IF file exists "$OUTPUT_DIR/uat.md":
-  mkdir -p "$OUTPUT_DIR/.history"
-  TIMESTAMP = current timestamp formatted as "YYYY-MM-DDTHH-mm-ss"
-  mv "$OUTPUT_DIR/uat.md" "$OUTPUT_DIR/.history/uat-${TIMESTAMP}.md"
-```
+**Archive previous UAT artifacts** before writing: if `$OUTPUT_DIR/uat.md` exists, move it to `$OUTPUT_DIR/.history/uat-{YYYY-MM-DDTHH-mm-ss}.md`.
 
 Build test list from test-plan.json. Create file at `$OUTPUT_DIR/uat.md`:
 
@@ -275,43 +259,11 @@ Append to Gaps section:
 ```
 
 **Auto-create Issue from UAT Gap:**
-```
-IF result == "issue":
-  mkdir -p ".workflow/issues"
-  existing_ids = []
-  IF file exists ".workflow/issues/issues.jsonl":
-    Read .workflow/issues/issues.jsonl
-    Extract all id fields matching today's date prefix ISS-YYYYMMDD-*
-    existing_ids = collected IDs
 
-  today = format(now(), "YYYYMMDD")
-  counter = max sequence number from existing_ids for today + 1 (start at 1 if none)
-
-  issue_id = "ISS-{today}-{counter padded to 3 digits}"
-  issue = {
-    id: issue_id,
-    title: "UAT: " + test.name + " - " + user_response (truncated to 100 chars),
-    status: "registered",
-    priority: severity_to_priority(inferred_severity),
-    severity: inferred_severity,
-    source: "uat",
-    phase_ref: TARGET_TYPE == "phase" ? PHASE_NUM : null,
-    gap_ref: test.id,
-    description: "UAT test failed: " + test.name + ". Expected: " + test.expected + ". Reported: " + user_response,
-    fix_direction: "",
-    context: { location: "", suggested_fix: "", notes: "requirement_ref: " + test.requirement_ref },
-    tags: ["uat"],
-    affected_components: [],
-    feedback: [],
-    issue_history: [],
-    created_at: now(),
-    updated_at: now(),
-    resolved_at: null,
-    resolution: null
-  }
-  Append JSON line to .workflow/issues/issues.jsonl
-  gap.issue_id = issue_id   // back-reference in gap YAML entry
-```
+When result is "issue", create an issue in `.workflow/issues/issues.jsonl`:
+- **ID**: `ISS-{YYYYMMDD}-{NNN}` (auto-increment per day from existing entries)
+- **Fields**: `id`, `title` ("UAT: {test.name} - {response}" truncated 100 chars), `status: "registered"`, `priority` (from severity), `severity`, `source: "uat"`, `phase_ref` (if phase-scoped), `gap_ref: test.id`, `description` (expected vs reported), `fix_direction: ""`, `context` (with requirement_ref), `tags: ["uat"]`, `affected_components: []`, `feedback: []`, `issue_history: []`, timestamps, `resolved_at: null`, `resolution: null`
+- Back-reference: set `gap.issue_id = issue_id` in the gap YAML entry
 
 **Batched writes for efficiency:**
 Keep results in memory. Write to file only when:
@@ -339,22 +291,7 @@ Proceed to Step 7.
 
 Update uat.md frontmatter: status -> "complete", updated timestamp.
 
-**Archive previous test result artifacts** before writing:
-```
-RESULT_TARGETS = ["test-results.json", "coverage-report.json"]
-has_existing = false
-FOR artifact IN RESULT_TARGETS:
-  IF file exists "$OUTPUT_DIR/.tests/${artifact}":
-    has_existing = true
-    break
-
-IF has_existing:
-  mkdir -p "$OUTPUT_DIR/.history"
-  TIMESTAMP = current timestamp formatted as "YYYY-MM-DDTHH-mm-ss"
-  FOR artifact IN RESULT_TARGETS:
-    IF file exists "$OUTPUT_DIR/.tests/${artifact}":
-      mv "$OUTPUT_DIR/.tests/${artifact}" "$OUTPUT_DIR/.history/${name}-${TIMESTAMP}.${ext}"
-```
+**Archive previous test result artifacts** before writing: if `test-results.json` or `coverage-report.json` exist in `$OUTPUT_DIR/.tests/`, move them to `$OUTPUT_DIR/.history/{name}-{YYYY-MM-DDTHH-mm-ss}.{ext}`.
 
 Write `.tests/test-results.json`:
 ```json
@@ -407,45 +344,11 @@ If issues > 0 -> go to Step 11.
 
 2. **Spawn one debug agent per cluster** (parallel):
 
-For each cluster, spawn workflow-debugger agent with pre-filled symptoms:
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Diagnose UAT gap cluster: {cluster_name}",
-  prompt: "
-    Investigate UAT failures for {target}.
-
-    Gaps in this cluster:
-    {gap list with test ID, expected, reported, severity}
-
-    Mode: symptoms_prefilled (no user questions needed)
-    Goal: find root cause for each gap
-
-    Search relevant source files, trace the behavior,
-    identify why expected != actual.
-
-    Return for each gap:
-    - root_cause: what's wrong
-    - fix_direction: how to fix
-    - affected_files: which files need changes
-    - evidence: file:line references
-  ",
-  run_in_background: false
-})
-```
+For each cluster, spawn a general-purpose agent with pre-filled symptoms (test ID, expected, reported, severity). Agent investigates source files and returns per gap: `root_cause`, `fix_direction`, `affected_files`, `evidence` (file:line refs). Mode: `symptoms_prefilled`, goal: `find_root_cause`. `run_in_background: false`.
 
 3. **Collect results** from all agents.
 
-**Pass issue_ids to debug context:**
-```
-FOR each cluster:
-  cluster.issue_ids = []
-  FOR each gap IN cluster.gaps:
-    IF gap.issue_id exists:
-      cluster.issue_ids.push(gap.issue_id)
-  // Include issue_ids in the agent prompt context so debug agents
-  // can reference and update the corresponding issues
-```
+**Pass issue_ids to debug context:** gather `issue_id` from each gap in the cluster and include in agent prompt so debug agents can reference/update corresponding issues.
 
 4. **Update uat.md** gaps with diagnosis:
 ```yaml
@@ -505,22 +408,9 @@ If re-verify passes: update uat.md gaps as resolved, report success.
 If re-verify still has gaps: report remaining gaps, suggest manual intervention.
 
 **Issue lifecycle updates during gap-fix loop:**
-```
-// Before fix execution: transition issues to planning/executing
-FOR each gap IN diagnosed_gaps:
-  IF gap.issue_id exists:
-    Update issue in .workflow/issues/issues.jsonl:
-      status: "registered" -> "planning" (before plan --gaps)
-      status: "planning" -> "executing" (before execute)
-
-// After re-verify: update based on result
-FOR each gap IN diagnosed_gaps:
-  IF gap.issue_id exists:
-    IF gap resolved by re-verify:
-      Update issue: status -> "completed", resolved_at -> now(), resolution -> "auto-fixed via gap-fix loop"
-    ELSE:
-      Update issue: status -> "failed", updated_at -> now()
-```
+- Before plan --gaps: transition issues `registered` -> `planning`
+- Before execute: transition `planning` -> `executing`
+- After re-verify: resolved gaps -> `completed` (with resolution "auto-fixed via gap-fix loop"), unresolved -> `failed`
 
 **Loop limit**: Maximum 2 iterations to prevent infinite loops.
 

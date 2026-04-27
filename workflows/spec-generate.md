@@ -4,58 +4,21 @@ Specification document chain producing a complete specification package (Product
 
 ## Worktree Guard
 
-```
-# Block in worktree
-IF file_exists(".workflow/worktree-scope.json"):
-  ERROR "Cannot run maestro-spec-generate inside a worktree. Run from the main worktree."
-  EXIT
-```
+Block if `.workflow/worktree-scope.json` exists — must run from main worktree.
 
 ## Pipeline Position
 
 ```
-maestro-brainstorm (optional upstream)
-        ↓ guidance-specification.md
-maestro-init (REQUIRED first step — project setup)
-        ↓ project.md, state.json, config.json
-maestro-spec-generate ← THIS (heavy path)
-        ↓ spec package + roadmap.md → .workflow/roadmap.md
-maestro-plan → maestro-execute → maestro-verify
-
-Alternative light path (skip spec-generate):
-maestro-init → maestro-roadmap → roadmap.md directly
-
-Note: maestro-init MUST run before spec-generate.
+brainstorm (optional) → init (REQUIRED) → spec-generate → plan → execute → verify
+Alternative light path: init → roadmap → plan (skip spec-generate)
 ```
 
 ## Architecture
 
 ```
-Phase 0:   Specification Study (read specs + templates)
-           |
-Phase 1:   Discovery               → spec-config.json + discovery-context.json
-           |                           (includes spec_type selection)
-Phase 1.5: Req Expansion           → refined-requirements.json
-           |                           (-y: auto-expansion, skip interaction)
-Phase 2:   Product Brief            → product-brief.md + glossary.json
-           |                           (multi-CLI parallel analysis)
-Phase 3:   Requirements (PRD)      → requirements/ (_index.md + REQ-*.md + NFR-*.md)
-           |                           (RFC 2119, data model definitions)
-Phase 4:   Architecture            → architecture/ (_index.md + ADR-*.md)
-           |                           (state machine, config model, error handling, observability)
-Phase 5:   Epics & Stories         → epics/ (_index.md + EPIC-*.md)
-           |
-Phase 6:   Readiness Check         → readiness-report.md + spec-summary.md
-           |                           (terminology + scope consistency validation)
-           ├── Pass (>=80%): Proceed to Phase 7
-           ├── Review (60-79%): Proceed with caveats
-           └── Fail (<60%): Phase 6.5 Auto-Fix (max 2 iterations)
-                 |
-Phase 6.5: Auto-Fix               → Updated Phase 2-5 documents
-                 └── Re-run Phase 6 validation
-           |
-Phase 7:   Roadmap Generation      → roadmap.md + .workflow/roadmap.md
-                                       (Epic→Phase mapping, interactive refinement)
+P0: Spec Study → P1: Discovery → P1.5: Req Expansion → P2: Product Brief → P3: PRD → P4: Architecture → P5: Epics → P6: Readiness Check → P7: Roadmap
+
+P6 gate: Pass (>=80%) → P7 | Review (60-79%) → P7 w/caveats | Fail (<60%) → P6.5 Auto-Fix (max 2 iter) → re-check
 ```
 
 ## Arguments
@@ -116,20 +79,8 @@ Used in Phase 3 (architecture doc) and Phase 6 (epic decomposition) for constrai
 These inform validation and output formatting for all subsequent phases.
 
 **Load project history (if `.workflow/` exists):**
-```
-IF .workflow/project.md exists:
-  Read project.md:
-    - "### Validated" → already_shipped (DO NOT re-specify)
-    - "### Active" → current_scope
-    - "## Context" → project_history (milestone summaries)
-    - "## Key Decisions" → locked_decisions
-
-IF .workflow/state.json exists:
-  Read state.json.accumulated_context:
-    - deferred[] → candidate_requirements (high priority for this iteration)
-    - key_decisions[] → architectural_constraints
-
-```
+- `project.md` → already_shipped (Validated), current_scope (Active), project_history (Context), locked_decisions (Key Decisions)
+- `state.json.accumulated_context` → deferred[] (high priority candidates), key_decisions[] (architectural constraints)
 
 **Rules**:
 - Features in `already_shipped` are EXCLUDED from spec generation scope — they are done
@@ -176,49 +127,14 @@ Spawn `workflow-external-researcher` agent to gather concrete API details, libra
 
 **Trigger**: When seed analysis identifies specific technologies, APIs, or external services. Auto-trigger in auto mode (`-y`). Skip if topic is purely conceptual with no technology keywords.
 
-```
-// Step 2.5.1: Build research queries from seed analysis
-researchTopics = extract from seed_analysis:
-  - Named technologies/frameworks (e.g., "OAuth 2.0", "WebSocket", "PostgreSQL")
-  - External APIs/services mentioned (e.g., "Stripe API", "SendGrid")
-  - Domain-specific protocols or standards
+Extract named technologies/APIs/frameworks/protocols from seed analysis and codebase exploration.
 
-IF researchTopics is empty: skip to Step 2.6, set apiResearchContext = null
+If topics found → spawn `workflow-external-researcher` agent for API research:
+- Per technology: stable version, API surface (endpoints, auth, rate limits), integration patterns, data models, limitations/deprecations
+- Focus on concrete details (versions, method signatures, config options)
+- Output → `apiResearchContext` (in-memory)
 
-// Step 2.5.2: Spawn external researcher
-Agent(
-  subagent_type="workflow-external-researcher",
-  prompt="""
-<objective>
-Research API details and technology specifics for: {seed_analysis.problem_statement}
-Mode: API Research
-</objective>
-
-<context>
-Technologies identified: {researchTopics}
-Domain: {seed_analysis.domain}
-Spec type: {spec_type or "TBD"}
-Codebase tech stack: {discovery_context.tech_stack or "none"}
-</context>
-
-<task>
-For each identified technology/API:
-1. Current stable version and key capabilities
-2. API surface: core endpoints/methods, authentication model, rate limits
-3. Integration patterns: recommended setup, configuration, common middleware
-4. Data models: key entities, request/response shapes
-5. Known limitations, deprecations, or migration paths
-
-Focus on CONCRETE details — versions, method signatures, config options.
-Be prescriptive. Return structured markdown only — do NOT write files.
-</task>
-  """,
-  run_in_background=false
-)
-
-// Step 2.5.3: Store as apiResearchContext (in-memory)
-apiResearchContext = agent_output
-```
+If no topics → `apiResearchContext = null`, skip to Step 2.6.
 
 `apiResearchContext` is passed into:
 - Step 4 (Product Brief): technology feasibility assessment
@@ -538,24 +454,12 @@ Phase = synchronization barrier (full plan→execute→verify cycle). Minimize p
 
 ```
 == spec-generate complete ==
-Session:  SPEC-{slug}-{date}
-Output:   .workflow/.spec/{session_id}/
-Quality:  {score}% ({gate})
-Phases:   {completed_count}/7
+Session: SPEC-{slug}-{date} | Quality: {score}% ({gate}) | Phases: {completed_count}/7
+Output: .workflow/.spec/{session_id}/
+  spec-config.json, product-brief.md, requirements/, architecture/, epics/,
+  readiness-report.md, spec-summary.md, roadmap.md
 
-Files:
-  spec-config.json          — Session state
-  product-brief.md          — Product brief
-  requirements/             — PRD ({req_count} REQs + {nfr_count} NFRs)
-  architecture/             — Architecture ({adr_count} ADRs)
-  epics/                    — Epics & Stories ({epic_count} Epics)
-  readiness-report.md       — Quality validation
-  spec-summary.md           — Executive summary
-  roadmap.md                — Project roadmap ({phase_count} phases, {milestone_count} milestones)
-
-Next:
-  Skill({ skill: "maestro-init" })                                    — Set up project
-  Skill({ skill: "maestro-plan", args: "1" })                         — Plan first phase
+Next: maestro-init (setup) | maestro-plan 1 (plan first phase)
 ```
 
 ---

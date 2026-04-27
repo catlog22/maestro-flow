@@ -19,48 +19,20 @@ Codebase scanning with parallel mapper agents.
 
 ## Step 2: Spawn Parallel Mapper Agents
 
-Spawn 4 parallel `workflow-codebase-mapper` agents. Each agent scans the codebase independently with a specific focus and writes its output directly to `.workflow/research/`.
+Spawn 4 parallel `workflow-codebase-mapper` agents, each writing to `.workflow/research/`:
 
-```
-Agent 1: tech focus
-  Scan: package.json, go.mod, requirements.txt, build files, dependencies
-  Output: .workflow/research/STACK.md
-  Content: languages, frameworks, build tools, key dependencies, versions
+| Agent | Focus | Output | Content |
+|-------|-------|--------|---------|
+| 1 | tech | STACK.md | languages, frameworks, build tools, dependencies, versions |
+| 2 | arch | ARCHITECTURE.md | architecture style, layers, module graph, key abstractions |
+| 3 | features | FEATURES.md | feature inventory, feature-to-file mapping, completeness |
+| 4 | concerns | PITFALLS.md | tech debt, missing tests, security gaps, performance issues |
 
-Agent 2: arch focus
-  Scan: directory structure, module boundaries, entry points, data flow
-  Output: .workflow/research/ARCHITECTURE.md
-  Content: architecture style, layer separation, module graph, key abstractions
+If `$ARGUMENTS` provided, pass as focus filter to each agent.
 
-Agent 3: features focus
-  Scan: routes, handlers, components, services, models
-  Output: .workflow/research/FEATURES.md
-  Content: feature inventory, feature-to-file mapping, completeness assessment
+Load project specs: `maestro spec load --category arch`
 
-Agent 4: concerns focus
-  Scan: error handling, logging, tests, config, security, performance
-  Output: .workflow/research/PITFALLS.md
-  Content: tech debt, missing tests, security gaps, performance concerns, known issues
-```
-
-If `$ARGUMENTS` (focus area) is provided, pass it to each agent as a focus filter: "Prioritize analysis of {focus_area} subsystem."
-
-**Load project specs for mapper context:**
-```
-specs_content = maestro spec load --category arch
-```
-
-**Agent spawn pattern:**
-```
-For each agent (1-4) in parallel:
-  Agent({
-    subagent_type: "workflow-codebase-mapper",
-    prompt: "Focus: {focus}. Scan the codebase and write {output_file}.
-             Project specs for reference: ${specs_content}
-             Write directly to the file. Return only a confirmation with line count.",
-    run_in_background: false
-  })
-```
+Each agent spawned in parallel as `workflow-codebase-mapper` subagent with specs context.
 
 ---
 
@@ -68,17 +40,8 @@ For each agent (1-4) in parallel:
 
 After all 4 agents complete:
 
-1. Verify all documents exist with content:
-   ```
-   .workflow/research/STACK.md         — exists, >10 lines
-   .workflow/research/ARCHITECTURE.md  — exists, >10 lines
-   .workflow/research/FEATURES.md      — exists, >10 lines
-   .workflow/research/PITFALLS.md      — exists, >10 lines
-   ```
-
-2. If any document is missing or empty:
-   - Log which agent failed
-   - Re-spawn that specific agent (max 1 retry per agent)
+1. Verify all 4 documents exist with >10 lines each.
+2. If any missing/empty → log failure, re-spawn that agent (max 1 retry).
 
 ---
 

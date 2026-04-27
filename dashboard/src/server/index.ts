@@ -167,7 +167,7 @@ async function main(): Promise<void> {
   const teamHandler = new TeamWsHandler(eventBus);
 
   const sessionFilter = new SessionScopedEventFilter();
-  const roomHandler = new RoomWsHandler(roomSessionManager, eventBus, sessionFilter);
+  const roomHandler = new RoomWsHandler(roomSessionManager, eventBus, sessionFilter, workflowRoot);
 
   const wsManager = new WebSocketManager(eventBus, [
     agentHandler,

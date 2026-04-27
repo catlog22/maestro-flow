@@ -195,6 +195,11 @@ export class MeetingRoomSession {
     }
   }
 
+  /** Get MCP server info (port + token) for HTTP transport. */
+  getMcpInfo(): MeetingRoomMcpServerInfo | null {
+    return this.mcpServerInfo;
+  }
+
   /**
    * Get MCP config for a specific adapter type and agent.
    * - 'claude-code': returns McpStdioServerConfig for --mcp-config

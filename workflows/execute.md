@@ -18,43 +18,18 @@ Core principle: **Execute per-plan, not per-phase.** Each plan's wave DAG runs i
 ```
 Input: [phase] argument OR --dir <path>
 
-# Worktree scope check
-IF file_exists(".workflow/worktree-scope.json"):
-  scope = read(".workflow/worktree-scope.json")
-  IF <phase> is a number AND <phase> NOT IN scope.owned_phases:
-    ERROR "Phase {phase} not owned by this worktree. Owned: {scope.owned_phases}"
-    EXIT
+Worktree scope check: if .workflow/worktree-scope.json exists, reject <phase> not in scope.owned_phases
+Auto-bootstrap: create .workflow/state.json if missing
 
-# Auto-bootstrap state.json if missing
-IF NOT file_exists(".workflow/state.json"):
-  mkdir -p .workflow/scratch/
-  Write minimal state.json
+Resolve PLAN_DIRS:
+  --dir <path>    → single plan, validate plan.json exists
+  no arguments    → all pending plans: state.json artifacts where type=plan, status=completed,
+                    current milestone, no matching EXC artifact; sorted by phase order, adhoc last
+  <phase number>  → pending plans for that phase only (same filter + phase match)
+  If empty: ERROR E001 "No pending plans found"
 
-IF --dir <path> is provided:
-  1. Set PLAN_DIRS = [<path>]  // single plan
-  2. Validate directory exists and contains plan.json
-
-ELSE IF no arguments:
-  // Find all pending plans for current milestone
-  1. Read state.json.artifacts
-  2. Filter: milestone == current_milestone, type == "plan", status == "completed"
-  3. Exclude plans that already have a corresponding EXC artifact (same path)
-  4. Sort by phase order (from roadmap), adhoc plans last
-  5. Set PLAN_DIRS = filtered plan paths
-  6. If empty: ERROR E001 "No pending plans found"
-
-ELSE IF argument is a number:
-  // Find pending plans for specific phase
-  1. Read state.json.artifacts
-  2. Filter: milestone == current_milestone, type == "plan", status == "completed", phase == arg
-  3. Exclude plans with existing EXC artifacts
-  4. Set PLAN_DIRS = filtered plan paths
-
-// Execute plans sequentially
-FOR each PLAN_DIR IN PLAN_DIRS:
-  execute_single_plan(PLAN_DIR)
-  register_exc_artifact(PLAN_DIR)
-  extract_incremental_learnings(PLAN_DIR)
+For each PLAN_DIR in PLAN_DIRS (sequential):
+  Execute plan, register EXC artifact, extract incremental learnings
 ```
 
 ---
@@ -168,28 +143,14 @@ codeReviewTool = E0.5 selection || "Skip"
 ### Detect completed tasks (breakpoint resume)
 
 ```
-completed_tasks = []
-For each task_id in plan.json.task_ids:
-  Read ${PLAN_DIR}/.task/${task_id}.json
-  If status == "completed":
-    completed_tasks.push(task_id)
-
-If completed_tasks.length > 0:
-  Log "Resuming: {completed_tasks.length}/{total} tasks already completed"
-  Filter completed tasks out of wave execution queue
-  Set current_wave = first wave with pending tasks
+Scan .task/${task_id}.json for each task in plan.json.task_ids
+Collect completed tasks; if any found, log resume status and advance to first wave with pending tasks
 ```
 
 ### Build wave execution queue
 
 ```
-waves = plan.json.waves
-
-execution_queue = []
-For each wave in waves:
-  pending_tasks = wave.tasks.filter(t => !completed_tasks.includes(t))
-  If pending_tasks.length > 0:
-    execution_queue.push({ wave: wave.wave, tasks: pending_tasks })
+Build execution_queue from plan.json.waves, including only waves with pending (non-completed) tasks
 ```
 
 ### Output
@@ -283,147 +244,52 @@ ${prior_summaries}
 
 ```
 For each wave in execution_queue (sequential):
-
-  Log "=== Wave {wave.wave}: {wave.tasks.length} tasks ==="
-
-  Update index.json:
-    execution.current_wave = wave.wave
-    execution.started_at = execution.started_at || now()
-
-  # State tracking (once, on first wave entry)
-  If first_wave_entry (current_wave == execution_queue[0].wave):
-    Read .workflow/state.json
-    If state.json.status != "executing":
-      state.json.status = "executing"
-      state.json.last_updated = now()
-      Write .workflow/state.json
+  Log wave start; update index.json (current_wave, started_at)
+  On first wave: set state.json.status = "executing" if not already
 
   For each task_id in wave.tasks (parallel):
+    Mark task active in state.json (last-write-wins for parallel tasks)
+    Load .task/${task_id}.json; resolve executor
 
-    # --- Per-task execution ---
+    IF executor == "agent":
+      Spawn workflow-executor agent (fresh 200k context) with:
+        task definition, phase context, prior wave summaries, specs_content, context.md, analysis.md
+      Agent: implement task → verify convergence → auto-fix (max 3) → checkpoint if blocked
+      On success: atomic commit (if auto-commit), write .summaries/${task_id}-summary.md
+      Update .task/${task_id}.json: status = "completed" | "blocked"
 
-    # Note: parallel tasks will overwrite; last-write-wins is acceptable for an advisory field
-    0. Mark task active in state.json
-       Read .workflow/state.json
-       state.json.current_task_id = task_id
-       state.json.last_updated = now()
-       Write .workflow/state.json
+    ELSE (CLI path via maestro delegate):
+      fixedId = "${PHASE_NUM || 'scratch'}-${PHASE_SLUG}-${task_id}"
+      Store fixedId in index.json.execution.delegate_ids[task_id]
+      Dispatch: maestro delegate "${prompt}" --to ${executor} --mode write --id ${fixedId}
+      Post-dispatch: verify convergence criteria against file state
+      Write summary, update task status, auto-commit if enabled
 
-    1. Load task definition
-       Read .task/${task_id}.json (lazy loading)
+    Collect result: { task_id, status, executor, summary_path, commit_hash, delegate_id }
+    Clear state.json.current_task_id
 
-    2. Resolve executor and dispatch
-       executor = resolveTaskExecutor(task_id)
-
-       IF executor == "agent":
-         # --- Agent path (existing) ---
-         Spawn workflow-executor agent (fresh 200k context)
-         Input:
-           - Task definition (.task/${task_id}.json)
-           - Phase context (index.json goal, success_criteria)
-           - Relevant summaries from prior waves (.summaries/ of deps)
-           - Project specs (specs_content from E1.5)
-           - Phase context decisions (context.md)
-           - Phase analysis scores (analysis.md)
-
-         Agent responsibilities:
-           a. Read task definition (read_first, files, action, convergence.criteria)
-           b. Implement the task (create/modify files per task.files)
-           c. Verify convergence.criteria pass
-           d. If verification fails: auto-fix (max 3 attempts)
-           e. If auto-fix fails: write checkpoint, mark task as "blocked"
-           f. Atomic commit (if auto-commit enabled):
-              git add <task files>
-              git commit -m "{type}({slug}): {task.title}"
-           g. Write .summaries/${task_id}-summary.md
-           h. Update .task/${task_id}.json:
-              status = "completed" | "blocked"
-
-       ELSE:
-         # --- CLI path (via maestro delegate) ---
-         fixedId = "${PHASE_NUM || 'scratch'}-${PHASE_SLUG}-${task_id}"
-         prompt = buildDelegatePrompt(task_def, phase_context, specs_content, prior_summaries)
-
-         # Store delegate ID for resume tracking
-         index.json.execution.delegate_ids[task_id] = fixedId
-
-         # Dispatch — synchronous, returns when done
-         Bash("maestro delegate \"${prompt}\" --to ${executor} --mode write --id ${fixedId}")
-
-         # Post-dispatch processing (CLI tools don't do this internally):
-         a. Verify convergence criteria against actual file state
-            For each criterion in task_def.convergence.criteria:
-              Check file contents / grep / test command
-         b. Determine status:
-            If all criteria pass: status = "completed"
-            Else: status = "blocked", log which criteria failed
-         c. Write .summaries/${task_id}-summary.md (from delegate output + verification result)
-         d. Update .task/${task_id}.json: status = status
-         e. Auto-commit (if --auto-commit and status == "completed"):
-            git add <task files>
-            git commit -m "{type}({slug}): {task.title}"
-
-    3. Collect result
-       result = { task_id, status, executor, summary_path, commit_hash, delegate_id }
-
-    4. Clear current_task_id in state.json
-       Read .workflow/state.json
-       state.json.current_task_id = null
-       state.json.last_updated = now()
-       Write .workflow/state.json
-
-    # --- End per-task ---
-
-  Wait for all tasks in wave to complete
-
-  # Post-wave processing
-  For each result in wave_results:
-    Update index.json.execution:
-      tasks_completed += (completed count)
-      commits.push({ hash, task, message }) for each commit
-
-  If any task blocked:
-    Log "Wave {wave.wave}: {blocked_count} tasks blocked"
-    AskUserQuestion:
-      "Tasks blocked: {blocked_list}. Continue to next wave or stop?"
-      Options: [Continue (skip blocked), Stop and review]
-    If stop: break execution loop
-
-  Log "=== Wave {wave.wave} complete ==="
+  Wait for all wave tasks; update index.json (tasks_completed, commits)
+  If any blocked: prompt user to continue or stop
 ```
 
 ### Parallel Dispatch Rules
 
 ```
-Within a wave, tasks execute in parallel regardless of executor type:
-- Agent tasks: multiple Agent() calls in single message (run_in_background: false)
-- CLI tasks: multiple Bash("maestro delegate ...") calls in single message (run_in_background: true)
-- Mixed: Agent() + Bash() calls together in single message
-- Each task = one independent dispatch (never merge tasks into one delegate prompt)
+All tasks in a wave dispatch in parallel (Agent + CLI mixed in single message).
+Agent tasks: run_in_background: false | CLI tasks: run_in_background: true
+Each task = one independent dispatch (never merge tasks into one delegate prompt)
 ```
 
 ### Deviation Rule
 
 ```
-Per task, max 3 auto-fix attempts:
+Max 3 auto-fix attempts per task:
+  Agent path: handled internally by workflow-executor agent
+  CLI path: 1) --resume ${fixedId} → 2) simplified prompt → 3) fallback to agent
 
-Agent path: auto-fix handled internally by workflow-executor agent.
-
-CLI path: auto-fix via session resume:
-  Attempt 1: Re-dispatch with --resume ${fixedId}
-  Attempt 2: Re-dispatch with simplified prompt (reduce to core action + criteria)
-  Attempt 3: Fallback to agent executor for this task
-
-If all 3 fail:
-  Mark task as "blocked" with checkpoint data:
-    .task/${task_id}.json.meta.checkpoint = {
-      attempt: 3,
-      last_error: "...",
-      partial_files: [...],
-      executor: executor,
-      delegate_id: fixedId
-    }
-  Continue wave (other tasks unaffected)
+If all 3 fail: mark "blocked" with checkpoint in .task/${task_id}.json.meta.checkpoint
+  { attempt: 3, last_error, partial_files, executor, delegate_id: fixedId }
+Continue wave (other tasks unaffected)
 ```
 
 ---
@@ -435,103 +301,33 @@ If all 3 fail:
 ### Check 1: Summary Existence
 
 ```
-For each task_id in index.json.plan.task_ids:
-  Read .task/${task_id}.json
-  If status == "completed":
-    If NOT file exists .summaries/${task_id}-summary.md:
-      violations.push({
-        type: "missing_summary",
-        severity: "warning",
-        task_id: task_id,
-        message: "Completed task ${task_id} has no summary file at .summaries/${task_id}-summary.md"
-      })
+For each completed task: flag warning if .summaries/${task_id}-summary.md missing
+  → violation: { type: "missing_summary", severity: "warning", task_id, message }
 ```
 
 ### Check 2: Task Status Consistency
 
 ```
-For each task_id in index.json.plan.task_ids:
-  Read .task/${task_id}.json
-  task_status = task.status
-
-  # Verify completed tasks were actually in the execution results
-  If task_status == "completed":
-    If task_id NOT in wave_results (collected from E2):
-      violations.push({
-        type: "status_mismatch",
-        severity: "warning",
-        task_id: task_id,
-        message: "Task ${task_id} status is 'completed' but was not part of execution results"
-      })
-
-  # Verify tasks that ran successfully are marked completed
-  If task_id in wave_results AND wave_results[task_id].status == "completed":
-    If task_status != "completed":
-      violations.push({
-        type: "status_mismatch",
-        severity: "critical",
-        task_id: task_id,
-        message: "Task ${task_id} completed execution but .task/${task_id}.json status is '${task_status}'"
-      })
+Cross-check task status against wave_results from E2:
+  - Completed in .task/ but not in wave_results → warning "status_mismatch"
+  - Completed in wave_results but not in .task/ → critical "status_mismatch"
 ```
 
 ### Check 3: Tech Stack Constraint Compliance
 
 ```
-# Load specs constraints from E1.5 specs_content (already loaded)
-tech_constraints = extract tech_stack constraints from specs_content
-  # e.g., allowed_languages, disallowed_imports, required_patterns
-
-If tech_constraints is not empty:
-  # Collect files modified during execution
-  modified_files = []
-  For each task_id in completed_tasks:
-    Read .task/${task_id}.json
-    For each file in task.files:
-      modified_files.push(file.path)
-
-  # Scan modified files for disallowed imports
-  For each file_path in modified_files:
-    If file exists ${file_path}:
-      file_content = Read ${file_path}
-      For each constraint in tech_constraints.disallowed_imports:
-        If file_content matches constraint.pattern:
-          violations.push({
-            type: "tech_stack_violation",
-            severity: "critical",
-            task_id: associated_task_id,
-            file: file_path,
-            message: "File ${file_path} contains disallowed import matching '${constraint.pattern}': ${constraint.reason}"
-          })
+Extract tech_stack constraints from specs_content (allowed_languages, disallowed_imports, required_patterns)
+If constraints exist:
+  Collect all files modified by completed tasks
+  Scan each for disallowed import patterns → critical "tech_stack_violation" per match
 ```
 
 ### Gate Logic
 
 ```
-critical_violations = violations.filter(v => v.severity == "critical")
-warnings = violations.filter(v => v.severity == "warning")
-
-If warnings.length > 0:
-  Log "Post-wave validation: {warnings.length} warning(s)"
-  For each warning in warnings:
-    Log "  WARN: ${warning.message}"
-
-If critical_violations.length > 0:
-  Log "Post-wave validation: {critical_violations.length} critical violation(s)"
-  For each violation in critical_violations:
-    Log "  CRITICAL: ${violation.message}"
-
-  # Block execution
-  index.json.status = "blocked"
-  index.json.execution.blocked_reason = "Post-wave validation failed with critical violations"
-  index.json.execution.violations = violations
-  index.json.updated_at = now()
-  Write index.json
-
-  Abort: "Post-wave validation failed. Fix critical violations before proceeding."
-
-# No critical violations — continue to E2.6
-Log "Post-wave validation passed ({warnings.length} warnings, 0 critical)"
+Log all warnings; log all critical violations
+If any critical: set index.json.status = "blocked" with blocked_reason and violations, abort
+If none critical: log "passed" and continue to E2.6
 ```
 
 ---
@@ -541,31 +337,15 @@ Log "Post-wave validation passed ({warnings.length} warnings, 0 critical)"
 **Purpose:** Run code review on execution output if selected in E0.5.
 
 ```
-If codeReviewTool == "Skip":
-  Log "Code review: skipped"
-  Continue to E3
+If codeReviewTool == "Skip": continue to E3
 
-# Collect diff scope
-diff_scope = git diff from execution start commit to HEAD
+Dispatch review via maestro delegate (run_in_background: true):
+  --to gemini|codex (per codeReviewTool selection) --mode analysis
+  Prompt: review git diff (execution start → HEAD) for correctness, style, bugs
+  Rule: analysis-review-code-quality (gemini only)
+  Expected: severity-ranked issues with file:line references and fix suggestions
 
-If codeReviewTool == "Gemini Review":
-  Bash("maestro delegate \"PURPOSE: Review code quality of execution changes
-TASK: Review git diff for correctness, style, potential bugs
-MODE: analysis
-CONTEXT: @**/* | Diff scope: execution changes only
-EXPECTED: Issue list with severity, file:line references, fix suggestions
-CONSTRAINTS: Review only, no modifications\" --to gemini --mode analysis --rule analysis-review-code-quality", run_in_background: true)
-
-If codeReviewTool == "Codex Review":
-  Bash("maestro delegate \"PURPOSE: Review code quality of execution changes
-TASK: Review git diff for correctness, style, potential bugs
-MODE: analysis
-CONTEXT: @**/* | Diff scope: execution changes only
-EXPECTED: Issue list with severity, file:line references, fix suggestions
-CONSTRAINTS: Review only, no modifications\" --to codex --mode analysis", run_in_background: true)
-
-# Wait for review completion, log results
-Log review findings summary
+Wait for completion, log findings summary
 ```
 
 ---
@@ -615,26 +395,13 @@ If config.json.workflow.reflection == true:
 ## Final State Update
 
 ```
-all_completed = index.json.execution.tasks_completed == index.json.execution.tasks_total
-
-If all_completed:
-  index.json.status = "verifying"  (ready for /workflow:verify)
-  index.json.execution.completed_at = now()
-  Log "All tasks completed. Run /workflow:verify to validate results."
+If all tasks completed:
+  index.json.status = "verifying", set completed_at → "Run /workflow:verify"
 Else:
-  index.json.status = "executing"  (partial, can resume)
-  Log "{completed}/{total} tasks completed. Re-run /workflow:execute to resume."
+  index.json.status = "executing" (partial) → "Re-run /workflow:execute to resume"
 
-index.json.updated_at = now()
-
-# Update project state.json (skip in SCRATCH_MODE)
-If NOT SCRATCH_MODE:
-  Read .workflow/state.json
-  If all_completed:
-    state.json.status = "verifying"
-  state.json.current_task_id = null  # safety clear: no task is active once the wave loop exits
-  state.json.last_updated = now()
-  Write .workflow/state.json
+Update index.json.updated_at
+If NOT SCRATCH_MODE: sync state.json (status, clear current_task_id)
 ```
 
 ---
@@ -645,51 +412,19 @@ If NOT SCRATCH_MODE:
 
 ```
 // Register EXC artifact
-Read .workflow/state.json
-plan_artifact = state.json.artifacts.find(a => a.type == "plan" && a.path == PLAN_DIR_relative)
-next_id = max(artifacts.filter(a => a.type == "execute").map(a => parseInt(a.id.replace("EXC-","")))) + 1
-
-artifact = {
-  id: "EXC-{next_id padded to 3}",
-  type: "execute",
-  milestone: plan_artifact.milestone,
-  phase: plan_artifact.phase,
-  scope: plan_artifact.scope,
-  path: plan_artifact.path,    // same path — execute writes into plan dir
-  status: "completed",
-  depends_on: plan_artifact.id,
-  harvested: false,
-  created_at: execution_start_time,
-  completed_at: now()
-}
-
-state.json.artifacts.push(artifact)
-state.json.last_updated = now()
-Write state.json (atomic)
+Find matching plan artifact in state.json; create EXC artifact:
+  { id: "EXC-{next_id padded to 3}", type: "execute", milestone, phase, scope,
+    path: plan_artifact.path, status: "completed", depends_on: plan_artifact.id,
+    harvested: false, created_at, completed_at }
+Append to state.json.artifacts (atomic write)
 
 // Incremental learning extraction
-Read all ${PLAN_DIR}/.summaries/TASK-*-summary.md
-Extract: strategy adjustments, patterns discovered, pitfalls encountered
+Read all .summaries/TASK-*-summary.md; extract strategy adjustments, patterns, pitfalls
+Deduplicate against existing learnings (maestro spec load --category learning)
+Append unique entries to .workflow/specs/learnings.md using <spec-entry> closed-tag format:
+  category="learning", keywords (3-5 terms), date, source="execute"
 
-// Check existing entries to avoid duplicates
-existing_learnings = maestro spec load --category learning
-
-// Append using <spec-entry> closed-tag format:
-FOR each extracted learning:
-  keywords = extract_keywords(learning.content)  // 3-5 domain-specific terms
-  IF not duplicate of existing_learnings:
-    Append to .workflow/specs/learnings.md:
-      <spec-entry category="learning" keywords="{keywords}" date="{YYYY-MM-DD}" source="execute">
-
-      ### {learning.summary}
-
-      {learning.content}
-      Phase: {phase} | Plan: {PLAN_DIR}
-
-      </spec-entry>
-
-Mark artifact.harvested = true
-Write state.json (atomic)
+Mark artifact.harvested = true; write state.json (atomic)
 ```
 
 ---
@@ -713,23 +448,13 @@ Write state.json (atomic)
 The execute workflow is fully resumable:
 
 ```
-State tracking in index.json.execution:
-  tasks_completed: N       # Count of finished tasks
-  current_wave: W          # Last active wave
-  commits: [...]           # All commits made
-  method: "agent"|"cli"|"auto"    # Execution method used
-  default_executor: "gemini"|...  # CLI tool used (if method != "agent")
-  delegate_ids: { task_id: fixedId, ... }  # CLI task delegate IDs
+State tracked in index.json.execution:
+  tasks_completed, current_wave, commits, method, default_executor,
+  delegate_ids: { task_id: fixedId, ... }
 
-Re-running /workflow:execute <phase>:
-  1. Reads index.json.execution.tasks_completed
-  2. Checks each .task/TASK-*.json status
-  3. For CLI-dispatched tasks with status "in-progress":
-     fixedId = index.json.execution.delegate_ids[task_id]
-     Check maestro delegate status ${fixedId}
-     If completed: retrieve output, process as completed
-     If failed: add to retry queue with --resume ${fixedId}
-  4. Builds queue of remaining tasks
-  5. Continues from next pending wave
-  6. No duplicate execution of completed tasks
+Resume behavior (/workflow:execute <phase> re-run):
+  Check each .task/TASK-*.json status + delegate status for in-progress CLI tasks
+  CLI tasks: retrieve completed output or retry with --resume ${fixedId}
+  Build queue of remaining tasks, continue from next pending wave
+  No duplicate execution of completed tasks
 ```

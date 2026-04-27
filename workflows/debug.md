@@ -85,22 +85,7 @@ Read `{artifact_dir}/uat.md` Gaps section (artifact_dir resolved from artifact r
 | Same flow | T-001 (login) + T-002 (session) -> "auth-flow" cluster |
 | Unrelated | T-005 (nav color) -> standalone "nav-styling" cluster |
 
-**Extract issue references for context enrichment:**
-```
-IF file exists ".workflow/issues/issues.jsonl":
-  issues = read_ndjson(".workflow/issues/issues.jsonl")
-  FOR each gap in loaded gaps:
-    IF gap has issue_id field:
-      matched_issue = issues.find(i => i.id == gap.issue_id)
-      IF matched_issue:
-        gap.issue_context = {
-          severity: matched_issue.severity,
-          feedback: matched_issue.feedback,
-          fix_direction: matched_issue.fix_direction,
-          context: matched_issue.context
-        }
-  // Pass issue_context to debug agent prompts for richer diagnosis
-```
+**Extract issue references for context enrichment:** For each gap with an `issue_id`, look up the matching issue in `.workflow/issues/issues.jsonl` and attach `issue_context` (severity, feedback, fix_direction, context) to the gap. Pass to debug agent prompts for richer diagnosis.
 
 If --parallel is set: go to Step 5: Spawn Parallel Debuggers.
 If --parallel is not set: investigate clusters sequentially (Step 6: Spawn Single Debugger per cluster).
@@ -138,76 +123,22 @@ Create debug session directory and proceed to Step 6.
 | Phase-scoped (from UAT) | `{ARTIFACT_DIR}/.debug/{gap-slug}/` (ARTIFACT_DIR resolved from artifact registry) |
 | Standalone | `.workflow/scratch/debug-{slug}-{date}/` |
 
-```
-IF TARGET_TYPE == "phase":
-  Read .workflow/state.json → state
-  artifacts = state.artifacts ?? []
-  art = artifacts.find(a => a.type === 'execute' && a.phase === phaseNum)
-  IF art:
-    DEBUG_DIR = ".workflow/" + art.path + "/.debug/{gap-slug}/"
-  ELSE:
-    ERROR "Phase {phaseNum} not found in artifact registry"
-ELSE:
-  DEBUG_DIR = ".workflow/scratch/debug-{slug}-{date}/"
+Resolve `DEBUG_DIR` from artifact registry:
+- Phase-scoped: look up phase in `.workflow/state.json` artifacts (type=execute), set `DEBUG_DIR = ".workflow/{art.path}/.debug/{gap-slug}/"`. Error if not found.
+- Standalone: `DEBUG_DIR = ".workflow/scratch/debug-{slug}-{date}/"`
 
-mkdir -p "$DEBUG_DIR"
-```
+Create the directory.
 
 ---
 
 ### Step 5: Spawn Parallel Debug Agents
 
-For each cluster, spawn concurrently:
+For each cluster, spawn concurrently as general-purpose agent (`run_in_background: false`):
 
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Debug cluster: {cluster_name}",
-  prompt: "
-    <objective>
-    Investigate UAT failures in cluster '{cluster_name}' for phase {phase}.
-    </objective>
-
-    <symptoms>
-    Mode: symptoms_prefilled (do NOT ask user questions)
-
-    Gaps in this cluster:
-    {for each gap in cluster:}
-      Test: {test_id}
-      Expected: {truth}
-      Actual: {reason}
-      Severity: {severity}
-    {end for}
-    </symptoms>
-
-    <instructions>
-    1. Read relevant source files for the affected functionality
-    2. Form 2-3 hypotheses per gap, ranked by likelihood
-    3. For each hypothesis:
-       a. Search code for evidence (grep, read files)
-       b. Log evidence as NDJSON line
-       c. Confirm or refute
-    4. Return structured results:
-
-    ## CLUSTER DIAGNOSIS: {cluster_name}
-
-    ### Gap: {test_id}
-    - root_cause: {what's wrong}
-    - fix_direction: {how to fix}
-    - affected_files: [{file:line}, ...]
-    - confidence: high|medium|low
-    - evidence: {key evidence summary}
-
-    ### Gap: {test_id}
-    ...
-
-    Write evidence to: {debug_dir}/evidence-{cluster_slug}.ndjson
-    Write understanding to: {debug_dir}/understanding-{cluster_slug}.md
-    </instructions>
-  ",
-  run_in_background: false
-})
-```
+- **Input**: cluster name, phase, all gaps (test_id, truth, reason, severity). Mode: `symptoms_prefilled`.
+- **Process**: read source files, form 2-3 hypotheses per gap ranked by likelihood, search code for evidence, log each as NDJSON line, confirm/refute.
+- **Output per gap**: `root_cause`, `fix_direction`, `affected_files` (file:line), `confidence` (high/medium/low), `evidence` summary.
+- **Files**: `{debug_dir}/evidence-{cluster_slug}.ndjson`, `{debug_dir}/understanding-{cluster_slug}.md`
 
 All agents run concurrently. Collect all results.
 
@@ -215,53 +146,12 @@ All agents run concurrently. Collect all results.
 
 ### Step 6: Spawn Single Debug Agent (sequential mode)
 
-Build prompt with symptoms (gathered or pre-filled):
+Spawn general-purpose agent (`run_in_background: false`) with:
 
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Debug: {issue_slug}",
-  prompt: "
-    <objective>
-    Investigate issue: {slug}
-    Summary: {issue description}
-    </objective>
-
-    <symptoms>
-    expected: {expected behavior}
-    actual: {actual behavior}
-    errors: {error messages}
-    reproduction: {reproduction steps}
-    timeline: {timeline}
-    </symptoms>
-
-    <mode>
-    symptoms_prefilled: {true if from UAT, false if gathered}
-    goal: find_and_fix
-    </mode>
-
-    <output_dir>{$DEBUG_DIR}</output_dir>
-
-    <instructions>
-    1. Form initial hypotheses (rank by likelihood)
-    2. For each hypothesis (most likely first):
-       a. Design a specific test
-       b. Execute the test
-       c. Log evidence as NDJSON line to evidence.ndjson
-       d. Update understanding.md
-    3. Return ONE of:
-       - '## ROOT CAUSE FOUND' + root cause + evidence + fix recommendation
-       - '## CHECKPOINT REACHED' + what you need from user
-       - '## INVESTIGATION INCONCLUSIVE' + what was checked + eliminated
-
-    Create files:
-    - {$DEBUG_DIR}/understanding.md
-    - {$DEBUG_DIR}/evidence.ndjson
-    </instructions>
-  ",
-  run_in_background: false
-})
-```
+- **Input**: slug, description, symptoms (expected, actual, errors, reproduction, timeline). `symptoms_prefilled: {true if from UAT}`, goal: `find_and_fix`.
+- **Process**: form hypotheses ranked by likelihood, test each (design test, execute, log NDJSON evidence, update understanding.md).
+- **Return one of**: `## ROOT CAUSE FOUND` (+ cause, evidence, fix), `## CHECKPOINT REACHED` (+ what's needed from user), `## INVESTIGATION INCONCLUSIVE` (+ what was checked/eliminated).
+- **Files**: `{$DEBUG_DIR}/understanding.md`, `{$DEBUG_DIR}/evidence.ndjson`
 
 Handle result based on agent output type.
 
@@ -300,21 +190,11 @@ Build unified diagnosis:
 
 ### Step 7.1: Update Issues with Diagnosis
 
-```
-IF file exists ".workflow/issues/issues.jsonl":
-  FOR each diagnosis result across all clusters:
-    FOR each gap in diagnosis.gaps:
-      IF gap has issue_id (from issue_context passed in Step 2):
-        Update issue in .workflow/issues/issues.jsonl:
-          status: "diagnosed"
-          context.suggested_fix: gap.fix_direction
-          context.notes: gap.root_cause
-          updated_at: now()
-        Append to issue.issue_history:
-          { from: previous_status, to: "diagnosed", changed_at: now(), actor: "debug-agent" }
+For each diagnosed gap with an `issue_id`, update the corresponding issue in `.workflow/issues/issues.jsonl`:
+- Set `status: "diagnosed"`, `context.suggested_fix: fix_direction`, `context.notes: root_cause`, `updated_at: now()`
+- Append to `issue_history`: `{ from: previous_status, to: "diagnosed", changed_at: now(), actor: "debug-agent" }`
 
-  Display: "Updated {count} issues with diagnosis results"
-```
+Display: "Updated {count} issues with diagnosis results"
 
 ---
 

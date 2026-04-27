@@ -38,32 +38,11 @@ Complements `wiki-connect.md` (link discovery) and `wiki-digest.md` (synthesis) 
 
 ### Step 1: Gather Data
 
-Run in parallel:
-```bash
-maestro wiki health
-maestro wiki list --json
-maestro wiki orphans
-maestro wiki hubs --top 5
-```
+Run in parallel: `maestro wiki health`, `list --json`, `orphans`, `hubs --top 5`.
 
 ### Step 2: Render Dashboard
 
-```
-== Wiki Health Dashboard ==
-Score:       {score}/100
-Entries:     {total} ({spec} spec, {memory} memory, {note} note, {lesson} lesson, {issue} issue)
-Broken:      {broken_count} broken links
-Orphans:     {orphan_count} entries with no connections
-Top Hubs:    {hub1} ({degree}), {hub2} ({degree}), ...
-
-{score < 50 ? "⚠ Graph needs attention" : score < 75 ? "Graph is fair" : "Graph is healthy"}
-
-Quick actions:
-  Fix connections:  /wiki-connect --fix
-  Generate digest:  /wiki-digest
-  Cleanup orphans:  /manage-wiki cleanup --fix
-  View full graph:  maestro wiki graph
-```
+Display: health score, entry counts by type, broken links, orphan count, top hubs. Include health status message and quick-action commands (`/wiki-connect --fix`, `/wiki-digest`, `/manage-wiki cleanup --fix`, `maestro wiki graph`).
 
 ---
 
@@ -77,20 +56,7 @@ maestro wiki search "<query>" --json
 
 ### Step 2: Display Results
 
-```
-== Wiki Search: "{query}" ({count} results) ==
-
-#  ID                    Type    Title                        Tags
-1  spec-auth-001         spec    JWT token rotation           auth, security, jwt
-2  memory-auth-flow      memory  Auth module implementation   auth, session
-3  note-auth-review      note    Auth code review findings    auth, review
-
-Actions:
-  View:    maestro wiki get <id>
-  Links:   maestro wiki backlinks <id>
-  Follow:  /learn-follow <id>
-  Connect: /wiki-connect --scope <type>
-```
+Show table of results (ID, type, title, tags) with action hints: `maestro wiki get <id>`, `backlinks <id>`, `/learn-follow <id>`, `/wiki-connect --scope <type>`.
 
 ### Step 3: Interactive Follow-up
 
@@ -102,12 +68,7 @@ If not `--json`: offer to view an entry by number selection.
 
 ### Step 1: Scan Issues
 
-Gather:
-```bash
-maestro wiki health          # baseline
-maestro wiki orphans --json  # orphaned entries
-maestro wiki graph           # broken links from graph structure
-```
+Gather baseline via `maestro wiki health`, `orphans --json`, `graph`.
 
 ### Step 2: Categorize Issues
 
@@ -120,33 +81,13 @@ maestro wiki graph           # broken links from graph structure
 
 ### Step 3: Display Issues
 
-```
-== Wiki Cleanup Scan ==
-Baseline health: {score}/100
-
-Issues found:
-  Broken links:   {count}
-  Orphans:        {count}
-  Stale drafts:   {count}
-  Empty bodies:   {count}
-
-{list of issues with entry IDs and descriptions}
-```
+Show baseline health, issue counts by type, and entry-level details.
 
 ### Step 4: Apply Fixes (--fix only)
 
-For each fixable issue:
-1. Broken links: `maestro wiki update <id> --frontmatter '{"related": [filtered_list]}'`
-2. Orphans: run mini wiki-connect for each orphan (BM25 search + tag match)
-3. Stale/empty: flag but don't auto-delete (too destructive)
+Broken links: remove from frontmatter via `maestro wiki update`. Orphans: mini wiki-connect (BM25 + tag match). Stale/empty: flag only (no auto-delete).
 
-Report delta:
-```
-== Cleanup Complete ==
-Fixed:     {fixed_count} issues
-Remaining: {remaining_count} (manual review needed)
-Health:    {old_score} → {new_score} ({delta})
-```
+Report: fixed count, remaining count, health delta.
 
 ---
 
@@ -158,47 +99,9 @@ Health:    {old_score} → {new_score} ({delta})
 maestro wiki list --json
 ```
 
-### Step 2: Compute Statistics
+### Step 2: Compute & Display Statistics
 
-- **Type distribution**: count per type (spec, memory, note, lesson, issue)
-- **Tag frequency**: top 20 most-used tags
-- **Category distribution**: entries per category (for specs)
-- **Connectivity**: average in-degree, average out-degree, max hub size
-- **Growth**: entries created per week (from timestamps)
+Compute: type distribution (count/%), top 20 tags, category distribution (specs), connectivity (avg in/out-degree, max hub), growth (entries/week).
 
-### Step 3: Display
+Display as bar charts and summary tables.
 
-```
-== Wiki Statistics ==
-
-Type Distribution:
-  spec      ████████████████  32 (40%)
-  memory    ████████          16 (20%)
-  note      ██████████        20 (25%)
-  lesson    ████              8 (10%)
-  issue     ██                4 (5%)
-  Total:    80
-
-Top Tags:
-  auth (12), performance (8), error-handling (7), testing (6), ...
-
-Connectivity:
-  Avg in-degree:  2.3
-  Avg out-degree: 1.8
-  Hub:            spec-auth (in=12)
-
-Growth (last 4 weeks):
-  Week 1: +5  |  Week 2: +8  |  Week 3: +3  |  Week 4: +12
-```
-
----
-
-## Error Codes
-
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | fatal | `.workflow/` not initialized | Run `/maestro-init` |
-| E002 | fatal | No wiki entries found | Create wiki content first |
-| E003 | error | Invalid subcommand | Valid: health, search, cleanup, stats |
-| W001 | warning | Health score below 50 | Run `/wiki-connect --fix` |
-| W002 | warning | Cleanup had partial failures | Retry manually |

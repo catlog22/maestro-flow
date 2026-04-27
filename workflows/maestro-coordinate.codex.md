@@ -8,23 +8,11 @@ Autonomous CLI coordinator for Codex. Classifies intent, selects command chain, 
 
 ## Step 1: Parse Arguments
 
-```javascript
-const args = $ARGUMENTS.trim();
-const autoYes = /\b(-y|--yes)\b/.test(args);
-const resumeMode = /\b(-c|--continue)\b/.test(args);
-const dryRun = /\b--dry-run\b/.test(args);
-const forcedChain = args.match(/--chain\s+(\S+)/)?.[1] || null;
-const cliTool = args.match(/--tool\s+(\S+)/)?.[1] || 'codex';
-const intent = args
-  .replace(/\b(-y|--yes|-c|--continue|--dry-run)\b/g, '')
-  .replace(/--(chain|tool)\s+\S+/g, '')
-  .trim();
-```
+Extract from `$ARGUMENTS`:
+- Flags: `-y`/`--yes` (autoYes), `-c`/`--continue` (resumeMode), `--dry-run`, `--chain <name>`, `--tool <name>` (default: codex)
+- `intent` = remaining text after flag removal
 
-**If resumeMode:**
-1. Find latest `status.json` in `.workflow/.maestro-coordinate/`
-2. Load state → set `current_step` to first non-completed step
-3. Jump to **Step 6**
+**If resumeMode:** Load latest `.workflow/.maestro-coordinate/*/status.json`, set `current_step` to first non-completed step, jump to **Step 6**.
 
 ---
 
@@ -34,23 +22,7 @@ const intent = args
 test -f .workflow/state.json && echo "exists" || echo "missing"
 ```
 
-**If exists:** Read `.workflow/state.json` + `.workflow/roadmap.md` + current phase `index.json`:
-
-```javascript
-const projectState = {
-  initialized: true,
-  current_milestone: /* from state.json */,
-  latest_artifact: /* last artifact in artifacts[] */,
-  milestone_progress: '...', // derived from artifact registry
-  phase_artifacts: { brainstorm: false, analysis: false, context: false, plan: false, verification: false, uat: false },
-  execution: { tasks_completed: 0, tasks_total: 0 },
-  verification_status: 'pending',
-  review_verdict: null, // PASS|WARN|BLOCK|null
-  uat_status: 'pending',
-  phases_total: 0, phases_completed: 0,
-  has_blockers: false, accumulated_context: null
-};
-```
+**If exists:** Read `.workflow/state.json` + `.workflow/roadmap.md` + current phase `index.json`. Derive `projectState`: current_milestone, latest_artifact, milestone_progress, phase_artifacts (brainstorm/analysis/context/plan/verification/uat flags), execution (tasks_completed/total), verification_status, review_verdict (PASS|WARN|BLOCK|null), uat_status, phases_total/completed, has_blockers, accumulated_context.
 
 **If missing:** `projectState = { initialized: false }`. If intent also empty → **Error E001**.
 
@@ -62,18 +34,7 @@ const projectState = {
 
 If `forcedChain` is set, validate and jump to **3c**.
 
-```javascript
-const exactMatch = {
-  'continue': 'state_continue', 'next': 'state_continue', 'go': 'state_continue',
-  '继续': 'state_continue', '下一步': 'state_continue',
-  'status': 'status', '状态': 'status', 'dashboard': 'status',
-};
-const normalized = intent.toLowerCase().trim();
-if (exactMatch[normalized]) {
-  taskType = exactMatch[normalized];
-  // → skip to 3c
-}
-```
+Exact-match keywords: `continue`/`next`/`go`/`继续`/`下一步` → `state_continue`; `status`/`状态`/`dashboard` → `status`. If matched, skip to **3c**.
 
 ### 3a-2: Structured intent extraction (LLM-native)
 
@@ -94,91 +55,48 @@ Instead of regex, extract a structured intent tuple using LLM semantic understan
 
 ### 3a-3: Route via action × object matrix
 
-```javascript
-function routeIntent(intent, projectState) {
-  const { action, object, issue_id } = intent;
+Route via `action × object` matrix. If `issue_id` present → issue pipeline directly.
 
-  // Hard signal: explicit issue ID → issue pipeline
-  if (issue_id) {
-    const issueRoutes = { 'analyze': 'issue_analyze', 'plan': 'issue_plan', 'fix': 'issue_execute', 'execute': 'issue_execute', 'debug': 'issue_analyze', 'manage': 'issue' };
-    return issueRoutes[action] || 'issue';
-  }
+| action | object-specific overrides | default |
+|--------|--------------------------|---------|
+| fix | bug/code/perf/security→debug, issue→issue | debug |
+| create | feature→quick, issue→issue, test→test_gen, spec→spec_generate, ui→ui_design, config→init, phase→roadmap | quick |
+| analyze | bug/code→analyze, issue→issue_analyze, codebase→spec_map | analyze |
+| explore | issue→issue_discover, feature/ui→brainstorm/ui_design | brainstorm |
+| plan | issue→issue_plan, spec→spec_generate | plan |
+| execute | issue→issue_execute | execute |
+| manage | issue→issue, milestone→milestone_audit, phase→milestone_close, memory/doc/codebase→memory/sync/codebase_refresh | status |
+| transition | phase→milestone_close, milestone→milestone_complete | milestone_close |
+| verify, review, test, debug, refactor, continue, sync, learn, retrospect | — | self-named |
 
-  // Action × Object matrix
-  const matrix = {
-    'fix':       { 'bug': 'debug', 'issue': 'issue', 'code': 'debug', 'performance': 'debug', 'security': 'debug', '_default': 'debug' },
-    'create':    { 'feature': 'quick', 'issue': 'issue', 'test': 'test_gen', 'spec': 'spec_generate', 'ui': 'ui_design', 'config': 'init', 'phase': 'roadmap', '_default': 'quick' },
-    'analyze':   { 'bug': 'analyze', 'issue': 'issue_analyze', 'code': 'analyze', 'codebase': 'spec_map', '_default': 'analyze' },
-    'explore':   { 'issue': 'issue_discover', 'feature': 'brainstorm', 'ui': 'ui_design', '_default': 'brainstorm' },
-    'plan':      { 'issue': 'issue_plan', 'spec': 'spec_generate', '_default': 'plan' },
-    'execute':   { 'issue': 'issue_execute', '_default': 'execute' },
-    'verify':    { '_default': 'verify' },
-    'review':    { '_default': 'review' },
-    'test':      { '_default': 'test' },
-    'debug':     { '_default': 'debug' },
-    'refactor':  { '_default': 'refactor' },
-    'manage':    { 'issue': 'issue', 'milestone': 'milestone_audit', 'phase': 'milestone_close', 'memory': 'memory', 'doc': 'sync', 'codebase': 'codebase_refresh', '_default': 'status' },
-    'transition':{ 'phase': 'milestone_close', 'milestone': 'milestone_complete', '_default': 'milestone_close' },
-    'continue':  { '_default': 'state_continue' },
-    'sync':      { '_default': 'sync' },
-    'learn':     { '_default': 'learn' },
-    'retrospect':{ '_default': 'retrospective' },
-  };
-
-  const actionMap = matrix[action] || matrix['fix'];
-  return actionMap[object] || actionMap['_default'] || 'quick';
-}
-```
-
-Compute clarity (3=action+object+scope, 2=action+object, 1=action only, 0=empty).
+Clarity scoring: 3=action+object+scope, 2=action+object, 1=action only, 0=empty.
 If clarity < 2 and not autoYes: clarify via AskUserQuestion (max 2 rounds).
 
 ### 3b: State-based routing (task_type == `state_continue`)
 
-```javascript
-function detectNextAction(s) {
-  if (!s.initialized) return { chain: 'init', steps: [{ cmd: 'maestro-init' }] };
-  const ps = s.phase_status, art = s.phase_artifacts, exec = s.execution;
+Returns `{ chain, steps }`. Steps are inline (unlike maestro.codex which uses chainMap lookup).
 
-  // Post-milestone: no roadmap, has accumulated context
-  if (s.phases_total === 0 && !fileExists('.workflow/roadmap.md') && s.accumulated_context)
-    return { chain: 'next-milestone', steps: [{ cmd: 'maestro-roadmap', args: '"{description}"' }] };
-  if (s.phases_total === 0)
-    return { chain: 'brainstorm-driven', steps: [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }] };
-
-  if (ps === 'pending') {
-    if (art.context) return { chain: 'plan', steps: [{ cmd: 'maestro-plan', args: '{phase}' }] };
-    return { chain: 'analyze', steps: [{ cmd: 'maestro-analyze', args: '{phase}' }] };
-  }
-  if (ps === 'exploring' || ps === 'planning') {
-    if (art.plan) return { chain: 'execute-verify', steps: [{ cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }] };
-    return { chain: 'plan', steps: [{ cmd: 'maestro-plan', args: '{phase}' }] };
-  }
-  if (ps === 'executing') {
-    if (exec.tasks_completed >= exec.tasks_total && exec.tasks_total > 0) return { chain: 'verify', steps: [{ cmd: 'maestro-verify', args: '{phase}' }] };
-    return { chain: 'execute', steps: [{ cmd: 'maestro-execute', args: '{phase}' }] };
-  }
-  if (ps === 'verifying') {
-    if (s.verification_status === 'passed') {
-      if (!s.review_verdict) return { chain: 'review', steps: [{ cmd: 'quality-review', args: '{phase}' }] };
-      if (s.uat_status === 'pending') return { chain: 'test', steps: [{ cmd: 'quality-test', args: '{phase}' }] };
-      if (s.uat_status === 'passed') return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
-      return { chain: 'debug', steps: [{ cmd: 'quality-debug', args: '--from-uat {phase}' }] };
-    }
-    return { chain: 'quality-loop-partial', steps: [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }] };
-  }
-  if (ps === 'testing') {
-    if (s.uat_status === 'passed') return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
-    return { chain: 'debug', steps: [{ cmd: 'quality-debug', args: '--from-uat {phase}' }] };
-  }
-  if (ps === 'completed') {
-    if (s.phases_completed >= s.phases_total) return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
-    return { chain: 'milestone-close', steps: [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }] };
-  }
-  if (ps === 'blocked') return { chain: 'debug', steps: [{ cmd: 'quality-debug' }] };
-  return { chain: 'status', steps: [{ cmd: 'manage-status' }] };
-}
-```
+| Condition | Chain | Steps |
+|-----------|-------|-------|
+| Not initialized | `init` | maestro-init |
+| No phases, no roadmap, has context | `next-milestone` | maestro-roadmap |
+| No phases | `brainstorm-driven` | brainstorm → plan → execute → verify |
+| pending + has context | `plan` | maestro-plan |
+| pending, no context | `analyze` | maestro-analyze |
+| exploring/planning + has plan | `execute-verify` | execute → verify |
+| exploring/planning, no plan | `plan` | maestro-plan |
+| executing, all tasks done | `verify` | maestro-verify |
+| executing, tasks remain | `execute` | maestro-execute |
+| verifying, passed + no review | `review` | quality-review |
+| verifying, passed + UAT pending | `test` | quality-test |
+| verifying, passed + UAT passed | `milestone-close` | audit → complete |
+| verifying, passed + UAT failed | `debug` | quality-debug |
+| verifying, not passed | `quality-loop-partial` | plan --gaps → execute → verify |
+| testing, UAT passed | `milestone-close` | audit → complete |
+| testing, UAT not passed | `debug` | quality-debug |
+| completed | `milestone-close` | audit → complete |
+| blocked | `debug` | quality-debug |
+| fallback | `status` | manage-status |
 
 ### 3c: Intent-based chain map
 
@@ -253,23 +171,8 @@ const taskToChain = {
 
 ### 3d: Resolve phase number and issue ID
 
-```javascript
-function resolvePhase() {
-  // From structured extraction
-  if (intentAnalysis.phase_ref) return intentAnalysis.phase_ref;
-  // Fallback regex
-  const m = intent.match(/phase\s*(\d+)|^(\d+)$/);
-  if (m) return m[1] || m[2];
-  // With scratch-based architecture, commands default to milestone-wide when no phase specified
-  return null;
-}
-
-function resolveIssueId() {
-  if (intentAnalysis.issue_id) return intentAnalysis.issue_id;
-  const m = intent.match(/ISS-[\w]+-\d+/i);
-  return m ? m[0] : null;
-}
-```
+**Phase**: from structured extraction → fallback regex (`phase N` or bare number) → null (milestone-wide default).
+**Issue ID**: from structured extraction → regex match `ISS-*-NNN`.
 
 When executing issue chains, replace `{issue_id}` in step args with the resolved issue ID.
 
@@ -291,28 +194,11 @@ MAESTRO-COORDINATE: {chain_name} (dry run)
 
 ## Step 5: Setup Session
 
-```javascript
-const sessionId = `coord-${new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15)}`;
-const sessionDir = `.workflow/.maestro-coordinate/${sessionId}`;
-Bash(`mkdir -p "${sessionDir}"`);
+Create session directory `.workflow/.maestro-coordinate/coord-{timestamp}/`.
 
-const state = {
-  session_id: sessionId, status: 'running',
-  created_at: new Date().toISOString(),
-  intent, task_type: taskType, chain_name: chainName,
-  tool: cliTool, auto_mode: autoYes, phase: resolvedPhase,
-  current_step: 0,
-  gemini_session_id: null,
-  step_analyses: [],
-  steps: chain.map((s, i) => ({
-    index: i, skill: s.cmd, args: s.args || '',
-    status: 'pending', exec_id: null, analysis: null
-  }))
-};
-Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
+Initialize `status.json` with: session_id, intent, task_type, chain_name, tool, auto_mode, phase, current_step=0, gemini_session_id=null, step_analyses=[], steps[] (each: index, skill, args, status=pending, exec_id=null, analysis=null).
 
-const context = { resolved_phase: resolvedPhase, user_intent: intent, issue_id: resolvedIssueId, spec_session_id: null };
-```
+Build context: `{ resolved_phase, user_intent, issue_id, spec_session_id: null }`.
 
 ---
 
@@ -320,233 +206,62 @@ const context = { resolved_phase: resolvedPhase, user_intent: intent, issue_id: 
 
 ### 6a: Assemble args
 
-```javascript
-const AUTO_FLAG_MAP = {
-  'maestro-analyze': '-y', 'maestro-brainstorm': '-y', 'maestro-ui-design': '-y',
-  'maestro-plan': '--auto', 'maestro-spec-generate': '-y', 'quality-test': '--auto-fix',
-  'quality-retrospective': '--auto-yes',
-};
-
-function assembleArgs(step) {
-  let a = (step.args || '')
-    .replace(/\{phase\}/g, context.resolved_phase || '')  // empty = milestone-wide default
-    .replace(/\{description\}/g, context.user_intent || '')
-    .replace(/\{issue_id\}/g, context.issue_id || '')
-    .replace(/\{spec_session_id\}/g, context.spec_session_id || '')
-    .replace(/\{scratch_dir\}/g, context.scratch_dir || '');
-  if (state.auto_mode) {
-    const flag = AUTO_FLAG_MAP[step.cmd];
-    if (flag && !a.includes(flag)) a = a ? `${a} ${flag}` : flag;
-  }
-  return a.trim();
-}
-```
+Replace template placeholders (`{phase}`, `{description}`, `{issue_id}`, `{spec_session_id}`, `{scratch_dir}`) from context. Inject auto-flags if auto_mode: analyze/brainstorm/ui-design/spec-generate → `-y`, plan → `--auto`, quality-test → `--auto-fix`, quality-retrospective → `--auto-yes`.
 
 ### 6b: Build prompt from template
 
-Read `~/.maestro/templates/cli/prompts/coordinate-step.txt`, fill placeholders.
-If previous step has analysis hints, inject them as `{{ANALYSIS_HINTS}}`.
+Read `~/.maestro/templates/cli/prompts/coordinate-step.txt`, fill placeholders: `{{COMMAND}}`, `{{ARGS}}`, `{{STEP_N}}`, `{{AUTO_DIRECTIVE}}`, `{{CHAIN_NAME}}`, `{{ANALYSIS_HINTS}}`.
 
-```javascript
-function escapeForShell(str) { return "'" + str.replace(/'/g, "'\\''") + "'"; }
-
-const assembledArgs = assembleArgs(step);
-const template = Read('~/.maestro/templates/cli/prompts/coordinate-step.txt');
-
-// Build analysis hints from previous step's gemini evaluation
-let analysisHints = '';
-const prevAnalysis = (state.step_analyses || []).find(a => a.step_index === state.current_step - 1);
-if (prevAnalysis?.next_step_hints) {
-  const h = prevAnalysis.next_step_hints;
-  const parts = [];
-  if (h.prompt_additions) parts.push(h.prompt_additions);
-  if (h.cautions?.length) parts.push('Cautions: ' + h.cautions.join('; '));
-  if (h.context_to_carry) parts.push('Context from prior step: ' + h.context_to_carry);
-  if (parts.length) analysisHints = parts.join('\n');
-}
-
-const prompt = template
-  .replace('{{COMMAND}}', `/${step.cmd}`)
-  .replace('{{ARGS}}', assembledArgs)
-  .replace('{{STEP_N}}', `${state.current_step + 1}/${state.steps.length}`)
-  .replace('{{AUTO_DIRECTIVE}}', state.auto_mode ? 'Auto-confirm all prompts. No interactive questions.' : '')
-  .replace('{{CHAIN_NAME}}', state.chain_name)
-  .replace('{{ANALYSIS_HINTS}}', analysisHints);
-```
+Analysis hints assembled from previous step's gemini evaluation: prompt_additions, cautions, context_to_carry.
 
 ### 6c: Launch via codex delegate
 
-```
-------------------------------------------------------------
-  STEP {i+1}/{total}: {step.cmd}  |  Tool: {cliTool}
-------------------------------------------------------------
+Display step header. Mark step as running, persist state. Execute:
+
+```bash
+codex delegate '<prompt>' --to {tool} --mode write
 ```
 
-```javascript
-state.steps[state.current_step].status = 'running';
-state.steps[state.current_step].started_at = new Date().toISOString();
-Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
-
-Bash({
-  command: `codex delegate ${escapeForShell(prompt)} --to ${state.tool} --mode write`,
-  run_in_background: true, timeout: 600000
-});
-// ■ STOP — wait for hook callback
-```
+Run in background (timeout 600s). **STOP** -- wait for callback.
 
 ---
 
 ## Step 7: Post-Step Callback
 
-```javascript
-const stepIdx = state.current_step;
-const step = state.steps[stepIdx];
-const output = /* callback output */;
-
-// Capture exec_id from stderr [CODEX_EXEC_ID=xxx]
-step.exec_id = /* from callback */;
-step.completed_at = new Date().toISOString();
-
-// Context propagation
-const phaseMatch = output.match(/PHASE:\s*(\d+)/m);
-if (phaseMatch) context.resolved_phase = phaseMatch[1];
-const specMatch = output.match(/SPEC-[\w-]+/);
-if (specMatch) context.spec_session_id = specMatch[0];
-const scratchMatch = output.match(/scratch_dir:\s*(.+)/m);
-if (scratchMatch) context.scratch_dir = scratchMatch[1].trim();
-
-// Success/failure
-const failed = /^STATUS:\s*FAILURE/m.test(output);
-if (!failed) {
-  step.status = 'completed';
-} else if (state.auto_mode) {
-  if (!step.retried) { step.retried = true; /* re-execute Step 6c */ return; }
-  step.status = 'skipped';
-} else {
-  // AskUserQuestion: Retry / Skip / Abort
-  // On Abort: state.status = 'aborted', save, exit
-}
-
-// Save output for analysis
-Write(`${sessionDir}/step-${stepIdx + 1}-output.txt`, output);
-Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
-
-// → Step 7b: Gemini analysis (skip if step failed/skipped or single-step chain)
-if (step.status === 'completed' && state.steps.length > 1) {
-  // → Step 7b
-} else {
-  // Skip analysis, advance directly
-  state.current_step = stepIdx + 1;
-  Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
-  if (state.current_step < state.steps.length) { /* → Step 6 */ }
-  else { /* → Step 8 */ }
-}
-```
+On callback:
+1. Capture exec_id from stderr `[CODEX_EXEC_ID=xxx]`
+2. **Context propagation**: extract `PHASE:`, `SPEC-*`, `scratch_dir:` from output
+3. **Success/failure**: if failed + auto_mode → retry once then skip; if failed + interactive → ask Retry/Skip/Abort
+4. Save output to `step-{N}-output.txt`, persist state
+5. If completed + multi-step chain → **Step 7b** (gemini analysis); otherwise advance to next step or **Step 8**
 
 ---
 
 ## Step 7b: Analyze Step Output (via gemini)
 
-After each step completes, call gemini to evaluate execution quality and generate optimization hints for subsequent steps.
+After each completed step, delegate to gemini for quality evaluation. Prompt includes: step command/args, last 200 lines of output, prior step analyses, next step info.
 
-```javascript
-const stepIdx = state.current_step;
-const step = state.steps[stepIdx];
-const output = Read(`${sessionDir}/step-${stepIdx + 1}-output.txt`);
-const nextStep = stepIdx < state.steps.length - 1 ? state.steps[stepIdx + 1] : null;
+Expected JSON response: `{ quality_score, execution_assessment: { success, completeness, key_outputs, missing_outputs }, issues: [{ severity, description }], next_step_hints: { prompt_additions, cautions, context_to_carry }, step_summary }`.
 
-// Build analysis prompt
-const priorAnalyses = (state.step_analyses || [])
-  .map(a => `- Step ${a.step_index + 1} (${a.cmd}): score=${a.quality_score}, issues=${a.issues?.length || 0}`)
-  .join('\n');
-
-const analysisPrompt = `PURPOSE: Evaluate execution quality of coordinate step "${step.cmd}" (${stepIdx + 1}/${state.steps.length}) and generate optimization hints for the next step.
-CHAIN: ${state.chain_name} | Intent: ${state.intent}
-COMMAND: /${step.cmd} ${step.args || ''}
-STEP OUTPUT (last 200 lines):
-${output.split('\n').slice(-200).join('\n')}
-${priorAnalyses ? `PRIOR STEP ANALYSES:\n${priorAnalyses}` : ''}
-${nextStep ? `NEXT STEP: /${nextStep.cmd} ${nextStep.args || ''}` : 'NEXT STEP: None (last step)'}
-EXPECTED OUTPUT (strict JSON):
-{
-  "quality_score": <0-100>,
-  "execution_assessment": { "success": <bool>, "completeness": "<full|partial|minimal>", "key_outputs": [], "missing_outputs": [] },
-  "issues": [{ "severity": "critical|high|medium|low", "description": "" }],
-  "next_step_hints": {
-    "prompt_additions": "<extra context or constraints to inject into next step prompt>",
-    "cautions": ["<things next step should watch out for>"],
-    "context_to_carry": "<key facts from this step's output that next step needs>"
-  },
-  "step_summary": ""
-}`;
-
-let delegateCmd = `codex delegate ${escapeForShell(analysisPrompt)} --to gemini --mode analysis --rule analysis-review-code-quality`;
-if (state.gemini_session_id) delegateCmd += ` --resume ${state.gemini_session_id}`;
-Bash({ command: delegateCmd, run_in_background: true, timeout: 300000 });
-// ■ STOP — wait for hook callback
+```bash
+codex delegate '<analysis_prompt>' --to gemini --mode analysis --rule analysis-review-code-quality [--resume {gemini_session_id}]
 ```
+
+Run in background (timeout 300s). **STOP** -- wait for callback.
 
 ### Step 7c: Post-Analyze Callback
 
-```javascript
-const analysisResult = /* parsed JSON from callback output */;
+Capture gemini session ID for resume chain. Store analysis result (quality_score, issues, next_step_hints, summary) in `step_analyses[]` and per-step `analysis` field. Write `step-{N}-analysis.json`.
 
-// Capture gemini session ID for resume chain
-state.gemini_session_id = /* from callback stderr [CODEX_EXEC_ID=xxx] */;
-
-// Store analysis
-if (!state.step_analyses) state.step_analyses = [];
-state.step_analyses.push({
-  step_index: stepIdx, cmd: step.cmd,
-  quality_score: analysisResult.quality_score,
-  issues: analysisResult.issues,
-  next_step_hints: analysisResult.next_step_hints,
-  summary: analysisResult.step_summary
-});
-step.analysis = {
-  quality_score: analysisResult.quality_score,
-  issue_count: (analysisResult.issues || []).length
-};
-Write(`${sessionDir}/step-${stepIdx + 1}-analysis.json`, JSON.stringify(analysisResult, null, 2));
-
-// Advance
-state.current_step = stepIdx + 1;
-Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
-
-if (state.current_step < state.steps.length) {
-  // → Back to Step 6
-} else {
-  // → Step 8
-}
-```
+Advance `current_step`. If more steps remain → back to **Step 6**; otherwise → **Step 8**.
 
 ---
 
 ## Step 8: Completion Report
 
-```javascript
-const done = state.steps.filter(s => s.status === 'completed').length;
-state.status = state.steps.some(s => s.status === 'failed') ? 'completed_with_errors' : 'completed';
-state.completed_at = new Date().toISOString();
-Write(`${sessionDir}/status.json`, JSON.stringify(state, null, 2));
-```
+Finalize state: status = `completed` or `completed_with_errors`, persist `status.json`.
 
-```
-============================================================
-  MAESTRO-COORDINATE COMPLETE
-============================================================
-  Session: {session_id}
-  Chain:   {chain_name} ({done}/{total})
-  Tool:    {cliTool}
-
-  Steps:
-    [✓] 1. maestro-plan — completed (quality: 85/100)
-    [✓] 2. maestro-execute — completed (quality: 78/100)
-
-  Avg Quality: {avg_score}/100
-  Next: $Maestro-coordinate --continue
-============================================================
-```
+Display completion banner: session, chain, tool, per-step status with quality scores, average quality score, resume command.
 
 ---
 
