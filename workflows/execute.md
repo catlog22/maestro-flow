@@ -64,9 +64,73 @@ FOR each PLAN_DIR IN PLAN_DIRS:
 | Flag | Effect |
 |------|--------|
 | `--auto-commit` | Override config: commit after each task completion |
-| `--method agent\|cli\|auto` | Override execution method (default: config.json.execution.method) |
+| `--method agent\|codex\|gemini\|cli\|auto` | Override execution method (default: config.json.execution.method) |
 | `--executor <tool>` | Default CLI tool: gemini\|codex\|qwen\|opencode\|claude (default: first enabled in cli-tools.json) |
 | `--dir <path>` | Use arbitrary directory instead of phase resolution (skip roadmap validation) |
+| `-y` | Auto-approve execution options (skip confirmation prompt) |
+
+---
+
+## E0.5: Execution Options Confirmation
+
+**Purpose:** Let user choose how tasks execute. Supports both menu selection and natural language intent (e.g., "前端用gemini，后端用codex，其余agent"). Skipped when `-y` flag or executionContext already confirmed.
+
+### Skip conditions
+
+- `-y` flag → use resolved defaults, skip prompt
+- `executionContext.executionMethod` already set → skip (confirmed in /maestro-plan)
+
+### Tool Call
+
+```
+AskUserQuestion({
+  questions: [
+    {
+      question: "How should tasks be executed? Select one, or choose Other to specify per-domain rules (e.g. '前端gemini 后端codex 其余agent')",
+      header: "Executor",
+      multiSelect: false,
+      options: [
+        { label: "Auto (Recommended)", description: "Per-task domain routing: frontend→gemini, backend→codex, general→agent" },
+        { label: "Agent", description: "Claude Code agent for all tasks (fastest)" },
+        { label: "Codex", description: "Codex CLI for all tasks (strong for complex backend)" },
+        { label: "Gemini", description: "Gemini CLI for all tasks (strong for frontend/UI)" }
+      ]
+    },
+    {
+      question: "Run code review after execution?",
+      header: "Review",
+      multiSelect: false,
+      options: [
+        { label: "Skip (Recommended)", description: "No code review, proceed to verification" },
+        { label: "Gemini Review", description: "Gemini CLI: git diff quality review" },
+        { label: "Codex Review", description: "Codex CLI: git-aware code review" }
+      ]
+    }
+  ]
+})
+```
+
+### Parse response
+
+**Question 1 (Executor):**
+
+| Answer | executionMethod | domainRouting |
+|--------|----------------|---------------|
+| "Auto" | `"auto"` | `{ frontend: "gemini", backend: "codex", default: "agent" }` |
+| "Agent" / "Codex" / "Gemini" | that value | not used |
+| Other text with domain rules | `"auto"` | Parse from user text (see examples below) |
+
+Other text parsing examples:
+
+| User types | domainRouting |
+|------------|---------------|
+| `前端gemini 后端codex` | `{ frontend: "gemini", backend: "codex", default: "agent" }` |
+| `backend agent, frontend gemini` | `{ frontend: "gemini", backend: "agent", default: "agent" }` |
+| `all codex` | `{ default: "codex" }` |
+
+**Question 2 (Review):** store as `codeReviewTool`
+
+Store: `executionMethod`, `domainRouting`, `codeReviewTool`
 
 ---
 
@@ -81,9 +145,11 @@ If executionContext is available in memory:
   planObject = executionContext.planObject
   explorations = executionContext.explorations
   clarifications = executionContext.clarifications
-  executionMethod = --method flag || executionContext.executionMethod
+  executionMethod = E0.5 selection || --method flag || executionContext.executionMethod
   defaultExecutor = --executor flag || executionContext.defaultExecutor
   executorAssignments = executionContext.executorAssignments || {}
+  domainRouting = E0.5 domainRouting || executionContext.domainRouting || {}
+  codeReviewTool = E0.5 selection || executionContext.codeReviewTool || "Skip"
   Skip disk reload
 ```
 
@@ -92,9 +158,11 @@ If executionContext is available in memory:
 ```
 Read ${PLAN_DIR}/plan.json
 
-executionMethod = --method flag || config.json.execution.method || "agent"
+executionMethod = E0.5 selection || --method flag || config.json.execution.method || "auto"
 defaultExecutor = --executor flag || config.json.execution.default_executor || "gemini"
 executorAssignments = plan.json.executor_assignments || {}
+domainRouting = E0.5 domainRouting || { frontend: "gemini", backend: "codex", default: "agent" }
+codeReviewTool = E0.5 selection || "Skip"
 ```
 
 ### Detect completed tasks (breakpoint resume)
@@ -145,19 +213,25 @@ Pass specs_content to each executor agent in E2.
 
 ### Executor Resolution
 
+Resolution priority: per-task assignment > explicit method > auto domain routing.
+
+**Single executor mode** (executionMethod is agent/codex/gemini/cli): all tasks use that executor.
+
+**Auto mode** (executionMethod is "auto"): route each task by domain using `domainRouting` map from E0.5.
+
+For each task, judge its domain from the task definition (scope, file paths, action description):
+- **frontend** — UI components, pages, styles, layouts, templates (.tsx/.jsx/.vue/.css/.html, scope contains ui/frontend/component/style/page/view)
+- **backend** — API, server, database, services, algorithms (.go/.rs/.java/.py/.sql/.proto, scope contains api/backend/server/database/service/worker)
+- **general** — mixed, .ts/.js only, config, tests, or unclear domain
+
+Then look up `domainRouting[domain]`, falling back to `domainRouting.default` (which is "agent" if unset).
+
+Log the routing decision per task before dispatch:
+
 ```
-# Priority: per-task assignment > global method > auto fallback
-function resolveTaskExecutor(task_id):
-  If executorAssignments[task_id]:
-    return executorAssignments[task_id].executor   # "agent"|"gemini"|"codex"|"qwen"|"opencode"|"claude"
-  If executionMethod == "agent":
-    return "agent"
-  If executionMethod == "cli":
-    return defaultExecutor                         # e.g., "gemini"
-  # executionMethod == "auto":
-  task = loaded task definition
-  # Heuristic: tasks with many files or multi-step implementation → agent; otherwise → CLI
-  return (task.files.length > 5 || task.implementation.length > 8) ? "agent" : defaultExecutor
+TASK-001 [frontend] → gemini
+TASK-002 [backend]  → codex
+TASK-003 [general]  → agent
 ```
 
 ### Delegate Prompt Builder
@@ -456,8 +530,42 @@ If critical_violations.length > 0:
 
   Abort: "Post-wave validation failed. Fix critical violations before proceeding."
 
-# No critical violations — continue to E3
+# No critical violations — continue to E2.6
 Log "Post-wave validation passed ({warnings.length} warnings, 0 critical)"
+```
+
+---
+
+## E2.6: Code Review (Optional)
+
+**Purpose:** Run code review on execution output if selected in E0.5.
+
+```
+If codeReviewTool == "Skip":
+  Log "Code review: skipped"
+  Continue to E3
+
+# Collect diff scope
+diff_scope = git diff from execution start commit to HEAD
+
+If codeReviewTool == "Gemini Review":
+  Bash("maestro delegate \"PURPOSE: Review code quality of execution changes
+TASK: Review git diff for correctness, style, potential bugs
+MODE: analysis
+CONTEXT: @**/* | Diff scope: execution changes only
+EXPECTED: Issue list with severity, file:line references, fix suggestions
+CONSTRAINTS: Review only, no modifications\" --to gemini --mode analysis --rule analysis-review-code-quality", run_in_background: true)
+
+If codeReviewTool == "Codex Review":
+  Bash("maestro delegate \"PURPOSE: Review code quality of execution changes
+TASK: Review git diff for correctness, style, potential bugs
+MODE: analysis
+CONTEXT: @**/* | Diff scope: execution changes only
+EXPECTED: Issue list with severity, file:line references, fix suggestions
+CONSTRAINTS: Review only, no modifications\" --to codex --mode analysis", run_in_background: true)
+
+# Wait for review completion, log results
+Log review findings summary
 ```
 
 ---

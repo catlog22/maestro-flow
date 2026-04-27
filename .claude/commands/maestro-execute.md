@@ -1,7 +1,7 @@
 ---
 name: maestro-execute
 description: Execute plan with wave-based parallel execution and atomic commits
-argument-hint: "[phase] [--auto-commit] [--method agent|cli|auto] [--executor <tool>] [--dir <path>]"
+argument-hint: "[phase] [--auto-commit] [--method agent|codex|gemini|cli|auto] [--executor <tool>] [--dir <path>] [-y]"
 allowed-tools:
   - Read
   - Write
