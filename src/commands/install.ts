@@ -220,12 +220,15 @@ function forceInstall(
 
   paths.ensure(paths.home);
 
-  const manifest = createManifest(mode, targetPath);
+  const hookLevel = (opts.hooks ?? 'none') as HookLevel;
+
+  const manifest = createManifest(mode, targetPath, {
+    hookLevel,
+    selectedComponentIds: available.map(c => c.def.id),
+  });
   const totalStats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
 
   for (const comp of available) {
-    // In global-only mode, skip project-scoped items unless they're alwaysGlobal
-    if (opts.global && !comp.def.alwaysGlobal) continue;
     console.error(`  ${comp.def.label} → ${comp.targetDir}`);
     copyRecursive(comp.sourceFull, comp.targetDir, totalStats, manifest);
   }
@@ -248,7 +251,6 @@ function forceInstall(
   const overlaysAppliedCount = applyOverlaysPostInstall(mode, targetBase);
 
   // Hook installation
-  const hookLevel = (opts.hooks ?? 'none') as HookLevel;
   if (hookLevel !== 'none' && HOOK_LEVELS.includes(hookLevel)) {
     const hookResult = installHooksByLevel(hookLevel, { project: mode === 'project' });
     console.error(t.install.forceHooksResult

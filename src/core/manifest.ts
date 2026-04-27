@@ -33,6 +33,10 @@ export interface Manifest {
   targetPath: string;
   installedAt: string;
   entries: ManifestEntry[];
+  /** Hook level configured during install (none/minimal/standard/full) */
+  hookLevel?: string;
+  /** Component IDs selected during interactive install (omitted = all) */
+  selectedComponentIds?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +59,11 @@ function manifestFile(id: string): string {
 // CRUD
 // ---------------------------------------------------------------------------
 
-export function createManifest(scope: 'global' | 'project', targetPath: string): Manifest {
+export function createManifest(
+  scope: 'global' | 'project',
+  targetPath: string,
+  opts?: { hookLevel?: string; selectedComponentIds?: string[] },
+): Manifest {
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').split('.')[0];
   return {
     id: `${scope}-${ts}`,
@@ -64,6 +72,8 @@ export function createManifest(scope: 'global' | 'project', targetPath: string):
     targetPath,
     installedAt: new Date().toISOString(),
     entries: [],
+    hookLevel: opts?.hookLevel,
+    selectedComponentIds: opts?.selectedComponentIds,
   };
 }
 

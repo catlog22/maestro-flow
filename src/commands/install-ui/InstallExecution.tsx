@@ -99,7 +99,10 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           if (existing) cleanManifestFiles(existing);
 
           paths.ensure(paths.home);
-          const manifest = createManifest(config.mode, targetPath);
+          const manifest = createManifest(config.mode, targetPath, {
+            hookLevel: config.installHooks ? config.hookLevel : 'none',
+            selectedComponentIds: config.selectedComponentIds,
+          });
           const stats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
 
           const components = scanComponents(pkgRoot, config.mode, config.projectPath)

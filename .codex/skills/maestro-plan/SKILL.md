@@ -237,6 +237,15 @@ spawn_agents_on_csv({
 
 6. Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`
 
+#### Task Count Guard (before Wave 2)
+
+Before generating the planning instruction, assess scope complexity and embed expected task count ceiling:
+- Single feature / simple change → expect **1-2 tasks** max
+- Medium feature (multiple files, one module) → expect **2-4 tasks** max
+- Large feature (cross-module) → expect **4-8 tasks** max
+
+Include this ceiling in `buildPlanningInstruction`. If the planning agent outputs more tasks than the threshold, re-prompt with explicit instruction to merge.
+
 #### Wave 2: Plan Generation (Sequential)
 
 1. Read master `tasks.csv`
@@ -270,17 +279,36 @@ spawn_agents_on_csv({
 6. Merge `wave-2-results.csv` into master `tasks.csv`, delete `wave-2.csv`
 
 **Planning agent responsibilities** (embedded in instruction):
-- Decompose phase goal → TASK-001..N with dependencies grouped into execution waves
+- Group work into feature-level tasks. One feature = one task (even if it touches 3-5 files). Do NOT split a single feature into multiple file-level tasks.
 - Apply Deep Work Rules: `read_first[]` includes modified file + source of truth; `convergence.criteria[]` are grep-verifiable; all actions/steps have concrete values
 - Write `plan.json` to `{PHASE_DIR}/plan.json` and `.task/TASK-{NNN}.json` to `{PHASE_DIR}/.task/`
 - `--gaps`: create fix tasks from gap context, link to issues; `--collab`: pre-allocate ID ranges
+
+**Task Grouping Rules (MANDATORY)** — pass to planning agent, re-prompt if violated:
+
+1. **Group by feature** — All changes for one feature = one task (even if 3-5 files). Never create separate tasks per file.
+2. **Group by context** — Related functional changes belong together. Don't split just because changes touch different files.
+3. **Minimize agent count** — Group simple unrelated changes into a single "batch" task to reduce overhead. Each agent spawn costs significant tokens.
+4. **Substantial tasks only** — Each task should represent 15-60 minutes of real work. If a task takes <5 minutes, merge it into another.
+5. **True dependencies only** — `depends_on` only when Task B genuinely needs Task A's output (e.g., "Task A defines the interface that Task B implements"). Sequential execution wastes time.
+6. **Prefer parallel** — Most tasks should be independent (no depends_on). Default to parallel waves.
+7. **Complexity-based sizing**:
+   - **Low** (single file, single concern, zero cross-module): **1 task**
+   - **Medium** (multiple files OR integration point): **1-4 tasks**
+   - **High** (cross-module, architectural, new subsystem): **4-10 tasks**
+
+**Anti-splitting rules** (re-prompt if violated):
+- One feature = one task (even if 3-5 files); never split a feature into per-file tasks
+- Group simple unrelated changes into a batch task to minimize agent spawns
+- `depends_on` only for genuine output dependencies; most tasks should be parallel
+- Each task must be substantial (15-60 min); sub-5-min changes must be merged
 
 ### Phase 3: Plan Checking + Confirmation
 
 **Objective**: Validate plan quality, revise if needed, present to user.
 
 1. **Plan checking** (inline, not a separate wave):
-   Read `plan.json` + all `.task/TASK-*.json`. Validate: requirements coverage, file feasibility, dependency correctness (no cycles, valid wave order), grep-verifiable convergence criteria, read_first completeness, action concreteness, no parallel file conflicts.
+   Read `plan.json` + all `.task/TASK-*.json`. Validate: requirements coverage, file feasibility, dependency correctness (no cycles, valid wave order), grep-verifiable convergence criteria, read_first completeness, action concreteness, no parallel file conflicts, **task count within complexity threshold** (reject over-split plans), **no per-file splitting** (each task must be feature-level).
 
 2. **Revision loop** (max 3 rounds): If critical issues found, regenerate affected tasks.
 

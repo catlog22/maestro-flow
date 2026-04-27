@@ -97,7 +97,10 @@ export function ExecutionView({
         // 5. Create manifest
         if (cancelled) return;
         setStatus('Creating manifest...');
-        const manifest = createManifest(config.mode, targetPath);
+        const manifest = createManifest(config.mode, targetPath, {
+          hookLevel: config.hookLevel,
+          selectedComponentIds: config.selectedIds,
+        });
         const totalStats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
 
         // 6. Copy components

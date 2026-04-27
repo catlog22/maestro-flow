@@ -87,29 +87,36 @@ async function reinstallWorkflows(version: string): Promise<void> {
   console.error('');
   console.error('  Reinstalling workflow components...');
 
-  // Deduplicate: one global, multiple projects
-  const globalManifest = manifests.find(m => m.scope === 'global');
-  const projectManifests = manifests.filter(m => m.scope === 'project');
-
-  if (globalManifest) {
-    try {
-      await execAsync('maestro install --force --global');
-      console.error(`  [+] Global components reinstalled (v${version})`);
-    } catch (err) {
-      console.error(`  [x] Global reinstall failed: ${err instanceof Error ? err.message : err}`);
-    }
+  // Deduplicate by scope + targetPath (latest manifest wins)
+  const seen = new Set<string>();
+  const deduped: { scope: string; targetPath: string; hookLevel: string }[] = [];
+  for (const m of manifests) {
+    const key = `${m.scope}:${m.targetPath}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push({ scope: m.scope, targetPath: m.targetPath, hookLevel: m.hookLevel ?? 'none' });
   }
 
-  for (const m of projectManifests) {
-    if (!existsSync(m.targetPath)) {
-      console.error(`  [-] Skipped ${m.targetPath} (directory not found)`);
-      continue;
-    }
-    try {
-      await execAsync(`maestro install --force --path "${m.targetPath}"`);
-      console.error(`  [+] Project reinstalled: ${m.targetPath}`);
-    } catch (err) {
-      console.error(`  [x] Project reinstall failed (${m.targetPath}): ${err instanceof Error ? err.message : err}`);
+  for (const { scope, targetPath, hookLevel } of deduped) {
+    const hooksArg = hookLevel !== 'none' ? ` --hooks ${hookLevel}` : '';
+    if (scope === 'global') {
+      try {
+        await execAsync(`maestro install --force --global${hooksArg}`);
+        console.error(`  [+] Global components reinstalled (v${version})`);
+      } catch (err) {
+        console.error(`  [x] Global reinstall failed: ${err instanceof Error ? err.message : err}`);
+      }
+    } else {
+      if (!existsSync(targetPath)) {
+        console.error(`  [-] Skipped ${targetPath} (directory not found)`);
+        continue;
+      }
+      try {
+        await execAsync(`maestro install --force --path "${targetPath}"${hooksArg}`);
+        console.error(`  [+] Project reinstalled: ${targetPath}`);
+      } catch (err) {
+        console.error(`  [x] Project reinstall failed (${targetPath}): ${err instanceof Error ? err.message : err}`);
+      }
     }
   }
 }
