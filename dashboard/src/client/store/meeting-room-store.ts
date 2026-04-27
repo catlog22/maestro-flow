@@ -31,7 +31,7 @@ export interface MeetingRoomStore {
   sessionStatus: RoomSessionStatus | null;
   layoutMode: LayoutMode;
   terminalLayoutMode: TerminalLayoutMode;
-  expandedTerminals: Set<string>;
+  expandedTerminals: string[];
   splitRatio: number;
   inputTarget: InputTarget;
   agents: RoomAgent[];
@@ -72,7 +72,7 @@ const INITIAL_STATE = {
   sessionStatus: null as RoomSessionStatus | null,
   layoutMode: 'split' as LayoutMode,
   terminalLayoutMode: 'grid-2x2' as TerminalLayoutMode,
-  expandedTerminals: new Set<string>(),
+  expandedTerminals: [] as string[],
   splitRatio: 60,
   inputTarget: { mode: 'broadcast' } as InputTarget,
   agents: [] as RoomAgent[],
@@ -93,38 +93,52 @@ export const useMeetingRoomStore = create<MeetingRoomStore>((set, get) => ({
 
   expandTerminal: (role) =>
     set((s) => {
-      const next = new Set(s.expandedTerminals);
-      next.add(role);
-      return { expandedTerminals: next };
+      if (s.expandedTerminals.includes(role)) return s;
+      return { expandedTerminals: [...s.expandedTerminals, role] };
     }),
 
   collapseTerminal: (role) =>
-    set((s) => {
-      const next = new Set(s.expandedTerminals);
-      next.delete(role);
-      return { expandedTerminals: next };
-    }),
+    set((s) => ({
+      expandedTerminals: s.expandedTerminals.filter((r) => r !== role),
+    })),
 
   setSplitRatio: (ratio) => set({ splitRatio: ratio }),
 
   setInputTarget: (target) => set({ inputTarget: target }),
 
   sendMessage: (content) => {
-    const { sessionId, inputTarget } = get();
+    const { sessionId, inputTarget, agents } = get();
     if (!sessionId || !content.trim()) return;
+    const trimmed = content.trim();
+
+    // Parse @mention at start of message: "@role message" → direct to role
+    const mentionMatch = trimmed.match(/^@(\S+)\s+([\s\S]+)/);
+    if (mentionMatch) {
+      const role = mentionMatch[1];
+      const body = mentionMatch[2].trim();
+      if (agents.some((a) => a.role === role) && body) {
+        sendWsMessage({
+          action: 'room:send_message',
+          sessionId,
+          to: role,
+          content: body,
+        });
+        return;
+      }
+    }
 
     if (inputTarget.mode === 'broadcast') {
       sendWsMessage({
         action: 'room:broadcast',
         sessionId,
-        content: content.trim(),
+        content: trimmed,
       });
     } else if (inputTarget.role) {
       sendWsMessage({
         action: 'room:send_message',
         sessionId,
         to: inputTarget.role,
-        content: content.trim(),
+        content: trimmed,
       });
     }
   },
@@ -181,5 +195,5 @@ export const useMeetingRoomStore = create<MeetingRoomStore>((set, get) => ({
   handleRoomClosed: () =>
     set({ sessionStatus: 'destroyed' }),
 
-  reset: () => set({ ...INITIAL_STATE, expandedTerminals: new Set<string>() }),
+  reset: () => set({ ...INITIAL_STATE, expandedTerminals: [] }),
 }));

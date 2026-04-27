@@ -54,9 +54,11 @@ function getGridStyle(mode: TerminalLayoutMode, paneCount: number): React.CSSPro
   }
 }
 
+const EMPTY_ENTRIES: NormalizedEntry[] = [];
+
 /** Single agent terminal pane */
 function TerminalPane({ role, processId }: { role: string; processId?: string }) {
-  const entries = useAgentStore((s) => (processId ? s.entries[processId] ?? [] : []));
+  const entries = useAgentStore((s) => (processId ? s.entries[processId] ?? EMPTY_ENTRIES : EMPTY_ENTRIES));
   const isStreaming = useAgentStore((s) => (processId ? s.processStreaming[processId] ?? false : false));
   const agents = useMeetingRoomStore((s) => s.agents);
   const expandedTerminals = useMeetingRoomStore((s) => s.expandedTerminals);
@@ -66,7 +68,7 @@ function TerminalPane({ role, processId }: { role: string; processId?: string })
 
   const agent = agents.find((a) => a.role === role);
   const statusColor = AGENT_STATUS_COLORS[agent?.status ?? 'offline'];
-  const isExpanded = expandedTerminals.has(role);
+  const isExpanded = expandedTerminals.includes(role);
 
   // Auto-scroll to bottom on new entries
   const prevLen = useRef(0);
@@ -138,8 +140,8 @@ export function TerminalPanelGrid() {
   // Determine which agents to show based on layout mode
   const visibleAgents = useMemo(() => {
     // If an agent is expanded, only show that one
-    if (expandedTerminals.size > 0) {
-      return agents.filter((a) => expandedTerminals.has(a.role));
+    if (expandedTerminals.length > 0) {
+      return agents.filter((a) => expandedTerminals.includes(a.role));
     }
     const maxPanes = terminalLayoutMode === 'single' ? 1
       : terminalLayoutMode === 'grid-2x2' ? 4

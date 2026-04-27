@@ -142,8 +142,9 @@ export class RoomWsHandler implements WsHandler {
       case 'room:send_message': {
         const session = this.sessionManager.getSession(sessionId);
         if (!session) break;
+        const from = (msg.from as string) || 'user';
         const mailMsg = await session.sendMessage(
-          'user',
+          from,
           msg.to as string,
           msg.content as string,
           (msg.priority as RoomMessagePriority) || 'normal',
@@ -155,8 +156,9 @@ export class RoomWsHandler implements WsHandler {
       case 'room:broadcast': {
         const session = this.sessionManager.getSession(sessionId);
         if (!session) break;
+        const bcastFrom = (msg.from as string) || 'user';
         const bcastMsg = await session.broadcastMessage(
-          'user',
+          bcastFrom,
           msg.content as string,
           (msg.priority as RoomMessagePriority) || 'normal',
         );
