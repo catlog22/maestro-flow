@@ -1,22 +1,22 @@
 ---
-name: manage-memory-capture
-description: Capture session memory (compact or tip) into .workflow/memory/ with JSON index
+name: manage-knowhow-capture
+description: Capture session memory (compact or tip) into .workflow/knowhow/ with JSON index
 argument-hint: "[compact|tip] [description] [--tag tag1,tag2]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
 <purpose>
-Capture session memory into `.workflow/memory/` with JSON index. Two modes: `compact` (full session compression) or `tip` (quick note with tags). Auto-detects mode or asks user when ambiguous.
+Capture session memory into `.workflow/knowhow/` with JSON index. Two modes: `compact` (full session compression) or `tip` (quick note with tags). Auto-detects mode or asks user when ambiguous.
 </purpose>
 
 <context>
 $ARGUMENTS — mode token followed by description and optional flags.
 
 ```bash
-$manage-memory-capture
-$manage-memory-capture "compact"
-$manage-memory-capture "tip Always check state.json before phase operations --tag workflow,state"
-$manage-memory-capture "compact Full auth implementation session"
+$manage-knowhow-capture
+$manage-knowhow-capture "compact"
+$manage-knowhow-capture "tip Always check state.json before phase operations --tag workflow,state"
+$manage-knowhow-capture "compact Full auth implementation session"
 ```
 
 **Modes**: `compact` (full session compression) or `tip` (quick note with tags).
@@ -30,11 +30,7 @@ No arguments: auto-detect or ask user.
 
 ### Step 1: Validate
 
-```bash
-test -d .workflow || exit 1  # E001: not initialized
-```
-
-Create `.workflow/memory/` if it does not exist.
+Verify `.workflow/` exists (E001). Create `.workflow/knowhow/` if missing.
 
 ### Step 2: Detect Mode
 
@@ -45,33 +41,22 @@ If absent or ambiguous, ask user via AskUserQuestion.
 
 **Compact mode**:
 1. Analyze current conversation for: objective, key decisions, modified files, current plan state, pending work
-2. Generate entry ID: `MEM-{YYYYMMDD}-{NNN}`
-3. Write `.workflow/memory/MEM-{id}.md` with sections:
+2. Generate entry ID: `KNW-{YYYYMMDD}-{NNN}`
+3. Write `.workflow/knowhow/KNW-{id}.md` with sections:
    - Objective, Key Decisions, Files Modified (absolute paths), Execution Plan (verbatim), Pending Work, Context Notes
 
 **Tip mode**:
 1. Extract content (everything after `tip`) and parse `--tag` flag
 2. Generate entry ID: `TIP-{YYYYMMDD}-{NNN}`
-3. Write `.workflow/memory/TIP-{id}.md` with: content, tags, timestamp, context
+3. Write `.workflow/knowhow/TIP-{id}.md` with: content, tags, timestamp, context
 
 ### Step 4: Wiki Index Invalidation
 
-Memory files are automatically indexed by WikiIndexer. No manual index update needed — the persistent `wiki-index.json` at `.workflow/` root is regenerated on next `maestro wiki` access.
-
-For immediate visibility, use:
-```bash
-maestro wiki get memory-{slug}         # verify entry exists in wiki
-maestro wiki list --type memory        # list all memory entries
-```
+Memory files are automatically indexed by WikiIndexer -- `wiki-index.json` regenerates on next `maestro wiki` access. Verify with `maestro wiki get memory-{slug}` or `maestro wiki list --type memory`.
 
 ### Step 5: Confirm
 
-```
-=== MEMORY CAPTURED ===
-ID: {entry_id}
-Type: {compact|tip}
-File: .workflow/memory/{filename}
-```
+Display captured entry: ID, type (compact/tip), file path.
 </execution>
 
 <error_codes>
@@ -84,7 +69,7 @@ File: .workflow/memory/{filename}
 </error_codes>
 
 <success_criteria>
-- [ ] `.workflow/` existence validated; `.workflow/memory/` created if missing
+- [ ] `.workflow/` existence validated; `.workflow/knowhow/` created if missing
 - [ ] Mode detected or prompted (compact vs tip)
 - [ ] Compact: conversation analyzed, MEM-id generated, markdown file written with all sections
 - [ ] Tip: content extracted, TIP-id generated, markdown file written

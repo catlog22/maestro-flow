@@ -162,50 +162,20 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+**Parse from `$ARGUMENTS`**:
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 4
+| Variable | Source | Default |
+|----------|--------|---------|
+| `AUTO_YES` | `--yes` or `-y` | false |
+| `continueMode` | `--continue` | false |
+| `maxConcurrency` | `--concurrency N` or `-c N` | 4 |
+| `maxIterations` | `--max-iterations N` | 5 |
+| `targetCoverage` | `--target-coverage N` | 95 |
+| `phaseArg` | remaining text after flag removal | — |
 
-// Parse integration-test-specific flags
-const maxIterMatch = $ARGUMENTS.match(/--max-iterations\s+(\d+)/)
-const maxIterations = maxIterMatch ? parseInt(maxIterMatch[1]) : 5
-const coverageMatch = $ARGUMENTS.match(/--target-coverage\s+(\d+)/)
-const targetCoverage = coverageMatch ? parseInt(coverageMatch[1]) : 95
+**Session path** (UTC+8 date prefix): `.workflow/.csv-wave/{YYYYMMDD}-integration-test-P{phaseArg}-{phaseSlug}/`
 
-// Clean phase text
-const phaseArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--max-iterations\s+\d+|--target-coverage\s+\d+/g, '')
-  .trim()
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-integration-test-P${phaseArg}-${phaseSlug}`  // phaseSlug from index.json or roadmap
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-
-// Initialize state.json
-const state = {
-  phase: phaseArg,
-  started_at: getUtc8ISOString(),
-  current_iteration: 0,
-  max_iterations: maxIterations,
-  strategy: "conservative",
-  current_layer: "L0",
-  pass_rates: [],
-  convergence_threshold: targetCoverage,
-  status: "running"
-}
-Write(`${sessionFolder}/state.json`, JSON.stringify(state, null, 2))
-
-// Initialize reflection-log.md
-Write(`${sessionFolder}/reflection-log.md`,
-  `# Integration Test Reflection Log\nPhase: ${phaseArg}\nStarted: ${getUtc8ISOString()}\n\n## Iterations\n`)
-```
+Create session directory. Initialize `state.json` with `{ phase, started_at, current_iteration: 0, max_iterations, strategy: "conservative", current_layer: "L0", pass_rates: [], convergence_threshold: targetCoverage, status: "running" }`. Initialize `reflection-log.md` with header.
 
 ### Phase 1: Exploration -> CSV
 
@@ -253,11 +223,7 @@ Write(`${sessionFolder}/reflection-log.md`,
 
 #### Wave 1: L0 Static Analysis
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (first wave)
-4. Write `wave-1.csv`
-5. Execute:
+Filter `wave == 1 && status == pending` from master CSV. No prev_context (first wave). Write `wave-1.csv`.
 
 ```javascript
 spawn_agents_on_csv({
@@ -267,60 +233,22 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 300,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      tests_passed: { type: "string" },
-      tests_failed: { type: "string" },
-      coverage: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: ["completed"|"failed"], findings, tests_passed, tests_failed, coverage, error }
+  // required: id, status, findings
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
-8. **Gate check**: If all L0 tasks failed, skip remaining waves for this iteration
+Merge results into master `tasks.csv`, delete `wave-1.csv`. **Gate**: If all L0 failed, skip remaining waves for this iteration.
 
-#### Wave 2: L1 Unit Tests (Parallel per Module)
+#### Waves 2-4: L1 Unit -> L2 Integration -> L3 E2E
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps -- all L0 tasks must be completed (not failed)
-4. Build `prev_context` from L0 findings:
-   ```
-   [Task 1: L0 Type Check] Clean -- 0 type errors
-   [Task 2: L0 Lint] 3 warnings in auth module (non-blocking)
-   ```
-5. Write `wave-2.csv` with `prev_context` column
-6. Execute `spawn_agents_on_csv` for L1 agents (parallel per module)
-7. Merge results into master `tasks.csv`
-8. Delete `wave-2.csv`
-9. **Gate check**: If all L1 tasks failed, skip L2 and L3
+Each wave follows the same pattern: filter pending tasks for that wave, check deps (all previous wave tasks must not have all-failed), build `prev_context` from predecessor findings, write wave CSV, execute `spawn_agents_on_csv`, merge results, delete temp CSV.
 
-#### Wave 3: L2 Integration Tests
-
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 3` AND `status == pending`
-3. Build `prev_context` from L1 findings (test commands used, failures found, coverage gaps)
-4. Write `wave-3.csv` with `prev_context`
-5. Execute `spawn_agents_on_csv` for L2 agents
-6. Merge results, delete temp CSV
-7. **Gate check**: If all L2 tasks failed, skip L3
-
-#### Wave 4: L3 E2E Tests
-
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 4` AND `status == pending`
-3. Build `prev_context` from L2 findings (integration points tested, coverage levels)
-4. Write `wave-4.csv` with `prev_context`
-5. Execute `spawn_agents_on_csv` for L3 agents
-6. Merge results, delete temp CSV
+| Wave | Layer | Parallelism | prev_context Source | Gate |
+|------|-------|-------------|---------------------|------|
+| 2 | L1 Unit | per module | L0 findings (type errors, lint warnings) | All L1 failed -> skip L2, L3 |
+| 3 | L2 Integration | per scope | L1 findings (test commands, failures, coverage) | All L2 failed -> skip L3 |
+| 4 | L3 E2E | per flow | L2 findings (integration points, coverage levels) | — |
 
 ### Phase 3: Reflect + Iterate
 
@@ -328,67 +256,30 @@ spawn_agents_on_csv({
 
 #### Step 3a: Calculate Pass Rate
 
-Aggregate across all layers:
-```
-overall_pass_rate = total_passed / (total_passed + total_failed) * 100
-```
-
-Record in `state.json.pass_rates[]`.
+`overall_pass_rate = total_passed / (total_passed + total_failed) * 100`. Record in `state.json.pass_rates[]`.
 
 #### Step 3b: Reflect
 
-Analyze iteration results:
-- Which tests failed and why?
-- Is pass rate improving, plateauing, or regressing?
-- Are failures clustered in one layer/module or spread out?
-- Is the current strategy working?
-
-Append to `reflection-log.md`:
-```markdown
-## Iteration {N}
-Strategy: {strategy_name}
-Pass rate: {rate}% (previous: {prev_rate}%)
-Delta: {+/-}%
-
-### What worked
-- {observation}
-
-### What failed
-- {test}: {reason}
-
-### Pattern detected
-- {pattern, e.g., "all failures in auth module"}
-
-### Strategy assessment
-- Current strategy: {effective|ineffective|partially_effective}
-- Recommendation: {keep|switch_to_X}
-```
+Analyze: which tests failed and why, trend (improving/plateauing/regressing), failure clustering, strategy effectiveness. Append to `reflection-log.md` per iteration: strategy, pass rate + delta, what worked, what failed, patterns detected, strategy assessment (effective/ineffective/partially_effective).
 
 #### Step 3c: Adjust Strategy (Adaptive Strategy Engine)
 
 | Condition | Strategy | Behavior |
 |-----------|----------|----------|
 | Iteration 1-2 | Conservative | Fix obvious failures, don't refactor |
-| Pass rate >80% AND failures similar to previous | Aggressive | Batch-fix related failures together |
-| New regressions appeared | Surgical | Revert last changes, fix regression only |
-| Stuck 3+ iterations (rate not improving) | Reflective | Step back, re-analyze root cause pattern |
+| Pass rate >80% + similar failures | Aggressive | Batch-fix related failures |
+| New regressions | Surgical | Revert last changes, fix regression only |
+| Stuck 3+ iterations | Reflective | Re-analyze root cause pattern |
 
-**Strategy transitions**:
-```
-Conservative -> (pass rate >80%) -> Aggressive
-Aggressive -> (regression) -> Surgical
-Surgical -> (regression fixed) -> Aggressive
-Any -> (stuck 3+ iters) -> Reflective
-Reflective -> (new insight) -> Conservative (restart approach)
-```
+**Transitions**: Conservative --(>80%)--> Aggressive --(regression)--> Surgical --(fixed)--> Aggressive. Any --(stuck 3+)--> Reflective --(new insight)--> Conservative.
 
 Update `state.json` with new strategy and iteration count.
 
 #### Step 3d: Convergence Check
 
-- If `overall_pass_rate >= target_coverage`: **CONVERGED** -> finalize
-- If `iteration >= max_iterations`: **MAX_ITER_REACHED** -> finalize
-- Otherwise: **ITERATE** -> reset pending tasks for failing layers, go back to Phase 2
+- `pass_rate >= target_coverage` -> **CONVERGED** -> finalize
+- `iteration >= max_iterations` -> **MAX_ITER_REACHED** -> finalize
+- Otherwise -> **ITERATE** -> reset failing layer tasks to pending, return to Phase 2
 
 #### Step 3e: Finalize
 

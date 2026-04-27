@@ -55,10 +55,7 @@ No auto mode -- UAT is inherently interactive. `--auto-fix` only automates gap c
 
 ### Step 2: Check Active Sessions
 
-```bash
-find .workflow/scratch -name "uat.md" -type f 2>/dev/null | head -5
-find .workflow/phases -name "uat.md" -type f 2>/dev/null | head -5
-```
+Scan `.workflow/scratch` and `.workflow/phases` for existing `uat.md` files.
 
 - If active sessions exist and no target specified: display session table, ask user to resume or start new
 - If `--session ID` specified: resume that session directly (skip to Step 9)
@@ -88,21 +85,7 @@ Write `{target_dir}/uat.md` with frontmatter (status, target, started), Current 
 
 ### Step 7: Present Test (Interactive Loop)
 
-Present one test at a time:
-```
-------------------------------------------------------------
-  TEST {number}/{total}: {name}
-------------------------------------------------------------
-
-Expected behavior:
-{expected}
-
-------------------------------------------------------------
-> Type "pass" or describe what's wrong
-------------------------------------------------------------
-```
-
-Wait for user response (plain text).
+Present one test at a time: show `TEST {number}/{total}: {name}`, expected behavior, then prompt user to type "pass" or describe what is wrong. Wait for user response (plain text).
 
 ### Step 8: Process Response
 
@@ -142,18 +125,7 @@ Read `uat.md`, find first `result: [pending]` test, announce progress, continue 
 
 ### Step 11: Auto-Diagnose
 
-Cluster related gaps by component/area. Spawn one debug Agent per cluster:
-
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Diagnose UAT gap cluster: {cluster_name}",
-  prompt: "Investigate UAT failures. Gaps: {gap list}. Find root cause, fix direction, affected files, evidence (file:line).",
-  run_in_background: false
-})
-```
-
-Update `uat.md` gaps with diagnosis results (root_cause, fix_direction, affected_files).
+Cluster related gaps by component/area. Spawn one debug Agent per cluster to investigate UAT failures — find root cause, fix direction, affected files, evidence (file:line). Update `uat.md` gaps with diagnosis results.
 
 ### Step 12: Gap Closure Decision
 
@@ -169,20 +141,7 @@ Update issue lifecycle during gap-fix loop (registered -> planning -> executing 
 
 ### Step 13: Report
 
-```
-=== UAT RESULTS ===
-Target:      {target}
-Smoke Tests: {smoke_count} run, {smoke_pass} passed
-UAT Tests:   {total} total
-  Passed:    {passed}
-  Issues:    {issues} ({blocker_count} blockers, {major_count} major)
-  Skipped:   {skipped}
-Diagnosis:   {diagnosed_count}/{issues} gaps diagnosed
-Auto-fix:    {fixed_count} gaps resolved
-
-Next steps:
-  {suggested_next_command}
-```
+Display summary: target, smoke test results, UAT counts (passed/issues/skipped with severity breakdown), diagnosis coverage, auto-fix results, and suggested next command.
 </execution>
 
 <error_codes>

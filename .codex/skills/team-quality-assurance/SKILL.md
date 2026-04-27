@@ -79,57 +79,19 @@ Before calling ANY tool, apply this check:
 
 ### Worker Spawn Template
 
-Coordinator spawns workers using this template:
-
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: <role>
-role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-inner_loop: <true|false>
-
-Read role_spec file (<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
-
-## Task Context
-task_id: <task-id>
-title: <task-title>
-description: <task-description>
-pipeline_phase: <pipeline-phase>
-
-## Upstream Context
-<prev_context>`
-})
-```
-
-After spawning, use `wait_agent({ timeout_ms: 1800000 })` to collect results (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents. Use `close_agent({ target })` each worker.
+Spawn via `team-worker` agent. Message includes: role, role_spec path, session folder/id, requirement, inner_loop flag, task context, upstream context. After spawning: `wait_agent` (30 min). Timeout: STATUS_CHECK (3 min) -> FINALIZE (3 min) -> close.
 
 ### Model Selection Guide
 
-| Role | model | reasoning_effort | Rationale |
-|------|-------|-------------------|-----------|
-| Scout (SCOUT-*) | (default) | medium | Issue discovery scanning, less reasoning needed |
-| Strategist (QASTRAT-*) | (default) | high | Test strategy design requires deep analysis |
-| Generator (QAGEN-*) | (default) | high | Test code generation needs precision |
-| Executor (QARUN-*) | (default) | medium | Running tests and collecting results |
-| Analyst (QAANA-*) | (default) | high | Quality analysis and coverage assessment |
+| Role | reasoning_effort |
+|------|-------------------|
+| Scout (SCOUT-*) | medium |
+| Strategist (QASTRAT-*) | high |
+| Generator (QAGEN-*) | high |
+| Executor (QARUN-*) | medium |
+| Analyst (QAANA-*) | high |
 
-Override model/reasoning_effort in spawn_agent when cost optimization is needed:
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  model: "<model-override>",
-  reasoning_effort: "<effort-level>",
-  message: "..."
-})
-```
+Override via `model`/`reasoning_effort` params in spawn_agent for cost optimization.
 
 ### User Commands
 
@@ -143,53 +105,17 @@ spawn_agent({
 
 ### v4 Agent Coordination
 
-#### Message Semantics
+**Message Semantics**: `send_message` to queue scout findings to strategist. `list_agents` for health checks. `followup_task` not used (all one-shot workers).
 
-| Intent | API | Example |
-|--------|-----|---------|
-| Send scout findings to running strategist | `send_message` | Queue issue scan results to QASTRAT-* |
-| Not used in this skill | `followup_task` | No resident agents -- all workers are one-shot |
-| Check running agents | `list_agents` | Verify agent health during resume |
+**Pipeline Pattern**: Sequential with GC loops: scout -> strategist -> generator -> executor -> analyst. Generator/executor may loop (max 3 rounds) when coverage below target.
 
-#### Pipeline Pattern
+**Agent Health Check**: Reconcile `tasks.json` with `list_agents({})`. Reset orphaned tasks to pending.
 
-Sequential pipeline with GC loops: scout -> strategist -> generator -> executor -> analyst. The executor/generator may loop via GC fix tasks when coverage is below target (max 3 rounds).
-
-#### Agent Health Check
-
-Use `list_agents({})` in handleResume and handleComplete:
-
-```
-// Reconcile session state with actual running agents
-const running = list_agents({})
-// Compare with tasks.json active_agents
-// Reset orphaned tasks (in_progress but agent gone) to pending
-```
-
-#### Named Agent Targeting
-
-Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
-- `send_message({ target: "QASTRAT-001", message: "..." })` -- queue scout findings to running strategist
-- `close_agent({ target: "SCOUT-001" })` -- cleanup by name after completion
+**Named Targeting**: `send_message({ target: "QASTRAT-001" })`, `close_agent({ target: "SCOUT-001" })`.
 
 ### Completion Action
 
-When pipeline completes, coordinator presents:
-
-```
-request_user_input({
-  questions: [{
-    question: "Quality Assurance pipeline complete. What would you like to do?",
-    header: "Completion",
-    multiSelect: false,
-    options: [
-      { label: "Archive & Clean (Recommended)", description: "Archive session, clean up" },
-      { label: "Keep Active", description: "Keep session for follow-up work" },
-      { label: "Export Results", description: "Export deliverables to target directory" }
-    ]
-  }]
-})
-```
+Present choice: **Archive & Clean** (recommended), **Keep Active**, **Export Results**.
 
 ### Session Directory
 

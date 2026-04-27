@@ -368,22 +368,22 @@ describe('PUT /api/wiki/:id', () => {
     expect(res.status).toBe(403);
   });
 
-  it('updates memory entry with body + title', async () => {
-    await seed('memory/MEM-m.md', `---\ntitle: Old Mem\n---\n# Old\nmemory body`);
-    const res = await req('/api/wiki/memory-m', {
+  it('updates knowhow entry with body + title', async () => {
+    await seed('knowhow/KNW-m.md', `---\ntitle: Old Mem\n---\n# Old\nknowhow body`);
+    const res = await req('/api/wiki/knowhow-m', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'New Mem', body: 'new memory body' }),
+      body: JSON.stringify({ title: 'New Mem', body: 'new knowhow body' }),
     });
     expect(res.status).toBe(200);
     const { entry } = (await res.json()) as { entry: WikiEntry };
     expect(entry.title).toBe('New Mem');
-    expect(entry.body).toContain('new memory body');
+    expect(entry.body).toContain('new knowhow body');
   });
 
   it('returns 409 on stale expectedHash', async () => {
-    await seed('memory/MEM-h.md', `---\ntitle: Hash Test\n---\n# H\norig`);
-    const res = await req('/api/wiki/memory-h', {
+    await seed('knowhow/KNW-h.md', `---\ntitle: Hash Test\n---\n# H\norig`);
+    const res = await req('/api/wiki/knowhow-h', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ body: 'updated', expectedHash: 'deadbeef' }),

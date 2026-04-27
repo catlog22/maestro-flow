@@ -145,8 +145,8 @@ describe('detectTaskType', () => {
   });
 
   it('detects memory', () => {
-    expect(detectTaskType('memory management')).toBe('memory');
-    expect(detectTaskType('manage memory for project')).toBe('memory');
+    expect(detectTaskType('knowhow management')).toBe('knowhow');
+    expect(detectTaskType('manage knowhow for project')).toBe('knowhow');
   });
 });
 

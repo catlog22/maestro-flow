@@ -34,7 +34,7 @@ $ARGUMENTS — subcommand and optional flags.
 | No args | Same as `health` |
 
 **Flags:**
-- `--type <type>` — Filter by wiki type: spec, memory, note, lesson, issue
+- `--type <type>` — Filter by wiki type: spec, knowhow, note, lesson, issue
 - `--fix` — Auto-fix issues found during cleanup (remove broken links, suggest connections)
 - `--json` — Output in JSON format
 </context>

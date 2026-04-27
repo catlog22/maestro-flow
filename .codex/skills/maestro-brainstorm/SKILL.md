@@ -163,31 +163,22 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+```
+Parse from $ARGUMENTS:
+  AUTO_YES       ← --yes | -y
+  continueMode   ← --continue
+  maxConcurrency ← --concurrency | -c N  (default: 6)
+  roleCount      ← --count N  (default: 3, max: 9)
+  skipQuestions   ← --skip-questions
+  topicArg       ← remaining text after flag removal
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 6
+Derive:
+  slug           ← topicArg kebab-cased, max 40 chars
+  dateStr        ← UTC+8 YYYYMMDD
+  sessionId      ← "{dateStr}-brainstorm-{slug}"
+  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
 
-// Parse brainstorm-specific flags
-const countMatch = $ARGUMENTS.match(/--count\s+(\d+)/)
-const roleCount = countMatch ? Math.min(parseInt(countMatch[1]), 9) : 3
-const skipQuestions = $ARGUMENTS.includes('--skip-questions')
-
-// Clean topic text
-const topicArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--count\s+\d+|--skip-questions/g, '')
-  .trim()
-
-const slug = topicArg.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-brainstorm-${slug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}/.brainstorming`)
+mkdir -p {sessionFolder}/.brainstorming
 ```
 
 ### Phase 1: Topic Resolution -> CSV
@@ -231,37 +222,22 @@ Bash(`mkdir -p ${sessionFolder}/.brainstorming`)
 
 #### Wave 1: Guidance Specification (Single Agent)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+1. Extract wave 1 pending rows from master `tasks.csv` into `wave-1.csv` (no prev_context needed)
+2. Execute:
 
 ```javascript
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-1.csv`,
   id_column: "id",
   instruction: buildGuidanceInstruction(sessionFolder, topicArg),
-  max_concurrency: 1,
-  max_runtime_seconds: 600,
+  max_concurrency: 1, max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      analysis_file: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: [completed|failed], findings, analysis_file, error }
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
-8. Read generated `guidance-specification.md` for wave 2 context propagation
+3. Merge results into master `tasks.csv`, delete `wave-1.csv`
+4. Read generated `guidance-specification.md` for wave 2 context propagation
 
 **Guidance agent responsibilities**:
 - Analyze topic, extract 5-10 core domain terms
@@ -272,40 +248,23 @@ spawn_agents_on_csv({
 
 #### Wave 2: Role Analysis (Parallel, 3-9 Agents)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Build `prev_context` from wave 1 findings:
-   ```
-   [Task 1: Guidance Specification] Generated guidance-specification.md with N features, M terms defined...
-   ```
-4. Include `guidance-specification.md` content in prev_context for each role agent
-5. Write `wave-2.csv` with `prev_context` column
-6. Execute:
+1. Extract wave 2 pending rows from master `tasks.csv`
+2. Build `prev_context` from wave 1 findings + `guidance-specification.md` content
+3. Write `wave-2.csv` with `prev_context` column
+4. Execute:
 
 ```javascript
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-2.csv`,
   id_column: "id",
   instruction: buildRoleAnalysisInstruction(sessionFolder),
-  max_concurrency: maxConcurrency,
-  max_runtime_seconds: 900,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 900,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      analysis_file: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: [completed|failed], findings, analysis_file, error }
 })
 ```
 
-7. Read `wave-2-results.csv`, merge into master `tasks.csv`
-8. Delete `wave-2.csv`
+5. Merge results into master `tasks.csv`, delete `wave-2.csv`
 
 **Role agent responsibilities**:
 - Read guidance-specification.md for framework context
@@ -321,19 +280,10 @@ spawn_agents_on_csv({
 
 #### Wave 3: Synthesis + Feature Index (Single Agent)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 3` AND `status == pending`
-3. Check deps -- if all wave 2 tasks failed, skip synthesis
-4. Build `prev_context` from wave 2 findings:
-   ```
-   [Task 2: System Architect Analysis] Key findings: microservice architecture with event sourcing...
-   [Task 3: UI Designer Analysis] Key findings: component-based design system with real-time cursors...
-   [Task 4: Product Manager Analysis] Key findings: MVP focuses on document editing + presence...
-   ```
-5. Write `wave-3.csv` with `prev_context` column
-6. Execute `spawn_agents_on_csv` for synthesis agent
-7. Merge results into master `tasks.csv`
-8. Delete `wave-3.csv`
+1. If all wave 2 tasks failed, skip synthesis entirely
+2. Extract wave 3 pending rows, build `prev_context` from wave 2 findings
+3. Write `wave-3.csv`, execute `spawn_agents_on_csv` for synthesis agent (same output_schema pattern)
+4. Merge results into master `tasks.csv`, delete `wave-3.csv`
 
 **Synthesis agent responsibilities**:
 - Cross-role analysis: consensus, conflicts, unique contributions
@@ -347,9 +297,8 @@ spawn_agents_on_csv({
 
 **Objective**: Generate final results and human-readable report.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
-3. Generate `context.md`:
+1. Export final `tasks.csv` as `results.csv`
+2. Generate `context.md`:
 
 ```markdown
 # Brainstorm Report -- {topic}
@@ -411,11 +360,7 @@ spawn_agents_on_csv({
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as found
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `discoveries.ndjson` before analysis. Append-only: dedup by type+key before writing, never modify/delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"terminology","data":{"term":"CRDT","definition":"Conflict-free Replicated Data Type","aliases":["conflict-free"],"category":"technical"}}' >> {session_folder}/discoveries.ndjson

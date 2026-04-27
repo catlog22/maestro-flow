@@ -33,121 +33,39 @@ $maestro-milestone-complete --force "M1"  # skip audit check
 
 ### Step 1: Parse & Validate
 
-1. Read `.workflow/state.json` to get `current_milestone`, `artifacts[]`, `milestones[]`
-2. Determine target milestone (from args or current_milestone)
-3. Check `--force` flag
-4. If no milestone: **E001**
-5. Check audit report exists at `.workflow/milestones/{milestone}/audit-report.md`
-   - Missing + not --force: **E002**
-   - Verdict FAIL + not --force: **E002**
-6. Check all milestone artifacts completed:
-   - `state.json.artifacts.filter(a => a.milestone == target && a.status != "completed")`
-   - If any incomplete + not --force: **E003**
+Read `.workflow/state.json` for `current_milestone`, `artifacts[]`, `milestones[]`. Determine target from args or current_milestone (E001 if none). Validate audit report at `.workflow/milestones/{milestone}/audit-report.md` with PASS verdict (E002 unless `--force`). Verify all milestone artifacts completed (E003 unless `--force`).
 
 ### Step 2: Archive Scratch Dirs
 
-```bash
-mkdir -p .workflow/milestones/{milestone}/artifacts/
-
-# For each artifact path, copy to archive
-for artifact in milestone_artifacts:
-  if dir exists .workflow/{artifact.path}:
-    cp -r .workflow/{artifact.path} .workflow/milestones/{milestone}/artifacts/$(basename {artifact.path})/
-```
-
-Snapshot roadmap:
-```bash
-cp .workflow/roadmap.md .workflow/milestones/{milestone}/roadmap-snapshot.md
-```
+Copy each milestone artifact's directory to `.workflow/milestones/{milestone}/artifacts/`. Snapshot `roadmap.md` as `roadmap-snapshot.md` in the milestone archive.
 
 ### Step 3: Extract Learnings
 
-- Read `.summaries/` from each execute artifact's plan dir
-- Read `reflection-log.md` if exists
-- Extract patterns, pitfalls, strategy adjustments
-- Check existing entries via `maestro spec load --category learning` (dedup)
-- Append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format (category=`learning`, auto-extract keywords, date=today, source=`milestone-complete`)
-- Avoid duplicates (check existing entries)
+Read `.summaries/` and `reflection-log.md` from execute artifacts. Extract patterns, pitfalls, strategy adjustments. Dedup against existing entries via `maestro spec load --category learning`. Append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format (category=`learning`, auto-extract keywords, date=today, source=`milestone-complete`).
 
 ### Step 3b: Knowledge Promotion Inquiry
 
-After learning extraction, scan `learnings.md` for promotion candidates:
+1. **High-frequency patterns**: Scan learning entries for keyword overlap (>=2 entries) -- offer promotion to coding convention via `/spec-add coding`
+2. **Convention drift**: Compare summaries against `coding-conventions.md` and `architecture-constraints.md` -- ask if conventions need updating
+3. **Wiki island check**: Auto-trigger `wiki-connect --fix` to link new knowledge
 
-1. **High-frequency pattern detection**: Scan all `<spec-entry category="learning">` entries for keyword overlap (≥2 entries sharing keywords):
-   → Ask: "Keyword '{keyword}' appears in {N} learning entries. Should this be promoted to a formal coding convention? (`/spec-add coding`)"
-
-2. **Convention drift detection**: Compare executed task summaries against `coding-conventions.md` and `architecture-constraints.md`:
-   → Ask: "Were any established conventions bypassed during this milestone? Should conventions be updated?"
-
-3. **Wiki island check**: Auto-trigger `wiki-connect --fix` to link newly extracted knowledge.
-
-If user confirms, append promoted `<spec-entry>` to target category file, preserving original date and source traceability.
+If user confirms promotion, append `<spec-entry>` to target category file preserving original date and source.
 
 ### Step 4: Archive Artifact Entries
 
-Move artifact entries from `state.json.artifacts[]` to `milestone_history`:
-
-```json
-{
-  "milestone_history": [
-    ...existing,
-    {
-      "id": "{milestone}",
-      "name": "{milestone_name}",
-      "status": "completed",
-      "completed_at": "{now}",
-      "archive_path": "milestones/{milestone}/",
-      "archived_artifacts": [ ...all milestone artifact entries... ]
-    }
-  ]
-}
-```
-
-Remove from `artifacts[]`:
-```
-state.json.artifacts = state.json.artifacts.filter(a => a.milestone != target)
-```
+Move milestone artifacts from `state.json.artifacts[]` to `milestone_history[]` with completion metadata (id, name, status, completed_at, archive_path, archived_artifacts). Remove from active `artifacts[]`.
 
 ### Step 5: Advance State
 
-```
-next = state.json.milestones.find(m => m.status == "pending")
-if next:
-  state.json.current_milestone = next.id
-  next.status = "active"
-else:
-  state.json.current_milestone = null
-  state.json.status = "completed"
-
-state.json.last_updated = now()
-Write state.json (atomic)
-```
+Set `current_milestone` to next pending milestone (mark it active), or set project `status: "completed"` if none remain. Atomic write to `state.json`.
 
 ### Step 6: Clean Scratch
 
-```bash
-for artifact in archived_artifacts:
-  rm -rf .workflow/{artifact.path}
-```
+Remove archived artifact directories from `.workflow/`.
 
 ### Step 7: Generate Summary & Report
 
-Write `.workflow/milestones/{milestone}/summary.md` with outcomes and learnings.
-Update `.workflow/project.md` Context section.
-
-```
-=== MILESTONE COMPLETE ===
-Milestone: {milestone} ({name})
-Artifacts: {count} archived
-Next:      {next_milestone or "Project complete"}
-
-Next steps:
-  $maestro-milestone-release  -- Cut release
-  $maestro-analyze            -- Start next milestone
-  $manage-status              -- View state
-  $manage-wiki health         -- Check wiki graph health
-  $wiki-digest                -- Generate knowledge digest
-```
+Write `.workflow/milestones/{milestone}/summary.md` with outcomes and learnings. Update `.workflow/project.md` Context section. Display completion report with next steps: `$maestro-milestone-release`, `$maestro-analyze`, `$manage-status`, `$manage-wiki health`, `$wiki-digest`.
 
 </execution>
 

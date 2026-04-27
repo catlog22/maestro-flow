@@ -171,29 +171,15 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+Parse `$ARGUMENTS` to extract:
+- `AUTO_YES` from `--yes` / `-y`
+- `skipResearch` from `--skip-research`
+- `brainstormSession` from `--from-brainstorm <SESSION-ID>`
+- `topicArg` = remaining text after stripping all flags
+- `slug` = topicArg lowercased, non-alphanumeric → `-`, max 40 chars
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const skipResearch = $ARGUMENTS.includes('--skip-research')
-const brainstormMatch = $ARGUMENTS.match(/--from-brainstorm\s+(\S+)/)
-const brainstormSession = brainstormMatch ? brainstormMatch[1] : null
-
-// Clean topic text
-const topicArg = $ARGUMENTS
-  .replace(/--yes|-y|--skip-research|--from-brainstorm\s+\S+/g, '')
-  .trim()
-
-const slug = topicArg.toLowerCase()
-  .replace(/[^a-z0-9]+/g, '-')
-  .substring(0, 40)
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-spec-generate-${slug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-```
+Session ID: `{YYYYMMDD}-spec-generate-{slug}`
+Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
 
 ### Phase 1: Input Parsing + CSV Generation
 
@@ -224,11 +210,7 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 #### Wave 1: Research (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+Filter master `tasks.csv` for `wave == 1 AND status == pending` → write `wave-1.csv` (no prev_context needed).
 
 ```javascript
 spawn_agents_on_csv({
@@ -252,38 +234,26 @@ spawn_agents_on_csv({
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`.
 
 #### Wave 2: Document Chain (Sequential)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps -- if all wave 1 tasks failed, use degraded mode (basic seed only)
-4. Build `prev_context` from wave 1 findings:
-   ```
-   [Task 1: Domain Research] Target users: developers building workflow tools. Market trends: ...
-   [Task 2: Competitive Analysis] Key competitors: X, Y, Z. Differentiation opportunities: ...
-   [Task 3: Tech Stack Analysis] Recommended: TypeScript + Node.js. Constraints: ...
-   ```
-5. Write `wave-2.csv` with `prev_context` column
-6. Execute `spawn_agents_on_csv` for document chain agent
-7. Merge results into master `tasks.csv`
-8. Delete `wave-2.csv`
+Filter master `tasks.csv` for `wave == 2 AND status == pending`. If all wave 1 tasks failed, use degraded mode (basic seed only).
+
+Build `prev_context` from wave 1 findings (format: `[Task N: Title] summary...` per task).
+Write `wave-2.csv` with `prev_context` column → execute `spawn_agents_on_csv` → merge results → delete `wave-2.csv`.
 
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results, readiness check, and write spec package.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
-3. **Readiness check** -- score on 4 dimensions (25% each):
+Export master `tasks.csv` as `results.csv`. **Readiness check** -- score on 4 dimensions (25% each):
    - Completeness: all required documents generated with substantive content
    - Consistency: glossary terms used uniformly, scope containment
    - Traceability: goals -> requirements -> architecture -> epics chain
    - Depth: acceptance criteria testable, ADRs justified, stories estimable
 
-4. **Gate decision**:
+**Gate decision**:
 
 | Score | Gate | Action |
 |-------|------|--------|
@@ -291,7 +261,7 @@ spawn_agents_on_csv({
 | 60-79% | Review | Proceed with caveats logged |
 | < 60% | Fail | Log issues, proceed with available output |
 
-5. Generate `context.md`:
+Generate `context.md`:
 
 ```markdown
 # Spec Generate Report
@@ -327,9 +297,7 @@ spawn_agents_on_csv({
 - Overall: {score}% ({gate})
 ```
 
-6. Write spec package to `.workflow/.spec/SPEC-{slug}-{date}/`
-7. Write `.workflow/roadmap.md`
-8. Display summary.
+Write spec package to `.workflow/.spec/SPEC-{slug}-{date}/`, write `.workflow/roadmap.md`, display summary.
 
 ### Shared Discovery Board Protocol
 
@@ -353,11 +321,7 @@ spawn_agents_on_csv({
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as found
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `{session_folder}/discoveries.ndjson` before own analysis. Deduplicate by type + dedup key before writing. Append-only — never modify or delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"domain_term","data":{"term":"workflow","definition":"A sequence of orchestrated tasks","aliases":["pipeline","process"]}}' >> {session_folder}/discoveries.ndjson

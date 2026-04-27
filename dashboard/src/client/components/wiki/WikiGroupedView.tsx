@@ -7,7 +7,7 @@ const TYPE_LABELS: Record<WikiNodeType, string> = {
   spec: 'Specs',
   issue: 'Issues',
   lesson: 'Lessons',
-  memory: 'Memory',
+  knowhow: 'KnowHow',
   note: 'Notes',
 };
 
@@ -17,7 +17,7 @@ const TYPE_COLORS: Record<WikiNodeType, string> = {
   spec: 'var(--color-accent-green, #16a34a)',
   issue: 'var(--color-accent-red, #dc2626)',
   lesson: 'var(--color-accent-yellow, #ca8a04)',
-  memory: 'var(--color-accent-cyan, #0891b2)',
+  knowhow: 'var(--color-accent-cyan, #0891b2)',
   note: 'var(--color-text-tertiary, #9ca3af)',
 };
 
@@ -27,7 +27,7 @@ const TYPE_ORDER: WikiNodeType[] = [
   'spec',
   'issue',
   'lesson',
-  'memory',
+  'knowhow',
   'note',
 ];
 
@@ -51,7 +51,7 @@ export function WikiGroupedView() {
   const groups = useMemo(() => {
     const out: Record<WikiNodeType, WikiEntry[]> = {
       project: [], roadmap: [], spec: [],
-      issue: [], lesson: [], memory: [], note: [],
+      issue: [], lesson: [], knowhow: [], note: [],
     };
     for (const d of rawEntries) {
       if (typeFilter !== 'all' && d.type !== typeFilter) continue;

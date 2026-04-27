@@ -1,6 +1,6 @@
 ---
-name: manage-memory
-description: Manage memory entries — workflow memory (.workflow/memory/) and system memory (~/.claude/projects/*/memory/)
+name: manage-knowhow
+description: Manage memory entries — workflow memory (.workflow/knowhow/) and system memory (~/.claude/projects/*/memory/)
 argument-hint: "[list|search|view|edit|delete|prune] [query|id|file] [--store workflow|system|all] [--tag tag] [--type compact|tip]"
 allowed-tools:
   - Read
@@ -13,14 +13,14 @@ allowed-tools:
 ---
 <purpose>
 Unified memory management across two stores:
-1. **Workflow memory** (`.workflow/memory/`) — Session compacts and tips with JSON index, created by `manage-memory-capture`
+1. **Workflow memory** (`.workflow/knowhow/`) — Session compacts and tips with JSON index, created by `manage-knowhow-capture`
 2. **System memory** (`~/.claude/projects/{project}/memory/`) — Claude Code auto-memory (MEMORY.md + topic files), persists across conversations
 
 Provides list/search/view/edit/delete/prune operations. Default store is `all` (show both).
 </purpose>
 
 <required_reading>
-@~/.maestro/workflows/memory.md
+@~/.maestro/workflows/knowhow.md
 </required_reading>
 
 <context>
@@ -47,13 +47,13 @@ Dual store architecture (paths, formats, index) defined in workflow memory.md.
 </context>
 
 <execution>
-Follow '~/.maestro/workflows/memory.md' Part A (Memory Management) completely.
+Follow '~/.maestro/workflows/knowhow.md' Part A (KnowHow Management) completely.
 </execution>
 
 <error_codes>
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
-| E001 | error | No memory stores found — run `/manage-memory-capture` or create MEMORY.md | resolve_paths |
+| E001 | error | No memory stores found — run `/manage-knowhow-capture` or create MEMORY.md | resolve_paths |
 | E002 | error | Entry ID or filename not found | execute_view, execute_delete |
 | E003 | error | Prune requires at least one filter (--tag, --type, --before, --after) | execute_prune |
 | E004 | error | Cannot delete MEMORY.md — use `edit` subcommand instead | execute_delete |
@@ -65,7 +65,7 @@ Follow '~/.maestro/workflows/memory.md' Part A (Memory Management) completely.
 <success_criteria>
 - [ ] Both store paths correctly resolved
 - [ ] Subcommand correctly detected from arguments
-- [ ] Store auto-detected from argument format (MEM-*/TIP-* vs filename)
+- [ ] Store auto-detected from argument format (KNW-*/TIP-* vs filename)
 - [ ] List: both stores displayed with appropriate formatting
 - [ ] Search: results from both stores, ranked by relevance
 - [ ] View: correct store selected, full content displayed
@@ -73,5 +73,5 @@ Follow '~/.maestro/workflows/memory.md' Part A (Memory Management) completely.
 - [ ] Delete: MEMORY.md protected, confirmation required, references checked
 - [ ] Prune: workflow-only, filters validated, index updated
 - [ ] Integrity check catches orphans and broken links
-- [ ] Next step: `/manage-memory-capture compact` to save new memory, or `/manage-status` to continue workflow
+- [ ] Next step: `/manage-knowhow-capture compact` to save new memory, or `/manage-status` to continue workflow
 </success_criteria>

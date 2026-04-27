@@ -49,30 +49,11 @@ Extract from arguments:
 
 ### Step 2: Load Project Context
 
-```bash
-cat .workflow/state.json 2>/dev/null
-cat .workflow/project.md 2>/dev/null
-```
-
-If `.workflow/` does not exist, create minimal scratch structure anyway (quick works without full init).
+Read `.workflow/state.json` and `.workflow/project.md` if they exist. If `.workflow/` does not exist, create minimal scratch structure anyway (quick works without full init).
 
 ### Step 3: Create Scratch Directory
 
-Generate slug from task description (lowercase, hyphens, max 40 chars).
-
-```bash
-mkdir -p .workflow/scratch/{slug}
-```
-
-Write `config.json` with task metadata:
-```json
-{
-  "task": "<description>",
-  "flags": { "discuss": false, "full": false },
-  "created_at": "<ISO timestamp>",
-  "status": "active"
-}
-```
+Generate slug from task description (lowercase, hyphens, max 40 chars). Create `.workflow/scratch/{slug}/`. Write `config.json` with: `task`, `flags` (discuss, full), `created_at` (ISO), `status` ("active").
 
 ### Step 4: Discussion Phase (if --discuss)
 
@@ -113,37 +94,13 @@ Update plan.json task statuses as completed.
 
 ### Step 8: Verification (if --full)
 
-**Only when `--full` is set.**
-
-Run convergence criteria checks:
-```bash
-# For each task, verify convergence_criteria via grep/test commands
-```
-
-If gaps found (W001): attempt single fix iteration, then report remaining gaps.
+**Only when `--full` is set.** Run convergence criteria checks for each task via grep/test commands. If gaps found (W001): attempt single fix iteration, then report remaining gaps.
 
 ### Step 9: Commit and Report
 
-```bash
-git add -A
-git commit -m "quick: {slug} - {short description}"
-```
+Commit all changes: `git add -A && git commit -m "quick: {slug} - {short description}"`. Update `.workflow/state.json` scratch task entry (if state.json exists).
 
-Update `.workflow/state.json` scratch task entry (if state.json exists).
-
-```
-=== QUICK TASK COMPLETE ===
-Task:    {description}
-Scratch: .workflow/scratch/{slug}/
-Status:  {completed|completed-with-gaps}
-
-Tasks: {completed}/{total}
-Files modified: {count}
-
-{if --full}
-Verification: {PASS|GAPS}
-{endif}
-```
+Display report: task description, scratch path, status (completed/completed-with-gaps), tasks completed/total, files modified count. If `--full`: include verification result (PASS/GAPS).
 
 </execution>
 

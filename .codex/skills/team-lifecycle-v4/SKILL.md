@@ -87,134 +87,39 @@ Before calling ANY tool, apply this check:
 
 ### Worker Spawn Template
 
-Coordinator spawns workers using this template:
-
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: <role>
-role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-inner_loop: <true|false>
-
-Read role_spec file (<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
-Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).
-
-## Task Context
-task_id: <task-id>
-title: <task-title>
-description: <task-description>
-pipeline_phase: <pipeline-phase>
-
-## Upstream Context
-<prev_context>`
-})
-```
+Spawn via `team-worker` agent. Message includes: role, role_spec path (`<skill_root>/roles/<role>/role.md`), session folder/id, requirement, inner_loop flag, task context (id, title, description, pipeline_phase), upstream context. Worker executes: Phase 1 (discovery) -> role Phase 2-4 -> Phase 5 (report).
 
 ### Supervisor Spawn Template
 
-Supervisor is a **resident agent** (independent from team_worker). Spawned once during session init, woken via followup_task for each CHECKPOINT task.
+Supervisor is a **resident agent** (`team_supervisor`), independent from team_worker.
 
-#### Spawn (Phase 2 -- once per session)
-
-```
-supervisorId = spawn_agent({
-  agent_type: "team_supervisor",
-  task_name: "supervisor",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: supervisor
-role_spec: <skill_root>/roles/supervisor/role.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-
-Read role_spec file (<skill_root>/roles/supervisor/role.md) to load checkpoint definitions.
-Init: load baseline context, report ready, go idle.
-Wake cycle: orchestrator sends checkpoint requests via followup_task.`
-})
-```
-
-#### Wake (per CHECKPOINT task)
-
-```
-followup_task({
-  target: "supervisor",
-  message: `## Checkpoint Request
-task_id: <CHECKPOINT-NNN>
-scope: [<upstream-task-ids>]
-pipeline_progress: <done>/<total> tasks completed`
-})
-wait_agent({ timeout_ms: 1800000 })  // 30 min
-```
-
-#### Shutdown (pipeline complete)
-
-```
-close_agent({ target: "supervisor" })
-```
+- **Spawn** (Phase 2, once): Load role-spec from `roles/supervisor/role.md`, init baseline context, go idle
+- **Wake** (per CHECKPOINT): `followup_task` with checkpoint task_id, upstream scope, progress. `wait_agent` (30 min)
+- **Shutdown**: `close_agent({ target: "supervisor" })` at pipeline end
 
 ### Model Selection Guide
 
-| Role | model | reasoning_effort | Rationale |
-|------|-------|-------------------|-----------|
-| Analyst (RESEARCH-*) | (default) | medium | Read-heavy exploration, less reasoning needed |
-| Writer (DRAFT-*) | (default) | high | Spec writing requires precision and completeness |
-| Planner (PLAN-*) | (default) | high | Architecture decisions need full reasoning |
-| Executor (IMPL-*) | (default) | high | Code generation needs precision |
-| Tester (TEST-*) | (default) | high | Test generation requires deep code understanding |
-| Reviewer (REVIEW-*, QUALITY-*, IMPROVE-*) | (default) | high | Deep analysis for quality assessment |
-| Supervisor (CHECKPOINT-*) | (default) | medium | Gate checking, report aggregation |
+| Role | reasoning_effort |
+|------|-------------------|
+| Analyst (RESEARCH-*) | medium |
+| Writer (DRAFT-*) | high |
+| Planner (PLAN-*) | high |
+| Executor (IMPL-*) | high |
+| Tester (TEST-*) | high |
+| Reviewer (REVIEW-*, QUALITY-*, IMPROVE-*) | high |
+| Supervisor (CHECKPOINT-*) | medium |
 
-Override model/reasoning_effort in spawn_agent when cost optimization is needed:
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  model: "<model-override>",
-  reasoning_effort: "<effort-level>",
-  message: "..."
-})
-```
+Override via `model`/`reasoning_effort` params in spawn_agent for cost optimization.
 
 ### v4 Agent Coordination
 
-#### Message Semantics
+**Message Semantics**: `send_message` for supplementary info to workers. `followup_task` to wake supervisor for checkpoints. `list_agents` for health checks.
 
-| Intent | API | Example |
-|--------|-----|---------|
-| Queue supplementary info (don't interrupt) | `send_message` | Send planning results to running implementers |
-| Wake resident supervisor for checkpoint | `followup_task` | Trigger CHECKPOINT-* evaluation on supervisor |
-| Supervisor reports back to coordinator | `send_message` | Supervisor sends checkpoint verdict as supplementary info |
-| Check running agents | `list_agents` | Verify agent + supervisor health during resume |
+**CRITICAL**: Supervisor is a **resident agent** woken via `followup_task`, NOT `send_message`. Regular workers are one-shot; supervisor persists across checkpoints.
 
-**CRITICAL**: The supervisor is a **resident agent** woken via `followup_task`, NOT `send_message`. Regular workers complete and are closed; the supervisor persists across checkpoints. See "Supervisor Spawn Template" above.
+**Agent Health Check**: Reconcile `tasks.json.active_agents` with `list_agents({})`. Reset orphaned tasks to pending. If supervisor missing but CHECKPOINT tasks pending, respawn.
 
-#### Agent Health Check
-
-Use `list_agents({})` in handleResume and handleComplete:
-
-```
-// Reconcile session state with actual running agents
-const running = list_agents({})
-// Compare with tasks.json active_agents
-// Reset orphaned tasks (in_progress but agent gone) to pending
-// ALSO check supervisor: if supervisor missing but CHECKPOINT tasks pending -> respawn
-```
-
-#### Named Agent Targeting
-
-Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
-- `send_message({ target: "IMPL-001", message: "..." })` -- queue planning context to running implementer
-- `followup_task({ target: "supervisor", message: "..." })` -- wake supervisor for checkpoint
-- `close_agent({ target: "IMPL-001" })` -- cleanup regular worker by name
-- `close_agent({ target: "supervisor" })` -- shutdown supervisor at pipeline end
+**Named Targeting**: `send_message({ target: "IMPL-001" })`, `followup_task({ target: "supervisor" })`, `close_agent({ target: ... })`.
 
 ### User Commands
 
@@ -229,22 +134,7 @@ Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
 
 ### Completion Action
 
-When pipeline completes, coordinator presents:
-
-```
-request_user_input({
-  questions: [{
-    question: "Pipeline complete. What would you like to do?",
-    header: "Completion",
-    multiSelect: false,
-    options: [
-      { label: "Archive & Clean (Recommended)", description: "Archive session, clean up resources" },
-      { label: "Keep Active", description: "Keep session for follow-up work" },
-      { label: "Export Results", description: "Export deliverables to target directory" }
-    ]
-  }]
-})
-```
+Present choice via `request_user_input`: **Archive & Clean** (recommended), **Keep Active**, **Export Results**.
 
 ### Specs Reference
 
@@ -271,18 +161,7 @@ request_user_input({
 
 ### Wave Execution Engine
 
-For each wave in the pipeline:
-
-1. **Load state** -- Read `<session>/tasks.json`, filter tasks for current wave
-2. **Skip failed deps** -- Mark tasks whose dependencies failed/skipped as `skipped`
-3. **Build upstream context** -- For each task, gather findings from `context_from` tasks via tasks.json and `discoveries/{id}.json`
-4. **Separate task types** -- Split into regular tasks and CHECKPOINT tasks
-5. **Spawn regular tasks** -- For each regular task, call `spawn_agent({ agent_type: "team_worker", message: "..." })`, collect agent IDs
-6. **Wait** -- `wait_agent({ timeout_ms: 1800000 })` (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents.
-7. **Collect results** -- Read `discoveries/{task_id}.json` for each agent, update tasks.json status/findings/error, then `close_agent({ target })` each worker
-8. **Execute checkpoints** -- For each CHECKPOINT task, `followup_task` to supervisor, `wait_agent`, read checkpoint report from `artifacts/`, parse verdict
-9. **Handle block** -- If verdict is `block`, prompt user via `request_user_input` with options: Override / Revise upstream / Abort
-10. **Persist** -- Write updated state to `<session>/tasks.json`
+Per wave: load state from `tasks.json` -> skip tasks with failed deps -> build upstream context from `discoveries/{id}.json` -> separate regular vs CHECKPOINT tasks -> spawn regular workers (`wait_agent` 30 min, timeout: STATUS_CHECK 3 min -> FINALIZE 3 min -> close) -> collect results to `discoveries/`, update `tasks.json` -> execute checkpoints via `followup_task` to supervisor -> handle `block` verdict (prompt: Override/Revise/Abort) -> persist state.
 </execution>
 
 <error_codes>

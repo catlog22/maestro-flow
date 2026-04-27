@@ -28,50 +28,23 @@ $manage-codebase-refresh "--since 3d --deep"
 
 ### Step 1: Validate Preconditions
 
-```bash
-test -d .workflow || exit 1        # E001: not initialized
-test -d .workflow/codebase || exit 1  # E002: no docs, use codebase-rebuild
-```
+Verify `.workflow/` exists (E001) and `.workflow/codebase/` exists (E002 -- use codebase-rebuild instead).
 
 ### Step 2: Detect Changes
 
-Determine baseline timestamp:
-1. If `--since` provided, use that date
-2. Else read `state.json` field `codebase_last_refreshed` or `codebase_last_rebuilt`
-3. Fallback to last 7 days
-
-```bash
-git diff --name-only --since="{baseline}" HEAD
-```
-
-If no changes detected, report clean state (W001) and exit.
+Resolve baseline: `--since` flag > `state.json.codebase_last_refreshed` > `codebase_last_rebuilt` > 7-day fallback. Run `git diff --name-only --since="{baseline}" HEAD`. If no changes: W001, exit.
 
 ### Step 3: Map Changes to Docs
 
-Read `.workflow/codebase/doc-index.json` to find which documentation entries cover the changed files.
-Build a list of affected doc entries that need refresh.
+Read `.workflow/codebase/doc-index.json` to find doc entries covering changed files. Build affected entry list.
 
 ### Step 4: Refresh Affected Docs
 
-For each affected documentation entry:
-1. Re-read the source files that changed
-2. Update the corresponding doc section in `.workflow/codebase/`
-3. Update the entry's timestamp in `doc-index.json`
-
-If `--deep` flag is set, also re-scan adjacent files for context changes.
+For each affected entry: re-read changed source files, update corresponding doc in `.workflow/codebase/`, update timestamp in `doc-index.json`. With `--deep`: also re-scan adjacent files.
 
 ### Step 5: Update State
 
-Update `doc-index.json` timestamps for all refreshed entries.
-Update `state.json` with `codebase_last_refreshed: "{ISO timestamp}"`.
-
-Display summary:
-```
-=== CODEBASE REFRESH ===
-Changes detected: {N} files
-Docs refreshed: {M} entries
-Skipped (unchanged): {K} entries
-```
+Update `doc-index.json` timestamps and `state.json.codebase_last_refreshed`. Display summary with change/refresh/skip counts.
 </execution>
 
 <error_codes>

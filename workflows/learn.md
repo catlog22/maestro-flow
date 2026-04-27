@@ -214,7 +214,7 @@ If `row.phase_slug` set: look up phase directory from `state.json` artifacts, re
 
 ### Step 5.3: Resolve routed artifact (if any)
 
-Map `routed_to` → path: `spec` → `.workflow/specs/{id}`, `issue` → `.workflow/issues/issues.jsonl#{id}`, `note` → `.workflow/memory/{id}.md`.
+Map `routed_to` → path: `spec` → `.workflow/specs/{id}`, `issue` → `.workflow/issues/issues.jsonl#{id}`, `note` → `.workflow/knowhow/{id}.md`.
 
 ### Step 5.4: Display
 
@@ -260,6 +260,6 @@ PHASE CONTEXT:
 | Workflow | Relationship |
 |----------|--------------|
 | `quality-retrospective` | Producer. Writes insights into the same `lessons.jsonl` with `source: "retrospective"` and a populated `lens` field. |
-| `manage-memory-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. They share the JSONL+index pattern but live in different directories so retrieval semantics stay clean. |
+| `manage-knowhow-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. They share the JSONL+index pattern but live in different directories so retrieval semantics stay clean. |
 | `phase-transition` | Reader (informally). Phase-transition's free-form `.workflow/specs/learnings.md` is a distinct file with a different audience; do not merge them. |
 | `maestro-plan` | Future consumer. Should query `lessons.jsonl` filtered by tag/lens/category to inform planning decisions. (Out of scope for this command.) |

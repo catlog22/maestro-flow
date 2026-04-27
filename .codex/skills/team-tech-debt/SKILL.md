@@ -99,64 +99,25 @@ $ARGUMENTS — task description and optional flags.
 
 ### Worker Spawn Template
 
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: <role>
-role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-inner_loop: <true|false>
-
-Read role_spec file to load Phase 2-4 domain instructions.
-
-## Task Context
-task_id: <task-id>
-title: <task-title>
-description: <task-description>
-pipeline_phase: <pipeline-phase>
-
-## Upstream Context
-<prev_context>`
-})
-```
-
-After spawning: `wait_agent({ timeout_ms: 1800000 })` (30 min). Timeout handling: STATUS_CHECK (3 min) → FINALIZE with interrupt (3 min) → mark timed_out, close.
+Spawn via `team-worker` agent. Message includes: role, role_spec path, session folder/id, requirement, inner_loop flag, task context, upstream context. After spawning: `wait_agent` (30 min). Timeout: STATUS_CHECK (3 min) -> FINALIZE (3 min) -> close.
 
 ### Model Selection Guide
 
-| Role | reasoning_effort | Rationale |
-|------|-------------------|-----------|
-| scanner | medium | Broad scan, pattern matching |
-| assessor | high | Impact and risk assessment |
-| planner | high | Prioritize and sequence fixes |
-| executor | high | Code fixes must preserve behavior |
-| validator | medium | Follows defined acceptance criteria |
+| Role | reasoning_effort |
+|------|-------------------|
+| scanner | medium |
+| assessor | high |
+| planner | high |
+| executor | high |
+| validator | medium |
 
 ### v4 Agent Coordination
 
-**Message Semantics:**
-| Intent | API | Example |
-|--------|-----|---------|
-| Queue supplementary info | `send_message` | Send scan findings to running assessor |
-| Assign fix from plan | `followup_task` | Assign TDFIX task from planner output |
-| Check running agents | `list_agents` | Verify agent health during resume |
+**Message Semantics**: `send_message` for supplementary info to downstream. `followup_task` to assign fixes from planner output. `list_agents` for health checks.
 
-**Agent Health Check:**
-```
-const running = list_agents({})
-// Compare with meta.json active tasks
-// Reset orphaned tasks (in_progress but agent gone) to pending
-```
+**Agent Health Check**: Reconcile `meta.json` active tasks with `list_agents({})`. Reset orphaned tasks to pending.
 
-**Named Agent Targeting:**
-- `send_message({ target: "TDSCAN-001", message: "..." })` — additional scan scope
-- `followup_task({ target: "TDFIX-001", message: "..." })` — assign fix from planner
-- `close_agent({ target: "TDVAL-001" })` — cleanup after validation
+**Named Targeting**: `send_message({ target: "TDSCAN-001" })`, `followup_task({ target: "TDFIX-001" })`, `close_agent({ target: "TDVAL-001" })`.
 </execution>
 
 <error_codes>

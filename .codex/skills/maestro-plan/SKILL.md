@@ -141,68 +141,31 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 ### Session Initialization
 
 ```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+// Parse from $ARGUMENTS:
+//   AUTO_YES      <- --yes | -y
+//   continueMode  <- --continue
+//   maxConcurrency <- --concurrency N | -c N  (default: 4)
+//   autoMode      <- --auto
+//   gapsMode      <- --gaps
+//   dirMatch      <- --dir <path>
+//   specMatch     <- --spec SPEC-xxx
+//   collabMode    <- --collab
+//   phaseArg      <- remaining text after stripping all flags
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 4
+// Auto-bootstrap .workflow/state.json if missing
 
-// Parse plan-specific flags
-const autoMode = $ARGUMENTS.includes('--auto')
-const gapsMode = $ARGUMENTS.includes('--gaps')
-const dirMatch = $ARGUMENTS.match(/--dir\s+(\S+)/)
-const specMatch = $ARGUMENTS.match(/--spec\s+(SPEC-\S+)/)
-const collabMode = $ARGUMENTS.includes('--collab')
+// Scope determination from state.json (priority order):
+//   --dir given       → scope from parent artifact or 'standalone'
+//   phaseArg empty    → 'milestone' (requires current_milestone + roadmap.md) or ERROR E001
+//   phaseArg is digit → 'phase', resolve slug from roadmap, find latest completed analyze artifact
+//   phaseArg is text  → 'adhoc' (if milestone active) or 'standalone', slugify phaseArg
 
-// Clean phase text
-const phaseArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--auto|--gaps|--parallel|--collab|--dir\s+\S+|--spec\s+\S+/g, '')
-  .trim()
+// Session IDs (UTC+8):
+//   sessionId    = {YYYYMMDD}-plan-P{phaseArg}-{phaseSlug}
+//   sessionFolder = .workflow/.csv-wave/{sessionId}
+//   scratchDir    = .workflow/scratch/{sessionId}
 
-// Auto-bootstrap state.json if missing
-if (!fileExists('.workflow/state.json')) {
-  Bash('mkdir -p .workflow/scratch/')
-  writeMinimalStateJson()
-}
-
-// Scope determination (per scratch-milestone-architecture)
-const state = JSON.parse(Read('.workflow/state.json'))
-let scope, phaseNum = null, phaseSlug, contextDir
-
-if (dirMatch) {
-  contextDir = dirMatch[1]
-  phaseSlug = contextDir.split('/').pop()
-  // Inherit scope from parent artifact if registered
-  const parentArtifact = state.artifacts.find(a => a.path === contextDir)
-  scope = parentArtifact?.scope || 'standalone'
-} else if (phaseArg === '') {
-  if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
-    scope = 'milestone'
-    phaseSlug = slugify(state.milestones.find(m => m.id === state.current_milestone)?.name || state.current_milestone)
-    // Find latest analyze artifact for this milestone
-    contextDir = state.artifacts.filter(a => a.type === 'analyze' && a.milestone === state.current_milestone && a.status === 'completed').pop()?.path
-  } else {
-    ERROR('E001: No args and no roadmap')
-  }
-} else if (/^\d+$/.test(phaseArg)) {
-  scope = 'phase'
-  phaseNum = parseInt(phaseArg)
-  phaseSlug = resolvePhaseSlugFromRoadmap(phaseNum)
-  contextDir = state.artifacts.filter(a => a.type === 'analyze' && a.milestone === state.current_milestone && a.phase === phaseNum && a.status === 'completed').pop()?.path
-} else {
-  scope = state.current_milestone ? 'adhoc' : 'standalone'
-  phaseSlug = phaseArg.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
-}
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-plan-P${phaseArg}-${phaseSlug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-const scratchDir = `.workflow/scratch/${dateStr}-plan-P${phaseArg}-${phaseSlug}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-Bash(`mkdir -p ${scratchDir}/.task/`)
+// Create: sessionFolder, scratchDir/.task/
 ```
 
 ### Phase 1: Phase Resolution -> CSV
@@ -266,21 +229,13 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
+  output_schema: { // required: id, status, findings
+    id: "string", status: "completed|failed", findings: "string", error: "string"
   }
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+6. Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`
 
 #### Wave 2: Plan Generation (Sequential)
 
@@ -303,123 +258,44 @@ spawn_agents_on_csv({
   instruction: buildPlanningInstruction(sessionFolder, phaseDir, {
     contextMd, indexJson, specRef, docIndex, designRef, gapsContext
   }),
-  max_concurrency: 1,  // Sequential — single planning agent
+  max_concurrency: 1,  // Single planning agent
   max_runtime_seconds: 900,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
+  output_schema: { // required: id, status, findings
+    id: "string", status: "completed|failed", findings: "string", error: "string"
   }
 })
 ```
 
-6. Merge results into master `tasks.csv`
-7. Delete `wave-2.csv`
+6. Merge `wave-2-results.csv` into master `tasks.csv`, delete `wave-2.csv`
 
 **Planning agent responsibilities** (embedded in instruction):
-- Decompose phase goal into concrete tasks (TASK-001, TASK-002, ...)
-- Determine dependencies and group into execution waves
-- Apply Deep Work Rules:
-  - Every task has `read_first[]` with file being modified + source of truth files
-  - Every task has `convergence.criteria[]` with grep-verifiable conditions
-  - Every `action` has concrete values (never "align X with Y")
-  - Every `implementation` step has specific values
-- Write `plan.json` to `{PHASE_DIR}/plan.json`
-- Write `.task/TASK-{NNN}.json` files to `{PHASE_DIR}/.task/`
-- If `--gaps`: create fix tasks from gap context, link to issues
-- If `--collab`: pre-allocate ID ranges for parallel planners
+- Decompose phase goal → TASK-001..N with dependencies grouped into execution waves
+- Apply Deep Work Rules: `read_first[]` includes modified file + source of truth; `convergence.criteria[]` are grep-verifiable; all actions/steps have concrete values
+- Write `plan.json` to `{PHASE_DIR}/plan.json` and `.task/TASK-{NNN}.json` to `{PHASE_DIR}/.task/`
+- `--gaps`: create fix tasks from gap context, link to issues; `--collab`: pre-allocate ID ranges
 
 ### Phase 3: Plan Checking + Confirmation
 
 **Objective**: Validate plan quality, revise if needed, present to user.
 
 1. **Plan checking** (inline, not a separate wave):
-   - Read generated `plan.json` + all `.task/TASK-*.json`
-   - Validate dimensions:
-
-| Check | Criteria |
-|-------|----------|
-| Requirements coverage | Every success_criterion maps to at least one task |
-| Feasibility | Referenced files exist or can be created |
-| Dependency correctness | No circular deps, deps exist, wave ordering valid |
-| Convergence criteria quality | Grep-verifiable, no subjective language |
-| read_first completeness | Every task has read_first[] with modified file |
-| Action concreteness | No vague "align X with Y" |
-| Wave structure | Parallel tasks have no conflicting file modifications |
+   Read `plan.json` + all `.task/TASK-*.json`. Validate: requirements coverage, file feasibility, dependency correctness (no cycles, valid wave order), grep-verifiable convergence criteria, read_first completeness, action concreteness, no parallel file conflicts.
 
 2. **Revision loop** (max 3 rounds): If critical issues found, regenerate affected tasks.
 
 3. **Export results**:
    - Export `results.csv` from master `tasks.csv`
-   - Generate `context.md`:
+   - Generate `context.md`: summary (phase, task count, wave count, complexity, exploration count), exploration findings per angle, plan overview (approach, task IDs, waves), next steps
 
-```markdown
-# Plan Report -- Phase {phase}
-
-## Summary
-- Phase: {phase_name}
-- Tasks: {task_count} in {wave_count} waves
-- Complexity: {complexity}
-- Explorations: {exploration_count} angles explored
-
-## Exploration Findings
-
-### {angle}: {title}
-{findings}
-
-## Plan Overview
-- Approach: {plan.approach}
-- Task IDs: {task_ids}
-- Waves: {wave_structure}
-
-## Next Steps
-{suggested actions}
-```
-
-4. **Update index.json**:
-   ```json
-   {
-     "status": "planning",
-     "plan": {
-       "task_ids": ["TASK-001", "TASK-002"],
-       "task_count": N,
-       "complexity": "moderate",
-       "waves": [[...], [...]]
-     },
-     "updated_at": "<ISO>"
-   }
-   ```
+4. **Update index.json**: set `status: "planning"`, `plan: { task_ids, task_count, complexity, waves }`, `updated_at`
 
 5. **Issue linking** (if --gaps):
-   For each created TASK-{NNN}.json that has `issue_id`:
-   - Update corresponding issue in `.workflow/issues/issues.jsonl`:
-     - `task_refs`: append TASK-{NNN} to array
-     - `task_plan_dir`: relative path to `.task/` directory
-     - `status`: "planned"
-     - `updated_at`: now()
-   - Append history entry: `{ action: "planned", at: <ISO>, by: "maestro-plan", summary: "Linked to TASK-{NNN}" }`
-   This ensures bidirectional issue <-> TASK traceability for dashboard display.
+   For each TASK with `issue_id`: update issue in `issues.jsonl` (`task_refs` += TASK-NNN, `task_plan_dir`, `status: "planned"`, `updated_at`) + append history entry. Ensures bidirectional issue-TASK traceability.
 
 6. **Display summary + options** (skip options if AUTO_YES):
-   ```
-   === PLAN READY ===
-   Phase: {phase_name}
-   Tasks: {task_count} tasks in {wave_count} waves
-   Check: {checker_status}
-
-   Plan: {scratch_dir}/plan.json
-   Tasks: {scratch_dir}/.task/TASK-*.json
-
-   Next steps:
-     Skill({ skill: "maestro-execute", args: "{phase}" })  -- Execute the plan
-     Skill({ skill: "maestro-plan", args: "{phase}" })     -- Re-plan with modifications
-   ```
+   Show phase name, task/wave counts, checker status, output file paths.
+   Next steps: `maestro-execute "{phase}"` (execute) or `maestro-plan "{phase}"` (re-plan).
 
 ### Shared Discovery Board Protocol
 

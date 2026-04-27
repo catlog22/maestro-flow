@@ -223,7 +223,7 @@ resolvePhase — priority order:
   4. null if chain is 'analyze-plan-execute' (uses {scratch_dir} instead)
   5. null if all chain commands are phase-independent:
      manage-status, manage-issue, manage-issue-discover, maestro-init, maestro-spec-generate,
-     maestro-fork, maestro-merge, maestro-roadmap, spec-setup, manage-memory, manage-memory-capture,
+     maestro-fork, maestro-merge, maestro-roadmap, spec-setup, manage-knowhow, manage-knowhow-capture,
      manage-learn, manage-codebase-rebuild, manage-codebase-refresh, maestro-milestone-audit,
      maestro-milestone-complete
   6. Ask user
@@ -402,13 +402,13 @@ const chainMap = {
   'spec_add':           [{ cmd: 'spec-add', args: '"{description}"' }],
   'spec_load':          [{ cmd: 'spec-load' }],
   'spec_map':           [{ cmd: 'manage-codebase-rebuild' }],
-  'memory_capture':     [{ cmd: 'manage-memory-capture', args: '"{description}"' }],
+  'knowhow_capture':     [{ cmd: 'manage-knowhow-capture', args: '"{description}"' }],
   'issue':              [{ cmd: 'manage-issue', args: '"{description}"' }],
   'issue_discover':     [{ cmd: 'manage-issue-discover', args: '"{description}"' }],
   'issue_analyze':      [{ cmd: 'maestro-analyze', args: '--gaps "{description}"' }],
   'issue_plan':         [{ cmd: 'maestro-plan', args: '--gaps' }],
   'issue_execute':      [{ cmd: 'maestro-execute', args: '' }],
-  'memory':             [{ cmd: 'manage-memory', args: '"{description}"' }],
+  'knowhow':             [{ cmd: 'manage-knowhow', args: '"{description}"' }],
   'quick':              [{ cmd: 'maestro-quick', args: '"{description}"' }],
   'fork':               [{ cmd: 'maestro-fork', args: '-m {milestone_num}' }],
   'merge':              [{ cmd: 'maestro-merge', args: '-m {milestone_num}' }],

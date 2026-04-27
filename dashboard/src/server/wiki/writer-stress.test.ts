@@ -90,19 +90,19 @@ describe('WikiWriter security — path traversal', () => {
     ).rejects.toThrow(WikiWriteError);
   });
 
-  it('memory writes to memory/MEM-slug.md', async () => {
+  it('knowhow writes to knowhow/KNW-slug.md', async () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
     const entry = await writer.create({
-      type: 'memory',
+      type: 'knowhow',
       slug: 'auth-lessons',
       title: 'Auth Lessons',
       body: 'learned',
     });
-    expect(entry.source.path).toBe('memory/MEM-auth-lessons.md');
+    expect(entry.source.path).toBe('knowhow/KNW-auth-lessons.md');
   });
 
-  it('note writes to memory/TIP-slug.md', async () => {
+  it('note writes to knowhow/TIP-slug.md', async () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
     const entry = await writer.create({
@@ -111,7 +111,7 @@ describe('WikiWriter security — path traversal', () => {
       title: 'Tip',
       body: 'tip',
     });
-    expect(entry.source.path).toBe('memory/TIP-quick-tip.md');
+    expect(entry.source.path).toBe('knowhow/TIP-quick-tip.md');
   });
 });
 
@@ -180,13 +180,13 @@ describe('WikiWriter virtual entries — read-only', () => {
 
 describe('WikiWriter concurrency', () => {
   it('concurrent PUTs — one wins, others see CONFLICT with stale hash', async () => {
-    // Use memory path (not specs/) since spec body updates are blocked
-    await seed('memory/MEM-s.md', `---\ntitle: Initial\n---\n# s\nv0`);
+    // Use knowhow path (not specs/) since spec body updates are blocked
+    await seed('knowhow/KNW-s.md', `---\ntitle: Initial\n---\n# s\nv0`);
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
 
     // Capture the initial hash
-    const raw = await readFile(join(tmpRoot, 'memory', 'MEM-s.md'));
+    const raw = await readFile(join(tmpRoot, 'knowhow', 'KNW-s.md'));
     const initialHash = createHash('sha256').update(raw).digest('hex');
 
     // Fire 5 concurrent PUTs all providing the SAME stale hash. Each update
@@ -194,7 +194,7 @@ describe('WikiWriter concurrency', () => {
     // hash on disk changes, so the remaining 4 must see CONFLICT.
     const results = await Promise.allSettled(
       Array.from({ length: 5 }, (_, i) =>
-        writer.update('memory-s', {
+        writer.update('knowhow-s', {
           body: `v${i + 1}`,
           expectedHash: initialHash,
         }),
@@ -228,25 +228,25 @@ describe('WikiWriter concurrency', () => {
     const writer = new WikiWriter(tmpRoot, indexer);
 
     const created = await writer.create({
-      type: 'memory',
+      type: 'knowhow',
       slug: 'rt',
       title: 'Initial',
       body: '# body',
     });
-    expect(created.id).toBe('memory-rt');
+    expect(created.id).toBe('knowhow-rt');
 
-    const updated = await writer.update('memory-rt', {
+    const updated = await writer.update('knowhow-rt', {
       title: 'Updated',
       body: '# updated',
     });
     expect(updated.title).toBe('Updated');
 
-    await writer.remove('memory-rt');
+    await writer.remove('knowhow-rt');
     const index = await indexer.get();
-    expect(index.byId['memory-rt']).toBeUndefined();
+    expect(index.byId['knowhow-rt']).toBeUndefined();
 
     // File should be gone from disk too
-    await expect(stat(join(tmpRoot, 'memory', 'MEM-rt.md'))).rejects.toThrow();
+    await expect(stat(join(tmpRoot, 'knowhow', 'KNW-rt.md'))).rejects.toThrow();
   });
 
   it('create with frontmatter serializes arrays and strings correctly', async () => {

@@ -145,30 +145,15 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+Parse `$ARGUMENTS` to extract:
+- `AUTO_YES` from `--yes` / `-y`
+- `targetPhases` from `--phases N` (default: auto-determined)
+- `brainstormSession` from `--from-brainstorm <SESSION-ID>`
+- `requirementArg` = remaining text after stripping all flags
+- `slug` = requirementArg lowercased, non-alphanumeric → `-`, max 40 chars
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const phasesMatch = $ARGUMENTS.match(/--phases\s+(\d+)/)
-const targetPhases = phasesMatch ? parseInt(phasesMatch[1]) : null
-const brainstormMatch = $ARGUMENTS.match(/--from-brainstorm\s+(\S+)/)
-const brainstormSession = brainstormMatch ? brainstormMatch[1] : null
-
-// Clean requirement text
-const requirementArg = $ARGUMENTS
-  .replace(/--yes|-y|--phases\s+\d+|--from-brainstorm\s+\S+/g, '')
-  .trim()
-
-const slug = requirementArg.toLowerCase()
-  .replace(/[^a-z0-9]+/g, '-')
-  .substring(0, 40)
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-roadmap-${slug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-```
+Session ID: `{YYYYMMDD}-roadmap-{slug}`
+Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
 
 ### Phase 1: Requirement Parsing + CSV Generation
 
@@ -205,11 +190,7 @@ Strategy: >= 3 high -> progressive, >= 3 low -> direct, else -> ask user (or aut
 
 #### Wave 1: Requirement Analysis (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+Filter master `tasks.csv` for `wave == 1 AND status == pending` → write `wave-1.csv` (no prev_context needed).
 
 ```javascript
 spawn_agents_on_csv({
@@ -232,43 +213,24 @@ spawn_agents_on_csv({
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`.
 
 #### Wave 2: Roadmap Assembly (Sequential)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps -- if all wave 1 tasks failed, use degraded mode (requirement text only)
-4. Build `prev_context` from wave 1 findings:
-   ```
-   [Task 1: Scope Analysis] Features: auth, OAuth, 2FA. MVP: basic auth + OAuth. Size: M...
-   [Task 2: Risk Analysis] High risk: OAuth provider integration. Medium: 2FA delivery...
-   [Task 3: Dependency Analysis] Critical path: auth -> OAuth -> 2FA. Parallel: UI + API...
-   ```
-5. Inject strategy and `--phases N` constraint into assembly prompt
-6. Write `wave-2.csv` with `prev_context` column
-7. Execute `spawn_agents_on_csv` for assembly agent
-8. Merge results into master `tasks.csv`
-9. Delete `wave-2.csv`
+Filter master `tasks.csv` for `wave == 2 AND status == pending`. If all wave 1 tasks failed, use degraded mode (requirement text only).
+
+Build `prev_context` from wave 1 findings (format: `[Task N: Title] summary...` per task). Inject strategy and `--phases N` constraint into assembly prompt.
+Write `wave-2.csv` with `prev_context` column → execute `spawn_agents_on_csv` → merge results → delete `wave-2.csv`.
 
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results, optional refinement, and write roadmap.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
+Export master `tasks.csv` as `results.csv`.
 
-3. **Interactive refinement** (skip if AUTO_YES):
-   - Present roadmap overview: phase count, milestone structure, dependency graph
-   - User feedback via AskUserQuestion (max 3 rounds):
-     - **Approve**: Proceed to output
-     - **Adjust Scope**: Move features between phases
-     - **Reorder**: Change phase sequencing
-     - **Split/Merge**: Break large phases or combine small ones
-   - Each round: update roadmap draft
+**Interactive refinement** (skip if AUTO_YES): Present roadmap overview, collect user feedback via AskUserQuestion (max 3 rounds). Options: Approve, Adjust Scope, Reorder, Split/Merge. Update draft each round.
 
-4. Generate `context.md`:
+Generate `context.md`:
 
 ```markdown
 # Roadmap Generation Report
@@ -297,12 +259,9 @@ spawn_agents_on_csv({
 - Deferred: {deferred_items}
 ```
 
-5. **Write outputs**:
-   - Write `.workflow/roadmap.md` using standard roadmap template structure
-   - Ensure `.workflow/scratch/` directory exists (phases are labels, not directories)
-   - Update `state.json` milestones array and set `current_milestone`
+**Write outputs**: `.workflow/roadmap.md` (standard template), ensure `.workflow/scratch/` exists, update `state.json` milestones array and `current_milestone`.
 
-6. Display summary:
+Display summary:
 
 ```
 === ROADMAP CREATED ===
@@ -338,11 +297,7 @@ Next steps:
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as found
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `{session_folder}/discoveries.ndjson` before own analysis. Deduplicate by type + dedup key before writing. Append-only — never modify or delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"risk_factor","data":{"name":"OAuth provider rate limits","severity":"medium","probability":"high","mitigation":"Implement token caching and retry logic"}}' >> {session_folder}/discoveries.ndjson

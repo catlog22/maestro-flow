@@ -46,11 +46,7 @@ Extract flags from arguments:
 
 ### Step 2: Detect Project State
 
-```bash
-# Check existing state
-ls .workflow/state.json 2>/dev/null
-ls package.json pyproject.toml Cargo.toml go.mod 2>/dev/null
-```
+Check for `.workflow/state.json` and common manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`).
 
 Classify as:
 - **existing**: `.workflow/state.json` found — warn and exit (E002)
@@ -86,67 +82,27 @@ Read the following templates:
 
 ### Step 5: Create .workflow/ Structure
 
-```bash
-mkdir -p .workflow/specs .workflow/scratch .workflow/codebase
-```
+Create directories: `.workflow/specs`, `.workflow/scratch`, `.workflow/codebase`.
 
 ### Step 6: Write project.md
 
-Populate template with gathered information:
-- Project name, core value proposition
-- Requirements: Validated / Active / Out of Scope
-- Key decisions and constraints
-- Tech stack (detected or specified)
-
-Write to `.workflow/project.md`.
+Populate template with: project name, core value proposition, requirements (Validated/Active/Out of Scope), key decisions, constraints, tech stack. Write to `.workflow/project.md`.
 
 ### Step 7: Write state.json
 
-Initialize state from template:
-- `current_milestone`: null
-- `current_task_id`: null
-- `status`: "initialized"
-- `artifacts`: []
-
-Write to `.workflow/state.json`.
+Initialize from template with `current_milestone: null`, `status: "initialized"`, empty `artifacts[]`. Write to `.workflow/state.json`.
 
 ### Step 8: Write config.json
 
-Configuration questions (or defaults for --auto):
-- Granularity: fine / medium / coarse
-- Workflow agents: enable/disable optional agents
-- Gate preferences: verification strictness
-
-Write to `.workflow/config.json`.
+Configuration questions (or defaults for --auto): granularity (fine/medium/coarse), workflow agents (enable/disable), gate preferences. Write to `.workflow/config.json`.
 
 ### Step 9: Initialize specs/
 
-Create convention files in `.workflow/specs/`:
-- `conventions.md` — detected or specified coding conventions
-- `learnings.md` — empty, populated during execute summaries extraction
+Create in `.workflow/specs/`: `conventions.md` (detected coding conventions), `learnings.md` (empty placeholder).
 
 ### Step 10: Completion Report
 
-```
-=== WORKFLOW INITIALIZED ===
-Project: {project_name}
-State:   .workflow/state.json (active)
-
-Created:
-  .workflow/project.md
-  .workflow/state.json
-  .workflow/config.json
-  .workflow/specs/
-
-Next steps (choose one path to create roadmap):
-  $maestro-spec-generate "<idea>"   -- Full spec package + roadmap (heavy)
-  $maestro-roadmap "<requirement>"  -- Direct interactive roadmap (light)
-
-Other commands:
-  $manage-status                   -- View project dashboard
-  $maestro-brainstorm "<topic>"     -- Explore ideas first
-  $maestro-quick "<task>"           -- Quick ad-hoc task
-```
+Display created files and next steps: `$maestro-spec-generate` (full spec), `$maestro-roadmap` (light), `$manage-status`, `$maestro-brainstorm`, `$maestro-quick`.
 
 </execution>
 

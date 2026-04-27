@@ -23,118 +23,42 @@ Synchronous pipeline coordination using spawn_agent + wait_agent.
 
 Read-only status report from tasks.json, then STOP.
 
-1. Read tasks.json
-2. Count tasks by status (pending, in_progress, completed, failed)
+Read tasks.json + team_msg (type="progress", last=50) + team_msg (type="blocker", last=10). Count tasks by status.
 
-```javascript
-// Read progress and blocker messages from message bus
-const progressMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "progress", last: 50
-})
-const blockerMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "blocker", last: 10
-})
+**Output format**:
 ```
-
-```
-Pipeline Status (<mode>):
-  [DONE]  TDSCAN-001  (scanner)   -> scan complete
-  [DONE]  TDEVAL-001  (assessor)  -> assessment ready
-  [RUN]   TDPLAN-001  (planner)   -> planning...
-  [WAIT]  TDFIX-001   (executor)  -> blocked by TDPLAN-001
-  [WAIT]  TDVAL-001   (validator) -> blocked by TDFIX-001
-
-[coordinator] Active Workers:
-  <task_id>  <role>  <milestone_phase>  <pct>%  "<summary>"  <time_ago>
-
-[coordinator] Blockers:
-  <task_id>  <role>  "<blocker_summary>"  <time_ago>
-  (omit section if no blockers)
-
-GC Rounds: 0/3
-Session: <session-id>
+Pipeline Status (<mode>): <task_id> (<role>) [DONE|RUN|WAIT] -> <summary> (per task)
+[coordinator] Active Workers: <task_id> <role> <milestone_phase> <pct>% "<summary>" <time_ago>
+[coordinator] Blockers: <task_id> <role> "<blocker_summary>" <time_ago> (omit if none)
+GC Rounds: <n>/3 | Session: <session-id>
 Commands: 'resume' to advance | 'check' to refresh
-
-**CLI monitoring** (works while coordinator is blocked):
-maestro agent-msg list -s "<session_id>" --type progress --last 10
 ```
+
+**CLI monitoring**: `maestro agent-msg list -s "<session_id>" --type progress --last 10`
 
 Output status -- do NOT advance pipeline.
 
 ## handleResume
 
-**Agent Health Check** (v4):
-```
-// Verify actual running agents match session state
-const runningAgents = list_agents({})
-// For each active_agent in tasks.json:
-//   - If agent NOT in runningAgents -> agent crashed
-//   - Reset that task to pending, remove from active_agents
-// This prevents stale agent references from blocking the pipeline
-```
+**Agent Health Check** (v4): Cross-check `list_agents()` against `active_agents`. Missing agents -> reset task to pending. Stuck in_progress -> reset to pending. Ready but still pending -> include in spawn list.
 
-1. Read tasks.json, check active_agents
-2. Tasks stuck in "in_progress" -> reset to "pending"
-3. Tasks with completed deps but still "pending" -> include in spawn list
-4. -> handleSpawnNext
+-> handleSpawnNext
 
 ## handleSpawnNext
 
 Find ready tasks, spawn workers, wait for completion, process results.
 
-1. Read tasks.json
-2. Collect: completedTasks, inProgressTasks, readyTasks (pending + all deps completed)
-3. No ready + work in progress -> report waiting, STOP
-4. No ready + nothing in progress -> handleComplete
-5. Has ready -> for each:
-   a. Check inner loop role with active worker -> skip (worker picks up)
-   b. Update task status in tasks.json -> in_progress
-   c. team_msg log -> task_unblocked
+```
+Classify tasks: completed | in_progress | ready (pending + all deps completed)
 
-### Spawn Workers
-
-For each ready task:
-
-```javascript
-// 1) Update status in tasks.json
-state.tasks[taskId].status = 'in_progress'
-
-// 2) Spawn worker
-const agentId = spawn_agent({
-  agent_type: "team_worker",
-  task_name: taskId,  // e.g., "TDSCAN-001" — enables named targeting
-  message: `## Role Assignment
-role: ${task.role}
-role_spec: ${skillRoot}/roles/${task.role}/role.md
-session: ${sessionFolder}
-session_id: ${sessionId}
-team_name: tech-debt
-requirement: ${task.description}
-inner_loop: ${task.role === 'executor'}
-
-Read role_spec file (${skillRoot}/roles/${task.role}/role.md) to load Phase 2-4 domain instructions.
-Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).
-
-## Task Context
-task_id: ${taskId}
-title: ${task.title}
-description: ${task.description}
-
-## Upstream Context
-${prevContext}
-
-## Progress Milestones
-session_id: ${sessionId}
-Report progress via team_msg at natural phase boundaries.
-Report blockers immediately via team_msg type="blocker".
-Report completion via team_msg type="task_complete" after report_agent_job_result.`
-})
-
-// 3) Track agent
-state.active_agents[taskId] = { agentId, role: task.role, started_at: now }
+Ready tasks -> route:
+  none + in_progress exists -> report waiting, STOP
+  none + nothing in_progress -> handleComplete
+  has ready -> for each:
+    skip if inner loop role already has active worker
+    else: set status="in_progress", log task_unblocked, spawn team_worker, add to active_agents
 ```
 
-Stage-to-role mapping:
 | Task Prefix | Role |
 |-------------|------|
 | TDSCAN | scanner |
@@ -143,166 +67,56 @@ Stage-to-role mapping:
 | TDFIX | executor |
 | TDVAL | validator |
 
-### Wait and Process Results
-
-After spawning all ready tasks:
-
-```javascript
-// 4) Batch wait — use task_name for stable targeting (v4)
-const taskNames = Object.keys(state.active_agents)
-const waitResult = wait_agent({ timeout_ms: 1800000 })  // 30 min
-
-// Drain progress from message bus
-const progressMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "progress", last: 100
-})
-for (const msg of (progressMsgs.result?.messages || [])) {
-  console.log(`[coordinator] trace: ${msg.summary}`)
-}
-
-if (waitResult.timed_out) {
-  for (const taskId of taskNames) {
-    // Status probe before closing
-    followup_task({ target: taskId, message: "STATUS_CHECK: Report current progress, findings so far, and estimated remaining work." })
-    const status = wait_agent({ timeout_ms: 180000 })  // 3 min
-    if (status.timed_out) {
-      followup_task({ target: taskId, message: "FINALIZE: Output all current findings immediately. Time limit reached.", interrupt: true })
-      const forced = wait_agent({ timeout_ms: 180000 })  // 3 min
-      if (forced.timed_out) {
-        const lastProgress = (progressMsgs.result?.messages || [])
-          .filter(m => m.data?.task_id === taskId).pop()
-        state.tasks[taskId].status = 'timed_out'
-        state.tasks[taskId].error = lastProgress
-          ? `Timed out at ${lastProgress.data.phase} (${lastProgress.data.progress_pct}%)`
-          : 'Timed out with no progress reported'
-        close_agent({ target: taskId })
-        delete state.active_agents[taskId]
-      }
-      // else: forced output received, process result
-    }
-    // else: status received, continue processing
-  }
-} else {
-  // 5) Collect results
-  for (const [taskId, agent] of Object.entries(state.active_agents)) {
-    state.tasks[taskId].status = 'completed'
-    close_agent({ target: taskId })  // Use task_name, not agentId
-    delete state.active_agents[taskId]
-  }
-}
+**Spawn worker message template**:
 ```
+## Role Assignment
+role: <role> | role_spec: <skillRoot>/roles/<role>/role.md
+session: <session-folder> | session_id: <session-id> | team_name: tech-debt
+requirement: <task-description> | inner_loop: <true for executor>
+Read role_spec for Phase 2-4 instructions. Execute Phase 1 -> role Phase 2-4 -> Phase 5 (report).
+## Task Context + Upstream Context
+task_id: <taskId> | title: <title> | description: <description> | <prevContext>
+## Progress Milestones
+Report progress via team_msg at phase boundaries. Blockers via type="blocker". Completion via type="task_complete" after report_agent_job_result.
+```
+
+**Result collection**: `wait_agent({ timeout_ms: 1800000 })` (30 min), drain progress from team_msg.
+
+**Timeout escalation**: STATUS_CHECK (3 min) -> FINALIZE with interrupt (3 min) -> mark timed_out with last progress context, close_agent. Normal completion -> mark completed, close_agent (use task_name, not agentId).
 
 ### Checkpoint Processing
 
 After task completion, check for checkpoints:
 
-- **TDPLAN-001 completes** -> Plan Approval Gate:
-  ```javascript
-  request_user_input({
-    questions: [{
-      question: "Remediation plan generated. Review and decide:",
-      header: "Plan Review",
-      multiSelect: false,
-      options: [
-        { label: "Approve", description: "Proceed with fix execution" },
-        { label: "Revise", description: "Re-run planner with feedback" },
-        { label: "Abort", description: "Stop pipeline" }
-      ]
-    }]
-  })
-  ```
-  - Approve -> Worktree Creation -> continue handleSpawnNext loop
-  - Revise -> Add TDPLAN-revised task to tasks.json -> continue
-  - Abort -> Log shutdown -> handleComplete
+- **TDPLAN-001 completes** -> Plan Approval Gate: `request_user_input` with Approve / Revise / Abort.
+  - Approve -> Worktree Creation (`git worktree add .worktrees/TD-<slug>-<date>`) -> continue
+  - Revise -> Add TDPLAN-revised task -> continue
+  - Abort -> handleComplete
 
-- **Worktree Creation** (before TDFIX):
-  ```
-  Bash("git worktree add .worktrees/TD-<slug>-<date> -b tech-debt/TD-<slug>-<date>")
-  ```
-  Update .msg/meta.json with worktree info.
-
-- **TDVAL-* completes** -> GC Loop Check:
-  Read validation results from .msg/meta.json
+- **TDVAL-* completes** -> GC Loop Check (read validation from .msg/meta.json):
 
   | Condition | Action |
   |-----------|--------|
   | No regressions | -> continue (pipeline complete) |
-  | Regressions AND gc_rounds < 3 | Add fix-verify tasks to tasks.json, increment gc_rounds |
+  | Regressions AND gc_rounds < 3 | Add fix-verify tasks, increment gc_rounds |
   | Regressions AND gc_rounds >= 3 | Accept current state -> handleComplete |
 
-  Fix-Verify Task Creation (add to tasks.json):
-  ```json
-  {
-    "TDFIX-fix-<round>": {
-      "title": "Fix regressions (Fix-Verify #<round>)",
-      "description": "PURPOSE: Fix regressions | Session: <session>",
-      "role": "executor",
-      "prefix": "TDFIX",
-      "deps": [],
-      "status": "pending",
-      "findings": null,
-      "error": null
-    },
-    "TDVAL-recheck-<round>": {
-      "title": "Recheck after fix (Fix-Verify #<round>)",
-      "description": "Re-validate after fix",
-      "role": "validator",
-      "prefix": "TDVAL",
-      "deps": ["TDFIX-fix-<round>"],
-      "status": "pending",
-      "findings": null,
-      "error": null
-    }
-  }
-  ```
+  Fix-Verify tasks: `TDFIX-fix-<round>` (role: executor) + `TDVAL-recheck-<round>` (role: validator, deps: [TDFIX-fix]).
 
-**Cross-Agent Supplementary Context** (v4):
-
-When spawning workers in a later pipeline phase, send upstream results as supplementary context to already-running workers:
-
-```
-// Example: Send scan results to running assessor
-send_message({
-  target: "<running-agent-task-name>",
-  message: `## Supplementary Context\n${upstreamFindings}`
-})
-// Note: send_message queues info without interrupting the agent's current work
-```
-
-Use `send_message` (not `followup_task`) for supplementary info that enriches but doesn't redirect the agent's current task.
+**Cross-Agent Supplementary Context** (v4): Use `send_message` (not `followup_task`) to deliver upstream results to running downstream workers as non-interrupting supplementary context.
 
 ### Persist and Loop
 
-After processing all results:
-1. Write updated tasks.json
-2. Check if more tasks are now ready (deps newly resolved)
-3. If yes -> loop back to step 1 of handleSpawnNext
-4. If no more ready and all done -> handleComplete
-5. If no more ready but some still blocked -> report status, STOP
+Write tasks.json -> more tasks ready? -> loop handleSpawnNext. All done -> handleComplete. Blocked -> report, STOP.
 
 ## handleComplete
 
-**Cleanup Verification** (v4):
-```
-// Verify all agents are properly closed
-const remaining = list_agents({})
-// If any team agents still running -> close_agent each
-// Ensures clean session shutdown
-```
+**Cleanup Verification** (v4): `list_agents()` -> close any still-running team agents.
 
-Pipeline done. Generate report and completion action.
-
-1. Verify all tasks (including fix-verify tasks) have status "completed"
-2. If any not completed -> handleSpawnNext
-3. If all completed:
-   - Read final state from .msg/meta.json
-   - If worktree exists and validation passed: commit, push, gh pr create, cleanup worktree
-   - Compile summary: total tasks, completed, gc_rounds, debt_score_before, debt_score_after
-   - Transition to coordinator Phase 5
-4. Execute completion action per tasks.json completion_action:
-   - interactive -> request_user_input (Archive/Keep/Export)
-   - auto_archive -> Archive & Clean (rm -rf session folder)
-   - auto_keep -> Keep Active (status=paused)
+Pipeline done. Verify all tasks (including fix-verify) completed. Incomplete -> handleSpawnNext. All complete:
+- If worktree exists + validation passed: commit, push, `gh pr create`, cleanup worktree
+- Compile summary: total tasks, gc_rounds, debt_score_before/after
+- Route by completion_action: interactive (Archive/Keep/Export) | auto_archive | auto_keep.
 
 ## handleAdapt
 
@@ -316,7 +130,4 @@ Capability gap reported mid-pipeline.
 
 ## Fast-Advance Reconciliation
 
-On every coordinator wake:
-1. Read team_msg entries with type="fast_advance"
-2. Sync active_agents with spawned successors
-3. No duplicate spawns
+On every wake: sync `fast_advance` messages from team_msg into active_agents. No duplicate spawns.

@@ -35,51 +35,19 @@ Extract entry ID from arguments.
 
 ### Step 2: Lookup Entry
 
-```bash
-maestro wiki get <entry-id> --json
-```
-
-- Validate entry exists (E003 if not found)
-- Validate entry is spec sub-node: `type` = "spec" and `parent` field set (E004 if not)
-- Extract: title, category, keywords, container path, body preview
+Run `maestro wiki get <entry-id> --json`. Validate: entry exists (E003), is spec sub-node with `type="spec"` and `parent` set (E004). Extract title, category, keywords, container path.
 
 ### Step 3: Confirm
 
 Display entry details. Ask user to confirm unless `-y` flag present.
 
-```
-== Spec Entry to Remove ==
-ID:        {entry-id}
-Title:     {title}
-Category:  {category}
-Keywords:  {keywords}
-Container: .workflow/specs/{filename}
-
-Remove this entry? [y/N]
-```
-
 ### Step 4: Remove
 
-```bash
-maestro wiki remove-entry <entry-id>
-```
-
-WikiIndexer auto-updates `.workflow/wiki-index.json`.
+Run `maestro wiki remove-entry <entry-id>`. WikiIndexer auto-updates `wiki-index.json`.
 
 ### Step 5: Verify & Report
 
-```bash
-maestro wiki get <entry-id>  # should return not-found
-```
-
-```
-== Entry Removed ==
-ID:        {entry-id}
-From:      .workflow/specs/{filename}
-
-To verify:  maestro wiki list --type spec --category {category}
-To re-add:  /spec-add {category} {content}
-```
+Confirm removal via `maestro wiki get <entry-id>` (should return not-found). Display removed ID, source file, and commands for verify/re-add.
 </execution>
 
 <error_codes>

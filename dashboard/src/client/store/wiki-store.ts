@@ -12,7 +12,7 @@ export type WikiNodeType =
   | 'spec'
   | 'issue'
   | 'lesson'
-  | 'memory'
+  | 'knowhow'
   | 'note';
 
 export type WikiStatus =
@@ -72,7 +72,7 @@ export interface WikiGraph {
   brokenLinks: BrokenLink[];
 }
 
-export type WritableWikiType = 'spec' | 'memory' | 'note';
+export type WritableWikiType = 'spec' | 'knowhow';
 
 export interface CreateWikiReq {
   type: WritableWikiType;
@@ -138,7 +138,7 @@ const EMPTY_GROUPS: Record<WikiNodeType, WikiEntry[]> = {
   spec: [],
   issue: [],
   lesson: [],
-  memory: [],
+  knowhow: [],
   note: [],
 };
 
@@ -286,7 +286,7 @@ export const useWikiStore = create<WikiStore>((set, get) => ({
       spec: [],
       issue: [],
       lesson: [],
-      memory: [],
+      knowhow: [],
       note: [],
     };
     for (const d of entries) out[d.type].push(d);

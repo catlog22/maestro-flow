@@ -130,75 +130,28 @@ If not found: "No templates. Create with $maestro-composer"
 
 **Trigger**: `-c [session-id]`
 
-1. If session-id given: load `.workflow/.maestro-coordinate/<session-id>/state.json`
-2. If no session-id: Glob `.workflow/.maestro-coordinate/MCP-*/state.json` sorted desc, find `status = "in_progress" | "paused"`
-3. None found → error E005
-4. Identify last completed wave, resume from next pending step
-5. Jump to Phase 3 (Wave Execution)
+Load session state by explicit ID or most recent `MCP-*/state.json` with `status = "in_progress" | "paused"`. Error E005 if none found. Resume from next pending step after last completed wave → jump to Phase 3.
 
 ---
 
 ### Phase 1: Load & Bind
 
-**Step 1.1** — Resolve template path:
-1. Absolute path → use as-is
-2. Slug → look up in `~/.maestro/templates/workflows/index.json`
-3. Partial match → confirm with user
-4. Not found → show `--list`, AskUserQuestion
-
-**Step 1.2** — Parse `--context key=value` pairs into `bound_context`.
-
-**Step 1.3** — Load and validate template JSON.
-
-**Step 1.4** — Collect missing required variables via AskUserQuestion.
-
-**Step 1.5** — Bind `{variable_name}` in all `args_template` strings. Leave `{N-xxx.field}` and `{prev_*}` unresolved (runtime Phase 3).
-
-**Step 1.6** — If `--dry-run`: print wave plan and exit (see Phase 2 output).
+1. **Resolve template**: absolute path → as-is, slug → lookup in `~/.maestro/templates/workflows/index.json`, partial → confirm, not found → show `--list`
+2. **Parse** `--context key=value` pairs into `bound_context`
+3. **Load and validate** template JSON
+4. **Collect missing** required variables via AskUserQuestion
+5. **Bind** `{variable_name}` in all `args_template` strings. Leave `{N-xxx.field}` and `{prev_*}` unresolved (runtime Phase 3)
+6. If `--dry-run`: print wave plan and exit
 
 ---
 
 ### Phase 2: Init Session & Build Wave Plan
 
-**Step 2.1** — Generate session ID: `MCP-<YYYYMMDD>-<HHmmss>`.
-
-**Step 2.2** — Topological sort (Kahn's algorithm) on template nodes + edges.
-
-**Step 2.3** — Classify barrier vs non-barrier per node:
-
-```javascript
-const BARRIER_SKILLS = new Set([
-  'maestro-analyze', 'maestro-plan', 'maestro-brainstorm',
-  'maestro-spec-generate', 'maestro-execute'
-]);
-
-function isBarrier(node) {
-  if (node.type === 'checkpoint') return true;
-  return BARRIER_SKILLS.has(node.executor);
-}
-```
-
-**Step 2.4** — Group into waves:
-
-```javascript
-function buildWaves(sortedNodes) {
-  const waves = [];
-  let currentWave = [];
-  for (const node of sortedNodes) {
-    if (isBarrier(node)) {
-      if (currentWave.length > 0) waves.push(currentWave);
-      waves.push([node]); // barrier = solo wave
-      currentWave = [];
-    } else {
-      currentWave.push(node);
-    }
-  }
-  if (currentWave.length > 0) waves.push(currentWave);
-  return waves;
-}
-```
-
-**Step 2.5** — Build steps array from waves. Write `state.json` to `.workflow/.maestro-coordinate/<session-id>/`.
+1. Generate session ID: `MCP-<YYYYMMDD>-<HHmmss>`
+2. Topological sort (Kahn's algorithm) on template nodes + edges
+3. Classify barrier vs non-barrier: barriers = checkpoint nodes + `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`
+4. Group into waves: barrier nodes → solo wave, non-barrier nodes → accumulate into parallel wave
+5. Build steps array from waves, write `state.json`
 
 **Step 2.6** — Display start banner:
 ```
@@ -223,69 +176,20 @@ function buildWaves(sortedNodes) {
 
 ### Phase 3: Wave Execution Loop
 
-```javascript
-let waveNum = 0;
-while (state.steps.some(s => s.status === 'pending')) {
-  waveNum++;
-  const waveSteps = getNextWave(state.steps);
-```
+Loop while any step has `status === 'pending'`:
 
 **3a. Resolve runtime references** in each step's args:
-
-```javascript
-function resolveArgs(args, steps, context) {
-  return args
-    .replace(/{(\w+)}/g, (_, key) => context[key] ?? '')
-    .replace(/{N-(\d+)\.(\w+)}/g, (_, id, field) => {
-      const step = steps.find(s => s.node_id === `N-${id}`);
-      return step?.[field] ?? '';
-    })
-    .replace(/{prev_(\w+)}/g, (_, field) => {
-      const prev = [...steps].reverse().find(s =>
-        s.status === 'completed' && s.type !== 'checkpoint');
-      return prev?.[field] ?? '';
-    });
-}
-```
+- `{key}` → lookup from `context[key]`
+- `{N-xxx.field}` → lookup from completed step with matching `node_id`
+- `{prev_field}` → lookup from most recently completed non-checkpoint step
 
 **3b. Handle checkpoint nodes** (no CSV spawn needed):
-
-```javascript
-if (waveSteps[0].type === 'checkpoint') {
-  const cp = waveSteps[0];
-  // Save checkpoint snapshot
-  Write(`${sessionDir}/checkpoints/${cp.node_id}.json`, JSON.stringify({
-    session_id: state.id, checkpoint_id: cp.node_id,
-    saved_at: new Date().toISOString(),
-    steps_snapshot: state.steps, context: state.context
-  }, null, 2));
-
-  state.context.last_checkpoint = cp.node_id;
-  cp.status = 'completed'; cp.wave_n = waveNum;
-
-  // If auto_continue == false: pause for user
-  if (!cp.auto_continue) {
-    AskUserQuestion: Continue / Pause / Abort
-    on Pause: state.status = 'paused', save, exit
-    on Abort: state.status = 'aborted', skip remaining, exit
-  }
-
-  Write(stateFile, JSON.stringify(state, null, 2));
-  continue;
-}
-```
+- Save checkpoint snapshot to `checkpoints/{node_id}.json` (session state + context)
+- Update `context.last_checkpoint`, mark completed
+- If `auto_continue === false`: prompt user (Continue / Pause / Abort)
 
 **3c. Build wave CSV** for skill nodes:
-
-```javascript
-const csvContent = 'id,skill_call,topic\n' + waveSteps.map(step => {
-  const resolvedArgs = resolveArgs(step.args, state.steps, state.context);
-  const skillCall = `$${step.skill} ${resolvedArgs}`.trim();
-  return `"${step.step_n}","${skillCall.replace(/"/g, '""')}","Template \"${state.template_name}\" step ${step.step_n}/${state.steps.length}"`;
-}).join('\n');
-
-Write(`${sessionDir}/wave-${waveNum}.csv`, csvContent);
-```
+Write `wave-{N}.csv` with columns `id,skill_call,topic`. Each row: resolved `$${step.skill} ${args}`.
 
 **3d. Spawn agents**:
 
@@ -298,43 +202,14 @@ spawn_agents_on_csv({
   max_runtime_seconds: 1800,
   output_csv_path: `${sessionDir}/wave-${waveNum}-results.csv`,
   output_schema: RESULT_SCHEMA
-});
+})
 ```
 
-**3e. Read results, update state**:
+**3e. Read results**: Map each result row back to its step — update status, findings, artifacts, wave_n.
 
-```javascript
-const results = readCSV(`${sessionDir}/wave-${waveNum}-results.csv`);
-for (const row of results) {
-  const step = state.steps.find(s => s.step_n === parseInt(row.id));
-  step.status = row.status;
-  step.findings = row.summary;
-  step.artifacts = row.artifacts;
-  step.wave_n = waveNum;
-}
-```
+**3f. Barrier analysis**: If barrier wave, read artifacts and update context (see barrier node table in `<context>`).
 
-**3f. Barrier analysis** (if barrier wave):
-
-```javascript
-if (isBarrier(waveSteps[0])) {
-  analyzeBarrierArtifacts(waveSteps[0], results[0], state.context);
-}
-```
-
-**3g. Persist + abort check**:
-
-```javascript
-state.waves.push({ wave_n: waveNum, steps: waveSteps.map(s => s.step_n) });
-Write(stateFile, JSON.stringify(state, null, 2));
-
-if (results.some(r => r.status === 'failed')) {
-  state.status = 'aborted';
-  state.steps.filter(s => s.status === 'pending').forEach(s => s.status = 'skipped');
-  Write(stateFile, JSON.stringify(state, null, 2));
-  break;
-}
-```
+**3g. Persist + abort check**: Append wave record to `state.waves[]`, persist `state.json`. If any result failed → set `state.status = 'aborted'`, mark remaining steps as skipped.
 
 ### Sub-Agent Instruction Template
 

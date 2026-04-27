@@ -31,57 +31,28 @@ $maestro-milestone-audit "M1"
 
 ### Step 1: Parse Arguments
 
-Extract milestone identifier from arguments.
-If empty: read `current_milestone` from `.workflow/state.json`.
-If still empty: error E001.
+Extract milestone identifier from arguments. Fallback: read `current_milestone` from `.workflow/state.json`. If still empty: E001.
 
 ### Step 2: Load Artifact Registry
 
-```bash
-cat .workflow/state.json
-cat .workflow/roadmap.md
-```
-
-- Parse `state.json.artifacts[]` filtered by milestone
-- Parse `roadmap.md` for phase list in this milestone
-- Group artifacts by type and phase
+Read `.workflow/state.json` and `.workflow/roadmap.md`. Filter `artifacts[]` by milestone, parse phase list, group by type and phase.
 
 ### Step 3: Phase Coverage Check
 
-For each phase in roadmap:
-- Check for completed analyze artifact (optional but noted)
-- Check for completed plan artifact (required)
-- Check for completed execute artifact (required)
-
-Report coverage matrix.
+For each phase: check for completed analyze (optional), plan (required), execute (required) artifacts. Report coverage matrix.
 
 ### Step 4: Ad-hoc & Execution Completeness
 
-- Check all adhoc-scoped artifacts are completed
-- For each execute artifact, verify tasks in plan dir are all completed
+Verify all adhoc-scoped artifacts completed. For each execute artifact, verify all tasks in plan dir completed.
 
 ### Step 5: Integration Check
 
-Spawn Agent for cross-phase integration validation:
-- Shared interfaces compatibility
-- Dependency chain satisfaction
-- Data contract consistency
-- API endpoint consistency
-
-Write report to `.workflow/milestones/{milestone}/audit-report.md`
+Spawn Agent for cross-phase validation: shared interfaces, dependency chains, data contracts, API consistency. Write report to `.workflow/milestones/{milestone}/audit-report.md`.
 
 ### Step 6: Verdict
 
-```
-PASS if:
-  - All phases have EXC artifacts (completed)
-  - No critical integration gaps
-  - All adhoc artifacts completed
-
-FAIL if:
-  - Missing EXC artifacts for any phase
-  - Critical integration gaps found
-```
+**PASS**: All phases have completed EXC artifacts, no critical integration gaps, all adhoc completed.
+**FAIL**: Missing EXC artifacts or critical integration gaps found.
 
 Display structured audit report with next-step routing.
 

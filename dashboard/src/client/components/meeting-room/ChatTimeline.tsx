@@ -170,7 +170,7 @@ export function ChatTimeline() {
                   </span>
                   {/* Message bubble */}
                   <div
-                    className={`flex flex-col gap-0.5 max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}
+                    className={`flex flex-col gap-0.5 max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}
                   >
                     {/* Routing indicator */}
                     {!isBroadcast ? (
@@ -184,10 +184,10 @@ export function ChatTimeline() {
                     )}
                     <div
                       className={[
-                        'text-[12px] px-2.5 py-1.5 rounded-lg leading-relaxed',
+                        'text-[12px] px-3 py-2 rounded-xl leading-relaxed shadow-sm',
                         isUser
-                          ? 'bg-accent-muted/15 text-text-primary'
-                          : 'bg-bg-secondary text-text-primary',
+                          ? 'bg-[var(--color-accent-muted)] text-text-primary border border-[var(--color-accent-muted)]'
+                          : 'bg-bg-secondary text-text-primary border border-border-divider',
                       ].join(' ')}
                     >
                       {renderContentWithMentions(msg.content, agents)}
@@ -215,27 +215,28 @@ export function ChatTimeline() {
               transition={{ duration: 0.15, ease: 'easeOut' }}
               className="mt-1"
             >
-              <div className={`flex items-start gap-2 ${isUserEntry ? 'flex-row-reverse' : ''}`}>
+              <div className="flex items-start gap-2">
+                {/* Role badge — prompt uses a muted "prompt" label, replies use role name */}
                 <span
                   className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full mt-0.5 whitespace-nowrap"
                   style={{
-                    background: isUserEntry ? 'var(--color-accent-muted)' : `${badgeColor}18`,
-                    color: isUserEntry ? 'var(--color-text-on-accent, #fff)' : badgeColor,
+                    background: isUserEntry ? 'var(--color-bg-hover)' : `${badgeColor}18`,
+                    color: isUserEntry ? 'var(--color-text-secondary)' : badgeColor,
                   }}
                 >
-                  {isUserEntry ? 'You' : role}
+                  {isUserEntry ? 'prompt' : role}
                 </span>
-                <div className={`flex flex-col gap-0.5 max-w-[75%] ${isUserEntry ? 'items-end' : 'items-start'}`}>
+                <div className="flex flex-col gap-0.5 max-w-[80%] items-start">
                   {!isUserEntry && (
                     <span className="text-[8px] text-text-placeholder font-mono">
                       {processId.slice(0, 8)}
                     </span>
                   )}
                   <div className={[
-                    'text-[12px] px-2.5 py-1.5 rounded-lg leading-relaxed whitespace-pre-wrap',
+                    'text-[12px] px-3 py-2 rounded-xl leading-relaxed whitespace-pre-wrap shadow-sm',
                     isUserEntry
-                      ? 'bg-accent-muted/15 text-text-primary'
-                      : 'bg-bg-secondary text-text-primary',
+                      ? 'bg-bg-secondary text-text-secondary border border-border-divider italic'
+                      : 'bg-bg-secondary text-text-primary border border-border-divider',
                   ].join(' ')}>
                     {content}
                   </div>

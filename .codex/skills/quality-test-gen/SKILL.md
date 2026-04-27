@@ -139,29 +139,21 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column (empty for w
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+```
+Parse from $ARGUMENTS:
+  AUTO_YES       ← --yes | -y
+  continueMode   ← --continue
+  maxConcurrency ← --concurrency | -c N  (default: 6)
+  typeFilter     ← --type unit|integration|e2e  (default: all)
+  framework      ← --framework jest|vitest|...  (default: auto-detect)
+  phaseArg       ← remaining text after flag removal
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 6
+Derive:
+  dateStr        ← UTC+8 YYYYMMDD
+  sessionId      ← "{dateStr}-testgen-P{phaseArg}-{phaseSlug}"
+  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
 
-// Parse test-gen-specific flags
-const typeMatch = $ARGUMENTS.match(/--type\s+(unit|integration|e2e)/)
-const frameworkMatch = $ARGUMENTS.match(/--framework\s+([\w]+)/)
-
-// Clean phase text
-const phaseArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--type\s+\w+|--framework\s+[\w]+/g, '')
-  .trim()
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-testgen-P${phaseArg}-${phaseSlug}`  // phaseSlug from index.json or roadmap
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
+mkdir -p {sessionFolder}
 ```
 
 ### Phase 1: Gap Analysis -> CSV
@@ -172,14 +164,9 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
 
-2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: review → review.json (critical findings become focused test targets), debug → understanding.md (confirmed root causes become regression test targets), test → uat.md (UAT gaps inform which behaviors need tests). Extract conclusions that may affect test generation priorities.
+2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase+milestone. Extract relevant outputs by type: review -> review.json (focused test targets), debug -> understanding.md (regression targets), test -> uat.md (behavior gaps).
 
-3. **Test infrastructure discovery**:
-   - Find config files: `jest.config.*`, `vitest.config.*`, `pytest.ini`, `.mocharc.*`
-   - Find existing test files: `*.test.*`, `*.spec.*`, `test_*`
-   - Find test utilities: `test-utils.*`, `testHelper*`, `conftest.py`
-   - Read 2-3 existing tests to learn patterns (imports, assertions, mocking)
-   - If no framework detected: Error E003
+3. **Test infrastructure discovery**: Scan for config files (`jest.config.*`, `vitest.config.*`, `pytest.ini`, `.mocharc.*`), existing test files (`*.test.*`, `*.spec.*`, `test_*`), and test utilities. Read 2-3 existing tests to learn patterns. Error E003 if no framework detected.
 
 3. **Gap identification**:
 
@@ -219,72 +206,35 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 #### Wave 1: Test Generation (Independent Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (single wave, no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+1. Extract wave 1 pending rows from master `tasks.csv` into `wave-1.csv` (no prev_context needed)
+2. Execute:
 
 ```javascript
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-1.csv`,
   id_column: "id",
   instruction: buildTestGenInstruction(sessionFolder),
-  max_concurrency: maxConcurrency,
-  max_runtime_seconds: 600,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      tests_created: { type: "string" },
-      coverage_delta: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: [completed|failed], findings, tests_created, coverage_delta, error }
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+3. Merge results into master `tasks.csv`, delete `wave-1.csv`
 
-**Agent Instruction Template** (`buildTestGenInstruction`):
-
-Each agent receives:
-- Source file path and test type classification
-- Detected framework and existing test patterns
-- Gap references (requirement IDs, descriptions)
-- RED-GREEN methodology rules:
-  1. **RED**: Write test that fails if behavior is broken (not trivially passing)
-  2. **Verify RED**: Run test -- if passes, strengthen; if fails with expected error, good
-  3. **GREEN assessment**: If source satisfies, gap was missing test; if fails, record as bug discovery
-- Discovery board protocol for sharing test patterns and fixtures
-- Instruction to NOT fix source code -- failing tests are valuable bug documentation
+**Agent Instruction** (`buildTestGenInstruction`): Each agent receives source file path, test type, detected framework, existing patterns, gap references, and RED-GREEN methodology (RED: write failing test -> verify it fails -> GREEN: assess if source satisfies). Agents must NOT fix source code -- failing tests document bugs. Discovery board protocol included.
 
 ### Phase 3: Results Aggregation
 
 **Objective**: Run full suite, generate final results and human-readable report.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
+1. Export final `tasks.csv` as `results.csv`
 
-3. **Run full test suite** to verify no regressions:
-   ```bash
-   {test_run_command} 2>&1 | tail -50
-   ```
-   Categorize: new passing (gap filled), new failing (bug discovered), existing broken (regression).
+2. **Run full test suite**: Categorize results as new passing (gap filled), new failing (bug discovered), existing broken (regression).
 
-4. **Archive previous artifacts** before writing:
-   ```
-   IF file exists "{artifact_dir}/.tests/test-gen-report.json":
-     mkdir -p "{artifact_dir}/.history"
-     mv to "{artifact_dir}/.history/test-gen-report-{TIMESTAMP}.json"
-   ```
+3. **Archive previous artifacts**: Move existing `test-gen-report.json` to `.history/` with timestamp before overwriting.
 
-5. Build `test-gen-report.json`:
+4. Build `test-gen-report.json`:
 
 ```json
 {
@@ -324,49 +274,15 @@ Each agent receives:
 }
 ```
 
-6. Generate `context.md`:
+5. **Generate context.md**: Report with summary (framework, file count, type filter), classification table (unit/integration/e2e/skipped counts), generation results per file (source, type, tests, status, bugs), test suite verification (passing/failing/regression counts), discovered bugs, and next steps.
 
-```markdown
-# Test Generation Report -- Phase {phase}
+6. **Update validation.json**: Change MISSING -> COVERED for gaps that now have tests.
 
-## Summary
-- Framework: {framework}
-- Source files analyzed: {file_count}
-- Test type filter: {type_filter or "all"}
+7. **Copy** `test-gen-report.json` to phase `.tests/` directory.
 
-## Classification
-| Category | Files |
-|----------|-------|
-| Unit | {N} |
-| Integration | {N} |
-| E2E | {N} |
-| Skipped | {N} |
+8. **Register artifact**: Append to `state.json.artifacts[]` with `type: "test"`, `id: TST-NNN`, `depends_on: exec_art.id`.
 
-## Generation Results
-| # | Source File | Type | Tests | Status | Bugs |
-|---|-----------|------|-------|--------|------|
-| 1 | validate.ts | unit | 4 | passing | 0 |
-| 2 | ChatWindow.tsx | e2e | 3 | mixed | 1 |
-
-## Test Suite Verification
-- New tests passing: {N} (coverage gaps filled)
-- New tests failing: {N} (bugs discovered)
-- Existing tests broken: {N} (regressions)
-
-## Bugs Discovered
-{list of failing tests with descriptions -- NOT fixed, documented only}
-
-## Next Steps
-{suggested_next_command}
-```
-
-7. Update `validation.json` gaps: change MISSING -> COVERED for gaps that now have tests.
-
-8. Copy `test-gen-report.json` to phase `.tests/` directory.
-
-9. **Register artifact**: Append to `state.json.artifacts[]` with `type: "test"`, `id: TST-NNN`, `path: "scratch/{YYYYMMDD}-testgen-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch.
-
-10. Display summary.
+9. Display summary.
 
 **Next step routing**:
 
@@ -400,11 +316,7 @@ Each agent receives:
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own test generation
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as found
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `discoveries.ndjson` before test generation. Append-only: dedup by type+key before writing, never modify/delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"test_pattern","data":{"name":"api-endpoint-test","file":"src/api/__tests__/users.test.ts","framework":"vitest","description":"supertest + vitest pattern for REST endpoints"}}' >> {session_folder}/discoveries.ndjson

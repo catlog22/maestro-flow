@@ -70,264 +70,96 @@ $ARGUMENTS — user intent text, or flags.
 
 ### Phase 1: Load Chain Graph
 
-```javascript
-const args = $ARGUMENTS.trim();
-const listMode = /\b--list\b/.test(args);
-const autoYes = /\b(-y|--yes)\b/.test(args);
-const resumeMode = /\b(-c|--continue)\b/.test(args);
-const resumeId = args.match(/(?:-c|--continue)\s+(\S+)/)?.[1] || null;
-const forcedChain = args.match(/--chain\s+(\S+)/)?.[1] || null;
-const intent = args
-  .replace(/\b(-y|--yes|--list|-c|--continue)\b/g, '')
-  .replace(/(?:-c|--continue)\s+\S+/g, '')
-  .replace(/--chain\s+\S+/g, '')
-  .trim();
-```
+Parse `$ARGUMENTS` to extract: `listMode` (`--list`), `autoYes` (`-y`/`--yes`), `resumeMode` (`-c`/`--continue`), `resumeId`, `forcedChain` (`--chain <name>`), `intent` (remaining text).
 
 **`--list`**: Scan `chains/*.json` and `chains/singles/*.json`, display names + descriptions, stop.
 
-**`-c` (resume)**:
-1. Glob `.workflow/.maestro-coordinate/MLC-*/state.json`, pick most recent (or by `resumeId`)
-2. Load state → find first node with `status !== "completed"` → set as `current_node`
-3. Jump to **Phase 2**
+**`-c` (resume)**: Glob `.workflow/.maestro-coordinate/MLC-*/state.json`, pick most recent (or by `resumeId`). Load state → find first incomplete node → jump to Phase 2.
 
 **Fresh session**:
 1. Resolve chain: `--chain` direct or classify from intent using `chains/_intent-map.json`
 2. Load chain JSON: try `chains/{name}.json` then `chains/singles/{name}.json`
 3. Read `.workflow/state.json` for project context (phase, milestone)
-4. Initialize session:
+4. Initialize session state:
 
-```javascript
-const sessionId = `MLC-${dateStr}-${timeStr}`;
-const sessionDir = `.workflow/.maestro-coordinate/${sessionId}`;
-
-const state = {
-  id: sessionId, intent, chain: graph.id, auto_mode: autoYes,
-  status: "in_progress", started_at: new Date().toISOString(),
-  current_node: graph.entry,
-  context: {
-    phase: resolvedPhase ?? null, description: intent,
-    result: null   // last command result, used by decision eval
-  },
-  visit_counts: {},   // nodeId → number
-  history: [],        // { node_id, type, outcome, summary, timestamp }
-};
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
+```json
+{
+  "id": "MLC-{YYYYMMDD}-{HHmmss}",
+  "intent": "<intent>", "chain": "<graph.id>", "auto_mode": false,
+  "status": "in_progress", "started_at": "<ISO>",
+  "current_node": "<graph.entry>",
+  "context": { "phase": null, "description": "<intent>", "result": null },
+  "visit_counts": {},
+  "history": []
+}
 ```
 
-**`--dry-run`**: Display node walk order with types, stop.
+Session dir: `.workflow/.maestro-coordinate/{sessionId}/`
 
+**`--dry-run`**: Display node walk order with types, stop.
 **Confirm** (skip if `autoYes`): Display chain summary, prompt `Proceed?`.
 
 ### Phase 2: Walk Loop
 
-```javascript
-while (state.status === 'in_progress') {
-  const nodeId = state.current_node;
-  const node = graph.nodes[nodeId];
-
-  if (!node) {
-    state.status = 'failed';
-    state.history.push({ node_id: nodeId, type: 'error', outcome: 'failed',
-      summary: `Node "${nodeId}" not found in graph`, timestamp: now() });
-    break;
-  }
-
-  // max_visits guard
-  state.visit_counts[nodeId] = (state.visit_counts[nodeId] ?? 0) + 1;
-  if (node.max_visits && state.visit_counts[nodeId] > node.max_visits) {
-    state.status = 'failed';
-    state.history.push({ node_id: nodeId, type: node.type, outcome: 'max_visits_exceeded',
-      summary: `Exceeded max_visits (${node.max_visits})`, timestamp: now() });
-    break;
-  }
-
-  switch (node.type) {
-    case 'command':  handleCommand(state, graph, nodeId, node); break;
-    case 'decision': handleDecision(state, nodeId, node);       break;
-    case 'gate':     handleGate(state, nodeId, node);            break;
-    case 'terminal': handleTerminal(state, nodeId, node);        break;
-  }
-
-  // Persist after every node
-  Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-}
-```
+Loop while `state.status === 'in_progress'`:
+1. Resolve `current_node` from graph — fail if not found
+2. Increment `visit_counts[nodeId]` — fail if exceeds `node.max_visits`
+3. Dispatch by `node.type`: command → handleCommand, decision → handleDecision, gate → handleGate, terminal → handleTerminal
+4. Persist `state.json` after every node
 
 #### handleCommand — spawn via CSV
 
+1. Build `skill_call` from node config + context + auto_mode
+2. Write single-row CSV: `wave-{nodeId}.csv` with columns `id,skill_call,topic`
+3. Spawn:
+
 ```javascript
-function handleCommand(state, graph, nodeId, node) {
-  // 1. Build skill_call
-  const skillCall = buildSkillCall(node, state.context, state.auto_mode);
-
-  // 2. Write single-row CSV
-  const csvPath = `${sessionDir}/wave-${nodeId}.csv`;
-  const csv = `id,skill_call,topic\n"${nodeId}","${skillCall.replace(/"/g, '""')}","Chain \\"${state.chain}\\" node ${nodeId}"`;
-  Write(csvPath, csv);
-
-  // 3. Spawn
-  spawn_agents_on_csv({
-    csv_path: csvPath,
-    id_column: "id",
-    instruction: AGENT_INSTRUCTION,
-    max_workers: 1,
-    max_runtime_seconds: 1800,
-    output_csv_path: `${sessionDir}/wave-${nodeId}-results.csv`,
-    output_schema: RESULT_SCHEMA
-  });
-
-  // 4. Read result
-  const results = readCSV(`${sessionDir}/wave-${nodeId}-results.csv`);
-  const result = results[0];
-  const outcome = result?.status === 'completed' ? 'success' : 'failed';
-
-  // 5. Update context with result (for downstream decision eval)
-  state.context.result = parseResultContext(result);
-
-  // 6. Record history
-  state.history.push({
-    node_id: nodeId, type: 'command', outcome,
-    summary: result?.summary ?? '', timestamp: now()
-  });
-
-  // 7. Advance or fail
-  if (outcome === 'failed') {
-    if (node.on_failure) {
-      state.current_node = node.on_failure;
-    } else {
-      state.status = 'failed';
-    }
-  } else {
-    state.current_node = node.next;
-  }
-}
+spawn_agents_on_csv({
+  csv_path: csvPath,
+  id_column: "id",
+  instruction: AGENT_INSTRUCTION,
+  max_workers: 1,
+  max_runtime_seconds: 1800,
+  output_csv_path: `${sessionDir}/wave-${nodeId}-results.csv`,
+  output_schema: RESULT_SCHEMA
+})
 ```
+
+4. Read result → parse findings into `state.context.result` (for downstream decision eval)
+5. Record history entry with outcome
+6. Advance: success → `node.next`, failure → `node.on_failure` or fail state
 
 #### handleDecision — in-process expr evaluation
 
-```javascript
-function handleDecision(state, nodeId, node) {
-  // Resolve eval expression from context
-  const evalKey = node.eval;   // e.g. "ctx.result.verification_status"
-  const value = resolveExpr(evalKey, state.context);
-
-  // Match edge
-  let target = null;
-  let matchedLabel = null;
-  for (const edge of node.edges) {
-    if (edge.value !== undefined && String(edge.value) === String(value)) {
-      target = edge.target;
-      matchedLabel = edge.label ?? edge.description ?? String(edge.value);
-      break;
-    }
-    if (edge.match && new RegExp(edge.match).test(String(value))) {
-      target = edge.target;
-      matchedLabel = edge.label ?? edge.description ?? edge.match;
-      break;
-    }
-  }
-  // Default fallback
-  if (!target) {
-    const defaultEdge = node.edges.find(e => e.default);
-    if (defaultEdge) {
-      target = defaultEdge.target;
-      matchedLabel = defaultEdge.label ?? defaultEdge.description ?? 'default';
-    }
-  }
-
-  state.history.push({
-    node_id: nodeId, type: 'decision',
-    outcome: target ? 'resolved' : 'no_match',
-    summary: `${evalKey} = "${value}" → ${matchedLabel ?? 'none'}`,
-    timestamp: now()
-  });
-
-  if (target) {
-    state.current_node = target;
-  } else {
-    state.status = 'failed';
-  }
-}
-```
+1. Evaluate `node.eval` expression (e.g. `ctx.result.verification_status`) against `state.context` via dot-path resolution
+2. Match against `node.edges[]`: first by exact `edge.value`, then by regex `edge.match`, finally `edge.default`
+3. Record history: `evalKey = "value" → matchedLabel`
+4. Advance to matched `edge.target` — fail if no match found
 
 #### handleGate — condition check
 
-```javascript
-function handleGate(state, nodeId, node) {
-  const passed = resolveExpr(node.condition, state.context);
-  state.history.push({
-    node_id: nodeId, type: 'gate',
-    outcome: passed ? 'passed' : 'blocked',
-    summary: `${node.condition} → ${passed}`,
-    timestamp: now()
-  });
-  state.current_node = passed ? node.on_pass : node.on_fail;
-}
-```
+Evaluate `node.condition` against context. Route to `node.on_pass` or `node.on_fail`. Record history with passed/blocked outcome.
 
 #### handleTerminal
 
-```javascript
-function handleTerminal(state, nodeId, node) {
-  state.status = node.status === 'success' ? 'completed' : 'failed';
-  state.history.push({
-    node_id: nodeId, type: 'terminal',
-    outcome: node.status ?? 'completed',
-    summary: node.summary ?? 'Chain walk complete',
-    timestamp: now()
-  });
-}
-```
+Set `state.status` to completed/failed based on `node.status`. Record final history entry.
 
 ### Shared Utilities
 
-```javascript
-const AUTO_FLAG_MAP = {
-  'maestro-analyze': '-y', 'maestro-brainstorm': '-y',
-  'maestro-ui-design': '-y', 'maestro-plan': '--auto',
-  'maestro-spec-generate': '-y', 'quality-test': '--auto-fix',
-  'quality-retrospective': '--auto-yes', 'maestro-roadmap': '-y',
-};
+**AUTO_FLAG_MAP** (skill → auto-confirm flag):
 
-function buildSkillCall(node, ctx, autoMode) {
-  let args = (node.args ?? '')
-    .replace(/{phase}/g, ctx.phase ?? '')
-    .replace(/{description}/g, ctx.description ?? '')
-    .replace(/{issue_id}/g, ctx.issue_id ?? '')
-    .replace(/{milestone_num}/g, ctx.milestone_num ?? '');
-  if (autoMode) {
-    const flag = node.auto_flag ?? AUTO_FLAG_MAP[node.cmd];
-    if (flag && !args.includes(flag)) args = args ? `${args} ${flag}` : flag;
-  }
-  return `$${node.cmd} ${args}`.trim();
-}
+| Skill | Flag |
+|-------|------|
+| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-spec-generate`, `maestro-roadmap` | `-y` |
+| `maestro-plan` | `--auto` |
+| `quality-test` | `--auto-fix` |
+| `quality-retrospective` | `--auto-yes` |
 
-function resolveExpr(expr, ctx) {
-  // expr is "ctx.result.verification_status" or "all_phases_completed"
-  // Navigate dot-path from context root
-  if (!expr) return undefined;
-  const path = expr.replace(/^ctx\./, '').split('.');
-  let val = ctx;
-  for (const key of path) {
-    if (val == null) return undefined;
-    val = val[key];
-  }
-  return val;
-}
+**buildSkillCall(node, ctx, autoMode)**: Substitute `{phase}`, `{description}`, `{issue_id}`, `{milestone_num}` from context into `node.args`. If autoMode, append auto flag from `node.auto_flag` or AUTO_FLAG_MAP. Return `$${node.cmd} ${resolvedArgs}`.
 
-function parseResultContext(result) {
-  // Extract structured fields from agent result for decision eval
-  if (!result) return {};
-  try {
-    const parsed = typeof result.findings === 'string'
-      ? JSON.parse(result.findings) : result.findings;
-    return { ...parsed, _raw_summary: result.summary, _status: result.status };
-  } catch {
-    return { _raw_summary: result.summary ?? '', _status: result.status ?? 'unknown' };
-  }
-}
-```
+**resolveExpr(expr, ctx)**: Navigate dot-path (e.g. `ctx.result.verification_status`) from context root. Strip `ctx.` prefix, walk path segments, return leaf value or undefined.
+
+**parseResultContext(result)**: Parse `result.findings` as JSON if string, merge with `_raw_summary` and `_status`. Fallback to raw summary on parse failure.
 
 ### Sub-Agent Instruction Template
 
@@ -375,12 +207,7 @@ const RESULT_SCHEMA = {
 
 ### Phase 3: Completion Report
 
-```javascript
-state.completed_at = new Date().toISOString();
-Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-```
-
-Display:
+Set `state.completed_at`, persist final `state.json`. Display:
 ```
 === LINK-COORDINATE COMPLETE ===
 Session:  {sessionId}

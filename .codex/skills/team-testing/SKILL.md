@@ -78,56 +78,18 @@ Before calling ANY tool, apply this check:
 
 ### Worker Spawn Template
 
-Coordinator spawns workers using this template:
-
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: <role>
-role_spec: <skill_root>/roles/<role>/role.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-inner_loop: <true|false>
-
-Read role_spec file (<skill_root>/roles/<role>/role.md) to load Phase 2-4 domain instructions.
-
-## Task Context
-task_id: <task-id>
-title: <task-title>
-description: <task-description>
-pipeline_phase: <pipeline-phase>
-
-## Upstream Context
-<prev_context>`
-})
-```
-
-After spawning, use `wait_agent({ timeout_ms: 1800000 })` to collect results (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents. Use `close_agent({ target })` each worker.
+Spawn via `team-worker` agent. Message includes: role, role_spec path, session folder/id, requirement, inner_loop flag, task context, upstream context. After spawning: `wait_agent` (30 min). Timeout: STATUS_CHECK (3 min) -> FINALIZE (3 min) -> close.
 
 ### Model Selection Guide
 
-| Role | model | reasoning_effort | Rationale |
-|------|-------|-------------------|-----------|
-| Strategist (STRATEGY-*) | (default) | high | Test strategy requires deep code understanding |
-| Generator (TESTGEN-*) | (default) | high | Test code generation needs precision |
-| Executor (TESTRUN-*) | (default) | medium | Running tests and collecting results, less reasoning |
-| Analyst (TESTANA-*) | (default) | high | Coverage analysis and quality assessment |
+| Role | reasoning_effort |
+|------|-------------------|
+| Strategist (STRATEGY-*) | high |
+| Generator (TESTGEN-*) | high |
+| Executor (TESTRUN-*) | medium |
+| Analyst (TESTANA-*) | high |
 
-Override model/reasoning_effort in spawn_agent when cost optimization is needed:
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  model: "<model-override>",
-  reasoning_effort: "<effort-level>",
-  message: "..."
-})
-```
+Override via `model`/`reasoning_effort` params in spawn_agent for cost optimization.
 
 ### User Commands
 
@@ -140,66 +102,19 @@ spawn_agent({
 
 ### v4 Agent Coordination
 
-#### Message Semantics
+**Message Semantics**: `send_message` to queue strategy to generators. `list_agents` for health checks. `followup_task` not used (all one-shot).
 
-| Intent | API | Example |
-|--------|-----|---------|
-| Send strategy to running generators | `send_message` | Queue test strategy findings to TESTGEN-* workers |
-| Not used in this skill | `followup_task` | No resident agents -- all workers are one-shot |
-| Check running agents | `list_agents` | Verify parallel generator/executor health |
+**Parallel Test Generation**: Spawn multiple generators per layer (L1/L2/L3) in parallel, then executors.
 
-#### Parallel Test Generation
+**GC Loop Coordination**: Create dynamic TESTGEN-fix and TESTRUN-fix tasks when coverage below target. Track `gc_rounds[layer]`.
 
-Comprehensive pipeline spawns multiple generators (per layer) and executors in parallel:
+**Agent Health Check**: Reconcile `tasks.json` with `list_agents({})`. Reset orphaned tasks to pending.
 
-```
-// Spawn parallel generators for L1 and L2
-const genNames = ["TESTGEN-001", "TESTGEN-002"]
-for (const name of genNames) {
-  spawn_agent({ agent_type: "team_worker", task_name: name, ... })
-}
-wait_agent({ timeout_ms: 1800000 })  // 30 min
-```
-
-#### GC Loop Coordination
-
-Generator-Critic loops create dynamic TESTGEN-fix and TESTRUN-fix tasks. The coordinator tracks `gc_rounds[layer]` and creates fix tasks dynamically when coverage is below target.
-
-#### Agent Health Check
-
-Use `list_agents({})` in handleResume and handleComplete:
-
-```
-// Reconcile session state with actual running agents
-const running = list_agents({})
-// Compare with tasks.json active_agents
-// Reset orphaned tasks (in_progress but agent gone) to pending
-```
-
-#### Named Agent Targeting
-
-Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
-- `send_message({ target: "TESTGEN-001", message: "..." })` -- queue strategy context to running generator
-- `close_agent({ target: "TESTRUN-001" })` -- cleanup by name after wait_agent returns
+**Named Targeting**: `send_message({ target: "TESTGEN-001" })`, `close_agent({ target: "TESTRUN-001" })`.
 
 ### Completion Action
 
-When pipeline completes, coordinator presents:
-
-```
-request_user_input({
-  questions: [{
-    question: "Testing pipeline complete. What would you like to do?",
-    header: "Completion",
-    multiSelect: false,
-    options: [
-      { label: "Archive & Clean (Recommended)", description: "Archive session, clean up team" },
-      { label: "Keep Active", description: "Keep session for follow-up work" },
-      { label: "Deepen Coverage", description: "Add more test layers or increase coverage targets" }
-    ]
-  }]
-})
-```
+Present choice: **Archive & Clean** (recommended), **Keep Active**, **Deepen Coverage** (add layers or raise targets).
 
 ### Session Directory
 

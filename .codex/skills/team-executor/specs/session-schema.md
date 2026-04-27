@@ -43,45 +43,20 @@ team-executor validates the following before execution:
 | Role-spec file mapping | Each role in team-session.json#roles must have .md file | "Role-spec file not found: role-specs/<role>.md" |
 | Role-spec structure | Each role-spec must have YAML frontmatter + Phase 2-4 sections | "Invalid role-spec: role-specs/<role>.md missing required section" |
 
-### Validation Algorithm
+### Validation Order
 
-```
-1. Parse --session=<path> from arguments
-   +- Not provided -> ERROR: "Session required. Usage: --session=<path-to-TC-folder>"
+Validate in sequence; halt on first error:
 
-2. Check directory exists
-   +- Not exists -> ERROR: "Session directory not found: <path>"
+| Step | Target | Required Fields / Checks | Error on Failure |
+|------|--------|--------------------------|------------------|
+| 1 | `--session=<path>` argument | Must be provided | "Session required. Usage: --session=<path-to-TC-folder>" |
+| 2 | Directory at path | Must exist | "Session directory not found: <path>" |
+| 3 | `team-session.json` | Exists, valid JSON, contains: `session_id` (string), `task_description` (string), `status` (active\|paused\|completed), `team_name` (string), `roles` (non-empty array) | "Invalid session: team-session.json missing, corrupt, or missing required fields" |
+| 4 | `task-analysis.json` | Exists, valid JSON, contains: `capabilities` (array), `dependency_graph` (object), `roles` (non-empty array) | "Invalid session: task-analysis.json missing, corrupt, or missing required fields" |
+| 5 | `role-specs/` directory | Exists, contains >= 1 `.md` file | "Invalid session: no role-spec files in role-specs/" |
+| 6 | Role-spec mapping | Each role in `team-session.json#roles` has matching `role-specs/<role.name>.md`; each file passes Role-Spec Structure Validation | "Role-spec file not found: role-specs/<role.name>.md" |
 
-3. Check team-session.json
-   +- Not exists -> ERROR: "Invalid session: team-session.json missing"
-   +- Parse error -> ERROR: "Invalid session: team-session.json corrupt"
-   +- Validate required fields:
-       +- session_id (string) -> missing -> ERROR
-       +- task_description (string) -> missing -> ERROR
-       +- status (string: active|paused|completed) -> invalid -> ERROR
-       +- team_name (string) -> missing -> ERROR
-       +- roles (array, non-empty) -> missing/empty -> ERROR
-
-4. Check task-analysis.json
-   +- Not exists -> ERROR: "Invalid session: task-analysis.json missing"
-   +- Parse error -> ERROR: "Invalid session: task-analysis.json corrupt"
-   +- Validate required fields:
-       +- capabilities (array) -> missing -> ERROR
-       +- dependency_graph (object) -> missing -> ERROR
-       +- roles (array, non-empty) -> missing/empty -> ERROR
-
-5. Check role-specs/ directory
-   +- Not exists -> ERROR: "Invalid session: role-specs/ directory missing"
-   +- No .md files -> ERROR: "Invalid session: no role-spec files in role-specs/"
-
-6. Check role-spec file mapping and structure
-   +- For each role in team-session.json#roles:
-       +- Check role-specs/<role.name>.md exists
-           +- Not exists -> ERROR: "Role-spec file not found: role-specs/<role.name>.md"
-       +- Validate role-spec structure (see Role-Spec Structure Validation)
-
-7. All checks pass -> proceed to Phase 0
-```
+All checks pass -> proceed to Phase 0.
 
 ---
 
@@ -207,24 +182,15 @@ message_types:
 
 ### Role-Spec Structure Validation
 
-```
-For each role-spec in role-specs/<role>.md:
-  1. Read file content
-  2. Check for YAML frontmatter (content between --- markers)
-     +- Not found -> ERROR: "Invalid role-spec: role-specs/<role>.md missing frontmatter"
-  3. Parse frontmatter, check required fields:
-     +- role (string) -> missing -> ERROR
-     +- prefix (string) -> missing -> ERROR
-     +- inner_loop (boolean) -> missing -> ERROR
-     +- message_types (object) -> missing -> ERROR
-  4. Check for "## Phase 2" section
-     +- Not found -> ERROR: "Invalid role-spec: missing Phase 2"
-  5. Check for "## Phase 3" section
-     +- Not found -> ERROR: "Invalid role-spec: missing Phase 3"
-  6. Check for "## Phase 4" section
-     +- Not found -> ERROR: "Invalid role-spec: missing Phase 4"
-  7. All checks pass -> role-spec valid
-```
+Each `role-specs/<role>.md` must satisfy:
+
+| Check | Required | Error on Failure |
+|-------|----------|------------------|
+| YAML frontmatter (between `---` markers) | Present | "Invalid role-spec: missing frontmatter" |
+| Frontmatter fields | `role` (string), `prefix` (string), `inner_loop` (boolean), `message_types` (object) | "Invalid role-spec: missing required field" |
+| Body sections | `## Phase 2`, `## Phase 3`, `## Phase 4` headings present | "Invalid role-spec: missing Phase N" |
+
+All checks pass -> role-spec valid.
 
 ---
 

@@ -30,9 +30,7 @@ $quality-sync "--since abc123 --dry-run"
 
 ### Step 1: Validate
 
-```bash
-test -d .workflow || exit 1  # E001: not initialized
-```
+Verify `.workflow/` directory exists — if missing, raise E001.
 
 ### Step 2: Detect Changes
 
@@ -72,14 +70,7 @@ Update `state.json`:
 
 Update affected `index.json` files in phase directories if task files were modified.
 
-Display summary:
-```
-=== SYNC COMPLETE ===
-Files changed: {N}
-Components affected: {C}
-Features affected: {F}
-Docs updated: {D}
-```
+Display summary: files changed, components affected, features affected, docs updated.
 
 </execution>
 

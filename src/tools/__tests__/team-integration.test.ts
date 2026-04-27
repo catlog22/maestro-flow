@@ -386,10 +386,10 @@ describe('L2: MCP tool registration chain', () => {
     expect(registered).toContain('read_many_files');
     expect(registered).toContain('team_msg');
     expect(registered).toContain('team_mailbox');
-    expect(registered).toContain('core_memory');
+
     expect(registered).toContain('team_task');
     expect(registered).toContain('team_agent');
-    expect(registered).toHaveLength(9);
+    expect(registered).toHaveLength(8);
   });
 
   it('all registered tools have valid schema (name, description, inputSchema)', async () => {

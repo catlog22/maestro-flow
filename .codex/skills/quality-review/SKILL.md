@@ -144,30 +144,16 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+Parse `$ARGUMENTS` to extract:
+- `AUTO_YES` from `--yes` / `-y`
+- `continueMode` from `--continue`
+- `maxConcurrency` from `--concurrency N` / `-c N` (default: 6)
+- `levelMatch` from `--level quick|standard|deep`
+- `dimsMatch` from `--dimensions <list>`
+- `phaseArg` = remaining text after stripping all flags
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 6
-
-// Parse review-specific flags
-const levelMatch = $ARGUMENTS.match(/--level\s+(quick|standard|deep)/)
-const dimsMatch = $ARGUMENTS.match(/--dimensions\s+([\w,]+)/)
-
-// Clean phase text
-const phaseArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--level\s+\w+|--dimensions\s+[\w,]+/g, '')
-  .trim()
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-review-P${phaseArg}-${phaseSlug}`  // phaseSlug from index.json or roadmap
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-```
+Session ID: `{YYYYMMDD}-review-P{phaseArg}-{phaseSlug}` (phaseSlug from index.json or roadmap)
+Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
 
 ### Phase 1: Phase Resolution -> CSV
 
@@ -175,10 +161,10 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Decomposition Rules**:
 
-1. **Phase resolution**: Resolve `{phaseArg}` via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
-2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: execute → .summaries/.task/, review → review.json, debug → understanding.md, test → uat.md. Extract conclusions that may affect this review (prior verdicts, root causes, UAT gaps) and pass as prior quality context to reviewer agents.
-3. **File collection**: Read `.task/TASK-*.json` -> collect all `files[].path` where action != "read"
-3. **Level detection**:
+1. **Phase resolution**: Resolve `{phaseArg}` via `state.json` artifact registry to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
+2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase + milestone. Extract prior quality context (verdicts, root causes, UAT gaps) from artifact outputs by type (execute → .summaries/.task/, review → review.json, debug → understanding.md, test → uat.md)
+3. **File collection**: Read `.task/TASK-*.json` → collect `files[].path` where action != "read"
+4. **Level detection**:
 
 | Condition | Level |
 |-----------|-------|
@@ -187,7 +173,7 @@ Bash(`mkdir -p ${sessionFolder}`)
 | 4-19 changed files | standard |
 | >=20 files OR phase marked critical | deep |
 
-4. **Dimension selection**:
+5. **Dimension selection**:
 
 | Level | Dimensions |
 |-------|------------|
@@ -197,9 +183,8 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 If `--dimensions` flag provided, override with explicit list.
 
-5. **Specs loading**: Read `.workflow/specs/` for project conventions (unless `--skip-specs`)
-
-6. **CSV generation**: One row per dimension + one aggregation row.
+6. **Specs loading**: Read `.workflow/specs/` for project conventions (unless `--skip-specs`)
+7. **CSV generation**: One row per dimension + one aggregation row
 
 **Wave computation**: Simple 2-wave -- all dimension tasks = wave 1, aggregation = wave 2.
 
@@ -211,11 +196,7 @@ If `--dimensions` flag provided, override with explicit list.
 
 #### Wave 1: Dimension Reviews (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+Filter master `tasks.csv` for `wave == 1 AND status == pending` → write `wave-1.csv` (no prev_context needed).
 
 ```javascript
 spawn_agents_on_csv({
@@ -240,32 +221,20 @@ spawn_agents_on_csv({
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`.
 
 #### Wave 2: Aggregation + Deep-Dive
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps -- if all wave 1 tasks failed, skip aggregation
-4. Build `prev_context` from wave 1 findings:
-   ```
-   [Task 1: Correctness Review] Found 2 critical issues: null pointer in login handler...
-   [Task 2: Security Review] Found 1 high issue: SQL injection in query builder...
-   ...
-   ```
-5. Write `wave-2.csv` with `prev_context` column
-6. Execute `spawn_agents_on_csv` for aggregation agent
-7. Merge results into master `tasks.csv`
-8. Delete `wave-2.csv`
+Filter master `tasks.csv` for `wave == 2 AND status == pending`. If all wave 1 tasks failed, skip aggregation.
+
+Build `prev_context` from wave 1 findings (format: `[Task N: Title] summary...` per task).
+Write `wave-2.csv` with `prev_context` column → execute `spawn_agents_on_csv` → merge results → delete `wave-2.csv`.
 
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results and human-readable report.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
-3. Build `review.json`:
+Export master `tasks.csv` as `results.csv`. Build `review.json`:
 
 ```json
 {
@@ -282,7 +251,7 @@ spawn_agents_on_csv({
 }
 ```
 
-4. Generate `context.md`:
+Generate `context.md`:
 
 ```markdown
 # Code Review Report -- Phase {phase}
@@ -315,7 +284,7 @@ spawn_agents_on_csv({
 {list of created issue IDs}
 ```
 
-5. **Verdict determination**:
+**Verdict determination**:
 
 | Condition | Verdict |
 |-----------|---------|
@@ -325,7 +294,7 @@ spawn_agents_on_csv({
 | Medium findings > 5 | WARN |
 | Otherwise | PASS |
 
-6. **Issue creation**: Based on level thresholds:
+**Issue creation** by level threshold:
 
 | Level | Create Issues For |
 |-------|------------------|
@@ -333,11 +302,11 @@ spawn_agents_on_csv({
 | standard | critical + high |
 | deep | critical + high + medium |
 
-7. **Phase index update**: Update `{artifact_dir}/index.json` with review status.
+**Phase index update**: Update `{artifact_dir}/index.json` with review status.
 
-8. **Register artifact**: Append to `state.json.artifacts[]` with `type: "review"`, `id: REV-NNN`, `path: "scratch/{YYYYMMDD}-review-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch, not shared with plan.
+**Register artifact**: Append to `state.json.artifacts[]` with `type: "review"`, `id: REV-NNN`, `path: "scratch/{YYYYMMDD}-review-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch, not shared with plan.
 
-9. Display summary.
+Display summary.
 
 ### Shared Discovery Board Protocol
 
@@ -362,11 +331,7 @@ spawn_agents_on_csv({
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own review
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as found
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `{session_folder}/discoveries.ndjson` before own review. Deduplicate by type + dedup key before writing. Append-only — never modify or delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"vulnerability","data":{"location":"src/auth/login.ts:42","type":"sql_injection","severity":"critical","cwe":"CWE-89"}}' >> {session_folder}/discoveries.ndjson

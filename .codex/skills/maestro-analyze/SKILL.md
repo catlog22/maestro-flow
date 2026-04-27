@@ -161,71 +161,37 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+**Parse from `$ARGUMENTS`**:
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 6
+| Variable | Source | Default |
+|----------|--------|---------|
+| `AUTO_YES` | `--yes` or `-y` | false |
+| `continueMode` | `--continue` | false |
+| `maxConcurrency` | `--concurrency N` or `-c N` | 6 |
+| `QUICK_MODE` | `-q` or `--quick` | false |
+| `GAPS_MODE` | `--gaps` | false |
+| `gapsIssueId` | `--gaps ISS-{id}` | null |
+| `subjectArg` | remaining text after flag removal | "" |
 
-// Parse analyze-specific flags
-const QUICK_MODE = $ARGUMENTS.includes('-q') || $ARGUMENTS.includes('--quick')
-const GAPS_MODE = $ARGUMENTS.includes('--gaps')
-const gapsIssueMatch = $ARGUMENTS.match(/--gaps\s+(ISS-\S+)/)
-const gapsIssueId = gapsIssueMatch ? gapsIssueMatch[1] : null
+**Auto-bootstrap**: If `.workflow/state.json` missing, create minimal `{ project: null, status: "active", current_milestone: null, artifacts: [] }`.
 
-// Clean subject text
-const subjectArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|-q|--quick|--gaps\s+ISS-\S+|--gaps/g, '')
-  .trim()
+**Scope determination** (from `state.json` + `subjectArg`):
 
-// Auto-bootstrap state.json if missing
-if (!fileExists('.workflow/state.json')) {
-  Bash('mkdir -p .workflow/scratch/')
-  writeMinimalStateJson()  // { project: null, status: "active", current_milestone: null, artifacts: [] }
-}
+| Condition | Scope | Slug |
+|-----------|-------|------|
+| `GAPS_MODE` | `gaps` | `gapsIssueId` slugified or `"issue-gaps"` |
+| Empty subject + milestone + roadmap | `milestone` | milestone name slugified |
+| Empty subject, no roadmap | ERROR: `"E001: No args and no roadmap"` | — |
+| Numeric subject + milestone + roadmap | `phase` | phase slug from roadmap |
+| Numeric subject, no roadmap | ERROR: `"Phase number requires init + roadmap"` | — |
+| Text subject + milestone | `adhoc` | subject slugified (max 40 chars) |
+| Text subject, no milestone | `standalone` | subject slugified (max 40 chars) |
 
-// Scope determination (per scratch-milestone-architecture)
-const state = JSON.parse(Read('.workflow/state.json'))
-let scope, slug, phaseNum = null
+**Session paths** (UTC+8 date prefix):
+- `sessionFolder`: `.workflow/.csv-wave/{YYYYMMDD}-analyze-{slug}/`
+- `scratchDir`: `.workflow/scratch/{YYYYMMDD}-analyze-{slug}/`
 
-if (GAPS_MODE) {
-  // --gaps → issue root cause analysis
-  scope = 'gaps'
-  slug = gapsIssueId ? gapsIssueId.toLowerCase().replace(/[^a-z0-9]+/g, '-') : 'issue-gaps'
-} else if (subjectArg === '') {
-  // No args → milestone-wide
-  if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
-    scope = 'milestone'
-    slug = slugify(state.milestones.find(m => m.id === state.current_milestone)?.name || state.current_milestone)
-  } else {
-    ERROR('E001: No args and no roadmap — provide topic text or create roadmap first')
-  }
-} else if (/^\d+$/.test(subjectArg)) {
-  // Phase number
-  if (state.current_milestone && fileExists('.workflow/roadmap.md')) {
-    scope = 'phase'
-    phaseNum = parseInt(subjectArg)
-    slug = resolvePhaseSlugFromRoadmap(phaseNum)  // parse roadmap.md for phase N slug
-  } else {
-    ERROR('Phase number requires init + roadmap')
-  }
-} else {
-  // Text → adhoc or standalone
-  slug = subjectArg.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
-  scope = state.current_milestone ? 'adhoc' : 'standalone'
-}
-
-const dateStr = getUtc8ISOString().substring(0, 10)
-const sessionId = `${dateStr}-analyze-${slug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-const scratchDir = `.workflow/scratch/${dateStr}-analyze-${slug}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-Bash(`mkdir -p ${scratchDir}`)
-```
+Create both directories.
 
 ### Phase 1: Subject Resolution -> CSV
 
@@ -278,11 +244,7 @@ Available exploration dimensions:
 
 #### Wave 1: CLI Exploration (Parallel) [SKIP in -q mode]
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+Filter `wave == 1 && status == pending` from master CSV. No prev_context (no predecessors). Write `wave-1.csv`.
 
 ```javascript
 spawn_agents_on_csv({
@@ -292,43 +254,22 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      score: { type: "string" },
-      recommendations: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: ["completed"|"failed"], findings, score, recommendations, error }
+  // required: id, status, findings
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+Merge results into master `tasks.csv`, delete `wave-1.csv`.
 
-**Exploration agent responsibilities**:
-- 3-layer exploration per dimension:
-  - Layer 1: Module Discovery (breadth) -- search by topic keywords, identify relevant files, map module boundaries
-  - Layer 2: Structure Tracing (depth) -- top 3-5 key files: trace call chains 2-3 levels deep, identify data flow
-  - Layer 3: Code Anchor Extraction (detail) -- each key finding: extract code snippet (20-50 lines) with file:line
+**Exploration agent responsibilities** (3-layer per dimension):
+1. **Module Discovery** (breadth) -- keyword search, relevant files, module boundaries
+2. **Structure Tracing** (depth) -- top 3-5 files: call chains 2-3 levels, data flow
+3. **Code Anchor Extraction** (detail) -- code snippet (20-50 lines) with file:line per finding
 - Share findings via discovery board
 
 #### Wave 2: 6-Dimension Scoring (Parallel) [SKIP in -q mode]
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Build `prev_context` from wave 1 findings:
-   ```
-   [Task 1: Explore Architecture] Module boundaries: src/auth/, src/api/, src/core/. Key pattern: repository layer...
-   [Task 2: Explore Implementation] Error handling: Result type pattern. Type coverage: 85%...
-   [Task 3: Explore Performance] Hot path: request handler chain (3 middleware). No async bottlenecks...
-   ```
-4. Write `wave-2.csv` with `prev_context` column
-5. Execute:
+Filter `wave == 2 && status == pending` from master CSV. Build `prev_context` from wave 1 findings (format: `[Task N: Title] summary...` per exploration task). Write `wave-2.csv` with `prev_context` column.
 
 ```javascript
 spawn_agents_on_csv({
@@ -338,23 +279,12 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      score: { type: "string" },
-      recommendations: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings", "score"]
-  }
+  output_schema: { id, status: ["completed"|"failed"], findings, score, recommendations, error }
+  // required: id, status, findings, score
 })
 ```
 
-6. Read `wave-2-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-2.csv`
+Merge results into master `tasks.csv`, delete `wave-2.csv`.
 
 **Scoring agent responsibilities** (6 dimensions):
 
@@ -371,22 +301,13 @@ Each score MUST include specific evidence (code refs, data points from explorati
 
 #### Wave 3: Decision Synthesis (Single Agent)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 3` (or wave 1 in quick mode) AND `status == pending`
-3. For full mode: check deps -- if all wave 2 tasks failed, use available exploration context
-4. Build `prev_context`:
-   - Full mode: from wave 2 scoring findings
-     ```
-     [Task 4: Score Feasibility] Score: 75. Moderate difficulty, existing patterns support...
-     [Task 5: Score Impact] Score: 90. High user value, significant DX improvement...
-     [Task 6: Score Risk] Score: 40. Main risk: auth regression. Mitigation: incremental rollout...
-     ...
-     ```
-   - Quick mode: from loaded project context (project.md, roadmap, brainstorm artifacts)
-5. Write `wave-3.csv` (or `wave-1.csv` in quick mode) with `prev_context` column
-6. Execute `spawn_agents_on_csv` for synthesis agent
-7. Merge results into master `tasks.csv`
-8. Delete temporary CSV
+Filter `wave == 3` (or wave 1 in quick mode) `&& status == pending`. If full mode and all wave 2 failed, fall back to available exploration context.
+
+**prev_context source**:
+- Full mode: wave 2 scoring findings (format: `[Task N: Score Dim] Score: X. summary...`)
+- Quick mode: loaded project context (project.md, roadmap, brainstorm artifacts)
+
+Write wave CSV with `prev_context`, execute `spawn_agents_on_csv` for synthesis agent, merge results, delete temp CSV.
 
 **Synthesis agent responsibilities**:
 - Compile dimension scores into analysis.md (full mode):
@@ -486,28 +407,9 @@ Each score MUST include specific evidence (code refs, data points from explorati
 }
 ```
 
-6. **Auto-create issues from Deferred items**:
+6. **Auto-create issues from Deferred items**: Filter decisions with `classification == "Deferred"`, append each as issue to `.workflow/issues/issues.jsonl`.
 
-```
-deferred_items = decisions.filter(d => d.classification == "Deferred")
-
-IF deferred_items.length > 0:
-  mkdir -p ".workflow/issues"
-  FOR each item IN deferred_items:
-    Append issue to .workflow/issues/issues.jsonl
-  Print: "Created {N} deferred issues for tracking"
-```
-
-7. **Register artifact in state.json**:
-   ```
-   Read .workflow/state.json
-   next_id = max ANL-NNN + 1 (or 1 if none)
-   Push artifact: { id: "ANL-{next_id}", type: "analyze", milestone: current_milestone,
-     phase: phaseNum, scope: scope, path: scratchDir (relative to .workflow/),
-     status: "completed", depends_on: null, harvested: false,
-     created_at: session_start, completed_at: now() }
-   Write state.json (atomic)
-   ```
+7. **Register artifact in state.json**: Append `{ id: "ANL-{next_id}", type: "analyze", milestone, phase, scope, path: scratchDir, status: "completed", depends_on: null, harvested: false, created_at, completed_at }`.
 8. Copy final outputs (context.md, analysis.md, conclusions.json) from CSV session folder to `scratchDir`
 9. Display summary
 

@@ -7,7 +7,7 @@ import { useI18n } from '@/client/i18n/index.js';
 // ---------------------------------------------------------------------------
 
 /** Routes that need full-bleed layout (no padding, no overflow-y) */
-const FULL_BLEED_ROUTES = ['/supervisor', '/chat'];
+const FULL_BLEED_ROUTES = ['/supervisor', '/chat', '/meeting-room'];
 
 export function MainContent({ children }: { children?: ReactNode }) {
   const { t } = useI18n();

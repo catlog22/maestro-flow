@@ -56,25 +56,13 @@ When `--yes` or `-y`: Skip interactive selection, auto-pick top-scored variant, 
 1. Parse flags from `$ARGUMENTS`: `--styles N`, `--stack`, `--targets`, `--persist`, `--full`, `-y`
 2. **Phase mode** (number): resolve via state.json artifact registry to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
 3. **Scratch mode** (text): create `.workflow/scratch/ui-design-{slug}-{date}/` with minimal index.json
-4. Create output directories:
-   ```bash
-   mkdir -p "${PHASE_DIR}/design-ref/prototypes"
-   mkdir -p "${PHASE_DIR}/design-ref/layout-templates"
-   ```
+4. Create output directories: `${PHASE_DIR}/design-ref/prototypes/` and `${PHASE_DIR}/design-ref/layout-templates/`
 
 ### Step 2: Detect Skill Availability
 
-```bash
-SKILL_PATH=""
-for path in \
-  "skills/ui-ux-pro-max/scripts/search.py" \
-  "$HOME/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/*/scripts/search.py"; do
-  expanded=$(ls $path 2>/dev/null | tail -1)
-  if [ -n "$expanded" ]; then SKILL_PATH="$expanded"; break; fi
-done
-```
+Search for `ui-ux-pro-max` script at `skills/ui-ux-pro-max/scripts/search.py` or `$HOME/.claude/plugins/cache/ui-ux-pro-max-skill/ui-ux-pro-max/*/scripts/search.py`.
 
-- If `--style-skill PKG` provided: override `SKILL_PATH`
+- If `--style-skill PKG` provided: override detected path
 - If `--full`: force self-contained pipeline regardless of skill availability
 
 ### Step 3: Gather Requirements Context
@@ -106,16 +94,7 @@ Present all variants with key attributes (colors, typography, effects).
 
 ### Step 6: Solidify Selected Design
 
-Spawn Agent for token extraction from selected variant:
-
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Extract design tokens from selected variant",
-  prompt: "Extract structured design-tokens.json and animation-tokens.json from the selected design variant. Colors in OKLCH format. Include component_styles, typography.combinations, spacing, border_radius, shadows, breakpoints. Animation tokens: duration, easing, transitions, keyframes, interactions, reduced_motion.",
-  run_in_background: false
-})
-```
+Spawn Agent to extract structured tokens from selected variant: `design-tokens.json` (OKLCH colors, component_styles, typography.combinations, spacing, border_radius, shadows, breakpoints) and `animation-tokens.json` (duration, easing, transitions, keyframes, interactions, reduced_motion).
 
 Write output artifacts:
 - `design-ref/MASTER.md` -- complete design system specification
@@ -125,38 +104,12 @@ Write output artifacts:
 
 ### Step 7: Optional Prototype Generation
 
-For each target, spawn Agent to generate standalone HTML prototype:
-
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Generate HTML prototype for {target}",
-  prompt: "Generate standalone HTML+CSS prototype from design-tokens.json and animation-tokens.json. Realistic content (not lorem ipsum). SVG icons via CDN. Responsive at 375/768/1024px. WCAG AA contrast.",
-  run_in_background: false
-})
-```
+For each target, spawn Agent to generate standalone HTML+CSS prototype from design-tokens.json and animation-tokens.json. Requirements: realistic content (no lorem ipsum), SVG icons via CDN, responsive at 375/768/1024px, WCAG AA contrast.
 
 ### Step 8: Update State and Report
 
 1. Update index.json with `design_ref` status
-2. Display completion report:
-   ```
-   === UI DESIGN READY ===
-   Phase:   {phase_name}
-   Styles:  {style_count} variants, #{selected} selected
-   Stack:   {stack}
-   Targets: {target_list}
-
-   Design System:
-     MASTER.md:  {scratch_dir}/design-ref/MASTER.md
-     Tokens:     {scratch_dir}/design-ref/design-tokens.json
-     Animation:  {scratch_dir}/design-ref/animation-tokens.json
-     Prototypes: {scratch_dir}/design-ref/prototypes/
-
-   Next steps:
-     Skill({ skill: "maestro-plan", args: "{phase}" })
-     Skill({ skill: "maestro-ui-design", args: "{phase} --refine" })
-   ```
+2. Display completion report: phase, variant count + selected, stack, targets, design system artifact paths (`MASTER.md`, `design-tokens.json`, `animation-tokens.json`, `prototypes/`). Suggest next: `$maestro-plan {phase}` or `$maestro-ui-design {phase} --refine`.
 </execution>
 
 <error_codes>

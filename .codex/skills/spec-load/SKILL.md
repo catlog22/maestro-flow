@@ -46,29 +46,19 @@ Extended types (`bug`, `pattern`, `decision`, `rule`, `validation`) are stored i
 
 ### Step 1: Validate Specs Directory
 
-```bash
-test -d .workflow/specs || exit 1  # E001: not initialized
-```
+Verify `.workflow/specs/` exists (E001).
 
 ### Step 2: Parse Arguments
 
-Extract optional `--category` and `--keyword` flags from arguments.
+Extract optional `--category` and `--keyword` flags.
 
 ### Step 3: Load via CLI
 
-```bash
-maestro spec load [--category <cat>] [--keyword <word>]
-```
-
-If CLI unavailable, read files directly and apply keyword filter.
+Run `maestro spec load [--category <cat>] [--keyword <word>]`. If CLI unavailable, read files directly and apply keyword filter.
 
 ### Step 4: Display Results
 
-```
-=== SPECS: {category} {keyword ? "keyword=" + keyword : ""} ===
---- {filename} ({category}) ---
-{matched entry content (tags stripped)}
-```
+Show matched entries grouped by filename and category, with `<spec-entry>` tags stripped.
 </execution>
 
 <error_codes>

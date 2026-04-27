@@ -29,213 +29,82 @@ Synchronous pipeline coordination using spawn_agent + wait_agent.
 
 Read-only status report from tasks.json, then STOP.
 
-1. Read tasks.json
-2. Count tasks by status (pending, in_progress, completed, failed)
+Read tasks.json + team_msg (type="progress", last=50) + team_msg (type="blocker", last=10). Count tasks by status.
 
-```javascript
-// Read progress and blocker messages from message bus
-const progressMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "progress", last: 50
-})
-const blockerMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "blocker", last: 10
-})
+**Output format**:
 ```
-
-Output:
-```
-[coordinator] Review Pipeline Status
-[coordinator] Mode: <pipeline_mode>
-[coordinator] Progress: <completed>/<total> (<percent>%)
-
-[coordinator] Pipeline Graph:
-  SCAN-001: <done|run|wait|deleted> <summary>
-  REV-001:  <done|run|wait|deleted> <summary>
-  FIX-001:  <done|run|wait|deleted> <summary>
-
-  done=completed  >>>=running  o=pending  x=deleted
-
-[coordinator] Active Workers:
-  <task_id>  <role>  <milestone_phase>  <pct>%  "<summary>"  <time_ago>
-
-[coordinator] Blockers:
-  <task_id>  <role>  "<blocker_summary>"  <time_ago>
-  (omit section if no blockers)
-
+[coordinator] Review Pipeline Status — Mode: <pipeline_mode> — Progress: <completed>/<total> (<percent>%)
+[coordinator] Pipeline Graph: <task_id>: <done|run|wait|deleted> <summary> (per task) — done=completed >>>=running o=pending x=deleted
+[coordinator] Active Workers: <task_id> <role> <milestone_phase> <pct>% "<summary>" <time_ago>
+[coordinator] Blockers: <task_id> <role> "<blocker_summary>" <time_ago> (omit if none)
 [coordinator] Ready to spawn: <subjects>
 [coordinator] Commands: 'resume' to advance | 'check' to refresh
-
-**CLI monitoring** (works while coordinator is blocked):
-maestro agent-msg list -s "<session_id>" --type progress --last 10
 ```
+
+**CLI monitoring**: `maestro agent-msg list -s "<session_id>" --type progress --last 10`
 
 Then STOP.
 
 ## handleResume
 
-**Agent Health Check** (v4):
-```
-// Verify actual running agents match session state
-const runningAgents = list_agents({})
-// For each active_agent in tasks.json:
-//   - If agent NOT in runningAgents -> agent crashed
-//   - Reset that task to pending, remove from active_agents
-// This prevents stale agent references from blocking the pipeline
-```
+**Agent Health Check** (v4): Cross-check `list_agents()` against `active_agents`. Missing agents -> reset task to pending.
 
-1. Read tasks.json, check active_agents
-2. No active agents -> handleSpawnNext
-3. Has active agents -> check each status
-   - completed -> mark done in tasks.json
-   - in_progress -> still running
-   - other -> worker failure -> reset to pending
-4. Some completed -> handleSpawnNext
-5. All running -> report status, STOP
+```
+Load active_agents -> route:
+  none -> handleSpawnNext
+  has agents -> classify each: completed | in_progress | failed(reset to pending)
+    some completed -> handleSpawnNext
+    all running -> report status -> STOP
+```
 
 ## handleSpawnNext
 
 Find ready tasks, spawn workers, wait for results, process.
 
-1. Read tasks.json:
-   - completedTasks: status = completed
-   - inProgressTasks: status = in_progress
-   - deletedTasks: status = deleted
-   - readyTasks: status = pending AND all deps in completedTasks
+```
+Classify tasks: completed | in_progress | deleted | ready (pending + all deps completed)
 
-2. No ready + work in progress -> report waiting, STOP
-3. No ready + nothing in progress -> handleComplete
-4. Has ready -> take first ready task:
-   a. Determine role from prefix (use Role-Worker Map)
-   b. Update task status to in_progress in tasks.json
-   c. team_msg log -> task_unblocked
-   d. Spawn team_worker:
+Ready tasks -> route:
+  none + in_progress exists -> report waiting, STOP
+  none + nothing in_progress -> handleComplete
+  has ready -> take first ready task:
+    determine role from prefix (Role-Worker Map)
+    set status="in_progress", log task_unblocked, spawn team_worker, add to active_agents
+```
 
-```javascript
-// 1) Update status in tasks.json
-state.tasks[taskId].status = 'in_progress'
-
-// 2) Spawn worker
-const agentId = spawn_agent({
-  agent_type: "team_worker",
-  task_name: taskId,  // e.g., "SCAN-001" — enables named targeting
-  message: `## Role Assignment
-role: ${role}
-role_spec: ${skillRoot}/roles/${role}/role.md
-session: ${sessionFolder}
-session_id: ${sessionId}
-requirement: ${taskDescription}
-inner_loop: ${innerLoop}
-
+**Spawn worker message template**:
+```
+## Role Assignment
+role: <role> | role_spec: <skillRoot>/roles/<role>/role.md
+session: <session-folder> | session_id: <session-id>
+requirement: <task-description> | inner_loop: <true|false>
 ## Current Task
-- Task ID: ${taskId}
-- Task: ${taskSubject}
-
-Read role_spec file to load Phase 2-4 domain instructions.
-Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 (report).
-
+task_id: <taskId> | subject: <taskSubject>
+Read role_spec for Phase 2-4 instructions. Execute Phase 1 -> role Phase 2-4 -> Phase 5 (report).
 ## Progress Milestones
-session_id: ${sessionId}
-Report progress via team_msg at natural phase boundaries.
-Report blockers immediately via team_msg type="blocker".
-Report completion via team_msg type="task_complete" after report_agent_job_result.`
-})
-
-// 3) Track agent
-state.active_agents[taskId] = { agentId, role, started_at: now }
-
-// 4) Wait for completion — use task_name for stable targeting (v4)
-const waitResult = wait_agent({ timeout_ms: 1800000 })  // 30 min
-
-// Drain progress from message bus
-const progressMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "progress", last: 100
-})
-for (const msg of (progressMsgs.result?.messages || [])) {
-  console.log(`[coordinator] trace: ${msg.summary}`)
-}
-
-if (waitResult.timed_out) {
-  // Status probe before closing
-  followup_task({ target: taskId, message: "STATUS_CHECK: Report current progress, findings so far, and estimated remaining work." })
-  const status = wait_agent({ timeout_ms: 180000 })  // 3 min
-  if (status.timed_out) {
-    followup_task({ target: taskId, message: "FINALIZE: Output all current findings immediately. Time limit reached.", interrupt: true })
-    const forced = wait_agent({ timeout_ms: 180000 })  // 3 min
-    if (forced.timed_out) {
-      const lastProgress = (progressMsgs.result?.messages || [])
-        .filter(m => m.data?.task_id === taskId).pop()
-      state.tasks[taskId].status = 'timed_out'
-      state.tasks[taskId].error = lastProgress
-        ? `Timed out at ${lastProgress.data.phase} (${lastProgress.data.progress_pct}%)`
-        : 'Timed out with no progress reported'
-      close_agent({ target: taskId })
-      delete state.active_agents[taskId]
-    }
-    // else: forced output received, process result
-  }
-  // else: status received, continue processing
-} else {
-  // 5) Collect results
-  state.tasks[taskId].status = 'completed'
-  close_agent({ target: taskId })  // Use task_name, not agentId
-  delete state.active_agents[taskId]
-}
+Report progress via team_msg at phase boundaries. Blockers via type="blocker". Completion via type="task_complete" after report_agent_job_result.
 ```
 
-   e. Check for checkpoints after worker completes:
-      - scanner completes -> read meta.json for findings_count:
-        - findings_count === 0 -> mark remaining REV-*/FIX-* tasks as deleted -> handleComplete
-        - findings_count > 0 -> proceed to handleSpawnNext
-      - reviewer completes AND pipeline_mode === 'full':
-        - autoYes flag set -> write fix-manifest.json, set fix_scope='all' -> handleSpawnNext
-        - NO autoYes -> request_user_input:
-          ```
-          question: "<N> findings reviewed. Proceed with fix?"
-          options:
-            - "Fix all": set fix_scope='all'
-            - "Fix critical/high only": set fix_scope='critical,high'
-            - "Skip fix": mark FIX-* tasks as deleted -> handleComplete
-          ```
-          Write fix_scope to meta.json, write fix-manifest.json, -> handleSpawnNext
-      - fixer completes -> handleSpawnNext (checks for completion naturally)
+**Result collection**: `wait_agent({ timeout_ms: 1800000 })` (30 min), drain progress from team_msg.
 
-5. Update tasks.json, output summary, STOP
+**Timeout escalation**: STATUS_CHECK (3 min) -> FINALIZE with interrupt (3 min) -> mark timed_out with last progress context, close_agent. Normal completion -> mark completed, close_agent (use task_name, not agentId).
 
-**Cross-Agent Supplementary Context** (v4):
+**Checkpoints after completion**:
+- scanner: findings_count === 0 -> delete remaining REV-*/FIX-* -> handleComplete; > 0 -> handleSpawnNext
+- reviewer (full mode): autoYes -> write fix-manifest.json, fix_scope='all'; else request_user_input (Fix all / Fix critical+high only / Skip fix -> delete FIX-* -> handleComplete). Write fix_scope to meta.json.
+- fixer: -> handleSpawnNext (natural completion check)
 
-When spawning workers in a later pipeline phase, send upstream results as supplementary context to already-running workers:
+Update tasks.json, output summary, STOP.
 
-```
-// Example: Send scan results to running reviewer
-send_message({
-  target: "<running-agent-task-name>",
-  message: `## Supplementary Context\n${upstreamFindings}`
-})
-// Note: send_message queues info without interrupting the agent's current work
-```
-
-Use `send_message` (not `followup_task`) for supplementary info that enriches but doesn't redirect the agent's current task.
+**Cross-Agent Supplementary Context** (v4): Use `send_message` (not `followup_task`) to deliver upstream results to running downstream workers as non-interrupting supplementary context.
 
 ## handleComplete
 
-**Cleanup Verification** (v4):
-```
-// Verify all agents are properly closed
-const remaining = list_agents({})
-// If any team agents still running -> close_agent each
-// Ensures clean session shutdown
-```
+**Cleanup Verification** (v4): `list_agents()` -> close any still-running team agents.
 
-Pipeline done. Generate report and completion action.
+Pipeline done. All tasks completed/deleted -> read meta.json, generate summary (mode, target, findings_count, stages, fix results, deliverables). Update session pipeline_status='complete'.
 
-1. All tasks completed or deleted (no pending, no in_progress)
-2. Read final session state from meta.json
-3. Generate pipeline summary: mode, target, findings_count, stages_completed, fix results (if applicable), deliverable paths
-4. Update session: pipeline_status='complete', completed_at=<timestamp>
-5. Read session.completion_action:
-   - interactive -> request_user_input (Archive/Keep/Export)
-   - auto_archive -> Archive & Clean
-   - auto_keep -> Keep Active (status=paused)
+Route by completion_action: interactive (Archive/Keep/Export) | auto_archive | auto_keep.
 
 ## handleAdapt
 
@@ -249,18 +118,11 @@ Capability gap reported mid-pipeline.
 
 ## Fast-Advance Reconciliation
 
-On every coordinator wake:
-1. Read tasks.json for completed tasks
-2. Sync active_agents with actual state
-3. No duplicate spawns
+On every wake: sync completed tasks and active_agents with actual state. No duplicate spawns.
 
 ## State Persistence
 
-After every handler execution:
-1. Reconcile active_agents with actual tasks.json states
-2. Remove entries for completed/deleted tasks
-3. Write updated tasks.json
-4. STOP (wait for next event)
+After every handler: reconcile active_agents with tasks.json, remove completed/deleted entries, write tasks.json, STOP.
 
 ## Error Handling
 

@@ -54,7 +54,6 @@ const MCP_TOOLS = [
   'read_file',
   'read_many_files',
   'team_msg',
-  'core_memory',
 ] as const;
 
 export { MCP_TOOLS };

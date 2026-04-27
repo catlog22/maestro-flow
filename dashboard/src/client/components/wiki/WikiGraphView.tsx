@@ -7,7 +7,7 @@ const TYPE_COLORS: Record<WikiNodeType, string> = {
   spec: '#16a34a',
   issue: '#dc2626',
   lesson: '#ca8a04',
-  memory: '#0891b2',
+  knowhow: '#0891b2',
   note: '#9ca3af',
 };
 

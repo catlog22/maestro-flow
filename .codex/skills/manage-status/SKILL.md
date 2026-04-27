@@ -28,19 +28,11 @@ Reads from:
 
 ### Step 1: Validate Project
 
-```bash
-# Verify .workflow/ exists
-test -d .workflow || exit 1  # E001: not initialized
-test -f .workflow/state.json || exit 1  # E002: state missing
-```
+Verify `.workflow/` exists (E001) and `state.json` is present (E002).
 
 ### Step 2: Load State Files
 
-Read all state sources:
-- `.workflow/state.json` -- project-level state machine
-- `.workflow/roadmap.md` -- milestone and phase structure
-- `.workflow/scratch/*/index.json` -- per-phase metadata and progress (resolved via state.json artifact registry)
-- `.workflow/scratch/*/.task/TASK-*.json` -- individual task statuses (resolved via state.json artifact registry)
+Read: `state.json`, `roadmap.md`, per-phase `scratch/*/index.json`, task files `scratch/*/.task/TASK-*.json` (all resolved via artifact registry).
 
 ### Step 3: Calculate Progress
 
@@ -51,30 +43,7 @@ For each phase directory found:
 
 ### Step 4: Render Dashboard
 
-Display formatted output:
-
-```
-=== PROJECT DASHBOARD ===
-Project: {name} | Status: {state}
-
---- Milestones & Phases ---
-{For each milestone}
-  M{N}: {title}
-  {For each phase}
-    Phase {N}: {title} [{status}] {progress_bar} {completed}/{total} ({pct}%)
-
---- Active Work ---
-Phase {N}: {title}
-  In-progress: {list}
-  Blocked: {list}
-
---- Knowledge Graph ---
-Wiki entries: {total} (spec: {N}, memory: {N}, note: {N}, lesson: {N}, issue: {N})
-Health: {score}/100 | Orphans: {N}
-
---- Next Steps ---
-Based on current state: {suggestion with Skill() reference}
-```
+Display sections: **Milestones & Phases** (per-phase status, progress bars, completion %), **Active Work** (in-progress and blocked tasks), **Knowledge Graph** (wiki entry counts by type, health score, orphans), **Next Steps** (state-based suggestion).
 
 ### Step 5: Suggest Next Steps
 

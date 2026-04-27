@@ -14,7 +14,7 @@ allowed-tools:
 <purpose>
 Unified atomic knowledge capture for the workflow learning library. Captures two types of knowledge:
 - **Insights**: Timeless "eureka moment" entries (patterns, gotchas, techniques) — the default mode
-- **Tips**: Quick contextual notes for cross-session recovery (formerly in `manage-memory-capture tip`)
+- **Tips**: Quick contextual notes for cross-session recovery (formerly in `manage-knowhow-capture tip`)
 
 Both types are stored in `.workflow/learning/lessons.jsonl` with auto-detected phase linkage and keyword-based category inference. Tips are distinguished by `source: "tip"` and implicitly tagged `tip`. Same store as retrospective output, so search and list see the entire knowledge corpus.
 </purpose>

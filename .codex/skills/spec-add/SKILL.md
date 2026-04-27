@@ -50,9 +50,7 @@ Extract category (first token) and content (remainder) from arguments.
 
 ### Step 2: Validate Specs Directory
 
-```bash
-test -d .workflow/specs || exit 1  # E002: not initialized
-```
+Verify `.workflow/specs/` exists (E002).
 
 ### Step 3: Route to File
 
@@ -81,12 +79,7 @@ Append `<spec-entry>` closed-tag block to target file:
 
 ### Step 6: Confirm
 
-```
-Added [{category}] to {target_file}
-Keywords: {kw1}, {kw2}, {kw3}
-Verify: /spec-load --keyword {kw1}
-Remove: /spec-remove <entry-id>
-```
+Display: category, target file, extracted keywords, and commands for verify (`/spec-load`) and remove (`/spec-remove`).
 </execution>
 
 <error_codes>

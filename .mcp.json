@@ -6,7 +6,7 @@
         "bin/maestro-mcp.js"
       ],
       "env": {
-        "MAESTRO_ENABLED_TOOLS": "write_file,edit_file,read_file,read_many_files,team_msg,core_memory"
+        "MAESTRO_ENABLED_TOOLS": "write_file,edit_file,read_file,read_many_files,team_msg"
       }
     },
     "claude_dms3-chrome-devtools": {
@@ -18,6 +18,10 @@
     "exa": {
       "url": "https://mcp.exa.ai/mcp",
       "type": "http"
+    },
+    "meeting-room": {
+      "type": "http",
+      "url": "http://127.0.0.1:3001/api/rooms/persist-test/mcp?token=d42678a5ebd8eb29f5e34112037ff546&agentId=leader"
     }
   }
 }

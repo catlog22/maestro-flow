@@ -163,12 +163,12 @@ describe('WikiWriter', () => {
   });
 
   it('returns 409 on stale expectedHash', async () => {
-    // Use memory path for body-update hash test (spec body updates are blocked)
-    await write('memory/MEM-s.md', `---\ntitle: S\n---\n# S\norig`);
+    // Use knowhow path for body-update hash test (spec body updates are blocked)
+    await write('knowhow/KNW-s.md', `---\ntitle: S\n---\n# S\norig`);
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
     try {
-      await writer.update('memory-s', {
+      await writer.update('knowhow-s', {
         body: 'updated',
         expectedHash: 'deadbeef',
       });
@@ -180,11 +180,11 @@ describe('WikiWriter', () => {
   });
 
   it('updates existing entry preserving frontmatter', async () => {
-    // Use memory path for body-update test (spec body updates are blocked)
-    await write('memory/MEM-s.md', `---\ntitle: Old\ntags:\n  - a\n---\n# Old\nbody`);
+    // Use knowhow path for body-update test (spec body updates are blocked)
+    await write('knowhow/KNW-s.md', `---\ntitle: Old\ntags:\n  - a\n---\n# Old\nbody`);
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const writer = new WikiWriter(tmpRoot, indexer);
-    const entry = await writer.update('memory-s', {
+    const entry = await writer.update('knowhow-s', {
       title: 'New',
       body: 'new body',
     });

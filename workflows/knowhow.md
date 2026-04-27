@@ -8,7 +8,7 @@ Two memory stores with different purposes:
 
 | Store | Path | Format | Index |
 |-------|------|--------|-------|
-| `workflow` | `.workflow/memory/` | `MEM-*.md`, `TIP-*.md` | `.workflow/wiki-index.json` (unified, auto-managed by WikiIndexer) |
+| `workflow` | `.workflow/knowhow/` | `KNW-*.md`, `TIP-*.md` | `.workflow/wiki-index.json` (unified, auto-managed by WikiIndexer) |
 | `system` | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
 
 **System memory path detection:**
@@ -19,14 +19,14 @@ Two memory stores with different purposes:
 
 ---
 
-## Part A: Memory Management (manage-memory)
+## Part A: Memory Management (manage-knowhow)
 
 Operations: list, search, view, edit, delete, prune across both stores.
 
 ### Step 1: Resolve Paths
 
 Detect both memory store paths:
-- **Workflow**: `.workflow/memory/` (index: `.workflow/wiki-index.json`, auto-managed by WikiIndexer)
+- **Workflow**: `.workflow/knowhow/` (index: `.workflow/wiki-index.json`, auto-managed by WikiIndexer)
 - **System**: `~/.claude/projects/{project-path}/memory/` where project-path derives from project root (e.g., `D:\maestro2` → `D--maestro2`)
 
 Verify which stores exist (workflow: directory exists; system: `MEMORY.md` exists). Neither → E001.
@@ -46,7 +46,7 @@ Parse arguments and detect subcommand:
 | Ambiguous | AskUserQuestion |
 
 **Store auto-detection for view/edit/delete:**
-- Argument matches `MEM-*` or `TIP-*` pattern → workflow store
+- Argument matches `KNW-*` or `TIP-*` pattern → workflow store
 - Argument matches `MEMORY.md` or `*.md` filename → system store
 - Explicit `--store` flag overrides
 
@@ -74,7 +74,7 @@ Rank: exact match > heading match > content match. Display each result with stor
 
 Display full content of a memory entry with metadata header (store, file path, modified date, line count).
 
-- **Workflow** (`MEM-*`/`TIP-*`): validate via `maestro wiki get <id>` or `wiki-index.json`, read `.md` file
+- **Workflow** (`KNW-*`/`TIP-*`): validate via `maestro wiki get <id>` or `wiki-index.json`, read `.md` file
 - **System** (filename): validate exists in system memory dir, read full content
 
 If not found, suggest similar entries/files.
@@ -109,14 +109,14 @@ Read `wiki-index.json` → apply filters → display candidates → `--dry-run` 
 ### Step 9: Integrity Check (after delete/prune only)
 
 Post-operation integrity check:
-- **Workflow**: compare `.workflow/memory/*.md` files against `wiki-index.json` entries (type=memory). Report orphans/dangling refs. WikiIndexer re-indexes on next write.
+- **Workflow**: compare `.workflow/knowhow/*.md` files against `wiki-index.json` entries (type=memory). Report orphans/dangling refs. WikiIndexer re-indexes on next write.
 - **System**: check `MEMORY.md` links to topic files, report broken links.
 
 ---
 
-## Part B: Memory Capture (manage-memory-capture)
+## Part B: Memory Capture (manage-knowhow-capture)
 
-Capture session working memory into `.workflow/memory/` for cross-session recovery. Two modes: compact (full session compression) and tip (quick note-taking).
+Capture session working memory into `.workflow/knowhow/` for cross-session recovery. Two modes: compact (full session compression) and tip (quick note-taking).
 
 ### Step 1: Parse Input
 
@@ -148,7 +148,7 @@ Extract session state into `sessionAnalysis` with fields: `projectRoot` (absolut
 
 Generate structured markdown content.
 
-**Compact mode**: Generate `MEM-{YYYYMMDD-HHMMSS}.md` with all `sessionAnalysis` fields as markdown sections (Session ID, Project Root, Objective, Execution Plan in details block, Working/Reference Files, Last Action, Decisions, Constraints, Dependencies, Known Issues, Changes Made, Pending, Notes).
+**Compact mode**: Generate `KNW-{YYYYMMDD-HHMMSS}.md` with all `sessionAnalysis` fields as markdown sections (Session ID, Project Root, Objective, Execution Plan in details block, Working/Reference Files, Last Action, Decisions, Constraints, Dependencies, Known Issues, Changes Made, Pending, Notes).
 
 **Tip mode**: Generate `TIP-{YYYYMMDD-HHMMSS}.md` with sections: Tip ID, Timestamp, Content, Tags (from `--tag`), Context (auto-detected from recent conversation files).
 

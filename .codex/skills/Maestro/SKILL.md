@@ -79,36 +79,15 @@ After a barrier skill completes **in its spawned sub-agent**, coordinator reads 
 
 ### Barrier Analysis Logic
 
-```javascript
-function analyzeBarrierArtifacts(step, result, ctx) {
-  const artifactPath = result.artifacts;
-  switch (step.skill) {
-    case 'maestro-analyze':
-      const contextMd = Read(`${artifactPath}/context.md`);
-      ctx.analysis_dir = artifactPath;
-      ctx.gaps = extractGaps(contextMd);
-      if (!ctx.phase) ctx.phase = extractPhase(contextMd);
-      break;
-    case 'maestro-plan':
-      const planJson = JSON.parse(Read(`${artifactPath}/plan.json`));
-      ctx.plan_dir = artifactPath;
-      ctx.task_count = planJson.tasks?.length ?? 0;
-      ctx.wave_count = planJson.waves?.length ?? 0;
-      break;
-    case 'maestro-brainstorm':
-      ctx.brainstorm_dir = artifactPath;
-      break;
-    case 'maestro-spec-generate':
-      ctx.spec_session_id = extractSpecId(artifactPath);
-      break;
-    case 'maestro-execute':
-      const execResults = Read(`${artifactPath}/results.csv`);
-      ctx.exec_completed = countStatus(execResults, 'completed');
-      ctx.exec_failed = countStatus(execResults, 'failed');
-      break;
-  }
-}
-```
+After each barrier skill completes, read its artifacts and update `state.context`:
+
+| Barrier Skill | Read | Context Updates |
+|---------------|------|-----------------|
+| `maestro-analyze` | `{artifacts}/context.md` | `analysis_dir`, `gaps` (extracted), `phase` (if unset) |
+| `maestro-plan` | `{artifacts}/plan.json` | `plan_dir`, `task_count`, `wave_count` from plan JSON |
+| `maestro-brainstorm` | `{artifacts}/` | `brainstorm_dir` |
+| `maestro-spec-generate` | `{artifacts}/` | `spec_session_id` (extracted) |
+| `maestro-execute` | `{artifacts}/results.csv` | `exec_completed`, `exec_failed` (counted by status) |
 </barrier_skills>
 
 <execution>
@@ -123,23 +102,17 @@ function analyzeBarrierArtifacts(step, result, ctx) {
 3. Otherwise classify intent via keyword heuristics (see chain_map)
 4. No match + not AUTO_YES → one clarifying question via `AskUserQuestion`
 5. Resolve chain's skill list
-6. Write `state.json`:
+6. Create session dir `.workflow/.maestro-coordinate/MCC-{dateStr}-{timeStr}/` and write `state.json`:
 
-```javascript
-const sessionId = `MCC-${dateStr}-${timeStr}`;
-const sessionDir = `.workflow/.maestro-coordinate/${sessionId}`;
-
-Write(`${sessionDir}/state.json`, JSON.stringify({
-  id: sessionId, intent, chain: resolvedChain, auto_yes: AUTO_YES,
-  status: "in_progress", started_at: new Date().toISOString(),
-  context: { phase: null, plan_dir: null, analysis_dir: null,
-             brainstorm_dir: null, spec_session_id: null, gaps: null },
-  waves: [],
-  steps: chain.map((skill, i) => ({
-    step_n: i + 1, skill: skill.cmd, args: skill.args ?? '',
-    status: "pending", wave_n: null
-  }))
-}, null, 2));
+```json
+{
+  "id": "MCC-{dateStr}-{timeStr}", "intent": "...", "chain": "...",
+  "auto_yes": false, "status": "in_progress", "started_at": "ISO",
+  "context": { "phase": null, "plan_dir": null, "analysis_dir": null,
+               "brainstorm_dir": null, "spec_session_id": null, "gaps": null },
+  "waves": [],
+  "steps": [{ "step_n": 1, "skill": "...", "args": "", "status": "pending", "wave_n": null }]
+}
 ```
 
 **`--dry-run`**: Display chain with `[BARRIER]` markers, stop.
@@ -148,95 +121,41 @@ Write(`${sessionDir}/state.json`, JSON.stringify({
 
 ### Phase 2: Wave Execution Loop
 
-```javascript
-let waveNum = 0;
-while (state.steps.some(s => s.status === 'pending')) {
-  waveNum++;
-  const waveSteps = buildNextWave(state.steps);
+**While pending steps remain**, increment `waveNum` and repeat:
 
-  // Build CSV — coordinator assembles skill_call, sub-agent executes verbatim
-  const csvContent = 'id,skill_call,topic\n' + waveSteps.map(step =>
-    `"${step.step_n}","${buildSkillCall(step, state.context).replace(/"/g, '""')}","Chain \"${state.chain}\" step ${step.step_n}/${state.steps.length}"`
-  ).join('\n');
-  Write(`${sessionDir}/wave-${waveNum}.csv`, csvContent);
-
-  // Spawn — ALL execution via spawn_agents_on_csv, never direct
-  spawn_agents_on_csv({
-    csv_path: `${sessionDir}/wave-${waveNum}.csv`,
-    id_column: "id", instruction: WAVE_INSTRUCTION,
-    max_workers: waveSteps.length > 1 ? waveSteps.length : 1,
-    max_runtime_seconds: 1800,
-    output_csv_path: `${sessionDir}/wave-${waveNum}-results.csv`,
-    output_schema: RESULT_SCHEMA
-  });
-
-  // Read results, update status
-  const results = readCSV(`${sessionDir}/wave-${waveNum}-results.csv`);
-  for (const row of results) {
-    const step = state.steps.find(s => s.step_n === parseInt(row.id));
-    step.status = row.status; step.findings = row.findings; step.wave_n = waveNum;
-  }
-
-  // Barrier: read artifacts, update context (NOT execute — skill already ran in sub-agent)
-  if (isBarrier(waveSteps[0].skill)) {
-    analyzeBarrierArtifacts(waveSteps[0], results[0], state.context);
-  }
-
-  // Persist + abort check
-  state.waves.push({ wave_n: waveNum, steps: waveSteps.map(s => s.step_n), results });
-  Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-
-  if (results.some(r => r.status === 'failed')) {
-    state.status = 'aborted';
-    state.steps.filter(s => s.status === 'pending').forEach(s => s.status = 'skipped');
-    Write(`${sessionDir}/state.json`, JSON.stringify(state, null, 2));
-    break;
-  }
-}
-```
+1. **Build wave**: Select next wave steps via `buildNextWave` (barrier = solo, non-barriers = grouped)
+2. **Write CSV**: `{sessionDir}/wave-{N}.csv` with columns `id,skill_call,topic` — one row per step, skill_call assembled with resolved context
+3. **Spawn**:
+   ```
+   spawn_agents_on_csv({
+     csv_path: "{sessionDir}/wave-{N}.csv",
+     id_column: "id", instruction: WAVE_INSTRUCTION,
+     max_workers: <wave size>, max_runtime_seconds: 1800,
+     output_csv_path: "{sessionDir}/wave-{N}-results.csv",
+     output_schema: RESULT_SCHEMA
+   })
+   ```
+4. **Read results**: Update each step's `status`, `findings`, `wave_n` from results CSV
+5. **Barrier check**: If wave was a barrier skill, run barrier analysis logic (read artifacts, update context)
+6. **Persist**: Append wave to `state.waves[]`, write `state.json`
+7. **Abort on failure**: If any result `status === 'failed'` → mark remaining steps `skipped`, set `state.status = 'aborted'`, break
 
 ### Skill Call Assembly
 
-```javascript
-const BARRIER_SKILLS = new Set([
-  'maestro-analyze', 'maestro-plan', 'maestro-brainstorm',
-  'maestro-spec-generate', 'maestro-execute'
-]);
-const AUTO_FLAG_MAP = {
-  'maestro-analyze': '-y', 'maestro-brainstorm': '-y',
-  'maestro-ui-design': '-y', 'maestro-plan': '--auto',
-  'maestro-spec-generate': '-y', 'quality-test': '--auto-fix',
-  'quality-retrospective': '--auto-yes',
-};
+**Barrier skills**: `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`
 
-function buildSkillCall(step, ctx) {
-  let args = (step.args ?? '')
-    .replace(/{phase}/g, ctx.phase ?? '')
-    .replace(/{description}/g, state.intent ?? '')
-    .replace(/{issue_id}/g, ctx.issue_id ?? '')
-    .replace(/{plan_dir}/g, ctx.plan_dir ?? '')
-    .replace(/{analysis_dir}/g, ctx.analysis_dir ?? '')
-    .replace(/{brainstorm_dir}/g, ctx.brainstorm_dir ?? '')
-    .replace(/{spec_session_id}/g, ctx.spec_session_id ?? '');
-  if (state.auto_yes) {
-    const flag = AUTO_FLAG_MAP[step.skill];
-    if (flag && !args.includes(flag)) args = args ? `${args} ${flag}` : flag;
-  }
-  return `$${step.skill} ${args}`.trim();
-}
+**Auto-yes flag map** (appended when `state.auto_yes` is true):
 
-function buildNextWave(steps) {
-  const pending = steps.filter(s => s.status === 'pending');
-  if (!pending.length) return [];
-  if (BARRIER_SKILLS.has(pending[0].skill)) return [pending[0]];
-  const wave = [pending[0]];
-  for (let i = 1; i < pending.length; i++) {
-    if (BARRIER_SKILLS.has(pending[i].skill)) break;
-    wave.push(pending[i]);
-  }
-  return wave;
-}
-```
+| Skill | Flag |
+|-------|------|
+| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-spec-generate` | `-y` |
+| `maestro-plan` | `--auto` |
+| `quality-test` | `--auto-fix` |
+| `quality-retrospective` | `--auto-yes` |
+
+**`buildSkillCall(step, ctx)`**: Replace placeholders `{phase}`, `{description}`, `{issue_id}`, `{plan_dir}`, `{analysis_dir}`, `{brainstorm_dir}`, `{spec_session_id}` in `step.args` with corresponding `ctx` values. Append auto-yes flag if applicable. Return `$<skill> <args>`.
+
+**`buildNextWave(steps)`**: Take first pending step. If it is a barrier skill, return it solo. Otherwise, collect consecutive non-barrier pending steps into one wave (stop at first barrier).
 
 ### Sub-Agent Instruction Template
 
@@ -259,19 +178,7 @@ function buildNextWave(steps) {
 
 ### Result Schema
 
-```javascript
-const RESULT_SCHEMA = {
-  type: "object",
-  properties: {
-    status: { type: "string", enum: ["completed", "failed"] },
-    skill_call: { type: "string" },
-    summary: { type: "string" },
-    artifacts: { type: "string" },
-    error: { type: "string" }
-  },
-  required: ["status", "skill_call", "summary", "artifacts", "error"]
-};
-```
+Object with all fields required: `status` ("completed"|"failed"), `skill_call` (string), `summary` (string), `artifacts` (path or ""), `error` (reason or "").
 
 ### Phase 3: Completion Report
 

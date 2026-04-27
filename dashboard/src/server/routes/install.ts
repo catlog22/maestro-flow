@@ -192,7 +192,7 @@ export function createInstallRoutes(): Hono {
       if (mcpConfig?.enabled && components.includes('mcp')) {
         const isWin = process.platform === 'win32';
         const env: Record<string, string> = {
-          MAESTRO_ENABLED_TOOLS: mcpConfig.enabledTools?.join(',') ?? 'write_file,edit_file,read_file,read_many_files,team_msg,core_memory',
+          MAESTRO_ENABLED_TOOLS: mcpConfig.enabledTools?.join(',') ?? 'write_file,edit_file,read_file,read_many_files,team_msg',
         };
         if (mcpConfig.projectRoot) env.MAESTRO_PROJECT_ROOT = mcpConfig.projectRoot;
 

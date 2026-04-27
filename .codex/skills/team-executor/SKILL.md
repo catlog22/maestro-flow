@@ -67,86 +67,27 @@ $ARGUMENTS — session path (required).
 
 ### Orchestration Lifecycle
 
-```
-Validate session
-  -> Phase 0: Reconcile state (reset interrupted, detect orphans)
-  -> Phase 1: Spawn first batch team-worker agents (background) -> STOP
-  -> Worker executes -> callback -> executor advances next step
-  -> Loop until pipeline complete -> Phase 2 report + completion action
-```
+Validate session -> Phase 0 (reconcile state, reset interrupted tasks, detect orphans) -> Phase 1 (spawn first batch workers, STOP) -> callback loop (advance next step) -> Phase 2 (report + completion action).
 
 ### Worker Spawn Template
 
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: <role>
-role_spec: <session-folder>/role-specs/<role>.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-inner_loop: <true|false>
+Spawn via `team-worker` agent with role-spec path from session. Message includes: role, role_spec, session folder/id, requirement, inner_loop flag, task context, upstream context. After spawning: `wait_agent` (30 min). Timeout: STATUS_CHECK (3 min) -> FINALIZE (3 min) -> mark timed_out, close.
 
-Read role_spec file to load Phase 2-4 domain instructions.
+### Model Selection
 
-## Task Context
-task_id: <task-id>
-title: <task-title>
-description: <task-description>
-pipeline_phase: <pipeline-phase>
-
-## Upstream Context
-<prev_context>`
-})
-```
-
-After spawning: `wait_agent({ timeout_ms: 1800000 })` (30 min). If `result.timed_out`: STATUS_CHECK via followup_task (3 min) → FINALIZE with interrupt (3 min) → mark timed_out, close agents.
-
-### Model Selection Guide
-
-Roles loaded dynamically from session role-specs:
-- Implementation/fix roles: `reasoning_effort: "high"`
-- Verification/test roles: `reasoning_effort: "medium"`
-- Default when unclear: `reasoning_effort: "high"`
+Implementation/fix roles: `reasoning_effort: "high"`. Verification/test: `"medium"`. Default: `"high"`.
 
 ### State Reconciliation
 
-On resume, reconcile session state with actual running agents:
-```
-const running = list_agents({})
-// Compare with task-analysis.json active tasks
-// Reset orphaned tasks (in_progress but agent gone) to pending
-```
+On resume: compare `list_agents({})` with task-analysis.json. Reset orphaned tasks to pending.
 
 ### Worker Communication
 
-- `send_message({ target: "<task-id>", message: "..." })` — queue supplementary context
-- `followup_task({ target: "<task-id>", message: "..." })` — assign new work to inner_loop worker
-- `close_agent({ target: "<task-id>" })` — cleanup completed worker
+`send_message` (supplementary context), `followup_task` (assign work to inner_loop worker), `close_agent` (cleanup).
 
 ### Completion Action
 
-```
-request_user_input({
-  questions: [{
-    question: "Team pipeline complete. What would you like to do?",
-    options: [
-      { label: "Archive & Clean (Recommended)", description: "Archive session, clean up team" },
-      { label: "Keep Active", description: "Keep session for follow-up work" },
-      { label: "Export Results", description: "Export deliverables to target directory, then clean" }
-    ]
-  }]
-})
-```
-
-| Choice | Steps |
-|--------|-------|
-| Archive & Clean | Update session status="completed" -> output final summary with artifact paths |
-| Keep Active | Update session status="paused" -> output resume command |
-| Export Results | request_user_input(target path) -> copy artifacts -> Archive & Clean |
+Present choice: **Archive & Clean** (mark completed, output summary), **Keep Active** (mark paused, output resume command), **Export Results** (prompt path, copy, archive).
 </execution>
 
 <error_codes>

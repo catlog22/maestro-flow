@@ -36,10 +36,7 @@ Parallel `maestro wiki` commands: `list --json`, `health`, `orphans`, `hubs --to
 - **Parent cluster**: Entries sharing the same parent but not linked to each other
 
 ### Stage 3: Score Candidates
-```
-score = 0.4 × tag_overlap + 0.3 × title_bm25 + 0.2 × same_category + 0.1 × type_bridge
-```
-Filter by `--min-similarity`, rank desc, limit by `--max`.
+Score = 0.4 x tag_overlap + 0.3 x title_bm25 + 0.2 x same_category + 0.1 x type_bridge. Filter by `--min-similarity`, rank desc, limit by `--max`.
 
 ### Stage 4: Present Suggestions
 Display ranked suggestions with scores, reasons, projected health delta.

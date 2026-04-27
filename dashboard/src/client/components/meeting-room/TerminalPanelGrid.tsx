@@ -70,19 +70,19 @@ function TerminalPane({ role, processId }: { role: string; processId?: string })
   const statusColor = AGENT_STATUS_COLORS[agent?.status ?? 'offline'];
   const isExpanded = expandedTerminals.includes(role);
 
-  // Auto-scroll to bottom on new entries
+  // Auto-scroll to bottom on new entries or streaming updates
   const prevLen = useRef(0);
   useEffect(() => {
-    if (entries.length > prevLen.current) {
+    if (entries.length > prevLen.current || isStreaming) {
       const el = scrollRef.current;
       if (el) el.scrollTop = el.scrollHeight;
     }
     prevLen.current = entries.length;
-  }, [entries.length]);
+  }, [entries.length, entries, isStreaming]);
 
   return (
     <div
-      className="flex flex-col rounded-lg border border-border-divider bg-bg-primary overflow-hidden"
+      className="flex flex-col h-full rounded-lg border border-border-divider bg-bg-primary overflow-hidden"
       style={isExpanded ? { gridColumn: '1 / -1', gridRow: '1 / -1' } : undefined}
     >
       {/* Pane header */}
@@ -196,7 +196,7 @@ export function TerminalPanelGrid() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="min-h-0 overflow-hidden"
+              className="min-h-0 overflow-hidden h-full"
             >
               <TerminalPane role={agent.role} processId={agent.processId} />
             </motion.div>

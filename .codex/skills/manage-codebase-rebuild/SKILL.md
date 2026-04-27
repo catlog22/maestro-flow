@@ -157,25 +157,15 @@ Single wave generates `wave-1.csv`. No `prev_context` needed (all tasks independ
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+Parse `$ARGUMENTS` to extract:
+- `AUTO_YES` from `--yes` / `-y`
+- `continueMode` from `--continue`
+- `maxConcurrency` from `--concurrency N` / `-c N` (default: 5)
+- `forceMode` from `--force` (or implied by AUTO_YES)
+- `skipCommit` from `--skip-commit`
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 5
-
-// Parse rebuild-specific flags
-const forceMode = $ARGUMENTS.includes('--force') || AUTO_YES
-const skipCommit = $ARGUMENTS.includes('--skip-commit')
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-rebuild-full`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-```
+Session ID: `{YYYYMMDD}-rebuild-full`
+Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
 
 ### Phase 1: Setup -> CSV
 
@@ -183,36 +173,18 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 **Steps**:
 
-1. **Validate .workflow/ exists**:
-   - Check `.workflow/state.json` exists
-   - If not: abort with "Run init first"
-
-2. **Confirm rebuild**:
-   - If `.workflow/codebase/` exists AND NOT forceMode:
-     ```
-     AskUserQuestion: "Codebase docs already exist. Rebuild will overwrite all files. Continue? [y/N]"
-     If no: exit
-     ```
-   - If forceMode or confirmed: clear `.workflow/codebase/`
-
-3. **Prepare directory structure**:
+1. **Validate** `.workflow/state.json` exists — abort with "Run init first" if missing
+2. **Confirm rebuild**: If `.workflow/codebase/` exists AND NOT forceMode, prompt user. If forceMode or confirmed, clear `.workflow/codebase/`
+3. **Prepare directories**:
    ```bash
    mkdir -p .workflow/codebase/tech-registry
    mkdir -p .workflow/codebase/feature-maps
    mkdir -p .workflow/codebase/action-logs
    ```
-
-4. **Detect source directories**:
-   - Check for: `src/`, `lib/`, `app/`, `packages/`
-   - Read `project.md` Tech Stack section if available for context
-   - If no source directories found: abort with "No source files in project"
-
-5. **Load project specs** (if available):
-   - Read `.workflow/specs/` for architecture context
-
-6. **Generate tasks.csv**: 5 rows, all wave 1, no dependencies.
-
-7. **User validation**: Display doc generator breakdown. Skip if AUTO_YES.
+4. **Detect source directories**: `src/`, `lib/`, `app/`, `packages/` — abort if none found
+5. **Load project specs** from `.workflow/specs/` if available
+6. **Generate tasks.csv**: 5 rows, all wave 1, no dependencies
+7. **User validation**: Display doc generator breakdown (skip if AUTO_YES)
 
 ### Phase 2: Wave Execution (Single Wave)
 
@@ -220,11 +192,7 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 #### Wave 1: All Generators (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (single wave, all independent)
-4. Write `wave-1.csv`
-5. Execute:
+Filter master `tasks.csv` for `wave == 1 AND status == pending` → write `wave-1.csv` (no prev_context needed, all independent).
 
 ```javascript
 spawn_agents_on_csv({
@@ -247,21 +215,15 @@ spawn_agents_on_csv({
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`.
 
 ### Phase 3: Results -> .workflow/codebase/
 
 **Objective**: Assemble doc-index.json from agent findings, validate, update state.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
+Export master `tasks.csv` as `results.csv`.
 
-3. **Assemble doc-index.json**:
-   - Read component findings from task 1 (Component Scanner)
-   - Read feature findings from task 2 (Feature Mapper)
-   - Read requirement/ADR findings from task 3 (Requirement Linker)
-   - Merge into complete doc-index.json:
+**Assemble doc-index.json** by merging findings from tasks 1-3 (Component Scanner, Feature Mapper, Requirement Linker):
    ```json
    {
      "version": "1.0",
@@ -277,15 +239,11 @@ spawn_agents_on_csv({
    ```
    - Write to `.workflow/codebase/doc-index.json`
 
-4. **Validate output files**:
-   - Check doc-index.json exists and is valid JSON
-   - Check tech-registry/_index.md exists (from task 4)
-   - Check feature-maps/_index.md exists (from task 5)
-   - Log warnings for any missing files
+**Validate output files**: doc-index.json (valid JSON), tech-registry/_index.md, feature-maps/_index.md — log warnings for missing.
 
-5. **Update state.json**: Set `codebase.last_rebuild` timestamp.
+**Update state.json**: Set `codebase.last_rebuild` timestamp.
 
-6. **Generate context.md**:
+**Generate context.md**:
 
 ```markdown
 # Codebase Rebuild Report
@@ -315,11 +273,9 @@ spawn_agents_on_csv({
 - Run manage-codebase-refresh for future incremental updates
 ```
 
-7. **Auto-commit** (unless --skip-commit):
-   - Stage `.workflow/codebase/` files
-   - Suggest commit: "docs(codebase): full rebuild of codebase documentation"
+**Auto-commit** (unless --skip-commit): Stage `.workflow/codebase/` files, commit "docs(codebase): full rebuild of codebase documentation".
 
-8. **Display completion report**:
+**Display completion report**:
 
 ```
 === CODEBASE REBUILD COMPLETE ===
@@ -357,17 +313,11 @@ Next steps:
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own analysis
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as discovered
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `{session_folder}/discoveries.ndjson` before own analysis. Deduplicate by type + dedup key before writing. Append-only — never modify or delete. Generators share discoveries to skip redundant scanning.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"1","type":"tech_stack","data":{"framework":"Express","language":"TypeScript","tools":["jest","eslint","prettier"]}}' >> {session_folder}/discoveries.ndjson
 ```
-
-Generators share discoveries so other generators can skip redundant scanning (e.g., Component Scanner discovers components, Feature Mapper and Tech Registry Writer can leverage those findings).
 </execution>
 
 <error_codes>

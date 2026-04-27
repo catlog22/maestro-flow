@@ -91,20 +91,9 @@ Workers can use CLI tools for analysis and code operations:
 
 ### Orchestration Mode
 
-User just provides task description.
-
 **Invocation**: `Skill(skill="team-coordinate", args="task description")`
 
-**Lifecycle**:
-```
-User provides task description
-  -> coordinator Phase 1: task analysis (detect capabilities, build dependency graph)
-  -> coordinator Phase 2: generate role-specs + initialize session
-  -> coordinator Phase 3: create task chain from dependency graph
-  -> coordinator Phase 4: spawn first batch workers (background) -> STOP
-  -> Worker executes -> callback -> coordinator advances next step
-  -> Loop until pipeline complete -> Phase 5 report + completion action
-```
+**Lifecycle**: Phase 1 (task analysis, dependency graph) -> Phase 2 (generate role-specs, init session) -> Phase 3 (create task chain) -> Phase 4 (spawn workers, STOP) -> callback loop -> Phase 5 (report + completion).
 
 **User Commands** (wake paused coordinator):
 
@@ -116,134 +105,41 @@ User provides task description
 | `feedback <text>` | Inject feedback into active pipeline |
 | `improve [dimension]` | Auto-improve weakest quality dimension |
 
-### Coordinator Spawn Template
+### Worker Spawn Template
 
-#### v2 Worker Spawn (all roles)
+Spawn via `team-worker` agent with role-spec path. Message includes: role, role_spec path, session folder, session_id, requirement, inner_loop flag, task context (id, title, description, pipeline_phase), and upstream context from prior tasks.
 
-When coordinator spawns workers, use `team-worker` agent with role-spec path:
+After spawning: `wait_agent` (30 min timeout). On timeout: STATUS_CHECK via followup_task (3 min) -> FINALIZE with interrupt (3 min) -> mark timed_out, close agent.
 
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  message: `## Role Assignment
-role: <role>
-role_spec: <session-folder>/role-specs/<role>.md
-session: <session-folder>
-session_id: <session-id>
-requirement: <task-description>
-inner_loop: <true|false>
-
-Read role_spec file to load Phase 2-4 domain instructions.
-
-## Task Context
-task_id: <task-id>
-title: <task-title>
-description: <task-description>
-pipeline_phase: <pipeline-phase>
-
-## Upstream Context
-<prev_context>`
-})
-```
-
-After spawning, use `wait_agent({ timeout_ms: 1800000 })` to collect results (30 min). If `result.timed_out`, send STATUS_CHECK via followup_task (wait 3 min), then FINALIZE with interrupt (wait 3 min), then mark timed_out and close agents. Use `close_agent({ target: <name> })` each worker.
-
-**Inner Loop roles** (role has 2+ serial same-prefix tasks): Set `inner_loop: true`. The team-worker agent handles the loop internally.
-
-**Single-task roles**: Set `inner_loop: false`.
+**Inner Loop**: Set `inner_loop: true` for roles with 2+ serial same-prefix tasks. Single-task roles: `inner_loop: false`.
 
 ### Model Selection Guide
 
-Roles are **dynamically generated** at runtime. Select model/reasoning_effort based on the generated role's `responsibility_type`:
+Map each role's `responsibility_type` (from `team-session.json#roles`) to reasoning effort:
 
-| responsibility_type | model | reasoning_effort | Rationale |
-|---------------------|-------|-------------------|-----------|
-| exploration | (default) | medium | Read-heavy, less reasoning needed |
-| analysis | (default) | high | Deep analysis requires full reasoning |
-| implementation | (default) | high | Code generation needs precision |
-| synthesis | (default) | medium | Aggregation over generation |
-| review | (default) | high | Quality assessment needs deep reasoning |
+| responsibility_type | reasoning_effort |
+|---------------------|-------------------|
+| exploration | medium |
+| analysis | high |
+| implementation | high |
+| synthesis | medium |
+| review | high |
 
-Map each generated role's `responsibility_type` (from `team-session.json#roles`) to the table above.
-
-Override model/reasoning_effort in spawn_agent when cost optimization is needed:
-```
-spawn_agent({
-  agent_type: "team_worker",
-  task_name: "<task-id>",
-  fork_turns: "none",
-  model: "<model-override>",
-  reasoning_effort: "<effort-level>",
-  message: "..."
-})
-```
+Override via `model`/`reasoning_effort` params in spawn_agent for cost optimization.
 
 ### v4 Agent Coordination
 
-#### Message Semantics
+**Message Semantics**: `send_message` to queue supplementary info to downstream workers (non-interrupting). `list_agents` for health checks. `followup_task` not used (all workers are one-shot).
 
-| Intent | API | Example |
-|--------|-----|---------|
-| Queue supplementary info (don't interrupt) | `send_message` | Send upstream task findings to a running downstream worker |
-| Not used in this skill | `followup_task` | No resident agents -- all workers are one-shot |
-| Check running agents | `list_agents` | Verify agent health during resume |
+**fork_turns**: Default `"none"`. Use `"all"` only when task requires deep familiarity with full conversation context (decided per-task in Phase 4).
 
-**Note**: Since roles are dynamically generated, the coordinator must resolve task prefixes and role names from `team-session.json#roles` at runtime. There are no hardcoded role-specific examples.
+**Agent Health Check**: On resume/complete, reconcile `team-session.json.active_workers` with `list_agents({})`. Reset orphaned tasks (in_progress but agent gone) to pending.
 
-#### fork_turns Strategy
-
-`fork_turns: "none"` is the default. Consider `fork_turns: "all"` only when:
-- Runtime analysis reveals the task requires deep familiarity with the full conversation context
-- The dynamically-generated role-spec indicates the worker needs project-wide understanding
-- The coordinator has already accumulated significant context about the codebase
-
-This decision should be made per-task during Phase 4 based on the role's `responsibility_type`.
-
-#### Agent Health Check
-
-Use `list_agents({})` in handleResume and handleComplete:
-
-```
-// Reconcile session state with actual running agents
-const running = list_agents({})
-// Compare with team-session.json active_workers
-// Reset orphaned tasks (in_progress but agent gone) to pending
-```
-
-#### Named Agent Targeting
-
-Workers are spawned with `task_name: "<task-id>"` enabling direct addressing:
-- `send_message({ target: "<TASK-ID>", message: "..." })` -- queue upstream context without interrupting
-- `close_agent({ target: "<TASK-ID>" })` -- cleanup by name
+**Named Targeting**: Workers spawned with `task_name: "<task-id>"` for `send_message`/`close_agent` by name.
 
 ### Completion Action
 
-When pipeline completes (all tasks done), coordinator presents an interactive choice:
-
-```
-request_user_input({
-  questions: [{
-    question: "Team pipeline complete. What would you like to do?",
-    header: "Completion",
-    multiSelect: false,
-    options: [
-      { label: "Archive & Clean (Recommended)", description: "Archive session, clean up team" },
-      { label: "Keep Active", description: "Keep session for follow-up work" },
-      { label: "Export Results", description: "Export deliverables to target directory, then clean" }
-    ]
-  }]
-})
-```
-
-#### Action Handlers
-
-| Choice | Steps |
-|--------|-------|
-| Archive & Clean | Update session status="completed" -> output final summary with artifact paths |
-| Keep Active | Update session status="paused" -> output: "Resume with: Skill(skill='team-coordinate', args='resume')" |
-| Export Results | request_user_input(target path) -> copy artifacts to target -> Archive & Clean |
+Present interactive choice via `request_user_input`: **Archive & Clean** (recommended -- mark completed, output summary), **Keep Active** (mark paused, output resume command), **Export Results** (prompt target path, copy artifacts, then archive).
 
 ### Specs Reference
 
@@ -310,15 +206,7 @@ request_user_input({
 
 ### Session Resume
 
-Coordinator supports `resume` / `continue` for interrupted sessions:
-
-1. Scan `.workflow/.team/TC-*/team-session.json` for active/paused sessions
-2. Multiple matches -> request_user_input for selection
-3. Audit task states -> reconcile session state <-> task status
-4. Reset in_progress -> pending (interrupted tasks)
-5. Rebuild team and spawn needed workers only
-6. Create missing tasks, set dependencies
-7. Kick first executable task -> Phase 4 coordination loop
+Scan `TC-*/team-session.json` for active/paused sessions (prompt if multiple). Reconcile state: reset interrupted tasks to pending, rebuild team, spawn needed workers, resume Phase 4 loop.
 </context>
 
 <error_codes>

@@ -53,33 +53,15 @@ $maestro-overlay "--remove cli-verify-after-execute"
 
 ### Step 1: Parse User Intent
 
-```javascript
-functions.update_plan({
-  explanation: "Parsing overlay intent",
-  plan: [
-    { step: "Parse intent", status: "in_progress" },
-    { step: "Identify targets and injection points", status: "pending" },
-    { step: "Draft overlay JSON", status: "pending" },
-    { step: "Install and report", status: "pending" }
-  ]
-})
-```
-
 **Quick-exit paths**:
-- `--list` → `functions.exec_command({ cmd: "maestro overlay list" })` then stop
-- `--remove <name>` → `functions.exec_command({ cmd: "maestro overlay remove <name>" })` then stop
+- `--list` → run `maestro overlay list`, then stop
+- `--remove <name>` → run `maestro overlay remove <name>`, then stop
 
-**Ambiguous intent**: If intent does not clearly specify (a) which command to target or (b) where in the flow to inject, ask up to 2 focused questions:
-```javascript
-functions.request_user_input({
-  id: "overlay-clarify",
-  message: "Which command(s) should this overlay target? (e.g. maestro-execute, maestro-plan)"
-})
-```
+**Ambiguous intent**: If target command or injection point unclear, ask up to 2 focused questions.
 
 ### Step 2: Identify Targets and Injection Points
 
-For each likely target command, read the pristine source from `$PKG_ROOT/.claude/commands/<name>.md` (preferred) or fall back to `~/.claude/commands/<name>.md`. Inspect XML sections and select injection point:
+Read pristine command source from `$PKG_ROOT/.claude/commands/<name>.md` (fallback: `~/.claude/commands/<name>.md`). Select injection point:
 
 | Intent type | Section | Mode |
 |-------------|---------|------|
@@ -91,81 +73,30 @@ For each likely target command, read the pristine source from `$PKG_ROOT/.claude
 
 ### Step 3: Draft Overlay JSON
 
-Build a slug from intent (kebab-case, lowercase, max 40 chars).
+Build slug from intent (kebab-case, lowercase, max 40 chars). Write overlay to `~/.maestro/overlays/<slug>.json`:
 
-```javascript
-functions.apply_patch:
-*** Begin Patch
-*** Add File: ~/.maestro/overlays/<slug>.json
-+{
-+  "name": "<slug>",
-+  "description": "<short summary of what and why>",
-+  "targets": ["<command-name>"],
-+  "priority": 50,
-+  "enabled": true,
-+  "patches": [
-+    {
-+      "section": "<section>",
-+      "mode": "<append|prepend|replace|new-section>",
-+      "content": "<injected markdown content with (overlay) heading>"
-+    }
-+  ]
-+}
-*** End Patch
+```json
+{
+  "name": "<slug>",
+  "description": "<short summary>",
+  "targets": ["<command-name>"],
+  "priority": 50,
+  "enabled": true,
+  "patches": [{
+    "section": "<section>",
+    "mode": "<append|prepend|replace|new-section>",
+    "content": "<injected markdown with (overlay) heading>"
+  }]
+}
 ```
 
-**Content guidelines**:
-- Lead injected block with heading including `(overlay)` e.g. `## CLI Verification (overlay)`
-- `@~/.maestro/...` references are encouraged for docs
-- Keep content concise — overlay adds a step, not rewrites the command
-
-```javascript
-functions.update_plan({
-  explanation: "Overlay JSON drafted",
-  plan: [
-    { step: "Parse intent", status: "completed" },
-    { step: "Identify targets and injection points", status: "completed" },
-    { step: "Draft overlay JSON", status: "completed" },
-    { step: "Install and report", status: "in_progress" }
-  ]
-})
-```
+**Content guidelines**: Lead with `## Title (overlay)` heading. Use `@~/.maestro/...` references. Keep concise.
 
 ### Step 4: Install via CLI and Report
 
-```javascript
-functions.exec_command({
-  cmd: "maestro overlay add ~/.maestro/overlays/<slug>.json",
-  workdir: "."
-})
-```
+Run `maestro overlay add ~/.maestro/overlays/<slug>.json`. On validation failure, fix JSON and retry (max 2).
 
-On validation failure, fix the JSON and re-run (max 2 retries).
-
-```javascript
-functions.update_plan({
-  explanation: "Overlay installed",
-  plan: [
-    { step: "Parse intent", status: "completed" },
-    { step: "Identify targets and injection points", status: "completed" },
-    { step: "Draft overlay JSON", status: "completed" },
-    { step: "Install and report", status: "completed" }
-  ]
-})
-```
-
-Display report:
-```
-=== OVERLAY INSTALLED ===
-Name:    <slug>
-Path:    ~/.maestro/overlays/<slug>.json
-Targets: <command> (applied), <command> (skipped: missing)
-Scopes:  [global]
-
-Re-apply: maestro overlay apply
-Remove:   maestro overlay remove <slug>
-Inspect:  maestro overlay list
-```
+Display report with name, path, targets (applied/skipped), and commands for re-apply/remove/inspect.
 
 </execution>
 

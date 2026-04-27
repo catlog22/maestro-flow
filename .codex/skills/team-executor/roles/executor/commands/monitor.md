@@ -45,18 +45,11 @@ Parse `$ARGUMENTS` to determine handler:
 Worker completed a task. Verify completion, update state, auto-advance.
 
 ```
-Receive callback from [<role>]
-  +- Find matching active agent by role (from tasks.json roles)
-  +- Is this a progress update (not final)?
-  |   +- YES -> Update tasks.json state, do NOT remove from active_agents -> STOP
-  +- Task status = completed?
-  |   +- YES -> close_agent, remove from active_agents -> update tasks.json
-  |   |   +- -> handleSpawnNext
-  |   +- NO -> progress message, do not advance -> STOP
-  +- No matching agent found
-      +- Scan all active agents for completed tasks
-      +- Found completed -> process each -> handleSpawnNext
-      +- None completed -> STOP
+Match agent by role -> route:
+  progress_update (not final) -> update state, keep in active_agents -> STOP
+  completed -> close_agent, remove from active_agents, -> handleSpawnNext
+  not_completed -> log progress -> STOP
+  no_match -> scan all agents for completions -> process any found -> handleSpawnNext, else STOP
 ```
 
 **Fast-advance note**: Check if expected next task is already `in_progress` (fast-advanced). If yes -> skip spawning, sync active_agents.
@@ -67,38 +60,19 @@ Receive callback from [<role>]
 
 Read-only status report. No pipeline advancement.
 
-```javascript
-// Read progress and blocker messages from message bus
-const progressMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "progress", last: 50
-})
-const blockerMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "blocker", last: 10
-})
+Read team_msg (type="progress", last=50) + team_msg (type="blocker", last=10). Aggregate per-worker milestones.
+
+**Output format**:
 ```
-
-```
-[executor] Pipeline Status
-[executor] Progress: <completed>/<total> (<percent>%)
-
-[executor] Execution Graph:
-  <visual representation with status icons>
-
-  done=completed  >>>=running  o=pending  .=not created
-
-[executor] Active Workers:
-  <task_id>  <role>  <milestone_phase>  <pct>%  "<summary>"  <time_ago>
-
-[executor] Blockers:
-  <task_id>  <role>  "<blocker_summary>"  <time_ago>
-  (omit section if no blockers)
-
+[executor] Pipeline Status — Progress: <completed>/<total> (<percent>%)
+[executor] Execution Graph: <dependency graph with status icons> done=completed >>>=running o=pending .=not created
+[executor] Active Workers: <task_id> <role> <milestone_phase> <pct>% "<summary>" <time_ago>
+[executor] Blockers: <task_id> <role> "<blocker_summary>" <time_ago> (omit if none)
 [executor] Ready to spawn: <subjects>
 [executor] Commands: 'resume' to advance | 'check' to refresh
-
-**CLI monitoring** (works while executor is blocked):
-maestro agent-msg list -s "<session_id>" --type progress --last 10
 ```
+
+**CLI monitoring**: `maestro agent-msg list -s "<session_id>" --type progress --last 10`
 
 Then STOP.
 
@@ -109,16 +83,12 @@ Then STOP.
 Check active agent completion, process results, advance pipeline.
 
 ```
-Load active_agents from tasks.json
-  +- No active agents -> handleSpawnNext
-  +- Has active agents -> check each:
-      +- status = completed -> mark done, close_agent, log
-      +- status = in_progress -> still running, log
-      +- other status -> worker failure -> reset to pending
-      After processing:
-        +- Some completed -> handleSpawnNext
-        +- All still running -> report status -> STOP
-        +- All failed -> handleSpawnNext (retry)
+Load active_agents -> route:
+  none -> handleSpawnNext
+  has agents -> classify each: completed(close_agent) | in_progress | failed(reset to pending)
+    some completed -> handleSpawnNext
+    all running -> report status -> STOP
+    all failed -> handleSpawnNext (retry)
 ```
 
 ---
@@ -128,127 +98,42 @@ Load active_agents from tasks.json
 Find all ready tasks, spawn team_worker agents, wait for completion, process results.
 
 ```
-Read tasks.json
-  +- completedTasks: status = completed
-  +- inProgressTasks: status = in_progress
-  +- readyTasks: pending + all deps in completedTasks
+Classify tasks: completed | in_progress | ready (pending + all deps completed)
 
-Ready tasks found?
-  +- NONE + work in progress -> report waiting -> STOP
-  +- NONE + nothing in progress -> PIPELINE_COMPLETE -> handleComplete
-  +- HAS ready tasks -> for each:
-      +- Is task owner an Inner Loop role AND already has active_agents?
-      |   +- YES -> SKIP spawn (existing worker picks it up)
-      |   +- NO -> normal spawn below
-      +- Update task status in tasks.json -> in_progress
-      +- team_msg log -> task_unblocked (session_id=<session-id>)
-      +- Spawn team_worker (see spawn tool call below)
-      +- Add to tasks.json active_agents
+Ready tasks -> route:
+  none + in_progress exists -> report waiting -> STOP
+  none + nothing in_progress -> PIPELINE_COMPLETE -> handleComplete
+  has ready -> for each:
+    skip if Inner Loop role already has active_agent
+    else: set status="in_progress", log task_unblocked, spawn team_worker, add to active_agents
 ```
 
-**Spawn worker tool call**:
-
-```javascript
-const agentId = spawn_agent({
-  agent_type: "team_worker",
-  message: `## Role Assignment
-role: ${task.role}
-role_spec: ${sessionFolder}/role-specs/${task.role}.md
-session: ${sessionFolder}
-session_id: ${sessionId}
-team_name: ${teamName}
-requirement: ${task.description}
-inner_loop: ${hasInnerLoop(task.role)}
-
-Read role_spec file (${sessionFolder}/role-specs/${task.role}.md) to load Phase 2-4 domain instructions.
-
+**Spawn worker message template**:
+```
+## Role Assignment
+role: <role> | role_spec: <session-folder>/role-specs/<role>.md
+session: <session-folder> | session_id: <session-id> | team_name: <team-name>
+requirement: <task-description> | inner_loop: <true|false>
+Read role_spec for Phase 2-4 instructions.
 ## Task Context
-task_id: ${taskId}
-title: ${task.title}
-description: ${task.description}
-
+task_id: <taskId> | title: <task-title> | description: <task-description>
 ## Upstream Context
-${prevContext}
-
+<prevContext>
 ## Progress Milestones
-session_id: ${sessionId}
-Report progress via team_msg at natural phase boundaries.
-Report blockers immediately via team_msg type="blocker".
-Report completion via team_msg type="task_complete" after report_agent_job_result.`
-})
-
-state.active_agents[taskId] = { agentId, role: task.role, started_at: now }
+Report progress via team_msg at phase boundaries. Blockers via type="blocker". Completion via type="task_complete" after report_agent_job_result.
 ```
 
 ### Wait and Process Results
 
-After spawning all ready tasks:
+`wait_agent({ timeout_ms: 1800000 })` (30 min), drain progress from team_msg.
 
-```javascript
-// Batch wait for all spawned workers
-const agentIds = Object.values(state.active_agents)
-  .filter(a => !a.resident)
-  .map(a => a.agentId)
-const waitResult = wait_agent({ timeout_ms: 1800000 })  // 30 min
+**Timeout escalation**: STATUS_CHECK (3 min) -> FINALIZE with interrupt (3 min) -> mark timed_out with last progress context, close_agent.
 
-// Drain progress from message bus
-const progressMsgs = mcp__maestro-tools__team_msg({
-  operation: "list", session_id: sessionId, type: "progress", last: 100
-})
-for (const msg of (progressMsgs.result?.messages || [])) {
-  console.log(`[executor] trace: ${msg.summary}`)
-}
-
-if (waitResult.timed_out) {
-  for (const [taskId, agent] of Object.entries(state.active_agents)) {
-    if (agent.resident) continue
-    // Status probe before closing
-    followup_task({ target: taskId, message: "STATUS_CHECK: Report current progress, findings so far, and estimated remaining work." })
-    const status = wait_agent({ timeout_ms: 180000 })  // 3 min
-    if (status.timed_out) {
-      followup_task({ target: taskId, message: "FINALIZE: Output all current findings immediately. Time limit reached.", interrupt: true })
-      const forced = wait_agent({ timeout_ms: 180000 })  // 3 min
-      if (forced.timed_out) {
-        const lastProgress = (progressMsgs.result?.messages || [])
-          .filter(m => m.data?.task_id === taskId).pop()
-        state.tasks[taskId].status = 'timed_out'
-        state.tasks[taskId].error = lastProgress
-          ? `Timed out at ${lastProgress.data.phase} (${lastProgress.data.progress_pct}%)`
-          : 'Timed out with no progress reported'
-        close_agent({ target: agent.agentId })
-        delete state.active_agents[taskId]
-      }
-      // else: forced output received, process result
-    }
-    // else: status received, continue processing
-  }
-} else {
-  // Collect results from discoveries/{task_id}.json
-  for (const [taskId, agent] of Object.entries(state.active_agents)) {
-    if (agent.resident) continue
-    try {
-      const disc = JSON.parse(Read(`${sessionFolder}/discoveries/${taskId}.json`))
-      state.tasks[taskId].status = disc.status || 'completed'
-      state.tasks[taskId].findings = disc.findings || ''
-      state.tasks[taskId].error = disc.error || null
-    } catch {
-      state.tasks[taskId].status = 'failed'
-      state.tasks[taskId].error = 'No discovery file produced'
-    }
-    close_agent({ target: agent.agentId })
-    delete state.active_agents[taskId]
-  }
-}
-```
+**Normal completion**: Read `discoveries/{task_id}.json` for status/findings/error. Missing file -> status="failed". Close each agent.
 
 ### Persist and Loop
 
-After processing all results:
-1. Write updated tasks.json
-2. Check if more tasks are now ready (deps newly resolved)
-3. If yes -> loop back to step 1 of handleSpawnNext
-4. If no more ready and all done -> handleComplete
-5. If no more ready but some still blocked -> report status, STOP
+Write tasks.json -> more tasks ready? -> loop handleSpawnNext. All done -> handleComplete. Blocked -> report, STOP.
 
 ---
 
@@ -257,18 +142,15 @@ After processing all results:
 Pipeline complete. Execute completion action.
 
 ```
-All tasks completed (no pending, no in_progress)
-  +- Generate pipeline summary (deliverables, stats, duration)
-  +- Read tasks.json completion_action:
-      |
-      +- "interactive":
-      |   request_user_input -> user choice:
-      |   +- "Archive & Clean": rm -rf session folder -> summary
-      |   +- "Keep Active": session status="paused" -> resume command
-      |   +- "Export Results": copy artifacts -> Archive & Clean
-      |
-      +- "auto_archive": Execute Archive & Clean
-      +- "auto_keep": Execute Keep Active
+Generate summary: deliverables + stats + duration
+
+Route by completion_action:
+  "interactive" -> request_user_input:
+    "Archive & Clean" -> rm session folder, output summary
+    "Keep Active"     -> status="paused", output resume command
+    "Export Results"   -> copy artifacts, then Archive & Clean
+  "auto_archive" -> Archive & Clean without prompt
+  "auto_keep"    -> Keep Active without prompt
 ```
 
 **Fallback**: If completion action fails, default to Keep Active, log warning.
@@ -280,14 +162,10 @@ All tasks completed (no pending, no in_progress)
 **UNLIKE team-coordinate, executor CANNOT generate new role-specs.**
 
 ```
-Receive capability_gap from [<role>]
-  +- Log via team_msg (type: warning)
-  +- Check existing roles -> does any cover this?
-  |   +- YES -> redirect to that role -> STOP
-  |   +- NO -> genuine gap, report to user:
-  |       "Capability gap detected. team-executor cannot generate new role-specs.
-  |        Options: 1. Continue  2. Re-run team-coordinate  3. Manually add role-spec"
-  +- Continue execution with existing roles
+Log capability_gap via team_msg (type: warning)
+Existing role covers gap? -> redirect -> STOP
+Genuine gap -> report to user: "Options: 1. Continue  2. Re-run team-coordinate  3. Manually add role-spec"
+Continue with existing roles
 ```
 
 ---
@@ -305,10 +183,10 @@ Detect orphaned tasks (in_progress without active_agents, > 5 minutes) -> reset 
 ### Consensus-Blocked Handling
 
 ```
-Route by severity:
-  +- HIGH: Create REVISION task (max 1). Already revised -> PAUSE for user (request_user_input)
-  +- MEDIUM: Proceed with warning, log to wisdom/issues.md
-  +- LOW: Proceed normally as consensus_reached with notes
+Route by consensus_blocked severity:
+  HIGH   -> create REVISION task (max 1, else PAUSE + escalate)
+  MEDIUM -> proceed with warning, log to wisdom/issues.md
+  LOW    -> proceed normally as consensus_reached with notes
 ```
 
 ## Phase 4: Validation

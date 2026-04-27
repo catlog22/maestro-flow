@@ -70,7 +70,7 @@ When `--auto-yes`: Accept all routing recommendations without prompting. Route a
 - `{target_dir}/retrospective.json` -- structured record
 - `.workflow/specs/{category-file}.md` -- `<spec-entry>` entries appended to matching category files (one per spec-routed insight)
 - `.workflow/issues/issues.jsonl` -- appended issue rows (`source: "retrospective"`)
-- `.workflow/memory/TIP-*.md` -- memory tips (via `manage-memory-capture` skill)
+- `.workflow/knowhow/TIP-*.md` -- memory tips (via `manage-knowhow-capture` skill)
 - `.workflow/learning/lessons.jsonl` -- append-only insight log
 - `.workflow/learning/learning-index.json` -- updated searchable index
 
@@ -132,19 +132,7 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 
 ### Session Initialization
 
-```javascript
-functions.update_plan({
-  explanation: "Starting retrospective",
-  plan: [
-    { step: "Stage 1-3: Parse mode and validate artifacts", status: "in_progress" },
-    { step: "Stage 4: Context-Agent Fork + parallel lens analysis", status: "pending" },
-    { step: "Stage 5: Synthesize insights", status: "pending" },
-    { step: "Stage 6: Route outputs", status: "pending" },
-    { step: "Stage 7: Write artifacts", status: "pending" },
-    { step: "Stage 8: Report", status: "pending" }
-  ]
-})
-```
+Update plan: Stages 1-3 → in_progress; Stages 4-8 → pending.
 
 ### Stages 1-3: Parse Mode and Validate Artifacts
 
@@ -167,19 +155,7 @@ Validate `--lens` values. If `--compare <M>` present, require single mode.
 
 **Stage 3: Scan mode** -- list all completed phases without retrospective.json. Prompt user to select.
 
-```javascript
-functions.update_plan({
-  explanation: "Artifacts validated, spawning analysis agents",
-  plan: [
-    { step: "Stage 1-3: Parse mode and validate artifacts", status: "completed" },
-    { step: "Stage 4: Context-Agent Fork + parallel lens analysis", status: "in_progress" },
-    { step: "Stage 5: Synthesize insights", status: "pending" },
-    { step: "Stage 6: Route outputs", status: "pending" },
-    { step: "Stage 7: Write artifacts", status: "pending" },
-    { step: "Stage 8: Report", status: "pending" }
-  ]
-})
-```
+Update plan: Stages 1-3 → completed; Stage 4 → in_progress.
 
 ### Stage 4: Context-Agent Fork + Parallel Lens Analysis
 
@@ -191,129 +167,39 @@ If existing `retrospective.{md,json}` present, move to `{artifact_dir}/.history/
 spawn_agent({
   task_name: "ctx",
   fork_turns: "none",
-  message: `## TASK ASSIGNMENT
-
-### MANDATORY FIRST STEPS
-1. Read: ~/.codex/agents/cli-explore-agent.md
-
----
-
-Goal: Load and summarize all phase artifacts for retrospective analysis.
-Phase: ${targetPhase}
-
-TASK:
-1. Read .workflow/state.json -- query artifacts[] for all entries matching phase === ${targetPhase} && milestone === current_milestone
-2. For each artifact, load outputs from .workflow/{artifact.path}/:
-   - execute artifacts → index.json, plan.json, .task/TASK-*.json, .summaries/TASK-*-summary.md
-   - verify artifacts → verification.json
-   - review artifacts → review.json (findings, verdict, severity distribution)
-   - debug artifacts → understanding.md, evidence.ndjson (root causes, fix directions)
-   - test artifacts → uat.md, .tests/ (UAT results, gaps, coverage)
-3. Read .workflow/issues/issues.jsonl -- filter rows with phase link to this phase
-4. Read .workflow/state.json for project context (milestones, accumulated_context)
-
-EXPECTED: Comprehensive artifact summary covering:
-- Phase goals and outcomes (from plan.json vs verification.json)
-- Task completion rates and failed tasks
-- Verification results: passed/failed criteria
-- Review findings: issues found, severity distribution
-- UAT results: scenarios passed/failed
-- Related issues: open/resolved counts
-- Key metrics: lines changed, test coverage, time taken
-`
+  message: `Load and summarize all phase ${targetPhase} artifacts for retrospective.
+    1. Query state.json artifacts[] for phase === ${targetPhase} && milestone === current_milestone
+    2. Load per-artifact outputs (execute→index/plan/tasks/summaries, verify→verification.json, review→review.json, debug→understanding/evidence, test→uat/tests)
+    3. Filter issues.jsonl for this phase; read state.json for project context
+    EXPECTED: Goals vs outcomes, completion rates, verification/review/UAT results, issue counts, key metrics`
 })
-wait_agent({ timeout_ms: 1800000 })  // initial spawn: 30 min
+wait_agent({ timeout_ms: 1800000 })
 ```
 
 **Step 4b: Fork 4 lens agents** (only active lenses based on `--lens` flag; default: all 4)
+
+All lenses use `fork_turns: "all"` and return the same JSON array schema:
+```json
+[{ "title": "<80 chars>", "summary": "...", "category": "pattern|antipattern|decision|tool|gotcha|technique",
+   "routing": "spec|issue|memory|none", "severity": "critical|high|medium|low", "evidence": "<file:line>" }]
+```
+
+| Agent | task_name | Focus |
+|-------|-----------|-------|
+| Technical | `lens-tech` | Tech debt, architecture decisions, code quality, performance, security, dependencies |
+| Process | `lens-proc` | Planning accuracy, collaboration, workflow efficiency, communication, process improvements |
+| Quality | `lens-qual` | Test coverage gaps, quality gates, UAT failures, review blockers, missing scenarios |
+| Decision | `lens-dec` | Key decisions, tradeoffs, ADR candidates, reversibility, retrospective judgment |
+
 ```javascript
-spawn_agent({
-  task_name: "lens-tech",
-  fork_turns: "all",
-  message: `## TECHNICAL LENS ANALYSIS
+// Spawn all 4 lenses in parallel
+["lens-tech", "lens-proc", "lens-qual", "lens-dec"].forEach(name =>
+  spawn_agent({ task_name: name, fork_turns: "all", message: `<lens-specific prompt>` })
+)
+const lensResults = wait_agent({ timeout_ms: 1800000 })
 
-Analyze the loaded phase artifacts from a TECHNICAL perspective.
-
-Focus areas:
-- Technical debt introduced or resolved
-- Architecture decisions and their rationale
-- Code quality issues (from review.json findings)
-- Performance gaps or regressions
-- Security concerns
-- Dependencies added or changed
-
-EXPECTED: JSON array of insights, each: {
-  "title": "<80 chars>",
-  "summary": "<full finding>",
-  "category": "pattern|antipattern|decision|tool|gotcha|technique",
-  "routing": "spec|issue|memory|none",
-  "severity": "critical|high|medium|low",
-  "evidence": "<file:line or artifact reference>"
-}
-`
-})
-
-spawn_agent({
-  task_name: "lens-proc",
-  fork_turns: "all",
-  message: `## PROCESS LENS ANALYSIS
-
-Analyze the loaded phase artifacts from a PROCESS perspective.
-
-Focus areas:
-- Planning accuracy (estimated vs actual from plan.json)
-- Collaboration patterns and bottlenecks
-- Workflow efficiency (task sequencing, dependencies)
-- Communication gaps or coordination issues
-- Process improvements that worked or failed
-
-EXPECTED: Same JSON array schema as technical lens.
-`
-})
-
-spawn_agent({
-  task_name: "lens-qual",
-  fork_turns: "all",
-  message: `## QUALITY LENS ANALYSIS
-
-Analyze the loaded phase artifacts from a QUALITY perspective.
-
-Focus areas:
-- Test coverage gaps (from verification.json, uat.md)
-- Quality gate outcomes (passed/failed criteria)
-- UAT failure patterns and root causes
-- Review blocking issues and their resolution
-- Missing test scenarios identified post-execution
-
-EXPECTED: Same JSON array schema as technical lens.
-`
-})
-
-spawn_agent({
-  task_name: "lens-dec",
-  fork_turns: "all",
-  message: `## DECISION LENS ANALYSIS
-
-Analyze the loaded phase artifacts from a DECISION perspective.
-
-Focus areas:
-- Key architectural or design decisions made (from plan.json, task summaries)
-- Tradeoffs accepted and their downstream effects
-- ADR candidates (decisions significant enough to document)
-- Reversibility of decisions made
-- Decisions that should have been made differently
-
-EXPECTED: Same JSON array schema as technical lens.
-`
-})
-
-const lensResults = wait_agent({
-  timeout_ms: 1800000  // initial spawn: 30 min
-})
-
-// Close lenses first
-;["lens-tech", "lens-proc", "lens-qual", "lens-dec"].forEach(n => close_agent({ target: n }))
-// Close context agent LAST
+// Close lenses first, then context agent LAST
+["lens-tech", "lens-proc", "lens-qual", "lens-dec"].forEach(n => close_agent({ target: n }))
 close_agent({ target: "ctx" })
 ```
 
@@ -325,44 +211,21 @@ If `lensResults.timed_out` for any agent: emit W001, continue with partial cover
 spawn_agent({
   task_name: "synthesizer",
   fork_turns: "none",
-  message: `## SYNTHESIS TASK
-
-Merge and distill insights from 4 lens analyses.
-
-Lens results:
-${JSON.stringify(lensResults.status, null, 2)}
-
-TASK:
-1. Merge all insights across lenses into a single list
-2. Deduplicate: if two lenses identified the same issue, merge into one (keep higher severity, combine evidence)
-3. Generate stable INS-{8hex} id for each: hash(phase_num + lens + title)
-4. Classify routing for each: spec (reusable pattern) | issue (recurring gap -> create issue) | memory (process note) | none
-5. Produce phase-level metrics summary
-
-EXPECTED: JSON with:
-- insights: array of {id, title, summary, category, lens, routing, severity, evidence}
-- metrics: {tasks_completed, tasks_failed, test_pass_rate, review_issues_count, uat_scenarios_passed}
-- routing_summary: {spec: N, issue: N, memory: N, none: N}
-`
+  message: `Merge and distill insights from 4 lens analyses.
+    Input: ${JSON.stringify(lensResults.status)}
+    1. Merge all insights, deduplicate (same issue across lenses → keep higher severity, combine evidence)
+    2. Generate stable INS-{8hex} id: hash(phase_num + lens + title)
+    3. Classify routing: spec | issue | memory | none
+    4. Produce phase-level metrics summary
+    EXPECTED JSON: { insights: [{id,title,summary,category,lens,routing,severity,evidence}],
+      metrics: {tasks_completed,tasks_failed,test_pass_rate,review_issues_count,uat_scenarios_passed},
+      routing_summary: {spec:N, issue:N, memory:N, none:N} }`
 })
-
-const synthResult = wait_agent({ timeout_ms: 1800000 })  // initial spawn: 30 min
+const synthResult = wait_agent({ timeout_ms: 1800000 })
 close_agent({ target: "synthesizer" })
 ```
 
-```javascript
-functions.update_plan({
-  explanation: "Synthesis complete, routing outputs",
-  plan: [
-    { step: "Stage 1-3: Parse mode and validate artifacts", status: "completed" },
-    { step: "Stage 4: Context-Agent Fork + parallel lens analysis", status: "completed" },
-    { step: "Stage 5: Synthesize insights", status: "completed" },
-    { step: "Stage 6: Route outputs", status: "in_progress" },
-    { step: "Stage 7: Write artifacts", status: "pending" },
-    { step: "Stage 8: Report", status: "pending" }
-  ]
-})
-```
+Update plan: Stages 1-5 → completed; Stage 6 → in_progress.
 
 ### Stage 6: Route Outputs
 
@@ -371,135 +234,33 @@ If `--no-route`: skip this stage.
 For each insight in `synthResult.insights`, route based on `routing` field:
 
 **Spec routing** (`routing: "spec"`):
-
-Map insight type to spec category: pattern/convention → `coding`, architecture → `arch`, quality → `quality`.
-Append `<spec-entry>` to matching category file:
-
-```markdown
-<spec-entry category="{category}" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="retrospective">
-
-### <title>
-
-<summary>
-
-**Evidence:** <evidence_refs>
-**Phase:** <N> | **Lens:** <lens> | **Insight:** <INS-id>
-
-</spec-entry>
-+
-+<summary>
-+
-+**Evidence**: <evidence>
-*** End Patch
-```
+Map category (pattern/convention → `coding`, architecture → `arch`, quality → `quality`). Append `<spec-entry>` with category, auto-extracted keywords, date, source="retrospective", title, summary, evidence, phase/lens/INS-id.
 
 **Issue routing** (`routing: "issue"`, severity critical/high):
-Append to `.workflow/issues/issues.jsonl`:
-```json
-{
-  "id": "ISS-<date>-<seq>",
-  "title": "<insight title>",
-  "status": "open",
-  "priority": 2,
-  "severity": "<severity>",
-  "source": "retrospective",
-  "description": "<insight summary>",
-  "context": {"phase": "<N>", "ins_id": "<INS-id>"},
-  "issue_history": [{"action": "created", "at": "<ISO>", "by": "quality-retrospective"}]
-}
-```
+Append to `.workflow/issues/issues.jsonl` with `ISS-<date>-<seq>` id, source="retrospective", phase/INS-id context, and history entry.
 
-**Memory routing** (`routing: "memory"`):
-```javascript
-Skill({ skill: "manage-memory-capture", args: `tip "${insight.title} -- ${insight.summary}" --tag retrospective,phase-${N}` })
-```
+**Memory routing** (`routing: "knowhow"`):
+Invoke `manage-knowhow-capture` skill with tip content and `--tag retrospective,phase-{N}`.
 
 If `!AUTO_YES`: present routing table and ask confirmation before routing each group.
 
 ### Stage 7: Write Artifacts
 
-```javascript
-functions.apply_patch:
-*** Begin Patch
-*** Add File: <target_dir>/retrospective.json
-+{
-+  "phase": <N>,
-+  "phase_slug": "<slug>",
-+  "retrospective_at": "<ISO>",
-+  "lenses_run": ["technical", "process", "quality", "decision"],
-+  "metrics": <metrics_from_synthesizer>,
-+  "findings_by_lens": { "technical": [...], "process": [...], "quality": [...], "decision": [...] },
-+  "distilled_insights": <insights_array>,
-+  "routing_summary": <routing_summary>
-+}
-*** Add File: <target_dir>/retrospective.md
-+# Retrospective: Phase <N> -- <slug>
-+
-+> Generated: <ISO> | Lenses: technical, process, quality, decision
-+
-+## Metrics
-+| Metric | Value |
-+|--------|-------|
-+| Tasks completed | <N>/<total> |
-+| Test pass rate | <N>% |
-+| Review issues | <N> |
-+| UAT scenarios | <N>/<total> |
-+
-+## Findings by Lens
-+...
-+
-+## Distilled Insights
-+...
-+
-+## Routing Summary
-+...
-*** End Patch
-```
+Write two files to `{target_dir}/`:
+- **retrospective.json**: phase, slug, timestamp, lenses_run, metrics, findings_by_lens, distilled_insights, routing_summary
+- **retrospective.md**: Header with phase/slug/timestamp, metrics table (tasks completed, test pass rate, review issues, UAT scenarios), findings by lens, distilled insights, routing summary
 
 Append each insight to `.workflow/learning/lessons.jsonl` and update `learning-index.json`.
 
-If `.workflow/specs/learnings.md` already exists, append each insight using `<spec-entry>` closed-tag format (category=`learning`, auto-extract keywords, date=today, source=`retrospective`). Never create the file — only append if it exists.
+If `.workflow/specs/learnings.md` already exists, append each insight as `<spec-entry>` (category=`learning`, auto-extract keywords, date=today, source=`retrospective`). Never create the file -- only append if it exists.
 
-```javascript
-functions.update_plan({
-  explanation: "Retrospective complete",
-  plan: [
-    { step: "Stage 1-3: Parse mode and validate artifacts", status: "completed" },
-    { step: "Stage 4: Context-Agent Fork + parallel lens analysis", status: "completed" },
-    { step: "Stage 5: Synthesize insights", status: "completed" },
-    { step: "Stage 6: Route outputs", status: "completed" },
-    { step: "Stage 7: Write artifacts", status: "completed" },
-    { step: "Stage 8: Report", status: "in_progress" }
-  ]
-})
-```
+Update plan: Stages 1-7 → completed; Stage 8 → in_progress.
 
 ### Stage 8: Report
 
-```
-=== RETROSPECTIVE COMPLETE ===
-Phase:    <N> (<slug>)
-Lenses:   technical, process, quality, decision
-Insights: <total> (<N> new, <N> duplicates merged)
+Display summary: phase, lenses run, insight counts (new vs merged duplicates), routing breakdown (spec/issue/memory/lesson counts with target paths), key metrics (task completion, test pass rate, review issues).
 
-ROUTING:
-  Spec entries:  <N>  -> .workflow/specs/{category-file}.md
-  Issues:       <N>  -> .workflow/issues/issues.jsonl
-  Memory tips:  <N>  -> .workflow/memory/TIP-*.md
-  Lessons:      <N>  -> .workflow/learning/lessons.jsonl
-
-METRICS:
-  Tasks:        <N>/<total> completed
-  Test pass:    <N>%
-  Review:       <N> issues
-
-Next:
-  $manage-status
-  $manage-issue "list --source retrospective"
-  $manage-learn "list --phase <N>"
-  $manage-wiki health
-  $wiki-digest "<phase-topic>"
-```
+Next steps: `$manage-status`, `$manage-issue "list --source retrospective"`, `$manage-learn "list --phase <N>"`, `$manage-wiki health`, `$wiki-digest "<phase-topic>"`.
 </execution>
 
 <error_codes>
@@ -513,7 +274,7 @@ Next:
 | E005 | error | Phase directory not found or phase not completed | scan_unreviewed |
 | W001 | warning | One or more lens agents timed out -- partial coverage | multi_lens_analysis |
 | W002 | warning | Existing retrospective.json found -- prompted to overwrite | scan_unreviewed |
-| W003 | warning | `manage-memory-capture` did not return parseable TIP id; fell back to direct write | route_outputs |
+| W003 | warning | `manage-knowhow-capture` did not return parseable TIP id; fell back to direct write | route_outputs |
 | W004 | warning | `--compare` target phase has no retrospective.json; delta omitted | load_artifacts |
 </error_codes>
 

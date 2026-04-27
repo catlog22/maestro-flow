@@ -160,30 +160,20 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+**Parse from `$ARGUMENTS`**:
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 4
+| Variable | Source | Default |
+|----------|--------|---------|
+| `AUTO_YES` | `--yes` or `-y` | false |
+| `continueMode` | `--continue` | false |
+| `maxConcurrency` | `--concurrency N` or `-c N` | 4 |
+| `skipTests` | `--skip-tests` | false |
+| `skipAntipattern` | `--skip-antipattern` | false |
+| `phaseArg` | remaining text after flag removal | — |
 
-// Parse verify-specific flags
-const skipTests = $ARGUMENTS.includes('--skip-tests')
-const skipAntipattern = $ARGUMENTS.includes('--skip-antipattern')
+**Session path** (UTC+8 date prefix): `.workflow/.csv-wave/{YYYYMMDD}-verify-P{phaseArg}-{phaseSlug}/`
 
-// Clean phase text
-const phaseArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--skip-tests|--skip-antipattern/g, '')
-  .trim()
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = `${dateStr}-verify-P${phaseArg}-${phaseSlug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-```
+Create session directory.
 
 ### Phase 1: Phase Resolution -> CSV
 
@@ -237,11 +227,7 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 #### Wave 1: Truth Checks + Artifact Existence (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+Filter `wave == 1 && status == pending` from master CSV. No prev_context (no predecessors). Write `wave-1.csv`.
 
 ```javascript
 spawn_agents_on_csv({
@@ -251,86 +237,32 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      gaps_found: { type: "string" },
-      fix_plan: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: ["completed"|"failed"], findings, gaps_found, fix_plan, error }
+  // required: id, status, findings
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
+Merge results into master `tasks.csv`, delete `wave-1.csv`.
 
-**Truth check agent protocol**:
-- For each truth, identify supporting artifacts
-- Check artifact existence and substance indicators
-- Check wiring indicators (import/usage grep)
-- Determine truth status: VERIFIED / FAILED / UNCERTAIN
-- Report gaps for FAILED truths with severity and fix direction
+**Truth check agent**: Identify supporting artifacts, check existence + substance + wiring indicators. Status: VERIFIED / FAILED / UNCERTAIN. Report gaps for FAILED with severity + fix direction.
 
-**Artifact existence agent protocol**:
-- Check file exists on disk via `ls` or `stat`
-- If missing, report gap with severity=critical
-- If exists, note file size and basic structure for wave 2
+**Artifact existence agent**: Check file on disk. Missing = gap (severity=critical). Exists = note size + structure for wave 2.
 
 #### Wave 2: Artifact Substance + Wiring (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending`
-3. Check deps -- if all wave 1 existence checks failed for a given artifact, skip substance check
-4. Build `prev_context` from wave 1 findings:
-   ```
-   [Task 1: Truth: User can see messages] VERIFIED - Chat.tsx renders message list from API response
-   [Task 3: Artifact Exists: Chat.tsx] completed - file exists, 142 lines
-   ...
-   ```
-5. Write `wave-2.csv` with `prev_context` column
-6. Execute `spawn_agents_on_csv` for substance + wiring agents
-7. Merge results into master `tasks.csv`
-8. Delete `wave-2.csv`
+Filter `wave == 2 && status == pending`. Skip substance check if all wave 1 existence checks failed for that artifact. Build `prev_context` from wave 1 findings (format: `[Task N: Title] status - summary`). Write `wave-2.csv`, execute `spawn_agents_on_csv`, merge results, delete temp CSV.
 
-**Substance check agent protocol**:
-- Files under ~10 lines of real logic -> STUB
-- Contains "placeholder", "coming soon", "TODO: implement" -> STUB
-- Real implementation with business logic -> SUBSTANTIVE
+**Substance check agent**: <10 lines real logic or contains placeholder markers ("placeholder", "coming soon", "TODO: implement") = STUB. Otherwise SUBSTANTIVE.
 
-**Wiring check agent protocol**:
-- `grep -r "import.*{artifact_name}" src/` -- check imported
-- `grep -r "{artifact_name}" src/ | grep -v "import"` -- check used beyond import
-- Status: WIRED / ORPHANED / NOT_WIRED
+**Wiring check agent**: Grep for import statements + actual usage beyond imports. Status: WIRED / ORPHANED / NOT_WIRED.
 
 #### Wave 3: Anti-Pattern Scan + Nyquist Audit (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 3` AND `status == pending`
-3. If `--skip-antipattern`: mark antipattern task as `skipped`
-4. If `--skip-tests`: mark nyquist task as `skipped`
-5. Build `prev_context` from wave 1 + wave 2 findings
-6. Write `wave-3.csv` with `prev_context` column
-7. Execute `spawn_agents_on_csv` for remaining tasks
-8. Merge results into master `tasks.csv`
-9. Delete `wave-3.csv`
+Filter `wave == 3 && status == pending`. Mark as `skipped` per skip flags (`--skip-antipattern`, `--skip-tests`). Build `prev_context` from wave 1 + wave 2 findings. Write `wave-3.csv`, execute `spawn_agents_on_csv`, merge results, delete temp CSV.
 
-**Anti-pattern scan agent protocol**:
-- Extract modified files from task summaries
-- Scan for: TODO/FIXME/XXX/HACK, placeholder content, empty returns, log-only functions, hardcoded test data, disabled tests
-- Categorize: Blocker (prevents goal) / Warning (incomplete) / Info (notable)
-- Report as JSON array in gaps_found
+**Anti-pattern scan agent**: Extract modified files from task summaries. Scan for TODO/FIXME/XXX/HACK, placeholder content, empty returns, log-only functions, hardcoded test data, disabled tests. Categorize: Blocker / Warning / Info. Report as JSON array in `gaps_found`.
 
-**Nyquist audit agent protocol**:
-- Detect test framework (jest, vitest, pytest, etc.)
-- Map requirements (must-haves) to test files
-- Classify: COVERED / PARTIAL / MISSING
-- Run coverage command if available
-- Report gaps and coverage percentage
+**Nyquist audit agent**: Detect test framework, map requirements to test files, classify COVERED / PARTIAL / MISSING. Run coverage if available. Report gaps + coverage percentage.
 
 ### Phase 3: Results Aggregation
 
@@ -439,54 +371,25 @@ Issue Refs: {issue_ids}
 | Any truth FAILED, artifact MISSING/STUB, key link NOT_WIRED, or blocker found | gaps_found |
 | All automated checks pass but human verification items remain | human_needed |
 
-10. **Auto-create issues** from gaps + blocker anti-patterns (same ID generation as verify workflow: ISS-YYYYMMDD-NNN)
+10. **Auto-create issues** from gaps + blocker anti-patterns (ID format: `ISS-YYYYMMDD-NNN`).
 
-11. **Archive previous verification artifacts** before writing to phase directory:
-    - If `verification.json` or `validation.json` exists in phase dir, move to `.history/`
+11. **Archive previous artifacts**: Move existing `verification.json`/`validation.json` in phase dir to `.history/`.
 
-12. **Copy output files** to phase directory:
-    - `verification.json` -> `{artifact_dir}/verification.json`
-    - `validation.json` -> `{artifact_dir}/validation.json` (if generated)
+12. **Copy outputs** to phase directory: `verification.json`, `validation.json` (if generated).
 
 13. **Update phase index.json** with verification status and timestamps.
 
-14. **Display summary**:
-
-```
-=== VERIFICATION RESULTS ===
-Phase:         {phase_name}
-
-Goal-Backward: {verified_count}/{total_truths} truths verified
-  Artifacts:   {artifact_verified}/{artifact_total} (L1-L3)
-  Wiring:      {links_wired}/{links_total} key links
-Anti-patterns: {blocker_count} blockers, {warning_count} warnings
-Nyquist:       {coverage_pct}% coverage ({SKIPPED|status})
-
-Gaps: {gap_count}
-  Critical: {critical_count}
-  High:     {high_count}
-  Medium:   {medium_count}
-  Low:      {low_count}
-
-Fix Plans: {fix_plan_count} generated
-Issues Created: {issue_count}
-Human Verification: {human_items} items
-
-Files:
-  {session_folder}/verification.json
-  {session_folder}/validation.json (if generated)
-  {artifact_dir}/verification.json
-  {artifact_dir}/validation.json (if generated)
-```
+14. **Display summary**: Phase name, truths verified/total, artifacts L1-L3, wiring status, anti-pattern counts, Nyquist coverage, gaps by severity, fix plan count, issues created, human verification items, output file paths.
 
 15. **Post-verify Knowledge Inquiry** (before next step routing):
-   - **Anti-pattern detection**: If anti-pattern scan found blockers:
-     → Ask: "Verification found {N} anti-patterns. Should `quality-rules.md` be updated to enforce these checks? (`/spec-add quality`)"
-   - **Constraint violation**: If Goal-Backward check found constraint violations or missing wiring:
-     → Ask: "Verification found architecture constraint violations. Should `architecture-constraints.md` be updated? (`/spec-add arch`)"
-   - **Test coverage gaps**: If Nyquist gaps found with recurring pattern:
-     → Ask: "Persistent test coverage gap detected in {module}. Should it be added to `test-conventions.md` as a required test area? (`/spec-add test`)"
-   - If user confirms, append `<spec-entry>` to matching category file via `spec-add` mechanism
+
+| Signal | Prompt User | Spec Category |
+|--------|-------------|---------------|
+| Anti-pattern blockers found | "Update `quality-rules.md`?" | `quality` via `/spec-add` |
+| Constraint/wiring violations | "Update `architecture-constraints.md`?" | `arch` via `/spec-add` |
+| Recurring Nyquist coverage gaps | "Add to `test-conventions.md`?" | `test` via `/spec-add` |
+
+On user confirm, append `<spec-entry>` to matching category file.
 
 16. **Next step routing**:
 

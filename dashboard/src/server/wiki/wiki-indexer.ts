@@ -78,7 +78,7 @@ export class WikiIndexer {
         spec: [],
         issue: [],
         lesson: [],
-        memory: [],
+        knowhow: [],
         note: [],
       } as Record<WikiNodeType, WikiEntry[]>;
 
@@ -143,7 +143,7 @@ export class WikiIndexer {
       spec: [],
       issue: [],
       lesson: [],
-      memory: [],
+      knowhow: [],
       note: [],
     };
     for (const d of source) out[d.type].push(d);
@@ -224,13 +224,21 @@ export class WikiIndexer {
       }
     }
 
-    // memory/*.md  (MEM-* → memory, TIP-* → note, others → memory)
-    for (const name of await safeReaddir(join(this.workflowRoot, 'memory'))) {
+    // knowhow/*.md  (KNW-→session, TIP-→tip, TPL-→template, RCP-→recipe, REF-→reference, DCS-→decision)
+    for (const name of await safeReaddir(join(this.workflowRoot, 'knowhow'))) {
       if (extname(name).toLowerCase() !== '.md') continue;
-      const upper = name.toUpperCase();
-      const type: WikiNodeType = upper.startsWith('TIP-') ? 'note' : 'memory';
-      const entry = await this.parseFileEntry(join(this.workflowRoot, 'memory', name), type);
-      if (entry) out.push(entry);
+      const entry = await this.parseFileEntry(join(this.workflowRoot, 'knowhow', name), 'knowhow');
+      if (entry) {
+        // Derive category from file prefix
+        const upper = name.toUpperCase();
+        if (upper.startsWith('KNW-')) entry.category = 'session';
+        else if (upper.startsWith('TPL-')) entry.category = 'template';
+        else if (upper.startsWith('RCP-')) entry.category = 'recipe';
+        else if (upper.startsWith('REF-')) entry.category = 'reference';
+        else if (upper.startsWith('DCS-')) entry.category = 'decision';
+        else if (upper.startsWith('TIP-')) entry.category = 'tip';
+        out.push(entry);
+      }
     }
 
     return out;
@@ -298,12 +306,11 @@ export class WikiIndexer {
     const parent = asString(data.parent) || null;
 
     const rel = toForwardSlash(relative(this.workflowRoot, absPath));
-    // Memory/note files live under memory/ with MEM-<slug>.md or TIP-<slug>.md
-    // naming. Strip the prefix from the id-generating stem so the id matches
-    // what the WikiWriter produced at create time (`memory-<slug>`, `note-<slug>`).
+    // Knowhow files live under knowhow/ with prefix-<slug>.md naming.
+    // Strip the 4-char prefix (KNW-/TIP-/TPL-/RCP-/REF-/DCS-) from the id-generating
+    // stem so the id matches what WikiWriter produced at create time (`knowhow-<slug>`).
     let idStem = stem;
-    if (type === 'memory' && /^MEM-/i.test(stem)) idStem = stem.slice(4);
-    else if (type === 'note' && /^TIP-/i.test(stem)) idStem = stem.slice(4);
+    if (/^(KNW|TIP|TPL|RCP|REF|DCS)-/i.test(stem)) idStem = stem.slice(4);
     const id = `${type}-${slugify(idStem)}`;
 
     return {

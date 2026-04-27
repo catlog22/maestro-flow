@@ -139,30 +139,22 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+```
+Parse from $ARGUMENTS:
+  AUTO_YES       ← --yes | -y
+  continueMode   ← --continue
+  maxConcurrency ← --concurrency | -c N  (default: 5)
+  fromUat        ← --from-uat <phase>  (default: null)
+  parallelMode   ← --parallel
+  bugDescription ← remaining text after flag removal
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 5
+Derive:
+  slug           ← bugDescription kebab-cased, max 40 chars
+  dateStr        ← UTC+8 YYYYMMDD
+  sessionId      ← fromUat ? "{dateStr}-debug-P{fromUat}-{slug}" : "{dateStr}-debug-{slug}"
+  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
 
-// Parse debug-specific flags
-const fromUatMatch = $ARGUMENTS.match(/--from-uat\s+(\S+)/)
-const parallelMode = $ARGUMENTS.includes('--parallel')
-
-// Clean bug description
-const bugDescription = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--from-uat\s+\S+|--parallel/g, '')
-  .trim()
-
-const slug = bugDescription.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 40)
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = fromUatMatch ? `${dateStr}-debug-P${fromUatMatch[1]}-${slug}` : `${dateStr}-debug-${slug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
+mkdir -p {sessionFolder}
 ```
 
 ### Phase 1: Input Resolution -> CSV
@@ -179,7 +171,7 @@ Bash(`mkdir -p ${sessionFolder}`)
 | `--parallel` flag present | parallel (implies from-uat, one agent per gap cluster) |
 | Neither flag | standalone (gather symptoms interactively) |
 
-2. **Related session discovery**: Query `state.json.artifacts[]` for all artifacts matching `phase === target_phase && milestone === current_milestone`. Each artifact's type determines its outputs: execute → .summaries/.task/, review → review.json (findings guide hypothesis formation), debug → understanding.md (avoid re-investigation), test → uat.md. Extract conclusions that may affect this debug session.
+2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase+milestone. Extract relevant outputs by type: execute -> .summaries/.task/, review -> review.json (guide hypotheses), debug -> understanding.md (avoid re-investigation), test -> uat.md.
 
 3. **Symptom collection**:
 
@@ -189,15 +181,9 @@ Bash(`mkdir -p ${sessionFolder}`)
 | from-uat | test artifact's uat.md (via registry) | Parse Gaps section, cluster by component |
 | parallel | test artifact's uat.md (via registry) | Same as from-uat, one investigation per cluster |
 
-3. **Hypothesis generation**: For each symptom cluster or bug description:
-   - Analyze code patterns around affected area
-   - Generate 3-5 ranked hypotheses
-   - Each hypothesis becomes a wave 1 CSV row
+3. **Hypothesis generation**: Per symptom cluster, analyze affected code and generate 3-5 ranked hypotheses (each becomes a wave 1 row).
 
-4. **Fix task generation**: For each hypothesis, pre-generate a wave 2 fix row:
-   - `deps` points to the hypothesis ID
-   - `context_from` points to the hypothesis ID
-   - Wave 2 tasks only execute if their hypothesis is confirmed
+4. **Fix task generation**: Pre-generate wave 2 fix row per hypothesis (`deps`/`context_from` -> hypothesis ID). Only executes if hypothesis confirmed.
 
 5. **CSV generation**: Hypothesis rows (wave 1) + fix rows (wave 2).
 
@@ -211,134 +197,60 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 #### Wave 1: Hypothesis Investigation (Parallel)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 1` AND `status == pending`
-3. No prev_context needed (wave 1 has no predecessors)
-4. Write `wave-1.csv`
-5. Execute:
+1. Extract wave 1 pending rows from master `tasks.csv` into `wave-1.csv` (no prev_context needed)
+2. Execute:
 
 ```javascript
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-1.csv`,
   id_column: "id",
   instruction: buildInvestigationInstruction(sessionFolder),
-  max_concurrency: maxConcurrency,
-  max_runtime_seconds: 600,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["confirmed", "refuted", "inconclusive", "failed"] },
-      findings: { type: "string" },
-      evidence_for: { type: "string" },
-      evidence_against: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: [confirmed|refuted|inconclusive|failed], findings, evidence_for, evidence_against, error }
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. Delete `wave-1.csv`
-8. **Filter for wave 2**: Mark wave 2 fix tasks as `skipped` if their hypothesis was `refuted` or `inconclusive`
+3. Merge results into master `tasks.csv`, delete `wave-1.csv`
+4. **Filter for wave 2**: Mark fix tasks as `skipped` if their hypothesis was `refuted` or `inconclusive`
 
 #### Wave 2: Fix Attempts (Parallel, Confirmed Only)
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == 2` AND `status == pending` (not skipped)
-3. If no confirmed hypotheses, skip wave 2 entirely
-4. Build `prev_context` from wave 1 findings:
-   ```
-   [H1: Null pointer in login handler] CONFIRMED: User object null when DB returns empty...
-   [H3: Stale session token] CONFIRMED: Refresh logic only handles 403, not 401...
-   ```
-5. Write `wave-2.csv` with `prev_context` column
-6. Execute:
+1. If no confirmed hypotheses remain, skip wave 2 entirely
+2. Extract wave 2 pending rows, build `prev_context` from confirmed wave 1 findings
+3. Write `wave-2.csv`, then execute:
 
 ```javascript
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-2.csv`,
   id_column: "id",
   instruction: buildFixInstruction(sessionFolder),
-  max_concurrency: maxConcurrency,
-  max_runtime_seconds: 900,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 900,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["fixed", "fix_failed", "failed"] },
-      findings: { type: "string" },
-      fix_applied: { type: "string" },
-      verified: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: [fixed|fix_failed|failed], findings, fix_applied, verified, error }
 })
 ```
 
-7. Merge results into master `tasks.csv`
-8. Delete `wave-2.csv`
+4. Merge results into master `tasks.csv`, delete `wave-2.csv`
 
 ### Phase 3: Results Aggregation
 
 **Objective**: Generate final results and human-readable report.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
-3. Generate `context.md`:
+1. Export final `tasks.csv` as `results.csv`
 
-```markdown
-# Debug Report -- {bug_description}
+2. **Generate context.md**: Debug report with summary (mode, hypothesis/confirmed/fixed/verified counts), per-hypothesis results (hypothesis, evidence for/against, findings, status), per-fix results (fix applied, verified, findings), aggregated root causes, and next steps.
 
-## Summary
-- Mode: {standalone | from-uat | parallel}
-- Hypotheses: {total} investigated
-- Confirmed: {confirmed_count}
-- Fixes applied: {fixed_count}
-- Fixes verified: {verified_count}
+3. **UAT update** (if --from-uat): Update `uat.md` gaps with `root_cause`, `fix_direction`, `affected_files` for confirmed hypotheses.
 
-## Hypothesis Results
+4. **Issue update**: If `issues.jsonl` exists, update matching issues with status `diagnosed`, add `context.suggested_fix` and `context.notes`.
 
-### H{N}: {title} [{status}]
-**Hypothesis**: {hypothesis}
-**Evidence For**: {evidence_for}
-**Evidence Against**: {evidence_against}
-**Findings**: {findings}
+5. **Register artifact** (phase-scoped only): Append to `state.json.artifacts[]` with `type: "debug"`, `id: DBG-NNN`, `depends_on: triggering_review_id || exec_art.id`.
 
-## Fix Results
-
-### FIX-H{N}: {title} [{status}]
-**Fix Applied**: {fix_applied}
-**Verified**: {verified}
-**Findings**: {findings}
-
-## Root Causes
-{aggregated confirmed hypotheses with evidence}
-
-## Next Steps
-{suggested actions based on results}
-```
-
-4. **UAT update** (if --from-uat): For each confirmed hypothesis with fix:
-   - Update `{artifact_dir}/uat.md` gaps with `root_cause`, `fix_direction`, `affected_files`
-
-5. **Issue update**: If `.workflow/issues/issues.jsonl` exists:
-   - Update matching issues with status `diagnosed`, add `context.suggested_fix` and `context.notes`
-
-6. **Register artifact** (phase-scoped only): Append to `state.json.artifacts[]` with `type: "debug"`, `id: DBG-NNN`, `path: "scratch/{YYYYMMDD}-debug-P{N}-{slug}"`, `depends_on: triggering_review_id || exec_art.id`. Output directory is independent scratch.
-
-7. **Post-debug Knowledge Inquiry** (after root causes confirmed):
-   - **Recurring pattern**: If root cause matches a recurring pattern (similar to prior debug sessions):
-     → Ask: "This root cause pattern has appeared before. Should it be documented in `debug-notes.md` to prevent recurrence? (`/spec-add debug`)"
-   - **Non-obvious fix**: If fix involved a non-obvious approach or workaround:
-     → Ask: "This fix used a non-obvious strategy. Should it be recorded as a learning? (`/spec-add learning`)"
-   - **Architectural gap**: If root cause traces to architectural boundary violation or missing constraint:
-     → Ask: "Root cause points to an architectural gap. Should `architecture-constraints.md` be updated? (`/spec-add arch`)"
-   - If user confirms, append `<spec-entry>` to matching category file via `spec-add` mechanism
+6. **Post-debug Knowledge Inquiry**: Prompt user to capture knowledge when:
+   - Recurring root cause pattern detected -> `/spec-add debug`
+   - Non-obvious fix strategy used -> `/spec-add learning`
+   - Architectural gap identified -> `/spec-add arch`
 
 8. **Next step routing**:
 
@@ -375,11 +287,7 @@ spawn_agents_on_csv({
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before own investigation
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as found
-4. **Append-only**: Never modify or delete
-5. **Deduplicate**: Check before writing
+Read `discoveries.ndjson` before investigation. Append-only: dedup by type+key before writing, never modify/delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"{id}","type":"root_cause","data":{"location":"src/auth/login.ts:42","cause":"null_dereference","severity":"high","confidence":"confirmed"}}' >> {session_folder}/discoveries.ndjson

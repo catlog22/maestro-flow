@@ -47,14 +47,8 @@ $ARGUMENTS — target path/module and optional flags.
 
 ### Phase 1: Session Init + Target Resolution
 
-```javascript
-const AUTO_YES = $ARGUMENTS.includes('-y') || $ARGUMENTS.includes('--yes')
-const patternsMatch = $ARGUMENTS.match(/--patterns\s+(\S+)/)
-const patternFilter = patternsMatch ? patternsMatch[1].split(',') : null
-const SAVE_SPEC = $ARGUMENTS.includes('--save-spec')
-const SAVE_WIKI = $ARGUMENTS.includes('--save-wiki')
-const target = $ARGUMENTS.replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--patterns\s+\S+|--save-spec|--save-wiki/g, '').trim()
-```
+Parse flags from `$ARGUMENTS`: `-y`/`--yes`, `--patterns <list>`, `--save-spec`, `--save-wiki`, `--continue`, `-c N`.
+Extract remaining text as target path/module.
 
 Resolve target to file list. Load existing patterns from `coding-conventions.md` + `lessons.jsonl` for dedup set.
 

@@ -34,12 +34,7 @@ If missing or invalid, display usage and prompt user (E_NO_SUBCOMMAND, E_INVALID
 
 ### Step 2: Ensure Storage
 
-```bash
-mkdir -p .workflow/issues
-touch .workflow/issues/issues.jsonl 2>/dev/null
-```
-
-Auto-create directory and empty file if missing (E_ISSUES_DIR_MISSING handled silently).
+Auto-create `.workflow/issues/` and empty `issues.jsonl` if missing (E_ISSUES_DIR_MISSING handled silently).
 
 ### Step 3: Execute Subcommand
 

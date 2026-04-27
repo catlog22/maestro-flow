@@ -163,34 +163,21 @@ Also writes to:
 ### Session Initialization
 
 ```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+// Parse from $ARGUMENTS:
+//   AUTO_YES   <- --yes | -y
+//   continueMode <- --continue
+//   maxConcurrency <- --concurrency N | -c N  (default: 8)
+//   mode       <- "by-prompt" if clean args start with "by-prompt", else "multi"
+//   userPrompt <- text after "by-prompt" (stripped of quotes)
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 8
+// Session IDs (UTC+8):
+//   sessionId    = DBP-{YYYYMMDD}-{HHmmss}
+//   csvSessionId = {YYYYMMDD}-discover-{mode}
+//   sessionFolder = .workflow/.csv-wave/{csvSessionId}
+//   discoveryDir  = .workflow/issues/discoveries/{sessionId}
 
-// Parse mode
-const cleanArgs = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+/g, '')
-  .trim()
-
-const isByPrompt = cleanArgs.startsWith('by-prompt')
-const userPrompt = isByPrompt
-  ? cleanArgs.replace(/^by-prompt\s*/, '').replace(/^['"]|['"]$/g, '').trim()
-  : ''
-const mode = isByPrompt ? 'by-prompt' : 'multi'
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const timeStr = getUtc8ISOString().substring(11, 19).replace(/:/g, '')
-const sessionId = `DBP-${dateStr}-${timeStr}`
-const csvSessionId = `${dateStr}-discover-${mode}`
-const sessionFolder = `.workflow/.csv-wave/${csvSessionId}`
-const discoveryDir = `.workflow/issues/discoveries/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder} && mkdir -p ${discoveryDir} && mkdir -p .workflow/issues`)
-Bash(`touch .workflow/issues/issues.jsonl`)
+// Create: sessionFolder, discoveryDir, .workflow/issues/
+// Touch: .workflow/issues/issues.jsonl
 ```
 
 Initialize `discovery-state.json`:
@@ -262,24 +249,17 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 900,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      issues_found: { type: "string" },
-      severity_distribution: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
+  output_schema: { // required: id, status, findings
+    id: "string", status: "completed|failed",
+    findings: "string", issues_found: "string",
+    severity_distribution: "string", error: "string"
   }
 })
 ```
 
-6. Read `wave-1-results.csv`, merge into master `tasks.csv`
-7. For each completed perspective, save raw findings to `{discoveryDir}/{perspective}-findings.json`
-8. Update `discovery-state.json`: `perspectives_completed += ["{perspective}"]`
+6. Merge `wave-1-results.csv` into master `tasks.csv`
+7. Save per-perspective findings to `{discoveryDir}/{perspective}-findings.json`
+8. Update `discovery-state.json` with completed perspectives
 9. Delete `wave-1.csv`
 
 **Perspective scan agent protocol**:
@@ -308,20 +288,12 @@ spawn_agents_on_csv({
 8. Delete `wave-2.csv`
 
 **Dedup agent protocol**:
-- Load all perspective findings from prev_context
-- Merge into single list
-- Deduplicate:
-  - Group findings by affected file path
-  - Within each file group, compare descriptions
-  - If two findings describe the same issue (>80% overlap or same file:line), keep higher severity
-- For each unique finding:
-  - Generate ISS-YYYYMMDD-NNN ID (read existing issues.jsonl to avoid collisions)
-  - Build issue record with full schema (id, title, status, priority, severity, source, description, fix_direction, context, tags, etc.)
-  - Severity-to-priority: critical->1, high->2, medium->3, low->4
-  - Set source = "discovery", tags = ["{perspective}"]
-- Append all issues to `.workflow/issues/issues.jsonl`
-- Append to `{discoveryDir}/discovery-issues.jsonl`
-- Report: total issues_found (pre-dedup), issues after dedup, severity_distribution
+- Merge all perspective findings from prev_context into single list
+- Deduplicate: group by file path, compare descriptions (>80% overlap or same file:line → keep higher severity)
+- For each unique finding: generate `ISS-YYYYMMDD-NNN` ID (collision-safe), build full issue record
+  - Severity-to-priority: critical→1, high→2, medium→3, low→4; source = "discovery", tags = ["{perspective}"]
+- Append to `.workflow/issues/issues.jsonl` and `{discoveryDir}/discovery-issues.jsonl`
+- Report: pre-dedup count, post-dedup count, severity_distribution
 
 ### Phase 3: Results Aggregation
 
@@ -384,48 +356,16 @@ spawn_agents_on_csv({
 {list of ISS-YYYYMMDD-NNN IDs with titles}
 ```
 
-6. **Display summary**:
-
-```
-====================================================
-  DISCOVERY COMPLETE: {sessionId}
-  Mode: {mode} ({perspective_count} perspectives)
-  Findings: {issues_found} raw, {issues_deduplicated} unique
-  Issues created: {issues_deduplicated}
-====================================================
-
-BREAKDOWN BY PERSPECTIVE:
-  Security:        {count}
-  Performance:     {count}
-  Reliability:     {count}
-  Maintainability: {count}
-  Scalability:     {count}
-  UX:              {count}
-  Accessibility:   {count}
-  Compliance:      {count}
-
-BREAKDOWN BY SEVERITY:
-  Critical: {count}
-  High:     {count}
-  Medium:   {count}
-  Low:      {count}
-
-Files:
-  {session_folder}/results.csv
-  {session_folder}/context.md
-  {discoveryDir}/discovery-state.json
-  {discoveryDir}/discovery-issues.jsonl
-  .workflow/issues/issues.jsonl (appended)
-```
+6. **Display summary**: Session ID, mode, perspective count, raw vs unique finding counts, per-perspective breakdown, severity breakdown, and output file paths.
 
 7. **Next step routing**:
 
 | Result | Suggestion |
 |--------|------------|
-| Critical issues found | `$manage-issue "list --severity critical"` -- Review critical issues |
-| Issues created | `$manage-issue "list"` -- View all issues |
-| Specific area needs deeper look | `$manage-issue-discover "by-prompt '...'"` -- Explore deeper |
-| Full scan complete | `$manage-issue "list --source discovery"` -- View discovered issues |
+| Critical issues found | `$manage-issue "list --severity critical"` |
+| Issues created | `$manage-issue "list"` |
+| Specific area needs deeper look | `$manage-issue-discover "by-prompt '...'"` |
+| Full scan complete | `$manage-issue "list --source discovery"` |
 
 ### Shared Discovery Board Protocol
 

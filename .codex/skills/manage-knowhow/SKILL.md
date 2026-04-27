@@ -1,25 +1,25 @@
 ---
-name: manage-memory
+name: manage-knowhow
 description: Manage memory entries across workflow and system stores (list, search, view, edit, delete, prune)
 argument-hint: "[list|search|view|edit|delete|prune] [query|id|file] [--store workflow|system|all] [--tag tag] [--type compact|tip]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
 <purpose>
-Manage memory entries across workflow and system stores. Provides list, search, view, edit, delete, and prune operations over `.workflow/memory/` (workflow store) and `~/.claude/projects/{project}/memory/` (system store).
+Manage memory entries across workflow and system stores. Provides list, search, view, edit, delete, and prune operations over `.workflow/knowhow/` (workflow store) and `~/.claude/projects/{project}/memory/` (system store).
 </purpose>
 
 <context>
 $ARGUMENTS — subcommand followed by options. Defaults to `list` if no arguments.
 
 ```bash
-$manage-memory
-$manage-memory "list --store workflow"
-$manage-memory "search authentication"
-$manage-memory "view MEM-20260318-001"
-$manage-memory "edit MEMORY.md"
-$manage-memory "delete TIP-20260318-001 --confirm"
-$manage-memory "prune --before 2026-01-01 --type tip --dry-run"
+$manage-knowhow
+$manage-knowhow "list --store workflow"
+$manage-knowhow "search authentication"
+$manage-knowhow "view KNW-20260318-001"
+$manage-knowhow "edit MEMORY.md"
+$manage-knowhow "delete TIP-20260318-001 --confirm"
+$manage-knowhow "prune --before 2026-01-01 --type tip --dry-run"
 ```
 
 **Subcommands**: `list`, `search`, `view`, `edit`, `delete`, `prune`.
@@ -37,7 +37,7 @@ $manage-memory "prune --before 2026-01-01 --type tip --dry-run"
 
 ### Step 1: Resolve Store Paths
 
-- **Workflow store**: `.workflow/memory/` (entries: `MEM-*.md`, `TIP-*.md`, indexed in unified `.workflow/wiki-index.json`)
+- **Workflow store**: `.workflow/knowhow/` (entries: `KNW-*.md`, `TIP-*.md`, indexed in unified `.workflow/wiki-index.json`)
 - **System store**: `~/.claude/projects/{project}/memory/` (files: `MEMORY.md` + topic `.md` files)
 
 Derive system path from project root (replace path separators with `--`, prefix drive letter).
@@ -54,7 +54,7 @@ Default to `list` if no arguments. Parse first token as subcommand.
 
 **search `<query>`**: Full-text grep across both stores. Rank by match count.
 
-**view `<id|file>`**: Auto-detect store from format (`MEM-*/TIP-*` = workflow, else system). Display full content.
+**view `<id|file>`**: Auto-detect store from format (`KNW-*/TIP-*` = workflow, else system). Display full content.
 
 **edit `<file>`**: Edit a system memory file. Read current content, apply changes. Warn if MEMORY.md exceeds 200 lines (W003).
 

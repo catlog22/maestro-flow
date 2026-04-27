@@ -56,13 +56,7 @@ $quality-refactor "--dir .workflow/scratch/refactor-auth-2026-03-18"  # resume e
 
 ### Step 2: Create Scratch Directory
 
-```bash
-REFACTOR_DIR=".workflow/scratch/refactor-${slug}-${date}"
-mkdir -p "$REFACTOR_DIR/.task"
-mkdir -p "$REFACTOR_DIR/.summaries"
-```
-
-Write `index.json` with type "refactor", scope, status "active", plan/execution/reflection counters.
+Create `.workflow/scratch/refactor-{slug}-{date}/` with `.task/` and `.summaries/` subdirectories. Write `index.json` with type "refactor", scope, status "active", plan/execution/reflection counters.
 
 ### Step 3: Scope Analysis
 
@@ -100,33 +94,11 @@ Initialize `reflection-log.md` if not exists.
 
 For each task in order:
 
-**5a. Execute refactoring:**
+**5a. Execute refactoring:** Spawn Agent to implement the refactoring — read `read_first` files, apply changes to targets, follow convergence criteria exactly.
 
-Spawn Agent for complex refactoring tasks:
-```
-Agent({
-  subagent_type: "general-purpose",
-  description: "Execute refactoring: {task title}",
-  prompt: "Implement refactoring as described. Read files in read_first, apply changes to target files. Follow convergence criteria exactly.",
-  run_in_background: false
-})
-```
+**5b. Run test suite** (npm test / pytest / go test as appropriate).
 
-**5b. Run test suite:**
-```bash
-npm test 2>&1 || pytest 2>&1 || go test ./... 2>&1
-```
-
-**5c. Record in reflection-log.md:**
-```markdown
-## Round {N}: {task title}
-
-- **Strategy:** {approach taken}
-- **Result:** {pass|fail}
-- **Tests:** {all pass | N failures}
-- **Adjustment:** {what to change next, or "none needed"}
-- **Files changed:** {list}
-```
+**5c. Record in reflection-log.md:** Round number, task title, strategy, result (pass/fail), test outcome, adjustment for next round, files changed.
 
 **5d. Handle test failures:**
 1. Revert the change
@@ -141,38 +113,13 @@ npm test 2>&1 || pytest 2>&1 || go test ./... 2>&1
 
 ### Step 6: Final Verification
 
-Run full test suite. Record final state in reflection-log.md:
-```markdown
-## Final Verification
-
-- **Tests:** {result}
-- **Tasks completed:** {N}/{total}
-- **Tasks blocked:** {N}
-- **Key learnings:** {patterns discovered}
-```
+Run full test suite. Record final state in reflection-log.md: test result, tasks completed/total, tasks blocked, key learnings.
 
 ### Step 7: Complete and Report
 
 Update `index.json`: status -> "completed", final execution/reflection counts.
 
-```
-## Refactoring Complete: {scope}
-
-| Metric | Value |
-|--------|-------|
-| Tasks completed | {N}/{total} |
-| Tasks blocked | {N} |
-| Reflection rounds | {N} |
-| Strategy adjustments | {N} |
-| Tests passing | {yes/no} |
-
-Key learnings:
-{from reflection-log.md}
-
-Artifacts:
-- Reflection log: {REFACTOR_DIR}/reflection-log.md
-- Task results: {REFACTOR_DIR}/.summaries/
-```
+Display report: scope, tasks completed/blocked, reflection rounds, strategy adjustments, test status, key learnings from reflection-log.md, artifact paths (`{REFACTOR_DIR}/reflection-log.md`, `{REFACTOR_DIR}/.summaries/`).
 
 If regressions: suggest Skill({ skill: "quality-debug" }).
 </execution>

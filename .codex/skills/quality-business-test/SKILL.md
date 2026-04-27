@@ -162,19 +162,7 @@ Record results in `.tests/business/test-results-iter-{N}.json`.
 
 ### Step 7: Build Traceability Matrix
 
-Map each result to `REQ-NNN:AC-N`:
-
-```
-FOR each REQ:
-  FOR each AC:
-    ac_status = "passed" if ALL scenarios passed
-                "failed" if ANY failed
-                "blocked" if ANY blocked (none failed)
-                "untested" if no scenarios mapped
-  verdict = "verified" if all MUST+SHOULD passed
-            "partial" if some failed
-            "unverified" if all failed/untested
-```
+Map each result to `REQ-NNN:AC-N`. Per AC: `passed` (all scenarios pass), `failed` (any fail), `blocked` (any blocked, none failed), `untested` (no scenarios). Per REQ verdict: `verified` (all MUST+SHOULD AC passed), `partial` (some failed), `unverified` (all failed/untested).
 
 ### Step 8: Generate Reports
 

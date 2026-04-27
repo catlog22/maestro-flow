@@ -98,52 +98,19 @@ id,title,description,focus_area,output_file,deps,context_from,wave,status,findin
 
 ### Session Initialization
 
-```javascript
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const focusArea = $ARGUMENTS.replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+/g, '').trim() || 'full'
-const dateStr = new Date(Date.now() + 8*60*60*1000).toISOString().substring(0,10).replace(/-/g,'')
-const sessionId = `${dateStr}-map-${focusArea.substring(0,20)}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
-Bash(`mkdir -p .workflow/codebase`)
-```
+Parse flags from `$ARGUMENTS` (`-y`, `-c N`, `--continue`). Extract focus area (default: "full"). Generate session ID: `{YYYYMMDD}-map-{focusArea}`. Create session folder at `.workflow/.csv-wave/{sessionId}/` and `.workflow/codebase/`.
 
 ### Phase 1: Generate tasks.csv
 
-Generate 4 mapper rows. If focus_area is specified, scope descriptions to that area.
+Generate 4 mapper rows. If focus area specified, scope descriptions to that area.
 
 ### Phase 2: Wave Execution
 
-Single wave — all 4 mappers run concurrently:
-
-```javascript
-spawn_agents_on_csv({
-  csv_path: `${sessionFolder}/wave-1.csv`,
-  id_column: "id",
-  instruction: buildMapperInstruction(sessionFolder, focusArea),
-  max_concurrency: 4,
-  max_runtime_seconds: 600,
-  output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
-})
-```
+Single wave -- all 4 mappers via `spawn_agents_on_csv` (max_concurrency: 4, 600s timeout). Each agent returns: id, status (completed/failed), findings, error.
 
 ### Phase 3: Write Output Files
 
-1. Read each agent's findings from results
-2. Write to `.workflow/codebase/{output_file}`
-3. Generate context.md summary
-4. Display report
+Read each agent's findings, write to `.workflow/codebase/{output_file}`, generate `context.md` summary, display report.
 
 ### Shared Discovery Board Protocol
 

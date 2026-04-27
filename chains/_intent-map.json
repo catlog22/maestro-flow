@@ -201,16 +201,16 @@
       "route": { "graph": "singles/spec-map" }
     },
     {
-      "type": "memory_capture",
-      "regex": "memory.*captur|save.*memory|compact",
+      "type": "knowhow_capture",
+      "regex": "knowhow.*captur|save.*knowhow|compact",
       "flags": "i",
-      "route": { "graph": "singles/memory-capture" }
+      "route": { "graph": "singles/knowhow-capture" }
     },
     {
-      "type": "memory",
-      "regex": "memory|manage.*mem|记忆",
+      "type": "knowhow",
+      "regex": "knowhow|知技",
       "flags": "i",
-      "route": { "graph": "singles/memory" }
+      "route": { "graph": "singles/knowhow" }
     },
     {
       "type": "team_lifecycle",
@@ -252,7 +252,7 @@
       "type": "learn",
       "regex": "\\blearn|capture.*insight|eureka|记录.*洞察",
       "flags": "i",
-      "route": { "graph": "singles/memory-capture" }
+      "route": { "graph": "singles/knowhow-capture" }
     },
     {
       "type": "fork",

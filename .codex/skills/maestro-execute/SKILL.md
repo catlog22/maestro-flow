@@ -158,34 +158,22 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 
 ### Session Initialization
 
-```javascript
-const getUtc8ISOString = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString()
+```
+Parse from $ARGUMENTS:
+  AUTO_YES        ← --yes | -y
+  continueMode    ← --continue
+  maxConcurrency  ← --concurrency | -c N  (default: 5)
+  autoCommit      ← --auto-commit
+  executionMethod ← --method agent|cli  (default: from config.json)
+  scratchDir      ← --dir <path>  (default: null)
+  phaseArg        ← remaining text after flag removal
 
-// Parse flags
-const AUTO_YES = $ARGUMENTS.includes('--yes') || $ARGUMENTS.includes('-y')
-const continueMode = $ARGUMENTS.includes('--continue')
-const concurrencyMatch = $ARGUMENTS.match(/(?:--concurrency|-c)\s+(\d+)/)
-const maxConcurrency = concurrencyMatch ? parseInt(concurrencyMatch[1]) : 5
+Derive:
+  dateStr        ← UTC+8 YYYYMMDD
+  sessionId      ← scratchDir ? "{dateStr}-execute-scratch" : "{dateStr}-execute-P{phaseArg}-{phaseSlug}"
+  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
 
-// Parse execute-specific flags
-const autoCommit = $ARGUMENTS.includes('--auto-commit')
-const methodMatch = $ARGUMENTS.match(/--method\s+(agent|cli)/)
-const executionMethod = methodMatch ? methodMatch[1] : null
-const dirMatch = $ARGUMENTS.match(/--dir\s+(\S+)/)
-const scratchDir = dirMatch ? dirMatch[1] : null
-
-// Clean phase text
-const phaseArg = $ARGUMENTS
-  .replace(/--yes|-y|--continue|--concurrency\s+\d+|-c\s+\d+|--auto-commit|--method\s+\w+|--dir\s+\S+/g, '')
-  .trim()
-
-const dateStr = getUtc8ISOString().substring(0, 10).replace(/-/g, '')
-const sessionId = scratchDir
-  ? `${dateStr}-execute-scratch`
-  : `${dateStr}-execute-P${phaseArg}-${phaseSlug}`
-const sessionFolder = `.workflow/.csv-wave/${sessionId}`
-
-Bash(`mkdir -p ${sessionFolder}`)
+mkdir -p {sessionFolder}
 ```
 
 ### Phase 1: Plan Resolution -> CSV
@@ -204,27 +192,13 @@ Bash(`mkdir -p ${sessionFolder}`)
 
    For multi-plan: execute sequentially. Each plan is a full CSV session.
 
-2. **Load plan** (per PLAN_DIR):
-   - Read `{PLAN_DIR}/plan.json` for wave structure
-   - Extract `plan.waves` array with task assignments
+2. **Load plan**: Read `{PLAN_DIR}/plan.json` for wave structure and task assignments
 
-3. **Detect completed tasks (breakpoint resume)**:
-   - For each task in plan, read `.task/TASK-{NNN}.json`
-   - If `status == "completed"`: exclude from CSV
-   - Log: "Resuming: {completed}/{total} tasks already completed"
+3. **Detect completed tasks (breakpoint resume)**: Read `.task/TASK-{NNN}.json` for each task; exclude completed ones from CSV. Log resume count.
 
-4. **Build tasks.csv from task definitions**:
-   - For each pending task in each wave:
-     - Read `.task/TASK-{NNN}.json`
-     - Extract: title, description, files (build scope), convergence.criteria, hints, execution_directives
-     - Set `deps` from task dependency field
-     - Set `context_from` = same as deps (findings propagate along dependency edges)
-     - Set `wave` from plan.json wave assignment
-   - Write `tasks.csv`
+4. **Build tasks.csv**: For each pending task per wave, read `.task/TASK-{NNN}.json` and extract: title, description, scope (from files), convergence.criteria, hints, execution_directives. Set `deps` from task dependency, `context_from` = deps, `wave` from plan.json.
 
-5. **Load project specs**:
-   - Read `.workflow/specs/` for coding conventions and architecture constraints
-   - Pass as context to all executor agents
+5. **Load project specs**: Read `.workflow/specs/` for coding conventions and architecture constraints (passed to all agents)
 
 6. **User validation**: Display task/wave breakdown. Skip if AUTO_YES.
 
@@ -234,160 +208,59 @@ Bash(`mkdir -p ${sessionFolder}`)
 
 #### Per-Wave Execution Loop
 
-For each wave in ascending order:
+For each wave N in ascending order:
 
-1. Read master `tasks.csv`
-2. Filter rows where `wave == N` AND `status == pending`
-3. If no pending tasks in this wave: skip to next wave
-4. Build `prev_context` for each task from completed predecessor findings:
-   ```
-   [TASK-001: Setup auth module] Created src/auth/auth.ts with verifyToken and generateToken...
-   [TASK-002: Create user model] Created src/models/user.ts with User interface...
-   ```
-5. Write `wave-{N}.csv` with `prev_context` column added
-6. Execute:
+1. Extract wave N pending rows from master `tasks.csv` (skip wave if none)
+2. Build `prev_context` per task from completed predecessor findings
+3. Write `wave-{N}.csv` with `prev_context` column, then execute:
 
 ```javascript
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-${N}.csv`,
   id_column: "id",
   instruction: buildExecutorInstruction(sessionFolder, phaseDir, autoCommit, specsContent),
-  max_concurrency: maxConcurrency,
-  max_runtime_seconds: 900,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 900,
   output_csv_path: `${sessionFolder}/wave-${N}-results.csv`,
-  output_schema: {
-    type: "object",
-    properties: {
-      id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed", "blocked"] },
-      findings: { type: "string" },
-      files_modified: { type: "string" },
-      tests_passed: { type: "string" },
-      error: { type: "string" }
-    },
-    required: ["id", "status", "findings"]
-  }
+  output_schema: { id, status: [completed|failed|blocked], findings, files_modified, tests_passed, error }
 })
 ```
 
-7. Read `wave-{N}-results.csv`, merge into master `tasks.csv`
-8. Delete `wave-{N}.csv`
+4. Merge results into master `tasks.csv`, delete `wave-{N}.csv`
 
 #### Blocked Task Handling
 
-After each wave:
-- Count blocked/failed tasks
-- If any blocked and NOT AUTO_YES:
-  ```
-  AskUserQuestion: "Tasks blocked: {blocked_list}. Continue to next wave or stop?"
-  Options: [Continue (skip blocked deps), Stop and review]
-  ```
-- If AUTO_YES: auto-continue, skip tasks whose deps are blocked
+After each wave: if blocked tasks exist, prompt user to continue or stop (AUTO_YES: auto-continue). Skip tasks whose deps are blocked/failed.
 
 #### Cascading Skip
 
-If a task is blocked/failed and other tasks in later waves depend on it:
-- Mark dependent tasks as `skipped` with error: "Dependency {dep_id} blocked/failed"
-- Do not attempt execution of skipped tasks
+Blocked/failed tasks cascade: mark all downstream dependents as `skipped` with error "Dependency {dep_id} blocked/failed".
 
 ### Phase 3: Results Aggregation
 
 **Objective**: Update all state files and generate execution report.
 
-1. Read final master `tasks.csv`
-2. Export as `results.csv`
+1. Export final `tasks.csv` as `results.csv`
 
-3. **Update task files**: For each row in results:
-   - Read `.task/{id}.json`
-   - Update `status` to match CSV status
-   - Write back to disk
+2. **Update task files**: Write each task's status from CSV back to `.task/{id}.json`
 
-3b. **Issue status sync**: For each completed/failed task that has `issue_id`:
-   - Read issue from `.workflow/issues/issues.jsonl` by `issue_id`
-   - Collect all `task_refs[]` statuses for that issue:
-     - All task_refs completed -> `issue.status = "resolved"`
-     - Any task_ref failed -> `issue.status = "in_progress"`
+3. **Issue status sync**: For tasks with `issue_id`, update `.workflow/issues/issues.jsonl`:
+   - All task_refs completed -> `issue.status = "resolved"`; any failed -> `"in_progress"`
    - Append history entry: `{ action: "executed", at: <ISO>, by: "maestro-execute", summary: "TASK-{NNN} {status}" }`
-   - Write updated issue back to `issues.jsonl`
 
-4. **Register EXC artifact in state.json**:
-   ```
-   Read .workflow/state.json
-   plan_artifact = state.json.artifacts.find(a => a.type == "plan" && a.path == PLAN_DIR_relative)
-   next_id = max EXC-NNN + 1
-   Push artifact: { id: "EXC-{next_id}", type: "execute", milestone: plan_artifact.milestone,
-     phase: plan_artifact.phase, scope: plan_artifact.scope, path: plan_artifact.path,
-     status: "completed", depends_on: plan_artifact.id, harvested: false,
-     created_at: execution_start, completed_at: now() }
-   Write state.json (atomic)
-   ```
+4. **Register EXC artifact in state.json**: Find matching plan artifact, create `{ id: "EXC-{next_id}", type: "execute", milestone, phase, scope, path, status: "completed", depends_on: plan_artifact.id, harvested: false, created_at, completed_at }`
 
-5. **Extract incremental learnings**:
-   - Read all `.summaries/` from PLAN_DIR
-   - Extract strategy adjustments, patterns, pitfalls
-   - Check existing entries via `maestro spec load --category learning` (dedup)
-   - Append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format (category=`learning`, auto-extract keywords, date=today, source=`execute`)
-   - Mark artifact `harvested: true` in state.json
+5. **Extract incremental learnings**: Read `.summaries/`, dedup against existing specs, append to `.workflow/specs/learnings.md` as `<spec-entry>` (category=learning), mark artifact `harvested: true`
 
-5b. **Post-task Knowledge Inquiry** (after each task completes):
-   - **Execution deviation**: If task summary mentions approach change, dependency swap, or plan deviation:
-     → Ask: "TASK-{NNN} deviated from the plan. Should this decision be recorded as an architecture constraint? (`/spec-add arch`)"
-   - **Retry success**: If task required ≥2 retries before completion:
-     → Ask: "TASK-{NNN} succeeded after {N} retries. Should this fix pattern be documented? (`/spec-add debug`)"
-   - **Implicit knowledge**: If task summary contains design rationale ("chose X because", "rejected Y due to"):
-     → Ask: "Design decision detected. Should it be recorded as a learning? (`/spec-add learning`)"
-   - If user confirms, append `<spec-entry>` to matching category file via `spec-add` mechanism
+6. **Post-task Knowledge Inquiry**: Prompt user to capture knowledge when:
+   - Execution deviation detected (plan change) -> `/spec-add arch`
+   - Retry success (>=2 retries) -> `/spec-add debug`
+   - Implicit design rationale found -> `/spec-add learning`
 
-6. **Generate context.md**:
+7. **Generate context.md**: Execution report with summary (tasks/blocked/waves/auto-commit), per-wave result table (task, status, files, tests), blocked tasks, discovery board summary, next steps.
 
-```markdown
-# Execution Report -- Phase {phase}
+8. **Auto-sync** (if config.json.codebase.auto_sync_after_execute == true): detect changed files, trigger codebase doc update.
 
-## Summary
-- Tasks: {completed}/{total} completed
-- Blocked: {blocked_count}
-- Waves executed: {waves_run}/{waves_total}
-- Auto-commit: {yes/no}
-
-## Wave Results
-
-### Wave {N}
-| Task | Status | Files Modified | Tests |
-|------|--------|---------------|-------|
-| {id}: {title} | {status} | {files} | {tests} |
-
-## Blocked Tasks
-{if any: task ID, error, checkpoint info}
-
-## Discovery Board Summary
-{aggregated discovery findings}
-
-## Next Steps
-- Run verify to validate results
-- Run debug for any blocked tasks
-```
-
-7. **Auto-sync** (if config.json.codebase.auto_sync_after_execute == true):
-   - Detect changed files from execution
-   - Trigger codebase doc update
-
-8. **Display completion report**:
-
-```
-=== EXECUTION COMPLETE ===
-Phase:     {phase_name}
-Completed: {completed_count}/{total_count} tasks
-Blocked:   {blocked_count} tasks
-Waves:     {waves_executed}/{total_waves}
-
-Summaries: {PLAN_DIR}/.summaries/
-Tasks:     {PLAN_DIR}/.task/
-
-Next steps:
-  Skill({ skill: "maestro-verify" })
-  Skill({ skill: "maestro-verify", args: "--dir {PLAN_DIR}" })
-  Skill({ skill: "manage-status" })
-```
+9. **Display completion report**: Phase, completed/blocked counts, wave progress, paths to `.summaries/` and `.task/`, next step suggestions (`maestro-verify`, `manage-status`).
 
 ### Shared Discovery Board Protocol
 
@@ -404,11 +277,7 @@ Next steps:
 
 #### Protocol
 
-1. **Read** `{session_folder}/discoveries.ndjson` before starting task implementation
-2. **Skip covered**: If discovery of same type + dedup key exists, skip
-3. **Write immediately**: Append findings as discovered
-4. **Append-only**: Never modify or delete existing entries
-5. **Deduplicate**: Check before writing
+Read `discoveries.ndjson` before implementation. Append-only: dedup by type+key before writing, never modify/delete.
 
 ```bash
 echo '{"ts":"<ISO>","worker":"TASK-001","type":"code_pattern","data":{"name":"Result type","file":"src/types/result.ts","description":"All functions return Result<T,E> for error handling"}}' >> {session_folder}/discoveries.ndjson

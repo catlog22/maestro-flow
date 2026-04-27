@@ -99,26 +99,7 @@ Example: 'analyze the code, then plan, implement, and test the feature'"
 
 **Step 1.6** — Write `intent.json` to `.workflow/templates/design-drafts/WFD-<slug>-<date>/`.
 
-**Step 1.7 — Interactive confirmation**:
-```
-============================================================
-  COMPOSER — Intent Parsed
-============================================================
-  Description: "<original input>"
-  Task type:   <type>
-  Complexity:  <level>
-
-  Detected steps:
-    1. <description>  →  <type_hint>
-    2. <description>  →  <type_hint>
-    3. <description>  →  <type_hint>
-
-  Variables:
-    - goal (required): <inferred description>
-============================================================
-```
-
-AskUserQuestion: `Looks good, continue to resolution` / `Edit steps` / `Add a step` / `Cancel`
+**Step 1.7 — Interactive confirmation**: Display description, task type, complexity, detected steps (numbered with type_hint), and variables. AskUserQuestion: `Continue to resolution` / `Edit steps` / `Add a step` / `Cancel`
 
 ---
 
@@ -153,20 +134,7 @@ If spec not found, use built-in fallback:
 
 **Step 2.4** — Write `nodes.json`.
 
-**Step 2.5 — Interactive confirmation**:
-```
-============================================================
-  COMPOSER — Nodes Resolved
-============================================================
-  N-001  [skill]    maestro-plan          "{goal}"
-  N-002  [skill]    maestro-execute       {phase}
-  N-003  [skill]    quality-test          {phase}
-
-  Parallel groups: none
-============================================================
-```
-
-AskUserQuestion: `Continue to checkpoint injection` / `Change executor` / `Change node type` / `Back to intent` / `Cancel`
+**Step 2.5 — Interactive confirmation**: Display resolved nodes table (ID, type, executor, args) and parallel groups. AskUserQuestion: `Continue to checkpoint injection` / `Change executor` / `Change node type` / `Back to intent` / `Cancel`
 
 ---
 
@@ -195,28 +163,7 @@ Set `auto_continue: false` for checkpoints before user-facing deliverables.
 
 ### Phase 4: Confirm — Visualize + User Approval
 
-**Step 4.1** — Render ASCII pipeline:
-```
-============================================================
-  COMPOSER — Pipeline Review
-============================================================
-Pipeline: <template-name>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- N-001  [skill]       maestro-plan              "{goal}"
-   |
- CP-01  [checkpoint]  After Plan                auto-continue
-   |
- N-002  [skill]       maestro-execute           {phase}
-   |
- CP-02  [checkpoint]  Before Tests              pause-for-user
-   |
- N-003  [skill]       quality-test              {phase}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Variables (required):  goal
-Checkpoints:           2  (1 auto, 1 pause)
-Nodes:                 3 work + 2 checkpoints
-============================================================
-```
+**Step 4.1** — Render ASCII pipeline: vertical node chain with `|` connectors showing each node (ID, type, executor, args) and checkpoint nodes (auto-continue vs pause-for-user). Footer: required variables, checkpoint counts, node counts.
 
 **Step 4.2** — AskUserQuestion: `Confirm & Save` / `Edit a node` / `Add a node` / `Remove a node` / `Rename template` / `Re-run checkpoint injection` / `Cancel`
 
@@ -236,26 +183,7 @@ Nodes:                 3 work + 2 checkpoints
 
 **Step 5.4** — Update `~/.maestro/templates/workflows/index.json`.
 
-**Step 5.5** — Output summary:
-```
-============================================================
-  COMPOSER — Template Saved
-============================================================
-  Path:      ~/.maestro/templates/workflows/<slug>.json
-  ID:        wft-<slug>-<date>
-  Nodes:     <n> work + <n> checkpoints
-  Variables: <required vars>
-
-  To execute:
-    $maestro-player <slug> --context goal="<your goal>"
-
-  To edit later:
-    $maestro-composer --edit ~/.maestro/templates/workflows/<slug>.json
-
-  To list all templates:
-    $maestro-player --list
-============================================================
-```
+**Step 5.5** — Output summary: path, template ID, node/checkpoint counts, required variables. Include usage commands: `$maestro-player <slug> --context goal="..."`, `$maestro-composer --edit <path>`, `$maestro-player --list`.
 
 **Step 5.6** — Clean up design draft directory.
 </execution>

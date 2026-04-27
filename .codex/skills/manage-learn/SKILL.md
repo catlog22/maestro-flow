@@ -74,98 +74,44 @@ Validate `--category` if provided (allowed: pattern, antipattern, decision, tool
 
 ### Step 2: Bootstrap Learning Store (on first use)
 
-Check if `.workflow/learning/lessons.jsonl` exists. If not:
-```javascript
-// Create directory and empty files — use Bash + Write (apply_patch cannot create empty files reliably)
-Bash('mkdir -p .workflow/learning && touch .workflow/learning/lessons.jsonl')
-Write('.workflow/learning/learning-index.json', '{"version":1,"entries":[]}\n')
-```
-
-Verify `.workflow/` exists (E001 if not).
+Verify `.workflow/` exists (E001 if not). If `.workflow/learning/lessons.jsonl` missing: create directory, empty `lessons.jsonl`, and initialize `learning-index.json` with `{"version":1,"entries":[]}`.
 
 ### Step 3: Execute Mode
 
 #### Capture Mode
 
-1. **Infer category** from insight text (keyword heuristics, no LLM):
+1. **Infer category** from keywords (no LLM):
 
-| Keywords present in text | Inferred category |
-|--------------------------|-------------------|
+| Keywords | Category |
+|----------|----------|
 | always, should, prefer, best practice | pattern |
 | never, avoid, don't, pitfall, breaks | antipattern |
-| decided, chose, tradeoff, because, reason | decision |
-| tool, library, framework, package, cli | tool |
-| gotcha, surprising, unexpected, watch out | gotcha |
-| technique, approach, method, pattern for | technique |
+| decided, chose, tradeoff, because | decision |
+| tool, library, framework, package | tool |
+| gotcha, surprising, unexpected | gotcha |
+| technique, approach, method | technique |
 
-2. **Auto-link phase**: Read `.workflow/state.json` for current phase (derived from artifact registry). Resolve matching directory slug via artifact registry in `state.json` to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`. `--phase 0` forces null.
-
-3. **Generate stable INS-id**: `INS-{8 lowercase hex}` from `hash(insightText + timestamp)`.
-
-4. **Build lessons.jsonl row**:
-```json
-{
-  "id": "INS-a3f7b2c1",
-  "title": "<first 80 chars of insight>",
-  "summary": "<full insight text>",
-  "source": "manual",
-  "lens": null,
-  "category": "<inferred or explicit>",
-  "tags": ["manual", "<user tags...>"],
-  "phase": "<N or null>",
-  "phase_slug": "<slug or null>",
-  "confidence": "<high|medium|low>",
-  "routed_to": null,
-  "routed_id": null,
-  "created_at": "<ISO>"
-}
-```
-
-5. **Append to lessons.jsonl**:
-```javascript
-// Append single JSON line — Bash echo avoids rewriting the whole file
-Bash(`echo '${JSON.stringify(insightRow)}' >> .workflow/learning/lessons.jsonl`)
-```
-
-6. **Update learning-index.json**: Read, push entry, write back:
-```javascript
-const index = JSON.parse(Read('.workflow/learning/learning-index.json'))
-index.entries.push({ id: insightRow.id, title: insightRow.title, category: insightRow.category, tags: insightRow.tags, phase: insightRow.phase, created_at: insightRow.created_at })
-Write('.workflow/learning/learning-index.json', JSON.stringify(index, null, 2) + '\n')
-```
+2. **Auto-link phase** from `state.json` artifact registry. `--phase 0` forces null.
+3. **Generate INS-id**: `INS-{8 hex}` from `hash(insightText + timestamp)`.
+4. **Build row** with fields: id, title (first 80 chars), summary, source="manual", lens=null, category, tags (includes "manual"), phase, phase_slug, confidence, routed_to=null, created_at.
+5. **Append** JSON line to `lessons.jsonl` (append-only, never rewrite).
+6. **Update** `learning-index.json`: push entry with id, title, category, tags, phase, created_at.
 
 #### List Mode
 
-Read `learning-index.json` entries array. Apply filters (`--tag`, `--category`, `--phase`, `--lens`). Sort newest-first. Display up to `--limit` rows (default 20):
-
-```
-ID              Category     Phase  Tags              Title
-INS-a3f7b2c1   gotcha       3      manual,zod        Zod v4 breaks z.object().strict() API
-INS-b1c2d3e4   pattern      2      manual            Always read state.json before planning
-```
+Read `learning-index.json`, apply filters (`--tag`, `--category`, `--phase`, `--lens`), sort newest-first, display up to `--limit` rows (default 20) as table.
 
 #### Search Mode
 
-Grep across `lessons.jsonl` for the query string. Rank by field match weight: title (3) > tags (2) > summary (1). Display top matches with ID, category, phase, title.
+Grep `lessons.jsonl` for query. Rank by field weight: title (3) > tags (2) > summary (1). Display top matches.
 
 #### Show Mode
 
-Validate INS-id format `INS-[0-9a-f]{8}`. Find row in `lessons.jsonl` where `id` matches. Display full record with all fields. If `routed_to` is set, display the linked artifact path.
+Validate `INS-[0-9a-f]{8}` format. Find matching row, display full record. Show linked artifact if `routed_to` is set.
 
 ### Step 4: Display Confirmation
 
-Capture mode:
-```
-=== INSIGHT CAPTURED ===
-ID:         INS-a3f7b2c1
-Category:   gotcha
-Phase:      3 (phase-03-api-layer)
-Confidence: medium
-Tags:       manual, zod, typescript
-
-Next: $manage-learn "list"  or  $manage-learn "search zod"
-Wiki: maestro wiki list --type lesson  (lessons auto-indexed in wiki graph)
-```
+Capture mode: display ID, category, phase, confidence, tags, and next-step commands (`$manage-learn "list"`, `$manage-learn "search ..."`).
 </execution>
 
 <error_codes>

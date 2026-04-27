@@ -10,6 +10,7 @@ import AtSign from 'lucide-react/dist/esm/icons/at-sign.js';
 import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left.js';
 import UserPlus from 'lucide-react/dist/esm/icons/user-plus.js';
 import { useBoardStore } from '@/client/store/board-store.js';
+import { useAgentStore } from '@/client/store/agent-store.js';
 import { useMeetingRoomStore } from '@/client/store/meeting-room-store.js';
 import { sendWsMessage } from '@/client/hooks/useWebSocket.js';
 import { AGENT_STATUS_COLORS } from '@/shared/team-types.js';
@@ -84,6 +85,21 @@ export function MeetingRoomPage() {
       sendWsMessage({ action: 'room:unsubscribe', sessionId });
     };
   }, [sessionId, connected]);
+
+  // Restore agent entries after snapshot loads agents with processIds
+  const setEntries = useAgentStore((s) => s.setEntries);
+  useEffect(() => {
+    if (!agents.length) return;
+    for (const agent of agents) {
+      if (!agent.processId) continue;
+      const existing = useAgentStore.getState().entries[agent.processId];
+      if (existing?.length) continue; // already have entries
+      fetch(`/api/agents/${agent.processId}/entries`)
+        .then((r) => r.ok ? r.json() : [])
+        .then((entries) => { if (entries.length) setEntries(agent.processId!, entries); })
+        .catch(() => {});
+    }
+  }, [agents, setEntries]);
 
   // Insert @mention into input
   const insertMention = useCallback((role: string) => {
@@ -191,19 +207,19 @@ export function MeetingRoomPage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border-divider bg-bg-secondary shrink-0">
+      <div className="flex items-center gap-2 px-3 py-1 border-b border-border-divider bg-bg-secondary shrink-0">
         <button
           type="button"
           onClick={() => navigate('/rooms')}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
+          className="w-5 h-5 rounded flex items-center justify-center text-text-tertiary hover:text-text-primary hover:bg-bg-hover transition-colors"
           title="Back to rooms"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeft size={12} />
         </button>
-        <span className="text-[length:var(--font-size-sm)] font-semibold text-text-primary">
+        <span className="text-[12px] font-semibold text-text-primary">
           Meeting Room
         </span>
-        <span className="text-[11px] text-text-tertiary font-mono">
+        <span className="text-[10px] text-text-tertiary font-mono">
           {sessionId}
         </span>
         <div className="flex-1" />
@@ -262,7 +278,7 @@ export function MeetingRoomPage() {
       </div>
 
       {/* Input bar */}
-      <div className="flex items-end gap-2 px-4 py-2 border-t border-border-divider bg-bg-secondary shrink-0">
+      <div className="flex items-end gap-2 px-3 py-1.5 border-t border-border-divider bg-bg-secondary shrink-0">
         {/* Input target selector */}
         <div className="flex items-center gap-1 shrink-0">
           <button

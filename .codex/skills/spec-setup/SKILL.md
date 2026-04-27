@@ -22,11 +22,7 @@ No arguments. Scans the codebase and generates spec files in `.workflow/specs/`.
 
 ### Step 1: Validate Preconditions
 
-```bash
-test -d .workflow || exit 1  # E001: not initialized
-```
-
-Verify project contains source files to scan (E002 if empty).
+Verify `.workflow/` exists (E001) and project contains source files (E002).
 
 ### Step 2: Scan Codebase
 
@@ -55,20 +51,7 @@ Create `.workflow/specs/` directory and write:
 
 ### Step 5: Display Report
 
-```
-=== SPEC SETUP COMPLETE ===
-Created:
-  - .workflow/specs/coding-conventions.md    (category: coding)
-  - .workflow/specs/architecture-constraints.md (category: arch)
-  - .workflow/specs/learnings.md             (category: learning)
-  {optional files if created}
-
-Next: Run Skill({ skill: "spec-add", args: "<category> <content>" }) to add entries
-Categories: coding, arch, quality, debug, test, review, learning
-Extended:   bug, pattern, decision, rule, validation (stored in closest core category file)
-Remove:  /spec-remove <entry-id>
-Wiki:    maestro wiki list --type spec (entries auto-indexed in wiki graph)
-```
+List created files with categories. Show next steps: `/spec-add <category> <content>`, available categories (core + extended), `/spec-remove`, wiki graph commands.
 
 </execution>
 

@@ -9,7 +9,7 @@ import { parseFrontmatter } from './frontmatter-util.js';
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 const ID_RE = /^[\w.-]+$/;
 
-export type WritableType = 'spec' | 'memory' | 'note';
+export type WritableType = 'spec' | 'knowhow';
 
 export interface CreateWikiReq {
   type: WritableType;
@@ -112,7 +112,7 @@ export class WikiWriter {
       throw new WikiWriteError('BAD_REQUEST', 'title is required');
     }
 
-    const targetPath = this.resolveTargetPath(req.type, req.slug);
+    const targetPath = this.resolveTargetPath(req.type, req.slug, req.category);
     if (await pathExists(targetPath)) {
       throw new WikiWriteError('CONFLICT', `file already exists: ${targetPath}`);
     }
@@ -379,19 +379,19 @@ export class WikiWriter {
   // -------------------------------------------------------------------------
 
   private assertWritableType(type: string): asserts type is WritableType {
-    if (type !== 'spec' && type !== 'memory' && type !== 'note') {
+    if (type !== 'spec' && type !== 'knowhow') {
       throw new WikiWriteError('BAD_REQUEST', `type '${type}' is not writable`);
     }
   }
 
-  private resolveTargetPath(type: WritableType, slug: string): string {
+  private resolveTargetPath(type: WritableType, slug: string, category?: string): string {
     let rel: string;
     if (type === 'spec') {
       rel = `specs/${slug}.md`;
     } else {
-      // memory | note → memory/<PREFIX>-<slug>.md
-      const prefix = type === 'note' ? 'TIP' : 'MEM';
-      rel = `memory/${prefix}-${slug}.md`;
+      // knowhow → knowhow/<PREFIX>-<slug>.md
+      const prefix = categoryToPrefix(category);
+      rel = `knowhow/${prefix}-${slug}.md`;
     }
     const abs = resolve(join(this.workflowRoot, rel));
     if (!this.isInsideRoot(abs) || !this.isWritablePath(abs)) {
@@ -411,7 +411,7 @@ export class WikiWriter {
     const segs = rel.split(sep);
     if (segs.length === 0) return false;
     const top = segs[0];
-    return top === 'specs' || top === 'memory';
+    return top === 'specs' || top === 'knowhow';
   }
 
   private isSpecPath(absPath: string): boolean {
@@ -472,6 +472,18 @@ export function splitFrontmatterAndBody(raw: string): {
 // ---------------------------------------------------------------------------
 // Small fs helpers
 // ---------------------------------------------------------------------------
+
+function categoryToPrefix(category?: string): string {
+  switch (category) {
+    case 'session':   return 'KNW';
+    case 'tip':       return 'TIP';
+    case 'template':  return 'TPL';
+    case 'recipe':    return 'RCP';
+    case 'reference': return 'REF';
+    case 'decision':  return 'DCS';
+    default:          return 'KNW';
+  }
+}
 
 async function pathExists(absPath: string): Promise<boolean> {
   try {
