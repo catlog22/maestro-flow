@@ -3,7 +3,7 @@
 // for testability and reuse.
 // ---------------------------------------------------------------------------
 
-import { join, dirname, resolve, relative, basename } from 'node:path';
+import { join, dirname, resolve, relative, basename, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import {
@@ -493,7 +493,12 @@ export function createTargetBackup(
 
   const backupFile = (filePath: string, baseDir: string) => {
     if (!existsSync(filePath)) return;
-    const rel = relative(baseDir, filePath);
+    let rel = relative(baseDir, filePath);
+    // On Windows, relative() returns an absolute path when paths are on different drives.
+    // Strip the drive letter colon to make it a valid relative path (e.g. "D:\foo" → "D\foo").
+    if (isAbsolute(rel)) {
+      rel = rel.replace(/^([a-zA-Z]):/, '$1');
+    }
     const dest = join(backupDir, rel);
     const destDir = dirname(dest);
     if (!existsSync(destDir)) mkdirSync(destDir, { recursive: true });
