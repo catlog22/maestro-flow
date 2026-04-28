@@ -28,7 +28,7 @@ $ARGUMENTS — user intent text, or special flags.
 - `--dry-run` — Display planned chain without executing
 - `--chain <name>` — Force specific chain (skips intent classification)
 
-**Session state**: `.workflow/.maestro-coordinate/{session-id}/`
+**Session state**: `.workflow/.maestro/{session-id}/`
 **Core output**: `tasks.csv` (master) + `wave-{N}-results.csv` (per wave) + `context.md` (report)
 </context>
 
@@ -94,7 +94,7 @@ After each barrier skill completes, read its artifacts and update `state.context
 
 ### Phase 1: Resolve Intent and Chain
 
-**`--continue`**: Glob `.workflow/.maestro-coordinate/MCC-*/state.json` sorted desc; load most recent; resume from first pending wave.
+**`--continue`**: Glob `.workflow/.maestro/maestro-*/status.json` sorted desc; load most recent; resume from first pending wave.
 
 **Fresh mode**:
 1. Read `.workflow/state.json` for project context (derive current phase from artifact registry, `workflow_name`)
@@ -102,16 +102,27 @@ After each barrier skill completes, read its artifacts and update `state.context
 3. Otherwise classify intent via keyword heuristics (see chain_map)
 4. No match + not AUTO_YES → one clarifying question via `AskUserQuestion`
 5. Resolve chain's skill list
-6. Create session dir `.workflow/.maestro-coordinate/MCC-{dateStr}-{timeStr}/` and write `state.json`:
+6. Create session dir `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/` and write `status.json`:
 
 ```json
 {
-  "id": "MCC-{dateStr}-{timeStr}", "intent": "...", "chain": "...",
-  "auto_yes": false, "status": "in_progress", "started_at": "ISO",
-  "context": { "phase": null, "plan_dir": null, "analysis_dir": null,
+  "session_id": "maestro-{YYYYMMDD-HHMMSS}",
+  "created_at": "ISO",
+  "intent": "...",
+  "task_type": "...",
+  "chain_name": "...",
+  "phase": null,
+  "auto_mode": false,
+  "exec_mode": "auto",
+  "cli_tool": "codex",
+  "gemini_session_id": null,
+  "step_analyses": [],
+  "context": { "plan_dir": null, "analysis_dir": null,
                "brainstorm_dir": null, "spec_session_id": null, "gaps": null },
   "waves": [],
-  "steps": [{ "step_n": 1, "skill": "...", "args": "", "status": "pending", "wave_n": null }]
+  "steps": [{ "index": 0, "skill": "...", "args": "", "engine": null, "status": "pending", "started_at": null, "completed_at": null, "wave_n": null }],
+  "current_step": 0,
+  "status": "running"
 }
 ```
 
@@ -135,16 +146,16 @@ After each barrier skill completes, read its artifacts and update `state.context
      output_schema: RESULT_SCHEMA
    })
    ```
-4. **Read results**: Update each step's `status`, `findings`, `wave_n` from results CSV
+4. **Read results**: Update each step's `status`, `wave_n` from results CSV
 5. **Barrier check**: If wave was a barrier skill, run barrier analysis logic (read artifacts, update context)
-6. **Persist**: Append wave to `state.waves[]`, write `state.json`
+6. **Persist**: Append wave to `state.waves[]`, write `status.json`
 7. **Abort on failure**: If any result `status === 'failed'` → mark remaining steps `skipped`, set `state.status = 'aborted'`, break
 
 ### Skill Call Assembly
 
 **Barrier skills**: `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`
 
-**Auto-yes flag map** (appended when `state.auto_yes` is true):
+**Auto-yes flag map** (appended when `status.auto_mode` is true):
 
 | Skill | Flag |
 |-------|------|
@@ -169,7 +180,7 @@ After each barrier skill completes, read its artifacts and update `state.context
 {topic}
 
 限制：
-- 不要修改 .workflow/.maestro-coordinate/ 下的 state 文件
+- 不要修改 .workflow/.maestro/ 下的 status 文件
 - skill 内部有自己的 session 管理，按 skill SKILL.md 执行即可
 
 最后必须调用 `report_agent_job_result`，返回 JSON：
@@ -195,7 +206,7 @@ WAVE RESULTS:
   [W3] $maestro-execute         →  ✓  12/12 tasks done
   [W4] $maestro-verify          →  ✓  all criteria met
 
-State:    .workflow/.maestro-coordinate/<sessionId>/state.json
+State:    .workflow/.maestro/<sessionId>/status.json
 Resume:   $maestro --continue
 ```
 </execution>
@@ -236,7 +247,7 @@ Accumulated across all waves. Updated after each wave completes.
 
 <success_criteria>
 - [ ] Intent classified and chain resolved (keyword heuristics or `--chain`)
-- [ ] Session dir initialized with `state.json` before first wave
+- [ ] Session dir initialized with `status.json` before first wave
 - [ ] Every skill invocation goes through `spawn_agents_on_csv` — none executed in coordinator
 - [ ] Barrier skills execute solo in their wave; coordinator only reads artifacts afterward
 - [ ] Non-barrier skills grouped into parallel waves where possible

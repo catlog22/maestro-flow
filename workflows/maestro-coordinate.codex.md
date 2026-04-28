@@ -12,7 +12,7 @@ Extract from `$ARGUMENTS`:
 - Flags: `-y`/`--yes` (autoYes), `-c`/`--continue` (resumeMode), `--dry-run`, `--chain <name>`, `--tool <name>` (default: codex)
 - `intent` = remaining text after flag removal
 
-**If resumeMode:** Load latest `.workflow/.maestro-coordinate/*/status.json`, set `current_step` to first non-completed step, jump to **Step 6**.
+**If resumeMode:** Load latest `.workflow/.maestro/*/status.json`, set `current_step` to first non-completed step, jump to **Step 6**.
 
 ---
 
@@ -194,7 +194,7 @@ MAESTRO-COORDINATE: {chain_name} (dry run)
 
 ## Step 5: Setup Session
 
-Create session directory `.workflow/.maestro-coordinate/coord-{timestamp}/`.
+Create session directory `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/`.
 
 Initialize `status.json` with: session_id, intent, task_type, chain_name, tool, auto_mode, phase, current_step=0, gemini_session_id=null, step_analyses=[], steps[] (each: index, skill, args, status=pending, exec_id=null, analysis=null).
 
