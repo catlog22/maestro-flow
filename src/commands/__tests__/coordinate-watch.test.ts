@@ -64,7 +64,7 @@ function writeWalkerState(
   sessionId: string,
   status: 'running' | 'completed' | 'failed' | 'paused',
 ): void {
-  const dir = join(workflowRoot, '.workflow', '.maestro-coordinate', sessionId);
+  const dir = join(workflowRoot, '.workflow', '.maestro', sessionId);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, 'walker-state.json'),

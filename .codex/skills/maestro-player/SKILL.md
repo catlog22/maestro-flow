@@ -14,7 +14,7 @@ Aligned with maestro codex coordinator pattern:
 - ALL skill execution via `spawn_agents_on_csv` — coordinator never executes directly
 - Barrier nodes (checkpoints + artifact-producing skills) execute solo
 - Non-barrier nodes grouped into parallel waves
-- Session state at `.workflow/.maestro-coordinate/{session-id}/`
+- Session state at `.workflow/.maestro/{session-id}/`
 - Resume from last completed wave via `-c`
 
 ```
@@ -57,7 +57,7 @@ $ARGUMENTS — template slug/path, or flags.
 | Constant | Value |
 |----------|-------|
 | Session prefix | `MCP` (Maestro Composer Player) |
-| Session dir | `.workflow/.maestro-coordinate/MCP-<YYYYMMDD>-<HHmmss>/` |
+| Session dir | `.workflow/.maestro/MCP-<YYYYMMDD>-<HHmmss>/` |
 | State file | `state.json` |
 | Wave CSV | `wave-{N}.csv` |
 | Wave results | `wave-{N}-results.csv` |
@@ -223,7 +223,7 @@ spawn_agents_on_csv({
 {topic}
 
 限制：
-- 不要修改 .workflow/.maestro-coordinate/ 下的 state 文件
+- 不要修改 .workflow/.maestro/ 下的 state 文件
 - skill 内部有自己的 session 管理，按 skill SKILL.md 执行即可
 
 最后必须调用 `report_agent_job_result`，返回 JSON：
@@ -266,7 +266,7 @@ const RESULT_SCHEMA = {
     [W3] $quality-test {phase}          →  ✓  all tests pass
          $quality-review {phase}        →  ✓  no issues
 
-  State:    .workflow/.maestro-coordinate/<session_id>/state.json
+  State:    .workflow/.maestro/<session_id>/state.json
   Resume:   $maestro-player -c
 ============================================================
 ```
@@ -310,7 +310,7 @@ Written by `spawn_agents_on_csv`. Contains result per agent.
 <success_criteria>
 - [ ] Template loaded from `~/.maestro/templates/workflows/` and validated
 - [ ] All required context variables bound
-- [ ] Session dir at `.workflow/.maestro-coordinate/MCP-*/` with `state.json`
+- [ ] Session dir at `.workflow/.maestro/MCP-*/` with `state.json`
 - [ ] DAG nodes converted to waves (barrier=solo, non-barrier=parallel)
 - [ ] Every skill invocation goes through `spawn_agents_on_csv` — none in coordinator
 - [ ] Checkpoint nodes handled inline (state save, optional user pause)

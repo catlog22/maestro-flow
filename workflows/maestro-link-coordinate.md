@@ -50,7 +50,7 @@ The walker handles internally:
 - Prompt assembly (command nodes via `coordinate-step` template, decision nodes inline)
 - CLI execution via `maestro delegate --to {tool} --mode {write|analysis}`
 - Decision auto-resolution: `expr` (static, instant) or `llm` (CLI spawn, expects `DECISION: <target>\nREASONING: <text>`). Expr fallback to LLM when no matching/default edge.
-- max_visits loop prevention, state persistence to `.workflow/.maestro-coordinate/{session_id}/`
+- max_visits loop prevention, state persistence to `.workflow/.maestro/coordinate-{session_id}/`
 - Channel telemetry published to `~/.maestro/data/async/` broker, observable via `maestro coordinate watch`
 
 > **Step-mode latency note**: LLM-driven decisions fire synchronous CLI spawns (several seconds). Do not impose tight per-step deadlines. Static `expr` decisions remain instant.
@@ -97,7 +97,7 @@ Display final summary:
 | `maestro coordinate status [sessionId]` | Query session state | JSON (full state) |
 | `maestro coordinate run "intent" --chain X --tool Y` | Autonomous full run | JSON (final state) |
 | `maestro coordinate watch <sessionId> [--follow] [--since N] [--format json\|text]` | Stream walker events from broker (observer, read-only) | JSONL/text to stdout |
-| `maestro coordinate report --session <sid> --node <id> --status SUCCESS\|FAILURE [...]` | Agent-invoked result writer — the authoritative command-node result channel | Writes `.workflow/.maestro-coordinate/{sid}/reports/{node}.json`, exits 0 |
+| `maestro coordinate report --session <sid> --node <id> --status SUCCESS\|FAILURE [...]` | Agent-invoked result writer — the authoritative command-node result channel | Writes `.workflow/.maestro/coordinate-{sid}/reports/{node}.json`, exits 0 |
 
 ---
 
@@ -106,7 +106,7 @@ Display final summary:
 1. **All execution via CLI endpoint** — `maestro coordinate start/next/run`, never direct walker calls
 2. **Step mode by default** — `start` pauses after each command node, `next` advances one step
 3. **JSON protocol** — all subcommands output structured JSON to stdout, logs to stderr
-4. **Session persistence** — state at `.workflow/.maestro-coordinate/{session_id}/walker-state.json`
+4. **Session persistence** — state at `.workflow/.maestro/coordinate-{session_id}/walker-state.json`
 5. **Decision auto-resolve** — walker evaluates `ctx.result.status` internally between steps; falls back to the injected LLM decider when `expr` has no matching edge and no default
 6. **Resume** — `next {sessionId}` continues any step_paused session
 7. **Autonomous fallback** — `run` walks entire graph without pausing (backward compat)

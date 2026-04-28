@@ -4,7 +4,7 @@
  * Tracks session state across three coordinator types:
  *   A) maestro & maestro-coordinate — reads .workflow/.maestro/status.json
  *   B) maestro-link-coordinate — captures coord session_id from Bash output,
- *      reads .workflow/.maestro-coordinate/walker-state.json
+ *      reads .workflow/.maestro/walker-state.json
  *
  * Bridge file: {tmpdir}/maestro-coord-{cc_session_id}.json
  */
@@ -182,7 +182,7 @@ export function parseCoordinateOutput(toolOutput: string): CoordinateCliOutput |
  * Resolves next node from the chain graph.
  */
 export function readWalkerState(workspaceRoot: string, coordSessionId: string): CoordBridgeData | null {
-  const coordDir = join(workspaceRoot, '.workflow', '.maestro-coordinate');
+  const coordDir = join(workspaceRoot, '.workflow', '.maestro');
   const statePath = join(coordDir, coordSessionId, 'walker-state.json');
   if (!existsSync(statePath)) return null;
 
@@ -348,7 +348,7 @@ export function readLatestSession(
 
 /** Find the latest walker-state.json across all coordinate sessions. */
 function readLatestCoordinateSession(workspaceRoot: string): CoordBridgeData | null {
-  const coordDir = join(workspaceRoot, '.workflow', '.maestro-coordinate');
+  const coordDir = join(workspaceRoot, '.workflow', '.maestro');
   if (!existsSync(coordDir)) return null;
 
   try {

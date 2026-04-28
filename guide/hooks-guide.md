@@ -382,7 +382,7 @@ index.json | plan.json | analysis.md
 | 数据来源 | 命令 | 说明 |
 |---------|------|------|
 | `.workflow/.maestro/*/status.json` | `/maestro`、`/maestro-coordinate` | 读取最近修改的 status.json |
-| `.workflow/.maestro-coordinate/*/walker-state.json` | `/maestro-link-coordinate` | 通过 `readLatestSession()` fallback 读取 |
+| `.workflow/.maestro/*/walker-state.json` | `/maestro-link-coordinate` | 通过 `readLatestSession()` fallback 读取 |
 
 **Stop 事件优化**：coordinator-tracker 仅更新 bridge 文件（纯 I/O 操作），不再产生 `additionalContext` 输出。next-step 提示的注入职责由 `skill-context` hook（UserPromptSubmit 事件）承担——当用户调用 `/maestro`、`/maestro-coordinate`、`/maestro-link-coordinate` 时，skill-context 读取 bridge 文件并注入提示。这一职责分离使 coordinator-tracker 可以安全地从 PostToolUse（每个工具调用 1 次）迁移到 Stop（每轮 1 次），大幅减少子进程 spawn。
 

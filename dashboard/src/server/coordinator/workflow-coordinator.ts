@@ -58,7 +58,7 @@ export class WorkflowCoordinator {
   private async getGraphWalker() {
     if (this.graphWalker) return this.graphWalker;
     if (!this.graphWalkerInitPromise) {
-      const sessionDir = join(this.workflowRoot, '.workflow', '.maestro-coordinate');
+      const sessionDir = join(this.workflowRoot, '.workflow', '.maestro');
       this.graphWalkerInitPromise = this.factory.create({
         agentManager: this.agentManager,
         eventBus: this.eventBus,
@@ -253,7 +253,7 @@ export class WorkflowCoordinator {
 
   private get sessionDir(): string {
     if (!this.session) throw new Error('No active session');
-    return join(this.workflowRoot, '.workflow', '.maestro-coordinate', this.session.sessionId);
+    return join(this.workflowRoot, '.workflow', '.maestro', this.session.sessionId);
   }
 
   private async persistState(): Promise<void> {
@@ -272,7 +272,7 @@ export class WorkflowCoordinator {
     try {
       let stateDir: string;
       if (sessionId) {
-        stateDir = join(this.workflowRoot, '.workflow', '.maestro-coordinate', sessionId);
+        stateDir = join(this.workflowRoot, '.workflow', '.maestro', sessionId);
       } else if (this.session) {
         stateDir = this.sessionDir;
       } else {

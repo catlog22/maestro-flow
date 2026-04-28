@@ -568,7 +568,7 @@ export class ExecutionScheduler {
     // Create GraphWalker via factory
     try {
       const bridge = new WalkerEventBridge('coordinate', this.eventBus, `chain-${issue.id}`);
-      const sessionDir = join(workDir, '.workflow', '.maestro-coordinate', `chain-${issue.id}`);
+      const sessionDir = join(workDir, '.workflow', '.maestro', `chain-${issue.id}`);
       const { walker } = await this.factory.create({
         agentManager: this.agentManager,
         eventBus: this.eventBus,

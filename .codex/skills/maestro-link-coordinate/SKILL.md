@@ -52,7 +52,7 @@ $ARGUMENTS — user intent text, or flags.
 - `--chain <name>` — Force a specific chain graph
 - `-y / --yes` — Auto mode: no confirmations between nodes
 
-**Session state**: `.workflow/.maestro-coordinate/{session-id}/`
+**Session state**: `.workflow/.maestro/{session-id}/`
 **Chain graphs**: `chains/` and `chains/singles/` directories (JSON files)
 </context>
 
@@ -74,7 +74,7 @@ Parse `$ARGUMENTS` to extract: `listMode` (`--list`), `autoYes` (`-y`/`--yes`), 
 
 **`--list`**: Scan `chains/*.json` and `chains/singles/*.json`, display names + descriptions, stop.
 
-**`-c` (resume)**: Glob `.workflow/.maestro-coordinate/MLC-*/state.json`, pick most recent (or by `resumeId`). Load state → find first incomplete node → jump to Phase 2.
+**`-c` (resume)**: Glob `.workflow/.maestro/MLC-*/state.json`, pick most recent (or by `resumeId`). Load state → find first incomplete node → jump to Phase 2.
 
 **Fresh session**:
 1. Resolve chain: `--chain` direct or classify from intent using `chains/_intent-map.json`
@@ -94,7 +94,7 @@ Parse `$ARGUMENTS` to extract: `listMode` (`--list`), `autoYes` (`-y`/`--yes`), 
 }
 ```
 
-Session dir: `.workflow/.maestro-coordinate/{sessionId}/`
+Session dir: `.workflow/.maestro/{sessionId}/`
 
 **`--dry-run`**: Display node walk order with types, stop.
 **Confirm** (skip if `autoYes`): Display chain summary, prompt `Proceed?`.
@@ -173,7 +173,7 @@ Set `state.status` to completed/failed based on `node.status`. Record final hist
 {topic}
 
 限制：
-- 不要修改 .workflow/.maestro-coordinate/ 下的 state 文件
+- 不要修改 .workflow/.maestro/ 下的 state 文件
 - skill 内部有自己的 session 管理，按 skill SKILL.md 执行即可
 
 最后必须调用 `report_agent_job_result`，返回 JSON：
@@ -222,7 +222,7 @@ NODE WALK:
   [✓] test (command) — success — All tests passing
 
 Nodes: {completed}/{total} | Visits: {total_visits}
-State: .workflow/.maestro-coordinate/{sessionId}/state.json
+State: .workflow/.maestro/{sessionId}/state.json
 Resume: $maestro-link-coordinate -c {sessionId}
 ```
 

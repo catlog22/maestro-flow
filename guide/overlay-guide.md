@@ -513,7 +513,7 @@ Player 根据节点类型选择执行方式：
 
 **Codex 版本**：
 ```
-.workflow/.maestro-coordinate/MCP-<YYYYMMDD>-<HHmmss>/
+.workflow/.maestro/MCP-<YYYYMMDD>-<HHmmss>/
 ├── state.json         # 主状态文件（与 maestro codex 兼容）
 ├── wave-1.csv         # 每波 CSV 输入
 ├── wave-1-results.csv # 每波结果

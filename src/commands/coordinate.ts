@@ -50,7 +50,7 @@ function resolvePaths(workflowRoot: string) {
   const localChainsRoot = join(workflowRoot, 'chains');
   const chainsRoot = existsSync(localChainsRoot) ? localChainsRoot : globalChainsRoot;
   const templateDir = join(home, '.maestro', 'templates', 'cli', 'prompts');
-  const sessionDir = join(workflowRoot, '.workflow', '.maestro-coordinate');
+  const sessionDir = join(workflowRoot, '.workflow', '.maestro');
   return { chainsRoot, templateDir, sessionDir };
 }
 
@@ -437,7 +437,7 @@ export function registerCoordinateCommand(program: Command): void {
   // maestro coordinate report — agent-invoked status writer
   //
   // Spawned agents call this to record their node result as a JSON file at
-  // <workflowRoot>/.workflow/.maestro-coordinate/<session>/reports/<node>.json.
+  // <workflowRoot>/.workflow/.maestro/<session>/reports/<node>.json.
   // GraphWalker reads that file preferentially over stdout parsing, so this
   // command is the authoritative result channel for a coordinate node.
   // -------------------------------------------------------------------------

@@ -3,7 +3,7 @@
  *
  * Fixtures at: ./fixtures/mock-workspace/
  *   .workflow/.maestro/session-abc123/status.json     — A类 (maestro/maestro-coordinate)
- *   .workflow/.maestro-coordinate/coord-.../walker-state.json — B类 (link-coordinate)
+ *   .workflow/.maestro/coord-.../walker-state.json — B类 (link-coordinate)
  *   chains/full-lifecycle.json                         — chain graph for next-node resolution
  *
  * Fixtures at: ./fixtures/coordinate-cli-output.json   — simulated Bash CLI output

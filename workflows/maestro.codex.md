@@ -12,7 +12,7 @@ Extract from `$ARGUMENTS`:
 - Flags: `-y`/`--yes` (AUTO_YES), `-c`/`--continue` (RESUME), `--dry-run`, `--chain <name>`
 - `intent` = remaining text after flag removal
 
-**Resume mode**: If RESUME, load latest `.workflow/.maestro-coordinate/coord-*/state.json`, set `current_step` to first pending step, jump to **Step 6**.
+**Resume mode**: If RESUME, load latest `.workflow/.maestro/maestro-*/status.json`, set `current_step` to first pending step, jump to **Step 6**.
 
 ---
 
@@ -304,7 +304,7 @@ MAESTRO-COORDINATE: {chain_name}  (dry run)
 
 ## Step 5: Setup Session
 
-Create session directory `.workflow/.maestro-coordinate/coord-{timestamp}/`.
+Create session directory `.workflow/.maestro/maestro-{timestamp}/`.
 
 **Barrier skills** (solo wave, coordinator analyzes artifacts after): `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`.
 

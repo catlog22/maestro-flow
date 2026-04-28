@@ -44,7 +44,7 @@ async function runReport(args: string[], workflowRoot: string): Promise<number> 
 }
 
 function sessionDirOf(workflowRoot: string): string {
-  return join(workflowRoot, '.workflow', '.maestro-coordinate');
+  return join(workflowRoot, '.workflow', '.maestro');
 }
 
 describe('maestro coordinate report', () => {
