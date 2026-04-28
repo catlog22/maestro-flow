@@ -36,6 +36,7 @@ export interface WikiEntry {
   body: string;
   raw?: unknown;
   ext: Record<string, unknown>;
+  scope: string | null;
   category: string | null;
   createdBy: string | null;
   sourceRef: string | null;

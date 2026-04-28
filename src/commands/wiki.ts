@@ -19,6 +19,10 @@ import { WikiWriter, WikiWriteError } from '#maestro-dashboard/wiki/writer.js';
 import { computeHealth, detectOrphans, detectHubs } from '#maestro-dashboard/wiki/graph-analysis.js';
 import type { WikiFilters, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
 
+// Inline type to avoid cross-build dependency on dashboard dist-server.
+// Must match WikiScope in dashboard/src/server/wiki/wiki-types.ts.
+type WikiScope = 'project' | 'global' | 'team' | 'personal';
+
 const DEFAULT_BASE = process.env.MAESTRO_DASHBOARD_URL ?? 'http://127.0.0.1:3001';
 
 // ── Lazy offline clients ───────────────────────────────────────────────
@@ -48,6 +52,7 @@ export function registerWikiCommand(program: Command): void {
     .alias('ls')
     .description('List wiki entries with optional filters')
     .option('--type <type>', 'Filter by type: project|roadmap|spec|issue|lesson|memory|note')
+    .option('--scope <scope>', 'Filter by spec scope: project|global|team|personal')
     .option('--tag <tag>', 'Filter by tag')
     .option('--status <status>', 'Filter by status')
     .option('--category <cat>', 'Filter by category')
@@ -62,6 +67,7 @@ export function registerWikiCommand(program: Command): void {
         const base = cmd.parent!.opts().base as string;
         const qs = new URLSearchParams();
         if (opts.type) qs.set('type', opts.type);
+        if (opts.scope) qs.set('scope', opts.scope);
         if (opts.tag) qs.set('tag', opts.tag);
         if (opts.status) qs.set('status', opts.status);
         if (opts.category) qs.set('category', opts.category);
@@ -90,8 +96,9 @@ export function registerWikiCommand(program: Command): void {
 
       // Offline mode
       const { indexer } = getOfflineClients();
-      const filters: WikiFilters = {};
+      const filters: WikiFilters & { scope?: WikiScope } = {};
       if (opts.type) filters.type = opts.type as WikiNodeType;
+      if (opts.scope) filters.scope = opts.scope as WikiScope;
       if (opts.tag) filters.tag = opts.tag;
       if (opts.status) filters.status = opts.status;
       if (opts.category) filters.category = opts.category;

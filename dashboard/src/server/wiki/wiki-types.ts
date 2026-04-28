@@ -14,6 +14,8 @@ export type WikiStatus =
   | 'blocked'
   | 'archived';
 
+export type WikiScope = 'project' | 'global' | 'team' | 'personal';
+
 export interface WikiSource {
   kind: 'file' | 'virtual';
   /** Forward-slash relative path from .workflow/ root. */
@@ -48,6 +50,8 @@ export interface WikiEntry {
   ext: Record<string, unknown>;
 
   // ── Enrichment fields ────────────────────────────────────────────────
+  /** Spec scope: project (default), global, team, personal. Null for non-spec types. */
+  scope: WikiScope | null;
   /** Content category: arch|coding|debug|learning|quality|execution|design|security|decision|... */
   category: string | null;
   /** Command/skill that created this entry, e.g. "manage-harvest", "memory-capture", "manual". */
@@ -73,6 +77,8 @@ export interface WikiFilters {
   status?: WikiStatus;
   /** BM25 query string — tokenized against title + summary + tags + body. */
   q?: string;
+  /** Filter by spec scope: project|global|team|personal. */
+  scope?: WikiScope;
   /** Filter by content category. */
   category?: string;
   /** Filter by creating command/skill. */
@@ -91,6 +97,7 @@ export interface PersistedEntry {
   status: WikiStatus;
   created: string;
   updated: string;
+  scope: WikiScope | null;
   category: string | null;
   createdBy: string | null;
   sourceRef: string | null;

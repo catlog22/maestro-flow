@@ -5,12 +5,15 @@ import { toForwardSlash } from '../../shared/utils.js';
 import { parseFrontmatter } from './frontmatter-util.js';
 import { parseSpecEntries } from './spec-entry-parser.js';
 import { loadVirtualEntries } from './virtual-wiki-adapters.js';
+import { homedir } from 'node:os';
+import { existsSync, readdirSync } from 'node:fs';
 import type {
   WikiEntry,
   WikiFilters,
   WikiIndex,
   WikiStatus,
   WikiNodeType,
+  WikiScope,
   PersistedWikiIndex,
   PersistedEntry,
 } from './wiki-types.js';
@@ -189,38 +192,48 @@ export class WikiIndexer {
       if (entry) out.push(entry);
     }
 
-    // specs/*.md — container node + sub-nodes from <spec-entry> blocks
-    for (const name of await safeReaddir(join(this.workflowRoot, 'specs'))) {
-      if (extname(name).toLowerCase() !== '.md') continue;
-      const absPath = join(this.workflowRoot, 'specs', name);
-      const container = await this.parseFileEntry(absPath, 'spec');
-      if (!container) continue;
-      out.push(container);
+    // specs — scan all scope directories (global, project, team, personal)
+    const specScopes = this.resolveSpecScopes();
+    for (const { dir, scope, idPrefix, sourcePrefix } of specScopes) {
+      for (const name of await safeReaddir(dir)) {
+        if (extname(name).toLowerCase() !== '.md') continue;
+        const absPath = join(dir, name);
+        const container = await this.parseFileEntry(absPath, 'spec');
+        if (!container) continue;
 
-      // Parse <spec-entry> blocks into sub-node WikiEntries
-      const specEntries = parseSpecEntries(container.body, name, {
-        category: container.category ?? undefined,
-        keywords: container.tags,
-      });
-      for (const se of specEntries) {
-        out.push({
-          id: `spec-${se.id}`,
-          type: 'spec',
-          title: se.title,
-          summary: se.content.slice(0, 240).replace(/\s+/g, ' '),
-          tags: se.keywords,
-          status: 'active',
-          created: container.created,
-          updated: container.updated,
-          related: [],
-          source: container.source,
-          body: se.content,
-          ext: { entryType: se.type, timestamp: se.timestamp },
-          category: se.category || container.category,
-          createdBy: container.createdBy,
-          sourceRef: container.sourceRef,
-          parent: container.id,
+        // Scoped ID: spec:{scope}:{stem} to prevent cross-scope collisions
+        const stem = basename(name, extname(name));
+        container.id = `${idPrefix}${slugify(stem)}`;
+        container.scope = scope;
+        container.source = { kind: 'file', path: `${sourcePrefix}${name}` };
+        out.push(container);
+
+        // Parse <spec-entry> blocks into sub-node WikiEntries
+        const specEntries = parseSpecEntries(container.body, name, {
+          category: container.category ?? undefined,
+          keywords: container.tags,
         });
+        for (const se of specEntries) {
+          out.push({
+            id: `${idPrefix}${se.id}`,
+            type: 'spec',
+            title: se.title,
+            summary: se.content.slice(0, 240).replace(/\s+/g, ' '),
+            tags: se.keywords,
+            status: 'active',
+            created: container.created,
+            updated: container.updated,
+            related: [],
+            source: container.source,
+            body: se.content,
+            ext: { entryType: se.type, timestamp: se.timestamp },
+            scope,
+            category: se.category || container.category,
+            createdBy: container.createdBy,
+            sourceRef: container.sourceRef,
+            parent: container.id,
+          });
+        }
       }
     }
 
@@ -242,6 +255,79 @@ export class WikiIndexer {
     }
 
     return out;
+  }
+
+  /**
+   * Resolve spec directories for all scopes that exist on disk.
+   * Returns entries with scoped ID prefix and source path prefix.
+   */
+  private resolveSpecScopes(): Array<{
+    dir: string;
+    scope: WikiScope;
+    idPrefix: string;
+    sourcePrefix: string;
+  }> {
+    const maestroHome = process.env.MAESTRO_HOME ?? join(homedir(), '.maestro');
+    const scopes: Array<{
+      dir: string;
+      scope: WikiScope;
+      idPrefix: string;
+      sourcePrefix: string;
+    }> = [];
+
+    // Global: ~/.maestro/specs/
+    const globalDir = join(maestroHome, 'specs');
+    if (existsSync(globalDir)) {
+      scopes.push({
+        dir: globalDir,
+        scope: 'global',
+        idPrefix: 'spec:global:',
+        sourcePrefix: '~/.maestro/specs/',
+      });
+    }
+
+    // Project baseline: .workflow/specs/
+    const projectDir = join(this.workflowRoot, 'specs');
+    if (existsSync(projectDir)) {
+      scopes.push({
+        dir: projectDir,
+        scope: 'project',
+        idPrefix: 'spec:project:',
+        sourcePrefix: 'specs/',
+      });
+    }
+
+    // Team: .workflow/collab/specs/
+    const teamDir = join(this.workflowRoot, 'collab', 'specs');
+    if (existsSync(teamDir)) {
+      // Only add the team root, not uid subdirs
+      scopes.push({
+        dir: teamDir,
+        scope: 'team',
+        idPrefix: 'spec:team:',
+        sourcePrefix: 'collab/specs/',
+      });
+    }
+
+    // Personal: .workflow/collab/specs/{uid}/ — scan each uid subdir
+    if (existsSync(teamDir)) {
+      try {
+        for (const d of readdirSync(teamDir, { withFileTypes: true })) {
+          if (!d.isDirectory()) continue;
+          const personalDir = join(teamDir, d.name);
+          scopes.push({
+            dir: personalDir,
+            scope: 'personal',
+            idPrefix: `spec:personal:${d.name}:`,
+            sourcePrefix: `collab/specs/${d.name}/`,
+          });
+        }
+      } catch {
+        // Best-effort
+      }
+    }
+
+    return scopes;
   }
 
   private async scanVirtual(): Promise<WikiEntry[]> {
@@ -326,6 +412,7 @@ export class WikiIndexer {
       source: { kind: 'file', path: rel },
       body: content,
       ext,
+      scope: null,
       category,
       createdBy,
       sourceRef,
@@ -376,6 +463,7 @@ export class WikiIndexer {
         status: e.status,
         created: e.created,
         updated: e.updated,
+        scope: e.scope,
         category: e.category,
         createdBy: e.createdBy,
         sourceRef: e.sourceRef,
@@ -486,6 +574,7 @@ async function safeReaddir(dir: string): Promise<string[]> {
 export function filterEntries(entries: WikiEntry[], filters: WikiFilters): WikiEntry[] {
   return entries.filter((d) => {
     if (filters.type && d.type !== filters.type) return false;
+    if (filters.scope && d.scope !== filters.scope) return false;
     if (filters.tag && !d.tags.includes(filters.tag)) return false;
     if (filters.status && d.status !== filters.status) return false;
     if (filters.category && d.category !== filters.category) return false;

@@ -29,6 +29,7 @@ function makeEntry(
     source: { kind: 'file', path: `specs/${id}.md` },
     body,
     ext: {},
+    scope: null,
     category: null,
     createdBy: null,
     sourceRef: null,

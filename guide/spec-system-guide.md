@@ -1,16 +1,18 @@
 # Spec 系统指南
 
-Maestro 的 Spec 系统管理项目级知识（编码规范、架构约束、调试记录、测试惯例等），供 agent 和 hook 在执行前自动加载。所有 spec 存储在 `.workflow/specs/` 中，与 Wiki 知识图谱深度集成。
+Maestro 的 Spec 系统管理多层级知识（编码规范、架构约束、调试记录、测试惯例等），供 agent 和 hook 在执行前自动加载。支持 4 种作用域（project / global / team / personal），与 Wiki 知识图谱深度集成。
 
 ## 目录
 
 - [概览](#概览)
+  - [Scope 体系](#scope-体系)
   - [Category 体系](#category-体系)
   - [Entry 格式](#entry-格式)
 - [命令](#命令)
   - [spec-setup — 初始化](#spec-setup--初始化)
   - [spec-add — 添加条目](#spec-add--添加条目)
   - [spec-load — 加载条目](#spec-load--加载条目)
+- [Auto-Init](#auto-init)
 - [Keyword 系统](#keyword-系统)
   - [关键词提取](#关键词提取)
   - [按 keyword 加载](#按-keyword-加载)
@@ -29,9 +31,24 @@ Maestro 的 Spec 系统管理项目级知识（编码规范、架构约束、调
 
 ## 概览
 
+### Scope 体系
+
+Spec 支持 4 种作用域，通过 `--scope` 参数指定：
+
+| Scope | 目录 | 用途 | Auto-Init |
+|-------|------|------|-----------|
+| `project`（默认） | `.workflow/specs/` | 项目级规范，所有人共享 | 是（需 `.workflow/` 存在） |
+| `global` | `~/.maestro/specs/` | 跨项目通用规范 | 是（无条件） |
+| `team` | `.workflow/collab/specs/` | 团队共享规范 | 否 |
+| `personal` | `.workflow/collab/specs/{uid}/` | 个人偏好覆盖 | 否 |
+
+`personal` scope 需要 `--uid` 参数或已执行 `maestro collab join`（自动从 git 身份解析）。
+
+**加载优先级**（低 → 高）：global → project → team → personal。后层内容追加，不覆盖。
+
 ### Category 体系
 
-Spec 系统使用统一的 **category** 体系。`spec-add` 和 `spec-load` 使用同一套 category 名，1:1 对应文件：
+Spec 系统使用统一的 **category** 体系。`spec-add` 和 `spec-load` 使用同一套 category 名，1:1 对应文件（每个 scope 目录下使用相同文件名）：
 
 | Category | 文件 | 用途 |
 |----------|------|------|
@@ -104,26 +121,33 @@ Refresh token generation must carry email from stored user data.
 ### spec-add — 添加条目
 
 ```bash
+# 项目级（默认）
 /spec-add coding "Always use named exports for utility functions"
 /spec-add learning "Off-by-one in pagination when page=0 passed"
-/spec-add arch "Use event-driven architecture for notification module"
+
+# 指定 scope
+/spec-add --scope global coding "Always use strict TypeScript"
+/spec-add --scope team arch "Microservices communicate via gRPC"
+/spec-add --scope personal debug "My local dev uses port 3001"
 ```
 
 执行流程：
 
-1. 解析 `<category> <content>`
-2. 从内容中自动提取 3-5 个关键词
-3. 以 `<spec-entry>` 闭合标签格式写入目标文件
-4. 输出确认信息和验证命令
+1. 解析 `[--scope <scope>] [--uid <uid>] <category> <content>`
+2. 根据 scope 解析目标目录
+3. 从内容中自动提取 3-5 个关键词
+4. 以 `<spec-entry>` 闭合标签格式写入目标文件
+5. 输出确认信息和验证命令
 
 **示例输出：**
 
 ```
 == spec-add complete ==
 Category: coding
+Scope: project
 Added to: .workflow/specs/coding-conventions.md
 Keywords: named-exports, utility, module
-Verify: /spec-load --keyword named-exports
+Verify: maestro spec load --scope project --keyword named-exports
 ```
 
 ### spec-load — 加载条目
@@ -135,6 +159,9 @@ Verify: /spec-load --keyword named-exports
 # 按 keyword 加载（entry 级别精确匹配）
 /spec-load --keyword auth
 
+# 指定 scope（包含 global 层 + baseline）
+/spec-load --scope global --keyword auth
+
 # 组合使用
 /spec-load --category coding --keyword naming
 
@@ -143,6 +170,17 @@ Verify: /spec-load --keyword named-exports
 ```
 
 `--keyword` 按 `<spec-entry>` 标签的 `keywords` 属性精确匹配。对于旧格式（heading 格式）条目，fallback 到文本搜索。
+
+**Scope 与层级加载：**
+
+| Scope | 加载的层 |
+|-------|---------|
+| `project`（默认） | baseline |
+| `global` | global + baseline |
+| `team` | baseline + team |
+| `personal` | baseline + team + personal（需 uid） |
+
+多层加载时，每层内容带有区分标题（如 `# Global Specs`、`# Baseline Specs`）。
 
 ---
 
@@ -188,6 +226,21 @@ Keyword 注入在三个点触发：
 | **Coordinator** | `transformPrompt` | coordinator 级别的 keyword 匹配注入 |
 
 三个触发点共享同一个 session dedup bridge，防止重复注入。
+
+---
+
+## Auto-Init
+
+`loadSpecs()` 调用时自动检测并创建缺失的 spec 目录（含 seed 文件），无需手动 `maestro spec init`：
+
+| Layer | Auto-Init 条件 |
+|-------|---------------|
+| `project` | `.workflow/` 已存在但 `.workflow/specs/` 不存在 |
+| `global` | `~/.maestro/specs/` 不存在时直接创建 |
+| `team` | **不自动创建** — 需明确 `maestro collab join` |
+| `personal` | **不自动创建** — 不应为任意 uid 建目录 |
+
+Auto-Init 创建 7 个空的 seed 文件（与 `maestro spec init` 相同），每个目录只检查一次（进程内去重）。
 
 ---
 
@@ -237,15 +290,26 @@ L5: Invalid date format "04-21-2026". Expected YYYY-MM-DD
 ## 文件结构
 
 ```
+~/.maestro/
+└── specs/                              # scope: global
+    ├── coding-conventions.md
+    ├── architecture-constraints.md
+    └── ...
+
 .workflow/
-├── specs/
-│   ├── coding-conventions.md      # category: coding
-│   ├── architecture-constraints.md # category: arch
-│   ├── quality-rules.md           # category: quality
-│   ├── debug-notes.md             # category: debug
-│   ├── test-conventions.md        # category: test
-│   ├── review-standards.md        # category: review
-│   └── learnings.md               # category: learning
+├── specs/                              # scope: project (baseline)
+│   ├── coding-conventions.md
+│   ├── architecture-constraints.md
+│   ├── quality-rules.md
+│   ├── debug-notes.md
+│   ├── test-conventions.md
+│   ├── review-standards.md
+│   └── learnings.md
+└── collab/
+    └── specs/                          # scope: team
+        ├── coding-conventions.md
+        └── {uid}/                      # scope: personal
+            └── coding-conventions.md
 ```
 
 每个文件有 YAML frontmatter：
@@ -366,11 +430,16 @@ maestro wiki remove-entry ... ──┘       │
 ## CLI 参考
 
 ```bash
-# 初始化
-maestro spec init                           # 创建种子文档
+# 初始化（--scope 控制目标目录）
+maestro spec init                           # 初始化 project baseline
+maestro spec init --scope global            # 初始化 ~/.maestro/specs/
+maestro spec init --scope team              # 初始化 .workflow/collab/specs/
+maestro spec init --scope personal          # 初始化 .workflow/collab/specs/{uid}/
 
-# 加载
-maestro spec load                           # 加载全部
+# 加载（--scope 控制层级范围）
+maestro spec load                           # 加载 project baseline
+maestro spec load --scope global            # 加载 global + baseline
+maestro spec load --scope personal --uid alice  # 加载 baseline + team + personal
 maestro spec load --category coding         # 按 category 加载
 maestro spec load --keyword auth            # 按 keyword 加载
 maestro spec load --category arch --keyword module  # 组合
@@ -378,8 +447,10 @@ maestro spec load --json                    # JSON 输出
 maestro spec load --stdin                   # Hook 模式（读 stdin）
 
 # 查看
-maestro spec list                           # 列出 spec 文件
-maestro spec status                         # 显示状态（文件数、大小）
+maestro spec list                           # 列出 project spec 文件
+maestro spec list --scope global            # 列出 global spec 文件
+maestro spec status                         # 显示 project 状态
+maestro spec status --scope global          # 显示 global 状态
 
 # Hook 管理
 maestro hooks install --level standard      # 安装包含 spec-validator + keyword-spec-injector

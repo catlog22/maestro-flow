@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 
 import type { DashboardEventBus } from '../state/event-bus.js';
 import { WikiIndexer } from '../wiki/wiki-indexer.js';
-import type { WikiFilters, WikiStatus, WikiNodeType } from '../wiki/wiki-types.js';
+import type { WikiFilters, WikiStatus, WikiNodeType, WikiScope } from '../wiki/wiki-types.js';
 import { computeHealth, detectHubs, detectOrphans } from '../wiki/graph-analysis.js';
 import { WikiWriter, WikiWriteError } from '../wiki/writer.js';
 
@@ -228,6 +228,7 @@ export function createSharedWikiWriter(
 function parseFilters(q: Record<string, string>): WikiFilters {
   const out: WikiFilters = {};
   if (q.type) out.type = q.type as WikiNodeType;
+  if (q.scope) out.scope = q.scope as WikiScope;
   if (q.tag) out.tag = q.tag;
   if (q.status) out.status = q.status as WikiStatus;
   if (q.q) out.q = q.q;
@@ -237,7 +238,7 @@ function parseFilters(q: Record<string, string>): WikiFilters {
 }
 
 function isValidId(id: string): boolean {
-  return /^[\w.-]+$/.test(id) && !id.includes('/') && !id.includes('\\');
+  return /^[\w.:-]+$/.test(id) && !id.includes('/') && !id.includes('\\');
 }
 
 type CtxLike = {

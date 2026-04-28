@@ -7,7 +7,7 @@ import type { WikiIndexer } from './wiki-indexer.js';
 import { parseFrontmatter } from './frontmatter-util.js';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
-const ID_RE = /^[\w.-]+$/;
+const ID_RE = /^[\w.:-]+$/;
 
 export type WritableType = 'spec' | 'knowhow';
 
@@ -236,6 +236,10 @@ export class WikiWriter {
     if (container.source.kind !== 'file') {
       throw new WikiWriteError('FORBIDDEN', `cannot append to virtual entry: ${req.containerId}`);
     }
+    // Only project-scope specs are writable via wiki. Use `spec-add --scope` for other scopes.
+    if (container.scope && container.scope !== 'project') {
+      throw new WikiWriteError('FORBIDDEN', `cannot write to ${container.scope}-scope specs via wiki — use "spec-add --scope ${container.scope}"`);
+    }
     const absPath = resolve(join(this.workflowRoot, container.source.path));
     if (!this.isInsideRoot(absPath) || !this.isSpecPath(absPath)) {
       throw new WikiWriteError('FORBIDDEN', `appendEntry only works on spec container files`);
@@ -303,6 +307,10 @@ export class WikiWriter {
     }
     if (!entry.parent) {
       throw new WikiWriteError('BAD_REQUEST', `${entryId} is a container — use remove() to delete the whole file`);
+    }
+    // Only project-scope specs are writable via wiki
+    if (entry.scope && entry.scope !== 'project') {
+      throw new WikiWriteError('FORBIDDEN', `cannot modify ${entry.scope}-scope specs via wiki — use "spec-add --scope ${entry.scope}"`);
     }
     const container = index.byId[entry.parent];
     if (!container || container.source.kind !== 'file') {
