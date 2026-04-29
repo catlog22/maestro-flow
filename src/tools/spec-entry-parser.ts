@@ -181,7 +181,33 @@ export function formatSpecEntries(entries: SpecEntryParsed[], keyword?: string):
 
   if (filtered.length === 0) return '';
 
-  return filtered.map(e => e.content).join('\n\n---\n\n');
+  return filtered.map(formatEntryClean).join('\n\n---\n\n');
+}
+
+/**
+ * Format a single parsed entry as clean markdown with metadata line.
+ *
+ * Input content:  `### Title\n\nBody`
+ * Output:         `### Title\n> category · kw1, kw2 · date · source\n\nBody`
+ */
+function formatEntryClean(e: SpecEntryParsed): string {
+  const meta: string[] = [];
+  if (e.category) meta.push(e.category);
+  if (e.keywords.length > 0) meta.push(e.keywords.join(', '));
+  if (e.date) meta.push(e.date);
+  if (e.source) meta.push(e.source);
+
+  if (meta.length === 0) return e.content;
+
+  const metaLine = `> ${meta.join(' \u00b7 ')}`;
+
+  // Inject after first ### heading line
+  const idx = e.content.indexOf('\n');
+  if (idx !== -1 && e.content.trimStart().startsWith('###')) {
+    return e.content.slice(0, idx) + '\n' + metaLine + e.content.slice(idx);
+  }
+
+  return metaLine + '\n\n' + e.content;
 }
 
 /**

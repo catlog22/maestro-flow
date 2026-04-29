@@ -11,8 +11,12 @@ import { loadSpecs } from '../spec-loader.js';
 
 const TEST_DIR = join(tmpdir(), `maestro-test-spec-loader-${Date.now()}`);
 const BASELINE_DIR = join(TEST_DIR, '.workflow', 'specs');
+const GLOBAL_DIR = join(TEST_DIR, '.global-specs');
 const TEAM_DIR = join(TEST_DIR, '.workflow', 'collab', 'specs');
 const PERSONAL_DIR = join(TEST_DIR, '.workflow', 'collab', 'specs', 'alice');
+
+/** Options to isolate tests from real ~/.maestro/specs/ */
+const TEST_OPTS = { globalDir: GLOBAL_DIR };
 
 function writeSpec(dir: string, filename: string, content: string): void {
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -20,6 +24,8 @@ function writeSpec(dir: string, filename: string, content: string): void {
 }
 
 function setupBaseline(): void {
+  // Pre-create empty global dir to prevent autoInitSeeds from writing seed files
+  if (!existsSync(GLOBAL_DIR)) mkdirSync(GLOBAL_DIR, { recursive: true });
   writeSpec(BASELINE_DIR, 'coding-conventions.md', '# Coding Conventions\n\nUse camelCase.');
   writeSpec(BASELINE_DIR, 'learnings.md', '# Learnings\n\nPattern X works.');
 }
@@ -47,28 +53,29 @@ describe('loadSpecs — single directory (no uid)', () => {
   afterEach(() => cleanup());
 
   it('loads all specs from baseline when no category or uid', () => {
-    const result = loadSpecs(TEST_DIR);
+    const result = loadSpecs(TEST_DIR, undefined, undefined, undefined, undefined, TEST_OPTS);
     assert.ok(result.content.includes('Coding Conventions'));
     assert.ok(result.content.includes('Learnings'));
     assert.strictEqual(result.totalLoaded, 2);
   });
 
   it('filters by category', () => {
-    const result = loadSpecs(TEST_DIR, 'coding');
+    const result = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, TEST_OPTS);
     assert.ok(result.content.includes('Coding Conventions'));
     assert.ok(!result.content.includes('Learnings')); // 1:1 mapping, no always-include
     assert.strictEqual(result.totalLoaded, 1);
   });
 
   it('returns empty when no specs directory', () => {
-    const result = loadSpecs('/nonexistent/path');
+    const result = loadSpecs('/nonexistent/path', undefined, undefined, undefined, undefined, TEST_OPTS);
     assert.strictEqual(result.content, '');
     assert.strictEqual(result.totalLoaded, 0);
   });
 
-  it('does not include layer headers when uid is absent', () => {
-    const result = loadSpecs(TEST_DIR);
+  it('does not include layer headers when only one layer has content', () => {
+    const result = loadSpecs(TEST_DIR, undefined, undefined, undefined, undefined, TEST_OPTS);
     assert.ok(!result.content.includes('# Baseline Specs'));
+    assert.ok(!result.content.includes('# Global Specs'));
     assert.ok(!result.content.includes('# Team Specs'));
     assert.ok(!result.content.includes('# Personal Specs'));
   });
@@ -87,14 +94,14 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   afterEach(() => cleanup());
 
   it('loads from all three layers with layer headers', () => {
-    const result = loadSpecs(TEST_DIR, undefined, 'alice');
+    const result = loadSpecs(TEST_DIR, undefined, 'alice', undefined, undefined, TEST_OPTS);
     assert.ok(result.content.includes('# Baseline Specs'));
     assert.ok(result.content.includes('# Team Specs'));
     assert.ok(result.content.includes('# Personal Specs (alice)'));
   });
 
   it('concatenates content from all layers (append, not replace)', () => {
-    const result = loadSpecs(TEST_DIR, undefined, 'alice');
+    const result = loadSpecs(TEST_DIR, undefined, 'alice', undefined, undefined, TEST_OPTS);
     // All three coding-conventions should appear
     assert.ok(result.content.includes('Use camelCase'));
     assert.ok(result.content.includes('Also use PascalCase'));
@@ -102,7 +109,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('respects category filter across layers', () => {
-    const result = loadSpecs(TEST_DIR, 'coding', 'alice');
+    const result = loadSpecs(TEST_DIR, 'coding', 'alice', undefined, undefined, TEST_OPTS);
     // coding-conventions is coding category
     assert.ok(result.content.includes('Use camelCase'));
     assert.ok(result.content.includes('Also use PascalCase'));
@@ -114,7 +121,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('includes debug-notes only with debug category', () => {
-    const result = loadSpecs(TEST_DIR, 'debug', 'alice');
+    const result = loadSpecs(TEST_DIR, 'debug', 'alice', undefined, undefined, TEST_OPTS);
     assert.ok(result.content.includes('Team Debug Notes'));
     // coding-conventions is NOT debug category
     assert.ok(!result.content.includes('Use camelCase'));
@@ -123,7 +130,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('counts specs from all layers', () => {
-    const result = loadSpecs(TEST_DIR, undefined, 'alice');
+    const result = loadSpecs(TEST_DIR, undefined, 'alice', undefined, undefined, TEST_OPTS);
     // baseline: coding-conventions + learnings = 2
     // team: coding-conventions + debug-notes = 2
     // personal: coding-conventions + learnings = 2
@@ -136,7 +143,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
     // Re-create personal (it was inside team dir)
     setupPersonalSpecs();
 
-    const result = loadSpecs(TEST_DIR, undefined, 'alice');
+    const result = loadSpecs(TEST_DIR, undefined, 'alice', undefined, undefined, TEST_OPTS);
     assert.ok(result.content.includes('# Baseline Specs'));
     // Team layer missing — should skip silently
     assert.ok(!result.content.includes('# Team Specs'));
@@ -144,7 +151,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('handles missing personal layer gracefully', () => {
-    const result = loadSpecs(TEST_DIR, undefined, 'bob');
+    const result = loadSpecs(TEST_DIR, undefined, 'bob', undefined, undefined, TEST_OPTS);
     assert.ok(result.content.includes('# Baseline Specs'));
     assert.ok(result.content.includes('# Team Specs'));
     // bob has no personal specs
@@ -152,7 +159,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('falls back to single-dir behavior when uid is undefined', () => {
-    const result = loadSpecs(TEST_DIR, undefined, undefined);
+    const result = loadSpecs(TEST_DIR, undefined, undefined, undefined, undefined, TEST_OPTS);
     assert.ok(!result.content.includes('# Baseline Specs'));
     assert.ok(!result.content.includes('# Team Specs'));
     // Only baseline specs loaded
@@ -162,7 +169,7 @@ describe('loadSpecs — three-layer (uid provided)', () => {
   });
 
   it('loads learnings only with learning category', () => {
-    const result = loadSpecs(TEST_DIR, 'learning', 'alice');
+    const result = loadSpecs(TEST_DIR, 'learning', 'alice', undefined, undefined, TEST_OPTS);
     // Learnings from baseline
     assert.ok(result.content.includes('Pattern X works'));
     // Learnings from personal

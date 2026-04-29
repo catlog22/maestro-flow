@@ -8,7 +8,7 @@
 
 import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseSpecEntries, formatSpecEntries, type SpecEntryParsed } from './spec-entry-parser.js';
+import { parseSpecEntries, formatSpecEntries } from './spec-entry-parser.js';
 import { paths } from '../config/paths.js';
 
 // ============================================================================
@@ -96,28 +96,39 @@ export function resolveSpecDir(projectPath: string, scope: SpecScope, uid?: stri
  *                - 'personal': baseline + team shared + personal (requires uid)
  *                - undefined: same as 'project'; uid alone still triggers team+personal for backward compat
  */
-export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: string, keyword?: string, scope?: SpecScope): SpecLoadResult {
-  // Build ordered list of (directory, label) pairs to scan
-  const layers = buildLayers(projectPath, uid, scope);
+export interface LoadSpecsOptions {
+  /** Override global specs directory (for testing). Defaults to ~/.maestro/specs/ */
+  globalDir?: string;
+}
 
-  // Auto-init only baseline and global layers.
+export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: string, keyword?: string, scope?: SpecScope, options?: LoadSpecsOptions): SpecLoadResult {
+  const globalDir = options?.globalDir ?? paths.specs;
+
+  // Build ordered list of (directory, label) pairs to scan
+  const layers = buildLayers(projectPath, uid, scope, globalDir);
+
+  // Auto-init baseline and global layers.
   // Team/personal are per-user — auto-creating them for arbitrary uids is wrong.
   autoInitSeeds(join(projectPath, SPECS_DIR));
-  if (scope === 'global') {
-    autoInitSeeds(paths.specs);
+  autoInitSeeds(globalDir);
+
+  // First pass: collect results per layer (skip empty)
+  const layerResults: Array<{ label: string; sections: string[]; matched: string[] }> = [];
+  for (const { dir, label } of layers) {
+    const { sections, matched } = loadFromDir(dir, category, keyword);
+    if (sections.length > 0) {
+      layerResults.push({ label, sections, matched });
+    }
   }
+
+  // Only show layer headers when multiple layers have actual content
+  const multiLayer = layerResults.length > 1;
 
   const allSections: string[] = [];
   const allMatched: string[] = [];
   let totalCount = 0;
 
-  const multiLayer = layers.length > 1;
-
-  for (const { dir, label } of layers) {
-    const { sections, matched } = loadFromDir(dir, category, keyword);
-    if (sections.length === 0) continue;
-
-    // Add layer headers when multi-layer mode is active (global or uid)
+  for (const { label, sections, matched } of layerResults) {
     if (multiLayer) {
       allSections.push(`${label}\n\n${sections.join('\n\n---\n\n')}`);
     } else {
@@ -145,13 +156,11 @@ interface LayerDef {
   label: string;
 }
 
-function buildLayers(projectPath: string, uid?: string, scope?: SpecScope): LayerDef[] {
+function buildLayers(projectPath: string, uid?: string, scope?: SpecScope, globalDir?: string): LayerDef[] {
   const layers: LayerDef[] = [];
 
-  // Global layer — lowest priority
-  if (scope === 'global') {
-    layers.push({ dir: paths.specs, label: LAYER_LABELS.global });
-  }
+  // Global layer — always included as lowest priority
+  layers.push({ dir: globalDir ?? paths.specs, label: LAYER_LABELS.global });
 
   // Baseline — always included
   layers.push({
@@ -207,15 +216,9 @@ function loadFromDir(
     const body = stripFrontmatter(raw).trim();
     if (!body) continue;
 
-    if (keyword) {
-      // Entry-level keyword filtering
-      const filtered = filterByKeyword(body, keyword);
-      if (filtered) {
-        sections.push(filtered);
-        matched.push(file);
-      }
-    } else {
-      sections.push(body);
+    const formatted = formatFileContent(body, keyword);
+    if (formatted) {
+      sections.push(formatted);
       matched.push(file);
     }
   }
@@ -239,29 +242,36 @@ function shouldInclude(filename: string, category?: SpecCategory): boolean {
 }
 
 /**
- * Filter file content by keyword. Returns matched entry content or null.
- * Handles both <spec-entry> tags (keyword attribute match) and legacy entries (text grep).
+ * Parse file body, strip <spec-entry> tags, format clean output with metadata.
+ * When keyword is provided, only return matching entries.
+ * Falls back to raw body for files with no structured entries.
  */
-function filterByKeyword(body: string, keyword: string): string | null {
-  const kw = keyword.toLowerCase();
+function formatFileContent(body: string, keyword?: string): string | null {
   const { entries, legacy } = parseSpecEntries(body);
 
-  const matchedSections: string[] = [];
-
-  // New-format: match by keywords attribute
-  const matchedEntries = entries.filter(e => e.keywords.includes(kw));
-  if (matchedEntries.length > 0) {
-    matchedSections.push(formatSpecEntries(matchedEntries));
-  }
-
-  // Legacy: grep text match
-  for (const leg of legacy) {
-    if (leg.content.toLowerCase().includes(kw)) {
-      matchedSections.push(leg.content);
+  // No structured entries → pass through raw body (or keyword-grep it)
+  if (entries.length === 0 && legacy.length === 0) {
+    if (keyword) {
+      return body.toLowerCase().includes(keyword.toLowerCase()) ? body : null;
     }
+    return body;
   }
 
-  return matchedSections.length > 0 ? matchedSections.join('\n\n---\n\n') : null;
+  const parts: string[] = [];
+
+  if (keyword) {
+    const kw = keyword.toLowerCase();
+    const matchedEntries = entries.filter(e => e.keywords.includes(kw));
+    if (matchedEntries.length > 0) parts.push(formatSpecEntries(matchedEntries));
+    for (const leg of legacy) {
+      if (leg.content.toLowerCase().includes(kw)) parts.push(leg.content);
+    }
+  } else {
+    if (entries.length > 0) parts.push(formatSpecEntries(entries));
+    for (const leg of legacy) parts.push(leg.content);
+  }
+
+  return parts.length > 0 ? parts.join('\n\n---\n\n') : null;
 }
 
 function stripFrontmatter(raw: string): string {
