@@ -247,7 +247,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: buildDiscoverInstruction(sessionFolder, discoveryDir, mode),
   max_concurrency: maxConcurrency,
-  max_runtime_seconds: 900,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: { // required: id, status, findings
     id: "string", status: "completed|failed",

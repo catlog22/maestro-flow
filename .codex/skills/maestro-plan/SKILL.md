@@ -227,7 +227,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: buildExplorationInstruction(sessionFolder, phaseDir),
   max_concurrency: maxConcurrency,
-  max_runtime_seconds: 600,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: { // required: id, status, findings
     id: "string", status: "completed|failed", findings: "string", error: "string"
@@ -268,7 +268,7 @@ spawn_agents_on_csv({
     contextMd, indexJson, specRef, docIndex, designRef, gapsContext
   }),
   max_concurrency: 1,  // Single planning agent
-  max_runtime_seconds: 900,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
   output_schema: { // required: id, status, findings
     id: "string", status: "completed|failed", findings: "string", error: "string"

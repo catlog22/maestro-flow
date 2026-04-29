@@ -106,7 +106,7 @@ Generate 4 mapper rows. If focus area specified, scope descriptions to that area
 
 ### Phase 2: Wave Execution
 
-Single wave -- all 4 mappers via `spawn_agents_on_csv` (max_concurrency: 4, 600s timeout). Each agent returns: id, status (completed/failed), findings, error.
+Single wave -- all 4 mappers via `spawn_agents_on_csv` (max_concurrency: 4, 3600s timeout). Each agent returns: id, status (completed/failed), findings, error.
 
 ### Phase 3: Write Output Files
 

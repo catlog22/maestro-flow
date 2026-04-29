@@ -219,7 +219,7 @@ spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-${N}.csv`,
   id_column: "id",
   instruction: buildExecutorInstruction(sessionFolder, phaseDir, autoCommit, specsContent),
-  max_concurrency: maxConcurrency, max_runtime_seconds: 900,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-${N}-results.csv`,
   output_schema: { id, status: [completed|failed|blocked], findings, files_modified, tests_passed, error }
 })

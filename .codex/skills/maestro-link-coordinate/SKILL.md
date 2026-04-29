@@ -119,7 +119,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: AGENT_INSTRUCTION,
   max_workers: 1,
-  max_runtime_seconds: 1800,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionDir}/wave-${nodeId}-results.csv`,
   output_schema: RESULT_SCHEMA
 })

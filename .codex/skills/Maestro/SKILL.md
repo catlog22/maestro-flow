@@ -141,7 +141,7 @@ After each barrier skill completes, read its artifacts and update `state.context
    spawn_agents_on_csv({
      csv_path: "{sessionDir}/wave-{N}.csv",
      id_column: "id", instruction: WAVE_INSTRUCTION,
-     max_workers: <wave size>, max_runtime_seconds: 1800,
+     max_workers: <wave size>, max_runtime_seconds: 3600,
      output_csv_path: "{sessionDir}/wave-{N}-results.csv",
      output_schema: RESULT_SCHEMA
    })

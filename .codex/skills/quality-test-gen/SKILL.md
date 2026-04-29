@@ -214,7 +214,7 @@ spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-1.csv`,
   id_column: "id",
   instruction: buildTestGenInstruction(sessionFolder),
-  max_concurrency: maxConcurrency, max_runtime_seconds: 600,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: { id, status: [completed|failed], findings, tests_created, coverage_delta, error }
 })

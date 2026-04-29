@@ -252,7 +252,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: buildExplorationInstruction(sessionFolder),
   max_concurrency: maxConcurrency,
-  max_runtime_seconds: 600,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: { id, status: ["completed"|"failed"], findings, score, recommendations, error }
   // required: id, status, findings
@@ -277,7 +277,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: buildScoringInstruction(sessionFolder),
   max_concurrency: maxConcurrency,
-  max_runtime_seconds: 600,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
   output_schema: { id, status: ["completed"|"failed"], findings, score, recommendations, error }
   // required: id, status, findings, score

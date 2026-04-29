@@ -200,7 +200,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: buildRebuildInstruction(sessionFolder, sourceDirs),
   max_concurrency: maxConcurrency,
-  max_runtime_seconds: 900,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: {
     type: "object",

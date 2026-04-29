@@ -175,6 +175,7 @@ Delegate to @commands/monitor.md#handleSpawnNext:
 ### Agent Lifecycle Management
 - **list_agents({})**: Returns all running agents. Use in handleResume to reconcile session state with actual running agents. Use in handleComplete to verify clean shutdown.
 - **Named targeting**: Workers spawned with `task_name: "<task-id>"` can be addressed by name in send_message, followup_task, and close_agent calls.
+- **Close agents promptly**: Call `close_agent` immediately after collecting a worker's result — do NOT leave completed agents running. Idle agents waste resources. At pipeline end, verify all agents closed via `list_agents`.
 
 ## Error Handling
 

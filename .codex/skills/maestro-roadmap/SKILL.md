@@ -198,7 +198,7 @@ spawn_agents_on_csv({
   id_column: "id",
   instruction: buildAnalysisInstruction(sessionFolder, requirementArg, strategy),
   max_concurrency: 3,
-  max_runtime_seconds: 300,
+  max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: {
     type: "object",

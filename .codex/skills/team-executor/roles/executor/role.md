@@ -155,6 +155,9 @@ Initialize session folder if needed.
 
 ---
 
+## Agent Lifecycle Management
+- **Close agents promptly**: Call `close_agent` immediately after collecting a worker's result — do NOT leave completed agents running. Idle agents waste resources. At pipeline end, verify all agents closed via `list_agents`.
+
 ## Error Handling
 
 | Error | Resolution |

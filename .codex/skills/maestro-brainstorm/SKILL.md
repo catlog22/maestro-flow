@@ -230,7 +230,7 @@ spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-1.csv`,
   id_column: "id",
   instruction: buildGuidanceInstruction(sessionFolder, topicArg),
-  max_concurrency: 1, max_runtime_seconds: 600,
+  max_concurrency: 1, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
   output_schema: { id, status: [completed|failed], findings, analysis_file, error }
 })
@@ -258,7 +258,7 @@ spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-2.csv`,
   id_column: "id",
   instruction: buildRoleAnalysisInstruction(sessionFolder),
-  max_concurrency: maxConcurrency, max_runtime_seconds: 900,
+  max_concurrency: maxConcurrency, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
   output_schema: { id, status: [completed|failed], findings, analysis_file, error }
 })
