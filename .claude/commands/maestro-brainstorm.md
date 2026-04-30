@@ -53,7 +53,7 @@ Follow '~/.maestro/workflows/brainstorm.md' completely.
 
 Auto mode:
 - Project not initialized → Skill({ skill: "maestro-init" })
-- Project initialized, need spec package → Skill({ skill: "maestro-spec-generate", args: "--from-brainstorm {session_id}" })
+- Project initialized, need spec package → Skill({ skill: "maestro-roadmap", args: "--mode full --from-brainstorm {session_id}" })
 - Project initialized, quick roadmap → Skill({ skill: "maestro-roadmap", args: "--from-brainstorm {session_id}" })
 - Need deeper analysis first → Skill({ skill: "maestro-analyze", args: "{topic}" })
 - `html-prototypes/` produced with 2+ files and user wants to browse → load `~/.maestro/workflows/brainstorm-visualize.md` and launch visualizer server (optional, user-triggered)

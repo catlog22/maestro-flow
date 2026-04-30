@@ -1,6 +1,6 @@
 {
   "$schema": "../chain-graph.schema.json",
-  "id": "singles/spec-generate",
+  "id": "singles/roadmap-full",
   "name": "Spec Generate",
   "description": "Generate specification package through 7-phase document chain",
   "version": "1.0.0",
@@ -17,10 +17,10 @@
   "nodes": {
     "spec_generate": {
       "type": "command",
-      "cmd": "maestro-spec-generate",
+      "cmd": "maestro-roadmap",
       "next": "done",
       "analyze": false,
-      "args": "\"{description}\"",
+      "args": "--mode full \"{description}\"",
       "description": "Generate specification package through 7-phase document chain"
     },
     "done": {

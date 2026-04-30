@@ -55,8 +55,8 @@
       "name": "maestro",
       "file": ".claude/commands/maestro.md",
       "category": "maestro",
-      "description": "Intelligent coordinator — analyze intent + read project state → select optimal command chain → execute via Skill()",
-      "argumentHint": "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>]",
+      "description": "Intelligent coordinator — analyze intent + read project state → select optimal command chain → execute via Skill() or CLI delegate",
+      "argumentHint": "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--exec auto|cli|skill] [--tool <name>]",
       "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -72,15 +72,15 @@
       "file": ".claude/commands/maestro-plan.md",
       "category": "maestro",
       "description": "Explore, clarify, plan, check, and confirm a phase execution plan — produces plan.json with waves and task definitions",
-      "argumentHint": "<phase> [--collab] [--spec SPEC-xxx] [--auto] [--gaps] [--dir <path>]",
+      "argumentHint": "[phase] [--collab] [--spec SPEC-xxx] [--auto] [--gaps] [--dir <path>] [--revise [instructions]] [--check <plan-dir>]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
       "name": "maestro-execute",
       "file": ".claude/commands/maestro-execute.md",
       "category": "maestro",
-      "description": "Execute phase plan with wave-based parallel execution and atomic commits",
-      "argumentHint": "<phase> [--auto-commit] [--method agent|cli] [--dir <path>]",
+      "description": "Execute plan with wave-based parallel execution and atomic commits",
+      "argumentHint": "[phase] [--auto-commit] [--method agent|codex|gemini|cli|auto] [--executor <tool>] [--dir <path>] [-y]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -88,7 +88,7 @@
       "file": ".claude/commands/maestro-verify.md",
       "category": "maestro",
       "description": "Goal-Backward verification with 3-layer must-have checks, anti-pattern scan, Nyquist test coverage validation, and gap-fix plan generation",
-      "argumentHint": "<phase> [--skip-tests] [--skip-antipattern]",
+      "argumentHint": "[phase] [--skip-tests] [--skip-antipattern] [--dir <path>]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -104,7 +104,7 @@
       "file": ".claude/commands/maestro-brainstorm.md",
       "category": "maestro",
       "description": "Unified brainstorming with dual-mode operation — auto pipeline (multi-role synthesis) and single role analysis",
-      "argumentHint": "[topic|role-name] [--yes] [--count N] [--session ID] [--update] [--style-skill PKG]",
+      "argumentHint": "[topic|role-name] [--yes] [--count N] [--session ID] [--update] [--skip-questions] [--include-questions] [--style-skill PKG]",
       "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -112,7 +112,7 @@
       "file": ".claude/commands/maestro-analyze.md",
       "category": "maestro",
       "description": "Multi-dimensional analysis with CLI exploration, decision extraction, and intent tracking",
-      "argumentHint": "<phase|topic> [-y] [-c] [-q]",
+      "argumentHint": "[phase|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -120,7 +120,7 @@
       "file": ".claude/commands/maestro-roadmap.md",
       "category": "maestro",
       "description": "Interactive roadmap creation with iterative refinement — lightweight alternative to spec-generate",
-      "argumentHint": "<requirement> [-y] [-c] [-m progressive|direct|auto] [--from-brainstorm SESSION-ID]",
+      "argumentHint": "<requirement> [-y] [-c] [-m progressive|direct|auto] [--from-brainstorm SESSION-ID] [--revise [instructions]] [--review]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -128,7 +128,7 @@
       "file": ".claude/commands/maestro-ui-design.md",
       "category": "maestro",
       "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max — user selects winner, solidify as code reference",
-      "argumentHint": "<phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--refine] [--persist] [-y]",
+      "argumentHint": "<phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -168,16 +168,24 @@
       "file": ".claude/commands/spec-add.md",
       "category": "spec",
       "description": "Add a spec entry (bug, pattern, decision, or rule) to the appropriate specs file",
-      "argumentHint": "<type> <content>",
+      "argumentHint": "[--scope project|global|team|personal] <category> <content>",
       "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep"]
     },
     {
       "name": "spec-load",
       "file": ".claude/commands/spec-load.md",
       "category": "spec",
-      "description": "Load relevant specs for current context — used by agents before execution",
-      "argumentHint": "[--category <type>] [keyword]",
+      "description": "Load relevant specs and lessons for current context (used by agents before execution)",
+      "argumentHint": "[--category <type>] [--keyword <word>] [--with-lessons]",
       "allowedTools": ["Read", "Bash", "Glob", "Grep"]
+    },
+    {
+      "name": "spec-remove",
+      "file": ".claude/commands/spec-remove.md",
+      "category": "spec",
+      "description": "Remove a spec entry from a specs file by entry ID",
+      "argumentHint": "<entry-id>",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "AskUserQuestion"]
     },
     {
       "name": "quality-review",
@@ -256,7 +264,7 @@
       "file": ".claude/commands/manage-knowhow-capture.md",
       "category": "manage",
       "description": "Capture session memory (compact or tips) into .workflow/knowhow/ with JSON index",
-      "argumentHint": "[compact|tip] [description] [--tag tag1,tag2]",
+      "argumentHint": "[type] [description] [--lang <lang>] [--source <url>] [--tag tag1,tag2]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep"]
     },
     {
@@ -264,7 +272,7 @@
       "file": ".claude/commands/manage-codebase-rebuild.md",
       "category": "manage",
       "description": "Full rebuild of codebase documentation — scans project, builds doc-index.json, generates all tech-registry and feature-maps",
-      "argumentHint": "[--force] [--skip-commit]",
+      "argumentHint": "[--focus <area>] [--force] [--skip-commit]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
@@ -288,7 +296,7 @@
       "file": ".claude/commands/manage-issue-discover.md",
       "category": "manage",
       "description": "Automated issue discovery — multi-perspective analysis or prompt-driven exploration",
-      "argumentHint": "[by-prompt \"what to look for\"]",
+      "argumentHint": "[multi-perspective | by-prompt \"what to look for\"] [-y|--yes] [--scope=src/**] [--depth=standard|deep]",
       "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep"]
     },
     {
@@ -298,6 +306,38 @@
       "description": "CLI-based coordinator - analyze intent → select command chain → execute sequentially via maestro delegate with auto-confirm",
       "argumentHint": "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--tool <tool>]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-amend",
+      "file": ".claude/commands/maestro-amend.md",
+      "category": "maestro",
+      "description": "Collect deficiency signals from workflow artifacts, sessions, and user reports, then generate overlays to amend workflow commands",
+      "argumentHint": "[description] [--from-verify <dir>] [--from-review <dir>] [--from-session <id>] [--from-issues ISS-xxx,...] [--scan] [--dry-run]",
+      "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-composer",
+      "file": ".claude/commands/maestro-composer.md",
+      "category": "maestro",
+      "description": "Semantic workflow composer — parse natural language into DAG of skill/CLI/agent nodes, auto-inject checkpoints, persist as reusable JSON template",
+      "argumentHint": "\"workflow description\" [--resume] [--edit <template-path>]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-player",
+      "file": ".claude/commands/maestro-player.md",
+      "category": "maestro",
+      "description": "Workflow template player — load JSON template, bind variables, execute DAG nodes in order, persist state at checkpoints, support resume",
+      "argumentHint": "<template-slug|path> [--context key=value...] [-c [session-id]] [--list] [--dry-run]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion", "Skill"]
+    },
+    {
+      "name": "maestro-update",
+      "file": ".claude/commands/maestro-update.md",
+      "category": "maestro",
+      "description": "Interactive workflow migration — detect version, preview changes, apply upgrades",
+      "argumentHint": "[--dry-run] [--force]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "AskUserQuestion"]
     },
     {
       "name": "maestro-fork",
@@ -327,7 +367,7 @@
       "name": "maestro-merge",
       "file": ".claude/commands/maestro-merge.md",
       "category": "maestro",
-      "description": "Two-phase merge of milestone worktree branch back — git merge first, artifact sync only on success",
+      "description": "Two-phase merge of milestone worktree branch back — git merge first, scratch artifact sync only on success",
       "argumentHint": "-m <milestone-number> [--force] [--dry-run] [--no-cleanup] [--continue]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
@@ -401,6 +441,14 @@
       "category": "manage",
       "description": "Capture, search, and review atomic learning insights and tips into .workflow/learning/lessons.jsonl",
       "argumentHint": "[<text>|tip <text>|list|search|show <id>] [--category ...] [--tag t1,t2] [--phase N] [--confidence ...]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "AskUserQuestion"]
+    },
+    {
+      "name": "manage-wiki",
+      "file": ".claude/commands/manage-wiki.md",
+      "category": "manage",
+      "description": "Wiki knowledge graph management — health dashboard, orphan cleanup, entry search, and graph statistics",
+      "argumentHint": "[health|search|cleanup|stats] [options]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "AskUserQuestion"]
     },
     {

@@ -102,7 +102,7 @@ Create in `.workflow/specs/`: `conventions.md` (detected coding conventions), `l
 
 ### Step 10: Completion Report
 
-Display created files and next steps: `$maestro-spec-generate` (full spec), `$maestro-roadmap` (light), `$manage-status`, `$maestro-brainstorm`, `$maestro-quick`.
+Display created files and next steps: `$maestro-roadmap --mode full` (full spec), `$maestro-roadmap` (light), `$manage-status`, `$maestro-brainstorm`, `$maestro-quick`.
 
 </execution>
 

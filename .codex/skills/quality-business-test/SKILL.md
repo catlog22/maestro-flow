@@ -197,9 +197,9 @@ Map each result to `REQ-NNN:AC-N`. Per AC: `passed` (all scenarios pass), `faile
 |------|----------|-----------|----------|
 | E001 | error | Phase number required | Prompt user for phase number |
 | E002 | error | Phase directory not found | Resolve via state.json artifact registry |
-| E003 | error | No spec package AND no success_criteria | Run maestro-spec-generate or maestro-plan first |
+| E003 | error | No spec package AND no success_criteria | Run maestro-roadmap --mode full or maestro-plan first |
 | E004 | error | L1 critical failures block L2/L3 | Fix blockers via quality-debug |
-| W001 | warning | Degraded mode (no spec package) | Consider running maestro-spec-generate |
+| W001 | warning | Degraded mode (no spec package) | Consider running maestro-roadmap --mode full |
 | W002 | warning | Some REQs have no testable AC | Note in report |
 | W003 | warning | Generator-Critic loop exhausted | Accept current state |
 | W004 | warning | Mock services unavailable for L3 | Skip L3 or use --gen-code |

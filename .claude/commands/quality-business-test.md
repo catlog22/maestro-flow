@@ -82,9 +82,9 @@ Follow '~/.maestro/workflows/business-test.md' completely.
 |------|----------|-----------|----------|
 | E001 | error | Phase number required | Prompt user for phase number |
 | E002 | error | Phase artifacts not found | Verify phase has artifacts in state.json |
-| E003 | error | No spec package AND no success_criteria (can't extract scenarios) | Run maestro-spec-generate or maestro-plan first |
+| E003 | error | No spec package AND no success_criteria (can't extract scenarios) | Run maestro-roadmap --mode full or maestro-plan first |
 | E004 | error | L1 critical failures block L2/L3 progression | Fix blockers first via quality-debug |
-| W001 | warning | Degraded mode (no spec package, using success_criteria) | Consider running maestro-spec-generate for full coverage |
+| W001 | warning | Degraded mode (no spec package, using success_criteria) | Consider running maestro-roadmap --mode full for full coverage |
 | W002 | warning | Some requirements have no testable acceptance criteria | Note in report, suggest spec refinement |
 | W003 | warning | Generator-Critic loop exhausted (3 iterations) without full convergence | Accept current state, proceed with known defects |
 | W004 | warning | Mock services not available for L3 scenarios | Skip L3 or run with --gen-code for TestContainers |

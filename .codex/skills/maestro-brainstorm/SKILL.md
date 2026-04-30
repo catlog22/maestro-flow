@@ -329,7 +329,7 @@ spawn_agents_on_csv({
 ## Next Steps
 - Skill: maestro-analyze -- Evaluate feasibility + lock decisions
 - Skill: maestro-plan -- Plan directly if scope is clear
-- Skill: maestro-spec-generate -- Generate full spec package from brainstorm
+- Skill: maestro-roadmap --mode full -- Generate full spec package from brainstorm
 ```
 
 4. Copy artifacts to output `.brainstorming/` directory (phase mode or scratch mode target)

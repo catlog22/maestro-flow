@@ -150,7 +150,7 @@ Set `state.status` to completed/failed based on `node.status`. Record final hist
 
 | Skill | Flag |
 |-------|------|
-| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-spec-generate`, `maestro-roadmap` | `-y` |
+| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-roadmap` | `-y` |
 | `maestro-plan` | `--auto` |
 | `quality-test` | `--auto-fix` |
 | `quality-retrospective` | `--auto-yes` |

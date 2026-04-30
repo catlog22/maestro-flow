@@ -8,7 +8,7 @@
       "workflow": "入口命令，自动路由到最优命令链",
       "workflow_zh": "所有工作流的统一入口，可路由至任意下游命令",
       "next_commands": ["maestro-init", "maestro-plan", "maestro-execute", "maestro-verify", "maestro-brainstorm"],
-      "flags": ["-y (自动模式)", "-c (恢复会话)", "--dry-run (演练)", "--chain (强制指定链)"]
+      "flags": ["-y (自动模式)", "-c (恢复会话)", "--dry-run (演练)", "--chain (强制指定链)", "--exec auto|cli|skill (执行引擎)", "--tool <name> (指定工具)"]
     },
     "maestro-init": {
       "name": "maestro-init",
@@ -30,7 +30,7 @@
       "workflow_zh": "项目初始化和路线图就绪后执行，为 maestro-execute 生成计划",
       "prev_commands": ["maestro-init", "maestro-roadmap", "maestro-spec-generate"],
       "next_commands": ["maestro-execute"],
-      "flags": ["<phase> (必填，阶段编号或名称)", "--collab (协作模式)", "--spec SPEC-xxx (引用规格)", "--auto (自动模式)", "--gaps (填补缺口)", "--dir <path> (草稿目录模式)"]
+      "flags": ["[phase] (阶段编号或名称)", "--collab (协作模式)", "--spec SPEC-xxx (引用规格)", "--auto (自动模式)", "--gaps (填补缺口)", "--dir <path> (草稿目录模式)", "--revise [instructions] (修订计划)", "--check <plan-dir> (检查计划)"]
     },
     "maestro-execute": {
       "name": "maestro-execute",
@@ -41,7 +41,7 @@
       "workflow_zh": "消费 maestro-plan 产出的 plan.json，执行完成后由 maestro-verify 验证",
       "prev_commands": ["maestro-plan"],
       "next_commands": ["maestro-verify"],
-      "flags": ["<phase> (必填)", "--auto-commit (自动提交)", "--method agent|cli (执行方式)", "--dir <path> (草稿目录模式)"]
+      "flags": ["[phase] (阶段)", "--auto-commit (自动提交)", "--method agent|codex|gemini|cli|auto (执行方式)", "--executor <tool> (指定执行工具)", "--dir <path> (草稿目录模式)", "-y (自动模式)"]
     },
     "maestro-verify": {
       "name": "maestro-verify",
@@ -52,7 +52,7 @@
       "workflow_zh": "执行完成后验证，通过后继续 quality-review 或直接 phase-transition",
       "prev_commands": ["maestro-execute"],
       "next_commands": ["quality-review", "maestro-milestone-audit"],
-      "flags": ["<phase> (必填)", "--skip-tests (跳过测试检查)", "--skip-antipattern (跳过反模式扫描)"]
+      "flags": ["[phase] (阶段)", "--skip-tests (跳过测试检查)", "--skip-antipattern (跳过反模式扫描)", "--dir <path> (草稿目录模式)"]
     },
     "maestro-quick": {
       "name": "maestro-quick",
@@ -74,7 +74,7 @@
       "workflow_zh": "工作流起点，为后续初始化和规划提供概念基础",
       "prev_commands": [],
       "next_commands": ["maestro-init"],
-      "flags": ["[topic|role-name] (主题或角色)", "--yes (自动模式)", "--count N (角色数量)", "--session ID (指定会话)", "--update (更新现有会话)", "--style-skill PKG (引入风格记忆包)"]
+      "flags": ["[topic|role-name] (主题或角色)", "--yes (自动模式)", "--count N (角色数量)", "--session ID (指定会话)", "--update (更新现有会话)", "--skip-questions (跳过提问)", "--include-questions (包含提问)", "--style-skill PKG (引入风格记忆包)"]
     },
     "maestro-analyze": {
       "name": "maestro-analyze",
@@ -85,7 +85,7 @@
       "workflow_zh": "在头脑风暴和规划之间使用，提取关键决策和上下文",
       "prev_commands": ["maestro-brainstorm", "maestro-init"],
       "next_commands": ["maestro-plan"],
-      "flags": ["<phase|topic> (必填)", "-y (自动模式)", "-c (恢复会话)", "-q (快速模式，仅提取决策)"]
+      "flags": ["[phase|topic] (阶段或主题)", "-y (自动模式)", "-c (恢复会话)", "-q (快速模式，仅提取决策)", "--gaps [ISS-ID] (缺口分析)"]
     },
     "maestro-roadmap": {
       "name": "maestro-roadmap",
@@ -96,7 +96,7 @@
       "workflow_zh": "项目初始化之后，阶段规划之前。适合不需要完整规格文档的项目",
       "prev_commands": ["maestro-init", "maestro-brainstorm"],
       "next_commands": ["maestro-plan"],
-      "flags": ["<requirement> (需求描述，必填)", "-y (自动模式)", "-c (恢复会话)", "-m progressive|direct|auto (模式)", "--from-brainstorm SESSION-ID (从头脑风暴导入)"]
+      "flags": ["<requirement> (需求描述，必填)", "-y (自动模式)", "-c (恢复会话)", "-m progressive|direct|auto (模式)", "--from-brainstorm SESSION-ID (从头脑风暴导入)", "--revise [instructions] (修订路线图)", "--review (审查模式)"]
     },
     "maestro-ui-design": {
       "name": "maestro-ui-design",
@@ -107,7 +107,7 @@
       "workflow_zh": "可在规划前插入 UI 设计阶段，为后续实现提供视觉参考",
       "prev_commands": ["maestro-init", "maestro-roadmap"],
       "next_commands": ["maestro-plan"],
-      "flags": ["<phase|topic> (必填)", "--styles N (生成风格数量)", "--stack <stack> (技术栈)", "--targets <pages> (目标页面)", "--layouts N (布局数量)", "--refine (精化模式)", "--persist (持久化结果)", "-y (自动模式)"]
+      "flags": ["<phase|topic> (阶段或主题)", "--styles N (生成风格数量)", "--stack <stack> (技术栈)", "--targets <pages> (目标页面)", "--layouts N (布局数量)", "--refine (精化模式)", "--persist (持久化结果)", "--full (完整模式)", "-y (自动模式)"]
     },
     "maestro-spec-generate": {
       "name": "maestro-spec-generate",
@@ -157,23 +157,34 @@
       "name": "spec-add",
       "name_zh": "添加规范",
       "description": "Add a spec entry (bug, pattern, decision, or rule) to the appropriate specs file",
-      "description_zh": "向知识库添加规范条目：bug（已修复的 bug 记录）、pattern（代码模式）、decision（架构决策）或 rule（约定规则）",
+      "description_zh": "向知识库添加规范条目：支持 project/global/team/personal 四种作用域，包含 bug、pattern、decision、rule 等分类",
       "workflow": "随时使用，记录开发过程中的决策和模式",
       "workflow_zh": "持续使用命令，在执行过程中积累项目知识",
       "prev_commands": [],
       "next_commands": [],
-      "flags": ["<type> (必填：bug|pattern|decision|rule)", "<content> (必填：条目内容)"]
+      "flags": ["--scope project|global|team|personal (作用域)", "<category> (必填：分类)", "<content> (必填：条目内容)"]
     },
     "spec-load": {
       "name": "spec-load",
       "name_zh": "加载规范",
-      "description": "Load relevant specs for current context — used by agents before execution",
-      "description_zh": "加载与当前上下文相关的规范，供代理在执行前注入上下文。支持按分类和关键词过滤",
+      "description": "Load relevant specs and lessons for current context (used by agents before execution)",
+      "description_zh": "加载与当前上下文相关的规范和学习记录，供代理在执行前注入上下文。支持按分类和关键词过滤",
       "workflow": "代理执行前自动调用",
       "workflow_zh": "通常由代理系统自动调用，也可手动检查当前上下文规范",
       "prev_commands": [],
       "next_commands": [],
-      "flags": ["--category <type> (按分类过滤)", "[keyword] (关键词搜索)"]
+      "flags": ["--category <type> (按分类过滤)", "--keyword <word> (关键词搜索)", "--with-lessons (包含学习记录)"]
+    },
+    "spec-remove": {
+      "name": "spec-remove",
+      "name_zh": "删除规范",
+      "description": "Remove a spec entry from a specs file by entry ID",
+      "description_zh": "通过条目 ID 从规范文件中删除指定条目。用于清理过时或错误的规范记录",
+      "workflow": "维护规范库时使用",
+      "workflow_zh": "配合 spec-add 使用，保持规范库整洁",
+      "prev_commands": ["spec-add"],
+      "next_commands": [],
+      "flags": ["<entry-id> (必填，条目 ID)"]
     },
     "quality-review": {
       "name": "quality-review",
@@ -283,7 +294,7 @@
       "workflow_zh": "在阶段完成或会话结束时使用",
       "prev_commands": [],
       "next_commands": [],
-      "flags": ["[compact|tip] (记忆类型)", "[description] (描述)", "--tag tag1,tag2 (标签)"]
+      "flags": ["[type] (知识类型: session|tip|template|recipe|reference|decision)", "[description] (描述)", "--lang <lang> (编程语言)", "--source <url> (来源URL)", "--tag tag1,tag2 (标签)"]
     },
     "manage-codebase-rebuild": {
       "name": "manage-codebase-rebuild",
@@ -294,7 +305,7 @@
       "workflow_zh": "重量级操作，覆盖现有文档。增量更新请用 manage-codebase-refresh",
       "prev_commands": ["maestro-init"],
       "next_commands": [],
-      "flags": ["--force (强制重建，跳过确认)", "--skip-commit (不提交变更)"]
+      "flags": ["--focus <area> (聚焦区域)", "--force (强制重建，跳过确认)", "--skip-commit (不提交变更)"]
     },
     "manage-codebase-refresh": {
       "name": "manage-codebase-refresh",
@@ -327,7 +338,7 @@
       "workflow_zh": "配合 maestro-milestone-audit 使用，发现集成差距",
       "prev_commands": [],
       "next_commands": ["manage-issue"],
-      "flags": ["[by-prompt \"what to look for\"] (可选，提示驱动模式)"]
+      "flags": ["[multi-perspective] (多视角分析模式)", "[by-prompt \"what to look for\"] (提示驱动模式)", "-y|--yes (自动模式)", "--scope=src/** (限定范围)", "--depth=standard|deep (分析深度)"]
     },
     "maestro-coordinate": {
       "name": "maestro-coordinate",
@@ -406,6 +417,50 @@
       "next_commands": [],
       "flags": ["<intent> (自然语言意图描述)"]
     },
+    "maestro-amend": {
+      "name": "maestro-amend",
+      "name_zh": "修补命令",
+      "description": "Collect deficiency signals from workflow artifacts, sessions, and user reports, then generate overlays to amend workflow commands",
+      "description_zh": "从工作流产物、会话和用户报告中收集缺陷信号，生成叠加层修补工作流命令。支持从验证结果、审查报告、会话和问题中提取改进信号",
+      "workflow": "verify/review 后使用，修补发现的命令缺陷",
+      "workflow_zh": "自动分析缺陷来源，生成 overlay 修补命令行为",
+      "prev_commands": ["maestro-verify", "quality-review"],
+      "next_commands": ["maestro-overlay"],
+      "flags": ["[description] (缺陷描述)", "--from-verify <dir> (从验证结果提取)", "--from-review <dir> (从审查结果提取)", "--from-session <id> (从会话提取)", "--from-issues ISS-xxx,... (从问题提取)", "--scan (扫描所有来源)", "--dry-run (演练)"]
+    },
+    "maestro-composer": {
+      "name": "maestro-composer",
+      "name_zh": "工作流作曲",
+      "description": "Semantic workflow composer — parse natural language into DAG of skill/CLI/agent nodes, auto-inject checkpoints, persist as reusable JSON template",
+      "description_zh": "语义工作流作曲器：将自然语言描述解析为 DAG（有向无环图），自动注入检查点，持久化为可复用 JSON 模板。支持 skill/CLI/agent 三类节点",
+      "workflow": "创建可复用工作流模板",
+      "workflow_zh": "输出 JSON 模板，通过 /maestro-player 执行",
+      "prev_commands": [],
+      "next_commands": ["maestro-player"],
+      "flags": ["\"workflow description\" (工作流描述)", "--resume (恢复设计会话)", "--edit <template-path> (编辑现有模板)"]
+    },
+    "maestro-player": {
+      "name": "maestro-player",
+      "name_zh": "工作流播放器",
+      "description": "Workflow template player — load JSON template, bind variables, execute DAG nodes in order, persist state at checkpoints, support resume",
+      "description_zh": "工作流模板播放器：加载 JSON 模板 → 绑定变量 → 按 DAG 顺序执行节点 → 检查点持久化状态 → 支持恢复。maestro-composer 的执行搭档",
+      "workflow": "执行 maestro-composer 创建的模板",
+      "workflow_zh": "加载模板、绑定上下文变量、逐节点执行",
+      "prev_commands": ["maestro-composer"],
+      "next_commands": [],
+      "flags": ["<template-slug|path> (模板名称或路径)", "--context key=value... (上下文变量)", "-c [session-id] (恢复会话)", "--list (列出所有模板)", "--dry-run (演练)"]
+    },
+    "maestro-update": {
+      "name": "maestro-update",
+      "name_zh": "工作流更新",
+      "description": "Interactive workflow migration — detect version, preview changes, apply upgrades",
+      "description_zh": "交互式工作流迁移：检测当前版本 → 预览变更差异 → 应用升级。确保 .claude/commands/ 和工作流配置保持最新",
+      "workflow": "版本升级时使用",
+      "workflow_zh": "安全升级命令和工作流文件，支持预览和确认",
+      "prev_commands": [],
+      "next_commands": [],
+      "flags": ["--dry-run (仅预览变更)", "--force (强制覆盖)"]
+    },
     "learn-decompose": {
       "name": "learn-decompose",
       "name_zh": "代码分解",
@@ -482,6 +537,17 @@
       "prev_commands": [],
       "next_commands": [],
       "flags": ["[<text>] (洞察文本)", "[tip <text>] (提示模式)", "[list] (列表)", "[search] (搜索)", "[show <id>] (查看)", "--category ... (分类)", "--tag t1,t2 (标签)", "--phase N (阶段)", "--confidence ... (置信度)"]
+    },
+    "manage-wiki": {
+      "name": "manage-wiki",
+      "name_zh": "知识图谱管理",
+      "description": "Wiki knowledge graph management — health dashboard, orphan cleanup, entry search, and graph statistics",
+      "description_zh": "知识图谱管理工具：健康仪表板（连通性、孤立条目检测）、条目搜索、孤立清理和图谱统计",
+      "workflow": "定期维护知识图谱",
+      "workflow_zh": "配合 wiki-connect 和 wiki-digest 使用",
+      "prev_commands": [],
+      "next_commands": ["wiki-connect", "wiki-digest"],
+      "flags": ["[health] (健康仪表板)", "[search] (条目搜索)", "[cleanup] (孤立清理)", "[stats] (图谱统计)", "[options] (子命令选项)"]
     },
     "quality-business-test": {
       "name": "quality-business-test",

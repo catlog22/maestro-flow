@@ -20,9 +20,9 @@
     },
     "spec_generate": {
       "type": "command",
-      "cmd": "maestro-spec-generate",
+      "cmd": "maestro-roadmap",
       "description": "Generate specification package through 7-phase document chain",
-      "args": "\"{description}\"",
+      "args": "--mode full \"{description}\"",
       "auto_flag": "-y",
       "next": "plan"
     },

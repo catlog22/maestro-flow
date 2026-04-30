@@ -107,7 +107,7 @@ export const CHAIN_MAP: Record<string, ChainStepDef[]> = {
   'team_tech_debt':     [{ cmd: 'team-tech-debt', args: '"{description}"' }],
 
   // Multi-step chains
-  'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-spec-generate', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '--mode full "{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'brainstorm-driven':    [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'ui-design-driven':     [{ cmd: 'maestro-ui-design', args: '{phase}' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'full-lifecycle':       [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
@@ -137,7 +137,7 @@ export const AUTO_FLAG_MAP: Record<string, string> = {
   'maestro-brainstorm':    '-y',
   'maestro-ui-design':     '-y',
   'maestro-plan':          '--auto',
-  'maestro-spec-generate': '-y',
+  'maestro-roadmap':       '-y',
   'quality-test':          '--auto-fix',
 };
 

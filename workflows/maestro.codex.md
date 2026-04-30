@@ -138,7 +138,7 @@ const chainMap = {
   // ── Multi-step chains ────────────────────────────────────────────────────
   'spec-driven': [
     { cmd: 'maestro-init' },
-    { cmd: 'maestro-spec-generate', args: '"{description}"' },
+    { cmd: 'maestro-roadmap', args: '--mode full "{description}"' },
     { cmd: 'maestro-plan',          args: '{phase}' },
     { cmd: 'maestro-execute',       args: '{phase}' },
     { cmd: 'maestro-verify',        args: '{phase}' }
@@ -306,9 +306,9 @@ MAESTRO-COORDINATE: {chain_name}  (dry run)
 
 Create session directory `.workflow/.maestro/maestro-{timestamp}/`.
 
-**Barrier skills** (solo wave, coordinator analyzes artifacts after): `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`.
+**Barrier skills** (solo wave, coordinator analyzes artifacts after): `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute`.
 
-**Auto-flag injection** (when AUTO_YES): `maestro-analyze/-brainstorm/-ui-design/-spec-generate` → `-y`, `maestro-plan` → `--auto`, `quality-test` → `--auto-fix`, `quality-retrospective` → `--auto-yes`.
+**Auto-flag injection** (when AUTO_YES): `maestro-analyze/-brainstorm/-roadmap/-ui-design` → `-y`, `maestro-plan` → `--auto`, `quality-test` → `--auto-fix`, `quality-retrospective` → `--auto-yes`.
 
 Initialize `state.json` with: session_id, intent, chain_name, auto_yes, context (phase, dirs, issue_id, gaps), waves[], and steps[] (each with index, cmd, args, status=pending).
 
@@ -352,7 +352,7 @@ Context updates per barrier skill:
 | `maestro-analyze` | `analysis_dir`, gaps (from context.md markers), phase (if detected) |
 | `maestro-plan` | `plan_dir`, task/wave count (from plan.json) |
 | `maestro-brainstorm` | `brainstorm_dir` |
-| `maestro-spec-generate` | `spec_session_id` (SPEC-* pattern) |
+| `maestro-roadmap` | `spec_session_id` (SPEC-* pattern) |
 | `maestro-execute` | `exec_completed`/`exec_failed` counts (from results.csv) |
 
 **Key principle**: The coordinator owns all context assembly. Sub-agents receive a fully-resolved `skill_call`.

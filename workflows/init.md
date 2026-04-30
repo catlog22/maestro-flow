@@ -1,6 +1,6 @@
 # Workflow: init
 
-Project initialization with automatic state detection. Creates project infrastructure only — roadmap creation is handled by maestro-spec-generate or maestro-roadmap.
+Project initialization with automatic state detection. Creates project infrastructure only — roadmap creation is handled by maestro-roadmap (light or full mode).
 
 ---
 
@@ -143,7 +143,7 @@ Verify all required directories and files exist:
    - Config highlights (mode, granularity, execution method, enabled agents)
    - Research summary (if research was run)
 3. Route next steps:
-   - "Run `/maestro-spec-generate` to create full spec package with roadmap (heavy path)"
+   - "Run `/maestro-roadmap --mode full` to create full spec package with roadmap (heavy path)"
    - "Run `/maestro-roadmap` to create interactive roadmap directly (light path)"
    - "Run `/manage-status` to view project dashboard"
    - "Run `/maestro-brainstorm` to explore ideas first"

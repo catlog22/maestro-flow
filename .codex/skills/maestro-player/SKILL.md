@@ -73,7 +73,7 @@ $ARGUMENTS — template slug/path, or flags.
 | `maestro-execute` | `results.csv` | `exec_status`, `completed_tasks` |
 | `maestro-analyze` | `context.md` | `analysis_dir`, `gaps`, `phase` |
 | `maestro-brainstorm` | `.brainstorming/` | `brainstorm_dir` |
-| `maestro-spec-generate` | `specs/` | `spec_session_id` |
+| `maestro-roadmap` | `specs/` | `spec_session_id` |
 
 All other skill nodes are **non-barrier** (groupable into parallel waves).
 
@@ -149,7 +149,7 @@ Load session state by explicit ID or most recent `MCP-*/state.json` with `status
 
 1. Generate session ID: `MCP-<YYYYMMDD>-<HHmmss>`
 2. Topological sort (Kahn's algorithm) on template nodes + edges
-3. Classify barrier vs non-barrier: barriers = checkpoint nodes + `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`
+3. Classify barrier vs non-barrier: barriers = checkpoint nodes + `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute`
 4. Group into waves: barrier nodes → solo wave, non-barrier nodes → accumulate into parallel wave
 5. Build steps array from waves, write `state.json`
 

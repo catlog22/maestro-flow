@@ -39,7 +39,7 @@ Given a user intent string and the current workflow state snapshot, classify the
 ### Multi-Step Chains
 | Chain Name | Steps | When to Use |
 |-----------|-------|-------------|
-| spec-driven | init → spec-generate → plan → execute → verify | New project from specifications |
+| spec-driven | init → roadmap --mode full → plan → execute → verify | New project from specifications |
 | brainstorm-driven | brainstorm → plan → execute → verify | Start from brainstorming |
 | ui-design-driven | ui-design → plan → execute → verify | Start from UI design |
 | full-lifecycle | plan → execute → verify → review → test → phase-transition | Complete phase lifecycle |

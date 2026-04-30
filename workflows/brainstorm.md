@@ -432,7 +432,7 @@ Execute analysis for ONE specified role with optional interactive context gather
 - Enhancements applied (EP-IDs)
 - Complexity score and review status
 - Next:
-  Skill({ skill: "maestro-spec-generate", args: "--from-brainstorm {sessionId}" })  — Generate full spec package
+  Skill({ skill: "maestro-roadmap", args: "--mode full --from-brainstorm {sessionId}" })  — Generate full spec package
   Skill({ skill: "maestro-analyze", args: "{topic}" })   — Evaluate feasibility + lock decisions
   Skill({ skill: "maestro-analyze", args: "{phase} -q" })   — Quick decision extraction only
   Skill({ skill: "maestro-plan", args: "{phase}" })       — Plan directly (if scope is clear)

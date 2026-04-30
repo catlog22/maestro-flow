@@ -12,7 +12,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Initialize a new project through auto state detection and unified flow. Invoked when starting a fresh project or onboarding an existing codebase into workflow management. Produces the `.workflow/` directory structure with project.md, state.json, config.json, and specs. Does NOT create roadmap — use maestro-spec-generate or maestro-roadmap as the next step.
+Initialize a new project through auto state detection and unified flow. Invoked when starting a fresh project or onboarding an existing codebase into workflow management. Produces the `.workflow/` directory structure with project.md, state.json, config.json, and specs. Does NOT create roadmap — use maestro-roadmap (light mode, default) or maestro-roadmap --mode full (spec package) as the next step.
 </purpose>
 
 <required_reading>
@@ -48,8 +48,8 @@ Created:
   .workflow/specs/
 
 Next steps (choose one path to create roadmap):
-  /maestro-spec-generate <idea>                                -- Full spec package + roadmap (heavy)
-  /maestro-roadmap <requirement>                               -- Direct interactive roadmap (light)
+  /maestro-roadmap <requirement>                               -- Direct interactive roadmap (light, default)
+  /maestro-roadmap --mode full <idea>                          -- Full spec package + roadmap (heavy)
 
 Other commands:
   /manage-status                                               -- View project dashboard
@@ -74,5 +74,5 @@ Other commands:
 - [ ] `.workflow/config.json` created with user-selected granularity, workflow agents, gate preferences
 - [ ] `.workflow/specs/` initialized with convention files
 - [ ] Research completed (if enabled) — 4 parallel agents spawned
-- [ ] User knows next step is `/maestro-roadmap` or `/maestro-spec-generate`
+- [ ] User knows next step is `/maestro-roadmap` (light) or `/maestro-roadmap --mode full` (spec package)
 </success_criteria>
