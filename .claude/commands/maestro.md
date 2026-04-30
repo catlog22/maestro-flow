@@ -1,7 +1,7 @@
 ---
 name: maestro
-description: Intelligent coordinator - analyze intent + read project state → select optimal command chain → execute via Skill() or CLI delegate
-argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--chain <name>] [--exec auto|cli|skill] [--tool <name>]"
+description: Intelligent coordinator - analyze intent + read project state → select optimal command chain → execute via internal or CLI delegate
+argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--exec auto|cli|internal] [--tool <name>] [--super]"
 allowed-tools:
   - Read
   - Write
@@ -19,16 +19,20 @@ Two routing modes:
 2. **State-based**: Read .workflow/state.json → determine next logical step → suggest/execute (triggered by `continue`/`next`)
 
 Per-step execution engine (default: auto):
-- **Skill()**: Observable steps — output visible in conversation, synchronous, user can intervene
+- **internal**: Execute via Skill() in current session — output visible in conversation, synchronous, user can intervene
 - **CLI delegate**: Heavy execution steps — context isolation, template-driven prompts, gemini quality analysis
 
 Produces session directory at `.workflow/.maestro/{session_id}/` with status.json tracking chain progress.
-Executes commands sequentially via Skill() with artifact propagation between steps.
+Executes commands sequentially with artifact propagation between steps.
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/maestro.md
 </required_reading>
+
+<deferred_reading>
+- [maestro-super.md](~/.maestro/workflows/maestro-super.md) — read when `--super` flag is active
+</deferred_reading>
 
 <context>
 $ARGUMENTS — user intent text, or special keywords.
@@ -41,9 +45,9 @@ $ARGUMENTS — user intent text, or special keywords.
 - `-y` / `--yes` — Auto mode: skip clarification, skip confirmation, auto-skip on errors. Propagates to downstream commands that support it.
 - `-c` / `--continue` — Resume previous coordinator session from `.workflow/.maestro/*/status.json`
 - `--dry-run` — Show planned chain without executing
-- `--chain <name>` — Force a specific chain (bypass intent detection). Valid: full-lifecycle, spec-driven, brainstorm-driven, execute-verify, quality-loop, milestone-close, quick, review
-- `--exec <mode>` — Execution engine: `auto` (default), `cli`, `skill`. Auto selects per step based on command complexity.
+- `--exec <mode>` — Execution engine: `auto` (default), `cli`, `internal`. `internal` = Skill() in current session; `cli` = delegate to external CLI. Auto selects per step based on command complexity.
 - `--tool <name>` — CLI tool for delegate execution (default: claude). Only used when engine=cli.
+- `--super` — Super mode: deliver production-ready complete software system. See Super Mode section below.
 
 **State files read:**
 - `.workflow/state.json` — project state machine + artifact registry
@@ -65,7 +69,7 @@ When `-y` is active, maestro propagates auto flags to downstream commands. Only 
 | maestro-roadmap | `-y` | Skip interactive questions, use defaults (create/revise/review) |
 | maestro-ui-design | `-y` | Skip interactive selection, pick top variant |
 | maestro-plan | `--auto` | Skip interactive clarification |
-| maestro-spec-generate | `-y` | Skip interactive questions, use defaults |
+| maestro-roadmap --mode full | `-y` | Skip interactive questions, use defaults |
 | maestro-execute | *(none)* | No auto flag — executes all tasks normally |
 | maestro-verify | *(none)* | No auto flag — runs full verification |
 | quality-review | *(none)* | No auto flag — auto-detects level, runs fully |
@@ -84,6 +88,8 @@ In auto mode, maestro also:
 - Auto-skips on step errors (retry once, then skip and continue)
 
 Context cleanup hints, context window reminders, and completion report format are defined in workflow maestro.md (Steps 7a-1, 7f).
+
+**Super mode (`--super`):** Read `maestro-super.md` from deferred_reading, then follow it completely.
 </execution>
 
 <error_codes>
@@ -95,7 +101,6 @@ Context cleanup hints, context window reminders, and completion report format ar
 | E004 | error | Resume session not found | Show available sessions |
 | W001 | warning | Intent ambiguous, multiple chains possible | Present options, let user choose |
 | W002 | warning | Chain step completed with warnings | Log and continue |
-| E005 | error | Invalid chain name provided with --chain | Show valid chain names and exit |
 | W003 | warning | State suggests different chain than intent | Show discrepancy, let user decide |
 </error_codes>
 
@@ -103,12 +108,16 @@ Context cleanup hints, context window reminders, and completion report format ar
 - [ ] Intent classified with task_type, complexity, clarity_score
 - [ ] Project state read and incorporated into routing
 - [ ] Command chain selected and confirmed (or auto-confirmed with -y)
-- [ ] Per-step engine selected (auto routes heavy steps to CLI, observable steps to Skill)
+- [ ] Per-step engine selected (auto routes heavy steps to CLI, observable steps to internal)
 - [ ] Auto flags correctly propagated to supporting commands only
 - [ ] Session directory created at .workflow/.maestro/{session_id}/
 - [ ] status.json tracks per-step progress and execution engine
-- [ ] All chain steps executed via Skill() or CLI delegate with proper argument propagation
+- [ ] All chain steps executed via internal or CLI delegate with proper argument propagation
 - [ ] Phase numbers auto-detected and passed to downstream commands
 - [ ] Error handling: retry/skip/abort per step (auto-skip in -y mode)
 - [ ] Session summary displayed on completion
+- [ ] (super mode) Requirements expanded and validated via Gemini before roadmap creation
+- [ ] (super mode) Each milestone scored ≥ 80% before advancing
+- [ ] (super mode) All milestones completed with no user intervention
+- [ ] (super mode) Final system builds, starts, and passes all tests
 </success_criteria>

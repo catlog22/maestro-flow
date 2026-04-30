@@ -1,7 +1,7 @@
 ---
 name: maestro
 description: Intelligent coordinator — analyze intent, read project state, select chain, execute wave-by-wave via spawn_agents_on_csv. Coordinator only assembles prompts and reads artifacts — never executes skills directly.
-argument-hint: "\"intent text\" [-y] [-c|--continue] [--dry-run] [--chain <name>]"
+argument-hint: "\"intent text\" [-y] [-c|--continue] [--dry-run] [--super]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
@@ -26,7 +26,7 @@ $ARGUMENTS — user intent text, or special flags.
 - `-y, --yes` — Auto mode: skip all prompts; propagate `-y` to each skill
 - `--continue` — Resume latest paused session from last incomplete wave
 - `--dry-run` — Display planned chain without executing
-- `--chain <name>` — Force specific chain (skips intent classification)
+- `--super` — Super mode: deliver production-ready complete software system. See `@~/.maestro/workflows/maestro-super.md`
 
 **Session state**: `.workflow/.maestro/{session-id}/`
 **Core output**: `tasks.csv` (master) + `wave-{N}-results.csv` (per wave) + `context.md` (report)
@@ -72,7 +72,7 @@ After a barrier skill completes **in its spawned sub-agent**, coordinator reads 
 | `maestro-analyze` | `.workflow/.csv-wave/*/context.md`, `state.json` | `gaps`, `phase`, `analysis_dir` |
 | `maestro-plan` | `{artifact_dir}/plan.json`, `{artifact_dir}/.task/TASK-*.json` | `plan_dir`, `task_count`, `wave_count` |
 | `maestro-brainstorm` | `.workflow/.csv-wave/*/.brainstorming/` | `brainstorm_dir`, `features` |
-| `maestro-spec-generate` | `.workflow/.csv-wave/*/specs/` | `spec_session_id` |
+| `maestro-roadmap` | `.workflow/.csv-wave/*/specs/` | `spec_session_id` |
 | `maestro-execute` | `.workflow/.csv-wave/*/results.csv` | `exec_status`, `completed_tasks`, `failed_tasks` |
 
 **Non-barrier skills** (groupable into multi-task waves): `maestro-verify`, `quality-review`, `quality-test`, `quality-debug`, `quality-refactor`, `quality-sync`, `manage-*`
@@ -86,7 +86,7 @@ After each barrier skill completes, read its artifacts and update `state.context
 | `maestro-analyze` | `{artifacts}/context.md` | `analysis_dir`, `gaps` (extracted), `phase` (if unset) |
 | `maestro-plan` | `{artifacts}/plan.json` | `plan_dir`, `task_count`, `wave_count` from plan JSON |
 | `maestro-brainstorm` | `{artifacts}/` | `brainstorm_dir` |
-| `maestro-spec-generate` | `{artifacts}/` | `spec_session_id` (extracted) |
+| `maestro-roadmap` | `{artifacts}/` | `spec_session_id` (extracted) |
 | `maestro-execute` | `{artifacts}/results.csv` | `exec_completed`, `exec_failed` (counted by status) |
 </barrier_skills>
 
@@ -98,8 +98,7 @@ After each barrier skill completes, read its artifacts and update `state.context
 
 **Fresh mode**:
 1. Read `.workflow/state.json` for project context (derive current phase from artifact registry, `workflow_name`)
-2. If `--chain` given, use directly
-3. Otherwise classify intent via keyword heuristics (see chain_map)
+2. Classify intent via keyword heuristics (see chain_map)
 4. No match + not AUTO_YES → one clarifying question via `AskUserQuestion`
 5. Resolve chain's skill list
 6. Create session dir `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/` and write `status.json`:
@@ -153,13 +152,13 @@ After each barrier skill completes, read its artifacts and update `state.context
 
 ### Skill Call Assembly
 
-**Barrier skills**: `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-spec-generate`, `maestro-execute`
+**Barrier skills**: `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute`
 
 **Auto-yes flag map** (appended when `status.auto_mode` is true):
 
 | Skill | Flag |
 |-------|------|
-| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-spec-generate` | `-y` |
+| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-roadmap` | `-y` |
 | `maestro-plan` | `--auto` |
 | `quality-test` | `--auto-fix` |
 | `quality-retrospective` | `--auto-yes` |
@@ -238,7 +237,7 @@ Accumulated across all waves. Updated after each wave completes.
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | Intent unclassifiable after clarification | Default to `feature` chain |
-| E002 | error | `--chain` value not in chain map | List valid chains, abort |
+| E002 | error | Intent unresolvable after retry | List available chains, abort |
 | E003 | error | Wave timeout (max_runtime_seconds) | Mark step `failed`, abort chain |
 | E004 | error | Barrier artifact not found | Retry wave once, then abort |
 | E005 | error | `--continue`: no session found | List sessions, prompt |
