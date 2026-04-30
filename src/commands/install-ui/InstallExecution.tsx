@@ -169,6 +169,13 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           mcpRegistered = addMcpServer(config.mode, config.projectPath, config.mcpTools, config.mcpProjectRoot || undefined);
         }
 
+        // CLI tools config
+        if (!cancelled) {
+          const { initCliToolsConfig } = await import('../../config/cli-tools-config.js');
+          const created = await initCliToolsConfig();
+          if (created) setStatus('Initialized cli-tools.json');
+        }
+
         setDone(true);
         setStatus(t.install.execComplete);
         onComplete({ filesInstalled, dirsCreated, filesSkipped, hooksInstalled, mcpRegistered, manifestPath, statuslineInstalled, backupPath, migrationWarnings: warnings });

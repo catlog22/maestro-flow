@@ -18,7 +18,7 @@ Orchestrate the team-coordinate workflow: task analysis, dynamic role-spec gener
 ```
 WRONG: Read("src/components/Button.tsx")           — worker work
 WRONG: Grep(pattern="useState", path="src/")       — worker work
-WRONG: Bash("maestro delegate '...' --to gemini")      — worker work
+WRONG: Bash("maestro delegate '...' --role analyze")    — worker work
 WRONG: Edit("src/utils/helper.ts", ...)             — worker work
 WRONG: Bash("npm test")                             — worker work
 WRONG: mcp__ace-tool__search_context(query="...")   — worker work

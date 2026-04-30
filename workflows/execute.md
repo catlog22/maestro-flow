@@ -48,16 +48,30 @@ For each PLAN_DIR in PLAN_DIRS (sequential):
 
 ## E0.5: Execution Options Confirmation
 
-**Purpose:** Let user choose how tasks execute. Supports both menu selection and natural language intent (e.g., "前端用gemini，后端用codex，其余agent"). Skipped when `-y` flag or executionContext already confirmed.
+**Purpose:** Let user choose how tasks execute. Reads available tools from `delegate-config show --json` to build dynamic options. Supports both menu selection and natural language intent. Skipped when `-y` flag or executionContext already confirmed.
 
 ### Skip conditions
 
 - `-y` flag → use resolved defaults, skip prompt
 - `executionContext.executionMethod` already set → skip (confirmed in /maestro-plan)
 
-### Tool Call
+### Pre-step: Load tool config
 
 ```
+Run: maestro delegate-config show --json
+Parse: { tools, roles } — extract enabled tool names and domain tags
+Build dynamic options from enabled tools (exclude agent which is always available)
+```
+
+### Tool Call
+
+Build AskUserQuestion dynamically from enabled tools:
+
+```
+// availableTools = enabled tools from delegate-config (e.g. ["gemini", "claude", "codex"])
+// frontendTool = first tool with "frontend" tag, fallback first enabled
+// backendTool = first tool with "backend" tag, fallback first enabled
+
 AskUserQuestion({
   questions: [
     {
@@ -65,10 +79,10 @@ AskUserQuestion({
       header: "Executor",
       multiSelect: false,
       options: [
-        { label: "Auto (Recommended)", description: "Per-task domain routing: frontend→gemini, backend→codex, general→agent" },
+        { label: "Auto (Recommended)", description: `Per-task domain routing: frontend→${frontendTool}, backend→${backendTool}, general→agent` },
         { label: "Agent", description: "Claude Code agent for all tasks (fastest)" },
-        { label: "Codex", description: "Codex CLI for all tasks (strong for complex backend)" },
-        { label: "Gemini", description: "Gemini CLI for all tasks (strong for frontend/UI)" }
+        // One option per enabled CLI tool:
+        ...availableTools.map(t => ({ label: t, description: `${t} CLI for all tasks` }))
       ]
     },
     {
@@ -77,8 +91,8 @@ AskUserQuestion({
       multiSelect: false,
       options: [
         { label: "Skip (Recommended)", description: "No code review, proceed to verification" },
-        { label: "Gemini Review", description: "Gemini CLI: git diff quality review" },
-        { label: "Codex Review", description: "Codex CLI: git-aware code review" }
+        // One option per enabled CLI tool with review capability:
+        ...availableTools.map(t => ({ label: `${t} Review`, description: `${t} CLI: git diff quality review` }))
       ]
     }
   ]
@@ -91,11 +105,11 @@ AskUserQuestion({
 
 | Answer | executionMethod | domainRouting |
 |--------|----------------|---------------|
-| "Auto" | `"auto"` | `{ frontend: "gemini", backend: "codex", default: "agent" }` |
-| "Agent" / "Codex" / "Gemini" | that value | not used |
-| Other text with domain rules | `"auto"` | Parse from user text (see examples below) |
+| "Auto" | `"auto"` | `{ frontend: frontendTool, backend: backendTool, default: "agent" }` |
+| "Agent" / tool name | that value | not used |
+| Other text with domain rules | `"auto"` | Parse from user text |
 
-Other text parsing examples:
+Other text parsing — match tool names dynamically from enabled tools:
 
 | User types | domainRouting |
 |------------|---------------|
@@ -134,9 +148,9 @@ If executionContext is available in memory:
 Read ${PLAN_DIR}/plan.json
 
 executionMethod = E0.5 selection || --method flag || config.json.execution.method || "auto"
-defaultExecutor = --executor flag || config.json.execution.default_executor || "gemini"
+defaultExecutor = --executor flag || config.json.execution.default_executor || first enabled tool from delegate-config
 executorAssignments = plan.json.executor_assignments || {}
-domainRouting = E0.5 domainRouting || { frontend: "gemini", backend: "codex", default: "agent" }
+domainRouting = E0.5 domainRouting || built from delegate-config domain tags (frontend→tag match, backend→tag match, default→"agent")
 codeReviewTool = E0.5 selection || "Skip"
 ```
 
@@ -340,9 +354,9 @@ If none critical: log "passed" and continue to E2.6
 If codeReviewTool == "Skip": continue to E3
 
 Dispatch review via maestro delegate (run_in_background: true):
-  --to gemini|codex (per codeReviewTool selection) --mode analysis
+  --to ${codeReviewTool} --mode analysis
   Prompt: review git diff (execution start → HEAD) for correctness, style, bugs
-  Rule: analysis-review-code-quality (gemini only)
+  Rule: analysis-review-code-quality
   Expected: severity-ranked issues with file:line references and fix suggestions
 
 Wait for completion, log findings summary

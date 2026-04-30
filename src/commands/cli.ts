@@ -10,7 +10,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { CliAgentRunner } from '../agents/cli-agent-runner.js';
 import { CliHistoryStore } from '../agents/cli-history-store.js';
 import type { ExecutionMeta, EntryLike } from '../agents/cli-history-store.js';
-import { loadCliToolsConfig, selectTool } from '../config/cli-tools-config.js';
+import { loadCliToolsConfig, selectTool, selectToolByRole } from '../config/cli-tools-config.js';
 import {
   deriveExecutionStatus,
   padRight,
@@ -40,6 +40,7 @@ export function registerCliCommand(program: Command): void {
   cli
     .option('-p, --prompt <prompt>', 'Prompt to send to the agent')
     .option('--tool <name>', 'CLI tool to use (gemini, qwen, codex, claude, opencode)')
+    .option('--role <role>', 'Capability role for auto tool selection (analyze, explore, review, implement, plan, brainstorm, research)')
     .option('--mode <mode>', 'Execution mode (analysis or write)', 'analysis')
     .option('--model <model>', 'Model override')
     .option('--cd <dir>', 'Working directory')
@@ -50,6 +51,7 @@ export function registerCliCommand(program: Command): void {
     .action(async (opts: {
       prompt?: string;
       tool?: string;
+      role?: string;
       mode: string;
       model?: string;
       cd?: string;
@@ -63,8 +65,21 @@ export function registerCliCommand(program: Command): void {
         process.exit(1);
       }
 
-      const config = await loadCliToolsConfig();
-      const selected = selectTool(opts.tool, config);
+      const workDir = resolve(opts.cd ?? process.cwd());
+      const config = await loadCliToolsConfig(workDir);
+
+      // Tool resolution priority: --tool > --role > first-enabled fallback
+      let selected;
+      if (opts.tool) {
+        if (opts.role) {
+          process.stderr.write(`Warning: --tool overrides --role; using tool "${opts.tool}" directly.\n`);
+        }
+        selected = selectTool(opts.tool, config);
+      } else if (opts.role) {
+        selected = selectToolByRole(opts.role, config);
+      } else {
+        selected = selectTool(undefined, config);
+      }
 
       const toolName = selected?.name ?? opts.tool ?? 'gemini';
       const model = opts.model ?? selected?.entry?.primaryModel;
@@ -82,11 +97,13 @@ export function registerCliCommand(program: Command): void {
           tool: toolName,
           mode,
           model,
-          workDir: resolve(opts.cd ?? process.cwd()),
+          workDir,
           rule: opts.rule,
           execId: opts.id,
           resume: opts.resume === true ? 'last' : opts.resume,
           includeDirs: opts.includeDirs?.split(',').map(d => d.trim()).filter(Boolean),
+          settingsFile: selected?.entry?.settingsFile,
+          baseTool: selected?.entry?.baseTool,
         });
         process.exit(exitCode);
       } catch (err) {

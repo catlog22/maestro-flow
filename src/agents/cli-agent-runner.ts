@@ -8,7 +8,7 @@ import { resolve, join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { readFileSync, appendFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { DashboardBridge } from './dashboard-bridge.js';
 import { CliHistoryStore, type EntryLike } from './cli-history-store.js';
 import { loadTemplate, loadProtocol } from '../config/template-discovery.js';
@@ -73,6 +73,10 @@ export interface CliRunOptions {
   /** Synchronous blocking mode: suppress broker events and MCP notifications,
    *  stream snapshot-style progress logs to stderr instead. */
   sync?: boolean;
+  /** Settings file path passed to the CLI tool (e.g. Claude --settings, Codex --profile) */
+  settingsFile?: string;
+  /** Base tool name for aliases — used to resolve agent type when tool is an alias */
+  baseTool?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -434,7 +438,8 @@ export class CliAgentRunner {
    * Run a CLI agent to completion and return its exit code (0 = success).
    */
   async run(options: CliRunOptions): Promise<number> {
-    const agentType = TOOL_TO_AGENT_TYPE[options.tool];
+    const agentType = TOOL_TO_AGENT_TYPE[options.tool]
+      ?? (options.baseTool ? TOOL_TO_AGENT_TYPE[options.baseTool] : undefined);
     if (!agentType) {
       console.error(`Unknown tool: ${options.tool}`);
       return 1;
@@ -491,6 +496,7 @@ export class CliAgentRunner {
       model: options.model,
       approvalMode: options.mode === 'write' ? 'auto' : 'suggest',
       interactive: adapter.supportsInteractive?.() === true,
+      settingsFile: options.settingsFile?.replace(/^~(?=[\\/])/, homedir()),
     };
 
     const agentProcess = await adapter.spawn(config);

@@ -1,16 +1,14 @@
-# Workflow: Spec Generate
+# Workflow: Spec Generate (Full Mode)
 
 Specification document chain producing a complete specification package (Product Brief, PRD, Architecture, Epics, Roadmap) through 7 sequential phases with multi-CLI analysis and interactive refinement. Pure documentation — no code generation.
 
-## Worktree Guard
-
-Block if `.workflow/worktree-scope.json` exists — must run from main worktree.
+**Shared logic**: `@roadmap-common.md` (worktree guard, context loading, codebase exploration, external research, minimum-phase principle, roadmap write logic)
 
 ## Pipeline Position
 
 ```
 brainstorm (optional) → init (REQUIRED) → spec-generate → plan → execute → verify
-Alternative light path: init → roadmap → plan (skip spec-generate)
+Alternative light path: init → roadmap (light mode) → plan (skip spec-generate)
 ```
 
 ## Architecture
@@ -62,7 +60,7 @@ $ARGUMENTS: "<idea or @file> [-y] [-c] [--from-brainstorm SESSION-ID]"
 
 ### Step 1: Prerequisite Loading (Phase 0)
 
-Before any operations, load specification and template documents:
+Load specification and template documents:
 
 | Document | Purpose | Priority |
 |----------|---------|----------|
@@ -70,22 +68,10 @@ Before any operations, load specification and template documents:
 | Quality gates | Per-phase quality criteria and scoring | P0 - must read |
 | Templates | product-brief, requirements-prd, architecture-doc, epics-template | Read on-demand per phase |
 
-**Load project specs:**
-```
-specs_content = maestro spec load --category arch
-```
-Used in Phase 3 (architecture doc) and Phase 6 (epic decomposition) for constraint awareness.
+**Load project specs and history**: Follow roadmap-common.md "Load Project Context".
 
-These inform validation and output formatting for all subsequent phases.
-
-**Load project history (if `.workflow/` exists):**
-- `project.md` → already_shipped (Validated), current_scope (Active), project_history (Context), locked_decisions (Key Decisions)
-- `state.json.accumulated_context` → deferred[] (high priority candidates), key_decisions[] (architectural constraints)
-
-**Rules**:
-- Features in `already_shipped` are EXCLUDED from spec generation scope — they are done
-- `deferred` items from previous milestone are HIGH PRIORITY candidates
-- `locked_decisions` constrain architecture choices in Phase 4
+Additional full-mode rules:
+- Features in `already_shipped` are EXCLUDED from spec generation scope
 - `lessons_learned` inform risk assessment in Phase 1 and architecture decisions in Phase 4
 - Pass assembled `project_context` to Phase 1 seed analysis and Phase 7 roadmap generation
 
@@ -98,9 +84,8 @@ Parse input, analyze the seed idea, optionally explore codebase, establish sessi
 - If `-c`: read spec-config.json, resume from first incomplete phase
 - If `--from-brainstorm SESSION-ID`:
   - Locate brainstorm session directory
-  - Read `guidance-specification.md` as enriched seed (already has terminology, non-goals, feature decomposition)
-  - Extract problem statement, features, roles from specification
-  - Set `input_type: "brainstorm"` — skip Phase 1.5 (requirements already clarified)
+  - Read `guidance-specification.md` as enriched seed
+  - Set `input_type: "brainstorm"` — skip Phase 1.5
 - If `@file`: read file content as seed
 - If text: use directly as seed
 - Missing input → error E001
@@ -116,33 +101,16 @@ Output dir: .workflow/.spec/{session_id}/
 - Assess complexity: simple (1-2 components) / moderate (3-5) / complex (6+)
 - For brainstorm input: enrich with feature decomposition data
 
-**Step 2.4: Codebase Exploration (conditional)**
-- Detect if project has source files (*.ts, *.js, *.py, etc.)
-- If yes: spawn cli-explore-agent for context discovery
+**Step 2.4: Codebase Exploration** — follow roadmap-common.md
 - Output: `discovery-context.json` with relevant_files, patterns, tech_stack
 
-**Step 2.5: External Research — API & Technology Details (Optional)**
-
-Spawn `workflow-external-researcher` agent to gather concrete API details, library versions, and integration patterns for the technologies identified in seed analysis and codebase exploration.
-
-**Trigger**: When seed analysis identifies specific technologies, APIs, or external services. Auto-trigger in auto mode (`-y`). Skip if topic is purely conceptual with no technology keywords.
-
-Extract named technologies/APIs/frameworks/protocols from seed analysis and codebase exploration.
-
-If topics found → spawn `workflow-external-researcher` agent for API research:
-- Per technology: stable version, API surface (endpoints, auth, rate limits), integration patterns, data models, limitations/deprecations
-- Focus on concrete details (versions, method signatures, config options)
-- Output → `apiResearchContext` (in-memory)
-
-If no topics → `apiResearchContext = null`, skip to Step 2.6.
+**Step 2.5: External Research** — follow roadmap-common.md
 
 `apiResearchContext` is passed into:
 - Step 4 (Product Brief): technology feasibility assessment
 - Step 5 (Requirements): API-aware requirement writing with concrete constraints
 - Step 6 (Architecture): informed ADR decisions with version-specific details
 - Step 7 (Epics): realistic story sizing based on API complexity
-
-If research fails (W005): `apiResearchContext = null`, continue without external context.
 
 **Step 2.6: Spec Type Selection**
 - Interactive (AskUserQuestion): Service / API / Library / Platform
@@ -153,7 +121,7 @@ If research fails (W005): `apiResearchContext = null`, continue without external
 - Confirm problem statement, select depth (Light/Standard/Comprehensive), select focus areas
 - `--yes`: accept all defaults
 
-**Output**: `spec-config.json` (session state), `discovery-context.json` (optional), `apiResearchContext` (in-memory, optional)
+**Output**: `spec-config.json`, `discovery-context.json` (optional), `apiResearchContext` (in-memory, optional)
 
 ### Step 3: Requirement Expansion & Clarification (Phase 1.5)
 
@@ -187,16 +155,16 @@ Generate product brief through multi-perspective CLI analysis.
 
 **Step 4.2: Multi-CLI Parallel Analysis (3 perspectives)**
 
-| Perspective | CLI Tool | Focus |
-|-------------|----------|-------|
-| Product | gemini | Vision, market fit, success criteria, scope boundaries |
-| Technical | codex | Feasibility, constraints, integration complexity, tech recommendations |
-| User | claude | Personas, journey maps, pain points, UX criteria |
+| Perspective | Role | Focus |
+|-------------|------|-------|
+| Product | analyze | Vision, market fit, success criteria, scope boundaries |
+| Technical | review | Feasibility, constraints, integration complexity, tech recommendations |
+| User | explore | Personas, journey maps, pain points, UX criteria |
 
 **Step 4.3: Synthesis**
 - Extract convergent themes (all agree), conflicts (need resolution), unique insights
 - For brainstorm input: cross-reference with guidance-specification decisions
-- If `apiResearchContext` is set: inject API details into technical feasibility assessment, enrich technology recommendations with concrete versions and constraints
+- If `apiResearchContext` is set: inject API details into technical feasibility assessment
 
 **Step 4.4: Interactive Refinement**
 - Present synthesis, user adjusts scope/vision
@@ -239,7 +207,7 @@ Generate detailed PRD with functional/non-functional requirements.
 
 Generate architecture decisions, component design, and technology selections.
 
-**Step 6.1: Architecture Analysis via CLI (gemini)**
+**Step 6.1: Architecture Analysis via CLI (role: review)**
 - System architecture style with justification
 - Core components and responsibilities
 - Component interaction diagram (Mermaid graph TD)
@@ -253,9 +221,9 @@ Generate architecture decisions, component design, and technology selections.
 - **Observability**: key metrics (5+), structured log events, health checks
 - Spec type profile injection for domain-specific depth
 - Glossary injection for terminology consistency
-- If `apiResearchContext` is set: inject as "External API Research" context — concrete versions, API surfaces, integration patterns inform ADR decisions and technology stack selection
+- If `apiResearchContext` is set: inject as "External API Research" context
 
-**Step 6.2: Architecture Review via CLI (codex)**
+**Step 6.2: Architecture Review via CLI (role: review)**
 - Challenge each ADR, identify scalability bottlenecks
 - Assess security gaps, evaluate technology choices
 - Rate overall quality 1-5
@@ -325,26 +293,23 @@ Gate decision: Pass (>=80) / Review (60-79) / Fail (<60)
 
 | Gate Result | Action |
 |-------------|--------|
-| Pass (>=80%) | Proceed to Step 11 (Phase 7: Roadmap Generation) |
+| Pass (>=80%) | Proceed to Step 11 (Phase 7: Roadmap) |
 | Review (60-79%) | Proceed to Step 11 with caveats logged |
-| Fail (<60%) | Trigger Step 9 (Phase 6.5 Auto-Fix), then re-run Step 8 |
+| Fail (<60%) | Trigger Step 9 (Auto-Fix), then re-run Step 8 |
 
 ### Step 9: Auto-Fix (Phase 6.5, conditional)
 
-Triggered when Phase 6 score < 60%. Automatically repair specification issues.
+Triggered when Phase 6 score < 60%.
 
 **Step 9.1: Parse Readiness Report**
-- Extract Error and Warning items
-- Group by originating phase (2-5)
-- Map to affected output files
+- Extract Error and Warning items, group by originating phase (2-5), map to affected files
 
 **Step 9.2: Fix Affected Phases (sequential, Phase 2→3→4→5)**
-- For each phase with issues:
-  - Read current phase output
-  - CLI re-generation with error context injected
-  - Inject glossary for terminology consistency
-  - Preserve unflagged content, only fix flagged issues
-  - Increment document version
+- Read current phase output
+- CLI re-generation with error context injected
+- Inject glossary for terminology consistency
+- Preserve unflagged content, only fix flagged issues
+- Increment document version
 
 **Step 9.3: Re-run Phase 6**
 - Generate new readiness-report.md
@@ -362,91 +327,40 @@ Convert Epics into an interactive roadmap with user confirmation.
 - Read individual `EPIC-NNN-{slug}.md` for Stories and acceptance criteria
 - Read `architecture/_index.md` for technical constraints (ADR decisions)
 
-**Minimum-Phase Principle (MANDATORY — applied during mapping):**
-
-Phase = synchronization barrier (full plan→execute→verify cycle). Minimize phases for maximum execution efficiency. The wave DAG inside each Phase handles task ordering and parallelism.
-
-| Rule | Constraint |
-|------|-----------|
-| **Default** | **1 Phase**. Merge all Epics into a single phase; wave DAG handles internal ordering. |
-| **Maximum** | **2 Phases**. Only when a hard dependency boundary exists that cannot be resolved. |
-| **Exceptional** | **3 Phases**. Must explicitly justify why 2 is insufficient. |
-| **Minimum Stories per phase** | 5 Stories. If an Epic maps to fewer than 5 Stories, merge with related Epic. |
-| **Merge principle** | Small Epics (1-2 Stories, all size S) MUST be merged. Same-module or same-concern Epics belong together. Multiple Epics → one phase is normal. |
-| **Split principle** | Only split when ALL three hard-dependency conditions are met: (1) runtime dependency — cannot mock/stub, (2) not parallelizable via contract/interface, (3) full barrier — all of Phase A must complete before any of Phase B starts. |
-
-- Map (with minimum-phase principle applied):
-  - Default: ALL Epics → 1 Phase (wave DAG orders tasks by Epic dependencies)
-  - Only split if hard dependency conditions are all met
-  - MVP-tagged Epics → Milestone 1, Post-MVP → Milestone 2+
-  - Epic dependencies → wave ordering within phase (not phase splits)
-  - Stories within Epics → phase success criteria
-  - ADR decisions → phase technical constraints
-
-**Post-mapping sizing check:**
-1. Count total phases. If > 2 → justify each split against the 3 hard-dependency conditions, merge if unjustified.
-2. Count Stories per phase. Any phase < 5 Stories → merge into neighbor.
-3. Verify each phase has a meaningful deliverable boundary.
-
-**Scope escalation:**
-- **Single project** (any size): 1-2 Phases. Use wave DAG for internal parallelism.
-- **Large scope** (monorepo with 2+ independently deployable services): Use **Milestones**. Each Milestone follows the 1-2 Phase limit independently.
+Apply **Minimum-Phase Principle** from roadmap-common.md for Epic→Phase mapping:
+- Default: ALL Epics → 1 Phase (wave DAG orders tasks by Epic dependencies)
+- Only split if hard dependency conditions are all met
+- MVP-tagged Epics → Milestone 1, Post-MVP → Milestone 2+
+- Small Epics (1-2 Stories, all size S) MUST be merged
+- Epic dependencies → wave ordering within phase (not phase splits)
+- Stories within Epics → phase success criteria
+- ADR decisions → phase technical constraints
 
 **Step 11.2: Generate Draft Roadmap**
-- Produce `roadmap.md` following `@templates/roadmap.md` structure:
-  ```markdown
-  # Roadmap: {project_name}
-
-  ## Overview
-  <from product-brief.md vision>
-
-  ## Phases
-  - [ ] **Phase 1: {Epic Title}** - {one-line goal}
-  - [ ] **Phase 2: {Epic Title}** - {one-line goal}
-
-  ## Phase Details
-
-  ### Phase 1: {Epic Title}
-  **Goal**: {Epic goal}
-  **Depends on**: {from Epic dependency map}
-  **Requirements**: {REQ-IDs traced from Epic→Stories→Requirements}
-  **Success Criteria** (what must be TRUE):
-    1. {from Stories' acceptance criteria — observable behavior}
-    2. {from Stories' acceptance criteria — observable behavior}
-
-  ## Scope Decisions
-  - **In scope**: {MVP Epics}
-  - **Deferred**: {Post-MVP Epics}
-  - **Out of scope**: {from product-brief non-goals}
-
-  ## Progress
-  | Phase | Status | Completed |
-  |-------|--------|-----------|
-  | 1. {Title} | Not started | - |
-  ```
+Follow roadmap-common.md **Roadmap Template** format. For full mode, populate from product-brief.md vision and Epic→Stories acceptance criteria.
 
 **Step 11.3: Interactive Refinement (max 3 rounds)**
 - Present roadmap overview: phase count, milestone structure, dependency graph
-- **Before presenting**: validate minimum-phase principle (default 1, max 2, exceptional 3). Auto-merge violations and inform user.
+- **Before presenting**: validate minimum-phase principle. Auto-merge violations and inform user.
 - User feedback via AskUserQuestion:
   - **Approve**: Run final sizing check before accepting
-  - **Adjust Scope**: Move Epics between milestones, merge phases (enforce minimum-phase principle)
+  - **Adjust Scope**: Move Epics between milestones, merge phases
   - **Reorder**: Change phase sequencing
   - **Split/Merge**: Combine small phases (min 5 tasks enforced); splits require hard-dependency justification
-- `--yes`: auto-approve draft roadmap (minimum-phase principle still enforced automatically)
-- Each round: update roadmap.md, log change in iteration history
+- `--yes`: auto-approve (minimum-phase principle still enforced automatically)
 
 **Step 11.4: Write Outputs**
 - Write `roadmap.md` to spec directory: `{spec_dir}/roadmap.md`
-- If `.workflow/` exists: also write to `.workflow/roadmap.md`
+- Write `.workflow/roadmap.md` — follow roadmap-common.md **Overwrite vs Edit Rules**
 - Update `spec-config.json`: add Phase 7 completion
+- Update `state.json` — follow roadmap-common.md **state.json Update Rules**
 
 **Step 11.5: Handoff Options (AskUserQuestion)**
 
 | Option | Action |
 |--------|--------|
-| Initialize project | Skill({ skill: "maestro-init" }) — set up project infrastructure |
-| Plan first phase | Skill({ skill: "maestro-plan", args: "1" }) — plan first roadmap phase |
+| Initialize project | Skill({ skill: "maestro-init" }) |
+| Plan first phase | Skill({ skill: "maestro-plan", args: "1" }) |
 | Create issues | Generate issues per phase via Skill({ skill: "manage-issue" }) |
 | Export only | Spec + roadmap complete, no further action |
 
@@ -538,7 +452,6 @@ Init detects existing `.workflow/roadmap.md` and skips roadmap creation.
 | Phase 5 | Story generation fails | No | Generate epics only |
 | Phase 6 | Validation fails | No | Partial report |
 | Phase 6.5 | Max iterations (2) | No | Force handoff |
-
 | Step 2.5 | External research fails | No | apiResearchContext = null, continue |
 
-CLI Fallback Chain: Gemini → Codex → Claude → degraded mode (local only)
+CLI Fallback Chain: Role-based resolution → degraded mode (local only)

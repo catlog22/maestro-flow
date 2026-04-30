@@ -22,7 +22,8 @@ maestro delegate "<PROMPT>" [options]
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--to <tool>` | Tool: gemini, qwen, codex, claude, opencode | First enabled in config |
+| `--to <tool>` | Explicit tool: gemini, qwen, codex, claude, opencode | First enabled in config |
+| `--role <role>` | Capability role: analyze, explore, review, implement, plan, brainstorm, research | — (resolves via config) |
 | `--mode <mode>` | `analysis` (read-only) or `write` (create/modify/delete) | `analysis` |
 | `--model <model>` | Model override | Tool's `primaryModel` |
 | `--cd <dir>` | Working directory | Current directory |
@@ -31,6 +32,19 @@ maestro delegate "<PROMPT>" [options]
 | `--resume [id]` | Resume previous session (last if no id) | — |
 | `--includeDirs <dirs>` | Additional directories (comma-separated) | — |
 | `--backend <type>` | Adapter backend: `direct` or `terminal` (tmux/wezterm) | `direct` |
+
+### Tool Resolution Priority
+
+1. `--to <tool>` — explicit tool selection (backward compat, highest priority)
+2. `--role <role>` — capability-based auto-selection via config
+3. No flag — first enabled tool in config
+
+### Role-Based Tool Selection
+
+Roles map to tools via `cli-tools.json` configuration:
+- User-defined roles in `roles` section override built-in defaults
+- Workspace `.maestro/cli-tools.json` overrides global `~/.maestro/cli-tools.json`
+- Built-in roles: `analyze`, `explore`, `review`, `implement`, `plan`, `brainstorm`, `research`
 
 ### Mode Definition (Authoritative)
 
@@ -284,7 +298,7 @@ Proactively invoke `maestro delegate` when these conditions are met — no user 
 
 - Default `--mode analysis` (safe, read-only)
 - Always `Bash(run_in_background: true)` — stop immediately, wait for callback
-- Tool fallback: `gemini` → `qwen` → `codex`
+- Use `--role` for capability-based tool selection; fallback chain is config-driven
 - Rule suggestions are guidelines — choose the best fit
 - Use `inject` for supplementary context mid-execution; `after_complete` for chained multi-step tasks
 </execution>

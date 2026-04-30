@@ -59,7 +59,7 @@ Build prompt with target file patterns, toolchain dedup summary, and per-dimensi
 - PRF: Algorithm complexity, N+1 queries, unnecessary sync, memory leaks, missing caching
 - MNT: Architectural coupling, abstraction leaks, convention violations, dead code
 
-Execute via `maestro delegate --to gemini --mode analysis --rule analysis-review-code-quality` (fallback: qwen -> codex). Parse JSON array response, validate required fields (dimension, title, location.file), enforce per-dimension limit (max 5 each), filter minimum severity (medium+). Write `<session>/scan/semantic-findings.json`.
+Execute via `maestro delegate --role review --mode analysis --rule analysis-review-code-quality`. Parse JSON array response, validate required fields (dimension, title, location.file), enforce per-dimension limit (max 5 each), filter minimum severity (medium+). Write `<session>/scan/semantic-findings.json`.
 
 ### Tech Profile Scan
 

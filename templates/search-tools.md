@@ -17,7 +17,7 @@ Semantic Search → Grep (pattern) → Glob (files) → CLI (deep analysis)
 | Find by intent/behavior | Semantic search tool (see above) |
 | Known identifier/regex | `Grep` |
 | Find files by name/ext | `Glob` |
-| Complex cross-file reasoning | `maestro delegate --to gemini --mode analysis` |
+| Complex cross-file reasoning | `maestro delegate --role analyze --mode analysis` |
 | Read identified file | `Read` |
 
 ## Fallback

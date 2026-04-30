@@ -159,6 +159,11 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
       args.push('--mcp-config', config.mcpConfigPath);
     }
 
+    // Inject settings file for Claude Code configuration
+    if (config.settingsFile) {
+      args.push('--settings', config.settingsFile);
+    }
+
     // Map approvalMode to Claude Code permission flags.
     // 'auto' → bypass all permission prompts (yolo) — required for non-interactive
     // --print mode where stdin is closed and no approval responder exists.

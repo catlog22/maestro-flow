@@ -109,7 +109,7 @@ Per perspective → delegate analysis:
   CONTEXT: @**/*
   EXPECTED: JSON array: [{ title, severity, description, location, fix_direction, affected_components[] }]
   CONSTRAINTS: Evidence-backed findings only
-  " --to gemini --mode analysis
+  " --role analyze --mode analysis
 
 Results → .workflow/issues/discoveries/{SESSION_ID}/{PERSPECTIVE}-findings.json
 Update discovery-state.json: perspectives_completed += ["{PERSPECTIVE}"]
@@ -170,7 +170,7 @@ Delegate to decompose USER_PROMPT into 3-5 exploration dimensions:
 
   maestro delegate "Decompose into searchable dimensions: {USER_PROMPT}
   EXPECTED: JSON array: [{ name, description, search_patterns[], file_patterns[], finding_criteria }]
-  " --to gemini --mode analysis
+  " --role analyze --mode analysis
 
 Store → .workflow/issues/discoveries/{SESSION_ID}/exploration-plan.json
 ```

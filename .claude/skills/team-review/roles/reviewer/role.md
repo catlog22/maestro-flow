@@ -52,7 +52,7 @@ Build prompt per group requesting 6 enrichment fields per finding:
 - `fix_complexity`: low / medium / high
 - `fix_dependencies`: finding IDs that must be fixed first
 
-Execute via `maestro delegate --to gemini --mode analysis --rule analysis-diagnose-bug-root-cause` (fallback: qwen -> codex). Parse JSON array responses, merge with originals (CLI-enriched replace originals, unenriched get defaults). Write `<session>/review/enriched-findings.json`.
+Execute via `maestro delegate --role review --mode analysis --rule analysis-diagnose-bug-root-cause`. Parse JSON array responses, merge with originals (CLI-enriched replace originals, unenriched get defaults). Write `<session>/review/enriched-findings.json`.
 
 ## Phase 4: Report Generation
 

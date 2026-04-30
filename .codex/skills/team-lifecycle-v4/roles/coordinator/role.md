@@ -14,7 +14,7 @@ Orchestrate team-lifecycle-v4: analyze -> dispatch -> spawn -> monitor -> report
 ```
 WRONG: Read("src/...")                              — worker work
 WRONG: Grep/Glob on project source                  — worker work
-WRONG: Bash("maestro delegate '...' --to gemini")       — worker work
+WRONG: Bash("maestro delegate '...' --role analyze")     — worker work
 WRONG: Edit/Write on project source files            — worker work
 WRONG: Bash("npm test"), Bash("tsc"), etc.           — worker work
 ```

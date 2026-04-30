@@ -50,7 +50,7 @@ CONTEXT: @<scan-scope>
 EXPECTED: List of findings with severity (critical/high/medium/low), file:line references, description
 CONSTRAINTS: Focus on actionable findings only
 ```
-Execute via: `maestro delegate "<prompt>" --to gemini --mode analysis`
+Execute via: `maestro delegate "<prompt>" --role analyze --mode analysis`
 
 After all perspectives complete:
 - Parse CLI outputs into structured findings

@@ -6,7 +6,7 @@ Super mode implies `-y` (all auto flags propagated) plus these additional behavi
 
 ## 1. Requirement Expansion
 
-On receiving user intent, autonomously expand incomplete requirements into a complete product scope. Delegate to Gemini (`maestro delegate --to gemini --mode analysis`) for requirement completeness analysis and gap-filling. Accept requirements that add real user value; discard noise.
+On receiving user intent, autonomously expand incomplete requirements into a complete product scope. Delegate via role (`maestro delegate --role analyze --mode analysis`) for requirement completeness analysis and gap-filling. Accept requirements that add real user value; discard noise.
 
 ## 2. Progressive Document Loading
 

@@ -1,7 +1,7 @@
 # Workflow: maestro
 
 Intelligent coordinator that routes user intent to optimal command chain based on project state.
-Dual execution engines: **Skill()** (in-process, synchronous) and **CLI delegate** (via `maestro delegate`, async with gemini quality analysis).
+Dual execution engines: **Skill()** (in-process, synchronous) and **CLI delegate** (via `maestro delegate`, async with role-based tool selection).
 Default `auto` mode selects engine based on chain complexity.
 
 **Prerequisites:**
@@ -222,7 +222,7 @@ resolvePhase — priority order:
   3. From project state artifacts: in-progress execute → first incomplete phase → latest artifact phase
   4. null if chain is 'analyze-plan-execute' (uses {scratch_dir} instead)
   5. null if all chain commands are phase-independent:
-     manage-status, manage-issue, manage-issue-discover, maestro-init, maestro-spec-generate,
+     manage-status, manage-issue, manage-issue-discover, maestro-init,
      maestro-fork, maestro-merge, maestro-roadmap, spec-setup, manage-knowhow, manage-knowhow-capture,
      manage-learn, manage-codebase-rebuild, manage-codebase-refresh, maestro-milestone-audit,
      maestro-milestone-complete
@@ -245,7 +245,7 @@ Engine is selected **per step**, not per chain.
 ```
 If execMode is 'cli' or 'skill' → force that engine for all steps.
 In 'auto' mode, select per step:
-  CLI steps (heavy, context-isolated): maestro-plan, maestro-execute, maestro-analyze, maestro-brainstorm, maestro-spec-generate, maestro-roadmap, maestro-ui-design, quality-refactor
+  CLI steps (heavy, context-isolated): maestro-plan, maestro-execute, maestro-analyze, maestro-brainstorm, maestro-roadmap, maestro-ui-design, quality-refactor
   Skill steps (everything else): observable, interactive, lightweight (verify, review, test, debug, milestone-*, manage-*, spec-*, quick, etc.)
 ```
 
@@ -282,7 +282,7 @@ Context object tracks: current_phase, user_intent, issue_id, spec_session_id, sc
 
 assembleArgs: substitute placeholders {phase}, {description}, {issue_id}, {spec_session_id}, {scratch_dir} in step.args.
   In auto_mode, append per-command flag if not already present:
-    maestro-analyze/brainstorm/roadmap/ui-design/spec-generate → -y
+    maestro-analyze/brainstorm/roadmap/ui-design → -y
     maestro-plan → --auto
     quality-test → --auto-fix
     quality-retrospective → --auto-yes
@@ -425,7 +425,7 @@ const chainMap = {
 
   // ── Multi-step chains ──
   'full-lifecycle':       [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-milestone-audit' }],
-  'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-spec-generate', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '--mode full "{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'roadmap-driven':       [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'brainstorm-driven':    [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'ui-design-driven':     [{ cmd: 'maestro-ui-design', args: '{phase}' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],

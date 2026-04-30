@@ -58,7 +58,7 @@ Phase 1: Load issues from .workflow/issues/issues.jsonl
 
 Phase 2: CLI exploration per issue
   - For each issue: build exploration prompt from issue.title, description, context, related_files
-  - Run maestro delegate --to gemini --mode analysis with codebase context
+  - Run maestro delegate --role analyze --mode analysis with codebase context
   - Gather affected files, call chains, root cause evidence
 
 Phase 3: Root cause synthesis → write issue.analysis

@@ -150,11 +150,11 @@ If the spec file does not exist, use the built-in fallback mapping:
 | `testing` | skill | `quality-test` |
 | `review` | skill | `quality-review` |
 | `brainstorm` | skill | `maestro-brainstorm` |
-| `analysis` | cli | `maestro delegate --to gemini --mode analysis` |
+| `analysis` | cli | `maestro delegate --role analyze --mode analysis` |
 | `verify` | skill | `maestro-verify` |
 | `refactor` | skill | `quality-refactor` |
 | `debug` | skill | `quality-debug` |
-| `spec` | skill | `maestro-spec-generate` |
+| `spec` | skill | `maestro-roadmap --mode full` |
 | `checkpoint` | checkpoint | — |
 
 **Step 2.1** — Load `intent.json`.
@@ -210,7 +210,7 @@ options:
 | Artifact boundary | Source output_ports: plan, spec, analysis, review-findings |
 | Execution gate | Target executor contains `execute` |
 | Agent spawn | Target type is `agent` |
-| Long-running | Target is maestro-plan, maestro-spec-generate |
+| Long-running | Target is maestro-plan, maestro-roadmap --mode full |
 | User-defined | Step had `type_hint: checkpoint` |
 | Post-testing | Source executor contains `test` or `integration-test` |
 

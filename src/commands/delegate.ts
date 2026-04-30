@@ -10,7 +10,7 @@ import { CliAgentRunner } from '../agents/cli-agent-runner.js';
 import { CliHistoryStore, type EntryLike } from '../agents/cli-history-store.js';
 import type { ExecutionMeta } from '../agents/cli-history-store.js';
 import { generateCliExecId } from '../agents/cli-agent-runner.js';
-import { loadCliToolsConfig, selectTool } from '../config/cli-tools-config.js';
+import { loadCliToolsConfig, selectTool, selectToolByRole } from '../config/cli-tools-config.js';
 import { paths } from '../config/paths.js';
 import { DelegateBrokerClient, type JsonObject, type DelegateJobEvent, type DelegateJobRecord, type DelegateQueuedMessage } from '../async/index.js';
 import { handleDelegateMessage } from '../async/delegate-control.js';
@@ -55,6 +55,8 @@ export interface DelegateExecutionRequest {
   includeDirs?: string[];
   sessionId?: string;
   backend: 'direct' | 'terminal';
+  settingsFile?: string;
+  baseTool?: string;
 }
 
 interface ChildProcessLike {
@@ -306,6 +308,7 @@ export function registerDelegateCommand(program: Command): void {
 
   delegate
     .option('--to <tool>', 'CLI tool to delegate to (gemini, qwen, codex, claude, opencode)')
+    .option('--role <role>', 'Capability role for auto tool selection (analyze, explore, review, implement, plan, brainstorm, research)')
     .option('--mode <mode>', 'Execution mode (analysis or write)', 'analysis')
     .option('--model <model>', 'Model override')
     .option('--cd <dir>', 'Working directory')
@@ -319,6 +322,7 @@ export function registerDelegateCommand(program: Command): void {
     .addOption(new Option('--worker').hideHelp())
     .action(async (prompt: string | undefined, opts: {
       to?: string;
+      role?: string;
       mode: string;
       model?: string;
       cd?: string;
@@ -336,8 +340,21 @@ export function registerDelegateCommand(program: Command): void {
         process.exit(1);
       }
 
-      const config = await loadCliToolsConfig();
-      const selected = selectTool(opts.to, config);
+      const workDir = resolve(opts.cd ?? process.cwd());
+      const config = await loadCliToolsConfig(workDir);
+
+      // Tool resolution priority: --to > --role > first-enabled fallback
+      let selected;
+      if (opts.to) {
+        if (opts.role) {
+          process.stderr.write(`Warning: --to overrides --role; using tool "${opts.to}" directly.\n`);
+        }
+        selected = selectTool(opts.to, config);
+      } else if (opts.role) {
+        selected = selectToolByRole(opts.role, config);
+      } else {
+        selected = selectTool(undefined, config);
+      }
 
       const toolName = selected?.name ?? opts.to ?? 'gemini';
       const model = opts.model ?? selected?.entry?.primaryModel;
@@ -350,7 +367,6 @@ export function registerDelegateCommand(program: Command): void {
 
       const backend = (opts.backend === 'terminal' ? 'terminal' : 'direct') as 'direct' | 'terminal';
       const execId = opts.id ?? generateCliExecId(toolName);
-      const workDir = resolve(opts.cd ?? process.cwd());
       const resume = opts.resume === true ? 'last' : opts.resume;
       const includeDirs = opts.includeDirs?.split(',').map(d => d.trim()).filter(Boolean);
       const request: DelegateExecutionRequest = {
@@ -365,6 +381,8 @@ export function registerDelegateCommand(program: Command): void {
         includeDirs,
         sessionId: opts.session ?? resolveRelaySessionId(),
         backend,
+        settingsFile: selected?.entry?.settingsFile,
+        baseTool: selected?.entry?.baseTool,
       };
 
       try {

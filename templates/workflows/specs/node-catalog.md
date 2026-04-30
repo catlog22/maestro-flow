@@ -128,7 +128,7 @@ Deliver: [specify expected output format]
 | `testing` | skill | `quality-test` |
 | `review` | skill | `quality-review` |
 | `brainstorm` | skill | `maestro-brainstorm` |
-| `analysis` | cli | `maestro delegate --to gemini --mode analysis` |
+| `analysis` | cli | `maestro delegate --role analyze --mode analysis` |
 | `spec` | skill | `maestro-spec-generate` |
 | `refactor` | skill | `quality-refactor` |
 | `integration-test` | skill | `quality-integration-test` |

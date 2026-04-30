@@ -73,7 +73,7 @@ MODE: analysis
 CONTEXT: @.workflow/.archives/manifest.json
 EXPECTED: Aggregated lessons with frequency counts
 CONSTRAINTS: analysis=READ-ONLY
-" --to gemini --mode analysis --rule workflow-skill-aggregation --cd .workflow/.archives
+" --role analyze --mode analysis --rule workflow-skill-aggregation --cd .workflow/.archives
 ```
 
 **Severity Classification**:
