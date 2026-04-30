@@ -19,6 +19,10 @@ Each wave = 1 barrier task (solo) or N parallel non-barrier tasks.
 @~/.maestro/workflows/maestro.codex.md — authoritative `detectTaskType`, `detectNextAction`, `chainMap` (35+ intent patterns, 40+ chain types). Read before executing any step.
 </required_reading>
 
+<deferred_reading>
+- [maestro-super.md](~/.maestro/workflows/maestro-super.md) — read when `--super` flag is active
+</deferred_reading>
+
 <context>
 $ARGUMENTS — user intent text, or special flags.
 
@@ -26,7 +30,7 @@ $ARGUMENTS — user intent text, or special flags.
 - `-y, --yes` — Auto mode: skip all prompts; propagate `-y` to each skill
 - `--continue` — Resume latest paused session from last incomplete wave
 - `--dry-run` — Display planned chain without executing
-- `--super` — Super mode: deliver production-ready complete software system. See `@~/.maestro/workflows/maestro-super.md`
+- `--super` — Super mode: deliver production-ready complete software system. Read `maestro-super.md` from deferred_reading, then follow it completely.
 
 **Session state**: `.workflow/.maestro/{session-id}/`
 **Core output**: `tasks.csv` (master) + `wave-{N}-results.csv` (per wave) + `context.md` (report)
