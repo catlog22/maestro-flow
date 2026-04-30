@@ -15,6 +15,7 @@ import type { Command } from 'commander';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { initCliToolsConfigSync } from '../config/cli-tools-config.js';
 import { runInstallWizard, runInstallFlow } from './install-ui/index.js';
 import { paths } from '../config/paths.js';
 import {
@@ -294,6 +295,11 @@ function forceInstall(
     for (const w of migrationWarnings) {
       console.error(`    ${w}`);
     }
+  }
+
+  // CLI tools config (idempotent — skips if exists)
+  if (initCliToolsConfigSync()) {
+    console.error('  Initialized cli-tools.json (auto-detected CLI availability)');
   }
 
   console.error('');

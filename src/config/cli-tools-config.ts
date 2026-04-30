@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -343,5 +344,28 @@ export async function initCliToolsConfig(): Promise<boolean> {
   const config: CliToolsConfig = { version: '1.1.0', tools };
   await mkdir(dirname(configPath), { recursive: true });
   await writeFile(configPath, JSON.stringify(config, null, 2) + '\n');
+  return true;
+}
+
+/**
+ * Synchronous version of initCliToolsConfig for non-async contexts (e.g. forceInstall).
+ */
+export function initCliToolsConfigSync(): boolean {
+  const configPath = join(homedir(), '.maestro', 'cli-tools.json');
+  if (existsSync(configPath)) return false;
+
+  const tools: Record<string, ToolEntry> = {};
+  for (const def of TOOL_DEFS) {
+    tools[def.name] = {
+      enabled: isCliAvailable(def.cmd),
+      primaryModel: def.primaryModel,
+      tags: def.tags,
+      type: def.type,
+    };
+  }
+
+  const config: CliToolsConfig = { version: '1.1.0', tools };
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
   return true;
 }
