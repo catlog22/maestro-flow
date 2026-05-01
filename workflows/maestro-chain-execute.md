@@ -3,10 +3,11 @@
 Upgraded version of maestro's original direct execution strategy.
 Reads session status.json, loops through steps with per-step engine selection,
 context propagation, post-step Gemini analysis, and error handling.
-Tracks all progress via status.json (the JSON file created during selection).
+Dual-track progress: status.json (persistence + resume) and TodoWrite (UI visibility).
 
 **Prerequisites:**
 - Session directory with valid status.json (status: "running", pending steps)
+- TodoWrite initialized by selection workflow (Step 3h) with `MAESTRO:{chain_name}:` prefix
 - $SESSION_PATH passed from maestro.md dispatch
 
 ## Step 1: Load Session
@@ -18,6 +19,18 @@ Extract: `session_id`, `chain_name`, `steps[]`, `context`, `auto_mode`, `exec_mo
 Set `$STEP_INDEX` = `current_step` (first pending step).
 
 Validate: `status == "running"` and at least one pending step exists.
+
+**TodoWrite sync (resume mode):** If TodoWrite has no `MAESTRO:{chain_name}:` entries (e.g., fresh context after `/maestro -c`), rebuild from status.json:
+
+```javascript
+const todos = steps.map((step, i) => ({
+  content: `MAESTRO:${chain_name}: [${i + 1}/${steps.length}] ${step.skill}`,
+  status: step.status === 'completed' ? 'completed'
+        : i === $STEP_INDEX ? 'in_progress'
+        : 'pending'
+}));
+TodoWrite({ todos });
+```
 
 Display banner:
 
@@ -127,15 +140,35 @@ CLI: capture `exec_id` from stderr `[MAESTRO_EXEC_ID=<id>]`.
 
 **Persist context back to status.json** after each step — write updated `context` field and `current_step`. This enables resume via `/maestro -c`.
 
-### 3d. Handle result
+### 3d. Handle result & sync dual tracking
 
-**Success:** mark step `status = "completed"`, set `completed_at` in status.json.
-CLI: save output to `step-{N}-output.txt` in session directory.
+**Success:**
+1. status.json: mark step `status = "completed"`, set `completed_at`
+2. TodoWrite: mark current step `completed`, next step `in_progress`
+3. CLI: save output to `step-{N}-output.txt` in session directory
+
+```javascript
+// Dual-track update after each step
+function updateDualTracking(stepIndex, total, chain_name, result) {
+  // 1. status.json — already updated in 3c
+  // 2. TodoWrite — sync UI
+  const todos = getAllTodos().map(todo => {
+    if (!todo.content.startsWith(`MAESTRO:${chain_name}:`)) return todo;
+    const num = extractStepNum(todo.content);
+    if (num === stepIndex + 1) return { ...todo, status: result };
+    if (num === stepIndex + 2 && result === 'completed') return { ...todo, status: 'in_progress' };
+    return todo;
+  });
+  TodoWrite({ todos });
+}
+```
 
 **Failure:**
-- `auto_mode` → retry once, then skip (mark `"skipped"`).
-- Interactive → offer: Retry (max 2) / Skip / Abort.
-- Abort → **Error E003** — update status.json `status = "aborted"`, display resume hint: `/maestro -c`.
+1. status.json: mark step `"failed"` or `"skipped"`
+2. TodoWrite: mark step `completed` (skipped) or keep `in_progress` (retry)
+3. `auto_mode` → retry once, then skip
+4. Interactive → offer: Retry (max 2) / Skip / Abort
+5. Abort → status.json `status = "aborted"`, TodoWrite mark remaining `pending`, display resume hint: `/maestro -c`
 
 ### 3e. Post-step analysis (CLI steps only)
 
@@ -176,7 +209,9 @@ On callback:
 
 ## Step 4: Completion Report
 
-Update status.json: `status = "completed"`.
+Finalize dual tracking:
+1. status.json: `status = "completed"`
+2. TodoWrite: all steps marked `completed` (or `completed` for skipped)
 
 ```
 ============================================================

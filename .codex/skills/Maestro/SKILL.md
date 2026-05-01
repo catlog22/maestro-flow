@@ -129,9 +129,23 @@ After each barrier skill completes, read its artifacts and update `state.context
 }
 ```
 
+7. **Initialize plan tracking** (dual-track: status.json + update_plan):
+
+```
+functions.update_plan({
+  plan: steps.map((step, i) => ({
+    id: `step-${i}`,
+    title: `[${i + 1}/${steps.length}] ${step.skill}${barrier(step) ? ' [BARRIER]' : ''}`,
+    status: "open"
+  }))
+})
+```
+
 **`--dry-run`**: Display chain with `[BARRIER]` markers, stop.
 
 **User confirmation** (skip if AUTO_YES): Display plan, prompt `Proceed? (yes/no)`.
+
+**`--continue` plan rebuild**: When resuming, rebuild `update_plan` from status.json — completed steps → `"completed"`, current → `"in_progress"`, rest → `"open"`.
 
 ### Phase 2: Wave Execution Loop
 
@@ -151,8 +165,21 @@ After each barrier skill completes, read its artifacts and update `state.context
    ```
 4. **Read results**: Update each step's `status`, `wave_n` from results CSV
 5. **Barrier check**: If wave was a barrier skill, run barrier analysis logic (read artifacts, update context)
-6. **Persist**: Append wave to `state.waves[]`, write `status.json`
-7. **Abort on failure**: If any result `status === 'failed'` → mark remaining steps `skipped`, set `state.status = 'aborted'`, break
+6. **Dual-track persist**:
+   - status.json: Append wave to `state.waves[]`, update step statuses, write `status.json`
+   - update_plan: Sync plan items from status.json step statuses:
+     ```
+     functions.update_plan({
+       plan: steps.map((step, i) => ({
+         id: `step-${i}`,
+         title: `[${i + 1}/${steps.length}] ${step.skill}`,
+         status: step.status === 'completed' ? 'completed'
+               : step.status === 'pending' && i === nextPendingIndex ? 'in_progress'
+               : step.status
+       }))
+     })
+     ```
+7. **Abort on failure**: If any result `status === 'failed'` → mark remaining steps `skipped` in both status.json and update_plan, set `state.status = 'aborted'`, break
 
 ### Skill Call Assembly
 
@@ -195,6 +222,10 @@ After each barrier skill completes, read its artifacts and update `state.context
 Object with all fields required: `status` ("completed"|"failed"), `skill_call` (string), `summary` (string), `artifacts` (path or ""), `error` (reason or "").
 
 ### Phase 3: Completion Report
+
+Finalize dual tracking:
+- status.json: `state.status = 'completed'`
+- update_plan: all steps → `"completed"` (skipped steps also marked completed)
 
 ```
 === COORDINATE COMPLETE ===

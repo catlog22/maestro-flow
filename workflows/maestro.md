@@ -272,15 +272,27 @@ Create session directory `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/` and wri
     "spec_session_id": null,
     "scratch_dir": null
   },
-  "steps": [{ "index": 0, "skill": "{skill_name}", "args": "{args}", "engine": "{cli|internal from 3e}", "status": "pending", "started_at": null, "completed_at": null }],
+  "steps": [{ "index": 0, "skill": "{chainMap[].cmd}", "args": "{chainMap[].args}", "engine": "{cli|internal from 3e}", "status": "pending", "started_at": null, "completed_at": null }],
   "current_step": "{$START_STEP or 0}",
   "status": "running"
 }
 ```
 
+### 3h: Initialize TodoWrite tracking
+
+Create TodoWrite entries with `MAESTRO:{chain_name}:` prefix for UI-visible progress tracking. TodoWrite and status.json form dual-track system — TodoWrite for user visibility, status.json for persistence and resume.
+
+```javascript
+const todos = steps.map((step, i) => ({
+  content: `MAESTRO:${chain_name}: [${i + 1}/${steps.length}] ${step.skill}`,
+  status: i === 0 ? 'in_progress' : 'pending'
+}));
+TodoWrite({ todos });
+```
+
 ## Step 4: Dispatch to execution workflow
 
-status.json already created in Step 3g with `steps[]` and `context`.
+status.json already created in Step 3g, TodoWrite initialized in Step 3h.
 
 1. Read `~/.maestro/workflows/maestro-chain-execute.md`
 2. Follow it with `$SESSION_PATH` = session directory from Step 3g

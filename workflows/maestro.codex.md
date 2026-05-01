@@ -290,8 +290,8 @@ Build context: `{ current_phase, user_intent, issue_id, spec_session_id: null, s
 
 ```
 MAESTRO-COORDINATE: {chain_name}  (dry run)
-  1. ${step.cmd} {step.args}
-  2. ${step.cmd} {step.args}
+  1. ${step.skill} {step.args}
+  2. ${step.skill} {step.args}
   …
 ```
 
@@ -310,7 +310,7 @@ Create session directory `.workflow/.maestro/maestro-{timestamp}/`.
 
 **Auto-flag injection** (when AUTO_YES): `maestro-analyze/-brainstorm/-roadmap/-ui-design` → `-y`, `maestro-plan` → `--auto`, `quality-test` → `--auto-fix`, `quality-retrospective` → `--auto-yes`.
 
-Initialize `state.json` with: session_id, intent, chain_name, auto_yes, context (phase, dirs, issue_id, gaps), waves[], and steps[] (each with index, cmd, args, status=pending).
+Initialize `state.json` with: session_id, intent, chain_name, auto_yes, context (phase, dirs, issue_id, gaps), waves[], and steps[] (each with index, skill, args, status=pending).
 
 ---
 
