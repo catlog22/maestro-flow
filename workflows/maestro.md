@@ -20,16 +20,7 @@ Parse $ARGUMENTS → extract flags, remainder is intent text.
   intent = arguments with all flags/valued options stripped, trimmed
 ```
 
-### 1b: Handle resume mode
-
-If `resumeMode`:
-1. Scan `.workflow/.maestro/` for latest session (or session ID if specified)
-2. Read `status.json` → find last completed step, remaining steps
-3. Set `$CHAIN` from status.json, `$STEP_INDEX` = last_completed + 1
-4. If no session found: **Error E004** — list available sessions
-5. Jump to **Step 4** at resume point
-
-### 1c: Read project state
+### 1b: Read project state
 
 Check `.workflow/state.json` existence.
 
@@ -54,7 +45,7 @@ Check `.workflow/state.json` existence.
 
 **If missing:** `$PROJECT_STATE = { initialized: false }`. If intent also empty → **Error E001** (suggest `maestro-init`).
 
-### 1d: Display banner
+### 1c: Display banner
 
 ```
 ============================================================
@@ -267,105 +258,36 @@ Create session directory `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/` and wri
   "cli_tool": "{cliTool}",
   "gemini_session_id": null,
   "step_analyses": [],
+  "context": {
+    "current_phase": "{resolved_phase}",
+    "user_intent": "{original_intent}",
+    "issue_id": "{resolved_issue_id or null}",
+    "spec_session_id": null,
+    "scratch_dir": null
+  },
   "steps": [{ "index": 0, "skill": "{cmd}", "args": "{args}", "engine": null, "status": "pending", "started_at": null, "completed_at": null }],
   "current_step": 0,
   "status": "running"
 }
 ```
 
-## Step 4: Execute Chain
+## Step 4: Dispatch
 
-### Shared: context & argument assembly
+### 4a: Low-complexity fast path
 
-```
-Context object tracks: current_phase, user_intent, issue_id, spec_session_id, scratch_dir, auto_mode.
+If ALL conditions met:
+- clarity >= 2
+- task_type == `'quick'` or (action == `'create'` && object == `'feature'`)
+- NOT `forcedChain`, NOT `state_continue`
 
-assembleArgs: substitute placeholders {phase}, {description}, {issue_id}, {spec_session_id}, {scratch_dir} in step.args.
-  In auto_mode, append per-command flag if not already present:
-    maestro-analyze/brainstorm/roadmap/ui-design → -y
-    maestro-plan → --auto
-    quality-test → --auto-fix
-    quality-retrospective → --auto-yes
+Then: `Skill({ skill: "maestro-quick", args: '"{description}"' })`. **End.**
 
-Shell-escape strings with single quotes for CLI delegate calls.
-```
+### 4b: Standard execution — read and follow execution workflow
 
-### Step loop — for each step starting at `$STEP_INDEX` (default 0):
-
-**4a. Select engine & display banner:**
-
-Select engine per step (see 3e). Display step banner with index, command name, engine, args.
-- Step >= 4 and not autoYes: hint user about `/maestro -c` for fresh context resume.
-- autoYes and step >= 5: log warning to status.json.
-- Update status.json: step status = `"running"`, engine, started_at.
-
-**4b. Execute (engine-dependent):**
-
-**Skill** — invoke `Skill({ skill: step.cmd, args: assembledArgs })` directly (synchronous, visible).
-
-**CLI** — template-driven, async, context-isolated:
-1. Load template `~/.maestro/templates/cli/prompts/coordinate-step.txt`
-2. Build `analysisHints` from previous step's `next_step_hints` (prompt_additions, cautions, context_to_carry)
-3. Substitute template placeholders: `{{COMMAND}}`, `{{ARGS}}`, `{{STEP_N}}`, `{{AUTO_DIRECTIVE}}`, `{{CHAIN_NAME}}`, `{{ANALYSIS_HINTS}}`
-4. Run `maestro delegate <prompt> --to {cliTool} --mode write` via `Bash(run_in_background: true, timeout: 600000)`
-5. **STOP** — wait for background callback
-
-**4c. Parse output & update context:**
-
-Scan step output for context propagation: `PHASE: N` → current_phase, `SPEC-xxx` → spec_session_id, `scratch_dir: path` → scratch_dir. CLI: capture exec_id from stderr.
-
-**4d. Handle result:**
-
-Success: mark `"completed"` in status.json. CLI: save output to `step-{N}-output.txt`.
-Failure: autoYes → retry once then skip. Interactive → Retry (max 2) / Skip / Abort. Abort → **Error E003** with resume hint.
-
-**4e. Post-step analysis (CLI steps only, multi-step chains):**
-
-Skip if: step failed/skipped, single-step chain, or `stepEngine === 'skill'`.
-
-Delegate to gemini (analysis mode, `--resume` if prior gemini_session_id exists) with prompt containing:
-- Step command, args, chain name, intent
-- Last 200 lines of step output
-- Next step info (if any)
-
-Expected JSON response:
-```json
-{
-  "quality_score": "<0-100>",
-  "execution_assessment": { "success": "<bool>", "completeness": "<full|partial|minimal>", "key_outputs": [], "missing_outputs": [] },
-  "issues": [{ "severity": "critical|high|medium|low", "description": "" }],
-  "next_step_hints": {
-    "prompt_additions": "<extra context for next step>",
-    "cautions": ["<things to watch out for>"],
-    "context_to_carry": "<key facts from this step>"
-  },
-  "step_summary": ""
-}
-```
-
-On callback: capture gemini exec_id for session continuity, store analysis in `state.step_analyses[]` and `step-{N}-analysis.json`, advance to next step (**4a**).
-
-**4f. Completion report:**
-
-```
-============================================================
-  MAESTRO SESSION COMPLETE
-============================================================
-  Session:  {session_id}
-  Chain:    {chain_name}
-  Steps:    {completed}/{total} completed
-  Phase:    {current_phase}
-
-  Results:
-    [✓] 1. maestro-plan — completed [cli] (quality: 85/100)
-    [✓] 2. maestro-verify — completed [skill]
-    [—] 3. quality-review — skipped [skill]
-
-  CLI Avg Quality: {avgScore}/100 (based on {cliStepCount} cli steps)
-
-  Next: /maestro continue | /manage-status
-============================================================
-```
+For ALL chains (regardless of step count):
+1. status.json already created in Step 3f with `steps[]` and `context`
+2. Read `~/.maestro/workflows/maestro-chain-execute.md`
+3. Follow it with `$SESSION_PATH` = session directory from Step 3f
 
 ---
 

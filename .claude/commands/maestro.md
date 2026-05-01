@@ -26,11 +26,9 @@ Produces session directory at `.workflow/.maestro/{session_id}/` with status.jso
 Executes commands sequentially with artifact propagation between steps.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/maestro.md
-</required_reading>
-
 <deferred_reading>
+- [maestro.md](~/.maestro/workflows/maestro.md) — read at execution start (Steps 1-3: intent analysis, chain selection, session setup)
+- [maestro-chain-execute.md](~/.maestro/workflows/maestro-chain-execute.md) — read when dispatching chain execution (Step 4b) or resume mode (Step 1b)
 - [maestro-super.md](~/.maestro/workflows/maestro-super.md) — read when `--super` flag is active
 </deferred_reading>
 
@@ -56,7 +54,9 @@ $ARGUMENTS — user intent text, or special keywords.
 </context>
 
 <execution>
-Follow '~/.maestro/workflows/maestro.md' completely.
+**Resume mode (`-c`):** Skip selection workflow entirely — scan `.workflow/.maestro/` for latest session, then read `~/.maestro/workflows/maestro-chain-execute.md` and follow it with `$SESSION_PATH` = discovered session path. **End.**
+
+**Normal mode:** Read `~/.maestro/workflows/maestro.md` from deferred_reading, then follow it completely.
 
 **Auto mode (`-y`) propagation:**
 
@@ -111,11 +111,10 @@ Context cleanup hints, context window reminders, and completion report format ar
 - [ ] Per-step engine selected (auto routes heavy steps to CLI, observable steps to internal)
 - [ ] Auto flags correctly propagated to supporting commands only
 - [ ] Session directory created at .workflow/.maestro/{session_id}/
-- [ ] status.json tracks per-step progress and execution engine
-- [ ] All chain steps executed via internal or CLI delegate with proper argument propagation
+- [ ] status.json created with steps[], context, and tracking fields
+- [ ] Low-complexity intents routed to maestro-quick
+- [ ] All chains dispatched via execution workflow (maestro-chain-execute.md) with status.json tracking
 - [ ] Phase numbers auto-detected and passed to downstream commands
-- [ ] Error handling: retry/skip/abort per step (auto-skip in -y mode)
-- [ ] Session summary displayed on completion
 - [ ] (super mode) Requirements expanded and validated via Gemini before roadmap creation
 - [ ] (super mode) Each milestone scored ≥ 80% before advancing
 - [ ] (super mode) All milestones completed with no user intervention
