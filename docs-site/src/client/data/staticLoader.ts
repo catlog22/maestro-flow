@@ -162,6 +162,15 @@ export const guideRegistry: Array<{
     description_zh: '全部 21 个终端命令 — 安装、委派、协调、Wiki、Hook、Overlay、协作等',
     icon: 'terminal',
   },
+  {
+    slug: 'role-routing',
+    file: 'role-routing-guide.md',
+    title: 'Role Routing & Tool Config',
+    description: 'Role-based CLI tool routing — 7 fixed roles, fallback chains, domain tags, workspace overrides',
+    title_zh: '角色路由与工具配置',
+    description_zh: '基于角色的 CLI 工具路由 — 7 个固定角色、fallback chain、domain tags、工作空间覆盖',
+    icon: 'shuffle',
+  },
 ];
 
 // Use import.meta.glob to load all markdown files
