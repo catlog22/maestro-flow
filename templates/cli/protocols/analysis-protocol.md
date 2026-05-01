@@ -30,7 +30,7 @@ RULES: [templates | additional constraints]
 
 ## Execution Flow
 
-0. **Load Project Specs** - MANDATORY first step: run `maestro spec load` to retrieve project specifications and constraints before any analysis. Adapt analysis scope and standards based on loaded specs
+0. **Apply Project Specs** - Review the `[PROJECT SPECS]` section (pre-loaded in this prompt) and adapt analysis scope and standards accordingly
 1. **Parse** all 6 fields (PURPOSE, TASK, MODE, CONTEXT, EXPECTED, RULES)
 2. **Read** and analyze CONTEXT files thoroughly
 3. **Identify** patterns, issues, and dependencies
@@ -41,7 +41,7 @@ RULES: [templates | additional constraints]
 ## Core Requirements
 
 **ALWAYS**:
-- Run `maestro spec load` FIRST to obtain project specifications before starting any work
+- Apply `[PROJECT SPECS]` constraints (pre-loaded in prompt) to guide analysis
 - Analyze ALL CONTEXT files completely
 - Apply RULES (templates + constraints) exactly
 - Provide code evidence with `file:line` references

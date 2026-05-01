@@ -44,6 +44,8 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   kh:         async () => (await import('./commands/knowhow.js')).registerKnowhowCommand,
   'delegate-config': async () => (await import('./commands/tools.js')).registerToolsCommand,
   dc:                async () => (await import('./commands/tools.js')).registerToolsCommand,
+  config:  async () => (await import('./commands/config.js')).registerConfigCommand,
+  cfg:     async () => (await import('./commands/config.js')).registerConfigCommand,
 };
 
 // Determine which command is being invoked from argv (if any)

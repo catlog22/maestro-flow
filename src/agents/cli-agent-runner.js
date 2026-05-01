@@ -11,6 +11,7 @@ import { tmpdir, homedir } from 'node:os';
 import { DashboardBridge } from './dashboard-bridge.js';
 import { CliHistoryStore } from './cli-history-store.js';
 import { loadTemplate, loadProtocol } from '../config/template-discovery.js';
+import { loadSpecs } from '../tools/spec-loader.js';
 import { NOTIFY_PREFIX } from '../hooks/constants.js';
 import { DelegateBrokerClient } from '../async/index.js';
 // ---------------------------------------------------------------------------
@@ -61,16 +62,62 @@ export function generateCliExecId(tool) {
 // ---------------------------------------------------------------------------
 // Prompt assembly — protocol + user prompt + template
 // ---------------------------------------------------------------------------
-async function assemblePrompt(userPrompt, mode, rule) {
+// ---------------------------------------------------------------------------
+// Role → Spec category mapping
+// ---------------------------------------------------------------------------
+const ROLE_SPEC_CATEGORIES = {
+    analyze: ['arch', 'coding', 'quality'],
+    explore: ['arch', 'coding'],
+    review: ['review', 'quality', 'coding'],
+    implement: ['coding', 'arch', 'quality', 'test'],
+    plan: ['arch', 'coding'],
+    brainstorm: ['arch'],
+    research: ['arch'],
+};
+const MODE_SPEC_CATEGORIES = {
+    analysis: ['arch', 'coding', 'quality', 'review'],
+    write: ['coding', 'arch', 'quality', 'test'],
+};
+async function assemblePrompt(userPrompt, mode, rule, workDir, role) {
     const parts = [];
     // 1. Load mode protocol
     const protocol = await loadProtocol(mode);
     if (protocol) {
         parts.push(protocol);
     }
-    // 2. User prompt
+    // 2. Pre-load project specs — category filtered by role, then mode fallback
+    if (workDir) {
+        try {
+            const categories = role
+                ? ROLE_SPEC_CATEGORIES[role]
+                : MODE_SPEC_CATEGORIES[mode];
+            const specParts = [];
+            if (categories) {
+                for (const cat of categories) {
+                    const result = loadSpecs(workDir, cat);
+                    if (result.content) {
+                        specParts.push(result.content);
+                    }
+                }
+            }
+            if (specParts.length === 0) {
+                // Fallback: load all specs
+                const allResult = loadSpecs(workDir);
+                if (allResult.content) {
+                    specParts.push(allResult.content);
+                }
+            }
+            if (specParts.length > 0) {
+                parts.push(`[PROJECT SPECS]\n\n${specParts.join('\n\n')}`);
+            }
+        }
+        catch {
+            // Specs are optional — continue without them
+        }
+    }
+    // 3. User prompt
     parts.push(userPrompt);
-    // 3. Load rule template (if specified)
+    // 4. Load rule template (if specified)
     if (rule) {
         const template = await loadTemplate(rule);
         if (template) {
@@ -355,7 +402,7 @@ export class CliAgentRunner {
             }
         }
         // Assemble final prompt: protocol + user prompt + template
-        const finalPrompt = await assemblePrompt(userPrompt, options.mode, options.rule);
+        const finalPrompt = await assemblePrompt(userPrompt, options.mode, options.rule, options.workDir, options.role);
         const adapterFactory = this.dependencies.createAdapter ?? createAdapter;
         const adapter = await adapterFactory(agentType, options.backend);
         // Optional Dashboard bridge — connect silently, don't block startup

@@ -57,6 +57,8 @@ export interface DelegateExecutionRequest {
   backend: 'direct' | 'terminal';
   settingsFile?: string;
   baseTool?: string;
+  /** Delegate role for spec category mapping */
+  role?: string;
 }
 
 interface ChildProcessLike {
@@ -383,6 +385,7 @@ export function registerDelegateCommand(program: Command): void {
         backend,
         settingsFile: selected?.entry?.settingsFile,
         baseTool: selected?.entry?.baseTool,
+        role: opts.role,
       };
 
       try {

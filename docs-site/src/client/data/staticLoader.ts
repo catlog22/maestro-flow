@@ -171,6 +171,15 @@ export const guideRegistry: Array<{
     description_zh: '基于角色的 CLI 工具路由 — 7 个固定角色、fallback chain、domain tags、工作空间覆盖',
     icon: 'shuffle',
   },
+  {
+    slug: 'skill-config',
+    file: 'skill-config-guide.md',
+    title: 'Skill Config Guide',
+    description: 'Per-skill parameter defaults with TUI editor and hook-based auto-injection',
+    title_zh: 'Skill 参数配置指南',
+    description_zh: '为 51 个命令设置默认参数 — TUI 编辑器、Hook 自动注入、双层级作用域',
+    icon: 'sliders',
+  },
 ];
 
 // Use import.meta.glob to load all markdown files

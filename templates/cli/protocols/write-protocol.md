@@ -24,7 +24,7 @@ RULES: [templates | additional constraints]
 ## Execution Flow
 
 ### MODE: write
-0. **Load Project Specs** - MANDATORY first step: run `maestro spec load` to retrieve project specifications and constraints before any implementation. Apply loaded specs to guide coding standards, architecture decisions, and quality gates
+0. **Apply Project Specs** - Review the `[PROJECT SPECS]` section (pre-loaded in this prompt) and apply specs to guide coding standards, architecture decisions, and quality gates
 1. **Parse** all 6 fields (PURPOSE, TASK, MODE, CONTEXT, EXPECTED, RULES)
 2. **Read** CONTEXT files, find 3+ similar patterns
 3. **Plan** implementation following RULES
@@ -35,7 +35,7 @@ RULES: [templates | additional constraints]
 ## Core Requirements
 
 **ALWAYS**:
-- Run `maestro spec load` FIRST to obtain project specifications before starting any work
+- Apply `[PROJECT SPECS]` constraints (pre-loaded in prompt) to guide implementation
 - Study CONTEXT files - find 3+ similar patterns before implementing
 - Apply RULES exactly
 - Test continuously (auto mode)

@@ -12,6 +12,7 @@ export const paths = {
   data: join(MAESTRO_HOME, 'data'),
   logs: join(MAESTRO_HOME, 'logs'),
   cliHistory: join(MAESTRO_HOME, 'cli-history'),
+  skillConfig: join(MAESTRO_HOME, 'skill-config.json'),
 
   project(root: string) {
     return {
