@@ -137,9 +137,9 @@ Display step banner:
   {next.type == "decision" ? "Retry: " + JSON.parse(next.args).retry_count + "/" + JSON.parse(next.args).max_retries : ""}
 ```
 
-**Context weight hint** (after 4+ completed steps):
+**Context weight hint** (after 4+ completed steps, skip if auto):
 ```
-If completed_count >= 4:
+If completed_count >= 4 && !auto:
   Display: ⚡ 已执行 {completed_count} 步，上下文较重。可 /maestro-ralph continue 在新上下文恢复。
 ```
 
