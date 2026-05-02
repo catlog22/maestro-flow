@@ -1,7 +1,7 @@
 ---
 name: quality-business-test
 description: PRD-forward business testing with requirement traceability, multi-layer execution (L1 Interface -> L2 Business Rule -> L3 Scenario), fixture generation, and feedback loop.
-argument-hint: "<phase> [--spec SPEC-xxx] [--layer L1|L2|L3] [--gen-code] [--dry-run] [--re-run] [--auto]"
+argument-hint: "<phase> [--spec SPEC-xxx] [--layer L1|L2|L3] [--gen-code] [--dry-run] [--re-run] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 ---
 
@@ -37,7 +37,7 @@ $quality-business-test "3 --gen-code"               # generate framework-specifi
 $quality-business-test "3 --dry-run"                # extract scenarios only, don't execute
 $quality-business-test "3 --re-run"                 # re-run only previously failed scenarios
 $quality-business-test "3 --spec SPEC-auth-2026-04" # explicit spec reference
-$quality-business-test "3 --auto"                   # skip plan confirmation
+$quality-business-test "3 -y"                   # skip plan confirmation
 ```
 
 **Flags**:
@@ -47,9 +47,9 @@ $quality-business-test "3 --auto"                   # skip plan confirmation
 - `--gen-code`: Generate framework-specific test classes (JUnit/RestAssured, supertest/vitest, pytest/httpx)
 - `--dry-run`: Extract scenarios and fixtures only, don't execute
 - `--re-run`: Re-run only previously failed/blocked scenarios
-- `--auto`: Skip interactive confirmations
+- `-y`: Skip interactive confirmations
 
-`--auto` skips interactive confirmation of test plan. `--dry-run` extracts scenarios only without execution.
+`-y` skips interactive confirmation of test plan. `--dry-run` extracts scenarios only without execution.
 
 **Output**: `{artifact_dir}/.tests/business/business-test-plan.json` + `business-test-report.json` + `business-test-summary.md`
 </context>
@@ -125,7 +125,7 @@ Three tiers:
 1. Archive previous `business-test-plan.json` to `.history/` if exists
 2. Write `.tests/business/business-test-plan.json` with scenarios, fixtures, mock_contracts, requirement_coverage_plan
 3. Display plan summary (scenario counts per layer, fixture counts, requirement coverage)
-4. If not `--auto`: wait for user confirmation (yes/edit/cancel)
+4. If not `-y`: wait for user confirmation (yes/edit/cancel)
 5. If `--dry-run`: stop here, report plan
 
 ### Step 5: Generate Test Code (if --gen-code)
@@ -209,7 +209,7 @@ Map each result to `REQ-NNN:AC-N`. Per AC: `passed` (all scenarios pass), `faile
 - [ ] Phase resolved and spec package loaded (or degraded mode activated)
 - [ ] Business test scenarios extracted from PRD acceptance criteria
 - [ ] Fixtures generated for all layers
-- [ ] Test plan written and confirmed (or --auto/--dry-run)
+- [ ] Test plan written and confirmed (or -y/--dry-run)
 - [ ] Tests executed progressively L1 -> L2 -> L3 with fail-fast
 - [ ] Traceability matrix maps every result to REQ-NNN:AC-N
 - [ ] Reports generated (JSON + summary markdown)

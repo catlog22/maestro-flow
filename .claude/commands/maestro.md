@@ -65,21 +65,23 @@ When `-y` is active, maestro propagates auto flags to downstream commands. Only 
 
 | Command | Auto Flag | Effect |
 |---------|-----------|--------|
+| maestro-init | `-y` | Skip interactive questioning |
 | maestro-analyze | `-y` | Skip interactive scoping, auto-deepen |
 | maestro-brainstorm | `-y` | Skip interactive questions, use defaults |
 | maestro-roadmap | `-y` | Skip interactive questions, use defaults (create/revise/review) |
 | maestro-ui-design | `-y` | Skip interactive selection, pick top variant |
-| maestro-plan | `--auto` | Skip interactive clarification |
-| maestro-roadmap --mode full | `-y` | Skip interactive questions, use defaults |
-| maestro-execute | *(none)* | No auto flag — executes all tasks normally |
-| maestro-verify | *(none)* | No auto flag — runs full verification |
-| quality-review | *(none)* | No auto flag — auto-detects level, runs fully |
-| quality-test | `--auto-fix` | Auto-trigger gap-fix loop on failures |
-| quality-test-gen | *(none)* | No auto flag — generates tests normally |
-| quality-debug | *(none)* | No auto flag — runs diagnosis normally |
-| quality-retrospective | `--auto-yes` | Accept all routing recommendations (spec/note/issue) without prompting |
-| maestro-milestone-audit | *(none)* | No auto flag — validates milestone readiness |
-| manage-learn | *(none)* | No auto flag — pure file operation, no prompts |
+| maestro-plan | `-y` | Skip confirmations and clarification |
+| maestro-execute | `-y` | Skip confirmations, blocked auto-continue |
+| maestro-verify | *(none)* | No interactive prompts |
+| quality-business-test | `-y` | Skip plan confirmation |
+| quality-review | *(none)* | No interactive prompts, auto-detects level |
+| quality-test | `-y --auto-fix` | Auto-trigger gap-fix loop on failures |
+| quality-test-gen | *(none)* | No interactive prompts |
+| quality-debug | *(none)* | No interactive prompts |
+| quality-retrospective | `-y` | Accept all routing recommendations without prompting |
+| maestro-milestone-audit | *(none)* | No interactive prompts |
+| maestro-milestone-complete | `-y` | Skip knowledge promotion inquiry |
+| manage-learn | *(none)* | No interactive prompts |
 
 Commands not listed (manage-*, spec-*, milestone-*) have no auto flags and execute as-is.
 

@@ -1,7 +1,7 @@
 ---
 name: quality-retrospective
 description: Multi-lens 复盘 of completed phase(s); routes insights to spec/note/issue stores and the lessons library
-argument-hint: "[phase|N..M] [--lens technical|process|quality|decision] [--all] [--no-route] [--compare N] [--auto-yes]"
+argument-hint: "[phase|N..M] [--lens technical|process|quality|decision] [--all] [--no-route] [--compare N] [-y]"
 allowed-tools:
   - Read
   - Write
@@ -30,7 +30,7 @@ Post-execution multi-perspective retrospective (复盘) for completed phases. Co
 <context>
 Arguments: $ARGUMENTS
 
-Modes (scan/single/range/all), flags (--lens, --no-route, --compare, --auto-yes), and storage paths defined in workflow retrospective.md Argument Shape and Stages 1-7.
+Modes (scan/single/range/all), flags (--lens, --no-route, --compare, -y), and storage paths defined in workflow retrospective.md Argument Shape and Stages 1-7.
 </context>
 
 <execution>

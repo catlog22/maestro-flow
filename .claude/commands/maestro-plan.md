@@ -1,7 +1,7 @@
 ---
 name: maestro-plan
 description: Explore, clarify, plan, check, and confirm a phase execution plan
-argument-hint: "[phase] [--collab] [--spec SPEC-xxx] [--auto] [--gaps] [--dir <path>] [--revise [instructions]] [--check <plan-dir>]"
+argument-hint: "[phase] [--collab] [--spec SPEC-xxx] [-y] [--gaps] [--dir <path>] [--revise [instructions]] [--check <plan-dir>]"
 allowed-tools:
   - Read
   - Write
@@ -36,7 +36,7 @@ All plan output goes to `.workflow/scratch/{YYYYMMDD}-plan-[P{N}-|M{N}-]{slug}/`
 <context>
 $ARGUMENTS — phase number, or no args for milestone-wide planning, with optional flags.
 
-Scope routing, base flags (`--collab`, `--spec`, `--auto`, `--gaps`, `--dir`), output directory format, and artifact registration are defined in workflow plan.md.
+Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), output directory format, and artifact registration are defined in workflow plan.md.
 
 **Command-level flags** (extensions beyond workflow base):
 - `--revise [instructions]` -- See workflow plan.md § Revise Mode

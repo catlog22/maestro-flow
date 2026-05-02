@@ -1,7 +1,7 @@
 ---
 name: quality-business-test
 description: PRD-forward business testing with requirement traceability, fixture generation, and multi-layer execution
-argument-hint: "<phase> [--spec SPEC-xxx] [--layer L1|L2|L3] [--gen-code] [--dry-run] [--re-run] [--auto]"
+argument-hint: "<phase> [--spec SPEC-xxx] [--layer L1|L2|L3] [--gen-code] [--dry-run] [--re-run] [-y]"
 allowed-tools:
   - Read
   - Write
@@ -37,7 +37,7 @@ Phase: $ARGUMENTS (required -- phase number)
 - `--gen-code` -- Generate framework-specific test classes (JUnit/RestAssured, supertest/vitest, pytest/httpx)
 - `--dry-run` -- Extract scenarios and fixtures only, don't execute
 - `--re-run` -- Re-run only previously failed/blocked scenarios
-- `--auto` -- Skip interactive confirmations
+- `-y` -- Skip interactive confirmations
 
 **Layer definitions:**
 
@@ -96,7 +96,7 @@ Follow '~/.maestro/workflows/business-test.md' completely.
 - [ ] RFC 2119 keywords mapped to test priorities
 - [ ] Test fixtures generated (valid/invalid/boundary per REQ data model)
 - [ ] business-test-plan.json written with layer distribution
-- [ ] User confirmed plan (or --auto skipped confirmation)
+- [ ] User confirmed plan (or -y skipped confirmation)
 - [ ] Test code generated if --gen-code (framework-appropriate)
 - [ ] L1 executed with Generator-Critic loop (max 3 iterations)
 - [ ] L2 executed if no L1 critical failures

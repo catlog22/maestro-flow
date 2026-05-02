@@ -1,7 +1,7 @@
 ---
 name: maestro-init
 description: Initialize project with auto state detection (empty/code/existing)
-argument-hint: "[--auto] [--from-brainstorm SESSION-ID]"
+argument-hint: "[-y] [--from-brainstorm SESSION-ID]"
 allowed-tools:
   - Read
   - Write
@@ -24,7 +24,7 @@ Initialize a new project through auto state detection and unified flow. Invoked 
 
 <context>
 **Flags:**
-- `--auto` -- Automatic mode. After config questions, runs research without further interaction. Expects idea document via @ reference.
+- `-y` -- Automatic mode. After config questions, runs research without further interaction. Expects idea document via @ reference.
 - `--from-brainstorm SESSION-ID` -- Import from a brainstorm session. Reads guidance-specification.md to pre-fill project vision, goals, constraints, and terminology. Skips interactive questioning.
 
 **Load project state if exists:**
@@ -61,7 +61,7 @@ Other commands:
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | No arguments provided when --auto requires @ reference | Check arguments format, re-run with correct input |
+| E001 | error | No arguments provided when -y requires @ reference | Check arguments format, re-run with correct input |
 | E002 | error | .workflow/ already exists for greenfield init | Check .workflow/ directory state, resolve conflicts |
 | E003 | error | Brainstorm session not found (--from-brainstorm) | Check arguments format, re-run with correct input |
 | W001 | warning | Research agent failed, continuing with partial results | Retry research or proceed with partial results |

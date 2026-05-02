@@ -1,7 +1,7 @@
 ---
 name: quality-test
 description: Conversational UAT with session persistence, auto-diagnosis, and gap-plan closure loop. Interactive testing flow with severity inference and parallel debug agents.
-argument-hint: "<phase> [--auto-fix] [--session ID]"
+argument-hint: "<phase> [-y] [--auto-fix] [--session ID]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion
 ---
 
@@ -29,7 +29,7 @@ $quality-test "--session 04-comments"  # resume specific session
 - `--auto-fix`: Auto-trigger gap-fix loop (plan --gaps -> execute -> re-verify) on failures
 - `--session ID`: Resume a specific UAT session
 
-No auto mode -- UAT is inherently interactive. `--auto-fix` only automates gap closure, not test execution.
+`-y` implies `--auto-fix`。UAT 执行本身保持交互（展示预期 → 确认），`-y` 仅自动化 gap closure loop。
 
 **Output**: `{target_dir}/uat.md` + `.tests/test-plan.json` + `.tests/test-results.json` + `.tests/coverage-report.json`
 </context>

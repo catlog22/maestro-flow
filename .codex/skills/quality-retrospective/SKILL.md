@@ -1,7 +1,7 @@
 ---
 name: quality-retrospective
 description: Multi-lens 复盘 (retrospective) for completed phases. Context-Agent Fork loads phase artifacts once; four parallel lens agents (technical, process, quality, decision) analyze independently; synthesizer distills insights; outputs are routed to spec stubs, knowhow tips, issues, and lessons.jsonl.
-argument-hint: "[phase|N..M] [--lens technical|process|quality|decision] [--all] [--no-route] [--compare N] [--auto-yes]"
+argument-hint: "[phase|N..M] [--lens technical|process|quality|decision] [--all] [--no-route] [--compare N] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -50,7 +50,7 @@ $quality-retrospective "3"
 $quality-retrospective "2..4"
 $quality-retrospective "--all"
 $quality-retrospective "3 --lens technical --no-route"
-$quality-retrospective "3 --compare 2 --auto-yes"
+$quality-retrospective "3 --compare 2 -y"
 ```
 
 **Flags**:
@@ -61,9 +61,9 @@ $quality-retrospective "3 --compare 2 --auto-yes"
 - `--lens <name>` -- restrict to one lens (repeatable): `technical|process|quality|decision`
 - `--no-route` -- produce retrospective.{md,json} only; skip auto-creation of spec/note/issue
 - `--compare <M>` -- emit a delta section vs phase M's prior retrospective
-- `--auto-yes` -- accept all routing recommendations without prompting
+- `-y` -- accept all routing recommendations without prompting
 
-When `--auto-yes`: Accept all routing recommendations without prompting. Route all insights automatically.
+When `-y`: Accept all routing recommendations without prompting. Route all insights automatically.
 
 **Storage written**:
 - `{target_dir}/retrospective.md` -- human-readable record (target_dir resolved via state.json artifact registry to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`)
@@ -124,7 +124,7 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 6. **Stable INS-ids**: `INS-{8hex}` from `hash(phase_num + lens + title)` -- re-runs do not create duplicates
 7. **Archive before overwrite**: Move existing retrospective.{md,json} to `.history/` with timestamp before writing new ones
 8. **Spec learnings.md backward-compat**: Append to it only if it already exists -- never create it
-9. **Route confirmation**: Unless `--auto-yes`, present routing table and ask per-group before writing spec/issue/knowhow
+9. **Route confirmation**: Unless `-y`, present routing table and ask per-group before writing spec/issue/knowhow
 10. **Lessons always written**: Append to `lessons.jsonl` regardless of `--no-route` -- routing only controls spec/issue/knowhow creation
 </invariants>
 

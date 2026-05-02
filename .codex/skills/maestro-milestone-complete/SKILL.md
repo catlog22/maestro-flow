@@ -1,7 +1,7 @@
 ---
 name: maestro-milestone-complete
 description: Archive completed milestone scratch artifacts to milestones/ dir, move artifact entries to milestone_history, extract learnings, advance state.
-argument-hint: "[milestone] [--force]"
+argument-hint: "[milestone] [--force] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -49,7 +49,8 @@ Read `.summaries/` and `reflection-log.md` from execute artifacts. Extract patte
 2. **Convention drift**: Compare summaries against `coding-conventions.md` and `architecture-constraints.md` -- ask if conventions need updating
 3. **Wiki island check**: Auto-trigger `wiki-connect --fix` to link new knowledge
 
-If user confirms promotion, append `<spec-entry>` to target category file preserving original date and source.
+If `-y`: auto-accept all promotions without asking.
+If not `-y`: ask user for confirmation. If user confirms, append `<spec-entry>` to target category file preserving original date and source.
 
 ### Step 4: Archive Artifact Entries
 

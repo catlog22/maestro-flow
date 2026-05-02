@@ -189,10 +189,10 @@ functions.update_plan({
 
 | Skill | Flag |
 |-------|------|
-| `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-roadmap` | `-y` |
-| `maestro-plan` | `--auto` |
-| `quality-test` | `--auto-fix` |
-| `quality-retrospective` | `--auto-yes` |
+| `maestro-init`, `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-roadmap` | `-y` |
+| `maestro-plan`, `maestro-execute`, `maestro-milestone-complete` | `-y` |
+| `quality-business-test`, `quality-retrospective` | `-y` |
+| `quality-test` | `-y --auto-fix` |
 
 **`buildSkillCall(step, ctx)`**: Replace placeholders `{phase}`, `{description}`, `{issue_id}`, `{plan_dir}`, `{analysis_dir}`, `{brainstorm_dir}`, `{spec_session_id}` in `step.args` with corresponding `ctx` values. Append auto-yes flag if applicable. Return `$<skill> <args>`.
 
