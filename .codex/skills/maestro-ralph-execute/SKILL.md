@@ -1,7 +1,7 @@
 ---
 name: maestro-ralph-execute
 description: Single-step skill executor — spawned by maestro-ralph via CSV, reads ralph session context, executes one skill command, reports result
-argument-hint: "<skill_call>"
+argument-hint: "[-y] <skill_call>"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -62,6 +62,10 @@ Read-only for this agent. Provides:
 ## Step 1: Parse skill_call
 
 ```
+Parse $ARGUMENTS:
+  Contains "-y" or "--yes" → auto = true, remove flag from remaining args
+  Remaining → skill_call
+
 Extract from skill_call:
   skill_name = text between $ and first space (e.g. "maestro-plan")
   skill_args = remainder after first space (e.g. "1")
@@ -70,6 +74,8 @@ If skill_call is empty or malformed:
   → report_agent_job_result({ status: "failed", error: "Invalid skill_call" })
   → End.
 ```
+
+Also read `session.auto` from ralph status.json — if `true`, treat as `-y` even if flag not passed.
 
 ## Step 2: Load ralph session context
 
@@ -133,6 +139,24 @@ maestro-verify, maestro-milestone-audit, maestro-milestone-complete:
 ```
 
 ## Step 4: Execute skill
+
+**`-y` auto flag 传播：** 当 `auto == true` 时，按传播表附加 flag：
+```
+auto_flag_map = {
+  "maestro-init": "-y",
+  "maestro-analyze": "-y",
+  "maestro-brainstorm": "-y",
+  "maestro-roadmap": "-y",
+  "maestro-plan": "-y",
+  "maestro-execute": "-y",
+  "quality-business-test": "-y",
+  "quality-test": "-y --auto-fix",
+  "quality-retrospective": "-y",
+  "maestro-milestone-complete": "-y"
+}
+flag = auto_flag_map[skill_name] || ""
+skill_args = flag ? `${skill_args} ${flag}` : skill_args
+```
 
 ```
 Read .codex/skills/{skill_name}/SKILL.md to understand the skill
