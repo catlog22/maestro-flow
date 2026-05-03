@@ -97,7 +97,7 @@ const SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
   { pattern: /\/quality-review\s+(\d+)/, skill: 'quality-review' },
   { pattern: /\/quality-test\s+(\d+)/, skill: 'quality-test' },
   { pattern: /\/maestro(?:\s|$)/, skill: 'maestro' },
-  { pattern: /\/maestro-coordinate(?:\s|$)/, skill: 'maestro-coordinate' },
+  { pattern: /\/maestro-ralph(?:\s|$)/, skill: 'maestro-ralph' },
   { pattern: /\/maestro-link-coordinate(?:\s|$)/, skill: 'maestro-link-coordinate' },
 ];
 
@@ -237,7 +237,7 @@ export function evaluateSkillContext(data: SkillContextInput): HookOutput | null
         const state: WorkflowState = JSON.parse(readFileSync(statePath, 'utf8'));
 
         // Section 0: Coordinator session context
-        const COORDINATOR_SKILLS = ['maestro', 'maestro-coordinate', 'maestro-link-coordinate'];
+        const COORDINATOR_SKILLS = ['maestro', 'maestro-ralph', 'maestro-link-coordinate'];
         if (COORDINATOR_SKILLS.includes(skill.skill) && data.session_id) {
           const coordBridge = readCoordBridge(data.session_id);
           if (coordBridge) {

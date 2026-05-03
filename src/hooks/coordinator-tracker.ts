@@ -2,7 +2,7 @@
  * Coordinator Tracker — Unified progress tracking for maestro coordinators
  *
  * Tracks session state across three coordinator types:
- *   A) maestro & maestro-coordinate — reads .workflow/.maestro/status.json
+ *   A) maestro & ralph — reads .workflow/.maestro/status.json (source field distinguishes)
  *   B) maestro-link-coordinate — captures coord session_id from Bash output,
  *      reads .workflow/.maestro/walker-state.json
  *
@@ -19,7 +19,7 @@ import { COORD_BRIDGE_PREFIX } from './constants.js';
 // Types
 // ---------------------------------------------------------------------------
 
-export type CoordinatorType = 'maestro' | 'maestro-coordinate' | 'maestro-link-coordinate';
+export type CoordinatorType = 'maestro' | 'ralph' | 'maestro-link-coordinate';
 
 export interface CoordStep {
   index: number;
@@ -32,16 +32,28 @@ export interface CoordBridgeData {
   coord_session_id?: string;
   maestro_session_id?: string;
   coordinator: CoordinatorType;
+  source?: 'maestro' | 'ralph';
   chain_name: string;
   intent: string;
   phase: number | null;
   steps_total: number;
   steps_completed: number;
+  /** Real step counts excluding decision nodes (ralph sessions inflate totals with decision nodes) */
+  steps_real?: number;
+  steps_real_completed?: number;
   current_step: CoordStep | null;
   next_step: CoordStep | null;
   remaining_steps: Array<{ skill: string; args: string }>;
   status: string;
   auto_mode?: boolean;
+  /** Ralph-specific: current lifecycle position (e.g., "verify", "post-review") */
+  lifecycle_position?: string;
+  /** Ralph-specific: quality pipeline mode ("full" | "standard" | "quick") */
+  quality_mode?: string;
+  /** Ralph-specific: true when current step is a decision node awaiting evaluation */
+  decision_pending?: boolean;
+  /** Ralph-specific: quality gates already passed */
+  passed_gates?: string[];
   updated_at: number;
 }
 
@@ -57,7 +69,7 @@ export interface CoordinateCliOutput {
 }
 
 // ---------------------------------------------------------------------------
-// A: Read .workflow/.maestro/*/status.json (maestro & maestro-coordinate)
+// A: Read .workflow/.maestro/*/status.json (maestro & ralph)
 // ---------------------------------------------------------------------------
 
 interface MaestroStatusJson {
@@ -68,6 +80,8 @@ interface MaestroStatusJson {
   auto_mode?: boolean;
   source?: 'maestro' | 'ralph';
   lifecycle_position?: string;
+  quality_mode?: string;
+  passed_gates?: string[];
   steps?: Array<{
     index?: number;
     skill?: string;
@@ -111,10 +125,22 @@ export function readMaestroSession(workspaceRoot: string): CoordBridgeData | nul
 function parseMaestroStatus(raw: MaestroStatusJson, mtime: number, dirName?: string): CoordBridgeData | null {
   const steps = raw.steps ?? [];
   const currentIdx = raw.current_step ?? 0;
+  const isRalph = raw.source === 'ralph';
+
+  // All steps count (includes decision nodes)
   const completed = steps.filter(s => s.status === 'completed').length;
 
-  const currentStep = steps[currentIdx]
-    ? { index: currentIdx, skill: steps[currentIdx].skill ?? '', args: steps[currentIdx].args ?? '' }
+  // Real step counts — exclude decision nodes for accurate progress
+  const realSteps = steps.filter(s => s.type !== 'decision');
+  const realCompleted = realSteps.filter(s => s.status === 'completed').length;
+
+  // Detect decision pending state
+  const currentStepRaw = steps[currentIdx];
+  const decisionPending = isRalph && currentStepRaw?.type === 'decision' &&
+    (currentStepRaw.status === 'running' || currentStepRaw.status === 'pending');
+
+  const currentStep = currentStepRaw
+    ? { index: currentIdx, skill: currentStepRaw.skill ?? '', args: currentStepRaw.args ?? '' }
     : null;
 
   const nextIdx = currentIdx + 1;
@@ -130,17 +156,24 @@ function parseMaestroStatus(raw: MaestroStatusJson, mtime: number, dirName?: str
   return {
     session_id: '',
     maestro_session_id: raw.session_id ?? dirName ?? undefined,
-    coordinator: 'maestro',
+    coordinator: isRalph ? 'ralph' : 'maestro',
+    source: raw.source,
     chain_name: raw.chain_name ?? '',
     intent: raw.intent ?? '',
     phase: raw.phase ?? null,
     steps_total: steps.length,
     steps_completed: completed,
+    steps_real: realSteps.length,
+    steps_real_completed: realCompleted,
     current_step: currentStep,
     next_step: nextStep,
     remaining_steps: remaining,
     status: raw.status ?? 'unknown',
     auto_mode: raw.auto_mode ?? false,
+    lifecycle_position: isRalph ? raw.lifecycle_position : undefined,
+    quality_mode: isRalph ? raw.quality_mode : undefined,
+    decision_pending: decisionPending || undefined,
+    passed_gates: isRalph ? raw.passed_gates : undefined,
     updated_at: Math.floor(mtime),
   };
 }
@@ -358,7 +391,7 @@ function readLatestCoordinateSession(workspaceRoot: string): CoordBridgeData | n
     const sessions = readdirSync(coordDir)
       .filter(name => name.startsWith('coord-'))
       .map(name => {
-        // Try walker-state.json (link-coordinate) then status.json (maestro-coordinate)
+        // Try walker-state.json (link-coordinate) then status.json
         for (const file of ['walker-state.json', 'status.json']) {
           const statePath = join(coordDir, name, file);
           if (existsSync(statePath)) {
@@ -414,9 +447,11 @@ export function buildNextStepHint(data: CoordBridgeData): string | null {
     lines.push(`Then: ${remaining}${data.remaining_steps.length > 4 ? ' …' : ''}`);
   }
 
-  // Resume hint
+  // Resume hint — ralph uses /maestro-ralph continue, others use /maestro -c
   if (data.coord_session_id) {
     lines.push(`Resume: /maestro-link-coordinate -c ${data.coord_session_id}`);
+  } else if (data.source === 'ralph') {
+    lines.push(`Resume: /maestro-ralph continue`);
   } else {
     lines.push(`Resume: /maestro -c`);
   }

@@ -482,14 +482,36 @@ export function buildCoordinatorSegment(session: string): string {
   try {
     const bridge = readCoordBridge(session);
     if (!bridge) return '';
-    const { status, steps_completed, steps_total, current_step, chain_name } = bridge;
+    const { status, current_step, chain_name } = bridge;
     if (status === 'completed' || status === 'failed') return '';
     const isPaused = status === 'paused' || status === 'step_paused';
-    const progress = isPaused ? 'P' : `${steps_completed}/${steps_total}`;
+
+    // Use real step counts (excluding decision nodes) when available
+    const total = bridge.steps_real ?? bridge.steps_total;
+    const done = bridge.steps_real_completed ?? bridge.steps_completed;
+    const progress = isPaused ? 'P' : `${done}/${total}`;
+
+    const isRalph = bridge.source === 'ralph';
     const stepLabel = current_step?.skill ?? '';
     const parts: string[] = [];
-    if (chain_name) parts.push(chain_name);
-    if (stepLabel) parts.push(stepLabel);
+
+    if (isRalph) {
+      // Ralph: show lifecycle position + decision marker + quality mode
+      parts.push('ralph');
+      if (bridge.lifecycle_position) parts.push(bridge.lifecycle_position);
+      else if (stepLabel) parts.push(stepLabel);
+      if (bridge.decision_pending) parts.push('\u25C6');  // ◆ decision pending
+      if (bridge.quality_mode && bridge.quality_mode !== 'standard') parts.push(bridge.quality_mode);
+      // Quality gates progress
+      if (bridge.passed_gates && bridge.passed_gates.length > 0) {
+        parts.push(`\u2713${bridge.passed_gates.length}`);  // ✓N gates passed
+      }
+    } else {
+      // Maestro: chain name + current step
+      if (chain_name) parts.push(chain_name);
+      if (stepLabel) parts.push(stepLabel);
+    }
+
     return `${parts.join(' ')} [${progress}]`;
   } catch { return ''; }
 }
