@@ -98,20 +98,19 @@ state.json exists → Path C (existing) | source files exist → Path B (brownfi
 
 ---
 
-## Step 2: Specs Setup (first-run only)
+## Step 2: Specs Init (first-run only)
 
 If `.workflow/specs/` does not exist:
 
-1. Create `.workflow/specs/` directory
-2. Auto-trigger `/workflow:specs-setup` — **MUST follow `specs-setup.md` templates exactly**:
-   - Scan codebase for conventions
-   - Generate `specs/coding-conventions.md`
-   - Generate `specs/architecture-constraints.md`
-   - Generate `specs/quality-rules.md`
-   - Generate `specs/debug-notes.md`
-   - Generate `specs/test-conventions.md`
-   - Generate `specs/review-standards.md`
-   - Create empty `specs/learnings.md`
+1. Run `Bash("maestro spec init")` — creates empty seed files (skeleton only, no codebase scan)
+
+2. If project has existing source files (package.json, tsconfig.json, pyproject.toml, go.mod, etc.):
+   - Auto-trigger `Skill({ skill: "spec-setup" })` — scan codebase and populate specs with detected conventions
+   - Note: Specs are further enriched by analyze, plan, and execute stages via `maestro spec add`
+
+3. If greenfield project (no source files):
+   - Skip spec-setup (nothing to scan)
+   - Note: Specs will be progressively populated as pipeline stages produce knowledge
 
 
 ---
@@ -130,7 +129,6 @@ Verify all required directories and files exist:
   scratch/           ✓ (create empty)
   milestones/        ✓ (create empty)
   codebase/          ✓ (create empty)
-  task-specs/        ✓ (create empty)
 ```
 
 ---

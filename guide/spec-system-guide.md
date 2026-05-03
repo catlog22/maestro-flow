@@ -12,6 +12,8 @@ Maestro 的 Spec 系统管理多层级知识（编码规范、架构约束、调
   - [spec-setup — 初始化](#spec-setup--初始化)
   - [spec-add — 添加条目](#spec-add--添加条目)
   - [spec-load — 加载条目](#spec-load--加载条目)
+  - [maestro spec add — CLI 添加](#maestro-spec-add--cli-添加)
+- [渐进填充](#渐进填充)
 - [Auto-Init](#auto-init)
 - [Keyword 系统](#keyword-系统)
   - [关键词提取](#关键词提取)
@@ -118,6 +120,8 @@ Refresh token generation must carry email from stored user data.
 
 技术栈信息维护在 `.workflow/project.md` 的 `## Tech Stack` 节中。
 
+> **触发时机**：`/maestro-init` 在检测到已有代码库时自动触发 `/spec-setup`。新项目（无源文件）跳过——specs 由后续 pipeline 阶段渐进填充。也可随时手动执行 `/spec-setup` 重新扫描。
+
 ### spec-add — 添加条目
 
 ```bash
@@ -150,6 +154,27 @@ Keywords: named-exports, utility, module
 Verify: maestro spec load --scope project --keyword named-exports
 ```
 
+### maestro spec add — CLI 添加
+
+除 `/spec-add` 技能外，还有等价的 CLI 命令供 workflow agent 程序化调用：
+
+```bash
+# 单条添加
+maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 --source <src>
+
+# 示例
+maestro spec add arch "Use JWT stateless auth" "Decided during analysis..." --keywords jwt,auth --source analyze:ANL-xxx
+maestro spec add coding "Barrel exports for modules" "All public modules use index.ts barrel" --keywords barrel,export --source plan:P1
+
+# 批量（stdin JSON）
+echo '[{"category":"arch","title":"...","content":"...","keywords":["jwt"]}]' | maestro spec add --stdin
+
+# JSON 输出
+maestro spec add arch "..." "..." --json
+```
+
+**与 `/spec-add` 的区别**：CLI 命令不需要 agent 上下文，可在 Bash 中直接调用。Workflow 阶段（analyze、plan、execute）使用此 CLI 进行渐进填充。
+
 ### spec-load — 加载条目
 
 ```bash
@@ -181,6 +206,31 @@ Verify: maestro spec load --scope project --keyword named-exports
 | `personal` | baseline + team + personal（需 uid） |
 
 多层加载时，每层内容带有区分标题（如 `# Global Specs`、`# Baseline Specs`）。
+
+---
+
+## 渐进填充
+
+Spec 内容不再依赖一次性扫描，而是由 pipeline 各阶段渐进补充：
+
+```
+maestro-init       → maestro spec init（空骨架）+ spec-setup（已有项目自动扫描）
+       ↓
+maestro-analyze    → Locked 决策 → arch，代码模式 → coding
+       ↓
+maestro-plan       → 设计约定 → coding/arch，测试策略 → test
+       ↓
+maestro-execute    → learnings → learning，设计理由 → coding，根因 → debug
+       ↓
+maestro-verify     → quality 发现 → quality
+```
+
+各阶段通过 `maestro spec add` CLI 写入。Agent 根据自身上下文判断哪些知识值得沉淀——不是所有发现都写 spec，只写跨 task 可复用的约束和约定。
+
+**典型产出量**：
+- analyze: 1-5 条（每个 Locked 决策 1 条）
+- plan: 0-3 条（大多数 plan 不产出 spec）
+- execute: 1-3 条 learning，0-1 条 coding/debug
 
 ---
 
@@ -451,6 +501,12 @@ maestro spec list                           # 列出 project spec 文件
 maestro spec list --scope global            # 列出 global spec 文件
 maestro spec status                         # 显示 project 状态
 maestro spec status --scope global          # 显示 global 状态
+
+# 添加条目（CLI）
+maestro spec add <category> "<title>" "<content>"  # 添加条目
+maestro spec add arch "..." "..." --keywords jwt,auth --source analyze:ANL-xxx
+maestro spec add coding "..." "..." --json          # JSON 输出
+echo '[{...}]' | maestro spec add --stdin            # 批量 stdin
 
 # Hook 管理
 maestro hooks install --level standard      # 安装包含 spec-validator + keyword-spec-injector

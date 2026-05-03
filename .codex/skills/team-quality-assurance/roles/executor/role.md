@@ -26,7 +26,7 @@ Run test suites, collect coverage data, and perform automatic fix cycles when te
 | Target layer | task description `layer: L1/L2/L3` | Yes |
 
 1. Extract session path and target layer from task description
-2. Load validation specs: Run `maestro spec load --category validation` for verification rules and acceptance criteria
+2. Load validation specs: Run `maestro spec load --category quality` for verification rules and acceptance criteria
 3. Read .msg/meta.json for strategy and generated test file list
 3. Detect test command by framework:
 

@@ -72,7 +72,7 @@ Used in Step 2-4 to produce architecture-aware documentation.
 
 ```
 Group components into features by:
-  directory proximity, naming patterns, import relationships, task-specs/ mapping.
+  directory proximity, naming patterns, import relationships, .spec/ mapping.
 
 For each feature group: derive name, collect component IDs, map requirements and phase.
 Build feature entry:
@@ -80,7 +80,7 @@ Build feature entry:
     "id": "FT-{NNN}",
     "name": "{Feature Name}",
     "status": "active",
-    "requirement_ids": [],        // From task-specs mapping
+    "requirement_ids": [],        // From .spec mapping
     "component_ids": ["TC-001", "TC-002"],
     "phase": null                 // From roadmap mapping
   }
@@ -88,10 +88,10 @@ Build feature entry:
 Back-fill component.feature_ids with assigned feature IDs.
 ```
 
-### Step 4: Map Requirements (if task-specs exist)
+### Step 4: Map Requirements (if .spec exist)
 
 ```
-If .workflow/task-specs/ exist: parse each SPEC-*/requirements/REQ-*.md,
+If .workflow/.spec/ exist: parse each SPEC-*/requirements/REQ-*.md,
 match to features by keyword analysis. Build requirement entry:
   {
     "id": "REQ-{NNN}",
@@ -102,13 +102,13 @@ match to features by keyword analysis. Build requirement entry:
     "acceptance_criteria": ["{criteria}"]
   }
 
-If no task-specs: requirements = [] (populated later by spec-generate).
+If no .spec: requirements = [] (populated later by spec-generate).
 ```
 
 ### Step 5: Record Architecture Decisions (if ADRs exist)
 
 ```
-If .workflow/task-specs/*/architecture/ADR-*.md exist: parse each ADR,
+If .workflow/.spec/*/architecture/ADR-*.md exist: parse each ADR,
 map to components by keyword analysis. Build ADR entry:
   {
     "id": "ADR-{NNN}",

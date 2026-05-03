@@ -54,7 +54,7 @@ Phase 4: Output Generation
    - Read schema file and memorize requirements BEFORE any analysis begins
 
 3. **Project Context Loading** (from spec system):
-   - Load exploration specs: `maestro spec load --category exploration`
+   - Load exploration specs: `maestro spec load --category arch`
    - Extract: tech_stack, architecture, key_components, overview
    - If no specs returned, proceed with fresh analysis
 

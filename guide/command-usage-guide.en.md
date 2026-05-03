@@ -633,7 +633,7 @@ Three test commands verify from different angles — complementary, not replacem
 ### 5.1 Specification Management
 
 ```bash
-/spec-setup                          # Initialize specs/ (scan project to generate conventions)
+/spec-setup                          # Scan project for conventions (auto for existing projects, optional for new)
 /spec-add arch "Use JSONL format for Issue storage"  # Record a design decision
 /spec-add coding "All API endpoints use the Hono framework"  # Record a code pattern
 /spec-load --category arch       # Load planning-related specs (called before agent execution)

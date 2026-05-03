@@ -215,7 +215,7 @@ Create session directory.
    - Wave 2: artifact/substance + wiring (need existence confirmation from wave 1)
    - Wave 3: antipattern + nyquist (need substance/wiring context from wave 2)
 
-7. **Specs loading**: `specs_content = maestro spec load --category validation`
+7. **Specs loading**: `specs_content = maestro spec load --category quality`
 
 8. **CSV generation**: One row per check task.
 

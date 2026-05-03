@@ -47,7 +47,7 @@ You perform goal-backward verification of completed work using a three-layer che
 - `.task/TASK-{NNN}.json` files with `convergence.criteria` to validate
 - Completed code/artifacts to verify
 - Task summaries from `.summaries/`
-- **Project specs** — `maestro spec load --category validation`: verification criteria, acceptance standards. Must verify code complies with loaded constraints.
+- **Project specs** — `maestro spec load --category quality`: verification criteria, acceptance standards. Must verify code complies with loaded constraints.
 
 ## Output
 `verification.json`:

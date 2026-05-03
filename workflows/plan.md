@@ -70,7 +70,7 @@ default             → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
    - Read `${CONTEXT_DIR}/context.md` if exists, else warn (no upstream analyze)
 
 2. **Load spec reference** (if `--spec` flag or index.json has spec_ref)
-   - Read from `.workflow/task-specs/${spec_ref}/`: spec-summary.md, requirements/_index.md, epics/_index.md
+   - Read from `.workflow/.spec/${spec_ref}/`: spec-summary.md, requirements/_index.md, epics/_index.md
 
 3. **Load project specs**
    ```

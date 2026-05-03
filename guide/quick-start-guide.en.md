@@ -195,7 +195,8 @@ Project-level knowledge auto-injection — no manual context pasting when Agents
 
 ```bash
 # Initialize (scan codebase to generate spec files)
-/spec-setup
+/spec-setup                                    # Existing projects: scan codebase to populate specs
+# New projects can skip -- specs are progressively populated by analyze/plan/execute
 
 # Add specs
 /spec-add coding "All APIs use Hono framework"

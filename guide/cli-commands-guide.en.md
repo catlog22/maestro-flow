@@ -287,6 +287,7 @@ maestro spec init                              # Initialize
 maestro spec load --category coding --keyword auth  # Load
 maestro spec list                              # List files
 maestro spec status                            # Status
+maestro spec add <category> "<title>" "<content>"    # Add entry
 ```
 
 ---

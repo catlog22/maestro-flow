@@ -180,6 +180,24 @@ export const guideRegistry: Array<{
     description_zh: '为 51 个命令设置默认参数 — TUI 编辑器、Hook 自动注入、双层级作用域',
     icon: 'sliders',
   },
+  {
+    slug: 'maestro-coordinator',
+    file: 'maestro-coordinator-guide.md',
+    title: 'Maestro Coordinator Guide',
+    description: 'Static chain selector — intent analysis, chain routing, unified executor dispatch',
+    title_zh: 'Maestro 智能协调器指南',
+    description_zh: '静态 chain 选择器 — 意图分析、链路由、统一执行器派发',
+    icon: 'compass',
+  },
+  {
+    slug: 'maestro-ralph',
+    file: 'maestro-ralph-guide.md',
+    title: 'Maestro Ralph Lifecycle Engine',
+    description: 'Adaptive lifecycle engine — closed-loop cycling with decision nodes, auto debug-fix retry',
+    title_zh: 'Maestro Ralph 生命周期引擎指南',
+    description_zh: '自适应生命周期引擎 — decision 节点闭环循环、自动 debug-fix 重试',
+    icon: 'refresh-cw',
+  },
 ];
 
 // Use import.meta.glob to load all markdown files

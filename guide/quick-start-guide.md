@@ -195,7 +195,8 @@ maestro delegate "..." --rule development-implement-feature --mode write
 
 ```bash
 # 初始化（扫描代码库生成规范文件）
-/spec-setup
+/spec-setup                                    # 已有项目：扫描代码库填充 specs
+# 新项目可跳过 -- specs 由 analyze/plan/execute 渐进填充
 
 # 录入规范
 /spec-add coding "所有 API 使用 Hono 框架"

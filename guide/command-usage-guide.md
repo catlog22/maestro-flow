@@ -637,7 +637,7 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 ### 5.1 规范管理
 
 ```bash
-/spec-setup                          # 初始化 specs/（扫描项目生成约定）
+/spec-setup                          # 扫描项目生成约定（已有项目自动触发，新项目可选）
 /spec-add arch "使用 JSONL 格式存储 Issue"  # 录入设计决策
 /spec-add coding "所有 API 端点使用 Hono 框架"  # 录入代码模式
 /spec-load --category arch       # 加载规划相关规范（agent 执行前调用）
