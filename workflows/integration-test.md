@@ -108,7 +108,7 @@ Write test plan to `.tests/integration/test-plan.json`:
 **Phase 3: Develop/write test code.**
 
 For each layer (current and below), write tests following existing patterns.
-Use quality-test-gen's RED-GREEN methodology for test writing.
+Use auto-test's RED-GREEN methodology for test writing.
 
 For integration tests (L2) specifically:
 - Set up test fixtures (DB seeds, mock services)

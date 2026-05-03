@@ -61,7 +61,7 @@ If user confirms, invoke `Skill({ skill: "spec-add", args: "<category> <content>
 **Next-step routing on completion:**
 - All checks pass, no gaps → /quality-review
 - Gaps found (must-have failures or anti-pattern blockers) → /maestro-plan --gaps
-- Low test coverage (Nyquist gaps) → /quality-test-gen
+- Low test coverage (Nyquist gaps) → /quality-auto-test
 
 **Gap-fix closure loop:**
 Gaps found → maestro-plan --gaps → maestro-execute → maestro-verify (re-run)

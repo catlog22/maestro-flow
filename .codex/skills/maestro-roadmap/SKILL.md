@@ -70,9 +70,17 @@ $maestro-roadmap --from-brainstorm WFS-001 "Enhance auth system"
 **Flags**:
 - `--mode light|full`: Execution mode (default: light)
 - `-y, --yes`: Skip all confirmations (auto mode)
+- `-m progressive|direct|auto`: Decomposition strategy (default: auto, light mode only)
 - `--phases N`: Target number of roadmap phases (default: auto-determined, light mode only)
+- `--revise [instructions]`: Revise existing roadmap preserving completed phase progress (light mode only)
+- `--review`: Roadmap health assessment, read-only (light mode only)
 - `--skip-research`: Skip Wave 1 research, jump to document generation (full mode only)
 - `--from-brainstorm SESSION-ID`: Import guidance-specification.md from brainstorm session as seed
+
+**Operation modes** (light mode):
+- **Create** (default): Build roadmap from requirements via full CSV pipeline
+- **Revise** (`--revise`): Load existing roadmap.md, apply modifications while preserving completed phases
+- **Review** (`--review`): Health assessment of current roadmap (read-only, no writes)
 
 When `--yes` or `-y`: Auto-confirm strategy/decisions, skip interactive refinement, use defaults.
 
@@ -185,11 +193,21 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 Parse `$ARGUMENTS` to extract:
 - `mode` from `--mode light|full` (default: `light`)
 - `AUTO_YES` from `--yes` / `-y`
+- `strategy` from `-m progressive|direct|auto` (default: `auto`, light only)
 - `targetPhases` from `--phases N` (light mode only)
+- `reviseMode` from `--revise [instructions]` (light only, forces mode=light)
+- `reviewMode` from `--review` (light only, forces mode=light)
 - `skipResearch` from `--skip-research` (full mode only)
 - `brainstormSession` from `--from-brainstorm <SESSION-ID>`
 - `requirementArg` = remaining text after stripping all flags
 - `slug` = requirementArg lowercased, non-alphanumeric → `-`, max 40 chars
+
+**Mode routing:**
+- If `--revise` or `--review`: force `mode = light`, bypass CSV pipeline
+  - **Revise**: Load `.workflow/roadmap.md`, apply instructions (preserve completed phases), write updated roadmap
+  - **Review**: Read `.workflow/roadmap.md` + `state.json`, assess health (phase completion, dependency validity, scope creep), report read-only
+  - Both skip Phase 1-3 CSV pipeline, go directly to operation-specific logic
+- Otherwise: proceed with CSV pipeline
 
 Session ID: `{YYYYMMDD}-roadmap-{slug}` (light) or `{YYYYMMDD}-roadmap-full-{slug}` (full)
 Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
@@ -352,12 +370,17 @@ Phases:   {phase_count} across {milestone_count} milestones
 Roadmap:  .workflow/roadmap.md
 [Full]    Spec:  .workflow/.spec/SPEC-{slug}-{date}/
 [Full]    Quality: {score}% ({gate})
-
-Next steps:
-  maestro-init                    -- Set up project (if not yet initialized)
-  maestro-plan "1"                -- Plan first phase
-  manage-status                   -- View project dashboard
 ```
+
+**Next-step routing:**
+
+| Condition | Next Step |
+|-----------|-----------|
+| Roadmap approved, need analysis | `$maestro-analyze "1"` |
+| Simple project, ready to plan | `$maestro-plan "1"` |
+| Need UI design first | `$maestro-ui-design "1"` |
+| View project dashboard | `$manage-status` |
+| Need project setup (full mode) | `$maestro-init` |
 
 ### Shared Discovery Board Protocol
 
@@ -407,6 +430,9 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"domain_term","data":{"term":"workflo
 | No requirement/idea text provided | Abort with error: "Requirement text or @file required" |
 | Brainstorm session not found | Abort with error: "Session {id} not found" -- list available sessions |
 | @file not found | Abort with error: "File {path} not found" |
+| roadmap.md not found (--revise/--review) | Run maestro-roadmap first to create |
+| Revision invalidates completed phase | Warn user, ask to confirm or adjust |
+| .workflow/ not initialized (full mode) | Run maestro-init first |
 | Wave 1 agent timeout | Mark as failed, Wave 2 uses available findings |
 | All Wave 1 agents failed | Wave 2 runs in degraded mode (seed input only) |
 | Wave 2 agent failed (light) | Abort with error: "Roadmap generation failed" |

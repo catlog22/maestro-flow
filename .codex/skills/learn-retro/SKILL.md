@@ -60,7 +60,7 @@ Write `retro-{date}.md` + `retro-{date}.json` with metrics, sessions, hotspots, 
 ### Phase 5: Persist
 Append insights to `lessons.jsonl` (source: "retro-git" or "retro-decision"). Display summary.
 
-**Next steps:** `/learn-follow <path>`, `/quality-test-gen <area>`, `/learn-investigate <question>`
+**Next steps:** `/learn-follow <path>`, `/quality-auto-test <area>`, `/learn-investigate <question>`
 </execution>
 
 <error_codes>

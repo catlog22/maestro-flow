@@ -2,7 +2,7 @@
 name: quality-sync
 description: Sync codebase docs after code changes -- traces git diff through component/feature/requirement layers
 argument-hint: "[--full] [--since <commit|HEAD~N>] [--dry-run]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
 <purpose>
@@ -70,7 +70,24 @@ Update `state.json`:
 
 Update affected `index.json` files in phase directories if task files were modified.
 
-Display summary: files changed, components affected, features affected, docs updated.
+### Step 6: Tech Stack Refresh (Conditional)
+
+If dependency manifests changed (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `pom.xml`):
+- Re-read manifest files
+- Update `project.md` Tech Stack section with current dependencies/versions
+- Update `doc-index.json` tech-registry entries
+
+### Step 7: Report & Routing
+
+Display summary: files changed, components affected, features affected, docs updated, tech stack refreshed (if applicable).
+
+**Next-step routing:**
+
+| Result | Next Step |
+|--------|-----------|
+| Docs refreshed successfully | `$manage-status` |
+| Major structural changes detected (new modules, removed dirs) | `$manage-codebase-rebuild` (full rebuild recommended) |
+| Dependency manifests changed significantly | Review `project.md` Tech Stack for accuracy |
 
 </execution>
 
@@ -85,8 +102,10 @@ Display summary: files changed, components affected, features affected, docs upd
 
 <success_criteria>
 - [ ] Changed files detected (or full resync triggered)
-- [ ] Impact chain traced through all layers
+- [ ] Impact chain traced through all layers (file → component → feature → requirement)
 - [ ] Documentation entries updated in `.workflow/codebase/`
+- [ ] `doc-index.json` reflects current file state with updated hashes
 - [ ] `state.json` updated with sync timestamp and commit hash
-- [ ] Summary report displayed
+- [ ] If dependency manifests changed: project.md Tech Stack section refreshed
+- [ ] Summary report with next-step routing displayed
 </success_criteria>

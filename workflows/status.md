@@ -121,10 +121,10 @@ Based on current project state, suggest the next command:
 | Phase verified, not reviewed | /quality-review \<N\> |
 | Phase reviewed, BLOCK verdict | /maestro-plan \<N\> --gaps |
 | Phase reviewed, PASS/WARN | /quality-test \<N\> |
-| Low test coverage | /quality-test-gen \<N\> |
+| Low test coverage | /quality-auto-test \<N\> |
 | UAT passed, all phases done | /maestro-milestone-audit |
 | UAT has failures | /quality-debug --from-uat \<N\> |
-| Need integration tests | /quality-integration-test \<N\> |
+| Need integration tests | /quality-auto-test \<N\> |
 | All milestone phases complete | /maestro-milestone-audit |
 | Milestone audit passed | /maestro-milestone-complete |
 | Ad-hoc small task | /maestro-quick \<task\> |

@@ -151,7 +151,7 @@ auto_flag_map = {
   "maestro-roadmap": "-y",
   "maestro-plan": "-y",
   "maestro-execute": "-y",
-  "quality-business-test": "-y",
+  "quality-auto-test": "-y",
   "quality-test": "-y --auto-fix",
   "quality-retrospective": "-y",
   "maestro-milestone-complete": "-y"
@@ -193,7 +193,7 @@ report_agent_job_result({
 | maestro-verify | verification.json path |
 | quality-review | review.json path |
 | quality-test | uat.md path |
-| quality-business-test | business test output path |
+| quality-auto-test | auto-test report path |
 | Others | empty or relevant output path |
 
 </execution>

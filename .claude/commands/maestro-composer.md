@@ -97,7 +97,7 @@ Example: 'analyze the code, then plan, implement, and test the feature'"
 
 **Step 1.3** — Extract variables (inputs that vary per run). Detect from: direct mentions, `{var}` patterns, implicit from task type.
 
-**Step 1.4** — Classify task type: `bugfix | feature | tdd | review | brainstorm | spec-driven | roadmap | refactor | integration-test | quick-task | custom`
+**Step 1.4** — Classify task type: `bugfix | feature | tdd | review | brainstorm | spec-driven | roadmap | refactor | auto-test | quick-task | custom`
 
 **Step 1.5** — Assess complexity: `simple` (1-3 nodes), `medium` (4-7), `complex` (8+)
 
@@ -212,7 +212,7 @@ options:
 | Agent spawn | Target type is `agent` |
 | Long-running | Target is maestro-plan, maestro-roadmap --mode full |
 | User-defined | Step had `type_hint: checkpoint` |
-| Post-testing | Source executor contains `test` or `integration-test` |
+| Post-testing | Source executor contains `test` or `auto-test` |
 
 Set `auto_continue: false` for checkpoints before user-facing deliverables.
 

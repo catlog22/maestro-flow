@@ -191,7 +191,7 @@ auto_flag_map = {
   "maestro-ui-design": "-y",
   "maestro-plan": "-y",
   "maestro-execute": "-y",
-  "quality-business-test": "-y",
+  "quality-auto-test": "-y",
   "quality-test": "-y --auto-fix",
   "quality-retrospective": "-y",
   "maestro-milestone-complete": "-y"

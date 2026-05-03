@@ -52,6 +52,7 @@ Wave-based hypothesis-driven debugging using `spawn_agents_on_csv`. Wave 1 explo
 $quality-debug "Login button throws 500 error on click"
 $quality-debug -y "JWT token not refreshed --from-uat 3"
 $quality-debug -c 4 "Navigation crash --from-uat 3 --parallel"
+$quality-debug -y "--from-auto-test 3"
 $quality-debug --continue "20260318-debug-P3-jwt-expiry"
 ```
 
@@ -59,6 +60,9 @@ $quality-debug --continue "20260318-debug-P3-jwt-expiry"
 - `-y, --yes`: Skip all confirmations (auto mode)
 - `-c, --concurrency N`: Max concurrent agents within each wave (default: 5)
 - `--continue`: Resume existing session
+- `--from-uat <phase>`: Load gaps from UAT uat.md as pre-filled symptoms
+- `--from-auto-test <phase>`: Load code_defect failures from auto-test report.json as pre-filled symptoms
+- `--parallel`: One agent per gap cluster (implies from-uat or from-auto-test)
 
 When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive symptom gathering (require bug description in args), use defaults for mode detection.
 
@@ -145,13 +149,16 @@ Parse from $ARGUMENTS:
   continueMode   ← --continue
   maxConcurrency ← --concurrency | -c N  (default: 5)
   fromUat        ← --from-uat <phase>  (default: null)
+  fromAutoTest   ← --from-auto-test <phase>  (default: null)
   parallelMode   ← --parallel
   bugDescription ← remaining text after flag removal
 
 Derive:
+  phaseRef       ← fromUat || fromAutoTest || null
+  sourceType     ← fromAutoTest ? "auto-test" : fromUat ? "uat" : "standalone"
   slug           ← bugDescription kebab-cased, max 40 chars
   dateStr        ← UTC+8 YYYYMMDD
-  sessionId      ← fromUat ? "{dateStr}-debug-P{fromUat}-{slug}" : "{dateStr}-debug-{slug}"
+  sessionId      ← phaseRef ? "{dateStr}-debug-P{phaseRef}-{slug}" : "{dateStr}-debug-{slug}"
   sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
 
 mkdir -p {sessionFolder}
@@ -168,10 +175,11 @@ mkdir -p {sessionFolder}
 | Condition | Mode |
 |-----------|------|
 | `--from-uat` flag present | from-uat (load gaps from uat.md) |
-| `--parallel` flag present | parallel (implies from-uat, one agent per gap cluster) |
+| `--from-auto-test` flag present | from-auto-test (load code_defects from report.json) |
+| `--parallel` flag present | parallel (implies from-uat or from-auto-test, one agent per gap cluster) |
 | Neither flag | standalone (gather symptoms interactively) |
 
-2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase+milestone. Extract relevant outputs by type: execute -> .summaries/.task/, review -> review.json (guide hypotheses), debug -> understanding.md (avoid re-investigation), test -> uat.md.
+2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase+milestone. Extract relevant outputs by type: execute -> .summaries/.task/, review -> review.json (guide hypotheses), debug -> understanding.md (avoid re-investigation), test -> uat.md + .tests/auto-test/report.json.
 
 3. **Symptom collection**:
 
@@ -179,7 +187,10 @@ mkdir -p {sessionFolder}
 |------|--------|--------|
 | standalone | User input | Ask 5 questions: expected, actual, errors, timeline, reproduction |
 | from-uat | test artifact's uat.md (via registry) | Parse Gaps section, cluster by component |
-| parallel | test artifact's uat.md (via registry) | Same as from-uat, one investigation per cluster |
+| from-auto-test | test artifact's `.tests/auto-test/report.json` (via registry) | Parse `failures[]` where `classification == "code_defect"`, cluster by target module |
+| parallel | test artifact's uat.md or report.json (via registry) | Same as from-uat/from-auto-test, one investigation per cluster |
+
+**from-auto-test specifics**: Each `code_defect` failure provides: `scenario_id`, `req_ref`, `description`, `expected`, `actual`, `fix_suggestion.file`, `fix_suggestion.line`, `fix_suggestion.direction`. Map these to symptoms: expected=failure.expected, actual=failure.actual, location=fix_suggestion.file:line, context=fix_suggestion.direction.
 
 3. **Hypothesis generation**: Per symptom cluster, analyze affected code and generate 3-5 ranked hypotheses (each becomes a wave 1 row).
 
@@ -298,9 +309,10 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"root_cause","data":{"location":"src/
 
 | Error | Resolution |
 |-------|------------|
-| No bug description and no --from-uat | Abort with error: "Issue description required" |
+| No bug description and no --from-uat/--from-auto-test | Abort with error: "Issue description required" |
 | UAT file not found for --from-uat phase | Abort with error: "uat.md not found for phase {N}" |
-| No gaps in UAT file | Abort with error: "No failed gaps found in uat.md" |
+| Auto-test report not found for --from-auto-test phase | Abort with error: "report.json not found for phase {N}" |
+| No gaps in UAT file / no code_defects in report | Abort with error: "No failed gaps/defects found" |
 | Hypothesis agent timeout | Mark as inconclusive, continue with remaining |
 | All hypotheses refuted | Skip wave 2, suggest manual investigation |
 | Fix agent timeout | Mark as fix_failed, report partial results |

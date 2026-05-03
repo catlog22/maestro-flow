@@ -259,7 +259,7 @@ Write `.workflow/learning/retro-{date}.json` with structured data.
 **Next-step routing:**
 - Browse insights → `/manage-learn list --tag retro`
 - Deep dive on high-churn file → `/learn-follow <path>`
-- Fix test gaps → `/quality-test-gen <area>`
+- Fix test gaps → `/quality-auto-test <area>`
 - Create issue for questionable decision → `/manage-issue create ...`
 - Investigate stale decision → `/learn-investigate <question>`
 - Full phase retrospective → `/quality-retrospective`

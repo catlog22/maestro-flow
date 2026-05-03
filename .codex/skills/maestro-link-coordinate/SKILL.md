@@ -152,7 +152,7 @@ Set `state.status` to completed/failed based on `node.status`. Record final hist
 |-------|------|
 | `maestro-init`, `maestro-analyze`, `maestro-brainstorm`, `maestro-ui-design`, `maestro-roadmap` | `-y` |
 | `maestro-plan`, `maestro-execute`, `maestro-milestone-complete` | `-y` |
-| `quality-business-test`, `quality-retrospective` | `-y` |
+| `quality-auto-test`, `quality-retrospective` | `-y` |
 | `quality-test` | `-y --auto-fix` |
 
 **buildSkillCall(node, ctx, autoMode)**: Substitute `{phase}`, `{description}`, `{issue_id}`, `{milestone_num}` from context into `node.args`. If autoMode, append auto flag from `node.auto_flag` or AUTO_FLAG_MAP. Return `$${node.cmd} ${resolvedArgs}`.

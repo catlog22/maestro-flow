@@ -209,6 +209,40 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 
 **User validation**: Display exploration breakdown (skip if AUTO_YES or `--auto`).
 
+### Pre-flight: Team Conflict Check
+
+Before starting the plan pipeline:
+```
+Bash("maestro collab preflight --phase <phase-number>")
+```
+If exit code is 1, present warnings and ask whether to proceed.
+
+### Wiki Knowledge Search
+
+During context collection, after loading files and before exploration (Wave 1):
+```
+phase_keywords = extract key terms from goal/title (2-5 terms)
+wiki_result = Bash("maestro wiki search ${phase_keywords} --json 2>/dev/null")
+
+IF wiki_result exit code != 0 OR empty:
+  W003: Wiki search unavailable, continue without prior knowledge
+ELSE:
+  entries = JSON.parse(wiki_result).entries (limit to first 10)
+  Pass wiki_context to Wave 2 planning agent
+```
+
+### Mode Routing
+
+| Mode | Trigger | Behavior |
+|------|---------|----------|
+| Create | Default (no --revise/--check) | Full pipeline: Phase 1 → Wave 1 → Wave 2 → Phase 3 |
+| Revise | `--revise [instructions]` | Load existing plan, apply incremental edits, re-check |
+| Check | `--check <plan-dir>` | Skip exploration/planning, run plan-checker only on existing plan |
+
+**Revise mode**: Load plan.json from target dir, apply user instructions (add/remove/edit tasks, adjust waves), re-run plan-checker, update index.json.
+
+**Check mode**: Read plan.json + .task/TASK-*.json from `--check` path, validate quality, report issues. No exploration, no generation.
+
 ### Phase 2: Wave Execution Engine
 
 **Objective**: Explore codebase then generate plan via spawn_agents_on_csv.
@@ -321,14 +355,38 @@ spawn_agents_on_csv({
    - Export `results.csv` from master `tasks.csv`
    - Generate `context.md`: summary (phase, task count, wave count, complexity, exploration count), exploration findings per angle, plan overview (approach, task IDs, waves), next steps
 
-4. **Update index.json**: set `status: "planning"`, `plan: { task_ids, task_count, complexity, waves }`, `updated_at`
+4. **Collision detection**: Scan same-milestone plans for overlapping file targets:
+   ```
+   other_plans = state.json.artifacts.filter(a => a.milestone == current && a.type == "plan" && a.id != this)
+   For each other_plan: read .task/TASK-*.json, collect files[].path
+   collisions = intersection(this_plan_files, other_plan_files)
+   If collisions.length > 0: emit W004, display collision table (non-blocking)
+   ```
 
-5. **Issue linking** (if --gaps):
+5. **Update index.json**: set `status: "planning"`, `plan: { task_ids, task_count, complexity, waves }`, `updated_at`
+
+6. **Register PLN artifact** in state.json:
+   ```json
+   { "id": "PLN-NNN", "type": "plan", "milestone": "current", "phase": "target_phase",
+     "scope": "phase", "path": "scratch/{YYYYMMDD}-plan-P{N}-{slug}",
+     "status": "completed", "depends_on": "anl_art.id || exec_art.id" }
+   ```
+
+7. **Issue linking** (if --gaps):
    For each TASK with `issue_id`: update issue in `issues.jsonl` (`task_refs` += TASK-NNN, `task_plan_dir`, `status: "planned"`, `updated_at`) + append history entry. Ensures bidirectional issue-TASK traceability.
 
-6. **Display summary + options** (skip options if AUTO_YES):
-   Show phase name, task/wave counts, checker status, output file paths.
-   Next steps: `maestro-execute "{phase}"` (execute) or `maestro-plan "{phase}"` (re-plan).
+8. **Display summary + options** (skip options if AUTO_YES):
+   ```
+   === PLAN READY ===
+   Phase: {phase_name}
+   Tasks: {task_count} tasks in {wave_count} waves
+   Check: {checker_status} (iteration {check_count}/{max_checks})
+   Collision: {collision_status}
+
+   Next steps:
+     $maestro-execute "{phase}"     -- Execute the plan
+     $maestro-plan "{phase}"        -- Re-plan with modifications
+   ```
 
 ### Shared Discovery Board Protocol
 
@@ -371,7 +429,11 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"existing_pattern","data":{"name":"Re
 | Phase argument required | Abort with error: "Phase argument required" |
 | Phase directory not found | Abort with error: "Phase {N} not found. Run init first." |
 | --gaps requires gaps source | Abort with error: "--gaps requires issues.jsonl, verification.json, or uat.md" |
+| No plan found to revise (--revise) | Use --dir to specify plan, or create plan first |
+| Plan directory not found (--check) | Check path, use --dir |
 | No context.md found | Warn, proceed with exploration only |
+| Wiki search unavailable (W003) | Continue without prior knowledge context |
+| Collision detected (W004) | Review colliding files, confirm or adjust scope |
 | Exploration agent timeout | Mark as failed, continue with available explorations |
 | Planning agent fails | Retry once with simplified context, then abort |
 | Plan produces invalid JSON | Retry once, then abort with error details |
@@ -387,8 +449,12 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"existing_pattern","data":{"name":"Re
 - [ ] plan.json produced in phase directory
 - [ ] .task/TASK-*.json files produced for all tasks
 - [ ] Plan passes quality checks (coverage, deps, criteria)
+- [ ] Collision detection executed against same-milestone plans
+- [ ] PLN artifact registered in state.json
 - [ ] context.md produced with exploration findings + plan overview
 - [ ] index.json updated with plan metadata
-- [ ] Issues linked (if --gaps mode)
+- [ ] Issues linked bidirectionally (if --gaps mode)
+- [ ] Wiki knowledge integrated (if available)
+- [ ] Team conflict preflight checked
 - [ ] discoveries.ndjson append-only throughout
 </success_criteria>

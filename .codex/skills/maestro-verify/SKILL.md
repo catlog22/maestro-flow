@@ -398,7 +398,7 @@ On user confirm, append `<spec-entry>` to matching category file.
 | All passed, no gaps | `$quality-review "{phase}"` for code review |
 | Critical gaps found | `$quality-debug` for investigation |
 | Minor gaps only | `$maestro-plan "{phase} --gaps"` -> `$maestro-execute` -> re-run `$maestro-verify` |
-| Low test coverage | `$quality-test-gen "{phase}"` to generate missing tests |
+| Low test coverage | `$quality-auto-test "{phase}"` to generate missing tests |
 | Human verification needed | `$quality-test "{phase}"` for interactive UAT |
 
 ### Shared Discovery Board Protocol

@@ -54,7 +54,15 @@ Spawn Agent for cross-phase validation: shared interfaces, dependency chains, da
 **PASS**: All phases have completed EXC artifacts, no critical integration gaps, all adhoc completed.
 **FAIL**: Missing EXC artifacts or critical integration gaps found.
 
-Display structured audit report with next-step routing.
+Display structured audit report.
+
+**Next-step routing:**
+
+| Verdict | Next Step |
+|---------|-----------|
+| PASS | `$maestro-milestone-complete "{milestone}"` |
+| FAIL, integration gaps | `$maestro-plan "--gaps"` |
+| FAIL, incomplete execution | `$maestro-execute` |
 
 </execution>
 

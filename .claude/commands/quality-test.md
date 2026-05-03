@@ -70,8 +70,8 @@ Append to state.json.artifacts[]:
 - Issues found, --auto-fix ran and succeeded → `/maestro-verify {phase}`
 - Issues found, --auto-fix ran but gaps remain → `/quality-debug --from-uat {phase}`
 - Issues found, manual fix needed → `/quality-debug --from-uat {phase}`
-- Coverage below threshold → `/quality-test-gen {phase}`
-- Need integration tests → `/quality-integration-test {phase}`
+- Coverage below threshold → `/quality-auto-test {phase}`
+- Need integration tests → `/quality-auto-test {phase}`
 </execution>
 
 <error_codes>
@@ -81,7 +81,7 @@ Append to state.json.artifacts[]:
 | E002 | error | Phase not verified yet (no verification.json) | Suggest `/maestro-verify` first |
 | E003 | error | Smoke test failed (app won't start) | Suggest `/quality-debug` |
 | W001 | warning | One or more test scenarios failed | Auto-diagnose, suggest fix options |
-| W002 | warning | Coverage below threshold | Suggest `/quality-test-gen` |
+| W002 | warning | Coverage below threshold | Suggest `/quality-auto-test` |
 </error_codes>
 
 <success_criteria>

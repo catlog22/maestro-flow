@@ -464,7 +464,7 @@ Next steps:
 | All passed, no gaps | Skill({ skill: "quality-review", args: "{phase}" }) for code review, then Skill({ skill: "quality-test" }) for UAT |
 | Critical gaps found | Skill({ skill: "quality-debug" }) for investigation |
 | Minor gaps only | Skill({ skill: "maestro-plan", args: "--gaps" }) -> Skill({ skill: "maestro-execute" }) -> re-run Skill({ skill: "maestro-verify" }) |
-| Low test coverage | Skill({ skill: "quality-test-gen", args: "{phase}" }) to generate missing tests |
+| Low test coverage | Skill({ skill: "quality-auto-test", args: "{phase}" }) to generate missing tests |
 | Human verification needed | Skill({ skill: "quality-test", args: "{phase}" }) for interactive UAT |
 
 **Gap-fix loop**: `verify -> plan --gaps -> execute -> verify` repeats until all gaps are closed or user accepts remaining gaps.

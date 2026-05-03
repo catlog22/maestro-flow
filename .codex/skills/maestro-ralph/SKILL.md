@@ -57,10 +57,9 @@ ralph -y → session.auto_mode = true
 | maestro-plan | `-y` | 跳过确认和澄清 |
 | maestro-execute | `-y` | 跳过确认，blocked 自动继续 |
 | maestro-verify | *(none)* | 无交互，正常执行 |
-| quality-business-test | `-y` | 跳过计划确认 |
+| quality-auto-test | `-y` | 跳过计划确认 |
 | quality-review | *(none)* | 无交互确认，自动检测级别 |
 | quality-test | `-y --auto-fix` | 自动触发 gap-fix loop |
-| quality-test-gen | *(none)* | 无交互，正常生成 |
 | quality-debug | *(none)* | 无交互确认，正常诊断 |
 | maestro-milestone-audit | *(none)* | 无交互，正常执行 |
 | maestro-milestone-complete | `-y` | 跳过 knowledge promotion 交互 |
@@ -192,10 +191,10 @@ analyze            maestro-analyze {phase}        yes      —                  
 plan               maestro-plan {phase}           yes      —                       always
 execute            maestro-execute {phase}        yes      —                       always
 verify             maestro-verify {phase}         no       decision:post-verify    always
-business-test      quality-business-test {phase}  no       decision:post-biz-test  full only ①
+business-test      quality-auto-test {phase}      no       decision:post-biz-test  full only ①
 review             quality-review {phase}         no       decision:post-review    full/standard ②
   └─ CLI alt       delegate --role review         —        decision:post-review    quick ②
-test-gen           quality-test-gen {phase}       no       —                       full; standard 按条件 ③
+test-gen           quality-auto-test {phase}      no       —                       full; standard 按条件 ③
 test               quality-test {phase}           no       decision:post-test      full/standard ④
 milestone-audit    maestro-milestone-audit        no       —                       always
 milestone-complete maestro-milestone-complete     no       decision:post-milestone always
@@ -243,7 +242,7 @@ Generate `steps[]` from current position to target. Decision nodes use:
 ```
 Conditional steps use:
 ```json
-{ "type": "skill", "skill": "quality-test-gen {phase}", "condition": "check_coverage", "threshold": 80 }
+{ "type": "skill", "skill": "quality-auto-test {phase}", "condition": "check_coverage", "threshold": 80 }
 ```
 
 ### 1d: Create session
@@ -302,8 +301,8 @@ Write `.workflow/.maestro/ralph-{YYYYMMDD-HHmmss}/status.json`:
   [ ] 5. ◆ post-review                     [decision] ← STOP
   ...
   ── skipped (standard mode) ──────────────────────────────
-  [~] _. quality-business-test {phase}     [skip: standard]
-  [?] _. quality-test-gen {phase}          [conditional: coverage < 80%]
+  [~] _. quality-auto-test {phase}          [skip: standard]
+  [?] _. quality-auto-test {phase}          [conditional: coverage < 80%]
 ============================================================
 ```
 
@@ -386,7 +385,7 @@ If failures found:
     → Insert: [quality-debug --from-business-test {phase},
                maestro-plan --gaps {phase}, maestro-execute {phase},
                maestro-verify {phase}, decision:post-verify(retry:0),
-               quality-business-test {phase}, decision:post-biz-test(retry+1)]
+               quality-auto-test {phase}, decision:post-biz-test(retry+1)]
 
 If all pass:
   → Add "business-test" to passed_gates
@@ -608,7 +607,7 @@ Write status.json
   [✓] 1. maestro-execute 1         [W2]
   [✓] 2. maestro-verify 1          [W3]
   [✓] 3. ◆ post-verify             [decision: no gaps]
-  [~] 4. quality-business-test 1   [skipped: standard mode]
+  [~] 4. quality-auto-test 1       [skipped: standard mode]
   [✓] 5. quality-review 1          [W4]
   ...
 
@@ -626,7 +625,7 @@ All skill execution goes through `$maestro-ralph-execute` as the worker wrapper:
 ```csv
 id,skill_call,topic
 "3","$maestro-ralph-execute \"$maestro-verify 1\"","Ralph step 3/14: verify phase 1"
-"4","$maestro-ralph-execute \"$quality-business-test 1\"","Ralph step 4/14: business test phase 1"
+"4","$maestro-ralph-execute \"$quality-auto-test 1\"","Ralph step 4/14: auto test phase 1"
 ```
 
 - `skill_call` column: `$maestro-ralph-execute [-y] "<inner_skill_call>"`（`session.auto_mode` 时附加 `-y`）

@@ -35,7 +35,7 @@ Follow '~/.maestro/workflows/refactor.md' completely.
 **Next-step routing on completion:**
 - All tests pass → `/quality-sync` (update codebase docs)
 - Test failures after refactor → `/quality-debug {scope}`
-- No test suite available → `/quality-test-gen {phase}`
+- No test suite available → `/quality-auto-test {phase}`
 </execution>
 
 <error_codes>

@@ -72,10 +72,9 @@ When `-y` is active, maestro propagates auto flags to downstream commands. Only 
 | maestro-plan | `-y` | Skip confirmations and clarification |
 | maestro-execute | `-y` | Skip confirmations, blocked auto-continue |
 | maestro-verify | *(none)* | No interactive prompts |
-| quality-business-test | `-y` | Skip plan confirmation |
+| quality-auto-test | `-y` | Skip plan confirmation |
 | quality-review | *(none)* | No interactive prompts, auto-detects level |
 | quality-test | `-y --auto-fix` | Auto-trigger gap-fix loop on failures |
-| quality-test-gen | *(none)* | No interactive prompts |
 | quality-debug | *(none)* | No interactive prompts |
 | quality-retrospective | `-y` | Accept all routing recommendations without prompting |
 | maestro-milestone-audit | *(none)* | No interactive prompts |

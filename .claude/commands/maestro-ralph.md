@@ -211,9 +211,9 @@ analyze            maestro-analyze {phase}       cli     —
 plan               maestro-plan {phase}          skill   —
 execute            maestro-execute {phase}       cli     —
 verify             maestro-verify {phase}        skill   decision:post-verify
-business-test      quality-business-test {phase}  skill   decision:post-business-test
+business-test      quality-auto-test {phase}      skill   decision:post-business-test
 review             quality-review {phase}        skill   decision:post-review
-test-gen           quality-test-gen {phase}      skill   —
+test-gen           quality-auto-test {phase}     skill   —
 test               quality-test {phase}          skill   decision:post-test
 milestone-audit    maestro-milestone-audit       skill   —
 milestone-complete maestro-milestone-complete    skill   decision:post-milestone
@@ -247,11 +247,11 @@ milestone-complete maestro-milestone-complete    skill   decision:post-milestone
   { "index": 1, "type": "cli",  "skill": "maestro-execute", "args": "{phase}" },
   { "index": 2, "type": "skill", "skill": "maestro-verify", "args": "{phase}" },
   { "index": 3, "type": "decision", "skill": "maestro-ralph", "args": "{\"decision\":\"post-verify\",\"retry_count\":0,\"max_retries\":2}" },
-  { "index": 4, "type": "skill", "skill": "quality-business-test", "args": "{phase}" },
+  { "index": 4, "type": "skill", "skill": "quality-auto-test", "args": "{phase}" },
   { "index": 5, "type": "decision", "skill": "maestro-ralph", "args": "{\"decision\":\"post-business-test\",\"retry_count\":0,\"max_retries\":2}" },
   { "index": 6, "type": "skill", "skill": "quality-review", "args": "{phase}" },
   { "index": 7, "type": "decision", "skill": "maestro-ralph", "args": "{\"decision\":\"post-review\",\"retry_count\":0,\"max_retries\":2}" },
-  { "index": 8, "type": "skill", "skill": "quality-test-gen", "args": "{phase}" },
+  { "index": 8, "type": "skill", "skill": "quality-auto-test", "args": "{phase}" },
   { "index": 9, "type": "skill", "skill": "quality-test", "args": "{phase}" },
   { "index": 10, "type": "decision", "skill": "maestro-ralph", "args": "{\"decision\":\"post-test\",\"retry_count\":0,\"max_retries\":2}" },
   { "index": 11, "type": "skill", "skill": "maestro-milestone-audit", "args": "" },
@@ -313,11 +313,11 @@ Write status.json:
   [ ] 1. maestro-execute 1               [cli]
   [ ] 2. maestro-verify 1                [skill]
   [ ] 3. ◆ post-verify                   [decision]
-  [ ] 4. quality-business-test 1         [skill]
+  [ ] 4. quality-auto-test 1              [skill]
   [ ] 5. ◆ post-business-test            [decision]
   [ ] 6. quality-review 1                [skill]
   [ ] 7. ◆ post-review                   [decision]
-  [ ] 8. quality-test-gen 1              [skill]
+  [ ] 8. quality-auto-test 1              [skill]
   [ ] 9. quality-test 1                  [skill]
   [ ] 10. ◆ post-test                    [decision]
   [ ] 11. maestro-milestone-audit        [skill]
@@ -400,7 +400,7 @@ If failures found:
     → Insert: [quality-debug --from-business-test {phase},
                maestro-plan --gaps {phase}, maestro-execute {phase} [cli],
                maestro-verify {phase}, decision:post-verify {retry:0},
-               quality-business-test {phase}, decision:post-business-test {retry+1}]
+               quality-auto-test {phase}, decision:post-business-test {retry+1}]
 
 If all pass:
   → No insertion, proceed
@@ -435,9 +435,9 @@ If failures found (any test result != pass, or gaps with severity >= high):
     → Insert: [quality-debug --from-uat {phase},
                maestro-plan --gaps {phase}, maestro-execute {phase} [cli],
                maestro-verify {phase}, decision:post-verify {retry:0},
-               quality-business-test {phase}, decision:post-business-test {retry:0},
+               quality-auto-test {phase}, decision:post-business-test {retry:0},
                quality-review {phase}, decision:post-review {retry:0},
-               quality-test-gen {phase}, quality-test {phase},
+               quality-auto-test {phase}, quality-test {phase},
                decision:post-test {retry+1}]
 
 If all pass:
@@ -462,11 +462,11 @@ If next milestone found:
      maestro-execute {first_phase} [cli],
      maestro-verify {first_phase} [skill],
      decision:post-verify {retry:0},
-     quality-business-test {first_phase} [skill],
+     quality-auto-test {first_phase} [skill],
      decision:post-business-test {retry:0},
      quality-review {first_phase} [skill],
      decision:post-review {retry:0},
-     quality-test-gen {first_phase} [skill],
+     quality-auto-test {first_phase} [skill],
      quality-test {first_phase} [skill],
      decision:post-test {retry:0},
      maestro-milestone-audit [skill],

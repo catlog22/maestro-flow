@@ -121,7 +121,14 @@ Update `index.json`: status -> "completed", final execution/reflection counts.
 
 Display report: scope, tasks completed/blocked, reflection rounds, strategy adjustments, test status, key learnings from reflection-log.md, artifact paths (`{REFACTOR_DIR}/reflection-log.md`, `{REFACTOR_DIR}/.summaries/`).
 
-If regressions: suggest Skill({ skill: "quality-debug" }).
+**Next-step routing:**
+
+| Result | Next Step |
+|--------|-----------|
+| All tests pass, refactoring complete | `$quality-sync` (update codebase docs) |
+| Test failures remain after refactor | `$quality-debug "{scope}"` |
+| No test suite available for scope | `$quality-auto-test "{phase}"` |
+| Partial completion (some blocked) | `$quality-debug "{scope}"` for blocked tasks |
 </execution>
 
 <error_codes>
