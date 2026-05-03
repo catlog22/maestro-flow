@@ -1,6 +1,6 @@
 # Maestro Ralph 自适应生命周期引擎指南
 
-闭环决策引擎 — 读��项目状态，推断生命周期位置，构建自适应命令链，decision 节点动态扩展/收缩链。
+闭环决策引擎 — 读取项目状态，推断生命周期位置，构建自适应命令链，decision 节点动态扩展/收缩链。
 
 ---
 
@@ -30,7 +30,7 @@ Maestro Ralph 是 Maestro Flow 的**全自动推进引擎**。它的核心能力
 
 ```bash
 # 新会话 — 自动推断位置，构建链
-/maestro-ralph "实��用户认证系统"
+/maestro-ralph "实现用户认证系统"
 
 # 继续执行（decision 节点暂停后恢复）
 /maestro-ralph continue
@@ -84,7 +84,7 @@ brainstorm → init → roadmap → analyze → plan → execute
                                     下一个 M     全部完成
 ```
 
-每个 `◆` 是一个 decision 节点。非 `-y` ��式下会暂停等待用户 `continue`。
+每个 `◆` 是一个 decision 节点。非 `-y` 模式下会暂停等待用户 `continue`。
 
 ---
 
@@ -128,7 +128,7 @@ brainstorm → init → roadmap → analyze → plan → execute
 
 | 模式 | 质量步骤 | 触发条件 |
 |------|----------|----------|
-| `full` | verify → business-test → review ��� test-gen → test | 有 REQ-*.md 且 phase scope |
+| `full` | verify → business-test → review → test-gen → test | 有 REQ-*.md 且 phase scope |
 | `standard` | verify → review → test（test-gen 按覆盖率条件） | 默认 |
 | `quick` | verify → CLI-review（跳过 business-test、test-gen、test） | 用户指定 |
 
@@ -259,7 +259,7 @@ Ralph 从 state.json 的 artifact 链推断当前位置：
 
 ## 统一执行器
 
-Maestro 和 Ralph 共用 `maestro-ralph-execute` 作为统一执��器：
+Maestro 和 Ralph 共用 `maestro-ralph-execute` 作为统一执行器：
 
 - **session 发现**：扫描 `.workflow/.maestro/*/status.json`，找到最近的 running session
 - **skill 节点**：`Skill()` 同步调用，完成后自动执行下一步
@@ -276,7 +276,7 @@ Maestro session 中不存在 decision 节点，执行器只处理 skill 和 cli 
 
 ```
 retry 0: 首次评估 → 失败 → 插入 fix 循环
-retry 1: 第二次评估 → ��失败 → 再次 fix
+retry 1: 第二次评估 → 仍失败 → 再次 fix
 retry 2: 达到上限 → 升级到 post-debug-escalate → 暂停
 ```
 
