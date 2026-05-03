@@ -13,6 +13,7 @@ import { InstallExecution, type InstallFlowResult } from './InstallExecution.js'
 import { InstallResult } from './InstallResult.js';
 import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS } from '../install-backend.js';
 import { detectStatusline, type HookLevel } from '../hooks.js';
+import { getAllManifests } from '../../core/manifest.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,14 @@ export function InstallFlow({
   const [mode, setMode] = useState<'global' | 'project'>(initialMode ?? 'global');
   const [projectPath] = useState(process.cwd());
 
+  // Load most recent manifest for defaults
+  const lastManifest = useMemo(() => {
+    try {
+      const all = getAllManifests();
+      return all.length > 0 ? all[0] : null;
+    } catch { return null; }
+  }, []);
+
   // Which categories are enabled
   const [enabledSteps, setEnabledSteps] = useState<Record<string, boolean>>({
     components: initialStepIds ? initialStepIds.includes('components') : true,
@@ -64,11 +73,15 @@ export function InstallFlow({
     backup: initialStepIds ? initialStepIds.includes('backup') : true,
   });
 
-  // Fine-grained config
+  // Fine-grained config — default to last manifest selections if available
   const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>(
-    () => COMPONENT_DEFS.map((d) => d.id),
+    () => lastManifest?.selectedComponentIds?.length
+      ? lastManifest.selectedComponentIds
+      : COMPONENT_DEFS.map((d) => d.id),
   );
-  const [hookLevel, setHookLevel] = useState<HookLevel>('standard');
+  const [hookLevel, setHookLevel] = useState<HookLevel>(
+    () => (lastManifest?.hookLevel as HookLevel) || 'standard',
+  );
   const [mcpEnabled, setMcpEnabled] = useState(true);
   const [mcpTools, setMcpTools] = useState<string[]>([...MCP_TOOLS]);
   const [mcpProjectRoot, setMcpProjectRoot] = useState('');
@@ -275,6 +288,13 @@ export function InstallFlow({
                   : t.install.modeProjectDesc.replace('{path}', projectPath)}
               </Text>
             </Box>
+            {lastManifest && (
+              <Box marginTop={1}>
+                <Text color="yellow">
+                  Defaults loaded from last install ({lastManifest.installedAt.split('T')[0]})
+                </Text>
+              </Box>
+            )}
           </Box>
         )}
 

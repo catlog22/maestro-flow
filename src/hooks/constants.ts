@@ -41,17 +41,8 @@ function readStatuslineConfig(): StatuslineConfig {
 
 const _slConfig = readStatuslineConfig();
 
-/** Remaining context % at which WARNING is emitted */
-export const WARNING_THRESHOLD = 35;
-
-/** Remaining context % at which CRITICAL is emitted */
-export const CRITICAL_THRESHOLD = 25;
-
 /** Ignore bridge metrics older than this (seconds) */
 export const STALE_SECONDS = 60;
-
-/** Minimum tool uses between repeated warnings */
-export const DEBOUNCE_CALLS = 5;
 
 /** Claude Code reserves ~16.5% for autocompact buffer */
 export const AUTO_COMPACT_BUFFER_PCT = 16.5;
@@ -248,7 +239,6 @@ export const THEME_NAMES = Object.keys(THEMES) as string[];
 /** Active theme colors — used as foreground on transparent background */
 export const TEXT_COLORS: ThemeColors = THEMES[_slConfig.theme] ?? THEMES.notion;
 
-// Legacy face exports (kept for context-monitor compatibility)
 export const FACES = {
   happy:    '^_^',
   neutral:  '-_-',

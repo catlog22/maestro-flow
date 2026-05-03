@@ -47,7 +47,7 @@ export const zh: LocaleStrings = {
     hooksTitle: 'Hooks 配置',
     hooksLevelDescriptions: {
       none: '无 Hooks',
-      minimal: 'Statusline + context-monitor + spec-injector',
+      minimal: 'Statusline + spec-injector',
       standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
       full: '+ workflow-guard (PreToolUse)',
     },

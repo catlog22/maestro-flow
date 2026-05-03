@@ -47,7 +47,7 @@ export const en: LocaleStrings = {
     hooksTitle: 'Hooks Configuration',
     hooksLevelDescriptions: {
       none: 'No hooks',
-      minimal: 'Statusline + context-monitor + spec-injector',
+      minimal: 'Statusline + spec-injector',
       standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
       full: '+ workflow-guard (PreToolUse)',
     },

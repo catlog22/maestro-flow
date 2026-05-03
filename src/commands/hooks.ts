@@ -9,7 +9,6 @@ import { evaluatePreflightGuard, loadPreflightConfig } from '../hooks/guards/pre
 import { evaluatePromptGuard } from '../hooks/guards/prompt-guard.js';
 import { evaluateSpecValidator } from '../hooks/guards/spec-validator.js';
 import { evaluateKeywordInjection } from '../hooks/keyword-spec-injector.js';
-import { evaluateContext } from '../hooks/context-monitor.js';
 import { evaluateDelegateNotifications } from '../hooks/delegate-monitor.js';
 import { runTeamMonitor } from '../hooks/team-monitor.js';
 import { evaluateSpecInjection } from '../hooks/spec-injector.js';
@@ -61,7 +60,7 @@ interface HookDef {
 /**
  * Hook installation levels (cumulative):
  * - `none`:     No hooks installed
- * - `minimal`:  Statusline + context-monitor (safe monitoring)
+ * - `minimal`:  Statusline + spec-injector (safe monitoring)
  * - `standard`: + delegate-monitor, team-monitor, telemetry (full monitoring)
  * - `full`:     + workflow-guard (PreToolUse), prompt-guard (UserPromptSubmit)
  */
@@ -71,13 +70,12 @@ export const HOOK_LEVELS: readonly HookLevel[] = ['none', 'minimal', 'standard',
 
 export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
-  minimal: 'Statusline + context-monitor + spec-injector',
+  minimal: 'Statusline + spec-injector',
   standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
   full: '+ workflow-guard (PreToolUse)',
 };
 
 const HOOK_DEFS: Record<string, HookDef> = {
-  'context-monitor': { event: 'PostToolUse', level: 'minimal' },
   'spec-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'minimal', requiresWorkspace: true },
   'delegate-monitor': { event: 'PostToolUse', matcher: 'Bash|Agent', level: 'standard' },
   'team-monitor': { event: 'Stop', level: 'standard' },
@@ -408,15 +406,6 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     }
   },
 
-  'context-monitor': async () => {
-    const raw = await readStdin();
-    const data = JSON.parse(raw);
-    const result = evaluateContext(data);
-    if (result) {
-      process.stdout.write(JSON.stringify(result));
-    }
-  },
-
   'delegate-monitor': async () => {
     const raw = await readStdin();
     const data = JSON.parse(raw);
@@ -697,7 +686,6 @@ export function registerHooksCommand(program: Command): void {
         const toggleKey = name === 'workflow-guard' ? 'workflowGuard'
           : name === 'preflight-guard' ? 'preflightGuard'
           : name === 'prompt-guard' ? 'promptGuard'
-          : name === 'context-monitor' ? 'contextMonitor'
           : name === 'delegate-monitor' ? 'delegateMonitor'
           : name === 'team-monitor' ? 'teamMonitor'
           : name === 'spec-injector' ? 'specInjector'
