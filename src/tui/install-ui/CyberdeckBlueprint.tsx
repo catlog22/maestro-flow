@@ -9,7 +9,7 @@ import { ConfigPanel } from './ConfigPanel.js';
 import { ReviewPanel } from './ReviewPanel.js';
 import { ExecutionView } from './ExecutionView.js';
 import { ResultDashboard } from './ResultDashboard.js';
-import { scanComponents, COMPONENT_DEFS } from '../install-backend.js';
+import { scanComponents, COMPONENT_DEFS } from '../../commands/install-backend.js';
 
 // ---------------------------------------------------------------------------
 // CyberdeckBlueprint — root component with step state machine

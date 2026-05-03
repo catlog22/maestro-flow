@@ -15,7 +15,7 @@ import {
   createBackup,
   type ScannedComponent,
   type CopyStats,
-} from '../install-backend.js';
+} from '../../commands/install-backend.js';
 import {
   createManifest,
   addFile,
@@ -23,7 +23,7 @@ import {
   findManifest,
   cleanManifestFiles,
 } from '../../core/manifest.js';
-import { installHooksByLevel, type HookLevel } from '../hooks.js';
+import { installHooksByLevel, type HookLevel } from '../../commands/hooks.js';
 import { type InstallConfig, type InstallResult } from './types.js';
 
 // ---------------------------------------------------------------------------

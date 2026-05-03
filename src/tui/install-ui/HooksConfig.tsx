@@ -3,7 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import {
   HOOK_LEVELS,
   type HookLevel,
-} from '../hooks.js';
+} from '../../commands/hooks.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------

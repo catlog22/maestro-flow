@@ -13,12 +13,12 @@ import {
   type ManifestEntry,
 } from '../../core/manifest.js';
 import { deleteOverlayManifest } from '../../core/overlay/applier.js';
-import { removeMcpServer } from '../install-backend.js';
+import { removeMcpServer } from '../../commands/install-backend.js';
 import {
   removeMaestroHooks,
   loadClaudeSettings,
   getClaudeSettingsPath,
-} from '../hooks.js';
+} from '../../commands/hooks.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------

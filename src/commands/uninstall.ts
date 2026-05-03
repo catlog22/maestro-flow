@@ -24,7 +24,7 @@ import {
   loadClaudeSettings,
   getClaudeSettingsPath,
 } from './hooks.js';
-import { runUninstallFlow } from './uninstall-ui/index.js';
+import { runUninstallFlow } from '../tui/uninstall-ui/index.js';
 import { t } from '../i18n/index.js';
 
 // ---------------------------------------------------------------------------

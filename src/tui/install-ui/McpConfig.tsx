@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { TextInput } from '@inkjs/ui';
-import { MCP_TOOLS } from '../install-backend.js';
+import { MCP_TOOLS } from '../../commands/install-backend.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------

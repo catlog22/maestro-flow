@@ -8,7 +8,7 @@ import {
   loadAllCommandDefs,
   type CommandDef,
 } from '../../config/argument-hint-parser.js';
-import { checkSkillContextHook } from '../config.js';
+import { checkSkillContextHook } from '../../commands/config.js';
 import { SkillsList } from './SkillsList.js';
 import { SkillParamEditor } from './SkillParamEditor.js';
 import { ConfigSourcesView } from './ConfigSourcesView.js';

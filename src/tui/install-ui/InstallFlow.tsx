@@ -11,8 +11,8 @@ import { BackupConfig } from './BackupConfig.js';
 import { InstallConfirm, type InstallFlowConfig } from './InstallConfirm.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
-import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS } from '../install-backend.js';
-import { detectStatusline, type HookLevel } from '../hooks.js';
+import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS } from '../../commands/install-backend.js';
+import { detectStatusline, type HookLevel } from '../../commands/hooks.js';
 import { getAllManifests } from '../../core/manifest.js';
 import { t } from '../../i18n/index.js';
 

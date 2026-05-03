@@ -2,7 +2,7 @@
 // Pure tree-building logic extracted from BlueprintPreview for testability.
 // ---------------------------------------------------------------------------
 
-import { type ComponentDef } from '../install-backend.js';
+import { type ComponentDef } from '../../commands/install-backend.js';
 
 /** A group of components sharing the same parent directory. */
 export interface TargetGroup {

@@ -9,6 +9,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
+import cliToolsDefaults from './cli-tools-defaults.json' with { type: 'json' };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,19 +60,8 @@ export const DELEGATE_ROLES = [
 
 export type DelegateRole = (typeof DELEGATE_ROLES)[number];
 
-// Default strengths (codex high priority):
-//   codex  — analyze, plan, implement, review, debug (preferred)
-//   gemini — analyze, plan, frontend, brainstorm, research
-//   claude — analyze, plan, implement
-const DEFAULT_ROLE_MAPPINGS: Record<string, RoleMapping> = {
-  analyze:    { fallbackChain: ['codex', 'gemini', 'claude'] },
-  explore:    { fallbackChain: ['codex', 'gemini', 'claude'] },
-  review:     { fallbackChain: ['codex', 'gemini', 'claude'] },
-  implement:  { fallbackChain: ['codex', 'claude', 'gemini'] },
-  plan:       { fallbackChain: ['codex', 'gemini', 'claude'] },
-  brainstorm: { fallbackChain: ['gemini', 'codex', 'claude'] },
-  research:   { fallbackChain: ['gemini', 'codex', 'claude'] },
-};
+// Loaded from cli-tools-defaults.json — edit that file to change defaults.
+const DEFAULT_ROLE_MAPPINGS: Record<string, RoleMapping> = cliToolsDefaults.roleMappings as Record<string, RoleMapping>;
 
 // ---------------------------------------------------------------------------
 // Defaults
@@ -300,13 +290,9 @@ export async function loadConfigSources(workDir?: string): Promise<{
 // Initialization
 // ---------------------------------------------------------------------------
 
-/** CLI tool definitions with detection commands. */
-const TOOL_DEFS: Array<{ name: string; cmd: string; primaryModel: string; tags: string[]; type: string }> = [
-  { name: 'gemini',   cmd: 'gemini',   primaryModel: 'gemini-2.5-pro',          tags: ['fullstack', 'frontend'], type: 'builtin' },
-  { name: 'claude',   cmd: 'claude',   primaryModel: 'claude-sonnet-4-20250514', tags: ['fullstack'],            type: 'builtin' },
-  { name: 'codex',    cmd: 'codex',    primaryModel: 'o3',                       tags: ['fullstack', 'backend'], type: 'builtin' },
-  { name: 'opencode', cmd: 'opencode', primaryModel: '',                         tags: ['fullstack'],            type: 'builtin' },
-];
+/** CLI tool definitions — loaded from cli-tools-defaults.json. */
+const TOOL_DEFS: Array<{ name: string; cmd: string; primaryModel: string; tags: string[]; type: string }> =
+  cliToolsDefaults.tools as Array<{ name: string; cmd: string; primaryModel: string; tags: string[]; type: string }>;
 
 function isCliAvailable(cmd: string): boolean {
   try {

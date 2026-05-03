@@ -75,7 +75,7 @@ export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   full: '+ workflow-guard (PreToolUse)',
 };
 
-const HOOK_DEFS: Record<string, HookDef> = {
+export const HOOK_DEFS: Record<string, HookDef> = {
   'spec-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'minimal', requiresWorkspace: true },
   'delegate-monitor': { event: 'PostToolUse', matcher: 'Bash|Agent', level: 'standard' },
   'team-monitor': { event: 'Stop', level: 'standard' },

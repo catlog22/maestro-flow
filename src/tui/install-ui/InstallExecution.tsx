@@ -15,7 +15,7 @@ import {
   injectDocFile,
   createTargetBackup,
   type CopyStats,
-} from '../install-backend.js';
+} from '../../commands/install-backend.js';
 import {
   createManifest,
   addFile,
@@ -23,7 +23,7 @@ import {
   findManifest,
   cleanManifestFiles,
 } from '../../core/manifest.js';
-import { installHooksByLevel, installStatusline as installStatuslineFn, type HookLevel } from '../hooks.js';
+import { installHooksByLevel, installStatusline as installStatuslineFn, type HookLevel } from '../../commands/hooks.js';
 import type { InstallFlowConfig } from './InstallConfirm.js';
 import { t } from '../../i18n/index.js';
 

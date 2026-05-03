@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { initCliToolsConfigSync } from '../config/cli-tools-config.js';
-import { runInstallWizard, runInstallFlow } from './install-ui/index.js';
+import { runInstallWizard, runInstallFlow } from '../tui/install-ui/index.js';
 import { paths } from '../config/paths.js';
 import {
   createManifest,

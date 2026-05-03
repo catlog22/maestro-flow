@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
-import type { HookLevel } from '../hooks.js';
+import type { HookLevel } from '../../commands/hooks.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------

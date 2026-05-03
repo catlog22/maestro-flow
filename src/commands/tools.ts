@@ -1,14 +1,9 @@
 // ---------------------------------------------------------------------------
-// `maestro delegate-config` — interactive TUI + CLI for delegate tool config
+// `maestro delegate-config` — alias for `maestro config delegate`
 //
-// Subcommands:
-//   maestro delegate-config            → dashboard (TUI)
-//   maestro delegate-config show       → print tools & roles summary (non-interactive)
-//   maestro delegate-config list       → tools overview (TUI)
-//   maestro delegate-config roles      → role mappings (TUI)
-//   maestro delegate-config register   → register settings file (TUI)
-//   maestro delegate-config ref        → command reference (TUI)
-//   maestro delegate-config config     → global/workspace config sources (TUI)
+// Kept for backward compatibility. All logic now lives in config.ts;
+// this module just re-routes to `config delegate` TUI/CLI via the
+// unified config-ui entry point.
 // ---------------------------------------------------------------------------
 
 import type { Command } from 'commander';
@@ -16,21 +11,14 @@ import type { Command } from 'commander';
 type InitialView = 'dashboard' | 'tools' | 'roles' | 'register' | 'reference' | 'sources';
 
 async function launchTui(initialView: InitialView = 'dashboard') {
-  const { render } = await import('ink');
-  const React = await import('react');
-  const { ToolsDashboard } = await import('./tools-ui/ToolsDashboard.js');
-
-  const { waitUntilExit } = render(
-    React.createElement(ToolsDashboard, { workDir: process.cwd(), initialView }),
-  );
-  await waitUntilExit();
+  const { runDelegateConfigTui } = await import('../tui/config-ui/index.js');
+  await runDelegateConfigTui(initialView);
 }
 
 async function printShow(json: boolean) {
   const { loadCliToolsConfig, selectToolByRole, getDefaultRoleMappings, DELEGATE_ROLES } = await import('../config/cli-tools-config.js');
   const config = await loadCliToolsConfig(process.cwd());
   const tools = Object.entries(config.tools);
-  const roles = getDefaultRoleMappings();
   const userRoles = config.roles ?? {};
 
   if (json) {
@@ -50,7 +38,6 @@ async function printShow(json: boolean) {
     return;
   }
 
-  // Text output
   console.log('Tools:');
   if (tools.length === 0) {
     console.log('  (none configured)');
@@ -76,7 +63,7 @@ export function registerToolsCommand(program: Command): void {
   const cmd = program
     .command('delegate-config')
     .alias('dc')
-    .description('Interactive TUI for delegate tool configuration and role mappings')
+    .description('Delegate tool configuration (alias for: maestro config delegate)')
     .action(async () => launchTui('dashboard'));
 
   cmd.command('show').description('Print tools & roles summary (non-interactive)')

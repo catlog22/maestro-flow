@@ -83,7 +83,7 @@ function overlayDir(): string {
 // ---------------------------------------------------------------------------
 
 async function runList(interactive: boolean): Promise<void> {
-  const { runOverlayListUI } = await import('./overlay-ui/index.js');
+  const { runOverlayListUI } = await import('../tui/overlay-ui/index.js');
   await runOverlayListUI(interactive);
 }
 

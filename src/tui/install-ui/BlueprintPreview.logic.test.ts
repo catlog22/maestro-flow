@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveParentDir, resolveSubPath, buildTree } from './BlueprintPreview.logic.js';
-import type { ComponentDef } from '../install-backend.js';
+import type { ComponentDef } from '../../commands/install-backend.js';
 
 // ---------------------------------------------------------------------------
 // Mock ComponentDef helpers

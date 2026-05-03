@@ -1,11 +1,16 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { paths } from '../../config/paths.js';
 import { getAllManifests } from '../../core/manifest.js';
-import { loadAllOverlays } from '../../core/overlay/loader.js';
-import { loadOverlayManifest } from '../../core/overlay/applier.js';
+import { loadAllOverlays, loadOverlay } from '../../core/overlay/loader.js';
+import {
+  loadOverlayManifest,
+  removeOverlayFromTargets,
+  deleteOverlayManifest,
+} from '../../core/overlay/applier.js';
 import { parseSections } from '../../core/overlay/section-parser.js';
+import { renderTui } from '../render.js';
 import type {
   OverlayAppliedState,
   SectionMarker,
@@ -168,62 +173,48 @@ function collectTargets(dir: string, scopes: Scope[]): TargetInfo[] {
 }
 
 // ---------------------------------------------------------------------------
-// Entry point
+// Data preparation (reusable by ConfigHub)
 // ---------------------------------------------------------------------------
 
-export async function runOverlayListUI(interactive: boolean): Promise<void> {
+export interface OverlayData {
+  overlays: import('../../core/overlay/types.js').OverlayFile[];
+  errors: { path: string; errors: string[] }[];
+  appliedState: Map<string, OverlayAppliedState>;
+  targets: TargetInfo[];
+  handleDelete: (name: string) => void;
+}
+
+/**
+ * Collect overlay data for rendering. Returns null if no overlays directory
+ * or no overlays installed.
+ */
+export function prepareOverlayData(): OverlayData | null {
   const dir = overlayDir();
-  if (!existsSync(dir)) {
-    console.error(`No overlays directory at ${dir}`);
-    return;
-  }
+  if (!existsSync(dir)) return null;
 
   const { overlays, errors } = loadAllOverlays(dir);
-  if (overlays.length === 0 && errors.length === 0) {
-    console.error('No overlays installed.');
-    return;
-  }
+  if (overlays.length === 0 && errors.length === 0) return null;
 
   const scopes = discoverScopes();
   const appliedState = collectAppliedState(scopes);
   const targets = collectTargets(dir, scopes);
 
-  // Dynamic imports for ink + React
-  const { render } = await import('ink');
-  const React = await import('react');
-  const { OverlayList } = await import('./OverlayList.js');
-
-  // Import remove logic
-  const { removeOverlayFromTargets, deleteOverlayManifest, loadOverlayManifest } = await import(
-    '../../core/overlay/applier.js'
-  );
-  const { loadOverlay } = await import('../../core/overlay/loader.js');
-  const { unlinkSync, readdirSync } = await import('node:fs');
-  const { join: joinPath } = await import('node:path');
-
   const handleDelete = (name: string): void => {
-    // Strip markers from all scopes
     let filesChanged = 0;
     for (const s of scopes) {
       const res = removeOverlayFromTargets(name, s.scope, s.targetBase);
       filesChanged += res.filesChanged;
     }
-
-    // Delete overlay file(s)
     if (existsSync(dir)) {
       for (const entry of readdirSync(dir)) {
         if (!entry.endsWith('.json')) continue;
-        const fp = joinPath(dir, entry);
+        const fp = join(dir, entry);
         try {
           const overlay = loadOverlay(fp);
           if (overlay.meta.name === name) unlinkSync(fp);
-        } catch {
-          // Skip unparseable
-        }
+        } catch { /* Skip unparseable */ }
       }
     }
-
-    // Prune empty manifests
     for (const s of scopes) {
       const m = loadOverlayManifest(s.scope, s.targetBase);
       if (m && m.appliedOverlays.length === 0) {
@@ -232,22 +223,26 @@ export async function runOverlayListUI(interactive: boolean): Promise<void> {
     }
   };
 
+  return { overlays, errors, appliedState, targets, handleDelete };
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+export async function runOverlayListUI(interactive: boolean): Promise<void> {
+  const data = prepareOverlayData();
+  if (!data) {
+    console.error('No overlays installed.');
+    return;
+  }
+
+  const { OverlayList } = await import('./OverlayList.js');
   const isInteractive = interactive && !!process.stdin.isTTY;
 
-  const { waitUntilExit } = render(
-    React.createElement(OverlayList, {
-      overlays,
-      errors,
-      appliedState,
-      targets,
-      interactive: isInteractive,
-      onDelete: handleDelete,
-    }),
-    { exitOnCtrlC: true },
-  );
-
-  process.on('SIGINT', () => process.exit(0));
-  process.on('SIGTERM', () => process.exit(0));
-
-  await waitUntilExit();
+  await renderTui(OverlayList, {
+    ...data,
+    interactive: isInteractive,
+    onDelete: data.handleDelete,
+  });
 }

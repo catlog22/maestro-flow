@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { existsSync } from 'node:fs';
-import { COMPONENT_DEFS } from '../install-backend.js';
+import { COMPONENT_DEFS } from '../../commands/install-backend.js';
 import { buildTree } from './BlueprintPreview.logic.js';
 
 // ---------------------------------------------------------------------------

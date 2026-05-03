@@ -8,7 +8,7 @@ import {
   parseNumberKey,
   clampIndex,
 } from './ComponentGrid.logic.js';
-import type { ScannedComponent } from '../install-backend.js';
+import type { ScannedComponent } from '../../commands/install-backend.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
