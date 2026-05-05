@@ -185,7 +185,7 @@ Skill({ skill: next.skill, args: effective_args })
 Background delegate execution with stop-and-wait pattern.
 
 ```
-cli_tool = session.cli_tool || "gemini"
+cli_tool = session.cli_tool
 
 Bash({
   command: `maestro delegate "PURPOSE: 执行 /${next.skill} ${next.args}

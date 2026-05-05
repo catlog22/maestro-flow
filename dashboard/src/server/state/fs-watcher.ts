@@ -32,6 +32,11 @@ export class FSWatcher {
       `${this.workflowRoot}/state.json`,
       `${this.workflowRoot}/phases/*/index.json`,
       `${this.workflowRoot}/phases/*/.task/TASK-*.json`,
+      `${this.workflowRoot}/phases/*/verification.json`,
+      `${this.workflowRoot}/phases/*/validation.json`,
+      `${this.workflowRoot}/phases/*/review.json`,
+      `${this.workflowRoot}/phases/*/plan.json`,
+      `${this.workflowRoot}/phases/*/uat.md`,
       `${this.workflowRoot}/scratch/*/index.json`,
       // Wiki index sources — unified /api/wiki endpoint
       `${this.workflowRoot}/project.md`,
@@ -44,6 +49,8 @@ export class FSWatcher {
       // Collab — member profiles and activity log
       `${this.workflowRoot}/collab/members/*.json`,
       `${this.workflowRoot}/collab/activity.jsonl`,
+      // CSV Wave — async delegate task execution tracking
+      `${this.workflowRoot}/.csv-wave/**/*.csv`,
     ];
 
     this.watcher = watch(patterns, {

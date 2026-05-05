@@ -228,7 +228,7 @@ Generate steps from `lifecycle_position` to target (default: `milestone-complete
   "phase": null | N,
   "milestone": "{M}",
   "auto_mode": false,
-  "cli_tool": "gemini",
+  "cli_tool": "claude",
   "quality_mode": "standard",
   "passed_gates": [],
   "context": {

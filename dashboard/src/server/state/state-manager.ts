@@ -154,6 +154,21 @@ export class StateManager {
       return;
     }
 
+    // phases/<slug>/{verification,validation,review,plan}.json — phase sidecar updated
+    // Re-read index.json from the same directory to pick up merged state
+    const phaseSidecarMatch = rel.match(/^phases\/([^/]+)\/(?:verification|validation|review|plan|uat)\.(?:json|md)$/);
+    if (phaseSidecarMatch) {
+      const slug = phaseSidecarMatch[1];
+      const indexPath = join(this.workflowRoot, 'phases', slug, 'index.json');
+      const phase = await readJsonSafe<PhaseCard>(indexPath);
+      if (phase) {
+        this.upsertPhase(phase);
+        this.board.lastUpdated = new Date().toISOString();
+        this.eventBus.emit(SSE_EVENT_TYPES.PHASE_UPDATED, phase);
+      }
+      return;
+    }
+
     // scratch/<slug>/index.json — scratch task updated
     const scratchMatch = rel.match(/^scratch\/[^/]+\/index\.json$/);
     if (scratchMatch) {
@@ -376,6 +391,65 @@ function normalizeProject(raw: Record<string, unknown>): ProjectState {
   const defaults = emptyProject();
   const ps = (raw.phases_summary ?? {}) as Record<string, unknown>;
   const ac = (raw.accumulated_context ?? {}) as Record<string, unknown>;
+
+  // Derive phases_summary from milestones + artifacts if not present in state.json
+  let phasesSummary = {
+    total: typeof ps.total === 'number' ? ps.total : defaults.phases_summary.total,
+    completed: typeof ps.completed === 'number' ? ps.completed : defaults.phases_summary.completed,
+    in_progress: typeof ps.in_progress === 'number' ? ps.in_progress : defaults.phases_summary.in_progress,
+    pending: typeof ps.pending === 'number' ? ps.pending : defaults.phases_summary.pending,
+  };
+
+  if (typeof ps.total !== 'number' && Array.isArray(raw.milestones)) {
+    const milestones = raw.milestones as Array<Record<string, unknown>>;
+    const artifacts = Array.isArray(raw.artifacts) ? raw.artifacts as Array<Record<string, unknown>> : [];
+    let total = 0;
+    let completed = 0;
+    let inProgress = 0;
+    let pending = 0;
+
+    for (const m of milestones) {
+      const phases = Array.isArray(m.phases) ? (m.phases as number[]) : [];
+      for (const phaseNum of phases) {
+        total++;
+        // Check artifacts for this phase to determine status
+        const phaseArtifacts = artifacts.filter(a => a.phase === phaseNum);
+        const hasExecute = phaseArtifacts.some(a => a.type === 'execute' && a.status === 'completed');
+        const hasVerify = phaseArtifacts.some(a => a.type === 'verify' && a.status === 'completed');
+        const hasAnalyze = phaseArtifacts.some(a => a.type === 'analyze');
+        const mStatus = String(m.status ?? 'pending');
+
+        if (mStatus === 'completed' || hasVerify) {
+          completed++;
+        } else if (hasExecute || hasAnalyze) {
+          inProgress++;
+        } else {
+          pending++;
+        }
+      }
+    }
+
+    phasesSummary = { total, completed, in_progress: inProgress, pending };
+  }
+
+  // Map status variants: state.json uses 'active' but ProjectStatus expects 'planning'|'executing'|'verifying'|'idle'
+  const rawStatus = typeof raw.status === 'string' ? raw.status : defaults.status;
+  let mappedStatus: ProjectState['status'] = defaults.status;
+  switch (rawStatus) {
+    case 'active': {
+      // Infer from latest artifact type
+      const artifacts = Array.isArray(raw.artifacts) ? raw.artifacts as Array<Record<string, unknown>> : [];
+      const latestType = artifacts.length > 0 ? artifacts[artifacts.length - 1].type : null;
+      if (latestType === 'execute') mappedStatus = 'executing';
+      else if (latestType === 'verify') mappedStatus = 'verifying';
+      else mappedStatus = 'planning';
+      break;
+    }
+    case 'planning': case 'executing': case 'verifying': case 'idle':
+      mappedStatus = rawStatus as ProjectState['status'];
+      break;
+  }
+
   return {
     version: typeof raw.version === 'string' ? raw.version : defaults.version,
     project_name: typeof raw.project_name === 'string' ? raw.project_name
@@ -386,13 +460,8 @@ function normalizeProject(raw: Record<string, unknown>): ProjectState {
     current_phase: typeof raw.current_phase === 'number' ? raw.current_phase
       : typeof raw.currentPhase === 'number' ? raw.currentPhase
       : defaults.current_phase,
-    status: typeof raw.status === 'string' ? raw.status as ProjectState['status'] : defaults.status,
-    phases_summary: {
-      total: typeof ps.total === 'number' ? ps.total : defaults.phases_summary.total,
-      completed: typeof ps.completed === 'number' ? ps.completed : defaults.phases_summary.completed,
-      in_progress: typeof ps.in_progress === 'number' ? ps.in_progress : defaults.phases_summary.in_progress,
-      pending: typeof ps.pending === 'number' ? ps.pending : defaults.phases_summary.pending,
-    },
+    status: mappedStatus,
+    phases_summary: phasesSummary,
     last_updated: typeof raw.last_updated === 'string' ? raw.last_updated
       : typeof raw.updatedAt === 'string' ? raw.updatedAt
       : defaults.last_updated,
@@ -415,11 +484,14 @@ function emptyBoard(): BoardState {
 
 /** Normalize a raw task JSON into a TaskCard — handles variant field names */
 function normalizeTask(raw: Record<string, unknown>, filename: string): TaskCard {
-  const id = String(raw.taskId ?? raw.id ?? filename.replace('.json', ''));
+  // task_id (snake_case) → taskId (camelCase) → id → filename fallback
+  const id = String(raw.taskId ?? raw.task_id ?? raw.id ?? filename.replace('.json', ''));
   const title = String(raw.title ?? '');
-  const status = String(raw.status ?? (raw.meta as Record<string, unknown>)?.status ?? 'pending');
-  const type = String(raw.type ?? raw.category ?? 'feature') as TaskCard['type'];
   const meta = (raw.meta as Record<string, unknown>) ?? {};
+  // Status: check meta.status first, then top-level status, then default
+  const status = String(meta.status ?? raw.status ?? 'pending');
+  const wave = typeof meta.wave === 'number' ? meta.wave : typeof raw.wave === 'number' ? raw.wave : 0;
+  const type = String(raw.type ?? raw.category ?? 'feature') as TaskCard['type'];
 
   return {
     id,
@@ -443,12 +515,12 @@ function normalizeTask(raw: Record<string, unknown>, filename: string): TaskCard
     code_skeleton: (raw.code_skeleton as string) ?? null,
     doc_context: (raw.doc_context as TaskCard['doc_context']) ?? { affected_features: [], affected_components: [], affected_requirements: [], adr_ids: [] },
     meta: {
-      status: String(meta.status ?? status) as TaskCard['meta']['status'],
+      status: status as TaskCard['meta']['status'],
       estimated_time: (meta.estimated_time as string) ?? null,
       risk: String(meta.risk ?? ''),
       autonomous: Boolean(meta.autonomous ?? false),
       checkpoint: Boolean(meta.checkpoint ?? false),
-      wave: typeof meta.wave === 'number' ? meta.wave : 0,
+      wave,
       execution_group: (meta.execution_group as string) ?? null,
       executor: String(meta.executor ?? ''),
     },

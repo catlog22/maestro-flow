@@ -33,6 +33,7 @@ import { createRequirementRoutes } from './requirements.js';
 import { createSupervisorRoutes } from './supervisor.js';
 import { createWorkspaceRoutes } from './workspace.js';
 import { createGitRoutes } from './git.js';
+import { createCsvWaveRoutes } from './csv-waves.js';
 import { createObservabilityRoutes } from '../observability/observability-routes.js';
 import type { RequirementExpander } from '../requirement/requirement-expander.js';
 import type { SelfLearningService } from '../supervisor/self-learning-service.js';
@@ -89,6 +90,9 @@ export function createRoutes(
 
   // Git source control routes (project root = parent of .workflow/)
   routes.route('/', createGitRoutes(getRoot));
+
+  // CSV Wave routes (reads from .workflow/.csv-wave/)
+  routes.route('/', createCsvWaveRoutes(getRoot));
 
   // SSE events route (depends on StateManager, EventBus, SSEHub)
   routes.route('/', createEventsRoute(stateManager, eventBus, sseHub));

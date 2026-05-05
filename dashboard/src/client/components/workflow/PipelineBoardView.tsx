@@ -24,6 +24,7 @@ const COLUMNS: ColumnDef[] = [
   { status: 'executing', label: 'Executing', match: ['executing'] },
   { status: 'verifying', label: 'Verifying', match: ['verifying', 'testing'] },
   { status: 'completed', label: 'Complete', match: ['completed'] },
+  { status: 'blocked', label: 'Blocked', match: ['blocked'] },
 ];
 
 function groupPhases(phases: PhaseCard[]): Map<PhaseStatus, PhaseCard[]> {

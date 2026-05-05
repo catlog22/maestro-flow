@@ -47,11 +47,15 @@ function StatusBadge({ status }: StatusBadgeProps) {
       break;
     case 'completed':
     case 'passed':
+    case 'verified':
       colorClasses = 'bg-green-950/40 text-green-400';
       break;
     case 'failed':
     case 'blocked':
       colorClasses = 'bg-red-950/40 text-red-400';
+      break;
+    case 'gaps_found':
+      colorClasses = 'bg-orange-950/40 text-orange-400';
       break;
     default:
       colorClasses = 'bg-[var(--color-bg-hover)] text-[var(--color-text-tertiary)]';

@@ -58,7 +58,8 @@ describe('StateManager', () => {
 
       const board = await manager.buildInitialState();
       expect(board.project.project_name).toBe('test-project');
-      expect(board.project.status).toBe('active');
+      // 'active' status maps to 'planning' when no artifacts exist
+      expect(board.project.status).toBe('planning');
       expect(emitSpy).toHaveBeenCalledWith(SSE_EVENT_TYPES.BOARD_FULL, board);
     });
 
