@@ -1,6 +1,6 @@
 ---
 name: maestro-player
-description: Workflow template player — load JSON template, bind variables, execute DAG nodes in order, persist state at checkpoints, support resume
+description: Play workflow templates with checkpoint resume
 argument-hint: "<template-slug|path> [--context key=value...] [-c [session-id]] [--list] [--dry-run]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: spec-remove
-description: Remove a spec entry from a specs file by entry ID
+description: Remove spec entry by ID
 argument-hint: "<entry-id>"
 allowed-tools:
   - Read

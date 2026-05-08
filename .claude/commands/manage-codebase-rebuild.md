@@ -1,6 +1,6 @@
 ---
 name: manage-codebase-rebuild
-description: Full rebuild of codebase documentation - scans project, builds doc-index.json, generates all tech-registry and feature-maps
+description: Rebuild all codebase documentation from scratch
 argument-hint: "[--focus <area>] [--force] [--skip-commit]"
 allowed-tools:
   - Read

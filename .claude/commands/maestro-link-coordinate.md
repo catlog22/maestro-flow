@@ -1,6 +1,6 @@
 ---
 name: maestro-link-coordinate
-description: Step-mode graph coordinator via maestro coordinate endpoint — executes chain nodes one by one with session tracking
+description: Execute command chain nodes step by step
 argument-hint: "\"intent text\" [--list] [-c [sessionId]] [--chain <name>] [--tool <tool>] [-y]"
 allowed-tools:
   - Read

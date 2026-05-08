@@ -1,6 +1,6 @@
 ---
 name: manage-harvest
-description: Extract knowledge from workflow artifacts and route to wiki / spec / issue stores
+description: Extract knowledge from artifacts into wiki/spec/issues
 argument-hint: "[<session-id|path>] [--to wiki|spec|issue|auto] [--source <type>] [--recent N] [--dry-run] [-y]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: quality-retrospective
-description: Multi-lens 复盘 of completed phase(s); routes insights to spec/note/issue stores and the lessons library
+description: Phase retrospective with insight routing to specs and lessons
 argument-hint: "[phase|N..M] [--lens technical|process|quality|decision] [--all] [--no-route] [--compare N] [-y]"
 allowed-tools:
   - Read

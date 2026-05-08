@@ -1,6 +1,6 @@
 ---
 name: spec-setup
-description: Initialize system specs by scanning project structure and generating conventions
+description: Initialize specs from project structure
 argument-hint: ""
 allowed-tools:
   - Read

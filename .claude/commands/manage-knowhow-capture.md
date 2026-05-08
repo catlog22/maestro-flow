@@ -1,6 +1,6 @@
 ---
 name: manage-knowhow-capture
-description: Capture reusable knowledge into .workflow/knowhow/ — session compact, template, recipe, reference, decision, or tip
+description: Capture reusable knowledge as templates, recipes, or tips
 argument-hint: "[type] [description] [--lang <lang>] [--source <url>] [--tag tag1,tag2]"
 allowed-tools:
   - Read

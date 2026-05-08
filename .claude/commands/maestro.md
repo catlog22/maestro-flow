@@ -1,6 +1,6 @@
 ---
 name: maestro
-description: Intelligent coordinator - analyze intent + read project state → select optimal command chain → dispatch to unified executor
+description: Auto-route intent to optimal command chain
 argument-hint: "\"intent text\" [-y] [-c] [--dry-run] [--exec auto|cli|internal] [--tool <name>] [--super]"
 allowed-tools:
   - Read

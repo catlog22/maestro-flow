@@ -1,6 +1,6 @@
 ---
 name: learn-second-opinion
-description: Multi-perspective analysis with review, challenge, and consult modes
+description: Get alternative perspectives — review, challenge, or consult
 argument-hint: "<target> [--mode review|challenge|consult]"
 allowed-tools:
   - Read

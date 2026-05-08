@@ -1,6 +1,6 @@
 ---
 name: maestro-analyze
-description: Multi-dimensional analysis with CLI exploration, decision extraction, and intent tracking
+description: Multi-angle analysis with CLI-assisted exploration
 argument-hint: "[phase|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]"
 allowed-tools:
   - Read

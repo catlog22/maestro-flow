@@ -1,6 +1,6 @@
 ---
 name: quality-review
-description: Tiered code review (quick/standard/deep) with parallel agents, severity classification, and auto-issue creation
+description: Tiered code review with severity classification
 argument-hint: "<phase> [--level quick|standard|deep] [--dimensions security,architecture,...] [--skip-specs]"
 allowed-tools:
   - Read

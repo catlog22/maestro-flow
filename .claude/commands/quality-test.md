@@ -1,6 +1,6 @@
 ---
 name: quality-test
-description: Conversational UAT with session persistence, auto-diagnosis, and gap-plan closure loop
+description: Conversational UAT with auto-diagnosis and gap closure
 argument-hint: "[phase] [--smoke] [--auto-fix]"
 allowed-tools:
   - Read

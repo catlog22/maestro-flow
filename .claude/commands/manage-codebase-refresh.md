@@ -1,6 +1,6 @@
 ---
 name: manage-codebase-refresh
-description: Incremental refresh of codebase docs based on recent changes
+description: Refresh codebase docs from recent changes
 argument-hint: "[--since <date>] [--deep]"
 allowed-tools:
   - Read

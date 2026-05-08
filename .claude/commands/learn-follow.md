@@ -1,6 +1,6 @@
 ---
 name: learn-follow
-description: Guided follow-along reading of code or wiki entries, extracting patterns and building understanding
+description: Guided reading of code or wiki to extract patterns
 argument-hint: "<path|wiki-id|topic> [--depth shallow|deep] [--save-wiki]"
 allowed-tools:
   - Read

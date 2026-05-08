@@ -1,6 +1,6 @@
 ---
 name: maestro-ralph-execute
-description: Single-step executor — find next pending step in session, execute by type (decision/internal/external), hand off to next iteration
+description: Execute next pending step in ralph session
 argument-hint: "[-y] [session-id]"
 allowed-tools:
   - Read

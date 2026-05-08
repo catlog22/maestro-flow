@@ -1,6 +1,6 @@
 ---
 name: maestro-ralph
-description: Closed-loop lifecycle decision engine — read project state, infer position, build adaptive command chain with decision/internal/external nodes
+description: Adaptive lifecycle engine — infer state, build command chain
 argument-hint: "[-y] \"intent\" | status | continue"
 allowed-tools:
   - Read

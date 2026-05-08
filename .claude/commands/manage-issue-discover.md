@@ -1,6 +1,6 @@
 ---
 name: manage-issue-discover
-description: Automated issue discovery -- multi-perspective analysis or prompt-driven exploration
+description: Discover issues via multi-perspective analysis
 argument-hint: "[multi-perspective | by-prompt \"what to look for\"] [-y|--yes] [--scope=src/**] [--depth=standard|deep]"
 allowed-tools:
   - Read

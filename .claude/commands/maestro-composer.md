@@ -1,6 +1,6 @@
 ---
 name: maestro-composer
-description: Semantic workflow composer — parse natural language into DAG of skill/CLI/agent nodes, auto-inject checkpoints, persist as reusable JSON template
+description: Compose reusable workflow templates from natural language
 argument-hint: "\"workflow description\" [--resume] [--edit <template-path>]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: maestro-milestone-release
-description: Version bump, changelog generation, and git tag for a completed milestone
+description: Bump version, generate changelog, tag milestone
 argument-hint: "[<version>] [--bump patch|minor|major] [--dry-run] [--no-tag] [--no-push]"
 allowed-tools:
   - Read

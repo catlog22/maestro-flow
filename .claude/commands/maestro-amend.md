@@ -1,6 +1,6 @@
 ---
 name: maestro-amend
-description: Collect deficiency signals from workflow artifacts, sessions, and user reports, then generate overlays to amend workflow commands
+description: Generate overlays to fix workflow command deficiencies
 argument-hint: "[description] [--from-verify <dir>] [--from-review <dir>] [--from-session <id>] [--from-issues ISS-xxx,...] [--scan] [--dry-run]"
 allowed-tools:
   - Read

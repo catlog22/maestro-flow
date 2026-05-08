@@ -1,6 +1,6 @@
 ---
 name: maestro-brainstorm
-description: Unified brainstorming with dual-mode operation - auto pipeline and single role analysis
+description: Brainstorm with auto pipeline or single-role analysis
 argument-hint: "[topic|role-name] [--yes] [--count N] [--session ID] [--update] [--skip-questions] [--include-questions] [--style-skill PKG]"
 allowed-tools:
   - Read

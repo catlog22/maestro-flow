@@ -1,6 +1,6 @@
 ---
 name: learn-decompose
-description: Decompose code into cataloged design patterns, saving findings to specs and wiki
+description: Extract design patterns from code into specs and wiki
 argument-hint: "<path|module> [--patterns <list>] [--save-spec] [--save-wiki]"
 allowed-tools:
   - Read

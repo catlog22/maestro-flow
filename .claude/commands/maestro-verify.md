@@ -1,6 +1,6 @@
 ---
 name: maestro-verify
-description: Goal-Backward verification with 3-layer must-have checks, anti-pattern scan, Nyquist test coverage validation, and gap-fix plan generation
+description: Verify goals with must-have checks and test coverage validation
 argument-hint: "[phase] [--skip-tests] [--skip-antipattern] [--dir <path>]"
 allowed-tools:
   - Read

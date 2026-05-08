@@ -1,6 +1,6 @@
 ---
 name: manage-learn
-description: Capture, search, and review atomic learning insights and tips into .workflow/learning/lessons.jsonl
+description: Capture and search learning insights and tips
 argument-hint: "[<text>|tip <text>|list|search|show <id>] [--category ...] [--tag t1,t2] [--phase N] [--confidence ...]"
 allowed-tools:
   - Read

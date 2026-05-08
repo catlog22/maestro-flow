@@ -1,6 +1,6 @@
 ---
 name: spec-add
-description: Add a spec entry to the appropriate specs file by category
+description: Add spec entry by category
 argument-hint: "[--scope project|global|team|personal] <category> <content>"
 allowed-tools:
   - Read

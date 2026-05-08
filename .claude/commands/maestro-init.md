@@ -1,6 +1,6 @@
 ---
 name: maestro-init
-description: Initialize project with auto state detection (empty/code/existing)
+description: Initialize project with auto state detection
 argument-hint: "[-y] [--from-brainstorm SESSION-ID]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: manage-wiki
-description: Wiki knowledge graph management — health dashboard, orphan cleanup, entry search, and graph statistics
+description: Manage wiki graph — health, cleanup, search, stats
 argument-hint: "[health|search|cleanup|stats] [options]"
 allowed-tools:
   - Read

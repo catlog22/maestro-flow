@@ -1,6 +1,6 @@
 ---
 name: maestro-roadmap
-description: Roadmap generation with dual mode — light (requirement→roadmap) or full (requirement→spec package→roadmap)
+description: Generate roadmap from requirements (light or full mode)
 argument-hint: "<requirement> [--mode light|full] [-y] [-c] [-m progressive|direct|auto] [--from-brainstorm SESSION-ID] [--revise [instructions]] [--review]"
 allowed-tools:
   - Read

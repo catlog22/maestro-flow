@@ -1,6 +1,6 @@
 ---
 name: maestro-update
-description: Interactive workflow migration — detect version, preview changes, apply upgrades
+description: Detect version, preview changes, apply workflow upgrades
 argument-hint: "[--dry-run] [--force]"
 allowed-tools:
   - Read

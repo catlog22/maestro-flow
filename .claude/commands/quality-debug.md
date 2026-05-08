@@ -1,6 +1,6 @@
 ---
 name: quality-debug
-description: Parallel hypothesis-driven debugging with UAT integration and structured root cause collection
+description: Debug with parallel hypotheses and root cause analysis
 argument-hint: "[issue description] [--from-uat <phase>] [--parallel]"
 allowed-tools:
   - Read

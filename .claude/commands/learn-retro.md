@@ -1,6 +1,6 @@
 ---
 name: learn-retro
-description: Unified retrospective — git activity metrics and decision quality evaluation with lens-based selection
+description: Retrospective of git activity and decision quality
 argument-hint: "[--lens git|decision|all] [--days N] [--author <name>] [--area <path>] [--phase N] [--tag <tag>] [--id <id>] [--compare]"
 allowed-tools:
   - Read

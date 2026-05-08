@@ -1,6 +1,6 @@
 ---
 name: maestro-ui-design
-description: Generate UI design prototypes with multiple styles via ui-ux-pro-max, user selects winner, solidify as code reference
+description: Generate UI design prototypes, select and solidify as code
 argument-hint: "<phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: wiki-connect
-description: Surface hidden connections in the wiki knowledge graph and suggest or apply new links
+description: Find and link hidden connections in wiki graph
 argument-hint: "[--scope <type>] [--min-similarity N] [--fix] [--max N]"
 allowed-tools:
   - Read

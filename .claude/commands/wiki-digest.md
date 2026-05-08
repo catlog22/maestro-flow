@@ -1,6 +1,6 @@
 ---
 name: wiki-digest
-description: Generate knowledge digest from wiki entries with theme clustering, gap analysis, and coverage heatmap
+description: Generate wiki digest with theme clustering and gap analysis
 argument-hint: "[<topic>|--recent N] [--type <type>] [--format brief|full]"
 allowed-tools:
   - Read

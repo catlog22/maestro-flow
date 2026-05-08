@@ -1,6 +1,6 @@
 ---
 name: maestro-fork
-description: Create a worktree for milestone-level parallel development, or sync existing worktree with main
+description: Create or sync milestone worktree for parallel dev
 argument-hint: "-m <milestone-number> [--base <branch>] [--sync]"
 allowed-tools:
   - Read

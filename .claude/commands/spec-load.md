@@ -1,6 +1,6 @@
 ---
 name: spec-load
-description: Load relevant specs and lessons for current context (used by agents before execution)
+description: Load specs and lessons for current context
 argument-hint: "[--category <type>] [--keyword <word>] [--with-lessons]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: maestro-quick
-description: Execute a quick task with workflow guarantees but skip optional agents
+description: Quick task execution, skip optional agents
 argument-hint: "[description] [--full] [--discuss]"
 allowed-tools:
   - Read

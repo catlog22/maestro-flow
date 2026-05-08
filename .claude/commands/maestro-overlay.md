@@ -1,6 +1,6 @@
 ---
 name: maestro-overlay
-description: Create or edit a non-invasive overlay that augments existing slash commands based on natural-language intent
+description: Create or edit command overlays from natural language
 argument-hint: "<intent>"
 allowed-tools:
   - Read

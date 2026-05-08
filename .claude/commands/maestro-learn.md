@@ -1,6 +1,6 @@
 ---
 name: maestro-learn
-description: Learning coordinator — route intent to learn commands, execute single or multi-step chains
+description: Route learning intent to learn-* commands
 argument-hint: "\"intent text\" [-y] [--dry-run] [--chain <name>]"
 allowed-tools:
   - Read

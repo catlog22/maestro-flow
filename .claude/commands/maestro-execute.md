@@ -1,6 +1,6 @@
 ---
 name: maestro-execute
-description: Execute plan with wave-based parallel execution and atomic commits
+description: Execute plan with parallel waves and atomic commits
 argument-hint: "[phase] [--auto-commit] [--method agent|cli|auto] [--executor <tool>] [--dir <path>] [-y]"
 allowed-tools:
   - Read

@@ -1,6 +1,6 @@
 ---
 name: maestro-plan
-description: Explore, clarify, plan, check, and confirm a phase execution plan
+description: Plan phase execution with exploration and verification
 argument-hint: "[phase] [--collab] [--spec SPEC-xxx] [-y] [--gaps] [--dir <path>] [--revise [instructions]] [--check <plan-dir>]"
 allowed-tools:
   - Read
