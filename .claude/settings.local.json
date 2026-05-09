@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Read(//d/maestro2/.claude/agents//**)",
+      "Read(//d/maestro2/.codex/agents//**)",
+      "Read(//d/maestro-flow-one/**)"
     ]
   }
 }

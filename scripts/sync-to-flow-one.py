@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Sync maestro2 commands to maestro-flow-one repository.
+Sync maestro2 commands and agents to maestro-flow-one repository.
 
 Usage:
     python scripts/sync-to-flow-one.py [--target D:\\maestro-flow-one] [--dry-run]
@@ -14,6 +14,8 @@ from pathlib import Path
 # Source project root
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 COMMANDS_DIR = SOURCE_ROOT / ".claude" / "commands"
+CLAUDE_AGENTS_DIR = SOURCE_ROOT / ".claude" / "agents"
+CODEX_AGENTS_DIR = SOURCE_ROOT / ".codex" / "agents"
 
 # Default target
 DEFAULT_TARGET = Path("D:/maestro-flow-one/maestro-flow")
@@ -55,6 +57,41 @@ def classify(filename: str) -> tuple[str, str] | None:
     return "lifecycle", filename
 
 
+def sync_files(source_dir: Path, target_dir: Path, ext: str, dry_run: bool) -> dict:
+    """Sync files from source to target (flat copy, no classification). Returns stats."""
+    stats = {"new": 0, "updated": 0, "unchanged": 0}
+    source_files = sorted(source_dir.glob(f"*{ext}"))
+
+    for src_file in source_files:
+        dest = target_dir / src_file.name
+        action = "new"
+        if dest.exists():
+            if src_file.read_text(encoding="utf-8") == dest.read_text(encoding="utf-8"):
+                stats["unchanged"] += 1
+                continue
+            action = "updated"
+
+        marker = "+" if action == "new" else "~"
+        print(f"  [{marker}] {src_file.name}")
+
+        if not dry_run:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dest)
+        stats[action] += 1
+
+    # Detect deleted files
+    deleted = 0
+    if target_dir.exists():
+        for dest_file in sorted(target_dir.glob(f"*{ext}")):
+            if not (source_dir / dest_file.name).exists():
+                print(f"  [-] {dest_file.name}  (source deleted)")
+                if not dry_run:
+                    dest_file.unlink()
+                deleted += 1
+    stats["deleted"] = deleted
+    return stats
+
+
 def sync(target_dir: Path, dry_run: bool = False) -> None:
     if not COMMANDS_DIR.exists():
         print(f"Error: Source commands directory not found: {COMMANDS_DIR}")
@@ -62,10 +99,11 @@ def sync(target_dir: Path, dry_run: bool = False) -> None:
 
     commands_target = target_dir / "commands"
 
-    # Collect all source files
+    # --- Sync commands (with prefix classification) ---
+    print("Commands:")
     source_files = sorted(COMMANDS_DIR.glob("*.md"))
     if not source_files:
-        print("No .md files found in source directory.")
+        print("  No .md files found in source directory.")
         return
 
     stats = {"new": 0, "updated": 0, "unchanged": 0, "skipped": 0}
@@ -124,10 +162,32 @@ def sync(target_dir: Path, dry_run: bool = False) -> None:
     # Summary
     print()
     mode_label = "[DRY RUN] " if dry_run else ""
-    print(f"{mode_label}Sync complete: "
+    print(f"{mode_label}Commands sync: "
           f"{stats['new']} new, {stats['updated']} updated, "
           f"{stats['unchanged']} unchanged, {stats['skipped']} skipped, {deleted} deleted")
     print(f"Total source commands: {len(source_files)}")
+
+    # --- Sync claude agents ---
+    if CLAUDE_AGENTS_DIR.exists():
+        print()
+        print("Claude agents:")
+        claude_agents_target = target_dir / "agents"
+        agent_stats = sync_files(CLAUDE_AGENTS_DIR, claude_agents_target, ".md", dry_run)
+        print(f"{mode_label}Claude agents sync: "
+              f"{agent_stats['new']} new, {agent_stats['updated']} updated, "
+              f"{agent_stats['unchanged']} unchanged, {agent_stats['deleted']} deleted")
+
+    # --- Sync codex agents ---
+    # Codex agents live under the sibling codex variant directory
+    codex_target_dir = target_dir.parent / "codex" / "maestro-flow"
+    if CODEX_AGENTS_DIR.exists():
+        print()
+        print("Codex agents:")
+        codex_agents_target = codex_target_dir / "agents"
+        codex_stats = sync_files(CODEX_AGENTS_DIR, codex_agents_target, ".toml", dry_run)
+        print(f"{mode_label}Codex agents sync: "
+              f"{codex_stats['new']} new, {codex_stats['updated']} updated, "
+              f"{codex_stats['unchanged']} unchanged, {codex_stats['deleted']} deleted")
 
 
 def main():

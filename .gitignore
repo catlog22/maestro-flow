@@ -25,3 +25,4 @@ dashboard/dist/
 dashboard/dist-server/
 dashboard/node_modules/
 .history
+.claude/settings.local.json
