@@ -1,10 +1,10 @@
 # Maestro Commands Quick Reference
 
-> Auto-generated cross-checked card layout — 54 commands, 7 categories
+> Auto-generated cross-checked card layout — 55 commands, 7 categories
 
 ---
 
-## Maestro (24 commands)
+## Maestro (25 commands)
 *Intelligent coordinator and core workflow commands — init, plan, execute, verify, and lifecycle management*
 
 ### `maestro` — 指挥家
@@ -84,6 +84,16 @@
 多维分析：CLI 探索 + 6 维度评分 + 决策记录协议 + 意图覆盖检查。生成 analysis.md 和 context.md，用于后续规划
 
 **Flags:** [phase|topic] (阶段或主题) · -y (自动模式) · -c (恢复会话) · -q (快速模式，仅提取决策) · --gaps [ISS-ID] (缺口分析)
+
+---
+
+### `maestro-collab` — 多 CLI 协作
+
+**Usage:** `/maestro-collab "<requirement>" [--tools gemini,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]`
+
+多 CLI 协作分析：将同一需求扇出到多个 CLI 工具并行分析，交叉验证输出中的共识与冲突，合成统一报告和标准下游产物（context.md + conclusions.json）
+
+**Flags:** "<requirement>" (需求描述) · --tools <list> (指定 CLI 工具，逗号分隔) · --mode analysis|write (委派模式) · --rule <template> (共享规则模板) · -y (跳过确认)
 
 ---
 

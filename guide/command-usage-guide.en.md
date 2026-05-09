@@ -768,6 +768,10 @@ graph LR
         SA["analyze topic"] --> SP["plan --dir"]
         SP --> SE["execute --dir"]
     end
+
+    subgraph collab["Multi-CLI Collab"]
+        MC["/maestro-collab"] -->|context.md| SP2["plan --dir"]
+    end
 ```
 
 ---
@@ -925,6 +929,14 @@ Entries are connected through three mechanisms:
 Health score formula: `score = max(0, 100 − 2×brokenLinks − 1×orphans − 3×missingTitles)`
 
 ---
+
+### Multi-CLI Collaborative Analysis
+
+```bash
+/maestro-collab "Analyze auth module for security vulnerabilities"           # Auto-select first 3 CLI tools
+/maestro-collab "Design caching strategy" --tools gemini,qwen,claude         # Specify tools
+/maestro-collab -y "Review error handling patterns"                          # Skip confirmation
+```
 
 ### Quick Fix a Bug
 

@@ -741,6 +741,10 @@ graph LR
         SA["analyze 'topic'"] --> SP["plan --dir"]
         SP --> SE["execute --dir"]
     end
+
+    subgraph collab["多 CLI 协作"]
+        MC["/maestro-collab"] -->|context.md| SP2["plan --dir"]
+    end
 ```
 
 ---
@@ -775,6 +779,14 @@ graph LR
 /maestro-plan --gaps
 /maestro-execute
 /manage-issue close ISS-xxx --resolution "已修复"
+```
+
+### 多 CLI 协作分析
+
+```bash
+/maestro-collab "分析 auth 模块的安全漏洞"                      # 自动选择前 3 个 CLI 工具
+/maestro-collab "设计缓存策略" --tools gemini,qwen,claude       # 指定工具
+/maestro-collab -y "审查错误处理模式"                            # 跳过确认
 ```
 
 ### 快速修复一个 bug

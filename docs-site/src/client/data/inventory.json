@@ -116,6 +116,14 @@
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
+      "name": "maestro-collab",
+      "file": ".claude/commands/maestro-collab.md",
+      "category": "maestro",
+      "description": "Multi-CLI collaborative analysis -- fan-out to multiple CLI tools, cross-verify, synthesize",
+      "argumentHint": "\"<requirement>\" [--tools gemini,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]",
+      "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
+    },
+    {
       "name": "maestro-roadmap",
       "file": ".claude/commands/maestro-roadmap.md",
       "category": "maestro",

@@ -87,6 +87,17 @@
       "next_commands": ["maestro-plan"],
       "flags": ["[phase|topic] (阶段或主题)", "-y (自动模式)", "-c (恢复会话)", "-q (快速模式，仅提取决策)", "--gaps [ISS-ID] (缺口分析)"]
     },
+    "maestro-collab": {
+      "name": "maestro-collab",
+      "name_zh": "多 CLI 协作",
+      "description": "Multi-CLI collaborative analysis -- fan-out to multiple CLI tools, cross-verify, synthesize",
+      "description_zh": "多 CLI 协作分析：将同一需求扇出到多个 CLI 工具并行分析，交叉验证输出中的共识与冲突，合成统一报告和标准下游产物",
+      "workflow": "独立命令，可在任意阶段使用，产出标准 context.md + conclusions.json",
+      "workflow_zh": "扇出到多个 CLI 并行分析，交叉验证后合成统一报告",
+      "prev_commands": [],
+      "next_commands": ["maestro-plan"],
+      "flags": ["\"<requirement>\" (需求描述)", "--tools <list> (指定 CLI 工具，逗号分隔)", "--mode analysis|write (委派模式)", "--rule <template> (共享规则模板)", "-y (跳过确认)"]
+    },
     "maestro-roadmap": {
       "name": "maestro-roadmap",
       "name_zh": "路线图",
