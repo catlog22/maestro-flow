@@ -268,23 +268,43 @@ CLI 协调器：分析用户意图 → 选择命令链 → 通过 maestro delega
 
 ---
 
-### `spec-add` — 添加规范
+### `spec-add` — Add Spec Entry
 
-**Usage:** `/spec-add [--scope project|global|team|personal] <category> <content>`
+**Usage:** `/spec-add [--scope project|global|team|personal] [--roles <csv>] <category> <content>`
 
-向知识库添加规范条目：支持 project/global/team/personal 四种作用域，包含 bug、pattern、decision、rule 等分类
+Add knowledge entries to the spec system with role tagging. Supports tools category for reusable process definitions, and ref mode for long procedures.
 
-**Flags:** --scope project|global|team|personal (作用域) · <category> (必填：分类) · <content> (必填：条目内容)
+**Flags:** --scope (scope) · --roles (applicable roles: implement,plan,test,review,analyze) · <category> (target file) · --ref (knowhow reference)
 
 ---
 
-### `spec-load` — 加载规范
+### `spec-load` — Load Specs by Role
 
-**Usage:** `/spec-load [--category <type>] [--keyword <word>] [--role <role>]`
+**Usage:** `/spec-load [--role <role>] [--keyword <word>]`
 
-加载与当前上下文相关的规范和知识条目，供代理在执行前注入上下文。支持按分类、关键词和角色过滤
+Load specs by role: primary role doc in full + cross-file entries with matching roles attribute. Role-based loading replaces category-based loading.
 
-**Flags:** --category <type> (按分类过滤) · --keyword <word> (关键词搜索) · --role <role> (含 wiki role 知识)
+**Flags:** --role <role> (implement|plan|test|review|analyze) · --keyword <word> (keyword filter)
+
+---
+
+### `maestro-tools-register` — Register Tool Spec
+
+**Usage:** `/maestro-tools-register <description>`
+
+Extract, generate, or optimize reusable process/tool definitions. Short processes inline in tools.md, long processes use ref mode with knowhow detail document.
+
+**Modes:** extract (from code/docs) · generate (from description) · optimize (improve existing)
+
+---
+
+### `maestro-tools-execute` — Execute Tool Spec
+
+**Usage:** `/maestro-tools-execute [tool-name | --role <role>]`
+
+Load registered tool specs and execute step-by-step. Supports direct invocation by name or role-based recommendation with interactive selection.
+
+**Flags:** <tool-name> (direct) · --role <role> (list available tools for role)
 
 ---
 
