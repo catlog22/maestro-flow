@@ -95,6 +95,11 @@ interface ClaudeSystemMessage {
   message?: string;
 }
 
+interface ClaudeUserMessage {
+  type: 'user';
+  message?: { role: string; content: unknown };
+}
+
 type ClaudeStreamMessage =
   | ClaudeAssistantMessage
   | ClaudeContentBlockStart
@@ -103,7 +108,8 @@ type ClaudeStreamMessage =
   | ClaudeToolUseMessage
   | ClaudeToolResultMessage
   | ClaudePermissionMessage
-  | ClaudeSystemMessage;
+  | ClaudeSystemMessage
+  | ClaudeUserMessage;
 
 // ---------------------------------------------------------------------------
 // Adapter implementation
@@ -511,8 +517,10 @@ export class ClaudeCodeAdapter extends BaseAgentAdapter {
         break;
       }
 
-      case 'system': {
-        // System messages are informational; skip silently
+      case 'system':
+      case 'user': {
+        // System and user messages are informational; skip silently.
+        // 'user' messages are echoes of stdin input in stream-json mode.
         break;
       }
 

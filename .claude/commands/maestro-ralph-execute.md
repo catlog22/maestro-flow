@@ -13,18 +13,9 @@ allowed-tools:
 ---
 <purpose>
 Single-step executor for ralph (adaptive) and maestro (static) sessions.
-Sessions stored at `.workflow/.maestro/*/status.json` with unified JSON schema.
+Sessions stored at `.workflow/.maestro/*/status.json`.
 
-Each invocation: find next pending step → execute → update status → hand off to next iteration.
-
-Three node types:
-- **decision** (ralph-only): `Skill("maestro-ralph")` — ralph re-evaluates, may expand chain
-- **internal**: `Skill({ skill, args })` — synchronous in-session → self-invoke next
-- **external**: `maestro delegate --to claude` → new Claude Code session executing `/{skill} {args}` → STOP → callback → self-invoke next
-
-Session sources:
-- **source: "ralph"** — Adaptive chain with decision nodes. Primary use case.
-- **source: "maestro"** — Static chain, internal/external only. No decision callbacks.
+Each invocation: locate session → find next pending step → resolve args → execute → update status → hand off to next iteration.
 
 Mutual invocation with `/maestro-ralph` forms a self-perpetuating work loop.
 </purpose>
@@ -39,15 +30,35 @@ Remaining  → session_id (if matches maestro-* or ralph-* pattern)
 ```
 
 Also read `session.auto_mode` from status.json — if `true`, treat as `-y` even without flag.
+
+**Session sources:**
+- **ralph** — Adaptive chain with decision nodes (primary)
+- **maestro** — Static chain, internal/external only, no decision callbacks
+
+**Node types:**
+
+| Type | Execution | Flow after |
+|------|-----------|------------|
+| decision (ralph-only) | `Skill("maestro-ralph")` — ralph re-evaluates, may expand chain | Ralph handles handoff, this execution ends |
+| internal | `Skill({ skill, args })` — synchronous in-session | Self-invoke next |
+| external | `maestro delegate --to claude` — new Claude Code session | STOP → callback → self-invoke next |
+
+**Auto flag map** (appended to skill args when auto mode is active):
+
+All lifecycle skills: `-y`. Exception: `quality-test` → `-y --auto-fix`.
+
+Fallback for unlisted skills: internal → no flag, external → `-y`.
+
+HARD RULE: External nodes ALWAYS append `-y` **to the skill's args inside the prompt** (not as a `maestro delegate` CLI argument), regardless of auto mode — delegate sessions are non-interactive and cannot confirm prompts.
 </context>
 
 <execution>
 
-## Step 1: Locate Session
+## Step 1: Locate Session + Find Next Step
 
 ```
-If $ARGUMENTS matches maestro-* or ralph-* pattern:
-  session_path = .workflow/.maestro/{$ARGUMENTS}/status.json
+If session_id provided (matches maestro-* or ralph-*):
+  session_path = .workflow/.maestro/{session_id}/status.json
 Else:
   Scan .workflow/.maestro/*/status.json
   Filter: status == "running"
@@ -61,16 +72,14 @@ If no session found:
 
 Read status.json → extract: `session_id`, `source`, `steps[]`, `current_step`, `status`, `phase`, `milestone`, `intent`, `auto_mode`, `context`, `cli_tool`.
 
-## Step 2: Find Next Pending Step
-
 ```
 next = steps.find(step => step.status == "pending")
-If no pending step → Step 6 (Complete)
+If no pending step → Step 5 (Complete Session)
 ```
 
-## Step 3: Resolve Args (context propagation)
+## Step 2: Resolve Args
 
-Before execution, enrich `next.args` with session context and prior outputs.
+Enrich `next.args` with session context before execution.
 
 **Placeholder substitution:**
 
@@ -109,8 +118,9 @@ For execute commands: find latest type=="plan" artifact → --dir .workflow/scra
 
 Write enriched args back to status.json (resume-safe).
 
-## Step 4: Mark Running
+## Step 3: Execute
 
+Mark step as running:
 ```
 next.status = "running"
 next.started_at = ISO timestamp
@@ -119,7 +129,7 @@ status.updated_at = ISO timestamp
 Write status.json
 ```
 
-Display step banner:
+Display banner:
 ```
 ------------------------------------------------------------
   [{next.index}/{steps.length - 1}] {next.skill} [{next.type}]
@@ -127,69 +137,35 @@ Display step banner:
   Session: {session_id} [{source}]
   Args: {next.args}
 ```
+If decision node: also show `Retry: {retry_count}/{max_retries}`.
 
-If decision node: also show `Retry: {retry_count}/{max_retries}` from parsed args.
-
-## Step 5: Execute by Type
-
-### 5a. decision node (ralph-only)
-
-Hand control back to ralph for re-evaluation.
+### decision node
 
 ```
 Skill({ skill: "maestro-ralph" })
 ```
 
-Ralph will: detect running decision → evaluate results → optionally expand steps[] → mark completed → call ralph-execute to resume.
+Ralph detects the running decision → evaluates → optionally expands steps[] → marks completed → calls ralph-execute. **This execution ends here — ralph handles the handoff.**
 
-**After Skill("maestro-ralph") returns, this execution ends.** Ralph handles the handoff.
+### internal node
 
-### 5b. internal node
-
-HARD RULE: Every internal step MUST be executed via `Skill({ skill, args })`.
-Never "simulate" or "inline" a skill's work. If Skill() is not called, the step has NOT been executed.
-
-**Auto flag propagation** (when `auto == true`):
-
-| Skill | Flag appended |
-|-------|---------------|
-| maestro-init | `-y` |
-| maestro-analyze | `-y` |
-| maestro-brainstorm | `-y` |
-| maestro-roadmap | `-y` |
-| maestro-ui-design | `-y` |
-| maestro-plan | `-y` |
-| maestro-execute | `-y` |
-| quality-auto-test | `-y` |
-| quality-test | `-y --auto-fix` |
-| quality-retrospective | `-y` |
-| maestro-milestone-complete | `-y` |
-| maestro-verify | `-y` |
-| quality-review | `-y` |
-| quality-debug | `-y` |
-| maestro-milestone-audit | `-y` |
+HARD RULE: Every step MUST be executed via `Skill({ skill, args })`. Never simulate or inline a skill's work.
 
 ```
-flag = auto_flag_map[next.skill] || ""
+flag = auto ? (auto_flag_map[next.skill] || "") : ""
 effective_args = flag ? `${next.args} ${flag}` : next.args
 
 Skill({ skill: next.skill, args: effective_args })
 ```
 
-**On success** → Step 5d (Mark Complete).
-**On failure** → Step 5e (Handle Failure).
+→ On success: Step 4a. On failure: Step 4b.
 
-### 5c. external node
+### external node
 
-Context-isolated skill execution via new Claude Code session.
-
-HARD RULE: external nodes ALWAYS delegate to `claude` — only Claude Code can execute slash-command skills.
-`session.cli_tool` is for analysis-mode delegates (e.g., decision evaluation in ralph), NOT for external node execution.
-
-HARD RULE: Delegate sessions are non-interactive and cannot confirm prompts. External nodes MUST always append `-y`, regardless of whether the user passed `-y`. Without it, delegate hangs indefinitely waiting for confirmation.
+HARD RULE: External nodes ALWAYS delegate to `claude` — only Claude Code can execute slash-command skills. `session.cli_tool` is for analysis-mode delegates (e.g., decision evaluation in ralph), NOT for external node execution.
 
 ```
-// Always apply auto flag — delegate sessions are non-interactive and cannot confirm
+// Always append -y to skill args inside the prompt — delegate sessions cannot confirm
 flag = auto_flag_map[next.skill] || "-y"
 effective_args = `${next.args} ${flag}`
 
@@ -203,12 +179,12 @@ Do NOT reimplement — invoke the skill command directly." --to claude --mode wr
 STOP — wait for background callback.
 ```
 
-**On callback:**
-- Retrieve output: `maestro delegate output <exec_id>`
-- **On success** → Step 5d (Mark Complete)
-- **On failure** → Step 5e (Handle Failure)
+On callback: retrieve output via `maestro delegate output <exec_id>`.
+→ On success: Step 4a. On failure: Step 4b.
 
-### 5d. Mark Complete (shared)
+## Step 4: Post-Execution
+
+### 4a. Mark Complete
 
 ```
 next.status = "completed"
@@ -223,12 +199,9 @@ Write status.json
 Display: [{next.index}/{total}] ✓ {next.skill} completed {next.type == "external" ? "[external]" : ""}
 ```
 
-Then hand off:
-```
-Skill({ skill: "maestro-ralph-execute" })
-```
+→ `Skill({ skill: "maestro-ralph-execute" })` (next iteration)
 
-### 5e. Handle Failure (shared)
+### 4b. Handle Failure
 
 ```
 next.status = "failed"
@@ -251,7 +224,7 @@ Else:
   End.
 ```
 
-**Interactive mode (non-auto):**
+**Interactive mode:**
 ```
 AskUserQuestion: "retry / skip / abort"
   retry → next.status = "pending", next.error = null → Skill("maestro-ralph-execute")
@@ -259,7 +232,7 @@ AskUserQuestion: "retry / skip / abort"
   abort → status.status = "paused" → Write status.json → End.
 ```
 
-## Step 6: Complete Session
+## Step 5: Complete Session
 
 When no pending steps remain:
 
@@ -312,7 +285,7 @@ Type badges: `◆` decision, `⚡` external, (none) internal.
 - [ ] Artifact dir resolution finds latest artifact for --dir args
 - [ ] decision nodes hand off to maestro-ralph via Skill() (ralph sessions only)
 - [ ] internal nodes execute via Skill() with auto flag propagation
-- [ ] external nodes use maestro delegate --to claude with run_in_background + STOP pattern
+- [ ] external nodes delegate to claude with `-y` in prompt args (not CLI args), run_in_background + STOP
 - [ ] Context propagation: output signals update status.json.context
 - [ ] status.json updated after every status change (resume-safe)
 - [ ] Auto mode: retry once then pause; interactive: AskUserQuestion retry/skip/abort

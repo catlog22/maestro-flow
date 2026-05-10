@@ -190,7 +190,7 @@ Generate steps from `lifecycle_position` to target (default: `milestone-complete
 
 IMPORTANT: `external` ≠ single CLI tool call. It spawns a full Claude Code session that executes the skill command — the delegate session has complete skill access.
 
-HARD RULE: Delegate sessions are non-interactive. All skills executed via delegate MUST always append `-y`, regardless of user flags. This is enforced by ralph-execute in Step 5c — ralph does not preset flags in steps.
+HARD RULE: Delegate sessions are non-interactive. All skills executed via delegate MUST always append `-y` **to the skill's args inside the prompt** (not as a `maestro delegate` CLI argument). This is enforced by ralph-execute in Step 5c — ralph does not preset flags in steps.
 
 **Build rules:**
 1. Start from inferred position, skip completed stages
@@ -237,7 +237,7 @@ HARD RULE: Delegate sessions are non-interactive. All skills executed via delega
   "target": "milestone-complete",
   "phase": null | N,
   "milestone": "{M}",
-  "auto_mode": false,
+  "auto_mode": auto_confirm,
   "cli_tool": "claude",
   "quality_mode": "standard",
   "passed_gates": [],
