@@ -94,7 +94,7 @@ export async function preloadCommands(): Promise<void> {
     'maestro-quick',
     'maestro-brainstorm',
     'maestro-analyze',
-    'pipeline-discuss',
+    'maestro-collab',
     'spec-setup',
     'quality-test',
     'quality-debug',

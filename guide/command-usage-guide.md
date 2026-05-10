@@ -363,7 +363,7 @@ execute --dir scratch/plan-xxx   ← 直接执行
 
 ```
 /maestro-verify (发现 gaps) → /maestro-plan --gaps → /maestro-execute → /maestro-verify (重新检查)
-/quality-auto-test (测试失败) → /quality-debug --from-auto-test → /maestro-plan --gaps → 重新执行
+/quality-auto-test (测试失败) → /quality-debug --from-uat → /maestro-plan --gaps → 重新执行
 /quality-test --auto-fix (失败) → /quality-debug → /maestro-plan --gaps → 重新执行
 ```
 
@@ -603,7 +603,7 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 | `/quality-auto-test {N}` | 统一自动测试 | `--max-iter N` `--layer L0-L3` `--strategy` `--dry-run` `--re-run` | 智能路由（spec/gap/code），CSV 并行写测试 + 诊断迭代 |
 | `/quality-review {N}` | 分层代码审查 | `--level quick\|standard\|deep` | 执行后审查代码质量 |
 | `/quality-test {N}` | 会话式 UAT | `--smoke` `--auto-fix` | 验收测试 + CSV 并行诊断 + 自动修复循环 |
-| `/quality-debug` | 假设驱动调试 | `--from-uat {N}` `--from-auto-test {N}` `--parallel` | 测试失败后根因分析 |
+| `/quality-debug` | 假设驱动调试 | `--from-uat {N}` `--parallel` | 测试失败后根因分析 |
 | `/quality-refactor` | 技术债务治理 | `[scope]` | 反思驱动的重构迭代 |
 | `/quality-sync` | 文档同步 | `--since HEAD~N` | 代码变更后同步文档 |
 
@@ -620,7 +620,7 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 ### 4.4 调试闭环
 
 ```
-/quality-auto-test (测试失败) → /quality-debug --from-auto-test {N} → 修复 → /quality-auto-test --re-run (重新验证)
+/quality-auto-test (测试失败) → /quality-debug --from-uat {N} → 修复 → /quality-auto-test --re-run (重新验证)
 /quality-test (UAT 失败) → /quality-debug --from-uat {N} → 修复 → /quality-test (重新验证)
 ```
 
@@ -636,7 +636,7 @@ Commander Agent 作为自主 supervisor 可自动推进 Issue 闭环，无需手
 /spec-setup                          # 扫描项目生成约定（已有项目自动触发，新项目可选）
 /spec-add arch "使用 JSONL 格式存储 Issue"  # 录入设计决策
 /spec-add coding "所有 API 端点使用 Hono 框架"  # 录入代码模式
-/spec-load --category arch       # 加载规划相关规范（agent 执行前调用）
+/spec-load --role plan           # 加载规划相关规范（agent 执行前调用）
 ```
 
 类型：`bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `validation`
@@ -801,7 +801,7 @@ graph LR
 /quality-auto-test 3                 # 统一自动测试（智能路由 spec/gap/code）
 /quality-test 3                     # 会话式 UAT
 # 如果发现失败：
-/quality-debug --from-auto-test 3    # 从自动测试失败诊断根因
+/quality-debug --from-uat 3          # 从 UAT 失败诊断根因
 /maestro-plan 3 --gaps              # 生成修复计划
 /maestro-execute 3                  # 执行修复
 /quality-auto-test 3 --re-run       # 只重跑失败场景

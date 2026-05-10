@@ -152,9 +152,6 @@ export async function loadSkill(
 export async function preloadSkills(): Promise<void> {
   const commonSkills = [
     { type: 'claude' as const, name: 'team-lifecycle-v4' },
-    { type: 'codex' as const, name: 'maestro-init' },
-    { type: 'codex' as const, name: 'maestro-plan' },
-    { type: 'codex' as const, name: 'maestro-execute' },
   ];
 
   await Promise.all(

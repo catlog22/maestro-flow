@@ -629,7 +629,7 @@ Quality commands typically run after Phase execution, but can also be used indep
 | `/quality-review {N}` | Tiered code review | `--level quick\|standard\|deep` | Review code quality after execution |
 | `/quality-auto-test {N}` | Test generation | `--layer unit\|e2e\|all` | Nyquist coverage analysis + RED-GREEN |
 | `/quality-test {N}` | Session-based UAT | `--smoke` `--auto-fix` | Acceptance testing + auto-fix loop |
-| `/quality-debug` | Hypothesis-driven debugging | `--from-uat {N}` `--from-business-test {N}` `--parallel` | Root cause analysis after test failure |
+| `/quality-debug` | Hypothesis-driven debugging | `--from-uat {N}` `--parallel` | Root cause analysis after test failure |
 | `/quality-auto-test {N}` | Integration testing | `--max-iter N` `--layer L0-L3` | L0-L3 progressive integration testing |
 | `/quality-refactor` | Technical debt remediation | `[scope]` | Reflection-driven refactoring iteration |
 | `/quality-sync` | Documentation sync | `--since HEAD~N` | Sync documentation after code changes |
@@ -647,7 +647,7 @@ Three test commands verify from different angles — complementary, not replacem
 ### 4.4 Debug Loop
 
 ```
-/quality-auto-test (business rule failure) → /quality-debug --from-business-test {N} → fix → /quality-auto-test --re-run (re-verify)
+/quality-auto-test (test failure) → /quality-debug --from-uat {N} → fix → /quality-auto-test --re-run (re-verify)
 /quality-test (failure found) → /quality-debug --from-uat {N} → fix → /quality-test (re-verify)
 ```
 
@@ -663,7 +663,7 @@ Three test commands verify from different angles — complementary, not replacem
 /spec-setup                          # Scan project for conventions (auto for existing projects, optional for new)
 /spec-add arch "Use JSONL format for Issue storage"  # Record a design decision
 /spec-add coding "All API endpoints use the Hono framework"  # Record a code pattern
-/spec-load --category arch       # Load planning-related specs (called before agent execution)
+/spec-load --role plan           # Load planning-related specs (called before agent execution)
 ```
 
 Types: `bug` / `pattern` / `decision` / `rule` / `debug` / `test` / `review` / `validation`

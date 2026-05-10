@@ -102,7 +102,7 @@ maestro hooks install --level standard
 ### 测试失败修复循环
 
 ```bash
-/quality-debug --from-auto-test 1       # 诊断失败
+/quality-debug --from-uat 1             # 诊断失败
 /maestro-plan 1 --gaps                  # 生成修复计划
 /maestro-execute 1                      # 执行修复
 /quality-auto-test 1 --re-run           # 重跑失败场景
@@ -201,9 +201,9 @@ maestro delegate "..." --rule development-implement-feature --mode write
 /spec-add learning "分页 offset=0 会越界"
 
 # 加载规范
-/spec-load --category coding
+/spec-load --role implement
 /spec-load --keyword auth
-/spec-load --category coding --keyword naming
+/spec-load --role implement --keyword auth
 ```
 
 **自动注入**：Hook 在 Agent 启动时按类型自动注入对应规范（coder→coding, tester→test, debugger→debug）。

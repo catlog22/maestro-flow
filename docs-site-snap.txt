@@ -853,7 +853,7 @@ uid=4_0 RootWebArea "Maestro Documentation" url="https://catlog22.github.io/Maes
     uid=4_787 StaticText "/spec-setup                          # 初始化 specs/（扫描项目生成约定）
 /spec-add decision "使用 JSONL 格式存储 Issue"  # 录入设计决策
 /spec-add pattern "所有 API 端点使用 Hono 框架"  # 录入代码模式
-/spec-load --category planning       # 加载规划相关规范（agent 执行前调用）
+/spec-load --role plan             # 加载规划相关规范（agent 执行前调用）
 "
     uid=4_788 StaticText "类型："
     uid=4_789 StaticText "bug"

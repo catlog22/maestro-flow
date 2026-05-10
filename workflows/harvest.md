@@ -349,5 +349,5 @@ Next:
   → Review wiki entries: maestro wiki list --type note
   → Triage issues: Skill({ skill: "manage-issue", args: "list --source harvest" })
   → Connect wiki graph: Skill({ skill: "wiki-connect", args: "--fix" })
-  → View specs: Skill({ skill: "spec-load", args: "--category learning" })
+  → View specs: Skill({ skill: "spec-load", args: "--role implement" })
 ```

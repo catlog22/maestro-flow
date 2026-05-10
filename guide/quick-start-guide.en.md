@@ -102,7 +102,7 @@ Run quality verification after execution — three complementary test tracks:
 ### Test Failure Fix Loop
 
 ```bash
-/quality-debug --from-auto-test 1      # Diagnose failure
+/quality-debug --from-uat 1            # Diagnose failure
 /maestro-plan 1 --gaps                 # Generate fix plan
 /maestro-execute 1                     # Execute fix
 /quality-auto-test 1 --re-run          # Re-run failed scenarios
@@ -201,9 +201,9 @@ Project-level knowledge auto-injection — no manual context pasting when Agents
 /spec-add learning "Pagination offset=0 causes off-by-one"
 
 # Load specs
-/spec-load --category coding
+/spec-load --role implement
 /spec-load --keyword auth
-/spec-load --category coding --keyword naming
+/spec-load --role implement --keyword auth
 ```
 
 **Auto-injection**: Hooks auto-inject specs by Agent type at startup (coder→coding, tester→test, debugger→debug).

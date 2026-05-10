@@ -181,6 +181,9 @@ maestro overlay remove <name>
 ### Bundle 操作
 
 ```bash
+# 推送 overlay 到团队共享目录
+maestro overlay push -n cli-verify quality-gate
+
 # 打包所有 overlay 为单个 bundle 文件
 maestro overlay bundle
 maestro overlay bundle -o my-overlays.json

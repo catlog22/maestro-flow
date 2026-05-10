@@ -122,21 +122,24 @@ Standard deployment procedure with rollback safety. See referenced document.
 
 ```bash
 # Initialize
-maestro spec init [--scope <scope>]
+maestro spec init [--scope <scope>] [--uid <uid>]
 
 # Add entry
 maestro spec add coding "Always use named exports" --roles "implement"
 maestro spec add tools "Test Flow" "Steps..." --roles "implement,test" --keywords "testing"
 maestro spec add tools "OAuth PKCE" "Summary" --roles "implement" --ref "knowhow/RCP-oauth.md"
+echo '{"category":"coding","title":"...","content":"..."}' | maestro spec add --stdin
+maestro spec add coding "title" "content" --json   # JSON 格式输出
 
 # Load
 maestro spec load --role implement              # Primary doc + cross-file role entries
 maestro spec load --role implement --keyword auth
 maestro spec load --keyword auth                # Keyword-only filter across all files
+echo '{"role":"implement"}' | maestro spec load --stdin
 
 # CLI equivalent
-maestro spec add <category> "<title>" "<content>" --roles r1,r2 --keywords kw1,kw2
-maestro spec load --role <role> [--keyword <word>] --json
+maestro spec add <category> "<title>" "<content>" --roles r1,r2 --keywords kw1,kw2 [--uid <uid>]
+maestro spec load --role <role> [--keyword <word>] [--uid <uid>] --json
 ```
 
 ### Progressive Fill
@@ -447,11 +450,12 @@ Both layers merged and controlled by context budget (full/reduced/minimal/skip).
 
 ```bash
 # ── Spec ────────────────────────────────────────────────────────
-maestro spec init [--scope <scope>]
-maestro spec load [--role <role>] [--keyword <kw>] [--scope <scope>] [--json]
-maestro spec add <category> "<title>" "<content>" [--roles r1,r2] [--keywords kw1,kw2] [--source <src>] [--ref <path>] [--knowhow-type <type>]
-maestro spec list [--scope <scope>]
-maestro spec status [--scope <scope>]
+maestro spec init [--scope <scope>] [--uid <uid>]
+maestro spec load [--role <role>] [--keyword <kw>] [--scope <scope>] [--json] [--uid <uid>] [--stdin]
+maestro spec add <category> "<title>" "<content>" [--roles r1,r2] [--keywords kw1,kw2] [--source <src>] [--ref <path>] [--knowhow-type <type>] [--uid <uid>] [--stdin] [--json]
+maestro spec list [--scope <scope>] [--uid <uid>]
+maestro spec ls [--scope <scope>] [--uid <uid>]               # list 别名
+maestro spec status [--scope <scope>] [--uid <uid>]
 
 # ── Tool Spec (via spec system) ───────────────────────────────
 /maestro-tools-register "<description>"          # Extract, generate, or optimize tool definitions

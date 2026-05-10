@@ -38,7 +38,9 @@ maestro delegate "<PROMPT>" [options]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--to <tool>` | Agent: gemini, qwen, codex, claude, opencode | First enabled in config |
+| `--role <role>` | Capability role for auto tool selection (analyze, explore, review, implement, plan, brainstorm, research) | — |
 | `--mode <mode>` | `analysis` (read-only) or `write` (create/modify/delete) | `analysis` |
+| `--effort <level>` | Reasoning effort level (low, medium, high, max) | — |
 | `--model <model>` | Model override | Tool's `primaryModel` |
 | `--cd <dir>` | Working directory | Current directory |
 | `--rule <template>` | Load protocol + prompt template | — |
@@ -58,6 +60,9 @@ maestro delegate status <id>                       # Broker + history state
 maestro delegate status <id> --events 10           # With more broker events
 maestro delegate output <id>                       # Assistant output
 maestro delegate output <id> --verbose             # With timestamps
+maestro delegate output <id> --all                 # Include thinking/reasoning entries
+maestro delegate output <id> --offset <n>          # Character offset to start from
+maestro delegate output <id> --limit <n>           # Max characters to return
 maestro delegate tail <id>                         # Recent events + history
 maestro delegate tail <id> --events 20 --history 20
 maestro delegate cancel <id>                       # Request cancellation

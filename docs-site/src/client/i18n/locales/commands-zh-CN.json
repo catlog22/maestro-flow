@@ -18,7 +18,7 @@
       "workflow": "brainstorm → **init** → roadmap/spec-generate",
       "workflow_zh": "头脑风暴之后，路线图/规格生成之前执行",
       "prev_commands": ["maestro-brainstorm"],
-      "next_commands": ["maestro-roadmap", "maestro-spec-generate"],
+      "next_commands": ["maestro-roadmap"],
       "flags": ["--auto (自动模式)", "--from-brainstorm SESSION-ID (从头脑风暴导入)"]
     },
     "maestro-plan": {
@@ -28,7 +28,7 @@
       "description_zh": "5 阶段规划流水线：探索 → 澄清需求 → 规划 → 检查 → 确认。生成包含波次和任务定义的 plan.json",
       "workflow": "init/roadmap → **plan** → execute",
       "workflow_zh": "项目初始化和路线图就绪后执行，为 maestro-execute 生成计划",
-      "prev_commands": ["maestro-init", "maestro-roadmap", "maestro-spec-generate"],
+      "prev_commands": ["maestro-init", "maestro-roadmap"],
       "next_commands": ["maestro-execute"],
       "flags": ["[phase] (阶段编号或名称)", "--collab (协作模式)", "--spec SPEC-xxx (引用规格)", "--auto (自动模式)", "--gaps (填补缺口)", "--dir <path> (草稿目录模式)", "--revise [instructions] (修订计划)", "--check <plan-dir> (检查计划)"]
     },
@@ -120,17 +120,6 @@
       "next_commands": ["maestro-plan"],
       "flags": ["<phase|topic> (阶段或主题)", "--styles N (生成风格数量)", "--stack <stack> (技术栈)", "--targets <pages> (目标页面)", "--layouts N (布局数量)", "--refine (精化模式)", "--persist (持久化结果)", "--full (完整模式)", "-y (自动模式)"]
     },
-    "maestro-spec-generate": {
-      "name": "maestro-spec-generate",
-      "name_zh": "规格生成",
-      "description": "Generate specification package from idea/requirements through 7-phase document chain producing product brief, PRD, architecture, epics, and interactive roadmap",
-      "description_zh": "7 阶段文档链：产品简报 → PRD → 架构文档 → 史诗故事 → 用户故事 → 验收标准 → 交互式路线图。适合需要完整规格文档的项目",
-      "workflow": "init → **spec-generate** → plan",
-      "workflow_zh": "项目初始化之后，阶段规划之前。maestro-roadmap 的重量级替代方案",
-      "prev_commands": ["maestro-init", "maestro-brainstorm"],
-      "next_commands": ["maestro-plan"],
-      "flags": ["<idea or @file> (必填)", "-y (自动模式)", "-c (恢复会话)", "--count N (并行角色数)"]
-    },
     "maestro-milestone-audit": {
       "name": "maestro-milestone-audit",
       "name_zh": "里程碑审计",
@@ -173,7 +162,7 @@
       "workflow_zh": "持续使用命令，在执行过程中积累项目知识",
       "prev_commands": [],
       "next_commands": [],
-      "flags": ["--scope project|global|team|personal (作用域)", "<category> (必填：分类)", "<content> (必填：条目内容)"]
+      "flags": ["--scope project|global|team|personal (作用域)", "--roles <csv> (角色标签)", "<category> (必填：分类)", "<content> (必填：条目内容)"]
     },
     "spec-load": {
       "name": "spec-load",
@@ -351,17 +340,6 @@
       "prev_commands": [],
       "next_commands": ["manage-issue"],
       "flags": ["[multi-perspective] (多视角分析模式)", "[by-prompt \"what to look for\"] (提示驱动模式)", "-y|--yes (自动模式)", "--scope=src/** (限定范围)", "--depth=standard|deep (分析深度)"]
-    },
-    "maestro-coordinate": {
-      "name": "maestro-coordinate",
-      "name_zh": "CLI 协调器",
-      "description": "CLI-based coordinator - analyze intent → select command chain → execute sequentially via maestro delegate with auto-confirm",
-      "description_zh": "CLI 协调器：分析用户意图 → 选择命令链 → 通过 maestro delegate 顺序执行，支持自动确认和非阻塞后台执行",
-      "workflow": "替代交互式 maestro 命令的 CLI 入口",
-      "workflow_zh": "通过 maestro delegate 端点执行命令链，适合自动化和脚本场景",
-      "prev_commands": [],
-      "next_commands": ["maestro-plan", "maestro-execute", "maestro-verify"],
-      "flags": ["\"intent text\" (意图文本)", "-y (自动模式)", "-c (恢复会话)", "--dry-run (演练)", "--chain <name> (指定命令链)", "--tool <tool> (指定工具)"]
     },
     "maestro-fork": {
       "name": "maestro-fork",
@@ -605,17 +583,39 @@
       "prev_commands": ["manage-harvest", "wiki-connect"],
       "next_commands": ["learn-follow", "spec-add"],
       "flags": ["[<topic>] (主题)", "--recent N (最近 N 天)", "--type <type> (类型过滤)", "--format brief|full (输出格式)"]
+    },
+    "maestro-tools-register": {
+      "name": "maestro-tools-register",
+      "name_zh": "工具注册",
+      "description": "Register tool specs — extract, generate, or optimize reusable process/tool definitions into .workflow/specs/tools.md",
+      "description_zh": "注册工具规格：从代码/对话/文档中提取流程，或从描述生成新工具定义，或优化现有工具步骤。长流程自动使用 ref 模式（knowhow 详文 + spec 索引）",
+      "workflow": "随时使用，积累可复用的工具定义",
+      "workflow_zh": "支持提取、生成、优化三种模式，输出到 tools.md",
+      "prev_commands": [],
+      "next_commands": ["maestro-tools-execute"],
+      "flags": ["[description] (意图描述)"]
+    },
+    "maestro-tools-execute": {
+      "name": "maestro-tools-execute",
+      "name_zh": "工具执行",
+      "description": "Load and execute tool specs by role or name — supports direct invocation by name or role-based recommendation",
+      "description_zh": "加载并执行工具规格：支持按名称直接调用、按角色推荐或交互式选择。逐步执行并报告进度",
+      "workflow": "配合 maestro-tools-register 使用",
+      "workflow_zh": "加载已注册的工具定义并按步骤执行",
+      "prev_commands": ["maestro-tools-register"],
+      "next_commands": [],
+      "flags": ["[tool-name] (工具名称)", "--role <role> (按角色推荐)"]
     }
   },
   "skills": {
     "team-lifecycle-v4": {
       "name": "team-lifecycle-v4",
       "name_zh": "完整生命周期团队",
-      "description": "Full lifecycle team skill — specification → planning → implementation → testing → review with clean multi-agent architecture",
-      "description_zh": "完整软件开发生命周期的多智能体编排：规格 → 规划 → 实现 → 测试 → 代码审查，采用清晰的角色分离架构",
+      "description": "Full lifecycle team skill — plan, develop, test, review in one coordinated session with role-based beat model architecture",
+      "description_zh": "完整软件开发生命周期的多智能体编排：规格 → 规划 → 实现 → 测试 → 代码审查，采用角色驱动的节拍模型架构",
       "workflow": "适用于需要完整团队协作的大型功能开发",
       "workflow_zh": "替代单 agent 顺序执行，实现并行多角色协作",
-      "roles": ["coordinator (协调器)", "planner (规划者)", "implementer (实现者)", "tester (测试者)", "reviewer (审查者)"],
+      "roles": ["coordinator (协调器)", "analyst (分析师)", "writer (文档编写者)", "planner (规划者)", "executor (执行者)", "tester (测试者)", "reviewer (审查者)", "supervisor (监督者)"],
       "phases_zh": ["规格阶段", "规划阶段", "实现阶段", "测试阶段", "审查阶段"]
     },
     "team-coordinate": {
@@ -626,7 +626,7 @@
       "workflow": "适用于任意需要多角色协作的任务",
       "workflow_zh": "最灵活的团队技能，角色完全按任务需求动态创建",
       "roles": ["coordinator (内置协调器)", "(动态生成的工作角色)"],
-      "phases_zh": ["任务分析", "角色生成", "任务分派", "并行执行", "结果汇总"]
+      "phases_zh": ["任务分析", "角色生成", "任务链", "并行执行", "结果报告"]
     },
     "team-executor": {
       "name": "team-executor",
@@ -636,7 +636,7 @@
       "workflow": "配合 team-coordinate 使用，用于恢复中断的会话",
       "workflow_zh": "team-coordinate 的执行续集，用于会话恢复",
       "roles": ["executor (执行器)"],
-      "phases_zh": ["会话加载", "状态协调", "执行", "交付"]
+      "phases_zh": ["状态协调", "执行", "结果报告"]
     },
     "team-testing": {
       "name": "team-testing",
@@ -677,6 +677,36 @@
       "workflow_zh": "专用债务治理团队，比单命令重构更系统",
       "roles": ["coordinator (协调器)", "scanner (债务扫描器)", "assessor (影响评估者)", "planner (修复规划者)", "executor (重构执行者)", "validator (验证者)"],
       "phases_zh": ["债务扫描", "影响评估", "修复规划", "重构执行", "结果验证"]
+    },
+    "codify-to-knowhow": {
+      "name": "codify-to-knowhow",
+      "name_zh": "知识固化",
+      "description": "Manifest-driven knowledge asset generator — converts any structured package into maestro knowhow + spec entries with ref linking",
+      "description_zh": "通用 manifest 驱动的知识资产生成器：读取 knowhow-manifest.json → 创建 knowhow 文件 → 创建 spec 条目 → 通过 ref 建立索引-详文桥梁",
+      "workflow": "上游 skill 生成 manifest 后调用",
+      "workflow_zh": "上游 skill（如 maestro-ui-codify）负责生成 manifest，本 skill 负责执行知识写入",
+      "roles": ["generator (生成器)"],
+      "phases_zh": ["加载 Manifest", "生成 Knowhow 资产", "生成 Spec 条目", "索引验证"]
+    },
+    "skill-iter-tune": {
+      "name": "skill-iter-tune",
+      "name_zh": "技能迭代调优",
+      "description": "Iterative skill tuning via execute-evaluate-improve feedback loop with two-tool pipeline (Claude + Gemini)",
+      "description_zh": "迭代式技能调优：Claude 执行技能 → Gemini 评估质量 → Agent 应用改进。循环直到达到质量阈值或最大迭代次数",
+      "workflow": "独立使用，优化现有 skill 的输出质量",
+      "workflow_zh": "支持单 skill 和 skill chain 两种调优模式",
+      "roles": ["executor (执行器)", "evaluator (评估器)"],
+      "phases_zh": ["初始化", "执行技能", "评估质量", "应用改进", "生成报告"]
+    },
+    "workflow-skill-designer": {
+      "name": "workflow-skill-designer",
+      "name_zh": "工作流技能设计器",
+      "description": "Meta-skill for designing orchestrator+phases structured workflow skills with progressive phase loading",
+      "description_zh": "元技能：设计编排器+阶段结构的工作流技能。生成 SKILL.md 协调器和 phases/ 文件夹，支持渐进式阶段加载和 TodoWrite 模式",
+      "workflow": "创建新工作流 skill 时使用",
+      "workflow_zh": "从命令/文本描述/需求文档/现有 skill 四种输入源生成完整 skill 包",
+      "roles": ["designer (设计器)"],
+      "phases_zh": ["需求分析", "编排器设计", "阶段文件设计", "验证与集成"]
     }
   }
 }

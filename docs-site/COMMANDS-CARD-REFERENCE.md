@@ -1,6 +1,6 @@
 # Maestro Commands Quick Reference
 
-> Auto-generated cross-checked card layout — 55 commands, 7 categories
+> Auto-generated cross-checked card layout — 58 commands, 7 categories
 
 ---
 
@@ -9,11 +9,11 @@
 
 ### `maestro` — 指挥家
 
-**Usage:** `/maestro "intent text" [-y] [-c] [--dry-run] [--chain <name>] [--exec auto|cli|skill] [--tool <name>]`
+**Usage:** `/maestro "intent text" [-y] [-c] [--dry-run] [--exec auto|cli|internal] [--tool <name>] [--super]`
 
 智能协调器 — 分析用户意图，读取项目状态，选择并执行最优命令链
 
-**Flags:** -y (自动模式) · -c (恢复会话) · --dry-run (演练) · --chain (强制指定链) · --exec auto|cli|skill (执行引擎) · --tool <name> (指定工具)
+**Flags:** -y (自动模式) · -c (恢复会话) · --dry-run (演练) · --exec auto|cli|internal (执行引擎) · --tool <name> (指定工具) · --super (超级模式)
 
 ---
 
@@ -257,7 +257,7 @@ CLI 协调器：分析用户意图 → 选择命令链 → 通过 maestro delega
 
 ---
 
-## Specification (4 commands)
+## Specification (6 commands)
 *Project specifications, conventions, and codebase knowledge management*
 
 ### `spec-setup` — 规格设置
@@ -274,7 +274,7 @@ CLI 协调器：分析用户意图 → 选择命令链 → 通过 maestro delega
 
 Add knowledge entries to the spec system with role tagging. Supports tools category for reusable process definitions, and ref mode for long procedures.
 
-**Flags:** --scope (scope) · --roles (applicable roles: implement,plan,test,review,analyze) · <category> (target file) · --ref (knowhow reference)
+**Flags:** --scope (scope) · --roles (applicable roles: implement,plan,test,review,analyze) · <category> (target file) · --ref (knowhow reference) · --knowhow-type (knowhow document type: asset|blueprint|document|template|recipe|reference|decision)
 
 ---
 
@@ -284,7 +284,7 @@ Add knowledge entries to the spec system with role tagging. Supports tools categ
 
 Load specs by role: primary role doc in full + cross-file entries with matching roles attribute. Role-based loading replaces category-based loading.
 
-**Flags:** --role <role> (implement|plan|test|review|analyze) · --keyword <word> (keyword filter)
+**Flags:** --role <role> (implement|plan|test|review|analyze) · --keyword <word> (keyword filter) · --with-lessons (include learning records)
 
 ---
 
@@ -318,7 +318,7 @@ Load registered tool specs and execute step-by-step. Supports direct invocation 
 
 ---
 
-## Quality (9 commands)
+## Quality (10 commands)
 *Testing, debugging, code review, refactoring, and quality assurance*
 
 ### `quality-review` — 代码审查
@@ -353,11 +353,11 @@ Load registered tool specs and execute step-by-step. Supports direct invocation 
 
 ### `quality-debug` — 调试
 
-**Usage:** `/quality-debug [issue description] [--from-uat <phase>] [--from-auto-test <phase>] [--parallel]`
+**Usage:** `/quality-debug [issue description] [--from-uat <phase>] [--parallel]`
 
-并行假设驱动调试 via CSV wave：Wave 1 并行假设验证，Wave 2 并行修复确认假设，可从 UAT 或自动测试失败直接触发
+并行假设驱动调试 via CSV wave：Wave 1 并行假设验证，Wave 2 并行修复确认假设，可从 UAT 失败直接触发
 
-**Flags:** [issue description] (问题描述) · --from-uat <phase> (从 UAT 触发) · --from-auto-test <phase> (从自动测试触发) · --parallel (并行调试模式)
+**Flags:** [issue description] (问题描述) · --from-uat <phase> (从 UAT 触发) · --parallel (并行调试模式)
 
 ---
 
@@ -384,6 +384,12 @@ Load registered tool specs and execute step-by-step. Supports direct invocation 
 ### ~~`quality-business-test`~~ — 已合并
 
 > **已废弃**：功能已合并入 `quality-auto-test`（spec 路由模式）。使用 `/quality-auto-test <phase>` 替代，当检测到 REQ-*.md 时自动进入 spec 路由。
+
+---
+
+### ~~`quality-integration-test`~~ — 已合并
+
+> **已废弃**：功能已合并入 `quality-auto-test`（统一自动测试）。使用 `/quality-auto-test <phase>` 替代。
 
 ---
 
@@ -424,7 +430,7 @@ Load registered tool specs and execute step-by-step. Supports direct invocation 
 
 将当前会话的经验捕获为记忆：compact（会话压缩摘要）或 tip（单个专业提示）。带 JSON 索引便于后续检索
 
-**Flags:** [type] (知识类型: session|tip|template|recipe|reference|decision) · [description] (描述) · --lang <lang> (编程语言) · --source <url> (来源URL) · --tag tag1,tag2 (标签)
+**Flags:** [type] (知识类型: session|tip|template|recipe|reference|decision) · [description] (描述) · --lang <lang> (编程语言) · --source <url> (来源URL) · --tag tag1,tag2 (标签) · --title <title> (显式标题)
 
 ---
 
