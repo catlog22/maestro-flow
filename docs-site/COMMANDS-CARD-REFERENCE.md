@@ -280,11 +280,11 @@ CLI 协调器：分析用户意图 → 选择命令链 → 通过 maestro delega
 
 ### `spec-load` — 加载规范
 
-**Usage:** `/spec-load [--category <type>] [--keyword <word>] [--with-lessons]`
+**Usage:** `/spec-load [--category <type>] [--keyword <word>] [--role <role>]`
 
-加载与当前上下文相关的规范和学习记录，供代理在执行前注入上下文。支持按分类和关键词过滤
+加载与当前上下文相关的规范和知识条目，供代理在执行前注入上下文。支持按分类、关键词和角色过滤
 
-**Flags:** --category <type> (按分类过滤) · --keyword <word> (关键词搜索) · --with-lessons (包含学习记录)
+**Flags:** --category <type> (按分类过滤) · --keyword <word> (关键词搜索) · --role <role> (含 wiki role 知识)
 
 ---
 
@@ -462,7 +462,7 @@ CLI 协调器：分析用户意图 → 选择命令链 → 通过 maestro delega
 
 **Usage:** `/manage-learn [<text>|tip <text>|list|search|show <id>] [--category ...] [--tag t1,t2] [--phase N] [--confidence ...]`
 
-统一原子知识捕获：洞察（模式、陷阱、技术）和提示（跨会话恢复笔记），存储到 .workflow/learning/lessons.jsonl
+统一原子知识捕获：洞察（模式、陷阱、技术）和提示（跨会话恢复笔记），存储到 .workflow/specs/learnings.md
 
 **Flags:** [<text>] (洞察文本) · [tip <text>] (提示模式) · [list] (列表) · [search] (搜索) · [show <id>] (查看) · --category ... (分类) · --tag t1,t2 (标签) · --phase N (阶段) · --confidence ... (置信度)
 
