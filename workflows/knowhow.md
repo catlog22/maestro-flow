@@ -372,3 +372,68 @@ store_knowhow { operation: "add", type: "template", title: "...", body: "..." }
 | knowhow | recipe | RCP- | Recipe |
 | knowhow | reference | REF- | Reference |
 | knowhow | decision | DCS- | Decision |
+| knowhow | learning | LRN- | Learning Insight |
+
+---
+
+## Part D: Learning Insights Container (LRN-insights.md)
+
+A special container file at `.workflow/knowhow/LRN-insights.md` holds multiple `<knowhow-entry>` sub-entries for atomic learning insights. This replaces the former `lessons.jsonl` approach.
+
+### Container Format
+
+```markdown
+---
+title: "Learning Insights"
+type: knowhow
+category: learning
+tags: [insights, learning]
+created: {ISO timestamp}
+---
+# Learning Insights
+
+Atomic insights captured during active work.
+
+<knowhow-entry category="pattern" keywords="auth,jwt" date="2026-05-10" id="INS-abc123" source="manual">
+
+### JWT refresh tokens must rotate on every use
+
+Refresh-on-use prevents replay attacks.
+
+- **Phase**: 1 (01-auth)
+- **Confidence**: high
+- **Tags**: auth, jwt, security
+
+</knowhow-entry>
+
+<knowhow-entry category="gotcha" keywords="redis,cache" date="2026-05-11" id="INS-def456" source="retrospective">
+
+### Redis MULTI is not truly transactional
+
+MULTI/EXEC guarantees atomicity but not isolation...
+
+- **Phase**: 2 (02-cache)
+- **Lens**: technical
+- **Confidence**: medium
+
+</knowhow-entry>
+```
+
+### Producers
+
+Multiple workflows append `<knowhow-entry>` blocks to this container:
+
+| Workflow | Source value | When |
+|----------|-------------|------|
+| `manage-learn` | `manual` or `tip` | Manual capture during active work |
+| `quality-retrospective` | `retrospective` | Phase retrospective insight distillation |
+| `learn-retro` | `retro-git` or `retro-decision` | Retrospective from git activity or decisions |
+| `wiki-connect` | `wiki-connect` | Graph connectivity insights |
+| `wiki-digest` | `wiki-digest` | Knowledge synthesis meta-insights |
+
+### Retrieval
+
+```bash
+maestro wiki list --type knowhow --category learning    # list all insights
+maestro wiki search "<query>"                           # full-text search
+```

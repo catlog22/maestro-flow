@@ -163,20 +163,7 @@ describe('WikiWriter virtual entries — read-only', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('rejects remove on virtual lesson', async () => {
-    await mkdir(join(tmpRoot, 'learning'), { recursive: true });
-    await writeFile(
-      join(tmpRoot, 'learning', 'lessons.jsonl'),
-      JSON.stringify({ id: 'L1', title: 'Lesson 1', category: 'pattern' }) + '\n',
-      'utf-8',
-    );
-    const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
-    const index = await indexer.get();
-    const lesson = index.entries.find((e) => e.type === 'lesson');
-    if (!lesson) return; // learning adapter may filter
-    const writer = new WikiWriter(tmpRoot, indexer);
-    await expect(writer.remove(lesson.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
-  });
+  // lesson type removed — virtual lesson tests no longer applicable
 });
 
 describe('WikiWriter concurrency', () => {

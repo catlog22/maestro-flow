@@ -33,7 +33,7 @@ $ARGUMENTS — learning intent text, or flags.
 | `deep-understand` | follow → decompose → second-opinion | Thorough module analysis |
 | `pattern-catalog` | decompose --save-spec --save-wiki → second-opinion --mode review | Full pattern extraction + review |
 
-**Session state:** `.workflow/learning/.maestro-learn/{session_id}/status.json`
+**Session state:** `.workflow/knowhow/.maestro-learn/{session_id}/status.json`
 </context>
 
 <execution>

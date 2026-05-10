@@ -11,10 +11,11 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { readdirSync } from 'node:fs';
 
-const CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision'] as const;
+const CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision', 'asset', 'blueprint'] as const;
 const PREFIX_MAP: Record<string, string> = {
   session: 'KNW', tip: 'TIP', template: 'TPL',
   recipe: 'RCP', reference: 'REF', decision: 'DCS',
+  asset: 'AST', blueprint: 'BLP',
 };
 
 function getKnowhowDir(): string {
@@ -54,6 +55,8 @@ export function registerKnowhowCommand(program: Command): void {
     .option('--lang <lang>', '[template] Programming language')
     .option('--source <url>', '[reference] Original URL')
     .option('--status <status>', '[decision] proposed|accepted|superseded')
+    .option('--asset-type <type>', '[asset] Asset type (e.g. prompt, config, workflow)')
+    .option('--code-paths <paths>', '[blueprint] Comma-separated code paths')
     .action(async (opts) => {
       const type = opts.type as string;
       if (!CATEGORIES.includes(type as any)) {
@@ -72,6 +75,14 @@ export function registerKnowhowCommand(program: Command): void {
       }
       if (opts.status && type !== 'decision') {
         console.error('--status is only valid for type "decision"');
+        process.exit(1);
+      }
+      if (opts.assetType && type !== 'asset') {
+        console.error('--asset-type is only valid for type "asset"');
+        process.exit(1);
+      }
+      if (opts.codePaths && type !== 'blueprint') {
+        console.error('--code-paths is only valid for type "blueprint"');
         process.exit(1);
       }
 
@@ -96,6 +107,12 @@ export function registerKnowhowCommand(program: Command): void {
       if (opts.lang) fmLines.push(`lang: ${opts.lang}`);
       if (opts.source) fmLines.push(`source: ${opts.source}`);
       if (opts.status) fmLines.push(`status: ${opts.status}`);
+      if (opts.assetType) fmLines.push(`assetType: ${opts.assetType}`);
+      if (opts.codePaths) {
+        const paths = opts.codePaths.split(',').map((s: string) => s.trim()).filter(Boolean);
+        fmLines.push('codePaths:');
+        for (const p of paths) fmLines.push(`  - ${p}`);
+      }
       fmLines.push('---', '', body);
 
       writeFileSync(join(dir, filename), fmLines.join('\n'), 'utf-8');

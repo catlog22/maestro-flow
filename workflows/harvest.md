@@ -67,7 +67,7 @@ Scan `.workflow/` for harvestable artifacts. Each source type has a known struct
 | `debug` | `.workflow/.debug/*/` | `debug-log.md`, `hypothesis-*.md` | directory name |
 | `scratchpad` | `.workflow/.scratchpad/` | `*.md`, `*.json` | filename |
 | `session` | `.workflow/active/WFS-*/` | `workflow-session.json` | `WFS-*` |
-| `learning` | `.workflow/learning/` | `lessons.jsonl`, `digest-*.md`, `*.md` | filename |
+| `knowhow` | `.workflow/knowhow/` | `LRN-insights.md`, `digest-*.md`, `*.md` | filename |
 
 Scan each source type (filtered by `--source`). For each matching directory/file within `--recent` window, extract: `source_type`, `id`, `path`, `title` (from JSON or H1), `updated_at`, `summary`, `file_count`.
 
@@ -143,8 +143,8 @@ Parse content to identify discrete knowledge items. Each source type has specifi
 
 **Debug (`debug-log.md`, `hypothesis-*.md`):**
 - Final diagnosis → bug fragment
-- Verified hypothesis → pattern/lesson fragment
-- Rejected hypotheses with reasoning → lesson fragment
+- Verified hypothesis → pattern/knowhow fragment
+- Rejected hypotheses with reasoning → knowhow fragment
 
 **Scratchpad (*.md):**
 - Markdown sections → generic fragments
@@ -155,8 +155,8 @@ Parse content to identify discrete knowledge items. Each source type has specifi
 - `key_decisions[]` → decision fragments
 - `deferred_items[]` → issue fragments
 
-**Learning (`lessons.jsonl`):**
-- Each lesson line → lesson fragment (check if already routed to wiki/spec/issue)
+**Knowhow (`LRN-insights.md`):**
+- Each `<knowhow-entry>` → knowhow fragment (check if already routed to wiki/spec/issue)
 
 Each fragment gets:
 ```
@@ -167,7 +167,7 @@ fragment = {
   title: extracted or inferred,
   content: raw text,
   tags: extracted from context,
-  category: "finding" | "decision" | "pattern" | "bug" | "risk" | "task" | "lesson" | "recommendation",
+  category: "finding" | "decision" | "pattern" | "bug" | "risk" | "task" | "knowhow" | "recommendation",
   confidence: 0.0-1.0 (based on specificity and actionability)
 }
 ```
@@ -190,7 +190,7 @@ For each fragment, determine the best routing target (unless `--to` forces a spe
 | `bug` | issue or spec (bug) | Active bugs → issue; fixed bugs → spec learnings |
 | `risk` | issue | Unmitigated risks → trackable issues |
 | `task` | issue | Unfinished work → trackable issues |
-| `lesson` | wiki (lesson) | Generalizable insights → wiki knowledge |
+| `knowhow` | wiki (knowhow) | Generalizable insights → wiki knowledge |
 | `recommendation` | wiki (note) or issue | Actionable recommendations → issue; informational → wiki |
 
 ### Override with `--to`
@@ -214,7 +214,7 @@ Fragments extracted: 8 (filtered from 12 by confidence ≥ 0.5)
 
   → Wiki (3 entries):
     [note]   "SQL injection vector in user input"     tags: security, sql
-    [lesson] "Parameterized queries prevent injection" tags: security, pattern
+    [knowhow] "Parameterized queries prevent injection" tags: security, pattern
     [spec]   "Auth token rotation policy"              tags: auth, security
 
   → Spec (2 entries):
@@ -239,11 +239,11 @@ Execute the routing plan. Each target uses existing infrastructure:
 
 ### 6a. Wiki routing
 
-Create via `maestro wiki create --type <wiki_type> --slug harvest-<source_type>-<short_id> --title --tags --body`. Types: note/lesson/spec. Fallback on failure: write `.workflow/harvest/wiki-pending-{id}.md` with frontmatter.
+Create via `maestro wiki create --type <wiki_type> --slug harvest-<source_type>-<short_id> --title --tags --body`. Types: note/knowhow/spec. Fallback on failure: write `.workflow/harvest/wiki-pending-{id}.md` with frontmatter.
 
 ### 6b. Spec routing
 
-Route via `Skill({ skill: "spec-add", args: "<spec_type> <content>" })`. Category mapping: pattern→pattern, decision→decision, bug→bug, lesson→rule.
+Route via `Skill({ skill: "spec-add", args: "<spec_type> <content>" })`. Category mapping: pattern→pattern, decision→decision, bug→bug, knowhow→rule.
 
 ### 6c. Issue routing
 
@@ -287,7 +287,7 @@ This log prevents duplicate harvesting in future runs.
 
 ## Stage 7: dedup_check
 
-Before writing any item in Stage 6, check for duplicates across `harvest-log.jsonl` (by fragment_id), wiki (by title search), `issues.jsonl` (by title/description), and `learnings.md` (by content). Duplicates are skipped with `[SKIP-DUP]` marker and logged to harvest report.
+Before writing any item in Stage 6, check for duplicates across `harvest-log.jsonl` (by fragment_id), wiki (by title search), `issues.jsonl` (by title/description), and `LRN-insights.md` (by content). Duplicates are skipped with `[SKIP-DUP]` marker and logged to harvest report.
 
 ---
 
@@ -314,7 +314,7 @@ Write `.workflow/harvest/harvest-report-{date}.md`:
 | # | Type | Slug | Title | Status |
 |---|------|------|-------|--------|
 | 1 | note | harvest-analysis-abc | SQL injection vector | CREATED |
-| 2 | lesson | harvest-analysis-def | Parameterized queries | CREATED |
+| 2 | knowhow | harvest-analysis-def | Parameterized queries | CREATED |
 
 ### Spec ({N} entries)
 | # | Type | Content (truncated) | Status |

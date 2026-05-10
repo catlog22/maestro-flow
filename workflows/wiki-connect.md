@@ -28,7 +28,7 @@ Knowledge graph link discovery and health improvement. Analyzes the unified wiki
 
 | Flag | Effect |
 |------|--------|
-| `--scope <type>` | Limit to wiki type: spec, knowhow, note, lesson, issue. Default: all |
+| `--scope <type>` | Limit to wiki type: spec, knowhow, note, issue. Default: all |
 | `--min-similarity N` | Minimum similarity score 0.0-1.0 (default: 0.3) |
 | `--fix` | Auto-apply top suggestions via `maestro wiki update` |
 | `--max N` | Maximum suggestions to generate (default: 20) |
@@ -68,7 +68,7 @@ For connected pairs A → B and B → C:
 
 ### 2d. Type Bridge
 Detect entries of different types referencing the same concept:
-- e.g., `spec-auth` and `lesson-auth-gotcha` — same domain, different perspectives
+- e.g., `spec-auth` and `knowhow-auth-gotcha` — same domain, different perspectives
 - Use tag overlap + title keyword match to detect shared concepts
 - Only suggest if entries are currently unlinked
 
@@ -99,7 +99,7 @@ Baseline health: 72/100 | Orphans: 8 | Broken links: 3
 #  Score  Source              → Target              Reason
 1  0.85   memory-auth-flow    → spec-auth           tag overlap (auth, security) + type bridge
 2  0.71   note-cache-pattern  → spec-performance    title BM25 match + type bridge
-3  0.65   lesson-retry-fix    → spec-error-handling  tag overlap (error, retry)
+3  0.65   knowhow-retry-fix   → spec-error-handling  tag overlap (error, retry)
 ...
 
 Projected health after fix: 81/100 (+9)
@@ -120,14 +120,14 @@ After all updates: re-run `maestro wiki health`, report applied/skipped counts a
 
 ## Stage 6: Persist & Report
 
-1. Write `.workflow/learning/wiki-connections-{YYYY-MM-DD}.md`:
+1. Write `.workflow/knowhow/LRN-wiki-connections-{YYYY-MM-DD}.md`:
    - Baseline vs final health scores
    - All suggestions (applied and unapplied) with scores
    - Orphan rescue results
    - Graph structure observations (hub concentration, type distribution)
    
-2. Append graph insights to `.workflow/learning/lessons.jsonl`:
-   - `source: "wiki-connect"`, `category: "technique"`
+2. Append graph insights as `<knowhow-entry>` to `.workflow/knowhow/LRN-insights.md`:
+   - `source="wiki-connect"`, `category="technique"`
    - e.g., "Auth entries poorly cross-referenced", "Memory entries have highest orphan rate"
 
 3. Display summary:
@@ -135,7 +135,7 @@ After all updates: re-run `maestro wiki health`, report applied/skipped counts a
 == Wiki Connect Complete ==
 Suggestions:  {total} ({applied} applied, {skipped} skipped)
 Health:       {baseline} → {new} ({delta})
-Report:       .workflow/learning/wiki-connections-{date}.md
+Report:       .workflow/knowhow/LRN-wiki-connections-{date}.md
 ```
 
 ---

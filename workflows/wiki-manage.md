@@ -28,7 +28,7 @@ Complements `wiki-connect.md` (link discovery) and `wiki-digest.md` (synthesis) 
 
 | Flag | Effect |
 |------|--------|
-| `--type <type>` | Filter: spec, knowhow, note, lesson, issue |
+| `--type <type>` | Filter: spec, knowhow, note, issue |
 | `--fix` | Auto-fix issues during cleanup |
 | `--json` | JSON output |
 

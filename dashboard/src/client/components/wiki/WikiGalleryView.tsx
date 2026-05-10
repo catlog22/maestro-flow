@@ -6,7 +6,6 @@ const TYPE_COLORS: Record<WikiNodeType, string> = {
   roadmap: 'var(--color-accent-purple, #8b5cf6)',
   spec: 'var(--color-accent-green, #16a34a)',
   issue: 'var(--color-accent-red, #dc2626)',
-  lesson: 'var(--color-accent-yellow, #ca8a04)',
   knowhow: 'var(--color-accent-cyan, #0891b2)',
   note: 'var(--color-text-tertiary, #9ca3af)',
 };

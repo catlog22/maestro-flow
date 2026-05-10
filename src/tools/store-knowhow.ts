@@ -24,7 +24,7 @@ import { getProjectRoot } from '../utils/path-validator.js';
 
 // --- Types ---
 
-const CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision'] as const;
+const CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision', 'asset', 'blueprint'] as const;
 type KnowHowCategory = (typeof CATEGORIES)[number];
 
 const PREFIX_MAP: Record<KnowHowCategory, string> = {
@@ -34,6 +34,8 @@ const PREFIX_MAP: Record<KnowHowCategory, string> = {
   recipe: 'RCP',
   reference: 'REF',
   decision: 'DCS',
+  asset: 'AST',
+  blueprint: 'BLP',
 };
 
 const DECISION_STATUSES = ['proposed', 'accepted', 'superseded'] as const;
@@ -53,6 +55,8 @@ const ParamsSchema = z.object({
   lang: z.string().optional(),       // template: programming language
   source: z.string().optional(),     // reference: original URL
   status: z.enum(DECISION_STATUSES).optional(), // decision: lifecycle status
+  assetType: z.string().optional(),  // asset: asset subtype
+  codePaths: z.array(z.string()).optional(), // blueprint: related code paths
   // search params
   query: z.string().optional(),
   limit: z.number().optional().default(20),
@@ -101,7 +105,7 @@ function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: s
 // --- Operations ---
 
 function executeAdd(params: Params): CcwToolResult {
-  const { type, title, body, tags, lang, source, status } = params;
+  const { type, title, body, tags, lang, source, status, assetType, codePaths } = params;
 
   if (!type) return { success: false, error: 'Parameter "type" is required for add operation' };
   if (!title) return { success: false, error: 'Parameter "title" is required for add operation' };
@@ -116,6 +120,12 @@ function executeAdd(params: Params): CcwToolResult {
   }
   if (status && type !== 'decision') {
     return { success: false, error: 'Parameter "status" is only valid for type "decision"' };
+  }
+  if (assetType && type !== 'asset') {
+    return { success: false, error: 'Parameter "assetType" is only valid for type "asset"' };
+  }
+  if (codePaths && type !== 'blueprint') {
+    return { success: false, error: 'Parameter "codePaths" is only valid for type "blueprint"' };
   }
 
   const dir = getKnowhowDir();
@@ -139,6 +149,11 @@ function executeAdd(params: Params): CcwToolResult {
   if (lang) fmLines.push(`lang: ${lang}`);
   if (source) fmLines.push(`source: ${escapeYamlValue(source)}`);
   if (status) fmLines.push(`status: ${status}`);
+  if (assetType) fmLines.push(`assetType: ${escapeYamlValue(assetType)}`);
+  if (codePaths && codePaths.length > 0) {
+    fmLines.push('codePaths:');
+    for (const p of codePaths) fmLines.push(`  - ${p}`);
+  }
   fmLines.push('---', '', body);
 
   writeFileSync(filePath, fmLines.join('\n'), 'utf-8');
@@ -239,12 +254,14 @@ export const schema: ToolSchema = {
     Optional: limit (default: 20)
 
 **Types & prefixes:**
-  session   → KNW-{ts}.md   session state recovery
-  tip       → TIP-{ts}.md   quick note / reminder
-  template  → TPL-{ts}.md   code/config template
-  recipe    → RCP-{ts}.md   step-by-step guide
-  reference → REF-{ts}.md   external doc summary
-  decision  → DCS-{ts}.md   architecture decision record
+  session    → KNW-{ts}.md   session state recovery
+  tip        → TIP-{ts}.md   quick note / reminder
+  template   → TPL-{ts}.md   code/config template
+  recipe     → RCP-{ts}.md   step-by-step guide
+  reference  → REF-{ts}.md   external doc summary
+  decision   → DCS-{ts}.md   architecture decision record
+  asset      → AST-{ts}.md   reusable asset (prompt, config, workflow)
+  blueprint  → BLP-{ts}.md   architecture blueprint with code paths
 
 Entries are automatically indexed by WikiIndexer (type=knowhow, category={type}).`,
   inputSchema: {
@@ -286,6 +303,15 @@ Entries are automatically indexed by WikiIndexer (type=knowhow, category={type})
         type: 'string',
         enum: DECISION_STATUSES,
         description: '[decision] Lifecycle status: proposed → accepted → superseded.',
+      },
+      assetType: {
+        type: 'string',
+        description: '[asset] Asset subtype (e.g. prompt, config, workflow).',
+      },
+      codePaths: {
+        type: 'array',
+        items: { type: 'string' },
+        description: '[blueprint] Related code paths.',
       },
       // search
       query: {

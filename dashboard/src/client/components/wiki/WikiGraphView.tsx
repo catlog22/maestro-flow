@@ -6,7 +6,6 @@ const TYPE_COLORS: Record<WikiNodeType, string> = {
   roadmap: '#8b5cf6',
   spec: '#16a34a',
   issue: '#dc2626',
-  lesson: '#ca8a04',
   knowhow: '#0891b2',
   note: '#9ca3af',
 };

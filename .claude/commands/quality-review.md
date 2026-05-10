@@ -54,6 +54,14 @@ Extract conclusions from related artifacts that may affect this review. Pass as 
 2. **Wiki constraints**: Run `maestro wiki search "architecture constraint" --json 2>/dev/null`. If results found, pass as `wiki_context` to reviewer agents for evaluating code against documented decisions.
 3. Both are optional — proceed without if unavailable.
 
+### Role Knowledge
+1. Browse accumulated knowledge for this role:
+   `maestro wiki list --role review`
+2. Analyze the index, identify entries relevant to the current task
+3. Load selected documents:
+   `maestro wiki load <id1> [id2] [id3...]`
+4. Review loaded knowledge before proceeding
+
 **Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
 </context>
 

@@ -18,7 +18,7 @@ Two lenses, usable independently or together:
 - **git**: Commit metrics, session detection, per-author breakdown, file hotspots, trend tracking
 - **decision**: Decision tracing across wiki/specs/git, multi-perspective evaluation, lifecycle classification
 
-All insights persist to `.workflow/learning/lessons.jsonl` for cross-session queryability via `manage-learn`.
+All insights persist to `.workflow/knowhow/LRN-insights.md` as `<knowhow-entry>` blocks for cross-session queryability via `manage-learn`.
 </purpose>
 
 <context>
@@ -38,18 +38,17 @@ Arguments: $ARGUMENTS
 **Decision lens flags:**
 - `--phase N` — Decisions from phase N's context and related specs
 - `--tag <tag>` — Decisions tagged with specific tag in wiki/specs
-- `--id <id>` — Single decision by wiki ID or lessons.jsonl INS-id
+- `--id <id>` — Single decision by wiki ID or LRN-insights.md INS-id
 
 **Storage written:**
-- `.workflow/learning/retro-{YYYY-MM-DD}.md` — Unified human-readable report
-- `.workflow/learning/retro-{YYYY-MM-DD}.json` — Structured metrics (machine-readable)
-- `.workflow/learning/lessons.jsonl` — Appended insights (source: "retro-git" or "retro-decision")
-- `.workflow/learning/learning-index.json` — Updated index
+- `.workflow/knowhow/LRN-retro-{YYYY-MM-DD}.md` — Unified human-readable report
+- `.workflow/knowhow/LRN-retro-{YYYY-MM-DD}.json` — Structured metrics (machine-readable)
+- `.workflow/knowhow/LRN-insights.md` — Appended `<knowhow-entry>` blocks (source: "retro-git" or "retro-decision")
 
 **Storage read:**
 - `.workflow/state.json` — Current phase context (optional)
-- `.workflow/learning/retro-*.json` — Prior retro for trend comparison
-- `.workflow/learning/lessons.jsonl` — Existing insights for dedup
+- `.workflow/knowhow/LRN-retro-*.json` — Prior retro for trend comparison
+- `.workflow/knowhow/LRN-insights.md` — Existing insights for dedup
 - `maestro wiki list --type spec --json` — Spec entries (decision lens)
 - `.workflow/specs/architecture-constraints.md` — Documented architectural decisions (decision lens)
 - Phase context with Locked/Free/Deferred decisions (decision lens) — resolve via `state.json.artifacts[]` scratch paths
@@ -60,7 +59,7 @@ Arguments: $ARGUMENTS
 ### Stage 1: Parse Arguments & Select Lenses
 - Parse `--lens` flag: `git`, `decision`, or `all` (default: `all`)
 - Extract lens-specific flags
-- Check `.workflow/learning/` exists; bootstrap if missing
+- Check `.workflow/knowhow/` exists; bootstrap if missing
 
 Display banner:
 ```
@@ -121,7 +120,7 @@ For each author:
 - Session count and patterns
 
 #### 2e: Trend Comparison (if --compare or prior report exists)
-- Find most recent `.workflow/learning/retro-*.json`
+- Find most recent `.workflow/knowhow/LRN-retro-*.json`
 - Compute deltas: commits, LOC, test ratio, churn rate, session count
 - Flag significant changes (>20% delta) as trend highlights
 
@@ -147,7 +146,7 @@ git log --oneline --all --grep="decision\|chose\|decided\|architecture" -20
 Also read:
 - `.workflow/specs/architecture-constraints.md` — grep for `<spec-entry category="arch"` blocks
 - Phase context files — resolve via `state.json.artifacts[]` scratch paths — scan for "Locked:", "Deferred:" sections
-- `.workflow/learning/lessons.jsonl` — filter `category == "decision"`
+- `.workflow/knowhow/LRN-insights.md` — filter `category="decision"` entries
 
 Apply scope filter (--phase, --tag, --id).
 
@@ -157,7 +156,7 @@ Per decision:
 {
   "id": "source id",
   "title": "what was decided",
-  "source": "wiki|spec|phase-context|lesson|git",
+  "source": "wiki|spec|phase-context|knowhow|git",
   "date": "when decided",
   "rationale": "why",
   "alternatives": "what was considered",
@@ -203,7 +202,7 @@ Spawn 3 Agents in a single message:
 
 ### Stage 4: Unified Report
 
-Write `.workflow/learning/retro-{date}.md`:
+Write `.workflow/knowhow/LRN-retro-{date}.md`:
 
 ```markdown
 # Retrospective: {date}
@@ -243,17 +242,16 @@ Write `.workflow/learning/retro-{date}.md`:
 1. {action}: {reason}
 ```
 
-Write `.workflow/learning/retro-{date}.json` with structured data.
+Write `.workflow/knowhow/LRN-retro-{date}.json` with structured data.
 
 ---
 
 ### Stage 5: Persist
 1. Write report files
-2. Append insights to `lessons.jsonl`:
-   - Git insights: `source: "retro-git"`, `category` per insight type
-   - Decision insights: `source: "retro-decision"`, `category: "decision"`
+2. Append insights as `<knowhow-entry>` blocks to `LRN-insights.md` via `maestro wiki append knowhow-lrn-insights --category <cat> --body "<content>" --keywords "<kw>"`:
+   - Git insights: source="retro-git", category per insight type
+   - Decision insights: source="retro-decision", category="decision"
    - Stable INS-id from `hash(lens + metric_or_decision + date)`
-3. Update `learning-index.json`
 4. Display summary
 
 **Next-step routing:**
@@ -271,8 +269,8 @@ Write `.workflow/learning/retro-{date}.json` with structured data.
 | E001 | error | Not inside a git repository (git lens) | Navigate to a git repo directory |
 | E002 | error | No commits found in time window (git lens) | Increase --days or check filters |
 | E003 | error | No decisions found in any source (decision lens) | Check wiki/specs content, or provide --id |
-| E004 | error | --id not found in wiki or lessons (decision lens) | Verify the decision ID exists |
-| W001 | warning | `.workflow/learning/` not found, bootstrapping | Auto-created; proceed normally |
+| E004 | error | --id not found in wiki or knowhow (decision lens) | Verify the decision ID exists |
+| W001 | warning | `.workflow/knowhow/` not found, bootstrapping | Auto-created; proceed normally |
 | W002 | warning | No prior retro report for comparison | Skip trend section; first retro establishes baseline |
 | W003 | warning | One perspective agent failed — partial evaluation (decision lens) | Proceed with available perspectives |
 | W004 | warning | No git implementation evidence for a decision | Evaluation is theoretical only |
@@ -294,10 +292,9 @@ Write `.workflow/learning/retro-{date}.json` with structured data.
   - [ ] 3 perspective agents spawned in parallel
   - [ ] Each decision classified by lifecycle status
   - [ ] Recommendations generated for non-Validated decisions
-- [ ] Unified report written to `retro-{date}.md`
-- [ ] Structured data written to `retro-{date}.json`
-- [ ] `lessons.jsonl` appended with insights (stable INS-ids)
-- [ ] `learning-index.json` updated
-- [ ] No files modified outside `.workflow/learning/`
+- [ ] Unified report written to `LRN-retro-{date}.md`
+- [ ] Structured data written to `LRN-retro-{date}.json`
+- [ ] `LRN-insights.md` appended with `<knowhow-entry>` blocks (stable INS-ids)
+- [ ] No files modified outside `.workflow/knowhow/`
 - [ ] Summary displayed with next-step routing
 </success_criteria>

@@ -73,7 +73,6 @@ export function createWikiRoutes(
       roadmap: 0,
       spec: 0,
       issue: 0,
-      lesson: 0,
       knowhow: 0,
       note: 0,
     };

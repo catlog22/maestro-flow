@@ -3,8 +3,8 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 
 import { toForwardSlash } from '../../shared/utils.js';
 import { parseFrontmatter } from './frontmatter-util.js';
-import { parseSpecEntries } from './spec-entry-parser.js';
-import { loadVirtualEntries } from './virtual-wiki-adapters.js';
+import { parseSpecEntries, parseKnowhowEntries } from './spec-entry-parser.js';
+import { adaptIssueRow, loadVirtualEntries } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
 import { existsSync, readdirSync } from 'node:fs';
 import type {
@@ -80,7 +80,6 @@ export class WikiIndexer {
         roadmap: [],
         spec: [],
         issue: [],
-        lesson: [],
         knowhow: [],
         note: [],
       } as Record<WikiNodeType, WikiEntry[]>;
@@ -145,7 +144,6 @@ export class WikiIndexer {
       roadmap: [],
       spec: [],
       issue: [],
-      lesson: [],
       knowhow: [],
       note: [],
     };
@@ -250,7 +248,37 @@ export class WikiIndexer {
         else if (upper.startsWith('REF-')) entry.category = 'reference';
         else if (upper.startsWith('DCS-')) entry.category = 'decision';
         else if (upper.startsWith('TIP-')) entry.category = 'tip';
+        else if (upper.startsWith('AST-')) entry.category = 'asset';
+        else if (upper.startsWith('BLP-')) entry.category = 'blueprint';
+        else if (upper.startsWith('LRN-')) entry.category = 'learning';
         out.push(entry);
+
+        // Parse <knowhow-entry> blocks into sub-node WikiEntries
+        const knowhowSubEntries = parseKnowhowEntries(entry.body, name, {
+          category: entry.category ?? undefined,
+          keywords: entry.tags,
+        });
+        for (const se of knowhowSubEntries) {
+          out.push({
+            id: `knowhow-${se.id}`,
+            type: 'knowhow' as const,
+            title: se.title,
+            summary: se.content.slice(0, 240).replace(/\s+/g, ' '),
+            tags: se.keywords,
+            status: 'active' as const,
+            created: entry.created,
+            updated: entry.updated,
+            related: [],
+            source: entry.source,
+            body: se.content,
+            ext: { entryType: se.type, timestamp: se.timestamp },
+            scope: null,
+            category: se.category || entry.category,
+            createdBy: entry.createdBy,
+            sourceRef: entry.sourceRef,
+            parent: entry.id,
+          });
+        }
       }
     }
 
@@ -338,15 +366,7 @@ export class WikiIndexer {
       const abs = join(this.workflowRoot, 'issues', name);
       if (!this.isInsideRoot(abs)) continue;
       const rel = toForwardSlash(relative(this.workflowRoot, abs));
-      out.push(...(await loadVirtualEntries(abs, 'issue', rel)));
-    }
-
-    for (const name of await safeReaddir(join(this.workflowRoot, 'learning'))) {
-      if (extname(name).toLowerCase() !== '.jsonl') continue;
-      const abs = join(this.workflowRoot, 'learning', name);
-      if (!this.isInsideRoot(abs)) continue;
-      const rel = toForwardSlash(relative(this.workflowRoot, abs));
-      out.push(...(await loadVirtualEntries(abs, 'lesson', rel)));
+      out.push(...(await loadVirtualEntries(abs, adaptIssueRow, rel)));
     }
 
     return out;
@@ -393,10 +413,10 @@ export class WikiIndexer {
 
     const rel = toForwardSlash(relative(this.workflowRoot, absPath));
     // Knowhow files live under knowhow/ with prefix-<slug>.md naming.
-    // Strip the 4-char prefix (KNW-/TIP-/TPL-/RCP-/REF-/DCS-) from the id-generating
+    // Strip the 4-char prefix (KNW-/TIP-/TPL-/RCP-/REF-/DCS-/AST-/BLP-/LRN-) from the id-generating
     // stem so the id matches what WikiWriter produced at create time (`knowhow-<slug>`).
     let idStem = stem;
-    if (/^(KNW|TIP|TPL|RCP|REF|DCS)-/i.test(stem)) idStem = stem.slice(4);
+    if (/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|LRN)-/i.test(stem)) idStem = stem.slice(4);
     const id = `${type}-${slugify(idStem)}`;
 
     return {

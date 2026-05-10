@@ -49,6 +49,14 @@ Extract conclusions from related artifacts that may affect this debug session â€
 2. **Wiki prior knowledge**: Run `maestro wiki search "<symptom keywords>" --json 2>/dev/null`. If results found, check for prior investigations on similar issues to avoid re-investigation.
 3. Both are optional â€” proceed without if unavailable.
 
+### Role Knowledge
+1. Browse accumulated knowledge for this role:
+   `maestro wiki list --role analyze`
+2. Analyze the index, identify entries relevant to the current task
+3. Load selected documents:
+   `maestro wiki load <id1> [id2] [id3...]`
+4. Review loaded knowledge before proceeding
+
 **Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
 </context>
 

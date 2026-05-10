@@ -21,14 +21,14 @@ $ARGUMENTS — question text and optional flags.
 - `--scope <path>` — Restrict to files under this directory (default: entire project)
 - `--max-hypotheses N` — Max hypotheses before escalating (default: 3)
 
-**Output**: `.workflow/learning/investigate-{slug}/` (evidence.ndjson, understanding.md, report.md)
+**Output**: `.workflow/knowhow/LRN-investigate-{slug}/` (evidence.ndjson, understanding.md, report.md)
 </context>
 
 <execution>
 
 ### Stage 1: Frame the Question
 - Parse question, generate slug, create investigation directory
-- Search prior knowledge: wiki search, grep lessons.jsonl, read debug-notes.md
+- Search prior knowledge: wiki search, grep LRN-insights.md, read debug-notes.md
 - Write initial `understanding.md`
 
 ### Stage 2: Evidence Collection
@@ -54,7 +54,7 @@ If all hypotheses fail: broaden scope, search wiki with alt keywords, or mark IN
 
 ### Stage 5: Synthesize + Persist
 1. Write `report.md` with answer, evidence trail, hypothesis results
-2. Append to `lessons.jsonl`:
+2. Append to `LRN-insights.md`:
    - Confirmed → category: "technique" / "pattern"
    - Disproved → category: "gotcha"
 3. Display summary with next-step routing
@@ -78,6 +78,6 @@ If all hypotheses fail: broaden scope, search wiki with alt keywords, or mark IN
 - [ ] At least 1 hypothesis formed and tested
 - [ ] understanding.md tracks evolving understanding
 - [ ] report.md written with answer and evidence trail
-- [ ] Findings appended to lessons.jsonl with stable INS-ids
+- [ ] Findings appended to LRN-insights.md with stable INS-ids
 - [ ] 3-strike escalation triggered if all hypotheses fail
 </success_criteria>

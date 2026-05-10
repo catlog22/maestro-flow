@@ -45,7 +45,7 @@ export class FSWatcher {
       `${this.workflowRoot}/phases/*/*.md`,
       `${this.workflowRoot}/memory/*.md`,
       `${this.workflowRoot}/issues/*.jsonl`,
-      `${this.workflowRoot}/learning/*.jsonl`,
+      `${this.workflowRoot}/knowhow/*.md`,
       // Collab — member profiles and activity log
       `${this.workflowRoot}/collab/members/*.json`,
       `${this.workflowRoot}/collab/activity.jsonl`,
@@ -145,6 +145,6 @@ function isWikiPath(absPath: string): boolean {
   if (/\/phases\/[^/]+\/[^/]+\.md$/.test(p)) return true;
   if (/\/memory\/[^/]+\.md$/.test(p)) return true;
   if (/\/issues\/[^/]+\.jsonl$/.test(p)) return true;
-  if (/\/learning\/[^/]+\.jsonl$/.test(p)) return true;
+  if (/\/knowhow\/[^/]+\.md$/.test(p)) return true;
   return false;
 }

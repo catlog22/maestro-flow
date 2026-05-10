@@ -1,8 +1,8 @@
 # Retrospective Workflow
 
-Multi-lens 复盘 of completed phase artifacts. Consumes existing execution outputs (verification.json, review.json, issues.jsonl, .summaries/, state.json, uat.md, plan.json) and routes distilled insights into the spec / note / issue / lessons stores.
+Multi-lens 复盘 of completed phase artifacts. Consumes existing execution outputs (verification.json, review.json, issues.jsonl, .summaries/, state.json, uat.md, plan.json) and routes distilled insights into the spec / note / issue / knowhow stores.
 
-This is a **post-execution analysis** workflow. It reads only — until the routing stage, where it writes new spec stubs, issue rows, memory entries, and lesson rows. It never modifies existing phase artifacts.
+This is a **post-execution analysis** workflow. It reads only — until the routing stage, where it writes new spec stubs, issue rows, memory entries, and knowhow entries. It never modifies existing phase artifacts.
 
 ---
 
@@ -369,26 +369,38 @@ After all routings complete, re-write `retrospective.json` with the `routed_id` 
 
 ---
 
-## Stage 7: persist_lessons
+## Stage 7: persist_insights
 
-Append every distilled insight (regardless of routing target, including `routed_to: "none"`) to the lessons store.
+Append every distilled insight (regardless of routing target, including `routed_to: "none"`) to the knowhow store.
 
 ### Bootstrap
 
 ```
-Ensure .workflow/learning/lessons.jsonl and learning-index.json exist.
-Initialize learning-index.json with {"entries":[],"_metadata":{"created":"...","version":"1.0"}} if new.
+Ensure .workflow/knowhow/ exists and LRN-insights.md exists.
+Create LRN-insights.md with frontmatter (title, type: knowhow, category: learning) if new.
 ```
 
-### Append rows
+### Append entries
 
-For each insight in `distilled_insights`, append a JSON line to `.workflow/learning/lessons.jsonl` with fields:
-`{ id, phase, phase_slug, lens, category, title, summary, confidence, tags, evidence_refs, routed_to, routed_id, source: "retrospective", captured_at }`
+For each insight in `distilled_insights`, append a `<knowhow-entry>` to `.workflow/knowhow/LRN-insights.md`:
 
-### Update index
+```html
+<knowhow-entry category="{insight.category}" keywords="{insight.tags joined by comma}" date="{YYYY-MM-DD}" id="{insight.id}" source="retrospective">
 
-Append an entry to `.workflow/learning/learning-index.json` entries[] for each new insight:
-`{ id, type: "insight", timestamp, file: "lessons.jsonl", summary (80 chars), tags, lens, category, phase, phase_slug, confidence, routed_to, routed_id }`
+### {insight.title}
+
+{insight.summary}
+
+- **Phase**: {phase} ({phase_slug})
+- **Lens**: {insight.lens}
+- **Confidence**: {insight.confidence}
+- **Evidence**: {insight.evidence_refs}
+- **Routed to**: {insight.routed_to} ({insight.routed_id or "—"})
+
+</knowhow-entry>
+```
+
+WikiIndexer auto-indexes each entry — no manual index update required.
 
 ### Backward-compat append to specs/learnings.md
 
@@ -409,12 +421,12 @@ Create file with category frontmatter + "## Entries" header if it does not exist
 Print confirmation banner and route the user.
 
 ```
-Print banner: phase, lenses run, insight count, routing summary (spec/note/issue/lesson counts with target paths), output file paths.
+Print banner: phase, lenses run, insight count, routing summary (spec/note/issue/knowhow counts with target paths), output file paths.
 
 Suggested next steps:
   manage-status                              — Review project state
   manage-issue list --source retrospective   — Triage created issues
-  manage-learn list                          — Browse the lessons library
+  manage-learn list                          — Browse the insights library
   maestro-milestone-audit                    — Audit milestone if all phases done
 ```
 
@@ -484,39 +496,23 @@ If `mode == "range"` or `--all`, loop Stages 3-8 per phase, then print aggregate
 }
 ```
 
-### lessons.jsonl row
+### knowhow-entry (in LRN-insights.md)
 
-One JSON object per line:
+```html
+<knowhow-entry category="pattern" keywords="auth,jwt,security" date="2026-04-11" id="INS-a1b2c3d4" source="retrospective">
 
-```json
-{"id":"INS-a1b2c3d4","phase":1,"phase_slug":"01-auth","lens":"technical","category":"pattern","title":"JWT refresh tokens must rotate on every use","summary":"...","confidence":"high","tags":["auth","jwt","security"],"evidence_refs":["..."],"routed_to":"spec","routed_id":"coding-conventions.md#INS-a1b2c3d4","source":"retrospective","captured_at":"2026-04-11T10:00:00Z"}
+### JWT refresh tokens must rotate on every use
+
+Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; should become a project-wide convention.
+
+- **Phase**: 1 (01-auth)
+- **Lens**: technical
+- **Confidence**: high
+- **Evidence**: .workflow/scratch/plan-auth-2026-04-15/verification.json#gaps[2]
+- **Routed to**: spec (coding-conventions.md#INS-a1b2c3d4)
+
+</knowhow-entry>
 ```
 
-### learning-index.json
-
-```json
-{
-  "entries": [
-    {
-      "id": "INS-a1b2c3d4",
-      "type": "insight",
-      "timestamp": "2026-04-11T10:00:00Z",
-      "file": "lessons.jsonl",
-      "summary": "JWT refresh tokens must rotate on every use",
-      "tags": ["auth", "jwt", "security"],
-      "lens": "technical",
-      "category": "pattern",
-      "phase": 1,
-      "phase_slug": "01-auth",
-      "confidence": "high",
-      "routed_to": "spec",
-      "routed_id": "coding-conventions.md#INS-a1b2c3d4"
-    }
-  ],
-  "_metadata": {
-    "created": "2026-04-11T10:00:00Z",
-    "version": "1.0"
-  }
-}
-```
+Auto-indexed by WikiIndexer — no separate index file required.
 

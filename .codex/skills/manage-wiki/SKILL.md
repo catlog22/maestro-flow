@@ -27,7 +27,7 @@ $ARGUMENTS — subcommand and optional flags.
 | `stats` | Graph statistics — type distribution, tag frequency, growth |
 
 **Flags:**
-- `--type <type>` — Filter: spec, knowhow, note, lesson, issue
+- `--type <type>` — Filter: spec, knowhow, note, issue
 - `--fix` — Auto-fix issues during cleanup
 - `--json` — JSON output
 </context>

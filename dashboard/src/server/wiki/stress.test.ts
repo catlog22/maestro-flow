@@ -44,7 +44,6 @@ function makeIndex(entries: WikiEntry[]): WikiIndex {
     roadmap: [],
     spec: [],
     issue: [],
-    lesson: [],
     knowhow: [],
     note: [],
   } as WikiIndex['byType'];

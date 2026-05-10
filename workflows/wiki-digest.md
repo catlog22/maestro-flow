@@ -13,7 +13,7 @@ Unlike `maestro wiki list` which shows raw entries, this workflow synthesizes an
 - `.workflow/` initialized
 - Wiki entries exist (at least 5 for meaningful clustering)
 - `maestro wiki` CLI available
-- `.workflow/learning/lessons.jsonl` exists (optional, for cross-reference)
+- `.workflow/knowhow/LRN-insights.md` exists (optional, for cross-reference)
 
 ---
 
@@ -32,7 +32,7 @@ Unlike `maestro wiki list` which shows raw entries, this workflow synthesizes an
 |------|--------|
 | `<topic>` | Search wiki for matching entries via BM25 |
 | `--recent N` | Entries updated within last N days |
-| `--type <type>` | Filter by wiki type: spec, knowhow, note, lesson, issue |
+| `--type <type>` | Filter by wiki type: spec, knowhow, note, issue |
 | `--format brief\|full` | `brief` = compact (default), `full` = detailed per-entry |
 | `--create-issues` | Auto-create knowledge-gap issues in `issues.jsonl` |
 
@@ -82,18 +82,18 @@ Top 3-5 most important entries by:
 - **Broken links**: `[[references]]` that don't resolve within the theme
 - **Orphans**: entries in this theme with no connections
 - **TODO markers**: entries with `?`, "TODO", "TBD" in title or body
-- **Missing perspectives**: theme has specs but no lessons? Issues but no decisions?
+- **Missing perspectives**: theme has specs but no knowhow? Issues but no decisions?
 
 ### Health Score
 Per-theme health adapted from wiki health formula (entries, connectivity, completeness).
 
 ---
 
-## Stage 4: Cross-Reference with Lessons
+## Stage 4: Cross-Reference with Knowhow Insights
 
-Search `.workflow/learning/lessons.jsonl` for keyword matches against each theme. Flag **unlinked insights** -- lessons matching a theme but not referenced by any wiki entry in that theme.
+Search via `maestro wiki search` or parse `.workflow/knowhow/LRN-insights.md` for keyword matches against each theme. Flag **unlinked insights** — knowhow entries matching a theme but not referenced by any wiki entry in that theme.
 
-If `lessons.jsonl` not found, skip with W002 warning.
+If `LRN-insights.md` not found, skip with W002 warning.
 
 ---
 
@@ -104,8 +104,8 @@ Build a type × theme matrix showing knowledge density:
 ```
               Theme 1    Theme 2    Theme 3    Theme 4    Theme 5
 spec          ███░░      ░░░░░      █████      ██░░░      ░░░░░
-memory        ░░░░░      ████░      ██░░░      ░░░░░      ███░░
-lesson        █░░░░      ██░░░      ████░      █░░░░      ░░░░░
+knowhow       ░░░░░      ████░      ██░░░      ░░░░░      ███░░
+note          █░░░░      ██░░░      ████░      █░░░░      ░░░░░
 issue         ██░░░      ░░░░░      █░░░░      ███░░      ░░░░░
 
 Legend: █ = entries exist, ░ = sparse/missing
@@ -117,7 +117,7 @@ Empty cells = knowledge gaps. Each gap becomes a candidate for Stage 7.
 
 ## Stage 6: Write Digest
 
-Produce `.workflow/learning/digest-{slug}-{YYYY-MM-DD}.md`:
+Produce `.workflow/knowhow/LRN-digest-{slug}-{YYYY-MM-DD}.md`:
 
 ```markdown
 # Knowledge Digest: {scope description}
@@ -140,10 +140,10 @@ Produce `.workflow/learning/digest-{slug}-{YYYY-MM-DD}.md`:
 ## Knowledge Gaps
 | Gap | Theme | Type Missing | Suggested Action |
 |-----|-------|-------------|-----------------|
-| No lessons for auth patterns | Security | lesson | /learn-decompose src/auth/ |
+| No knowhow for auth patterns | Security | knowhow | /learn-decompose src/auth/ |
 
 ## Unlinked Insights
-{lessons.jsonl entries not connected to wiki graph}
+{knowhow entries not connected to wiki graph}
 
 ## Recommended Actions
 1. {action}: {reason}
@@ -160,8 +160,8 @@ For each knowledge gap from Stage 5: dedup against `.workflow/issues/issues.json
 
 ## Stage 8: Persist
 
-1. Write digest file to `.workflow/learning/`
-2. Append meta-insights to `.workflow/learning/lessons.jsonl` (`source: "wiki-digest"`, `category: "technique"`)
+1. Write digest file to `.workflow/knowhow/`
+2. Append meta-insights as `<knowhow-entry>` to `.workflow/knowhow/LRN-insights.md` (`source="wiki-digest"`, `category="technique"`)
 3. Display summary: scope, entry count, theme count, gap count, created issues (if applicable), report path.
 
 ---

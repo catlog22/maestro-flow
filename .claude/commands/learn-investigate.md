@@ -27,16 +27,15 @@ Arguments: $ARGUMENTS
 - `--max-hypotheses N` — Maximum hypotheses to test before escalating (default: 3)
 
 **Storage written:**
-- `.workflow/learning/investigate-{slug}/evidence.ndjson` — Structured evidence log (one JSON line per evidence)
-- `.workflow/learning/investigate-{slug}/understanding.md` — Evolving understanding document
-- `.workflow/learning/investigate-{slug}/report.md` — Final investigation report
-- `.workflow/learning/lessons.jsonl` — Investigation findings as insights (source: "investigate")
-- `.workflow/learning/learning-index.json` — Updated index
+- `.workflow/knowhow/LRN-investigate-{slug}/evidence.ndjson` — Structured evidence log (one JSON line per evidence)
+- `.workflow/knowhow/LRN-investigate-{slug}/understanding.md` — Evolving understanding document
+- `.workflow/knowhow/LRN-investigate-{slug}/report.md` — Final investigation report
+- `.workflow/knowhow/LRN-insights.md` — Investigation findings as `<knowhow-entry>` blocks (source: "investigate")
 
 **Storage read:**
 - Source files within scope
 - `maestro wiki search "<question>"` — Prior knowledge about the topic
-- `.workflow/learning/lessons.jsonl` — Prior related investigations
+- `.workflow/knowhow/LRN-insights.md` — Prior related investigations
 - `.workflow/specs/debug-notes.md` — Known gotchas and patterns
 - `.workflow/codebase/architecture.md` — Structural context (if exists)
 </context>
@@ -47,17 +46,17 @@ Arguments: $ARGUMENTS
 - Parse question from arguments
 - Determine scope (--scope or full project)
 - Generate investigation slug from question keywords
-- Create `.workflow/learning/investigate-{slug}/` directory
+- Create `.workflow/knowhow/LRN-investigate-{slug}/` directory
 - Search prior knowledge:
   - `maestro wiki search "<question>"` for related entries
-  - Grep `lessons.jsonl` for related insights
+  - Search `LRN-insights.md` for related insights
   - Read `debug-notes.md` for known gotchas
 
 Write initial `understanding.md`:
 ```markdown
 # Investigation: {question}
 ## Initial Understanding
-- Prior knowledge: {summary of wiki/lessons findings}
+- Prior knowledge: {summary of wiki/knowhow findings}
 - Scope: {path or "full project"}
 - Started: {timestamp}
 ```
@@ -78,7 +77,7 @@ For each piece of evidence, append to `evidence.ndjson`:
 ### Stage 3: Pattern Matching
 Compare collected evidence against known patterns:
 - Check `debug-notes.md` entries for matching situations
-- Check `lessons.jsonl` for related technique/pattern/gotcha entries
+- Check `LRN-insights.md` for related technique/pattern/gotcha entries
 - Identify: does this match a documented pattern, or is it novel?
 
 Update `understanding.md` with pattern analysis section.
@@ -179,12 +178,10 @@ Write final `report.md`:
 ```
 
 ### Stage 8: Persist
-1. Append findings to `lessons.jsonl`:
-   - Confirmed hypotheses → `category: "technique"` or `"pattern"`
-   - Disproved hypotheses → `category: "gotcha"` (what looked true but wasn't)
-   - `source: "investigate"`, tags: `["investigate", "{question-slug}"]`
+1. Append findings as `<knowhow-entry>` blocks to `LRN-insights.md` via `maestro wiki append knowhow-lrn-insights --category <cat> --body "<content>" --keywords "investigate,{question-slug}"`:
+   - Confirmed hypotheses → `category="technique"` or `"pattern"`
+   - Disproved hypotheses → `category="gotcha"` (what looked true but wasn't)
    - Stable INS-id from `hash("investigate" + question + finding_title)`
-2. Update `learning-index.json`
 3. Display summary with answer and next steps
 
 **Next-step routing:**
@@ -199,23 +196,22 @@ Write final `report.md`:
 |------|----------|-----------|----------|
 | E001 | error | No question provided | Provide a question as the first argument |
 | E002 | error | Scope path does not exist | Check --scope path is valid |
-| W001 | warning | No prior knowledge found in wiki/lessons | Proceed with fresh investigation |
+| W001 | warning | No prior knowledge found in wiki/knowhow | Proceed with fresh investigation |
 | W002 | warning | Evidence collection found very few matches (<3) | Broaden search terms or expand scope |
 | W003 | warning | All hypotheses inconclusive — escalating | Investigation marked INCONCLUSIVE |
 </error_codes>
 
 <success_criteria>
 - [ ] Question parsed and investigation slug generated
-- [ ] Investigation directory created under `.workflow/learning/`
-- [ ] Prior knowledge loaded from wiki and lessons
+- [ ] Investigation directory created under `.workflow/knowhow/`
+- [ ] Prior knowledge loaded from wiki and knowhow
 - [ ] Evidence collected and logged to `evidence.ndjson` (structured NDJSON)
-- [ ] Pattern matching performed against debug-notes and lessons
+- [ ] Pattern matching performed against debug-notes and knowhow insights
 - [ ] At least 1 hypothesis formed and tested
 - [ ] `understanding.md` tracks evolving understanding with timestamps
 - [ ] `report.md` written with answer, evidence trail, hypothesis results
-- [ ] Findings appended to `lessons.jsonl` with stable INS-ids
-- [ ] `learning-index.json` updated
+- [ ] Findings appended to `LRN-insights.md` as `<knowhow-entry>` blocks with stable INS-ids
 - [ ] 3-strike escalation triggered if all hypotheses fail
-- [ ] No files modified outside `.workflow/learning/`
+- [ ] No files modified outside `.workflow/knowhow/`
 - [ ] Summary displayed with answer and next-step routing
 </success_criteria>

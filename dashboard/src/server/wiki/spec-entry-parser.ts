@@ -59,7 +59,6 @@ export const FILE_CATEGORY_MAP: Record<string, string> = {
 /** Heading regex: matches ## or ### at start of line. */
 export const HEADING_RE = /^(#{2,3})\s+(.+)$/;
 
-const SPEC_ENTRY_TAG_RE = /<spec-entry\s+([^>]+)>([\s\S]*?)<\/spec-entry>/g;
 const TAG_ATTR_RE = /([\w-]+)="([^"]*)"/g;
 
 /** Detect entry type from heading text or fall back to file-based default. */
@@ -96,12 +95,12 @@ export function extractCleanTitle(heading: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Parse markdown body into SpecEntry objects.
- * First extracts <spec-entry> closed-tag blocks, then parses remaining text
- * with legacy heading-based parser.
+ * Generic entry block parser. Extracts closed-tag blocks matching `tagName`,
+ * then parses remaining text with legacy heading-based parser.
  */
-export function parseSpecEntries(
+function parseEntryBlocks(
   body: string,
+  tagName: string,
   fileName: string,
   frontmatter?: Record<string, unknown>,
 ): SpecEntry[] {
@@ -109,12 +108,12 @@ export function parseSpecEntries(
   const entries: SpecEntry[] = [];
   let entryIndex = 0;
 
-  // Pass 1: Extract <spec-entry> closed-tag blocks
+  // Pass 1: Extract <tagName> closed-tag blocks
+  const tagRe = new RegExp(`<${tagName}\\s+([^>]+)>([\\s\\S]*?)<\\/${tagName}>`, 'g');
   const consumedRanges: Array<{ start: number; end: number }> = [];
   let tagMatch: RegExpExecArray | null;
-  SPEC_ENTRY_TAG_RE.lastIndex = 0;
 
-  while ((tagMatch = SPEC_ENTRY_TAG_RE.exec(body)) !== null) {
+  while ((tagMatch = tagRe.exec(body)) !== null) {
     const attrStr = tagMatch[1];
     const innerContent = tagMatch[2].trim();
     consumedRanges.push({ start: tagMatch.index, end: tagMatch.index + tagMatch[0].length });
@@ -190,4 +189,26 @@ export function parseSpecEntries(
   }
 
   return entries;
+}
+
+/**
+ * Parse markdown body into SpecEntry objects from <spec-entry> blocks.
+ */
+export function parseSpecEntries(
+  body: string,
+  fileName: string,
+  frontmatter?: Record<string, unknown>,
+): SpecEntry[] {
+  return parseEntryBlocks(body, 'spec-entry', fileName, frontmatter);
+}
+
+/**
+ * Parse markdown body into SpecEntry objects from <knowhow-entry> blocks.
+ */
+export function parseKnowhowEntries(
+  body: string,
+  fileName: string,
+  frontmatter?: Record<string, unknown>,
+): SpecEntry[] {
+  return parseEntryBlocks(body, 'knowhow-entry', fileName, frontmatter);
 }

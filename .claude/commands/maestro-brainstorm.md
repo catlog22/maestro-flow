@@ -44,6 +44,14 @@ $ARGUMENTS -- topic text for auto mode, or role name for single role mode.
 - `--skip-questions`: Skip context gathering questions
 - `--include-questions`: Force context gathering even if analysis exists
 - `--style-skill PKG`: Style package for ui-designer role
+
+### Role Knowledge
+1. Browse accumulated knowledge for this role:
+   `maestro wiki list --role brainstorm`
+2. Analyze the index, identify entries relevant to the current task
+3. Load selected documents:
+   `maestro wiki load <id1> [id2] [id3...]`
+4. Review loaded knowledge before proceeding
 </context>
 
 <execution>

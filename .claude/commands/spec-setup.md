@@ -11,7 +11,7 @@ allowed-tools:
 ---
 <purpose>
 Initialize the project-level specs directory by scanning the codebase for conventions, patterns, and tech stack.
-Core files (coding, arch, learning) are always created. Optional files (quality, debug, test, review) are created only when relevant signals are detected.
+Core files (coding, arch, knowhow) are always created. Optional files (quality, debug, test, review) are created only when relevant signals are detected.
 All output lands in `.workflow/specs/`.
 </purpose>
 
@@ -44,7 +44,7 @@ Follow '~/.maestro/workflows/specs-setup.md' completely.
 
 <success_criteria>
 - [ ] `.workflow/specs/` directory created
-- [ ] Core files always created: `coding-conventions.md`, `architecture-constraints.md`, `learnings.md`
+- [ ] Core files always created: `coding-conventions.md`, `architecture-constraints.md`, `knowhow.md`
 - [ ] Optional files created when detected: `quality-rules.md` (linter/CI), `test-conventions.md` (test framework), `debug-notes.md` (on demand), `review-standards.md` (on demand)
 - [ ] Report displayed with summary and next steps
 </success_criteria>

@@ -3,8 +3,8 @@
 Atomic insight capture, search, and retrieval. Lightweight gstack-style "eureka moment" log that complements the retrospective workflow: where retrospective extracts insights from completed phases in bulk, `manage-learn` captures one insight at a time during active work.
 
 Storage:
-- `.workflow/learning/lessons.jsonl` — append-only JSONL row per insight (shared with retrospective output)
-- `.workflow/learning/learning-index.json` — searchable index
+- `.workflow/knowhow/LRN-insights.md` — append-only container of `<knowhow-entry>` sub-entries (shared with retrospective output)
+- Auto-indexed by WikiIndexer (no manual index required)
 
 **Shared store rationale:** Manual captures (`source: "manual"`), tips (`source: "tip"`), retrospective-distilled insights (`source: "retrospective"`, `lens: <name>` from `quality-retrospective`), and learn-retro insights (`source: "retro-git"` or `source: "retro-decision"` from `learn-retro`) all live in the same store so search and list see the entire knowledge corpus. The `source` field disambiguates origin.
 
@@ -15,7 +15,7 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 ## Prerequisites
 
 - `.workflow/` initialized (`.workflow/state.json` exists). If missing, error E001.
-- The `learning/` directory and its files are created on first use; do not require them to exist upfront.
+- The `knowhow/` directory and `LRN-insights.md` are created on first use; do not require them to exist upfront.
 
 ---
 
@@ -26,7 +26,7 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 /manage-learn "<insight>" --category pattern --tag auth,jwt    → capture with explicit category and tags
 /manage-learn list                                              → show recent 20 insights
 /manage-learn list --tag auth                                   → filtered list
-/manage-learn search <query>                                    → text search across lessons.jsonl
+/manage-learn search <query>                                    → search via maestro wiki search
 /manage-learn show <INS-id>                                     → full insight + linked phase context
 ```
 
@@ -58,15 +58,25 @@ Empty args → AskUserQuestion. Invalid --category → E002.
 ### Step 2.1: Bootstrap storage
 
 ```bash
-LEARN_DIR=".workflow/learning"
-LESSONS_FILE="$LEARN_DIR/lessons.jsonl"
-INDEX_FILE="$LEARN_DIR/learning-index.json"
+KNOWHOW_DIR=".workflow/knowhow"
+INSIGHTS_FILE="$KNOWHOW_DIR/LRN-insights.md"
 
-mkdir -p "$LEARN_DIR"
-touch "$LESSONS_FILE"
+mkdir -p "$KNOWHOW_DIR"
 
-if [ ! -f "$INDEX_FILE" ]; then
-  echo '{"entries":[],"_metadata":{"created":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","version":"1.0"}}' > "$INDEX_FILE"
+if [ ! -f "$INSIGHTS_FILE" ]; then
+  cat > "$INSIGHTS_FILE" << 'EOF'
+---
+title: "Learning Insights"
+type: knowhow
+category: learning
+tags: [insights, learning]
+created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+---
+# Learning Insights
+
+Atomic insights captured during active work.
+
+EOF
 fi
 ```
 
@@ -102,32 +112,33 @@ Simple keyword heuristics — no LLM call. Match the insight text (lowercased) a
 
 First match wins. If nothing matches, category = `technique`.
 
-### Step 2.5: Build row
+### Step 2.5: Build knowhow-entry
 
 ```
-row = {
-  id: "INS-{hex}",
-  phase: phase,
-  phase_slug: phase_slug,
-  lens: null,                  // null for manual capture (only retrospective sets this)
-  category: category,
-  title: first 80 chars of insight text (truncated on word boundary),
-  summary: full insight text,
-  confidence: --confidence value or "medium",
-  tags: parsed --tag values + ["manual"],
-  evidence_refs: [],           // empty for manual capture
-  routed_to: "none",
-  routed_id: null,
-  source: "manual",
-  captured_at: now ISO 8601 UTC
-}
+entry = <knowhow-entry
+  category="{category}"
+  keywords="{parsed --tag values joined by comma}"
+  date="{YYYY-MM-DD}"
+  id="INS-{hex}"
+  source="manual"
+>
+
+### {title: first 80 chars of insight text, truncated on word boundary}
+
+{full insight text}
+
+- **Phase**: {phase or "none"} ({phase_slug or "—"})
+- **Confidence**: {--confidence value or "medium"}
+- **Tags**: {parsed --tag values + ["manual"]}
+
+</knowhow-entry>
 ```
 
 ### Step 2.6: Persist
 
-Append row as single JSON line to `.workflow/learning/lessons.jsonl`.
+Append the `<knowhow-entry>` block to `.workflow/knowhow/LRN-insights.md`.
 
-Update `.workflow/learning/learning-index.json` — append an index entry mirroring key row fields: `id`, `type:"insight"`, `timestamp`, `file:"lessons.jsonl"`, `summary` (=title), `tags`, `lens`, `category`, `phase`, `phase_slug`, `confidence`, `routed_to:"none"`, `routed_id:null`.
+WikiIndexer auto-indexes the entry — no manual index update required.
 
 ### Step 2.7: Confirmation banner
 
@@ -139,12 +150,12 @@ Display: ID, category, confidence, tags, phase (+slug if present), title, file p
 
 ### Step 3.1: Read entries
 
-Read `.workflow/learning/learning-index.json`. Filter by `--tag`, `--category`, `--phase`, `--lens` flags. Sort by timestamp descending. Limit to 20 (or `--limit N`).
+Query via `maestro wiki list --type knowhow --category learning --json`. Filter by `--tag`, `--category`, `--phase`, `--lens` flags. Sort by timestamp descending. Limit to 20 (or `--limit N`).
 
 ### Step 3.2: Display table
 
 ```
-=== LEARNING INSIGHTS ({shown}/{total}) ===
+=== KNOWHOW INSIGHTS ({shown}/{total}) ===
 
   ID              Category    Phase   Conf   Tags                 Title
   ──────────────  ──────────  ──────  ─────  ───────────────────  ────────────────────────────
@@ -174,9 +185,9 @@ Capture your first: Skill({ skill: "manage-learn", args: "\"...\"" })
 
 Next token after "search". Empty → AskUserQuestion.
 
-### Step 4.2: Scan lessons.jsonl
+### Step 4.2: Search via wiki
 
-Case-insensitive search across each row's `title`, `summary`, `tags`, `category`, `lens`. Rank matches: title match +3, tags +2, summary +1. Sort by rank desc, then captured_at desc.
+Execute `maestro wiki search "<query>" --type knowhow --json`. Results are ranked by BM25 relevance. Sort by rank desc, then date desc.
 
 ### Step 4.3: Display results
 
@@ -204,45 +215,44 @@ List all: Skill({ skill: "manage-learn", args: "list" })
 
 ## Stage 5: show mode
 
-### Step 5.1: Locate row
+### Step 5.1: Locate entry
 
-Find row matching target INS-id in `lessons.jsonl`. Missing arg → E003. Not found → E004.
+Find `<knowhow-entry>` matching target INS-id in `LRN-insights.md`. Missing arg → E003. Not found → E004.
 
 ### Step 5.2: Resolve linked phase context (if any)
 
-If `row.phase_slug` set: look up phase directory from `state.json` artifacts, read its `index.json` for title/status, check for `retrospective.md`.
+If `entry.phase_slug` set (parsed from entry content): look up phase directory from `state.json` artifacts, read its `index.json` for title/status, check for `retrospective.md`.
 
 ### Step 5.3: Resolve routed artifact (if any)
 
-Map `routed_to` → path: `spec` → `.workflow/specs/{id}`, `issue` → `.workflow/issues/issues.jsonl#{id}`, `note` → `.workflow/knowhow/{id}.md`.
+Map `routed_to` → path: `spec` → `.workflow/specs/{id}`, `issue` → `.workflow/issues/issues.jsonl#{id}`, `knowhow` → `.workflow/knowhow/{id}.md`.
 
 ### Step 5.4: Display
 
 ```
 =========================================
-  INSIGHT: {row.id}
-  CATEGORY: {row.category}
-  CONFIDENCE: {row.confidence}
-  SOURCE: {row.source}{IF row.lens: " (" + row.lens + " lens)"}
+  INSIGHT: {entry.id}
+  CATEGORY: {entry.category}
+  CONFIDENCE: {entry.confidence}
+  SOURCE: {entry.source}{IF entry.lens: " (" + entry.lens + " lens)"}
 =========================================
 
-CAPTURED:    {row.captured_at}
-PHASE:       {row.phase or "none"}{IF phase_slug: " (" + phase_slug + ")"}
-TAGS:        {row.tags joined by ", "}
+CAPTURED:    {entry.date}
+PHASE:       {entry.phase or "none"}{IF phase_slug: " (" + phase_slug + ")"}
+TAGS:        {entry.keywords}
 
 TITLE:
-  {row.title}
+  {entry.title}
 
 SUMMARY:
-  {row.summary}
+  {entry.content}
 
 EVIDENCE:
-  {FOR ref in row.evidence_refs:} - {ref}{END FOR}
-  {OR "(none — manual capture)"}
+  {parsed from entry content, or "(none — manual capture)"}
 
 ROUTED:
-  Target: {row.routed_to}
-  ID:     {row.routed_id or "—"}
+  Target: {entry.routed_to or "none"}
+  ID:     {entry.routed_id or "—"}
   Path:   {routed_path or "—"}
 
 {IF phase_context:}
@@ -259,7 +269,7 @@ PHASE CONTEXT:
 
 | Workflow | Relationship |
 |----------|--------------|
-| `quality-retrospective` | Producer. Writes insights into the same `lessons.jsonl` with `source: "retrospective"` and a populated `lens` field. |
-| `manage-knowhow-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. They share the JSONL+index pattern but live in different directories so retrieval semantics stay clean. |
+| `quality-retrospective` | Producer. Appends `<knowhow-entry>` to the same `LRN-insights.md` with `source: "retrospective"` and a populated `lens` field. |
+| `manage-knowhow-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. Both write to `.workflow/knowhow/` with different prefixes. |
 | `phase-transition` | Reader (informally). Phase-transition's free-form `.workflow/specs/learnings.md` is a distinct file with a different audience; do not merge them. |
-| `maestro-plan` | Future consumer. Should query `lessons.jsonl` filtered by tag/lens/category to inform planning decisions. (Out of scope for this command.) |
+| `maestro-plan` | Future consumer. Should query via `maestro wiki search` or `maestro wiki list --type knowhow --category learning` to inform planning decisions. (Out of scope for this command.) |

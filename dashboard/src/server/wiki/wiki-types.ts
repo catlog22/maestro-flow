@@ -3,7 +3,6 @@ export type WikiNodeType =
   | 'roadmap'
   | 'spec'
   | 'issue'
-  | 'lesson'
   | 'knowhow'
   | 'note';
 
@@ -60,6 +59,8 @@ export interface WikiEntry {
   sourceRef: string | null;
   /** Parent entry ID for hierarchical relationships (child→parent). */
   parent: string | null;
+  /** Applicable roles: analyze|explore|review|implement|plan|brainstorm|research */
+  roles: string[];
 }
 
 export interface WikiIndex {
@@ -83,6 +84,8 @@ export interface WikiFilters {
   category?: string;
   /** Filter by creating command/skill. */
   createdBy?: string;
+  /** Filter by applicable role. */
+  role?: string;
 }
 
 // ── Persisted index (written to .workflow/wiki-index.json) ────────────
@@ -104,6 +107,7 @@ export interface PersistedEntry {
   parent: string | null;
   related: string[];
   source: WikiSource;
+  roles: string[];
 }
 
 export interface PersistedWikiIndex {

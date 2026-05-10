@@ -11,7 +11,6 @@ export type WikiNodeType =
   | 'roadmap'
   | 'spec'
   | 'issue'
-  | 'lesson'
   | 'knowhow'
   | 'note';
 
@@ -138,7 +137,6 @@ const EMPTY_GROUPS: Record<WikiNodeType, WikiEntry[]> = {
   roadmap: [],
   spec: [],
   issue: [],
-  lesson: [],
   knowhow: [],
   note: [],
 };
@@ -286,7 +284,6 @@ export const useWikiStore = create<WikiStore>((set, get) => ({
       roadmap: [],
       spec: [],
       issue: [],
-      lesson: [],
       knowhow: [],
       note: [],
     };

@@ -51,9 +51,9 @@ export function tokenize(text: string): string[] {
 
 function documentText(entry: WikiEntry): string {
   return [
-    entry.title,
+    entry.title, entry.title, entry.title,  // 3x title weight
     entry.summary,
-    entry.tags.join(' '),
+    entry.tags.join(' '), entry.tags.join(' '),  // 2x tags weight
     entry.category ?? '',
     entry.body,
   ].join(' ');

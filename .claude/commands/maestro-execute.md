@@ -30,13 +30,21 @@ Invoked after /maestro-plan produces a confirmed plan. When called without args 
 <context>
 $ARGUMENTS — phase number, or no args for milestone-wide execution, with optional flags.
 
-Scope routing, flags, resolution logic, output directory format, artifact registration schema, and incremental learning extraction are defined in workflow `execute.md`.
+Scope routing, flags, resolution logic, output directory format, artifact registration schema, and incremental knowhow extraction are defined in workflow `execute.md`.
 
 ### Pre-load context (before task execution)
 
 1. **Codebase docs**: If `.workflow/codebase/doc-index.json` exists, read `ARCHITECTURE.md` for module boundaries. Pass as shared context to executor agents.
 2. **Wiki knowledge**: Run `maestro wiki search "<phase keywords>" --json 2>/dev/null`. If results found, extract top 5 entries as prior knowledge context for agents.
 3. Both are optional — proceed without if unavailable (log warning).
+
+### Role Knowledge
+1. Browse accumulated knowledge for this role:
+   `maestro wiki list --role implement`
+2. Analyze the index, identify entries relevant to the current task
+3. Load selected documents:
+   `maestro wiki load <id1> [id2] [id3...]`
+4. Review loaded knowledge before proceeding
 </context>
 
 <execution>
@@ -61,7 +69,7 @@ After each task completes, evaluate inquiry triggers:
    → Ask: "TASK-{NNN} succeeded after {N} retries. Should this fix pattern be documented? (`/spec-add debug`)"
 
 3. **Implicit knowledge**: If task summary contains design rationale ("chose X because", "rejected Y due to"):
-   → Ask: "Design decision detected. Should it be recorded as a learning? (`/spec-add learning`)"
+   → Ask: "Design decision detected. Should it be recorded as knowhow? (`/spec-add learning`)"
 
 If user confirms, invoke `Skill({ skill: "spec-add", args: "<category> <content>" })` with extracted content.
 
@@ -115,6 +123,6 @@ If failed tasks exist, suggest /quality-debug for investigation.
 - [ ] `.summaries/TASK-{NNN}-summary.md` written for each completed task
 - [ ] `.task/TASK-{NNN}.json` statuses updated (completed|blocked)
 - [ ] EXC artifact registered in state.json for each plan executed
-- [ ] Incremental learnings extracted to specs/learnings.md
+- [ ] Incremental knowhow extracted to specs/learnings.md
 - [ ] state.json updated with execution progress
 </success_criteria>

@@ -46,8 +46,8 @@ $ARGUMENTS — user learning intent text, or flags.
 | `pattern-catalog` | decompose --save-spec --save-wiki → second-opinion --mode review | Full pattern extraction + review |
 
 **Storage:**
-- `.workflow/learning/.maestro-learn/{session_id}/status.json` — Session tracking
-- All learn command outputs go to `.workflow/learning/`
+- `.workflow/knowhow/.maestro-learn/{session_id}/status.json` — Session tracking
+- All learn command outputs go to `.workflow/knowhow/`
 </context>
 
 <execution>
@@ -108,7 +108,7 @@ pattern-catalog → [learn-decompose --save-spec --save-wiki, learn-second-opini
 **If not `-y`:** show plan, ask for confirmation.
 
 **Execute:**
-1. Create session dir: `.workflow/learning/.maestro-learn/learn-{timestamp}/`
+1. Create session dir: `.workflow/knowhow/.maestro-learn/learn-{timestamp}/`
 2. Write `status.json` with chain steps
 3. Execute each step via `Skill()`:
    - On success: mark completed, continue
@@ -136,5 +136,5 @@ pattern-catalog → [learn-decompose --save-spec --save-wiki, learn-second-opini
 - [ ] All chain steps executed via Skill()
 - [ ] Error handling: retry/skip/abort per step
 - [ ] Session summary displayed with next-step routing
-- [ ] No files modified outside `.workflow/learning/`
+- [ ] No files modified outside `.workflow/knowhow/`
 </success_criteria>

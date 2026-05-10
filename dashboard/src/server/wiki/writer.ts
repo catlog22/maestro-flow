@@ -56,8 +56,8 @@ export class WikiWriteError extends Error {
 /**
  * WikiWriter — safe CRUD for real markdown wiki entries.
  *
- * Scope: only `spec | memory | note` entries backed by real `.md`
- * files. Virtual entries (issue/lesson), and the top-level `project.md` /
+ * Scope: only `spec | knowhow` entries backed by real `.md`
+ * files. Virtual entries (issue), and the top-level `project.md` /
  * `roadmap.md` narratives are rejected.
  *
  * All writes invalidate the indexer cache on success so the next read
@@ -237,12 +237,12 @@ export class WikiWriter {
       throw new WikiWriteError('FORBIDDEN', `cannot append to virtual entry: ${req.containerId}`);
     }
     // Only project-scope specs are writable via wiki. Use `spec-add --scope` for other scopes.
-    if (container.scope && container.scope !== 'project') {
+    if (this.isSpecPath(resolve(join(this.workflowRoot, container.source.path))) && container.scope && container.scope !== 'project') {
       throw new WikiWriteError('FORBIDDEN', `cannot write to ${container.scope}-scope specs via wiki — use "spec-add --scope ${container.scope}"`);
     }
     const absPath = resolve(join(this.workflowRoot, container.source.path));
-    if (!this.isInsideRoot(absPath) || !this.isSpecPath(absPath)) {
-      throw new WikiWriteError('FORBIDDEN', `appendEntry only works on spec container files`);
+    if (!this.isInsideRoot(absPath) || (!this.isSpecPath(absPath) && !this.isKnowhowPath(absPath))) {
+      throw new WikiWriteError('FORBIDDEN', `appendEntry only works on spec or knowhow container files`);
     }
 
     const kws = Array.isArray(req.keywords)
@@ -260,7 +260,8 @@ export class WikiWriter {
       .slice(0, 5)
       .join(',');
 
-    const entryBlock = `\n<spec-entry category="${req.category}" keywords="${kwStr}" date="${date}">\n\n### ${firstLine}\n\n${req.content.trim()}\n\n</spec-entry>\n`;
+    const entryTag = this.isKnowhowPath(absPath) ? 'knowhow-entry' : 'spec-entry';
+    const entryBlock = `\n<${entryTag} category="${req.category}" keywords="${kwStr}" date="${date}">\n\n### ${firstLine}\n\n${req.content.trim()}\n\n</${entryTag}>\n`;
 
     return this.withLock(absPath, async () => {
       let existing: string;
@@ -308,8 +309,8 @@ export class WikiWriter {
     if (!entry.parent) {
       throw new WikiWriteError('BAD_REQUEST', `${entryId} is a container — use remove() to delete the whole file`);
     }
-    // Only project-scope specs are writable via wiki
-    if (entry.scope && entry.scope !== 'project') {
+    // Only project-scope specs are writable via wiki (knowhow has no scope restriction)
+    if (entry.type === 'spec' && entry.scope && entry.scope !== 'project') {
       throw new WikiWriteError('FORBIDDEN', `cannot modify ${entry.scope}-scope specs via wiki — use "spec-add --scope ${entry.scope}"`);
     }
     const container = index.byId[entry.parent];
@@ -329,8 +330,8 @@ export class WikiWriter {
         throw new WikiWriteError('NOT_FOUND', `container file missing`);
       }
 
-      // Strategy 1: remove <spec-entry> block containing the entry title
-      const tagRe = /<spec-entry\s+[^>]+>[\s\S]*?<\/spec-entry>/g;
+      // Strategy 1: remove <spec-entry> or <knowhow-entry> block containing the entry title
+      const tagRe = /<(spec|knowhow)-entry\s+[^>]+>[\s\S]*?<\/\1-entry>/g;
       let matched = false;
       const cleaned = raw.replace(tagRe, (block) => {
         if (matched) return block;
@@ -427,6 +428,12 @@ export class WikiWriter {
     const rel = abs.slice(this.workflowRoot.length + 1);
     return rel.split(sep)[0] === 'specs';
   }
+
+  private isKnowhowPath(absPath: string): boolean {
+    const abs = resolve(absPath);
+    const rel = abs.slice(this.workflowRoot.length + 1);
+    return rel.split(sep)[0] === 'knowhow';
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +496,9 @@ function categoryToPrefix(category?: string): string {
     case 'recipe':    return 'RCP';
     case 'reference': return 'REF';
     case 'decision':  return 'DCS';
+    case 'asset':     return 'AST';
+    case 'blueprint': return 'BLP';
+    case 'learning':  return 'LRN';
     default:          return 'KNW';
   }
 }

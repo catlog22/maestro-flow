@@ -11,7 +11,7 @@ Structured second-opinion for code, decisions, or plans. Three modes:
 - **challenge**: single adversarial agent via spawn_agents_on_csv (1 worker)
 - **consult**: interactive Q&A (no CSV wave — direct orchestration)
 
-Findings persist to `lessons.jsonl`. Decoupled from phase lifecycle.
+Findings persist to `LRN-insights.md`. Decoupled from phase lifecycle.
 </purpose>
 
 <context>
@@ -28,7 +28,7 @@ $ARGUMENTS — target and optional flags.
 - `--mode challenge` — Adversarial single-agent analysis
 - `--mode consult` — Interactive Q&A session
 
-**Output**: `.workflow/learning/opinion-{slug}-{date}.md`
+**Output**: `.workflow/knowhow/LRN-opinion-{slug}-{date}.md`
 </context>
 
 <execution>
@@ -61,8 +61,8 @@ Single agent via spawn_agents_on_csv (1 worker). Adversarial analysis with forci
 Interactive loop via AskUserQuestion. Agent studies target, answers questions with code references. Compile Q&A into report on exit.
 
 ### Phase 3: Persist
-1. Write `opinion-{slug}-{date}.md` with per-persona findings + synthesis
-2. Append non-trivial findings to `lessons.jsonl` (source: "second-opinion")
+1. Write `LRN-opinion-{slug}-{date}.md` with per-persona findings + synthesis
+2. Append non-trivial findings to `LRN-insights.md` (source: "second-opinion")
 3. Display summary with verdict and next steps
 
 **Next steps:** `/manage-issue create`, `/learn-decompose <path>`, `/learn-follow <path>`
@@ -81,6 +81,6 @@ Interactive loop via AskUserQuestion. Agent studies target, answers questions wi
 - [ ] Target resolved and context loaded
 - [ ] Mode executed: review (3 parallel agents), challenge (adversarial), or consult (interactive)
 - [ ] Synthesis produced with agreements, disagreements, verdict
-- [ ] Report written to `opinion-{slug}-{date}.md`
-- [ ] Non-trivial findings appended to `lessons.jsonl`
+- [ ] Report written to `LRN-opinion-{slug}-{date}.md`
+- [ ] Non-trivial findings appended to `LRN-insights.md`
 </success_criteria>

@@ -18,7 +18,7 @@ Structured second-opinion workflow for code, decisions, or plans. Three modes in
 - **challenge**: single adversarial agent that tries to break the approach, find hidden assumptions, and propose alternatives
 - **consult**: interactive Q&A mode where the agent studies the target and answers your questions
 
-Decoupled from the phase/execution lifecycle — can be invoked on any piece of code or knowledge at any time. Findings persist to `lessons.jsonl`.
+Decoupled from the phase/execution lifecycle — can be invoked on any piece of code or knowledge at any time. Findings persist to `LRN-insights.md` as `<knowhow-entry>` blocks.
 </purpose>
 
 <context>
@@ -36,15 +36,14 @@ Arguments: $ARGUMENTS
 - `--mode consult` — Interactive Q&A session
 
 **Storage written:**
-- `.workflow/learning/opinion-{slug}-{YYYY-MM-DD}.md` — Opinion report
-- `.workflow/learning/lessons.jsonl` — New insights from analysis (source: "second-opinion")
-- `.workflow/learning/learning-index.json` — Updated index
+- `.workflow/knowhow/LRN-opinion-{slug}-{YYYY-MM-DD}.md` — Opinion report
+- `.workflow/knowhow/LRN-insights.md` — New `<knowhow-entry>` blocks from analysis (source: "second-opinion")
 
 **Storage read:**
 - Target content (file, wiki entry, diff, or plan)
 - `.workflow/specs/` — Project conventions for context
 - `maestro wiki search` — Related knowledge entries
-- `.workflow/learning/lessons.jsonl` — Prior insights about the topic
+- `.workflow/knowhow/LRN-insights.md` — Prior insights about the topic
 </context>
 
 <execution>
@@ -60,7 +59,7 @@ Arguments: $ARGUMENTS
 ### Stage 2: Load Context
 - Read relevant specs: `Skill({ skill: "spec-load" })` silently to get project conventions
 - Search wiki: `maestro wiki search "<target topic>"` for related entries (top 5)
-- Search lessons: grep `lessons.jsonl` for entries related to the target area
+- Search insights: search `LRN-insights.md` for entries related to the target area
 - Build context brief: target content + conventions + related knowledge
 
 ### Stage 3: Execute Mode
@@ -124,15 +123,12 @@ Across all perspectives (or from single agent in challenge/consult):
 - **Top 3 recommendations**: prioritized by impact
 
 ### Stage 5: Persist & Report
-1. Write `.workflow/learning/opinion-{slug}-{date}.md`:
+1. Write `.workflow/knowhow/LRN-opinion-{slug}-{date}.md`:
    - Target summary
    - Per-persona findings (review) / adversarial analysis (challenge) / Q&A transcript (consult)
    - Synthesis: agreements, disagreements, verdict
    - Recommendations
-2. Append non-trivial findings to `lessons.jsonl`:
-   - `source: "second-opinion"`, `category: "pattern"` or `"antipattern"` or `"decision"`
-   - Tags: `["second-opinion", "{mode}", "{target-slug}"]`
-3. Update `learning-index.json`
+2. Append non-trivial findings as `<knowhow-entry>` blocks to `LRN-insights.md` via `maestro wiki append knowhow-lrn-insights --category <cat> --body "<content>" --keywords "second-opinion,{mode},{target-slug}"`
 4. Display summary with verdict and recommendations
 
 **Next-step routing:**
@@ -153,15 +149,14 @@ Across all perspectives (or from single agent in challenge/consult):
 
 <success_criteria>
 - [ ] Target resolved and content loaded
-- [ ] Context gathered (specs, wiki, lessons)
+- [ ] Context gathered (specs, wiki, knowhow)
 - [ ] Mode executed correctly:
   - review: 3 agents spawned in parallel, all returned findings
   - challenge: adversarial analysis completed with forcing questions
   - consult: interactive Q&A loop completed
 - [ ] Synthesis produced with agreements, disagreements, verdict
-- [ ] Report written to `opinion-{slug}-{date}.md`
-- [ ] Non-trivial findings appended to `lessons.jsonl`
-- [ ] `learning-index.json` updated
-- [ ] No files modified outside `.workflow/learning/`
+- [ ] Report written to `LRN-opinion-{slug}-{date}.md`
+- [ ] Non-trivial findings appended to `LRN-insights.md` as `<knowhow-entry>` blocks
+- [ ] No files modified outside `.workflow/knowhow/`
 - [ ] Summary displayed with verdict and next-step routing
 </success_criteria>

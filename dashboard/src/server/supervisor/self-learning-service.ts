@@ -114,7 +114,7 @@ export class SelfLearningService {
     return Array.from(this.knowledgeBase.values());
   }
 
-  /** Add a knowledge entry (manual or auto) */
+  /** @deprecated kb.jsonl is being replaced by knowhow markdown (.workflow/knowhow/). Use store_knowhow tool instead. */
   async addKnowledgeEntry(
     entry: Omit<KnowledgeEntry, 'id' | 'usageCount' | 'lastAccessed'>,
   ): Promise<KnowledgeEntry> {

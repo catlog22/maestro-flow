@@ -90,68 +90,9 @@ export function adaptIssueRow(
   };
 }
 
-export function adaptLessonRow(
-  row: unknown,
-  sourcePath: string,
-  line: number,
-): WikiEntry | null {
-  if (!row || typeof row !== 'object') return null;
-  const r = row as Record<string, unknown>;
-
-  // patterns.jsonl shape: { command, frequency, successRate, avgDuration, lastUsed, contexts[] }
-  const command = asString(r.command);
-  if (!command) {
-    warn(`lesson-no-command:${sourcePath}`, `lesson row at ${sourcePath}:${line} missing command`);
-    return null;
-  }
-
-  const frequency = typeof r.frequency === 'number' ? r.frequency : 0;
-  const successRate = typeof r.successRate === 'number' ? r.successRate : 0;
-  const avgDuration = typeof r.avgDuration === 'number' ? r.avgDuration : 0;
-  const contexts = Array.isArray(r.contexts) ? r.contexts.map(String) : [];
-
-  const successPct = Math.round(successRate * 100);
-  const durationSec = Math.round(avgDuration / 1000);
-
-  const title = `Pattern: ${command}`;
-  const summary =
-    `Used ${frequency}× • ${successPct}% success • ~${durationSec}s avg` +
-    (contexts.length ? ` • ${contexts.length} context(s)` : '');
-
-  const slug = command.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-|-$/g, '');
-  const lastUsed = toIso(r.lastUsed);
-
-  return {
-    id: `lesson-${slug || `row${line}`}`,
-    type: 'lesson',
-    title,
-    summary,
-    tags: ['pattern', command],
-    status: 'active',
-    created: lastUsed,
-    updated: lastUsed,
-    related: [],
-    source: { kind: 'virtual', path: sourcePath, line },
-    body: '',
-    raw: row,
-    ext: {
-      command,
-      frequency,
-      successRate,
-      avgDuration,
-      contexts,
-    },
-    scope: null,
-    category: 'learning',
-    createdBy: null,
-    sourceRef: null,
-    parent: null,
-  };
-}
-
 export async function loadVirtualEntries(
   absPath: string,
-  kind: 'issue' | 'lesson',
+  adapter: (row: unknown, sourcePath: string, line: number) => WikiEntry | null,
   relPath: string,
 ): Promise<WikiEntry[]> {
   let raw: string;
@@ -172,10 +113,7 @@ export async function loadVirtualEntries(
       warn(`bad-json:${absPath}:${i + 1}`, `invalid JSON at ${absPath}:${i + 1}`);
       continue;
     }
-    const entry =
-      kind === 'issue'
-        ? adaptIssueRow(parsed, relPath, i + 1)
-        : adaptLessonRow(parsed, relPath, i + 1);
+    const entry = adapter(parsed, relPath, i + 1);
     if (entry) out.push(entry);
   }
   return out;

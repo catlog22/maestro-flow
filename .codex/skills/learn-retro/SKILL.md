@@ -22,7 +22,7 @@ $ARGUMENTS — lens selection and scope flags.
 **Git flags:** `--days N` (default: 7), `--author <name>`, `--area <path>`, `--compare`
 **Decision flags:** `--phase N`, `--tag <tag>`, `--id <id>`
 
-**Output**: `.workflow/learning/retro-{date}.md` + `retro-{date}.json`
+**Output**: `.workflow/knowhow/LRN-retro-{date}.md` + `LRN-retro-{date}.json`
 </context>
 
 <execution>
@@ -41,7 +41,7 @@ $ARGUMENTS — lens selection and scope flags.
 **Trend comparison** if prior `retro-*.json` exists.
 
 ### Phase 3: Decision Lens (skip if --lens git)
-**3a: Collect decisions** from wiki, specs, git log, phase context, lessons.jsonl.
+**3a: Collect decisions** from wiki, specs, git log, phase context, LRN-insights.md.
 **3b: Build decision registry** per decision (id, title, source, rationale, alternatives, evidence).
 
 **3c: Multi-perspective evaluation** via spawn_agents_on_csv (3 parallel agents):
@@ -55,10 +55,10 @@ $ARGUMENTS — lens selection and scope flags.
 **3d: Classify lifecycle**: Validated / Aging / Questionable / Stale / Reversed.
 
 ### Phase 4: Unified Report
-Write `retro-{date}.md` + `retro-{date}.json` with metrics, sessions, hotspots, decision health, combined insights, recommended actions.
+Write `LRN-retro-{date}.md` + `LRN-retro-{date}.json` with metrics, sessions, hotspots, decision health, combined insights, recommended actions.
 
 ### Phase 5: Persist
-Append insights to `lessons.jsonl` (source: "retro-git" or "retro-decision"). Display summary.
+Append insights to `LRN-insights.md` (source: "retro-git" or "retro-decision"). Display summary.
 
 **Next steps:** `/learn-follow <path>`, `/quality-auto-test <area>`, `/learn-investigate <question>`
 </execution>
@@ -69,7 +69,7 @@ Append insights to `lessons.jsonl` (source: "retro-git" or "retro-decision"). Di
 | E001 | error | Not inside git repo (git lens) | Navigate to git repo |
 | E002 | error | No commits in time window | Increase --days |
 | E003 | error | No decisions found (decision lens) | Check wiki/specs content |
-| W001 | warning | .workflow/learning/ not found | Auto-bootstrap |
+| W001 | warning | .workflow/knowhow/ not found | Auto-bootstrap |
 | W002 | warning | No prior retro for comparison | First retro establishes baseline |
 | W003 | warning | Decision perspective agent failed | Proceed with partial evaluation |
 </error_codes>
@@ -78,6 +78,6 @@ Append insights to `lessons.jsonl` (source: "retro-git" or "retro-decision"). Di
 - [ ] Lens selection parsed correctly
 - [ ] Git lens: metrics computed, sessions detected, hotspots identified
 - [ ] Decision lens: decisions collected, 3 agents spawned in parallel, lifecycle classified
-- [ ] Unified report written to retro-{date}.md + retro-{date}.json
-- [ ] lessons.jsonl appended with insights (stable INS-ids)
+- [ ] Unified report written to LRN-retro-{date}.md + LRN-retro-{date}.json
+- [ ] LRN-insights.md appended with insights (stable INS-ids)
 </success_criteria>
