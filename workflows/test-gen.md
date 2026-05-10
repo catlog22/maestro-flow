@@ -9,7 +9,7 @@ Tests expose bugs -- fixing is for quality-debug or maestro-execute.
 ### Step 0: Load Project Specs
 
 ```
-specs_content = maestro spec load --category test
+specs_content = maestro spec load --role test
 ```
 
 Follow project test conventions in Step 4 (Generate Test Plan) and Step 5 (Write Tests).

@@ -276,7 +276,7 @@ export function createSpecsRoutes(
         .split(/\s+/)
         .filter(w => w.length >= 3);
       const keywords = [...new Set(kwCandidates)].slice(0, 5).join(',');
-      const entryBlock = `\n<spec-entry category="${entryCategory}" keywords="${keywords}" date="${date}">\n\n### ${firstLine}\n\n${content.trim()}\n\n</spec-entry>\n`;
+      const entryBlock = `\n<spec-entry roles="${entryCategory}" keywords="${keywords}" date="${date}">\n\n### ${firstLine}\n\n${content.trim()}\n\n</spec-entry>\n`;
 
       let newId = '';
 

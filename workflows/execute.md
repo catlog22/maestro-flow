@@ -175,7 +175,7 @@ Build execution_queue from plan.json.waves, including only waves with pending (n
 ## E1.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category coding
+specs_content = maestro spec load --role implement
 ```
 
 Pass specs_content to each executor agent in E2.
@@ -457,9 +457,9 @@ Append to state.json.artifacts (atomic write)
 
 // Incremental learning extraction
 Read all .summaries/TASK-*-summary.md; extract strategy adjustments, patterns, pitfalls
-Deduplicate against existing learnings (maestro spec load --category learning)
+Deduplicate against existing learnings (maestro spec load --role implement)
 Append unique entries to .workflow/specs/learnings.md using <spec-entry> closed-tag format:
-  category="learning", keywords (3-5 terms), date, source="execute"
+  roles="implement", keywords (3-5 terms), date, source="execute"
 
 Mark artifact.harvested = true; write state.json (atomic)
 ```

@@ -23,9 +23,9 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 
 ```
 /manage-learn "<insight text>"                                  → capture, infer category, auto-link phase
-/manage-learn "<insight>" --category pattern --tag auth,jwt    → capture with explicit category and tags
+/manage-learn "<insight>" --category pattern --keywords auth,jwt → capture with explicit category and keywords
 /manage-learn list                                              → show recent 20 insights
-/manage-learn list --tag auth                                   → filtered list
+/manage-learn list --keywords auth                              → filtered list
 /manage-learn search <query>                                    → search via maestro wiki search
 /manage-learn show <INS-id>                                     → full insight + linked phase context
 ```
@@ -33,7 +33,7 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 | Flag | Effect |
 |------|--------|
 | `--category <name>` | One of: pattern, antipattern, decision, tool, gotcha, technique, tip. Default: inferred (tip mode defaults to `tip`). |
-| `--tag t1,t2` | Comma-separated tags. Insight mode implicitly adds `manual`, tip mode implicitly adds `tip`. |
+| `--keywords t1,t2` | Comma-separated keywords. Insight mode implicitly adds `manual`, tip mode implicitly adds `tip`. |
 | `--phase <N>` | Override auto-detected phase link. Use `--phase 0` to force "no phase". |
 | `--confidence <level>` | high / medium / low. Default: medium (insight), low (tip). |
 | `--lens <name>` | Filter by retrospective lens: technical, process, quality, decision, git (list/search only). |
@@ -46,7 +46,7 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 ```
 Verify .workflow/ exists (else E001). Route by first token:
   "list" → list | "search" → search (next token = query) | "show" → show (next token = INS-id)
-  "tip"  → tip capture (source="tip", category="tip", confidence="low", implicit tag "tip")
+  "tip"  → tip capture (source="tip", category="tip", confidence="low", implicit keyword "tip")
   else   → capture mode (full quoted text = insight body)
 Empty args → AskUserQuestion. Invalid --category → E002.
 ```
@@ -68,7 +68,7 @@ if [ ! -f "$INSIGHTS_FILE" ]; then
 ---
 title: "Learning Insights"
 type: spec
-category: learning
+roles: [implement]
 tags: [insights, learning]
 created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 ---
@@ -118,8 +118,8 @@ First match wins. If nothing matches, category = `technique`.
 
 ```
 entry = <spec-entry
-  category="{category}"
-  keywords="{parsed --tag values joined by comma}"
+  roles="{role}"
+  keywords="{category},{parsed --keywords values joined by comma}"
   date="{YYYY-MM-DD}"
   id="INS-{hex}"
   source="manual"
@@ -131,7 +131,7 @@ entry = <spec-entry
 
 - **Phase**: {phase or "none"} ({phase_slug or "—"})
 - **Confidence**: {--confidence value or "medium"}
-- **Tags**: {parsed --tag values + ["manual"]}
+- **Tags**: {parsed --keywords values + ["manual"]}
 
 </spec-entry>
 ```
@@ -152,7 +152,7 @@ Display: ID, category, confidence, tags, phase (+slug if present), title, file p
 
 ### Step 3.1: Read entries
 
-Query via `maestro wiki list --type knowhow --category learning --json`. Filter by `--tag`, `--category`, `--phase`, `--lens` flags. Sort by timestamp descending. Limit to 20 (or `--limit N`).
+Query via `maestro wiki list --type knowhow --role implement --json`. Filter by `--keywords`, `--category`, `--phase`, `--lens` flags. Sort by timestamp descending. Limit to 20 (or `--limit N`).
 
 ### Step 3.2: Display table
 
@@ -274,4 +274,4 @@ PHASE CONTEXT:
 | `quality-retrospective` | Producer. Appends `<spec-entry>` to the same `specs/learnings.md` with `source: "retrospective"` and a populated `lens` field. |
 | `manage-knowhow-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. Both write to `.workflow/knowhow/` with different prefixes. |
 | `phase-transition` | Reader (informally). Phase-transition's free-form `.workflow/specs/learnings.md` is a distinct file with a different audience; do not merge them. |
-| `maestro-plan` | Future consumer. Should query via `maestro wiki search` or `maestro wiki list --type knowhow --category learning` to inform planning decisions. (Out of scope for this command.) |
+| `maestro-plan` | Future consumer. Should query via `maestro wiki search` or `maestro wiki list --type knowhow --role implement` to inform planning decisions. (Out of scope for this command.) |

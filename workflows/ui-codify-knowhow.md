@@ -67,27 +67,27 @@ const allCodePaths = [...new Set([...codePaths_tokens, ...codePaths_layout, ...c
       "prefix": "AST",
       "fileSlug": "tokens",
       "title": "${package_name} Design Tokens",
-      "category": "asset",
+      "type": "asset",
       "assetType": "design-tokens",
       "codePaths": ["<from allCodePaths — token sources>"],
       "tags": ["design-tokens", "colors", "typography", "spacing", "${package_name}"],
       "body": "## Design Token Reference\n\nExtracted from: ${package_dir}/design-tokens.json\n\n### Colors\n<summarize color categories and count>\n\n### Typography\n<summarize font families, scale>\n\n### Spacing\n<summarize spacing scale>\n\n> Full token data: `${package_dir}/design-tokens.json`",
       "entries": [
         {
-          "category": "pattern",
-          "keywords": "colors,design-tokens,${package_name}",
+          "roles": "implement",
+          "keywords": "pattern,colors,design-tokens,${package_name}",
           "title": "Color System",
           "body": "<summarize primary, secondary, accent, semantic colors with values>"
         },
         {
-          "category": "pattern",
-          "keywords": "typography,design-tokens,${package_name}",
+          "roles": "implement",
+          "keywords": "pattern,typography,design-tokens,${package_name}",
           "title": "Typography Scale",
           "body": "<summarize font families, sizes, weights>"
         },
         {
-          "category": "pattern",
-          "keywords": "spacing,design-tokens,${package_name}",
+          "roles": "implement",
+          "keywords": "pattern,spacing,design-tokens,${package_name}",
           "title": "Spacing System",
           "body": "<summarize spacing scale values>"
         }
@@ -97,21 +97,21 @@ const allCodePaths = [...new Set([...codePaths_tokens, ...codePaths_layout, ...c
       "prefix": "AST",
       "fileSlug": "components",
       "title": "${package_name} Component Patterns",
-      "category": "asset",
+      "type": "asset",
       "assetType": "component-patterns",
       "codePaths": ["<from allCodePaths — layout sources>"],
       "tags": ["components", "layout", "universal", "specialized", "${package_name}"],
       "body": "## Component Pattern Reference\n\nExtracted from: ${package_dir}/layout-templates.json\n\n### Universal Components (${universalComponents.length})\n<list universal component names with descriptions>\n\n### Specialized Components (${specializedComponents.length})\n<list specialized component names with descriptions>\n\n> Full component data: `${package_dir}/layout-templates.json`",
       "entries": [
         {
-          "category": "pattern",
-          "keywords": "universal,components,${package_name}",
+          "roles": "implement",
+          "keywords": "pattern,universal,components,${package_name}",
           "title": "Universal Components",
           "body": "<list each universal component: name, purpose, key variants>"
         },
         {
-          "category": "pattern",
-          "keywords": "specialized,components,${package_name}",
+          "roles": "implement",
+          "keywords": "pattern,specialized,components,${package_name}",
           "title": "Specialized Components",
           "body": "<list each specialized component: name, purpose, usage context>"
         }
@@ -121,29 +121,29 @@ const allCodePaths = [...new Set([...codePaths_tokens, ...codePaths_layout, ...c
 
   "specs": [
     {
-      "category": "coding",
-      "keywords": "colors,design-tokens,${package_name}",
+      "roles": "implement",
+      "keywords": "coding,colors,design-tokens,${package_name}",
       "title": "${package_name} 颜色编码约定",
       "ref": "knowhow/AST-${package_name}-tokens.md",
       "body": "<summarize: 主色使用 var(--color-primary)，语义色映射规则，色彩命名约定>"
     },
     {
-      "category": "coding",
-      "keywords": "typography,design-tokens,${package_name}",
+      "roles": "implement",
+      "keywords": "coding,typography,design-tokens,${package_name}",
       "title": "${package_name} 排版编码约定",
       "ref": "knowhow/AST-${package_name}-tokens.md",
       "body": "<summarize: 字体家族使用规则，字号层级，font-weight 约定>"
     },
     {
-      "category": "coding",
-      "keywords": "spacing,design-tokens,${package_name}",
+      "roles": "implement",
+      "keywords": "coding,spacing,design-tokens,${package_name}",
       "title": "${package_name} 间距编码约定",
       "ref": "knowhow/AST-${package_name}-tokens.md",
       "body": "<summarize: 间距 token 使用规则，padding/margin 约定>"
     },
     {
-      "category": "arch",
-      "keywords": "components,classification,${package_name}",
+      "roles": "plan",
+      "keywords": "arch,components,classification,${package_name}",
       "title": "${package_name} 组件分类约束",
       "ref": "knowhow/AST-${package_name}-components.md",
       "body": "<summarize: universal vs specialized 分类标准，复用规则>"
@@ -161,13 +161,13 @@ const allCodePaths = [...new Set([...codePaths_tokens, ...codePaths_layout, ...c
   "prefix": "DCS",
   "fileSlug": "decisions",
   "title": "${package_name} Design Decisions",
-  "category": "decision",
+  "type": "decision",
   "tags": ["design-decisions", "conflicts", "${package_name}"],
   "body": "## Design Conflict Decisions\n\n<for each conflict: describe token, list variants with sources, document selected value and reasoning>",
   "entries": [
     {
-      "category": "decision",
-      "keywords": "conflict,resolution,${package_name}",
+      "roles": "plan",
+      "keywords": "decision,conflict,resolution,${package_name}",
       "title": "Token Conflict Resolutions",
       "body": "<summarize each conflict: token name, file sources, chosen value, rationale>"
     }
@@ -179,8 +179,8 @@ const allCodePaths = [...new Set([...codePaths_tokens, ...codePaths_layout, ...c
 
 ```json
 {
-  "category": "arch",
-  "keywords": "design-decisions,conflicts,${package_name}",
+  "roles": "plan",
+  "keywords": "arch,design-decisions,conflicts,${package_name}",
   "title": "${package_name} 设计决策约束",
   "ref": "knowhow/DCS-${package_name}-decisions.md",
   "body": "<summarize: 冲突解决策略，优先级规则>"

@@ -39,7 +39,7 @@ Write index.json: id, type="refactor", title, status="active", scope, plan (empt
 ### Step 2.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category coding
+specs_content = maestro spec load --role implement
 ```
 
 Used in Step 3 to detect pattern violations against project conventions.

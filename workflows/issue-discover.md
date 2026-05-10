@@ -86,7 +86,7 @@ Initialize discovery-state.json:
 ### Step 3.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category coding
+specs_content = maestro spec load --role implement
 ```
 
 Pass to each analysis agent so severity assessments align with project quality standards.

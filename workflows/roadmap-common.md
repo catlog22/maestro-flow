@@ -15,7 +15,7 @@ Block if `.workflow/worktree-scope.json` exists — must run from main worktree.
 ### Load Specs
 
 ```
-specs_content = maestro spec load --category arch
+specs_content = maestro spec load --role plan
 ```
 
 Ensure phases respect architectural constraints.

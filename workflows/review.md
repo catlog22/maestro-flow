@@ -104,7 +104,7 @@ dimensions = --dimensions flag (comma-separated), or level defaults:
 **Skip if `--skip-specs` flag is set.**
 
 ```
-specs_content = maestro spec load --category review
+specs_content = maestro spec load --role review
 ```
 
 Pass specs_content to reviewer agents as quality standards context.

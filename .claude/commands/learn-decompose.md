@@ -52,7 +52,7 @@ Arguments: $ARGUMENTS
 
 ### Stage 2: Load Existing Patterns
 - Read `.workflow/specs/coding-conventions.md` — extract documented patterns
-- Search `specs/learnings.md` for `<spec-entry>` blocks with `category="pattern"` — previously discovered
+- Search `specs/learnings.md` for `<spec-entry>` blocks with `roles="implement"` — previously discovered
 - Build dedup set: pattern names already known
 
 ### Stage 3: Parallel Agent Analysis (4 dimensions)
@@ -134,7 +134,7 @@ Build the decomposition report grouped by dimension:
 
 ### Stage 6: Persist
 1. Write `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`
-2. Append each **new** pattern as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --category pattern --body "<content>" --keywords "decompose,{dimension},{target-slug}"`:
+2. Append each **new** pattern as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --roles implement --body "<content>" --keywords "decompose,pattern,{dimension},{target-slug}"`:
    - Stable INS-id from `hash("decompose" + target + pattern_name)`
 4. If `--save-spec`: for each new pattern, invoke `Skill({ skill: "spec-add", args: "pattern {description}" })`
 5. If `--save-wiki`: create wiki note per dimension group via `maestro wiki create --type note --slug decompose-{dimension}-{slug}`

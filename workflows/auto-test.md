@@ -26,8 +26,8 @@ Only Step 2 diverges (scenario source). Everything else is shared.
 
 **Load specs:**
 ```
-specs_test = maestro spec load --category test
-specs_arch = maestro spec load --category arch
+specs_test = maestro spec load --role test
+specs_arch = maestro spec load --role plan
 ```
 
 `specs_test` for test conventions (Steps 3-5); `specs_arch` for module boundaries (Step 2).

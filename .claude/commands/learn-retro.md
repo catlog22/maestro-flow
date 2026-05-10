@@ -144,9 +144,9 @@ git log --oneline --all --grep="decision\|chose\|decided\|architecture" -20
 ```
 
 Also read:
-- `.workflow/specs/architecture-constraints.md` — grep for `<spec-entry category="arch"` blocks
+- `.workflow/specs/architecture-constraints.md` — grep for `<spec-entry` blocks with `roles="plan"`
 - Phase context files — resolve via `state.json.artifacts[]` scratch paths — scan for "Locked:", "Deferred:" sections
-- `.workflow/knowhow/specs/learnings.md` — filter `category="decision"` entries
+- `.workflow/knowhow/specs/learnings.md` — filter entries with `keywords` containing "decision"
 
 Apply scope filter (--phase, --tag, --id).
 
@@ -248,9 +248,9 @@ Write `.workflow/knowhow/KNW-retro-{date}.json` with structured data.
 
 ### Stage 5: Persist
 1. Write report files
-2. Append insights as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --category <cat> --body "<content>" --keywords "<kw>"`:
-   - Git insights: source="retro-git", category per insight type
-   - Decision insights: source="retro-decision", category="decision"
+2. Append insights as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --roles implement --body "<content>" --keywords "<kw>"`:
+   - Git insights: source="retro-git", roles per insight type
+   - Decision insights: source="retro-decision", roles="plan" (merge "decision" into keywords)
    - Stable INS-id from `hash(lens + metric_or_decision + date)`
 4. Display summary
 

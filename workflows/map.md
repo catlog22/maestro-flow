@@ -30,7 +30,7 @@ Spawn 4 parallel `workflow-codebase-mapper` agents, each writing to `.workflow/r
 
 If `$ARGUMENTS` provided, pass as focus filter to each agent.
 
-Load project specs: `maestro spec load --category arch`
+Load project specs: `maestro spec load --role plan`
 
 Each agent spawned in parallel as `workflow-codebase-mapper` subagent with specs context.
 

@@ -41,7 +41,7 @@ Archive completed milestone, move artifacts to history, and prepare for next.
 ## Step 2.5: Load Existing Learnings
 
 ```
-existing_learnings = maestro spec load --category learning
+existing_learnings = maestro spec load --role implement
 ```
 
 Check existing entries to avoid duplicates when appending in Step 3.
@@ -57,7 +57,7 @@ Check existing entries to avoid duplicates when appending in Step 3.
 
 2. Aggregate learnings and append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format. Each entry (strategy adjustment, pattern, or pitfall) follows this template:
    ```
-   <spec-entry category="learning" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="milestone-complete">
+   <spec-entry roles="implement" keywords="{auto-extracted}" date="{YYYY-MM-DD}" source="milestone-complete">
 
    ### {summary}
 

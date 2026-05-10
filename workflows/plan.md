@@ -74,7 +74,7 @@ default             → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
 
 3. **Load project specs**
    ```
-   specs_content = maestro spec load --category arch
+   specs_content = maestro spec load --role plan
    ```
    Pass to planner agent as project constraints context.
 

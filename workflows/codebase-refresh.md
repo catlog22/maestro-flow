@@ -52,7 +52,7 @@ Build affected sets:
 ### Step 3.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category arch
+specs_content = maestro spec load --role plan
 ```
 
 Used in Step 4-5 to validate refreshed docs against architectural expectations.

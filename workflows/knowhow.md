@@ -30,7 +30,7 @@ Six types of knowhow, each with dedicated structure:
 | `decision` | DCS- | Architecture Decision Record | Making non-trivial design choices |
 | `tip` | TIP- | Quick note, snippet, reminder | Fleeting insight, debugging trick |
 
-All types share `WikiNodeType = 'knowhow'`. The `category` field distinguishes subtypes in wiki queries.
+All types share `WikiNodeType = 'knowhow'`. The `type` field distinguishes subtypes in wiki queries.
 
 ---
 
@@ -60,7 +60,7 @@ Verify stores exist. Neither → E001.
 
 ### Step 3: List
 
-Workflow: `maestro wiki list --type knowhow --json`, filter by `--tag`, `--type`, `--category`.
+Workflow: `maestro wiki list --type knowhow --json`, filter by `--keywords`, `--type`, `--role`.
 System: Glob `*.md` files, extract titles.
 
 Display: ID/File, Type, Category, Date, Tags, Summary with navigation hints.
@@ -123,7 +123,6 @@ Reusable code or configuration pattern. Sections:
 ---
 title: {descriptive name}
 type: template
-category: template
 lang: {typescript|python|bash|yaml|...}
 tags: [{comma-separated}]
 created: {ISO timestamp}
@@ -166,7 +165,6 @@ Step-by-step operational guide. Sections:
 ---
 title: {goal summary}
 type: recipe
-category: recipe
 tags: [{comma-separated}]
 created: {ISO timestamp}
 ---
@@ -211,7 +209,6 @@ External documentation digest. Sections:
 ---
 title: {reference title}
 type: reference
-category: reference
 source: {original URL}
 tags: [{comma-separated}]
 created: {ISO timestamp}
@@ -254,7 +251,6 @@ Architecture Decision Record. Sections:
 ---
 title: {decision summary}
 type: decision
-category: decision
 status: {proposed|accepted|superseded}
 tags: [{comma-separated}]
 created: {ISO timestamp}
@@ -304,7 +300,6 @@ Quick note. Minimal structure:
 ---
 title: {tip summary}
 type: tip
-category: tip
 tags: [{comma-separated}]
 created: {ISO timestamp}
 ---
@@ -327,7 +322,6 @@ Frontmatter keys by type:
 |-------|:-------:|:--------:|:------:|:---------:|:--------:|:---:|
 | title | Y | Y | Y | Y | Y | Y |
 | type | Y | Y | Y | Y | Y | Y |
-| category | Y | Y | Y | Y | Y | Y |
 | tags | Y | Y | Y | Y | Y | Y |
 | created | Y | Y | Y | Y | Y | Y |
 | lang | | Y | | | | |
@@ -352,7 +346,7 @@ maestro knowhow search "deploy auth"    # full-text
 maestro knowhow get knowhow-{slug}      # view one
 
 maestro wiki list --type knowhow --json # programmatic
-maestro wiki list --type knowhow --category decision  # decisions only
+maestro wiki list --type knowhow --role plan  # decisions only
 ```
 
 ### MCP
@@ -364,8 +358,8 @@ store_knowhow { operation: "add", type: "template", title: "...", body: "..." }
 
 ### Type Label Reference
 
-| Wiki type | Category | Prefix | Label |
-|-----------|----------|--------|-------|
+| Wiki type | Type | Prefix | Label |
+|-----------|------|--------|-------|
 | knowhow | session | KNW- | Session |
 | knowhow | tip | TIP- | Tip |
 | knowhow | template | TPL- | Template |
@@ -386,7 +380,7 @@ A special container file at `.workflow/specs/learnings.md` holds multiple `<spec
 ---
 title: "Learning Insights"
 type: spec
-category: learning
+roles: [implement]
 tags: [insights, learning]
 created: {ISO timestamp}
 ---
@@ -396,7 +390,7 @@ Atomic insights captured during active work.
 
 ## Entries
 
-<spec-entry category="pattern" keywords="auth,jwt" date="2026-05-10" id="INS-abc123" source="manual">
+<spec-entry roles="implement" keywords="pattern,auth,jwt" date="2026-05-10" id="INS-abc123" source="manual">
 
 ### JWT refresh tokens must rotate on every use
 
@@ -408,7 +402,7 @@ Refresh-on-use prevents replay attacks.
 
 </spec-entry>
 
-<spec-entry category="gotcha" keywords="redis,cache" date="2026-05-11" id="INS-def456" source="retrospective">
+<spec-entry roles="analyze" keywords="gotcha,redis,cache" date="2026-05-11" id="INS-def456" source="retrospective">
 
 ### Redis MULTI is not truly transactional
 
@@ -436,6 +430,6 @@ Multiple workflows append `<spec-entry>` blocks to this container:
 ### Retrieval
 
 ```bash
-maestro wiki list --type knowhow --category learning    # list all insights
+maestro wiki list --type knowhow --role implement    # list all insights
 maestro wiki search "<query>"                           # full-text search
 ```

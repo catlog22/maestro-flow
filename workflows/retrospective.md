@@ -304,24 +304,24 @@ Accept all? [Y/n/i for individual]
 
 #### Target: spec
 
-Route spec-routed insights as `<spec-entry>` entries into the appropriate category file. Map insight type to category:
-- `pattern` / `convention` → `coding`
-- `adr-candidate` / architecture → `arch`
-- quality-related → `quality`
+Route spec-routed insights as `<spec-entry>` entries into the appropriate target file. Map insight type to roles:
+- `pattern` / `convention` → `implement`
+- `adr-candidate` / architecture → `plan`
+- quality-related → `review`
 
 ```
-Map insight type → category → target file:
-  pattern/convention → coding → coding-conventions.md
-  adr-candidate/architecture → arch → arch-decisions.md
-  quality-related → quality → quality-conventions.md
+Map insight type → roles → target file:
+  pattern/convention → implement → coding-conventions.md
+  adr-candidate/architecture → plan → arch-decisions.md
+  quality-related → review → quality-conventions.md
 
 Append <spec-entry> to .workflow/specs/{target_file} with:
-  category, keywords (3-5 extracted from title+summary), date, source="retrospective"
+  roles, keywords (3-5 extracted from title+summary), date, source="retrospective"
   Body: insight title, summary, evidence refs, phase/lens/INS_id/confidence metadata
 
-Create target file with category frontmatter if it does not exist.
+Create target file with roles frontmatter if it does not exist.
 
-insight.routed_id = "{category_file}#INS-{INS_id}"
+insight.routed_id = "{target_file}#INS-{INS_id}"
 ```
 
 #### Target: note
@@ -377,7 +377,7 @@ Append every distilled insight (regardless of routing target, including `routed_
 
 ```
 Ensure .workflow/specs/ exists and learnings.md exists.
-Create learnings.md with frontmatter (title, type: spec, category: learning) if new.
+Create learnings.md with frontmatter (title, type: spec, roles: [implement]) if new.
 ```
 
 ### Append entries
@@ -385,7 +385,7 @@ Create learnings.md with frontmatter (title, type: spec, category: learning) if 
 For each insight in `distilled_insights`, append a `<spec-entry>` to `.workflow/specs/learnings.md`:
 
 ```html
-<spec-entry category="{insight.category}" keywords="{insight.tags joined by comma}" date="{YYYY-MM-DD}" id="{insight.id}" source="retrospective">
+<spec-entry roles="{insight.role}" keywords="{insight.category},{insight.tags joined by comma}" date="{YYYY-MM-DD}" id="{insight.id}" source="retrospective">
 
 ### {insight.title}
 
@@ -408,10 +408,10 @@ Append learnings to `.workflow/specs/learnings.md` (shared with milestone-comple
 
 ```
 Append each insight to .workflow/specs/learnings.md as <spec-entry> with:
-  category="learning", keywords (3-5 extracted), date, source="retrospective"
+  roles="implement", keywords (3-5 extracted), date, source="retrospective"
   Body: title, summary, phase/lens/INS_id metadata
 
-Create file with category frontmatter + "## Entries" header if it does not exist.
+Create file with roles frontmatter + "## Entries" header if it does not exist.
 ```
 
 ---
@@ -499,7 +499,7 @@ If `mode == "range"` or `--all`, loop Stages 3-8 per phase, then print aggregate
 ### spec-entry (in specs/learnings.md)
 
 ```html
-<spec-entry category="pattern" keywords="auth,jwt,security" date="2026-04-11" id="INS-a1b2c3d4" source="retrospective">
+<spec-entry roles="implement" keywords="pattern,auth,jwt,security" date="2026-04-11" id="INS-a1b2c3d4" source="retrospective">
 
 ### JWT refresh tokens must rotate on every use
 

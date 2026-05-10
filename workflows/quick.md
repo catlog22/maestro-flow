@@ -204,7 +204,7 @@ Report: "Context captured: ${QUICK_DIR}/context.md"
 ### Step 4.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category coding
+specs_content = maestro spec load --role implement
 ```
 
 Passed inline to planner agent in Step 5.

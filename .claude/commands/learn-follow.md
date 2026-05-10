@@ -124,7 +124,7 @@ Build a structured summary document:
 
 ### Stage 7: Persist
 1. Write `.workflow/knowhow/KNW-follow-{slug}-{date}.md` with the understanding map
-2. Append each new pattern/technique as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --category <cat> --body "<content>" --keywords "follow,{target-slug}"`:
+2. Append each new pattern/technique as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --roles implement --body "<content>" --keywords "follow,{target-slug}"`:
    - Stable INS-id from `hash("follow" + target + pattern_name)`
 3. If `--save-wiki`: run `maestro wiki create --type note --slug follow-{slug} --title "Follow-Along: {target}" --body-file .workflow/knowhow/KNW-follow-{slug}-{date}.md`
 5. Display summary with key findings and next steps

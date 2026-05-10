@@ -30,8 +30,8 @@ If existing session at `${PHASE_DIR}/.tests/integration/state.json`: offer resum
 ### Step 1.3: Load Project Specs
 
 ```
-specs_content = maestro spec load --category test
-arch_content = maestro spec load --category arch
+specs_content = maestro spec load --role test
+arch_content = maestro spec load --role plan
 ```
 
 `specs_content` for test conventions; `arch_content` for module boundaries in Step 2-3.

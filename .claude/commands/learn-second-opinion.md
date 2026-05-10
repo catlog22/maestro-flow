@@ -128,7 +128,7 @@ Across all perspectives (or from single agent in challenge/consult):
    - Per-persona findings (review) / adversarial analysis (challenge) / Q&A transcript (consult)
    - Synthesis: agreements, disagreements, verdict
    - Recommendations
-2. Append non-trivial findings as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --category <cat> --body "<content>" --keywords "second-opinion,{mode},{target-slug}"`
+2. Append non-trivial findings as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --roles implement --body "<content>" --keywords "second-opinion,{mode},{target-slug}"`
 4. Display summary with verdict and recommendations
 
 **Next-step routing:**

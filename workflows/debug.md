@@ -53,7 +53,7 @@ If resuming: load understanding.md + evidence.ndjson, spawn continuation agent.
 ### Step 1.5: Load Project Specs
 
 ```
-specs_content = maestro spec load --category debug
+specs_content = maestro spec load --role analyze
 ```
 
 Pass to debug agents as prior knowledge (known issues, root causes, workarounds).

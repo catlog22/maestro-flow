@@ -40,7 +40,7 @@ Archive flow steps (validation, directory archival, artifact history, knowhow ex
 
 After knowhow extraction (step 4), scan `learnings.md` for promotion candidates:
 
-1. **High-frequency pattern detection**: Scan all `<spec-entry category="learning">` entries for keyword overlap (≥2 entries sharing keywords):
+1. **High-frequency pattern detection**: Scan all `<spec-entry>` entries with `roles="implement"` for keyword overlap (≥2 entries sharing keywords):
    → Ask: "Keyword '{keyword}' appears in {N} knowhow entries. Should this be promoted to a formal coding convention? (`/spec-add coding`)"
 
 2. **Convention drift detection**: Compare executed task summaries against `coding-conventions.md` and `architecture-constraints.md`:
