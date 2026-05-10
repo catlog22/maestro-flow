@@ -1,7 +1,7 @@
 ---
 name: spec-load
 description: Load specs and lessons for current context
-argument-hint: "[--category <type>] [--keyword <word>] [--with-lessons] [--role <role>]"
+argument-hint: "[--role <role>] [--keyword <word>]"
 allowed-tools:
   - Read
   - Bash
@@ -9,8 +9,8 @@ allowed-tools:
   - Grep
 ---
 <purpose>
-Load and display relevant spec files for the current working context.
-Supports filtering by category (file-level) and keyword (entry-level via `<spec-entry>` tags).
+Load relevant specs filtered by role (primary), category (file-level), and/or keyword (entry-level).
+Role-based loading: loads the role's primary doc in full + matching entries from other files.
 </purpose>
 
 <required_reading>
@@ -20,20 +20,28 @@ Supports filtering by category (file-level) and keyword (entry-level via `<spec-
 <context>
 $ARGUMENTS -- optional flags and keyword
 
-Category-to-file mapping (1:1) and flag details defined in workflow specs-load.md.
-
 **Flags:**
-- `--category <type>` — Filter by spec category
+- `--role <role>` — Load by role: primary role doc (full) + cross-file entries with matching roles attr. Roles: implement, plan, test, review, analyze, explore, brainstorm, research.
 - `--keyword <word>` — Filter by keyword within entries
-- `--with-lessons` — Include lessons alongside specs
-- `--role <role>` — Also load wiki role knowledge (browse `maestro wiki list --role <role>`, load relevant entries via `maestro wiki load <id1> [id2...]`)
+
+**File → Primary Role mapping:**
+| File | Role |
+|------|------|
+| coding-conventions.md | implement |
+| architecture-constraints.md | plan |
+| test-conventions.md | test |
+| review-standards.md | review |
+| debug-notes.md | analyze |
+| quality-rules.md | review |
+| learnings.md | implement |
+| tools.md | _(per-entry roles)_ |
 
 **Examples:**
 ```
-/spec-load --keyword auth
-/spec-load --category coding --keyword naming
-/spec-load --category arch
+/spec-load --role implement             # coding全文 + 跨文件implement条目
+/spec-load --role review                # review-standards + quality-rules + 跨文件review条目
 /spec-load --role implement --keyword auth
+/spec-load --keyword auth
 ```
 
 **Ref entries:**

@@ -21,7 +21,7 @@ Deep analysis on scan findings: triage, root cause / impact / optimization enric
 | .msg/meta.json | <session>/.msg/meta.json | No |
 
 1. Extract session path, input path, dimensions from task description
-2. Load review specs: Run `maestro spec load --category review` for review standards, checklists, and approval gates
+2. Load review specs: Run `maestro spec load --role review` for review standards, checklists, and approval gates
 3. Load scan results. If missing or empty -> report clean, complete immediately
 3. Load wisdom files from `<session>/wisdom/`
 4. Triage findings into two buckets:

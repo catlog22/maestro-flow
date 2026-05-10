@@ -5,11 +5,12 @@ Add a `<spec-entry>` closed-tag entry to a single target spec file by category.
 ## Arguments
 
 ```
-$ARGUMENTS: "[--scope <scope>] [--uid <uid>] <category> <content>"
+$ARGUMENTS: "[--scope <scope>] [--uid <uid>] [--roles <csv>] <category> <content>"
 
 --scope  -- target scope: project (default) | global | team | personal
 --uid    -- user id for personal scope (auto-detected from git if omitted)
-category -- one of: coding, arch, quality, debug, test, review, learning
+--roles  -- comma-separated applicable roles (implement,plan,test,review,analyze,explore)
+category -- one of: coding, arch, quality, debug, test, review, learning, tools
 content  -- free-text description of the entry
 ```
 
@@ -33,6 +34,7 @@ content  -- free-text description of the entry
 | `test` | `test-conventions.md` |
 | `review` | `review-standards.md` |
 | `learning` | `learnings.md` |
+| `tools` | `tools.md` |
 
 ## Prerequisites
 
@@ -83,6 +85,13 @@ Auto-extract 3-5 relevant keywords from the content:
 ```
 Entry format (closed-tag), date = YYYY-MM-DD, title = first meaningful phrase:
 
+When --roles provided (new format):
+<spec-entry roles="{role1},{role2}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}">
+### {title}
+{content}
+</spec-entry>
+
+When --roles not provided (legacy format):
 <spec-entry category="{category}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}">
 ### {title}
 {content}

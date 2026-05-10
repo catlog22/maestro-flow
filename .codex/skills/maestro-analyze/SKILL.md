@@ -208,7 +208,7 @@ Create both directories.
    - Read `.workflow/state.json` → `current_milestone`, `artifacts[]`, `accumulated_context`
    - Find prior analyze artifacts from `state.json.artifacts[]` (type=analyze, same milestone) → load their `context.md`
    - Find brainstorm artifacts from `state.json.artifacts[]` (type=brainstorm, same milestone) → load `guidance-specification.md`
-   - Load project specs: `maestro spec load --category arch`
+   - Load project specs: `maestro spec load --role plan`
 
 3. **Quick mode routing**: If QUICK_MODE, generate only wave 3 (synthesis/decide) task in CSV. Skip exploration and scoring.
 

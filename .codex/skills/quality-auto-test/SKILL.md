@@ -208,8 +208,8 @@ mkdir -p {sessionFolder}
 Resolve phase dir from `state.json` artifact registry (`type='execute'`, matching phase). Error E002 if not found.
 
 ```
-specs_test = maestro spec load --category test
-specs_arch = maestro spec load --category arch
+specs_test = maestro spec load --role test
+specs_arch = maestro spec load --role plan
 ```
 
 #### Step 1: Read State & Route

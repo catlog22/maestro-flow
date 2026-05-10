@@ -236,7 +236,7 @@ export class WikiIndexer {
             createdBy: container.createdBy,
             sourceRef: container.sourceRef,
             parent: container.id,
-            roles: container.roles ?? [],
+            roles: se.roles.length > 0 ? se.roles : (container.roles ?? []),
           });
         }
       }
@@ -290,7 +290,7 @@ export class WikiIndexer {
             createdBy: entry.createdBy,
             sourceRef: entry.sourceRef,
             parent: entry.id,
-            roles: entry.roles,
+            roles: se.roles.length > 0 ? se.roles : (entry.roles ?? []),
           });
         }
       }

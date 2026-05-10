@@ -208,7 +208,7 @@ Mark each eligible tool as `recommended: true/false` based on auto-selection.
 
 **3. Context loading**:
 - Read `.workflow/project.md` if exists
-- Load project specs: `maestro spec load --category arch,coding` (if available)
+- Load project specs: `maestro spec load --role implement` (if available)
 - Grep for relevant codebase files based on requirement keywords
 
 **4. Build delegate prompt** (shared across all tools):

@@ -5,12 +5,12 @@ Load spec files filtered by category. Supports project, global, team, and person
 ## Arguments
 
 ```
-$ARGUMENTS: "[--scope <scope>] [--uid <uid>] [--category <type>] [keyword]"
+$ARGUMENTS: "[--scope <scope>] [--uid <uid>] [--role <role>] [keyword]"
 
 --scope     -- load scope: project (default) | global | team | personal
 --uid       -- user id for personal scope (auto-detected from git if omitted)
---category  -- filter by category (1:1 mapping to file):
-               coding | arch | quality | debug | test | review | learning | all
+--role      -- filter by role: implement | plan | test | review | analyze | explore
+               Loads primary role doc in full + cross-file entries with matching roles attr
 keyword     -- optional, grep within loaded specs for matching sections
 ```
 
@@ -18,16 +18,18 @@ keyword     -- optional, grep within loaded specs for matching sections
 
 Each category loads exactly one file per layer. Same mapping as spec-add.
 
-| Category | File loaded |
-|----------|------------|
-| `coding` | `coding-conventions.md` |
-| `arch` | `architecture-constraints.md` |
-| `quality` | `quality-rules.md` |
-| `debug` | `debug-notes.md` |
-| `test` | `test-conventions.md` |
-| `review` | `review-standards.md` |
-| `learning` | `learnings.md` |
-| `all` (default) | All `.md` files in specs/ |
+## File → Primary Role Mapping
+
+| File | Role |
+|------|------|
+| `coding-conventions.md` | implement |
+| `architecture-constraints.md` | plan |
+| `test-conventions.md` | test |
+| `review-standards.md` | review |
+| `debug-notes.md` | analyze |
+| `quality-rules.md` | review |
+| `learnings.md` | implement |
+| `tools.md` | _(per-entry roles)_ |
 
 ## Layer Order by Scope
 
@@ -44,12 +46,12 @@ Each layer is prefixed with a section header when multi-layer.
 
 ### Step 1: Parse Arguments
 
-Extract `--scope`, `--uid`, `--category <type>` and remaining text (keyword for grep).
+Extract `--scope`, `--uid`, `--role <role>` and remaining text (keyword for grep).
 
 ### Step 2: Load Specs via CLI
 
 ```bash
-maestro spec load --scope <scope> [--uid <uid>] [--category <category>] [--keyword <word>]
+maestro spec load --scope <scope> [--uid <uid>] [--role <role>] [--keyword <word>]
 ```
 
 If `maestro spec load` CLI is unavailable, read files directly from the resolved directory.

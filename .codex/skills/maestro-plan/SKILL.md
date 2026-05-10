@@ -198,7 +198,7 @@ If no matching session found, list available sessions and abort.
    - Read spec-ref if `--spec` flag
    - Read `.workflow/codebase/doc-index.json` if exists
    - Find design artifacts from `state.json.artifacts[]` (type=brainstorm with ui-designer) for MASTER.md
-   - Load project specs via `maestro spec load --category arch`
+   - Load project specs via `maestro spec load --role plan`
 
 3. **Upstream analysis check**:
    - If `{contextDir}/conclusions.json` exists and has content: reuse as exploration context, skip wave 1

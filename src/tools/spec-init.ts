@@ -167,6 +167,25 @@ Add entries with: \`/spec-add learning <description>\`
 
 `,
   },
+  {
+    filename: 'tools.md',
+    frontmatter: {
+      title: 'Tools',
+      readMode: 'optional',
+      priority: 'medium',
+      category: 'tools',
+      keywords: ['tool', 'process', 'workflow', 'checklist', 'procedure'],
+    },
+    body: `# Tools
+
+Reusable tool/process definitions. Each entry declares its applicable roles.
+
+Add entries with: \`maestro spec add tools "<title>" "<content>" --roles "implement,test"\`
+
+## Entries
+
+`,
+  },
 ];
 
 // ============================================================================

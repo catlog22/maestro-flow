@@ -1,7 +1,7 @@
 ---
 name: spec-add
-description: Add spec entry by category
-argument-hint: "<category> <content>"
+description: Add spec entry by category with role tagging
+argument-hint: "<category> <content> [--roles <csv>]"
 allowed-tools: Read, Write, Bash, Glob, Grep
 ---
 
@@ -15,9 +15,9 @@ $spec-add "arch Use Zod for runtime validation over io-ts"
 $spec-add "quality All API endpoints must return structured error objects"
 ```
 
-**Valid categories**: coding, arch, quality, debug, test, review, learning, bug, pattern, decision, rule, validation.
+**Valid categories**: coding, arch, quality, debug, test, review, learning, tools, bug, pattern, decision, rule, validation.
 
-**CLI alternative**: `maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 --source <src>`. Used by workflow agents (analyze, plan, execute) for programmatic spec enrichment.
+**CLI alternative**: `maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 --roles implement,test --source <src>`. Used by workflow agents (analyze, plan, execute) for programmatic spec enrichment.
 </purpose>
 
 <context>
@@ -33,6 +33,7 @@ $ARGUMENTS — `<category> <content>` where category selects the target file.
 | `test` | `test-conventions.md` |
 | `review` | `review-standards.md` |
 | `learning` | `learnings.md` |
+| `tools` | `tools.md` |
 | `bug` | `learnings.md` |
 | `pattern` | `coding-conventions.md` |
 | `decision` | `architecture-constraints.md` |
@@ -40,6 +41,8 @@ $ARGUMENTS — `<category> <content>` where category selects the target file.
 | `validation` | `quality-rules.md` |
 
 Extended types (`bug`, `pattern`, `decision`, `rule`, `validation`) are stored in the file of their closest core category but retain their specific category in the `<spec-entry>` tag.
+
+**--roles option**: When `--roles` is provided, the entry uses `roles` attr instead of `category` attr. This declares which agent roles should load this entry via `spec load --role`.
 </context>
 
 <execution>
@@ -70,6 +73,16 @@ Auto-extract 3-5 relevant keywords from the content. Keywords should be:
 Append `<spec-entry>` closed-tag block to target file:
 
 ```markdown
+<!-- With --roles (new format): -->
+<spec-entry roles="{role1},{role2}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}">
+
+### {title extracted from content}
+
+{content}
+
+</spec-entry>
+
+<!-- Without --roles (legacy format): -->
 <spec-entry category="{category}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}">
 
 ### {title extracted from content}

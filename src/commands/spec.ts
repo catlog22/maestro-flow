@@ -43,8 +43,9 @@ export function registerSpecCommand(program: Command): void {
   // ── load ──────────────────────────────────────────────────────────────
   spec
     .command('load')
-    .description('Load specs matching category')
-    .option('--category <stage>', 'Filter by category: coding|arch|quality|debug|test|review|learning')
+    .description('Load specs matching category or role')
+    .option('--category <stage>', 'Filter by category: coding|arch|quality|debug|test|review|learning|tools')
+    .option('--role <role>', 'Filter by role: implement|plan|test|review|analyze|explore|brainstorm|research')
     .option('--keyword <word>', 'Filter entries by keyword')
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
     .option('--uid <uid>', 'User id for personal scope (auto-detected from git if omitted)')
@@ -82,7 +83,8 @@ export function registerSpecCommand(program: Command): void {
         process.exit(1);
       }
 
-      const result = loadSpecs(projectPath, opts.category, uid, keyword, scope);
+      const role = opts.role as string | undefined;
+      const result = loadSpecs(projectPath, opts.category, uid, keyword, scope, { role });
 
       if (opts.stdin) {
         if (result.content) {
@@ -233,6 +235,7 @@ export function registerSpecCommand(program: Command): void {
     .argument('<title>', 'Entry title')
     .argument('[content]', 'Entry content (if omitted, reads from remaining args)')
     .option('--keywords <words>', 'Comma-separated keywords')
+    .option('--roles <roles>', 'Comma-separated roles (implement,plan,test,review,analyze,explore)')
     .option('--source <source>', 'Source reference (e.g., analyze:ANL-xxx)')
     .option('--ref <path>', 'Create as index entry referencing a knowhow document')
     .option('--knowhow-type <type>', 'Knowhow type for --ref (asset, blueprint, document, template, etc.)')
@@ -315,6 +318,10 @@ export function registerSpecCommand(program: Command): void {
       const keywords = typeof opts.keywords === 'string'
         ? opts.keywords.split(',').map((k: string) => k.trim()).filter(Boolean)
         : [];
+
+      const roles = typeof opts.roles === 'string'
+        ? opts.roles.split(',').map((r: string) => r.trim().toLowerCase()).filter(Boolean)
+        : undefined;
 
       // ── --ref mode: create index entry referencing a knowhow document ──
       const refPath = opts.ref as string | undefined;
@@ -400,6 +407,7 @@ export function registerSpecCommand(program: Command): void {
         opts.source as string | undefined,
         scope,
         uid,
+        roles,
       );
 
       if (opts.json) {

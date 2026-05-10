@@ -1,45 +1,41 @@
 ---
 name: spec-load
 description: Load specs and lessons for current context
-argument-hint: "[--category <type>] [--keyword <word>]"
+argument-hint: "[--role <role>] [--keyword <word>]"
 allowed-tools: Read, Bash, Glob, Grep
 ---
 
 <purpose>
-Load relevant specs filtered by category (file-level) and/or keyword (entry-level via `<spec-entry>` tags).
+Load relevant specs filtered by role (primary), category (file-level), and/or keyword (entry-level).
+Role-based loading: loads role's primary doc in full + matching entries from other files.
 </purpose>
 
 <context>
-$ARGUMENTS — optional category filter and keyword.
+$ARGUMENTS — optional role, category filter, and keyword.
 
 ```bash
 $spec-load
-$spec-load "--category coding"
+$spec-load "--role implement"
 $spec-load "--keyword auth"
-$spec-load "--category coding --keyword naming"
+$spec-load "--role implement --keyword auth"
+$spec-load "--role review"
 ```
 
-**Category-to-file mapping (1:1, same as spec-add):**
+**File → Primary Role mapping:**
+| File | Primary Role |
+|------|-------------|
+| `coding-conventions.md` | implement |
+| `architecture-constraints.md` | plan |
+| `test-conventions.md` | test |
+| `review-standards.md` | review |
+| `debug-notes.md` | analyze |
+| `quality-rules.md` | review |
+| `learnings.md` | implement |
+| `tools.md` | _(per-entry roles)_ |
 
-| Category | File loaded |
-|----------|------------|
-| `coding` | `coding-conventions.md` |
-| `arch` | `architecture-constraints.md` |
-| `quality` | `quality-rules.md` |
-| `debug` | `debug-notes.md` |
-| `test` | `test-conventions.md` |
-| `review` | `review-standards.md` |
-| `learning` | `learnings.md` |
-| `bug` | `learnings.md` |
-| `pattern` | `coding-conventions.md` |
-| `decision` | `architecture-constraints.md` |
-| `rule` | `quality-rules.md` |
-| `validation` | `quality-rules.md` |
-| `all` (default) | All spec files |
+**--role loading**: Loads primary role doc in full + entries from other files that have matching `roles` attr.
 
-Extended types (`bug`, `pattern`, `decision`, `rule`, `validation`) are stored in their closest core category's file but retain their specific category in the `<spec-entry>` tag.
-
-**Keyword filtering**: When `--keyword` is provided, only entries with matching keyword in their `<spec-entry keywords="...">` attribute are returned. Legacy entries (heading format) are filtered by text grep.
+**Keyword filtering**: When `--keyword` is provided, only entries with matching keyword in their `<spec-entry keywords="...">` attribute are returned.
 </context>
 
 <execution>
@@ -50,11 +46,11 @@ Verify `.workflow/specs/` exists (E001).
 
 ### Step 2: Parse Arguments
 
-Extract optional `--category` and `--keyword` flags.
+Extract optional `--role` and `--keyword` flags.
 
 ### Step 3: Load via CLI
 
-Run `maestro spec load [--category <cat>] [--keyword <word>]`. If CLI unavailable, read files directly and apply keyword filter.
+Run `maestro spec load [--role <role>] [--keyword <word>]`. If CLI unavailable, read files directly and apply keyword/role filter.
 
 ### Step 4: Display Results
 

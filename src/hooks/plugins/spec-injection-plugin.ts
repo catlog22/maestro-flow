@@ -4,7 +4,7 @@
 
 import type { MaestroPlugin } from '../../types/index.js';
 import type { WorkflowHookRegistry } from '../workflow-hooks.js';
-import { loadSpecs, type SpecCategory } from '../../tools/spec-loader.js';
+import { loadSpecs } from '../../tools/spec-loader.js';
 import { resolveSelf } from '../../tools/team-members.js';
 import { evaluateKeywordInjection } from '../keyword-spec-injector.js';
 
@@ -27,12 +27,12 @@ export class SpecInjectionPlugin implements MaestroPlugin {
     registry.transformPrompt.tap(this.name, (prompt: string) => {
       const parts: string[] = [prompt];
 
-      // Category-based injection
-      const category = inferCategory(prompt);
+      // Role-based injection
+      const role = inferRole(prompt);
       const uid = resolveUidSafe();
-      const catResult = loadSpecs(this.projectPath, category, uid);
-      if (catResult.content) {
-        parts.push(catResult.content);
+      const roleResult = loadSpecs(this.projectPath, undefined, uid, undefined, undefined, { role });
+      if (roleResult.content) {
+        parts.push(roleResult.content);
       }
 
       // Keyword-based injection (with session dedup)
@@ -62,15 +62,15 @@ function resolveUidSafe(): string | undefined {
 }
 
 /**
- * Infer spec category from prompt keywords.
+ * Infer role from prompt keywords.
  * The coordinator doesn't have agent-type metadata, so we use
  * heuristic keyword matching on the assembled prompt.
  */
-function inferCategory(prompt: string): SpecCategory {
+function inferRole(prompt: string): string {
   const lower = prompt.toLowerCase();
   if (/\b(review|audit|check quality)\b/.test(lower)) return 'review';
   if (/\b(test|spec|coverage|assert)\b/.test(lower)) return 'test';
-  if (/\b(debug|diagnose|fix|error|bug)\b/.test(lower)) return 'debug';
-  if (/\b(plan|design|architect|decompose|explore|discover|search|analyze)\b/.test(lower)) return 'arch';
-  return 'coding'; // Default for implementation work
+  if (/\b(debug|diagnose|error|bug)\b/.test(lower)) return 'analyze';
+  if (/\b(plan|design|architect|decompose|explore|discover|search|analyze)\b/.test(lower)) return 'plan';
+  return 'implement'; // Default for implementation work
 }

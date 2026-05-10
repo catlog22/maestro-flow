@@ -20,6 +20,7 @@ export interface SpecEntry {
   timestamp: string;
   category: string;
   keywords: string[];
+  roles: string[];
   ref?: string;
 }
 
@@ -28,7 +29,7 @@ export interface SpecEntry {
 // ---------------------------------------------------------------------------
 
 const ENTRY_TYPES = [
-  'coding', 'arch', 'quality', 'debug', 'test', 'review', 'learning',
+  'coding', 'arch', 'quality', 'debug', 'test', 'review', 'learning', 'tools',
   'bug', 'pattern', 'decision', 'rule', 'validation',
 ] as const;
 type EntryType = (typeof ENTRY_TYPES)[number];
@@ -39,6 +40,7 @@ const FILE_TYPE_MAP: Record<string, EntryType> = {
   'architecture-constraints': 'arch',
   'quality-rules': 'quality',
   'debug-notes': 'debug',
+  tools: 'tools',
   'test-conventions': 'test',
   'review-standards': 'review',
 };
@@ -51,6 +53,7 @@ export const FILE_CATEGORY_MAP: Record<string, string> = {
   'debug-notes': 'debug',
   'test-conventions': 'test',
   'review-standards': 'review',
+  tools: 'tools',
 };
 
 // ---------------------------------------------------------------------------
@@ -131,6 +134,7 @@ function parseEntryBlocks(
     const type = attrs.category ?? detectEntryType(title, fileName);
     const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
     const kws = attrs.keywords ? attrs.keywords.split(',').map((k) => k.trim()) : [];
+    const roles = attrs.roles ? attrs.roles.split(',').map((r) => r.trim().toLowerCase()).filter(Boolean) : [];
     const ref = attrs.ref || undefined;
 
     entries.push({
@@ -146,6 +150,7 @@ function parseEntryBlocks(
           ? frontmatter.category
           : (FILE_CATEGORY_MAP[stem] ?? 'general')),
       keywords: kws,
+      roles,
       ...(ref ? { ref } : {}),
     });
   }
@@ -188,7 +193,7 @@ function parseEntryBlocks(
     const keywords = Array.isArray(frontmatter?.keywords)
       ? frontmatter.keywords.map(String)
       : [];
-    entries.push({ id, type, title, content, file: fileName, timestamp, category, keywords });
+    entries.push({ id, type, title, content, file: fileName, timestamp, category, keywords, roles: [] });
   }
 
   return entries;

@@ -20,6 +20,7 @@ import type { SpecInjectionConfig } from '../types/index.js';
 // Types
 // ---------------------------------------------------------------------------
 
+/** @deprecated Kept for backward-compat config parsing. Use AGENT_ROLE_MAP instead. */
 export interface SpecInjectionRule {
   categories: SpecCategory[];
   /** Additional file paths relative to project root */
@@ -94,46 +95,53 @@ export function evaluateSpecInjection(
   config?: SpecInjectionConfig,
   uid?: string,
 ): SpecInjectionResult {
-  // Merge user config mapping with defaults
-  const mapping = buildMapping(config);
-  const rule = mapping[agentType];
+  // Primary: role-based loading (unified approach)
+  const role = AGENT_ROLE_MAP[agentType];
 
-  if (!rule) return { inject: false };
+  // Fallback: if agent not in role map, try legacy category mapping
+  if (!role) {
+    const mapping = buildMapping(config);
+    const rule = mapping[agentType];
+    if (!rule) return { inject: false };
+
+    // Legacy path: load by categories
+    const resolvedUid = uid ?? resolveUidSafe();
+    const sections: string[] = [];
+    const allCategories: string[] = [];
+    let totalCount = 0;
+    for (const category of rule.categories) {
+      const result = loadSpecs(projectPath, category as SpecCategory, resolvedUid);
+      if (result.content) {
+        sections.push(result.content);
+        allCategories.push(category);
+        totalCount += result.totalLoaded;
+      }
+    }
+    if (sections.length === 0) return { inject: false };
+    const rawContent = sections.join('\n\n---\n\n');
+    const budget = evaluateContextBudget(rawContent, sessionId);
+    if (budget.action === 'skip') return { inject: false, budgetAction: 'skip' };
+    return { inject: true, content: budget.content, categories: allCategories, specCount: totalCount, budgetAction: budget.action };
+  }
 
   // Resolve uid from team membership if not explicitly provided
   const resolvedUid = uid ?? resolveUidSafe();
 
-  // Load specs for each category
   const sections: string[] = [];
-  const allCategories: string[] = [];
   let totalCount = 0;
 
-  for (const category of rule.categories) {
-    const result = loadSpecs(projectPath, category as SpecCategory, resolvedUid);
-    if (result.content) {
-      sections.push(result.content);
-      allCategories.push(category);
-      totalCount += result.totalLoaded;
-    }
+  // Load specs by role (primary role doc full + cross-file role entries)
+  const specResult = loadSpecs(projectPath, undefined, resolvedUid, undefined, undefined, { role });
+  if (specResult.content) {
+    sections.push(specResult.content);
+    totalCount += specResult.totalLoaded;
   }
 
   // Wiki role knowledge injection
-  const role = AGENT_ROLE_MAP[agentType];
-  if (role) {
-    const wikiResult = loadWikiByRole(projectPath, role);
-    if (wikiResult) {
-      sections.push(wikiResult.content);
-      totalCount += wikiResult.entryCount;
-    }
-  }
-
-  if (sections.length === 0 && !sessionId) return { inject: false };
-
-  // Keyword-based injection from agent prompt (if sessionId available)
-  if (sessionId && projectPath) {
-    // Extract prompt from the original function context — the caller should pass it
-    // For now, keyword injection from agent prompts is handled at the hook runner level
-    // via evaluateKeywordInjection(), not here. This keeps the two concerns separate.
+  const wikiResult = loadWikiByRole(projectPath, role);
+  if (wikiResult) {
+    sections.push(wikiResult.content);
+    totalCount += wikiResult.entryCount;
   }
 
   if (sections.length === 0) return { inject: false };
@@ -150,7 +158,7 @@ export function evaluateSpecInjection(
   return {
     inject: true,
     content: budget.content,
-    categories: allCategories,
+    categories: [role],
     specCount: totalCount,
     budgetAction: budget.action,
   };

@@ -15,7 +15,7 @@ import { paths } from '../config/paths.js';
 // Types
 // ============================================================================
 
-export type SpecCategory = 'coding' | 'arch' | 'quality' | 'debug' | 'test' | 'review' | 'learning';
+export type SpecCategory = 'coding' | 'arch' | 'quality' | 'debug' | 'test' | 'review' | 'learning' | 'tools';
 
 export type SpecScope = 'project' | 'global' | 'team' | 'personal';
 
@@ -37,6 +37,19 @@ export const CATEGORY_MAP: Record<string, SpecCategory> = {
   'test-conventions.md':        'test',
   'review-standards.md':        'review',
   'learnings.md':               'learning',
+  'tools.md':                   'tools',
+};
+
+/** File → primary role mapping. Used by --role loading to identify main docs. */
+export const FILE_ROLE_MAP: Record<string, string> = {
+  'coding-conventions.md':       'implement',
+  'architecture-constraints.md': 'plan',
+  'test-conventions.md':         'test',
+  'review-standards.md':         'review',
+  'debug-notes.md':              'analyze',
+  'quality-rules.md':            'review',
+  'learnings.md':                'implement',
+  'tools.md':                    '',  // no primary role — per-entry roles
 };
 
 const SPECS_DIR = '.workflow/specs';
@@ -101,7 +114,7 @@ export interface LoadSpecsOptions {
   globalDir?: string;
 }
 
-export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: string, keyword?: string, scope?: SpecScope, options?: LoadSpecsOptions): SpecLoadResult {
+export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: string, keyword?: string, scope?: SpecScope, options?: LoadSpecsOptions & { role?: string }): SpecLoadResult {
   const globalDir = options?.globalDir ?? paths.specs;
 
   // Build ordered list of (directory, label) pairs to scan
@@ -112,10 +125,12 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
   autoInitSeeds(join(projectPath, SPECS_DIR));
   autoInitSeeds(globalDir);
 
+  const role = options?.role;
+
   // First pass: collect results per layer (skip empty)
   const layerResults: Array<{ label: string; sections: string[]; matched: string[] }> = [];
   for (const { dir, label } of layers) {
-    const { sections, matched } = loadFromDir(dir, category, keyword);
+    const { sections, matched } = loadFromDir(dir, category, keyword, role);
     if (sections.length > 0) {
       layerResults.push({ label, sections, matched });
     }
@@ -184,11 +199,16 @@ function buildLayers(projectPath: string, uid?: string, scope?: SpecScope, globa
 /**
  * Load spec files from a single directory. Returns empty arrays if the
  * directory does not exist or is unreadable.
+ *
+ * When `role` is provided:
+ * - Primary role docs (FILE_ROLE_MAP match) are loaded in full
+ * - Other files: only entries with matching roles attr are included
  */
 function loadFromDir(
   specsDir: string,
   category?: SpecCategory,
   keyword?: string,
+  role?: string,
 ): { sections: string[]; matched: string[] } {
   if (!existsSync(specsDir)) return { sections: [], matched: [] };
 
@@ -203,7 +223,7 @@ function loadFromDir(
   const matched: string[] = [];
 
   for (const file of files) {
-    if (!shouldInclude(file, category)) continue;
+    if (!shouldInclude(file, category, role)) continue;
 
     const filePath = join(specsDir, file);
     let raw: string;
@@ -216,7 +236,11 @@ function loadFromDir(
     const body = stripFrontmatter(raw).trim();
     if (!body) continue;
 
-    const formatted = formatFileContent(body, keyword);
+    // Determine load mode for this file
+    const fileRole = FILE_ROLE_MAP[file];
+    const isFullLoad = role && fileRole === role;
+
+    const formatted = formatFileContent(body, keyword, isFullLoad ? undefined : role);
     if (formatted) {
       sections.push(formatted);
       matched.push(file);
@@ -230,38 +254,57 @@ function loadFromDir(
 // Internal
 // ============================================================================
 
-function shouldInclude(filename: string, category?: SpecCategory): boolean {
-  // No category filter → load all
-  if (!category) return true;
+function shouldInclude(filename: string, category?: SpecCategory, role?: string): boolean {
+  // Category filter takes precedence
+  if (category) {
+    const cat = CATEGORY_MAP[filename];
+    return cat ? cat === category : false;
+  }
 
-  const cat = CATEGORY_MAP[filename];
-  if (cat) return cat === category;
+  // Role filter: include primary role docs + all other files (for entry-level filtering)
+  if (role) {
+    const fileRole = FILE_ROLE_MAP[filename];
+    // Primary doc for this role → always include (full load)
+    if (fileRole === role) return true;
+    // Files with no role mapping or different primary role → include for entry-level filtering
+    return true;
+  }
 
-  // Unknown files: include only when no category filter
-  return false;
+  // No filter → load all
+  return true;
 }
 
 /**
  * Parse file body, strip <spec-entry> tags, format clean output with metadata.
  * When keyword is provided, only return matching entries.
+ * When role is provided, only return entries with matching roles attribute.
  * Falls back to raw body for files with no structured entries.
  */
-function formatFileContent(body: string, keyword?: string): string | null {
+function formatFileContent(body: string, keyword?: string, role?: string): string | null {
   const { entries, legacy } = parseSpecEntries(body);
 
   // No structured entries → pass through raw body (or keyword-grep it)
   if (entries.length === 0 && legacy.length === 0) {
+    // Role filtering: non-primary docs with no structured entries are skipped
+    if (role) return null;
     if (keyword) {
       return body.toLowerCase().includes(keyword.toLowerCase()) ? body : null;
     }
     return body;
   }
 
+  // Apply role filter at entry level
+  let filteredEntries = entries;
+  if (role) {
+    filteredEntries = entries.filter(e => e.roles.includes(role));
+    if (filteredEntries.length === 0) return null;
+  }
+
   const parts: string[] = [];
 
   // Separate ref entries (lightweight display) from regular entries
-  const refEntries = entries.filter(e => e.ref);
-  const regularEntries = entries.filter(e => !e.ref);
+  const refEntries = filteredEntries.filter(e => e.ref);
+  const regularEntries = filteredEntries.filter(e => !e.ref);
 
   if (keyword) {
     const kw = keyword.toLowerCase();
@@ -269,13 +312,17 @@ function formatFileContent(body: string, keyword?: string): string | null {
     const matchedRef = refEntries.filter(e => e.keywords.includes(kw));
     if (matchedRegular.length > 0) parts.push(formatSpecEntries(matchedRegular));
     if (matchedRef.length > 0) parts.push(matchedRef.map(formatRefEntry).join('\n\n---\n\n'));
-    for (const leg of legacy) {
-      if (leg.content.toLowerCase().includes(kw)) parts.push(leg.content);
+    if (!role) {
+      for (const leg of legacy) {
+        if (leg.content.toLowerCase().includes(kw)) parts.push(leg.content);
+      }
     }
   } else {
     if (regularEntries.length > 0) parts.push(formatSpecEntries(regularEntries));
     if (refEntries.length > 0) parts.push(refEntries.map(formatRefEntry).join('\n\n---\n\n'));
-    for (const leg of legacy) parts.push(leg.content);
+    if (!role) {
+      for (const leg of legacy) parts.push(leg.content);
+    }
   }
 
   return parts.length > 0 ? parts.join('\n\n---\n\n') : null;
