@@ -13,6 +13,7 @@ import { loadSpecs, type SpecCategory } from '../tools/spec-loader.js';
 import { evaluateContextBudget } from './context-budget.js';
 import { resolveSelf } from '../tools/team-members.js';
 import { evaluateKeywordInjection } from './keyword-spec-injector.js';
+import { loadWikiByRole } from './wiki-role-loader.js';
 import type { SpecInjectionConfig } from '../types/index.js';
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,21 @@ const DEFAULT_AGENT_SPEC_MAP: Record<string, SpecInjectionRule> = {
   'workflow-debugger':   { categories: ['debug'], extras: [] },
 };
 
+/** Agent-type → delegate role mapping for wiki knowledge loading. */
+const AGENT_ROLE_MAP: Record<string, string> = {
+  'code-developer':      'implement',
+  'tdd-developer':       'implement',
+  'workflow-executor':   'implement',
+  'universal-executor':  'implement',
+  'test-fix-agent':      'implement',
+  'cli-lite-planning-agent': 'plan',
+  'action-planning-agent':   'plan',
+  'workflow-planner':        'plan',
+  'workflow-reviewer':   'review',
+  'debug-explore-agent': 'analyze',
+  'workflow-debugger':   'analyze',
+};
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -98,6 +114,16 @@ export function evaluateSpecInjection(
       sections.push(result.content);
       allCategories.push(category);
       totalCount += result.totalLoaded;
+    }
+  }
+
+  // Wiki role knowledge injection
+  const role = AGENT_ROLE_MAP[agentType];
+  if (role) {
+    const wikiResult = loadWikiByRole(projectPath, role);
+    if (wikiResult) {
+      sections.push(wikiResult.content);
+      totalCount += wikiResult.entryCount;
     }
   }
 

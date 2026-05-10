@@ -1,7 +1,7 @@
 ---
 name: spec-load
 description: Load specs and lessons for current context
-argument-hint: "[--category <type>] [--keyword <word>] [--with-lessons]"
+argument-hint: "[--category <type>] [--keyword <word>] [--with-lessons] [--role <role>]"
 allowed-tools:
   - Read
   - Bash
@@ -22,11 +22,18 @@ $ARGUMENTS -- optional flags and keyword
 
 Category-to-file mapping (1:1) and flag details defined in workflow specs-load.md.
 
+**Flags:**
+- `--category <type>` — Filter by spec category
+- `--keyword <word>` — Filter by keyword within entries
+- `--with-lessons` — Include lessons alongside specs
+- `--role <role>` — Also load wiki role knowledge (browse `maestro wiki list --role <role>`, load relevant entries via `maestro wiki load <id1> [id2...]`)
+
 **Examples:**
 ```
 /spec-load --keyword auth
 /spec-load --category coding --keyword naming
 /spec-load --category arch
+/spec-load --role implement --keyword auth
 ```
 </context>
 

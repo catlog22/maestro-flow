@@ -34,6 +34,7 @@ function makeEntry(
     createdBy: null,
     sourceRef: null,
     parent: null,
+    roles: [],
   };
 }
 

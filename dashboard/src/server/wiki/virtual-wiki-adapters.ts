@@ -87,6 +87,7 @@ export function adaptIssueRow(
     createdBy: null,
     sourceRef: id,
     parent: null,
+    roles: [],
   };
 }
 

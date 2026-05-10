@@ -17,7 +17,7 @@ import { resolve } from 'node:path';
 import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import { WikiWriter, WikiWriteError } from '#maestro-dashboard/wiki/writer.js';
 import { computeHealth, detectOrphans, detectHubs } from '#maestro-dashboard/wiki/graph-analysis.js';
-import type { WikiFilters, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
+import type { WikiEntry, WikiFilters, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
 
 // Inline type to avoid cross-build dependency on dashboard dist-server.
 // Must match WikiScope in dashboard/src/server/wiki/wiki-types.ts.
@@ -57,6 +57,7 @@ export function registerWikiCommand(program: Command): void {
     .option('--status <status>', 'Filter by status')
     .option('--category <cat>', 'Filter by category')
     .option('--created-by <cmd>', 'Filter by creating command/skill')
+    .option('--role <role>', 'Filter by role: analyze|explore|review|implement|plan|brainstorm|research')
     .option('-q, --query <q>', 'BM25 full-text query')
     .option('--group', 'Return results grouped by type')
     .option('--json', 'Output as JSON')
@@ -72,6 +73,7 @@ export function registerWikiCommand(program: Command): void {
         if (opts.status) qs.set('status', opts.status);
         if (opts.category) qs.set('category', opts.category);
         if (opts.createdBy) qs.set('createdBy', opts.createdBy);
+        if (opts.role) qs.set('role', opts.role);
         if (opts.query) qs.set('q', opts.query);
         if (opts.group) qs.set('group', 'true');
         const data = await apiGet(base, `/api/wiki?${qs.toString()}`);
@@ -103,6 +105,7 @@ export function registerWikiCommand(program: Command): void {
       if (opts.status) filters.status = opts.status;
       if (opts.category) filters.category = opts.category;
       if (opts.createdBy) filters.createdBy = opts.createdBy;
+      if (opts.role) filters.role = opts.role;
       if (opts.query) filters.q = opts.query;
 
       if (opts.group) {
@@ -180,6 +183,50 @@ export function registerWikiCommand(program: Command): void {
         console.log('\n---');
         console.log(entry.body);
       }
+    });
+
+  // ── load ──────────────────────────────────────────────────────────────
+  wiki
+    .command('load <ids...>')
+    .description('Load specific wiki documents by ID array — use after "wiki list --role" to select relevant docs')
+    .option('--json', 'Output as JSON')
+    .action(async (ids: string[], opts) => {
+      const { indexer } = getOfflineClients();
+      const index = await indexer.get();
+
+      const entries = ids
+        .map(id => index.byId[id])
+        .filter((e): e is WikiEntry => Boolean(e));
+
+      const missing = ids.filter(id => !index.byId[id]);
+      if (missing.length > 0) {
+        console.error(`Not found: ${missing.join(', ')}`);
+      }
+
+      if (entries.length === 0) {
+        console.error('No entries found for given IDs');
+        return;
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify({
+          totalLoaded: entries.length,
+          entries: entries.map(e => ({
+            id: e.id, type: e.type, title: e.title,
+            summary: e.summary, body: e.body,
+            roles: e.roles,
+            codePaths: e.ext.codePaths ?? null,
+          })),
+        }, null, 2));
+        return;
+      }
+
+      const sections = entries.map(e => {
+        const codePaths = Array.isArray(e.ext.codePaths)
+          ? `\n\n[codePaths: ${(e.ext.codePaths as string[]).join(', ')}]` : '';
+        return `## [${e.type}] ${e.title}\n\n${e.body || e.summary}${codePaths}`;
+      });
+      console.log(`# Wiki Documents (${entries.length} loaded)\n\n---\n\n${sections.join('\n\n---\n\n')}`);
     });
 
   // ── search ────────────────────────────────────────────────────────────

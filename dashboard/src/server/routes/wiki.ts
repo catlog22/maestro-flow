@@ -233,6 +233,7 @@ function parseFilters(q: Record<string, string>): WikiFilters {
   if (q.q) out.q = q.q;
   if (q.category) out.category = q.category;
   if (q.createdBy) out.createdBy = q.createdBy;
+  if (q.role) out.role = q.role;
   return out;
 }
 
