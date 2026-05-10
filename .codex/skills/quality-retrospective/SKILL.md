@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 <purpose>
 Multi-lens retrospective for completed phases. Context-Agent Fork loads phase artifacts once;
 four parallel lens agents (technical, process, quality, decision) analyze independently;
-synthesizer distills insights; outputs are routed to spec stubs, knowhow tips, issues, and LRN-insights.md.
+synthesizer distills insights; outputs are routed to spec stubs, knowhow tips, issues, and specs/learnings.md.
 
 ```
 +------------------------------------------------------------------+
@@ -71,7 +71,7 @@ When `-y`: Accept all routing recommendations without prompting. Route all insig
 - `.workflow/specs/{category-file}.md` -- `<spec-entry>` entries appended to matching category files (one per spec-routed insight)
 - `.workflow/issues/issues.jsonl` -- appended issue rows (`source: "retrospective"`)
 - `.workflow/knowhow/TIP-*.md` -- knowhow tips (via `manage-knowhow-capture` skill)
-- `.workflow/knowhow/LRN-insights.md` -- append-only insight log
+- `.workflow/specs/learnings.md` -- append-only insight log
 - Index auto-maintained by WikiIndexer
 
 **Storage read (never modified)** — all resolved via `state.json.artifacts[]`:
@@ -125,7 +125,7 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 7. **Archive before overwrite**: Move existing retrospective.{md,json} to `.history/` with timestamp before writing new ones
 8. **Spec learnings.md backward-compat**: Append to it only if it already exists -- never create it
 9. **Route confirmation**: Unless `-y`, present routing table and ask per-group before writing spec/issue/knowhow
-10. **Lessons always written**: Append to `LRN-insights.md` regardless of `--no-route` -- routing only controls spec/issue/knowhow creation
+10. **Lessons always written**: Append to `specs/learnings.md` regardless of `--no-route` -- routing only controls spec/issue/knowhow creation
 </invariants>
 
 <execution>
@@ -250,7 +250,7 @@ Write two files to `{target_dir}/`:
 - **retrospective.json**: phase, slug, timestamp, lenses_run, metrics, findings_by_lens, distilled_insights, routing_summary
 - **retrospective.md**: Header with phase/slug/timestamp, metrics table (tasks completed, test pass rate, review issues, UAT scenarios), findings by lens, distilled insights, routing summary
 
-Append each insight to `.workflow/knowhow/LRN-insights.md` (auto-indexed by WikiIndexer).
+Append each insight to `.workflow/specs/learnings.md`.
 
 If `.workflow/specs/learnings.md` already exists, append each insight as `<spec-entry>` (category=`learning`, auto-extract keywords, date=today, source=`retrospective`). Never create the file -- only append if it exists.
 
@@ -287,6 +287,6 @@ Next steps: `$manage-status`, `$manage-issue "list --source retrospective"`, `$m
 - [ ] Synthesizer produces deduplicated insights with stable INS-ids
 - [ ] Routing applied per insight (spec/issue/knowhow/none) with confirmation
 - [ ] retrospective.{md,json} written to phase directory
-- [ ] Lessons appended to LRN-insights.md regardless of --no-route flag
+- [ ] Lessons appended to specs/learnings.md regardless of --no-route flag
 - [ ] Existing retrospective archived before overwrite
 </success_criteria>

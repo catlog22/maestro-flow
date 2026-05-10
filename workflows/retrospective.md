@@ -376,16 +376,16 @@ Append every distilled insight (regardless of routing target, including `routed_
 ### Bootstrap
 
 ```
-Ensure .workflow/knowhow/ exists and LRN-insights.md exists.
-Create LRN-insights.md with frontmatter (title, type: knowhow, category: learning) if new.
+Ensure .workflow/specs/ exists and learnings.md exists.
+Create learnings.md with frontmatter (title, type: spec, category: learning) if new.
 ```
 
 ### Append entries
 
-For each insight in `distilled_insights`, append a `<knowhow-entry>` to `.workflow/knowhow/LRN-insights.md`:
+For each insight in `distilled_insights`, append a `<spec-entry>` to `.workflow/specs/learnings.md`:
 
 ```html
-<knowhow-entry category="{insight.category}" keywords="{insight.tags joined by comma}" date="{YYYY-MM-DD}" id="{insight.id}" source="retrospective">
+<spec-entry category="{insight.category}" keywords="{insight.tags joined by comma}" date="{YYYY-MM-DD}" id="{insight.id}" source="retrospective">
 
 ### {insight.title}
 
@@ -397,7 +397,7 @@ For each insight in `distilled_insights`, append a `<knowhow-entry>` to `.workfl
 - **Evidence**: {insight.evidence_refs}
 - **Routed to**: {insight.routed_to} ({insight.routed_id or "—"})
 
-</knowhow-entry>
+</spec-entry>
 ```
 
 WikiIndexer auto-indexes each entry — no manual index update required.
@@ -496,10 +496,10 @@ If `mode == "range"` or `--all`, loop Stages 3-8 per phase, then print aggregate
 }
 ```
 
-### knowhow-entry (in LRN-insights.md)
+### spec-entry (in specs/learnings.md)
 
 ```html
-<knowhow-entry category="pattern" keywords="auth,jwt,security" date="2026-04-11" id="INS-a1b2c3d4" source="retrospective">
+<spec-entry category="pattern" keywords="auth,jwt,security" date="2026-04-11" id="INS-a1b2c3d4" source="retrospective">
 
 ### JWT refresh tokens must rotate on every use
 
@@ -511,8 +511,6 @@ Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; shou
 - **Evidence**: .workflow/scratch/plan-auth-2026-04-15/verification.json#gaps[2]
 - **Routed to**: spec (coding-conventions.md#INS-a1b2c3d4)
 
-</knowhow-entry>
+</spec-entry>
 ```
-
-Auto-indexed by WikiIndexer — no separate index file required.
 

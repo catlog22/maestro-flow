@@ -31,15 +31,15 @@ Arguments: $ARGUMENTS
 - `--save-wiki` — Create wiki note entries per pattern group via `maestro wiki create --type note`
 
 **Storage written:**
-- `.workflow/knowhow/LRN-decompose-{slug}-{YYYY-MM-DD}.md` — Pattern decomposition report
-- `.workflow/knowhow/LRN-insights.md` — One `<knowhow-entry>` per discovered pattern (source: "decompose")
+- `.workflow/knowhow/KNW-decompose-{slug}-{YYYY-MM-DD}.md` — Pattern decomposition report
+- `.workflow/specs/learnings.md` — One `<spec-entry>` per discovered pattern (source: "decompose")
 - If `--save-spec`: entries appended to `.workflow/specs/coding-conventions.md`
 - If `--save-wiki`: new wiki note entries
 
 **Storage read:**
 - Source files at target path
 - `.workflow/specs/coding-conventions.md` — Existing documented patterns (for dedup)
-- `.workflow/knowhow/LRN-insights.md` — Previously identified patterns (for dedup)
+- `.workflow/specs/learnings.md` — Previously identified patterns (for dedup)
 </context>
 
 <execution>
@@ -52,7 +52,7 @@ Arguments: $ARGUMENTS
 
 ### Stage 2: Load Existing Patterns
 - Read `.workflow/specs/coding-conventions.md` — extract documented patterns
-- Search `LRN-insights.md` for `<knowhow-entry>` blocks with `category="pattern"` — previously discovered
+- Search `specs/learnings.md` for `<spec-entry>` blocks with `category="pattern"` — previously discovered
 - Build dedup set: pattern names already known
 
 ### Stage 3: Parallel Agent Analysis (4 dimensions)
@@ -133,8 +133,8 @@ Build the decomposition report grouped by dimension:
 ```
 
 ### Stage 6: Persist
-1. Write `.workflow/knowhow/LRN-decompose-{slug}-{date}.md`
-2. Append each **new** pattern as a `<knowhow-entry>` block to `LRN-insights.md` via `maestro wiki append knowhow-lrn-insights --category pattern --body "<content>" --keywords "decompose,{dimension},{target-slug}"`:
+1. Write `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`
+2. Append each **new** pattern as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --category pattern --body "<content>" --keywords "decompose,{dimension},{target-slug}"`:
    - Stable INS-id from `hash("decompose" + target + pattern_name)`
 4. If `--save-spec`: for each new pattern, invoke `Skill({ skill: "spec-add", args: "pattern {description}" })`
 5. If `--save-wiki`: create wiki note per dimension group via `maestro wiki create --type note --slug decompose-{dimension}-{slug}`
@@ -162,8 +162,8 @@ Build the decomposition report grouped by dimension:
 - [ ] All 4 dimension agents spawned in parallel
 - [ ] Each finding has: name, dimension, confidence, anchors, description, tradeoffs
 - [ ] Cross-reference performed (documented / known / new status assigned)
-- [ ] Pattern catalog written to `LRN-decompose-{slug}-{date}.md`
-- [ ] New patterns appended to `LRN-insights.md` as `<knowhow-entry>` blocks with stable INS-ids
+- [ ] Pattern catalog written to `KNW-decompose-{slug}-{date}.md`
+- [ ] New patterns appended to `specs/learnings.md` as `<spec-entry>` blocks with stable INS-ids
 - [ ] If --save-spec: spec entries created for new patterns
 - [ ] If --save-wiki: wiki notes created per dimension group
 - [ ] No files modified outside `.workflow/knowhow/` (and optionally specs/wiki)

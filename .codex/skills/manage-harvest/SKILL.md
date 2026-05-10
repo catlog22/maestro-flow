@@ -42,7 +42,7 @@ $ARGUMENTS — session-id, path, or empty for scan mode.
 | debug | `.workflow/.debug/*/` | debug-log.md |
 | scratchpad | `.workflow/.scratchpad/` | *.md |
 | session | `.workflow/active/WFS-*/` | workflow-session.json |
-| learning | `.workflow/knowhow/` | LRN-insights.md |
+| learning | `.workflow/specs/` | learnings.md |
 </context>
 
 <execution>

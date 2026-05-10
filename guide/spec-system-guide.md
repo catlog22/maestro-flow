@@ -140,7 +140,6 @@ Knowhow 是广谱知识存储，支持多种文档类型。所有文件存储在
 | `DCS-` | decision | 架构/设计决策 |
 | `AST-` | asset | 通用代码资产（API 契约、数据模型、UI 原型等） |
 | `BLP-` | blueprint | 架构蓝图、系统设计 |
-| `LRN-` | learning | 学习洞察容器 |
 
 #### 容器模式（`<knowhow-entry>`）
 
@@ -148,8 +147,8 @@ Knowhow 是广谱知识存储，支持多种文档类型。所有文件存储在
 
 ```markdown
 ---
-title: Learning Insights
-category: learning
+title: Session Compact 20260510
+category: session
 roles: [analyze, review]
 ---
 
@@ -190,6 +189,38 @@ tags: [auth, api, jwt]
 ```
 
 `codePaths` 保留在 `WikiEntry.ext` 中，可通过 `entry.ext.codePaths` 访问。
+
+#### ref 引用模式（Spec → Knowhow 桥接）
+
+Spec 是索引/规则层，Knowhow 是详文层。当一个主题过于复杂无法内联在 spec-entry 中时，可用 `ref` 属性引用 knowhow 详文：
+
+```markdown
+<!-- 内联模式（简短洞察） -->
+<spec-entry category="pattern" keywords="auth,jwt" date="2026-05-10">
+
+### JWT Token Rotation
+
+Always rotate refresh tokens on use.
+
+</spec-entry>
+
+<!-- 引用模式（复杂主题 → knowhow 详文） -->
+<spec-entry category="pattern" keywords="oauth,pkce" date="2026-05-10"
+  ref="knowhow/AST-oauth-flow.md">
+
+### OAuth 2.0 集成架构
+
+完整 OAuth PKCE 流程设计。详见引用文档。
+
+</spec-entry>
+```
+
+WikiIndexer 解析 `ref` 属性时，自动在 spec 子条目与 knowhow 文档之间建立 `related` 链接，纳入知识图谱。
+
+**分工原则**：
+- **Spec**（`specs/`）= 索引 + 规则。条目简短，agent 自动加载
+- **Knowhow**（`knowhow/`）= 详文。完整文档，按需加载
+- **ref** = 索引条目指向详文的桥梁
 
 ### Role 角色化检索
 
@@ -267,9 +298,9 @@ WikiIndexer 将 `<spec-entry>` 和 `<knowhow-entry>` 统一解析为独立 WikiE
 └───────────────────┘        └──────────────────────────┘
 
 ┌───────────────────┐        ┌──────────────────────────┐
-│ knowhow/LRN-*.md  │   ──>  │ knowhow-lrn-insights     │ (容器)
-│  <knowhow-entry>  │   ──>  │ knowhow-lrn-insights-001 │ (子节点, parent=容器)
-│  <knowhow-entry>  │   ──>  │ knowhow-lrn-insights-002 │
+│ knowhow/KNW-*.md  │   ──>  │ knowhow-knw-session      │ (容器)
+│  <knowhow-entry>  │   ──>  │ knowhow-knw-session-001  │ (子节点, parent=容器)
+│  <knowhow-entry>  │   ──>  │ knowhow-knw-session-002  │
 └───────────────────┘        └──────────────────────────┘
 ```
 
@@ -365,8 +396,7 @@ maestro wiki append knowhow-...  ──┘     │
 │   ├── DCS-20260429-1100.md            # 决策记录
 │   ├── TIP-20260429-1200.md            # 提示
 │   ├── AST-auth-api.md                 # 代码资产（API 契约）
-│   ├── BLP-microservice-arch.md        # 架构蓝图
-│   └── LRN-insights.md                # 学习洞察容器（<knowhow-entry> 子条目）
+│   └── BLP-microservice-arch.md        # 架构蓝图
 ├── collab/
 │   └── specs/                          # scope: team
 │       └── {uid}/                      # scope: personal

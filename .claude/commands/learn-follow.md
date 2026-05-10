@@ -14,7 +14,7 @@ allowed-tools:
 <purpose>
 Guided reading experience for code files, wiki entries, or topics. Instead of just reading code, this command walks through content section by section using forcing questions (inspired by gstack `/office-hours` brainstorming) to extract patterns, identify assumptions, and build a structured understanding map.
 
-Outputs reading notes with extracted patterns, open questions, and connection points. Insights persist to `LRN-insights.md` as `<knowhow-entry>` blocks and optionally become wiki note entries for the knowledge graph.
+Outputs reading notes with extracted patterns, open questions, and connection points. Insights persist to `specs/learnings.md` as `<spec-entry>` blocks and optionally become wiki note entries for the knowledge graph.
 </purpose>
 
 <context>
@@ -31,15 +31,15 @@ Arguments: $ARGUMENTS
 - `--save-wiki` — Create a wiki note entry with the reading notes via `maestro wiki create --type note`
 
 **Storage written:**
-- `.workflow/knowhow/LRN-follow-{slug}-{YYYY-MM-DD}.md` — Reading notes with understanding map
-- `.workflow/knowhow/LRN-insights.md` — Appended pattern/technique `<knowhow-entry>` blocks
+- `.workflow/knowhow/KNW-follow-{slug}-{YYYY-MM-DD}.md` — Reading notes with understanding map
+- `.workflow/knowhow/specs/learnings.md` — Appended pattern/technique `<spec-entry>` blocks
 - If `--save-wiki`: new wiki note entry
 
 **Storage read:**
 - Target source file or wiki entry
 - `maestro wiki backlinks <id>` / `maestro wiki forward <id>` — Relationship context
 - `.workflow/specs/coding-conventions.md` — Convention reference for pattern matching
-- `.workflow/knowhow/LRN-insights.md` — Prior insights for dedup and cross-reference
+- `.workflow/knowhow/specs/learnings.md` — Prior insights for dedup and cross-reference
 </context>
 
 <execution>
@@ -119,14 +119,14 @@ Build a structured summary document:
 ## Connections
 - Links to: {forward link entries}
 - Referenced by: {backlink entries}
-- Related insights: {matching LRN-insights.md entries}
+- Related insights: {matching specs/learnings.md entries}
 ```
 
 ### Stage 7: Persist
-1. Write `.workflow/knowhow/LRN-follow-{slug}-{date}.md` with the understanding map
-2. Append each new pattern/technique as a `<knowhow-entry>` block to `LRN-insights.md` via `maestro wiki append knowhow-lrn-insights --category <cat> --body "<content>" --keywords "follow,{target-slug}"`:
+1. Write `.workflow/knowhow/KNW-follow-{slug}-{date}.md` with the understanding map
+2. Append each new pattern/technique as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --category <cat> --body "<content>" --keywords "follow,{target-slug}"`:
    - Stable INS-id from `hash("follow" + target + pattern_name)`
-3. If `--save-wiki`: run `maestro wiki create --type note --slug follow-{slug} --title "Follow-Along: {target}" --body-file .workflow/knowhow/LRN-follow-{slug}-{date}.md`
+3. If `--save-wiki`: run `maestro wiki create --type note --slug follow-{slug} --title "Follow-Along: {target}" --body-file .workflow/knowhow/KNW-follow-{slug}-{date}.md`
 5. Display summary with key findings and next steps
 
 **Next-step routing:**
@@ -154,8 +154,8 @@ Build a structured summary document:
 - [ ] Patterns extracted with file:line anchors
 - [ ] Convention comparison performed against coding-conventions.md
 - [ ] Understanding map produced with: concepts, patterns, assumptions, questions, connections
-- [ ] `LRN-follow-{slug}-{date}.md` written
-- [ ] `LRN-insights.md` appended with discovered patterns as `<knowhow-entry>` blocks (stable INS-ids)
+- [ ] `KNW-follow-{slug}-{date}.md` written
+- [ ] `specs/learnings.md` appended with discovered patterns as `<spec-entry>` blocks (stable INS-ids)
 - [ ] If --save-wiki: wiki note entry created
 - [ ] No files modified outside `.workflow/knowhow/` (and optionally wiki)
 - [ ] Summary displayed with next-step routing

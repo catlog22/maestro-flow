@@ -13,7 +13,7 @@ Unlike `maestro wiki list` which shows raw entries, this workflow synthesizes an
 - `.workflow/` initialized
 - Wiki entries exist (at least 5 for meaningful clustering)
 - `maestro wiki` CLI available
-- `.workflow/knowhow/LRN-insights.md` exists (optional, for cross-reference)
+- `.workflow/specs/learnings.md` exists (optional, for cross-reference)
 
 ---
 
@@ -91,9 +91,9 @@ Per-theme health adapted from wiki health formula (entries, connectivity, comple
 
 ## Stage 4: Cross-Reference with Knowhow Insights
 
-Search via `maestro wiki search` or parse `.workflow/knowhow/LRN-insights.md` for keyword matches against each theme. Flag **unlinked insights** — knowhow entries matching a theme but not referenced by any wiki entry in that theme.
+Search via `maestro wiki search` or parse `.workflow/specs/learnings.md` for keyword matches against each theme. Flag **unlinked insights** — learning entries matching a theme but not referenced by any wiki entry in that theme.
 
-If `LRN-insights.md` not found, skip with W002 warning.
+If `learnings.md` not found, skip with W002 warning.
 
 ---
 
@@ -117,7 +117,7 @@ Empty cells = knowledge gaps. Each gap becomes a candidate for Stage 7.
 
 ## Stage 6: Write Digest
 
-Produce `.workflow/knowhow/LRN-digest-{slug}-{YYYY-MM-DD}.md`:
+Produce `.workflow/knowhow/KNW-digest-{slug}-{YYYY-MM-DD}.md`:
 
 ```markdown
 # Knowledge Digest: {scope description}
@@ -161,7 +161,7 @@ For each knowledge gap from Stage 5: dedup against `.workflow/issues/issues.json
 ## Stage 8: Persist
 
 1. Write digest file to `.workflow/knowhow/`
-2. Append meta-insights as `<knowhow-entry>` to `.workflow/knowhow/LRN-insights.md` (`source="wiki-digest"`, `category="technique"`)
+2. Append meta-insights as `<spec-entry>` to `.workflow/specs/learnings.md` (`source="wiki-digest"`, `category="technique"`)
 3. Display summary: scope, entry count, theme count, gap count, created issues (if applicable), report path.
 
 ---

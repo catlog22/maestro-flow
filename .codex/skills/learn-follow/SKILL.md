@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 <purpose>
 Guided reading experience for code files, wiki entries, or topics. Walks through content
 section by section using 4 forcing questions to extract patterns, identify assumptions,
-and build a structured understanding map. Insights persist to `LRN-insights.md`.
+and build a structured understanding map. Insights persist to `specs/learnings.md`.
 
 Unlike `learn-decompose` which is parallel pattern extraction, this is sequential
 deep reading that builds understanding incrementally.
@@ -27,7 +27,7 @@ $ARGUMENTS — target and optional flags.
 - `--depth deep` — Every function, branch, assumption
 - `--save-wiki` — Create wiki note with reading notes
 
-**Output**: `.workflow/knowhow/LRN-follow-{slug}-{date}.md`
+**Output**: `.workflow/knowhow/KNW-follow-{slug}-{date}.md`
 </context>
 
 <execution>
@@ -56,8 +56,8 @@ From forcing question answers, extract: design patterns (with file:line anchors)
 Cross-reference against `coding-conventions.md`: documented vs undocumented patterns.
 
 ### Stage 5: Persist
-1. Write `LRN-follow-{slug}-{date}.md` with understanding map
-2. Append new patterns to `LRN-insights.md` (source: "follow", stable INS-ids)
+1. Write `KNW-follow-{slug}-{date}.md` with understanding map
+2. Append new patterns to `specs/learnings.md` (source: "follow", stable INS-ids)
 3. If `--save-wiki`: create wiki note entry
 
 **Next steps:** `/learn-decompose <path>`, `/spec-add coding ...`, `/learn-second-opinion <file>`
@@ -78,6 +78,6 @@ Cross-reference against `coding-conventions.md`: documented vs undocumented patt
 - [ ] All 4 forcing questions applied per section
 - [ ] Patterns extracted with file:line anchors
 - [ ] Understanding map produced with concepts, patterns, assumptions, questions
-- [ ] `LRN-follow-{slug}-{date}.md` written
-- [ ] `LRN-insights.md` appended with stable INS-ids
+- [ ] `KNW-follow-{slug}-{date}.md` written
+- [ ] `specs/learnings.md` appended with stable INS-ids
 </success_criteria>

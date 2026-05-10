@@ -56,7 +56,7 @@ Follow '~/.maestro/workflows/wiki-connect.md' completely (Stages 1-6).
 - [ ] If --fix: entries updated with new `related` links
 - [ ] If --fix: new health score computed and delta reported
 - [ ] Report written to `wiki-connections-{date}.md`
-- [ ] Graph insights appended to `LRN-insights.md` as `<knowhow-entry>` blocks
+- [ ] Graph insights appended to `specs/learnings.md` as `<spec-entry>` blocks
 - [ ] No unintended entry modifications (only `related` field changed)
 - [ ] Summary displayed with next-step routing
 </success_criteria>

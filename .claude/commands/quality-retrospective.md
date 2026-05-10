@@ -13,7 +13,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Post-execution multi-perspective retrospective (复盘) for completed phases. Consumes existing execution artifacts (verification.json, review.json, issues.jsonl, plan.json, .summaries/, uat.md, state.json) and runs four parallel lenses — technical, process, quality, decision — to distill reusable insights. Routes each insight into the appropriate store: spec stub for reusable patterns, memory tip for process notes, issue for recurring gaps. Auto-scans for unreviewed completed phases and reports the backlog. Every insight is also persisted to `.workflow/knowhow/LRN-insights.md` as `<knowhow-entry>` blocks for cross-phase queryability.
+Post-execution multi-perspective retrospective (复盘) for completed phases. Consumes existing execution artifacts (verification.json, review.json, issues.jsonl, plan.json, .summaries/, uat.md, state.json) and runs four parallel lenses — technical, process, quality, decision — to distill reusable insights. Routes each insight into the appropriate store: spec stub for reusable patterns, memory tip for process notes, issue for recurring gaps. Auto-scans for unreviewed completed phases and reports the backlog. Every insight is also persisted to `.workflow/knowhow/specs/learnings.md` as `<spec-entry>` blocks for cross-phase queryability.
 </purpose>
 
 <required_reading>
@@ -70,7 +70,7 @@ Follow `~/.maestro/workflows/retrospective.md` Stages 1–8 in order. Key invari
 - [ ] Spec entries (if any) appended as `<spec-entry>` to matching `.workflow/specs/{category-file}.md`
 - [ ] Issue rows (if any) match canonical issues.jsonl schema (status "open", full issue_history, all required fields)
 - [ ] Note tips (if any) created via `Skill({ skill: "manage-learn", args: "tip ..." })`
-- [ ] `LRN-insights.md` appended with one `<knowhow-entry>` per insight regardless of routing target
+- [ ] `specs/learnings.md` appended with one `<spec-entry>` per insight regardless of routing target
 - [ ] No existing phase artifacts modified (verification.json, review.json, plan.json untouched)
 - [ ] Confirmation banner displays routing counts and next-step suggestions
 - [ ] Next step: `/manage-status` to review state, or `/manage-issue list --source retrospective` to triage created issues, or `/manage-learn list` to browse the knowhow library

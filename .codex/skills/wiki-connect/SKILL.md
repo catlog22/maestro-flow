@@ -20,7 +20,7 @@ $ARGUMENTS — optional flags.
 - `--fix` — Auto-apply top suggestions
 - `--max N` — Max suggestions (default: 20)
 
-**Output**: `.workflow/knowhow/LRN-wiki-connections-{date}.md`
+**Output**: `.workflow/knowhow/KNW-wiki-connections-{date}.md`
 </context>
 
 <execution>
@@ -47,7 +47,7 @@ For each suggestion: get entry → append target to `related` → update via `ma
 Re-run `maestro wiki health` for delta.
 
 ### Stage 6: Persist
-Write `LRN-wiki-connections-{date}.md`. Append graph insights to `LRN-insights.md` (source: "wiki-connect").
+Write `KNW-wiki-connections-{date}.md`. Append graph insights to `specs/learnings.md` (source: "wiki-connect").
 
 **Next steps:** `/wiki-digest <topic>`, `/manage-wiki health`, `/learn-follow <wiki-id>`, `maestro wiki graph`
 </execution>
@@ -68,6 +68,6 @@ Write `LRN-wiki-connections-{date}.md`. Append graph insights to `LRN-insights.m
 - [ ] Candidates scored and ranked
 - [ ] Suggestions displayed with scores and reasons
 - [ ] If --fix: entries updated, new health score reported
-- [ ] Report written to `LRN-wiki-connections-{date}.md`
-- [ ] Graph insights appended to `LRN-insights.md`
+- [ ] Report written to `KNW-wiki-connections-{date}.md`
+- [ ] Graph insights appended to `specs/learnings.md`
 </success_criteria>

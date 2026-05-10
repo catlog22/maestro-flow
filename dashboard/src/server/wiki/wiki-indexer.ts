@@ -212,6 +212,12 @@ export class WikiIndexer {
           keywords: container.tags,
         });
         for (const se of specEntries) {
+          const related: string[] = [];
+          if (se.ref) {
+            const refStem = se.ref.replace(/^knowhow\//, '').replace(/\.md$/, '');
+            const refSlug = refStem.replace(/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP)-/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            related.push(`knowhow-${refSlug}`);
+          }
           out.push({
             id: `${idPrefix}${se.id}`,
             type: 'spec',
@@ -221,10 +227,10 @@ export class WikiIndexer {
             status: 'active',
             created: container.created,
             updated: container.updated,
-            related: [],
+            related,
             source: container.source,
             body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp },
+            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}) },
             scope,
             category: se.category || container.category,
             createdBy: container.createdBy,
@@ -251,7 +257,6 @@ export class WikiIndexer {
         else if (upper.startsWith('TIP-')) entry.category = 'tip';
         else if (upper.startsWith('AST-')) entry.category = 'asset';
         else if (upper.startsWith('BLP-')) entry.category = 'blueprint';
-        else if (upper.startsWith('LRN-')) entry.category = 'learning';
         out.push(entry);
 
         // Parse <knowhow-entry> blocks into sub-node WikiEntries
@@ -260,6 +265,12 @@ export class WikiIndexer {
           keywords: entry.tags,
         });
         for (const se of knowhowSubEntries) {
+          const related: string[] = [];
+          if (se.ref) {
+            const refStem = se.ref.replace(/^knowhow\//, '').replace(/\.md$/, '');
+            const refSlug = refStem.replace(/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP)-/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+            related.push(`knowhow-${refSlug}`);
+          }
           out.push({
             id: `knowhow-${se.id}`,
             type: 'knowhow' as const,
@@ -269,10 +280,10 @@ export class WikiIndexer {
             status: 'active' as const,
             created: entry.created,
             updated: entry.updated,
-            related: [],
+            related,
             source: entry.source,
             body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp },
+            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}) },
             scope: null,
             category: se.category || entry.category,
             createdBy: entry.createdBy,
@@ -416,10 +427,10 @@ export class WikiIndexer {
 
     const rel = toForwardSlash(relative(this.workflowRoot, absPath));
     // Knowhow files live under knowhow/ with prefix-<slug>.md naming.
-    // Strip the 4-char prefix (KNW-/TIP-/TPL-/RCP-/REF-/DCS-/AST-/BLP-/LRN-) from the id-generating
+    // Strip the 4-char prefix (KNW-/TIP-/TPL-/RCP-/REF-/DCS-/AST-/BLP-) from the id-generating
     // stem so the id matches what WikiWriter produced at create time (`knowhow-<slug>`).
     let idStem = stem;
-    if (/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|LRN)-/i.test(stem)) idStem = stem.slice(4);
+    if (/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP)-/i.test(stem)) idStem = stem.slice(4);
     const id = `${type}-${slugify(idStem)}`;
 
     return {

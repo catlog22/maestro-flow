@@ -120,13 +120,13 @@ After all updates: re-run `maestro wiki health`, report applied/skipped counts a
 
 ## Stage 6: Persist & Report
 
-1. Write `.workflow/knowhow/LRN-wiki-connections-{YYYY-MM-DD}.md`:
+1. Write `.workflow/knowhow/KNW-wiki-connections-{YYYY-MM-DD}.md`:
    - Baseline vs final health scores
    - All suggestions (applied and unapplied) with scores
    - Orphan rescue results
    - Graph structure observations (hub concentration, type distribution)
    
-2. Append graph insights as `<knowhow-entry>` to `.workflow/knowhow/LRN-insights.md`:
+2. Append graph insights as `<spec-entry>` to `.workflow/specs/learnings.md`:
    - `source="wiki-connect"`, `category="technique"`
    - e.g., "Auth entries poorly cross-referenced", "Memory entries have highest orphan rate"
 
@@ -135,7 +135,7 @@ After all updates: re-run `maestro wiki health`, report applied/skipped counts a
 == Wiki Connect Complete ==
 Suggestions:  {total} ({applied} applied, {skipped} skipped)
 Health:       {baseline} → {new} ({delta})
-Report:       .workflow/knowhow/LRN-wiki-connections-{date}.md
+Report:       .workflow/knowhow/KNW-wiki-connections-{date}.md
 ```
 
 ---

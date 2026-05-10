@@ -372,20 +372,20 @@ store_knowhow { operation: "add", type: "template", title: "...", body: "..." }
 | knowhow | recipe | RCP- | Recipe |
 | knowhow | reference | REF- | Reference |
 | knowhow | decision | DCS- | Decision |
-| knowhow | learning | LRN- | Learning Insight |
+| spec | learning | — | Learning Insight (in `specs/learnings.md`) |
 
 ---
 
-## Part D: Learning Insights Container (LRN-insights.md)
+## Part D: Learning Insights Container (specs/learnings.md)
 
-A special container file at `.workflow/knowhow/LRN-insights.md` holds multiple `<knowhow-entry>` sub-entries for atomic learning insights. This replaces the former `lessons.jsonl` approach.
+A special container file at `.workflow/specs/learnings.md` holds multiple `<spec-entry>` sub-entries for atomic learning insights. This replaces the former `lessons.jsonl` approach.
 
 ### Container Format
 
 ```markdown
 ---
 title: "Learning Insights"
-type: knowhow
+type: spec
 category: learning
 tags: [insights, learning]
 created: {ISO timestamp}
@@ -394,7 +394,9 @@ created: {ISO timestamp}
 
 Atomic insights captured during active work.
 
-<knowhow-entry category="pattern" keywords="auth,jwt" date="2026-05-10" id="INS-abc123" source="manual">
+## Entries
+
+<spec-entry category="pattern" keywords="auth,jwt" date="2026-05-10" id="INS-abc123" source="manual">
 
 ### JWT refresh tokens must rotate on every use
 
@@ -404,9 +406,9 @@ Refresh-on-use prevents replay attacks.
 - **Confidence**: high
 - **Tags**: auth, jwt, security
 
-</knowhow-entry>
+</spec-entry>
 
-<knowhow-entry category="gotcha" keywords="redis,cache" date="2026-05-11" id="INS-def456" source="retrospective">
+<spec-entry category="gotcha" keywords="redis,cache" date="2026-05-11" id="INS-def456" source="retrospective">
 
 ### Redis MULTI is not truly transactional
 
@@ -416,12 +418,12 @@ MULTI/EXEC guarantees atomicity but not isolation...
 - **Lens**: technical
 - **Confidence**: medium
 
-</knowhow-entry>
+</spec-entry>
 ```
 
 ### Producers
 
-Multiple workflows append `<knowhow-entry>` blocks to this container:
+Multiple workflows append `<spec-entry>` blocks to this container:
 
 | Workflow | Source value | When |
 |----------|-------------|------|

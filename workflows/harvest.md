@@ -67,7 +67,7 @@ Scan `.workflow/` for harvestable artifacts. Each source type has a known struct
 | `debug` | `.workflow/.debug/*/` | `debug-log.md`, `hypothesis-*.md` | directory name |
 | `scratchpad` | `.workflow/.scratchpad/` | `*.md`, `*.json` | filename |
 | `session` | `.workflow/active/WFS-*/` | `workflow-session.json` | `WFS-*` |
-| `knowhow` | `.workflow/knowhow/` | `LRN-insights.md`, `digest-*.md`, `*.md` | filename |
+| `knowhow` | `.workflow/knowhow/` | `*.md`, `digest-*.md` | filename |
 
 Scan each source type (filtered by `--source`). For each matching directory/file within `--recent` window, extract: `source_type`, `id`, `path`, `title` (from JSON or H1), `updated_at`, `summary`, `file_count`.
 
@@ -155,8 +155,8 @@ Parse content to identify discrete knowledge items. Each source type has specifi
 - `key_decisions[]` → decision fragments
 - `deferred_items[]` → issue fragments
 
-**Knowhow (`LRN-insights.md`):**
-- Each `<knowhow-entry>` → knowhow fragment (check if already routed to wiki/spec/issue)
+**Learning Insights (`specs/learnings.md`):**
+- Each `<spec-entry>` → learning fragment (check if already routed to wiki/spec/issue)
 
 Each fragment gets:
 ```
@@ -287,7 +287,7 @@ This log prevents duplicate harvesting in future runs.
 
 ## Stage 7: dedup_check
 
-Before writing any item in Stage 6, check for duplicates across `harvest-log.jsonl` (by fragment_id), wiki (by title search), `issues.jsonl` (by title/description), and `LRN-insights.md` (by content). Duplicates are skipped with `[SKIP-DUP]` marker and logged to harvest report.
+Before writing any item in Stage 6, check for duplicates across `harvest-log.jsonl` (by fragment_id), wiki (by title search), `issues.jsonl` (by title/description), and `specs/learnings.md` (by content). Duplicates are skipped with `[SKIP-DUP]` marker and logged to harvest report.
 
 ---
 

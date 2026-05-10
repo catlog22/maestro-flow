@@ -48,7 +48,7 @@ Follow '~/.maestro/workflows/wiki-digest.md' completely (Stages 1-8).
 | E001 | error | No wiki entries found (empty index) | Initialize wiki content first |
 | E002 | error | Topic search returned 0 results | Broaden topic or check wiki content |
 | W001 | warning | Too few entries (<5) for meaningful theme clustering | Digest produced but themes may be trivial |
-| W002 | warning | LRN-insights.md not found — skipping cross-reference | Proceed without knowhow context |
+| W002 | warning | specs/learnings.md not found — skipping cross-reference | Proceed without knowhow context |
 | W003 | warning | Some entry bodies failed to load — partial summaries | Note incomplete entries in digest |
 </error_codes>
 
@@ -57,12 +57,12 @@ Follow '~/.maestro/workflows/wiki-digest.md' completely (Stages 1-8).
 - [ ] Baseline health score recorded
 - [ ] Entries clustered into 3-5 semantic themes
 - [ ] Per-theme analysis: summary, key entries, gaps, health
-- [ ] Cross-reference with LRN-insights.md completed
+- [ ] Cross-reference with specs/learnings.md completed
 - [ ] Coverage heatmap generated (type × theme matrix)
 - [ ] Knowledge gaps identified with suggested actions
 - [ ] If `--create-issues`: gap issues created in `issues.jsonl` (deduped)
-- [ ] Digest written to `LRN-digest-{slug}-{date}.md`
-- [ ] Meta-insights appended to `LRN-insights.md` as `<knowhow-entry>` blocks
+- [ ] Digest written to `KNW-digest-{slug}-{date}.md`
+- [ ] Meta-insights appended to `specs/learnings.md` as `<spec-entry>` blocks
 - [ ] No files modified outside `.workflow/knowhow/` and `.workflow/issues/` (issues only when `--create-issues`)
 - [ ] Summary displayed with key findings and next-step routing
 </success_criteria>

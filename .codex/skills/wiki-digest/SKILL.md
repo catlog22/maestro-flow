@@ -26,7 +26,7 @@ $ARGUMENTS — scope and optional flags.
 - `--format full` — Detailed with per-entry summaries
 - `--create-issues` — Auto-create knowledge-gap issues in issues.jsonl
 
-**Output**: `.workflow/knowhow/LRN-digest-{slug}-{date}.md`
+**Output**: `.workflow/knowhow/KNW-digest-{slug}-{date}.md`
 </context>
 
 <execution>
@@ -41,7 +41,7 @@ Group entries into 3-5 themes via: tag co-occurrence, title BM25 similarity, rel
 Per theme: summary paragraph, key entries (by hub score), gap detection (broken links, orphans, TODO markers, missing perspectives), health score.
 
 ### Stage 4: Cross-Reference with Lessons
-Search `LRN-insights.md` for related insights. Flag unlinked insights (knowhow entries matching theme but not referenced by wiki entries).
+Search `specs/learnings.md` for related insights. Flag unlinked insights (knowhow entries matching theme but not referenced by wiki entries).
 
 ### Stage 5: Coverage Heatmap
 Type × theme matrix showing knowledge density:
@@ -60,7 +60,7 @@ Produce `digest-{slug}-{date}.md` with themes, heatmap, gaps, unlinked insights,
 For each gap: dedup against issues.jsonl, append with `type: "knowledge-gap"`, `source: "wiki-digest"`.
 
 ### Stage 8: Persist
-Append meta-insights to `LRN-insights.md` (source: "wiki-digest"). Display summary.
+Append meta-insights to `specs/learnings.md` (source: "wiki-digest"). Display summary.
 
 **Next steps:** `/learn-follow <wiki-id>`, `/wiki-connect --fix`, `/manage-wiki cleanup`, `/learn-decompose <path>`
 </execution>
@@ -71,7 +71,7 @@ Append meta-insights to `LRN-insights.md` (source: "wiki-digest"). Display summa
 | E001 | error | No wiki entries found | Initialize wiki content |
 | E002 | error | Topic search returned 0 | Broaden topic |
 | W001 | warning | Too few entries (<5) | Themes may be trivial |
-| W002 | warning | LRN-insights.md not found | Skip cross-reference |
+| W002 | warning | learnings.md not found | Skip cross-reference |
 | W003 | warning | Some entry bodies failed to load | Partial summaries |
 </error_codes>
 
@@ -79,9 +79,9 @@ Append meta-insights to `LRN-insights.md` (source: "wiki-digest"). Display summa
 - [ ] Scope parsed and entries loaded
 - [ ] Entries clustered into 3-5 semantic themes
 - [ ] Per-theme analysis with gaps identified
-- [ ] Cross-reference with LRN-insights.md completed
+- [ ] Cross-reference with specs/learnings.md completed
 - [ ] Coverage heatmap generated
 - [ ] If --create-issues: gap issues created (deduped)
-- [ ] Digest written to `LRN-digest-{slug}-{date}.md`
-- [ ] Meta-insights appended to LRN-insights.md
+- [ ] Digest written to `KNW-digest-{slug}-{date}.md`
+- [ ] Meta-insights appended to specs/learnings.md
 </success_criteria>

@@ -22,7 +22,7 @@ $ARGUMENTS — lens selection and scope flags.
 **Git flags:** `--days N` (default: 7), `--author <name>`, `--area <path>`, `--compare`
 **Decision flags:** `--phase N`, `--tag <tag>`, `--id <id>`
 
-**Output**: `.workflow/knowhow/LRN-retro-{date}.md` + `LRN-retro-{date}.json`
+**Output**: `.workflow/knowhow/KNW-retro-{date}.md` + `KNW-retro-{date}.json`
 </context>
 
 <execution>
@@ -41,7 +41,7 @@ $ARGUMENTS — lens selection and scope flags.
 **Trend comparison** if prior `retro-*.json` exists.
 
 ### Phase 3: Decision Lens (skip if --lens git)
-**3a: Collect decisions** from wiki, specs, git log, phase context, LRN-insights.md.
+**3a: Collect decisions** from wiki, specs, git log, phase context, specs/learnings.md.
 **3b: Build decision registry** per decision (id, title, source, rationale, alternatives, evidence).
 
 **3c: Multi-perspective evaluation** via spawn_agents_on_csv (3 parallel agents):
@@ -55,10 +55,10 @@ $ARGUMENTS — lens selection and scope flags.
 **3d: Classify lifecycle**: Validated / Aging / Questionable / Stale / Reversed.
 
 ### Phase 4: Unified Report
-Write `LRN-retro-{date}.md` + `LRN-retro-{date}.json` with metrics, sessions, hotspots, decision health, combined insights, recommended actions.
+Write `KNW-retro-{date}.md` + `KNW-retro-{date}.json` with metrics, sessions, hotspots, decision health, combined insights, recommended actions.
 
 ### Phase 5: Persist
-Append insights to `LRN-insights.md` (source: "retro-git" or "retro-decision"). Display summary.
+Append insights to `specs/learnings.md` (source: "retro-git" or "retro-decision"). Display summary.
 
 **Next steps:** `/learn-follow <path>`, `/quality-auto-test <area>`, `/learn-investigate <question>`
 </execution>
@@ -78,6 +78,6 @@ Append insights to `LRN-insights.md` (source: "retro-git" or "retro-decision"). 
 - [ ] Lens selection parsed correctly
 - [ ] Git lens: metrics computed, sessions detected, hotspots identified
 - [ ] Decision lens: decisions collected, 3 agents spawned in parallel, lifecycle classified
-- [ ] Unified report written to LRN-retro-{date}.md + LRN-retro-{date}.json
-- [ ] LRN-insights.md appended with insights (stable INS-ids)
+- [ ] Unified report written to KNW-retro-{date}.md + KNW-retro-{date}.json
+- [ ] specs/learnings.md appended with insights (stable INS-ids)
 </success_criteria>

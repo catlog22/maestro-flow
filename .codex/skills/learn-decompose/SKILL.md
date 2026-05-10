@@ -8,7 +8,7 @@ allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUser
 <purpose>
 Systematic pattern extraction from code via CSV wave pipeline. 4 parallel dimension agents
 scan a module, then a cross-reference agent deduplicates against existing patterns and
-produces a catalog. Discovered patterns persist to `LRN-insights.md` and optionally to
+produces a catalog. Discovered patterns persist to `specs/learnings.md` and optionally to
 specs (via `spec-add`) and wiki.
 
 ```
@@ -32,7 +32,7 @@ $ARGUMENTS — target path/module and optional flags.
 - `--save-spec`: Invoke `spec-add` for each new pattern
 - `--save-wiki`: Create wiki note entries per dimension group
 
-**Output**: `.workflow/.csv-wave/{session-id}/` + `.workflow/knowhow/LRN-decompose-{slug}-{date}.md`
+**Output**: `.workflow/.csv-wave/{session-id}/` + `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`
 </context>
 
 <invariants>
@@ -50,7 +50,7 @@ $ARGUMENTS — target path/module and optional flags.
 Parse flags from `$ARGUMENTS`: `-y`/`--yes`, `--patterns <list>`, `--save-spec`, `--save-wiki`, `--continue`, `-c N`.
 Extract remaining text as target path/module.
 
-Resolve target to file list. Load existing patterns from `coding-conventions.md` + `LRN-insights.md` for dedup set.
+Resolve target to file list. Load existing patterns from `coding-conventions.md` + `specs/learnings.md` for dedup set.
 
 ### Phase 2: Wave 1 — Parallel Dimension Scans
 
@@ -87,8 +87,8 @@ Single agent receives all wave 1 findings via `prev_context`. Tasks:
 
 ### Phase 4: Persist
 
-1. Write `LRN-decompose-{slug}-{date}.md` with full catalog
-2. Append each **new** pattern to `LRN-insights.md` (source: "decompose", category: "pattern")
+1. Write `KNW-decompose-{slug}-{date}.md` with full catalog
+2. Append each **new** pattern to `specs/learnings.md` (source: "decompose", category: "pattern")
 3. If `--save-spec`: invoke `spec-add` per new pattern
 4. If `--save-wiki`: create wiki note per dimension group
 </execution>
@@ -107,7 +107,7 @@ Single agent receives all wave 1 findings via `prev_context`. Tasks:
 - [ ] 4 dimension agents spawned in parallel via spawn_agents_on_csv
 - [ ] Each finding has: name, dimension, confidence, anchors, description
 - [ ] Cross-reference performed (documented / known / new)
-- [ ] Pattern catalog written to `LRN-decompose-{slug}-{date}.md`
-- [ ] New patterns appended to `LRN-insights.md` with stable INS-ids
+- [ ] Pattern catalog written to `KNW-decompose-{slug}-{date}.md`
+- [ ] New patterns appended to `specs/learnings.md` with stable INS-ids
 - [ ] If --save-spec / --save-wiki: entries created
 </success_criteria>

@@ -20,6 +20,7 @@ export interface SpecEntry {
   timestamp: string;
   category: string;
   keywords: string[];
+  ref?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,6 +131,7 @@ function parseEntryBlocks(
     const type = attrs.category ?? detectEntryType(title, fileName);
     const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
     const kws = attrs.keywords ? attrs.keywords.split(',').map((k) => k.trim()) : [];
+    const ref = attrs.ref || undefined;
 
     entries.push({
       id,
@@ -144,6 +146,7 @@ function parseEntryBlocks(
           ? frontmatter.category
           : (FILE_CATEGORY_MAP[stem] ?? 'general')),
       keywords: kws,
+      ...(ref ? { ref } : {}),
     });
   }
 

@@ -3,7 +3,7 @@
 Atomic insight capture, search, and retrieval. Lightweight gstack-style "eureka moment" log that complements the retrospective workflow: where retrospective extracts insights from completed phases in bulk, `manage-learn` captures one insight at a time during active work.
 
 Storage:
-- `.workflow/knowhow/LRN-insights.md` — append-only container of `<knowhow-entry>` sub-entries (shared with retrospective output)
+- `.workflow/specs/learnings.md` — append-only container of `<spec-entry>` sub-entries (shared with retrospective output)
 - Auto-indexed by WikiIndexer (no manual index required)
 
 **Shared store rationale:** Manual captures (`source: "manual"`), tips (`source: "tip"`), retrospective-distilled insights (`source: "retrospective"`, `lens: <name>` from `quality-retrospective`), and learn-retro insights (`source: "retro-git"` or `source: "retro-decision"` from `learn-retro`) all live in the same store so search and list see the entire knowledge corpus. The `source` field disambiguates origin.
@@ -15,7 +15,7 @@ This workflow does NOT spawn agents or call CLI tools. It is a thin file operati
 ## Prerequisites
 
 - `.workflow/` initialized (`.workflow/state.json` exists). If missing, error E001.
-- The `knowhow/` directory and `LRN-insights.md` are created on first use; do not require them to exist upfront.
+- The `specs/` directory and `learnings.md` are created on first use; do not require them to exist upfront.
 
 ---
 
@@ -58,16 +58,16 @@ Empty args → AskUserQuestion. Invalid --category → E002.
 ### Step 2.1: Bootstrap storage
 
 ```bash
-KNOWHOW_DIR=".workflow/knowhow"
-INSIGHTS_FILE="$KNOWHOW_DIR/LRN-insights.md"
+SPECS_DIR=".workflow/specs"
+INSIGHTS_FILE="$SPECS_DIR/learnings.md"
 
-mkdir -p "$KNOWHOW_DIR"
+mkdir -p "$SPECS_DIR"
 
 if [ ! -f "$INSIGHTS_FILE" ]; then
   cat > "$INSIGHTS_FILE" << 'EOF'
 ---
 title: "Learning Insights"
-type: knowhow
+type: spec
 category: learning
 tags: [insights, learning]
 created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -75,6 +75,8 @@ created: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 # Learning Insights
 
 Atomic insights captured during active work.
+
+## Entries
 
 EOF
 fi
@@ -112,10 +114,10 @@ Simple keyword heuristics — no LLM call. Match the insight text (lowercased) a
 
 First match wins. If nothing matches, category = `technique`.
 
-### Step 2.5: Build knowhow-entry
+### Step 2.5: Build spec-entry
 
 ```
-entry = <knowhow-entry
+entry = <spec-entry
   category="{category}"
   keywords="{parsed --tag values joined by comma}"
   date="{YYYY-MM-DD}"
@@ -131,12 +133,12 @@ entry = <knowhow-entry
 - **Confidence**: {--confidence value or "medium"}
 - **Tags**: {parsed --tag values + ["manual"]}
 
-</knowhow-entry>
+</spec-entry>
 ```
 
 ### Step 2.6: Persist
 
-Append the `<knowhow-entry>` block to `.workflow/knowhow/LRN-insights.md`.
+Append the `<spec-entry>` block to `.workflow/specs/learnings.md`.
 
 WikiIndexer auto-indexes the entry — no manual index update required.
 
@@ -217,7 +219,7 @@ List all: Skill({ skill: "manage-learn", args: "list" })
 
 ### Step 5.1: Locate entry
 
-Find `<knowhow-entry>` matching target INS-id in `LRN-insights.md`. Missing arg → E003. Not found → E004.
+Find `<spec-entry>` matching target INS-id in `learnings.md`. Missing arg → E003. Not found → E004.
 
 ### Step 5.2: Resolve linked phase context (if any)
 
@@ -269,7 +271,7 @@ PHASE CONTEXT:
 
 | Workflow | Relationship |
 |----------|--------------|
-| `quality-retrospective` | Producer. Appends `<knowhow-entry>` to the same `LRN-insights.md` with `source: "retrospective"` and a populated `lens` field. |
+| `quality-retrospective` | Producer. Appends `<spec-entry>` to the same `specs/learnings.md` with `source: "retrospective"` and a populated `lens` field. |
 | `manage-knowhow-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. Both write to `.workflow/knowhow/` with different prefixes. |
 | `phase-transition` | Reader (informally). Phase-transition's free-form `.workflow/specs/learnings.md` is a distinct file with a different audience; do not merge them. |
 | `maestro-plan` | Future consumer. Should query via `maestro wiki search` or `maestro wiki list --type knowhow --category learning` to inform planning decisions. (Out of scope for this command.) |
