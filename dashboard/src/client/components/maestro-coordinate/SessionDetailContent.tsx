@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import type { MaestroSessionListItem } from '@/shared/maestro-session-types.js';
 import type { SessionDetail } from '@/client/store/maestro-coordinate-store.js';
 import { SOURCE_COLORS, formatTimestamp } from './constants.js';
@@ -39,6 +40,9 @@ export function SessionDetailContent({
           <div className="text-[14px] font-semibold text-text-primary leading-snug mb-3">
             {session.intent}
           </div>
+
+          {/* Resume command */}
+          <ResumeCommand source={session.source} sessionId={session.sessionId} intent={session.intent} status={session.status} />
 
           {/* Meta grid */}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-4">
@@ -121,5 +125,77 @@ function StatusPill({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ResumeCommand — copyable CLI command to resume/continue a session
+// ---------------------------------------------------------------------------
+
+function getResumeCommand(
+  source: string,
+  sessionId: string,
+  intent: string,
+  status: string,
+): string | null {
+  // Completed/failed sessions can be resumed
+  if (source === 'ralph') {
+    return status === 'completed' || status === 'failed'
+      ? `/maestro-ralph continue`
+      : `/maestro-ralph continue`;
+  }
+  if (source === 'maestro') {
+    // Maestro sessions are re-invoked with the original intent
+    return `/maestro "${intent}"`;
+  }
+  if (source === 'coordinate') {
+    return `/maestro-execute`;
+  }
+  return null;
+}
+
+function ResumeCommand({
+  source,
+  sessionId,
+  intent,
+  status,
+}: {
+  source: string;
+  sessionId: string;
+  intent: string;
+  status: string;
+}) {
+  const cmd = getResumeCommand(source, sessionId, intent, status);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    if (!cmd) return;
+    void navigator.clipboard.writeText(cmd).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [cmd]);
+
+  if (!cmd) return null;
+
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <code className="flex-1 px-3 py-1.5 text-[11px] font-mono text-text-secondary bg-bg-secondary rounded-[var(--radius-md)] border border-border-divider select-all truncate">
+        {cmd}
+      </code>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className={[
+          'shrink-0 px-2 py-1 text-[10px] font-semibold rounded-[var(--radius-md)]',
+          'border border-border-divider transition-colors duration-150',
+          copied
+            ? 'bg-[rgba(90,158,120,0.12)] text-[#5A9E78] border-[#5A9E78]'
+            : 'bg-bg-card text-text-tertiary hover:bg-bg-hover hover:text-text-primary',
+        ].join(' ')}
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
   );
 }
