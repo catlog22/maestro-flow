@@ -7,7 +7,6 @@ import { PipelineBoardView } from '@/client/components/workflow/PipelineBoardVie
 import { TimelineView } from '@/client/components/kanban/TimelineView.js';
 import { CommandCenterView } from '@/client/components/workflow/CommandCenterView.js';
 import { WfTableView } from '@/client/components/workflow/WfTableView.js';
-import { SetupChecklist } from '@/client/components/workflow/SetupChecklist.js';
 import { DetailPanel } from '@/client/components/common/DetailPanel.js';
 import { KanbanDetailPanel } from '@/client/components/kanban/KanbanDetailPanel.js';
 import type { SelectedKanbanItem } from '@/shared/types.js';
@@ -28,9 +27,7 @@ export function WorkflowPage() {
   const [activeView, setActiveView] = useState<ActiveView>('board');
   const [selectedItem, setSelectedItem] = useState<SelectedKanbanItem | null>(null);
   const { register, unregister } = useContext(ViewSwitcherContext);
-  const { phases, board, selectedPhase, setSelectedPhase } = useBoardStore(useShallow((s) => ({
-    phases: s.board?.phases ?? [],
-    board: s.board,
+  const { selectedPhase, setSelectedPhase } = useBoardStore(useShallow((s) => ({
     selectedPhase: s.selectedPhase,
     setSelectedPhase: s.setSelectedPhase,
   })));
@@ -74,21 +71,15 @@ export function WorkflowPage() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 min-w-0 overflow-hidden">
-          {phases.length === 0 ? (
-            <SetupChecklist project={board?.project} />
-          ) : (
-            <>
-              {activeView === 'board' && <PipelineBoardView onSelectTask={handleSelectTask} />}
-              {activeView === 'timeline' && (
-                <TimelineView
-                  onSelectPhase={(id) => { setSelectedItem(null); setSelectedPhase(selectedPhase === id ? null : id); }}
-                  onSelectTask={handleSelectTask}
-                />
-              )}
-              {activeView === 'center' && <CommandCenterView />}
-              {activeView === 'table' && <WfTableView onSelectTask={handleSelectTask} />}
-            </>
+          {activeView === 'board' && <PipelineBoardView onSelectTask={handleSelectTask} />}
+          {activeView === 'timeline' && (
+            <TimelineView
+              onSelectPhase={(id) => { setSelectedItem(null); setSelectedPhase(selectedPhase === id ? null : id); }}
+              onSelectTask={handleSelectTask}
+            />
           )}
+          {activeView === 'center' && <CommandCenterView />}
+          {activeView === 'table' && <WfTableView onSelectTask={handleSelectTask} />}
         </div>
 
         {/* Detail panel */}

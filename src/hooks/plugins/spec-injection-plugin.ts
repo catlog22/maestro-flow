@@ -65,12 +65,15 @@ function resolveUidSafe(): string | undefined {
  * Infer category from prompt keywords.
  * The coordinator doesn't have agent-type metadata, so we use
  * heuristic keyword matching on the assembled prompt.
+ *
+ * Principle: category = "who consumes" (agent type), not "what it's about".
+ * Multi-word phrases don't need \b; single words use \b to avoid sub-matches.
  */
 function inferCategory(prompt: string): SpecCategory {
   const lower = prompt.toLowerCase();
-  if (/\b(review|audit|check quality)\b/.test(lower)) return 'review';
-  if (/\b(test|spec|coverage|assert)\b/.test(lower)) return 'test';
-  if (/\b(debug|diagnose|error|bug)\b/.test(lower)) return 'debug';
-  if (/\b(plan|design|architect|decompose|explore|discover|search|analyze)\b/.test(lower)) return 'arch';
+  if (/\b(review|audit|compliance|lint)\b|code review|security audit|quality gate/.test(lower)) return 'review';
+  if (/\b(test(?:ing)?|coverage|assert|verify|validate|e2e|regression)\b/.test(lower)) return 'test';
+  if (/\b(debug|diagnose|bug|trace|crash|hang|leak)\b|root cause/.test(lower)) return 'debug';
+  if (/\b(plan|design|architect|decompose|blueprint)\b|migration strategy/.test(lower)) return 'arch';
   return 'coding'; // Default for implementation work
 }

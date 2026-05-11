@@ -10,11 +10,26 @@ import type { AgentManager } from '../../agents/agent-manager.js';
 import type { DashboardEventBus } from '../../state/event-bus.js';
 import { loadDashboardAgentSettings } from '../../config.js';
 import { EntryNormalizer } from '../../agents/entry-normalizer.js';
-import { handleDelegateMessage } from '../../../../../src/async/delegate-control.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 import type { RoomSessionManager } from '../../rooms/room-session-manager.js';
 import type { RoomMcpAgentType } from '../../rooms/meeting-room-session.js';
 
-type DelegateMessageHandler = typeof handleDelegateMessage;
+interface DelegateMessageParams {
+  execId: string;
+  message: string;
+  delivery: string;
+  requestedBy: string;
+}
+
+type DelegateMessageHandler = (params: DelegateMessageParams) => Promise<void>;
+
+async function handleDelegateMessage(params: DelegateMessageParams): Promise<void> {
+  const args = ['delegate', 'message', params.execId, params.message, '--delivery', params.delivery];
+  await execFileAsync('maestro', args, { timeout: 30_000 });
+}
 
 // ---------------------------------------------------------------------------
 // AgentWsHandler — spawn, stop, message, approve, CLI bridge forwarding

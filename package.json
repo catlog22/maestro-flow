@@ -6,7 +6,8 @@
   "imports": {
     "#maestro-dashboard/agents/*": "./dashboard/dist-server/dashboard/src/server/agents/*",
     "#maestro-dashboard/shared/*": "./dashboard/dist-server/dashboard/src/shared/*",
-    "#maestro-dashboard/wiki/*": "./dashboard/dist-server/dashboard/src/server/wiki/*"
+    "#maestro-dashboard/wiki/*": "./dashboard/dist-server/dashboard/src/server/wiki/*",
+    "#async/*": "./dashboard/dist-server/src/async/*"
   },
   "bin": {
     "maestro": "bin/maestro.js",
@@ -27,6 +28,7 @@
     ".claude/agents",
     ".claude/skills",
     ".claude/CLAUDE.md",
+    ".codex/agents",
     ".codex/skills",
     "dashboard/dist",
     "dashboard/dist-server",
