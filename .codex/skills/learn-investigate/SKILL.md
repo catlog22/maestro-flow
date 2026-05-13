@@ -28,7 +28,8 @@ $ARGUMENTS — question text and optional flags.
 
 ### Stage 1: Frame the Question
 - Parse question, generate slug, create investigation directory
-- Search prior knowledge: wiki search, grep specs/learnings.md, read debug-notes.md
+- Load debug specs: `maestro spec load --category debug` for known issues and patterns
+- Search prior knowledge: `maestro wiki list --category debug`, wiki search, grep specs/learnings.md
 - Write initial `understanding.md`
 
 ### Stage 2: Evidence Collection

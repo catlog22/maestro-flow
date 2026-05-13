@@ -51,6 +51,8 @@ Extract from arguments:
 
 Read `.workflow/state.json` and `.workflow/project.md` if they exist. If `.workflow/` does not exist, create minimal scratch structure anyway (quick works without full init).
 
+Load coding specs + tools if available: `maestro spec load --category coding`. Browse wiki: `maestro wiki list --category coding`, load relevant entries via `maestro wiki load <id>`. All optional — proceed without if unavailable.
+
 ### Step 3: Create Scratch Directory
 
 Generate slug from task description (lowercase, hyphens, max 40 chars). Create `.workflow/scratch/{slug}/`. Write `config.json` with: `task`, `flags` (discuss, full), `created_at` (ISO), `status` ("active").

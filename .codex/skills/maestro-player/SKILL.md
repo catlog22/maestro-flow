@@ -6,328 +6,186 @@ allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUser
 ---
 
 <purpose>
-Wave-based template executor using `spawn_agents_on_csv`. Loads a workflow template
-(produced by maestro-composer), binds context variables, converts DAG nodes into
-CSV waves via topological sort, executes wave-by-wave with barrier/non-barrier grouping.
+Wave-based template executor via `spawn_agents_on_csv`. Load template → bind variables → topological sort → group into barrier/non-barrier waves → spawn wave-by-wave → read results → report.
 
-Aligned with maestro codex coordinator pattern:
-- ALL skill execution via `spawn_agents_on_csv` — coordinator never executes directly
-- Barrier nodes (checkpoints + artifact-producing skills) execute solo
-- Non-barrier nodes grouped into parallel waves
-- Session state at `.workflow/.maestro/{session-id}/`
-- Resume from last completed wave via `-c`
-
-```
-Load Template → Bind Variables → Build Wave CSV → spawn → read results →
-(barrier: read artifacts, update context) → next wave → report
-```
+Session: `.workflow/.maestro/MCP-{YYYYMMDD-HHmmss}/state.json`
 </purpose>
 
 <invariants>
-1. **ALL skills via spawn_agents_on_csv**: Every node execution goes through spawn. Coordinator NEVER directly executes any skill.
-2. **Coordinator = prompt assembler only**: Load template → resolve refs → build CSV → spawn → read results → assemble next CSV.
-3. **Barrier = solo wave**: Checkpoint nodes and artifact-producing skills execute alone (wave size = 1).
-4. **Non-barriers can parallel**: Consecutive non-barrier nodes grouped into one wave.
-5. **Wave-by-wave**: Never start wave N+1 before wave N results are read and analyzed.
-6. **Coordinator owns context**: Sub-agents never read prior results — coordinator assembles full `skill_call` with resolved args.
-7. **Resume from wave**: `-c` finds last completed wave, resumes from next pending step.
+1. **ALL skills via spawn_agents_on_csv**: Coordinator NEVER directly executes any skill
+2. **Coordinator = prompt assembler**: Load → resolve refs → build CSV → spawn → read results → next CSV
+3. **Barrier = solo wave**: Checkpoint + artifact-producing skills execute alone
+4. **Non-barriers can parallel**: Grouped into one wave
+5. **Wave-by-wave**: Never start N+1 before N results read
+6. **Coordinator owns context**: Sub-agents never read prior results — coordinator assembles full skill_call
+7. **Resume from wave**: `-c` finds last completed wave, resumes next
 </invariants>
 
 <context>
 $ARGUMENTS — template slug/path, or flags.
 
-**Flags:**
-- `--context key=value` — Bind context variables (repeatable)
-- `-c` / `--continue [session-id]` — Resume paused/interrupted session
-- `--list` — List available templates
-- `--dry-run` — Show wave plan without executing
+**Flags**: `--context key=value` (repeatable), `-c [session-id]` (resume), `--list`, `--dry-run`
 
-**Entry routing:**
+**Entry routing**:
 
-| Detection | Condition | Handler |
-|-----------|-----------|---------|
-| List | `--list` | handleList |
-| Resume | `-c [session-id]` | Phase 0: Resume |
-| Dry run | `--dry-run` | Phase 1 + 2, print plan, exit |
-| Normal | Template slug/path | Phase 1 |
-| No args | Empty | handleList + AskUserQuestion |
-
-**Session tracking (aligned with maestro codex):**
-
-| Constant | Value |
-|----------|-------|
-| Session prefix | `MCP` (Maestro Composer Player) |
-| Session dir | `.workflow/.maestro/MCP-<YYYYMMDD>-<HHmmss>/` |
-| State file | `state.json` |
-| Wave CSV | `wave-{N}.csv` |
-| Wave results | `wave-{N}-results.csv` |
-| Template dir | `~/.maestro/templates/workflows/` |
-| Template index | `~/.maestro/templates/workflows/index.json` |
+| Condition | Handler |
+|-----------|---------|
+| `--list` or no args | Scan index.json, display templates |
+| `-c [session-id]` | S_RESUME |
+| Template slug/path | S_LOAD |
 
 **Barrier nodes** (solo wave, coordinator reads artifacts after):
 
-| Node type | Artifacts to Read | Context Updates |
+| Node type | Artifacts to read | Context updates |
 |-----------|------------------|-----------------|
-| `checkpoint` | — (state save only) | `last_checkpoint` |
-| `maestro-plan` | `plan.json`, `.task/TASK-*.json` | `plan_dir`, `task_count` |
-| `maestro-execute` | `results.csv` | `exec_status`, `completed_tasks` |
-| `maestro-analyze` | `context.md` | `analysis_dir`, `gaps`, `phase` |
-| `maestro-brainstorm` | `.brainstorming/` | `brainstorm_dir` |
-| `maestro-roadmap` | `specs/` | `spec_session_id` |
+| checkpoint | — | last_checkpoint |
+| maestro-plan | plan.json, .task/ | plan_dir, task_count |
+| maestro-execute | results.csv | exec_status |
+| maestro-analyze | context.md | analysis_dir, gaps |
+| maestro-brainstorm | .brainstorming/ | brainstorm_dir |
+| maestro-roadmap | specs/ | spec_session_id |
 
-All other skill nodes are **non-barrier** (groupable into parallel waves).
-
-**state.json schema:**
-
+**state.json schema**:
 ```json
 {
   "id": "MCP-<YYYYMMDD>-<HHmmss>",
   "intent": "<template_name> with context",
   "chain": "<template_id>",
-  "template_path": "~/.maestro/templates/workflows/<slug>.json",
-  "template_name": "<name>",
+  "template_path": "<path>",
   "auto_yes": false,
-  "status": "in_progress | paused | completed | aborted",
-  "started_at": "<ISO>",
-  "context": {
-    "goal": "...", "scope": "...",
-    "phase": null, "plan_dir": null, "analysis_dir": null,
-    "last_checkpoint": null
-  },
+  "status": "in_progress|paused|completed|aborted",
+  "context": { "goal": "...", "phase": null, "plan_dir": null, "last_checkpoint": null },
   "waves": [],
-  "steps": [
-    {
-      "step_n": 1, "node_id": "N-001",
-      "skill": "<executor>", "args": "<args_template>",
-      "type": "skill | cli | checkpoint",
-      "is_barrier": true,
-      "status": "pending | completed | failed | skipped",
-      "wave_n": null, "findings": null, "artifacts": null
-    }
-  ]
+  "steps": [{
+    "step_n": 1, "node_id": "N-001", "skill": "<executor>",
+    "args": "<args_template>", "type": "skill|cli|checkpoint",
+    "is_barrier": true, "status": "pending|completed|failed|skipped",
+    "wave_n": null, "findings": null, "artifacts": null
+  }]
 }
 ```
+
+**Runtime reference resolution** (before each wave CSV):
+- `{key}` → context[key]
+- `{N-xxx.field}` → completed step with matching node_id
+- `{prev_field}` → most recently completed non-checkpoint step
+
+**CSV schemas**:
+
+wave-{N}.csv (input): `id,skill_call,topic`
+wave-{N}-results.csv (output): from spawn_agents_on_csv result schema
 </context>
 
-<execution>
+<state_machine>
 
-### handleList
+<states>
+S_ROUTE      — 入口路由                                  PERSIST: —
+S_RESUME     — 恢复 session                              PERSIST: —
+S_LOAD       — 加载模板、绑定变量                         PERSIST: —
+S_INIT       — 拓扑排序、分组 waves、创建 session          PERSIST: state.json
+S_WAVE_LOOP  — 逐 wave 执行（核心循环）                   PERSIST: state.json (每 wave 更新)
+S_COMPLETE   — 标记完成、输出报告                         PERSIST: state.json (final)
+</states>
 
-Scan `~/.maestro/templates/workflows/index.json`. Display:
+<transitions>
+
+S_ROUTE:
+  → handleList   WHEN: --list or no args
+  → S_RESUME     WHEN: -c flag
+  → S_LOAD       WHEN: template provided
+
+S_RESUME:
+  → S_WAVE_LOOP  WHEN: session found                    DO: load state, resume from next pending wave
+  → ERROR(E005)  WHEN: no session found
+
+S_LOAD:
+  → S_INIT       DO: A_LOAD_AND_BIND
+
+S_INIT:
+  → END          WHEN: --dry-run                        DO: display wave plan with [BARRIER] markers
+  → S_WAVE_LOOP  DO: A_INIT_SESSION
+
+S_WAVE_LOOP:
+  → S_WAVE_LOOP  WHEN: wave completed, more pending     DO: A_EXECUTE_WAVE → advance
+  → S_COMPLETE   WHEN: all steps completed
+  → END          WHEN: checkpoint pause                 DO: set status=paused
+  → END          WHEN: wave failed                      DO: mark remaining skipped, set status=aborted
+  GUARD: checkpoint nodes → handle inline (no spawn), save snapshot, optional user pause
+
+S_COMPLETE:
+  → END          DO: display per-wave results, set status=completed
+
+</transitions>
+
+<actions>
+
+### A_LOAD_AND_BIND
+
+1. Resolve template: absolute/relative/slug → index.json lookup
+2. Parse --context key=value, validate template JSON
+3. Collect missing required vars via AskUserQuestion
+4. Bind {variable} placeholders (leave {N-xxx.field}/{prev_*} for runtime)
+
+### A_INIT_SESSION
+
+1. Generate ID: MCP-{YYYYMMDD-HHmmss}
+2. Topological sort (Kahn's) → classify barrier vs non-barrier → group into waves
+3. Build steps array, write state.json
+4. Display wave plan (template, session, context, waves with [BARRIER] markers)
+
+### A_EXECUTE_WAVE
+
+1. **Checkpoint**: handle inline — save snapshot, update context.last_checkpoint, mark completed. If auto_continue==false: AskUserQuestion (Continue/Pause/Abort).
+
+2. **Skill nodes**: resolve runtime references → write wave-{N}.csv → spawn:
 ```
-Available workflow templates:
-  feature-tdd-review    [feature, complex]   3 work nodes, 2 checkpoints
-  quick-bugfix          [bugfix, simple]     2 work nodes, 1 checkpoint
-
-Run: $maestro-player <slug> --context goal="..."
-```
-
-If not found: "No templates. Create with $maestro-composer"
-
----
-
-### Phase 0: Resume
-
-**Trigger**: `-c [session-id]`
-
-Load session state by explicit ID or most recent `MCP-*/state.json` with `status = "in_progress" | "paused"`. Error E005 if none found. Resume from next pending step after last completed wave → jump to Phase 3.
-
----
-
-### Phase 1: Load & Bind
-
-1. **Resolve template**: absolute path → as-is, slug → lookup in `~/.maestro/templates/workflows/index.json`, partial → confirm, not found → show `--list`
-2. **Parse** `--context key=value` pairs into `bound_context`
-3. **Load and validate** template JSON
-4. **Collect missing** required variables via AskUserQuestion
-5. **Bind** `{variable_name}` in all `args_template` strings. Leave `{N-xxx.field}` and `{prev_*}` unresolved (runtime Phase 3)
-6. If `--dry-run`: print wave plan and exit
-
----
-
-### Phase 2: Init Session & Build Wave Plan
-
-1. Generate session ID: `MCP-<YYYYMMDD>-<HHmmss>`
-2. Topological sort (Kahn's algorithm) on template nodes + edges
-3. Classify barrier vs non-barrier: barriers = checkpoint nodes + `maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute`
-4. Group into waves: barrier nodes → solo wave, non-barrier nodes → accumulate into parallel wave
-5. Build steps array from waves, write `state.json`
-
-**Step 2.5a — Register goal constraint**:
-```
-functions.create_goal({
-  objective: `Player ${template_name}: ${steps.length} steps from template ${template_id}`
-})
-```
-
-**Step 2.6** — Display start banner:
-```
-============================================================
-  MAESTRO PLAYER
-============================================================
-  Template: <template.name>
-  Session:  <session_id>
-  Context:  goal="<value>"
-
-  Wave Plan:
-    [W1] N-001 maestro-plan          "{goal}"       [BARRIER]
-    [W2] N-002 maestro-execute       {phase}        [BARRIER]
-    [W3] N-003 quality-test          {phase}
-         N-004 quality-review        {phase}
-============================================================
-```
-
-**`--dry-run`**: Display above and exit.
-
----
-
-### Phase 3: Wave Execution Loop
-
-Loop while any step has `status === 'pending'`:
-
-**3a. Resolve runtime references** in each step's args:
-- `{key}` → lookup from `context[key]`
-- `{N-xxx.field}` → lookup from completed step with matching `node_id`
-- `{prev_field}` → lookup from most recently completed non-checkpoint step
-
-**3b. Handle checkpoint nodes** (no CSV spawn needed):
-- Save checkpoint snapshot to `checkpoints/{node_id}.json` (session state + context)
-- Update `context.last_checkpoint`, mark completed
-- If `auto_continue === false`: prompt user (Continue / Pause / Abort)
-
-**3c. Build wave CSV** for skill nodes:
-Write `wave-{N}.csv` with columns `id,skill_call,topic`. Each row: resolved `$${step.skill} ${args}`.
-
-**3d. Spawn agents**:
-
-```javascript
 spawn_agents_on_csv({
-  csv_path: `${sessionDir}/wave-${waveNum}.csv`,
-  id_column: "id",
-  instruction: PLAYER_INSTRUCTION,
-  max_workers: waveSteps.length,
-  max_runtime_seconds: 3600,
-  output_csv_path: `${sessionDir}/wave-${waveNum}-results.csv`,
-  output_schema: RESULT_SCHEMA
+  csv_path: "wave-{N}.csv", id_column: "id",
+  instruction: SUB_AGENT_INSTRUCTION,
+  max_workers: waveSteps.length, max_runtime_seconds: 3600,
+  output_csv_path: "wave-{N}-results.csv", output_schema: RESULT_SCHEMA
 })
 ```
 
-**3e. Read results**: Map each result row back to its step — update status, findings, artifacts, wave_n.
+3. Read results → update step status/findings/artifacts
+4. **Barrier analysis**: read artifacts, update context per barrier table
+5. Append wave record to state.waves[], persist state.json
 
-**3f. Barrier analysis**: If barrier wave, read artifacts and update context (see barrier node table in `<context>`).
-
-**3g. Persist + abort check**: Append wave record to `state.waves[]`, persist `state.json`. If any result failed → set `state.status = 'aborted'`, mark remaining steps as skipped.
-
-### Sub-Agent Instruction Template
+### SUB_AGENT_INSTRUCTION
 
 ```
 你是 CSV job 子 agent。
-
-先原样执行这一段技能调用：
-{skill_call}
-
-然后基于结果完成这一行任务说明：
-{topic}
-
-限制：
-- 不要修改 .workflow/.maestro/ 下的 state 文件
-- skill 内部有自己的 session 管理，按 skill SKILL.md 执行即可
-
-最后必须调用 `report_agent_job_result`，返回 JSON：
-{"status":"completed|failed","skill_call":"{skill_call}","summary":"一句话结果","artifacts":"产物路径或空字符串","error":"失败原因或空字符串"}
+先原样执行技能调用：{skill_call}
+然后基于结果完成任务说明：{topic}
+限制：不要修改 .workflow/.maestro/ 下的 state 文件
+最后调用 report_agent_job_result，返回 JSON：
+{"status":"completed|failed","skill_call":"...","summary":"一句话","artifacts":"路径或空","error":"原因或空"}
 ```
 
-### Result Schema
+### RESULT_SCHEMA
 
-```javascript
-const RESULT_SCHEMA = {
-  type: "object",
-  properties: {
-    status: { type: "string", enum: ["completed", "failed"] },
-    skill_call: { type: "string" },
-    summary: { type: "string" },
-    artifacts: { type: "string" },
-    error: { type: "string" }
-  },
-  required: ["status", "skill_call", "summary", "artifacts", "error"]
-};
+```json
+{ "status": "completed|failed", "skill_call": "", "summary": "", "artifacts": "", "error": "" }
 ```
 
----
+</actions>
 
-### Phase 4: Completion Report
-
-```
-============================================================
-  MAESTRO PLAYER SESSION COMPLETE
-============================================================
-  Session:   <session_id>
-  Template:  <template_name> (<template_id>)
-  Waves:     <N> executed
-  Steps:     <completed>/<total>
-  Context:   goal="<value>"
-
-  WAVE RESULTS:
-    [W1] $maestro-plan "{goal}"         →  ✓  plan created
-    [W2] $maestro-execute {phase}       →  ✓  12/12 tasks
-    [W3] $quality-test {phase}          →  ✓  all tests pass
-         $quality-review {phase}        →  ✓  no issues
-
-  State:    .workflow/.maestro/<session_id>/state.json
-  Resume:   $maestro-player -c
-============================================================
-```
-
-Update `state.status = "completed"`, write final `state.json`.
-Release goal constraint: `functions.update_goal({ status: "complete" })`
-
-**Note**: Abort path (Phase 3 step 3g) does NOT call `update_goal` — goal stays running for `-c` resume.
-</execution>
-
-<csv_schema>
-### wave-{N}.csv (Per-Wave Input)
-
-```csv
-id,skill_call,topic
-"1","$maestro-plan \"implement user auth\"","Template \"feature-plan-test\" step 1/5"
-```
-
-| Column | Description |
-|--------|-------------|
-| `id` | Step number (string) |
-| `skill_call` | Full skill invocation with resolved context args |
-| `topic` | Brief description for the agent |
-
-### wave-{N}-results.csv (Per-Wave Output)
-
-Written by `spawn_agents_on_csv`. Contains result per agent.
-</csv_schema>
+</state_machine>
 
 <error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Template not found | Show --list, suggest closest match |
-| E002 | error | Template JSON invalid | Point to file for fix |
-| E003 | error | Required variable missing, user declined | Cannot proceed |
-| E004 | error | DAG cycle in template | Suggest $maestro-composer --edit |
-| E005 | error | Resume session not found | List sessions |
-| E006 | error | Wave timeout | Mark failed, abort chain |
-| E007 | error | Barrier artifact not found | Retry wave once, then abort |
-| W001 | warning | Runtime reference resolved to empty | Log, continue |
-| W002 | warning | Barrier artifact partial | Continue with available context |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | Template not found | Show --list |
+| E002 | Template JSON invalid | Point to file |
+| E004 | DAG cycle | Suggest maestro-composer --edit |
+| E005 | Resume session not found | List sessions |
+| E007 | Barrier artifact not found | Retry once, then abort |
 </error_codes>
 
 <success_criteria>
-- [ ] Template loaded from `~/.maestro/templates/workflows/` and validated
-- [ ] All required context variables bound
-- [ ] Session dir at `.workflow/.maestro/MCP-*/` with `state.json`
-- [ ] DAG nodes converted to waves (barrier=solo, non-barrier=parallel)
-- [ ] Every skill invocation goes through `spawn_agents_on_csv` — none in coordinator
-- [ ] Checkpoint nodes handled inline (state save, optional user pause)
+- [ ] DAG nodes grouped into barrier (solo) / non-barrier (parallel) waves
+- [ ] Every skill via spawn_agents_on_csv, none in coordinator
 - [ ] Barrier artifacts read and context updated before next wave
-- [ ] Runtime references ({N-xxx.field}, {prev_*}) resolved before each wave CSV
-- [ ] Failed step → remaining marked skipped → abort reported
-- [ ] `--dry-run` shows wave plan with [BARRIER] markers, no execution
-- [ ] `-c` resumes from last completed wave
-- [ ] Completion report with per-wave status
+- [ ] Failed step → remaining skipped → abort reported
+- [ ] -c resumes from last completed wave
 </success_criteria>

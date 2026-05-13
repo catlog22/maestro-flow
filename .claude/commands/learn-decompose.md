@@ -12,160 +12,105 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Systematic pattern extraction from code. Analyzes a module or directory across 4 dimensions (structural, behavioral, data, error) using parallel agents, then catalogs findings with code anchors. Discovered patterns can be persisted to specs (via `spec-add`) and wiki (via `maestro wiki create`).
-
-Unlike `learn-follow` which reads code with forcing questions, this command is purpose-built for pattern identification and cataloging. It produces a reusable pattern catalog that feeds into the spec system.
+Systematic pattern extraction: analyze module across 4 dimensions using parallel agents, catalog findings with code anchors, persist to specs/wiki. Produces reusable pattern catalog.
 </purpose>
 
 <context>
-Arguments: $ARGUMENTS
+$ARGUMENTS — target path/module and optional flags.
 
-**Target resolution:**
-- File path → analyze that file
-- Directory path → analyze all source files in it
-- Module name → Glob for matching directory under `src/`
+**Target resolution**: file path → that file; directory → all source files; module name → Glob `src/**/{module}*`.
 
-**Flags:**
-- `--patterns <list>` — Comma-separated pattern names to look for (e.g., "observer,factory,middleware"). If omitted, detect all.
-- `--save-spec` — Invoke `Skill({ skill: "spec-add" })` for each newly discovered pattern
-- `--save-wiki` — Create wiki note entries per pattern group via `maestro wiki create --type note`
+**Flags**:
+- `--patterns <list>`: Comma-separated pattern names to look for (default: detect all)
+- `--save-spec`: `Skill("spec-add")` for each new pattern
+- `--save-wiki`: create wiki note per dimension group
 
-**Storage written:**
-- `.workflow/knowhow/KNW-decompose-{slug}-{YYYY-MM-DD}.md` — Pattern decomposition report
-- `.workflow/specs/learnings.md` — One `<spec-entry>` per discovered pattern (source: "decompose")
-- If `--save-spec`: entries appended to `.workflow/specs/coding-conventions.md`
-- If `--save-wiki`: new wiki note entries
-
-**Storage read:**
-- Source files at target path
-- `.workflow/specs/coding-conventions.md` — Existing documented patterns (for dedup)
-- `.workflow/specs/learnings.md` — Previously identified patterns (for dedup)
+**Storage read**: target files + `coding-conventions.md` + `specs/learnings.md` (dedup)
+**Storage write**: `.workflow/knowhow/KNW-decompose-{slug}-{date}.md` + append `specs/learnings.md`
 </context>
 
-<execution>
+<state_machine>
 
-### Stage 1: Resolve Target
-- If argument is a file: verify exists, use as single-file target
-- If argument is a directory: list all `.ts`, `.tsx`, `.js`, `.jsx` files (exclude `node_modules`, `dist`, `.test.`)
-- If argument is a module name: Glob `src/**/{module}*` to find matching directory
-- If target unresolvable, AskUserQuestion with suggestions
+<states>
+S_RESOLVE    — 解析 target 为具体文件列表                PERSIST: —
+S_DEDUP      — 加载已有 patterns 用于去重                PERSIST: —
+S_ANALYZE    — 4 维度并行 Agent 分析                     PERSIST: —
+S_CROSSREF   — 交叉引用、去重、标记状态                   PERSIST: —
+S_CATALOG    — 生成 pattern catalog 报告                  PERSIST: outputs
+S_PERSIST    — 写文件 + 可选 spec-add/wiki create         PERSIST: knowhow files
+</states>
 
-### Stage 2: Load Existing Patterns
-- Read `.workflow/specs/coding-conventions.md` — extract documented patterns
-- Search `specs/learnings.md` for `<spec-entry>` blocks with `roles="implement"` — previously discovered
-- Build dedup set: pattern names already known
+<transitions>
 
-### Stage 3: Parallel Agent Analysis (4 dimensions)
-Spawn 4 Agents in a single message, each analyzing the target from one dimension:
+S_RESOLVE:
+  → S_DEDUP       WHEN: file list resolved
+  → S_RESOLVE     WHEN: unresolvable                     DO: AskUserQuestion
 
-**Agent 1 — Structural Patterns:**
-- Class hierarchy and composition relationships
-- Module boundaries and encapsulation
-- Dependency injection / inversion of control
-- Builder, Factory, Singleton patterns
-- Export structure (barrel files, re-exports)
+S_DEDUP:
+  → S_ANALYZE     DO: read coding-conventions.md + specs/learnings.md → build known pattern set
 
-**Agent 2 — Behavioral Patterns:**
-- Event flow (EventEmitter, pub/sub, callbacks)
-- Middleware chains and interceptors
-- Observer/subscriber patterns
-- Command/strategy patterns
-- State machines
+S_ANALYZE:
+  → S_CROSSREF    DO: A_PARALLEL_DIMENSION_ANALYSIS
 
-**Agent 3 — Data Patterns:**
-- Repository / data access patterns
-- DTO / transformation pipelines
-- Caching strategies (memoization, LRU, TTL)
-- Serialization / deserialization
-- Schema validation approaches
+S_CROSSREF:
+  → S_CATALOG     DO: A_CROSSREF_DEDUP
 
-**Agent 4 — Error Patterns:**
-- Error boundary and propagation
-- Retry / backoff / circuit breaker
-- Fallback chains
-- Validation and guard clauses
-- Logging and observability patterns
+S_CATALOG:
+  → S_PERSIST     DO: write KNW-decompose report (grouped by dimension: pattern table + details)
 
-Each agent returns findings as structured list:
-```json
-[{
-  "name": "pattern name",
-  "dimension": "structural|behavioral|data|error",
-  "confidence": "high|medium|low",
-  "anchors": ["file:line", "file:line"],
-  "description": "what it does",
-  "rationale": "why this approach",
-  "tradeoffs": "what was given up"
-}]
-```
+S_PERSIST:
+  → END           DO: append specs/learnings.md [+ spec-add if --save-spec] [+ wiki note if --save-wiki]
 
-If `--patterns` specified, instruct agents to focus only on named patterns.
+</transitions>
 
-### Stage 4: Cross-Reference & Dedup
-- Match agent findings against existing pattern set from Stage 2
-- Mark each finding: `documented` (already in specs), `known` (in knowhow), or `new`
-- Flag contradictions: finding conflicts with documented convention
-- Merge duplicate findings across agents (same pattern found by multiple dimensions)
+<actions>
 
-### Stage 5: Produce Pattern Catalog
-Build the decomposition report grouped by dimension:
+### A_PARALLEL_DIMENSION_ANALYSIS
 
-```markdown
-# Pattern Decomposition: {target}
+Spawn 4 Agents in single message:
 
-## Summary
-- Patterns found: N (M new, K documented, J known)
-- Dimensions analyzed: structural, behavioral, data, error
-- Contradictions: N
+| Agent | Dimension | Looks for |
+|-------|-----------|-----------|
+| 1 | Structural | Class hierarchy, composition, DI/IoC, Factory/Builder/Singleton, barrel exports |
+| 2 | Behavioral | Event flow, middleware chains, observer/pub-sub, command/strategy, state machines |
+| 3 | Data | Repository/DAO, DTO pipelines, caching (memo/LRU/TTL), serialization, schema validation |
+| 4 | Error | Error boundaries, retry/backoff/circuit-breaker, fallback chains, guard clauses, logging |
 
-## Structural Patterns
-| Pattern | Confidence | Location | Status |
-|---------|-----------|----------|--------|
-| {name} | high | {file:line} | new / documented / known |
+If `--patterns` specified: agents focus only on named patterns.
 
-### {Pattern Name}
-**Description:** ...
-**Code example:** (inline snippet from anchor)
-**Trade-offs:** ...
+Each agent returns: `[{ name, dimension, confidence (high/medium/low), anchors [file:line], description, rationale, tradeoffs }]`
 
-## Behavioral Patterns
-...
-```
+### A_CROSSREF_DEDUP
 
-### Stage 6: Persist
-1. Write `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`
-2. Append each **new** pattern as a `<spec-entry>` block to `specs/learnings.md` via `maestro spec add learning --body "<content>" --keywords "decompose,pattern,{dimension},{target-slug}"`:
-   - Stable INS-id from `hash("decompose" + target + pattern_name)`
-4. If `--save-spec`: for each new pattern, invoke `Skill({ skill: "spec-add", args: "pattern {description}" })`
-5. If `--save-wiki`: create wiki note per dimension group via `maestro wiki create --type note --slug decompose-{dimension}-{slug}`
-6. Display summary with counts and next steps
+For each finding, match against known pattern set:
+| Status | Condition |
+|--------|-----------|
+| documented | Already in coding-conventions.md |
+| known | In specs/learnings.md |
+| new | Not seen before |
 
-**Next-step routing:**
-- Follow-along on a specific pattern → `/learn-follow <anchor-file>`
-- Get second opinion on findings → `/learn-second-opinion <target>`
-- Add all new patterns to specs → `/spec-add coding ...` per pattern
-</execution>
+Flag contradictions (finding conflicts with documented convention). Merge duplicates across agents (same pattern found by multiple dimensions).
+
+</actions>
+
+</state_machine>
 
 <error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Target path not found | Check path exists, or use a module name |
-| E002 | error | No source files found in target directory | Check target has .ts/.js files, exclude filters may be too aggressive |
-| W001 | warning | One or more dimension agents failed — partial results | Proceed with available dimensions, retry failed ones |
-| W002 | warning | coding-conventions.md not found — skipping dedup against specs | All patterns marked as "new" |
-| W003 | warning | Large target (>50 files) — analysis may be slow | Consider narrowing scope with --patterns filter |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E002 | No source files in target | Check target has .ts/.js files |
+| W001 | One+ dimension agent failed | Proceed with available dimensions |
+| W003 | Large target (>50 files) | Consider --patterns filter |
 </error_codes>
 
 <success_criteria>
-- [ ] Target resolved to concrete file list
-- [ ] Existing patterns loaded for dedup
-- [ ] All 4 dimension agents spawned in parallel
-- [ ] Each finding has: name, dimension, confidence, anchors, description, tradeoffs
-- [ ] Cross-reference performed (documented / known / new status assigned)
-- [ ] Pattern catalog written to `KNW-decompose-{slug}-{date}.md`
-- [ ] New patterns appended to `specs/learnings.md` as `<spec-entry>` blocks with stable INS-ids
-- [ ] If --save-spec: spec entries created for new patterns
-- [ ] If --save-wiki: wiki notes created per dimension group
-- [ ] No files modified outside `.workflow/knowhow/` (and optionally specs/wiki)
-- [ ] Summary displayed with pattern counts and next-step routing
+- [ ] 4 dimension agents spawned in parallel, findings with anchors
+- [ ] Cross-reference: documented/known/new status assigned
+- [ ] Pattern catalog written + specs/learnings.md appended
 </success_criteria>
+
+<next_step_routing>
+- Follow-along → `/learn-follow <anchor-file>`
+- Second opinion → `/learn-second-opinion <target>`
+- Add to specs → `/spec-add coding ...`
+</next_step_routing>

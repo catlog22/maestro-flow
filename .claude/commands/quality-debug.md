@@ -43,20 +43,11 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 
 Extract conclusions from related artifacts that may affect this debug session — review findings guide investigation direction, prior debug avoids redundant work.
 
-### Pre-load context (before hypothesis formation)
-
-1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, load module boundaries to scope impact analysis and inform hypothesis formation.
-2. **Wiki prior knowledge**: Run `maestro wiki search "<symptom keywords>" --json 2>/dev/null`. If results found, check for prior investigations on similar issues to avoid re-investigation.
-3. **Debug specs + tools**: Run `maestro spec load --category debug --keyword "<symptom keywords>"`. If tools found, extract known issues, workarounds, and root-cause notes to inform hypotheses.
-4. All are optional — proceed without if unavailable.
-
-### Role Knowledge
-1. Browse accumulated knowledge for this role:
-   `maestro wiki list --category debug`
-2. Analyze the index, identify entries relevant to the current task
-3. Load selected documents:
-   `maestro wiki load <id1> [id2] [id3...]`
-4. Review loaded knowledge before proceeding
+### Pre-load (optional, proceed without)
+- Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → module boundaries
+- Wiki: `maestro wiki search "<symptom keywords>" --json` → prior investigations
+- Specs: `maestro spec load --category debug --keyword "<symptom>"` → known issues/workarounds
+- Role knowledge: `maestro wiki list --category debug` → select relevant → `maestro wiki load`
 
 **Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
 </context>
@@ -84,18 +75,13 @@ Append to state.json.artifacts[]:
 
 ### Post-debug Knowledge Inquiry
 
-After root cause is confirmed, evaluate inquiry triggers:
+| Condition | Ask | Route |
+|-----------|-----|-------|
+| Recurring root cause pattern (seen in prior debug) | "Document in debug-notes.md?" | spec-add debug |
+| Non-obvious fix / workaround | "Record as learning?" | spec-add learning |
+| Root cause = architectural boundary violation | "Update architecture-constraints.md?" | spec-add arch |
 
-1. **Recurring pattern**: If root cause matches a recurring pattern (similar to prior debug sessions):
-   → Ask: "This root cause pattern has appeared before. Should it be documented in `debug-notes.md` to prevent recurrence? (`/spec-add debug`)"
-
-2. **Non-obvious fix**: If fix involved a non-obvious approach or workaround:
-   → Ask: "This fix used a non-obvious strategy. Should it be recorded as a learning? (`/spec-add learning`)"
-
-3. **Architectural gap**: If root cause traces to architectural boundary violation or missing constraint:
-   → Ask: "Root cause points to an architectural gap. Should `architecture-constraints.md` be updated? (`/spec-add arch`)"
-
-If user confirms, invoke `Skill({ skill: "spec-add", args: "<category> <content>" })`.
+On confirm → `Skill("spec-add", "<category> <content>")`.
 
 **Next-step routing on completion:**
 - Root cause found, fix needed → `/maestro-plan {phase} --gaps`

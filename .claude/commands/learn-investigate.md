@@ -12,206 +12,141 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Systematic investigation workflow for understanding questions (not bug-fixing). Inspired by gstack `/investigate` with its 4-phase approach, scope lock, and 3-strike escalation rule.
+Systematic investigation for understanding questions (not bug-fixing). 4-phase scientific method with scope lock and 3-strike escalation. Produces evidence trails and understanding docs that persist to the learning system.
 
-Unlike `quality-debug` which is designed for fixing bugs during execution phases, this command is for answering "how does X work?", "why does Y happen?", "what would happen if Z?" questions. It produces structured evidence trails and understanding documents that persist to the learning system.
+Unlike `quality-debug` (fix bugs during execution), this answers "how does X work?", "why does Y happen?", "what if Z?".
 </purpose>
 
 <context>
-Arguments: $ARGUMENTS
+$ARGUMENTS — question text and optional flags.
 
-**Target:** First argument is the question or topic to investigate (quoted string or keywords).
+**Flags**:
+- `--scope <path>`: Restrict to files under this dir (default: entire project)
+- `--max-hypotheses N`: Max hypotheses before escalation (default: 3)
 
-**Flags:**
-- `--scope <path>` — Restrict investigation to files under this directory (default: entire project)
-- `--max-hypotheses N` — Maximum hypotheses to test before escalating (default: 3)
+**Storage write**:
+- `.workflow/knowhow/KNW-investigate-{slug}/evidence.ndjson` — structured evidence (one JSON line per item)
+- `.workflow/knowhow/KNW-investigate-{slug}/understanding.md` — evolving understanding
+- `.workflow/knowhow/KNW-investigate-{slug}/report.md` — final report
+- `specs/learnings.md` — appended `<spec-entry>` blocks
 
-**Storage written:**
-- `.workflow/knowhow/KNW-investigate-{slug}/evidence.ndjson` — Structured evidence log (one JSON line per evidence)
-- `.workflow/knowhow/KNW-investigate-{slug}/understanding.md` — Evolving understanding document
-- `.workflow/knowhow/KNW-investigate-{slug}/report.md` — Final investigation report
-- `.workflow/knowhow/specs/learnings.md` — Investigation findings as `<spec-entry>` blocks (source: "investigate")
-
-**Storage read:**
-- Source files within scope
-- `maestro wiki search "<question>"` — Prior knowledge about the topic
-- `.workflow/knowhow/specs/learnings.md` — Prior related investigations
-- `.workflow/specs/debug-notes.md` — Known gotchas and patterns
-- `.workflow/codebase/architecture.md` — Structural context (if exists)
+**Storage read**: source files in scope + `maestro wiki search` + `specs/learnings.md` + `debug-notes.md` + `codebase/architecture.md`
 </context>
 
-<execution>
+<state_machine>
 
-### Stage 1: Frame the Question
-- Parse question from arguments
-- Determine scope (--scope or full project)
-- Generate investigation slug from question keywords
-- Create `.workflow/knowhow/KNW-investigate-{slug}/` directory
-- Search prior knowledge:
-  - `maestro wiki search "<question>"` for related entries
-  - Search `specs/learnings.md` for related insights
-  - Read `debug-notes.md` for known gotchas
+<states>
+S_FRAME          — 解析问题、确定 scope、搜索先验知识          PERSIST: understanding.md (initial)
+S_EVIDENCE       — 系统收集证据                                PERSIST: evidence.ndjson
+S_PATTERN        — 比对已知模式                                PERSIST: understanding.md (patterns)
+S_HYPOTHESIZE    — 生成假设列表                                PERSIST: understanding.md (hypotheses)
+S_CLI_EXPLORE    — CLI 辅助探索（可选）                         PERSIST: evidence.ndjson (append)
+S_TEST           — 逐假设测试                                  PERSIST: evidence.ndjson + understanding.md
+S_ESCALATE       — 3-strike 升级                               PERSIST: —
+S_REPORT         — 综合报告 + persist                          PERSIST: report.md + specs/learnings.md
+</states>
 
-Write initial `understanding.md`:
-```markdown
-# Investigation: {question}
-## Initial Understanding
-- Prior knowledge: {summary of wiki/knowhow findings}
-- Scope: {path or "full project"}
-- Started: {timestamp}
+<transitions>
+
+S_FRAME:
+  → S_EVIDENCE    DO: A_FRAME_QUESTION
+
+S_EVIDENCE:
+  → S_PATTERN     DO: A_COLLECT_EVIDENCE
+
+S_PATTERN:
+  → S_HYPOTHESIZE DO: match evidence against debug-notes.md + specs/learnings.md patterns
+
+S_HYPOTHESIZE:
+  → S_CLI_EXPLORE WHEN: CLI tools enabled AND hypotheses non-trivial    DO: A_FORM_HYPOTHESES
+  → S_TEST        WHEN: no CLI tools OR trivial hypotheses              DO: A_FORM_HYPOTHESES
+
+S_CLI_EXPLORE:
+  → S_TEST        DO: A_CLI_SUPPLEMENT (maestro delegate --role explore --mode analysis, run_in_background, STOP)
+
+S_TEST:
+  → S_REPORT      WHEN: hypothesis confirmed                  DO: A_TEST_HYPOTHESIS
+  → S_REPORT      WHEN: all hypotheses tested (some confirmed) DO: A_TEST_HYPOTHESIS
+  → S_ESCALATE    WHEN: max_hypotheses all failed              DO: A_TEST_HYPOTHESIS
+
+S_ESCALATE:
+  → S_HYPOTHESIZE WHEN: user broadens scope or provides new hypothesis   DO: AskUserQuestion
+  → S_REPORT      WHEN: user selects "Escalate" or still stuck          DO: mark INCONCLUSIVE
+
+S_REPORT:
+  → END           DO: A_SYNTHESIZE_REPORT
+
+</transitions>
+
+<actions>
+
+### A_FRAME_QUESTION
+
+1. Parse question, generate slug, create KNW-investigate-{slug}/
+2. Search prior knowledge: `maestro wiki search "<question>"` + search specs/learnings.md + read debug-notes.md
+3. Write initial understanding.md (question, prior knowledge summary, scope, timestamp)
+
+### A_COLLECT_EVIDENCE
+
+Parallel evidence gathering:
+1. Code search: Grep keywords from question
+2. File inspection: Read most relevant files
+3. Import tracing: follow dependency chain
+4. Git history: `git log --oneline -10 -- <relevant-files>`
+
+Each item → append evidence.ndjson: `{ts, type (code|git|search|doc), source (file:line), relevance (high|medium|low), content, note}`
+
+### A_FORM_HYPOTHESES
+
+Generate ranked hypotheses: each is specific, testable claim about "how/why".
+Rank by plausibility (evidence strength). Write to understanding.md:
+- `[HIGH]` hypothesis — Evidence: {refs}
+- `[MEDIUM]` hypothesis — Evidence: {refs}
+
+### A_CLI_SUPPLEMENT
+
 ```
-
-### Stage 2: Evidence Collection
-Systematically gather evidence related to the question:
-
-1. **Code search**: Grep for keywords from the question across the scoped files
-2. **File inspection**: Read the most relevant files identified by search
-3. **Import/dependency tracing**: Follow imports to understand the dependency chain
-4. **Git history**: `git log --oneline -10 -- <relevant-files>` for recent changes
-
-For each piece of evidence, append to `evidence.ndjson`:
-```json
-{"ts": "ISO", "type": "code|git|search|doc", "source": "file:line", "relevance": "high|medium|low", "content": "...", "note": "why this matters"}
+maestro delegate "PURPOSE: Gather evidence for hypotheses
+TASK: Trace call chains and data flows per hypothesis | Find corroborating/contradicting patterns
+EXPECTED: JSON [{hypothesis_rank, evidence: [{file, line, supports: bool, explanation}]}]
+" --role explore --mode analysis
 ```
+Run_in_background, STOP, wait. On callback: append to evidence.ndjson.
 
-### Stage 3: Pattern Matching
-Compare collected evidence against known patterns:
-- Check `debug-notes.md` entries for matching situations
-- Check `specs/learnings.md` for related technique/pattern/gotcha entries
-- Identify: does this match a documented pattern, or is it novel?
+### A_TEST_HYPOTHESIS
 
-Update `understanding.md` with pattern analysis section.
+For each hypothesis (rank order):
+1. Design test: what evidence would confirm/disprove?
+2. Execute: code trace, targeted search, data inspection
+3. Record: append evidence.ndjson with type: "test"
+4. Update: mark hypothesis confirmed / disproved / inconclusive
 
-### Stage 4: Hypothesis Formation
-From evidence and patterns, generate ranked hypotheses:
-- Each hypothesis: a specific, testable claim about "how/why"
-- Rank by plausibility (evidence strength)
-- Write hypotheses to `understanding.md`
+### A_SYNTHESIZE_REPORT
 
-```markdown
-## Hypotheses
-1. **[HIGH]** {hypothesis 1} — Evidence: {refs}
-2. **[MEDIUM]** {hypothesis 2} — Evidence: {refs}
-3. **[LOW]** {hypothesis 3} — Evidence: {refs}
-```
+Write report.md: Answer (or INCONCLUSIVE), Evidence Trail table, Hypotheses Tested table, Key Learnings, Open Questions.
+Append to specs/learnings.md: confirmed → roles="implement", disproved → roles="analyze" (gotcha).
 
-### Stage 4.5: CLI Supplementary Exploration (optional)
+</actions>
 
-**Skip if** no enabled CLI tools or hypotheses are trivially testable.
-
-```
-IF no CLI tools enabled: skip to Stage 5
-
-hypothesis_summary = hypotheses.map(h => "${h.rank}: ${h.claim}").join("\n")
-
-Bash({
-  command: 'maestro delegate "PURPOSE: Gather evidence for investigation hypotheses
-TASK: For each hypothesis, trace relevant call chains and data flows | Find corroborating or contradicting code patterns
-MODE: analysis
-CONTEXT: @${scope_path}/**/*
-EXPECTED: JSON array of { hypothesis_rank, evidence: [{ file, line, supports: bool, explanation }] }
-CONSTRAINTS: Focus on code-level evidence only | Max 5 evidence items per hypothesis
-
-Hypotheses:
-${hypothesis_summary}
-" --role explore --mode analysis',
-  run_in_background: true
-})
-```
-
-**On callback:** Parse result, append each evidence item to `evidence.ndjson` with `type: "cli-exploration"`. Pass as supplementary context to Stage 5 testing.
-
-### Stage 5: Hypothesis Testing
-For each hypothesis (in rank order):
-
-1. **Design test**: What specific evidence would confirm or disprove this?
-2. **Execute test**: Code trace, targeted search, data inspection, or experiment
-3. **Record result**: Append to `evidence.ndjson` with `type: "test"`
-4. **Update understanding**: Mark hypothesis as confirmed / disproved / inconclusive
-
-```markdown
-## Test Results
-### Hypothesis 1: {claim}
-- Test: {what was done}
-- Result: CONFIRMED / DISPROVED / INCONCLUSIVE
-- Evidence: {file:line references}
-```
-
-### Stage 6: 3-Strike Escalation
-If `--max-hypotheses` hypotheses all fail:
-
-1. **Broaden scope**: If scope was restricted, suggest expanding. AskUserQuestion:
-   ```
-   {N} hypotheses tested, none confirmed.
-   A) Broaden scope to full project
-   B) I have a new hypothesis: [user provides]
-   C) Escalate — this needs deeper investigation
-   ```
-2. **Search wiki for clues**: `maestro wiki search` with alternative keywords
-3. **If still stuck**: Mark as INCONCLUSIVE with what was learned and what remains unknown
-
-### Stage 7: Synthesize & Report
-Write final `report.md`:
-
-```markdown
-# Investigation Report: {question}
-
-## Answer
-{confirmed understanding or "INCONCLUSIVE: ..."}
-
-## Evidence Trail
-| # | Type | Source | Relevance | Finding |
-|---|------|--------|-----------|---------|
-| 1 | code | file:line | high | ... |
-
-## Hypotheses Tested
-| Hypothesis | Result | Key Evidence |
-|-----------|--------|-------------|
-| ... | confirmed/disproved | file:line |
-
-## Key Learnings
-- {learning 1}
-- {learning 2}
-
-## Open Questions
-- {what remains unknown}
-```
-
-### Stage 8: Persist
-1. Append findings as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --body "<content>" --keywords "investigate,{question-slug}"`:
-   - Confirmed hypotheses → `roles="implement"` (merge "technique"/"pattern" into keywords)
-   - Disproved hypotheses → `roles="analyze"` (merge "gotcha" into keywords)
-   - Stable INS-id from `hash("investigate" + question + finding_title)`
-3. Display summary with answer and next steps
-
-**Next-step routing:**
-- Save finding to specs → `/spec-add debug <finding>`
-- Follow-along on discovered code → `/learn-follow <path>`
-- Decompose patterns found → `/learn-decompose <module>`
-- Create wiki entry for understanding → `maestro wiki create --type note`
-</execution>
+</state_machine>
 
 <error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No question provided | Provide a question as the first argument |
-| E002 | error | Scope path does not exist | Check --scope path is valid |
-| W001 | warning | No prior knowledge found in wiki/knowhow | Proceed with fresh investigation |
-| W002 | warning | Evidence collection found very few matches (<3) | Broaden search terms or expand scope |
-| W003 | warning | All hypotheses inconclusive — escalating | Investigation marked INCONCLUSIVE |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E002 | --scope path not found | Check path |
+| W002 | Very few evidence matches (<3) | Broaden search terms or expand scope |
+| W003 | All hypotheses inconclusive | Investigation marked INCONCLUSIVE |
 </error_codes>
 
 <success_criteria>
-- [ ] Question parsed and investigation slug generated
-- [ ] Investigation directory created under `.workflow/knowhow/`
-- [ ] Prior knowledge loaded from wiki and knowhow
-- [ ] Evidence collected and logged to `evidence.ndjson` (structured NDJSON)
-- [ ] Pattern matching performed against debug-notes and knowhow insights
+- [ ] Evidence collected and logged to evidence.ndjson (structured NDJSON)
 - [ ] At least 1 hypothesis formed and tested
-- [ ] `understanding.md` tracks evolving understanding with timestamps
-- [ ] `report.md` written with answer, evidence trail, hypothesis results
-- [ ] Findings appended to `specs/learnings.md` as `<spec-entry>` blocks with stable INS-ids
-- [ ] 3-strike escalation triggered if all hypotheses fail
-- [ ] No files modified outside `.workflow/knowhow/`
-- [ ] Summary displayed with answer and next-step routing
+- [ ] 3-strike escalation triggered if all fail
+- [ ] Report + spec-entry blocks written
 </success_criteria>
+
+<next_step_routing>
+- Save to specs → `/spec-add debug <finding>`
+- Follow code → `/learn-follow <path>`
+- Decompose patterns → `/learn-decompose <module>`
+</next_step_routing>

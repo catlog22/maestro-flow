@@ -47,12 +47,7 @@ Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), outpu
 - Reads `conclusions.json` if available (implementation_scope seeds task generation)
 
 ### Role Knowledge
-1. Browse accumulated knowledge for this role:
-   `maestro wiki list --category arch`
-2. Analyze the index, identify entries relevant to the current task
-3. Load selected documents:
-   `maestro wiki load <id1> [id2] [id3...]`
-4. Review loaded knowledge before proceeding
+`maestro wiki list --category arch` → select relevant → `maestro wiki load`
 </context>
 
 <execution>

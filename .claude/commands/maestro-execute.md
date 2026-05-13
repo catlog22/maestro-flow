@@ -40,12 +40,7 @@ Scope routing, flags, resolution logic, output directory format, artifact regist
 4. All are optional — proceed without if unavailable (log warning).
 
 ### Role Knowledge
-1. Browse accumulated knowledge for this role:
-   `maestro wiki list --category coding`
-2. Analyze the index, identify entries relevant to the current task
-3. Load selected documents:
-   `maestro wiki load <id1> [id2] [id3...]`
-4. Review loaded knowledge before proceeding
+`maestro wiki list --category coding` → select relevant → `maestro wiki load`
 </context>
 
 <execution>
@@ -61,18 +56,15 @@ Follow '~/.maestro/workflows/execute.md' completely.
 
 ### Post-task Knowledge Inquiry
 
-After each task completes, evaluate inquiry triggers:
+After each task completion, check triggers:
 
-1. **Execution deviation**: If task summary mentions approach change, dependency swap, or plan deviation:
-   → Ask: "TASK-{NNN} deviated from the plan. Should this decision be recorded as an architecture constraint? (`/spec-add arch`)"
+| Condition | Ask | Route |
+|-----------|-----|-------|
+| Summary mentions approach change / plan deviation | "Record as arch constraint?" | spec-add arch |
+| retry_count >= 2 | "Document fix pattern?" | spec-add debug |
+| Summary contains design rationale ("chose X because") | "Record as knowhow?" | spec-add learning |
 
-2. **Retry success**: If task required ≥2 retries before completion:
-   → Ask: "TASK-{NNN} succeeded after {N} retries. Should this fix pattern be documented? (`/spec-add debug`)"
-
-3. **Implicit knowledge**: If task summary contains design rationale ("chose X because", "rejected Y due to"):
-   → Ask: "Design decision detected. Should it be recorded as knowhow? (`/spec-add learning`)"
-
-If user confirms, invoke `Skill({ skill: "spec-add", args: "<category> <content>" })` with extracted content.
+On confirm → `Skill("spec-add", "<category> <content>")`.
 
 ### Issue Status Sync
 

@@ -13,8 +13,7 @@ allowed-tools:
 ---
 <purpose>
 Capture reusable knowledge into `.workflow/knowhow/` with type-specific structured fields.
-Six content types, each optimized for a different reuse pattern. All entries are automatically
-indexed by WikiIndexer (type=knowhow) and searchable via `maestro knowhow search`.
+Auto-indexed by WikiIndexer (type=knowhow), searchable via `maestro knowhow search`.
 </purpose>
 
 <required_reading>
@@ -22,181 +21,57 @@ indexed by WikiIndexer (type=knowhow) and searchable via `maestro knowhow search
 </required_reading>
 
 <context>
-Arguments: $ARGUMENTS
+$ARGUMENTS — type token + description + optional flags.
 
-**Types:**
+**Flags**: `--lang <lang>`, `--source <url>`, `--tag tag1,tag2`, `--title <title>`, `--asset-type <type>`, `--code-paths <paths>`, `--category <cat>`
 
-| Type | Prefix | Use Case | Key Fields |
-|------|--------|----------|------------|
-| `compact` | KNW- | Session state recovery | objective, files, decisions, plan, pending |
-| `template` | TPL- | Code/config templates | language, code block, usage context |
-| `recipe` | RCP- | Step-by-step how-to | prerequisites, steps, expected outcome |
-| `reference` | REF- | External doc / API quick-ref | source URL, key points, scenarios |
-| `decision` | DCS- | Design decision record | context, alternatives, rationale, consequences |
-| `tip` | TIP- | Quick note / reminder | content, tags |
-| `asset` | AST- | Code asset (API contract, data model) | assetType, codePaths, category |
-| `blueprint` | BLP- | Architecture design with code paths | codePaths, category |
-| `document` | DOC- | General long-form (fallback) | — |
+**Type routing** (first token match):
 
-No arguments: auto-detect type or ask user via AskUserQuestion.
+| Token | Type | Prefix | Key fields |
+|-------|------|--------|------------|
+| `compact`/`session`/`压缩`/`保存` | compact | KNW- | objective, files, decisions, plan, pending |
+| `template`/`tpl`/`模板` | template | TPL- | language, code block, usage, parameters |
+| `recipe`/`rcp`/`配方`/`步骤` | recipe | RCP- | prerequisites, steps, expected outcome, pitfalls |
+| `reference`/`ref`/`参考`/`引用` | reference | REF- | source URL, key points, scenarios, examples |
+| `decision`/`dcs`/`决策`/`adr` | decision | DCS- | context, alternatives table, rationale, consequences |
+| `tip`/`note`/`记录`/`快速` | tip | TIP- | content, tags |
+| `asset`/`ast`/`资产`/`契约` | asset | AST- | assetType, codePaths, category |
+| `blueprint`/`blp`/`蓝图` | blueprint | BLP- | codePaths, category |
+| `document`/`doc`/`文档` | document | DOC- | (general fallback) |
+| Short text + `--tag` | tip | TIP- | — |
+| No args | — | — | AskUserQuestion (9 options) |
 
-**Flags:**
-- `--lang <lang>` — Language for templates (typescript, python, bash, yaml, etc.)
-- `--source <url>` — Source URL for references
-- `--tag tag1,tag2` — Categorization tags
-- `--title <title>` — Explicit title (auto-generated if omitted)
-- `--asset-type <type>` — Asset subtype: api-contract, data-model, prompt, config, etc.
-- `--code-paths <paths>` — Related source paths for asset/blueprint (comma-separated)
-- `--category <cat>` — Spec category for agent discovery (coding, arch, test, debug, review, learning)
+**Output**: `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{HHMM}.md` with YAML frontmatter (title, type, category, created, tags, source, lang, status)
 </context>
 
 <execution>
+Follow '~/.maestro/workflows/knowhow.md' completely.
 
-### Step 1: Detect Type
+**Type-specific content rules**:
 
-Parse first token as type. If ambiguous, AskUserQuestion with options:
-
-| Token Match | Type |
-|-------------|------|
-| `compact`, `session`, `压缩`, `保存` | compact |
-| `template`, `tpl`, `模板` | template |
-| `recipe`, `rcp`, `配方`, `步骤` | recipe |
-| `reference`, `ref`, `参考`, `引用` | reference |
-| `decision`, `dcs`, `决策`, `adr` | decision |
-| `tip`, `note`, `记录`, `快速` | tip |
-| `asset`, `ast`, `资产`, `契约` | asset |
-| `blueprint`, `blp`, `蓝图` | blueprint |
-| `document`, `doc`, `文档` | document |
-| No match, short text, `--tag` present | tip |
-| No arguments | AskUserQuestion (9 options) |
-
-### Step 2: Generate Content by Type
-
-#### compact (KNW-{YYYYMMDD}-{HHMM}.md)
-
-Extract from conversation history:
-- **Session ID** — WFS-* if workflow session active, else `manual-{date}`
-- **Project Root** — Absolute path
-- **Objective** — High-level goal
-- **Execution Plan** — Source + complete verbatim content (never summarize)
-- **Working Files** — Modified files with roles (absolute paths, 3-8 files)
-- **Reference Files** — Read-only context files
-- **Last Action** — Final action + result
-- **Decisions** — Table: decision | reasoning
-- **Constraints** — User-specified limitations
-- **Dependencies** — Added/changed packages
-- **Known Issues** — Deferred bugs
-- **Changes Made** — Completed modifications
-- **Pending** — Next steps
-- **Notes** — Unstructured thoughts
-
-Plan detection priority: workflow session IMPL_PLAN.md > TodoWrite items > user-stated > inferred.
-
-#### template (TPL-{YYYYMMDD}-{HHMM}.md)
-
-Ask for or extract:
-- **Language / Tech** — `--lang` flag or inferred from context
-- **Usage** — When/how to use this template
-- **Code** — The template content (ask user to provide or select from conversation)
-- **Parameters** — Placeholders to replace (e.g. `{{name}}`, `{{port}}`)
-- **Dependencies** — Required packages/config
-- **Tags** — From `--tag` flag
-
-If code not provided explicitly, prompt user: "Paste the template code:"
-
-#### recipe (RCP-{YYYYMMDD}-{HHMM}.md)
-
-Ask for or extract:
-- **Goal** — What this recipe accomplishes
-- **Prerequisites** — Tools, access, config needed
-- **Steps** — Numbered step-by-step instructions
-- **Expected Outcome** — What success looks like
-- **Common Pitfalls** — Known issues / gotchas
-- **Related** — Links to templates, references, decisions used
-- **Tags** — From `--tag` flag
-
-If steps not clear, prompt user: "Describe the steps (numbered list):"
-
-#### reference (REF-{YYYYMMDD}-{HHMM}.md)
-
-Ask for or extract:
-- **Source** — `--source` flag (URL, doc title, API endpoint)
-- **Key Points** — Bullet list of essential info
-- **Applicable Scenarios** — When to consult this reference
-- **Quick Examples** — Copy-paste ready code snippets
-- **Last Verified** — Date (today)
-- **Tags** — From `--tag` flag
-
-If `--source` provided, offer to fetch and summarize via WebFetch.
-
-#### decision (DCS-{YYYYMMDD}-{HHMM}.md)
-
-Ask for or extract:
-- **Context** — Background and problem statement
-- **Decision** — What was decided
-- **Alternatives Considered** — Table: alternative | pros | cons | rejected because
-- **Rationale** — Why this choice over alternatives
-- **Consequences** — Positive and negative impact
-- **Related** — Links to affected specs, recipes, templates
-- **Date** — Decision date
-- **Status** — proposed | accepted | superseded
-
-#### tip (TIP-{YYYYMMDD}-{HHMM}.md)
-
-Simple note:
-- **Content** — Everything after type token (or full $ARGUMENTS)
-- **Context** — Auto-detected from recent conversation files
-- **Tags** — From `--tag` flag
-- **Timestamp** — ISO format
-
-### Step 3: Write File
-
-Write to `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{HHMM}.md` with YAML frontmatter:
-
-```yaml
----
-title: {auto or --title}
-type: {type}
-category: {type}
-created: {ISO timestamp}
-tags: [{tags}]
-source: {url if reference}
-lang: {language if template}
-status: {status if decision}
----
-{markdown body}
-```
-
-### Step 4: Confirm
-
-```
-=== KNOWHOW CAPTURED ===
-Type: {type}
-ID:   knowhow-{slug}
-File: .workflow/knowhow/{filename}
-
-{type-specific summary line}
-```
+| Type | Content extraction |
+|------|-------------------|
+| compact | Extract from conversation: session ID, objective, execution plan (verbatim), working files (3-8), decisions, constraints, pending. Plan priority: workflow IMPL_PLAN.md > TodoWrite > user-stated > inferred. |
+| template | Ask for: language, code block, parameters (placeholders), usage context, dependencies |
+| recipe | Ask for: goal, prerequisites, numbered steps, expected outcome, common pitfalls |
+| reference | From --source URL or ask. Key points, applicable scenarios, quick examples. Offer WebFetch if URL provided. |
+| decision | Context, alternatives (table: alt/pros/cons/rejected-because), rationale, consequences. Status: proposed/accepted/superseded. |
+| tip | Content = everything after type token. Auto-detect context from recent files. |
+| asset | assetType (api-contract/data-model/prompt/config), codePaths, category for agent discovery |
+| blueprint | Architecture design with codePaths and category |
 </execution>
 
 <error_codes>
-| Code | Severity | Description | Stage |
-|------|----------|-------------|-------|
-| E001 | error | `.workflow/` not initialized — run `/maestro-init` first | validate |
-| E002 | error | Template: no code provided after prompt | template |
-| E003 | error | Recipe: no steps provided after prompt | recipe |
-| W001 | warning | No active workflow session — compact captures conversation only | compact |
-| W002 | warning | Plan detection found no explicit plan — using inferred plan | compact |
-| W003 | warning | `--source` URL could not be fetched — proceeding with manual entry | reference |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E002 | Template: no code provided after prompt | Ask again or cancel |
+| E003 | Recipe: no steps provided after prompt | Ask again or cancel |
+| W001 | No active workflow session (compact) | Captures conversation only |
+| W002 | Plan detection found no explicit plan (compact) | Uses inferred plan |
 </error_codes>
 
 <success_criteria>
-- [ ] Type correctly detected or selected
-- [ ] All type-specific fields populated (not empty)
-- [ ] YAML frontmatter written with correct fields
-- [ ] Markdown body follows type structure
-- [ ] File written to `.workflow/knowhow/` with correct prefix
-- [ ] Auto-indexed by WikiIndexer (type=knowhow)
-- [ ] Confirmation displayed with ID, type, file path
-- [ ] Next step hint appropriate to type shown
+- [ ] Type detected or selected, all type-specific fields populated
+- [ ] File written to .workflow/knowhow/ with correct prefix and YAML frontmatter
+- [ ] Confirmation displayed with ID, type, path
 </success_criteria>

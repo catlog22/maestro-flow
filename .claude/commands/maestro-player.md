@@ -14,391 +14,162 @@ allowed-tools:
   - Skill
 ---
 <purpose>
-Load a workflow template (produced by maestro-composer) → bind context variables →
-execute DAG nodes in topological order → persist state at checkpoints → support resume.
+Load workflow template (from maestro-composer) → bind context variables → execute DAG nodes in topological order → persist state at checkpoints → support resume.
 
-Node execution mechanisms:
-- `skill` node → `Skill()` (synchronous)
-- `command` node → `Skill()` with namespace (synchronous)
-- `cli` node → `maestro delegate` (background + wait for callback)
-- `agent` node → `Agent()` (sync or background per config)
-- `checkpoint` node → state save, optional user pause
-
-Session state persisted at `.workflow/.maestro/<session_id>/status.json` (same tracking
-location as maestro.md), enabling resume from any checkpoint via `-c`.
+Session: `.workflow/.maestro/player-{YYYYMMDD-HHmmss}/status.json`
 </purpose>
 
 <context>
 $ARGUMENTS — template slug/path, or flags.
 
-**Flags:**
-- `--context key=value` — Bind context variables (repeatable)
-- `-c` / `--continue [session-id]` — Resume paused/interrupted session (consistent with maestro.md)
-- `--list` — List available templates from `~/.maestro/templates/workflows/index.json`
-- `--dry-run` — Show execution plan without executing
+**Flags**:
+- `--context key=value`: Bind context variables (repeatable)
+- `-c [session-id]`: Resume paused/interrupted session
+- `--list`: List available templates from index.json
+- `--dry-run`: Show execution plan without executing
 
-**Entry routing:**
-
-| Detection | Condition | Handler |
-|-----------|-----------|---------|
-| List templates | `--list` in args | handleList |
-| Resume session | `-c [session-id]` | Phase 0: Resume |
-| Dry run | `--dry-run` in args | Phase 1 + 2, print plan, exit |
-| Normal | Template slug/path provided | Phase 1 |
-| No args | Empty args | handleList + AskUserQuestion |
-
-**Shared constants (aligned with maestro.md tracking):**
-
-| Constant | Value |
-|----------|-------|
-| Session prefix | `player` |
-| Session dir | `.workflow/.maestro/player-<YYYYMMDD>-<HHmmss>/` |
-| State file | `status.json` |
-| Template dir (global) | `~/.maestro/templates/workflows/` |
-| Template index (global) | `~/.maestro/templates/workflows/index.json` |
-
-**Session status.json schema (aligned with maestro.md):**
-
-```json
-{
-  "session_id": "player-<YYYYMMDD>-<HHmmss>",
-  "created_at": "<ISO>",
-  "intent": "<template_name> with context",
-  "task_type": "player",
-  "chain_name": "<template_id>",
-  "template_id": "wft-<slug>-<date>",
-  "template_path": "~/.maestro/templates/workflows/<slug>.json",
-  "template_name": "<name>",
-  "auto_mode": false,
-  "status": "running | paused | completed | failed | aborted",
-  "context": { "goal": "...", "scope": "..." },
-  "steps": [
-    {
-      "index": 0,
-      "node_id": "N-001",
-      "skill": "<executor>",
-      "args": "<resolved_args>",
-      "type": "skill | cli | command | agent | checkpoint",
-      "status": "pending | running | completed | skipped | failed",
-      "started_at": null,
-      "completed_at": null,
-      "session_id": null,
-      "output_path": null,
-      "artifacts": [],
-      "error": null
-    }
-  ],
-  "current_step": 0,
-  "last_checkpoint": null,
-  "updated_at": "<ISO>",
-  "completed_at": null
-}
-```
-
-**Session directory structure (under .workflow/.maestro/):**
-
-```
-.workflow/.maestro/player-<YYYYMMDD>-<HHmmss>/
-├── status.json             # Main state file (maestro.md compatible)
-├── checkpoints/
-│   ├── CP-01.json
-│   └── CP-02.json
-└── artifacts/
-    └── N-001-output.md
-```
-
-**Node execution mechanisms:**
+**Node execution mechanisms**:
 
 | Node type | Mechanism | Blocking |
 |-----------|-----------|----------|
-| skill | `Skill(skill=executor, args=resolved_args)` | sync |
-| command | `Skill(skill=executor, args=resolved_args)` | sync |
-| cli | `maestro delegate "prompt" --to tool --mode mode --rule rule` via `Bash(run_in_background: true)` | async, wait for callback |
-| agent | `Agent(subagent_type=executor, prompt=resolved_args)` | configurable |
+| skill | `Skill(skill, args)` | sync |
+| command | `Skill(skill, args)` | sync |
+| cli | `maestro delegate --to tool --mode mode` via `Bash(run_in_background: true)` | async, STOP + wait |
+| agent | `Agent(subagent_type, prompt)` | configurable |
 | checkpoint | State save + optional user pause | — |
 
-**Runtime reference resolution:**
+**Runtime reference resolution** in args_template:
 
-Before executing each node, resolve `{ref}` patterns in `args_template`:
-
-| Reference | Resolves To |
+| Reference | Resolves to |
 |-----------|-------------|
-| `{variable}` | `session_state.context[variable]` |
-| `{N-001.session_id}` | `node_states["N-001"].session_id` |
-| `{N-001.output_path}` | `node_states["N-001"].output_path` |
-| `{prev_session_id}` | session_id of previous non-checkpoint node |
-| `{prev_output_path}` | output_path of previous non-checkpoint node |
+| `{variable}` | session context[variable] |
+| `{N-001.session_id}` | node's session_id |
+| `{N-001.output_path}` | node's output_path |
+| `{prev_session_id}` | previous non-checkpoint node's session_id |
+| `{prev_output_path}` | previous non-checkpoint node's output_path |
 
-Fallback: if referenced field is null, substitution results in empty string.
+**Session schema** (status.json — must align with maestro.md tracking):
+```json
+{
+  "session_id": "player-<YYYYMMDD>-<HHmmss>",
+  "status": "running|paused|completed|failed|aborted",
+  "template_id": "wft-<slug>-<date>",
+  "template_path": "<path>",
+  "auto_mode": false,
+  "context": { "goal": "..." },
+  "steps": [{
+    "index": 0, "node_id": "N-001", "skill": "<executor>",
+    "args": "<resolved>", "type": "skill|cli|agent|checkpoint",
+    "status": "pending|running|completed|skipped|failed",
+    "session_id": null, "output_path": null, "artifacts": []
+  }],
+  "current_step": 0,
+  "last_checkpoint": null
+}
+```
 </context>
 
-<execution>
+<state_machine>
 
-### handleList
+<states>
+S_ROUTE        — 入口路由（list/resume/dry-run/normal）     PERSIST: —
+S_RESUME       — 恢复已暂停 session                         PERSIST: —
+S_LOAD         — 加载模板、收集变量、绑定引用                 PERSIST: —
+S_INIT         — 创建 session、拓扑排序、初始化 steps         PERSIST: status.json
+S_EXEC_LOOP    — 逐步执行（核心循环）                        PERSIST: status.json (每步更新)
+S_COMPLETE     — 标记完成、输出摘要                           PERSIST: status.json (final)
+</states>
 
-Scan `~/.maestro/templates/workflows/index.json`. Display:
-```
-Available workflow templates:
-  feature-tdd-review    [feature, complex]   3 work nodes, 2 checkpoints
-  quick-bugfix          [bugfix, simple]     2 work nodes, 1 checkpoint
+<transitions>
 
-Run: /maestro-player <slug> --context goal="..."
-```
+S_ROUTE:
+  → handleList    WHEN: --list                              DO: scan index.json, display templates
+  → S_RESUME      WHEN: -c flag
+  → S_LOAD        WHEN: template slug/path provided
+  → handleList    WHEN: no args                             DO: display templates + AskUserQuestion
 
-If index not found, output: "No templates found. Create one with /maestro-composer"
+S_RESUME:
+  → S_EXEC_LOOP   WHEN: session found                      DO: A_RESUME_SESSION
+  → ERROR(E004)   WHEN: no session found
 
----
+S_LOAD:
+  → S_INIT        DO: A_LOAD_AND_BIND
 
-### Phase 0: Resume — Session Reconciliation
+S_INIT:
+  → END           WHEN: --dry-run                           DO: display execution plan
+  → S_EXEC_LOOP   DO: A_INIT_SESSION (topological sort → steps[], write status.json, display banner)
 
-**Trigger**: `-c [session-id]`
+S_EXEC_LOOP:
+  → S_EXEC_LOOP   WHEN: step completed, more steps          DO: A_EXECUTE_STEP → advance current_step
+  → S_COMPLETE     WHEN: all steps completed
+  → END           WHEN: checkpoint pause                    DO: set status=paused, display resume command
+  → END           WHEN: abort chosen                        DO: set status=aborted, save progress
+  GUARD: cli nodes → Bash(run_in_background: true) + STOP, wait for callback
+  GUARD: on failure → on_fail: skip (log, advance) | retry (once) | abort (AskUserQuestion: Retry/Skip/Abort)
+  GUARD: after step 3+ → display context hint "可随时 /maestro-player -c 恢复"
 
-1. If session-id provided: load `.workflow/.maestro/<session-id>/status.json`
-2. If no session-id: scan `.workflow/.maestro/player-*/status.json` for `status = "running" | "paused"`
-3. Multiple found → AskUserQuestion for selection
-4. None found → error E004
-5. Reset any `running` steps back to `pending` (interrupted mid-execution)
-6. Determine next executable step from `steps[]` after `last_checkpoint`
-7. Set `current_step` to resume point
-8. Resume at Phase 3 (Execute Loop) from that step
+S_COMPLETE:
+  → END           DO: A_COMPLETE_SESSION
 
----
+</transitions>
 
-### Phase 1: Load & Bind
+<actions>
 
-**Objective**: Load template, collect missing variables, bind all references.
+### A_RESUME_SESSION
 
-**Step 1.1** — Resolve template path:
-1. Absolute path → use as-is
-2. Relative path (`.` prefix) → resolve from cwd
-3. Slug only → look up in `~/.maestro/templates/workflows/index.json`
-4. Partial match → scan index, confirm with user
-5. Not found → show available templates, AskUserQuestion
+1. If session-id: load status.json. If none: scan player-*/status.json for running|paused.
+2. Reset any "running" steps to "pending" (interrupted mid-execution)
+3. Set current_step to resume point after last_checkpoint
+4. Enter S_EXEC_LOOP
 
-**Step 1.2** — Parse `--context key=value` pairs into `bound_context`.
+### A_LOAD_AND_BIND
 
-**Step 1.3** — Load and validate template JSON (`template_id`, `nodes`, `edges`, `context_schema` must be present).
+1. Resolve template: absolute path → as-is; relative → from cwd; slug → index.json lookup
+2. Parse `--context key=value` pairs
+3. Validate template (template_id, nodes, edges, context_schema required)
+4. Collect missing required variables via AskUserQuestion
+5. Bind {variable} placeholders (leave {N-xxx.field} and {prev_*} for runtime)
 
-**Step 1.4** — Collect missing required variables:
-- For each `context_schema` entry where `required: true` and not in `bound_context`:
-  AskUserQuestion to collect value
-- For optional variables: use `default` or empty string
+### A_INIT_SESSION
 
-**Step 1.5** — Bind variables: replace `{variable_name}` with values in all `args_template` strings. Leave `{N-xxx.field}` and `{prev_*}` unresolved (runtime Phase 3).
+1. Generate session_id: player-{YYYYMMDD-HHmmss}
+2. Topological sort (Kahn's algorithm) → flatten to steps[] (parallel nodes share batch index)
+3. All steps status: "pending"
+4. Write status.json
 
-**Step 1.6** — If `--dry-run`: print execution plan and exit:
-```
-Workflow: <template.name>
-Context:  goal = "<value>"
+### A_EXECUTE_STEP
 
-Execution Plan:
-  [1] N-001  [skill]       maestro-plan        "<goal>"
-  [2] CP-01  [checkpoint]  After Plan          auto-continue
-  [3] N-002  [skill]       maestro-execute     --resume-session {N-001.session_id}
+1. Resolve runtime references ({N-xxx.field}, {prev_*}) in args
+2. Set step status="running", write status.json
+3. Execute by type:
+   - **skill/command**: `Skill(skill, resolved_args)` → extract session_id, output_path, artifacts
+   - **cli**: `Bash(run_in_background: true)` → STOP, wait for callback → `maestro delegate output <id>`
+   - **agent**: `Agent(subagent_type, resolved_args)`
+   - **checkpoint**: write checkpoint snapshot. If auto_continue==false: AskUserQuestion (Continue/Pause/Abort)
+4. Set step status="completed" (or "skipped"/"failed"), write status.json
 
-To execute: /maestro-player <slug> --context goal="..."
-```
+### A_COMPLETE_SESSION
 
----
+Set status="completed", completed_at. Display summary: session, template, steps completed, context, per-step results, artifacts, session dir.
+AskUserQuestion: Keep session / Run again / Done.
 
-### Phase 2: Instantiate — Init Session State
+</actions>
 
-**Objective**: Create session directory, init state, compute execution plan.
-
-**Step 2.1** — Generate session ID: `player-<YYYYMMDD>-<HHmmss>`. Create directory at `.workflow/.maestro/<session_id>/`.
-
-**Step 2.2** — Topological sort via Kahn's algorithm. Flatten nodes into `steps[]` array (maestro.md format). Parallel nodes get same batch index.
-
-**Step 2.3** — Init all steps as `status: "pending"`.
-
-**Step 2.4** — Write `status.json` (see schema in Context section).
-
-**Step 2.5** — Show execution start banner:
-```
-============================================================
-  MAESTRO PLAYER
-============================================================
-  Template: <template.name>
-  Session:  <session_id>
-  Context:  goal="<value>"
-
-  Pipeline:
-    1. N-001 [skill]      maestro-plan
-    2. CP-01 [checkpoint] After Plan
-    3. N-002 [skill]      maestro-execute
-============================================================
-```
-
----
-
-### Phase 3: Execute Loop
-
-**Objective**: Execute each step in order. Save state after every step.
-
-**CRITICAL**: After each step status change, write `status.json` immediately. This enables resume on interruption.
-
-**For each step starting at `current_step`:**
-
-**3a. Display step banner** (consistent with maestro.md):
-```
-------------------------------------------------------------
-  STEP {i+1}/{total}: {node_id} [{type}] {executor}
-------------------------------------------------------------
-  Args: {resolved_args}
-```
-
-**3b. Update status.json**: Set step status = `"running"`, started_at = now.
-
-**3c. Execute by node type:**
-
-**skill / command node**:
-```
-resolved_args = resolveArgs(step.args_template, status)
-Skill(skill=step.skill, args=resolved_args)
-
-Extract from result: session_id (WFS-*), output_path, artifacts
-Update step: status="completed", session_id, output_path, artifacts, completed_at
-Write status.json
-```
-
-**cli node — CRITICAL: background + stop**:
-```
-resolved_args = resolveArgs(step.args_template, status)
-
-Bash({
-  command: `maestro delegate "${resolved_args}" --to ${step.cli_tool} --mode ${step.cli_mode} --rule ${step.cli_rule}`,
-  run_in_background: true
-})
-
-Write status.json  // persist "running" state
-STOP — wait for background callback
-```
-
-On callback:
-```
-Load status.json
-Find step with status "running"
-Retrieve output: maestro delegate output <exec_id>
-Update step: status="completed", output_path, completed_at
-Write status.json
-Advance to next step
-```
-
-**agent node**:
-```
-resolved_args = resolveArgs(step.args_template, status)
-
-Agent({
-  subagent_type: step.skill,
-  prompt: resolved_args,
-  run_in_background: step.run_in_background ?? false,
-  description: step.node_id
-})
-
-Update step: status="completed", output_path, completed_at
-Write status.json
-```
-
-**checkpoint node**:
-```
-// 1. Write checkpoint snapshot
-Write <session_dir>/checkpoints/<step.node_id>.json with:
-  session_id, checkpoint_id, saved_at, steps_snapshot, last_completed_step
-
-// 2. Update status.json
-status.last_checkpoint = step.node_id
-Mark step completed, write status.json
-
-// 3. If auto_continue == false: pause for user
-AskUserQuestion:
-  - Continue → proceed
-  - Pause → set status="paused", write status.json, output resume command, EXIT
-  - Abort → set status="aborted", EXIT
-```
-
-**3d. Handle result** (consistent with maestro.md):
-
-On success: update step status = `"completed"`, advance `current_step`.
-
-On failure:
-```
-on_fail = step.on_fail || "abort"
-
-skip   → mark "skipped", log warning, advance
-retry  → retry once, if still fails → fall to abort
-abort  → AskUserQuestion: Retry / Skip / Abort
-         On Abort: save progress, display: "Resume with: /maestro-player -c"
-```
-
-**3e. Context cleanup hint** (after step 3+, consistent with maestro.md):
-```
-  ⚡ 已执行 {i} 步，上下文较重。可随时 /maestro-player -c 在新上下文中恢复。
-```
-
----
-
-### Phase 4: Complete — Archive + Summary
-
-**Objective**: Mark session complete, output summary.
-
-**Step 4.1** — Set `status = "completed"`, `completed_at = <ISO>`, write `status.json`.
-
-**Step 4.2** — Collect all artifacts from steps.
-
-**Step 4.3** — Display execution summary (consistent with maestro.md):
-```
-============================================================
-  MAESTRO PLAYER SESSION COMPLETE
-============================================================
-  Session:   <session_id>
-  Template:  <template_name> (<template_id>)
-  Steps:     <completed>/<total> completed
-  Context:   goal="<value>"
-
-  Results:
-    [✓] 1. N-001 maestro-plan         — completed (WFS-plan-xxx)
-    [✓] 2. CP-01 After Plan           — completed (checkpoint)
-    [✓] 3. N-002 maestro-execute      — completed (WFS-exec-xxx)
-    [✓] 4. N-003 quality-test    — completed (WFS-test-xxx)
-
-  Artifacts:
-    - IMPL_PLAN.md         (N-001)
-    - src/auth/index.ts    (N-002)
-    - test/auth.test.ts    (N-003)
-
-  Session dir: .workflow/.maestro/<session_id>/
-============================================================
-```
-
-**Step 4.4** — AskUserQuestion completion action:
-- **Keep session** → leave at current path
-- **Run again** → AskUserQuestion for same/new context, re-enter Phase 1
-- **Nothing** → done
-</execution>
+</state_machine>
 
 <error_codes>
-| Code | Severity | Description | Recovery |
-|------|----------|-------------|----------|
-| E001 | error | Template not found | Show --list output, suggest closest match |
-| E002 | error | Template JSON invalid (missing required fields) | Point to template file for fix |
-| E003 | error | Required context variable missing and user declined | Cannot proceed without required vars |
-| E004 | error | Resume session not found | Scan `.workflow/.maestro/player-*/`, list available |
-| E005 | error | DAG cycle in template | Point to template for fix, suggest maestro-composer --edit |
-| E006 | error | Node execution failed + abort chosen | Save state, suggest --resume |
-| W001 | warning | Node completed with warnings | Log and continue |
-| W002 | warning | Runtime reference resolved to empty string | Log, executor handles gracefully |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | Template not found | Show --list, suggest closest match |
+| E002 | Template JSON invalid (missing template_id/nodes/edges) | Point to template file for fix |
+| E004 | Resume session not found | List available player-*/ sessions |
+| E005 | DAG cycle in template | Point to template, suggest --edit |
+| E006 | Node execution failed + abort chosen | Save state, suggest `-c` resume |
 </error_codes>
 
 <success_criteria>
-- [ ] Template loaded from `~/.maestro/templates/workflows/` and validated
-- [ ] All required context variables bound (from --context or user input)
-- [ ] Session directory created at `.workflow/.maestro/player-*/` with `status.json`
-- [ ] Steps array computed via topological sort (maestro.md compatible format)
-- [ ] Each step executed with correct mechanism (Skill/delegate/Agent)
-- [ ] Runtime references ({N-xxx.field}, {prev_*}) resolved before each step
-- [ ] `status.json` written after every step status change (resume-safe)
-- [ ] Checkpoints saved with snapshots under `checkpoints/`
-- [ ] CLI nodes use `maestro delegate` with `Bash(run_in_background: true)` + stop pattern
-- [ ] Step banners and completion report match maestro.md format
-- [ ] Resume via `-c` scans `.workflow/.maestro/player-*/status.json`
+- [ ] Template loaded, variables bound, session created with topological steps
+- [ ] status.json written after every step change (resume-safe)
+- [ ] CLI nodes use Bash(run_in_background) + STOP pattern
+- [ ] Checkpoints saved, resume via -c works
 </success_criteria>

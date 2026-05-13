@@ -43,12 +43,7 @@ $ARGUMENTS -- phase number for milestone-scoped, topic text for adhoc/standalone
 Scope routing, output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Scope Routing and Output Structure sections).
 
 ### Role Knowledge
-1. Browse accumulated knowledge for this role:
-   `maestro wiki list --category debug`
-2. Analyze the index, identify entries relevant to the current task
-3. Load selected documents:
-   `maestro wiki load <id1> [id2] [id3...]`
-4. Review loaded knowledge before proceeding
+`maestro wiki list --category debug` → select relevant → `maestro wiki load`
 </context>
 
 <execution>

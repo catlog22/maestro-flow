@@ -42,8 +42,12 @@ Flags (`--skip-tests`, `--skip-antipattern`, `--dir`), scope routing, output pat
 ### Pre-load context (before verification)
 
 1. **Codebase docs**: If `.workflow/codebase/` exists, read `ARCHITECTURE.md` for expected module wiring and `FEATURES.md` for component mapping. Use in Layer 3 (Connection) checks.
-2. **Wiki constraints**: Run `maestro wiki search "architecture constraint" --json 2>/dev/null`. If results found, include documented invariants as additional truth checks in Layer 1.
-3. Both are optional — proceed without if unavailable.
+2. **Review specs**: Run `maestro spec load --category review` to load review standards. Use as quality baseline for anti-pattern scan and constraint checks.
+3. **Wiki constraints**: Run `maestro wiki search "architecture constraint" --json 2>/dev/null`. If results found, include documented invariants as additional truth checks in Layer 1.
+4. **Role Knowledge**:
+   - Browse: `maestro wiki list --category review`
+   - Load task-relevant entries: `maestro wiki load <id1> [id2...]`
+5. All are optional — proceed without if unavailable.
 </context>
 
 <execution>
@@ -51,18 +55,13 @@ Follow '~/.maestro/workflows/verify.md' completely.
 
 ### Post-verify Knowledge Inquiry
 
-After verification completes, evaluate inquiry triggers:
+| Condition | Ask | Route |
+|-----------|-----|-------|
+| Anti-pattern blockers found (TODO/FIXME/stubs) | "Update quality-rules.md?" | spec-add quality |
+| Architecture constraint violations | "Update architecture-constraints.md?" | spec-add arch |
+| Recurring test coverage gap (same module across tasks) | "Add to test-conventions.md?" | spec-add test |
 
-1. **Anti-pattern detection**: If anti-pattern scan found blockers (TODO/FIXME, stubs, empty returns):
-   → Ask: "Verification found {N} anti-patterns. Should `quality-rules.md` be updated to enforce these checks? (`/spec-add quality`)"
-
-2. **Constraint violation**: If Goal-Backward check found constraint_violations or missing wiring:
-   → Ask: "Verification found architecture constraint violations. Should `architecture-constraints.md` be updated? (`/spec-add arch`)"
-
-3. **Test coverage gaps**: If Nyquist gaps found with recurring pattern (same module/type across tasks):
-   → Ask: "Persistent test coverage gap detected in {module}. Should it be added to `test-conventions.md` as a required test area? (`/spec-add test`)"
-
-If user confirms, invoke `Skill({ skill: "spec-add", args: "<category> <content>" })`.
+On confirm → `Skill("spec-add", "<category> <content>")`.
 
 **Next-step routing on completion:**
 - All checks pass, no gaps → /quality-review

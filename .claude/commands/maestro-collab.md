@@ -13,321 +13,160 @@ allowed-tools:
 ---
 
 <purpose>
-Multi-CLI collaboration: fan-out the same requirement to multiple CLI tools in parallel, cross-verify outputs for consensus/conflicts, then synthesize into a unified report with standard downstream artifacts (context.md + conclusions.json).
-
-Each CLI tool independently analyzes the requirement. Results are compared and merged via evidence-weighted synthesis.
+Fan-out requirement to multiple CLI tools in parallel → cross-verify for consensus/conflicts → synthesize into unified report with downstream artifacts (context.md + conclusions.json).
 </purpose>
 
 <context>
 $ARGUMENTS — requirement text and optional flags.
 
-```bash
-/maestro-collab "analyze the auth module for security vulnerabilities"
-/maestro-collab "design a caching strategy" --tools gemini,qwen,claude
-/maestro-collab -y "review error handling patterns"
-/maestro-collab "refactor user service" --mode write --tools gemini,claude
-```
-
 **Flags**:
-- `--tools <list>`: Comma-separated CLI tools (default: auto-select first 3 enabled)
+- `--tools <list>`: Comma-separated CLI tools (default: first 3 enabled)
 - `--mode analysis|write`: Delegate mode (default: analysis)
 - `--rule <template>`: Shared rule template for all delegates
-- `-y` / `--yes`: Skip plan confirmation
+- `-y`: Skip plan confirmation
+
+**Pre-load** (optional): `maestro spec load --category arch` + `maestro wiki list --category arch` → include in delegate prompts.
 
 **Output**: `.workflow/scratch/{YYYYMMDD}-collab-{slug}/`
-- `collab-report.md` — full collaboration report
-- `context.md` — standard Locked/Free/Deferred decisions (plan/analyze compatible)
-- `conclusions.json` — structured conclusions (plan fast-track compatible)
-- `per-tool/{tool}-output.md` — raw per-tool outputs
+- `collab-report.md` — merged findings with consensus/conflict/unique tags
+- `context.md` — Locked/Free/Deferred decisions (plan compatible)
+- `conclusions.json` — structured: session_id, tools[], consensus_level, recommendation, confidence, dimensions[], decisions[]
+- `per-tool/{tool}-output.md` — raw outputs
 </context>
 
-<execution>
+<state_machine>
 
-### Step 1: Parse Arguments
+<states>
+S_PARSE           — 解析参数、提取 flags                      PERSIST: —
+S_DISCOVER        — 发现可用 CLI 工具                          PERSIST: —
+S_CONFIRM         — 展示计划、用户确认（-y 跳过）              PERSIST: —
+S_FANOUT          — 构建 prompt、并行启动 delegate、STOP       PERSIST: —
+S_COLLECT         — 回调到达、收集结果                          PERSIST: per-tool outputs
+S_CROSS_VERIFY    — 分类发现（共识/冲突/独有）                  PERSIST: —
+S_SYNTHESIZE      — 解决冲突、生成 3 个输出文件                 PERSIST: outputs
+S_REGISTER        — 注册 CLB artifact                          PERSIST: state.json
+S_REPORT          — 显示摘要 + next-step routing               PERSIST: —
+</states>
 
-Extract from `$ARGUMENTS`:
-- `requirement` — remaining text after flag removal (error if empty)
-- `--tools` → `selectedTools` (comma-split)
-- `--mode` → `delegateMode` (default: `analysis`)
-- `--rule` → `ruleTemplate`
-- `-y` / `--yes` → `autoYes`
+<transitions>
 
-### Step 2: Discover Available CLI Tools
+S_PARSE:
+  → S_DISCOVER    WHEN: requirement non-empty              DO: extract requirement, tools, mode, rule, autoYes
+  → S_PARSE       WHEN: requirement empty                  DO: AskUserQuestion for requirement
 
-```bash
+S_DISCOVER:
+  → S_CONFIRM     WHEN: eligible tools >= 2                DO: A_DISCOVER_TOOLS
+  → ERROR(E002)   WHEN: eligible tools < 2
+
+S_CONFIRM:
+  → S_FANOUT      WHEN: autoYes                            DO: A_SETUP_SESSION
+  → S_FANOUT      WHEN: user confirms "执行"               DO: A_SETUP_SESSION
+  → S_DISCOVER    WHEN: user selects "修改工具选择"         DO: re-select tools, validate >= 2
+  → END           WHEN: user cancels
+
+S_FANOUT:
+  → S_COLLECT     DO: A_PARALLEL_DELEGATE then STOP — wait for callbacks
+
+S_COLLECT:
+  → S_CROSS_VERIFY  WHEN: all callbacks arrived            DO: A_COLLECT_OUTPUTS
+  → ERROR(E004)     WHEN: all delegates failed
+  GUARD: 1+ succeeded → continue with partial results (W001)
+
+S_CROSS_VERIFY:
+  → S_SYNTHESIZE    DO: A_CLASSIFY_FINDINGS
+
+S_SYNTHESIZE:
+  → S_REGISTER      DO: A_GENERATE_OUTPUTS
+
+S_REGISTER:
+  → S_REPORT        DO: append CLB artifact to state.json (type: collab, scope: adhoc)
+
+S_REPORT:
+  → END             DO: display summary (requirement, tools, consensus_level, per-tool status, artifact id, output dir)
+
+</transitions>
+
+<actions>
+
+### A_DISCOVER_TOOLS
+
+```
 Bash("maestro tools list --json 2>/dev/null || cat ~/.maestro/cli-tools.json")
 ```
+Filter: enabled == true. If --mode write: exclude type == "api-endpoint".
+Auto-select (no --tools): first 3 eligible in config order.
 
-Parse tool entries. Build eligible list:
-- `enabled == true`
-- If `--mode write`: exclude `type == "api-endpoint"`
+### A_SETUP_SESSION
 
-Auto-select (when `--tools` omitted): first 3 eligible in config order.
-Validate: minimum 2 eligible tools (abort if fewer).
+Create: `.workflow/scratch/{YYYYMMDD}-collab-{slug}/` + `per-tool/`.
 
-### Step 3: Present Collaboration Plan
+### A_PARALLEL_DELEGATE
 
-**(Skip if `-y`)**
+1. Build shared prompt:
+   ```
+   PURPOSE: {requirement}; success = actionable findings with evidence
+   TASK: {auto-decomposed into 3-5 specific verbs}
+   MODE: {delegateMode}
+   CONTEXT: @**/*
+   EXPECTED: Structured findings with file:line refs, confidence (0-100), prioritized recommendations
+   CONSTRAINTS: {from requirement}
+   ```
+2. Launch ALL delegates in ONE message — multiple `Bash(run_in_background: true)`:
+   ```
+   maestro delegate "${prompt}" --to {tool} --mode ${mode} [--rule ${rule}]
+   ```
+3. **STOP immediately after launch. Wait for background callbacks.**
 
-Display plan, then ask user:
+### A_COLLECT_OUTPUTS
 
-```
-============================================================
-  COLLABORATION PLAN
-============================================================
-  Requirement: {requirement}
-  Mode:        {delegateMode}
-  Rule:        {ruleTemplate || "none"}
+On each callback: `maestro delegate output <id>` → write `per-tool/{tool}-output.md`.
 
-  Available CLI Tools (from cli-tools.json):
-    [✓] gemini    — gemini-3.1-pro-preview     [fullstack, frontend]
-    [✓] claude    — claude-sonnet-4-6           [fullstack]
-    [✓] codex     — gpt-5.5                    [fullstack, backend]
-    [ ] opencode  — (no model)                  [fullstack]
+### A_CLASSIFY_FINDINGS
 
-  Selected: gemini, claude, codex (3 tools)
+Read all per-tool outputs. For each finding:
 
-  Pipeline:
-    1. Fan-out → parallel delegate to each tool
-    2. Cross-verification → consensus/conflict analysis
-    3. Synthesis → context.md + conclusions.json
-============================================================
-```
+| Condition | Tag |
+|-----------|-----|
+| 2+ tools agree | CONSENSUS |
+| Tools disagree | CONFLICT |
+| 1 tool only | UNIQUE |
 
-Use `AskUserQuestion` with options:
-- **执行** — proceed with selected tools
-- **修改工具选择** — let user specify different tool combination
-- **取消** — abort
+consensus_level = consensus_count / total_findings * 100.
+If consensus_level < 40%: W003.
 
-If **修改工具选择**: ask user which tools to use (show eligible list), validate ≥ 2, re-display plan.
-
-### Step 4: Setup Session
-
-```
-slug = requirement kebab-cased, max 40 chars
-outputDir = .workflow/scratch/{YYYYMMDD}-collab-{slug}/
-```
-
-Create `outputDir` + `outputDir/per-tool/`.
-
-### Step 5: Build Delegate Prompt
-
-Shared prompt for all tools:
-
-```
-PURPOSE: {requirement}; success = actionable findings with evidence
-TASK: {auto-decomposed into 3-5 specific verbs}
-MODE: {delegateMode}
-CONTEXT: @**/*
-EXPECTED: Structured findings with file:line references, confidence score (0-100), prioritized recommendations. Sections: ## Findings, ## Recommendations, ## Confidence
-CONSTRAINTS: {extracted from requirement}
-```
-
-### Step 6: Parallel Fan-Out
-
-Launch ALL delegate calls simultaneously using multiple `Bash(run_in_background: true)` in a **single message**:
-
-```
-// Launch all in ONE message — do NOT wait between calls
-Bash({
-  command: `maestro delegate "${prompt}" --to gemini --mode ${mode} ${rule}`,
-  run_in_background: true
-})
-Bash({
-  command: `maestro delegate "${prompt}" --to claude --mode ${mode} ${rule}`,
-  run_in_background: true
-})
-Bash({
-  command: `maestro delegate "${prompt}" --to codex --mode ${mode} ${rule}`,
-  run_in_background: true
-})
-```
-
-**After launching all calls → STOP immediately. Do not output anything. Wait for background completion callbacks.**
-
-### Step 7: Collect Results
-
-As each background callback arrives:
-1. Extract exec ID from output (`[MAESTRO_EXEC_ID=...]`)
-2. Run `maestro delegate output <id>` to get full result
-3. Write raw output to `per-tool/{tool}-output.md`
-
-**Wait until ALL callbacks have arrived before proceeding.**
-
-### Step 8: Cross-Verify
-
-Read all `per-tool/{tool}-output.md` files. Compare findings across tools:
-
-For each finding, classify:
-- **[CONSENSUS]**: 2+ tools agree on same finding/recommendation
-- **[CONFLICT]**: Tools disagree on approach or assessment
-- **[UNIQUE]**: Finding from only one tool
-
-Compute `consensus_level = (consensus_count / total_findings) * 100`.
-
-### Step 9: Synthesize Outputs
+### A_GENERATE_OUTPUTS
 
 Resolve conflicts via evidence-weighted voting:
-- Higher confidence tool's position wins
-- More specific evidence (file:line refs) wins over general statements
-- If tied: mark as `[SUGGESTED]`
+- Higher confidence wins; more specific evidence (file:line) wins over general; tied → SUGGESTED
 
-Generate three output files:
+Write 3 files:
+1. **collab-report.md**: Summary, Consensus Findings, Resolved Conflicts, Unresolved Items, Unique Insights, Recommendations, Per-Tool Confidence table
+2. **context.md**: Locked (CONSENSUS items), Free (UNIQUE with strong evidence), Deferred (UNRESOLVED conflicts). Standard Locked/Free/Deferred format for plan compatibility.
+3. **conclusions.json**: session_id, subject, mode, tools[], consensus_level, recommendation (Go/No-Go/Conditional), confidence, dimensions[{name, score, findings}], decisions[{title, classification, source_tools, rationale}]
 
-#### collab-report.md
+</actions>
 
-```markdown
-# Multi-CLI Collaboration Report — {requirement}
-
-## Summary
-- Tools: {tool_list}
-- Consensus level: {N}%
-- Key finding: {top finding}
-
-## Consensus Findings
-{findings agreed by 2+ tools}
-
-## Resolved Conflicts
-{conflicts resolved with rationale and winning tool}
-
-## Unresolved Items
-{items requiring human judgment}
-
-## Unique Insights
-{valuable unique findings with source tool attribution}
-
-## Recommendations
-{prioritized, merged recommendations}
-
-## Per-Tool Confidence
-| Tool | Confidence | Key Strength |
-|------|-----------|--------------|
-```
-
-#### context.md (standard downstream format)
-
-```markdown
-# Context: {requirement}
-
-**Date**: {date}
-**Mode**: collab ({tool_list})
-**Consensus Level**: {N}%
-
-## Decisions
-
-### Decision N: {TITLE}
-- **Context**: {what and why}
-- **Options**: 1. {opt1} 2. {opt2}
-- **Chosen**: {selected}
-- **Reason**: {rationale — which tools agreed/disagreed}
-
-## Constraints
-
-### Locked
-{[CONSENSUS] items — treat as confirmed decisions}
-
-### Free
-{[UNIQUE] items with strong evidence — implementer discretion}
-
-### Deferred
-{[UNRESOLVED] conflicts — require human judgment}
-
-## Code Context
-{file:line references from per-tool findings}
-```
-
-#### conclusions.json
-
-```json
-{
-  "session_id": "{sessionId}",
-  "subject": "{requirement}",
-  "mode": "collab",
-  "tools": ["gemini", "claude", "codex"],
-  "consensus_level": 85,
-  "recommendation": "Go|No-Go|Conditional",
-  "confidence": "high|medium|low",
-  "dimensions": [
-    { "name": "gemini", "score": 80, "findings": "...", "recommendations": "..." }
-  ],
-  "decisions": [
-    { "title": "...", "classification": "locked|free|deferred", "source_tools": [], "rationale": "..." }
-  ],
-  "timestamp": "<ISO>"
-}
-```
-
-### Step 10: Register Artifact
-
-Append to `.workflow/state.json`:
-
-```json
-{
-  "id": "CLB-{next_id}",
-  "type": "collab",
-  "milestone": "{current_milestone}",
-  "phase": null,
-  "scope": "adhoc",
-  "path": "scratch/{YYYYMMDD}-collab-{slug}",
-  "status": "completed",
-  "depends_on": null,
-  "harvested": false,
-  "created_at": "<ISO>",
-  "completed_at": "<ISO>"
-}
-```
-
-### Step 11: Display Summary
-
-```
-============================================================
-  MULTI-CLI COLLABORATION COMPLETE
-============================================================
-  Requirement:     {requirement}
-  Tools:           {tool_list}
-  Consensus Level: {N}%
-
-  Per-Tool:
-    gemini:  completed (confidence: {N}%)
-    claude:  completed (confidence: {N}%)
-    codex:   completed (confidence: {N}%)
-
-  Artifact: CLB-{id}
-  Output:   {outputDir}/
-
-  Next steps:
-    /maestro-analyze "{topic}"            — Deep feasibility analysis
-    /maestro-plan "{phase} --dir {dir}"   — Plan from collab conclusions
-    /maestro-brainstorm "{topic}"         — Expand with multi-role brainstorm
-============================================================
-```
-
-</execution>
+</state_machine>
 
 <error_codes>
-
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Requirement argument missing | Prompt for requirement |
-| E002 | error | Fewer than 2 CLI tools eligible | Check cli-tools.json, enable more tools |
-| E003 | error | Specified tool not found/enabled | Show available tools |
-| E004 | error | All delegates failed | Abort with per-tool error details |
-| W001 | warning | One tool failed | Continue with remaining tools |
-| W002 | warning | >50% conflicts in cross-verify | Highlight in report, recommend manual review |
-| W003 | warning | Low consensus level (<40%) | Flag in summary |
-
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E002 | Fewer than 2 eligible tools | Check cli-tools.json, enable more tools |
+| E004 | All delegates failed | Abort with per-tool error details |
+| W001 | One tool failed | Continue with remaining (partial degradation) |
+| W003 | consensus_level < 40% | Flag in summary, recommend manual review |
 </error_codes>
 
 <success_criteria>
-- [ ] Available tools discovered from cli-tools.json with eligibility filtering
-- [ ] Plan presented via AskUserQuestion with tool modification option (unless -y)
-- [ ] All delegates launched in parallel via Bash(run_in_background: true)
-- [ ] Execution stopped after launch — waited for all callbacks
-- [ ] Per-tool outputs written to per-tool/{tool}-output.md
-- [ ] Cross-verification: consensus/conflict/unique classification complete
-- [ ] collab-report.md produced with merged findings
-- [ ] context.md produced in Locked/Free/Deferred format (downstream compatible)
-- [ ] conclusions.json produced (plan fast-track compatible)
+- [ ] All delegates launched in parallel via Bash(run_in_background: true), STOP after launch
+- [ ] Cross-verification: consensus/conflict/unique classification with consensus_level
+- [ ] 3 output files produced (collab-report.md, context.md, conclusions.json)
 - [ ] CLB artifact registered in state.json
 - [ ] Partial degradation: continued if 1+ tools succeeded
 </success_criteria>
+
+<next_step_routing>
+- Deep feasibility → `/maestro-analyze "{topic}"`
+- Plan from conclusions → `/maestro-plan --dir {dir}`
+- Expand → `/maestro-brainstorm "{topic}"`
+</next_step_routing>

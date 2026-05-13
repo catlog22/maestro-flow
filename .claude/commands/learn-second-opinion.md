@@ -12,151 +12,111 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Structured second-opinion workflow for code, decisions, or plans. Three modes inspired by gstack `/codex`:
+Structured second-opinion on code, decisions, or plans. Three modes:
+- **review** (default): 3 parallel agents (pragmatist, purist, strategist)
+- **challenge**: single adversarial agent — break assumptions, propose alternatives
+- **consult**: interactive Q&A — agent studies target, answers your questions
 
-- **review** (default): 3 parallel agents with distinct personas (pragmatist, purist, strategist) independently assess the target
-- **challenge**: single adversarial agent that tries to break the approach, find hidden assumptions, and propose alternatives
-- **consult**: interactive Q&A mode where the agent studies the target and answers your questions
-
-Decoupled from the phase/execution lifecycle — can be invoked on any piece of code or knowledge at any time. Findings persist to `specs/learnings.md` as `<spec-entry>` blocks.
+Findings persist to `specs/learnings.md` as `<spec-entry>` blocks.
 </purpose>
 
 <context>
-Arguments: $ARGUMENTS
+$ARGUMENTS — target and optional mode flag.
 
-**Target resolution (auto-detected):**
-- File path → analyze that file's content
-- Wiki ID (`<type>-<slug>`) → fetch via `maestro wiki get`
-- `HEAD` or `staged` → analyze current git diff (`git diff HEAD` or `git diff --staged`)
-- Phase number (e.g., `3`) → resolve via `state.json.artifacts[]` to find plan in scratch dir
+**Target resolution** (auto-detected):
+| Input | Resolution |
+|-------|-----------|
+| File path | Read file content |
+| Wiki ID (`<type>-<slug>`) | `maestro wiki get <id>` |
+| `HEAD` / `staged` | `git diff HEAD` / `git diff --staged` |
+| Phase number | Resolve via state.json.artifacts[] → plan.json |
 
-**Flags:**
-- `--mode review` — 3-persona parallel review (default)
-- `--mode challenge` — Adversarial single-agent analysis
-- `--mode consult` — Interactive Q&A session
+**Flags**: `--mode review|challenge|consult` (default: review)
 
-**Storage written:**
-- `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md` — Opinion report
-- `.workflow/knowhow/specs/learnings.md` — New `<spec-entry>` blocks from analysis (source: "second-opinion")
+**Pre-load** (optional): `Skill("spec-load")` for conventions + `maestro wiki search "<target topic>"` for related entries.
 
-**Storage read:**
-- Target content (file, wiki entry, diff, or plan)
-- `.workflow/specs/` — Project conventions for context
-- `maestro wiki search` — Related knowledge entries
-- `.workflow/knowhow/specs/learnings.md` — Prior insights about the topic
+**Output**: `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md`
 </context>
 
-<execution>
+<state_machine>
 
-### Stage 1: Resolve Target
-- File path: Read the file
-- Wiki ID: `maestro wiki get <id>`
-- `HEAD`: `git diff HEAD` (unstaged + staged changes)
-- `staged`: `git diff --staged`
-- Phase N: Resolve via `state.json.artifacts.find(a => a.type === 'plan' && a.phase === N)` → read `.workflow/{artifact.path}/plan.json`
-- If unresolvable, AskUserQuestion for clarification
+<states>
+S_RESOLVE    — 解析 target                          PERSIST: —
+S_CONTEXT    — 加载 specs/wiki 上下文                PERSIST: —
+S_EXECUTE    — 按 mode 执行分析                      PERSIST: —
+S_SYNTHESIZE — 综合观点、生成报告                     PERSIST: outputs
+S_PERSIST    — 写文件、append specs/learnings.md      PERSIST: knowhow files
+</states>
 
-### Stage 2: Load Context
-- Read relevant specs: `Skill({ skill: "spec-load" })` silently to get project conventions
-- Search wiki: `maestro wiki search "<target topic>"` for related entries (top 5)
-- Search insights: search `specs/learnings.md` for entries related to the target area
-- Build context brief: target content + conventions + related knowledge
+<transitions>
 
-### Stage 3: Execute Mode
+S_RESOLVE:
+  → S_CONTEXT     WHEN: target resolved                DO: read target content
+  → S_RESOLVE     WHEN: unresolvable                   DO: AskUserQuestion for clarification
 
-#### Mode: review (default)
-Spawn 3 Agents in a single message with distinct personas:
+S_CONTEXT:
+  → S_EXECUTE     DO: load specs + wiki search (optional, proceed without)
 
-**Agent 1 — Pragmatist:**
-- Focus: simplicity, YAGNI, maintenance cost, readability
-- Question: "Is this the simplest thing that could work? What's the maintenance burden?"
-- Evaluates: complexity score, abstraction depth, dependency count
+S_EXECUTE:
+  → S_SYNTHESIZE  WHEN: mode == review                 DO: A_REVIEW
+  → S_SYNTHESIZE  WHEN: mode == challenge              DO: A_CHALLENGE
+  → S_SYNTHESIZE  WHEN: mode == consult                DO: A_CONSULT
 
-**Agent 2 — Purist:**
-- Focus: correctness, type safety, edge cases, error handling
-- Question: "What assumptions can be violated? Where are the edge cases?"
-- Evaluates: error paths covered, type completeness, invariant preservation
+S_SYNTHESIZE:
+  → S_PERSIST     DO: merge perspectives → agreements, disagreements, verdict, top 3 recommendations
 
-**Agent 3 — Strategist:**
-- Focus: scalability, extensibility, architecture alignment
-- Question: "Does this support future growth? Does it fit the overall architecture?"
-- Evaluates: coupling, cohesion, architecture constraint compliance
+S_PERSIST:
+  → END           DO: write KNW-opinion + append <spec-entry> blocks to specs/learnings.md
 
-Each agent returns:
-```json
-{
-  "persona": "pragmatist|purist|strategist",
-  "verdict": "approve|concern|reject",
-  "confidence": "high|medium|low",
-  "findings": [{ "severity": "high|medium|low", "description": "...", "location": "file:line", "suggestion": "..." }],
-  "summary": "one paragraph assessment"
-}
-```
+</transitions>
 
-#### Mode: challenge
-Spawn 1 Agent as an adversarial reviewer:
+<actions>
 
-- Try to find the weakest assumption in the approach
-- Propose a concrete scenario that breaks the current implementation
-- Identify the single biggest risk
-- Suggest an alternative approach and argue why it might be better
-- Apply forcing questions:
-  - "What assumption would invalidate this entire approach?"
-  - "What's the simplest thing that breaks this?"
-  - "If you had to rewrite this in 6 months, what would you regret?"
-  - "What's the implicit contract that isn't enforced?"
+### A_REVIEW
+Spawn 3 Agents in single message:
 
-#### Mode: consult
+| Agent | Focus | Question |
+|-------|-------|----------|
+| Pragmatist | simplicity, YAGNI, maintenance | "Simplest thing that works? Maintenance burden?" |
+| Purist | correctness, edge cases, type safety | "What assumptions can be violated?" |
+| Strategist | scalability, architecture alignment | "Supports future growth? Fits architecture?" |
+
+Each returns: persona, verdict (approve/concern/reject), confidence, findings[{severity, description, location, suggestion}], summary.
+
+### A_CHALLENGE
+Spawn 1 adversarial Agent:
+- Find weakest assumption
+- Propose concrete breaking scenario
+- Identify single biggest risk
+- Suggest alternative approach
+- Apply forcing questions: "What invalidates this?", "Simplest thing that breaks this?", "What would you regret in 6 months?", "What implicit contract isn't enforced?"
+
+### A_CONSULT
 Interactive loop:
-1. Agent studies the target content thoroughly
-2. Display: "Target loaded. What would you like to know?"
-3. AskUserQuestion for the first question
-4. Agent answers with code references and evidence
-5. Loop: AskUserQuestion for follow-up or "done" to exit
-6. On exit, compile all Q&A into the report
+1. Agent studies target
+2. Display "Target loaded. What would you like to know?"
+3. AskUserQuestion → Agent answers with code refs → repeat until "done"
+4. Compile Q&A into report
 
-### Stage 4: Synthesize
-Across all perspectives (or from single agent in challenge/consult):
-- **Points of agreement**: findings all personas share
-- **Points of disagreement**: where personas diverge (with reasoning)
-- **Verdict**: combined assessment with confidence level
-- **Top 3 recommendations**: prioritized by impact
+</actions>
 
-### Stage 5: Persist & Report
-1. Write `.workflow/knowhow/KNW-opinion-{slug}-{date}.md`:
-   - Target summary
-   - Per-persona findings (review) / adversarial analysis (challenge) / Q&A transcript (consult)
-   - Synthesis: agreements, disagreements, verdict
-   - Recommendations
-2. Append non-trivial findings as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --body "<content>" --keywords "second-opinion,{mode},{target-slug}"`
-4. Display summary with verdict and recommendations
-
-**Next-step routing:**
-- Create issue for a finding → `/manage-issue create <description>`
-- Decompose patterns found → `/learn-decompose <path>`
-- Follow-along on the code → `/learn-follow <path>`
-</execution>
+</state_machine>
 
 <error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Target not resolvable (file/wiki/diff/plan not found) | Verify target argument, provide correct path or ID |
-| E002 | error | Unknown --mode value | Use: review, challenge, or consult |
-| W001 | warning | One review agent failed — partial perspectives | Proceed with available agents, note incomplete coverage |
-| W002 | warning | No related wiki entries found for context | Proceed without wiki context |
-| W003 | warning | Git diff empty (no changes) for HEAD/staged target | Nothing to review; suggest using a file path instead |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E002 | Unknown --mode value | Use: review, challenge, or consult |
+| W001 | One review agent failed | Proceed with available perspectives |
 </error_codes>
 
 <success_criteria>
-- [ ] Target resolved and content loaded
-- [ ] Context gathered (specs, wiki, knowhow)
-- [ ] Mode executed correctly:
-  - review: 3 agents spawned in parallel, all returned findings
-  - challenge: adversarial analysis completed with forcing questions
-  - consult: interactive Q&A loop completed
-- [ ] Synthesis produced with agreements, disagreements, verdict
-- [ ] Report written to `KNW-opinion-{slug}-{date}.md`
-- [ ] Non-trivial findings appended to `specs/learnings.md` as `<spec-entry>` blocks
-- [ ] No files modified outside `.workflow/knowhow/`
-- [ ] Summary displayed with verdict and next-step routing
+- [ ] Mode executed: review (3 parallel agents) / challenge (adversarial) / consult (interactive Q&A)
+- [ ] Synthesis with agreements, disagreements, verdict
+- [ ] Report written + findings appended to specs/learnings.md
 </success_criteria>
+
+<next_step_routing>
+- Create issue → `/manage-issue create <description>`
+- Decompose patterns → `/learn-decompose <path>`
+- Follow code → `/learn-follow <path>`
+</next_step_routing>

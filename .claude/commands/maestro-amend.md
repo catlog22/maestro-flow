@@ -11,11 +11,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Signal-driven overlay generator — collects workflow deficiency signals from heterogeneous sources (verification gaps, review findings, debug sessions, open issues, user feedback), diagnoses which commands need amendment, and batch-generates targeted overlays to fix them.
+Signal-driven overlay generator — collect workflow deficiency signals from multiple sources, diagnose which commands need amendment, batch-generate targeted overlays. All amendments use overlay system (`~/.maestro/overlays/*.json`) — non-invasive, idempotent, survives reinstall.
 
-Differs from `/maestro-overlay` which takes a single explicit intent. This command **discovers** what needs amending by analyzing workflow artifacts, then proposes and applies overlay fixes automatically.
-
-**Mechanism**: All amendments use the overlay system (`~/.maestro/overlays/*.json`) — non-invasive, idempotent, survives reinstall.
+Differs from `/maestro-overlay` (single explicit intent). This command **discovers** what needs amending by analyzing workflow artifacts.
 </purpose>
 
 <required_reading>
@@ -26,275 +24,140 @@ Differs from `/maestro-overlay` which takes a single explicit intent. This comma
 <context>
 $ARGUMENTS — optional description and/or source flags.
 
-### Signal Sources
+**Signal sources**:
 
-| Flag | Source | What it collects |
-|------|--------|------------------|
-| `--from-verify <dir>` | `verification.json` | Workflow gaps exposed by verify failures |
-| `--from-review <dir>` | `review.json` | Process deficiencies from code review |
-| `--from-session <id>` | Session artifacts | Problems encountered during workflow execution |
-| `--from-issues ISS-xxx,...` | `issues.jsonl` | Issues that trace to command deficiency |
-| `--scan` | Auto-scan `.workflow/` | Discover all workflow-related signals |
-| _(positional text)_ | User description | Direct observation of command deficiency |
+| Flag | Source | Collects |
+|------|--------|----------|
+| `--from-verify <dir>` | verification.json | Workflow gaps from verify failures |
+| `--from-review <dir>` | review.json | Process deficiencies from code review |
+| `--from-session <id>` | Session artifacts | Problems during workflow execution |
+| `--from-issues ISS-xxx,...` | issues.jsonl | Issues tracing to command deficiency |
+| `--scan` | Auto-scan .workflow/ | Discover all workflow-related signals |
+| _(positional text)_ | User description | Direct observation |
 
-Multiple sources combinable. No flags and no description → interactive mode.
+Multiple combinable. No flags + no description → interactive (scan + AskUserQuestion).
 
-### Control Flags
+**Control**: `--dry-run` (preview, don't install), `-y` (skip confirmations)
 
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Generate overlay JSON, show preview, don't install |
-| `-y` | Skip confirmations |
+**CLI targeting**: `"cli": "claude"` (default, patches .claude/commands/), `"codex"` (patches .codex/skills/), `"both"` (both paths)
 
-### Signal-to-Overlay Classification
-
-A signal becomes an overlay candidate when it identifies a **workflow command deficiency** — a missing step, missing precondition, absent reading, or gap in success criteria. Signals about code bugs (not command gaps) are out of scope; suggest `/maestro-quick` or `/maestro-plan --gaps` for those.
-
-### CLI Targeting
-
-Overlays support the `cli` field to target different workflow systems:
-- `"cli": "claude"` (default) → patches `.claude/commands/{name}.md`
-- `"cli": "codex"` → patches `.codex/skills/{name}/SKILL.md`
-- `"cli": "both"` → patches both paths
-
-When diagnosing signals, determine which CLI's workflow is affected and set the `cli` field accordingly.
-
-### Output
-- Overlay files: `~/.maestro/overlays/amend-{slug}.json`
-- Optional docs: `~/.maestro/overlays/docs/amend-{slug}.md`
+**Output**: `~/.maestro/overlays/amend-{slug}.json` + optional `~/.maestro/overlays/docs/amend-{slug}.md`
 </context>
 
-<execution>
-### 1. Collect signals
+<state_machine>
 
-Parse $ARGUMENTS for source flags and description text.
+<states>
+S_COLLECT      — 收集信号（从 flags / scan / description）    PERSIST: —
+S_DIAGNOSE     — 映射信号到命令补丁                           PERSIST: —
+S_GROUP        — 分组、规划 overlay 粒度                      PERSIST: —
+S_PREVIEW      — 展示注入点地图、用户确认                     PERSIST: —
+S_DRAFT        — 生成 overlay JSON                            PERSIST: overlay files
+S_INSTALL      — 安装 overlay                                 PERSIST: command files
+S_REPORT       — 报告摘要 + post-patch routing                PERSIST: —
+</states>
 
-**If no sources and no description** → interactive mode:
-Scan `.workflow/` for recent artifacts containing workflow-level signals:
+<transitions>
 
-```
-candidates = []
+S_COLLECT:
+  → S_DIAGNOSE    WHEN: signals found                      DO: A_COLLECT_SIGNALS
+  → ERROR(E001)   WHEN: no signals from any source
 
-# Verification: workflow gaps (not code bugs)
-for each verification.json in .workflow/scratch/*-verify-*/
-  extract must_have_failures, anti_pattern items
-  filter for items whose fix_direction points at a command gap
-  (e.g., "missing pre-check step", "no reading for X", "success criteria incomplete")
+S_DIAGNOSE:
+  → S_GROUP       WHEN: command deficiencies identified     DO: A_DIAGNOSE_SIGNALS
+  → ERROR(E003)   WHEN: all signals are code bugs (not command gaps)
 
-# Review: process findings
-for each review.json in .workflow/scratch/*-review-*/
-  extract findings tagged as "process" or "workflow"
+S_GROUP:
+  → S_PREVIEW     DO: A_GROUP_OVERLAYS
 
-# Debug sessions: root causes tracing to command omission
-for each understanding.md in .workflow/scratch/*-debug-*/
-  extract root causes where cause_type mentions workflow/command
+S_PREVIEW:
+  → S_DRAFT       WHEN: user confirms "Apply all" or selects patches
+  → S_PREVIEW     WHEN: user selects "Edit"                DO: modify signal target/section
+  → END           WHEN: user cancels
 
-# Open issues: workflow-tagged
-issues = read .workflow/issues/issues.jsonl
-  | filter status == "open" AND tags include "workflow" or "command"
+S_DRAFT:
+  → S_INSTALL     WHEN: not --dry-run                      DO: A_DRAFT_OVERLAYS
+  → END           WHEN: --dry-run                          DO: display JSON + section map preview
 
-# Execution summaries: deviations
-for each summary in .workflow/scratch/*-plan-*/.summaries/
-  extract plan deviations that suggest a missing command step
-```
+S_INSTALL:
+  → S_REPORT      DO: A_INSTALL_OVERLAYS (`maestro overlay add`, retry max 2 on validation failure)
 
-Display scan results and use AskUserQuestion (multiSelect) to let user pick sources. Also allow user to add a freeform description.
+S_REPORT:
+  → END           DO: display summary (signals collected/applied/skipped, overlay details, skipped code-bug routing)
 
-**If source flags** → extract signals from each specified source.
+</transitions>
 
-**If only description** → user's text is the sole signal. Parse for:
-- Which command(s) are affected
-- What's missing or broken in the command flow
-- What the expected behavior should be
+<actions>
 
-### 2. Diagnose: map signals to command patches
+### A_COLLECT_SIGNALS
 
-For each signal, determine:
+**If source flags**: extract signals from each specified source.
+**If --scan or interactive**: scan .workflow/ for:
+- verification.json → must_have_failures, anti_patterns (filter for command gap direction)
+- review.json → findings tagged "process" or "workflow"
+- debug understanding.md → root causes with workflow/command cause_type
+- issues.jsonl → status=open AND tags include "workflow"/"command"
+- execution summaries → plan deviations suggesting missing command step
 
-```
-{
-  signal_id: "SIG-001",
-  source: "verify:scratch/20260426-verify-M1/",
-  description: "maestro-execute skipped pre-flight when no test suite exists",
-  target_command: "maestro-execute",
-  target_section: "execution",
-  patch_mode: "append",
-  fix_direction: "Add fallback verification when no test suite detected",
-  severity: "medium"
-}
-```
+**If only description**: parse for affected command(s), what's missing, expected behavior.
 
-**Diagnosis heuristics:**
+### A_DIAGNOSE_SIGNALS
 
-| Signal pattern | Target section | Mode |
-|---------------|----------------|------|
-| Missing pre-check / gate | `execution` | `prepend` |
-| Missing post-step / verification | `execution` | `append` |
-| Missing reading / context | `required_reading` or `deferred_reading` | `append` |
-| Incomplete success criteria | `success_criteria` | `append` |
-| Missing error handling | `error_codes` | `append` |
-| Scope/context gap | `context` | `append` |
-| Entirely new concern | _(new section)_ | `new-section` |
+Per signal, determine:
+- signal_id, source, description, target_command, target_section, patch_mode, fix_direction, severity
 
-If target command is ambiguous, read the pristine source from `$PKG_ROOT/.claude/commands/<name>.md` (preferred) or `~/.claude/commands/<name>.md` to confirm the right section.
+**Section mapping**:
 
-### 3. Group and plan overlays
+| Signal pattern | Section | Mode |
+|---------------|---------|------|
+| Missing pre-check/gate | execution | prepend |
+| Missing post-step/verification | execution | append |
+| Missing reading/context | required_reading / deferred_reading | append |
+| Incomplete success criteria | success_criteria | append |
+| Missing error handling | error_codes | append |
+| Scope/context gap | context | append |
+| Entirely new concern | _(new section)_ | new-section |
 
-Group signals by target command. Signals hitting the same command **and** same section merge into one patch. Different sections on the same command stay as separate patches in one overlay.
+Read pristine source from `$PKG_ROOT/.claude/commands/<name>.md` to confirm section.
+Classify: command deficiency → proceed; code bug → skip (suggest /maestro-quick).
 
-Decide overlay granularity:
-- **Single-concern** (1–2 signals on same command) → one overlay per command: `patch-{command}-{slug}.json`
-- **Multi-concern** (3+ signals across commands) → one umbrella overlay: `amend-{slug}.json`
+### A_GROUP_OVERLAYS
 
-For each planned overlay, read the target command's pristine source to:
-- Verify the section exists
-- Check for existing overlays (via `<!-- maestro-overlay:` markers)
-- Confirm the injection point makes sense
+Group by target command + section (merge same command+section).
+Granularity: 1-2 signals → `patch-{command}-{slug}.json`; 3+ cross-command → `amend-{slug}.json`.
+Read target commands to verify sections exist, check existing overlays.
 
-### 4. Preview injection points
+Display section map with injection points per target command.
 
-For each target command, render a section map with injection points (same format as `/maestro-overlay`):
+### A_DRAFT_OVERLAYS
 
-```
-=== maestro-execute.md (1 existing overlay) ===
+Build overlay JSON per schema: name, description, targets[], cli, priority (60), enabled, patches[{section, mode, content}].
+Content rules: heading includes `(patch: SIG-NNN)`, concise, supplementary doc to `~/.maestro/overlays/docs/` if >10 lines.
 
-  <purpose>
-  <required_reading>
-     ├─ [existing] require-spec-before-plan #0
-  <context>
-  <execution>
-     ├─ [existing] require-spec-before-plan #1  "Pre-check: Load Spec"
-     ├─ [existing] cli-verify-after-execute #0  "CLI Verification"
-     >>> NEW: prepend — SIG-001 "Fallback verify when no tests"
-     >>> NEW: append  — SIG-003 "Issue sync retry on failure"
-  <error_codes>
-  <success_criteria>
-     >>> NEW: append  — SIG-002 "Verify issue status updated"
-
-=== maestro-plan.md (0 existing overlays) ===
-
-  <purpose>
-  <required_reading>
-  <context>
-     >>> NEW: append  — SIG-004 "Load prior patch history"
-  <execution>
-  <success_criteria>
-```
-
-Use AskUserQuestion to confirm:
-- **"Apply all"** — proceed with all patches
-- **"Select patches"** — per-signal confirmation
-- **"Edit"** — modify a specific signal's target/section before proceeding
-- **"Cancel"** — abort
-
-### 5. Draft overlay JSON
-
-For each overlay, build the JSON following the overlay schema:
-
-```json
-{
-  "name": "amend-execute-verify-fallback",
-  "description": "Add fallback verification and issue sync retry to maestro-execute [from: AMEND-20260426]",
-  "targets": ["maestro-execute"],
-  "cli": "claude",
-  "priority": 60,
-  "enabled": true,
-  "patches": [
-    {
-      "section": "execution",
-      "mode": "prepend",
-      "content": "## Fallback Verification (patch: SIG-001)\n\nIf no test suite exists for the affected module, run a structural verification instead:\n..."
-    },
-    {
-      "section": "execution",
-      "mode": "append",
-      "content": "## Issue Sync Retry (patch: SIG-003)\n\nIf issue status sync fails, retry once before logging as warning:\n..."
-    },
-    {
-      "section": "success_criteria",
-      "mode": "append",
-      "content": "- [ ] Issue statuses confirmed synced after execution (patch: SIG-002)"
-    }
-  ]
-}
-```
-
-**Content rules:**
-- Heading includes `(patch: SIG-NNN)` for traceability
-- Content is concise — fix the gap, nothing more
-- `@~/.maestro/overlays/docs/` references for anything longer than 10 lines
-- If supplementary doc needed, write it to `~/.maestro/overlays/docs/amend-{slug}.md` first
-
-Write overlay JSON to `~/.maestro/overlays/amend-{slug}.json`.
-
-If `--dry-run`, show the JSON and section map preview, then stop.
-
-### 6. Install overlays
-
-For each generated overlay:
+### A_INSTALL_OVERLAYS
 
 ```bash
 maestro overlay add ~/.maestro/overlays/amend-{slug}.json
 ```
+On validation failure: fix JSON, retry (max 2).
 
-On validation failure, fix the JSON and retry (max 2 attempts).
+</actions>
 
-### 7. Report
-
-```
-=== AMEND OVERLAYS INSTALLED ===
-Session:   AMEND-20260426
-Signals:   5 collected, 4 applied, 1 skipped (code bug, not command gap)
-Overlays:  2 created
-
-  amend-execute-verify-fallback
-    Targets:  maestro-execute (3 patches: exec prepend, exec append, criteria append)
-    Path:     ~/.maestro/overlays/amend-execute-verify-fallback.json
-    Source:   SIG-001, SIG-002, SIG-003
-
-  amend-plan-context-history
-    Targets:  maestro-plan (1 patch: context append)
-    Path:     ~/.maestro/overlays/amend-plan-context-history.json
-    Source:   SIG-004
-
-Skipped:
-  SIG-005   "Missing null check in auth.ts" → code bug, use /maestro-quick
-
-Re-apply:  maestro overlay apply
-Remove:    maestro overlay remove amend-execute-verify-fallback
-Inspect:   maestro overlay list
-```
-
-### Post-patch routing
-
-Use AskUserQuestion:
-- **"Test commands"** — run affected commands to verify patches work
-- **"View overlays"** — `maestro overlay list`
-- **"Continue"** — done
-</execution>
+</state_machine>
 
 <error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No signals found from any source | Verify artifact paths, or provide description |
-| E002 | error | Source artifact not found | Check path exists |
-| E003 | error | No signals map to command deficiencies (all are code bugs) | Use `/maestro-quick` or `/maestro-plan --gaps` instead |
-| E004 | error | Overlay validation failed after 2 retries | Review generated JSON manually |
-| W001 | warning | Some signals skipped (code bugs, not command gaps) | Route to appropriate fix command |
-| W002 | warning | Target command has many existing overlays (≥3) | Consider consolidating overlays |
-| W003 | warning | Scan found no recent workflow artifacts | Check `.workflow/` or provide explicit source |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No signals from any source | Verify artifact paths or provide description |
+| E003 | All signals are code bugs, not command gaps | Use /maestro-quick or /maestro-plan --gaps |
+| E004 | Overlay validation failed after 2 retries | Review JSON manually |
+| W001 | Some signals skipped (code bugs) | Route to appropriate fix command |
+| W002 | Target command has >= 3 existing overlays | Consider consolidating |
 </error_codes>
 
 <success_criteria>
-- [ ] Signal sources resolved and signals collected
-- [ ] Each signal classified: command deficiency vs. code bug (only command deficiencies proceed)
-- [ ] Signals mapped to target command + section + mode
-- [ ] Pristine command sources read to verify sections and check existing overlays
-- [ ] Section map with injection points shown and confirmed by user
-- [ ] Overlay JSON written to `~/.maestro/overlays/amend-{slug}.json`
-- [ ] Supplementary docs written to `~/.maestro/overlays/docs/` if needed
-- [ ] `maestro overlay add` exited successfully for each overlay
-- [ ] Target command files contain `<!-- maestro-overlay:amend-{slug}#N hash=... -->` markers
-- [ ] Report shown with overlay details, source traceability, and skipped signals
-- [ ] Skipped code-bug signals routed to appropriate alternative command
+- [ ] Signals classified: command deficiency vs code bug
+- [ ] Pristine command sources read to verify injection points
+- [ ] Section map with injection points confirmed by user
+- [ ] Overlay JSON installed successfully; command files contain overlay markers
+- [ ] Skipped code-bug signals routed to alternatives
 </success_criteria>

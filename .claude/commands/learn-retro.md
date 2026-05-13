@@ -12,289 +12,146 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Unified retrospective that combines git activity analysis and decision quality evaluation into a single command with lens-based selection. Works on raw git history and wiki/spec data — does not require completed phase artifacts (unlike `quality-retrospective`).
+Unified retrospective combining git activity analysis and decision quality evaluation. Works on raw git history and wiki/spec data. Two lenses (git, decision), usable independently or together.
 
-Two lenses, usable independently or together:
-- **git**: Commit metrics, session detection, per-author breakdown, file hotspots, trend tracking
-- **decision**: Decision tracing across wiki/specs/git, multi-perspective evaluation, lifecycle classification
-
-All insights persist to `.workflow/knowhow/specs/learnings.md` as `<spec-entry>` blocks for cross-session queryability via `manage-learn`.
+All insights persist to `specs/learnings.md` as `<spec-entry>` blocks.
 </purpose>
 
 <context>
-Arguments: $ARGUMENTS
+$ARGUMENTS — lens selection and scope flags.
 
-**Lens selection:**
-- `--lens git` — Git activity retrospective only
-- `--lens decision` — Decision evaluation only
-- `--lens all` — Both lenses (default)
+**Lens**: `--lens git` | `--lens decision` | `--lens all` (default: all)
 
-**Git lens flags:**
-- `--days N` — Time window in days (default: 7)
-- `--author <name>` — Filter commits by author name (substring match)
-- `--area <path>` — Scope to files under a specific directory
-- `--compare` — Compare against the previous retro report if one exists
+**Git lens flags**: `--days N` (default: 7), `--author <name>`, `--area <path>`, `--compare` (vs prior retro)
+**Decision lens flags**: `--phase N`, `--tag <tag>`, `--id <id>` (single decision by wiki/INS id)
 
-**Decision lens flags:**
-- `--phase N` — Decisions from phase N's context and related specs
-- `--tag <tag>` — Decisions tagged with specific tag in wiki/specs
-- `--id <id>` — Single decision by wiki ID or specs/learnings.md INS-id
+**Storage write**:
+- `.workflow/knowhow/KNW-retro-{date}.md` — unified report
+- `.workflow/knowhow/KNW-retro-{date}.json` — structured metrics
+- `specs/learnings.md` — appended `<spec-entry>` blocks (source: retro-git / retro-decision)
 
-**Storage written:**
-- `.workflow/knowhow/KNW-retro-{YYYY-MM-DD}.md` — Unified human-readable report
-- `.workflow/knowhow/KNW-retro-{YYYY-MM-DD}.json` — Structured metrics (machine-readable)
-- `.workflow/knowhow/specs/learnings.md` — Appended `<spec-entry>` blocks (source: "retro-git" or "retro-decision")
-
-**Storage read:**
-- `.workflow/state.json` — Current phase context (optional)
-- `.workflow/knowhow/KNW-retro-*.json` — Prior retro for trend comparison
-- `.workflow/knowhow/specs/learnings.md` — Existing insights for dedup
-- `maestro wiki list --type spec --json` — Spec entries (decision lens)
-- `.workflow/specs/architecture-constraints.md` — Documented architectural decisions (decision lens)
-- Phase context with Locked/Free/Deferred decisions (decision lens) — resolve via `state.json.artifacts[]` scratch paths
+**Storage read**: git history, `.workflow/state.json`, prior `KNW-retro-*.json`, `specs/learnings.md`, wiki specs, `architecture-constraints.md`, phase context files
 </context>
 
-<execution>
+<state_machine>
 
-### Stage 1: Parse Arguments & Select Lenses
-- Parse `--lens` flag: `git`, `decision`, or `all` (default: `all`)
-- Extract lens-specific flags
-- Check `.workflow/knowhow/` exists; bootstrap if missing
+<states>
+S_PARSE       — 解析 lens + flags                           PERSIST: —
+S_GIT         — git 活动分析（lens=git/all 时）              PERSIST: metrics
+S_DECISION    — 决策质量评估（lens=decision/all 时）         PERSIST: evaluations
+S_REPORT      — 生成统一报告                                 PERSIST: .md + .json
+S_PERSIST     — 写 spec-entry 块                             PERSIST: specs/learnings.md
+</states>
 
-Display banner:
-```
-============================================================
-  LEARN RETRO
-============================================================
-  Lens:    {git | decision | all}
-  Scope:   {days/author/area for git} {phase/tag/id for decision}
-```
+<transitions>
 
----
+S_PARSE:
+  → S_GIT         WHEN: lens == git OR all               DO: ensure .workflow/knowhow/ exists (mkdir -p)
+  → S_DECISION    WHEN: lens == decision                  DO: ensure .workflow/knowhow/ exists (mkdir -p)
 
-### Stage 2: Git Lens (skip if --lens decision)
+S_GIT:
+  → S_DECISION    WHEN: lens == all                          DO: A_GIT_ANALYSIS
+  → S_REPORT      WHEN: lens == git                          DO: A_GIT_ANALYSIS
 
-#### 2a: Gather Raw Data (parallel git commands)
-Run ALL these git commands in parallel:
+S_DECISION:
+  → S_REPORT      DO: A_DECISION_ANALYSIS
 
+S_REPORT:
+  → S_PERSIST     DO: write KNW-retro-{date}.md + .json
+
+S_PERSIST:
+  → END           DO: append insights to specs/learnings.md via `maestro spec add learning`
+  RULE: INS-id = hash(lens + metric_or_decision_id + date) for cross-session stability
+
+</transitions>
+
+<actions>
+
+### A_GIT_ANALYSIS
+
+**Parallel git commands**:
 ```bash
-# Commit stats with author, timestamp, subject, files changed
-git log --since="<start-date>T00:00:00" --format="%H|%aN|%ae|%ai|%s" --shortstat
-
-# Per-commit numstat for test vs production LOC split
-git log --since="<start-date>T00:00:00" --format="COMMIT:%H|%aN" --numstat
-
-# Timestamps for session detection (sorted)
-git log --since="<start-date>T00:00:00" --format="%at|%aN|%ai|%s" | sort -n
-
-# File hotspots (most frequently changed files)
-git log --since="<start-date>T00:00:00" --format="" --name-only | grep -v '^$' | sort | uniq -c | sort -rn | head -20
-
-# Per-author commit counts
-git shortlog --since="<start-date>T00:00:00" -sn --no-merges
+git log --since="{start}" --format="%H|%aN|%ae|%ai|%s" --shortstat
+git log --since="{start}" --format="COMMIT:%H|%aN" --numstat
+git log --since="{start}" --format="%at|%aN|%ai|%s" | sort -n
+git log --since="{start}" --format="" --name-only | grep -v '^$' | sort | uniq -c | sort -rn | head -20
+git shortlog --since="{start}" -sn --no-merges
 ```
+Apply --author and --area filters.
 
-Apply `--author` and `--area` filters if provided.
+**Compute metrics**:
 
-#### 2b: Compute Metrics
-| Metric | Computation |
-|--------|-------------|
-| Commits | Count of non-merge commits |
-| Contributors | Unique author count |
-| Total insertions / deletions | Sum from shortstat |
-| Net LOC | insertions - deletions |
-| Test LOC (insertions) | Sum insertions for test files from numstat |
-| Test ratio | test_insertions / total_insertions x 100% |
-| Churn rate | Files changed >2 times / total unique files |
-| Active days | Distinct dates with commits |
+| Metric | Formula |
+|--------|---------|
+| Test ratio | test_insertions / total_insertions * 100% |
+| Churn rate | files changed >2x / total unique files |
+| Sessions | Cluster commits by >2hr gaps in timestamps |
+| LOC/session-hour | net_loc / total_session_hours |
 
-#### 2c: Detect Work Sessions
-Cluster commits by >2hr gaps in timestamps:
-- Per session: start time, end time, duration, commit count, primary focus area
-- Compute: total sessions, avg session duration, avg LOC/session-hour
+**Per-author breakdown**: commits, LOC, top 3 areas, test ratio, session count.
 
-#### 2d: Per-Author Breakdown
-For each author:
-- Commit count, LOC added/removed, top 3 file areas
-- Test ratio (their test LOC / their total LOC)
-- Session count and patterns
+**Trend** (if --compare or prior KNW-retro-*.json exists): compute deltas, flag >20% changes.
 
-#### 2e: Trend Comparison (if --compare or prior report exists)
-- Find most recent `.workflow/knowhow/KNW-retro-*.json`
-- Compute deltas: commits, LOC, test ratio, churn rate, session count
-- Flag significant changes (>20% delta) as trend highlights
+**Distill insights**: high churn files (instability), low test ratio areas (<20%), session patterns, area drift vs roadmap.
 
-#### 2f: Distill Git Insights
-- **High churn files** (changed >3 times): instability signal
-- **Low test ratio areas** (<20%): testing gap
-- **Session patterns**: scattered vs deep sessions
-- **Area drift**: commits not aligned with current roadmap phase
+### A_DECISION_ANALYSIS
 
-Each insight: title, description, category (pattern/antipattern/technique), tags, confidence.
-
----
-
-### Stage 3: Decision Lens (skip if --lens git)
-
-#### 3a: Collect Decisions (parallel)
+**Collect** (parallel):
 ```bash
 maestro wiki search "decision" --json
 maestro wiki list --type spec --json
-git log --oneline --all --grep="decision\|chose\|decided\|architecture" -20
+git log --oneline --all --grep="decision\|chose\|decided" -20
 ```
+Plus: architecture-constraints.md, phase context Locked/Deferred sections, specs/learnings.md.
+Apply --phase/--tag/--id filters.
 
-Also read:
-- `.workflow/specs/architecture-constraints.md` — grep for `<spec-entry` blocks with `roles="plan"`
-- Phase context files — resolve via `state.json.artifacts[]` scratch paths — scan for "Locked:", "Deferred:" sections
-- `.workflow/knowhow/specs/learnings.md` — filter entries with `keywords` containing "decision"
+**Build registry** per decision: id, title, source, date, rationale, alternatives, phase, implementation_evidence [file paths].
 
-Apply scope filter (--phase, --tag, --id).
+**Evaluate** — spawn 3 Agents in single message:
 
-#### 3b: Build Decision Registry
-Per decision:
-```json
-{
-  "id": "source id",
-  "title": "what was decided",
-  "source": "wiki|spec|phase-context|knowhow|git",
-  "date": "when decided",
-  "rationale": "why",
-  "alternatives": "what was considered",
-  "phase": "which phase",
-  "implementation_evidence": ["file paths from git"]
-}
-```
+| Agent | Dimension | Grades |
+|-------|-----------|--------|
+| Technical Soundness | Implementation matches intent? Context changed? | sound / degraded / violated |
+| Cost Assessment | Complexity added? Coupling/debt? | low-cost / acceptable / expensive / debt-creating |
+| Alternative Hindsight | Right call with current knowledge? Reversible? | confirmed / questionable / should-revisit |
 
-#### 3c: Multi-Perspective Evaluation
-Spawn 3 Agents in a single message:
+**Classify lifecycle**:
 
-**Agent 1 — Technical Soundness:**
-- Does implementation match stated intent?
-- Has technical context changed since decision was made?
-- Grade: sound / degraded / violated
-
-**Agent 2 — Cost Assessment:**
-- What complexity did this decision add?
-- Is it creating coupling or tech debt?
-- Grade: low-cost / acceptable / expensive / debt-creating
-
-**Agent 3 — Alternative Hindsight:**
-- With what we know now, was this the right call?
-- Would reversing be feasible?
-- Grade: confirmed / questionable / should-revisit
-
-#### 3d: Classify Decision Lifecycle
 | Status | Criteria |
 |--------|---------|
-| **Validated** | Sound + Low/Acceptable cost + Confirmed |
-| **Aging** | Sound but Expensive + Confirmed |
-| **Questionable** | Degraded or Violated + Questionable |
-| **Stale** | Any + Should-revisit |
-| **Reversed** | Code contradicts the decision |
+| Validated | sound + low/acceptable + confirmed |
+| Aging | sound + expensive + confirmed |
+| Questionable | degraded/violated + questionable |
+| Stale | any + should-revisit |
+| Reversed | code contradicts decision |
 
-#### 3e: Generate Recommendations
-- **Aging**: flag for tech debt review
-- **Questionable**: create issue for investigation
-- **Stale**: suggest decision refresh
-- **Reversed**: suggest documenting the reversal
+**Recommend**: Aging → tech debt review, Questionable → create issue, Stale → refresh, Reversed → document reversal.
 
----
+</actions>
 
-### Stage 4: Unified Report
-
-Write `.workflow/knowhow/KNW-retro-{date}.md`:
-
-```markdown
-# Retrospective: {date}
-**Lenses:** {active lenses} | **Period:** {days}d
-
-## Git Activity  (if git lens active)
-### Metrics
-| Metric | Value | Trend |
-|--------|-------|-------|
-| Commits | N | +/-% |
-| ...
-
-### Work Sessions
-{session timeline}
-
-### File Hotspots
-{top 10 most-changed files}
-
-### Per-Author
-{author breakdown table}
-
-## Decision Health  (if decision lens active)
-### Dashboard
-| Status | Count | Decisions |
-|--------|-------|-----------|
-| Validated | N | {list} |
-| Aging | N | {list} |
-| ...
-
-### Per-Decision Evaluation
-{detailed evaluations}
-
-## Combined Insights
-{merged insights from both lenses, deduplicated}
-
-## Recommended Actions
-1. {action}: {reason}
-```
-
-Write `.workflow/knowhow/KNW-retro-{date}.json` with structured data.
-
----
-
-### Stage 5: Persist
-1. Write report files
-2. Append insights as `<spec-entry>` blocks to `specs/learnings.md` via `maestro spec add learning --body "<content>" --keywords "<kw>"`:
-   - Git insights: source="retro-git", roles per insight type
-   - Decision insights: source="retro-decision", roles="plan" (merge "decision" into keywords)
-   - Stable INS-id from `hash(lens + metric_or_decision + date)`
-4. Display summary
-
-**Next-step routing:**
-- Browse insights → `/manage-learn list --tag retro`
-- Deep dive on high-churn file → `/learn-follow <path>`
-- Fix test gaps → `/quality-auto-test <area>`
-- Create issue for questionable decision → `/manage-issue create ...`
-- Investigate stale decision → `/learn-investigate <question>`
-- Full phase retrospective → `/quality-retrospective`
-</execution>
+</state_machine>
 
 <error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Not inside a git repository (git lens) | Navigate to a git repo directory |
-| E002 | error | No commits found in time window (git lens) | Increase --days or check filters |
-| E003 | error | No decisions found in any source (decision lens) | Check wiki/specs content, or provide --id |
-| E004 | error | --id not found in wiki or knowhow (decision lens) | Verify the decision ID exists |
-| W001 | warning | `.workflow/knowhow/` not found, bootstrapping | Auto-created; proceed normally |
-| W002 | warning | No prior retro report for comparison | Skip trend section; first retro establishes baseline |
-| W003 | warning | One perspective agent failed — partial evaluation (decision lens) | Proceed with available perspectives |
-| W004 | warning | No git implementation evidence for a decision | Evaluation is theoretical only |
-| W005 | warning | Phase context files not found (decision lens) | Skip phase-context decisions |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | Not in git repo (git lens) | Navigate to git repo |
+| E002 | No commits in window (git lens) | Increase --days |
+| E003 | No decisions found (decision lens) | Check wiki/specs or provide --id |
+| E004 | --id not found in wiki or knowhow | Verify the decision ID exists |
+| W002 | No prior retro for comparison | Skip trend; first retro = baseline |
+| W003 | One perspective agent failed | Proceed with available perspectives |
 </error_codes>
 
 <success_criteria>
-- [ ] Lens selection parsed correctly (git / decision / all)
-- [ ] Git lens (if active):
-  - [ ] All git commands executed successfully
-  - [ ] Metrics computed: commits, LOC, test ratio, churn rate, sessions
-  - [ ] Sessions detected with >2hr gap clustering
-  - [ ] Per-author breakdown generated
-  - [ ] Trend comparison computed if prior report exists
-  - [ ] At least 1 actionable insight distilled
-- [ ] Decision lens (if active):
-  - [ ] Decisions collected from available sources
-  - [ ] Scope filter applied correctly
-  - [ ] 3 perspective agents spawned in parallel
-  - [ ] Each decision classified by lifecycle status
-  - [ ] Recommendations generated for non-Validated decisions
-- [ ] Unified report written to `KNW-retro-{date}.md`
-- [ ] Structured data written to `KNW-retro-{date}.json`
-- [ ] `specs/learnings.md` appended with `<spec-entry>` blocks (stable INS-ids)
-- [ ] No files modified outside `.workflow/knowhow/`
-- [ ] Summary displayed with next-step routing
+- [ ] Git lens: metrics computed (commits, LOC, test ratio, churn, sessions), insights distilled
+- [ ] Decision lens: decisions collected, 3 agents evaluated in parallel, lifecycle classified
+- [ ] Unified report + structured JSON written
+- [ ] specs/learnings.md appended with stable INS-ids
 </success_criteria>
+
+<next_step_routing>
+- Browse insights → `/manage-learn list --tag retro`
+- Deep dive churn → `/learn-follow <path>`
+- Fix test gaps → `/quality-auto-test <area>`
+- Investigate stale decision → `/learn-investigate <question>`
+</next_step_routing>

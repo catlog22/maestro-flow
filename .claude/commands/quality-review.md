@@ -48,20 +48,11 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 
 Extract conclusions from related artifacts that may affect this review. Pass as prior quality context to reviewer agents — avoid redundant work, focus on gaps and regressions.
 
-### Pre-load context (before dispatching reviewer agents)
-
-1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, load component boundaries and layer rules. Pass as `codebase_context` to reviewer agents (especially architecture dimension).
-2. **Wiki constraints**: Run `maestro wiki search "architecture constraint" --json 2>/dev/null`. If results found, pass as `wiki_context` to reviewer agents for evaluating code against documented decisions.
-3. **Review specs + tools**: Run `maestro spec load --category review` to load review standards, checklists, AND discoverable knowhow tools. Pass as `specs_content` to all reviewer agents.
-4. All are optional — proceed without if unavailable.
-
-### Role Knowledge
-1. Browse accumulated knowledge for this role:
-   `maestro wiki list --category review`
-2. Analyze the index, identify entries relevant to the current task
-3. Load selected documents:
-   `maestro wiki load <id1> [id2] [id3...]`
-4. Review loaded knowledge before proceeding
+### Pre-load (optional, proceed without)
+- Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → component boundaries, layer rules
+- Wiki constraints: `maestro wiki search "architecture constraint" --json` → documented decisions
+- Specs: `maestro spec load --category review` → review standards, checklists, knowhow tools
+- Role knowledge: `maestro wiki list --category review` → select relevant → `maestro wiki load`
 
 **Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
 </context>
