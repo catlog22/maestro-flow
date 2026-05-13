@@ -266,9 +266,12 @@ export class CodexCliAdapter extends BaseAgentAdapter {
 
     // Stderr handling: Codex sends warnings, reasoning, and progress to stderr.
     // Try JSON parse first to detect structured messages (warnings/errors).
+    // Stderr activity proves the process is alive (e.g. waiting for MCP tool
+    // response), so reset the stale-stream heartbeat to avoid false timeouts.
     child.stderr.on('data', (chunk: Buffer) => {
       const text = chunk.toString().trim();
       if (text.length === 0) return;
+      monitor.heartbeat();
 
       for (const line of text.split('\n')) {
         const trimmed = line.trim();

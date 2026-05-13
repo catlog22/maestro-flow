@@ -17,9 +17,21 @@ Available CLI endpoints are dynamically defined by the config file
 
 - **Prefer `mcp__ide__getDiagnostics`** for code error checking over shell-based TypeScript compilation
 
-## Knowledge Capture
+## Knowledge System
 
-- **Spec writes** → always `<spec-entry>` closed-tag format with `category`, `keywords`, `date`, `source`. Never raw Markdown. Route through `spec-add` when possible.
-- **Capture signal** → when execution surfaces non-obvious knowledge (plan deviation, retry pattern, root cause, constraint violation), ask user once whether to persist it. Match category to content: decisions→`arch`, pitfalls→`debug`/`learning`, patterns→`coding`, rules→`quality`.
-- **Promotion** → at milestone close, scan learnings for repeated keywords (≥2 entries) and offer to graduate them into formal conventions.
-- **Traceability** → every entry needs a source anchor: `file:line`, `INS-{id}`, commit, or phase path.
+### Search — Query Before Acting
+
+When tackling unfamiliar domains or cross-cutting concerns, search existing knowledge first:
+- `maestro spec load --category <cat>` — load rules by category (coding/arch/debug/test/review/learning)
+- `maestro spec load --keyword <kw>` — cross-category keyword match
+- `maestro wiki search "<query>"` — full-text search across all knowhow
+- `maestro wiki list --category <cat>` → `maestro wiki load <id>` — browse then load full detail
+
+### Record — Capture Knowledge
+
+When execution surfaces non-obvious knowledge (decisions, root causes, pitfalls, patterns), persist it:
+
+- **Spec entry** (short rule/constraint) → `/spec-add <category> "title" "content" --keywords kw1,kw2`
+- **Knowhow document** (detailed recipe/template/decision/reference) → `/manage-knowhow-capture`
+
+Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`learning`, rules→`review`, test strategy→`test`.

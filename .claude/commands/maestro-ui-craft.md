@@ -68,7 +68,6 @@ Explicit `--chain` overrides routing. Ambiguous + no `-y` → AskUserQuestion.
 <state_machine>
 
 <states>
-S_DETECT     — 检测 impeccable skill 是否可用    PERSIST: —
 S_PARSE      — 解析参数、意图分类、chain 选择    PERSIST: —
 S_SETUP      — 加载 context、检查 PRODUCT.md    PERSIST: —
 S_CHAIN      — 按序执行 chain 步骤              PERSIST: step progress
@@ -78,10 +77,6 @@ S_REPORT     — 最终报告 + 趋势                  PERSIST: final scores
 </states>
 
 <transitions>
-
-S_DETECT:
-  → S_PARSE     WHEN: skill "impeccable" available in harness (check system skill list)
-  → END         WHEN: not available → E001
 
 S_PARSE:
   → S_SETUP     WHEN: chain selected (explicit or routed)
@@ -133,18 +128,7 @@ S_REPORT:
 
 <execution>
 
-## 1. Detect Impeccable
-
-Check if "impeccable" appears in the system's available skill list (auto-discovered by harness).
-The skill list is provided in `<system-reminder>` tags — search for `impeccable` in the skill descriptions.
-
-```
-"impeccable" in available skills?
-  Yes → continue
-  No  → E001: "impeccable skill 未安装。请先在目标项目中安装 impeccable。"
-```
-
-## 2. Parse & Route
+## 1. Parse & Route
 
 1. If `--chain` present → use directly
 2. Otherwise → match $ARGUMENTS against intent patterns
@@ -154,13 +138,13 @@ The skill list is provided in `<system-reminder>` tags — search for `impeccabl
 
 Create TodoWrite with chain steps.
 
-## 3. Setup Context
+## 2. Setup Context
 
 1. If chain starts with `teach` → execute it first, impeccable handles context loading internally
 2. Otherwise → invoke `Skill({ skill: "impeccable" })` with no args to trigger setup (context + register)
 3. If impeccable reports PRODUCT.md missing → prepend teach, execute, then resume
 
-## 4. Execute Chain
+## 3. Execute Chain
 
 For each step in chain, sequentially:
 
@@ -176,7 +160,7 @@ Execute via: `Skill({ skill: "impeccable", args: "{command} {target}" })`
 - After `craft` completes → the build exists, ready for evaluation
 - Gate steps (critique/audit) → transition to quality gate logic
 
-## 5. Quality Gate
+## 4. Quality Gate
 
 When chain reaches a gate step (critique or audit):
 
@@ -240,7 +224,7 @@ audit_pass    = (score >= threshold * 0.5) AND (P0_count == 0)
 ```
 → force advance to next chain step
 
-## 6. Final Report
+## 5. Final Report
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -313,7 +297,6 @@ These are structural/interactive — never picked by the refine loop:
 </error_codes>
 
 <success_criteria>
-- [ ] Impeccable skill detected in target project
 - [ ] Intent classified and chain type selected
 - [ ] Context loaded (PRODUCT.md present or taught)
 - [ ] All chain steps executed via Skill("impeccable", ...)

@@ -600,11 +600,13 @@ export function registerDelegateCommand(program: Command): void {
           console.error(`Execution ${id} is still running — no output yet.`);
         } else {
           console.error(`No output available for: ${id}`);
+          console.error(`Tip: run "maestro delegate tail ${id}" to see full event history.`);
         }
         process.exit(1);
       }
 
       process.stdout.write(output);
+      if (!output.endsWith('\n')) process.stdout.write('\n');
     });
 
   delegate

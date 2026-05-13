@@ -281,6 +281,16 @@ export class CliHistoryStore {
       ? this.extractLastReply(entries)
       : this.extractFullOutput(entries, includeAll);
 
+    // Append error summary so critical failures (e.g. MCP 413, stream stale)
+    // are visible regardless of extraction mode (lastReply or fullOutput).
+    const errors = entries
+      .filter((e) => e.type === 'error')
+      .map((e) => String(e.message ?? e.content ?? ''));
+    if (errors.length > 0) {
+      const deduped = [...new Set(errors)];
+      result += `\n\n--- Errors (${deduped.length}) ---\n${deduped.join('\n')}`;
+    }
+
     if (offset !== undefined && offset > 0) {
       result = result.slice(offset);
     }

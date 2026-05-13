@@ -67,11 +67,7 @@ Explicit `--chain` overrides routing. Ambiguous + no `-y` → `request_user_inpu
 
 <execution>
 
-## 1. Detect Impeccable
-
-Check if "impeccable" is available as a skill in the current harness. If not available → error: "impeccable skill not installed."
-
-## 2. Parse & Route
+## 1. Parse & Route
 
 1. If `--chain` present → use directly
 2. Otherwise → match $ARGUMENTS against intent patterns
@@ -87,13 +83,13 @@ Check if "impeccable" is available as a skill in the current harness. If not ava
    ]}] }
    ```
 
-## 3. Setup Context
+## 2. Setup Context
 
 1. If chain starts with `teach` → execute it first, impeccable handles context loading internally
 2. Otherwise → invoke `$impeccable` with no args to trigger setup (context + register)
 3. If impeccable reports PRODUCT.md missing → prepend teach, execute, then resume
 
-## 4. Execute Chain
+## 3. Execute Chain
 
 For each step in chain, sequentially:
 
@@ -107,7 +103,7 @@ Step {n}/{total}: $impeccable {command} {target}
 - After `craft` completes → the build exists, ready for evaluation
 - Gate steps (critique/audit) → transition to quality gate logic
 
-## 5. Quality Gate
+## 4. Quality Gate
 
 When chain reaches a gate step (critique or audit):
 
@@ -158,7 +154,7 @@ audit_pass    = (score >= threshold * 0.5) AND (P0_count == 0)
 
 → force advance to next chain step with warning
 
-## 6. Final Report
+## 5. Final Report
 
 Present summary: chain type, critique score with trend, audit score, loop count, commands executed, pass/partial status.
 
@@ -217,7 +213,6 @@ When critique/audit findings lack explicit "Suggested command", map by category:
 </error_codes>
 
 <success_criteria>
-- [ ] Impeccable skill detected
 - [ ] Intent classified and chain type selected
 - [ ] Context loaded (PRODUCT.md present or taught)
 - [ ] All chain steps executed via $impeccable
