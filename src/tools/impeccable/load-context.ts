@@ -19,7 +19,7 @@ export interface ContextResult {
 const PRODUCT_NAMES = ['PRODUCT.md', 'Product.md', 'product.md'];
 const DESIGN_NAMES = ['DESIGN.md', 'Design.md', 'design.md'];
 const LEGACY_NAMES = ['.impeccable.md'];
-const FALLBACK_DIRS = ['.agents/context', 'docs'];
+const FALLBACK_DIRS = ['.workflow/impeccable', '.agents/context', 'docs'];
 
 export function resolveContextDir(cwd = process.cwd()): string {
   // 1. Explicit override

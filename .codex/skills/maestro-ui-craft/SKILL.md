@@ -1,7 +1,7 @@
 ---
 name: maestro-ui-craft
 description: Chain maestro-impeccable commands with intelligent routing and quality gate loops for automated UI production
-argument-hint: "<intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [-y]"
+argument-hint: "<intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [-y] [-c]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, request_user_input
 ---
 <purpose>
@@ -13,18 +13,30 @@ maestro-impeccable has 23 commands across 6 categories -- this command chains th
 with quality gates that loop until design quality meets the threshold.
 
 Prerequisite: maestro-impeccable skill available (auto-discovered by harness).
+
+Session: `.workflow/.maestro/ui-craft-{YYYYMMDD-HHmmss}/status.json`
 </purpose>
+
+<invariants>
+1. **Session before execution** -- status.json created before any chain step runs
+2. **All steps via Skill** -- every impeccable command dispatched through `$maestro-impeccable`
+3. **Gate scores drive loops** -- refine loop auto-selects commands from P0/P1 findings, never from hardcoded lists
+4. **Interactive gates respected** -- teach, shape, craft retain their user gates; never suppress
+</invariants>
 
 <context>
 $ARGUMENTS -- intent description or target path, with optional flags.
 
-**Usage**:
+**Keywords:** `continue`/`next` → resume previous session
+
+**Usage:**
 
 ```bash
 $maestro-ui-craft "create a landing page"
 $maestro-ui-craft "improve the dashboard" --chain improve
 $maestro-ui-craft "add animations" --chain enhance --enhance animate
 $maestro-ui-craft "production ready" --chain harden
+$maestro-ui-craft -c                               # resume previous session
 $maestro-ui-craft -y "create pricing page --chain build"
 ```
 
@@ -33,6 +45,7 @@ $maestro-ui-craft -y "create pricing page --chain build"
 - `--enhance <cmd>` -- Specific enhance command (animate|colorize|typeset|layout|delight|overdrive|bolder)
 - `--threshold <score>` -- Critique pass threshold (default: 26/40). Audit threshold auto-computed as threshold*0.5
 - `--max-loops <n>` -- Maximum quality gate iterations (default: 3)
+- `-c` / `--continue` -- Resume previous ui-craft session
 - `-y` -- Auto mode: auto-select at ambiguous routing, skip confirmations where maestro-impeccable allows
 </context>
 
@@ -65,15 +78,109 @@ Explicit `--chain` overrides routing. Ambiguous + no `-y` → `request_user_inpu
 
 </chains>
 
+<state_machine>
+
+<states>
+S_PARSE      -- parse args, intent classification, chain selection       PERSIST: --
+S_RESUME     -- scan existing ui-craft sessions, resume execution         PERSIST: --
+S_SETUP      -- load context, check PRODUCT.md                           PERSIST: --
+S_CREATE     -- create session + status.json                              PERSIST: session (full)
+S_CHAIN      -- execute chain steps in sequence                           PERSIST: step progress, executed commands
+S_GATE       -- quality gate: parse scores, decide                        PERSIST: scores, loop count
+S_REFINE     -- execute auto-selected refine commands                     PERSIST: refine commands, loop state
+S_REPORT     -- final report + trend                                      PERSIST: final scores, status
+</states>
+
+<transitions>
+
+S_PARSE:
+  → S_RESUME     WHEN: -c / --continue flag OR keyword "continue"/"next"
+  → S_SETUP      WHEN: chain selected (explicit or routed)
+  → S_PARSE      WHEN: ambiguous AND not -y          DO: request_user_input
+  → END          WHEN: no intent AND no target → E002
+
+S_RESUME:
+  → S_CHAIN      WHEN: session found                  DO: A_LOCATE_SESSION
+  → END          WHEN: no session found → E005
+
+S_SETUP:
+  → S_CREATE     DO: A_LOAD_CONTEXT
+
+S_CREATE:
+  → S_CHAIN      DO: A_CREATE_SESSION
+
+S_CHAIN:
+  → S_GATE       WHEN: current step is gate command (critique/audit)
+  → S_CHAIN      WHEN: step is normal command → execute → advance
+  → S_REPORT     WHEN: all steps complete
+
+S_GATE:
+  → S_CHAIN      WHEN: PASS (score >= threshold AND P0 == 0) → advance
+  → S_REFINE     WHEN: FAIL (score < threshold OR P0 > 0)
+  → S_CHAIN      WHEN: max loops exceeded → W002 → force advance
+
+S_REFINE:
+  → S_GATE       DO: execute auto-selected commands → re-run gate command
+                  GUARD: loop_count < max_loops
+
+S_REPORT:
+  → END          DO: A_FINAL_REPORT
+
+</transitions>
+
+<actions>
+
+### A_LOCATE_SESSION
+
+1. Scan `.workflow/.maestro/ui-craft-*/status.json`, filter `status == "running"`, sort DESC
+2. Take most recent; load into context as current session
+3. Resume from `current_step` position
+
+### A_LOAD_CONTEXT
+
+1. Trigger impeccable context loading: `$maestro-impeccable teach`
+   - Impeccable's own setup auto-discovers and loads PRODUCT.md / DESIGN.md from `.workflow/impeccable/`
+   - If PRODUCT.md missing/placeholder, impeccable teach handles the interview
+2. If teach was not in the chain but PRODUCT.md is missing:
+   - Prepend `teach` to chain start
+   - Announce: W001
+3. Context is now loaded for subsequent commands
+
+### A_CREATE_SESSION
+
+1. Read `.workflow/state.json` for project context (phase, milestone)
+2. Create `.workflow/.maestro/ui-craft-{YYYYMMDD-HHmmss}/status.json`:
+   ```json
+   { "session_id": "ui-craft-{ts}", "source": "ui-craft", "intent": "...",
+     "chain_type": "build|improve|enhance|harden|live", "target": "...",
+     "auto_mode": false, "threshold": 26, "max_loops": 3,
+     "steps": [{ "index": 0, "command": "shape", "status": "pending" }],
+     "gate_history": [], "loop_count": 0,
+     "current_step": 0, "status": "running",
+     "created_at": "ISO-8601", "updated_at": "ISO-8601" }
+   ```
+3. Write status.json before executing any step
+
+### A_FINAL_REPORT
+
+1. Read critique trend if available (impeccable's critique persists snapshots automatically)
+2. Update status.json with `status: "completed"` and final scores
+3. Present summary table with scores, iterations, commands executed
+
+</actions>
+
+</state_machine>
+
 <execution>
 
 ## 1. Parse & Route
 
-1. If `--chain` present → use directly
-2. Otherwise → match $ARGUMENTS against intent patterns
-3. If `--enhance` present → chain = enhance, cmd = --enhance value
-4. For enhance chain without `--enhance` → infer from intent
-5. Ambiguous + no `-y` → `request_user_input`:
+1. If `-c` / `--continue` or keyword "continue"/"next" → S_RESUME
+2. If `--chain` present → use directly
+3. Otherwise → match $ARGUMENTS against intent patterns
+4. If `--enhance` present → chain = enhance, cmd = --enhance value
+5. For enhance chain without `--enhance` → infer from intent
+6. Ambiguous + no `-y` → `request_user_input`:
    ```json
    { "questions": [{ "id": "chain_select", "header": "Chain", "question": "Which workflow?", "options": [
      { "label": "Build (Recommended)", "description": "New UI from scratch: shape → craft → critique → refine → audit" },
@@ -89,7 +196,11 @@ Explicit `--chain` overrides routing. Ambiguous + no `-y` → `request_user_inpu
 2. Otherwise → invoke `$maestro-impeccable` with no args to trigger setup (context + register)
 3. If maestro-impeccable reports PRODUCT.md missing → prepend teach, execute, then resume
 
-## 3. Execute Chain
+## 3. Create Session
+
+Write `.workflow/.maestro/ui-craft-{ts}/status.json` with chain steps before any execution.
+
+## 4. Execute Chain
 
 For each step in chain, sequentially:
 
@@ -97,13 +208,15 @@ For each step in chain, sequentially:
 Step {n}/{total}: $maestro-impeccable {command} {target}
 ```
 
+After each step: update status.json `current_step` and step `status`.
+
 **Rules:**
 - `teach`, `shape`, `craft` are interactive -- do NOT suppress their user gates
 - After `teach` completes → re-run context loader for fresh PRODUCT.md
 - After `craft` completes → the build exists, ready for evaluation
 - Gate steps (critique/audit) → transition to quality gate logic
 
-## 4. Quality Gate
+## 5. Quality Gate
 
 When chain reaches a gate step (critique or audit):
 
@@ -123,7 +236,7 @@ From critique output, extract:
 - **score**: Nielsen's total (N/40) -- from "**Total** | | **N/40**" row
 - **P0_count**: count of `[P0]` tagged findings
 - **P1_count**: count of `[P1]` tagged findings
-- **suggested_commands**: list of "/maestro-impeccable <cmd>" from "Suggested command" fields
+- **suggested_commands**: list of "$maestro-impeccable <cmd>" from "Suggested command" fields
 
 From audit output, extract:
 - **score**: dimension total (N/20) -- from "**Total** | | **N/20**" row
@@ -149,14 +262,17 @@ audit_pass    = (score >= threshold * 0.5) AND (P0_count == 0)
 5. Execute each: `$maestro-impeccable {cmd} {target}`
 6. Re-run gate command (critique/audit)
 7. Increment loop_count
+8. Append to status.json `gate_history`
 
 ### 5f. On Max Loops Exceeded
 
 → force advance to next chain step with warning
 
-## 5. Final Report
+## 6. Final Report
 
 Present summary: chain type, critique score with trend, audit score, loop count, commands executed, pass/partial status.
+
+Update status.json: `status: "completed"`, `final_scores`, `completed_at`.
 
 If issues remain → suggest: "Run `$maestro-ui-craft --chain improve {target}` to continue iteration."
 
@@ -207,6 +323,7 @@ When critique/audit findings lack explicit "Suggested command", map by category:
 | E002 | error | No intent or target specified |
 | E003 | error | Invalid --chain type |
 | E004 | error | Invalid --enhance command |
+| E005 | error | Resume session not found |
 | W001 | warning | PRODUCT.md missing, prepending teach to chain |
 | W002 | warning | Max quality gate loops exceeded, forcing continue |
 | W003 | warning | Could not parse score from critique/audit output |
@@ -215,8 +332,10 @@ When critique/audit findings lack explicit "Suggested command", map by category:
 <success_criteria>
 - [ ] Intent classified and chain type selected
 - [ ] Context loaded (PRODUCT.md present or taught)
+- [ ] Session dir created with status.json before execution
 - [ ] All chain steps executed via $maestro-impeccable
 - [ ] Quality gate evaluated with parsed scores
 - [ ] Refine loop executed when gate failed (if applicable)
+- [ ] Gate history and scores persisted to status.json
 - [ ] Final report with scores and trend presented
 </success_criteria>

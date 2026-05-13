@@ -3696,7 +3696,7 @@ void main() {
   }
 
   // ---------------------------------------------------------------------------
-  // Design System Panel — visualizes the project's .impeccable/design.json sidecar
+  // Design System Panel — visualizes the project's .workflow/impeccable/design.json sidecar
   // ---------------------------------------------------------------------------
 
   const DESIGN_PREFS_KEY = 'impeccable-live-design-panel';
@@ -3708,7 +3708,7 @@ void main() {
     open: false,
     tab: 'visual',          // 'visual' | 'raw'
     parsed: null,           // parseDesignMd output (frontmatter + body sections)
-    sidecar: null,          // .impeccable/design.json v2 payload (extensions + components + narrative)
+    sidecar: null,          // .workflow/impeccable/design.json v2 payload (extensions + components + narrative)
     hasMd: false,
     hasSidecar: false,
     present: null,          // true/false once fetch resolves
@@ -4209,7 +4209,7 @@ void main() {
     box.className = 'stale';
     box.innerHTML = `
       <span class="stale-dot"></span>
-      <span class="stale-text"><strong>DESIGN.md is newer than .impeccable/design.json.</strong> Run <code>/maestro-impeccable document</code> to refresh the sidecar.</span>
+      <span class="stale-text"><strong>DESIGN.md is newer than .workflow/impeccable/design.json.</strong> Run <code>/maestro-impeccable document</code> to refresh the sidecar.</span>
     `;
     return box;
   }
@@ -4217,7 +4217,7 @@ void main() {
   function renderParsedMdCta() {
     const box = document.createElement('div');
     box.className = 'parsed-md-cta';
-    box.innerHTML = `<strong>Basic view</strong>This panel reads the tokens in your <code>DESIGN.md</code> frontmatter. Running <code>/maestro-impeccable document</code> also generates a <code>.impeccable/design.json</code> sidecar with your project's actual component snippets (button, input, nav) and tonal ramps, rendered live below the tokens.`;
+    box.innerHTML = `<strong>Basic view</strong>This panel reads the tokens in your <code>DESIGN.md</code> frontmatter. Running <code>/maestro-impeccable document</code> also generates a <code>.workflow/impeccable/design.json</code> sidecar with your project's actual component snippets (button, input, nav) and tonal ramps, rendered live below the tokens.`;
     return box;
   }
 
@@ -4677,7 +4677,7 @@ void main() {
 
   function cssSafe(v) {
     // Strip anything outside valid CSS value chars to prevent injection via
-    // .impeccable/design.json values rendered into inline style strings.
+    // .workflow/impeccable/design.json values rendered into inline style strings.
     return String(v).replace(/[<>"'`\n]/g, '');
   }
 

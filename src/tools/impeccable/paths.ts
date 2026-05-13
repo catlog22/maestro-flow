@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const IMPECCABLE_DIR = '.impeccable';
+export const IMPECCABLE_DIR = '.workflow/impeccable';
 export const LIVE_DIR = 'live';
 export const CRITIQUE_DIR = 'critique';
 

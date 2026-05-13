@@ -1,9 +1,9 @@
 # Teach Flow
 
-Gathers design context for a project and writes two complementary files at the project root:
+Gathers design context for a project and writes two complementary files under `.workflow/impeccable/`:
 
-- **PRODUCT.md** (strategic): root project file for register, target users, product purpose, brand personality, anti-references, strategic design principles. Answers "who/what/why".
-- **DESIGN.md** (visual): root project file for visual theme, color palette, typography, components, layout. Follows the [Google Stitch DESIGN.md format](https://stitch.withgoogle.com/docs/design-md/format/). Answers "how it looks".
+- **PRODUCT.md** (strategic): project design context file for register, target users, product purpose, brand personality, anti-references, strategic design principles. Answers "who/what/why". Stored at `.workflow/impeccable/PRODUCT.md`.
+- **DESIGN.md** (visual): project visual system file for color palette, typography, components, layout. Follows the [Google Stitch DESIGN.md format](https://stitch.withgoogle.com/docs/design-md/format/). Answers "how it looks". Stored at `.workflow/impeccable/DESIGN.md`.
 
 Every other impeccable command reads these files before doing any work.
 
@@ -128,7 +128,7 @@ product
 
 Register is either `brand` or `product` as a bare value. No prose, no commentary.
 
-Write to `PROJECT_ROOT/PRODUCT.md`. If `.impeccable.md` existed, the loader already renamed it; merge into that content rather than starting from scratch.
+Write to `.workflow/impeccable/PRODUCT.md`. If `.impeccable.md` existed, the loader already renamed it; merge into that content rather than starting from scratch.
 
 ## Step 5: Decide on DESIGN.md
 

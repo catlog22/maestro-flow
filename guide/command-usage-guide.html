@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maestro Command Reference</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:oklch(0.985 0.003 80);
+  --surface:oklch(0.995 0.001 80);
+  --border:oklch(0.88 0.01 80);
+  --border-hover:oklch(0.72 0.04 80);
+  --text:oklch(0.18 0.02 60);
+  --text-2:oklch(0.42 0.015 60);
+  --text-3:oklch(0.62 0.01 60);
+  --accent:oklch(0.52 0.13 55);
+  --accent-light:oklch(0.92 0.05 60);
+  --code-bg:oklch(0.96 0.008 260);
+  --code-text:oklch(0.28 0.04 260);
+  --cat-core:oklch(0.55 0.14 155);
+  --cat-manage:oklch(0.55 0.13 250);
+  --cat-quality:oklch(0.55 0.12 30);
+  --cat-spec:oklch(0.55 0.13 330);
+  --cat-learn:oklch(0.55 0.12 90);
+  --cat-wiki:oklch(0.55 0.12 200);
+  --radius:6px;
+  --mono:'SF Mono','Cascadia Code','Fira Code','JetBrains Mono',ui-monospace,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Helvetica Neue',sans-serif;
+  --serif:ui-serif,Georgia,'Times New Roman',serif;
+  --max-w:1200px;
+}
+html{font-size:16px;scroll-behavior:smooth}
+body{
+  font-family:var(--sans);
+  background:var(--bg);
+  color:var(--text);
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── Header ── */
+.site-header{
+  max-width:var(--max-w);
+  margin:0 auto;
+  padding:2.5rem 2rem 0.5rem;
+  display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;
+}
+.site-header h1{
+  font-size:1.5rem;
+  font-weight:700;
+  letter-spacing:-0.02em;
+  color:var(--text);
+}
+.site-header p{
+  font-size:0.875rem;
+  color:var(--text-3);
+  margin-top:0.25rem;
+}
+.header-right{display:flex;align-items:center;gap:0.75rem;flex-shrink:0}
+.search-box{
+  position:relative;
+}
+.search-box input{
+  font-family:var(--mono);
+  font-size:0.8rem;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:0.45rem 0.75rem 0.45rem 2rem;
+  color:var(--text);
+  width:220px;
+  outline:none;
+  transition:border-color .15s ease-out;
+}
+.search-box input:focus{border-color:var(--accent)}
+.search-box input::placeholder{color:var(--text-3)}
+.search-box::before{
+  content:'⌕';position:absolute;left:0.65rem;top:50%;transform:translateY(-50%);
+  font-size:0.85rem;color:var(--text-3);pointer-events:none;
+}
+.stats{
+  display:flex;gap:1.25rem;margin-top:0.75rem;
+}
+.stats span{
+  font-size:0.75rem;
+  color:var(--text-3);
+  font-variant-numeric:tabular-nums;
+}
+.stats b{
+  font-weight:600;
+  color:var(--text);
+}
+.cmd-card.hidden{display:none}
+.cat-section.hidden{display:none}
+.no-results{
+  display:none;
+  text-align:center;
+  padding:4rem 2rem;
+  color:var(--text-3);
+  font-size:0.9rem;
+}
+.no-results.show{display:block}
+
+/* ── Tabs ── */
+.tabs{
+  position:sticky;top:0;z-index:100;
+  background:oklch(0.985 0.003 80 / 0.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+}
+.tabs-inner{
+  max-width:var(--max-w);
+  margin:0 auto;
+  display:flex;gap:0;padding:0 2rem;
+}
+.tab-btn{
+  background:none;border:none;
+  font-family:var(--sans);
+  font-size:0.875rem;font-weight:500;
+  color:var(--text-3);
+  padding:0.875rem 1.25rem;
+  cursor:pointer;
+  position:relative;
+  transition:color .2s ease-out;
+}
+.tab-btn:hover{color:var(--text-2)}
+.tab-btn.active{color:var(--accent);font-weight:600}
+.tab-btn.active::after{
+  content:'';position:absolute;bottom:-1px;left:0;right:0;
+  height:2px;background:var(--accent);border-radius:1px;
+}
+
+/* ── Category Anchors ── */
+.cat-nav{
+  max-width:var(--max-w);margin:0 auto;
+  padding:0.75rem 2rem 1.25rem;
+  display:flex;gap:0.5rem;flex-wrap:wrap;
+}
+.cat-nav a{
+  font-size:0.75rem;font-weight:500;
+  color:var(--text-3);
+  text-decoration:none;
+  padding:0.25rem 0.6rem;
+  border:1px solid var(--border);
+  border-radius:20px;
+  transition:color .15s ease-out,border-color .15s ease-out,background .15s ease-out;
+}
+.cat-nav a:hover{
+  color:var(--text);
+  border-color:var(--border-hover);
+  background:var(--surface);
+}
+
+/* ── Tab Panels ── */
+.tab-panel{display:none;animation:fadeIn .3s ease-out}
+.tab-panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+.tab-content{
+  max-width:var(--max-w);
+  margin:0 auto;
+  padding:2rem;
+}
+
+/* ── Category Section ── */
+.cat-section{margin-bottom:3rem}
+.cat-header{
+  display:flex;align-items:center;gap:0.75rem;
+  margin-bottom:1.25rem;
+}
+.cat-bar{
+  width:3px;height:1.5rem;border-radius:2px;flex-shrink:0;
+}
+.cat-header h2{
+  font-size:1.1rem;font-weight:700;letter-spacing:-0.01em;
+}
+.cat-header .cat-count{
+  font-size:0.75rem;color:var(--text-3);font-weight:400;
+  margin-left:0.25rem;
+}
+.cat-desc{
+  font-size:0.825rem;color:var(--text-2);
+  margin-bottom:1.25rem;max-width:65ch;
+}
+
+/* ── Card Grid ── */
+.card-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+  gap:1rem;
+}
+
+/* ── Command Card ── */
+.cmd-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:1.25rem;
+  transition:transform .18s ease-out,border-color .18s ease-out,box-shadow .18s ease-out;
+}
+.cmd-card:hover{
+  transform:translateY(-2px);
+  border-color:var(--border-hover);
+  box-shadow:0 4px 16px oklch(0.5 0 0 / 0.04);
+}
+.cmd-name{
+  font-family:var(--mono);
+  font-size:0.9rem;
+  font-weight:600;
+  color:var(--accent);
+  margin-bottom:0.35rem;
+  word-break:break-all;
+}
+.cmd-desc{
+  font-size:0.825rem;
+  color:var(--text-2);
+  margin-bottom:0.75rem;
+  line-height:1.5;
+}
+.cmd-usage{
+  font-family:var(--mono);
+  font-size:0.775rem;
+  background:var(--code-bg);
+  color:var(--code-text);
+  padding:0.5rem 0.75rem;
+  border-radius:4px;
+  margin-bottom:0.6rem;
+  overflow-x:auto;
+  white-space:pre;
+  line-height:1.5;
+  max-height:4.6em;
+  overflow-y:hidden;
+  position:relative;
+  transition:max-height .25s ease-out;
+}
+.cmd-usage.expanded{max-height:600px}
+.cmd-usage-toggle{
+  display:none;
+  font-family:var(--sans);
+  font-size:0.7rem;
+  color:var(--accent);
+  background:none;border:none;
+  cursor:pointer;
+  padding:0.15rem 0 0;
+  margin-bottom:0.3rem;
+}
+.cmd-usage-toggle.show{display:inline-block}
+.cmd-chain{
+  display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;
+  font-size:0.75rem;color:var(--text-3);
+  margin-top:0.5rem;
+}
+.cmd-chain .arrow{color:var(--text-3);font-size:0.65rem}
+.cmd-chain code{
+  font-family:var(--mono);
+  font-size:0.725rem;
+  background:oklch(0.96 0.005 80);
+  padding:0.1rem 0.35rem;border-radius:3px;
+  color:var(--text-2);
+}
+
+/* ── Example Section (Tab 2) ── */
+.example-block{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:1.5rem 1.75rem;
+  margin-bottom:1.5rem;
+}
+.example-block h3{
+  font-size:1rem;font-weight:700;
+  margin-bottom:0.35rem;
+}
+.example-block .ex-desc{
+  font-size:0.825rem;color:var(--text-2);
+  margin-bottom:1rem;max-width:65ch;
+}
+.example-steps{
+  display:flex;flex-direction:column;gap:0.5rem;
+}
+.step{
+  display:flex;align-items:flex-start;gap:0.6rem;
+  font-family:var(--mono);font-size:0.8rem;
+}
+.step-num{
+  flex-shrink:0;
+  width:1.4rem;height:1.4rem;
+  border-radius:50%;
+  background:var(--accent-light);
+  color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.7rem;font-weight:700;
+  font-family:var(--sans);
+  margin-top:0.1rem;
+}
+.step code{
+  background:var(--code-bg);
+  padding:0.15rem 0.5rem;
+  border-radius:3px;
+  color:var(--code-text);
+  white-space:pre-wrap;
+  word-break:break-all;
+}
+.step .step-note{
+  font-family:var(--sans);
+  font-size:0.75rem;
+  color:var(--text-3);
+  margin-top:0.1rem;
+}
+.flow-diagram{
+  display:flex;align-items:center;gap:0.3rem;flex-wrap:wrap;
+  margin-bottom:1rem;padding:0.75rem 1rem;
+  font-family:var(--mono);font-size:0.775rem;
+  background:oklch(0.97 0.005 260 / 0.3);
+  border-radius:var(--radius);
+  border:1px solid oklch(0.92 0.01 260);
+}
+.flow-diagram .flow-node{
+  padding:0.3rem 0.65rem;
+  border:1px solid oklch(0.82 0.02 260);
+  border-radius:4px;
+  background:var(--surface);
+  color:var(--text-2);
+  white-space:nowrap;
+  font-size:0.75rem;
+}
+.flow-diagram .flow-arrow{
+  color:var(--text-3);font-size:0.7rem;
+  font-weight:600;
+}
+.flow-diagram .flow-node.highlight{
+  border-color:var(--accent);
+  color:var(--accent);
+  background:var(--accent-light);
+  font-weight:600;
+}
+.flow-diagram .flow-branch{
+  font-size:0.6rem;
+  color:var(--accent);
+  font-weight:600;
+  font-style:normal;
+  padding:0.1rem 0.35rem;
+  background:var(--accent-light);
+  border-radius:3px;
+}
+
+/* ── Footer ── */
+.site-footer{
+  max-width:var(--max-w);
+  margin:0 auto;
+  padding:2rem;
+  border-top:1px solid var(--border);
+  margin-top:2rem;
+}
+.site-footer p{
+  font-size:0.75rem;color:var(--text-3);
+}
+
+/* ── Reveal Animation ── */
+.reveal{
+  opacity:0;transform:translateY(8px);
+  transition:opacity .4s ease-out,transform .4s ease-out;
+}
+.reveal.visible{opacity:1;transform:none}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .card-grid{grid-template-columns:1fr}
+  .site-header{padding:2rem 1.25rem 1rem}
+  .tab-content{padding:1.25rem}
+  .tabs-inner{padding:0 1rem;overflow-x:auto}
+  .tab-btn{white-space:nowrap;padding:0.75rem 1rem}
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--border-hover)}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div>
+    <h1>Maestro Command Reference</h1>
+    <p>53 slash commands · 9 categories · workflow orchestration CLI</p>
+    <div class="stats">
+      <span><b>16</b> core</span>
+      <span><b>12</b> manage</span>
+      <span><b>9</b> quality</span>
+      <span><b>3</b> spec</span>
+      <span><b>5</b> learn</span>
+      <span><b>2</b> wiki</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search commands..." autocomplete="off">
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tabs-inner">
+    <button class="tab-btn active" data-tab="commands">命令卡片</button>
+    <button class="tab-btn" data-tab="examples">实战实例</button>
+  </div>
+</nav>
+
+<!-- ══════════════ TAB 1: COMMANDS ══════════════ -->
+<div class="tab-panel active" id="tab-commands">
+<div class="tab-content">
+
+<div class="cat-nav" id="catNav">
+  <a href="#cat-core">核心工作流</a>
+  <a href="#cat-manage">管理</a>
+  <a href="#cat-quality">质量</a>
+  <a href="#cat-spec">规范</a>
+  <a href="#cat-learn">学习</a>
+  <a href="#cat-wiki">知识图谱</a>
+</div>
+<div class="no-results" id="noResults">No matching commands found.</div>
+
+<!-- ── 核心工作流 ── -->
+<section class="cat-section reveal" id="cat-core">
+  <div class="cat-header">
+    <div class="cat-bar" style="background:var(--cat-core)"></div>
+    <h2>核心工作流 <span class="cat-count">16 commands</span></h2>
+  </div>
+  <p class="cat-desc">项目初始化、规划、执行、验证、协调、milestones 与 overlays。全局入口 <code>/maestro</code> 是智能协调器。</p>
+  <div class="card-grid">
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro</div>
+      <div class="cmd-desc">智能协调器。根据用户意图和项目状态自动选择最优命令链。</div>
+      <div class="cmd-usage">/maestro "&lt;intent&gt;"
+/maestro continue
+/maestro -y "&lt;intent&gt;"
+/maestro status</div>
+      <div class="cmd-chain">
+        <span>衔接</span>
+        <code>init</code><span class="arrow">→</span>
+        <code>roadmap</code><span class="arrow">→</span>
+        <code>plan</code><span class="arrow">→</span>
+        <code>execute</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-init</div>
+      <div class="cmd-desc">初始化 .workflow/ 目录，创建 state.json、project.md、specs/。项目起点。</div>
+      <div class="cmd-usage">/maestro-init
+/maestro-init --from-brainstorm ANL-xxx</div>
+      <div class="cmd-chain">
+        <code>brainstorm</code><span class="arrow">→</span>
+        <code>init</code><span class="arrow">→</span>
+        <code>roadmap</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-brainstorm</div>
+      <div class="cmd-desc">多角色头脑风暴，产出 guidance-specification.md。可选的初始化前置步骤。</div>
+      <div class="cmd-usage">/maestro-brainstorm "&lt;topic&gt;"</div>
+      <div class="cmd-chain">
+        <code>brainstorm</code><span class="arrow">→</span>
+        <code>init --from-brainstorm</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-roadmap</div>
+      <div class="cmd-desc">交互式路线图生成。轻量方案，适合需求明确的小型项目。</div>
+      <div class="cmd-usage">/maestro-roadmap "&lt;desc&gt;" -y</div>
+      <div class="cmd-chain">
+        <code>init</code><span class="arrow">→</span>
+        <code>roadmap</code><span class="arrow">→</span>
+        <code>analyze</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-spec-generate</div>
+      <div class="cmd-desc">完整规范链（7 阶段），产出 PRD + 架构文档 + roadmap。适合大型项目。</div>
+      <div class="cmd-usage">/maestro-spec-generate</div>
+      <div class="cmd-chain">
+        <code>init</code><span class="arrow">→</span>
+        <code>spec-generate</code><span class="arrow">→</span>
+        <code>plan</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-ui-design</div>
+      <div class="cmd-desc">UI 设计原型生成。可选步骤，产出 design-ref/ 和 design tokens。</div>
+      <div class="cmd-usage">/maestro-ui-design</div>
+      <div class="cmd-chain">
+        <code>roadmap</code><span class="arrow">·→</span>
+        <code>ui-design</code><span class="arrow">→</span>
+        <code>plan</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-analyze</div>
+      <div class="cmd-desc">分析阶段。消费 roadmap + project.md，产出 context.md 和 analysis.md。支持多次分析。</div>
+      <div class="cmd-usage">/maestro-analyze
+/maestro-analyze 1
+/maestro-analyze "topic"
+/maestro-analyze --gaps ISS-xxx
+/maestro-analyze -q "topic"</div>
+      <div class="cmd-chain">
+        <code>roadmap</code><span class="arrow">→</span>
+        <code>analyze</code><span class="arrow">↻</span>
+        <code>analyze</code><span class="arrow">→</span>
+        <code>plan</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-plan</div>
+      <div class="cmd-desc">规划阶段。消费 context.md，产出 plan.json + TASK-*.json。支持 revise 和碰撞检测。</div>
+      <div class="cmd-usage">/maestro-plan
+/maestro-plan 1
+/maestro-plan --gaps
+/maestro-plan --dir scratch/xxx</div>
+      <div class="cmd-chain">
+        <code>analyze</code><span class="arrow">→</span>
+        <code>plan</code><span class="arrow">↻</span>
+        <code>plan(revise)</code><span class="arrow">→</span>
+        <code>execute</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-execute</div>
+      <div class="cmd-desc">执行阶段。消费 plan.json，产出代码变更和 .summaries/。逐个 plan 执行，plan 内 wave 并行。</div>
+      <div class="cmd-usage">/maestro-execute
+/maestro-execute --dir scratch/xxx</div>
+      <div class="cmd-chain">
+        <code>plan</code><span class="arrow">→</span>
+        <code>execute</code><span class="arrow">→</span>
+        <code>verify</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-verify</div>
+      <div class="cmd-desc">验证阶段。消费 .summaries/，产出 verification.json。发现 gaps 时回退到 analyze。</div>
+      <div class="cmd-usage">/maestro-verify</div>
+      <div class="cmd-chain">
+        <code>execute</code><span class="arrow">→</span>
+        <code>verify</code><span class="arrow">→</span>
+        <code>review</code>
+        <span style="color:var(--text-3);font-size:0.7rem;margin-left:0.5rem">或 gaps→analyze</span>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-collab</div>
+      <div class="cmd-desc">多 CLI 协作分析。自动或手动选择多个 AI 工具并行分析同一主题。</div>
+      <div class="cmd-usage">/maestro-collab "&lt;topic&gt;"
+/maestro-collab "&lt;topic&gt;" --tools gemini,qwen,claude
+/maestro-collab -y "&lt;topic&gt;"</div>
+      <div class="cmd-chain">
+        <code>collab</code><span class="arrow">→</span>
+        <code>plan --dir</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-quick</div>
+      <div class="cmd-desc">最短路径快速任务。跳过可选 agent，产出存放在 scratch/ 不影响主干。</div>
+      <div class="cmd-usage">/maestro-quick "修复 bug"
+/maestro-quick --full "重构 API"
+/maestro-quick --discuss "方案讨论"</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-milestone-audit</div>
+      <div class="cmd-desc">里程碑审计。基于 artifact registry 检查 phase 覆盖度和跨 artifact 集成验证。</div>
+      <div class="cmd-usage">/maestro-milestone-audit</div>
+      <div class="cmd-chain">
+        <code>test</code><span class="arrow">→</span>
+        <code>milestone-audit</code><span class="arrow">→</span>
+        <code>milestone-complete</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-milestone-complete</div>
+      <div class="cmd-desc">归档 scratch 到 milestones/，推进到下一里程碑。需 audit 通过。</div>
+      <div class="cmd-usage">/maestro-milestone-complete</div>
+      <div class="cmd-chain">
+        <code>milestone-audit</code><span class="arrow">→</span>
+        <code>milestone-complete</code><span class="arrow">→</span>
+        <code>analyze (next M)</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-overlay</div>
+      <div class="cmd-desc">Overlay 管理。创建和管理覆盖层配置，用于临时修改或扩展工作流行为。</div>
+      <div class="cmd-usage">/maestro-overlay</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/maestro-fork</div>
+      <div class="cmd-desc">分支管理。创建工作流分支以并行探索不同方案。</div>
+      <div class="cmd-usage">/maestro-fork</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── 管理 ── -->
+<section class="cat-section reveal" id="cat-manage">
+  <div class="cat-header">
+    <div class="cat-bar" style="background:var(--cat-manage)"></div>
+    <h2>管理 <span class="cat-count">12 commands</span></h2>
+  </div>
+  <p class="cat-desc">Issue 生命周期、代码库文档、知识捕获、记忆管理、harvest 和状态查看。</p>
+  <div class="card-grid">
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-issue</div>
+      <div class="cmd-desc">Issue CRUD 操作。创建、查看、更新、关闭、关联 Issue。</div>
+      <div class="cmd-usage">/manage-issue create --title "..." --severity high
+/manage-issue list --status open
+/manage-issue close ISS-xxx --resolution "fixed"
+/manage-issue link ISS-xxx --task TASK-001</div>
+      <div class="cmd-chain">
+        <code>discover</code><span class="arrow">→</span>
+        <code>create</code><span class="arrow">→</span>
+        <code>analyze --gaps</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-issue-discover</div>
+      <div class="cmd-desc">问题发现。8 视角全扫描或按提示词定向发现，去重后写入 issues.jsonl。</div>
+      <div class="cmd-usage">/manage-issue-discover
+/manage-issue-discover by-prompt "&lt;query&gt;"</div>
+      <div class="cmd-chain">
+        <code>discover</code><span class="arrow">→</span>
+        <code>create</code><span class="arrow">→</span>
+        <code>analyze --gaps</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-status</div>
+      <div class="cmd-desc">项目仪表板。展示进度、活跃任务和下一步建议。</div>
+      <div class="cmd-usage">/manage-status</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-codebase-rebuild</div>
+      <div class="cmd-desc">全量重建 .workflow/codebase/ 文档。</div>
+      <div class="cmd-usage">/manage-codebase-rebuild</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-codebase-refresh</div>
+      <div class="cmd-desc">增量刷新代码库文档，基于 git diff。</div>
+      <div class="cmd-usage">/manage-codebase-refresh</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-knowhow</div>
+      <div class="cmd-desc">知识复用管理。搜索、列出和管理 knowhow 条目。</div>
+      <div class="cmd-usage">/manage-knowhow list --store workflow
+/manage-knowhow search "&lt;query&gt;"</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-knowhow-capture</div>
+      <div class="cmd-desc">捕获并压缩当前知识复用条目。</div>
+      <div class="cmd-usage">/manage-knowhow-capture compact</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-learn</div>
+      <div class="cmd-desc">学习洞察管理。浏览和过滤学习记录。</div>
+      <div class="cmd-usage">/manage-learn list --tag git-retro</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-harvest</div>
+      <div class="cmd-desc">收获工作产物中的知识，提取为可复用条目。</div>
+      <div class="cmd-usage">/manage-harvest</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-memory /manage-memory-capture</div>
+      <div class="cmd-desc">记忆管理。持久化和检索会话间的上下文记忆。</div>
+      <div class="cmd-usage">/manage-memory
+/manage-memory-capture</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/manage-wiki</div>
+      <div class="cmd-desc">Wiki 知识图谱管理。维护和查询项目知识索引。</div>
+      <div class="cmd-usage">/manage-wiki</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── 质量 ── -->
+<section class="cat-section reveal" id="cat-quality">
+  <div class="cat-header">
+    <div class="cat-bar" style="background:var(--cat-quality)"></div>
+    <h2>质量 <span class="cat-count">9 commands</span></h2>
+  </div>
+  <p class="cat-desc">代码审查、自动测试、UAT、调试、重构、复盘和同步。测试三轨并行：spec/gap/code 智能路由。</p>
+  <div class="card-grid">
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-auto-test</div>
+      <div class="cmd-desc">统一自动测试。智能路由 spec/gap/code 三轨，CSV 并行写测试 + 诊断迭代。</div>
+      <div class="cmd-usage">/quality-auto-test {N}
+/quality-auto-test {N} --max-iter 5
+/quality-auto-test {N} --layer L0-L3
+/quality-auto-test {N} --re-run</div>
+      <div class="cmd-chain">
+        <code>verify</code><span class="arrow">→</span>
+        <code>auto-test</code><span class="arrow">→</span>
+        <code>review</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-review</div>
+      <div class="cmd-desc">分层代码审查。支持 quick/standard/deep 三级深度。自动为 critical/high 发现创建 Issue。</div>
+      <div class="cmd-usage">/quality-review {N}
+/quality-review {N} --level deep</div>
+      <div class="cmd-chain">
+        <code>auto-test</code><span class="arrow">→</span>
+        <code>review</code><span class="arrow">→</span>
+        <code>test</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-test</div>
+      <div class="cmd-desc">会话式 UAT 验收测试。支持 smoke 模式和 auto-fix 循环。</div>
+      <div class="cmd-usage">/quality-test {N}
+/quality-test {N} --smoke
+/quality-test {N} --auto-fix</div>
+      <div class="cmd-chain">
+        <code>review</code><span class="arrow">→</span>
+        <code>test</code><span class="arrow">→</span>
+        <code>milestone-audit</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-debug</div>
+      <div class="cmd-desc">假设驱动调试。科学方法（假设→实验→验证），支持并行假设验证。</div>
+      <div class="cmd-usage">/quality-debug
+/quality-debug --from-uat {N}
+/quality-debug --parallel</div>
+      <div class="cmd-chain">
+        <code>test(失败)</code><span class="arrow">→</span>
+        <code>debug</code><span class="arrow">→</span>
+        <code>plan --gaps</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-refactor</div>
+      <div class="cmd-desc">技术债务治理。反思驱动的重构迭代。</div>
+      <div class="cmd-usage">/quality-refactor
+/quality-refactor &lt;scope&gt;</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-sync</div>
+      <div class="cmd-desc">文档同步。代码变更后同步相关文档。</div>
+      <div class="cmd-usage">/quality-sync --since HEAD~5</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-retrospective</div>
+      <div class="cmd-desc">质量复盘。回顾质量指标和改进机会。</div>
+      <div class="cmd-usage">/quality-retrospective</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-integration-test</div>
+      <div class="cmd-desc">集成测试。验证模块间协作的正确性。</div>
+      <div class="cmd-usage">/quality-integration-test</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/quality-business-test</div>
+      <div class="cmd-desc">业务测试。从业务规则视角验证功能正确性，失败时创建 Issue（带 REQ 追溯）。</div>
+      <div class="cmd-usage">/quality-business-test</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── 规范 ── -->
+<section class="cat-section reveal" id="cat-spec">
+  <div class="cat-header">
+    <div class="cat-bar" style="background:var(--cat-spec)"></div>
+    <h2>规范 <span class="cat-count">3 commands</span></h2>
+  </div>
+  <p class="cat-desc">项目规范初始化、加载和录入。类型：bug / pattern / decision / rule / debug / test / review / validation。</p>
+  <div class="card-grid">
+
+    <div class="cmd-card">
+      <div class="cmd-name">/spec-setup</div>
+      <div class="cmd-desc">扫描项目生成约定。已有项目自动触发，新项目可选。</div>
+      <div class="cmd-usage">/spec-setup</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/spec-add</div>
+      <div class="cmd-desc">录入设计决策或代码模式到规范库。</div>
+      <div class="cmd-usage">/spec-add arch "使用 JSONL 格式存储 Issue"
+/spec-add coding "所有 API 使用 Hono 框架"</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/spec-load</div>
+      <div class="cmd-desc">加载指定角色的规范上下文。agent 执行前调用。</div>
+      <div class="cmd-usage">/spec-load --role plan</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── 学习 ── -->
+<section class="cat-section reveal" id="cat-learn">
+  <div class="cat-header">
+    <div class="cat-bar" style="background:var(--cat-learn)"></div>
+    <h2>学习 <span class="cat-count">5 commands</span></h2>
+  </div>
+  <p class="cat-desc">统一复盘、跟读学习、模式拆解、系统探究、多视角分析。输出汇聚到 lessons.jsonl。</p>
+  <div class="card-grid">
+
+    <div class="cmd-card">
+      <div class="cmd-name">/learn-retro</div>
+      <div class="cmd-desc">统一复盘。--lens 切换 Git 活动分析和决策质量评估。</div>
+      <div class="cmd-usage">/learn-retro
+/learn-retro --lens git --days 14
+/learn-retro --lens decision --phase 2</div>
+      <div class="cmd-chain">
+        <code>retro</code><span class="arrow">→</span>
+        <code>lessons.jsonl</code><span class="arrow">→</span>
+        <code>spec-add</code>
+      </div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/learn-follow</div>
+      <div class="cmd-desc">跟读学习。逐段施加 4 个强制提问，提取模式并构建理解图。</div>
+      <div class="cmd-usage">/learn-follow src/commands/wiki.ts
+/learn-follow spec-auth
+/learn-follow src/mcp/ --depth deep</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/learn-decompose</div>
+      <div class="cmd-desc">4 维度并行分析（结构/行为/数据/错误模式），产出模式目录。</div>
+      <div class="cmd-usage">/learn-decompose src/commands/
+/learn-decompose src/ --save-spec
+/learn-decompose src/ --save-wiki</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/learn-investigate</div>
+      <div class="cmd-desc">系统化探究。带假说测试、证据日志、3-strike 升级。</div>
+      <div class="cmd-usage">/learn-investigate "BM25 搜索如何工作"
+/learn-investigate "并发控制" --scope src/mcp/</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/learn-second-opinion</div>
+      <div class="cmd-desc">多视角分析。review / challenge / consult 三种模式。</div>
+      <div class="cmd-usage">/learn-second-opinion src/server.ts
+/learn-second-opinion HEAD --mode challenge
+/learn-second-opinion spec-auth --mode consult</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── 知识图谱 ── -->
+<section class="cat-section reveal" id="cat-wiki">
+  <div class="cat-header">
+    <div class="cat-bar" style="background:var(--cat-wiki)"></div>
+    <h2>知识图谱 <span class="cat-count">2 commands</span></h2>
+  </div>
+  <p class="cat-desc">基于 BM25 全文搜索和图谱分析的知识索引系统。支持 wikilink、反向链接和健康评分。</p>
+  <div class="card-grid">
+
+    <div class="cmd-card">
+      <div class="cmd-name">/wiki-connect</div>
+      <div class="cmd-desc">知识图谱连接发现。找出孤立节点、缺失连接，建议或自动应用新链接。</div>
+      <div class="cmd-usage">/wiki-connect
+/wiki-connect --scope spec
+/wiki-connect --fix</div>
+    </div>
+
+    <div class="cmd-card">
+      <div class="cmd-name">/wiki-digest</div>
+      <div class="cmd-desc">知识摘要生成。主题聚类、覆盖热图和缺口分析。</div>
+      <div class="cmd-usage">/wiki-digest
+/wiki-digest "authentication"
+/wiki-digest --recent 7</div>
+    </div>
+
+  </div>
+</section>
+
+</div>
+</div>
+
+<!-- ══════════════ TAB 2: EXAMPLES ══════════════ -->
+<div class="tab-panel" id="tab-examples">
+<div class="tab-content">
+
+<!-- ── 主干 Phase 管线流程 ── -->
+<div class="example-block reveal">
+  <h3>主干 Phase 管线</h3>
+  <p class="ex-desc">完整的 Milestone 生命周期：分析 → 规划 → 执行 → 验证 → 审查 → 测试 → 审计 → 完成。支持多次 analyze/plan，逐个 execute。</p>
+  <div class="flow-diagram">
+    <span class="flow-node">analyze</span><span class="flow-arrow">↻</span>
+    <span class="flow-node">analyze</span><span class="flow-arrow">→</span>
+    <span class="flow-node">plan</span><span class="flow-arrow">↻</span>
+    <span class="flow-node">plan(revise)</span><span class="flow-arrow">→</span>
+    <span class="flow-node highlight">execute</span><span class="flow-arrow">→</span>
+    <span class="flow-node">verify</span><span class="flow-arrow">→</span>
+    <span class="flow-node">review</span><span class="flow-arrow">→</span>
+    <span class="flow-node">test</span><span class="flow-arrow">→</span>
+    <span class="flow-node">milestone-audit</span>
+  </div>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/maestro-analyze</code><div class="step-note">全量分析当前里程碑，产出 ANL artifact</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/maestro-plan</code><div class="step-note">消费 analyze 产出，生成 plan.json + TASK 文件，含碰撞检测</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/maestro-execute</code><div class="step-note">逐个 plan 执行，plan 内 wave 并行，产出 EXC artifact</div></div></div>
+    <div class="step"><span class="step-num">4</span><div><code>/maestro-verify</code><div class="step-note">验证执行结果。有 gaps 时回退到 analyze</div></div></div>
+    <div class="step"><span class="step-num">5</span><div><code>/quality-auto-test → /quality-review → /quality-test</code><div class="step-note">质量三件套：自动测试 → 代码审查 → UAT</div></div></div>
+    <div class="step"><span class="step-num">6</span><div><code>/maestro-milestone-audit → /maestro-milestone-complete</code><div class="step-note">审计通过后归档，推进下一里程碑</div></div></div>
+  </div>
+</div>
+
+<!-- ── Issue 闭环 ── -->
+<div class="example-block reveal">
+  <h3>Issue 闭环工作流</h3>
+  <p class="ex-desc">独立于 Phase 管线的问题追踪。Commander Agent 可自动推进 analyze → plan → execute 全闭环。</p>
+  <div class="flow-diagram">
+    <span class="flow-node">discover</span><span class="flow-arrow">→</span>
+    <span class="flow-node">create</span><span class="flow-arrow">→</span>
+    <span class="flow-node">analyze --gaps</span><span class="flow-arrow">→</span>
+    <span class="flow-node">plan --gaps</span><span class="flow-arrow">→</span>
+    <span class="flow-node highlight">execute</span><span class="flow-arrow">→</span>
+    <span class="flow-node">close</span>
+  </div>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/manage-issue-discover by-prompt "检查 API 错误处理"</code><div class="step-note">8 视角全扫描或按提示词定向发现</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/manage-issue create --title "内存泄漏" --severity high</code><div class="step-note">创建 Issue，状态 open</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/maestro-analyze --gaps ISS-xxx</code><div class="step-note">根因分析 → 状态 diagnosed</div></div></div>
+    <div class="step"><span class="step-num">4</span><div><code>/maestro-plan --gaps</code><div class="step-note">生成 TASK-*.json → 状态 planned</div></div></div>
+    <div class="step"><span class="step-num">5</span><div><code>/maestro-execute</code><div class="step-note">执行修复 → 状态 resolved</div></div></div>
+    <div class="step"><span class="step-num">6</span><div><code>/manage-issue close ISS-xxx --resolution "fixed"</code><div class="step-note">关闭 Issue</div></div></div>
+  </div>
+</div>
+
+<!-- ── Gap 修复循环 ── -->
+<div class="example-block reveal">
+  <h3>Gap 修复循环</h3>
+  <p class="ex-desc">验证或测试发现缺口时的修复循环。支持多入口触发。</p>
+  <div class="flow-diagram">
+    <span class="flow-node">verify</span><span class="flow-branch">gaps!</span><span class="flow-arrow">→</span>
+    <span class="flow-node">plan --gaps</span><span class="flow-arrow">→</span>
+    <span class="flow-node highlight">execute</span><span class="flow-arrow">→</span>
+    <span class="flow-node">verify</span><span class="flow-branch">re-check</span>
+  </div>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/maestro-verify</code><div class="step-note">发现 gaps → 触发修复循环</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/maestro-plan --gaps</code><div class="step-note">基于 gap 产出修复计划</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/maestro-execute</code><div class="step-note">执行修复</div></div></div>
+    <div class="step"><span class="step-num">4</span><div><code>/maestro-verify</code><div class="step-note">重新验证，直到无 gaps</div></div></div>
+  </div>
+</div>
+
+<!-- ── 新项目从零开始 ── -->
+<div class="example-block reveal">
+  <h3>新项目从零开始</h3>
+  <p class="ex-desc">完整的初始化到里程碑完成流程。可选 brainstorm 前置。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/maestro-brainstorm "在线教育平台"</code><div class="step-note">可选：多角色头脑风暴</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/maestro-init --from-brainstorm ANL-xxx</code><div class="step-note">初始化项目</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/maestro-roadmap -y</code><div class="step-note">创建路线图</div></div></div>
+    <div class="step"><span class="step-num">4</span><div><code>/maestro-plan 1 → /maestro-execute 1 → /maestro-verify 1</code><div class="step-note">逐 Phase 推进</div></div></div>
+    <div class="step"><span class="step-num">5</span><div><code>/maestro-milestone-audit → /maestro-milestone-complete</code><div class="step-note">审计并归档</div></div></div>
+  </div>
+</div>
+
+<!-- ── 一键全自动 ── -->
+<div class="example-block reveal">
+  <h3>一键全自动</h3>
+  <p class="ex-desc">使用 /maestro 协调器全自动推进，无需手动衔接。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/maestro -y "实现用户认证系统"</code><div class="step-note">自动执行: init → roadmap → plan → execute → verify → review → test → milestone-audit</div></div></div>
+  </div>
+</div>
+
+<!-- ── 测试失败修复 ── -->
+<div class="example-block reveal">
+  <h3>测试失败后的修复循环</h3>
+  <p class="ex-desc">质量管线中发现问题后的标准修复路径。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/quality-auto-test 3</code><div class="step-note">统一自动测试，智能路由 spec/gap/code</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/quality-debug --from-uat 3</code><div class="step-note">从 UAT 失败诊断根因，假设驱动</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/maestro-plan 3 --gaps</code><div class="step-note">生成修复计划</div></div></div>
+    <div class="step"><span class="step-num">4</span><div><code>/maestro-execute 3</code><div class="step-note">执行修复</div></div></div>
+    <div class="step"><span class="step-num">5</span><div><code>/quality-auto-test 3 --re-run</code><div class="step-note">只重跑失败场景验证</div></div></div>
+  </div>
+</div>
+
+<!-- ── 多 CLI 协作 ── -->
+<div class="example-block reveal">
+  <h3>多 CLI 协作分析</h3>
+  <p class="ex-desc">使用多个 AI 工具并行分析同一主题，综合不同视角。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/maestro-collab "分析 auth 模块安全漏洞"</code><div class="step-note">自动选择前 3 个 CLI 工具</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/maestro-collab "设计缓存策略" --tools gemini,qwen,claude</code><div class="step-note">指定工具组合</div></div></div>
+  </div>
+</div>
+
+<!-- ── 快速修复 ── -->
+<div class="example-block reveal">
+  <h3>快速修复一个 bug</h3>
+  <p class="ex-desc">最短路径，不走 Phase 管线。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/maestro-quick "修复登录页面在移动端的样式错乱"</code><div class="step-note">产出存放在 scratch/ 不影响主干</div></div></div>
+  </div>
+</div>
+
+<!-- ── 接手新项目 ── -->
+<div class="example-block reveal">
+  <h3>接手新项目，快速理解代码</h3>
+  <p class="ex-desc">学习工具集组合使用，快速建立代码理解。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/learn-follow src/</code><div class="step-note">从入口跟读代码</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/learn-decompose src/ --save-spec</code><div class="step-note">拆解模式，入库到 specs</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/wiki-digest</code><div class="step-note">生成知识摘要</div></div></div>
+    <div class="step"><span class="step-num">4</span><div><code>/wiki-connect --fix</code><div class="step-note">修复图谱连接</div></div></div>
+  </div>
+</div>
+
+<!-- ── 周末复盘 ── -->
+<div class="example-block reveal">
+  <h3>周末复盘</h3>
+  <p class="ex-desc">定期回顾 Git 活动和架构决策质量。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">1</span><div><code>/learn-retro --lens git</code><div class="step-note">Git 活动复盘：提交指标、工作会话、趋势</div></div></div>
+    <div class="step"><span class="step-num">2</span><div><code>/learn-retro --lens decision</code><div class="step-note">决策复盘：多源收集，3 视角评估</div></div></div>
+    <div class="step"><span class="step-num">3</span><div><code>/manage-learn list --tag git-retro</code><div class="step-note">浏览复盘洞察</div></div></div>
+  </div>
+</div>
+
+<!-- ── Scope 路由模式 ── -->
+<div class="example-block reveal">
+  <h3>五种 Scope 使用模式</h3>
+  <p class="ex-desc">每个管线命令支持 4 种 scope，灵活组合分析-规划-执行。</p>
+  <div class="example-steps">
+    <div class="step"><span class="step-num">A</span><div><code>analyze → plan → execute → verify</code><div class="step-note">一步到位：默认覆盖里程碑所有 phases</div></div></div>
+    <div class="step"><span class="step-num">B</span><div><code>analyze 1 → plan 1 → execute 1
+analyze 2 → plan 2 → execute 2</code><div class="step-note">逐 Phase：每个 plan 独立执行</div></div></div>
+    <div class="step"><span class="step-num">C</span><div><code>analyze → plan 1 → execute 1 → plan 2 → execute 2
+analyze "hotfix" → plan --dir → execute --dir</code><div class="step-note">混合模式：全量分析 + 逐 phase 执行 + ad-hoc</div></div></div>
+    <div class="step"><span class="step-num">D</span><div><code>analyze 1 → analyze 2 → plan → execute</code><div class="step-note">统一规划：多次分析后一次规划执行</div></div></div>
+    <div class="step"><span class="step-num">E</span><div><code>analyze "auth" → plan --dir → execute --dir</code><div class="step-note">纯 scratch：无需 init/roadmap</div></div></div>
+  </div>
+</div>
+
+</div>
+</div>
+
+<footer class="site-footer">
+  <p>Maestro CLI — workflow orchestration with MCP endpoint support</p>
+</footer>
+
+<script>
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// Scroll reveal
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.05, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// Usage block expand/collapse — show toggle for tall blocks
+document.querySelectorAll('.cmd-usage').forEach(block => {
+  if (block.scrollHeight > block.clientHeight + 2) {
+    const toggle = document.createElement('button');
+    toggle.className = 'cmd-usage-toggle show';
+    toggle.textContent = 'Show more';
+    toggle.addEventListener('click', () => {
+      const expanded = block.classList.toggle('expanded');
+      toggle.textContent = expanded ? 'Show less' : 'Show more';
+    });
+    block.parentNode.insertBefore(toggle, block.nextSibling);
+  }
+});
+
+// Search
+const searchInput = document.getElementById('searchInput');
+const noResults = document.getElementById('noResults');
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  const cards = document.querySelectorAll('#tab-commands .cmd-card');
+  const sections = document.querySelectorAll('#tab-commands .cat-section');
+  let visibleCount = 0;
+
+  cards.forEach(card => {
+    const text = card.textContent.toLowerCase();
+    const match = !q || text.includes(q);
+    card.classList.toggle('hidden', !match);
+    if (match) visibleCount++;
+  });
+
+  sections.forEach(sec => {
+    const visibleCards = sec.querySelectorAll('.cmd-card:not(.hidden)');
+    sec.classList.toggle('hidden', visibleCards.length === 0);
+  });
+
+  noResults.classList.toggle('show', visibleCount === 0 && q);
+});
+
+// Keyboard shortcut: / to focus search
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== searchInput) {
+    e.preventDefault();
+    searchInput.focus();
+  }
+  if (e.key === 'Escape' && document.activeElement === searchInput) {
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input'));
+    searchInput.blur();
+  }
+});
+</script>
+</body>
+</html>

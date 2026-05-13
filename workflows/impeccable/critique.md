@@ -16,7 +16,7 @@ Before gathering assessments, do two small bookkeeping steps. They cost almost n
    ```
    Keep the printed slug. It identifies this target's stream across runs. If the command exits non-zero ("no stable slug for input"), skip persistence for this run and tell the user; the trend won't update but the critique still goes ahead.
 
-3. **Read the ignore list** at `.impeccable/critique/ignore.md` if it exists. Plain markdown; each non-empty, non-comment line is something the user has marked as "do not re-raise" (deferred tradeoffs, designer-intended deviations, detector false-positives the user accepts). When a finding's text matches a line here (case-insensitive substring against rule name or snippet), **drop it silently**. Do not mention it in the report. This is the ONLY input critique consumes from prior runs; anchoring on prior findings would defeat the point of independent assessment.
+3. **Read the ignore list** at `.workflow/impeccable/critique/ignore.md` if it exists. Plain markdown; each non-empty, non-comment line is something the user has marked as "do not re-raise" (deferred tradeoffs, designer-intended deviations, detector false-positives the user accepts). When a finding's text matches a line here (case-insensitive substring against rule name or snippet), **drop it silently**. Do not mention it in the report. This is the ONLY input critique consumes from prior runs; anchoring on prior findings would defeat the point of independent assessment.
 
 ### Gather Assessments
 
@@ -184,7 +184,7 @@ Provocative questions that might unlock better solutions:
 
 ### Persist the Snapshot
 
-Once the report above is finalized, write it to `.impeccable/critique/` so the user can refer back, and so `/maestro-impeccable polish` can pick up the priority issues without a copy-paste.
+Once the report above is finalized, write it to `.workflow/impeccable/critique/` so the user can refer back, and so `/maestro-impeccable polish` can pick up the priority issues without a copy-paste.
 
 Skip this step if the Setup slug was null (vague or root-level target).
 
@@ -206,7 +206,7 @@ Skip this step if the Setup slug was null (vague or root-level target).
 4. **Append a single line to the user-visible output**, after the report and before the questions:
 
    > **Trend for `<slug>` (last 5 runs): 24 → 28 → 32 → 29 → 32**
-   > Wrote `.impeccable/critique/<filename>`.
+   > Wrote `.workflow/impeccable/critique/<filename>`.
 
    If this is the first run for the slug, the trend is just one score; say so: "First run for this target, no trend yet."
 

@@ -23,7 +23,7 @@ Skipping these produces generic output that ignores the project.
 
 ### 1. Context gathering
 
-Two files, case-insensitive. The loader looks at the project root by default and falls back to `.agents/context/` and `docs/` if the root is clean. Override with `IMPECCABLE_CONTEXT_DIR=path/to/dir`.
+Two files, case-insensitive. The loader searches `.workflow/impeccable/` first, then the project root, then `.agents/context/` and `docs/`. Override with `IMPECCABLE_CONTEXT_DIR=path/to/dir`.
 
 - **PRODUCT.md**: required. Users, brand, tone, anti-references, strategic principles.
 - **DESIGN.md**: optional, strongly recommended. Colors, typography, elevation, components.

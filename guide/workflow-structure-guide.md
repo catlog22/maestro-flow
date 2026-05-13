@@ -190,6 +190,15 @@
 │
 ├── reference_style/              # UI 设计系统参考（ui-codify 默认输出）
 │
+├── impeccable/                   # Impeccable UI 设计上下文
+│   ├── PRODUCT.md                # 产品定义（用户、品牌、调性、策略原则）
+│   ├── DESIGN.md                 # 设计系统（颜色、字体、组件 token）
+│   ├── design.json               # 设计系统扩展 sidecar（ Stitch 面板用）
+│   ├── critique/                 # 审查报告快照（critique 命令产物）
+│   └── live/                     # Live 模式配置与会话
+│       ├── config.json           # Live 模式配置（inject 目标、CSP 状态）
+│       └── sessions/             # 会话日志（append-only journal）
+│
 ├── worktrees.json                # Worktree 注册表（主工作空间）
 ├── worktree-scope.json           # Worktree 作用域标记（fork 的工作空间内）
 ├── harvest-log.jsonl             # 收获日志（manage-harvest 去重用）
@@ -328,6 +337,7 @@
 | 头脑风暴 | `*brainstorm*` | guidance-specification.md, .brainstorming/ | maestro-brainstorm |
 | 协作 | `*collab*` | collab-report.md, context.md, conclusions.json | maestro-collab |
 | UI 设计 | `*ui-design*` | MASTER.md, design-tokens.json, animation-tokens.json | maestro-ui-design |
+| Impeccable 上下文 | `impeccable/` | PRODUCT.md, DESIGN.md | maestro-impeccable (teach/document) |
 | 复盘 | （写入 retrospective.json/md + specs/learnings.md） | | quality-retrospective |
 
 ---
@@ -769,3 +779,4 @@ created → completed → harvested → archived
 | brainstorm | BRN | adhoc | maestro-brainstorm |
 | collab | CLB | adhoc | maestro-collab |
 | ui-design | — | phase, scratch | maestro-ui-design |
+| impeccable | — | standalone | maestro-impeccable (teach/document) |

@@ -53,7 +53,7 @@ LOOP:
 
 ## Recovery commands
 
-The live helper persists an append-only journal under `.impeccable/live/sessions/`. Browser checkpoints are advisory but durable; the journal is canonical. This is local durable recovery state, not project source.
+The live helper persists an append-only journal under `.workflow/impeccable/live/sessions/`. Browser checkpoints are advisory but durable; the journal is canonical. This is local durable recovery state, not project source.
 
 Use these commands when the chat was interrupted, polling was missed, the helper restarted, or the browser reloaded:
 
@@ -452,7 +452,7 @@ When the poll returns `exit`, proceed to cleanup. If the poll is still running a
 maestro impeccable live-server stop
 ```
 
-Stops the HTTP server and runs `live-inject --remove` to strip `localhost:…/live.js` from the HTML entry. To stop the server but keep the inject tag (for a quick restart), use `stop --keep-inject`. `.impeccable/live/config.json` persists as project config for future sessions.
+Stops the HTTP server and runs `live-inject --remove` to strip `localhost:…/live.js` from the HTML entry. To stop the server but keep the inject tag (for a quick restart), use `stop --keep-inject`. `.workflow/impeccable/live/config.json` persists as project config for future sessions.
 
 Then:
 - Remove any leftover variant wrappers (search for `impeccable-variants-start` markers).
@@ -460,7 +460,7 @@ Then:
 
 ## First-time setup (config missing or invalid)
 
-If `maestro impeccable live` outputs `{ ok: false, error: "config_missing" | "config_invalid", path }`, write the live config at the reported path. By default this is `.impeccable/live/config.json`.
+If `maestro impeccable live` outputs `{ ok: false, error: "config_missing" | "config_invalid", path }`, write the live config at the reported path. By default this is `.workflow/impeccable/live/config.json`.
 
 Schema:
 
@@ -540,7 +540,7 @@ maestro impeccable detect-csp
 
 Output: `{ shape, signals }` where `shape` is one of `append-arrays`, `append-string`, `middleware`, `meta-tag`, or `null`. The shape is named by *patch mechanism*, so one template covers many frameworks.
 
-- **`null`**: no CSP; skip to writing `.impeccable/live/config.json` with `cspChecked: true`.
+- **`null`**: no CSP; skip to writing `.workflow/impeccable/live/config.json` with `cspChecked: true`.
 - **`append-arrays`**: CSP defined as structured directive arrays. Auto-patchable. See *append-arrays* below. Covers:
   - Monorepo helpers with `additionalScriptSrc` / `additionalConnectSrc` options (Next.js + shared config package)
   - SvelteKit `kit.csp.directives`
@@ -617,6 +617,6 @@ Reference outputs:
 
 ### Troubleshooting
 
-If a user says "no" to the CSP patch at setup time and later complains that live doesn't work: their dev CSP blocks `http://localhost:8400`. Fix: delete `cspChecked` from `.impeccable/live/config.json` and re-run `maestro impeccable live`: setup will ask again.
+If a user says "no" to the CSP patch at setup time and later complains that live doesn't work: their dev CSP blocks `http://localhost:8400`. Fix: delete `cspChecked` from `.workflow/impeccable/live/config.json` and re-run `maestro impeccable live`: setup will ask again.
 
 Then re-run `maestro impeccable live`.

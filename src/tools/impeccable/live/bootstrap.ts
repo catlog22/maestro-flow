@@ -6,7 +6,7 @@
  * CLI entry point: prepare everything needed to enter the live variant poll loop.
  *
  * Does (all in one command):
- *   1. Check .impeccable/live/config.json (returns config_missing if first-ever run)
+ *   1. Check .workflow/impeccable/live/config.json (returns config_missing if first-ever run)
  *   2. Start the live server in the background (or reuse a running one)
  *   3. Inject the browser script tag into the project's entry file
  *   4. Read PRODUCT.md / DESIGN.md for project context

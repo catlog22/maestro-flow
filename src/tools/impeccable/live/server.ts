@@ -36,7 +36,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const staticDir = path.join(__dirname, 'static');
 
 // PRODUCT.md / DESIGN.md live wherever load-context resolves. The generated
-// DESIGN sidecar is project-local at .impeccable/design.json, with legacy
+// DESIGN sidecar is at .workflow/impeccable/design.json, with legacy
 // DESIGN.json fallback for existing projects.
 const CONTEXT_DIR = resolveContextDir(process.cwd());
 const DEFAULT_POLL_TIMEOUT = 600_000;   // 10 min — agent re-polls on timeout anyway
@@ -485,7 +485,7 @@ function createRequestHandler(scriptInfo: { detectScript: string; sessionPath: s
         try {
           response.sidecar = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
         } catch (err) {
-          response.sidecarError = 'Failed to parse .impeccable/design.json: ' + (err as Error).message;
+          response.sidecarError = 'Failed to parse .workflow/impeccable/design.json: ' + (err as Error).message;
         }
       }
 

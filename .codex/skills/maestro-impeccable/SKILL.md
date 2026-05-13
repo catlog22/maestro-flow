@@ -38,17 +38,20 @@ Before any design work:
 
 1. Load context (PRODUCT.md / DESIGN.md) via loader script:
    ```bash
-   node .claude/skills/maestro-impeccable/scripts/load-context.mjs
+   maestro impeccable load-context
    ```
-2. Identify register (brand vs product) and load matching reference.
-3. If sub-command invoked, load its reference file from `.claude/skills/maestro-impeccable/reference/`.
+   The loader searches `.workflow/impeccable/` first, then the project root, then `.agents/context/` and `docs/`.
+   PRODUCT.md and DESIGN.md are stored at `.workflow/impeccable/`.
+
+2. Identify register (brand vs product) and load matching reference from `~/.maestro/workflows/impeccable/brand.md` or `product.md`.
+3. If sub-command invoked, load its reference file from `~/.maestro/workflows/impeccable/{command}.md`.
 
 If PRODUCT.md missing → run `teach` first, then resume original task.
 
 ## Command Execution
 
 Route by first argument:
-1. **Matches command** → load `reference/{command}.md`, follow instructions
+1. **Matches command** → load `~/.maestro/workflows/impeccable/{command}.md`, follow instructions
 2. **No argument** → show command menu grouped by category
 3. **No match** → general design invocation with full argument as context
 
@@ -96,7 +99,7 @@ maestro spec add ui "<title>" "<summary>" --keywords impeccable,<cmd>,... --ref 
 
 <success_criteria>
 - [ ] Sub-command recognized and reference file loaded
-- [ ] Context loaded (PRODUCT.md, register identified)
+- [ ] Context loaded from .workflow/impeccable/ (PRODUCT.md, register identified)
 - [ ] Design changes applied to target files
 - [ ] Knowhow entry created in .workflow/knowhow/ with category: ui (unless --skip-harvest or live)
 - [ ] Spec index entry created for DCS-/AST- types
