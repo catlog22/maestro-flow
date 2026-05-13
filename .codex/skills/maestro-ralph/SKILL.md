@@ -156,17 +156,28 @@ S_FALLBACK -> S_PARSE_ROUTE WHEN: user input | -> END WHEN: cancel
 | Has .workflow/ but no state.json | init |
 | Has state.json | artifact-based inference |
 
-**Artifact-based**: filter by current_milestone + target phase. Latest artifact type: none->analyze, analyze->plan, plan->execute, execute->verify, verify->refine from result files:
+**Artifact-based inference:** Filter by current_milestone + target phase:
 
 | Condition | Position |
 |-----------|----------|
-| verification.json: passed==false or gaps[] non-empty | verify-failed |
-| passed==true, no review.json, has auto-test report | review |
-| passed==true, no review.json, no auto-test report | business-test (full) / review (standard/quick) |
-| review.json: verdict=="BLOCK" | review-failed |
-| review.json: verdict!="BLOCK" | test |
-| uat.md: all passed | milestone-audit |
-| uat.md: has failures | test-failed |
+| no milestones defined or no roadmap.md | `roadmap` |
+| no artifacts for target phase | `analyze` |
+| latest artifact = analyze | `plan` |
+| latest artifact = plan | `execute` |
+| latest artifact = execute | `verify` |
+| latest artifact = verify | → refine from result files |
+
+**Refine from verify results:**
+
+| Condition | Position |
+|-----------|----------|
+| verification.json: passed==false or gaps[] non-empty | `verify-failed` |
+| passed==true, no review.json, has auto-test report | `review` |
+| passed==true, no review.json, no auto-test report | `business-test` (full) / `review` (standard/quick) |
+| review.json: verdict=="BLOCK" | `review-failed` |
+| review.json: verdict!="BLOCK" | `test` |
+| uat.md: all passed | `milestone-audit` |
+| uat.md: has failures | `test-failed` |
 
 ### A_RESOLVE_PHASE
 
@@ -182,23 +193,32 @@ Priority: regex from intent `phase\s*(\d+)` -> latest in-progress artifact's pha
 
 ### A_BUILD_STEPS
 
-Lifecycle stages (start from position, skip completed, filter by quality_mode):
+**Lifecycle stages:**
 
-| Stage | Skill | Barrier | Decision after |
-|-------|-------|---------|----------------|
-| brainstorm | maestro-brainstorm | yes | -- |
-| init | maestro-init | no | -- |
-| roadmap | maestro-roadmap | yes | -- |
-| analyze | maestro-analyze | yes | -- |
-| plan | maestro-plan | yes | -- |
-| execute | maestro-execute | yes | -- |
-| verify | maestro-verify | no | post-verify |
-| business-test | quality-auto-test | no | post-business-test (full) |
-| review | quality-review | no | post-review |
-| test-gen | quality-auto-test | no | -- (full; standard if coverage<80%) |
-| test | quality-test | no | post-test |
-| milestone-audit | maestro-milestone-audit | no | -- |
-| milestone-complete | maestro-milestone-complete | no | post-milestone |
+| Stage | Skill | Barrier | Quality Mode | Decision after |
+|-------|-------|---------|-------------|----------------|
+| brainstorm | maestro-brainstorm "{intent}" | yes | all | — |
+| init | maestro-init | no | all | — |
+| roadmap | maestro-roadmap "{intent}" | yes | all | — |
+| analyze | maestro-analyze {phase} | yes | all | — |
+| plan | maestro-plan {phase} | yes | all | — |
+| execute | maestro-execute {phase} | yes | all | — |
+| verify | maestro-verify {phase} | no | all | post-verify |
+| business-test | quality-auto-test {phase} | no | full only | post-business-test |
+| review | quality-review {phase} | no | all (quick: --tier quick) | post-review |
+| test-gen | quality-auto-test {phase} | no | full; standard if coverage<80% | — |
+| test | quality-test {phase} | no | full, standard | post-test |
+| milestone-audit | maestro-milestone-audit | no | all | — |
+| milestone-complete | maestro-milestone-complete | no | all | post-milestone |
+
+**Build rules:**
+1. Start from `lifecycle_position`, end at `milestone-complete`
+2. Skip stages with existing completed artifacts (check state.json)
+3. Filter stages by `quality_mode` — skip non-applicable stages (see Quality Mode column)
+4. Quick mode: `review` appends `--tier quick`; skips `business-test`, `test-gen`, `test`
+5. Insert decision node after each stage with non-empty Decision column: `{ type: "decision", decision: "<gate>", retry_count: 0, max_retries: 2 }`
+6. Args use placeholders `{phase}`, `{intent}`, `{dirs}` — resolved at wave execution time
+7. Append `-y` to all skill args when `auto_mode` is true (see -y propagation table in context)
 
 ### A_BUILD_AND_SPAWN_WAVE
 
