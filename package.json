@@ -36,7 +36,7 @@
     "dashboard/package.json"
   ],
   "scripts": {
-    "build": "cd dashboard && npx tsc -p tsconfig.node.json && cd .. && tsc",
+    "build": "cd dashboard && npx tsc -p tsconfig.node.json && cd .. && tsc && node -e \"const fs=require('fs');const p=require('path');const s='src/tools/impeccable/live/static',d='dist/src/tools/impeccable/live/static';if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});for(const f of fs.readdirSync(s)){fs.copyFileSync(p.join(s,f),p.join(d,f))}}\"",
     "dev": "tsc --watch",
     "start": "node bin/maestro.js",
     "mcp": "node bin/maestro-mcp.js",

@@ -1,63 +1,67 @@
 /**
  * CLI helper: find an element in source and wrap it in a variant container.
  *
- * Usage:
- *   npx impeccable wrap --id SESSION_ID --count N --query "hero-combined-left" [--file path]
- *
  * Searches project files for the element matching the query (class name, ID, or
  * text snippet), wraps it with the variant scaffolding, and prints the file path
  * + line range where the agent should insert variant HTML.
  *
  * This replaces 3-4 agent tool calls (grep + read + edit) with a single CLI call.
+ *
+ * Converted from live-wrap.mjs to TypeScript.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { isGeneratedFile } from './is-generated.mjs';
+import { isGeneratedFile } from '../is-generated.js';
 
 const EXTENSIONS = ['.html', '.jsx', '.tsx', '.vue', '.svelte', '.astro'];
 
-export async function wrapCli() {
-  const args = process.argv.slice(2);
+interface WrapOpts {
+  id: string;
+  count: number;
+  elementId?: string;
+  classes?: string;
+  tag?: string;
+  query?: string;
+  file?: string;
+  text?: string;
+}
 
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage: impeccable wrap [options]
+interface ElementMatch {
+  startLine: number;
+  endLine: number;
+}
 
-Find an element in source and wrap it in a variant container.
+interface CommentSyntax {
+  open: string;
+  close: string;
+}
 
-Required:
-  --id ID            Session ID for the variant wrapper
-  --count N          Number of expected variants (1-8)
+interface StyleMode {
+  mode: string;
+  styleTag: string;
+}
 
-Element identification (at least one required):
-  --element-id ID    HTML id attribute of the element
-  --classes A,B,C    Comma-separated CSS class names
-  --tag TAG          Tag name (div, section, etc.)
-  --query TEXT       Fallback: raw text to search for
+interface CssAuthoring {
+  mode: string;
+  styleTag: string;
+  strategy: string;
+  rulePattern: string;
+  selectorExamples: string[];
+  requirements: string[];
+  forbidden: string[];
+}
 
-Optional:
-  --file PATH        Source file to search in (skips auto-detection)
-  --text TEXT        Picked element's textContent. Used to disambiguate when
-                     classes/tag match multiple sibling elements (e.g. a list
-                     of <Card>s with the same className). Pass the first ~80
-                     chars of event.element.textContent.
-  --help             Show this help message
+/**
+ * Regex that matches a tag opener on a line. Allows the tag name to be
+ * followed by whitespace, `>`, `/`, or end-of-line so that multi-line JSX
+ * openers (e.g. `<section\n  className="..."\n>`) are recognised.
+ */
+const OPENER_RE = /<([A-Za-z][A-Za-z0-9]*)(?=[\s/>]|$)/;
 
-Output (JSON):
-  { file, startLine, endLine, insertLine, commentSyntax }
-
-The agent should insert variant HTML at insertLine.`);
-    process.exit(0);
-  }
-
-  const id = argVal(args, '--id');
-  const count = parseInt(argVal(args, '--count') || '3');
-  const elementId = argVal(args, '--element-id');
-  const classes = argVal(args, '--classes');
-  const tag = argVal(args, '--tag');
-  const query = argVal(args, '--query');
-  const filePath = argVal(args, '--file');
-  const text = argVal(args, '--text');
+export async function wrapCli(opts: WrapOpts): Promise<void> {
+  const { id, count, elementId, classes, tag, query, text } = opts;
+  let { file: filePath } = opts;
 
   if (!id) { console.error('Missing --id'); process.exit(1); }
   if (!elementId && !classes && !query) {
@@ -72,8 +76,8 @@ The agent should insert variant HTML at insertLine.`);
 
   // Find the source file. Generated files are excluded from auto-search so we
   // don't silently write variants into a file the next build will wipe.
-  let targetFile = filePath;
-  let matchedQuery = null;
+  let targetFile: string | null | undefined = filePath;
+  let matchedQuery: string | null = null;
   if (!targetFile) {
     for (const q of queries) {
       targetFile = findFileWithQuery(q, process.cwd(), genOpts);
@@ -83,7 +87,7 @@ The agent should insert variant HTML at insertLine.`);
       // Nothing in source. Did the element show up in a generated file? That
       // tells the agent "fall back to the agent-driven flow" vs "element just
       // doesn't exist in this project."
-      let generatedHit = null;
+      let generatedHit: string | null = null;
       for (const q of queries) {
         generatedHit = findFileWithQuery(q, process.cwd(), { ...genOpts, includeGenerated: true });
         if (generatedHit) break;
@@ -124,9 +128,9 @@ The agent should insert variant HTML at insertLine.`);
   // supplied, collect every candidate the queries surface and disambiguate
   // by the picked element's textContent. Without `--text`, fall back to the
   // legacy first-match behavior so unmodified callers keep working.
-  let match = null;
+  let match: ElementMatch | null = null;
   if (text) {
-    const candidates = [];
+    const candidates: ElementMatch[] = [];
     for (const q of queries) {
       const all = findAllElements(lines, q, tag);
       for (const c of all) {
@@ -187,7 +191,7 @@ The agent should insert variant HTML at insertLine.`);
   const commentSyntax = detectCommentSyntax(targetFile);
   const styleMode = detectStyleMode(targetFile);
   const isJsx = commentSyntax.open === '{/*';
-  const indent = lines[startLine].match(/^(\s*)/)[1];
+  const indent = lines[startLine].match(/^(\s*)/)![1];
 
   // Extract the original element. Reindent under the wrapper while preserving
   // the relative depth between lines — `l.trimStart()` would strip ALL leading
@@ -198,7 +202,7 @@ The agent should insert variant HTML at insertLine.`);
   // `deindentContent` on the accept side already mirrors this convention.
   const originalLines = lines.slice(startLine, endLine + 1);
   const originalBaseIndent = minLeadingSpaces(originalLines);
-  const reindentOriginal = (extra) => originalLines
+  const reindentOriginal = (extra: string): string => originalLines
     .map((l) => (l.trim() === '' ? '' : indent + extra + l.slice(originalBaseIndent)))
     .join('\n');
   const originalIndented = reindentOriginal('    ');
@@ -220,7 +224,7 @@ The agent should insert variant HTML at insertLine.`);
   // tuck both marker comments INSIDE it. accept/discard then expands its
   // replacement range to include the wrapper's `<div>` open / close lines
   // so the entire scaffold gets removed cleanly.
-  const wrapperLines = isJsx ? [
+  const wrapperLines: string[] = isJsx ? [
     indent + '<div data-impeccable-variants="' + id + '" data-impeccable-variant-count="' + count + '" ' + styleContents + '>',
     indent + '  ' + commentSyntax.open + ' impeccable-variants-start ' + id + ' ' + commentSyntax.close,
     indent + '  ' + commentSyntax.open + ' Original ' + commentSyntax.close,
@@ -282,17 +286,12 @@ The agent should insert variant HTML at insertLine.`);
 // Helpers
 // ---------------------------------------------------------------------------
 
-function argVal(args, flag) {
-  const idx = args.indexOf(flag);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
-}
-
 /**
  * Build search query strings in priority order (most specific first).
  * ID is most reliable, then specific class combos, then single classes, then raw query.
  */
-function buildSearchQueries(elementId, classes, tag, query) {
-  const queries = [];
+function buildSearchQueries(elementId?: string, classes?: string, tag?: string, query?: string): string[] {
+  const queries: string[] = [];
 
   // 1. ID is the most specific
   if (elementId) {
@@ -331,7 +330,7 @@ function buildSearchQueries(elementId, classes, tag, query) {
   return queries;
 }
 
-function detectCommentSyntax(filePath) {
+export function detectCommentSyntax(filePath: string): CommentSyntax {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.jsx' || ext === '.tsx') {
     return { open: '{/*', close: '*/}' };
@@ -340,7 +339,7 @@ function detectCommentSyntax(filePath) {
   return { open: '<!--', close: '-->' };
 }
 
-function detectStyleMode(filePath) {
+function detectStyleMode(filePath: string): StyleMode {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.astro') {
     return {
@@ -354,12 +353,12 @@ function detectStyleMode(filePath) {
   };
 }
 
-function buildCssSelectorPrefixExamples(styleMode, count) {
+function buildCssSelectorPrefixExamples(styleMode: string, count: number): string[] {
   if (styleMode !== 'astro-global-prefixed') return [];
   return Array.from({ length: count }, (_, i) => `[data-impeccable-variant="${i + 1}"]`);
 }
 
-function buildCssAuthoring(styleMode, count) {
+function buildCssAuthoring(styleMode: StyleMode, count: number): CssAuthoring {
   const variantNumbers = Array.from({ length: count }, (_, i) => i + 1);
   if (styleMode.mode === 'astro-global-prefixed') {
     return {
@@ -400,9 +399,9 @@ function buildCssAuthoring(styleMode, count) {
  * Search project files for the query string (class name, ID, etc.)
  * Returns the first matching file path, or null.
  */
-function findFileWithQuery(query, cwd, genOpts = {}) {
+function findFileWithQuery(query: string, cwd: string, genOpts: { cwd?: string; includeGenerated?: boolean } = {}): string | null {
   const searchDirs = ['src', 'app', 'pages', 'components', 'public', 'views', 'templates', '.'];
-  const seen = new Set();
+  const seen = new Set<string>();
 
   for (const dir of searchDirs) {
     const absDir = path.join(cwd, dir);
@@ -413,13 +412,13 @@ function findFileWithQuery(query, cwd, genOpts = {}) {
   return null;
 }
 
-function searchDir(dir, query, seen, depth, genOpts) {
+function searchDir(dir: string, query: string, seen: Set<string>, depth: number, genOpts: { cwd?: string; includeGenerated?: boolean }): string | null {
   if (depth > 5) return null; // don't go too deep
   const realDir = fs.realpathSync(dir);
   if (seen.has(realDir)) return null;
   seen.add(realDir);
 
-  let entries;
+  let entries: fs.Dirent[];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
   catch { return null; }
 
@@ -452,29 +451,12 @@ function searchDir(dir, query, seen, depth, genOpts) {
 }
 
 /**
- * Regex that matches a tag opener on a line. Allows the tag name to be
- * followed by whitespace, `>`, `/`, or end-of-line so that multi-line JSX
- * openers (e.g. `<section\n  className="..."\n>`) are recognised.
- */
-const OPENER_RE = /<([A-Za-z][A-Za-z0-9]*)(?=[\s/>]|$)/;
-
-/**
- * Find the element's start and end line in the file.
- *
- * `query` is a class name, attribute fragment (`class="..."`, `className="..."`,
- * `id="..."`), or a raw text snippet. Because a query can appear on a
- * continuation line of a multi-line tag (e.g. the `className="..."` row of a
- * `<section\n  className="..."\n>` JSX tag), we walk backward from the match
- * line to find the actual tag opener. When `tag` is provided, opener candidates
- * must match that tag name.
- */
-/**
  * Return the smallest leading-whitespace count across a set of lines,
  * ignoring blank lines (whose indent isn't load-bearing). Used to compute
  * the common base indent of a multi-line picked element so reindenting
  * under the wrapper preserves the relative depth between lines.
  */
-function minLeadingSpaces(lines) {
+function minLeadingSpaces(lines: string[]): number {
   let min = Infinity;
   for (const l of lines) {
     if (l.trim() === '') continue;
@@ -484,7 +466,7 @@ function minLeadingSpaces(lines) {
   return min === Infinity ? 0 : min;
 }
 
-function findElement(lines, query, tag = null) {
+export function findElement(lines: string[], query: string, tag?: string | null): ElementMatch | null {
   // Iterate all matches — the first substring hit isn't always the right one.
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].includes(query)) continue;
@@ -511,9 +493,9 @@ function findElement(lines, query, tag = null) {
  * first-match silently lands on the wrong branch. Returning all matches lets
  * the caller narrow by textContent or fail with a structured ambiguity error.
  */
-function findAllElements(lines, query, tag = null) {
-  const out = [];
-  const seen = new Set();
+function findAllElements(lines: string[], query: string, tag?: string | null): ElementMatch[] {
+  const out: ElementMatch[] = [];
+  const seen = new Set<number>();
   for (let i = 0; i < lines.length; i++) {
     if (!lines[i].includes(query)) continue;
     const stripped = lines[i].trim();
@@ -544,7 +526,7 @@ function findAllElements(lines, query, tag = null) {
  * 8 chars after stripping is too weak to disambiguate — the caller falls
  * back to first-match.
  */
-function filterByText(candidates, lines, text) {
+function filterByText(candidates: ElementMatch[], lines: string[], text: string): ElementMatch[] {
   const trimmed = text.replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 80);
   // Too short to disambiguate. Return [] so the caller's `filtered.length
   // === 0` branch fires (fall back to first-match) — the previous
@@ -576,7 +558,7 @@ function filterByText(candidates, lines, text) {
  *
  * Returns the line index of the opener, or -1 if none can be resolved.
  */
-function findOpenerLine(lines, matchLine, tag) {
+function findOpenerLine(lines: string[], matchLine: number, tag?: string | null): number {
   const self = lines[matchLine].match(OPENER_RE);
   if (self) {
     if (!tag || self[1] === tag) return matchLine;
@@ -597,7 +579,7 @@ function findOpenerLine(lines, matchLine, tag) {
  * Starting from a line with an opening tag, find the line with the matching
  * closing tag by counting tag nesting depth.
  */
-function findClosingLine(lines, start) {
+export function findClosingLine(lines: string[], start: number): number {
   const openMatch = lines[start].match(OPENER_RE);
   if (!openMatch) return start; // caller passed a non-opener; nothing to span
 
@@ -622,11 +604,4 @@ function findClosingLine(lines, start) {
   return Math.min(start + 50, lines.length - 1);
 }
 
-// Auto-execute when run directly (node live-wrap.mjs ...)
-const _running = process.argv[1];
-if (_running?.endsWith('live-wrap.mjs') || _running?.endsWith('live-wrap.mjs/')) {
-  wrapCli();
-}
-
-// Test exports (used by tests/live-wrap.test.mjs)
-export { buildSearchQueries, findElement, findClosingLine, detectCommentSyntax };
+export { buildSearchQueries };

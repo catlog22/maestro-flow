@@ -1,16 +1,11 @@
-#!/usr/bin/env node
 /**
  * Live variant mode server (self-contained, zero dependencies).
  *
  * Serves the browser script (/live.js), the detection overlay (/detect.js),
- * uses Server-Sent Events (SSE) for server→browser push, and HTTP POST for
- * browser→server events. Agent communicates via HTTP long-poll (/poll).
+ * uses Server-Sent Events (SSE) for server->browser push, and HTTP POST for
+ * browser->server events. Agent communicates via HTTP long-poll (/poll).
  *
- * Usage:
- *   node <scripts_path>/live-server.mjs              # start
- *   node <scripts_path>/live-server.mjs stop         # stop + remove injected live.js tag
- *   node <scripts_path>/live-server.mjs stop --keep-inject   # stop only
- *   node <scripts_path>/live-server.mjs --help
+ * Converted from live-server.mjs to TypeScript.
  */
 
 import http from 'node:http';
@@ -20,9 +15,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { parseDesignMd } from './design-parser.mjs';
-import { resolveContextDir } from './load-context.mjs';
-import { createLiveSessionStore } from './live-session-store.mjs';
+import { parseDesignMd } from '../design-parser.js';
+import { resolveContextDir } from '../load-context.js';
+import { createLiveSessionStore } from './session-store.js';
 import {
   getDesignSidecarPath,
   getLiveAnnotationsDir,
@@ -30,26 +25,35 @@ import {
   removeLiveServerInfo,
   resolveDesignSidecarPath,
   writeLiveServerInfo,
-} from './impeccable-paths.mjs';
+} from '../paths.js';
+import type { LiveServerInfo } from '../paths.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-// PRODUCT.md / DESIGN.md live wherever load-context.mjs resolves. The generated
+const staticDir = path.join(__dirname, 'static');
+
+// PRODUCT.md / DESIGN.md live wherever load-context resolves. The generated
 // DESIGN sidecar is project-local at .impeccable/design.json, with legacy
 // DESIGN.json fallback for existing projects.
 const CONTEXT_DIR = resolveContextDir(process.cwd());
 const DEFAULT_POLL_TIMEOUT = 600_000;   // 10 min — agent re-polls on timeout anyway
 const SSE_HEARTBEAT_INTERVAL = 30_000;  // keepalive ping every 30s
 
+export interface ServerOpts {
+  background?: boolean;
+  port?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Port detection
 // ---------------------------------------------------------------------------
 
-async function findOpenPort(start = 8400) {
+async function findOpenPort(start = 8400): Promise<number> {
   return new Promise((resolve) => {
     const srv = net.createServer();
     srv.listen(start, '127.0.0.1', () => {
-      const port = srv.address().port;
-      srv.close(() => resolve(port));
+      const port = srv.address();
+      const p = typeof port === 'object' && port !== null ? port.port : start;
+      srv.close(() => resolve(p));
     });
     srv.on('error', () => resolve(findOpenPort(start + 1)));
   });
@@ -59,40 +63,62 @@ async function findOpenPort(start = 8400) {
 // Session state
 // ---------------------------------------------------------------------------
 
-const state = {
+interface PendingEntry {
+  event: Record<string, unknown>;
+  leaseUntil: number;
+}
+
+interface PendingPoll {
+  resolve: (event: Record<string, unknown>) => void;
+  leaseMs: number;
+}
+
+interface ServerState {
+  token: string | null;
+  port: number | null;
+  sseClients: Set<http.ServerResponse>;
+  pendingEvents: PendingEntry[];
+  pendingPolls: PendingPoll[];
+  exitTimer: ReturnType<typeof setTimeout> | null;
+  sessionDir: string | null;
+  sessionStore: ReturnType<typeof createLiveSessionStore> | null;
+  leaseTimer: ReturnType<typeof setTimeout> | null;
+}
+
+const state: ServerState = {
   token: null,
   port: null,
-  sseClients: new Set(),   // SSE response objects (server→browser push)
-  pendingEvents: [],        // browser events waiting for agent ack ({ event, leaseUntil })
-  pendingPolls: [],         // agent poll callbacks waiting for browser events
+  sseClients: new Set(),
+  pendingEvents: [],
+  pendingPolls: [],
   exitTimer: null,
-  sessionDir: null,         // per-session tmp dir for annotation screenshots
+  sessionDir: null,
   sessionStore: null,
   leaseTimer: null,
 };
 
-// Cap per-annotation upload size. A full 1920×1080 PNG is typically <1 MB;
+// Cap per-annotation upload size. A full 1920x1080 PNG is typically <1 MB;
 // cap at 10 MB to guard against runaway writes from a misbehaving client.
 const MAX_ANNOTATION_BYTES = 10 * 1024 * 1024;
 
-function enqueueEvent(event) {
+function enqueueEvent(event: Record<string, unknown>): void {
   if (!event || (event.id && state.pendingEvents.some((entry) => entry.event?.id === event.id && entry.event?.type === event.type))) return;
   state.pendingEvents.push({ event, leaseUntil: 0 });
   flushPendingPolls();
 }
 
-function restorePendingEventsFromStore() {
+function restorePendingEventsFromStore(): void {
   if (!state.sessionStore) return;
   for (const snapshot of state.sessionStore.listActiveSessions()) {
-    if (snapshot.pendingEvent) enqueueEvent(snapshot.pendingEvent);
+    if (snapshot.pendingEvent) enqueueEvent(snapshot.pendingEvent as unknown as Record<string, unknown>);
   }
 }
 
-function findAvailablePendingEvent(now = Date.now()) {
+function findAvailablePendingEvent(now = Date.now()): PendingEntry | undefined {
   return state.pendingEvents.find((entry) => !entry.leaseUntil || entry.leaseUntil <= now);
 }
 
-function leaseEvent(entry, leaseMs) {
+function leaseEvent(entry: PendingEntry, leaseMs: number): Record<string, unknown> {
   if (!entry.event?.id) {
     const idx = state.pendingEvents.indexOf(entry);
     if (idx !== -1) state.pendingEvents.splice(idx, 1);
@@ -102,7 +128,7 @@ function leaseEvent(entry, leaseMs) {
   return entry.event;
 }
 
-function acknowledgePendingEvent(id) {
+function acknowledgePendingEvent(id: unknown): boolean {
   if (!id) return false;
   const idx = state.pendingEvents.findIndex((entry) => entry.event?.id === id);
   if (idx === -1) return false;
@@ -111,7 +137,7 @@ function acknowledgePendingEvent(id) {
   return true;
 }
 
-function scheduleLeaseFlush() {
+function scheduleLeaseFlush(): void {
   if (state.leaseTimer) {
     clearTimeout(state.leaseTimer);
     state.leaseTimer = null;
@@ -129,21 +155,21 @@ function scheduleLeaseFlush() {
   }, Math.max(0, nextLeaseUntil - now));
 }
 
-function flushPendingPolls() {
+function flushPendingPolls(): void {
   while (state.pendingPolls.length > 0) {
     const entry = findAvailablePendingEvent();
     if (!entry) {
       scheduleLeaseFlush();
       return;
     }
-    const poll = state.pendingPolls.shift();
+    const poll = state.pendingPolls.shift()!;
     poll.resolve(leaseEvent(entry, poll.leaseMs));
   }
   scheduleLeaseFlush();
 }
 
 /** Push a message to all connected SSE clients. */
-function broadcast(msg) {
+function broadcast(msg: Record<string, unknown>): void {
   const data = 'data: ' + JSON.stringify(msg) + '\n\n';
   for (const res of state.sseClients) {
     try { res.write(data); } catch { /* client gone */ }
@@ -154,9 +180,9 @@ function broadcast(msg) {
 // Load scripts
 // ---------------------------------------------------------------------------
 
-function loadBrowserScripts() {
-  // Detection script: look relative to the skill scripts dir, then fall back
-  // to the npm package location (cli/engine/detect-antipatterns-browser.js).
+function loadBrowserScripts(): { detectScript: string; sessionPath: string; livePath: string } {
+  // Detection script: look relative to the package, then fall back
+  // to the npm package location.
   // This one IS cached — detect.js rarely changes during a session.
   const detectPaths = [
     path.join(__dirname, '..', '..', '..', '..', 'cli', 'engine', 'detect-antipatterns-browser.js'),
@@ -170,8 +196,8 @@ function loadBrowserScripts() {
   // live-browser.js: DO NOT cache. Return the path so the /live.js handler
   // can re-read on every request. Editing the browser script during iteration
   // should land on the next tab reload, not require a server restart.
-  const sessionPath = path.join(__dirname, 'live-browser-session.js');
-  const livePath = path.join(__dirname, 'live-browser.js');
+  const sessionPath = path.join(staticDir, 'live-browser-session.js');
+  const livePath = path.join(staticDir, 'live-browser.js');
   for (const p of [sessionPath, livePath]) {
     if (!fs.existsSync(p)) {
       process.stderr.write('Error: live browser script not found at ' + p + '\n');
@@ -182,23 +208,23 @@ function loadBrowserScripts() {
   return { detectScript, sessionPath, livePath };
 }
 
-function hasProjectContext() {
+function hasProjectContext(): boolean {
   // PRODUCT.md carries brand voice / anti-references — that's what determines
   // whether variants are brand-aware. DESIGN.md (visual tokens) is a separate
   // concern, surfaced by the design panel's own empty state. Legacy
-  // .impeccable.md is auto-migrated to PRODUCT.md by load-context.mjs.
+  // .impeccable.md is auto-migrated to PRODUCT.md by load-context.
   try {
     fs.accessSync(path.join(CONTEXT_DIR, 'PRODUCT.md'), fs.constants.R_OK);
     return true;
   } catch { return false; }
 }
 
-function statOrNull(filePath) {
+function statOrNull(filePath: string): fs.Stats | null {
   try { return fs.statSync(filePath); } catch { return null; }
 }
 
 // ---------------------------------------------------------------------------
-// Validation (inline — no external import needed for self-contained script)
+// Validation (inline — no external import needed for self-contained server)
 // ---------------------------------------------------------------------------
 
 const VISUAL_ACTIONS = [
@@ -213,17 +239,17 @@ const VISUAL_ACTIONS = [
 const ID_PATTERN = /^[0-9a-f]{8}$/;
 const VARIANT_ID_PATTERN = /^[0-9]{1,3}$/;
 
-function isValidId(v) { return typeof v === 'string' && ID_PATTERN.test(v); }
-function isValidVariantId(v) { return typeof v === 'string' && VARIANT_ID_PATTERN.test(v); }
+function isValidId(v: unknown): v is string { return typeof v === 'string' && ID_PATTERN.test(v); }
+function isValidVariantId(v: unknown): v is string { return typeof v === 'string' && VARIANT_ID_PATTERN.test(v); }
 
-function validateEvent(msg) {
+function validateEvent(msg: Record<string, unknown>): string | null {
   if (!msg || typeof msg !== 'object' || !msg.type) return 'Missing or invalid message';
   switch (msg.type) {
     case 'generate':
       if (!isValidId(msg.id)) return 'generate: missing or malformed id';
-      if (!msg.action || !VISUAL_ACTIONS.includes(msg.action)) return 'generate: invalid action';
-      if (!Number.isInteger(msg.count) || msg.count < 1 || msg.count > 8) return 'generate: count must be 1-8';
-      if (!msg.element || !msg.element.outerHTML) return 'generate: missing element context';
+      if (!msg.action || !VISUAL_ACTIONS.includes(msg.action as string)) return 'generate: invalid action';
+      if (!Number.isInteger(msg.count) || (msg.count as number) < 1 || (msg.count as number) > 8) return 'generate: count must be 1-8';
+      if (!msg.element || !(msg.element as Record<string, unknown>).outerHTML) return 'generate: missing element context';
       // Optional annotation fields (all-or-nothing: if any present, all must be well-formed).
       if (msg.screenshotPath !== undefined && typeof msg.screenshotPath !== 'string') return 'generate: screenshotPath must be string';
       if (msg.comments !== undefined && !Array.isArray(msg.comments)) return 'generate: comments must be array';
@@ -242,7 +268,7 @@ function validateEvent(msg) {
       return isValidId(msg.id) ? null : 'discard: missing or malformed id';
     case 'checkpoint':
       if (!isValidId(msg.id)) return 'checkpoint: missing or malformed id';
-      if (!Number.isInteger(msg.revision) || msg.revision < 0) return 'checkpoint: revision must be a non-negative integer';
+      if (!Number.isInteger(msg.revision) || (msg.revision as number) < 0) return 'checkpoint: revision must be a non-negative integer';
       if (msg.paramValues !== undefined && (typeof msg.paramValues !== 'object' || msg.paramValues === null || Array.isArray(msg.paramValues))) {
         return 'checkpoint: paramValues must be an object';
       }
@@ -261,9 +287,10 @@ function validateEvent(msg) {
 // HTTP request handler
 // ---------------------------------------------------------------------------
 
-function createRequestHandler({ detectScript, sessionPath, livePath }) {
+function createRequestHandler(scriptInfo: { detectScript: string; sessionPath: string; livePath: string }): (req: http.IncomingMessage, res: http.ServerResponse) => void {
+  const { detectScript, sessionPath, livePath } = scriptInfo;
   return (req, res) => {
-    const url = new URL(req.url, `http://localhost:${state.port}`);
+    const url = new URL(req.url ?? '/', `http://localhost:${state.port}`);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -277,14 +304,14 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       // the next tab reload. No-store headers prevent browser caching across
       // sessions — during iteration, a cached old script silently breaks
       // every subsequent session.
-      let sessionScript;
-      let liveScript;
+      let sessionScript: string;
+      let liveScript: string;
       try {
         sessionScript = fs.readFileSync(sessionPath, 'utf-8');
         liveScript = fs.readFileSync(livePath, 'utf-8');
       } catch (err) {
         res.writeHead(500, { 'Content-Type': 'text/plain' });
-        res.end('Error reading live browser scripts: ' + err.message);
+        res.end('Error reading live browser scripts: ' + (err as Error).message);
         return;
       }
       const body =
@@ -311,7 +338,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
     // Lazy-loaded by live.js when the user clicks Go; exposes
     // window.modernScreenshot.domToBlob(...) for capture.
     if (p === '/modern-screenshot.js') {
-      const vendorPath = path.join(__dirname, 'modern-screenshot.umd.js');
+      const vendorPath = path.join(staticDir, 'modern-screenshot.umd.js');
       try {
         res.writeHead(200, {
           'Content-Type': 'application/javascript',
@@ -324,10 +351,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       return;
     }
 
-    // --- Annotation upload (browser → server, raw PNG body) ---
-    // Client generates the eventId, POSTs the PNG, then POSTs the generate
-    // event with screenshotPath already set. Keeps bytes out of the SSE/poll
-    // bridge and preserves the "one shot from the user's POV" UX.
+    // --- Annotation upload (browser -> server, raw PNG body) ---
     if (p === '/annotation' && req.method === 'POST') {
       const token = url.searchParams.get('token');
       if (token !== state.token) { res.writeHead(401); res.end('Unauthorized'); return; }
@@ -337,7 +361,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         res.end(JSON.stringify({ error: 'Invalid eventId' }));
         return;
       }
-      if ((req.headers['content-type'] || '').toLowerCase() !== 'image/png') {
+      if ((req.headers['content-type'] ?? '').toLowerCase() !== 'image/png') {
         res.writeHead(415, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Content-Type must be image/png' }));
         return;
@@ -347,10 +371,10 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         res.end(JSON.stringify({ error: 'Session dir unavailable' }));
         return;
       }
-      const chunks = [];
+      const chunks: Buffer[] = [];
       let total = 0;
       let aborted = false;
-      req.on('data', (c) => {
+      req.on('data', (c: Buffer) => {
         if (aborted) return;
         total += c.length;
         if (total > MAX_ANNOTATION_BYTES) {
@@ -364,12 +388,12 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       });
       req.on('end', () => {
         if (aborted) return;
-        const absPath = path.join(state.sessionDir, eventId + '.png');
+        const absPath = path.join(state.sessionDir!, eventId + '.png');
         try {
           fs.writeFileSync(absPath, Buffer.concat(chunks));
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ error: 'Write failed: ' + err.message }));
+          res.end(JSON.stringify({ error: 'Write failed: ' + (err as Error).message }));
           return;
         }
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -416,16 +440,6 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
     }
 
     // --- Design system (unified v2 response) + raw ---
-    //   /design-system.json    returns both parsed DESIGN.md and .impeccable/design.json
-    //                          sidecar when present. Panel merges them:
-    //                            { present, parsed, sidecar, hasMd, hasSidecar,
-    //                              mdNewerThanJson, parseError?, sidecarError? }
-    //                          - parsed: output of parseDesignMd (frontmatter
-    //                            + six canonical sections) when DESIGN.md exists.
-    //                          - sidecar: .impeccable/design.json contents when present.
-    //                            Expected shape: schemaVersion 2, carrying
-    //                            extensions + components + narrative.
-    //   /design-system/raw     returns DESIGN.md markdown verbatim
     if (p === '/design-system.json' || p === '/design-system/raw') {
       const token = url.searchParams.get('token');
       if (token !== state.token) { res.writeHead(401); res.end('Unauthorized'); return; }
@@ -448,7 +462,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         return;
       }
 
-      const response = {
+      const response: Record<string, unknown> = {
         present: true,
         hasMd: !!mdStat,
         hasSidecar: !!jsonStat,
@@ -459,7 +473,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         try {
           response.parsed = parseDesignMd(fs.readFileSync(mdPath, 'utf-8'));
         } catch (err) {
-          response.parseError = err.message;
+          response.parseError = (err as Error).message;
         }
       }
 
@@ -467,7 +481,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         try {
           response.sidecar = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
         } catch (err) {
-          response.sidecarError = 'Failed to parse .impeccable/design.json: ' + err.message;
+          response.sidecarError = 'Failed to parse .impeccable/design.json: ' + (err as Error).message;
         }
       }
 
@@ -484,7 +498,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       if (!filePath || filePath.includes('..')) { res.writeHead(400); res.end('Bad path'); return; }
       const absPath = path.resolve(process.cwd(), filePath);
       if (!absPath.startsWith(process.cwd())) { res.writeHead(403); res.end('Forbidden'); return; }
-      let content;
+      let content: string;
       try { content = fs.readFileSync(absPath, 'utf-8'); }
       catch { res.writeHead(404); res.end('File not found'); return; }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -492,7 +506,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       return;
     }
 
-    // --- SSE: server→browser push (replaces WebSocket) ---
+    // --- SSE: server->browser push ---
     if (p === '/events' && req.method === 'GET') {
       const token = url.searchParams.get('token');
       if (token !== state.token) { res.writeHead(401); res.end('Unauthorized'); return; }
@@ -507,7 +521,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       }) + '\n\n');
 
       state.sseClients.add(res);
-      clearTimeout(state.exitTimer);
+      if (state.exitTimer) clearTimeout(state.exitTimer);
 
       // Keepalive: SSE comment every 30s prevents silent connection drops.
       const heartbeat = setInterval(() => {
@@ -518,7 +532,7 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         clearInterval(heartbeat);
         state.sseClients.delete(res);
         if (state.sseClients.size === 0) {
-          clearTimeout(state.exitTimer);
+          if (state.exitTimer) clearTimeout(state.exitTimer);
           state.exitTimer = setTimeout(() => {
             if (state.sseClients.size === 0) enqueueEvent({ type: 'exit' });
           }, 8000);
@@ -527,12 +541,12 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
       return;
     }
 
-    // --- Browser→server events (replaces WebSocket messages) ---
+    // --- Browser->server events ---
     if (p === '/events' && req.method === 'POST') {
       let body = '';
-      req.on('data', (c) => { body += c; });
+      req.on('data', (c: Buffer) => { body += c; });
       req.on('end', () => {
-        let msg;
+        let msg: Record<string, unknown>;
         try { msg = JSON.parse(body); } catch {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'Invalid JSON' }));
@@ -551,10 +565,10 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
         }
         if (state.sessionStore && msg.id) {
           try {
-            state.sessionStore.appendEvent(msg);
+            state.sessionStore.appendEvent(msg as unknown as import('./session-store.js').LiveEvent);
           } catch (err) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'session_store_append_failed', message: err.message }));
+            res.end(JSON.stringify({ error: 'session_store_append_failed', message: (err as Error).message }));
             return;
           }
         }
@@ -590,50 +604,51 @@ function createRequestHandler({ detectScript, sessionPath, livePath }) {
 }
 
 // ---------------------------------------------------------------------------
-// Agent poll endpoints (unchanged from WS version)
+// Agent poll endpoints
 // ---------------------------------------------------------------------------
 
-function handlePollGet(req, res, url) {
+function handlePollGet(_req: http.IncomingMessage, res: http.ServerResponse, url: URL): void {
   const token = url.searchParams.get('token');
   if (token !== state.token) {
     res.writeHead(401, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Unauthorized' }));
     return;
   }
-  const timeout = parseInt(url.searchParams.get('timeout') || DEFAULT_POLL_TIMEOUT, 10);
-  const leaseMs = parseInt(url.searchParams.get('leaseMs') || '30000', 10);
+  const timeout = parseInt(url.searchParams.get('timeout') ?? String(DEFAULT_POLL_TIMEOUT), 10);
+  const leaseMs = parseInt(url.searchParams.get('leaseMs') ?? '30000', 10);
   const available = findAvailablePendingEvent();
   if (available) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(leaseEvent(available, leaseMs)));
     return;
   }
-  const poll = { resolve, leaseMs };
+  const poll: PendingPoll = { resolve: doResolve, leaseMs };
   const timer = setTimeout(() => {
     const idx = state.pendingPolls.indexOf(poll);
     if (idx !== -1) state.pendingPolls.splice(idx, 1);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ type: 'timeout' }));
   }, timeout);
-  function resolve(event) {
+  function doResolve(event: Record<string, unknown>): void {
     clearTimeout(timer);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(event));
   }
+  poll.resolve = doResolve;
   state.pendingPolls.push(poll);
   scheduleLeaseFlush();
-  req.on('close', () => {
+  _req.on('close', () => {
     clearTimeout(timer);
     const idx = state.pendingPolls.indexOf(poll);
     if (idx !== -1) state.pendingPolls.splice(idx, 1);
   });
 }
 
-function handlePollPost(req, res) {
+function handlePollPost(req: http.IncomingMessage, res: http.ServerResponse): void {
   let body = '';
-  req.on('data', (c) => { body += c; });
+  req.on('data', (c: Buffer) => { body += c; });
   req.on('end', () => {
-    let msg;
+    let msg: Record<string, unknown>;
     try { msg = JSON.parse(body); } catch {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Invalid JSON' }));
@@ -656,16 +671,16 @@ function handlePollPost(req, res) {
               : 'agent_done';
         state.sessionStore.appendEvent({
           type: eventType,
-          id: msg.id,
-          file: msg.file,
-          message: msg.message,
-          carbonize: msg.data?.carbonize === true,
+          id: String(msg.id ?? ''),
+          file: typeof msg.file === 'string' ? msg.file : undefined,
+          message: typeof msg.message === 'string' ? msg.message : undefined,
+          carbonize: (msg.data as Record<string, unknown> | undefined)?.carbonize === true,
         });
       } catch { /* keep reply path best-effort; browser still needs SSE */ }
     }
     flushPendingPolls();
     // Forward the reply to the browser via SSE
-    broadcast({ type: msg.type || 'done', id: msg.id, message: msg.message, file: msg.file, data: msg.data });
+    broadcast({ type: (msg.type as string) || 'done', id: msg.id, message: msg.message, file: msg.file, data: msg.data });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   });
@@ -675,9 +690,9 @@ function handlePollPost(req, res) {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-let httpServer = null;
+let httpServer: http.Server | null = null;
 
-function shutdown() {
+function shutdown(): void {
   removeLiveServerInfo(process.cwd());
   if (state.leaseTimer) clearTimeout(state.leaseTimer);
   state.leaseTimer = null;
@@ -693,144 +708,127 @@ function shutdown() {
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Main CLI entry
 // ---------------------------------------------------------------------------
 
-const args = process.argv.slice(2);
+export async function serverCli(action?: string, opts?: ServerOpts): Promise<void> {
+  const args: string[] = [];
+  if (action) args.push(action);
+  if (opts?.background) args.push('--background');
+  if (opts?.port) args.push(`--port=${opts.port}`);
 
-if (args.includes('--help') || args.includes('-h')) {
-  console.log(`Usage: node live-server.mjs [options]
-
-Start the live variant mode server (zero dependencies).
-
-Commands:
-  (default)     Start the server (foreground)
-  stop          Stop the server and remove the injected live.js script tag
-  stop --keep-inject   Stop the server only (leave the script tag in the HTML entry)
-
-Options:
-  --background  Start detached, print connection JSON to stdout, then exit
-  --port=PORT   Use a specific port (default: auto-detect starting at 8400)
-  --keep-inject Only with stop: skip live-inject.mjs --remove
-  --help        Show this help
-
-Endpoints:
-  /live.js             Browser script (element picker + variant cycling)
-  /detect.js           Detection overlay (backwards compatible)
-  /modern-screenshot.js Vendored modern-screenshot UMD build (lazy-loaded by live.js)
-  /annotation          POST raw image/png to stage a variant screenshot
-  /events              SSE stream (server→browser) + POST (browser→server)
-  /poll                Long-poll for agent CLI
-  /source              Raw source file reader (no-HMR fallback)
-  /status              Durable recovery status (token-protected)
-  /health              Health check`);
-  process.exit(0);
-}
-
-if (args.includes('stop')) {
-  const keepInject = args.includes('--keep-inject');
-  try {
-    const { info } = readLiveServerInfo(process.cwd()) || {};
-    const res = await fetch(`http://localhost:${info.port}/stop?token=${info.token}`);
-    if (res.ok) console.log(`Stopped live server on port ${info.port}.`);
-  } catch {
-    console.log('No running live server found.');
-  }
-  if (!keepInject) {
-    const injectPath = path.join(__dirname, 'live-inject.mjs');
+  if (args.includes('stop')) {
+    const keepInject = args.includes('--keep-inject');
     try {
-      const out = execFileSync(process.execPath, [injectPath, '--remove'], {
-        encoding: 'utf-8',
-        cwd: process.cwd(),
-      });
-      const line = out.trim().split('\n').filter(Boolean).pop();
-      if (line) {
-        try {
-          const j = JSON.parse(line);
-          if (j.removed === true) {
-            console.log(`Removed live script tag from ${j.file}.`);
-          }
-        } catch {
-          /* ignore non-JSON lines */
-        }
+      const record = readLiveServerInfo(process.cwd());
+      const info = record?.info as LiveServerInfo | undefined;
+      if (info) {
+        const res = await fetch(`http://localhost:${info.port}/stop?token=${info.token}`);
+        if (res.ok) console.log(`Stopped live server on port ${info.port}.`);
       }
-    } catch (err) {
-      const detail = err.stderr?.toString?.().trim?.()
-        || err.stdout?.toString?.().trim?.()
-        || err.message
-        || String(err);
-      console.warn(`Note: could not remove live script tag (${detail.split('\n')[0]})`);
+    } catch {
+      console.log('No running live server found.');
+    }
+    if (!keepInject) {
+      try {
+        const { injectCli } = await import('./inject.js');
+        // Capture injectCli output by replacing console.log temporarily
+        let captured = '';
+        const origLog = console.log;
+        console.log = (...a: unknown[]) => { captured = a.map(String).join(' '); };
+        await injectCli({ remove: true });
+        console.log = origLog;
+
+        const line = captured.trim().split('\n').filter(Boolean).pop();
+        if (line) {
+          try {
+            const j = JSON.parse(line) as Record<string, unknown>;
+            if (j.removed === true) {
+              console.log(`Removed live script tag from ${j.file}.`);
+            }
+          } catch {
+            /* ignore non-JSON lines */
+          }
+        }
+      } catch (err) {
+        const error = err as Error & { stderr?: { toString(): string }; stdout?: { toString(): string } };
+        const detail = error.stderr?.toString?.().trim?.()
+          || error.stdout?.toString?.().trim?.()
+          || error.message
+          || String(err);
+        console.warn(`Note: could not remove live script tag (${detail.split('\n')[0]})`);
+      }
+    }
+    process.exit(0);
+  }
+
+  // --background: spawn a detached child server, wait for it to be ready,
+  // print the connection JSON, then exit.
+  if (args.includes('--background')) {
+    const childArgs = args.filter(a => a !== '--background');
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...childArgs], {
+      detached: true,
+      stdio: 'ignore',
+      cwd: process.cwd(),
+    });
+    child.unref();
+
+    // Poll for the PID file (the child writes it once the HTTP server is listening).
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      try {
+        const record = readLiveServerInfo(process.cwd());
+        const info = record?.info;
+        if (info && info.pid !== process.pid) {
+          // Output JSON so the agent can read port + token from stdout.
+          console.log(JSON.stringify(info));
+          process.exit(0);
+        }
+      } catch { /* not ready yet */ }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    console.error('Timed out waiting for live server to start.');
+    process.exit(1);
+  }
+
+  // Check for existing session
+  const existingRecord = readLiveServerInfo(process.cwd());
+  if (existingRecord?.info) {
+    const existing = existingRecord.info;
+    try {
+      process.kill(existing.pid, 0);
+      console.error(`Live server already running on port ${existing.port} (pid ${existing.pid}).`);
+      console.error('Stop it first with: maestro impeccable live-server stop');
+      process.exit(1);
+    } catch {
+      try { fs.unlinkSync(existingRecord.path); } catch {}
     }
   }
-  process.exit(0);
-}
 
-// --background: spawn a detached child server, wait for it to be ready,
-// print the connection JSON, then exit.  This keeps the startup command
-// simple (no shell backgrounding or chained commands).
-if (args.includes('--background')) {
-  const childArgs = args.filter(a => a !== '--background');
-  const child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...childArgs], {
-    detached: true,
-    stdio: 'ignore',
-    cwd: process.cwd(),
+  state.token = randomUUID();
+  state.sessionStore = createLiveSessionStore({ cwd: process.cwd() });
+  restorePendingEventsFromStore();
+  const portArg = args.find(a => a.startsWith('--port='));
+  state.port = portArg ? parseInt(portArg.split('=')[1], 10) : await findOpenPort();
+  // Annotation screenshots live in the project root so the agent's Read tool
+  // doesn't trip a per-file permission prompt. Sessioned by token so concurrent
+  // projects (or quick restarts) don't collide.
+  const annotRoot = getLiveAnnotationsDir(process.cwd());
+  fs.mkdirSync(annotRoot, { recursive: true });
+  state.sessionDir = fs.mkdtempSync(path.join(annotRoot, 'session-'));
+
+  const scriptInfo = loadBrowserScripts();
+  httpServer = http.createServer(createRequestHandler(scriptInfo));
+
+  httpServer.listen(state.port, '127.0.0.1', () => {
+    writeLiveServerInfo(process.cwd(), { pid: process.pid, port: state.port!, token: state.token! });
+    const url = `http://localhost:${state.port}`;
+    console.log(`\nImpeccable live server running on ${url}`);
+    console.log(`Token: ${state.token}\n`);
+    console.log(`Inject: <script src="${url}/live.js"><\/script>`);
+    console.log(`Stop:   maestro impeccable live-server stop`);
   });
-  child.unref();
 
-  // Poll for the PID file (the child writes it once the HTTP server is listening).
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    try {
-      const { info } = readLiveServerInfo(process.cwd()) || {};
-      if (info.pid !== process.pid) {
-        // Output JSON so the agent can read port + token from stdout.
-        console.log(JSON.stringify(info));
-        process.exit(0);
-      }
-    } catch { /* not ready yet */ }
-    await new Promise(r => setTimeout(r, 200));
-  }
-  console.error('Timed out waiting for live server to start.');
-  process.exit(1);
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
-
-// Check for existing session
-const existingRecord = readLiveServerInfo(process.cwd());
-if (existingRecord?.info) {
-  const existing = existingRecord.info;
-  try {
-    process.kill(existing.pid, 0);
-    console.error(`Live server already running on port ${existing.port} (pid ${existing.pid}).`);
-    console.error('Stop it first with: node ' + path.basename(fileURLToPath(import.meta.url)) + ' stop');
-    process.exit(1);
-  } catch {
-    try { fs.unlinkSync(existingRecord.path); } catch {}
-  }
-}
-
-state.token = randomUUID();
-state.sessionStore = createLiveSessionStore({ cwd: process.cwd() });
-restorePendingEventsFromStore();
-const portArg = args.find(a => a.startsWith('--port='));
-state.port = portArg ? parseInt(portArg.split('=')[1], 10) : await findOpenPort();
-// Annotation screenshots live in the project root so the agent's Read tool
-// doesn't trip a per-file permission prompt. Sessioned by token so concurrent
-// projects (or quick restarts) don't collide.
-const annotRoot = getLiveAnnotationsDir(process.cwd());
-fs.mkdirSync(annotRoot, { recursive: true });
-state.sessionDir = fs.mkdtempSync(path.join(annotRoot, 'session-'));
-
-const { detectScript, sessionPath, livePath } = loadBrowserScripts();
-httpServer = http.createServer(createRequestHandler({ detectScript, sessionPath, livePath }));
-
-httpServer.listen(state.port, '127.0.0.1', () => {
-  writeLiveServerInfo(process.cwd(), { pid: process.pid, port: state.port, token: state.token });
-  const url = `http://localhost:${state.port}`;
-  console.log(`\nImpeccable live server running on ${url}`);
-  console.log(`Token: ${state.token}\n`);
-  console.log(`Inject: <script src="${url}/live.js"><\/script>`);
-  console.log(`Stop:   node ${path.basename(fileURLToPath(import.meta.url))} stop`);
-});
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);

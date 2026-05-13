@@ -1,59 +1,69 @@
 /**
  * CLI helper: deterministic accept/discard of variant sessions.
  *
- * Usage:
- *   node live-accept.mjs --id SESSION_ID --discard
- *   node live-accept.mjs --id SESSION_ID --variant N
- *
  * For discard: removes the entire variant wrapper and restores the original.
  * For accept: replaces the wrapper with the chosen variant's content. If the
  * session had a colocated <style> block, it's preserved with carbonize markers
  * for a background agent to integrate into the project's CSS.
  *
- * Output: JSON to stdout.
+ * Converted from live-accept.mjs to TypeScript.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { isGeneratedFile } from './is-generated.mjs';
+import { isGeneratedFile } from '../is-generated.js';
 
 const EXTENSIONS = ['.html', '.jsx', '.tsx', '.vue', '.svelte', '.astro'];
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface AcceptOpts {
+  id: string;
+  variant?: number;
+  discard?: boolean;
+  paramValues?: string;
+}
+
+interface MarkerBlock {
+  start: number;
+  end: number;
+}
+
+interface CommentSyntax {
+  open: string;
+  close: string;
+}
+
+interface SessionFound {
+  file: string;
+  content: string;
+  lines: string[];
+}
+
+interface AcceptResult {
+  carbonize?: boolean;
+  handled?: boolean;
+  error?: string;
+  todo?: string;
+}
 
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
-export async function acceptCli() {
-  const args = process.argv.slice(2);
-
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage: node live-accept.mjs [options]
-
-Deterministic accept/discard for live variant sessions.
-
-Modes:
-  --discard          Remove variants, restore original
-  --variant N        Accept variant N, discard the rest
-
-Required:
-  --id SESSION_ID    Session ID of the variant wrapper
-
-Output (JSON):
-  { handled, file, carbonize }`);
-    process.exit(0);
-  }
-
-  const id = argVal(args, '--id');
-  const variantNum = argVal(args, '--variant');
-  const paramValuesRaw = argVal(args, '--param-values');
-  const isDiscard = args.includes('--discard');
+export async function acceptCli(opts: AcceptOpts): Promise<void> {
+  const { id, discard: isDiscard } = opts;
+  const variantNum = opts.variant !== undefined ? String(opts.variant) : undefined;
+  const paramValuesRaw = opts.paramValues;
 
   if (!id) { console.error('Missing --id'); process.exit(1); }
   if (!isDiscard && !variantNum) { console.error('Need --discard or --variant N'); process.exit(1); }
 
-  let paramValues = null;
+  let paramValues: Record<string, unknown> | null = null;
   if (paramValuesRaw) {
-    try { paramValues = JSON.parse(paramValuesRaw); }
+    try { paramValues = JSON.parse(paramValuesRaw) as Record<string, unknown>; }
     catch { paramValues = null; } // malformed blob: skip the comment rather than failing the accept
   }
 
@@ -64,7 +74,7 @@ Output (JSON):
     process.exit(0);
   }
 
-  const { file: targetFile, content, lines } = found;
+  const { file: targetFile, lines } = found;
   const relFile = path.relative(process.cwd(), targetFile);
 
   // Bail if the session lives in a generated file. The agent manually wrote
@@ -85,7 +95,7 @@ Output (JSON):
     const result = handleDiscard(id, lines, targetFile);
     console.log(JSON.stringify({ handled: true, file: relFile, carbonize: false, ...result }));
   } else {
-    const result = handleAccept(id, variantNum, lines, targetFile, paramValues);
+    const result = handleAccept(id, variantNum!, lines, targetFile, paramValues);
     // Single-line attention-grabber when cleanup is required. The full
     // five-step checklist lives in reference/live.md (loaded once per
     // session); repeating it per-event would waste tokens.
@@ -100,7 +110,7 @@ Output (JSON):
 // Discard
 // ---------------------------------------------------------------------------
 
-function handleDiscard(id, lines, targetFile) {
+function handleDiscard(id: string, lines: string[], targetFile: string): Record<string, unknown> {
   const block = findMarkerBlock(id, lines);
   if (!block) return { handled: false, error: 'Markers not found' };
 
@@ -114,7 +124,7 @@ function handleDiscard(id, lines, targetFile) {
   // as the deindent base would push the restored content 2 spaces too far
   // right on every JSX/TSX session. `replaceRange.start` is the outer wrapper
   // line, which is at the original element's indent for both HTML and JSX.
-  const indent = lines[replaceRange.start].match(/^(\s*)/)[1];
+  const indent = lines[replaceRange.start].match(/^(\s*)/)![1];
   const restored = deindentContent(original, indent);
 
   const newLines = [
@@ -130,7 +140,7 @@ function handleDiscard(id, lines, targetFile) {
 // Accept
 // ---------------------------------------------------------------------------
 
-function handleAccept(id, variantNum, lines, targetFile, paramValues) {
+function handleAccept(id: string, variantNum: string, lines: string[], targetFile: string, paramValues: Record<string, unknown> | null): AcceptResult {
   const block = findMarkerBlock(id, lines);
   if (!block) return { handled: false, error: 'Markers not found' };
 
@@ -141,7 +151,7 @@ function handleAccept(id, variantNum, lines, targetFile, paramValues) {
   // deeper than the original element. See handleDiscard for the full
   // rationale.
   const replaceRange = expandReplaceRange(block, lines, isJsx);
-  const indent = lines[replaceRange.start].match(/^(\s*)/)[1];
+  const indent = lines[replaceRange.start].match(/^(\s*)/)![1];
 
   // Extract the chosen variant's inner content
   const variantContent = extractVariant(lines, block, variantNum);
@@ -159,7 +169,7 @@ function handleAccept(id, variantNum, lines, targetFile, paramValues) {
 
   // Build the replacement
   const restored = deindentContent(variantContent, indent);
-  const replacement = [];
+  const replacement: string[] = [];
 
   if (cssContent) {
     replacement.push(indent + commentSyntax.open + ' impeccable-carbonize-start ' + id + ' ' + commentSyntax.close);
@@ -215,7 +225,7 @@ function handleAccept(id, variantNum, lines, targetFile, paramValues) {
  * Find the start/end marker lines for a session.
  * Returns { start, end } (0-indexed line numbers) or null.
  */
-function findMarkerBlock(id, lines) {
+export function findMarkerBlock(id: string, lines: string[]): MarkerBlock | null {
   let start = -1;
   let end = -1;
   const startPattern = 'impeccable-variants-start ' + id;
@@ -245,7 +255,7 @@ function findMarkerBlock(id, lines) {
  * Marker lines themselves stay where they were so extractOriginal /
  * extractVariant / extractCss continue to walk the same range.
  */
-function expandReplaceRange(block, lines, isJsx) {
+function expandReplaceRange(block: MarkerBlock, lines: string[], isJsx: boolean): MarkerBlock {
   if (!isJsx) return { start: block.start, end: block.end };
 
   let { start, end } = block;
@@ -275,7 +285,7 @@ function expandReplaceRange(block, lines, isJsx) {
   // (open, group 1 is empty), or `</div>`.
   const tagRe = /<div\b[^>]*?(\/?)>|<\/div\s*>/g;
   let depth = 0;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = tagRe.exec(joined)) !== null) {
     const isClose = m[0].startsWith('</');
     const isSelfClose = !isClose && m[1] === '/';
@@ -304,8 +314,8 @@ function expandReplaceRange(block, lines, isJsx) {
  *   - Same-line `<style>…</style>` blocks
  *   - Multi-line `<style>\n…\n</style>` blocks
  */
-function stripStyleAndJoin(lines, block) {
-  const out = [];
+function stripStyleAndJoin(lines: string[], block: MarkerBlock): string {
+  const out: string[] = [];
   let inStyle = false;
   for (let i = block.start; i <= block.end; i++) {
     let line = lines[i];
@@ -344,13 +354,13 @@ function stripStyleAndJoin(lines, block) {
  * regex source fragment that must appear inside the opener tag.
  * Returns the inner string (may be empty), or null if not found.
  */
-function extractInnerByAttr(text, attrMatch) {
+function extractInnerByAttr(text: string, attrMatch: string): string | null {
   const openerRe = new RegExp('<([A-Za-z][A-Za-z0-9]*)\\b[^>]*' + attrMatch + '[^>]*>');
   const openMatch = text.match(openerRe);
   if (!openMatch) return null;
 
   const tagName = openMatch[1];
-  const innerStart = openMatch.index + openMatch[0].length;
+  const innerStart = openMatch.index! + openMatch[0].length;
 
   // Match any opener or closer of this tag name after innerStart.
   // (Does not match self-closing <TAG … />, which doesn't contribute to depth.)
@@ -358,7 +368,7 @@ function extractInnerByAttr(text, attrMatch) {
   tagRe.lastIndex = innerStart;
 
   let depth = 1;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = tagRe.exec(text))) {
     const isClose = m[0].startsWith('</');
     const isSelfClose = !isClose && /\/\s*>$/.test(m[0]);
@@ -376,7 +386,7 @@ function extractInnerByAttr(text, attrMatch) {
  * Extract the original element content from within the variant wrapper.
  * Returns an array of lines.
  */
-function extractOriginal(lines, block) {
+export function extractOriginal(lines: string[], block: MarkerBlock): string[] {
   const text = stripStyleAndJoin(lines, block);
   const inner = extractInnerByAttr(text, 'data-impeccable-variant="original"');
   if (inner === null) return [];
@@ -387,7 +397,7 @@ function extractOriginal(lines, block) {
  * Extract a specific variant's inner content (stripping the wrapper div).
  * Returns an array of lines, or null if not found.
  */
-function extractVariant(lines, block, variantNum) {
+export function extractVariant(lines: string[], block: MarkerBlock, variantNum: string): string[] | null {
   const text = stripStyleAndJoin(lines, block);
   const inner = extractInnerByAttr(text, 'data-impeccable-variant="' + variantNum + '"');
   if (inner === null) return null;
@@ -408,10 +418,10 @@ function extractVariant(lines, block, variantNum) {
  *   3. Multi-line: `<style>` on one line, `</style>` on a later line — return
  *      the lines between them.
  */
-function extractCss(lines, block, id) {
+export function extractCss(lines: string[], block: MarkerBlock, id: string): string[] | null {
   const styleAttr = 'data-impeccable-css="' + id + '"';
   let inStyle = false;
-  const content = [];
+  const content: string[] = [];
 
   for (let i = block.start; i <= block.end; i++) {
     const line = lines[i];
@@ -454,7 +464,7 @@ function extractCss(lines, block, id) {
  * accepted variants block being carbonized) would produce nested
  * `{` `{` … `}` `}`, which oxc rejects with "Expected `}` but found `@`".
  */
-function stripJsxTemplateLines(content) {
+function stripJsxTemplateLines(content: string[]): string[] | null {
   const out = content.slice();
 
   // Drop any leading blank lines so we don't miss a `{` line buried below
@@ -474,7 +484,7 @@ function stripJsxTemplateLines(content) {
   }
   if (out.length === 0) return null;
 
-  // Trailing `` ` `` `}`: own line, or attached to the last CSS line.
+  // Trailing `` ` ` `}`: own line, or attached to the last CSS line.
   const lastIdx = out.length - 1;
   const lastTrim = out[lastIdx].trimEnd();
   if (lastTrim === '`}') {
@@ -489,23 +499,23 @@ function stripJsxTemplateLines(content) {
   return out.length > 0 ? out : null;
 }
 
-function stripJsxTemplateWrap(text) {
+function stripJsxTemplateWrap(text: string): string {
   const lines = text.split('\n');
   const stripped = stripJsxTemplateLines(lines);
   return stripped ? stripped.join('\n') : '';
 }
 
 /**
- * De-indent content that was indented by live-wrap.mjs.
+ * De-indent content that was indented by live-wrap.
  * The wrap script adds `indent + '    '` (4 extra spaces) to each line.
  * We restore to just `indent` level.
  */
-function deindentContent(contentLines, baseIndent) {
+export function deindentContent(contentLines: string[], baseIndent: string): string[] {
   // Find the minimum indentation in the content to determine how much was added
   let minIndent = Infinity;
   for (const line of contentLines) {
     if (line.trim() === '') continue;
-    const leadingSpaces = line.match(/^(\s*)/)[1].length;
+    const leadingSpaces = line.match(/^(\s*)/)![1].length;
     minIndent = Math.min(minIndent, leadingSpaces);
   }
   if (minIndent === Infinity) minIndent = 0;
@@ -517,7 +527,7 @@ function deindentContent(contentLines, baseIndent) {
   });
 }
 
-function detectCommentSyntax(filePath) {
+export function detectCommentSyntax(filePath: string): CommentSyntax {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.jsx' || ext === '.tsx') {
     return { open: '{/*', close: '*/}' };
@@ -529,10 +539,10 @@ function detectCommentSyntax(filePath) {
 // File search (find the file containing session markers)
 // ---------------------------------------------------------------------------
 
-function findSessionFile(id, cwd) {
+function findSessionFile(id: string, cwd: string): SessionFound | null {
   const marker = 'impeccable-variants-start ' + id;
   const searchDirs = ['src', 'app', 'pages', 'components', 'public', 'views', 'templates', '.'];
-  const seen = new Set();
+  const seen = new Set<string>();
 
   for (const dir of searchDirs) {
     const absDir = path.join(cwd, dir);
@@ -546,14 +556,14 @@ function findSessionFile(id, cwd) {
   return null;
 }
 
-function searchDir(dir, query, seen, depth) {
+function searchDir(dir: string, query: string, seen: Set<string>, depth: number): string | null {
   if (depth > 5) return null;
-  let realDir;
+  let realDir: string;
   try { realDir = fs.realpathSync(dir); } catch { return null; }
   if (seen.has(realDir)) return null;
   seen.add(realDir);
 
-  let entries;
+  let entries: fs.Dirent[];
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
   catch { return null; }
 
@@ -576,20 +586,3 @@ function searchDir(dir, query, seen, depth) {
 
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
-
-function argVal(args, flag) {
-  const idx = args.indexOf(flag);
-  return idx !== -1 && idx + 1 < args.length ? args[idx + 1] : null;
-}
-
-// Auto-execute when run directly
-const _running = process.argv[1];
-if (_running?.endsWith('live-accept.mjs') || _running?.endsWith('live-accept.mjs/')) {
-  acceptCli();
-}
-
-export { findMarkerBlock, extractOriginal, extractVariant, extractCss, deindentContent, detectCommentSyntax };

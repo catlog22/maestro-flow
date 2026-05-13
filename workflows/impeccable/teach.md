@@ -12,7 +12,7 @@ Every other impeccable command reads these files before doing any work.
 Run the shared loader first so you know what already exists:
 
 ```bash
-node .claude/skills/maestro-impeccable/scripts/load-context.mjs
+maestro impeccable load-context
 ```
 
 The output tells you whether PRODUCT.md and/or DESIGN.md already exist. If `migrated: true`, legacy `.impeccable.md` was auto-renamed to `PRODUCT.md`. Mention this once to the user.
@@ -149,7 +149,7 @@ Summarize:
 - The 3-5 strategic principles from PRODUCT.md that will guide future work
 - If DESIGN.md is pending, remind the user how to generate it later
 
-**Critical: re-run the loader to refresh session context.** After writing PRODUCT.md, run `node .claude/skills/maestro-impeccable/scripts/load-context.mjs` one final time and let its full JSON output land in conversation. This ensures subsequent commands in this session use the freshly-written PRODUCT.md, not a stale earlier version.
+**Critical: re-run the loader to refresh session context.** After writing PRODUCT.md, run `maestro impeccable load-context` one final time and let its full JSON output land in conversation. This ensures subsequent commands in this session use the freshly-written PRODUCT.md, not a stale earlier version.
 
 If teach was invoked as a blocker by another impeccable command (e.g. the user ran `/maestro-impeccable polish` with no PRODUCT.md), resume that original task now with the fresh context.
 

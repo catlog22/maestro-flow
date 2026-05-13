@@ -15,9 +15,109 @@ const CANONICAL_SECTIONS = [
   "Do's and Don'ts",
 ];
 
+// ---------- Types ----------
+
+interface Section {
+  name: string;
+  subtitle: string | null;
+  lines: string[];
+}
+
+interface Subsection {
+  name: string | null;
+  lines: string[];
+}
+
+interface NamedRule {
+  name: string;
+  body: string;
+}
+
+interface ColorEntry {
+  name: string | null;
+  value: string;
+  valueRange: string[] | null;
+  format: string;
+  description: string | null;
+}
+
+interface ColorGroup {
+  role: string;
+  colors: ColorEntry[];
+}
+
+interface FontSpec {
+  family: string;
+  fallback: string | null;
+  purpose?: string;
+}
+
+interface TypeBullet {
+  name: string;
+  specs: string[];
+  purpose: string | null;
+}
+
+interface ShadowEntry {
+  name: string | null;
+  value: string;
+  purpose: string | null;
+}
+
+interface ComponentVariant {
+  name: string;
+  description: string;
+}
+
+interface ComponentEntry {
+  name: string;
+  description: string | null;
+  properties: Record<string, string>;
+  variants: ComponentVariant[];
+}
+
+export interface DesignModel {
+  schemaVersion: 2;
+  title: string | null;
+  frontmatter: Record<string, unknown> | null;
+  overview: {
+    subtitle: string | null;
+    creativeNorthStar: string | null;
+    philosophy: string[];
+    keyCharacteristics: string[];
+  } | null;
+  colors: {
+    subtitle: string | null;
+    description: string | null;
+    groups: ColorGroup[];
+    rules: NamedRule[];
+  } | null;
+  typography: {
+    subtitle: string | null;
+    fonts: Record<string, FontSpec>;
+    character: string | null;
+    hierarchy: TypeBullet[];
+    rules: NamedRule[];
+  } | null;
+  elevation: {
+    subtitle: string | null;
+    description: string | null;
+    shadows: ShadowEntry[];
+    rules: NamedRule[];
+  } | null;
+  components: {
+    subtitle: string | null;
+    components: ComponentEntry[];
+  } | null;
+  dosDonts: {
+    dos: string[];
+    donts: string[];
+  } | null;
+}
+
 // ---------- Frontmatter (Stitch YAML subset) ----------
 
-function parseFrontmatter(md) {
+function parseFrontmatterRaw(md: string): { frontmatter: Record<string, unknown> | null; body: string } {
   const lines = md.split(/\r?\n/);
   if (lines[0]?.trim() !== '---') return { frontmatter: null, body: md };
 
@@ -36,23 +136,15 @@ function parseFrontmatter(md) {
   }
 }
 
-// Minimal YAML reader for the Stitch frontmatter subset: scalar maps with
-// one level of nested objects (typography roles, components). Indent-based,
-// 2-space convention. No arrays, no anchors, no multi-line scalars — Stitch's
-// schema doesn't need them and accepting them would require a real YAML
-// dependency we don't want to vendor.
-function parseYamlSubset(yaml) {
+function parseYamlSubset(yaml: string): Record<string, unknown> {
   const lines = yaml.split(/\r?\n/);
-  const root = {};
-  const stack = [{ indent: -1, obj: root }];
+  const root: Record<string, unknown> = {};
+  const stack: Array<{ indent: number; obj: Record<string, unknown> }> = [{ indent: -1, obj: root }];
 
   for (const raw of lines) {
-    // Skip blanks and line-only comments. Don't strip inline comments:
-    // unquoted hex values start with `#` and can't be safely distinguished
-    // from a comment after whitespace.
     if (!raw.trim() || /^\s*#/.test(raw)) continue;
 
-    const indent = raw.match(/^\s*/)[0].length;
+    const indent = raw.match(/^\s*/)?.[0].length ?? 0;
     const content = raw.slice(indent);
 
     const colonIdx = findTopLevelColon(content);
@@ -67,7 +159,7 @@ function parseYamlSubset(yaml) {
     const parent = stack[stack.length - 1].obj;
 
     if (rest === '') {
-      const obj = {};
+      const obj: Record<string, unknown> = {};
       parent[key] = obj;
       stack.push({ indent, obj });
     } else {
@@ -78,8 +170,8 @@ function parseYamlSubset(yaml) {
   return root;
 }
 
-function findTopLevelColon(s) {
-  let inQuote = null;
+function findTopLevelColon(s: string): number {
+  let inQuote: string | null = null;
   for (let i = 0; i < s.length; i++) {
     const ch = s[i];
     if (inQuote) {
@@ -93,7 +185,7 @@ function findTopLevelColon(s) {
   return -1;
 }
 
-function parseScalar(raw) {
+function parseScalar(raw: string): unknown {
   const s = raw.trim();
   if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     return s.slice(1, -1);
@@ -108,17 +200,14 @@ function parseScalar(raw) {
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
 const OKLCH_RE = /oklch\([^)]+\)/gi;
-const RGBA_RE = /rgba?\([^)]+\)/gi;
-const BOX_SHADOW_RE = /(?:box-shadow:\s*)?((?:-?\d[\w\d\s\-.,/()#%]*)+)/;
-const NAMED_RULE_RE = /\*\*(The [^*]+?Rule)\.\*\*\s*(.+)/;
 
 // ---------- Section splitting ----------
 
-function splitSections(md) {
+function splitSections(md: string): { title: string | null; sections: Record<string, Section> } {
   const lines = md.split(/\r?\n/);
-  let title = null;
-  const sections = {};
-  let current = null;
+  let title: string | null = null;
+  const sections: Record<string, Section> = {};
+  let current: Section | null = null;
 
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -138,7 +227,6 @@ function splitSections(md) {
         sections[canonical] = current;
         continue;
       }
-      // non-canonical H2 — ignore but stop feeding into current
       current = null;
       continue;
     }
@@ -149,18 +237,15 @@ function splitSections(md) {
   return { title, sections };
 }
 
-function normalizeApostrophes(s) {
+function normalizeApostrophes(s: string): string {
   return s.replace(/[\u2018\u2019]/g, "'");
 }
 
-function matchCanonicalSection(name) {
+function matchCanonicalSection(name: string): string | null {
   const normalized = normalizeApostrophes(name).toLowerCase();
-  // Exact match first
   for (const c of CANONICAL_SECTIONS) {
     if (normalizeApostrophes(c).toLowerCase() === normalized) return c;
   }
-  // Keyword-contained match: "Overview & Creative North Star" -> "Overview",
-  // "Elevation & Depth" -> "Elevation", etc.
   for (const c of CANONICAL_SECTIONS) {
     const key = normalizeApostrophes(c).toLowerCase();
     const pattern = new RegExp(`\\b${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
@@ -169,12 +254,11 @@ function matchCanonicalSection(name) {
   return null;
 }
 
-// ---------- Subsection splitting (inside a canonical section) ----------
+// ---------- Subsection splitting ----------
 
-function splitSubsections(lines) {
-  const subs = [];
-  let current = { name: null, lines: [] };
-  subs.push(current);
+function splitSubsections(lines: string[]): Subsection[] {
+  const subs: Subsection[] = [{ name: null, lines: [] }];
+  let current: Subsection = subs[0];
 
   for (const raw of lines) {
     const h3 = raw.match(/^###\s+(.+?)\s*$/);
@@ -191,9 +275,9 @@ function splitSubsections(lines) {
 
 // ---------- Generic helpers ----------
 
-function collectParagraphs(lines) {
-  const paragraphs = [];
-  let buf = [];
+function collectParagraphs(lines: string[]): string[] {
+  const paragraphs: string[] = [];
+  let buf: string[] = [];
   const flush = () => {
     if (buf.length) {
       paragraphs.push(buf.join(' ').trim());
@@ -203,7 +287,6 @@ function collectParagraphs(lines) {
   for (const raw of lines) {
     const trimmed = raw.trim();
     if (trimmed === '') { flush(); continue; }
-    // Horizontal rules (---, ***) and headings/bullets end a paragraph.
     if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(trimmed)) { flush(); continue; }
     if (raw.startsWith('#') || raw.match(/^[-*]\s/)) { flush(); continue; }
     buf.push(trimmed);
@@ -212,9 +295,9 @@ function collectParagraphs(lines) {
   return paragraphs.filter(Boolean);
 }
 
-function collectBullets(lines) {
-  const bullets = [];
-  let current = null;
+function collectBullets(lines: string[]): string[] {
+  const bullets: string[] = [];
+  let current: string | null = null;
   for (const raw of lines) {
     const m = raw.match(/^\s*[-*]\s+(.+)$/);
     if (m) {
@@ -222,12 +305,10 @@ function collectBullets(lines) {
       current = m[1];
       continue;
     }
-    // continuation of a bullet (indented line)
     if (current && raw.match(/^\s{2,}\S/)) {
       current += ' ' + raw.trim();
       continue;
     }
-    // blank line ends a bullet
     if (raw.trim() === '' && current) {
       bullets.push(current);
       current = null;
@@ -237,19 +318,18 @@ function collectBullets(lines) {
   return bullets;
 }
 
-function stripBold(s) {
+function stripBold(s: string): string {
   return s.replace(/\*\*(.+?)\*\*/g, '$1');
 }
 
-function extractNamedRules(lines) {
-  const rules = [];
-  const seen = new Set();
+function extractNamedRules(lines: string[]): NamedRule[] {
+  const rules: NamedRule[] = [];
+  const seen = new Set<string>();
 
-  // Style A (Impeccable): "**The X Rule.** body body body" — can span lines.
   const joined = lines.join('\n');
   const inlineStart = /\*\*(The [^*]+?Rule)\.\*\*/g;
-  const inlineMatches = [];
-  let m;
+  const inlineMatches: Array<{ name: string; start: number; end: number }> = [];
+  let m: RegExpExecArray | null;
   while ((m = inlineStart.exec(joined)) !== null) {
     inlineMatches.push({ name: m[1], start: m.index, end: inlineStart.lastIndex });
   }
@@ -266,16 +346,14 @@ function extractNamedRules(lines) {
     rules.push({ name, body: stripBold(body) });
   }
 
-  // Style B (Stitch): `### The "X" Rule` or `### The X Fallback`, body is the
-  // bullets/paragraphs until the next heading. Accept Rule / Fallback / Principle.
   for (let i = 0; i < lines.length; i++) {
     const h3 = lines[i].match(/^###\s+(.+?)\s*$/);
     if (!h3) continue;
-    const headerName = stripBold(h3[1]).replace(/["“”]/g, '').trim();
+    const headerName = stripBold(h3[1]).replace(/[""""]/g, '').trim();
     if (!/^The\b.*\b(Rule|Fallback|Principle)\b/i.test(headerName)) continue;
     if (seen.has(headerName.toLowerCase())) continue;
 
-    const bodyLines = [];
+    const bodyLines: string[] = [];
     for (let j = i + 1; j < lines.length; j++) {
       if (/^##\s|^###\s/.test(lines[j])) break;
       bodyLines.push(lines[j]);
@@ -287,12 +365,10 @@ function extractNamedRules(lines) {
     }
   }
 
-  // Style C (Stitch bullet form): "*   **The Layering Principle:** body"
-  // Colon/period lives inside the bold, so match "**...**" then inspect.
   for (const b of collectBullets(lines)) {
     const mm = b.match(/^\*\*([^*]+?)\*\*\s*(.+)$/);
     if (!mm) continue;
-    const nameRaw = mm[1].replace(/[.:]\s*$/, '').replace(/["“”]/g, '').trim();
+    const nameRaw = mm[1].replace(/[.:]\s*$/, '').replace(/[""""]/g, '').trim();
     if (!/^The\b.+\b(Rule|Fallback|Principle)$/i.test(nameRaw)) continue;
     if (seen.has(nameRaw.toLowerCase())) continue;
     seen.add(nameRaw.toLowerCase());
@@ -304,11 +380,11 @@ function extractNamedRules(lines) {
 
 // ---------- Per-section extractors ----------
 
-function extractOverview(section) {
+function extractOverview(section: Section | undefined): DesignModel['overview'] {
   if (!section) return null;
   const text = section.lines.join('\n');
   const northStar = text.match(/\*\*Creative North Star:\s*"([^"]+)"\*\*/);
-  const keyChars = [];
+  const keyChars: string[] = [];
   const keyCharMatch = text.match(/\*\*Key Characteristics:\*\*\s*\n([\s\S]+?)(?:\n##|\n###|$)/);
   if (keyCharMatch) {
     for (const line of keyCharMatch[1].split('\n')) {
@@ -317,11 +393,10 @@ function extractOverview(section) {
     }
   }
 
-  // Philosophy paragraphs: everything that isn't a rule header or key-char block
   const paragraphs = collectParagraphs(section.lines).filter(
     (p) =>
       !p.startsWith('**Creative North Star') &&
-      !p.startsWith('**Key Characteristics')
+      !p.startsWith('**Key Characteristics'),
   );
 
   return {
@@ -332,41 +407,37 @@ function extractOverview(section) {
   };
 }
 
-function extractColors(section) {
+function extractColors(section: Section | undefined): DesignModel['colors'] {
   if (!section) return null;
   const subs = splitSubsections(section.lines);
 
   const description = collectParagraphs(subs[0].lines).join(' ');
-  const groups = [];
+  const groups: ColorGroup[] = [];
   const ROLE_KEYWORDS = /^(primary|secondary|tertiary|neutral|accent)\b/i;
 
   for (const sub of subs.slice(1)) {
     if (!sub.name || /Named Rules?/i.test(sub.name) || /^The\s/i.test(sub.name)) continue;
 
     const bullets = collectBullets(sub.lines);
-    const parsed = bullets.map((b) => parseColorBullet(b)).filter(Boolean);
+    const parsed = bullets.map((b) => parseColorBullet(b)).filter(Boolean) as ColorEntry[];
     if (parsed.length === 0) continue;
 
-    // If every bullet starts with a role keyword (Primary/Secondary/...), promote
-    // each bullet to its own group. Otherwise keep the subsection as the group.
     const allRoleBullets =
       parsed.length > 0 && parsed.every((p) => p.name && ROLE_KEYWORDS.test(p.name));
 
     if (allRoleBullets) {
       for (const p of parsed) {
-        groups.push({ role: p.name, colors: [p] });
+        groups.push({ role: p.name!, colors: [p] });
       }
     } else {
       groups.push({ role: sub.name, colors: parsed });
     }
   }
 
-  // If the Colors section has no subsections at all (unlikely), fall back to
-  // scanning the whole section as a flat bullet list.
   if (groups.length === 0) {
     const flat = collectBullets(section.lines)
       .map((b) => parseColorBullet(b))
-      .filter(Boolean);
+      .filter(Boolean) as ColorEntry[];
     if (flat.length) {
       for (const p of flat) {
         if (p.name && ROLE_KEYWORDS.test(p.name)) {
@@ -388,10 +459,9 @@ function extractColors(section) {
   };
 }
 
-function parseColorBullet(bullet) {
+function parseColorBullet(bullet: string): ColorEntry | null {
   const text = bullet.trim();
 
-  // Case 1 (Impeccable): **Name** (value-with-maybe-nested-parens): description
   const bold = text.match(/^\*\*(.+?)\*\*\s*(.*)$/);
   if (bold && bold[2].startsWith('(')) {
     const value = extractParenGroup(bold[2]);
@@ -403,13 +473,11 @@ function parseColorBullet(bullet) {
     }
   }
 
-  // Case 2 (Stitch): **Name (values):** description   — value embedded in bold.
   const stitch = text.match(/^\*\*([^*]+?)\s*\(([^)]+)\):\*\*\s*(.*)$/);
   if (stitch) {
     return buildColor(stitch[1].trim(), stitch[2], stitch[3]);
   }
 
-  // Case 3: bullet without bold, just hex/oklch inside.
   const values = collectColorValues(text);
   if (values.length) {
     return buildColor(null, values.join(' to '), text);
@@ -417,7 +485,7 @@ function parseColorBullet(bullet) {
   return null;
 }
 
-function extractParenGroup(s) {
+function extractParenGroup(s: string): string | null {
   if (s[0] !== '(') return null;
   let depth = 0;
   for (let i = 0; i < s.length; i++) {
@@ -430,7 +498,7 @@ function extractParenGroup(s) {
   return null;
 }
 
-function buildColor(name, rawValue, description) {
+function buildColor(name: string | null, rawValue: string, description: string): ColorEntry {
   const values = collectColorValues(rawValue);
   const primary = values[0] ?? rawValue.trim();
   return {
@@ -442,20 +510,14 @@ function buildColor(name, rawValue, description) {
   };
 }
 
-function collectColorValues(s) {
-  const out = [];
-  s.replace(HEX_RE, (v) => {
-    out.push(v);
-    return v;
-  });
-  s.replace(OKLCH_RE, (v) => {
-    out.push(v);
-    return v;
-  });
+function collectColorValues(s: string): string[] {
+  const out: string[] = [];
+  s.replace(HEX_RE, (v) => { out.push(v); return v; });
+  s.replace(OKLCH_RE, (v) => { out.push(v); return v; });
   return out;
 }
 
-function detectFormat(v) {
+function detectFormat(v: string): string {
   if (!v) return 'unknown';
   if (v.startsWith('#')) return 'hex';
   if (/^oklch/i.test(v)) return 'oklch';
@@ -463,44 +525,13 @@ function detectFormat(v) {
   return 'unknown';
 }
 
-function scanInlineColors(lines) {
-  const out = [];
-  for (const line of lines) {
-    if (!/^\s*[-*]\s/.test(line)) continue;
-    const trimmed = line.replace(/^\s*[-*]\s+/, '');
-    const color = parseColorBullet(trimmed);
-    if (color) out.push(color);
-  }
-  return out;
-}
-
-function parseStitchInlineGroups(lines) {
-  // Stitch writes: `*   **Primary (`#00478d` to `#005eb8`):** Use for "..."`
-  // Each bullet IS its own role. Group them under the spoken role name.
-  const out = [];
-  for (const line of lines) {
-    if (!/^\s*[-*]\s/.test(line)) continue;
-    const trimmed = line.replace(/^\s*[-*]\s+/, '').trim();
-    const m = trimmed.match(
-      /^\*\*([A-Z][a-zA-Z]+)\s*\(([^)]+)\):\*\*\s*(.*)$/
-    );
-    if (m) {
-      const role = m[1];
-      const color = buildColor(role, m[2], m[3]);
-      out.push({ role, colors: [color] });
-    }
-  }
-  return out;
-}
-
-function extractTypography(section) {
+function extractTypography(section: Section | undefined): DesignModel['typography'] {
   if (!section) return null;
   const text = section.lines.join('\n');
 
-  const fonts = {};
-  // Pattern A: **Display Font:** Family (with fallback)
+  const fonts: Record<string, FontSpec> = {};
   const fontLineRe = /\*\*([\w\s/]+?)Font:\*\*\s*([^\n(]+?)(?:\s*\(with\s+([^)]+)\))?\s*$/gm;
-  let fm;
+  let fm: RegExpExecArray | null;
   while ((fm = fontLineRe.exec(text)) !== null) {
     const rawRole = fm[1].trim().toLowerCase().replace(/\s+/g, '-');
     const role = normalizeFontRole(rawRole) || 'display';
@@ -510,10 +541,9 @@ function extractTypography(section) {
     };
   }
 
-  // Pattern B (Stitch): *   **Display & Headlines (Noto Serif):** description
   if (Object.keys(fonts).length === 0) {
     const stitchRe = /\*\*([\w\s&/]+?)\s*\(([^)]+)\):\*\*\s*(.+)/g;
-    let sm;
+    let sm: RegExpExecArray | null;
     while ((sm = stitchRe.exec(text)) !== null) {
       const rawRole = sm[1]
         .trim()
@@ -525,24 +555,21 @@ function extractTypography(section) {
     }
   }
 
-  // Character paragraph — either a **Character:** label, or fall back to the
-  // first free paragraph under the section header (Stitch style).
   const characterMatch = text.match(/\*\*Character:\*\*\s*([^\n]+(?:\n[^\n]+)*?)(?=\n\n|\n###|\n##|$)/);
-  let character = characterMatch ? characterMatch[1].replace(/\n/g, ' ').trim() : null;
+  let character: string | null = characterMatch ? characterMatch[1].replace(/\n/g, ' ').trim() : null;
   if (!character) {
     const paragraphs = collectParagraphs(section.lines).filter(
-      (p) => !/^\*\*[\w\s/&]+Font/i.test(p) && !/^\*\*[\w\s/&]+\([^)]+\)/.test(p)
+      (p) => !/^\*\*[\w\s/&]+Font/i.test(p) && !/^\*\*[\w\s/&]+\([^)]+\)/.test(p),
     );
     if (paragraphs.length) character = paragraphs[0];
   }
 
-  // Hierarchy bullets under ### Hierarchy
   const subs = splitSubsections(section.lines);
-  let hierarchy = [];
+  let hierarchy: TypeBullet[] = [];
   const hierSub = subs.find((s) => s.name && /hierarch/i.test(s.name));
   if (hierSub) {
     const bullets = collectBullets(hierSub.lines);
-    hierarchy = bullets.map(parseTypeBullet).filter(Boolean);
+    hierarchy = bullets.map(parseTypeBullet).filter(Boolean) as TypeBullet[];
   }
 
   return {
@@ -554,21 +581,17 @@ function extractTypography(section) {
   };
 }
 
-function normalizeFontRole(raw) {
-  // Canonical roles the panel cares about: display, body, label, mono.
-  // Stitch often writes compound roles like "display-&-headlines" or "ui-&-body"
-  // — collapse them to the first canonical role present.
+function normalizeFontRole(raw: string): string | null {
   const tokens = raw.split(/[-/&\s]+/).filter(Boolean);
   const priority = ['display', 'headline', 'body', 'ui', 'label', 'mono'];
-  const canonical = { headline: 'display', ui: 'body' };
+  const canonical: Record<string, string> = { headline: 'display', ui: 'body' };
   for (const p of priority) {
     if (tokens.includes(p)) return canonical[p] || p;
   }
   return null;
 }
 
-function parseTypeBullet(bullet) {
-  // - **Display** (family, weight 300, italic, clamp(...), line-height 1): purpose
+function parseTypeBullet(bullet: string): TypeBullet | null {
   const m = bullet.match(/^\*\*(.+?)\*\*\s*\(([^)]+)\):\s*(.*)$/);
   if (!m) return null;
   const name = m[1].trim();
@@ -580,15 +603,15 @@ function parseTypeBullet(bullet) {
   };
 }
 
-function extractElevation(section) {
+function extractElevation(section: Section | undefined): DesignModel['elevation'] {
   if (!section) return null;
   const subs = splitSubsections(section.lines);
 
   const description = collectParagraphs(subs[0].lines).join(' ') || null;
 
-  const shadows = [];
-  const seen = new Set();
-  const dedupe = (entry) => {
+  const shadows: ShadowEntry[] = [];
+  const seen = new Set<string>();
+  const dedupe = (entry: ShadowEntry) => {
     const key = (entry.name || '') + '::' + entry.value;
     if (seen.has(key)) return;
     seen.add(key);
@@ -600,8 +623,6 @@ function extractElevation(section) {
     if (parsed) dedupe(parsed);
   }
 
-  // Fallback: extract shadows written inline in prose. Stitch style is
-  //   "...use an extra-diffused shadow: `box-shadow: 0 12px 40px rgba(...)`."
   for (const p of collectParagraphs(section.lines)) {
     for (const inline of extractInlineShadows(p)) dedupe(inline);
   }
@@ -617,44 +638,31 @@ function extractElevation(section) {
   };
 }
 
-function extractInlineShadows(text) {
-  // Find `box-shadow: ...` anywhere in prose and capture the value. Work on the
-  // raw string so it handles both backtick-fenced and unfenced variants.
-  const out = [];
+function extractInlineShadows(text: string): ShadowEntry[] {
+  const out: ShadowEntry[] = [];
   const re = /box-shadow\s*:\s*([^`;\n]+)/gi;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
     const value = m[1].replace(/[`.)]+$/, '').trim();
     if (!value) continue;
-    // Name heuristic: the noun immediately before the shadow phrase.
-    // e.g. "an extra-diffused shadow: ..." -> "extra-diffused shadow"
     const before = text.slice(0, m.index);
     const nameMatch = before.match(/\b([A-Za-z][A-Za-z\- ]{2,40})\s+shadow\b[^A-Za-z0-9]*$/i);
-    let name = null;
+    let name: string | null = null;
     if (nameMatch) {
       const stripped = nameMatch[1]
         .replace(/^(?:use|using|apply|applying|is|are|looks? like)\s+/i, '')
         .replace(/^(?:a|an|the)\s+/i, '')
         .trim();
       if (stripped) {
-        name =
-          stripped.charAt(0).toUpperCase() + stripped.slice(1) + ' shadow';
+        name = stripped.charAt(0).toUpperCase() + stripped.slice(1) + ' shadow';
       }
     }
-    out.push({
-      name,
-      value,
-      purpose: null,
-    });
+    out.push({ name, value, purpose: null });
   }
   return out;
 }
 
-function parseShadowBullet(bullet) {
-  // - **Name** (`box-shadow: value`): purpose
-  // - **Name** (`value`): purpose
-  // Only accept if the paren content looks like a shadow value (contains px,
-  // rem, rgba, or box-shadow). This filters out `**Rule Name:**` bullets.
+function parseShadowBullet(bullet: string): ShadowEntry | null {
   const m = bullet.match(/^\*\*(.+?)\*\*\s*\(`?([^`]+?)`?\):\s*(.*)$/);
   if (!m) return null;
   const rawValue = m[2].replace(/^box-shadow:\s*/i, '').trim();
@@ -670,10 +678,10 @@ function parseShadowBullet(bullet) {
   };
 }
 
-function extractComponents(section) {
+function extractComponents(section: Section | undefined): DesignModel['components'] {
   if (!section) return null;
   const subs = splitSubsections(section.lines);
-  const components = [];
+  const components: ComponentEntry[] = [];
 
   for (const sub of subs.slice(1)) {
     if (!sub.name) continue;
@@ -681,17 +689,14 @@ function extractComponents(section) {
     const bullets = collectBullets(sub.lines);
     const paragraphs = collectParagraphs(sub.lines);
 
-    const variants = [];
-    const properties = {};
+    const variants: ComponentVariant[] = [];
+    const properties: Record<string, string> = {};
 
     for (const b of bullets) {
-      // - **Key:** value
       const m = b.match(/^\*\*(.+?):?\*\*:?\s*(.+)$/);
       if (m) {
         const key = stripBold(m[1]).trim();
         const value = stripBold(m[2]).trim();
-        // Heuristic: "Primary", "Secondary", "Hover", "Focus" etc are variants;
-        // "Shape", "Background", "Padding" are properties.
         if (/^(primary|secondary|tertiary|ghost|hover|focus|active|disabled|default|error|selected|unselected|state)$/i.test(key.split(/[\s/]/)[0])) {
           variants.push({ name: key, description: value });
         } else {
@@ -714,11 +719,11 @@ function extractComponents(section) {
   };
 }
 
-function extractDosDonts(section) {
+function extractDosDonts(section: Section | undefined): DesignModel['dosDonts'] {
   if (!section) return null;
   const subs = splitSubsections(section.lines);
-  const dos = [];
-  const donts = [];
+  const dos: string[] = [];
+  const donts: string[] = [];
 
   for (const sub of subs.slice(1)) {
     if (!sub.name) continue;
@@ -731,7 +736,6 @@ function extractDosDonts(section) {
     }
   }
 
-  // Classify by bullet prefix as a backup (catches loose bullets outside H3 wrappers)
   for (const b of collectBullets(section.lines)) {
     const stripped = normalizeApostrophes(stripBold(b).trim());
     if (/^don'?t\b/i.test(stripped)) {
@@ -746,8 +750,17 @@ function extractDosDonts(section) {
 
 // ---------- Coverage assessment ----------
 
-function assessCoverage(model) {
-  const report = {};
+export interface CoverageReport {
+  overview: unknown;
+  colors: unknown;
+  typography: unknown;
+  elevation: unknown;
+  components: unknown;
+  dosDonts: unknown;
+}
+
+export function assessCoverage(model: DesignModel): CoverageReport {
+  const report: CoverageReport = {} as CoverageReport;
 
   report.overview = model.overview
     ? {
@@ -801,8 +814,8 @@ function assessCoverage(model) {
 
 // ---------- Main ----------
 
-export function parseDesignMd(md) {
-  const { frontmatter, body } = parseFrontmatter(md);
+export function parseDesignMd(md: string): DesignModel {
+  const { frontmatter, body } = parseFrontmatterRaw(md);
   const { title, sections } = splitSections(body);
   return {
     schemaVersion: 2,
@@ -816,5 +829,3 @@ export function parseDesignMd(md) {
     dosDonts: extractDosDonts(sections["Do's and Don'ts"]),
   };
 }
-
-export { assessCoverage };

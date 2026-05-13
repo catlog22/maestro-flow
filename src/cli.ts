@@ -57,6 +57,7 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   dc:                async () => (await import('./commands/tools.js')).registerToolsCommand,
   config:  async () => (await import('./commands/config.js')).registerConfigCommand,
   cfg:     async () => (await import('./commands/config.js')).registerConfigCommand,
+  impeccable: async () => (await import('./commands/impeccable.js')).registerImpeccableCommand,
 };
 
 // Determine which command is being invoked from argv (if any)

@@ -7,19 +7,13 @@
  * every subsequent run, this script handles insert/remove deterministically
  * with zero LLM involvement.
  *
- * Usage:
- *   node live-inject.mjs --port PORT   # Insert the live script tag
- *   node live-inject.mjs --remove      # Remove the live script tag
- *   node live-inject.mjs --check       # Check whether live config exists
+ * Converted from live-inject.mjs to TypeScript.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { resolveLiveConfigPath } from './impeccable-paths.mjs';
+import { resolveLiveConfigPath } from '../paths.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CONFIG_PATH = resolveLiveConfigPath({ cwd: process.cwd(), scriptsDir: __dirname });
 const MARKER_OPEN_TEXT = 'impeccable-live-start';
 const MARKER_CLOSE_TEXT = 'impeccable-live-end';
 
@@ -28,46 +22,60 @@ const MARKER_CLOSE_TEXT = 'impeccable-live-end';
  * matching them would silently inject tracking scripts into third-party
  * code. The user cannot turn these off via config — they are the floor.
  */
-const HARD_EXCLUDES = [
+const HARD_EXCLUDES: string[] = [
   '**/node_modules/**',
   '**/.git/**',
 ];
 
-export async function injectCli() {
-  const args = process.argv.slice(2);
+interface InjectOpts {
+  port?: string;
+  remove?: boolean;
+  check?: boolean;
+}
 
-  if (args.includes('--help') || args.includes('-h')) {
-    console.log(`Usage: node live-inject.mjs [options]
+export interface LiveConfig {
+  files: string[];
+  exclude?: string[];
+  insertBefore?: string;
+  insertAfter?: string;
+  commentSyntax: 'html' | 'jsx';
+  cspChecked?: boolean;
+}
 
-Insert or remove the live mode script tag in the project's HTML entry point.
-Reads configuration from .impeccable/live/config.json.
+interface FileResult {
+  file: string;
+  error?: string;
+  inserted?: boolean;
+  removed?: boolean;
+  note?: string;
+  anchor?: string;
+  cspPatched?: boolean;
+  cspReverted?: boolean;
+}
 
-Modes:
-  --port PORT   Insert script tag pointing at http://localhost:PORT/live.js
-  --remove      Remove the script tag (if present)
-  --check       Print whether .impeccable/live/config.json exists and its content
+const CSP_MARKER_ATTR = 'data-impeccable-csp-original';
 
-Output (JSON):
-  { ok, file, inserted|removed, config? }`);
-    process.exit(0);
-  }
+export async function injectCli(opts: InjectOpts = {}): Promise<void> {
+  const CONFIG_PATH = resolveLiveConfigPath({ cwd: process.cwd() });
 
-  if (args.includes('--check')) {
-    if (!fs.existsSync(CONFIG_PATH)) {
+  if (opts.check) {
+    if (!CONFIG_PATH || !fs.existsSync(CONFIG_PATH)) {
       console.log(JSON.stringify({ ok: false, error: 'config_missing', path: CONFIG_PATH }));
       process.exit(0);
     }
-    let cfg;
+    let cfg: LiveConfig;
     try {
       cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
     } catch (err) {
-      console.log(JSON.stringify({ ok: false, error: 'config_invalid', message: err.message, path: CONFIG_PATH }));
+      const error = err as Error;
+      console.log(JSON.stringify({ ok: false, error: 'config_invalid', message: error.message, path: CONFIG_PATH }));
       return;
     }
     try {
       validateConfig(cfg);
     } catch (err) {
-      console.log(JSON.stringify({ ok: false, error: 'config_invalid', message: err.message, path: CONFIG_PATH }));
+      const error = err as Error;
+      console.log(JSON.stringify({ ok: false, error: 'config_invalid', message: error.message, path: CONFIG_PATH }));
       return;
     }
     console.log(JSON.stringify({ ok: true, config: cfg, path: CONFIG_PATH }));
@@ -75,17 +83,17 @@ Output (JSON):
   }
 
   // Load config
-  if (!fs.existsSync(CONFIG_PATH)) {
+  if (!CONFIG_PATH || !fs.existsSync(CONFIG_PATH)) {
     console.error(JSON.stringify({ ok: false, error: 'config_missing', path: CONFIG_PATH }));
     process.exit(1);
   }
-  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+  const config: LiveConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
   validateConfig(config);
 
   const resolvedFiles = resolveFiles(process.cwd(), config);
 
-  if (args.includes('--remove')) {
-    const results = resolvedFiles.map((relFile) => {
+  if (opts.remove) {
+    const results = resolvedFiles.map((relFile): FileResult => {
       const absFile = path.resolve(process.cwd(), relFile);
       if (!fs.existsSync(absFile)) return { file: relFile, error: 'file_not_found' };
       const content = fs.readFileSync(absFile, 'utf-8');
@@ -103,15 +111,14 @@ Output (JSON):
     return;
   }
 
-  // Insert mode — need --port
-  const portIdx = args.indexOf('--port');
-  const port = portIdx !== -1 ? parseInt(args[portIdx + 1], 10) : NaN;
+  // Insert mode — need port
+  const port = parseInt(opts.port || '', 10);
   if (!Number.isFinite(port)) {
     console.error(JSON.stringify({ ok: false, error: 'missing_port' }));
     process.exit(1);
   }
 
-  const results = resolvedFiles.map((relFile) => {
+  const results = resolvedFiles.map((relFile): FileResult => {
     const absFile = path.resolve(process.cwd(), relFile);
     if (!fs.existsSync(absFile)) return { file: relFile, error: 'file_not_found' };
     const content = fs.readFileSync(absFile, 'utf-8');
@@ -140,17 +147,17 @@ Output (JSON):
  * are applied as filters. Duplicates are removed. Order is preserved by
  * first appearance.
  */
-export function resolveFiles(rootDir, config) {
+export function resolveFiles(rootDir: string, config: LiveConfig): string[] {
   const patterns = config.files;
-  const userExcludes = Array.isArray(config.exclude) ? config.exclude : [];
+  const userExcludes: string[] = Array.isArray(config.exclude) ? config.exclude : [];
   const allExcludes = [...HARD_EXCLUDES, ...userExcludes];
   const excludeRegexes = allExcludes.map(globToRegex);
 
-  const isExcluded = (relPath) => excludeRegexes.some((re) => re.test(relPath));
-  const isGlob = (s) => /[*?[]/.test(s);
+  const isExcluded = (relPath: string): boolean => excludeRegexes.some((re) => re.test(relPath));
+  const isGlob = (s: string): boolean => /[*?[]/.test(s);
 
-  const seen = new Set();
-  const out = [];
+  const seen = new Set<string>();
+  const out: string[] = [];
   for (const pat of patterns) {
     if (!isGlob(pat)) {
       // Literal path — include even if it doesn't exist yet; the caller
@@ -162,15 +169,15 @@ export function resolveFiles(rootDir, config) {
       }
       continue;
     }
-    let matches;
+    let matches: fs.Dirent[];
     try {
       matches = fs.globSync(pat, { cwd: rootDir, withFileTypes: true });
     } catch {
       continue;
     }
     for (const ent of matches) {
-      if (!ent.isFile || !ent.isFile()) continue;
-      const abs = path.join(ent.parentPath || ent.path || rootDir, ent.name);
+      if (!(ent as unknown as { isFile(): boolean }).isFile || !(ent as unknown as { isFile(): boolean }).isFile()) continue;
+      const abs = path.join((ent as unknown as { parentPath?: string; path?: string }).parentPath || (ent as unknown as { parentPath?: string; path?: string }).path || rootDir, ent.name);
       const rel = path.relative(rootDir, abs).split(path.sep).join('/');
       if (isExcluded(rel)) continue;
       if (seen.has(rel)) continue;
@@ -188,7 +195,7 @@ export function resolveFiles(rootDir, config) {
  *   ?   → any single char except `/`
  * Paths are normalized to forward slashes before matching.
  */
-function globToRegex(pattern) {
+function globToRegex(pattern: string): RegExp {
   let re = '';
   let i = 0;
   while (i < pattern.length) {
@@ -226,7 +233,7 @@ function globToRegex(pattern) {
 // Core operations
 // ---------------------------------------------------------------------------
 
-function validateConfig(cfg) {
+function validateConfig(cfg: LiveConfig): void {
   if (!cfg || typeof cfg !== 'object') throw new Error('config.json must be an object');
   if (!Array.isArray(cfg.files) || cfg.files.length === 0) {
     throw new Error('config.files (non-empty string array) required');
@@ -253,10 +260,10 @@ function validateConfig(cfg) {
   }
 }
 
-function commentOpen(syntax) { return syntax === 'jsx' ? '{/*' : '<!--'; }
-function commentClose(syntax) { return syntax === 'jsx' ? '*/}' : '-->'; }
+function commentOpen(syntax: string): string { return syntax === 'jsx' ? '{/*' : '<!--'; }
+function commentClose(syntax: string): string { return syntax === 'jsx' ? '*/}' : '-->'; }
 
-function buildTagBlock(syntax, port) {
+export function buildTagBlock(syntax: string, port: number): string {
   const open = commentOpen(syntax);
   const close = commentClose(syntax);
   return (
@@ -266,7 +273,7 @@ function buildTagBlock(syntax, port) {
   );
 }
 
-function insertTag(content, config, port) {
+export function insertTag(content: string, config: LiveConfig, port: number): string {
   const block = buildTagBlock(config.commentSyntax, port);
   // insertBefore: match the LAST occurrence. Anchors like `</body>` naturally
   // belong at the end, and the same literal can appear earlier in code blocks
@@ -278,9 +285,9 @@ function insertTag(content, config, port) {
   }
   // insertAfter: match the FIRST occurrence — typical anchors like `<head>` or
   // `<body>` open near the top of the document.
-  const idx = content.indexOf(config.insertAfter);
+  const idx = content.indexOf(config.insertAfter!);
   if (idx === -1) return content;
-  const after = idx + config.insertAfter.length;
+  const after = idx + config.insertAfter!.length;
   // Preserve a single trailing newline if the anchor didn't end with one
   const prefix = content[after] === '\n' ? content.slice(0, after + 1) : content.slice(0, after) + '\n';
   return prefix + block + content.slice(prefix.length);
@@ -297,8 +304,8 @@ function insertTag(content, config, port) {
  * unindented. Replacing the whole block (plus its trailing newline) with just
  * the captured indent hands the indent back to the anchor that follows.
  */
-function removeTag(content, _syntax) {
-  const patterns = [
+export function removeTag(content: string, _syntax: string): string {
+  const patterns: RegExp[] = [
     /([ \t]*)<!--\s*impeccable-live-start\s*-->[\s\S]*?<!--\s*impeccable-live-end\s*-->[ \t]*\n/,
     /([ \t]*)\{\/\*\s*impeccable-live-start\s*\*\/\}[\s\S]*?\{\/\*\s*impeccable-live-end\s*\*\/\}[ \t]*\n/,
   ];
@@ -329,12 +336,23 @@ function removeTag(content, _syntax) {
 // Only the in-source meta-tag form gets the auto-patch.
 // ---------------------------------------------------------------------------
 
-const CSP_MARKER_ATTR = 'data-impeccable-csp-original';
+interface CspTag {
+  start: number;
+  end: number;
+  full: string;
+  attrs: string;
+}
 
-function findCspMetaTags(content) {
-  const out = [];
+interface AttrMatch {
+  quote: string;
+  value: string;
+  full: string;
+}
+
+function findCspMetaTags(content: string): CspTag[] {
+  const out: CspTag[] = [];
   const tagRe = /<meta\s+([^>]*?)\/?>/gis;
-  let m;
+  let m: RegExpExecArray | null;
   while ((m = tagRe.exec(content)) !== null) {
     const attrs = m[1];
     if (!/(http-equiv|httpEquiv)\s*=\s*(['"])Content-Security-Policy\2/i.test(attrs)) continue;
@@ -343,13 +361,13 @@ function findCspMetaTags(content) {
   return out;
 }
 
-function getAttr(attrs, name) {
+function getAttr(attrs: string, name: string): AttrMatch | null {
   const re = new RegExp(`\\b${name}\\s*=\\s*(['"])([\\s\\S]*?)\\1`, 'i');
   const m = attrs.match(re);
   return m ? { quote: m[1], value: m[2], full: m[0] } : null;
 }
 
-function appendOriginToDirective(csp, directive, origin) {
+function appendOriginToDirective(csp: string, directive: string, origin: string): string {
   const re = new RegExp(`(^|;)(\\s*)(${directive})\\s+([^;]*)`, 'i');
   const m = csp.match(re);
   if (m) {
@@ -363,7 +381,7 @@ function appendOriginToDirective(csp, directive, origin) {
   return csp.trim().replace(/;?\s*$/, '') + `; ${directive} 'self' ${origin}`;
 }
 
-export function patchCspMeta(content, port) {
+export function patchCspMeta(content: string, port: number): string {
   const tags = findCspMetaTags(content);
   if (tags.length === 0) return content;
   const origin = `http://localhost:${port}`;
@@ -406,7 +424,7 @@ export function patchCspMeta(content, port) {
   return result;
 }
 
-export function revertCspMeta(content) {
+export function revertCspMeta(content: string): string {
   const tags = findCspMetaTags(content);
   if (tags.length === 0) return content;
 
@@ -418,7 +436,7 @@ export function revertCspMeta(content) {
     const contentAttr = getAttr(tag.attrs, 'content');
     if (!contentAttr) continue;
 
-    let originalValue;
+    let originalValue: string;
     try { originalValue = Buffer.from(origAttr.value, 'base64').toString('utf-8'); }
     catch { continue; }
 
@@ -433,14 +451,4 @@ export function revertCspMeta(content) {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Auto-execute
-// ---------------------------------------------------------------------------
-
-const _running = process.argv[1];
-if (_running?.endsWith('live-inject.mjs') || _running?.endsWith('live-inject.mjs/')) {
-  injectCli();
-}
-
-export { insertTag, removeTag, validateConfig, buildTagBlock };
-// patchCspMeta + revertCspMeta are exported above where they're defined.
+export { validateConfig };

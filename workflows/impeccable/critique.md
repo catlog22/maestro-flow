@@ -12,7 +12,7 @@ Before gathering assessments, do two small bookkeeping steps. They cost almost n
 
 2. **Compute the slug.** Run:
    ```bash
-   node .claude/skills/maestro-impeccable/scripts/critique-storage.mjs slug "<resolved-path-or-url>"
+   maestro impeccable critique slug "<resolved-path-or-url>"
    ```
    Keep the printed slug. It identifies this target's stream across runs. If the command exits non-zero ("no stable slug for input"), skip persistence for this run and tell the user; the trend won't update but the critique still goes ahead.
 
@@ -193,13 +193,13 @@ Skip this step if the Setup slug was null (vague or root-level target).
 2. **Pass the structured metadata** through `IMPECCABLE_CRITIQUE_META` (JSON), then run the write command:
    ```bash
    IMPECCABLE_CRITIQUE_META='{"target":"<user phrasing>","total_score":<n>,"p0_count":<n>,"p1_count":<n>}' \
-     node .claude/skills/maestro-impeccable/scripts/critique-storage.mjs write <slug> <body-file>
+     maestro impeccable critique write <slug> <body-file>
    ```
    The helper prints the absolute path it wrote.
 
 3. **Read the trend** for context:
    ```bash
-   node .claude/skills/maestro-impeccable/scripts/critique-storage.mjs trend <slug> 5
+   maestro impeccable critique trend <slug> 5
    ```
    This returns a JSON array of the last 5 frontmatter entries (including the one you just wrote).
 

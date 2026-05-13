@@ -5,7 +5,7 @@ version: 1.0.0
 user-invocable: true
 argument-hint: "[craft|shape · audit|critique · animate|bolder|colorize|delight|layout|overdrive|quieter|typeset · adapt|clarify|distill · harden|onboard|optimize|polish · teach|document|extract|live] [target] [--skip-harvest] [-y]"
 allowed-tools:
-  - Bash(npx impeccable *)
+  - Bash(maestro impeccable *)
   - Write
 ---
 
@@ -31,14 +31,14 @@ Two files, case-insensitive. The loader looks at the project root by default and
 Load both in one call:
 
 ```bash
-node .claude/skills/maestro-impeccable/scripts/load-context.mjs
+maestro impeccable load-context
 ```
 
 Consume the full JSON output. Never pipe through `head`, `tail`, `grep`, or `jq`.
 
 If the output is already in this session, don't re-run. Exceptions: you just ran `teach` or `document` (they rewrite the files), or the user manually edited one.
 
-`live` already warms context via `live.mjs`. If you've run `live.mjs`, skip `load-context.mjs`.
+`live` already warms context via `maestro impeccable live`. If you've run `live`, skip `load-context`.
 
 If PRODUCT.md is missing/empty/placeholder (`[TODO]`, <200 chars): run `teach`, then resume the original task. If the original task was `craft`, resume into `shape` first.
 
