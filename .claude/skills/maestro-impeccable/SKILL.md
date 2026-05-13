@@ -23,22 +23,28 @@ Skipping these produces generic output that ignores the project.
 
 ### 1. Context gathering
 
-Two files, case-insensitive. The loader searches `.workflow/impeccable/` first, then the project root, then `.agents/context/` and `docs/`. Override with `IMPECCABLE_CONTEXT_DIR=path/to/dir`.
+Two files, case-insensitive. PRODUCT.md and DESIGN.md are stored at `.workflow/impeccable/`.
 
 - **PRODUCT.md**: required. Users, brand, tone, anti-references, strategic principles.
 - **DESIGN.md**: optional, strongly recommended. Colors, typography, elevation, components.
 
-Load both in one call:
+Both are registered in the spec system under category `ui` via `spec add`. Load with:
+
+```bash
+maestro spec load --category ui
+```
+
+This surfaces all design context (product + visual) from `.workflow/specs/ui-conventions.md`. If specs are not initialized, fall back to the legacy loader:
 
 ```bash
 maestro impeccable load-context
 ```
 
-Consume the full JSON output. Never pipe through `head`, `tail`, `grep`, or `jq`.
+Consume the full output. Never pipe through `head`, `tail`, `grep`, or `jq`.
 
-If the output is already in this session, don't re-run. Exceptions: you just ran `teach` or `document` (they rewrite the files), or the user manually edited one.
+If the output is already in this session, don't re-run. Exceptions: you just ran `teach` or `document` (they rewrite the files and re-register specs), or the user manually edited one.
 
-`live` already warms context via `maestro impeccable live`. If you've run `live`, skip `load-context`.
+`live` already warms context via `maestro impeccable live`. If you've run `live`, skip context loading.
 
 If PRODUCT.md is missing/empty/placeholder (`[TODO]`, <200 chars): run `teach`, then resume the original task. If the original task was `craft`, resume into `shape` first.
 

@@ -110,6 +110,7 @@ Real-time dashboard at `http://127.0.0.1:3001` with Kanban board, Gantt timeline
 ```bash
 maestro serve                  # → http://127.0.0.1:3001
 maestro view                   # Terminal TUI alternative
+maestro command-help           # Open interactive command reference in browser (alias: ch)
 ```
 
 ### 5. Multi-Agent Engine
@@ -177,7 +178,8 @@ maestro/
 ## Documentation
 
 - **[Maestro Ralph Guide](guide/maestro-ralph-guide.md)** — Adaptive lifecycle engine: position inference, decision nodes, quality modes, retry escalation
-- **[Command Usage Guide](guide/command-usage-guide.md)** — All 51 commands with workflow diagrams, pipeline chaining, Issue closed-loop
+- **[Command Usage Guide](guide/command-usage-guide.md)** — All 53 commands with workflow diagrams, pipeline chaining, Issue closed-loop
+- **[Command Reference (HTML)](guide/command-usage-guide.html)** — Interactive HTML version with search, card grid, and workflow examples (`maestro command-help` to open)
 - **[CLI Commands Reference](guide/cli-commands-guide.en.md)** — All 21 terminal commands: install, delegate, coordinate, wiki, hooks, overlay, collab
 - **[Spec System Guide](guide/spec-system-guide.md)** — Project specs with `<spec-entry>` format, keyword-based loading, validation hooks
 - **[Delegate Async Guide](guide/delegate-async-guide.md)** — Async task delegation: CLI & MCP usage, message injection, chaining

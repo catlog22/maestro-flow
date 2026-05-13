@@ -75,5 +75,6 @@ function inferCategory(prompt: string): SpecCategory {
   if (/\b(test(?:ing)?|coverage|assert|verify|validate|e2e|regression)\b/.test(lower)) return 'test';
   if (/\b(debug|diagnose|bug|trace|crash|hang|leak)\b|root cause/.test(lower)) return 'debug';
   if (/\b(plan|design|architect|decompose|blueprint)\b|migration strategy/.test(lower)) return 'arch';
+  if (/\b(ui|ux|frontend|component|style|css|scss|tailwind|design system|layout|animation|responsive|landing|dashboard|impeccable)\b/.test(lower)) return 'ui';
   return 'coding'; // Default for implementation work
 }

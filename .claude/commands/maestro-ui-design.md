@@ -40,7 +40,17 @@ Flags, workflow routing, scope modes, and output artifacts defined in the routed
 </context>
 
 <execution>
-## Workflow Routing
+## 1. Load UI Specs
+
+Load project UI conventions before generating designs:
+
+```bash
+maestro spec load --category ui
+```
+
+If specs not initialized, continue without — the workflow still produces valid output.
+
+## 2. Workflow Routing
 
 Detect ui-ux-pro-max skill availability and route to the appropriate workflow:
 
@@ -71,6 +81,7 @@ Skill detection logic, report format, and complete pipeline steps defined in the
 
 <success_criteria>
 **Both paths (common):**
+- [ ] UI specs loaded via `spec load --category ui` (if available)
 - [ ] Requirements extracted from phase context (context.md, brainstorm, spec, or user input)
 - [ ] N style variants generated with contrasting design directions
 - [ ] User selected preferred variant (or auto-selected in -y mode)

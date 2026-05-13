@@ -58,6 +58,9 @@ You implement a single task from the execution plan. Each task is executed atomi
   - Quality rules (enforcement criteria)
   - All specs with `readMode: required` and `category: execution`
   - **Must comply**: All generated code must follow loaded spec constraints
+- **UI specs (conditional)** -- If task involves frontend/UI work (focus_paths in `src/components/`, `src/pages/`, `src/styles/`, `src/ui/`, or description contains UI keywords), also load via `maestro spec load --category ui`:
+  - Design tokens, component conventions, visual system constraints
+  - PRODUCT.md/DESIGN.md references
 - Prior task summaries from `.summaries/` (for context on dependencies)
 - `context.md` -- Phase context with Locked/Free/Deferred decisions (read to understand constraints before implementing)
 - `analysis.md` -- Phase analysis with 6-dimension scores (reference for quality expectations)

@@ -209,7 +209,9 @@ If exit code is 1, present warnings and ask whether to proceed.
 
 5. **Load project specs + tools**: Run `maestro spec load --category coding` to load coding conventions, architecture constraints, AND discoverable knowhow tools (passed to all agents)
 
-6. **Load codebase + wiki context** (optional, passed to all agents):
+6. **Load UI specs (conditional)**: If any task involves frontend/UI work (task scope/description contains component, page, style, layout, CSS, HTML, frontend; or focus_paths in `src/components/`, `src/pages/`, `src/styles/`, `src/ui/`), also run `maestro spec load --category ui` and include in agent context.
+
+7. **Load codebase + wiki context** (optional, passed to all agents):
    - If `.workflow/codebase/ARCHITECTURE.md` exists: read and include as `codebase_context` in agent instructions
    - Run `maestro wiki search "<phase keywords>" --json 2>/dev/null`; if results: include top 5 entries as `wiki_context`
    - Both are optional — proceed without if unavailable

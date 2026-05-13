@@ -36,7 +36,13 @@ $ARGUMENTS -- sub-command + target + optional flags.
 
 Before any design work:
 
-1. Load context (PRODUCT.md / DESIGN.md) via loader script:
+1. Load context (PRODUCT.md / DESIGN.md) via spec system:
+   ```bash
+   maestro spec load --category ui
+   ```
+   This surfaces all design context (product + visual) from `.workflow/specs/ui-conventions.md`.
+
+   If specs are not initialized, fall back to the legacy loader:
    ```bash
    maestro impeccable load-context
    ```

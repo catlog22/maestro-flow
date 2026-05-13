@@ -104,6 +104,7 @@ id,wave,title,description,agent_type,deps,status,findings,output_path,error
 </csv_schema>
 
 <invariants>
+0. **Load UI Specs**: Before extraction, load project UI conventions via `maestro spec load --category ui` (if available). Ensures extracted tokens align with existing conventions.
 1. **Start Immediately**: First action is argument parsing, then validation
 2. **Wave Order is Sacred**: Never execute wave N+1 before wave N completes and results are merged
 3. **CSV is Source of Truth**: Master tasks.csv holds all state

@@ -130,6 +130,18 @@ Register is either `brand` or `product` as a bare value. No prose, no commentary
 
 Write to `.workflow/impeccable/PRODUCT.md`. If `.impeccable.md` existed, the loader already renamed it; merge into that content rather than starting from scratch.
 
+### Step 4b: Register Product Context as Spec
+
+After writing PRODUCT.md, append a spec entry to `.workflow/specs/ui-conventions.md`:
+
+```markdown
+<spec-entry category="ui" keywords="product,brand,register,users,anti-references" date="{YYYY-MM-DD}" source=".workflow/impeccable/PRODUCT.md">
+Product Context: {project_name}. Register: {register}. Users: {users_summary}. Brand personality: {personality}. Design principles: {principles_list}. Anti-references: {anti_refs_summary}.
+</spec-entry>
+```
+
+If `ui-conventions.md` doesn't exist, create it. Other maestro commands load this via `spec load --category ui`.
+
 ## Step 5: Decide on DESIGN.md
 
 Offer `/maestro-impeccable document` either way. Two paths:

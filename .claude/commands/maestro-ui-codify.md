@@ -41,6 +41,18 @@ Flags:
 </context>
 
 <execution>
+## 1. Load UI Specs
+
+Load project UI conventions before extracting design system:
+
+```bash
+maestro spec load --category ui
+```
+
+If specs not initialized, continue without — the workflow still produces valid output.
+
+## 2. Execute Workflow
+
 Route to `~/.maestro/workflows/ui-codify.md` and follow completely.
 
 The workflow orchestrates 4 phases with deferred loading of phase-specific workflow files. Each phase reads its workflow file only when execution reaches that phase.
@@ -56,6 +68,7 @@ The workflow orchestrates 4 phases with deferred loading of phase-specific workf
 </error_codes>
 
 <success_criteria>
+- [ ] UI specs loaded via `spec load --category ui` (if available)
 - [ ] Source path validated and file discovery completed
 - [ ] design-tokens.json generated with color, typography, spacing tokens
 - [ ] layout-templates.json generated with component patterns (universal/specialized)

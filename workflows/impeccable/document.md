@@ -328,6 +328,18 @@ Pull directly from the DESIGN.md you just wrote:
 
 Do not reword. The panel shows these as secondary collapsible context; the same voice that's in the Markdown carries through.
 
+### Step 4c: Register Design Context as Spec
+
+After writing DESIGN.md and the design.json sidecar, append a spec entry to `.workflow/specs/ui-conventions.md`:
+
+```markdown
+<spec-entry category="ui" keywords="design,colors,typography,components,visual-system" date="{YYYY-MM-DD}" source=".workflow/impeccable/DESIGN.md">
+Design System: {project_name}. Color strategy: {color_strategy}. Typography: {type_direction}. Elevation: {elevation_approach}. Key components: {component_list}. North star: {north_star}.
+</spec-entry>
+```
+
+If `ui-conventions.md` doesn't exist, create it. Combined with the product entry from `teach`, `spec load --category ui` surfaces both.
+
 ### Step 5: Confirm, refine, and refresh session cache
 
 1. Show the user the full DESIGN.md you wrote. Briefly highlight the non-obvious creative choices (descriptive color names, atmosphere language, named rules).

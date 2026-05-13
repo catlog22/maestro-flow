@@ -92,7 +92,7 @@ Display: category, target file, extracted keywords, and commands for verify (`/s
 |------|----------|-------------|
 | E001 | fatal | Category and content are both required |
 | E002 | fatal | `.workflow/specs/` not initialized -- run `Skill({ skill: "spec-setup" })` first |
-| E003 | fatal | Invalid category -- must be one of: coding, arch, quality, debug, test, review, learning, bug, pattern, decision, rule, validation |
+| E003 | fatal | Invalid category -- must be one of: coding, arch, quality, debug, test, review, learning, ui, bug, pattern, decision, rule, validation |
 </error_codes>
 
 <success_criteria>

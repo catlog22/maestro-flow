@@ -57,7 +57,7 @@ and writes knowhow entries. DCS-/AST- types also get spec index entries for disc
 Skill({ skill: "maestro-impeccable", args: "$ARGUMENTS" })
 ```
 
-The skill handles: context loading (PRODUCT.md/DESIGN.md from .workflow/impeccable/), register detection (brand/product),
+The skill handles: context loading (spec load --category ui, with load-context fallback), register detection (brand/product),
 reference file loading, and command execution.
 
 ## 2. Harvest
@@ -82,7 +82,7 @@ Skip harvest if:
 
 <success_criteria>
 - [ ] Sub-command recognized and routed to maestro-impeccable skill
-- [ ] Skill executed with context (PRODUCT.md loaded from .workflow/impeccable/, register identified)
+- [ ] Skill executed with context (spec load --category ui or load-context fallback, register identified)
 - [ ] Design changes applied to target files
 - [ ] Knowhow entry created in .workflow/knowhow/ (unless --skip-harvest or live)
 - [ ] Spec index entry created for DCS-/AST- types

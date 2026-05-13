@@ -50,7 +50,7 @@ Follow '~/.maestro/workflows/specs-add.md' completely.
 |------|----------|-------------|-------|
 | E001 | fatal | Category and content are both required | parse_input |
 | E002 | fatal | Specs directory not initialized -- run `maestro spec init --scope <scope>` | validate_entry |
-| E003 | fatal | Invalid category -- must be one of: coding, arch, quality, debug, test, review, learning, tools | parse_input |
+| E003 | fatal | Invalid category -- must be one of: coding, arch, quality, debug, test, review, learning, tools, ui | parse_input |
 | E004 | fatal | Invalid scope -- must be one of: project, global, team, personal | parse_input |
 | E005 | fatal | Personal scope requires uid -- use `--uid` or run `maestro collab join` first | parse_input |
 </error_codes>

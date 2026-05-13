@@ -60,6 +60,16 @@ When `--yes` or `-y`: Skip interactive selection, auto-pick top-scored variant, 
 
 <execution>
 
+### Step 0: Load UI Specs
+
+Load project UI conventions before generating designs:
+
+```bash
+maestro spec load --category ui
+```
+
+If specs not initialized, continue without — the workflow still produces valid output.
+
 ### Step 1: Parse Input and Resolve Target
 
 1. Parse flags from `$ARGUMENTS`: `--styles N`, `--stack`, `--targets`, `--persist`, `--full`, `-y`
