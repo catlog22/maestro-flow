@@ -28,6 +28,19 @@ export interface ManifestInfo {
   version: string;
 }
 
+export interface AddonInfo {
+  id: string;
+  name: string;
+  description: string;
+  repo: string;
+  homepage?: string;
+  tags?: string[];
+  /** Per-harness install status: { claude: true, codex: false } */
+  harnesses: Record<string, boolean>;
+  /** True if any harness is installed */
+  installed: boolean;
+}
+
 export interface DetectionResult {
   sourceDir: string;
   components: ComponentInfo[];
@@ -74,6 +87,8 @@ export interface InstallStore {
   result: InstallResult | null;
   error: string | null;
   manifests: ManifestInfo[];
+  addons: AddonInfo[];
+  addonInstalling: string | null;
 
   setOpen: (open: boolean) => void;
   setStep: (step: WizardStep) => void;
@@ -87,6 +102,8 @@ export interface InstallStore {
   detect: () => Promise<void>;
   install: () => Promise<void>;
   fetchManifests: () => Promise<void>;
+  fetchAddons: () => Promise<void>;
+  installAddon: (addonId: string, harnesses?: string[]) => Promise<void>;
   reset: () => void;
 }
 
@@ -109,6 +126,8 @@ export const useInstallStore = create<InstallStore>((set, get) => ({
   result: null,
   error: null,
   manifests: [],
+  addons: [],
+  addonInstalling: null,
 
   setOpen: (open) => {
     if (open) {
@@ -172,6 +191,8 @@ export const useInstallStore = create<InstallStore>((set, get) => ({
         selectedComponents: new Set(available),
         step: 'configure',
       });
+      // Also fetch available addons
+      get().fetchAddons();
     } catch (err) {
       set({ detecting: false, error: String(err) });
     }
@@ -224,6 +245,45 @@ export const useInstallStore = create<InstallStore>((set, get) => ({
     }
   },
 
+  fetchAddons: async () => {
+    const { mode, projectPath } = get();
+    try {
+      const params = new URLSearchParams({ mode });
+      if (mode === 'project' && projectPath) params.set('projectPath', projectPath);
+      const res = await fetch(`${INSTALL_API_ENDPOINTS.ADDONS}?${params}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { addons: AddonInfo[] };
+      set({ addons: data.addons ?? [] });
+    } catch {
+      // non-critical
+    }
+  },
+
+  installAddon: async (addonId: string, harnesses?: string[]) => {
+    const { mode, projectPath } = get();
+    set({ addonInstalling: addonId });
+    try {
+      const res = await fetch(INSTALL_API_ENDPOINTS.ADDON_INSTALL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          addonId,
+          mode,
+          projectPath: mode === 'project' ? projectPath : undefined,
+          harnesses,
+        }),
+      });
+      const data = (await res.json()) as { success: boolean; error?: string };
+      if (data.success) {
+        // Refresh addons list to update installed status
+        await get().fetchAddons();
+      }
+      set({ addonInstalling: null });
+    } catch {
+      set({ addonInstalling: null });
+    }
+  },
+
   reset: () =>
     set({
       step: 'mode',
@@ -238,5 +298,7 @@ export const useInstallStore = create<InstallStore>((set, get) => ({
       installing: false,
       result: null,
       error: null,
+      addons: [],
+      addonInstalling: null,
     }),
 }));

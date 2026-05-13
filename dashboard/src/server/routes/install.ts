@@ -7,8 +7,59 @@
 import { Hono } from 'hono';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, cpSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+// ---------------------------------------------------------------------------
+// Addon Registry — inline to avoid circular build dependency
+// ---------------------------------------------------------------------------
+
+interface AddonTarget {
+  harness: string;
+  srcPath: string;
+  destPath: string;
+}
+
+interface AddonDef {
+  id: string;
+  name: string;
+  description: string;
+  repo: string;
+  branch: string;
+  targets: AddonTarget[];
+  homepage?: string;
+  tags?: string[];
+}
+
+const ADDON_REGISTRY: AddonDef[] = [
+  {
+    id: 'impeccable',
+    name: 'Impeccable',
+    description: 'Production-grade frontend design — 23 commands for UI craft, critique, polish, and iteration',
+    repo: 'pbakaus/impeccable',
+    branch: 'main',
+    targets: [
+      { harness: 'claude', srcPath: '.claude/skills/impeccable', destPath: '.claude/skills/impeccable' },
+      { harness: 'codex', srcPath: '.codex/agents', destPath: '.codex/agents' },
+    ],
+    homepage: 'https://impeccable.style',
+    tags: ['design', 'frontend', 'ui', 'ux'],
+  },
+  {
+    id: 'ui-ux-pro-max',
+    name: 'UI/UX Pro Max',
+    description: 'Design intelligence — 50+ styles, 97 palettes, 57 font pairings, 99 UX guidelines across 9 stacks',
+    repo: 'nextlevelbuilder/ui-ux-pro-max-skill',
+    branch: 'main',
+    targets: [
+      { harness: 'claude', srcPath: '.claude/skills/ui-ux-pro-max', destPath: '.claude/skills/ui-ux-pro-max' },
+      { harness: 'codex', srcPath: '.claude/skills/ui-ux-pro-max', destPath: '.codex/skills/ui-ux-pro-max' },
+    ],
+    homepage: 'https://github.com/nextlevelbuilder/ui-ux-pro-max-skill',
+    tags: ['design', 'ui', 'ux', 'tokens', 'typography'],
+  },
+];
 import {
   resolveSourceDir,
   scanAvailableSources,
@@ -248,6 +299,110 @@ export function createInstallRoutes(): Hono {
 
   app.get('/api/install/manifests', (c) => {
     return c.json({ manifests: getAllManifests() });
+  });
+
+  // -------------------------------------------------------------------
+  // GET /api/install/addons — List available addons with install status
+  // -------------------------------------------------------------------
+
+  app.get('/api/install/addons', (c) => {
+    const mode = (c.req.query('mode') ?? 'global') as 'global' | 'project';
+    const projectPath = c.req.query('projectPath') ?? '';
+    const targetBase = mode === 'global' ? homedir() : projectPath;
+
+    const addons = ADDON_REGISTRY.map((addon) => {
+      // Check install status per harness
+      const harnesses: Record<string, boolean> = {};
+      for (const t of addon.targets) {
+        const destDir = join(targetBase, t.destPath);
+        harnesses[t.harness] = existsSync(destDir) && (
+          existsSync(join(destDir, 'SKILL.md')) || existsSync(join(destDir, 'AGENTS.md')) ||
+          // For dirs without SKILL.md (e.g. codex agents), check any file exists
+          existsSync(destDir)
+        );
+      }
+      return {
+        id: addon.id,
+        name: addon.name,
+        description: addon.description,
+        repo: addon.repo,
+        homepage: addon.homepage,
+        tags: addon.tags,
+        harnesses,
+        installed: Object.values(harnesses).some(Boolean),
+      };
+    });
+
+    return c.json({ addons });
+  });
+
+  // -------------------------------------------------------------------
+  // POST /api/install/addon — Install an addon from GitHub
+  // -------------------------------------------------------------------
+
+  app.post('/api/install/addon', async (c) => {
+    const body = await c.req.json<{
+      addonId: string;
+      mode: 'global' | 'project';
+      projectPath?: string;
+      harnesses?: string[];  // ['claude', 'codex'] — default: all available
+    }>();
+
+    const { addonId, mode, projectPath, harnesses: requestedHarnesses } = body;
+    const addon = ADDON_REGISTRY.find((a) => a.id === addonId);
+    if (!addon) {
+      return c.json({ success: false, error: `Addon "${addonId}" not found in registry` }, 404);
+    }
+
+    const targetBase = mode === 'global' ? homedir() : projectPath!;
+
+    // Filter targets by requested harnesses (default: all)
+    const targets = requestedHarnesses?.length
+      ? addon.targets.filter((t) => requestedHarnesses.includes(t.harness))
+      : addon.targets;
+
+    if (targets.length === 0) {
+      return c.json({ success: false, error: 'No matching harness targets' }, 400);
+    }
+
+    try {
+      // Clone repo to temp dir (shallow, depth 1)
+      const tmp = join(tmpdir(), `maestro-addon-${addonId}-${Date.now()}`);
+      mkdirSync(tmp, { recursive: true });
+
+      execSync(
+        `git clone --depth 1 --branch ${addon.branch} https://github.com/${addon.repo}.git "${tmp}"`,
+        { stdio: 'pipe', timeout: 60_000 },
+      );
+
+      // Copy each target
+      const installed: string[] = [];
+      for (const target of targets) {
+        const srcDir = join(tmp, target.srcPath);
+        const destDir = join(targetBase, target.destPath);
+
+        if (!existsSync(srcDir)) continue;
+
+        mkdirSync(destDir, { recursive: true });
+        cpSync(srcDir, destDir, { recursive: true });
+        installed.push(`${target.harness}: ${target.destPath}`);
+      }
+
+      // Cleanup temp
+      rmSync(tmp, { recursive: true, force: true });
+
+      return c.json({
+        success: true,
+        addon: addon.id,
+        installed,
+        message: `${addon.name} installed: ${installed.join(', ')}`,
+      });
+    } catch (error: unknown) {
+      return c.json({
+        success: false,
+        error: `Failed to install ${addon.name}: ${(error as Error).message}`,
+      }, 500);
+    }
   });
 
   return app;

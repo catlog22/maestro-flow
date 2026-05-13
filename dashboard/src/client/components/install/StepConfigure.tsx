@@ -1,4 +1,4 @@
-import { useInstallStore, MCP_TOOLS } from '@/client/store/install-store.js';
+import { useInstallStore, MCP_TOOLS, type AddonInfo } from '@/client/store/install-store.js';
 
 export function StepConfigure() {
   const detection = useInstallStore((s) => s.detection);
@@ -134,6 +134,9 @@ export function StepConfigure() {
         </div>
       )}
 
+      {/* Addons */}
+      <AddonSection />
+
       {/* Disabled items info */}
       {detection.disabledItems.length > 0 && (
         <div className="rounded-[var(--radius-md)] border border-border bg-bg-card px-4 py-3">
@@ -167,6 +170,87 @@ export function StepConfigure() {
         >
           Review
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Addon Section — external skill marketplace
+// ---------------------------------------------------------------------------
+
+function AddonSection() {
+  const addons = useInstallStore((s) => s.addons);
+  const addonInstalling = useInstallStore((s) => s.addonInstalling);
+  const installAddon = useInstallStore((s) => s.installAddon);
+
+  if (addons.length === 0) return null;
+
+  return (
+    <div>
+      <h3 className="text-[13px] font-semibold text-text-primary mb-3">Addons</h3>
+      <div className="flex flex-col gap-[6px]">
+        {addons.map((addon) => {
+          const harnessEntries = Object.entries(addon.harnesses);
+          const allInstalled = harnessEntries.every(([, v]) => v);
+
+          return (
+            <div
+              key={addon.id}
+              className="px-3 py-[10px] rounded-[var(--radius-md)] border border-border bg-bg-card"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[12px] font-semibold text-text-primary">{addon.name}</span>
+                    {addon.tags?.map((tag) => (
+                      <span key={tag} className="text-[9px] font-mono text-text-tertiary px-[5px] py-[1px] rounded bg-bg-secondary">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-text-tertiary mt-[2px] leading-relaxed">{addon.description}</p>
+                </div>
+                {allInstalled ? (
+                  <span className="text-[10px] font-semibold text-[var(--color-status-completed,#5A9E78)] px-3 py-[5px] shrink-0">
+                    Installed
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={addonInstalling === addon.id}
+                    onClick={() => installAddon(addon.id)}
+                    className="px-3 py-[5px] rounded-[var(--radius-md)] border border-text-primary bg-transparent text-[10px] font-semibold text-text-primary hover:bg-text-primary hover:text-white transition-all cursor-pointer disabled:opacity-40 disabled:cursor-default shrink-0"
+                  >
+                    {addonInstalling === addon.id ? 'Installing...' : 'Install All'}
+                  </button>
+                )}
+              </div>
+              {/* Per-harness status */}
+              <div className="flex items-center gap-3 mt-2">
+                {harnessEntries.map(([harness, installed]) => (
+                  <div key={harness} className="flex items-center gap-[5px]">
+                    <span
+                      className="w-[6px] h-[6px] rounded-full shrink-0"
+                      style={{ background: installed ? 'var(--color-status-completed,#5A9E78)' : 'var(--color-text-tertiary)' }}
+                    />
+                    <span className="text-[10px] font-mono text-text-tertiary">{harness}</span>
+                    {!installed && !allInstalled && (
+                      <button
+                        type="button"
+                        disabled={addonInstalling === addon.id}
+                        onClick={() => installAddon(addon.id, [harness])}
+                        className="text-[9px] text-text-tertiary hover:text-text-primary underline cursor-pointer disabled:opacity-40 disabled:cursor-default"
+                      >
+                        install
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

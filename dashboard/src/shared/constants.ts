@@ -322,6 +322,8 @@ export const INSTALL_API_ENDPOINTS = {
   DETECT: '/api/install/detect',
   EXECUTE: '/api/install/execute',
   MANIFESTS: '/api/install/manifests',
+  ADDONS: '/api/install/addons',
+  ADDON_INSTALL: '/api/install/addon',
 } as const;
 
 // ---------------------------------------------------------------------------
