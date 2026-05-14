@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PROJECT_NAME}} — {{STYLE_NAME}}</title>
+  {{GOOGLE_FONTS_LINK}}
+  <style>
+    /* === Design Tokens (injected from MASTER.md) === */
+    :root {
+      /* Colors */
+      --color-primary: {{COLOR_PRIMARY}};
+      --color-on-primary: {{COLOR_ON_PRIMARY}};
+      --color-secondary: {{COLOR_SECONDARY}};
+      --color-accent: {{COLOR_ACCENT}};
+      --color-background: {{COLOR_BACKGROUND}};
+      --color-foreground: {{COLOR_FOREGROUND}};
+      --color-muted: {{COLOR_MUTED}};
+      --color-border: {{COLOR_BORDER}};
+      --color-destructive: {{COLOR_DESTRUCTIVE}};
+      --color-ring: {{COLOR_RING}};
+
+      /* Typography */
+      --font-heading: {{FONT_HEADING}}, system-ui, sans-serif;
+      --font-body: {{FONT_BODY}}, system-ui, sans-serif;
+
+      /* Spacing */
+      --space-xs: 4px;
+      --space-sm: 8px;
+      --space-md: 16px;
+      --space-lg: 24px;
+      --space-xl: 32px;
+      --space-2xl: 48px;
+      --space-3xl: 64px;
+
+      /* Shadows */
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+      --shadow-xl: 0 20px 25px rgba(0,0,0,0.15);
+
+      /* Radii */
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+    }
+
+    /* === Reset === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-body);
+      color: var(--color-foreground);
+      background: var(--color-background);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* === Variant Label === */
+    .variant-label {
+      position: fixed;
+      top: var(--space-sm);
+      right: var(--space-sm);
+      background: var(--color-primary);
+      color: var(--color-on-primary);
+      font-family: var(--font-heading);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: var(--radius-sm);
+      z-index: 100;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* === Navigation === */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-md) var(--space-xl);
+      border-bottom: 1px solid var(--color-border);
+      background: var(--color-background);
+    }
+    .nav-brand {
+      font-family: var(--font-heading);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+    .nav-links {
+      display: flex;
+      gap: var(--space-lg);
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--color-foreground);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 200ms ease;
+    }
+    .nav-links a:hover { color: var(--color-primary); }
+
+    /* === Hero === */
+    .hero {
+      padding: var(--space-3xl) var(--space-xl);
+      text-align: center;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-family: var(--font-heading);
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--color-foreground);
+      margin-bottom: var(--space-md);
+    }
+    .hero p {
+      font-size: 1.125rem;
+      color: var(--color-muted);
+      margin-bottom: var(--space-xl);
+      max-width: 560px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero-actions {
+      display: flex;
+      gap: var(--space-md);
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* === Buttons === */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 24px;
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all 200ms ease;
+    }
+    .btn-primary {
+      background: var(--color-accent);
+      color: white;
+    }
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--color-foreground);
+      border: 1px solid var(--color-border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+
+    /* === Section === */
+    .section {
+      padding: var(--space-3xl) var(--space-xl);
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: var(--space-2xl);
+    }
+    .section-header h2 {
+      font-family: var(--font-heading);
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: var(--space-sm);
+    }
+    .section-header p {
+      color: var(--color-muted);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* === Card Grid === */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--space-lg);
+      max-width: 960px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--color-background);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      box-shadow: var(--shadow-sm);
+      transition: all 200ms ease;
+    }
+    .card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      background: var(--color-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: var(--space-md);
+      color: var(--color-on-primary);
+      font-size: 1.25rem;
+    }
+    .card h3 {
+      font-family: var(--font-heading);
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: var(--space-sm);
+    }
+    .card p {
+      color: var(--color-muted);
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    /* === Stats === */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: var(--space-lg);
+      max-width: 720px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .stat-value {
+      font-family: var(--font-heading);
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: var(--color-primary);
+      line-height: 1;
+    }
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--color-muted);
+      margin-top: var(--space-xs);
+    }
+
+    /* === Form === */
+    .form-section {
+      max-width: 480px;
+      margin: 0 auto;
+      background: var(--color-background);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-xl);
+      box-shadow: var(--shadow-sm);
+    }
+    .form-group {
+      margin-bottom: var(--space-md);
+    }
+    .form-label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: var(--space-xs);
+      color: var(--color-foreground);
+    }
+    .form-input {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: 0.875rem;
+      color: var(--color-foreground);
+      background: var(--color-background);
+      transition: border-color 200ms ease, box-shadow 200ms ease;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--color-ring);
+      box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-ring), transparent 80%);
+    }
+    .form-input::placeholder {
+      color: var(--color-muted);
+    }
+
+    /* === Footer === */
+    .footer {
+      padding: var(--space-xl);
+      text-align: center;
+      border-top: 1px solid var(--color-border);
+      font-size: 0.8125rem;
+      color: var(--color-muted);
+    }
+
+    /* === Color Swatches (design system preview) === */
+    .swatches {
+      display: flex;
+      gap: var(--space-sm);
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: 720px;
+      margin: 0 auto var(--space-xl);
+    }
+    .swatch {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--color-border);
+      position: relative;
+    }
+    .swatch::after {
+      content: attr(data-label);
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.625rem;
+      color: var(--color-muted);
+      white-space: nowrap;
+    }
+
+    /* === Typography Showcase === */
+    .type-showcase {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .type-sample {
+      margin-bottom: var(--space-lg);
+      padding-bottom: var(--space-lg);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .type-sample:last-child { border-bottom: none; }
+    .type-meta {
+      font-size: 0.75rem;
+      color: var(--color-muted);
+      margin-bottom: var(--space-xs);
+      font-family: monospace;
+    }
+
+    /* === Responsive === */
+    @media (max-width: 640px) {
+      .hero { padding: var(--space-2xl) var(--space-md); }
+      .section { padding: var(--space-2xl) var(--space-md); }
+      .nav { padding: var(--space-md); }
+      .nav-links { display: none; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="variant-label">{{STYLE_NAME}}</div>
+
+  <!-- Navigation -->
+  <nav class="nav">
+    <a href="#" class="nav-brand">{{PROJECT_NAME}}</a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#stats">Metrics</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Build something remarkable</h1>
+    <p>A showcase of the design system's visual language, typography, color palette, and component patterns.</p>
+    <div class="hero-actions">
+      <a href="#" class="btn btn-primary">Get Started</a>
+      <a href="#" class="btn btn-secondary">Learn More</a>
+    </div>
+  </section>
+
+  <!-- Color Swatches -->
+  <section class="section">
+    <div class="section-header">
+      <h2>Color Palette</h2>
+      <p>The project's semantic color system</p>
+    </div>
+    <div class="swatches">
+      <div class="swatch" style="background: var(--color-primary);" data-label="Primary"></div>
+      <div class="swatch" style="background: var(--color-secondary);" data-label="Secondary"></div>
+      <div class="swatch" style="background: var(--color-accent);" data-label="Accent"></div>
+      <div class="swatch" style="background: var(--color-foreground);" data-label="Foreground"></div>
+      <div class="swatch" style="background: var(--color-muted);" data-label="Muted"></div>
+      <div class="swatch" style="background: var(--color-border);" data-label="Border"></div>
+      <div class="swatch" style="background: var(--color-destructive);" data-label="Destructive"></div>
+      <div class="swatch" style="background: var(--color-ring);" data-label="Ring"></div>
+    </div>
+  </section>
+
+  <!-- Typography Showcase -->
+  <section class="section" style="background: var(--color-muted); background: color-mix(in oklch, var(--color-muted), var(--color-background) 70%);">
+    <div class="section-header">
+      <h2>Typography</h2>
+      <p>Heading and body font pairing</p>
+    </div>
+    <div class="type-showcase">
+      <div class="type-sample">
+        <div class="type-meta">Display / {{FONT_HEADING}} / 700 / 3rem</div>
+        <div style="font-family: var(--font-heading); font-size: 3rem; font-weight: 700; line-height: 1.1;">The quick brown fox</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">Headline / {{FONT_HEADING}} / 700 / 2rem</div>
+        <div style="font-family: var(--font-heading); font-size: 2rem; font-weight: 700; line-height: 1.2;">Jumps over the lazy dog</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">Title / {{FONT_HEADING}} / 600 / 1.25rem</div>
+        <div style="font-family: var(--font-heading); font-size: 1.25rem; font-weight: 600; line-height: 1.3;">Section title for subsections</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">Body / {{FONT_BODY}} / 400 / 1rem</div>
+        <div style="font-family: var(--font-body); font-size: 1rem; font-weight: 400; line-height: 1.6; max-width: 65ch;">Body text demonstrates the reading experience. Good typography creates visual rhythm and hierarchy. Line length stays within 65-75 characters for optimal readability across devices.</div>
+      </div>
+      <div class="type-sample">
+        <div class="type-meta">Label / {{FONT_BODY}} / 500 / 0.875rem</div>
+        <div style="font-family: var(--font-body); font-size: 0.875rem; font-weight: 500; line-height: 1.4;">Button label, badge text, metadata</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Feature Cards -->
+  <section class="section" id="features">
+    <div class="section-header">
+      <h2>Feature Cards</h2>
+      <p>Component styling and interaction states</p>
+    </div>
+    <div class="card-grid">
+      <div class="card">
+        <div class="card-icon">&#9670;</div>
+        <h3>Design Tokens</h3>
+        <p>Consistent spacing, color, and typography tokens that scale across the entire interface.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#9733;</div>
+        <h3>Component Library</h3>
+        <p>Pre-built components following the design system's visual language and interaction patterns.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">&#9881;</div>
+        <h3>Responsive Layout</h3>
+        <p>Fluid grids and adaptive spacing that work seamlessly from mobile to desktop viewports.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="section" id="stats">
+    <div class="section-header">
+      <h2>By the Numbers</h2>
+    </div>
+    <div class="stats">
+      <div>
+        <div class="stat-value">10</div>
+        <div class="stat-label">Semantic colors</div>
+      </div>
+      <div>
+        <div class="stat-value">7</div>
+        <div class="stat-label">Spacing tokens</div>
+      </div>
+      <div>
+        <div class="stat-value">4</div>
+        <div class="stat-label">Shadow levels</div>
+      </div>
+      <div>
+        <div class="stat-value">2</div>
+        <div class="stat-label">Font families</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Form -->
+  <section class="section" id="contact">
+    <div class="section-header">
+      <h2>Form Components</h2>
+      <p>Input styling and focus states</p>
+    </div>
+    <div class="form-section">
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" class="form-input" placeholder="Jane Doe">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email Address</label>
+        <input type="email" class="form-input" placeholder="jane@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Message</label>
+        <textarea class="form-input" rows="3" placeholder="Tell us about your project..."></textarea>
+      </div>
+      <button class="btn btn-primary" style="width: 100%; margin-top: var(--space-sm);">Submit</button>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>{{PROJECT_NAME}} Design System Preview &mdash; Style: {{STYLE_NAME}} &mdash; Fonts: {{FONT_HEADING}} + {{FONT_BODY}}</p>
+  </footer>
+
+</body>
+</html>

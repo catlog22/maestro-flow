@@ -1,6 +1,15 @@
 # Design Stage + Bridge
 
-Design system generation via ui-search (BM25 search engine + CSV knowledge base) and bridge conversion to Google Stitch DESIGN.md format. Loaded as deferred reading by maestro-ui-craft when build chain enters S_DESIGN or S_BRIDGE states.
+Design system generation via ui-search (BM25 search engine + CSV knowledge base), **visual prototype comparison**, and bridge conversion to Google Stitch DESIGN.md format. Loaded as deferred reading by maestro-ui-craft when build chain enters S_DESIGN_EXPLORE or S_BRIDGE states.
+
+## Architecture
+
+```
+PRODUCT.md → A1 Extract → A2 Keywords → A3 Generate MASTER_{A,B,C}.md
+  → A3.1 Render HTML prototypes → A4 Visualize (/compare)
+  → A4.1 User Review (Approve / Mix / Redo) → A4.2 Mix (optional)
+  → A5 Persist → Phase B Bridge → DESIGN.md
+```
 
 ## Phase A: Design System Generation
 
@@ -54,7 +63,7 @@ For each variant, call:
 python search.py "${variant_keywords}" --design-system -p "${project_name}" -f markdown
 ```
 
-Save each output for comparison.
+Save each output to a temporary directory as `MASTER_A.md`, `MASTER_B.md`, `MASTER_C.md` etc.
 
 Optionally gather supplementary context:
 
@@ -67,12 +76,121 @@ python search.py "${industry}" --domain color
 python search.py "${personality}" --domain typography
 ```
 
-### A4. Present Variants for Selection
+### A3.1. Render HTML Prototypes
+
+For each generated `MASTER_{N}.md`, render a visual HTML prototype using the render script:
+
+```bash
+# Resolve render script — same search order as search.py
+RENDER_PATH="workflows/impeccable/ui-search/render-prototype.js"
+if [ ! -f "$RENDER_PATH" ]; then
+  RENDER_PATH="$HOME/.maestro/workflows/impeccable/ui-search/render-prototype.js"
+fi
+
+# Render all variants at once
+node "$RENDER_PATH" MASTER_A.md MASTER_B.md MASTER_C.md \
+  --output "{temp_dir}/prototypes" --project "${project_name}"
+```
+
+This produces:
+```
+{temp_dir}/prototypes/
+├── prototype_A.html    ← self-contained, all CSS inline
+├── prototype_B.html
+├── prototype_C.html
+└── manifest.json       ← metadata for downstream tools
+```
+
+Each prototype shows the design system's visual language: color palette swatches, typography hierarchy, card grid, form inputs, buttons, stats, and layout rhythm. It does NOT contain business logic or real data.
+
+If `node` is not available or rendering fails → W008, fall back to A4 text-only comparison.
+
+### A4. Present Variants for Comparison
+
+**Visual mode** (prototypes rendered successfully):
+
+1. Start the visualize server:
+   ```bash
+   maestro brainstorm-visualize start --dir "{temp_dir}/prototypes/"
+   ```
+   Save `execId` and `url`.
+
+2. Direct user to the compare view:
+   ```
+   ▸ Design variants ready for comparison:
+     {url}/compare?files=prototype_A.html,prototype_B.html,prototype_C.html
+
+     [A] {style_name_A} — {font_heading_A}/{font_body_A}
+     [B] {style_name_B} — {font_heading_B}/{font_body_B}
+     [C] {style_name_C} — {font_heading_C}/{font_body_C}
+   ```
+
+3. Collect user decision via AskUserQuestion:
+   - **Approve [A/B/C]** — adopt this variant directly
+   - **Mix** — enter mix protocol (A4.1)
+   - **Redo** — adjust keywords and regenerate (back to A2, max 3 redo rounds)
+
+4. Stop server after decision:
+   ```bash
+   maestro brainstorm-visualize stop {execId}
+   ```
+
+**Text-only fallback** (no Node.js, CI/headless, or rendering failed):
 
 Display each variant summary showing: style name, color palette, typography, effects, anti-patterns.
-
 If `-y` flag: auto-select variant 1.
-Otherwise: ask user to pick [1-N | "redo" | "all"].
+Otherwise: ask user to pick [1-N | "redo"].
+
+### A4.1. Mix Protocol (Optional)
+
+When user selects "Mix", enter the dimension-based mixing flow:
+
+1. AskUserQuestion with dimension selection:
+   ```
+   Which dimensions from which variant?
+     Colors:     [A] / [B] / [C]
+     Typography: [A] / [B] / [C]
+     Spacing:    [A] / [B] / [C]
+     Shadows:    [A] / [B] / [C]
+   ```
+
+2. Extract sections by Markdown heading from each selected variant:
+   | Dimension | MASTER.md Section |
+   |-----------|-------------------|
+   | Colors | `### Color Palette` (up to next `###`) |
+   | Typography | `### Typography` (up to next `###`) |
+   | Spacing | `### Spacing Variables` (up to next `###`) |
+   | Shadows | `### Shadow Depths` (up to next `###`) |
+
+3. Assemble new MASTER.md:
+   - Take selected dimension blocks from their respective variants
+   - Take remaining sections (Component Specs, Style Guidelines, Anti-Patterns, Checklist) from the variant with the most selected dimensions (primary variant)
+   - Regenerate Component Specs CSS using the mixed color values
+
+4. Re-render HTML prototype of the mixed result:
+   ```bash
+   node "$RENDER_PATH" MASTER_mixed.md --output "{temp_dir}/prototypes" --project "${project_name}"
+   ```
+
+5. Show mixed prototype to user for final confirmation:
+   - **Approve** → proceed to A5
+   - **Redo mix** → back to step 1 (max 2 re-mix rounds)
+
+### A4.2. Harvest Rejected Variants
+
+After selection, archive rejected variants for knowledge accumulation:
+
+1. Move rejected `MASTER_{N}.md` files to `.workflow/impeccable/design-system/harvest/rejected-variants/`
+2. Append rejection metadata as YAML frontmatter:
+   ```yaml
+   ---
+   status: rejected
+   date: "{ISO-8601}"
+   selected_variant: "{winner_label}"
+   user_feedback: "{reason if provided, else 'not selected'}"
+   ---
+   ```
+3. On next design-explore invocation, scan `harvest/rejected-variants/` for `user_feedback` entries and append as supplementary anti-references to the keyword generation (A2), making the system learn from past rejections.
 
 ### A5. Persist Selected Variant
 
@@ -80,6 +198,14 @@ Otherwise: ask user to pick [1-N | "redo" | "all"].
 python search.py "${selected_keywords}" --design-system --persist \
   -p "${project_name}" --output-dir ".workflow/impeccable"
 ```
+
+If the selected variant was directly approved (not mixed), copy the already-generated `MASTER_{N}.md` instead of re-running search.py:
+
+```bash
+cp "{temp_dir}/MASTER_{selected}.md" ".workflow/impeccable/design-system/{project-slug}/MASTER.md"
+```
+
+If the variant was mixed, write the assembled `MASTER_mixed.md` as the final MASTER.md.
 
 This creates:
 ```
@@ -89,9 +215,12 @@ This creates:
 Record selection metadata for status.json:
 ```json
 {
-  "selected_variant": 1,
+  "selected_variant": "A",
   "variant_name": "{style_name}",
   "keywords": "{selected_keywords}",
+  "mix_config": null | { "colors": "A", "typography": "B", "spacing": "C", "shadows": "A" },
+  "redo_count": 0,
+  "rejected_variants": ["B", "C"],
   "selected_at": "ISO-8601"
 }
 ```

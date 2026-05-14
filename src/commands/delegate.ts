@@ -436,11 +436,12 @@ export function registerDelegateCommand(program: Command): void {
         const runner = new CliAgentRunner();
         const syncMode = !opts.worker;
 
-        // Sync mode: emit ONE broker event at start so any active channel
-        // subscriber (CC launched with --dangerously-load-development-channels)
-        // sees a "started" notification. No subsequent events are published —
-        // sync output returns directly via stdout when the command completes.
+        // Sync mode: emit exec ID + ONE broker event at start so any active
+        // channel subscriber sees a "started" notification. Output and status
+        // summary are auto-appended on completion — callers don't need separate
+        // `delegate output` or `delegate status` commands.
         if (syncMode) {
+          process.stderr.write(`[MAESTRO_EXEC_ID=${execId}]\n`);
           try {
             const broker = new DelegateBrokerClient();
             broker.publishEvent({
@@ -463,12 +464,19 @@ export function registerDelegateCommand(program: Command): void {
 
         const exitCode = await runner.run({ ...request, sync: syncMode });
 
-        // In sync mode, output the final result after completion
+        // In sync mode, auto-append status summary + output so callers get
+        // everything in a single background callback — no manual `output`/`status`.
         if (syncMode) {
           const store = new CliHistoryStore();
+          const finalStatus = exitCode === 130 ? 'cancelled' : exitCode === 0 ? 'completed' : 'failed';
+
+          // Status summary line
+          process.stderr.write(`\n[DELEGATE ${finalStatus.toUpperCase()}] ${execId} ${toolName}/${mode}\n`);
+
+          // Output
           const output = store.getOutput(execId, { lastReply: true });
           if (output) {
-            process.stderr.write('\n--- Output ---\n');
+            process.stderr.write('--- Output ---\n');
             process.stdout.write(output);
             if (!output.endsWith('\n')) process.stdout.write('\n');
           }
@@ -477,7 +485,6 @@ export function registerDelegateCommand(program: Command): void {
           // The runner skips broker events in sync mode, so we emit it here.
           try {
             const broker = new DelegateBrokerClient();
-            const finalStatus = exitCode === 130 ? 'cancelled' : exitCode === 0 ? 'completed' : 'failed';
             broker.publishEvent({
               jobId: execId,
               type: finalStatus,

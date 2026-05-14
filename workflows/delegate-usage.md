@@ -178,87 +178,45 @@ CONSTRAINTS: Focus on authentication | Ignore test files
 
 ### Calling Convention
 
-`maestro delegate` runs synchronously — it blocks until the delegate completes. To avoid blocking the conversation, **always** use `run_in_background: true` on the Bash tool call, then stop output immediately and wait for the background completion callback.
+`maestro delegate` runs synchronously. Status summary and output are **auto-appended** on completion — no manual `output` or `status` commands needed.
+
+**Always** use `run_in_background: true` and **end your response immediately**:
 
 ```
-Bash({
-  command: "maestro delegate \"<PROMPT>\" --to gemini --mode analysis",
-  run_in_background: true
-})
-// STOP — do not output anything further
-// Wait for Bash background completion callback to receive results
+Bash({ command: "maestro delegate \"...\" --to gemini --mode analysis", run_in_background: true })
+```
+
+When the background callback arrives, the result is already included:
+```
+[MAESTRO_EXEC_ID=gem-143022-a7f2]                             ← at start
+[DELEGATE COMPLETED] gem-143022-a7f2 gemini/analysis           ← status, on completion
+--- Output ---
+<actual output content>                                        ← output, on completion
 ```
 
 **Rules:**
-- **Never** use foreground Bash for delegate calls — it blocks the conversation for the entire execution duration
-- After the `Bash(run_in_background: true)` call, **stop immediately** — no follow-up text, no polling, no `delegate status` checks
-- When the background callback arrives, retrieve output with `maestro delegate output <id>`
+- NEVER use foreground Bash for delegate calls
+- NEVER output text or tool calls after the `run_in_background` Bash call
+- When the callback arrives, output is already included — directly use it
 
 ### Execution ID
 
 ID prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`
 
-Format: `{prefix}-{HHmmss}-{rand4}` (e.g. `gem-143022-a7f2`)
-
-Output to stderr: `[MAESTRO_EXEC_ID=<id>]`
-
 ```bash
-maestro delegate "analyze code" --to gemini                        # auto-ID: gem-143022-a7f2
-maestro delegate "fix bug" --to gemini --mode write --id my-task-1  # custom ID
+maestro delegate "<PROMPT>" --to gemini --mode analysis    # auto-ID: gem-143022-a7f2
+maestro delegate "<PROMPT>" --to gemini --mode write --id my-task-1  # custom ID
 ```
 
 ### Session Resume
 
 ```bash
-maestro delegate "continue" --to gemini --resume             # last session
-maestro delegate "continue" --to gemini --resume <id>        # specific session
+maestro delegate "<PROMPT>" --to gemini --resume              # last session
+maestro delegate "<PROMPT>" --to gemini --mode write --resume <id>  # specific
+maestro delegate "<PROMPT>" --to gemini --resume <id1>,<id2>     # merge multiple
 ```
 
 Resume auto-assembles previous conversation context. Warning emitted when context exceeds 32KB.
-
-### Subcommands
-
-```bash
-# List executions
-maestro delegate show                              # recent 20
-maestro delegate show --all                        # up to 100
-
-# Inspect state
-maestro delegate status <id>                       # broker + history + snapshot preview
-maestro delegate status <id> --events 10           # with more broker events
-maestro delegate tail <id>                         # recent events + history
-maestro delegate tail <id> --events 20 --history 20
-
-# Get result
-maestro delegate output <id>                       # last reply only (after last tool call)
-maestro delegate output <id> --full                # full output (all turns)
-maestro delegate output <id> --verbose             # include start/end timestamps
-
-# Lifecycle control
-maestro delegate cancel <id>                       # request cancellation
-
-# Message delivery
-maestro delegate message <id> "text"               # inject into running worker
-maestro delegate message <id> "text" --delivery after_complete  # chain after done
-maestro delegate messages <id>                     # list queued messages
-```
-
-### MCP Tools
-
-All subcommands are also available as MCP tools for programmatic access:
-
-| CLI Subcommand | MCP Tool | Extra Params |
-|---------------|----------|-------------|
-| `message <id> "text"` | `delegate_message` | `delivery` (inject/after_complete) |
-| `messages <id>` | `delegate_messages` | — |
-| `status <id>` | `delegate_status` | `eventLimit` |
-| `output <id>` | `delegate_output` | — |
-| `tail <id>` | `delegate_tail` | `limit` |
-| `cancel <id>` | `delegate_cancel` | — |
-
-### Snapshot & Preview
-
-`delegate status` includes a `Preview:` field showing the agent's latest output — built from `assistant_message`, `tool_use` completions, and `file_change` events.
 
 ### Job Lifecycle
 
@@ -318,7 +276,7 @@ Bash({
   run_in_background: true
 })
 // → STOP, wait for callback
-// → on callback: maestro delegate output <id>
+// → callback includes status + output automatically
 ```
 
 ### Inject Supplementary Context

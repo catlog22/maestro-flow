@@ -44,6 +44,8 @@ Discovery includes at least one user-answer round unless PRODUCT.md, DESIGN.md, 
 
 Force a visual decision on three fronts. Skip anything PRODUCT.md or DESIGN.md already answers; ask only what's missing.
 
+**Lite Mode**: When DESIGN.md exists (typically produced by design-explore → bridge), the visual direction is already locked. **Skip all three questions below** — the design system has already decided color strategy, theme, and visual anchors. Announce once: *"Visual direction inherited from DESIGN.md ({style_name}), skipping color/theme/anchor questions."* Proceed directly to Scope.
+
 - **Color strategy for this surface.** Pick one: Restrained / Committed / Full palette / Drenched. Can override the project default if the surface earns it (e.g. a drenched hero inside an otherwise Restrained product).
 - **Theme via scene sentence.** Write one sentence of physical context for this surface: who uses it, where, under what ambient light, in what mood. The sentence forces dark vs light. If it doesn't, add detail until it does.
 - **Two or three named anchor references.** Specific products, brands, objects. Not adjectives like "modern" or "clean."
@@ -70,6 +72,8 @@ Scope answers are task-scoped. Don't write them to PRODUCT.md or DESIGN.md; carr
 - What's the biggest risk of getting this wrong?
 
 ## Phase 1.5: Visual Direction Probe (Capability-Gated)
+
+**Skip condition**: If DESIGN.md exists (visual baseline already locked by design-explore), **skip Phase 1.5 entirely**. The design system prototypes have already been compared and approved — generating additional visual probes would be redundant. Announce: *"Phase 1.5 skipped — visual direction locked by design-explore."* Proceed to Phase 2: Design Brief.
 
 After the discovery interview, generate a small set of visual direction probes **before** writing the final brief when all of these are true:
 

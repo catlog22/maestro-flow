@@ -1,7 +1,7 @@
 ---
 name: maestro-ui-craft
 description: Chain maestro-impeccable commands with intelligent routing and quality gate loops for automated UI production
-argument-hint: "<intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [--skip-design] [--styles <N>] [--stack <stack>] [-y] [-c]"
+argument-hint: "<intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [--skip-design-explore] [--skip-design] [--styles <N>] [--stack <stack>] [-y] [-c]"
 allowed-tools:
   - Read
   - Write
@@ -22,8 +22,9 @@ Core innovation: critique/audit scores drive automatic command selection and ite
 Impeccable has 23 commands across 6 categories — this command chains them into automated pipelines
 with quality gates that loop until design quality meets the threshold.
 
-Includes integrated design system generation (via ui-search BM25 engine + CSV knowledge base)
-with automatic bridge to impeccable's DESIGN.md format. Replaces the former maestro-ui-design command.
+Includes integrated design-explore: multi-variant design system generation (via ui-search BM25 engine + CSV knowledge base),
+HTML prototype rendering for visual comparison, interactive user review with mix support,
+and automatic bridge to impeccable's DESIGN.md format. Replaces the former maestro-ui-design command.
 
 Prerequisite: maestro-impeccable skill available (auto-discovered by harness).
 
@@ -32,7 +33,7 @@ Session: `.workflow/.maestro/ui-craft-{YYYYMMDD-HHmmss}/status.json`
 
 <deferred_reading>
 - [impeccable harvest workflow](~/.maestro/workflows/impeccable.md) — read after command execution for harvest logic
-- [design stage workflow](~/.maestro/workflows/impeccable/design.md) — read when S_DESIGN or S_BRIDGE state entered
+- [design stage workflow](~/.maestro/workflows/impeccable/design.md) — read when S_DESIGN_EXPLORE or S_BRIDGE state entered
 </deferred_reading>
 
 <invariants>
@@ -54,8 +55,8 @@ $ARGUMENTS — intent description or target path, with optional flags.
 - `--max-loops <n>` — Maximum quality gate iterations (default: 3)
 - `-c` / `--continue` — Resume previous ui-craft session
 - `-y` — Auto mode: auto-select at ambiguous routing, skip confirmations where impeccable allows
-- `--skip-design` — Skip design system generation and bridge (use existing DESIGN.md or full shape interview)
-- `--styles <N>` — Number of design system variants to generate (2-5, default 3). Only used in build chain design step
+- `--skip-design-explore` / `--skip-design` — Skip design-explore (prototype comparison) and bridge (use existing DESIGN.md or full shape interview)
+- `--styles <N>` — Number of design system variants to generate and compare (2-5, default 3). Only used in build chain design-explore step
 - `--stack <stack>` — Tech stack for supplementary guidelines (default: html-tailwind). Passed to ui-search
 </context>
 
@@ -65,15 +66,15 @@ $ARGUMENTS — intent description or target path, with optional flags.
 
 | Chain | Sequence | Gate Condition |
 |-------|----------|----------------|
-| **build** | teach? → **design?** → **bridge?** → shape → craft → **critique** → [refine loop] → audit → polish | critique ≥ threshold AND P0 == 0 |
+| **build** | teach? → **design_explore?** → **bridge?** → shape → craft → **critique** → [refine loop] → audit → polish | critique ≥ threshold AND P0 == 0 |
 | **improve** | **critique** → [refine loop] → polish → audit | critique ≥ threshold AND P0 == 0 |
 | **enhance** | {cmd} → **critique** → polish (if needed) | critique ≥ threshold |
 | **harden** | harden → **audit** → polish | audit ≥ threshold×0.5 |
 | **live** | live | — (interactive, no gate) |
 
 - `teach?` — conditional: only if PRODUCT.md missing/placeholder
-- `design?` — conditional: only if DESIGN.md missing AND `--skip-design` not set
-- `bridge?` — conditional: only if design step ran (MASTER.md produced but no DESIGN.md yet)
+- `design_explore?` — conditional: only if DESIGN.md missing AND `--skip-design-explore` not set. Generates multiple MASTER.md variants, renders HTML prototypes, launches visual comparison, user selects/mixes
+- `bridge?` — conditional: only if design_explore step ran (MASTER.md produced but no DESIGN.md yet)
 - `[refine loop]` — quality gate loop: extract suggested commands from critique → execute → re-critique
 
 ### Intent → Chain Routing
@@ -98,7 +99,7 @@ S_PARSE      — 解析参数、意图分类、chain 选择                PERSI
 S_RESUME     — 扫描已有 ui-craft session、恢复执行           PERSIST: —
 S_SETUP      — 加载 context、检查 PRODUCT.md                PERSIST: —
 S_CREATE     — 创建 session + status.json                    PERSIST: session (全量)
-S_DESIGN     — 设计系统生成 (ui-search BM25 + CSV)            PERSIST: variants, selection
+S_DESIGN_EXPLORE — 多变体设计探索：生成 MASTER variants、渲染 HTML 原型、可视化对比、用户选型/混搭  PERSIST: variants, html_prototypes, selection, mix_config, redo_count
 S_BRIDGE     — MASTER.md → DESIGN.md 格式转换                 PERSIST: bridge status
 S_CHAIN      — 按序执行 chain 步骤                           PERSIST: step progress, executed commands
 S_GATE       — 质量门控：解析评分、决策                       PERSIST: scores, loop count
@@ -125,16 +126,17 @@ S_CREATE:
   → S_CHAIN      DO: A_CREATE_SESSION
 
 S_CHAIN:
-  → S_DESIGN     WHEN: current step is 'design' AND DESIGN.md missing AND --skip-design not set
-  → S_BRIDGE     WHEN: current step is 'bridge' AND design step produced MASTER.md
+  → S_DESIGN_EXPLORE  WHEN: current step is 'design_explore' AND DESIGN.md missing AND --skip-design-explore not set
+  → S_BRIDGE     WHEN: current step is 'bridge' AND design_explore step produced MASTER.md
   → S_GATE       WHEN: current step is gate command (critique/audit)
-  → S_CHAIN      WHEN: step is design/bridge but skip conditions met → advance
+  → S_CHAIN      WHEN: step is design_explore/bridge but skip conditions met → advance
   → S_CHAIN      WHEN: step is normal command → execute → advance
   → S_REPORT     WHEN: all steps complete
 
-S_DESIGN:
-  → S_BRIDGE     WHEN: design system generated (MASTER.md ready)     DO: A_GENERATE_DESIGN_SYSTEM
-  → S_CHAIN      WHEN: generation failed → W004 → skip bridge        DO: advance to shape
+S_DESIGN_EXPLORE:
+  → S_DESIGN_EXPLORE  WHEN: user chose 'Redo' AND redo_count < 3    DO: regenerate variants with adjusted keywords
+  → S_BRIDGE     WHEN: variant approved or mix completed (MASTER.md ready)  DO: A_DESIGN_EXPLORE (generate variants, render prototypes, visual compare, user review, optional mix, harvest rejected, persist selected)
+  → S_CHAIN      WHEN: exploration failed → W004 → skip bridge       DO: advance to shape (full interview fallback)
 
 S_BRIDGE:
   → S_CHAIN      WHEN: DESIGN.md written → advance to shape          DO: A_BRIDGE_TO_DESIGN_MD
@@ -187,14 +189,15 @@ S_REPORT:
    ```
 3. Write status.json before executing any step
 
-### A_GENERATE_DESIGN_SYSTEM
+### A_DESIGN_EXPLORE
 
 1. Read `.workflow/impeccable/PRODUCT.md`, extract: register, brand_personality, anti_references, industry
-2. Resolve script: `workflows/impeccable/ui-search/search.py` (project-local) or `~/.maestro/workflows/impeccable/ui-search/search.py` (installed)
-3. Verify Python available (E006 if not), script exists (E007 if not)
-4. Read deferred: `~/.maestro/workflows/impeccable/design.md`, execute Phase A (variant generation + selection)
-5. Persist selected variant to `.workflow/impeccable/design-system/{project}/MASTER.md`
-6. Update status.json with design selection metadata
+2. Resolve scripts: `search.py` and `render-prototype.js` (project-local → installed fallback)
+3. Verify Python available (E006 if not), scripts exist (E007 if not), Node.js available (W008 if not → text fallback)
+4. Read deferred: `~/.maestro/workflows/impeccable/design.md`, execute Phase A (variant generation → prototype rendering → visual comparison → user review → optional mix → harvest rejected → persist selected)
+5. Persist selected/mixed variant to `.workflow/impeccable/design-system/{project}/MASTER.md`
+6. Archive rejected variants to `.workflow/impeccable/design-system/harvest/rejected-variants/`
+7. Update status.json with design selection metadata (variant, mix_config, redo_count, rejected_variants)
 
 ### A_BRIDGE_TO_DESIGN_MD
 
@@ -251,18 +254,19 @@ After each step: update status.json `current_step` and step `status`.
 
 **Step-specific logic:**
 
-### 4a. Design step (build chain only)
+### 4a. Design-explore step (build chain only)
 
-When current step is `design`:
+When current step is `design_explore`:
 
-1. Check if `.workflow/impeccable/DESIGN.md` already exists → skip design + bridge, advance to shape
-2. Check if `--skip-design` is set → skip design + bridge, advance to shape
-3. Otherwise → execute A_GENERATE_DESIGN_SYSTEM:
+1. Check if `.workflow/impeccable/DESIGN.md` already exists → skip design_explore + bridge, advance to shape
+2. Check if `--skip-design-explore` or `--skip-design` is set → skip design_explore + bridge, advance to shape
+3. Otherwise → execute A_DESIGN_EXPLORE:
    - Read `.workflow/impeccable/PRODUCT.md` for register, brand personality, anti-references, industry
-   - Resolve `workflows/impeccable/ui-search/search.py` (project-local) or `~/.maestro/workflows/impeccable/ui-search/search.py` (installed)
-   - Verify Python available (E006), script exists (E007)
-   - Read deferred: `~/.maestro/workflows/impeccable/design.md`, execute **Phase A** (variant generation + selection)
-   - Persist selected variant to `.workflow/impeccable/design-system/{project}/MASTER.md`
+   - Resolve `search.py` and `render-prototype.js` (project-local → installed fallback)
+   - Verify Python available (E006), scripts exist (E007)
+   - Read deferred: `~/.maestro/workflows/impeccable/design.md`, execute **Phase A** (variant generation → prototype rendering → visual comparison → user review → optional mix → harvest rejected → persist selected)
+   - Persist selected/mixed variant to `.workflow/impeccable/design-system/{project}/MASTER.md`
+   - Archive rejected variants to `harvest/rejected-variants/` with user feedback
 4. On failure → W004, skip bridge, advance to shape (full interview fallback)
 
 ### 4b. Bridge step (build chain only, after design)
@@ -429,6 +433,7 @@ These are structural/interactive — never picked by the refine loop:
 | E007 | error | ui-search scripts not found at expected path |
 | W004 | warning | Design system generation failed, skipping design+bridge, falling back to shape full interview |
 | W005 | warning | Bridge transformation failed, continuing without DESIGN.md |
+| W008 | warning | Node.js not available for prototype rendering, falling back to text-only variant comparison |
 </error_codes>
 
 <success_criteria>

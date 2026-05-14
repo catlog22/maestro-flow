@@ -186,34 +186,30 @@ CONSTRAINTS: Focus on authentication | Ignore test files
 
 ### Calling Convention
 
-> **CRITICAL BEHAVIOR RULE**: After issuing a `maestro delegate` call with `run_in_background: true`, you MUST end your response immediately. Do not output any text, status message, or additional tool calls after the Bash tool call. Your entire message ends at the tool call.
+`maestro delegate` runs synchronously. Status summary and output are **auto-appended** on completion — no manual `output` or `status` commands needed.
 
-**Why**: `maestro delegate` blocks until completion. Background execution + immediate stop ensures the conversation remains responsive.
-
-**Correct** — response contains ONLY the Bash tool call, nothing after it:
+**Always** use `run_in_background: true` and **end your response immediately**:
 
 ```
 Bash({ command: "maestro delegate \"...\" --to gemini --mode analysis", run_in_background: true })
 ```
 
-**Wrong** — any text or tool call after the Bash call is a violation:
-
+When the background callback arrives, the result is already included:
 ```
-Bash({ command: "maestro delegate \"...\" --to gemini --mode analysis", run_in_background: true })
-"I've started the analysis..."  ← VIOLATION: response must end above
+[MAESTRO_EXEC_ID=gem-143022-a7f2]        , at start
+[DELEGATE COMPLETED] gem-143022-a7f2 gemini/analysis   ← status, on completion
+--- Output ---
+<actual output content>                   ← output, on completion
 ```
 
 **Rules:**
 - NEVER use foreground Bash for delegate calls
-- NEVER output text, status updates, or additional tool calls after the `run_in_background` Bash call
-- NEVER poll with `delegate status` — wait for the background completion callback
-- When the callback arrives, retrieve output with `maestro delegate output <id>`
+- NEVER output text or tool calls after the `run_in_background` Bash call
+- When the callback arrives, output is already included — directly use it
 
 ### Execution ID
 
 ID prefix: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`
-
-Output to stderr: `[MAESTRO_EXEC_ID=<id>]`
 
 ```bash
 maestro delegate "<PROMPT>" --to gemini --mode analysis    # auto-ID: gem-143022-a7f2
@@ -229,19 +225,6 @@ maestro delegate "<PROMPT>" --to gemini --resume <id1>,<id2>     # merge multipl
 ```
 
 Resume auto-assembles previous conversation context. Warning emitted when context exceeds 32KB.
-
-### Subcommands
-
-```bash
-maestro delegate show                     # recent 20 executions
-maestro delegate show --all               # up to 100
-maestro delegate output <id>              # last reply only (after last tool call)
-maestro delegate output <id> --full       # full output (all turns)
-maestro delegate output <id> --verbose    # include start/end timestamps
-maestro delegate status <id>              # broker + history + snapshot preview
-maestro delegate tail <id>                # recent events + history
-maestro delegate cancel <id>              # request cancellation
-```
 </execution>
 
 ---
