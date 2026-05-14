@@ -94,7 +94,14 @@ export interface LocaleStrings {
     confirmLabelMcp: string;
     confirmLabelStatusline: string;
     confirmLabelBackup: string;
+    confirmLabelCodexHooks: string;
+    confirmLabelCodexMcp: string;
     confirmSkipped: string;
+
+    // Codex Hooks
+    codexHooksLevelDescriptions: Record<string, string>;
+    codexHooksWinWarning: string;
+    codexHooksFeatureFlagHint: string;
 
     // Execution
     execPreparing: string;
@@ -104,8 +111,10 @@ export interface LocaleStrings {
     execInstalling: string; // "Installing {name}..."
     execWritingVersion: string;
     execInstallingHooks: string; // "Installing {level} hooks..."
+    execInstallingCodexHooks: string; // "Installing Codex {level} hooks..."
     execInstallingStatusline: string;
     execRegisteringMcp: string;
+    execRegisteringCodexMcp: string;
     execComplete: string;
     execDone: string;
     execElapsed: string;

@@ -13,6 +13,11 @@ export interface InstallFlowConfig {
   installComponents: boolean;
   installHooks: boolean;
   installMcp: boolean;
+  installCodexHooks: boolean;
+  codexHookLevel: HookLevel;
+  installCodexMcp: boolean;
+  codexMcpTools: string[];
+  codexMcpProjectRoot: string;
   installStatusline: boolean;
   statuslineTheme: string;
   hookLevel: HookLevel;
@@ -87,6 +92,26 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
           />
         ) : (
           <Row label={t.install.confirmLabelMcp} value={t.install.confirmSkipped} valueColor="gray" />
+        )}
+
+        {config.installCodexHooks ? (
+          <Row
+            label={t.install.confirmLabelCodexHooks}
+            value={`${config.codexHookLevel} — ${t.install.codexHooksLevelDescriptions[config.codexHookLevel]}`}
+            valueColor="green"
+          />
+        ) : (
+          <Row label={t.install.confirmLabelCodexHooks} value={t.install.confirmSkipped} valueColor="gray" />
+        )}
+
+        {config.installCodexMcp ? (
+          <Row
+            label={t.install.confirmLabelCodexMcp}
+            value={`${config.codexMcpTools.length} tools`}
+            valueColor="green"
+          />
+        ) : (
+          <Row label={t.install.confirmLabelCodexMcp} value={t.install.confirmSkipped} valueColor="gray" />
         )}
 
         <Row

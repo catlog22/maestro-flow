@@ -54,6 +54,14 @@ export function InstallResult({ result }: InstallResultProps) {
           value={result.mcpRegistered ? 'maestro-tools registered' : t.install.confirmSkipped}
           valueColor={result.mcpRegistered ? 'green' : 'gray'}
         />
+        {result.codexHooksInstalled > 0 && (
+          <Row label="Codex Hooks:" value={t.install.resultHooks.replace('{count}', String(result.codexHooksInstalled))} />
+        )}
+        <Row
+          label="Codex MCP:"
+          value={result.codexMcpRegistered ? 'maestro-tools registered' : t.install.confirmSkipped}
+          valueColor={result.codexMcpRegistered ? 'green' : 'gray'}
+        />
         {result.backupPath && (
           <Box>
             <Text color="cyan">{'Backup:'.padEnd(13)}</Text>

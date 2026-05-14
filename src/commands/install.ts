@@ -27,6 +27,7 @@ import {
 } from '../core/manifest.js';
 import {
   installHooksByLevel,
+  installCodexHooksByLevel,
   HOOK_LEVELS,
   type HookLevel,
 } from './hooks.js';
@@ -39,6 +40,7 @@ import {
   copyRecursive,
   injectDocFile,
   createTargetBackup,
+  addCodexMcpServer,
   MCP_TOOLS,
   type CopyStats,
 } from './install-backend.js';
@@ -137,8 +139,10 @@ export function registerInstallCommand(program: Command): void {
     .option('--global', 'Install global assets only (with --force)')
     .option('--path <dir>', 'Install to project directory (with --force)')
     .option('--hooks <level>', 'Hook level for --force mode: none, minimal, standard, full')
+    .option('--codex-hooks <level>', 'Codex hook level for --force mode: none, minimal, standard, full')
+    .option('--codex-mcp', 'Register Codex MCP server in --force mode')
     .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; components?: string }) => {
+    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; components?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -181,7 +185,7 @@ export function registerInstallCommand(program: Command): void {
 function forceInstall(
   pkgRoot: string,
   version: string,
-  opts: { global?: boolean; path?: string; hooks?: string; components?: string },
+  opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; components?: string },
 ): void {
   console.error(t.install.forceVersion.replace('{version}', version));
   console.error('');
@@ -277,6 +281,19 @@ function forceInstall(
       .replace('{level}', hookLevel)
       .replace('{count}', String(hookResult.installedHooks.length))
       .replace('{path}', hookResult.settingsPath));
+  }
+
+  // Codex hook installation
+  const codexHookLevel = (opts.codexHooks ?? 'none') as HookLevel;
+  if (codexHookLevel !== 'none' && HOOK_LEVELS.includes(codexHookLevel)) {
+    const codexResult = installCodexHooksByLevel(codexHookLevel, { project: mode === 'project' });
+    console.error(`  Codex Hooks (${codexHookLevel}): ${codexResult.installedHooks.length} hooks → ${codexResult.settingsPath}`);
+  }
+
+  // Codex MCP registration
+  if (opts.codexMcp) {
+    const ok = addCodexMcpServer(mode, projectPath || '', [...MCP_TOOLS]);
+    console.error(`  Codex MCP: ${ok ? 'maestro-tools registered' : 'failed'}`);
   }
 
   saveManifest(manifest);

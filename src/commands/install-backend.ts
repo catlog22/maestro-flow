@@ -212,6 +212,96 @@ export function removeMcpServer(
 }
 
 // ---------------------------------------------------------------------------
+// Codex MCP config helpers (TOML-based)
+// ---------------------------------------------------------------------------
+
+function getCodexConfigPath(scope: 'global' | 'project', projectPath: string): string {
+  return scope === 'project'
+    ? join(projectPath, '.codex', 'config.toml')
+    : join(homedir(), '.codex', 'config.toml');
+}
+
+/**
+ * Remove the `[mcp_servers.maestro-tools]` and `[mcp_servers.maestro-tools.env]`
+ * sections from a TOML string. Returns the cleaned content.
+ */
+function removeCodexMcpBlock(content: string): string {
+  // Match from [mcp_servers.maestro-tools] (and any sub-tables like .env)
+  // up to the next top-level section header or end of file.
+  // The regex handles both the main section and its sub-sections.
+  return content.replace(
+    /\n?\[mcp_servers\.maestro-tools(?:\.[^\]]+)?\][^\[]*(?=\n\[|\s*$)/g,
+    '',
+  ).trim();
+}
+
+export function addCodexMcpServer(
+  scope: 'global' | 'project',
+  projectPath: string,
+  enabledTools: string[],
+  projectRoot?: string,
+): boolean {
+  const isWin = process.platform === 'win32';
+  const fp = getCodexConfigPath(scope, projectPath);
+
+  try {
+    let content = '';
+    if (existsSync(fp)) {
+      content = readFileSync(fp, 'utf-8');
+    }
+
+    // Remove existing maestro-tools block
+    content = removeCodexMcpBlock(content);
+
+    // Build TOML block
+    const command = isWin ? 'cmd' : 'maestro-mcp';
+    const args = isWin ? '["/c", "maestro-mcp"]' : '[]';
+    const envLines = [`MAESTRO_ENABLED_TOOLS = "${enabledTools.join(',')}"`];
+    if (projectRoot) {
+      envLines.push(`MAESTRO_PROJECT_ROOT = "${projectRoot.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    }
+
+    const block = [
+      '',
+      `[mcp_servers.maestro-tools]`,
+      `command = "${command}"`,
+      `args = ${args}`,
+      '',
+      `[mcp_servers.maestro-tools.env]`,
+      ...envLines,
+    ].join('\n');
+
+    content = content ? content + '\n' + block + '\n' : block.trimStart() + '\n';
+
+    // Ensure parent directory exists
+    const dir = join(fp, '..');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(fp, content, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeCodexMcpServer(
+  scope: 'global' | 'project',
+  projectPath: string,
+): boolean {
+  const fp = getCodexConfigPath(scope, projectPath);
+  if (!existsSync(fp)) return false;
+
+  try {
+    const original = readFileSync(fp, 'utf-8');
+    const cleaned = removeCodexMcpBlock(original);
+    if (cleaned === original.trim()) return false;
+    writeFileSync(fp, cleaned + '\n', 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Scanning
 // ---------------------------------------------------------------------------
 

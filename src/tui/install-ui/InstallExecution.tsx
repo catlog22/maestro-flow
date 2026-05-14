@@ -11,6 +11,7 @@ import {
   restoreDisabledState,
   applyOverlaysPostInstall,
   addMcpServer,
+  addCodexMcpServer,
   copyRecursive,
   injectDocFile,
   createTargetBackup,
@@ -23,7 +24,7 @@ import {
   findManifest,
   cleanManifestFiles,
 } from '../../core/manifest.js';
-import { installHooksByLevel, installStatusline as installStatuslineFn, type HookLevel } from '../../commands/hooks.js';
+import { installHooksByLevel, installCodexHooksByLevel, installStatusline as installStatuslineFn, type HookLevel } from '../../commands/hooks.js';
 import type { InstallFlowConfig } from './InstallConfirm.js';
 import { t } from '../../i18n/index.js';
 
@@ -37,6 +38,8 @@ export interface InstallFlowResult {
   filesSkipped: number;
   hooksInstalled: number;
   mcpRegistered: boolean;
+  codexHooksInstalled: number;
+  codexMcpRegistered: boolean;
   manifestPath: string;
   statuslineInstalled: boolean;
   backupPath: string | null;
@@ -74,6 +77,8 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
         let filesSkipped = 0;
         let hooksInstalled = 0;
         let mcpRegistered = false;
+        let codexHooksInstalled = 0;
+        let codexMcpRegistered = false;
         let statuslineInstalled = false;
         let backupPath: string | null = null;
         const warnings: string[] = [];
@@ -169,6 +174,23 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           mcpRegistered = addMcpServer(config.mode, config.projectPath, config.mcpTools, config.mcpProjectRoot || undefined);
         }
 
+        // Codex Hooks
+        if (config.installCodexHooks) {
+          if (cancelled) return;
+          setStatus(t.install.execInstallingCodexHooks.replace('{level}', config.codexHookLevel));
+          const result = installCodexHooksByLevel(config.codexHookLevel, {
+            project: config.mode === 'project',
+          });
+          codexHooksInstalled = result.installedHooks.length;
+        }
+
+        // Codex MCP
+        if (config.installCodexMcp) {
+          if (cancelled) return;
+          setStatus(t.install.execRegisteringCodexMcp);
+          codexMcpRegistered = addCodexMcpServer(config.mode, config.projectPath, config.codexMcpTools, config.codexMcpProjectRoot || undefined);
+        }
+
         // CLI tools config
         if (!cancelled) {
           const { initCliToolsConfig } = await import('../../config/cli-tools-config.js');
@@ -178,7 +200,7 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
 
         setDone(true);
         setStatus(t.install.execComplete);
-        onComplete({ filesInstalled, dirsCreated, filesSkipped, hooksInstalled, mcpRegistered, manifestPath, statuslineInstalled, backupPath, migrationWarnings: warnings });
+        onComplete({ filesInstalled, dirsCreated, filesSkipped, hooksInstalled, mcpRegistered, codexHooksInstalled, codexMcpRegistered, manifestPath, statuslineInstalled, backupPath, migrationWarnings: warnings });
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }

@@ -12,7 +12,7 @@ import { InstallConfirm, type InstallFlowConfig } from './InstallConfirm.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
 import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS } from '../../commands/install-backend.js';
-import { detectStatusline, type HookLevel } from '../../commands/hooks.js';
+import { detectStatusline, CODEX_HOOK_LEVEL_DESCRIPTIONS, type HookLevel } from '../../commands/hooks.js';
 import { getAllManifests } from '../../core/manifest.js';
 import { t } from '../../i18n/index.js';
 
@@ -31,6 +31,7 @@ import { t } from '../../i18n/index.js';
 type FlowStep =
   | 'mode' | 'hub'
   | 'components_config' | 'hooks_config' | 'mcp_config'
+  | 'codex_hooks_config' | 'codex_mcp_config'
   | 'statusline_config' | 'backup_config'
   | 'confirm' | 'executing' | 'complete';
 
@@ -69,6 +70,8 @@ export function InstallFlow({
     components: initialStepIds ? initialStepIds.includes('components') : true,
     hooks: initialStepIds ? initialStepIds.includes('hooks') : true,
     mcp: initialStepIds ? initialStepIds.includes('mcp') : true,
+    codexHooks: initialStepIds ? initialStepIds.includes('codexHooks') : false,
+    codexMcp: initialStepIds ? initialStepIds.includes('codexMcp') : false,
     statusline: initialStepIds ? initialStepIds.includes('statusline') : false,
     backup: initialStepIds ? initialStepIds.includes('backup') : true,
   });
@@ -85,6 +88,12 @@ export function InstallFlow({
   const [mcpEnabled, setMcpEnabled] = useState(true);
   const [mcpTools, setMcpTools] = useState<string[]>([...MCP_TOOLS]);
   const [mcpProjectRoot, setMcpProjectRoot] = useState('');
+
+  // Codex config
+  const [codexHookLevel, setCodexHookLevel] = useState<HookLevel>('standard');
+  const [codexMcpEnabled, setCodexMcpEnabled] = useState(true);
+  const [codexMcpTools, setCodexMcpTools] = useState<string[]>([...MCP_TOOLS]);
+  const [codexMcpProjectRoot, setCodexMcpProjectRoot] = useState('');
 
   // Statusline — detect existing config + theme
   const [installStatusline, setInstallStatusline] = useState(false);
@@ -123,6 +132,11 @@ export function InstallFlow({
     installComponents: enabledSteps.components,
     installHooks: enabledSteps.hooks,
     installMcp: enabledSteps.mcp && mcpEnabled,
+    installCodexHooks: enabledSteps.codexHooks,
+    codexHookLevel,
+    installCodexMcp: enabledSteps.codexMcp && codexMcpEnabled,
+    codexMcpTools,
+    codexMcpProjectRoot,
     installStatusline: enabledSteps.statusline && installStatusline,
     statuslineTheme,
     hookLevel,
@@ -136,23 +150,28 @@ export function InstallFlow({
     backupAll: enabledSteps.backup && backupAll,
   }), [mode, projectPath, enabledSteps, hookLevel, selectedComponents.length,
     fileCount, mcpTools, mcpEnabled, selectedComponentIds, mcpProjectRoot,
+    codexHookLevel, codexMcpEnabled, codexMcpTools, codexMcpProjectRoot,
     installStatusline, statuslineTheme, backupClaudeMd, backupAll]);
 
   // Hub items with live summary
   const hubItems = useMemo(() => buildHubItems(
-    enabledSteps as { components: boolean; hooks: boolean; mcp: boolean; statusline: boolean; backup: boolean },
+    enabledSteps as { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; statusline: boolean; backup: boolean },
     {
       componentCount: selectedComponents.length,
       fileCount,
       hookLevel,
       mcpToolCount: mcpTools.length,
       mcpEnabled,
+      codexHookLevel,
+      codexMcpToolCount: codexMcpTools.length,
+      codexMcpEnabled,
       statuslineDetected,
       backupClaudeMd,
       backupAll,
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,
-    mcpEnabled, statuslineDetected, backupClaudeMd, backupAll]);
+    mcpEnabled, codexHookLevel, codexMcpTools.length, codexMcpEnabled,
+    statuslineDetected, backupClaudeMd, backupAll]);
 
   // Toggle category enabled/disabled
   const toggleStep = useCallback((id: string) => {
@@ -165,6 +184,8 @@ export function InstallFlow({
       components: 'components_config',
       hooks: 'hooks_config',
       mcp: 'mcp_config',
+      codexHooks: 'codex_hooks_config',
+      codexMcp: 'codex_mcp_config',
       statusline: 'statusline_config',
       backup: 'backup_config',
     };
@@ -193,7 +214,7 @@ export function InstallFlow({
       if (key.escape) setStep(isSubcommand ? 'confirm' : 'hub');
       return;
     }
-    if (step === 'hooks_config' || step === 'mcp_config' || step === 'statusline_config' || step === 'backup_config') {
+    if (step === 'hooks_config' || step === 'mcp_config' || step === 'codex_hooks_config' || step === 'codex_mcp_config' || step === 'statusline_config' || step === 'backup_config') {
       if (key.return) returnFromConfig();
       else if (key.escape) setStep(isSubcommand ? 'confirm' : 'hub');
       return;
@@ -220,7 +241,7 @@ export function InstallFlow({
       ];
 
   // Map current step to progress key
-  const progressKey = ['components_config', 'hooks_config', 'mcp_config', 'statusline_config', 'backup_config'].includes(step)
+  const progressKey = ['components_config', 'hooks_config', 'mcp_config', 'codex_hooks_config', 'codex_mcp_config', 'statusline_config', 'backup_config'].includes(step)
     ? (isSubcommand ? step.replace('_config', '') : 'hub')
     : step;
   const stepIndex = progressSteps.findIndex((s) => s.key === progressKey);
@@ -232,6 +253,8 @@ export function InstallFlow({
     components_config: t.install.footerComponents,
     hooks_config: t.install.footerHooks,
     mcp_config: t.install.footerMcp,
+    codex_hooks_config: t.install.footerHooks,
+    codex_mcp_config: t.install.footerMcp,
     statusline_config: t.install.footerStatusline,
     backup_config: t.install.footerBackup,
     confirm: t.install.footerConfirm,
@@ -330,6 +353,22 @@ export function InstallFlow({
             onEnableChange={setMcpEnabled}
             onToolsChange={setMcpTools}
             onRootChange={setMcpProjectRoot}
+          />
+        )}
+
+        {step === 'codex_hooks_config' && (
+          <HooksConfig level={codexHookLevel} onLevelChange={setCodexHookLevel} />
+        )}
+
+        {step === 'codex_mcp_config' && (
+          <McpConfig
+            enabled={codexMcpEnabled}
+            tools={codexMcpTools}
+            projectRoot={codexMcpProjectRoot}
+            mode={mode}
+            onEnableChange={setCodexMcpEnabled}
+            onToolsChange={setCodexMcpTools}
+            onRootChange={setCodexMcpProjectRoot}
           />
         )}
 

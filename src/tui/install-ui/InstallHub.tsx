@@ -95,10 +95,11 @@ export function InstallHub({ items, onToggle, onEnter, onInstall, onBack }: Inst
 // ---------------------------------------------------------------------------
 
 export function buildHubItems(
-  enabled: { components: boolean; hooks: boolean; mcp: boolean; statusline: boolean; backup: boolean },
+  enabled: { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; statusline: boolean; backup: boolean },
   summaries: {
     componentCount: number; fileCount: number; hookLevel: HookLevel;
     mcpToolCount: number; mcpEnabled: boolean;
+    codexHookLevel: HookLevel; codexMcpToolCount: number; codexMcpEnabled: boolean;
     statuslineDetected: string | null;
     backupClaudeMd: boolean; backupAll: boolean;
   },
@@ -140,6 +141,22 @@ export function buildHubItems(
       enabled: enabled.mcp,
       summary: enabled.mcp && summaries.mcpEnabled
         ? t.install.hubTools.replace('{count}', String(summaries.mcpToolCount))
+        : t.install.hubSkipped,
+    },
+    {
+      id: 'codexHooks',
+      label: 'Codex Hooks',
+      enabled: enabled.codexHooks,
+      summary: enabled.codexHooks
+        ? `${summaries.codexHookLevel} — ${t.install.codexHooksLevelDescriptions[summaries.codexHookLevel]}`
+        : t.install.hubSkipped,
+    },
+    {
+      id: 'codexMcp',
+      label: 'Codex MCP',
+      enabled: enabled.codexMcp,
+      summary: enabled.codexMcp && summaries.codexMcpEnabled
+        ? t.install.hubTools.replace('{count}', String(summaries.codexMcpToolCount))
         : t.install.hubSkipped,
     },
     {

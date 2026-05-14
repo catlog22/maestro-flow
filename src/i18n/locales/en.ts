@@ -96,7 +96,19 @@ export const en: LocaleStrings = {
     confirmLabelMcp: 'MCP Server:',
     confirmLabelStatusline: 'Statusline:',
     confirmLabelBackup: 'Backup:',
+    confirmLabelCodexHooks: 'Codex Hooks:',
+    confirmLabelCodexMcp: 'Codex MCP:',
     confirmSkipped: 'skipped',
+
+    // Codex Hooks
+    codexHooksLevelDescriptions: {
+      none: 'No hooks',
+      minimal: 'Session context (SessionStart)',
+      standard: '+ spec/keyword-injector + skill-context + delegate-monitor + coordinator/team/telemetry(Stop)',
+      full: '+ workflow-guard (PreToolUse, Bash only)',
+    },
+    codexHooksWinWarning: 'Warning: Codex hooks are not yet supported on Windows.',
+    codexHooksFeatureFlagHint: 'Add codex_hooks = true to [features] in ~/.codex/config.toml to enable hooks.',
 
     // Execution
     execPreparing: 'Preparing...',
@@ -106,8 +118,10 @@ export const en: LocaleStrings = {
     execInstalling: 'Installing {name}...',
     execWritingVersion: 'Writing version marker...',
     execInstallingHooks: 'Installing {level} hooks...',
+    execInstallingCodexHooks: 'Installing Codex {level} hooks...',
     execInstallingStatusline: 'Installing statusline...',
     execRegisteringMcp: 'Registering MCP server...',
+    execRegisteringCodexMcp: 'Registering Codex MCP server...',
     execComplete: 'Complete',
     execDone: '  Done',
     execElapsed: 'Elapsed: {time}',

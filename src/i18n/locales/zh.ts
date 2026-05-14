@@ -96,7 +96,19 @@ export const zh: LocaleStrings = {
     confirmLabelMcp: 'MCP 服务器：',
     confirmLabelStatusline: 'Statusline：',
     confirmLabelBackup: '备份：',
+    confirmLabelCodexHooks: 'Codex Hooks：',
+    confirmLabelCodexMcp: 'Codex MCP：',
     confirmSkipped: '已跳过',
+
+    // Codex Hooks
+    codexHooksLevelDescriptions: {
+      none: '无 Hooks',
+      minimal: '会话上下文 (SessionStart)',
+      standard: '+ 规范/关键词注入 + skill 感知 + delegate 监控 + 协调器/团队/遥测(Stop)',
+      full: '+ 工作流防护 (PreToolUse，仅 Bash)',
+    },
+    codexHooksWinWarning: '警告：Codex hooks 暂不支持 Windows。',
+    codexHooksFeatureFlagHint: '在 ~/.codex/config.toml 的 [features] 中添加 codex_hooks = true 以启用 hooks。',
 
     // Execution
     execPreparing: '准备中...',
@@ -106,8 +118,10 @@ export const zh: LocaleStrings = {
     execInstalling: '正在安装 {name}...',
     execWritingVersion: '写入版本标记...',
     execInstallingHooks: '正在安装 {level} hooks...',
+    execInstallingCodexHooks: '正在安装 Codex {level} hooks...',
     execInstallingStatusline: '正在安装 statusline...',
     execRegisteringMcp: '注册 MCP 服务器...',
+    execRegisteringCodexMcp: '注册 Codex MCP 服务器...',
     execComplete: '完成',
     execDone: '  完成',
     execElapsed: '用时：{time}',
