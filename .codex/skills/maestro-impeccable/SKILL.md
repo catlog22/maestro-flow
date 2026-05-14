@@ -4,148 +4,166 @@ description: Production-grade UI design with knowhow accumulation -- 24 commands
 argument-hint: "<command|intent> [target] [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [--skip-harvest] [--skip-design-explore] [--styles <N>] [--stack <stack>] [-y] [-c]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
-<purpose>
-Production-grade UI design system with two execution modes:
 
-**Direct Mode** — Execute any of 24 sub-commands for the full design lifecycle.
-**Chain Mode** — Orchestrate sub-commands via intelligent intent routing + quality gate auto-iteration.
-5 chains: build, improve, enhance, harden, live. Critique/audit scores drive automatic command selection and iteration loops.
-
-After each command, automatically harvests design knowledge to `.workflow/knowhow/` (category: ui) for cross-session accumulation.
-
-Includes integrated `search` subcommand for querying UI/UX design knowledge base (BM25 + CSV):
-```bash
-maestro impeccable search "<query>" -d <domain>          # domain search
-maestro impeccable search "<query>" --design-system      # generate design system
-```
-Domains: style, color, chart, landing, product, ux, typography, icons, react, web, google-fonts.
-Stacks: react, nextjs, vue, svelte, astro, swiftui, react-native, flutter, html-tailwind, shadcn.
-</purpose>
-
-<sub_commands>
-All sub-command workflows: `~/.maestro/workflows/impeccable/{command}.md`
-
-| Category | Commands |
-|----------|----------|
-| Build | craft, shape, teach, document, extract, explore |
-| Evaluate | critique, audit |
-| Refine | polish, bolder, quieter, distill, harden, onboard |
-| Enhance | animate, colorize, typeset, layout, delight, overdrive |
-| Fix | clarify, adapt, optimize |
-| Iterate | live |
-
-Reference workflows: brand.md, product.md, design.md, codex.md, heuristics-scoring.md, cognitive-load.md,
-color-and-contrast.md, interaction-design.md, motion-design.md, personas.md, responsive-design.md,
-spatial-design.md, typography.md, ux-writing.md
-
-Search engine: `workflows/impeccable/ui-search/`
-</sub_commands>
-
-<context>
-$ARGUMENTS -- sub-command, intent text, or special keywords, with optional flags.
-
-**Flags (direct mode):**
-- `--skip-harvest` -- Execute command without knowhow capture
-- `-y` -- Auto-confirm where the skill allows
-
-**Flags (chain mode):**
-- `--chain <type>` -- Force chain type: build, improve, enhance, harden, live
-- `--enhance <cmd>` -- Specific enhance command
-- `--threshold <score>` -- Critique pass threshold (default: 26/40)
-- `--max-loops <n>` -- Maximum quality gate iterations (default: 3)
-- `-c` / `--continue` -- Resume previous chain session
-- `--skip-design-explore` / `--skip-design` -- Skip design-explore
-- `--styles <N>` -- Number of design system variants (2-5, default 3)
-- `--stack <stack>` -- Tech stack for supplementary guidelines (default: html-tailwind)
-
-</context>
-
-<execution>
+Designs and iterates production-grade frontend interfaces. Real working code, committed design choices, exceptional craft. Automatically harvests design knowledge to `.workflow/knowhow/` for cross-session accumulation.
 
 ## Setup
 
-Before any design work:
+Before any design work or file edits:
 
-1. Load context (PRODUCT.md / DESIGN.md) via spec system:
-   ```bash
-   maestro spec load --category ui
-   ```
-   This surfaces all design context (product + visual) from `.workflow/specs/ui-conventions.md`.
+1. Load context (PRODUCT.md / DESIGN.md) via the loader script.
+2. Identify the register and load the matching register reference (brand.md or product.md).
+3. **If the user invoked a sub-command (e.g. `craft`, `shape`, `audit`), load its reference file too.** Non-negotiable: `craft` without `craft.md` loaded means skipping the shape-and-confirm step.
 
-   If specs are not initialized, fall back to the legacy loader:
-   ```bash
-   maestro impeccable load-context
-   ```
-   The loader searches `.workflow/impeccable/` first, then the project root, then `.agents/context/` and `docs/`.
-   PRODUCT.md and DESIGN.md are stored at `.workflow/impeccable/`.
+Skipping these produces generic output that ignores the project.
 
-2. Identify register (brand vs product) and load matching reference from `~/.maestro/workflows/impeccable/brand.md` or `product.md`.
-3. If sub-command invoked, load its reference file from `~/.maestro/workflows/impeccable/{command}.md`.
+### 1. Context gathering
 
-If PRODUCT.md missing → run `teach` first, then resume original task.
+Two files, case-insensitive. PRODUCT.md and DESIGN.md are stored at `.workflow/impeccable/`.
 
-## Command Execution
+- **PRODUCT.md**: required. Users, brand, tone, anti-references, strategic principles.
+- **DESIGN.md**: optional, strongly recommended. Colors, typography, elevation, components.
 
-Route by first argument:
-1. **Matches command** → load `~/.maestro/workflows/impeccable/{command}.md`, follow instructions
-2. **No argument** → show command menu grouped by category
-3. **No match** → general design invocation with full argument as context
+Both are registered in the spec system under category `ui` via `spec add`. Load with:
 
-## Harvest (Post-Execution)
-
-After command completes (except `live`), unless `--skip-harvest`:
-
-| Command | Knowhow Type | Prefix |
-|---------|-------------|--------|
-| craft | decision + asset | DCS- + AST- |
-| shape | decision | DCS- |
-| teach | reference | REF- |
-| document, extract | asset | AST- |
-| explore | decision + asset | DCS- + AST- |
-| critique, audit, polish, harden, onboard, clarify, adapt, optimize | tip | TIP- |
-| colorize, typeset, layout, animate, bolder, quieter, distill, delight, overdrive | decision | DCS- |
-
-Write knowhow with `category: ui`. For DCS-/AST- types, also create spec index:
 ```bash
-maestro spec add ui "<title>" "<summary>" --keywords impeccable,<cmd>,... --ref knowhow/<file>
+maestro spec load --category ui
 ```
 
-## Post-Execution Routing
+This surfaces all design context (product + visual) from `.workflow/specs/ui-conventions.md`. If specs are not initialized, fall back to the legacy loader:
 
-After harvest, determine whether this command was invoked as part of a larger pipeline by checking conversation context (e.g., brainstorm Step 3.5, ui-craft chain step).
+```bash
+maestro impeccable load-context
+```
 
-**Pipeline context detected** (called via Skill from brainstorm, ui-craft, etc.): Report result and stop. Do NOT suggest next-step commands — the calling flow owns what happens next.
+Consume the full output. Never pipe through `head`, `tail`, `grep`, or `jq`.
 
-**Standalone invocation** (user directly ran the command): Show next-step suggestions based on command executed (teach→explore/shape, explore→shape→craft, craft→critique, etc.).
+If the output is already in this session, don't re-run. Exceptions: you just ran `teach` or `document` (they rewrite the files and re-register specs), or the user manually edited one.
 
-</execution>
+`live` already warms context via `maestro impeccable live`. If you've run `live`, skip context loading.
 
-<shared_design_laws>
+If PRODUCT.md is missing/empty/placeholder (`[TODO]`, <200 chars): run `teach`, then resume the original task. If the original task was `craft`, resume into `shape` first.
 
-- **Color**: OKLCH only. Never #000/#fff. Pick color strategy first (Restrained → Committed → Full palette → Drenched).
-- **Theme**: Write physical scene sentence before choosing dark/light.
-- **Typography**: Body 65-75ch. Hierarchy via scale + weight (>=1.25 ratio).
-- **Layout**: Vary spacing for rhythm. Cards only when truly best. No nested cards.
-- **Motion**: No CSS layout animations. Ease-out exponential curves.
-- **Bans**: Side-stripe borders, gradient text, glassmorphism default, hero-metric template, identical card grids, modal as first thought.
-- **Copy**: Every word earns its place. No em dashes.
-- **AI slop test**: Two-altitude category-reflex check.
+If DESIGN.md is missing: nudge once per session (*"Run `/maestro-impeccable document` for more on-brand output"*), then proceed.
 
-</shared_design_laws>
+### 2. Register
 
-<error_codes>
-| Code | Severity | Description |
-|------|----------|-------------|
-| E001 | error | Invalid sub-command |
-| E002 | error | No intent or target specified |
-| W001 | warning | Harvest failed (command still succeeded) |
-| W002 | warning | PRODUCT.md missing, auto-triggering teach |
-</error_codes>
+Every design task is **brand** (marketing, landing, campaign: design IS the product) or **product** (app UI, admin, dashboard: design SERVES the product).
 
-<success_criteria>
-- [ ] Sub-command recognized and reference file loaded
-- [ ] Context loaded from .workflow/impeccable/ (PRODUCT.md, register identified)
-- [ ] Design changes applied to target files
-- [ ] Knowhow entry created in .workflow/knowhow/ with category: ui (unless --skip-harvest or live)
-- [ ] Spec index entry created for DCS-/AST- types
-</success_criteria>
+Identify before designing. Priority: (1) cue in the task; (2) surface in focus; (3) `register` field in PRODUCT.md. First match wins.
+
+Load the matching reference: [brand.md](~/.maestro/workflows/impeccable/brand.md) or [product.md](~/.maestro/workflows/impeccable/product.md).
+
+## Shared design laws
+
+Apply to every design, both registers. Match complexity to vision. Vary across projects; never converge on the same choices.
+
+### Color
+
+- Use OKLCH. Reduce chroma near lightness extremes.
+- Never `#000` or `#fff`. Tint neutrals toward brand hue (chroma 0.005-0.01).
+- Pick **color strategy** first: Restrained → Committed → Full palette → Drenched.
+
+### Theme
+
+Write one sentence of physical scene before choosing dark/light. Run the sentence, not the category.
+
+### Typography
+
+- Body line length: 65-75ch.
+- Hierarchy: scale + weight contrast (≥1.25 ratio).
+
+### Layout
+
+- Vary spacing for rhythm. Cards only when truly best affordance. No nested cards.
+
+### Motion
+
+- No CSS layout property animations. Ease-out with exponential curves.
+
+### Absolute bans
+
+Match-and-refuse: side-stripe borders, gradient text, glassmorphism as default, hero-metric template, identical card grids, modal as first thought.
+
+### Copy
+
+Every word earns its place. No em dashes.
+
+### AI slop test
+
+Two-altitude category-reflex check. If someone could guess theme+palette from category alone, or guess aesthetic family from category+anti-references, rework until neither is obvious.
+
+See [~/.maestro/workflows/impeccable/brand.md](~/.maestro/workflows/impeccable/brand.md) for reflex-reject aesthetic lanes.
+
+## Commands
+
+All sub-command workflows: `~/.maestro/workflows/impeccable/{command}.md`
+
+| Command | Category | Description | Reference |
+|---|---|---|---|
+| `craft [feature]` | Build | Shape, then build end-to-end | [craft.md](~/.maestro/workflows/impeccable/craft.md) |
+| `shape [feature]` | Build | Plan UX/UI before code | [shape.md](~/.maestro/workflows/impeccable/shape.md) |
+| `teach` | Build | Set up PRODUCT.md and DESIGN.md | [teach.md](~/.maestro/workflows/impeccable/teach.md) |
+| `document` | Build | Generate DESIGN.md from code | [document.md](~/.maestro/workflows/impeccable/document.md) |
+| `extract [target]` | Build | Pull tokens/components into design system | [extract.md](~/.maestro/workflows/impeccable/extract.md) |
+| `explore [--styles N]` | Build | Multi-style comparison: generate variants, render prototypes, visual compare, select/mix | [explore.md](~/.maestro/workflows/impeccable/explore.md) |
+| `critique [target]` | Evaluate | UX review with heuristic scoring | [critique.md](~/.maestro/workflows/impeccable/critique.md) |
+| `audit [target]` | Evaluate | Technical quality checks | [audit.md](~/.maestro/workflows/impeccable/audit.md) |
+| `polish [target]` | Refine | Final quality pass | [polish.md](~/.maestro/workflows/impeccable/polish.md) |
+| `bolder [target]` | Refine | Amplify bland designs | [bolder.md](~/.maestro/workflows/impeccable/bolder.md) |
+| `quieter [target]` | Refine | Tone down aggressive designs | [quieter.md](~/.maestro/workflows/impeccable/quieter.md) |
+| `distill [target]` | Refine | Strip to essence | [distill.md](~/.maestro/workflows/impeccable/distill.md) |
+| `harden [target]` | Refine | Production-ready: errors, i18n, edge cases | [harden.md](~/.maestro/workflows/impeccable/harden.md) |
+| `onboard [target]` | Refine | First-run flows, empty states | [onboard.md](~/.maestro/workflows/impeccable/onboard.md) |
+| `animate [target]` | Enhance | Add purposeful motion | [animate.md](~/.maestro/workflows/impeccable/animate.md) |
+| `colorize [target]` | Enhance | Add strategic color | [colorize.md](~/.maestro/workflows/impeccable/colorize.md) |
+| `typeset [target]` | Enhance | Improve typography | [typeset.md](~/.maestro/workflows/impeccable/typeset.md) |
+| `layout [target]` | Enhance | Fix spacing, rhythm, hierarchy | [layout.md](~/.maestro/workflows/impeccable/layout.md) |
+| `delight [target]` | Enhance | Add personality | [delight.md](~/.maestro/workflows/impeccable/delight.md) |
+| `overdrive [target]` | Enhance | Push past conventional limits | [overdrive.md](~/.maestro/workflows/impeccable/overdrive.md) |
+| `clarify [target]` | Fix | Improve UX copy and labels | [clarify.md](~/.maestro/workflows/impeccable/clarify.md) |
+| `adapt [target]` | Fix | Adapt for devices/screens | [adapt.md](~/.maestro/workflows/impeccable/adapt.md) |
+| `optimize [target]` | Fix | Fix UI performance | [optimize.md](~/.maestro/workflows/impeccable/optimize.md) |
+| `live` | Iterate | Browser-based variant generation | [live.md](~/.maestro/workflows/impeccable/live.md) |
+
+### Routing rules
+
+1. **No argument**: render command menu grouped by category.
+2. **First word matches command**: load its reference file, follow instructions. Rest is target.
+3. **No match**: general design invocation with full argument as context.
+
+## Harvest — Design Knowledge Accumulation
+
+After every command execution (except `live`), harvest design decisions into `.workflow/knowhow/` for cross-session reuse. Skip if `--skip-harvest` flag is set.
+
+### Harvest routing
+
+| Command | Type | Prefix | Extract |
+|---------|------|--------|---------|
+| craft | decision + asset | DCS- + AST- | Design decisions + tokens (dual entry) |
+| shape | decision | DCS- | Key decisions from brief |
+| teach | reference | REF- | Brand/user/principles from PRODUCT.md |
+| document | asset | AST- | Token system from DESIGN.md YAML |
+| extract | asset | AST- | Design system patterns |
+| explore | decision + asset | DCS- + AST- | Style selection rationale + design tokens |
+| critique | tip | TIP- | Scores + P0/P1 findings |
+| audit | tip | TIP- | 5-dimension scores |
+| polish | tip | TIP- | Polish points |
+| bolder/quieter/distill | decision | DCS- | Direction decisions |
+| harden/onboard | tip | TIP- | Patterns applied |
+| animate | decision | DCS- | Animation strategy |
+| colorize | decision | DCS- | Color strategy + OKLCH values |
+| typeset | decision | DCS- | Typography decisions |
+| layout | decision | DCS- | Layout/spacing decisions |
+| delight/overdrive | decision | DCS- | Creative decisions |
+| clarify/adapt/optimize | tip | TIP- | Fix points |
+
+### Harvest execution
+
+1. **Determine type** from routing table.
+2. **Extract** from output files (document, critique) or conversation context (others).
+3. **Write knowhow**:
+   - DCS-/TIP-/REF- → `store_knowhow` MCP: `{operation: "add", type, title: "maestro-impeccable <cmd>: <description>", body, tags: ["impeccable", "<cmd>", ...]}`
+   - AST- → Write to `.workflow/knowhow/AST-impeccable-<slug>-<YYYYMMDD>.md` with YAML frontmatter (`category: ui`)
+4. **Spec index** (DCS-/AST- only): `maestro spec add ui "<title>" "<summary>" --keywords impeccable,<cmd>,... --ref knowhow/<file>`
+5. **Report**: one-line summary with knowhow ID.
