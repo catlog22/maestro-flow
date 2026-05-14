@@ -155,7 +155,7 @@ S_FALLBACK:
 | maestro-analyze | `-y` | Skip scoping, auto-deepen |
 | maestro-brainstorm | `-y` | Skip questions, use defaults |
 | maestro-roadmap | `-y` | Skip questions (create/revise/review) |
-| maestro-ui-design | `-y` | Skip selection, pick top variant |
+| maestro-ui-craft | `-y` | Auto-select design variant + skip confirmations |
 | maestro-plan | `-y` | Skip confirmations and clarification |
 | maestro-execute | `-y` | Skip confirmations, blocked auto-continue |
 | quality-auto-test | `-y` | Skip plan confirmation |

@@ -107,9 +107,9 @@
 
 ---
 
-### `maestro-ui-design` — UI 设计
+### `maestro-ui-craft` — UI 生产管线
 
-**Usage:** `/maestro-ui-design <phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]`
+**Usage:** `/maestro-ui-craft <intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [-y]`
 
 通过 ui-ux-pro-max 生成多种风格的 UI 设计原型，用户选择最佳方案，固化为代码参考文档
 

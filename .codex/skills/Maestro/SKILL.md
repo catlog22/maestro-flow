@@ -261,7 +261,7 @@ Read `.workflow/state.json` and route by condition:
 | `status` | `manage-status` |
 | `init` | `maestro-init` |
 | `analyze` | `maestro-analyze {phase}` |
-| `ui_design` | `maestro-ui-design {phase}` |
+| `ui_design` | `maestro-ui-craft "{phase}" --chain build` |
 | `plan` | `maestro-plan {phase}` |
 | `execute` | `maestro-execute {phase}` |
 | `verify` | `maestro-verify {phase}` |
@@ -314,7 +314,7 @@ Read `.workflow/state.json` and route by condition:
 | `deploy` | maestro-verify → maestro-milestone-release |
 | `spec-driven` | maestro-init → [B] maestro-roadmap --mode full → [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `brainstorm-driven` | [B] maestro-brainstorm → [B] maestro-plan → [B] maestro-execute → maestro-verify |
-| `ui-design-driven` | maestro-ui-design → [B] maestro-plan → [B] maestro-execute → maestro-verify |
+| `ui-craft-build` | maestro-ui-craft --chain build → [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `roadmap-driven` | maestro-init → [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `next-milestone` | [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `full-lifecycle` | [B] maestro-plan → [B] maestro-execute → maestro-verify → quality-review → quality-test → maestro-milestone-audit → maestro-milestone-complete |
@@ -341,7 +341,7 @@ Read `.workflow/state.json` and route by condition:
 
 | Skill | Flag |
 |-------|------|
-| maestro-init, maestro-analyze, maestro-brainstorm, maestro-ui-design, maestro-roadmap | `-y` |
+| maestro-init, maestro-analyze, maestro-brainstorm, maestro-ui-craft, maestro-roadmap | `-y` |
 | maestro-plan, maestro-execute, maestro-milestone-complete | `-y` |
 | quality-auto-test, quality-retrospective | `-y` |
 | quality-test | `-y --auto-fix` |

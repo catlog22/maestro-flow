@@ -9,8 +9,8 @@ Maestro UI 生产管线覆盖从设计原型到代码实现的全生命周期，
 ### 管线架构
 
 ```
-maestro-ui-design        maestro-ui-craft          maestro-ui-codify
-  设计原型生成              自动化生产管线              设计系统代码化
+maestro-ui-craft --chain build   maestro-ui-craft         maestro-ui-codify
+  设计原型生成                    自动化生产管线              设计系统代码化
        │                        │                        │
        ▼                        ▼                        ▼
   MASTER.md               impeccable skill          design-tokens.json
@@ -32,7 +32,7 @@ analyze -> ui-design -> plan -> execute -> verify
                     设计先于规划
 ```
 
-`maestro-ui-design` 产出的 `design-ref/` 目录会被 `maestro-plan` 自动检测，将设计 token 和规范注入执行任务的 `read_first[]` 列表，确保实现严格遵循设计意图。
+`maestro-ui-craft --chain build` 产出的 `design-ref/` 目录会被 `maestro-plan` 自动检测，将设计 token 和规范注入执行任务的 `read_first[]` 列表，确保实现严格遵循设计意图。
 
 ### 与 impeccable skill 的集成
 
@@ -42,14 +42,14 @@ analyze -> ui-design -> plan -> execute -> verify
 
 ## 二、命令详解
 
-### 2.1 maestro-ui-design — UI 设计原型
+### 2.1 maestro-ui-craft --chain build — UI 设计原型
 
-**定位**：生成多个风格变体的设计原型，用户选择后固化为可消费的设计系统。
+**定位**：生成多个风格变体的设计原型，用户选择后固化为可消费的设计系统。（原 `maestro-ui-design`，现已合并入 `maestro-ui-craft`。）
 
 **命令语法**：
 
 ```
-/maestro-ui-design <phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]
+/maestro-ui-craft "<phase|topic>" --chain build [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]
 ```
 
 **参数说明**：
@@ -110,7 +110,7 @@ design-ref/
 | 下一步 | 命令 |
 |--------|------|
 | 基于设计规划 | `/maestro-plan {phase}` |
-| 精调已选设计 | `/maestro-ui-design {phase} --refine` |
+| 精调已选设计 | `/maestro-ui-craft "{phase}" --chain improve` |
 | 先分析再规划 | `/maestro-analyze {phase}` |
 
 ---
@@ -315,7 +315,7 @@ Phase 1 (inline)        Phase 2 (3 个并行 Agent)   Phase 3 (Agent)         Ph
 
 ```bash
 # Step 1: 设计原型
-/maestro-ui-design 1 --styles 3 --targets home,dashboard,settings
+/maestro-ui-craft "1" --chain build --styles 3 --targets home,dashboard,settings
 
 # Step 2: 基于 design-ref 自动生产（build chain）
 /maestro-ui-craft "新建 landing page" --chain build --threshold 28
@@ -331,7 +331,7 @@ Phase 1 (inline)        Phase 2 (3 个并行 Agent)   Phase 3 (Agent)         Ph
 
 ### 与 Phase 管线集成
 
-UI 设计驱动的 Phase 管线（`ui-design-driven` chain graph）：
+UI 设计驱动的 Phase 管线（`ui-craft-build` chain graph）：
 
 ```
 ui-design -> plan -> execute -> verify -> check_verify
@@ -341,7 +341,7 @@ ui-design -> plan -> execute -> verify -> check_verify
 
 ```bash
 # 设计驱动的完整 Phase 管线
-/maestro-ui-design 1           # 先设计
+/maestro-ui-craft "1" --chain build  # 先设计
 /maestro-plan 1                # 基于设计规划
 /maestro-execute 1             # 执行实现
 /maestro-verify 1              # 验证目标达成
@@ -384,7 +384,7 @@ ui-design -> plan -> execute -> verify -> check_verify
 
 | 场景 | 命令 | 说明 |
 |------|------|------|
-| 新项目需要从零设计 UI | `maestro-ui-design` | 生成多个风格方案，选择后固化 |
+| 新项目需要从零设计 UI | `maestro-ui-craft --chain build` | 生成多个风格方案，选择后固化 |
 | 已有设计，需要高质量实现 | `maestro-ui-craft --chain build` | 从 teach 到 polish 全自动 |
 | 现有页面需要优化 | `maestro-ui-craft --chain improve` | critique 驱动迭代改进 |
 | 需要增强动效/排版/色彩 | `maestro-ui-craft --chain enhance` | 单维度增强 + critique 验证 |
@@ -401,17 +401,17 @@ ui-design -> plan -> execute -> verify -> check_verify
 
 **管线模式**适合：
 - 全新功能的 UI 生产（`design -> craft -> codify`）
-- Phase 级别的完整交付（`ui-design-driven` chain graph）
+- Phase 级别的完整交付（`ui-craft-build` chain graph）
 - 需要质量保证的迭代循环（`craft` 的自动 refine loop）
 
 ### 常用组合
 
 ```bash
 # 快速原型验证（最短路径）
-/maestro-ui-design "Landing Page" -y --styles 2
+/maestro-ui-craft "Landing Page" --chain build -y --styles 2
 
 # 完整新页面生产
-/maestro-ui-design 2 --targets home,profile,settings
+/maestro-ui-craft "2" --chain build --targets home,profile,settings
 /maestro-ui-craft "新建用户中心" --chain build -y
 
 # 迭代优化现有页面

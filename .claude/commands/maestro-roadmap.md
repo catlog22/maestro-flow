@@ -100,7 +100,7 @@ Follow `~/.maestro/workflows/spec-generate.md` completely.
 |-----------|-----------|
 | Roadmap approved, need analysis | /maestro-analyze 1 |
 | Simple project, ready to plan | /maestro-plan 1 |
-| Need UI design first | /maestro-ui-design 1 |
+| Need UI design first | /maestro-ui-craft --chain build |
 | View project dashboard | /manage-status |
 | Need project setup (full mode) | /maestro-init |
 </execution>

@@ -84,7 +84,7 @@ default             → Create Mode: P1 → P2 → P3 → P4 → P4.5 → P5
 4b. **Load design reference** (if available)
    - If `${PHASE_DIR}/design-ref/MASTER.md` exists: load MASTER.md, design-tokens.json, animation-tokens.json (optional), layout-templates/layout-*.json
      - Every UI task must include in `read_first[]`: design-tokens.json, animation-tokens.json, relevant layout-*.json, MASTER.md
-   - Else if phase goal matches UI keywords (`landing|page|dashboard|frontend|UI|component|界面`): suggest running `maestro-ui-design` (non-blocking)
+   - Else if phase goal matches UI keywords (`landing|page|dashboard|frontend|UI|component|界面`): suggest running `maestro-ui-craft --chain build` (non-blocking)
 
 5. **Load upstream analysis** (if available)
    - If `${PHASE_DIR}/conclusions.json` exists with non-empty status: load as explorationContext (conclusions + explorations.json + perspectives.json)

@@ -9,6 +9,15 @@ Designs and iterates production-grade frontend interfaces. Real working code, co
 After each command, automatically harvests design knowledge to `.workflow/knowhow/` (category: ui) for cross-session accumulation.
 
 Replaces the standalone impeccable skill. 23 commands covering the full design lifecycle.
+
+Includes integrated `search` subcommand for querying UI/UX design knowledge base (BM25 + CSV):
+```bash
+maestro impeccable search "<query>" -d <domain>          # domain search
+maestro impeccable search "<query>" --design-system      # generate design system
+maestro impeccable search "<query>" --design-system --persist -p "Project"  # save MASTER.md
+```
+Domains: style, color, chart, landing, product, ux, typography, icons, react, web, google-fonts.
+Stacks: react, nextjs, vue, svelte, astro, swiftui, react-native, flutter, html-tailwind, shadcn.
 </purpose>
 
 <context>

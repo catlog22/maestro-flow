@@ -326,7 +326,7 @@ Sorted by date first for easy chronological ordering. Scope prefixes enable quic
 | Auto-test | `*auto-test*` | report.json, scenarios.csv, reflection-log.md | quality-auto-test |
 | Brainstorm | `*brainstorm*` | guidance-specification.md, .brainstorming/ | maestro-brainstorm |
 | Collab | `*collab*` | collab-report.md, context.md, conclusions.json | maestro-collab |
-| UI design | `*ui-design*` | MASTER.md, design-tokens.json, animation-tokens.json | maestro-ui-design |
+| UI design | `*ui-design*` | MASTER.md, design-tokens.json, animation-tokens.json | maestro-ui-craft --chain build |
 | Retrospective | (writes to retrospective.json/md + specs/learnings.md) | | quality-retrospective |
 
 ---
@@ -766,4 +766,4 @@ created → completed → harvested → archived
 | test | TST | phase | quality-test, quality-auto-test |
 | brainstorm | BRN | adhoc | maestro-brainstorm |
 | collab | CLB | adhoc | maestro-collab |
-| ui-design | — | phase, scratch | maestro-ui-design |
+| ui-design | — | phase, scratch | maestro-ui-craft --chain build |

@@ -71,7 +71,7 @@ export const CHAIN_MAP: Record<string, ChainStepDef[]> = {
   'status':             [{ cmd: 'manage-status' }],
   'init':               [{ cmd: 'maestro-init' }],
   'analyze':            [{ cmd: 'maestro-analyze', args: '{phase}' }],
-  'ui_design':          [{ cmd: 'maestro-ui-design', args: '{phase}' }],
+  'ui_design':          [{ cmd: 'maestro-ui-craft', args: '"{phase}" --chain build' }],
   'plan':               [{ cmd: 'maestro-plan', args: '{phase}' }],
   'execute':            [{ cmd: 'maestro-execute', args: '{phase}' }],
   'verify':             [{ cmd: 'maestro-verify', args: '{phase}' }],
@@ -109,7 +109,7 @@ export const CHAIN_MAP: Record<string, ChainStepDef[]> = {
   // Multi-step chains
   'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '--mode full "{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'brainstorm-driven':    [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'ui-design-driven':     [{ cmd: 'maestro-ui-design', args: '{phase}' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'ui-craft-build':       [{ cmd: 'maestro-ui-craft', args: '"{phase}" --chain build' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'full-lifecycle':       [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'execute-verify':       [{ cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'quality-loop':         [{ cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'quality-debug', args: '--from-uat {phase}' }, { cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
@@ -135,7 +135,7 @@ export const TASK_TO_CHAIN: Record<string, string> = {
 export const AUTO_FLAG_MAP: Record<string, string> = {
   'maestro-analyze':       '-y',
   'maestro-brainstorm':    '-y',
-  'maestro-ui-design':     '-y',
+  'maestro-ui-craft':      '-y',
   'maestro-plan':          '--auto',
   'maestro-roadmap':       '-y',
   'quality-test':          '--auto-fix',

@@ -36,7 +36,7 @@
       "type": "ui_design",
       "regex": "ui.*design|design.*ui|prototype|设计.*原型|UI.*风格",
       "flags": "i",
-      "route": { "graph": "ui-design-driven" }
+      "route": { "graph": "ui-craft-build" }
     },
     {
       "type": "init",

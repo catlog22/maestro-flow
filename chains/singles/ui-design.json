@@ -2,7 +2,7 @@
   "$schema": "../chain-graph.schema.json",
   "id": "singles/ui-design",
   "name": "UI Design",
-  "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max",
+  "description": "UI design-driven production via maestro-ui-craft build chain",
   "version": "1.0.0",
   "tags": [
     "maestro",
@@ -18,11 +18,11 @@
   "nodes": {
     "ui_design": {
       "type": "command",
-      "cmd": "maestro-ui-design",
+      "cmd": "maestro-ui-craft",
       "next": "done",
       "analyze": false,
-      "args": "{phase}",
-      "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max"
+      "args": "\"{phase}\" --chain build",
+      "description": "UI design-driven production via maestro-ui-craft build chain"
     },
     "done": {
       "type": "terminal",

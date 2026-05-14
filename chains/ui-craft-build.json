@@ -1,8 +1,8 @@
 {
   "$schema": "./chain-graph.schema.json",
-  "id": "ui-design-driven",
-  "name": "UI Design-Driven",
-  "description": "UI Design -> Plan -> Execute -> Verify pipeline",
+  "id": "ui-craft-build",
+  "name": "UI Craft Build",
+  "description": "UI Craft Build -> Plan -> Execute -> Verify pipeline",
   "version": "1.0.0",
   "tags": ["lifecycle", "ui-design"],
   "entry": "ui_design",
@@ -13,9 +13,9 @@
   "nodes": {
     "ui_design": {
       "type": "command",
-      "cmd": "maestro-ui-design",
-      "description": "Generate UI design prototypes with multiple styles, user selects winner",
-      "args": "{phase}",
+      "cmd": "maestro-ui-craft",
+      "description": "UI design-driven production via maestro-ui-craft build chain",
+      "args": "\"{phase}\" --chain build",
       "auto_flag": "-y",
       "next": "plan"
     },
@@ -53,12 +53,12 @@
     "done": {
       "type": "terminal",
       "status": "success",
-      "summary": "UI design-driven pipeline completed successfully"
+      "summary": "UI craft build pipeline completed successfully"
     },
     "done_with_issues": {
       "type": "terminal",
       "status": "paused",
-      "summary": "UI design-driven pipeline completed with verification issues"
+      "summary": "UI craft build pipeline completed with verification issues"
     }
   }
 }

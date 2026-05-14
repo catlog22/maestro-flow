@@ -132,11 +132,11 @@
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
-      "name": "maestro-ui-design",
-      "file": ".claude/commands/maestro-ui-design.md",
+      "name": "maestro-ui-craft",
+      "file": ".claude/commands/maestro-ui-craft.md",
       "category": "maestro",
-      "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max — user selects winner, solidify as code reference",
-      "argumentHint": "<phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]",
+      "description": "Chain maestro-impeccable commands with intelligent routing and quality gate loops for automated UI production",
+      "argumentHint": "<intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [-y]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {

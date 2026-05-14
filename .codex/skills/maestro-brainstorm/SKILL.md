@@ -94,7 +94,7 @@ S_AGGREGATE → END      DO: A_AGGREGATE
 2. Generate context.md (summary, guidance, per-role findings, synthesis, feature index, next steps)
 3. Confidence scoring: 5 dimensions (role_coverage, cross_role_consistency, feature_completeness, spec_quality, design_feasibility). Quality gate: >3 UNRESOLVED → warn.
 4. Copy artifacts to target .brainstorming/
-5. Next-step routing: UI features detected → maestro-ui-design; else → maestro-analyze / maestro-plan / maestro-roadmap
+5. Next-step routing: UI features detected → maestro-ui-craft --chain build; else → maestro-analyze / maestro-plan / maestro-roadmap
 
 </actions>
 </state_machine>

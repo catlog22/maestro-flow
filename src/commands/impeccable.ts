@@ -1,7 +1,8 @@
 /**
  * Impeccable Command — CLI for design tool utilities.
  *
- * Subcommands: load-context, detect-csp, critique (slug|write|latest|trend),
+ * Subcommands: load-context, detect-csp, search,
+ * critique (slug|write|latest|trend),
  * live, live-server, live-poll, live-inject, live-wrap, live-accept,
  * live-complete, live-resume, live-status
  */
@@ -31,6 +32,68 @@ export function registerImpeccableCommand(program: Command): void {
       const { detectCsp } = await import('../tools/impeccable/detect-csp.js');
       const result = detectCsp(process.cwd());
       console.log(JSON.stringify(result, null, 2));
+    });
+
+  // ── search ──────────────────────────────────────────────────────────
+  cmd
+    .command('search <query>')
+    .description('Search UI/UX design knowledge base (BM25 + CSV)')
+    .option('-d, --domain <domain>', 'Search domain (style|color|chart|landing|product|ux|typography|icons|react|web|google-fonts)')
+    .option('-s, --stack <stack>', 'Stack-specific search (react|nextjs|vue|svelte|astro|swiftui|react-native|flutter|html-tailwind|shadcn)')
+    .option('-n, --max-results <n>', 'Max results (default: 3)')
+    .option('--design-system', 'Generate complete design system recommendation')
+    .option('-p, --project-name <name>', 'Project name for design system output')
+    .option('-f, --format <fmt>', 'Output format: ascii|markdown (default: ascii)')
+    .option('--persist', 'Save design system to MASTER.md')
+    .option('--page <page>', 'Page-specific override file')
+    .option('-o, --output-dir <dir>', 'Output directory for persisted files')
+    .action(async (query: string, opts: Record<string, string | boolean | undefined>) => {
+      const { spawnSync } = await import('node:child_process');
+      const { resolve, join } = await import('node:path');
+      const { existsSync } = await import('node:fs');
+
+      // Resolve script path: project-local → installed
+      const candidates = [
+        resolve(process.cwd(), 'workflows/impeccable/ui-search/search.py'),
+        join(process.env.HOME || process.env.USERPROFILE || '', '.maestro/workflows/impeccable/ui-search/search.py'),
+      ];
+      const scriptPath = candidates.find(p => existsSync(p));
+      if (!scriptPath) {
+        process.stderr.write('ui-search scripts not found. Expected at workflows/impeccable/ui-search/search.py\n');
+        process.exit(1);
+      }
+
+      // Resolve Python binary
+      const pythonBin = ['python', 'python3'].find(bin => {
+        const r = spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin], { stdio: 'pipe', shell: true });
+        return r.status === 0;
+      });
+      if (!pythonBin) {
+        process.stderr.write('Python not found. Install Python 3 to use ui-search.\n');
+        process.exit(1);
+      }
+
+      // Build args
+      const args = [scriptPath, query];
+      if (opts.domain) { args.push('-d', String(opts.domain)); }
+      if (opts.stack) { args.push('-s', String(opts.stack)); }
+      if (opts.maxResults) { args.push('-n', String(opts.maxResults)); }
+      if (opts.designSystem) { args.push('--design-system'); }
+      if (opts.projectName) { args.push('-p', String(opts.projectName)); }
+      if (opts.format) { args.push('-f', String(opts.format)); }
+      if (opts.persist) { args.push('--persist'); }
+      if (opts.page) { args.push('--page', String(opts.page)); }
+      if (opts.outputDir) { args.push('-o', String(opts.outputDir)); }
+
+      const result = spawnSync(pythonBin, args, {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+        cwd: process.cwd(),
+      });
+
+      if (result.stdout) { process.stdout.write(result.stdout); }
+      if (result.stderr) { process.stderr.write(result.stderr); }
+      process.exit(result.status ?? 1);
     });
 
   // ── critique ────────────────────────────────────────────────────────

@@ -76,7 +76,7 @@ context = {
    {milestone_num} → context.milestone_num
 
 2. In auto_mode, append per-command flag if not already present:
-   maestro-analyze / maestro-brainstorm / maestro-roadmap / maestro-ui-design → -y
+   maestro-analyze / maestro-brainstorm / maestro-roadmap / maestro-ui-craft → -y
    maestro-plan → --auto
    quality-test → --auto-fix
    quality-retrospective → --auto-yes
@@ -95,7 +95,7 @@ Read `step.engine` from status.json (pre-computed by selection workflow Step 3e)
 If `step.engine` is missing or null, fallback to auto selection:
 ```
   CLI: maestro-plan, maestro-execute, maestro-analyze, maestro-brainstorm,
-       maestro-roadmap, maestro-ui-design, quality-refactor
+       maestro-roadmap, maestro-ui-craft, quality-refactor
   Internal: everything else (current-session Skill() call)
 ```
 

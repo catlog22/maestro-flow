@@ -9,14 +9,14 @@ The Maestro UI production pipeline covers the full lifecycle from design prototy
 ### Pipeline Architecture
 
 ```
-maestro-ui-design        maestro-ui-craft          maestro-ui-codify
-  Design prototype gen     Automated production       Design system codification
-       |                        |                        |
-       v                        v                        v
-  MASTER.md               impeccable skill          design-tokens.json
-  design-tokens.json      critique/audit scoring     animation-tokens.json
-  animation-tokens.json   Auto-iteration loop        layout-templates.json
-  selection.json          Quality gate driven         knowhow asset persistence
+maestro-ui-craft --chain build   maestro-ui-craft         maestro-ui-codify
+  Design prototype gen            Automated production      Design system codification
+       |                               |                        |
+       v                               v                        v
+  MASTER.md                       impeccable skill          design-tokens.json
+  design-tokens.json              critique/audit scoring     animation-tokens.json
+  animation-tokens.json           Auto-iteration loop        layout-templates.json
+  selection.json                  Quality gate driven         knowhow asset persistence
        |                        |                        |
        +------------------------+------------------------+
                         Knowledge consolidation
@@ -32,7 +32,7 @@ analyze -> ui-design -> plan -> execute -> verify
                   Design precedes planning
 ```
 
-The `design-ref/` directory produced by `maestro-ui-design` is automatically detected by `maestro-plan`, which injects design tokens and specifications into the execution tasks' `read_first[]` list, ensuring implementations strictly follow design intent.
+The `design-ref/` directory produced by `maestro-ui-craft --chain build` is automatically detected by `maestro-plan`, which injects design tokens and specifications into the execution tasks' `read_first[]` list, ensuring implementations strictly follow design intent.
 
 ### Integration with impeccable skill
 
@@ -42,14 +42,14 @@ The `design-ref/` directory produced by `maestro-ui-design` is automatically det
 
 ## 2. Command Reference
 
-### 2.1 maestro-ui-design — UI Design Prototypes
+### 2.1 maestro-ui-craft --chain build — UI Design Prototypes
 
-**Purpose**: Generate design prototypes with multiple style variants. After user selection, codify them into a consumable design system.
+**Purpose**: Generate design prototypes with multiple style variants. After user selection, codify them into a consumable design system. (Formerly `maestro-ui-design`, now part of `maestro-ui-craft`.)
 
 **Command Syntax**:
 
 ```
-/maestro-ui-design <phase|topic> [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]
+/maestro-ui-craft "<phase|topic>" --chain build [--styles N] [--stack <stack>] [--targets <pages>] [--layouts N] [--refine] [--persist] [--full] [-y]
 ```
 
 **Parameter Reference**:
@@ -110,7 +110,7 @@ design-ref/
 | Next Step | Command |
 |-----------|---------|
 | Plan based on design | `/maestro-plan {phase}` |
-| Refine selected design | `/maestro-ui-design {phase} --refine` |
+| Refine selected design | `/maestro-ui-craft "{phase}" --chain improve` |
 | Analyze before planning | `/maestro-analyze {phase}` |
 
 ---
@@ -315,7 +315,7 @@ This is the standard UI production pipeline, with three commands executed in seq
 
 ```bash
 # Step 1: Design prototypes
-/maestro-ui-design 1 --styles 3 --targets home,dashboard,settings
+/maestro-ui-craft "1" --chain build --styles 3 --targets home,dashboard,settings
 
 # Step 2: Automated production based on design-ref (build chain)
 /maestro-ui-craft "新建 landing page" --chain build --threshold 28
@@ -331,7 +331,7 @@ This is the standard UI production pipeline, with three commands executed in seq
 
 ### Integration with Phase Pipeline
 
-UI design-driven Phase pipeline (`ui-design-driven` chain graph):
+UI design-driven Phase pipeline (`ui-craft-build` chain graph):
 
 ```
 ui-design -> plan -> execute -> verify -> check_verify
@@ -341,7 +341,7 @@ Corresponding command sequence:
 
 ```bash
 # Design-driven full Phase pipeline
-/maestro-ui-design 1           # Design first
+/maestro-ui-craft "1" --chain build  # Design first
 /maestro-plan 1                # Plan based on design
 /maestro-execute 1             # Execute implementation
 /maestro-verify 1              # Verify goal completion
@@ -384,7 +384,7 @@ Extract a design system from an existing codebase:
 
 | Scenario | Command | Description |
 |----------|---------|-------------|
-| New project needs UI design from scratch | `maestro-ui-design` | Generate multiple style proposals, codify after selection |
+| New project needs UI design from scratch | `maestro-ui-craft --chain build` | Generate multiple style proposals, codify after selection |
 | Have design, need high-quality implementation | `maestro-ui-craft --chain build` | Fully automated from teach to polish |
 | Existing page needs optimization | `maestro-ui-craft --chain improve` | Critique-driven iterative improvement |
 | Need to enhance motion/typography/color | `maestro-ui-craft --chain enhance` | Single-dimension enhancement + critique validation |
@@ -401,17 +401,17 @@ Extract a design system from an existing codebase:
 
 **Pipeline mode** is suitable for:
 - Brand-new feature UI production (`design -> craft -> codify`)
-- Phase-level complete delivery (`ui-design-driven` chain graph)
+- Phase-level complete delivery (`ui-craft-build` chain graph)
 - Iterative loops requiring quality assurance (`craft`'s auto refine loop)
 
 ### Common Combinations
 
 ```bash
 # Quick prototype validation (shortest path)
-/maestro-ui-design "Landing Page" -y --styles 2
+/maestro-ui-craft "Landing Page" --chain build -y --styles 2
 
 # Complete new page production
-/maestro-ui-design 2 --targets home,profile,settings
+/maestro-ui-craft "2" --chain build --targets home,profile,settings
 /maestro-ui-craft "新建用户中心" --chain build -y
 
 # Iterative optimization of existing page

@@ -109,16 +109,16 @@
       "next_commands": ["maestro-plan"],
       "flags": ["<requirement> (需求描述，必填)", "-y (自动模式)", "-c (恢复会话)", "-m progressive|direct|auto (模式)", "--from-brainstorm SESSION-ID (从头脑风暴导入)", "--revise [instructions] (修订路线图)", "--review (审查模式)"]
     },
-    "maestro-ui-design": {
-      "name": "maestro-ui-design",
-      "name_zh": "UI 设计",
-      "description": "Generate UI design prototypes with multiple styles via ui-ux-pro-max — user selects winner, solidify as code reference",
-      "description_zh": "通过 ui-ux-pro-max 生成多种风格的 UI 设计原型，用户选择最佳方案，固化为代码参考文档",
-      "workflow": "init/roadmap → **ui-design** → plan → execute",
-      "workflow_zh": "可在规划前插入 UI 设计阶段，为后续实现提供视觉参考",
+    "maestro-ui-craft": {
+      "name": "maestro-ui-craft",
+      "name_zh": "UI 生产管线",
+      "description": "Chain maestro-impeccable commands with intelligent routing and quality gate loops for automated UI production",
+      "description_zh": "通过 critique/audit 评分驱动循环，将 impeccable skill 的命令编排为自动化质量门控管线，涵盖设计原型生成到生产加固",
+      "workflow": "init/roadmap → **ui-craft --chain build** → plan → execute",
+      "workflow_zh": "可在规划前插入 UI 设计阶段（--chain build），为后续实现提供视觉参考",
       "prev_commands": ["maestro-init", "maestro-roadmap"],
       "next_commands": ["maestro-plan"],
-      "flags": ["<phase|topic> (阶段或主题)", "--styles N (生成风格数量)", "--stack <stack> (技术栈)", "--targets <pages> (目标页面)", "--layouts N (布局数量)", "--refine (精化模式)", "--persist (持久化结果)", "--full (完整模式)", "-y (自动模式)"]
+      "flags": ["<intent|target> (意图描述或目标路径)", "--chain build|improve|enhance|harden|live (链类型)", "--enhance <cmd> (enhance 链命令)", "--threshold <score> (评分阈值)", "--max-loops <n> (最大迭代次数)", "-y (自动模式)"]
     },
     "maestro-milestone-audit": {
       "name": "maestro-milestone-audit",

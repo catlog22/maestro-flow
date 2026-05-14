@@ -233,7 +233,7 @@ Step type is selected **per step**, not per chain. Pre-compute and write to each
 ```
 If execMode is 'cli' or 'internal' → force that type for all steps ("cli" or "skill").
 In 'auto' mode, select per step:
-  CLI steps (heavy, context-isolated): maestro-plan, maestro-execute, maestro-analyze, maestro-brainstorm, maestro-roadmap, maestro-ui-design, quality-refactor → type: "cli"
+  CLI steps (heavy, context-isolated): maestro-plan, maestro-execute, maestro-analyze, maestro-brainstorm, maestro-roadmap, maestro-ui-craft, quality-refactor → type: "cli"
   Skill steps (everything else): current-session Skill() call — verify, review, test, debug, milestone-*, manage-*, spec-*, quick, etc. → type: "skill"
 ```
 
@@ -318,7 +318,7 @@ const chainMap = {
   'init':               [{ cmd: 'maestro-init' }],
   'analyze':            [{ cmd: 'maestro-analyze', args: '{phase}' }],
   'analyze-quick':      [{ cmd: 'maestro-analyze', args: '{phase} -q' }],
-  'ui_design':          [{ cmd: 'maestro-ui-design', args: '{phase}' }],
+  'ui_design':          [{ cmd: 'maestro-ui-craft', args: '"{description}" --chain build' }],
   'ui_craft':           [{ cmd: 'maestro-ui-craft', args: '"{description}"' }],
   'ui_craft_build':     [{ cmd: 'maestro-ui-craft', args: '"{description}" --chain build' }],
   'ui_craft_improve':   [{ cmd: 'maestro-ui-craft', args: '"{description}" --chain improve' }],
@@ -370,7 +370,7 @@ const chainMap = {
   'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '--mode full "{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'roadmap-driven':       [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'brainstorm-driven':    [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'ui-design-driven':     [{ cmd: 'maestro-ui-design', args: '{phase}' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'ui-craft-build':       [{ cmd: 'maestro-ui-craft', args: '"{description}" --chain build' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'ui-craft-driven':      [{ cmd: 'maestro-ui-craft', args: '"{description}" --chain build' }, { cmd: 'maestro-verify', args: '{phase}' }],
   'analyze-plan-execute': [{ cmd: 'maestro-analyze', args: '"{description}" -q' }, { cmd: 'maestro-plan', args: '--dir {scratch_dir}' }, { cmd: 'maestro-execute', args: '--dir {scratch_dir}' }],
   'execute-verify':       [{ cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
@@ -440,7 +440,7 @@ detectNextAction(state):
 | `spec-driven` | init → spec-generate → plan → execute → verify | From idea/requirements (heavy) |
 | `roadmap-driven` | init → roadmap → plan → execute → verify | From requirements (light) |
 | `brainstorm-driven` | brainstorm → plan → execute → verify | From exploration |
-| `ui-design-driven` | ui-design → plan → execute → verify | From UI prototypes |
+| `ui-craft-build` | ui-craft --chain build → plan → execute → verify | From design system generation |
 | `analyze-plan-execute` | analyze -q → plan --dir → execute --dir | Fast track (scratch mode) |
 | `execute-verify` | execute → verify | Resume after planning |
 | `review-fix` | plan --gaps → execute → review | Fix review-blocked issues |
@@ -470,7 +470,7 @@ detectNextAction(state):
 | `"discover issues"` | `{explore, issue}` | issue_discover | manage-issue-discover |
 | `"brainstorm notifications"` | `{explore, feature}` | brainstorm | brainstorm-driven |
 | `"spec generate auth"` | `{create, spec}` | spec_generate | spec-driven |
-| `"ui design landing"` | `{create, ui}` | ui_design | ui-design-driven |
+| `"ui design landing"` | `{create, ui}` | ui_design | ui-craft-build |
 | `"refactor auth module"` | `{refactor, code}` | refactor | quality-refactor |
 | `"复盘 phase 2"` | `{retrospect, phase}` | retrospective | quality-retrospective |
 | `"team review code"` | `{review, team}` | team_review | team-review |

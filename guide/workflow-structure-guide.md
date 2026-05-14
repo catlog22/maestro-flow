@@ -336,7 +336,7 @@
 | 自动测试 | `*auto-test*` | report.json, scenarios.csv, reflection-log.md | quality-auto-test |
 | 头脑风暴 | `*brainstorm*` | guidance-specification.md, .brainstorming/ | maestro-brainstorm |
 | 协作 | `*collab*` | collab-report.md, context.md, conclusions.json | maestro-collab |
-| UI 设计 | `*ui-design*` | MASTER.md, design-tokens.json, animation-tokens.json | maestro-ui-design |
+| UI 设计 | `*ui-design*` | MASTER.md, design-tokens.json, animation-tokens.json | maestro-ui-craft --chain build |
 | Impeccable 上下文 | `impeccable/` | PRODUCT.md, DESIGN.md | maestro-impeccable (teach/document) |
 | 复盘 | （写入 retrospective.json/md + specs/learnings.md） | | quality-retrospective |
 
@@ -778,5 +778,5 @@ created → completed → harvested → archived
 | test | TST | phase | quality-test, quality-auto-test |
 | brainstorm | BRN | adhoc | maestro-brainstorm |
 | collab | CLB | adhoc | maestro-collab |
-| ui-design | — | phase, scratch | maestro-ui-design |
+| ui-design | — | phase, scratch | maestro-ui-craft --chain build |
 | impeccable | — | standalone | maestro-impeccable (teach/document) |

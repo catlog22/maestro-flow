@@ -169,7 +169,7 @@ If the design needs exceed ui-ux-pro-max capabilities (e.g., multi-layout matrix
 
 ```
 For advanced multi-layer design exploration:
-  Skill({ skill: "maestro-ui-design", args: "{phase} --full" })
+  /maestro-ui-craft --chain build {target}
 ```
 
 ---

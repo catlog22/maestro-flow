@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(sed:*)",
-      "Bash(grep -rl \"reference/\" *.md)"
+      "Bash(grep -rl \"reference/\" *.md)",
+      "Bash(python workflows/impeccable/ui-search/search.py \"modern SaaS\" --design-system -f markdown)",
+      "Bash(python workflows/impeccable/ui-search/search.py \"accessibility animation\" -d ux)"
     ]
   }
 }

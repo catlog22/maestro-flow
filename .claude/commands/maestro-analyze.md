@@ -79,7 +79,7 @@ Phase 4: Output context.md for downstream plan --gaps
 **Next-step routing on completion:**
 
 Phase/Milestone scope:
-- Go recommendation, UI work needed → `/maestro-ui-design {phase}`
+- Go recommendation, UI work needed → `/maestro-ui-craft --chain build {target}`
 - Go recommendation, ready to plan → `/maestro-plan` or `/maestro-plan {phase}`
 - No-Go recommendation → revisit requirements or `/maestro-brainstorm {topic}`
 
@@ -129,5 +129,5 @@ Both modes (full + quick):
 - [ ] Scope creep redirected to Deferred section
 - [ ] Deferred items auto-created as issues (if any)
 - [ ] Artifact registered in state.json with correct scope/milestone/phase
-- [ ] Next step routed (ui-design/plan for Go, brainstorm for No-Go)
+- [ ] Next step routed (ui-craft/plan for Go, brainstorm for No-Go)
 </success_criteria>

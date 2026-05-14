@@ -28,7 +28,7 @@ graph TB
         INIT["/maestro-init"]
         RM["/maestro-roadmap"]
         SG["/maestro-spec-generate"]
-        UID["/maestro-ui-design"]
+        UID["/maestro-ui-craft"]
     end
 
     subgraph pipeline["Milestone Pipeline"]
@@ -293,7 +293,7 @@ The main workflow progresses the project in units of **Phase**, with each Phase 
 | 1 | `/maestro-init` | Initialize .workflow/ directory | state.json, project.md, specs/ |
 | 2a | `/maestro-roadmap` | Lightweight roadmap (interactive) | roadmap.md (phases as labels) |
 | 2b | `/maestro-spec-generate` | Full specification chain (7 stages) | PRD + architecture docs + roadmap.md |
-| (optional) | `/maestro-ui-design` | UI design prototype | design-ref/ tokens |
+| (optional) | `/maestro-ui-craft --chain build` | UI design prototype | design-ref/ tokens |
 
 **Choosing 2a vs 2b**: Use roadmap for small projects or when requirements are clear; use spec-generate for large projects or when complete specification documents are needed.
 
@@ -425,7 +425,7 @@ All of the above sequencing can be orchestrated automatically via `/maestro`:
 | `spec-driven` | init→spec-generate→... | Requires full specification |
 | `roadmap-driven` | init→roadmap→... | Lightweight roadmap |
 | `brainstorm-driven` | brainstorm→init→roadmap→... | Start from brainstorming |
-| `ui-design-driven` | ui-design→plan→execute→verify | UI design driven |
+| `ui-craft-build` | ui-craft --chain build→plan→execute→verify | UI design driven |
 | `analyze-plan-execute` | analyze→plan→execute | Quick analyze-plan-execute |
 | `execute-verify` | execute→verify | Plan already exists, execute directly |
 | `quality-loop` | review→test→debug | Quality pipeline |

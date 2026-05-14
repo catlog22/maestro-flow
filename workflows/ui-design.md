@@ -364,7 +364,7 @@ Spacing & Layout, Effects & Interactions, Component Styles, Animation System, An
 
 `maestro-plan` P1 (Context Collection):
 - If `${PHASE_DIR}/design-ref/MASTER.md` exists: load as planner context, add `design-tokens.json`, `layout-templates/layout-*.json`, `animation-tokens.json` to UI task `read_first[]`
-- If missing + phase goal has UI keywords: suggest `maestro-ui-design` (non-blocking)
+- If missing + phase goal has UI keywords: suggest `maestro-ui-craft --chain build` (non-blocking)
 
 ---
 

@@ -27,7 +27,7 @@
     {"name": "maestro-ralph", "command": "/maestro-ralph", "category": "ralph", "description": "Ralph 引擎 — 自适应生命周期决策节点管理", "source": "../../commands/maestro-ralph.md"},
     {"name": "maestro-ralph-execute", "command": "/maestro-ralph-execute", "category": "ralph", "description": "Ralph 执行 — 运行自适应决策链", "source": "../../commands/maestro-ralph-execute.md"},
     {"name": "maestro-learn", "command": "/maestro-learn", "category": "core", "description": "学习 — 从执行中提取知识和模式", "source": "../../commands/maestro-learn.md"},
-    {"name": "maestro-ui-design", "command": "/maestro-ui-design", "category": "ui", "description": "UI 设计 — 设计系统原型和 Token 管理", "source": "../../commands/maestro-ui-design.md"},
+    {"name": "maestro-ui-craft", "command": "/maestro-ui-craft", "category": "ui", "description": "UI 生产管线 — 设计系统原型、自动化生产和质量门控", "source": "../../commands/maestro-ui-craft.md"},
     {"name": "maestro-ui-codify", "command": "/maestro-ui-codify", "category": "ui", "description": "UI 固化 — 将设计产出转化为知识资产", "source": "../../commands/maestro-ui-codify.md"},
     {"name": "maestro-update", "command": "/maestro-update", "category": "core", "description": "版本更新 — 检查并安装最新版本", "source": "../../commands/maestro-update.md"},
     {"name": "maestro-tools-register", "command": "/maestro-tools-register", "category": "tools", "description": "MCP 工具注册 — 注册外部工具到 Maestro", "source": "../../commands/maestro-tools-register.md"},

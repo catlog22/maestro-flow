@@ -28,7 +28,7 @@ graph TB
         INIT["/maestro-init"]
         RM["/maestro-roadmap"]
         SG["/maestro-spec-generate"]
-        UID["/maestro-ui-design"]
+        UID["/maestro-ui-craft"]
     end
 
     subgraph pipeline["Milestone 管线"]
@@ -266,7 +266,7 @@ stateDiagram-v2
 | 1 | `/maestro-init` | 初始化 .workflow/ 目录 | state.json, project.md, specs/ |
 | 2a | `/maestro-roadmap` | 轻量路线图（交互式） | roadmap.md (phases 为标签) |
 | 2b | `/maestro-spec-generate` | 完整规范链（7 阶段） | PRD + 架构文档 + roadmap.md |
-| (可选) | `/maestro-ui-design` | UI 设计原型 | design-ref/ tokens |
+| (可选) | `/maestro-ui-craft --chain build` | UI 设计原型 | design-ref/ tokens |
 
 **选择 2a 还是 2b**：小型项目或需求明确时用 roadmap；大型项目或需要完整规范文档时用 spec-generate。
 
@@ -399,7 +399,7 @@ execute --dir scratch/plan-xxx   ← 直接执行
 | `spec-driven` | init→spec-generate→... | 需要完整规范 |
 | `roadmap-driven` | init→roadmap→... | 轻量路线图 |
 | `brainstorm-driven` | brainstorm→init→roadmap→... | 从头脑风暴开始 |
-| `ui-design-driven` | ui-design→plan→execute→verify | UI 设计驱动 |
+| `ui-craft-build` | ui-craft --chain build→plan→execute→verify | UI 设计驱动 |
 | `analyze-plan-execute` | analyze→plan→execute | 快速分析-规划-执行 |
 | `execute-verify` | execute→verify | 已有计划，直接执行 |
 | `quality-loop` | review→test→debug | 质量流水线 |

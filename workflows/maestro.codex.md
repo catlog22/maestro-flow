@@ -105,7 +105,7 @@ const chainMap = {
   'status':             [{ cmd: 'manage-status' }],
   'init':               [{ cmd: 'maestro-init' }],
   'analyze':            [{ cmd: 'maestro-analyze',        args: '{phase}' }],
-  'ui_design':          [{ cmd: 'maestro-ui-design',       args: '{phase}' }],
+  'ui_design':          [{ cmd: 'maestro-ui-craft',         args: '"{phase}" --chain build' }],
   'plan':               [{ cmd: 'maestro-plan',            args: '{phase}' }],
   'execute':            [{ cmd: 'maestro-execute',         args: '{phase}' }],
   'verify':             [{ cmd: 'maestro-verify',          args: '{phase}' }],
@@ -150,8 +150,8 @@ const chainMap = {
     { cmd: 'maestro-execute',    args: '{phase}' },
     { cmd: 'maestro-verify',     args: '{phase}' }
   ],
-  'ui-design-driven': [
-    { cmd: 'maestro-ui-design', args: '{phase}' },
+  'ui-craft-build': [
+    { cmd: 'maestro-ui-craft', args: '"{phase}" --chain build' },
     { cmd: 'maestro-plan',      args: '{phase}' },
     { cmd: 'maestro-execute',   args: '{phase}' },
     { cmd: 'maestro-verify',    args: '{phase}' }

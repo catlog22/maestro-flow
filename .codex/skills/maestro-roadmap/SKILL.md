@@ -158,7 +158,7 @@ Build prev_context from wave 1. Inject strategy + --phases constraint (light mod
    +-- readiness-report.md
    ```
 7. Update state.json milestones + current_milestone
-8. Next-step routing: need analysis -> maestro-analyze; ready to plan -> maestro-plan; UI first -> maestro-ui-design; full mode setup -> maestro-init
+8. Next-step routing: need analysis -> maestro-analyze; ready to plan -> maestro-plan; UI first -> maestro-ui-craft --chain build; full mode setup -> maestro-init
 
 </actions>
 
