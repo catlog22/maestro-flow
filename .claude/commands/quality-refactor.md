@@ -41,6 +41,9 @@ If not provided, prompt user for scope.
 <execution>
 Follow '~/.maestro/workflows/refactor.md' completely.
 
+**Knowledge inquiry on completion:**
+After successful refactoring, ask user once: "Record refactoring pattern as coding convention?" If yes, persist via `Skill("spec-add", "coding \"<title>\" \"<pattern>\" --keywords <kw1>,<kw2>")`.
+
 **Next-step routing on completion:**
 - All tests pass → `/quality-sync` (update codebase docs)
 - Test failures after refactor → `/quality-debug {scope}`

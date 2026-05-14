@@ -31,6 +31,9 @@ Flags (`-m`, `--force`, `--dry-run`, `--no-cleanup`, `--continue`), merge sequen
 <execution>
 Follow '~/.maestro/workflows/merge.md' completely.
 
+**Knowledge inquiry on completion:**
+After successful merge, ask user once: "Record milestone learnings?" If yes, persist via `Skill("spec-add", "learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2>")`.
+
 **Next-step routing on completion:**
 - View dashboard → Skill({ skill: "manage-status" })
 - Audit milestone → Skill({ skill: "maestro-milestone-audit" })

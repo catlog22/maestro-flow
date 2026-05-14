@@ -69,6 +69,10 @@ maestro-plan → maestro-execute → maestro-verify
 ```
 
 **Note (full mode):** `maestro-init` MUST run before `--mode full`. It creates the `.workflow/` directory and project context.
+
+### Pre-load specs
+1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for phase decomposition — ensures roadmap respects documented decisions and boundaries.
+2. Optional — proceed without if unavailable.
 </context>
 
 <execution>

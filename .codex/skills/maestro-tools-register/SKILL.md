@@ -2,7 +2,7 @@
 name: maestro-tools-register
 description: Register tool specs - extract, generate, or optimize reusable process definitions
 argument-hint: "[description or intent]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, Agent
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
 <purpose>

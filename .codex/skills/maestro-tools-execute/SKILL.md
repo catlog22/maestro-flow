@@ -2,7 +2,7 @@
 name: maestro-tools-execute
 description: Load and execute tool specs by role or name
 argument-hint: "[tool-name | --category <category>]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion, Agent
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
 <purpose>

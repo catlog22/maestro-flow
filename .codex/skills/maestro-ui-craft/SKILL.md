@@ -2,7 +2,7 @@
 name: maestro-ui-craft
 description: Chain maestro-impeccable commands with intelligent routing and quality gate loops for automated UI production
 argument-hint: "<intent|target> [--chain build|improve|enhance|harden|live] [--enhance <cmd>] [--threshold <score>] [--max-loops <n>] [--skip-design-explore] [--skip-design] [--styles <N>] [--stack <stack>] [-y] [-c]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, request_user_input
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 <purpose>
 Orchestrate maestro-impeccable skill commands via intelligent intent routing + quality gate auto-iteration.

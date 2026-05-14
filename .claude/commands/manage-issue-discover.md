@@ -48,6 +48,10 @@ $ARGUMENTS -- optional. Parse first token to determine mode.
 **State files:**
 - `.workflow/issues/issues.jsonl` -- issues appended here
 - `.workflow/issues/discoveries/{SESSION_ID}/` -- session artifacts
+
+### Pre-load specs
+1. **Debug specs**: Run `maestro spec load --category debug` to load known antipatterns, root causes, and gotchas. Informs discovery perspectives with prior findings.
+2. Optional — proceed without if unavailable.
 </context>
 
 <execution>

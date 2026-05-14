@@ -40,6 +40,9 @@ $ARGUMENTS — milestone number and optional flags.
 <execution>
 Follow '~/.maestro/workflows/merge.md' completely.
 
+**Knowledge inquiry on completion:**
+After successful merge, ask user once: "Record milestone learnings?" If yes, persist via `maestro spec add learning "<title>" "<insight>" --keywords <kw1>,<kw2>`.
+
 **Next steps:**
 - View dashboard → `$manage-status`
 - Audit milestone → `$maestro-milestone-audit`
