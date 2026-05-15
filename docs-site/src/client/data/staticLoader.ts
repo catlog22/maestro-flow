@@ -73,6 +73,15 @@ export const guideRegistry: Array<{
     icon: 'sparkles',
   },
   {
+    slug: 'spec-injection',
+    file: 'spec-injection-guide.md',
+    title: 'Spec Injection Configuration',
+    description: 'Keyword-granularity injection control, extra document binding, agent mapping overrides, CLI/TUI/Dashboard configuration',
+    title_zh: 'Spec 注入配置指南',
+    description_zh: 'keyword 颗粒度注入控制、额外文档绑定、agent 映射覆盖、CLI/TUI/Dashboard 三端配置',
+    icon: 'sliders',
+  },
+  {
     slug: 'overlay',
     file: 'overlay-guide.md',
     file_en: 'overlay-guide.en.md',
