@@ -986,7 +986,7 @@ export function registerHooksCommand(program: Command): void {
 
       if (opts.clear) {
         const archived = clearAnalyticsLog(workspace);
-        console.log(archived ? `\u2713 Log archived to: ${archived}` : 'No log file to archive.');
+        console.log(archived ? `\u2713 \u65E5\u5FD7\u5DF2\u5F52\u6863\u5230: ${archived}` : '\u65E0\u65E5\u5FD7\u6587\u4EF6\u53EF\u5F52\u6863\u3002');
         return;
       }
 
@@ -1005,7 +1005,7 @@ export function registerHooksCommand(program: Command): void {
         const hooks = filterHookEntries(all).slice(-n);
 
         if (hooks.length === 0) {
-          console.log('No hook events recorded yet.');
+          console.log('\u6682\u65E0 Hook \u4E8B\u4EF6\u8BB0\u5F55\u3002');
           return;
         }
         if (opts.json) {
@@ -1013,13 +1013,13 @@ export function registerHooksCommand(program: Command): void {
           return;
         }
 
-        console.log(`\nRecent Hook Events (last ${hooks.length}):\n`);
+        console.log(`\nHook \u8FD1\u671F\u4E8B\u4EF6\uFF08\u6700\u8FD1 ${hooks.length} \u6761\uFF09\uFF1A\n`);
         for (const e of hooks) {
           const ts = e.timestamp.slice(11, 19);
           const dur = e.durationMs != null ? `${e.durationMs}ms` : '';
           const outcomeColor = e.outcome === 'error' ? '\x1b[31m' : '\x1b[32m';
-          const plugin = e.pluginName === 'subprocess' ? 'SUB' : 'CRD';
-          const nodeStr = e.nodeId ? ` node:${e.nodeId}` : '';
+          const plugin = e.pluginName === 'subprocess' ? '\u5B50\u8FDB\u7A0B' : '\u534F\u8C03\u5668';
+          const nodeStr = e.nodeId ? ` \u8282\u70B9:${e.nodeId}` : '';
           const dataStr = e.data ? ` ${JSON.stringify(e.data)}` : '';
           console.log(`  ${ts}  ${outcomeColor}${(e.outcome ?? 'ok').padEnd(7)}\x1b[0m [${plugin}] ${e.hookName.padEnd(24)} ${dur.padStart(6)}${nodeStr}${dataStr}`);
         }
@@ -1031,7 +1031,7 @@ export function registerHooksCommand(program: Command): void {
       const hooks = filterHookEntries(all);
 
       if (hooks.length === 0) {
-        console.log('No hook events recorded yet. Hook events are tracked automatically when hooks run.');
+        console.log('\u6682\u65E0 Hook \u4E8B\u4EF6\u8BB0\u5F55\u3002Hook \u8C03\u7528\u4F1A\u81EA\u52A8\u8BB0\u5F55\u3002');
         return;
       }
 
@@ -1081,33 +1081,33 @@ export function registerHooksCommand(program: Command): void {
       const earliest = hooks[0]?.timestamp?.slice(0, 10) ?? '\u2014';
       const latest = hooks[hooks.length - 1]?.timestamp?.slice(0, 10) ?? '\u2014';
 
-      console.log('\nHook Analytics');
-      console.log('==============\n');
-      console.log(`  Total invocations:   ${hooks.length}`);
-      if (durCount > 0) console.log(`  Avg duration:        ${(totalDurMs / durCount).toFixed(1)}ms`);
+      console.log('\nHook \u5206\u6790\u62A5\u544A');
+      console.log('============\n');
+      console.log(`  \u603B\u8C03\u7528\u6B21\u6570:      ${hooks.length}`);
+      if (durCount > 0) console.log(`  \u5E73\u5747\u8017\u65F6:        ${(totalDurMs / durCount).toFixed(1)}ms`);
 
       // By type (subprocess vs coordinator)
-      console.log('\n  By Type:');
+      console.log('\n  \u6309\u7C7B\u578B:');
       for (const [p, count] of Object.entries(byPlugin).sort((a, b) => b[1] - a[1])) {
-        const label = p === 'subprocess' ? 'Subprocess (Claude Code / Codex)' : p === 'specAnalytics' ? 'Coordinator (in-process)' : p;
+        const label = p === 'subprocess' ? '\u5B50\u8FDB\u7A0B (Claude Code / Codex)' : p === 'specAnalytics' ? '\u534F\u8C03\u5668 (\u8FDB\u7A0B\u5185)' : p;
         console.log(`    ${label.padEnd(36)} ${count}`);
       }
 
       // By hook name
       const sorted = Object.entries(byName).sort((a, b) => b[1].total - a[1].total);
-      console.log('\n  By Hook:');
-      console.log(`    ${'Hook'.padEnd(28)} ${'Total'.padStart(6)} ${'Errors'.padStart(7)} ${'Err%'.padStart(6)} ${'Avg ms'.padStart(8)}`);
-      console.log(`    ${'─'.repeat(28)} ${'─'.repeat(6)} ${'─'.repeat(7)} ${'─'.repeat(6)} ${'─'.repeat(8)}`);
+      console.log('\n  \u6309 Hook:');
+      console.log(`    ${'Hook'.padEnd(28)} ${'\u603B\u6570'.padStart(6)} ${'\u9519\u8BEF'.padStart(6)} ${'\u9519\u8BEF\u7387'.padStart(7)} ${'\u5E73\u5747ms'.padStart(8)}`);
+      console.log(`    ${'─'.repeat(28)} ${'─'.repeat(6)} ${'─'.repeat(6)} ${'─'.repeat(7)} ${'─'.repeat(8)}`);
       for (const [name, s] of sorted) {
         const errRate = s.total > 0 ? (s.errors / s.total * 100).toFixed(1) : '0.0';
         const avgMs = s.durCount > 0 ? (s.totalMs / s.durCount).toFixed(1) : '\u2014';
         const errColor = s.errors > 0 ? '\x1b[31m' : '';
         const reset = s.errors > 0 ? '\x1b[0m' : '';
-        console.log(`    ${name.padEnd(28)} ${String(s.total).padStart(6)} ${errColor}${String(s.errors).padStart(7)}${reset} ${(errRate + '%').padStart(6)} ${String(avgMs).padStart(8)}`);
+        console.log(`    ${name.padEnd(28)} ${String(s.total).padStart(6)} ${errColor}${String(s.errors).padStart(6)}${reset} ${(errRate + '%').padStart(7)} ${String(avgMs).padStart(8)}`);
       }
 
-      console.log(`\n  Log: ${(fileSize / 1024).toFixed(1)} KB | ${earliest} ~ ${latest}`);
-      if (opts.hook) console.log(`  Filter: --hook ${opts.hook}`);
+      console.log(`\n  \u65E5\u5FD7: ${(fileSize / 1024).toFixed(1)} KB | ${earliest} ~ ${latest}`);
+      if (opts.hook) console.log(`  \u8FC7\u6EE4: --hook ${opts.hook}`);
     });
 
   // --- maestro hooks list ---

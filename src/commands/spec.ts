@@ -772,11 +772,7 @@ export function registerSpecCommand(program: Command): void {
 
       if (opts.clear) {
         const archived = clearAnalyticsLog(cwd);
-        if (archived) {
-          console.log(`\u2713 Log archived to: ${archived}`);
-        } else {
-          console.log('No log file to archive.');
-        }
+        console.log(archived ? `\u2713 \u65E5\u5FD7\u5DF2\u5F52\u6863\u5230: ${archived}` : '\u65E0\u65E5\u5FD7\u6587\u4EF6\u53EF\u5F52\u6863\u3002');
         return;
       }
 
@@ -784,7 +780,7 @@ export function registerSpecCommand(program: Command): void {
         const n = parseInt(opts.recent, 10) || 20;
         const recent = readRecentAnalytics(cwd, n);
         if (recent.length === 0) {
-          console.log('No analytics data. Spec injection events will be recorded automatically.');
+          console.log('\u6682\u65E0\u5206\u6790\u6570\u636E\u3002Spec \u6CE8\u5165\u4E8B\u4EF6\u4F1A\u81EA\u52A8\u8BB0\u5F55\u3002');
           return;
         }
 
@@ -793,20 +789,20 @@ export function registerSpecCommand(program: Command): void {
           return;
         }
 
-        console.log(`\nRecent Events (last ${recent.length}):\n`);
+        console.log(`\n\u8FD1\u671F\u4E8B\u4EF6\uFF08\u6700\u8FD1 ${recent.length} \u6761\uFF09\uFF1A\n`);
         for (const entry of recent) {
           const ts = entry.timestamp.slice(0, 19).replace('T', ' ');
           if (entry.type === 'injection') {
             const status = entry.inject ? '\x1b[32m\u2713\x1b[0m' : '\x1b[31m\u2717\x1b[0m';
             const src = entry.source.replace('spec-', '').padEnd(20);
             const agent = (entry.agentType ?? entry.inferredCategory ?? '').padEnd(22);
-            const kw = entry.matchedKeywords?.length ? ` kw:[${entry.matchedKeywords.join(',')}]` : '';
+            const kw = entry.matchedKeywords?.length ? ` \u5173\u952E\u8BCD:[${entry.matchedKeywords.join(',')}]` : '';
             const reason = entry.reason ? ` (${entry.reason})` : '';
-            console.log(`  ${ts}  ${status} ${src} ${agent} ${entry.specCount} specs${kw}${reason}`);
+            console.log(`  ${ts}  ${status} ${src} ${agent} ${entry.specCount} \u6761${kw}${reason}`);
           } else if (entry.type === 'cli') {
-            console.log(`  ${ts}  \x1b[36mCLI\x1b[0m  ${entry.command.padEnd(25)} ${JSON.stringify(entry.args)}`);
+            console.log(`  ${ts}  \x1b[36m\u547D\u4EE4\x1b[0m ${entry.command.padEnd(25)} ${JSON.stringify(entry.args)}`);
           } else if (entry.type === 'hook') {
-            console.log(`  ${ts}  \x1b[33mHOOK\x1b[0m ${entry.hookName.padEnd(20)} ${entry.nodeId ?? ''}`);
+            console.log(`  ${ts}  \x1b[33mHook\x1b[0m ${entry.hookName.padEnd(20)} ${entry.nodeId ?? ''}`);
           }
         }
         return;
@@ -815,7 +811,7 @@ export function registerSpecCommand(program: Command): void {
       // Default: summary
       const entries = readAnalytics(cwd);
       if (entries.length === 0) {
-        console.log('No analytics data. Spec injection events will be recorded automatically.');
+        console.log('\u6682\u65E0\u5206\u6790\u6570\u636E\u3002Spec \u6CE8\u5165\u4E8B\u4EF6\u4F1A\u81EA\u52A8\u8BB0\u5F55\u3002');
         return;
       }
 
@@ -827,69 +823,69 @@ export function registerSpecCommand(program: Command): void {
         return;
       }
 
-      console.log('\nSpec Injection Analytics');
-      console.log('========================\n');
-      console.log(`  Total injections:    ${stats.totalInjections}`);
-      console.log(`  Successful:          ${stats.successfulInjections} (${stats.hitRate.toFixed(1)}%)`);
-      console.log(`  Failed:              ${stats.failedInjections} (${(100 - stats.hitRate).toFixed(1)}%)`);
+      console.log('\nSpec \u6CE8\u5165\u5206\u6790\u62A5\u544A');
+      console.log('==================\n');
+      console.log(`  \u603B\u6CE8\u5165\u6B21\u6570:      ${stats.totalInjections}`);
+      console.log(`  \u6210\u529F:            ${stats.successfulInjections} (${stats.hitRate.toFixed(1)}%)`);
+      console.log(`  \u5931\u8D25:            ${stats.failedInjections} (${(100 - stats.hitRate).toFixed(1)}%)`);
 
       // By source
       const sources = Object.entries(stats.bySource);
       if (sources.length > 0) {
-        console.log('\n  By Source:');
+        console.log('\n  \u6309\u6765\u6E90:');
         for (const [src, s] of sources) {
           const rate = s.total > 0 ? ((s.injected / s.total) * 100).toFixed(1) : '0.0';
-          console.log(`    ${src.padEnd(28)} ${String(s.total).padStart(4)} (${rate}% hit)`);
+          console.log(`    ${src.padEnd(28)} ${String(s.total).padStart(4)} (\u547D\u4E2D\u7387 ${rate}%)`);
         }
       }
 
       // By agent type
       const agents = Object.entries(stats.byAgentType).sort((a, b) => b[1].total - a[1].total);
       if (agents.length > 0) {
-        console.log('\n  By Agent/Category:');
+        console.log('\n  \u6309 Agent/Category:');
         for (const [agent, s] of agents.slice(0, 10)) {
           const rate = s.total > 0 ? ((s.injected / s.total) * 100).toFixed(1) : '0.0';
-          console.log(`    ${agent.padEnd(28)} ${String(s.total).padStart(4)} (${rate}% hit)`);
+          console.log(`    ${agent.padEnd(28)} ${String(s.total).padStart(4)} (\u547D\u4E2D\u7387 ${rate}%)`);
         }
-        if (agents.length > 10) console.log(`    ... and ${agents.length - 10} more`);
+        if (agents.length > 10) console.log(`    \u2026 \u53E6\u6709 ${agents.length - 10} \u9879`);
       }
 
       // Budget actions
       const budgets = Object.entries(stats.byBudgetAction);
       if (budgets.length > 0) {
-        console.log('\n  Budget Actions:');
+        console.log('\n  \u4E0A\u4E0B\u6587\u9884\u7B97:');
         console.log(`    ${budgets.map(([k, v]) => `${k}: ${v}`).join('  ')}`);
       }
 
       // Top keywords
       if (stats.keywordStats.topKeywords.length > 0) {
-        console.log('\n  Top Keywords:');
+        console.log('\n  \u70ED\u95E8\u5173\u952E\u8BCD:');
         console.log(`    ${stats.keywordStats.topKeywords.slice(0, 10).map(k => `${k.keyword} (${k.count})`).join('  ')}`);
-        console.log(`    Avg matched/prompt: ${stats.keywordStats.avgMatchedPerPrompt.toFixed(1)}  Dedup filtered: ${stats.keywordStats.dedupFilteredTotal}`);
+        console.log(`    \u5E73\u5747\u5339\u914D/\u6B21: ${stats.keywordStats.avgMatchedPerPrompt.toFixed(1)}  \u53BB\u91CD\u8FC7\u6EE4: ${stats.keywordStats.dedupFilteredTotal}`);
       }
 
       // Hook stats
       if (stats.hookStats.totalInvocations > 0) {
-        console.log('\n  Hook Invocations:');
+        console.log('\n  Hook \u8C03\u7528:');
         const hooks = Object.entries(stats.hookStats.byHook).sort((a, b) => b[1] - a[1]);
         console.log(`    ${hooks.map(([k, v]) => `${k}: ${v}`).join('  ')}`);
         if (stats.hookStats.avgDurationMs > 0) {
-          console.log(`    Avg duration: ${stats.hookStats.avgDurationMs.toFixed(1)}ms`);
+          console.log(`    \u5E73\u5747\u8017\u65F6: ${stats.hookStats.avgDurationMs.toFixed(1)}ms`);
         }
       }
 
       // CLI stats
       const cliEntries = Object.entries(stats.cliStats).sort((a, b) => b[1] - a[1]);
       if (cliEntries.length > 0) {
-        console.log('\n  CLI Endpoints:');
+        console.log('\n  CLI \u7AEF\u70B9\u8C03\u7528:');
         console.log(`    ${cliEntries.map(([k, v]) => `${k}: ${v}`).join('  ')}`);
       }
 
       // Log info
       const sizeKB = (stats.logFileSize / 1024).toFixed(1);
-      const earliest = stats.timeRange.earliest ? stats.timeRange.earliest.slice(0, 10) : '—';
-      const latest = stats.timeRange.latest ? stats.timeRange.latest.slice(0, 10) : '—';
-      console.log(`\n  Log: ${sizeKB} KB | ${stats.totalEntries} entries | ${earliest} ~ ${latest}`);
+      const earliest = stats.timeRange.earliest ? stats.timeRange.earliest.slice(0, 10) : '\u2014';
+      const latest = stats.timeRange.latest ? stats.timeRange.latest.slice(0, 10) : '\u2014';
+      console.log(`\n  \u65E5\u5FD7: ${sizeKB} KB | ${stats.totalEntries} \u6761\u8BB0\u5F55 | ${earliest} ~ ${latest}`);
     });
 }
 
