@@ -4,8 +4,8 @@ export interface SpecInjectionConfig {
     mapping?: Record<string, AgentSpecMapping>;
     /** Category-level document associations (extend CATEGORY_MAP) */
     categoryDocs?: Record<string, CategoryDocConfig>;
-    /** Files to always inject regardless of agent type */
-    always?: string[];
+    /** Always-inject at session start: document paths and/or keyword-matched entries */
+    always?: AlwaysInjectConfig;
     /** Global keyword filter rules */
     keywordFilters?: KeywordFilterConfig;
     /** Max chars before truncation kicks in */
@@ -25,6 +25,14 @@ export interface CategoryDocConfig {
     specFiles?: string[];
     /** Additional document paths (relative to project root or knowhow/ prefix) */
     docs?: string[];
+}
+export interface AlwaysInjectConfig {
+    /** Document paths to always inject */
+    docs?: string[];
+    /** Keywords: always inject spec entries matching these keywords */
+    keywords?: string[];
+    /** Categories: always inject all entries from these categories */
+    categories?: string[];
 }
 export interface KeywordFilterConfig {
     /** Global keyword whitelist */

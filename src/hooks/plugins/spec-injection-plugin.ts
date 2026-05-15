@@ -51,10 +51,24 @@ export class SpecInjectionPlugin implements MaestroPlugin {
         if (docsResult.content) parts.push(docsResult.content);
       }
 
-      // Always-inject documents
-      if (config.always?.length) {
-        const alwaysResult = loadExtraDocs(this.projectPath, config.always);
-        if (alwaysResult.content) parts.push(alwaysResult.content);
+      // Always-inject (session start): docs, keyword-matched entries, categories
+      if (config.always) {
+        if (config.always.docs?.length) {
+          const alwaysResult = loadExtraDocs(this.projectPath, config.always.docs);
+          if (alwaysResult.content) parts.push(alwaysResult.content);
+        }
+        if (config.always.keywords?.length) {
+          const kwOpts: LoadSpecsOptions = { includeKeywords: config.always.keywords };
+          const kwResult = loadSpecs(this.projectPath, undefined, uid, undefined, undefined, kwOpts);
+          if (kwResult.content) parts.push(kwResult.content);
+        }
+        if (config.always.categories?.length) {
+          for (const cat of config.always.categories) {
+            if (cat === category) continue;
+            const catRes = loadSpecs(this.projectPath, cat as import('../../tools/spec-loader.js').SpecCategory, uid);
+            if (catRes.content) parts.push(catRes.content);
+          }
+        }
       }
 
       // Keyword-based injection (with session dedup)

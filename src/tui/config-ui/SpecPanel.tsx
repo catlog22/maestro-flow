@@ -5,10 +5,17 @@ import { Box, Text, useInput, useApp } from 'ink';
 // Types
 // ---------------------------------------------------------------------------
 
+interface SpecEntryBrief {
+  title: string;
+  keywords: string[];
+}
+
 interface SpecFileInfo {
   name: string;
   entries: number;
   size: number;
+  /** Brief info for each <spec-entry> in the file */
+  entryBriefs: SpecEntryBrief[];
 }
 
 interface ScopeInfo {
@@ -96,6 +103,7 @@ export function SpecPanel({ workDir, onBack }: SpecPanelProps) {
     const { existsSync, readdirSync, readFileSync } = await import('node:fs');
     const { join } = await import('node:path');
     const { resolveSpecDir } = await import('../../tools/spec-loader.js');
+    const { parseSpecEntries } = await import('../../tools/spec-entry-parser.js');
 
     const result: ScopeInfo[] = [];
     for (const scope of ['project', 'global', 'team'] as const) {
@@ -104,11 +112,15 @@ export function SpecPanel({ workDir, onBack }: SpecPanelProps) {
       const files: SpecFileInfo[] = [];
 
       if (exists) {
-        const entries = readdirSync(dir).filter((f: string) => f.endsWith('.md'));
-        for (const file of entries) {
+        const mdFiles = readdirSync(dir).filter((f: string) => f.endsWith('.md'));
+        for (const file of mdFiles) {
           const content = readFileSync(join(dir, file), 'utf-8');
-          const entryCount = (content.match(/<spec-entry\b/g) || []).length;
-          files.push({ name: file, entries: entryCount, size: content.length });
+          const parsed = parseSpecEntries(content);
+          const entryBriefs: SpecEntryBrief[] = parsed.entries.map(e => ({
+            title: e.title || '(untitled)',
+            keywords: e.keywords,
+          }));
+          files.push({ name: file, entries: entryBriefs.length, size: content.length, entryBriefs });
         }
       }
 
@@ -236,6 +248,23 @@ function ViewMode({ scopes }: { scopes: ScopeInfo[] }) {
             );
           })}
         </Box>
+      )}
+
+      {/* Entry briefs for selected file */}
+      {currentScope?.files[cursor]?.entryBriefs.length > 0 && (
+        <>
+          <Text> </Text>
+          <Box borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1}>
+            <Text bold dimColor>Entries in {currentScope.files[cursor].name}:</Text>
+            {currentScope.files[cursor].entryBriefs.map((e, i) => (
+              <Box key={`${e.title}-${i}`} gap={1}>
+                <Text color="green">*</Text>
+                <Text>{truncate(e.title, 30)}</Text>
+                <Text dimColor color="yellow">[{truncate(e.keywords.join(', '), 40)}]</Text>
+              </Box>
+            ))}
+          </Box>
+        </>
       )}
 
       <Text> </Text>
@@ -543,7 +572,7 @@ const CONFIG_SECTIONS: { key: string; id: ConfigSection; label: string }[] = [
 interface SpecInjectionConfig {
   mapping?: Record<string, AgentSpecMapping>;
   categoryDocs?: Record<string, CategoryDocConfig>;
-  always?: string[];
+  always?: AlwaysInjectConfig;
   keywordFilters?: KeywordFilterConfig;
   maxContentLength?: number;
 }
@@ -558,6 +587,12 @@ interface AgentSpecMapping {
 interface CategoryDocConfig {
   specFiles?: string[];
   docs?: string[];
+}
+
+interface AlwaysInjectConfig {
+  docs?: string[];
+  keywords?: string[];
+  categories?: string[];
 }
 
 interface KeywordFilterConfig {
@@ -1220,16 +1255,22 @@ function AlwaysInjectSection({
   onChange: (c: SpecInjectionConfig) => void;
   onStatus: (msg: string) => void;
 }) {
-  const always = config.always ?? [];
+  const always = config.always ?? {};
+  const TABS = ['docs', 'keywords', 'categories'] as const;
+  type AlwaysTab = typeof TABS[number];
+  const [tab, setTab] = useState<AlwaysTab>('docs');
   const [cursor, setCursor] = useState(0);
   const [inputMode, setInputMode] = useState(false);
   const [inputBuf, setInputBuf] = useState('');
+
+  const currentList: string[] = always[tab] ?? [];
 
   useInput((input, key) => {
     if (inputMode) {
       if (key.escape) { setInputMode(false); setInputBuf(''); return; }
       if (key.return && inputBuf.trim()) {
-        onChange({ ...config, always: [...always, inputBuf.trim()] });
+        const updated = { ...always, [tab]: [...currentList, inputBuf.trim()] };
+        onChange({ ...config, always: updated });
         setInputBuf('');
         setInputMode(false);
         return;
@@ -1239,22 +1280,30 @@ function AlwaysInjectSection({
       return;
     }
 
+    if (input === '\t') {
+      const idx = TABS.indexOf(tab);
+      setTab(TABS[(idx + 1) % TABS.length]);
+      setCursor(0);
+      return;
+    }
     if (key.upArrow) { setCursor(c => Math.max(0, c - 1)); return; }
-    if (key.downArrow) { setCursor(c => Math.min(always.length - 1, c + 1)); return; }
+    if (key.downArrow) { setCursor(c => Math.min(currentList.length - 1, c + 1)); return; }
     if (input === 'a') { setInputMode(true); setInputBuf(''); return; }
-    if (input === 'd' && always[cursor]) {
-      const next = always.filter((_, i) => i !== cursor);
-      onChange({ ...config, always: next });
+    if (input === 'd' && currentList[cursor]) {
+      const next = currentList.filter((_, i) => i !== cursor);
+      const updated = { ...always, [tab]: next.length > 0 ? next : undefined };
+      onChange({ ...config, always: updated });
       setCursor(c => Math.max(0, c - 1));
       return;
     }
   });
 
   if (inputMode) {
+    const hint = tab === 'docs' ? 'doc path' : tab === 'keywords' ? 'keyword' : 'category';
     return (
       <Box flexDirection="column">
         <Box gap={1}>
-          <Text bold color="cyan">Add path:</Text>
+          <Text bold color="cyan">Add {hint}:</Text>
           <Text color="yellow">{inputBuf}<Text inverse> </Text></Text>
         </Box>
         <Text dimColor>  Enter to confirm, Esc to cancel</Text>
@@ -1264,18 +1313,33 @@ function AlwaysInjectSection({
 
   return (
     <Box flexDirection="column">
-      <Text bold>Always Inject</Text>
+      <Text bold>Always Inject (session start)</Text>
       <Text> </Text>
 
-      {always.length === 0 ? (
-        <Text dimColor>No always-inject paths. Press [a] to add.</Text>
+      {/* Tab switcher */}
+      <Box gap={1}>
+        {TABS.map(t => (
+          <Box key={t}>
+            {t === tab
+              ? <Text bold inverse color="cyan">{` ${t} `}</Text>
+              : <Text dimColor>{` ${t} `}</Text>
+            }
+          </Box>
+        ))}
+        <Text dimColor>(Tab to switch)</Text>
+      </Box>
+      <Text> </Text>
+
+      {currentList.length === 0 ? (
+        <Text dimColor>No {tab} configured. Press [a] to add.</Text>
       ) : (
-        always.map((p, i) => {
+        currentList.map((p, i) => {
           const isCur = i === cursor;
+          const color = tab === 'keywords' ? 'green' : tab === 'categories' ? 'yellow' : undefined;
           return (
             <Box key={`${p}-${i}`} gap={1}>
               <Text color="cyan">{isCur ? '>' : ' '}</Text>
-              <Text bold={isCur}>{p}</Text>
+              <Text bold={isCur} color={color}>{p}</Text>
               {isCur && <Text dimColor> [d]del</Text>}
             </Box>
           );
@@ -1283,7 +1347,7 @@ function AlwaysInjectSection({
       )}
 
       <Text> </Text>
-      <Text dimColor>  [a]dd | [d]el | Up/Down navigate</Text>
+      <Text dimColor>  [a]dd | [d]el | Tab switch | Up/Down navigate</Text>
     </Box>
   );
 }

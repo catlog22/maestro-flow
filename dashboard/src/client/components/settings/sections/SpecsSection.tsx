@@ -111,10 +111,16 @@ interface CategoryDoc {
   docs?: string[];
 }
 
+interface AlwaysInjectData {
+  docs?: string[];
+  keywords?: string[];
+  categories?: string[];
+}
+
 interface SpecInjectionConfigData {
   mapping?: Record<string, AgentMapping>;
   categoryDocs?: Record<string, CategoryDoc>;
-  always?: string[];
+  always?: AlwaysInjectData;
   keywordFilters?: { include?: string[]; exclude?: string[] };
   maxContentLength?: number;
 }
@@ -661,7 +667,9 @@ function AgentPreviewModal({
     if (catDoc?.specFiles) specFiles.push(...catDoc.specFiles);
     if (catDoc?.docs) specFiles.push(...catDoc.docs);
   }
-  const alwaysFiles = config.always ?? [];
+  const alwaysDocs = config.always?.docs ?? [];
+  const alwaysKeywords = config.always?.keywords ?? [];
+  const alwaysCategories = config.always?.categories ?? [];
   const extraDocs = mapping.extras ?? [];
   const ref = useRef<HTMLDivElement>(null);
 
@@ -756,15 +764,21 @@ function AgentPreviewModal({
           </div>
         )}
 
-        {/* Always inject */}
-        {alwaysFiles.length > 0 && (
+        {/* Always inject (session start) */}
+        {(alwaysDocs.length > 0 || alwaysKeywords.length > 0 || alwaysCategories.length > 0) && (
           <div>
             <span className="font-[var(--font-weight-medium)] text-text-secondary block mb-[var(--spacing-0-5)]">
-              Always Injected ({alwaysFiles.length}):
+              Always (session start):
             </span>
             <div className="flex flex-col gap-[var(--spacing-0-5)]">
-              {alwaysFiles.map((f, i) => (
-                <span key={`${f}-${i}`} className="text-text-secondary font-mono truncate">{f}</span>
+              {alwaysDocs.map((f, i) => (
+                <span key={`doc-${f}-${i}`} className="text-text-secondary font-mono truncate">{f}</span>
+              ))}
+              {alwaysKeywords.map((k, i) => (
+                <span key={`kw-${k}-${i}`} className="text-accent-green text-[length:var(--font-size-xs)]">kw:{k}</span>
+              ))}
+              {alwaysCategories.map((c, i) => (
+                <span key={`cat-${c}-${i}`} className="text-accent-purple text-[length:var(--font-size-xs)]">cat:{c}</span>
               ))}
             </div>
           </div>
@@ -1382,19 +1396,97 @@ function SpecInjectionConfig() {
         )}
       </CollapsibleSection>
 
-      {/* --- Always Inject --- */}
+      {/* --- Always Inject (Session Start) --- */}
       <CollapsibleSection
-        title="Always Inject"
-        description="File paths injected into every agent context"
+        title="Always Inject (Session Start)"
+        description="Documents, keywords, and categories always injected at session start"
         expanded={!!expandedSections['always']}
         onToggle={() => toggleSection('always')}
       >
-        <PathListWithSuggestions
-          paths={config.always ?? []}
-          onChange={(always) => setConfig((prev) => ({ ...prev, always: always.length > 0 ? always : undefined }))}
-          placeholder="Add file path..."
-          suggestions={DOC_PATH_SUGGESTIONS}
-        />
+        <div className="flex flex-col gap-[var(--spacing-4)]">
+          {/* Docs */}
+          <div>
+            <p className="text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] text-text-secondary mb-[var(--spacing-1)]">
+              Documents
+            </p>
+            <PathListWithSuggestions
+              paths={config.always?.docs ?? []}
+              onChange={(docs) => {
+                const always = { ...config.always, docs: docs.length > 0 ? docs : undefined };
+                if (!always.docs && !always.keywords?.length && !always.categories?.length) {
+                  setConfig((prev) => ({ ...prev, always: undefined }));
+                } else {
+                  setConfig((prev) => ({ ...prev, always }));
+                }
+              }}
+              placeholder="Add doc path..."
+              suggestions={DOC_PATH_SUGGESTIONS}
+            />
+          </div>
+
+          {/* Keywords */}
+          <div>
+            <p className="text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] text-text-secondary mb-[var(--spacing-1)]">
+              Keywords (always inject matching entries)
+            </p>
+            <div className="flex flex-wrap gap-[var(--spacing-1)] mb-[var(--spacing-1)]">
+              {(config.always?.keywords ?? []).map((kw) => (
+                <TagChip key={kw} label={kw} variant="include" onRemove={() => {
+                  const next = (config.always?.keywords ?? []).filter(k => k !== kw);
+                  const always = { ...config.always, keywords: next.length > 0 ? next : undefined };
+                  if (!always.docs?.length && !always.keywords && !always.categories?.length) {
+                    setConfig((prev) => ({ ...prev, always: undefined }));
+                  } else {
+                    setConfig((prev) => ({ ...prev, always }));
+                  }
+                }} />
+              ))}
+            </div>
+            <TagInput placeholder="Add keyword..." onAdd={(kw) => {
+              const current = config.always?.keywords ?? [];
+              if (current.includes(kw)) return;
+              setConfig((prev) => ({
+                ...prev,
+                always: { ...prev.always, keywords: [...current, kw] },
+              }));
+            }} />
+          </div>
+
+          {/* Categories */}
+          <div>
+            <p className="text-[length:var(--font-size-xs)] font-[var(--font-weight-semibold)] text-text-secondary mb-[var(--spacing-1)]">
+              Categories (always inject all entries from these)
+            </p>
+            <div className="flex flex-wrap gap-[var(--spacing-1)]">
+              {(defaults?.validCategories ?? []).map((cat) => {
+                const active = (config.always?.categories ?? []).includes(cat);
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      const current = config.always?.categories ?? [];
+                      const next = active ? current.filter(c => c !== cat) : [...current, cat];
+                      const always = { ...config.always, categories: next.length > 0 ? next : undefined };
+                      if (!always.docs?.length && !always.keywords?.length && !always.categories) {
+                        setConfig((prev) => ({ ...prev, always: undefined }));
+                      } else {
+                        setConfig((prev) => ({ ...prev, always }));
+                      }
+                    }}
+                    className={`px-[var(--spacing-2)] py-[var(--spacing-0-5)] rounded-full text-[length:var(--font-size-xs)] font-[var(--font-weight-medium)] transition-all ${
+                      active
+                        ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple/40'
+                        : 'bg-bg-secondary text-text-tertiary border border-border-default hover:text-text-secondary'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       </CollapsibleSection>
 
       {/* --- Global Keyword Filters --- */}

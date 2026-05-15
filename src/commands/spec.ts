@@ -461,9 +461,12 @@ export function registerSpecCommand(program: Command): void {
         }
       }
 
-      // Always
-      if (config.always?.length) {
-        console.log(`\nAlways Inject: ${config.always.join(', ')}`);
+      // Always (session start)
+      if (config.always) {
+        console.log('\nAlways Inject (session start):');
+        if (config.always.docs?.length) console.log(`  docs: ${config.always.docs.join(', ')}`);
+        if (config.always.keywords?.length) console.log(`  keywords: ${config.always.keywords.join(', ')}`);
+        if (config.always.categories?.length) console.log(`  categories: ${config.always.categories.join(', ')}`);
       }
 
       // Keyword filters
@@ -579,38 +582,82 @@ export function registerSpecCommand(program: Command): void {
   // spec injection always
   injection
     .command('always')
-    .description('Manage always-inject document paths')
-    .option('--add <paths>', 'Comma-separated paths to add')
-    .option('--remove <paths>', 'Comma-separated paths to remove')
-    .option('--clear', 'Clear all always-inject paths')
-    .action(async (opts: { add?: string; remove?: string; clear?: boolean }) => {
+    .description('Manage always-inject config (session start): docs, keywords, and categories')
+    .option('--docs <paths>', 'Comma-separated doc paths to add')
+    .option('--keywords <kw>', 'Comma-separated keywords: always inject matching entries')
+    .option('--categories <cats>', 'Comma-separated categories: always inject these categories')
+    .option('--remove-docs <paths>', 'Remove doc paths')
+    .option('--remove-keywords <kw>', 'Remove keywords')
+    .option('--remove-categories <cats>', 'Remove categories')
+    .option('--clear', 'Clear all always-inject config')
+    .action(async (opts: {
+      docs?: string; keywords?: string; categories?: string;
+      removeDocs?: string; removeKeywords?: string; removeCategories?: string;
+      clear?: boolean;
+    }) => {
       const { loadSpecInjectionConfig, saveSpecInjectionConfig } = await import('../config/index.js');
       const config = loadSpecInjectionConfig(process.cwd());
 
       if (opts.clear) {
         delete config.always;
         saveSpecInjectionConfig(process.cwd(), config);
-        console.log('\u2713 Cleared all always-inject paths');
+        console.log('\u2713 Cleared all always-inject config');
         return;
       }
 
-      const current = new Set(config.always ?? []);
+      if (!config.always) config.always = {};
+      const always = config.always;
 
-      if (opts.add) {
-        for (const p of opts.add.split(',').map(s => s.trim()).filter(Boolean)) {
-          current.add(p);
-        }
+      // Docs
+      if (opts.docs) {
+        const docs = new Set(always.docs ?? []);
+        for (const p of opts.docs.split(',').map(s => s.trim()).filter(Boolean)) docs.add(p);
+        always.docs = [...docs];
       }
-      if (opts.remove) {
-        for (const p of opts.remove.split(',').map(s => s.trim()).filter(Boolean)) {
-          current.delete(p);
-        }
+      if (opts.removeDocs) {
+        const docs = new Set(always.docs ?? []);
+        for (const p of opts.removeDocs.split(',').map(s => s.trim()).filter(Boolean)) docs.delete(p);
+        always.docs = docs.size > 0 ? [...docs] : undefined;
       }
 
-      config.always = current.size > 0 ? [...current] : undefined;
-      if (!config.always) delete config.always;
+      // Keywords
+      if (opts.keywords) {
+        const kw = new Set(always.keywords ?? []);
+        for (const k of opts.keywords.split(',').map(s => s.trim()).filter(Boolean)) kw.add(k);
+        always.keywords = [...kw];
+      }
+      if (opts.removeKeywords) {
+        const kw = new Set(always.keywords ?? []);
+        for (const k of opts.removeKeywords.split(',').map(s => s.trim()).filter(Boolean)) kw.delete(k);
+        always.keywords = kw.size > 0 ? [...kw] : undefined;
+      }
+
+      // Categories
+      if (opts.categories) {
+        const cats = new Set(always.categories ?? []);
+        for (const c of opts.categories.split(',').map(s => s.trim()).filter(Boolean)) cats.add(c);
+        always.categories = [...cats];
+      }
+      if (opts.removeCategories) {
+        const cats = new Set(always.categories ?? []);
+        for (const c of opts.removeCategories.split(',').map(s => s.trim()).filter(Boolean)) cats.delete(c);
+        always.categories = cats.size > 0 ? [...cats] : undefined;
+      }
+
+      // Clean up empty
+      if (!always.docs?.length) delete always.docs;
+      if (!always.keywords?.length) delete always.keywords;
+      if (!always.categories?.length) delete always.categories;
+      if (!always.docs && !always.keywords && !always.categories) {
+        delete config.always;
+      }
+
       saveSpecInjectionConfig(process.cwd(), config);
-      console.log(`\u2713 Always-inject: ${config.always?.join(', ') ?? '(empty)'}`);
+      console.log('\u2713 Always-inject (session start):');
+      if (config.always?.docs?.length) console.log(`  docs: ${config.always.docs.join(', ')}`);
+      if (config.always?.keywords?.length) console.log(`  keywords: ${config.always.keywords.join(', ')}`);
+      if (config.always?.categories?.length) console.log(`  categories: ${config.always.categories.join(', ')}`);
+      if (!config.always) console.log('  (empty)');
     });
 
   // spec injection filter

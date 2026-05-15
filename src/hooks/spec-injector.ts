@@ -130,12 +130,39 @@ export function evaluateSpecInjection(
     }
   }
 
-  // Always-inject documents
-  if (config?.always?.length) {
-    const alwaysResult = loadExtraDocs(projectPath, config.always);
-    if (alwaysResult.content) {
-      sections.push(alwaysResult.content);
-      totalCount += alwaysResult.count;
+  // Always-inject (session start): documents, keyword-matched entries, and categories
+  if (config?.always) {
+    const always = config.always;
+
+    // Always-inject documents
+    if (always.docs?.length) {
+      const alwaysResult = loadExtraDocs(projectPath, always.docs);
+      if (alwaysResult.content) {
+        sections.push(alwaysResult.content);
+        totalCount += alwaysResult.count;
+      }
+    }
+
+    // Always-inject keyword-matched entries (load from all specs, filter by keywords)
+    if (always.keywords?.length) {
+      const kwOpts: LoadSpecsOptions = { includeKeywords: always.keywords };
+      const kwResult = loadSpecs(projectPath, undefined, resolvedUid, undefined, undefined, kwOpts);
+      if (kwResult.content) {
+        sections.push(kwResult.content);
+        totalCount += kwResult.totalLoaded;
+      }
+    }
+
+    // Always-inject full categories
+    if (always.categories?.length) {
+      for (const cat of always.categories) {
+        if (allCategories.includes(cat)) continue; // Already loaded above
+        const catResult = loadSpecs(projectPath, cat as SpecCategory, resolvedUid);
+        if (catResult.content) {
+          sections.push(catResult.content);
+          totalCount += catResult.totalLoaded;
+        }
+      }
     }
   }
 
