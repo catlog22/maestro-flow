@@ -69,17 +69,34 @@ export function buildKeywordIndex(projectPath: string): Map<string, IndexedEntry
       };
 
       for (const kw of entry.keywords) {
-        const list = index.get(kw);
-        if (list) {
-          list.push(indexed);
-        } else {
-          index.set(kw, [indexed]);
+        addToIndex(index, kw, indexed);
+
+        // Index CJK sub-tokens so partial matches work
+        // e.g. keyword "设计系统" also indexes "设计" and "系统"
+        if (/[\u4e00-\u9fff]/.test(kw) && kw.length > 2) {
+          for (let n = 2; n <= Math.min(4, kw.length); n++) {
+            for (let i = 0; i <= kw.length - n; i++) {
+              const sub = kw.substring(i, i + n);
+              if (sub !== kw) addToIndex(index, sub, indexed);
+            }
+          }
         }
       }
     }
   }
 
   return index;
+}
+
+function addToIndex(index: Map<string, IndexedEntry[]>, key: string, entry: IndexedEntry): void {
+  const k = key.toLowerCase();
+  const list = index.get(k);
+  if (list) {
+    // Avoid duplicate entries under the same key
+    if (!list.some(e => e.id === entry.id)) list.push(entry);
+  } else {
+    index.set(k, [entry]);
+  }
 }
 
 /**

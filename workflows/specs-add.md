@@ -74,10 +74,18 @@ grep -i "<content_first_10_words>" <resolved_dir>/<target_file> | tail -5
 
 ### Step 3: Extract Keywords
 
-Auto-extract 3-5 relevant keywords from the content:
-- Domain-specific terms (not generic words like "code", "file", "function")
-- Lowercase, no spaces (use hyphens for multi-word terms)
-- Terms that would help future keyword-based lookup
+Auto-extract 3-5 relevant keywords from the content. **Keywords must match the content language:**
+
+- **Chinese content** → generate Chinese keywords (2-4 字词语，如 `设计系统,颜色,组件,布局`)
+- **English content** → generate English keywords (lowercase, hyphens for multi-word)
+- **Mixed content** → generate bilingual keywords (中英各半，如 `设计,layout,组件,responsive`)
+
+Keyword quality rules:
+- Domain-specific terms (not generic words like "code"/"代码", "file"/"文件", "function"/"函数")
+- Must be terms a user would naturally type when searching for this knowledge
+- Chinese keywords: 2-4 characters, no punctuation (如 `路由,状态管理,权限控制`)
+- English keywords: lowercase, no spaces (use hyphens for multi-word terms)
+- Prefer concrete nouns/verbs over abstract descriptions
 
 ### Step 4: Format Entry
 

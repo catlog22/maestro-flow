@@ -31,11 +31,14 @@ Scope-to-directory mapping, category-to-file mapping, and entry format defined i
 
 **Examples:**
 ```bash
-# Standard spec entry
+# English content → English keywords
 /spec-add coding "Named exports" "Always use named exports" --keywords "exports,naming"
 
-# Spec with ref to detailed knowhow
-/spec-add coding "OAuth PKCE Flow" "完整 PKCE 集成流程" --ref knowhow/RCP-oauth-pkce.md --keywords "oauth,pkce"
+# Chinese content → Chinese keywords (匹配中文 prompt)
+/spec-add coding "命名导出规范" "始终使用命名导出" --keywords "导出,命名,模块"
+
+# Mixed → bilingual keywords
+/spec-add coding "OAuth PKCE Flow" "完整 PKCE 集成流程" --ref knowhow/RCP-oauth-pkce.md --keywords "oauth,pkce,认证,授权"
 
 /spec-add arch "OAuth PKCE 集成" "完整流程设计" --ref knowhow/AST-oauth-flow.md
 ```

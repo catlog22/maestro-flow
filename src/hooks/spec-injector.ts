@@ -41,17 +41,31 @@ const AGENT_CATEGORY_MAP: Record<string, SpecCategory[]> = {
   'universal-executor':  ['coding', 'ui'],
   'test-fix-agent':      ['coding', 'test'],
 
+  // Exploration agents → coding + arch specs
+  'Explore':             ['coding', 'arch'],
+  'general-purpose':     ['coding', 'learning'],
+  'claude-code-guide':   ['coding'],
+
   // Planning agents → arch specs
-  'cli-lite-planning-agent': ['arch'],
+  'cli-lite-planning-agent': ['arch', 'coding'],
   'action-planning-agent':   ['arch'],
   'workflow-planner':        ['arch'],
+  'workflow-collab-planner': ['arch'],
+  'Plan':                    ['arch', 'coding'],
 
   // Review agents → review specs
   'workflow-reviewer':   ['review'],
+  'workflow-review':     ['review', 'coding'],
 
   // Debug agents → debug specs
   'debug-explore-agent': ['debug'],
   'workflow-debugger':   ['debug'],
+
+  // Context / research agents
+  'context-search-agent':      ['coding', 'arch'],
+  'workflow-research-agent':   ['coding'],
+  'workflow-codebase-mapper':  ['arch'],
+  'workflow-analyzer':         ['coding', 'arch'],
 
   // General — used by Codex SessionStart (no agent type available)
   'general':             ['coding', 'learning'],
