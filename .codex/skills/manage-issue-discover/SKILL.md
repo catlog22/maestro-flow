@@ -78,16 +78,16 @@ When `--yes` or `-y`: Auto-confirm perspective selection, skip interactive valid
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,perspective,scope_glob,deps,context_from,wave,status,findings,issues_found,severity_distribution,error
-"1","Security Scan","Scan codebase for security vulnerabilities: authentication bypass, injection flaws, XSS, CSRF, sensitive data exposure, insecure crypto, secrets in code. Rate each finding critical/high/medium/low with file:line references.","security","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"2","Performance Scan","Scan codebase for performance issues: N+1 queries, unbounded loops, missing caching, memory leaks, large payloads, blocking operations, unoptimized algorithms.","performance","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"3","Reliability Scan","Scan codebase for reliability issues: unhandled errors, missing retry logic, race conditions, data integrity gaps, missing graceful degradation, silent failures.","reliability","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"4","Maintainability Scan","Scan codebase for maintainability issues: code duplication, tight coupling, missing abstractions, unclear naming, dead code, overly complex functions.","maintainability","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"5","Scalability Scan","Scan codebase for scalability issues: hardcoded limits, single-threaded bottlenecks, stateful assumptions, schema rigidity, missing pagination.","scalability","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"6","UX Scan","Scan codebase for UX issues: confusing flows, missing user feedback, inconsistent behavior, missing loading states, poor error messages.","ux","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"7","Accessibility Scan","Scan codebase for accessibility issues: missing ARIA labels, keyboard navigation gaps, color contrast problems, missing alt text, focus management issues.","accessibility","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"8","Compliance Scan","Scan codebase for compliance issues: logging gaps, missing audit trails, data retention violations, privacy control gaps, regulatory requirement gaps.","compliance","src/**/*.{ts,tsx,js,jsx}","","","1","","","","",""
-"9","Dedup + Issue Creation","Aggregate all perspective findings. Deduplicate by file path + description similarity (keep higher severity). Generate ISS-YYYYMMDD-NNN issue records. Append to .workflow/issues/issues.jsonl.","dedup","","1;2;3;4;5;6;7;8","1;2;3;4;5;6;7;8","2","","","","",""
+id,title,description,perspective,scope_glob,deps,context_from,wave
+"1","Security Scan","Scan codebase for security vulnerabilities: authentication bypass, injection flaws, XSS, CSRF, sensitive data exposure, insecure crypto, secrets in code. Rate each finding critical/high/medium/low with file:line references.","security","src/**/*.{ts,tsx,js,jsx}","","","1"
+"2","Performance Scan","Scan codebase for performance issues: N+1 queries, unbounded loops, missing caching, memory leaks, large payloads, blocking operations, unoptimized algorithms.","performance","src/**/*.{ts,tsx,js,jsx}","","","1"
+"3","Reliability Scan","Scan codebase for reliability issues: unhandled errors, missing retry logic, race conditions, data integrity gaps, missing graceful degradation, silent failures.","reliability","src/**/*.{ts,tsx,js,jsx}","","","1"
+"4","Maintainability Scan","Scan codebase for maintainability issues: code duplication, tight coupling, missing abstractions, unclear naming, dead code, overly complex functions.","maintainability","src/**/*.{ts,tsx,js,jsx}","","","1"
+"5","Scalability Scan","Scan codebase for scalability issues: hardcoded limits, single-threaded bottlenecks, stateful assumptions, schema rigidity, missing pagination.","scalability","src/**/*.{ts,tsx,js,jsx}","","","1"
+"6","UX Scan","Scan codebase for UX issues: confusing flows, missing user feedback, inconsistent behavior, missing loading states, poor error messages.","ux","src/**/*.{ts,tsx,js,jsx}","","","1"
+"7","Accessibility Scan","Scan codebase for accessibility issues: missing ARIA labels, keyboard navigation gaps, color contrast problems, missing alt text, focus management issues.","accessibility","src/**/*.{ts,tsx,js,jsx}","","","1"
+"8","Compliance Scan","Scan codebase for compliance issues: logging gaps, missing audit trails, data retention violations, privacy control gaps, regulatory requirement gaps.","compliance","src/**/*.{ts,tsx,js,jsx}","","","1"
+"9","Dedup + Issue Creation","Aggregate all perspective findings. Deduplicate by file path + description similarity (keep higher severity). Generate ISS-YYYYMMDD-NNN issue records. Append to .workflow/issues/issues.jsonl.","dedup","","1;2;3;4;5;6;7;8","1;2;3;4;5;6;7;8","2"
 ```
 
 **Columns**:
@@ -102,11 +102,13 @@ id,title,description,perspective,scope_glob,deps,context_from,wave,status,findin
 | `deps` | Input | Semicolon-separated dependency task IDs |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs |
 | `wave` | Computed | Wave number (1 = perspective scans, 2 = dedup + issue creation) |
-| `status` | Output | `pending` -> `completed` / `failed` / `skipped` |
+| `result_status` | Output | `completed` / `failed` / `skipped` (mapped to master `status` on merge) |
 | `findings` | Output | Key scan findings summary (max 500 chars) |
 | `issues_found` | Output | JSON array of discovered issues: `[{"title":"...","severity":"critical","description":"...","location":"file:line","fix_direction":"...","affected_components":["..."]}]` |
 | `severity_distribution` | Output | JSON: `{"critical":N,"high":N,"medium":N,"low":N}` |
 | `error` | Output | Error message if failed |
+
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns + prev_context. Output columns are returned exclusively via output_schema.
 
 ### Per-Wave CSV (Temporary)
 
@@ -249,18 +251,18 @@ spawn_agents_on_csv({
   max_concurrency: maxConcurrency,
   max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: { // required: id, status, findings
-    id: "string", status: "completed|failed",
+  output_schema: { // required: id, result_status, findings
+    id: "string", result_status: "completed|failed",
     findings: "string", issues_found: "string",
     severity_distribution: "string", error: "string"
   }
 })
 ```
 
-6. Merge `wave-1-results.csv` into master `tasks.csv`
+6. Merge `wave-1-results.csv` into master `tasks.csv` (map `result_status` -> master `status` column)
 7. Save per-perspective findings to `{discoveryDir}/{perspective}-findings.json`
 8. Update `discovery-state.json` with completed perspectives
-9. Delete `wave-1.csv`
+9. Delete temporary files: `wave-1.csv` and `wave-1-results.csv`
 
 **Perspective scan agent protocol**:
 - Scan all source files matching scope_glob
@@ -284,8 +286,8 @@ spawn_agents_on_csv({
    ```
 5. Write `wave-2.csv` with `prev_context` column
 6. Execute `spawn_agents_on_csv` for dedup agent
-7. Merge results into master `tasks.csv`
-8. Delete `wave-2.csv`
+7. Merge results into master `tasks.csv` (map `result_status` -> master `status` column)
+8. Delete temporary files: `wave-2.csv` and `wave-2-results.csv`
 
 **Dedup agent protocol**:
 - Merge all perspective findings from prev_context into single list

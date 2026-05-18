@@ -68,14 +68,16 @@ $maestro-ui-codify "src/styles" --output-dir .workflow/packages --overwrite -y
 ### tasks.csv (Master State)
 
 ```csv
-id,wave,title,description,agent_type,deps,status,findings,output_path,error
-"discover-1","1","Discover design files","Scan source directory, categorize files by type (CSS/SCSS/JS/TS/HTML), build file inventory with import relationships","discover","","","","",""
-"style-1","2","Extract visual design tokens","Extract color, typography, spacing, border, shadow tokens from source files. Output design-tokens.json","extract-style","discover-1","","","",""
-"anim-1","2","Extract animation tokens","Extract animation/transition declarations: keyframes, durations, easings, motion patterns. Output animation-tokens.json","extract-animation","discover-1","","","",""
-"layout-1","2","Extract layout patterns","Extract component layout patterns: grid/flex systems, responsive breakpoints, container patterns. Output layout-templates.json","extract-layout","discover-1","","","",""
-"package-1","3","Generate reference package","Copy token JSONs to package dir, generate preview.html + preview.css interactive showcase","package","style-1;anim-1;layout-1","","","",""
-"knowhow-1","4","Build knowledge assets","Read token JSONs, build knowhow-manifest.json, write knowhow files + spec entries, cleanup temp workspace","knowhow","package-1","","","",""
+id,wave,title,description,agent_type,deps
+"discover-1","1","Discover design files","Scan source directory, categorize files by type (CSS/SCSS/JS/TS/HTML), build file inventory with import relationships","discover",""
+"style-1","2","Extract visual design tokens","Extract color, typography, spacing, border, shadow tokens from source files. Output design-tokens.json","extract-style","discover-1"
+"anim-1","2","Extract animation tokens","Extract animation/transition declarations: keyframes, durations, easings, motion patterns. Output animation-tokens.json","extract-animation","discover-1"
+"layout-1","2","Extract layout patterns","Extract component layout patterns: grid/flex systems, responsive breakpoints, container patterns. Output layout-templates.json","extract-layout","discover-1"
+"package-1","3","Generate reference package","Copy token JSONs to package dir, generate preview.html + preview.css interactive showcase","package","style-1;anim-1;layout-1"
+"knowhow-1","4","Build knowledge assets","Read token JSONs, build knowhow-manifest.json, write knowhow files + spec entries, cleanup temp workspace","knowhow","package-1"
 ```
+
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns. Output columns are returned exclusively via output_schema.
 
 **Columns**:
 
@@ -87,7 +89,7 @@ id,wave,title,description,agent_type,deps,status,findings,output_path,error
 | `description` | Input | Detailed instructions for this task |
 | `agent_type` | Input | Agent type: discover/extract-style/extract-animation/extract-layout/package/knowhow |
 | `deps` | Input | Semicolon-separated dependency task IDs |
-| `status` | Output | `pending` -> `completed` / `failed` |
+| `result_status` | Output | `completed` / `failed` (returned via output_schema) |
 | `findings` | Output | Key findings summary (max 500 chars) |
 | `output_path` | Output | Path to generated artifact |
 | `error` | Output | Error message if failed |
@@ -272,11 +274,11 @@ spawn_agents_on_csv({
   max_concurrency: 1,
   max_runtime_seconds: 1800,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: { id, status: ["completed"|"failed"], findings, output_path, error }
+  output_schema: { id, result_status: ["completed"|"failed"], findings, output_path, error }
 })
 ```
 
-Merge results into master `tasks.csv`, delete `wave-1.csv`.
+Merge wave-1-results.csv into master `tasks.csv`: map `result_status` -> master `status` column, then delete `wave-1.csv` and `wave-1-results.csv`.
 
 #### Wave 2: Parallel Extraction (3 agents)
 
@@ -290,11 +292,11 @@ spawn_agents_on_csv({
   max_concurrency: 3,
   max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
-  output_schema: { id, status: ["completed"|"failed"], findings, output_path, error }
+  output_schema: { id, result_status: ["completed"|"failed"], findings, output_path, error }
 })
 ```
 
-Merge results into master `tasks.csv`, delete `wave-2.csv`.
+Merge wave-2-results.csv into master `tasks.csv`: map `result_status` -> master `status` column, then delete `wave-2.csv` and `wave-2-results.csv`.
 
 **Degradation**: If animation agent fails (W001), continue — animation is optional. If style or layout agent fails, warn but continue with available results.
 
@@ -310,11 +312,11 @@ spawn_agents_on_csv({
   max_concurrency: 1,
   max_runtime_seconds: 1800,
   output_csv_path: `${sessionFolder}/wave-3-results.csv`,
-  output_schema: { id, status: ["completed"|"failed"], findings, output_path, error }
+  output_schema: { id, result_status: ["completed"|"failed"], findings, output_path, error }
 })
 ```
 
-Merge results into master `tasks.csv`, delete `wave-3.csv`.
+Merge wave-3-results.csv into master `tasks.csv`: map `result_status` -> master `status` column, then delete `wave-3.csv` and `wave-3-results.csv`.
 
 #### Wave 4: Knowledge Assets (Barrier)
 
@@ -328,11 +330,11 @@ spawn_agents_on_csv({
   max_concurrency: 1,
   max_runtime_seconds: 1800,
   output_csv_path: `${sessionFolder}/wave-4-results.csv`,
-  output_schema: { id, status: ["completed"|"failed"], findings, output_path, error }
+  output_schema: { id, result_status: ["completed"|"failed"], findings, output_path, error }
 })
 ```
 
-Merge results into master `tasks.csv`, delete `wave-4.csv`.
+Merge wave-4-results.csv into master `tasks.csv`: map `result_status` -> master `status` column, then delete `wave-4.csv` and `wave-4-results.csv`.
 
 ### Step 5: Results & Completion
 

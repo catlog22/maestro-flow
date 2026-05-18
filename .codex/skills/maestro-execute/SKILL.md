@@ -94,12 +94,12 @@ When `--yes` or `-y`: Auto-confirm task breakdown, skip blocked-task prompts, au
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,scope,convergence_criteria,hints,execution_directives,deps,context_from,wave,status,findings,files_modified,tests_passed,error
-"TASK-001","Setup auth module","Create authentication module with JWT token generation and verification. Export verifyToken and generateToken functions.","src/auth/","auth.ts contains export function verifyToken(; auth.ts contains export function generateToken(","Reference existing middleware pattern in src/middleware/auth.ts","npm test -- --grep auth","","","1","","","","",""
-"TASK-002","Create user model","Define User interface and database schema with email, passwordHash, role fields. Use existing Result type pattern.","src/models/","user.ts contains export interface User; user.ts contains email: string","See src/models/session.ts for existing model pattern","npm test -- --grep user","","","1","","","","",""
-"TASK-003","Auth middleware","Create Express middleware that validates JWT from Authorization header. Use verifyToken from auth module. Return 401 on invalid token.","src/middleware/","auth-middleware.ts contains export function authMiddleware(; auth-middleware.ts contains verifyToken","Follows existing middleware pattern in src/middleware/logging.ts","npm test -- --grep middleware","TASK-001","TASK-001","2","","","","",""
-"TASK-004","Login endpoint","Implement POST /api/login endpoint. Validate credentials against user model, return JWT on success. Use generateToken from auth module.","src/routes/","login.ts contains router.post('/api/login'; login.ts contains generateToken(","Wire into existing Express app in src/app.ts","curl -X POST localhost:3000/api/login","TASK-001;TASK-002","TASK-001;TASK-002","2","","","","",""
-"TASK-005","Integration tests","Write integration tests for full auth flow: register, login, access protected route, token refresh.","tests/","tests/auth.test.ts exists; npm test exits with code 0","Use existing test setup in tests/setup.ts","npm test","TASK-003;TASK-004","TASK-003;TASK-004","3","","","","",""
+id,title,description,scope,convergence_criteria,hints,execution_directives,deps,context_from,wave
+"TASK-001","Setup auth module","Create authentication module with JWT token generation and verification. Export verifyToken and generateToken functions.","src/auth/","auth.ts contains export function verifyToken(; auth.ts contains export function generateToken(","Reference existing middleware pattern in src/middleware/auth.ts","npm test -- --grep auth","","","1"
+"TASK-002","Create user model","Define User interface and database schema with email, passwordHash, role fields. Use existing Result type pattern.","src/models/","user.ts contains export interface User; user.ts contains email: string","See src/models/session.ts for existing model pattern","npm test -- --grep user","","","1"
+"TASK-003","Auth middleware","Create Express middleware that validates JWT from Authorization header. Use verifyToken from auth module. Return 401 on invalid token.","src/middleware/","auth-middleware.ts contains export function authMiddleware(; auth-middleware.ts contains verifyToken","Follows existing middleware pattern in src/middleware/logging.ts","npm test -- --grep middleware","TASK-001","TASK-001","2"
+"TASK-004","Login endpoint","Implement POST /api/login endpoint. Validate credentials against user model, return JWT on success. Use generateToken from auth module.","src/routes/","login.ts contains router.post('/api/login'; login.ts contains generateToken(","Wire into existing Express app in src/app.ts","curl -X POST localhost:3000/api/login","TASK-001;TASK-002","TASK-001;TASK-002","2"
+"TASK-005","Integration tests","Write integration tests for full auth flow: register, login, access protected route, token refresh.","tests/","tests/auth.test.ts exists; npm test exits with code 0","Use existing test setup in tests/setup.ts","npm test","TASK-003;TASK-004","TASK-003;TASK-004","3"
 ```
 
 **Columns**:
@@ -116,11 +116,13 @@ id,title,description,scope,convergence_criteria,hints,execution_directives,deps,
 | `deps` | Input | Semicolon-separated dependency task IDs |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs |
 | `wave` | Computed | Wave number from plan.json wave assignment |
-| `status` | Output | `pending` -> `completed` / `failed` / `blocked` / `skipped` |
+| `status` | Output | `pending` -> `completed` / `failed` / `blocked` / `skipped` (mapped from output_schema `result_status`) |
 | `findings` | Output | Implementation notes and observations (max 500 chars) |
 | `files_modified` | Output | Semicolon-separated list of created/modified files |
 | `tests_passed` | Output | Test pass/fail status from execution_directives |
 | `error` | Output | Error message if failed or blocked |
+
+**Column separation rule**: Wave CSV (input to spawn_agents_on_csv) and output_schema MUST NOT share column names. Wave CSV only contains Input columns + prev_context. Output columns are returned exclusively via output_schema (using `result_status`, not `status`). During merge, `result_status` maps back to the master CSV's `status` column.
 
 ### Per-Wave CSV (Temporary)
 
@@ -132,7 +134,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 |------|---------|-----------|
 | `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
 | `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
-| `wave-{N}-results.csv` | Per-wave output | Created by spawn_agents_on_csv |
+| `wave-{N}-results.csv` | Per-wave output (uses `result_status`) | Created by spawn_agents_on_csv, deleted after merge |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable execution report | Created in Phase 3 |
@@ -158,7 +160,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 4. **Context Propagation**: prev_context built from master CSV findings, not from memory
 5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
 6. **Cascading Skip on Failure**: If a task fails/blocks, all dependent tasks are skipped
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+7. **Cleanup Temp Files**: Remove `wave-{N}.csv` AND `wave-{N}-results.csv` after results are merged
 8. **Max 3 Fix Attempts**: Per task, auto-fix convergence failures up to 3 times, then mark blocked
 9. **Breakpoint Resume**: Always detect completed tasks and skip them on re-run
 10. **DO NOT STOP**: Continuous execution until all waves complete or user explicitly stops
@@ -251,11 +253,11 @@ spawn_agents_on_csv({
   instruction: buildExecutorInstruction(sessionFolder, phaseDir, autoCommit, specsContent),  // agent: ~/.codex/agents/workflow-executor.toml
   max_concurrency: maxConcurrency, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-${N}-results.csv`,
-  output_schema: { id, status: [completed|failed|blocked], findings, files_modified, tests_passed, error }
+  output_schema: { id, result_status: [completed|failed|blocked], findings, files_modified, tests_passed, error }
 })
 ```
 
-4. Merge results into master `tasks.csv`, delete `wave-{N}.csv`
+4. Merge results into master `tasks.csv`: map `result_status` from `wave-{N}-results.csv` to the `status` column in master CSV. Delete `wave-{N}.csv` AND `wave-{N}-results.csv` after merge.
 
 #### Blocked Task Handling
 

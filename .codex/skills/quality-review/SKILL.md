@@ -81,19 +81,19 @@ When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive validat
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,dimension,changed_files,project_specs,review_level,deps,context_from,wave,status,findings,severity_counts,top_issues,error
-"1","Correctness Review","Review all changed files for correctness: logic errors, missing edge cases, incorrect return values, null/undefined handling, off-by-one errors. Classify each finding as critical/high/medium/low with file:line references.","correctness","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","Existing patterns use Result type for error handling","standard","","","1","","","","",""
-"2","Security Review","Review all changed files for security vulnerabilities: injection flaws, XSS, CSRF, auth bypass, sensitive data exposure, insecure crypto. Reference OWASP Top 10. Classify each finding.","security","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","Auth uses bcrypt + JWT","standard","","","1","","","","",""
-"3","Performance Review","Review all changed files for performance issues: N+1 queries, unnecessary re-renders, memory leaks, blocking operations, unoptimized algorithms.","performance","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","","","1","","","","",""
-"4","Architecture Review","Review all changed files for architecture issues: layer violations, circular dependencies, inappropriate coupling, missing abstractions, SRP violations.","architecture","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","ESM modules, strict TypeScript","standard","","","1","","","","",""
-"5","Maintainability Review","Review all changed files for maintainability: code duplication, overly complex functions, poor naming, missing types, unclear control flow.","maintainability","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","","","1","","","","",""
-"6","Best Practices Review","Review all changed files for best-practice violations: error handling gaps, missing validation, hardcoded values, deprecated API usage, inconsistent patterns.","best-practices","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","","","1","","","","",""
-"7","Aggregate + Deep-Dive","Aggregate all dimension findings. Calculate severity distribution. Determine verdict (PASS/WARN/BLOCK). If critical findings exist, perform deep-dive with cross-file impact analysis.","aggregation","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","1;2;3;4;5;6","1;2;3;4;5;6","2","","","","",""
+id,title,description,dimension,changed_files,project_specs,review_level,deps,context_from,wave
+"1","Correctness Review","Review all changed files for correctness: logic errors, missing edge cases, incorrect return values, null/undefined handling, off-by-one errors. Classify each finding as critical/high/medium/low with file:line references.","correctness","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","Existing patterns use Result type for error handling","standard","","","1"
+"2","Security Review","Review all changed files for security vulnerabilities: injection flaws, XSS, CSRF, auth bypass, sensitive data exposure, insecure crypto. Reference OWASP Top 10. Classify each finding.","security","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","Auth uses bcrypt + JWT","standard","","","1"
+"3","Performance Review","Review all changed files for performance issues: N+1 queries, unnecessary re-renders, memory leaks, blocking operations, unoptimized algorithms.","performance","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","","","1"
+"4","Architecture Review","Review all changed files for architecture issues: layer violations, circular dependencies, inappropriate coupling, missing abstractions, SRP violations.","architecture","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","ESM modules, strict TypeScript","standard","","","1"
+"5","Maintainability Review","Review all changed files for maintainability: code duplication, overly complex functions, poor naming, missing types, unclear control flow.","maintainability","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","","","1"
+"6","Best Practices Review","Review all changed files for best-practice violations: error handling gaps, missing validation, hardcoded values, deprecated API usage, inconsistent patterns.","best-practices","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","","","1"
+"7","Aggregate + Deep-Dive","Aggregate all dimension findings. Calculate severity distribution. Determine verdict (PASS/WARN/BLOCK). If critical findings exist, perform deep-dive with cross-file impact analysis.","aggregation","src/auth/login.ts;src/auth/register.ts;src/utils/validation.ts","","standard","1;2;3;4;5;6","1;2;3;4;5;6","2"
 ```
 
 **Columns**:
 
-| Column | Phase | Description |
+| Column | Layer | Description |
 |--------|-------|-------------|
 | `id` | Input | Unique task identifier (string) |
 | `title` | Input | Short task title |
@@ -105,11 +105,13 @@ id,title,description,dimension,changed_files,project_specs,review_level,deps,con
 | `deps` | Input | Semicolon-separated dependency task IDs |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs |
 | `wave` | Computed | Wave number (1 = dimension review, 2 = aggregation) |
-| `status` | Output | `pending` -> `completed` / `failed` / `skipped` |
+| `result_status` | Output | `completed` / `failed` (returned via output_schema) |
 | `findings` | Output | Key review findings summary (max 500 chars) |
 | `severity_counts` | Output | JSON: `{"critical":N,"high":N,"medium":N,"low":N}` |
 | `top_issues` | Output | Top 5 issues with `[severity] description (file:line)` format |
 | `error` | Output | Error message if failed |
+
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns + prev_context. Output columns are returned exclusively via output_schema.
 
 ### Per-Wave CSV (Temporary)
 
@@ -120,7 +122,8 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
 | `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
-| `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
+| `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after merge |
+| `wave-{N}-results.csv` | Per-wave output from spawn_agents_on_csv (temporary) | Created by spawn_agents_on_csv, deleted after merge |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
 | `context.md` | Human-readable review report | Created in Phase 3 |
@@ -135,7 +138,8 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 +-- discoveries.ndjson
 +-- context.md
 +-- review.json
-+-- wave-{N}.csv (temporary)
++-- wave-{N}.csv (temporary, deleted after merge)
++-- wave-{N}-results.csv (temporary, deleted after merge)
 ```
 </csv_schema>
 
@@ -146,7 +150,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 4. **Context Propagation**: prev_context built from master CSV, not from memory
 5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
 6. **Skip on Failure**: If all dimension agents failed, skip aggregation
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+7. **Cleanup Temp Files**: Remove wave-{N}.csv and wave-{N}-results.csv after results are merged
 8. **DO NOT STOP**: Continuous execution until all waves complete
 </invariants>
 
@@ -220,25 +224,25 @@ spawn_agents_on_csv({
     type: "object",
     properties: {
       id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
+      result_status: { type: "string", enum: ["completed", "failed"] },
       findings: { type: "string" },
       severity_counts: { type: "string" },
       top_issues: { type: "string" },
       error: { type: "string" }
     },
-    required: ["id", "status", "findings"]
+    required: ["id", "result_status", "findings"]
   }
 })
 ```
 
-Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`.
+Merge `wave-1-results.csv` into master `tasks.csv` (map `result_status` → master `status` column), then delete both `wave-1.csv` and `wave-1-results.csv`.
 
 #### Wave 2: Aggregation + Deep-Dive
 
 Filter master `tasks.csv` for `wave == 2 AND status == pending`. If all wave 1 tasks failed, skip aggregation.
 
 Build `prev_context` from wave 1 findings (format: `[Task N: Title] summary...` per task).
-Write `wave-2.csv` with `prev_context` column → execute `spawn_agents_on_csv` → merge results → delete `wave-2.csv`.
+Write `wave-2.csv` with `prev_context` column → execute `spawn_agents_on_csv` → merge results into master `tasks.csv` (map `result_status` → master `status` column) → delete both `wave-2.csv` and `wave-2-results.csv`.
 
 ### Phase 3: Results Aggregation
 

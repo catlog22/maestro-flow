@@ -39,10 +39,10 @@ $quality-refactor "--dir .workflow/scratch/refactor-auth-2026-03-18"  # resume e
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,category,scope,convergence_criteria,read_first,verification_cmd,risk,deps,wave,status,findings,files_modified,tests_passed,retry_count,strategy_adjustment,error
-"TASK-001","Extract shared validation","Extract duplicated email/phone validation logic into shared utils module","duplication","src/auth/login.ts;src/auth/register.ts","src/utils/validation.ts contains export function validateEmail(; grep -r 'validateEmail' shows single import source","src/auth/login.ts;src/auth/register.ts;src/utils/","npm test","low","","1","","","","","0","",""
-"TASK-002","Simplify token refresh","Reduce cyclomatic complexity in token refresh handler from 12 to <6","complexity","src/auth/token.ts","src/auth/token.ts function refreshToken has no more than 2 levels of nesting","src/auth/token.ts;src/auth/types.ts","npm test -- --grep token","medium","","2","","","","","0","",""
-"TASK-003","Remove dead session code","Remove unused session cleanup functions identified in analysis","dead_code","src/session/","grep -r 'cleanupExpired' returns 0 matches outside test files","src/session/cleanup.ts","npm test","low","","1","","","","","0","",""
+id,title,description,category,scope,convergence_criteria,read_first,verification_cmd,risk,deps,wave,status,retry_count,strategy_adjustment
+"TASK-001","Extract shared validation","Extract duplicated email/phone validation logic into shared utils module","duplication","src/auth/login.ts;src/auth/register.ts","src/utils/validation.ts contains export function validateEmail(; grep -r 'validateEmail' shows single import source","src/auth/login.ts;src/auth/register.ts;src/utils/","npm test","low","","1","pending","0",""
+"TASK-002","Simplify token refresh","Reduce cyclomatic complexity in token refresh handler from 12 to <6","complexity","src/auth/token.ts","src/auth/token.ts function refreshToken has no more than 2 levels of nesting","src/auth/token.ts;src/auth/types.ts","npm test -- --grep token","medium","","2","pending","0",""
+"TASK-003","Remove dead session code","Remove unused session cleanup functions identified in analysis","dead_code","src/session/","grep -r 'cleanupExpired' returns 0 matches outside test files","src/session/cleanup.ts","npm test","low","","1","pending","0",""
 ```
 
 **Columns**:
@@ -60,13 +60,21 @@ id,title,description,category,scope,convergence_criteria,read_first,verification
 | `risk` | Input | `low` / `medium` / `high` |
 | `deps` | Input | Semicolon-separated dependency task IDs |
 | `wave` | Computed | Wave number — same-risk independent tasks can share a wave |
-| `status` | Output | `pending` -> `completed` / `failed` / `blocked` / `skipped` |
-| `findings` | Output | Implementation notes (max 500 chars) |
-| `files_modified` | Output | Semicolon-separated list of changed files |
-| `tests_passed` | Output | `true` / `false` — verification result |
+| `status` | Input | Task lifecycle state in master CSV: `pending` / `completed` / `failed` / `blocked` / `skipped` |
 | `retry_count` | State | Current retry count (max 2) |
 | `strategy_adjustment` | State | Strategy change note for retry |
-| `error` | Output | Error message if failed |
+
+**Output columns** (returned exclusively via `output_schema`, NOT in wave CSV):
+
+| Column | Description |
+|--------|-------------|
+| `result_status` | `completed` / `failed` / `blocked` — wave execution result |
+| `findings` | Implementation notes (max 500 chars) |
+| `files_modified` | Semicolon-separated list of changed files |
+| `tests_passed` | `true` / `false` — verification result |
+| `error` | Error message if failed |
+
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns. Output columns are returned exclusively via output_schema.
 
 ### Per-Wave CSV (Temporary)
 
@@ -168,16 +176,16 @@ spawn_agents_on_csv({
 2. Apply refactoring described in description targeting scope files
 3. Verify convergence_criteria via grep (all criteria must pass)
 4. Run verification_cmd and report test result
-5. If tests fail: revert ALL changes for this task, set status=failed
+5. If tests fail: revert ALL changes for this task, set result_status=failed
 6. Append discoveries to ${sessionFolder}/discoveries.ndjson
 Report: files_modified (semicolon-separated), tests_passed (true/false), findings (what was changed and why)`,
   max_concurrency: 1, max_runtime_seconds: 1800,
   output_csv_path: `${sessionFolder}/wave-${N}-results.csv`,
-  output_schema: { id, status: [completed|failed|blocked], findings, files_modified, tests_passed, error }
+  output_schema: { id, result_status: [completed|failed|blocked], findings, files_modified, tests_passed, error }
 })
 ```
 
-4. Merge results into master `tasks.csv`, delete `wave-{N}.csv`
+4. Merge results into master `tasks.csv`: map `result_status` -> master `status` column, copy `findings`, `files_modified`, `tests_passed`, `error` into master. Delete temporary `wave-{N}.csv` and `wave-{N}-results.csv`.
 
 **5b. Reflect per wave:**
 

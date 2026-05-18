@@ -28,9 +28,9 @@ $maestro-milestone-audit "M1"
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,scope,check_targets,deps,wave,status,findings,gaps_found,severity,error
-"integ-1","Interface & dependency chains","Verify shared interfaces are consistent across phases: re-exports match, dependency chains unbroken, no circular imports between phase outputs","cross-phase imports, shared types, re-exports","grep for shared type names across phase output dirs; verify export/import consistency","","1","","","","",""
-"integ-2","Data contracts & API consistency","Verify request/response schemas match across phases: API signatures consistent, error codes aligned, no contract drift","request/response schemas, API signatures, error codes","diff API type definitions across phases; check error code enum consistency","","1","","","","",""
+id,title,description,scope,check_targets,deps,wave
+"integ-1","Interface & dependency chains","Verify shared interfaces are consistent across phases: re-exports match, dependency chains unbroken, no circular imports between phase outputs","cross-phase imports, shared types, re-exports","grep for shared type names across phase output dirs; verify export/import consistency","","1"
+"integ-2","Data contracts & API consistency","Verify request/response schemas match across phases: API signatures consistent, error codes aligned, no contract drift","request/response schemas, API signatures, error codes","diff API type definitions across phases; check error code enum consistency","","1"
 ```
 
 **Columns**:
@@ -44,19 +44,21 @@ id,title,description,scope,check_targets,deps,wave,status,findings,gaps_found,se
 | `check_targets` | Input | Specific verification commands/grep patterns |
 | `deps` | Input | Dependencies (empty — all wave 1) |
 | `wave` | Computed | Wave number (always 1 — single parallel wave) |
-| `status` | Output | `pending` -> `pass` / `fail` / `warning` |
+| `result_status` | Output | `pass` / `fail` / `warning` |
 | `findings` | Output | Detailed findings per dimension (max 500 chars) |
 | `gaps_found` | Output | Semicolon-separated list of integration gaps |
 | `severity` | Output | `critical` / `warning` / `info` per gap |
 | `error` | Output | Error message if check failed |
+
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns. Output columns are returned exclusively via output_schema.
 
 ### Session Structure
 
 ```
 .workflow/.csv-wave/{YYYYMMDD}-audit-{milestone}/
 +-- tasks.csv
-+-- wave-1.csv (temporary)
-+-- wave-1-results.csv
++-- wave-1.csv (temporary, deleted after merge)
++-- wave-1-results.csv (temporary, deleted after merge)
 ```
 </csv_schema>
 
@@ -95,16 +97,16 @@ Verify all adhoc-scoped artifacts completed. For each execute artifact, verify a
 spawn_agents_on_csv({
   csv_path: `${sessionFolder}/wave-1.csv`,
   id_column: "id",
-  instruction: `You are an integration checker for milestone ${milestone}. For each row, examine the scope and check_targets. Search the codebase for inconsistencies, contract drift, and broken dependencies across phase outputs. Report findings with file:line references. Set status to pass/fail/warning. List specific gaps in gaps_found (semicolon-separated).`,
+  instruction: `You are an integration checker for milestone ${milestone}. For each row, examine the scope and check_targets. Search the codebase for inconsistencies, contract drift, and broken dependencies across phase outputs. Report findings with file:line references. Set result_status to pass/fail/warning. List specific gaps in gaps_found (semicolon-separated).`,
   max_concurrency: 2, max_runtime_seconds: 600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: { id, status: [pass|fail|warning], findings, gaps_found, severity, error }
+  output_schema: { id, result_status: [pass|fail|warning], findings, gaps_found, severity, error }
 })
 ```
 
-4. Merge results into master `tasks.csv`
+4. Merge results into master `tasks.csv`: map `result_status` → master `status` column, copy `findings`, `gaps_found`, `severity`, `error`. Delete temporary files (`wave-1.csv`, `wave-1-results.csv`) after merge.
 5. Parse `gaps_found` from all workers — aggregate into `.workflow/milestones/{milestone}/audit-report.md`
-6. Any worker with `status == fail` and `severity == critical` → milestone verdict = FAIL
+6. Any worker with `result_status == fail` and `severity == critical` → milestone verdict = FAIL
 
 ### Step 6: Verdict
 

@@ -54,7 +54,7 @@ Find where incorrect value appears → trace backward through call chain → fix
 |                                                                           |
 |  Phase 3: Results Aggregation                                             |
 |     +-- Export results.csv with all investigation + fix outcomes           |
-|     +-- Generate context.md with diagnosis summary                        |
+|     +-- Generate understanding.md with diagnosis summary                        |
 |     +-- Update UAT gaps with diagnosis (if --from-uat)                    |
 |     +-- Update issues.jsonl with diagnosis results                        |
 |     +-- Display summary with next steps                                   |
@@ -83,7 +83,7 @@ $quality-debug --continue "20260318-debug-P3-jwt-expiry"
 When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive symptom gathering (require bug description in args), use defaults for mode detection.
 
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
+**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `understanding.md` (human-readable report)
 </context>
 
 <csv_schema>
@@ -91,56 +91,60 @@ When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive sympto
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,hypothesis,evidence_for,evidence_against,deps,context_from,wave,status,findings,fix_applied,verified,error
-"H1","Null pointer in login handler","Investigate whether login handler crashes due to null user object after failed DB lookup","User object is null when DB returns empty result; login.ts:42 dereferences without null check","","","","","1","","","","",""
-"H2","Missing error boundary","Investigate whether unhandled promise rejection in auth middleware propagates to 500","Auth middleware catches DB errors but not validation errors; middleware.ts:78 has no catch block","","","","","1","","","","",""
-"H3","Stale session token","Investigate whether expired session tokens bypass refresh logic","Session refresh only triggers on 403 but server returns 401 for expired tokens; session.ts:15","","","","","1","","","","",""
-"FIX-H1","Fix null pointer in login","Apply null check before user object dereference in login handler","","","","H1","H1","2","","","","",""
-"FIX-H3","Fix session token refresh","Update refresh trigger to also handle 401 status codes","","","","H3","H3","2","","","","",""
+id,title,description,hypothesis,deps,context_from,wave
+"H1","Null pointer in login handler","Investigate whether login handler crashes due to null user object after failed DB lookup","User object is null when DB returns empty result; login.ts:42 dereferences without null check","","","1"
+"H2","Missing error boundary","Investigate whether unhandled promise rejection in auth middleware propagates to 500","Auth middleware catches DB errors but not validation errors; middleware.ts:78 has no catch block","","","1"
+"H3","Stale session token","Investigate whether expired session tokens bypass refresh logic","Session refresh only triggers on 403 but server returns 401 for expired tokens; session.ts:15","","","1"
+"FIX-H1","Fix null pointer in login","Apply null check before user object dereference in login handler","","H1","H1","2"
+"FIX-H3","Fix session token refresh","Update refresh trigger to also handle 401 status codes","","H3","H3","2"
 ```
 
 **Columns**:
 
-| Column | Phase | Description |
+| Column | Layer | Description |
 |--------|-------|-------------|
 | `id` | Input | Unique task identifier: `H{N}` for hypotheses (wave 1), `FIX-H{N}` for fixes (wave 2) |
 | `title` | Input | Short hypothesis or fix title |
 | `description` | Input | Detailed investigation/fix instructions |
 | `hypothesis` | Input | The hypothesis being tested (wave 1) or empty (wave 2) |
-| `evidence_for` | Output | Evidence supporting the hypothesis |
-| `evidence_against` | Output | Evidence refuting the hypothesis |
 | `deps` | Input | Semicolon-separated dependency task IDs (wave 2 depends on wave 1) |
 | `context_from` | Input | Semicolon-separated task IDs whose findings this task needs |
-| `wave` | Computed | Wave number (1 = investigation, 2 = fix attempt) |
-| `status` | Output | `pending` -> `confirmed` / `refuted` / `inconclusive` / `fixed` / `fix_failed` / `skipped` |
+| `wave` | Input | Wave number (1 = investigation, 2 = fix attempt) |
+| `result_status` | Output | `confirmed` / `refuted` / `inconclusive` / `fixed` / `fix_failed` / `failed` |
 | `findings` | Output | Key findings summary (max 500 chars) |
+| `evidence_for` | Output | Evidence supporting the hypothesis (wave 1) |
+| `evidence_against` | Output | Evidence refuting the hypothesis (wave 1) |
 | `fix_applied` | Output | Description of fix applied (wave 2 only) |
 | `verified` | Output | `true` / `false` -- whether fix was verified to work (wave 2 only) |
 | `error` | Output | Error message if failed |
 
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns + `prev_context`. Output columns are returned exclusively via `output_schema`.
+
 ### Per-Wave CSV (Temporary)
 
-Each wave generates `wave-{N}.csv` with extra `prev_context` column.
+Each wave generates `wave-{N}.csv` with Input columns + `prev_context` only. Output columns (`result_status`, `findings`, etc.) are NEVER included in wave CSV — they come from `output_schema` in the results CSV.
 
 ### Output Artifacts
 
 | File | Purpose | Lifecycle |
 |------|---------|-----------|
 | `tasks.csv` | Master state -- all tasks with status/findings | Updated after each wave |
-| `wave-{N}.csv` | Per-wave input (temporary) | Created before wave, deleted after |
+| `wave-{N}.csv` | Per-wave input (temporary) | Deleted after merge |
+| `wave-{N}-results.csv` | Per-wave output (temporary) | Deleted after merge into tasks.csv |
 | `results.csv` | Final export of all task results | Created in Phase 3 |
 | `discoveries.ndjson` | Shared exploration board | Append-only, carries across waves |
-| `context.md` | Human-readable diagnosis report | Created in Phase 3 |
+| `understanding.md` | Human-readable diagnosis report | Created in Phase 3 |
 
 ### Session Structure
 
 ```
 .workflow/.csv-wave/{YYYYMMDD}-debug-P{N}-{slug}/
-+-- tasks.csv
-+-- results.csv
-+-- discoveries.ndjson
-+-- context.md
-+-- wave-{N}.csv (temporary)
++-- tasks.csv              (master state, persisted)
++-- results.csv            (final export, persisted)
++-- discoveries.ndjson     (shared board, persisted)
++-- understanding.md       (diagnosis report, persisted)
++-- wave-{N}.csv           (temporary, deleted after merge)
++-- wave-{N}-results.csv   (temporary, deleted after merge)
 ```
 </csv_schema>
 
@@ -151,7 +155,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 4. **Context Propagation**: prev_context built from master CSV, not from memory
 5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
 6. **Skip on Refuted**: Wave 2 fix tasks skip if their hypothesis was refuted or inconclusive
-7. **Cleanup Temp Files**: Remove wave-{N}.csv after results are merged
+7. **Cleanup Temp Files**: Remove wave-{N}.csv AND wave-{N}-results.csv after results are merged into master tasks.csv
 8. **DO NOT STOP**: Continuous execution until all waves complete
 </invariants>
 
@@ -240,12 +244,12 @@ spawn_agents_on_csv({
   instruction: buildInvestigationInstruction(sessionFolder),  // agent: ~/.codex/agents/workflow-debugger.toml
   max_concurrency: maxConcurrency, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-1-results.csv`,
-  output_schema: { id, status: [confirmed|refuted|inconclusive|failed], findings, evidence_for, evidence_against, error }
+  output_schema: { id, result_status: [confirmed|refuted|inconclusive|failed], findings, evidence_for, evidence_against, error }
 })
 ```
 
-3. Merge results into master `tasks.csv`, delete `wave-1.csv`
-4. **Filter for wave 2**: Mark fix tasks as `skipped` if their hypothesis was `refuted` or `inconclusive`
+3. Merge `wave-1-results.csv` into master `tasks.csv` (map `result_status` → master `status` column), delete `wave-1.csv` and `wave-1-results.csv`
+4. **Filter for wave 2**: Mark fix tasks as `skipped` if their hypothesis `result_status` was `refuted` or `inconclusive`
 
 #### Wave 2: Fix Attempts (Parallel, Confirmed Only)
 
@@ -260,11 +264,11 @@ spawn_agents_on_csv({
   instruction: buildFixInstruction(sessionFolder),  // agent: ~/.codex/agents/workflow-debugger.toml
   max_concurrency: maxConcurrency, max_runtime_seconds: 3600,
   output_csv_path: `${sessionFolder}/wave-2-results.csv`,
-  output_schema: { id, status: [fixed|fix_failed|failed], findings, fix_applied, verified, error }
+  output_schema: { id, result_status: [fixed|fix_failed|failed], findings, fix_applied, verified, error }
 })
 ```
 
-4. Merge results into master `tasks.csv`, delete `wave-2.csv`
+4. Merge `wave-2-results.csv` into master `tasks.csv` (map `result_status` → master `status` column), delete `wave-2.csv` and `wave-2-results.csv`
 
 ### Phase 3: Results Aggregation
 
@@ -272,11 +276,11 @@ spawn_agents_on_csv({
 
 1. Export final `tasks.csv` as `results.csv`
 
-2. **Generate context.md**: Debug report with summary (mode, hypothesis/confirmed/fixed/verified counts), per-hypothesis results (hypothesis, evidence for/against, findings, status), per-fix results (fix applied, verified, findings), aggregated root causes, and next steps.
+2. **Generate understanding.md**: Debug report with summary (mode, hypothesis/confirmed/fixed/verified counts), per-hypothesis results (hypothesis, evidence for/against, findings, status), per-fix results (fix applied, verified, findings), aggregated root causes, and next steps.
 
 2b. **Debug confidence scoring**:
 
-   Dimensions (4): hypothesis_quality, evidence_completeness, root_cause_isolation, fix_confidence. Factors (weights): evidence_depth(.30), evidence_strength(.25), coverage_breadth(.20), reproduction(.15), consistency(.10). Map to legacy: <40% = low, 40-70% = medium, >70% = high. Append confidence assessment to context.md.
+   Dimensions (4): hypothesis_quality, evidence_completeness, root_cause_isolation, fix_confidence. Factors (weights): evidence_depth(.30), evidence_strength(.25), coverage_breadth(.20), reproduction(.15), consistency(.10). Map to legacy: <40% = low, 40-70% = medium, >70% = high. Append confidence assessment to understanding.md.
 
 3. **UAT update** (if --from-uat): Update `uat.md` gaps with `root_cause`, `fix_direction`, `affected_files` for confirmed hypotheses.
 
@@ -353,9 +357,9 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"root_cause","data":{"location":"src/
 - [ ] Wave 1 hypotheses investigated in parallel
 - [ ] Refuted/inconclusive hypotheses correctly skip wave 2 fix tasks
 - [ ] Wave 2 fixes attempted only for confirmed hypotheses
-- [ ] context.md produced with diagnosis summary
+- [ ] understanding.md produced with diagnosis summary
 - [ ] Multi-factor confidence scored per hypothesis replacing simple high/medium/low
-- [ ] Confidence assessment appended to context.md
+- [ ] Confidence assessment appended to understanding.md
 - [ ] UAT gaps updated (if --from-uat)
 - [ ] Issues updated with diagnosis results
 - [ ] discoveries.ndjson append-only throughout

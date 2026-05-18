@@ -80,12 +80,12 @@ When `--yes` or `-y`: Auto-confirm rebuild (implies --force), skip all prompts.
 ### tasks.csv (Master State)
 
 ```csv
-id,title,description,doc_dimension,output_path,deps,context_from,wave,status,findings,error
-"1","Component Scanner","Scan all source directories for components: models, services, controllers, utils, types, config, middleware, core modules. For each component extract exported symbols, determine type, record code locations. Output JSON array of component entries with id (TC-NNN), name, type, code_locations, symbols.","components",".workflow/codebase/doc-index.json#components","","","1","","",""
-"2","Feature Mapper","Group discovered components by domain/functional area using directory proximity, naming patterns, and import relationships. Map features to requirements if .workflow/.spec/ exists. Output JSON array of feature entries with id (FT-NNN), name, status, component_ids, requirement_ids, phase.","features",".workflow/codebase/doc-index.json#features","","","1","","",""
-"3","Requirement Linker","If .workflow/.spec/ exists, scan SPEC-*/requirements/REQ-*.md files. Parse requirement metadata (title, priority, acceptance_criteria). Match requirements to features by keyword analysis. Also scan for ADR-*.md architecture decisions. Output JSON arrays for requirements and architecture_decisions.","requirements",".workflow/codebase/doc-index.json#requirements","","","1","","",""
-"4","Tech Registry Writer","For each component discovered, generate a markdown documentation file in .workflow/codebase/tech-registry/{slug}.md with: ID, type, features, code locations, exported symbols, dependencies. Generate _index.md with component table. Output file count and paths.","tech-registry",".workflow/codebase/tech-registry/","","","1","","",""
-"5","Feature Map Writer","For each feature discovered, generate a markdown documentation file in .workflow/codebase/feature-maps/{slug}.md with: ID, status, phase, requirements, component table. Generate _index.md with feature table. Output file count and paths.","feature-maps",".workflow/codebase/feature-maps/","","","1","","",""
+id,title,description,doc_dimension,output_path,deps,context_from,wave
+"1","Component Scanner","Scan all source directories for components: models, services, controllers, utils, types, config, middleware, core modules. For each component extract exported symbols, determine type, record code locations. Output JSON array of component entries with id (TC-NNN), name, type, code_locations, symbols.","components",".workflow/codebase/doc-index.json#components","","","1"
+"2","Feature Mapper","Group discovered components by domain/functional area using directory proximity, naming patterns, and import relationships. Map features to requirements if .workflow/.spec/ exists. Output JSON array of feature entries with id (FT-NNN), name, status, component_ids, requirement_ids, phase.","features",".workflow/codebase/doc-index.json#features","","","1"
+"3","Requirement Linker","If .workflow/.spec/ exists, scan SPEC-*/requirements/REQ-*.md files. Parse requirement metadata (title, priority, acceptance_criteria). Match requirements to features by keyword analysis. Also scan for ADR-*.md architecture decisions. Output JSON arrays for requirements and architecture_decisions.","requirements",".workflow/codebase/doc-index.json#requirements","","","1"
+"4","Tech Registry Writer","For each component discovered, generate a markdown documentation file in .workflow/codebase/tech-registry/{slug}.md with: ID, type, features, code locations, exported symbols, dependencies. Generate _index.md with component table. Output file count and paths.","tech-registry",".workflow/codebase/tech-registry/","","","1"
+"5","Feature Map Writer","For each feature discovered, generate a markdown documentation file in .workflow/codebase/feature-maps/{slug}.md with: ID, status, phase, requirements, component table. Generate _index.md with feature table. Output file count and paths.","feature-maps",".workflow/codebase/feature-maps/","","","1"
 ```
 
 **Columns**:
@@ -100,9 +100,16 @@ id,title,description,doc_dimension,output_path,deps,context_from,wave,status,fin
 | `deps` | Input | Empty (all independent) |
 | `context_from` | Input | Empty (no cross-task context needed) |
 | `wave` | Computed | Always 1 (single wave, independent parallel) |
-| `status` | Output | `pending` -> `completed` / `failed` / `skipped` |
-| `findings` | Output | Generation summary -- counts, paths, notes (max 500 chars) |
-| `error` | Output | Error message if failed |
+
+**Output columns** (returned exclusively via `output_schema`, NOT in wave CSV):
+
+| Column | Description |
+|--------|-------------|
+| `result_status` | `completed` / `failed` (mapped to master `status` on merge) |
+| `result_findings` | Generation summary -- counts, paths, notes (max 500 chars) |
+| `error` | Error message if failed |
+
+**Column separation rule**: Input columns and Output columns MUST NOT share names. Wave CSV only contains Input columns + prev_context. Output columns are returned exclusively via output_schema.
 
 ### Per-Wave CSV (Temporary)
 
@@ -207,16 +214,16 @@ spawn_agents_on_csv({
     type: "object",
     properties: {
       id: { type: "string" },
-      status: { type: "string", enum: ["completed", "failed"] },
-      findings: { type: "string" },
+      result_status: { type: "string", enum: ["completed", "failed"] },
+      result_findings: { type: "string" },
       error: { type: "string" }
     },
-    required: ["id", "status", "findings"]
+    required: ["id", "result_status", "result_findings"]
   }
 })
 ```
 
-Merge `wave-1-results.csv` into master `tasks.csv`, delete `wave-1.csv`.
+Merge `wave-1-results.csv` into master `tasks.csv`: map `result_status` -> master `status`, `result_findings` -> master `findings`, copy `error` as-is. After merge, delete temporary files (`wave-1.csv` and `wave-1-results.csv`).
 
 ### Phase 3: Results -> .workflow/codebase/
 
