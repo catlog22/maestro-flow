@@ -24,6 +24,7 @@ import type {
 import { BaseAgentAdapter } from './base-adapter.js';
 import { EntryNormalizer } from './entry-normalizer.js';
 import { loadEnvFile } from './env-file-loader.js';
+import { killProcessTree } from './process-tree-kill.js';
 import { cleanSpawnEnv } from './env-cleanup.js';
 
 // ---------------------------------------------------------------------------
@@ -120,6 +121,8 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true,
       windowsHide: true,
+      // POSIX: own process group so killProcessTree can signal the tree.
+      detached: process.platform !== 'win32',
     });
 
     if (!child.stdout || !child.stdin || !child.stderr) {
@@ -232,11 +235,11 @@ export class CodexAppServerAdapter extends BaseAgentAdapter {
       );
     }
 
-    session.child.kill('SIGTERM');
+    killProcessTree(session.child.pid, 'SIGTERM');
 
     const killTimer = setTimeout(() => {
       if (!session.child.killed) {
-        session.child.kill('SIGKILL');
+        killProcessTree(session.child.pid, 'SIGKILL');
       }
     }, 5000);
 

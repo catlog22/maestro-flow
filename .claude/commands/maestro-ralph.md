@@ -21,7 +21,7 @@ Entry points:
 - **`/maestro-ralph continue`** — Resume via maestro-ralph-execute
 - **`/maestro-ralph status`** — Display session progress
 
-Initial decomposition (S_DECOMPOSE): broad intents (重构/全面/迁移/重写) are boundary-clarified via ≤3 questions, producing 执行准则 + 子目标清单 written into status.json, plus a `goal-checklist.md` and a copy-paste `/goal` prompt. Ralph only **emits** the prompt — the user binds it; ralph cannot self-call `/goal` (it is a harness command, not a tool).
+Initial decomposition (S_DECOMPOSE): broad intents (重构/全面/迁移/重写) are boundary-clarified via ≤3 questions, producing 执行准则 + 子目标清单 written into status.json, plus a `goal-checklist.md` and a copy-paste `/goal` prompt for the user to bind.
 
 Three node types:
 - **internal**: `Skill()` call (synchronous, lightweight)
@@ -535,7 +535,7 @@ Displayed verbatim after the chain overview (only when decomposition produced):
 - [ ] Decomposition runs as initial step; broad intent boundary-clarified via ≤3 questions (ignores auto_confirm); narrow auto-derives
 - [ ] status.json enriched additively with boundary_contract + execution_criteria + task_decomposition; absent fields = old behavior preserved
 - [ ] goal-checklist.md generated with verifiable done_when mapped to ralph evidence + ALL_GOALS_DONE sentinel
-- [ ] Goal Prompt emitted for user to bind via /goal (ralph never self-calls /goal)
+- [ ] Goal Prompt emitted for user to bind via /goal
 - [ ] post-goal-audit decision node inserted before milestone-complete (only when decomposed)
 - [ ] Unmet sub-goals DYNAMICALLY grow steps[] via scoped per-goal mini-loops (goal_ref tagged), looping until all_met or max retries → escalate
 - [ ] Quality pipeline generated: verify → business-test → review → test-gen → test

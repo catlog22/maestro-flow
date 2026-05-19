@@ -44,11 +44,18 @@ vi.mock('./env-cleanup.js', () => ({
   })),
 }));
 
+vi.mock('./process-tree-kill.js', () => ({
+  killProcessTree: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 
 import { GeminiA2aAdapter } from './gemini-a2a-adapter.js';
+import { killProcessTree } from './process-tree-kill.js';
+
+const killProcessTreeMock = vi.mocked(killProcessTree);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -168,6 +175,7 @@ describe('GeminiA2aAdapter', () => {
     spawnMock.mockReset();
     spawnMock.mockReturnValue(fakeChild);
     httpRequestMock.mockReset();
+    killProcessTreeMock.mockReset();
   });
 
   afterEach(() => {
@@ -447,7 +455,7 @@ describe('GeminiA2aAdapter', () => {
 
       await adapter.stop(proc.id);
 
-      expect(fakeChild.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(killProcessTreeMock).toHaveBeenCalledWith(fakeChild.pid, 'SIGTERM');
     });
   });
 

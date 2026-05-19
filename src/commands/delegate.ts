@@ -61,6 +61,8 @@ export interface DelegateExecutionRequest {
   role?: string;
   /** Reasoning effort level */
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
+  /** Stale-stream silence window (ms) before force-terminating a silent CLI */
+  streamTimeout?: number;
 }
 
 interface ChildProcessLike {
@@ -159,6 +161,9 @@ export function buildDetachedDelegateWorkerArgs(
   }
   if (request.reasoningEffort) {
     args.push('--effort', request.reasoningEffort);
+  }
+  if (request.streamTimeout) {
+    args.push('--timeout', String(request.streamTimeout));
   }
 
   return args;
@@ -326,6 +331,7 @@ export function registerDelegateCommand(program: Command): void {
     .option('--session <id>', 'Claude Code session ID for completion notifications')
     .option('--backend <type>', 'Adapter backend: direct (default) or terminal (tmux/wezterm)')
     .option('--effort <level>', 'Reasoning effort level (low, medium, high, max) — overrides tool config')
+    .option('--timeout <ms>', 'Stale-stream timeout in ms — force-terminate CLI after this much silence (default 600000 = 10 min); overrides tool config')
     .option('--async', 'Run detached in the background; results delivered via MCP channel notifications (default: synchronous)')
     .addOption(new Option('--worker').hideHelp())
     .action(async (prompt: string | undefined, opts: {
@@ -341,6 +347,7 @@ export function registerDelegateCommand(program: Command): void {
       session?: string;
       backend?: string;
       effort?: string;
+      timeout?: string;
       async?: boolean;
       worker?: boolean;
     }) => {
@@ -397,6 +404,19 @@ export function registerDelegateCommand(program: Command): void {
         reasoningEffort = selected?.entry?.reasoningEffort;
       }
 
+      // Resolve stale-stream timeout: CLI --timeout overrides cli-tools.json
+      let streamTimeout: number | undefined;
+      if (opts.timeout !== undefined) {
+        const parsed = Number(opts.timeout);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          console.error(`Invalid timeout: ${opts.timeout}. Use a positive number of milliseconds.`);
+          process.exit(1);
+        }
+        streamTimeout = parsed;
+      } else {
+        streamTimeout = selected?.entry?.streamTimeoutMs;
+      }
+
       const backend = (opts.backend === 'terminal' ? 'terminal' : 'direct') as 'direct' | 'terminal';
       const execId = opts.id ?? generateCliExecId(toolName);
       const resume = opts.resume === true ? 'last' : opts.resume;
@@ -417,6 +437,7 @@ export function registerDelegateCommand(program: Command): void {
         baseTool: selected?.entry?.baseTool,
         role: opts.role,
         reasoningEffort,
+        streamTimeout,
       };
 
       try {

@@ -82,6 +82,9 @@ export interface CliRunOptions {
   role?: string;
   /** Reasoning effort level — overrides config-level setting */
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
+  /** Stale-stream silence window (ms) before force-terminating a silent CLI.
+   *  Overrides cli-tools.json `streamTimeoutMs`; undefined = adapter default (10 min). */
+  streamTimeout?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -569,6 +572,7 @@ export class CliAgentRunner {
       interactive: adapter.supportsInteractive?.() === true,
       settingsFile: options.settingsFile?.replace(/^~(?=[\\/])/, homedir()),
       reasoningEffort: options.reasoningEffort,
+      streamTimeoutMs: options.streamTimeout,
     };
 
     const agentProcess = await adapter.spawn(config);

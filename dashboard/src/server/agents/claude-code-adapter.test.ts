@@ -29,11 +29,18 @@ vi.mock('./env-cleanup.js', () => ({
   })),
 }));
 
+vi.mock('./process-tree-kill.js', () => ({
+  killProcessTree: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
 
 import { ClaudeCodeAdapter } from './claude-code-adapter.js';
+import { killProcessTree } from './process-tree-kill.js';
+
+const killProcessTreeMock = vi.mocked(killProcessTree);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,6 +90,7 @@ describe('ClaudeCodeAdapter', () => {
     fakeChild = createFakeChild();
     spawnMock.mockReset();
     spawnMock.mockReturnValue(fakeChild);
+    killProcessTreeMock.mockReset();
   });
 
   afterEach(() => {
@@ -443,13 +451,13 @@ describe('ClaudeCodeAdapter', () => {
   // -----------------------------------------------------------------------
 
   describe('stop and cleanup', () => {
-    it('sends SIGTERM on stop', async () => {
+    it('sends SIGTERM to the process tree on stop', async () => {
       const config = baseConfig({ interactive: true });
       const proc = await adapter.spawn(config);
 
       await adapter.stop(proc.id);
 
-      expect(fakeChild.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(killProcessTreeMock).toHaveBeenCalledWith(fakeChild.pid, 'SIGTERM');
     });
 
     it('emits status_change entry on process exit', async () => {
@@ -534,7 +542,7 @@ describe('ClaudeCodeAdapter', () => {
       await adapter.stop(proc.id);
 
       expect(stdin.end).toHaveBeenCalled();
-      expect(fakeChild.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(killProcessTreeMock).toHaveBeenCalledWith(fakeChild.pid, 'SIGTERM');
     });
   });
 });

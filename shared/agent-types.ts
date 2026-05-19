@@ -42,6 +42,12 @@ export interface AgentConfig {
   metadata?: Record<string, unknown>;
   /** Reasoning effort level (undefined = tool default) */
   reasoningEffort?: 'low' | 'medium' | 'high' | 'max';
+  /**
+   * Stale-stream silence window in ms before the adapter force-terminates a
+   * silent CLI. Undefined = StreamMonitor default (10 min). Threaded from
+   * `maestro delegate --timeout` / cli-tools.json `streamTimeoutMs`.
+   */
+  streamTimeoutMs?: number;
 }
 
 /** Runtime state of a spawned agent process */

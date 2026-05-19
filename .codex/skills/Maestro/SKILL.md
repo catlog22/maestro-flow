@@ -2,18 +2,23 @@
 name: maestro
 description: Auto-route intent to optimal command chain
 argument-hint: "\"intent text\" [-y] [-c|--continue] [--dry-run] [--super]"
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 ---
 
 <purpose>
-Wave-based pipeline coordinator. Classify intent → resolve chain → wave-by-wave spawn → report.
-All skill execution via `spawn_agents_on_csv` — coordinator never executes skills directly.
+Sequential pipeline coordinator. Classify intent → decompose (broad lifecycle intents) →
+resolve chain → **directly invoke each skill in-context, one at a time** → report.
 
 Entry points:
-- **`$maestro "intent"`** — Classify → chain → execute
-- **`$maestro --continue`** — Resume from last incomplete wave
+- **`$maestro "intent"`** — Classify → decompose → chain → execute
+- **`$maestro --continue`** — Resume from first pending step
 - **`$maestro --dry-run "intent"`** — Show chain, no execution
 - **`$maestro --super "intent"`** — Production-ready mode (read maestro-super.md)
+
+Codex specifics (parity with maestro-ralph):
+- **No agent spawning** — skills run directly in coordinator context, sequentially.
+- **Goal created via built-in tool** — `create_goal` binds the decomposed sub-goal checklist;
+  `update_plan` mirrors steps; `update_goal` releases on convergence.
 </purpose>
 
 <deferred_reading>
@@ -25,7 +30,7 @@ $ARGUMENTS — user intent text, or special flags.
 
 **Flags:**
 - `-y, --yes` — Auto mode: skip all prompts; propagate `-y` to each skill
-- `--continue` — Resume latest paused session from last incomplete wave
+- `--continue` — Resume latest paused session from first pending step
 - `--dry-run` — Display planned chain without executing
 - `--super` — Read and follow `maestro-super.md` completely
 
@@ -33,13 +38,13 @@ $ARGUMENTS — user intent text, or special flags.
 </context>
 
 <invariants>
-1. **ALL skills via spawn_agents_on_csv** — coordinator NEVER directly executes any skill logic
-2. **Coordinator = prompt assembler** — classify → build CSV → spawn → read results → assemble next
-3. **Barrier = solo wave** — barrier skills always execute alone (wave size = 1)
-4. **Non-barriers can parallel** — consecutive non-barrier skills grouped into one wave
-5. **Wave-by-wave** — never start wave N+1 before wave N results are read
-6. **Coordinator owns context** — sub-agents never read prior results; coordinator assembles full `skill_call`
-7. **Abort on failure** — failed step → mark remaining skipped → report
+1. **Skills invoked DIRECTLY in-context** — coordinator runs `$skill {resolved_args}` itself, sequentially. NO spawn_agents_on_csv, NO wave/CSV/worker.
+2. **Coordinator owns the loop** — classify → decompose → resolve chain → for each step: resolve args → invoke skill → read result → persist → next.
+3. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`, `goal_checklist_path`) + `goal-checklist.md`. Reference maestro-ralph `A_DECOMPOSE_TASKS`; do not duplicate logic.
+4. **Goal is tool-created** — `A_DECOMPOSE_TASKS` calls `create_goal` with sub-goal success criteria. `update_goal` on convergence; held while aborted/paused.
+5. **Status JSON: schema-additive + step-dynamic** — decomposition fields OPTIONAL (absent → old flat-chain behavior); `steps[]` is a living array grown at runtime by `post-goal-audit`. `goal_ref` traces dynamically-added steps. Never remove/rename existing fields. `waves` kept as empty array for backward-compat (spawning removed).
+6. **Sequential execution** — one step at a time in index order; each step's result read before the next starts.
+7. **Abort on failure** — failed step → mark remaining skipped → report (goal stays bound for `--continue`).
 </invariants>
 
 <state_machine>
@@ -48,10 +53,12 @@ $ARGUMENTS — user intent text, or special flags.
 S_PARSE         — 解析参数、检测 flags              PERSIST: —
 S_CONTINUE      — 加载已有 session，定位 resume 点   PERSIST: session (loaded)
 S_CLASSIFY      — 意图分类、解析 chain (A_CLASSIFY)   PERSIST: —
+S_DECOMPOSE     — 边界澄清、写执行准则+子目标、建 goal PERSIST: session.boundary_contract, .execution_criteria, .task_decomposition
 S_CREATE        — 创建 session + status.json         PERSIST: session.status, session.steps[]
 S_DRY_RUN       — 显示 chain 后结束                  PERSIST: —
 S_CONFIRM       — 用户确认（auto_mode 跳过）          PERSIST: —
-S_WAVE_LOOP     — 构建 wave → spawn → 读结果 → 循环  PERSIST: session.waves[], session.current_step, session.context
+S_STEP_LOOP     — 逐步直接调用 skill → 读结果 → 循环  PERSIST: session.current_step, session.steps[], session.context
+S_DECISION_EVAL — 评估 post-goal-audit 决策节点       PERSIST: —
 S_COMPLETE      — 标记完成、释放目标                  PERSIST: session.status = "completed"
 S_ABORTED       — 失败中止、标记剩余 skipped          PERSIST: session.status = "aborted"
 S_FALLBACK      — 意图无法分类，请求输入              PERSIST: —
@@ -65,32 +72,42 @@ S_PARSE:
   → S_FALLBACK    WHEN: no intent AND no flags
 
 S_CONTINUE:
-  → S_WAVE_LOOP   WHEN: session found, has pending steps     DO: A_RESUME_SESSION
+  → S_STEP_LOOP   WHEN: session found, has pending steps     DO: A_RESUME_SESSION
   → S_FALLBACK    WHEN: no session found
 
 S_CLASSIFY:
-  → S_CREATE      WHEN: chain resolved                      DO: A_CLASSIFY
+  → S_DECOMPOSE   WHEN: chain resolved                      DO: A_CLASSIFY
   → S_FALLBACK    WHEN: no match AND auto_mode
   → S_CLASSIFY    WHEN: no match AND not auto_mode          DO: A_CLARIFY_INTENT
                    GUARD: max 1 clarification attempt → S_FALLBACK
 
+S_DECOMPOSE:
+  → S_CREATE      DO: A_DECOMPOSE_TASKS
+                   GUARD: broad intent (重构/全面/重写/迁移/overhaul/migrate/rewrite) on multi-step lifecycle chain → MUST clarify even if auto_mode
+                   GUARD: single-step chain OR narrow intent OR chain ∈ {status,init,quick} → skip decomposition (pass through)
+
 S_CREATE:
   → S_DRY_RUN     WHEN: --dry-run flag                      DO: A_CREATE_SESSION
   → S_CONFIRM     WHEN: not auto_mode                       DO: A_CREATE_SESSION
-  → S_WAVE_LOOP   WHEN: auto_mode                           DO: A_CREATE_SESSION
+  → S_STEP_LOOP   WHEN: auto_mode                           DO: A_CREATE_SESSION
 
 S_DRY_RUN:
-  → END           DO: display chain with [BARRIER] markers
+  → END           DO: display chain with step types + sub-goal summary
 
 S_CONFIRM:
-  → S_WAVE_LOOP   WHEN: user confirms
+  → S_STEP_LOOP   WHEN: user confirms
   → S_ABORTED     WHEN: user cancels
 
-S_WAVE_LOOP:
-  → S_WAVE_LOOP   WHEN: pending steps remain                DO: A_BUILD_AND_SPAWN_WAVE
+S_STEP_LOOP:
+  → S_DECISION_EVAL WHEN: next step.type == "decision"
+  → S_STEP_LOOP   WHEN: next step.type == "skill"           DO: A_EXEC_STEP
   → S_COMPLETE    WHEN: no pending steps
-  → S_ABORTED     WHEN: step failed
-                   GUARD: wave order is sacred — never skip ahead
+  → S_ABORTED     WHEN: step failed (auto_mode: retry once then abort)
+
+S_DECISION_EVAL:                                            ENTRY: A_GOAL_AUDIT_EVALUATE (produces verdict)
+  → S_STEP_LOOP   WHEN: verdict == all_met                  DO: A_APPLY_GOAL_DONE
+  → S_STEP_LOOP   WHEN: verdict == has_unmet                DO: A_APPLY_GOAL_FIX
+  → S_ABORTED     WHEN: retry >= max_retries AND unmet      DO: escalate (insert quality-debug "{gaps}")
 
 S_COMPLETE:
   → END           DO: A_FINALIZE
@@ -105,28 +122,6 @@ S_FALLBACK:
 </transitions>
 
 <actions>
-
-### A_CREATE_SESSION
-
-1. Read `.workflow/state.json` for project context (current phase, milestone, workflow_name)
-2. Resolve chain's skill list from Chain Map (see appendix)
-3. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`:
-   ```json
-   { "session_id", "source": "maestro", "intent", "task_type", "chain_name",
-     "phase", "milestone", "auto_mode", "context": { "issue_id", "scratch_dir",
-     "plan_dir", "analysis_dir", "brainstorm_dir" },
-     "steps": [{ "index", "skill", "args", "status": "pending", "wave_n": null }],
-     "waves": [], "current_step": 0, "status": "running" }
-   ```
-4. Initialize tracking:
-   - `create_goal({ objective: "Maestro {chain}: {N} steps [{skill list}]" })`
-   - `update_plan({ plan: steps.map(step => { step, status: "pending" }) })`
-
-### A_RESUME_SESSION
-
-1. Glob `.workflow/.maestro/maestro-*/status.json` sorted desc, load most recent
-2. Find first pending step → set as resume point
-3. Rebuild `update_plan` from status.json (completed→"completed", current→"in_progress", rest→"open")
 
 ### A_CLASSIFY
 
@@ -254,39 +249,98 @@ Read `.workflow/state.json` and route by condition:
 1. `AskUserQuestion` with available chain types
 2. Re-classify with user response
 
-### A_BUILD_AND_SPAWN_WAVE
+### A_DECOMPOSE_TASKS
 
-1. **buildNextWave**: first pending step; barrier → solo wave; non-barrier → collect consecutive non-barriers
-2. **buildSkillCall** per step:
-   - Replace placeholders: `{phase}`, `{plan_dir}`, `{analysis_dir}`, `{brainstorm_dir}`, `{spec_session_id}`
-   - Append auto-yes flag if `auto_mode` (see Appendix: Auto-Yes Flag Map)
-3. Write `{sessionDir}/wave-{N}.csv` (columns: id, skill_call, topic)
-4. `spawn_agents_on_csv({ csv_path, id_column: "id", instruction: WAVE_INSTRUCTION, max_workers, max_runtime_seconds: 3600, output_csv_path, output_schema: RESULT_SCHEMA })`
-5. Read results → update step statuses in status.json
-6. **Barrier analysis** (if barrier skill): read artifacts, update `session.context`
-   | Barrier Skill | Read | Context Updates |
-   |---------------|------|-----------------|
+Shares the decomposition contract with maestro-ralph `A_DECOMPOSE_TASKS` — **reference that spec; do not duplicate.** Condensed:
+
+1. Classify intent breadth. Skip for narrow / single-step / {status,init,quick} chains
+2. Broad/medium → `AskUserQuestion` ≤3 rounds: Scope (in/out) | Constraints (compat/API/perf/test bar) | Definition of Done
+3. Derive `execution_criteria` (3-6 imperative rules) + `task_decomposition` (outcome sub-goals; each `done_when` objectively verifiable, mapped to a ralph evidence artifact: verification.json / review.json / uat.md / test path)
+4. Write `{session_dir}/goal-checklist.md` (same template as maestro-ralph) with `ALL_GOALS_DONE` sentinel; set `goal_checklist_path`
+5. Append `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }` as the FINAL node — after the last evidence-producing step (verify/review/test), before a milestone-complete/close-out step if present (audit needs evidence artifacts) → dynamic step growth for unmet sub-goals
+6. **Register goal via `create_goal`:**
+   ```
+   create_goal({ objective: "Maestro {chain}: {intent} — converge {N} sub-goals within boundary",
+     success_criteria: task_decomposition.map(g => `${g.id}: ${g.done_when}`),
+     constraints: [...execution_criteria, "stay within boundary_contract"] })
+   ```
+
+### A_CREATE_SESSION
+
+1. Read `.workflow/state.json` for project context (current phase, milestone, workflow_name)
+2. Resolve chain's skill list from Chain Map (see appendix)
+3. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`:
+   ```json
+   { "session_id", "source": "maestro", "intent", "task_type", "chain_name",
+     "phase", "milestone", "auto_mode", "context": { "issue_id", "scratch_dir",
+     "plan_dir", "analysis_dir", "brainstorm_dir" },
+     "steps": [{ "index", "type": "skill|decision", "skill", "args", "status": "pending", "goal_ref": null }],
+     "waves": [], "current_step": 0, "status": "running",
+     "_comment": "↓ OPTIONAL additive block — present only if S_DECOMPOSE ran; absent → flat-chain behavior",
+     "boundary_contract": {}, "execution_criteria": [], "task_decomposition": [], "goal_checklist_path": "" }
+   ```
+   Decomposition fields written ONLY if A_DECOMPOSE_TASKS produced them (additive)
+4. Initialize tracking:
+   - If decomposed: goal already registered by A_DECOMPOSE_TASKS. Else: `create_goal({ objective: "Maestro {chain}: {N} steps [{skill list}]" })`
+   - `update_plan({ plan: steps.map(step => ({ step, status: "pending" })) })`
+
+### A_RESUME_SESSION
+
+1. Glob `.workflow/.maestro/maestro-*/status.json` sorted desc, load most recent
+2. Find first pending step → set as resume point
+3. Rebuild `update_plan` from status.json (completed→"completed", current→"in_progress", rest→"open")
+
+### A_EXEC_STEP
+
+Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechanism**.
+
+1. **buildSkillCall**: replace placeholders `{phase}`/`{plan_dir}`/`{analysis_dir}`/`{brainstorm_dir}`/`{spec_session_id}`; append auto-yes flag if `auto_mode` (see Appendix: Auto-Yes Flag Map)
+2. Mark step `status="running"`, persist status.json + `update_plan` (this step → in_progress)
+3. **Invoke the skill directly**: execute `$skill {resolved_args}` in coordinator context (NO spawn). Read its produced artifacts directly
+4. On success: capture summary; mark step `status="done"`. **Barrier-context update** (when step is a context-producing skill):
+   | Skill | Read | Context Updates |
+   |-------|------|-----------------|
    | maestro-analyze | context.md, state.json | analysis_dir, gaps, phase |
-   | maestro-plan | plan.json, .task/TASK-*.json | plan_dir, task_count, wave_count |
+   | maestro-plan | plan.json, .task/TASK-*.json | plan_dir, task_count |
    | maestro-brainstorm | .brainstorming/ | brainstorm_dir, features |
    | maestro-roadmap | specs/ | spec_session_id |
    | maestro-execute | results.csv | exec_completed, exec_failed |
-7. Persist: write status.json + sync update_plan
+5. On failure: mark `status="failed"`; auto_mode → retry once → still failed → S_ABORTED
+6. Persist status.json + `update_plan` after every step
+
+### A_GOAL_AUDIT_EVALUATE
+
+Entry action of S_DECISION_EVAL — mirrors maestro-ralph `A_GOAL_AUDIT_EVALUATE` (reference that spec; do not duplicate). Condensed:
+
+1. Read `session.task_decomposition` + `goal_checklist_path`
+2. For each sub-goal `status != "done"`: resolve its `evidence` artifact under current phase scratch dir
+3. Delegate read-only audit (`maestro delegate --role analyze --mode analysis`): for each unmet sub-goal, read evidence, judge against `done_when`, return `STATUS(all_met|has_unmet) / UNMET=[{id,gap,target_phase}]`
+4. For each met sub-goal → set `task_decomposition[i].status="done"` + flip `[ ]→[x]` in goal-checklist.md; persist
+5. Produce verdict (`all_met` / `has_unmet`) consumed by S_DECISION_EVAL transition. GUARD: retry >= max_retries AND still unmet → escalate
+
+### A_APPLY_GOAL_FIX
+
+**Dynamic step-growth core** (mirrors maestro-ralph). For each unmet sub-goal (grouped by target_phase), insert before the post-goal-audit node a scoped mini-loop `$maestro-plan --gaps {phase} "G{n}: {gap}" → $maestro-execute {phase} → $maestro-verify {phase}`, each tagged `goal_ref: "G{n}"`, type `"skill"`. Re-append `decision:post-goal-audit {retry+1}`. Reindex, increment retry, persist + `update_plan`. `steps[]` grew.
+
+### A_APPLY_GOAL_DONE
+
+1. Set all `task_decomposition[*].status="done"`, persist; append `ALL_GOALS_DONE` to goal-checklist.md
+2. `update_goal({ status: "complete" })` — release decomposition goal
+3. Proceed to chain's terminal step
 
 ### A_FINALIZE
 
 1. Set `session.status = "completed"`, write status.json
-2. Sync update_plan: all steps → "completed"
-3. `update_goal({ status: "complete" })` — release goal constraint
+2. Sync `update_plan`: all steps → "completed"
+3. `update_goal({ status: "complete" })` — release goal (idempotent if already released)
 4. Generate completion report (see Appendix: Report Format)
 
 ### A_ABORT_REPORT
 
-1. Mark remaining steps as `skipped` in status.json
-2. Set `session.status = "aborted"`, write status.json
-3. Sync update_plan (skipped steps marked)
-4. Do NOT call update_goal — goal stays for `--continue` resume
-5. Display abort report with failure details
+1. Mark remaining steps `skipped` in status.json
+2. Set `session.status = "aborted"`, write status.json; sync `update_plan`
+3. Do NOT call `update_goal` — goal stays for `--continue` resume
+4. Display abort report with failure details
 
 </actions>
 
@@ -349,7 +403,7 @@ Read `.workflow/state.json` and route by condition:
 
 **Multi-step chains:**
 
-| Chain | Steps (→ = sequential, [B] = barrier) |
+| Chain | Steps (→ = sequential, [B] = context-producing barrier) |
 |-------|---------------------------------------|
 | `feature` | [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `quality-fix` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → maestro-verify |
@@ -371,6 +425,8 @@ Read `.workflow/state.json` and route by condition:
 | `issue-full` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → quality-review → manage-issue close |
 | `issue-quick` | [B] maestro-plan --gaps → [B] maestro-execute → manage-issue close |
 
+> When S_DECOMPOSE ran, a `decision:post-goal-audit` node is appended as the final node (after the last evidence-producing step; before milestone-complete/close-out if the chain ends with one). `[B]` now denotes a context-producing skill (artifacts read into `session.context`) — execution is still sequential (no parallelism; spawning removed).
+
 **Chain Aliases** (taskType → chain):
 
 | taskType | Chain |
@@ -388,35 +444,9 @@ Read `.workflow/state.json` and route by condition:
 | quality-auto-test, quality-retrospective | `-y` |
 | quality-test | `-y --auto-fix` |
 
-### Barrier Skills
+### Context-Producing Skills
 
-`maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute`
-
-Non-barrier (groupable): `maestro-verify`, `quality-review`, `quality-test`, `quality-debug`, `quality-refactor`, `quality-sync`, `manage-*`
-
-### Worker Contract
-
-**Instruction template:**
-```
-你是 CSV job 子 agent。
-先原样执行这一段技能调用：{skill_call}
-然后基于结果完成这一行任务说明：{topic}
-限制：不要修改 .workflow/.maestro/ 下的 status 文件
-最后必须调用 `report_agent_job_result`，返回 JSON：
-{"status":"completed|failed","skill_call":"{skill_call}","summary":"一句话结果","artifacts":"产物路径","error":"失败原因"}
-```
-
-**Result schema:** `{ status, skill_call, summary, artifacts, error }` — all string, all required
-
-### CSV Schema
-
-**wave-{N}.csv:**
-```csv
-id,skill_call,topic
-"1","$maestro-analyze --gaps \"fix auth\" -y","Chain \"quality-fix\" step 1/4"
-```
-
-**Session status.json:** see A_CREATE_SESSION for full schema
+`maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute` — their artifacts are read into `session.context` after the step completes (see A_EXEC_STEP step 4). Other skills produce no coordinator context. No parallelism — all steps run sequentially.
 
 ### Error Codes
 
@@ -424,35 +454,38 @@ id,skill_call,topic
 |------|----------|-----------|----------|
 | E001 | error | Intent unclassifiable after clarification | Default to `feature` chain |
 | E002 | error | Intent unresolvable after retry | List chains, abort |
-| E003 | error | Wave timeout | Mark step failed, abort chain |
-| E004 | error | Barrier artifact not found | Retry wave once, then abort |
+| E003 | error | Step skill invocation failed | auto_mode retry once, then abort chain |
+| E004 | error | Context artifact not found | Retry step once, then abort |
 | E005 | error | --continue: no session found | List sessions, prompt |
-| W001 | warning | Barrier artifact partial | Continue with available context |
+| W001 | warning | Context artifact partial | Continue with available context |
 
 ### Success Criteria
 
 - [ ] Intent classified and chain resolved
-- [ ] Session dir initialized with status.json before first wave
-- [ ] Every skill goes through spawn_agents_on_csv
-- [ ] Barrier skills solo wave; non-barriers grouped parallel
-- [ ] Each wave: CSV → spawn → results → state updated
-- [ ] Barrier artifacts read before assembling next wave args
-- [ ] Failed step → remaining skipped → abort reported
-- [ ] --dry-run shows chain with [BARRIER], no execution
-- [ ] --continue resumes from last incomplete wave
+- [ ] Broad lifecycle intents decomposed (S_DECOMPOSE, ≤3 boundary questions) sharing maestro-ralph contract; narrow/single-step skip
+- [ ] Goal registered via built-in `create_goal`; status.json decomposition fields additive-only
+- [ ] post-goal-audit node appended as final node (after evidence-producing steps); unmet sub-goals dynamically grow steps[] (goal_ref tagged)
+- [ ] Session dir initialized with status.json before first step
+- [ ] Every skill invoked DIRECTLY in-context — NO spawn_agents_on_csv, NO wave/CSV/worker
+- [ ] Sequential execution; status.json + update_plan persisted after every step
+- [ ] Context-producing skills' artifacts read into session.context before next step's args assembled
+- [ ] Failed step → remaining skipped → abort reported (goal held for --continue)
+- [ ] --dry-run shows chain + sub-goal summary, no execution
+- [ ] --continue resumes from first pending step
+- [ ] update_goal released on convergence (A_APPLY_GOAL_DONE / A_FINALIZE); held while aborted
 
 ### Report Format
 
 ```
-=== COORDINATE COMPLETE ===
+=== MAESTRO COMPLETE ===
 Session:  {sessionId}
 Chain:    {chain}
-Waves:    {N} executed
-Steps:    {completed}/{total}
+Steps:    {completed}/{total}   Sub-goals: {done}/{total}
 
-WAVE RESULTS:
-  [W1] $maestro-analyze --gaps  →  ✓  found 3 gaps
-  [W2] $maestro-plan --gaps     →  ✓  12 tasks in 3 waves
+STEP RESULTS:
+  [1] $maestro-analyze --gaps  →  ✓  found 3 gaps
+  [2] $maestro-plan --gaps     →  ✓  12 tasks
+  [◆] post-goal-audit          →  ✓  all sub-goals met
   ...
 
 State:    .workflow/.maestro/{sessionId}/status.json

@@ -14,7 +14,9 @@ import type {
 import { BaseAgentAdapter } from './base-adapter.js';
 import { EntryNormalizer } from './entry-normalizer.js';
 import { loadEnvFile } from './env-file-loader.js';
-import { StreamMonitor } from './stream-monitor.js';
+import { StreamMonitor, DEFAULT_STREAM_TIMEOUT_MS } from './stream-monitor.js';
+import { createStaleHandler } from './stale-handler.js';
+import { killProcessTree } from './process-tree-kill.js';
 import { cleanSpawnEnv } from './env-cleanup.js';
 
 // ---------------------------------------------------------------------------
@@ -119,6 +121,8 @@ export class StreamJsonAdapter extends BaseAgentAdapter {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true,
       windowsHide: true,
+      // POSIX: own process group so killProcessTree can signal the tree.
+      detached: process.platform !== 'win32',
     });
 
     if (!child.stdout || !child.stdin || !child.stderr) {
@@ -131,13 +135,21 @@ export class StreamJsonAdapter extends BaseAgentAdapter {
     child.stdin.write(config.prompt);
     child.stdin.end();
 
-    // Heartbeat monitor: detect stale streams (60s silence)
-    const monitor = new StreamMonitor(() => {
-      this.emitEntry(
+    // Heartbeat monitor: detect stale streams and terminate the process tree
+    // (shared cascade with claude/codex/opencode — see stale-handler.ts).
+    const staleTimeoutMs = config.streamTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const monitor = new StreamMonitor(
+      createStaleHandler({
         processId,
-        EntryNormalizer.error(processId, 'Stream stale: no output for 60s', 'stream_stale'),
-      );
-    });
+        child,
+        timeoutMs: staleTimeoutMs,
+        onStaleDetected: (message) =>
+          this.emitEntry(processId, EntryNormalizer.error(processId, message, 'stream_stale')),
+        isStopped: () => this.stoppedEmitted.has(processId),
+        emitStopped: (reason) => this.emitStopped(processId, reason),
+      }),
+      staleTimeoutMs,
+    );
     this.streamMonitors.set(processId, monitor);
 
     // Line-by-line parsing of stream-json stdout
@@ -196,13 +208,13 @@ export class StreamJsonAdapter extends BaseAgentAdapter {
       );
     }
 
-    // Graceful SIGTERM
-    child.kill('SIGTERM');
+    // Graceful SIGTERM — whole process tree (cmd.exe/npx grandchildren)
+    killProcessTree(child.pid, 'SIGTERM');
 
     // SIGKILL fallback after 5 seconds
     const killTimer = setTimeout(() => {
       if (!child.killed) {
-        child.kill('SIGKILL');
+        killProcessTree(child.pid, 'SIGKILL');
       }
     }, 5000);
 

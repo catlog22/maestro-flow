@@ -49,6 +49,8 @@ $ARGUMENTS — user intent text, or special keywords.
 1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
 2. **Session before execution** — status.json created before any step runs
 3. **Auto flags only to supporting commands** — unlisted commands execute as-is
+4. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`, `goal_checklist_path`) + `goal-checklist.md`, then EMIT the `/goal` bind prompt. Reference maestro-ralph `A_DECOMPOSE_TASKS` for the full spec; do not duplicate logic
+5. **Status JSON: schema-additive + step-dynamic** — decomposition fields OPTIONAL (absent → old flat-chain behavior); `steps[]` is a living array grown at runtime by ralph-execute's `post-goal-audit`. Never remove/rename existing fields
 </invariants>
 
 <state_machine>
@@ -57,6 +59,7 @@ $ARGUMENTS — user intent text, or special keywords.
 S_PARSE         — 解析参数、检测 flags                PERSIST: —
 S_RESUME        — 扫描已有 session、恢复执行           PERSIST: —
 S_CLASSIFY      — 意图分类、chain 选择                 PERSIST: —
+S_DECOMPOSE     — 边界澄清、写执行准则+子目标清单       PERSIST: session.boundary_contract, .execution_criteria, .task_decomposition
 S_CREATE        — 创建 session + status.json           PERSIST: session (全量)
 S_DRY_RUN       — 显示 chain 后结束                    PERSIST: —
 S_CONFIRM       — 用户确认（auto_mode 跳过）            PERSIST: —
@@ -77,10 +80,15 @@ S_RESUME:
   → S_FALLBACK    WHEN: no session found
 
 S_CLASSIFY:
-  → S_CREATE      WHEN: chain resolved                    DO: A_CLASSIFY_INTENT
+  → S_DECOMPOSE   WHEN: chain resolved                    DO: A_CLASSIFY_INTENT
   → S_FALLBACK    WHEN: no match AND auto_mode
   → S_CLASSIFY    WHEN: no match AND not auto_mode        DO: A_CLARIFY
                    GUARD: max 2 clarification rounds → S_FALLBACK
+
+S_DECOMPOSE:
+  → S_CREATE      DO: A_DECOMPOSE_TASKS
+                   GUARD: broad intent (重构/全面/重写/迁移/overhaul/migrate/rewrite) on a multi-step lifecycle chain → MUST clarify even if auto_mode
+                   GUARD: single-step chain OR narrow intent OR chain ∈ {status,init,quick} → skip decomposition (pass through)
 
 S_CREATE:
   → S_DRY_RUN     WHEN: --dry-run flag                    DO: A_CREATE_SESSION
@@ -128,6 +136,21 @@ S_FALLBACK:
 1. `AskUserQuestion` with parsed intent + available chain options
 2. Re-classify with user response
 
+### A_DECOMPOSE_TASKS
+
+Shares the decomposition contract with maestro-ralph `A_DECOMPOSE_TASKS` — **reference that spec; do not duplicate the table logic here.** Condensed:
+
+1. Classify intent breadth (broad: 重构/全面/重写/迁移/overhaul/migrate/rewrite; narrow: single file/function/bug). Skip entirely for narrow / single-step / {status,init,quick} chains
+2. Broad/medium → `AskUserQuestion` ≤3 rounds: Scope (in/out) | Constraints (compat/API/perf/test bar) | Definition of Done
+3. Derive `execution_criteria` (3-6 imperative rules) + `task_decomposition` (outcome sub-goals, each `done_when` objectively verifiable and mapped to a ralph evidence artifact: verification.json / review.json / uat.md / test path)
+4. Write `{session_dir}/goal-checklist.md` (same template as maestro-ralph) with `ALL_GOALS_DONE` sentinel; set `goal_checklist_path`
+5. Append a `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }` node as the FINAL node — after the last evidence-producing step (verify/review/test), before a milestone-complete/close-out step if the chain ends with one. (Audit needs evidence artifacts to exist.) ralph-execute then dynamically grows `steps[]` for unmet sub-goals
+6. **Emit the `/goal` bind prompt:**
+   ```
+   📋 任务分解完成。复制下面一行设定目标(推荐)：
+   /goal 当 {session_dir}/goal-checklist.md 中子目标全 [x] 且含 ALL_GOALS_DONE 时达成；否则按执行准则继续推进且不越边界契约
+   ```
+
 ### A_CREATE_SESSION
 
 1. Read `.workflow/state.json` for project context (phase, milestone)
@@ -135,10 +158,13 @@ S_FALLBACK:
    ```json
    { "session_id", "source": "maestro", "intent", "task_type", "chain_name",
      "phase", "milestone", "auto_mode", "exec_mode", "cli_tool",
-     "context": { ... }, "steps": [{ "index", "skill", "args", "type", "status": "pending" }],
-     "waves": [], "current_step": 0, "status": "running" }
+     "context": { ... }, "steps": [{ "index", "skill", "args", "type", "status": "pending", "goal_ref": null }],
+     "waves": [], "current_step": 0, "status": "running",
+     "_comment": "↓ OPTIONAL additive block — present only if S_DECOMPOSE ran; absent → old flat-chain behavior",
+     "boundary_contract": {}, "execution_criteria": [], "task_decomposition": [], "goal_checklist_path": "" }
    ```
-3. Initialize tracking: `create_goal`, `update_plan`
+   Decomposition fields written ONLY if A_DECOMPOSE_TASKS produced them (additive; never break flat-chain readers)
+3. Initialize tracking via `TodoWrite`. The decomposition goal is bound by the user via the emitted `/goal` prompt
 4. If `--super`: read `maestro-super.md`, follow it completely
 
 </actions>
@@ -180,8 +206,11 @@ Unlisted commands have no auto flags.
 ### Success Criteria
 
 - [ ] Intent classified with task_type, complexity, clarity_score
+- [ ] Broad lifecycle intents decomposed (S_DECOMPOSE, ≤3 boundary questions) sharing maestro-ralph contract; narrow/single-step skip
+- [ ] Decomposition writes additive block + goal-checklist.md + post-goal-audit node; emits /goal bind prompt (no self-call, no phantom create_goal)
 - [ ] Chain selected and confirmed (or auto-confirmed)
-- [ ] Session dir created with status.json before execution
+- [ ] Session dir created with status.json before execution; decomposition fields additive-only
+- [ ] Tracking via TodoWrite (Claude); status.json steps[] grown dynamically by ralph-execute post-goal-audit
 - [ ] Auto flags propagated to supporting commands only
 - [ ] All chains dispatched via maestro-ralph-execute
 - [ ] Low-complexity intents routed to maestro-quick

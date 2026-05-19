@@ -19,7 +19,7 @@ Codex specifics:
 - **No agent spawning** — skills run directly in coordinator context, sequentially, one step at a time.
 - **Goal created via built-in tool** — `create_goal` binds the decomposed sub-goal checklist as a
   hard objective; `update_plan` mirrors steps; `update_goal` releases on convergence. Codex
-  registers the goal itself (unlike the Claude harness where `/goal` is user-only).
+  registers the goal itself via `create_goal`.
 </purpose>
 
 <context>
@@ -139,7 +139,7 @@ S_DECISION_EVAL:
 S_APPLY_VERDICT:
   -> S_LOAD_NEXT     WHEN: proceed             DO: add gate to passed_gates
   -> S_LOAD_NEXT     WHEN: post-goal-audit + all sub-goals met   DO: A_APPLY_GOAL_DONE
-  -> S_FIX_LOOP      WHEN: post-goal-audit + unmet sub-goals      DO: A_APPLY_GOAL_FIX
+  -> S_LOAD_NEXT     WHEN: post-goal-audit + unmet sub-goals      DO: A_APPLY_GOAL_FIX
   -> S_FIX_LOOP      WHEN: fix                 DO: clear passed_gates, increment retry
   -> S_PAUSED        WHEN: escalate
   -> S_LOAD_NEXT     WHEN: post-milestone + next milestone    DO: A_ADVANCE_MILESTONE
@@ -243,7 +243,7 @@ narrow → derive defaults from intent + codebase, skip questions.
 
 **5. Persist** (additive) into session: `boundary_contract`, `execution_criteria`, `task_decomposition`, `goal_checklist_path` = `{session_dir}/goal-checklist.md`. Write the checklist file (see Appendix: Goal Checklist Template).
 
-**6. Register goal via built-in tool** (Codex creates it directly — no user prompt):
+**6. Register goal via `create_goal`:**
 ```
 create_goal({
   objective: "Ralph: {intent} — converge all {N} sub-goals within boundary",

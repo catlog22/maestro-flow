@@ -24,6 +24,7 @@ import type {
 import { BaseAgentAdapter } from './base-adapter.js';
 import { EntryNormalizer } from './entry-normalizer.js';
 import { loadEnvFile } from './env-file-loader.js';
+import { killProcessTree } from './process-tree-kill.js';
 import { cleanSpawnEnv } from './env-cleanup.js';
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,8 @@ export class GeminiA2aAdapter extends BaseAgentAdapter {
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: true,
         windowsHide: true,
+        // POSIX: own process group so killProcessTree can signal the npx tree.
+        detached: process.platform !== 'win32',
       },
     );
 
@@ -167,11 +170,11 @@ export class GeminiA2aAdapter extends BaseAgentAdapter {
     // Abort SSE connection
     session.abortController?.abort();
 
-    // Kill server
-    session.serverProcess.kill('SIGTERM');
+    // Kill server — whole process tree (npx → node grandchildren)
+    killProcessTree(session.serverProcess.pid, 'SIGTERM');
     const killTimer = setTimeout(() => {
       if (!session.serverProcess.killed) {
-        session.serverProcess.kill('SIGKILL');
+        killProcessTree(session.serverProcess.pid, 'SIGKILL');
       }
     }, KILL_TIMEOUT_MS);
     session.serverProcess.once('exit', () => clearTimeout(killTimer));

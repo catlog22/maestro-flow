@@ -40,6 +40,9 @@ export interface ToolEntry {
   /** Reasoning effort level (undefined = tool default).
    *  Translated per-adapter: Claude → --effort, Codex → -c reasoning.effort. */
   reasoningEffort?: ReasoningEffort;
+  /** Stale-stream silence window in ms before force-terminating a silent CLI
+   *  (undefined = adapter default, 10 min). Overridden by `delegate --timeout`. */
+  streamTimeoutMs?: number;
 }
 
 export interface RoleMapping {
