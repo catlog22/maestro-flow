@@ -231,3 +231,23 @@ registerNotice({
     },
   ],
 });
+
+registerNotice({
+  version: '0.4.11',
+  title: 'Multi-CLI/IDE MCP registration + neutral .agents/ mirror',
+  highlights: [
+    '`install` 新增 7 个可选 MCP 目标：Cursor / Qoder / Trae / Kiro / Roo / VS Code Copilot / Gemini CLI',
+    'ExtraMcpConfig 多选 TUI：默认全部不勾选，目标路径在 UI 中可见',
+    '新增中性 `.agents/` 镜像（从 .claude/ 转换）+ 8 个 opt-in 组件给非 Claude IDE',
+    'maestro-ralph 状态机重排：goal-checklist 与 status.json 单一信息源对齐',
+    '新增快速入门页面（QuickStartPage）+ docs-site 布局/样式重构',
+  ],
+  actions: [
+    {
+      id: 'install-neutral-agents-global',
+      description: '为全局 ~/.agents/ 安装中性 skills + agents（供 Cursor/Qoder/Trae/Kiro/Roo/VS Code 等通用 IDE 使用）',
+      defaultYes: false,
+      run: () => runShell('maestro install --force --global --components agents-standard-skills,agents-standard-agents'),
+    },
+  ],
+});
