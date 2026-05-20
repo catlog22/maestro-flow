@@ -13,6 +13,7 @@ import {
   applyOverlaysPostInstall,
   addMcpServer,
   addCodexMcpServer,
+  addExtraMcpServer,
   copyRecursive,
   injectDocFile,
   createTargetBackup,
@@ -41,6 +42,8 @@ export interface InstallFlowResult {
   mcpRegistered: boolean;
   codexHooksInstalled: number;
   codexMcpRegistered: boolean;
+  extraMcpRegistered: string[];
+  extraMcpFailed: string[];
   manifestPath: string;
   statuslineInstalled: boolean;
   backupPath: string | null;
@@ -80,6 +83,8 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
         let mcpRegistered = false;
         let codexHooksInstalled = 0;
         let codexMcpRegistered = false;
+        const extraMcpRegistered: string[] = [];
+        const extraMcpFailed: string[] = [];
         let statuslineInstalled = false;
         let backupPath: string | null = null;
         const warnings: string[] = [];
@@ -192,6 +197,22 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           codexMcpRegistered = addCodexMcpServer(config.mode, config.projectPath, config.codexMcpTools, config.codexMcpProjectRoot || undefined);
         }
 
+        // Extra MCP targets (opt-in: Cursor / Qoder / Trae / Kiro / Roo / VS Code Copilot / Gemini CLI)
+        if (config.installExtraMcp) {
+          for (const targetId of config.extraMcpTargetIds) {
+            if (cancelled) return;
+            setStatus(`Registering MCP for ${targetId}...`);
+            const ok = addExtraMcpServer(
+              targetId,
+              config.mode,
+              config.projectPath,
+              config.mcpTools,
+              config.mcpProjectRoot || undefined,
+            );
+            (ok ? extraMcpRegistered : extraMcpFailed).push(targetId);
+          }
+        }
+
         // CLI tools config — first install creates, upgrade merges missing tools
         if (!cancelled) {
           const { initCliToolsConfig } = await import('../../config/cli-tools-config.js');
@@ -202,7 +223,7 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
 
         setDone(true);
         setStatus(t.install.execComplete);
-        onComplete({ filesInstalled, dirsCreated, filesSkipped, hooksInstalled, mcpRegistered, codexHooksInstalled, codexMcpRegistered, manifestPath, statuslineInstalled, backupPath, migrationWarnings: warnings });
+        onComplete({ filesInstalled, dirsCreated, filesSkipped, hooksInstalled, mcpRegistered, codexHooksInstalled, codexMcpRegistered, extraMcpRegistered, extraMcpFailed, manifestPath, statuslineInstalled, backupPath, migrationWarnings: warnings });
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }

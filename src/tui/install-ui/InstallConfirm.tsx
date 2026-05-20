@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { HookLevel } from '../../commands/hooks.js';
+import type { ExtraMcpTargetId } from '../../commands/install-backend.js';
 import { t } from '../../i18n/index.js';
 import { C, BORDER } from '../shared/index.js';
 
@@ -19,6 +20,8 @@ export interface InstallFlowConfig {
   installCodexMcp: boolean;
   codexMcpTools: string[];
   codexMcpProjectRoot: string;
+  installExtraMcp: boolean;
+  extraMcpTargetIds: ExtraMcpTargetId[];
   installStatusline: boolean;
   statuslineTheme: string;
   hookLevel: HookLevel;
@@ -113,6 +116,16 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
           />
         ) : (
           <Row label={t.install.confirmLabelCodexMcp} value={t.install.confirmSkipped} valueColor={C.neutral} />
+        )}
+
+        {config.installExtraMcp ? (
+          <Row
+            label="Extra MCP"
+            value={`${config.extraMcpTargetIds.length} target(s): ${config.extraMcpTargetIds.join(', ')}`}
+            valueColor={C.success}
+          />
+        ) : (
+          <Row label="Extra MCP" value={t.install.confirmSkipped} valueColor={C.neutral} />
         )}
 
         <Row

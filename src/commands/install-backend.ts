@@ -534,3 +534,188 @@ export const MCP_TOOLS = [
   'team_msg',
   'store_knowhow',
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Generic MCP server install — opt-in CLI/IDE targets
+//
+// Three formats based on consumer:
+//   - JSON_MCP_SERVERS: top-level `mcpServers` key, own mcp.json file
+//     (Cursor, Qoder, Trae, Kiro, Roo Code, Claude `.mcp.json`)
+//   - JSON_VSCODE_SERVERS: top-level `servers` key with `type: "stdio"`
+//     (VS Code Copilot `.vscode/mcp.json`)
+//   - JSON_GEMINI_MERGE: merge `mcpServers` into existing settings.json
+//     (Gemini CLI `.gemini/settings.json`)
+//
+// Resolved per target — see EXTRA_MCP_TARGETS below.
+// ---------------------------------------------------------------------------
+
+export type ExtraMcpTargetId =
+  | 'cursor' | 'qoder' | 'trae' | 'kiro' | 'roo'
+  | 'vscode-copilot' | 'gemini-cli';
+
+type McpFormat = 'json-mcpServers' | 'json-vscode-servers' | 'json-gemini-merge';
+
+interface ExtraMcpTargetSpec {
+  id: ExtraMcpTargetId;
+  label: string;
+  format: McpFormat;
+  /** Returns the config file path, or null when scope is unsupported. */
+  configPath: (scope: 'global' | 'project', projectPath: string) => string | null;
+}
+
+export const EXTRA_MCP_TARGETS: ExtraMcpTargetSpec[] = [
+  {
+    id: 'cursor',
+    label: 'Cursor (.cursor/mcp.json)',
+    format: 'json-mcpServers',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.cursor', 'mcp.json')
+      : join(homedir(), '.cursor', 'mcp.json'),
+  },
+  {
+    id: 'qoder',
+    label: 'Qoder (<proj>/mcp.json — Settings → MCP)',
+    format: 'json-mcpServers',
+    configPath: (scope, p) => scope === 'project'
+      // Qoder uses root-level mcp.json (no leading dot) per their docs
+      ? join(p, 'mcp.json')
+      // Global config lives under SharedClientCache; we write the canonical path,
+      // even though Qoder UI commonly bootstraps this on first launch.
+      : join(homedir(), '.qoder', 'SharedClientCache', 'mcp.json'),
+  },
+  {
+    id: 'trae',
+    label: 'Trae (.mcp.json)',
+    format: 'json-mcpServers',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.mcp.json')
+      : join(homedir(), '.trae', 'mcp.json'),
+  },
+  {
+    id: 'kiro',
+    label: 'Kiro (.kiro/settings/mcp.json)',
+    format: 'json-mcpServers',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.kiro', 'settings', 'mcp.json')
+      : join(homedir(), '.kiro', 'settings', 'mcp.json'),
+  },
+  {
+    id: 'roo',
+    label: 'Roo Code (.roo/mcp.json)',
+    format: 'json-mcpServers',
+    // Roo Code global config lives inside VS Code globalStorage — skip global
+    // (users almost always want project-level). Project = .roo/mcp.json.
+    configPath: (scope, p) => scope === 'project' ? join(p, '.roo', 'mcp.json') : null,
+  },
+  {
+    id: 'vscode-copilot',
+    label: 'VS Code Copilot (.vscode/mcp.json)',
+    format: 'json-vscode-servers',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.vscode', 'mcp.json')
+      // User-profile mcp.json — location varies by OS, command-driven in VS Code.
+      // We target the canonical app-data folder.
+      : process.platform === 'win32'
+        ? join(homedir(), 'AppData', 'Roaming', 'Code', 'User', 'mcp.json')
+        : process.platform === 'darwin'
+          ? join(homedir(), 'Library', 'Application Support', 'Code', 'User', 'mcp.json')
+          : join(homedir(), '.config', 'Code', 'User', 'mcp.json'),
+  },
+  {
+    id: 'gemini-cli',
+    label: 'Gemini CLI (.gemini/settings.json)',
+    format: 'json-gemini-merge',
+    configPath: (scope, p) => scope === 'project'
+      ? join(p, '.gemini', 'settings.json')
+      : join(homedir(), '.gemini', 'settings.json'),
+  },
+];
+
+function buildServerConfig(
+  enabledTools: string[],
+  projectRoot: string | undefined,
+  format: McpFormat,
+): Record<string, unknown> {
+  const isWin = process.platform === 'win32';
+  const env: Record<string, string> = {
+    MAESTRO_ENABLED_TOOLS: enabledTools.join(','),
+  };
+  if (projectRoot) env.MAESTRO_PROJECT_ROOT = projectRoot;
+
+  const base: Record<string, unknown> = {
+    command: isWin ? 'cmd' : 'maestro-mcp',
+    args: isWin ? ['/c', 'maestro-mcp'] : [],
+    env,
+  };
+
+  if (format === 'json-vscode-servers') {
+    return { type: 'stdio', ...base };
+  }
+  return base;
+}
+
+export function addExtraMcpServer(
+  targetId: ExtraMcpTargetId,
+  scope: 'global' | 'project',
+  projectPath: string,
+  enabledTools: string[],
+  projectRoot?: string,
+): boolean {
+  const spec = EXTRA_MCP_TARGETS.find((t) => t.id === targetId);
+  if (!spec) return false;
+  const fp = spec.configPath(scope, projectPath);
+  if (!fp) return false;
+
+  try {
+    const dir = dirname(fp);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+    const serverConfig = buildServerConfig(enabledTools, projectRoot, spec.format);
+    const containerKey = spec.format === 'json-vscode-servers' ? 'servers' : 'mcpServers';
+
+    let data: Record<string, unknown> = {};
+    if (existsSync(fp)) {
+      try {
+        data = JSON.parse(readFileSync(fp, 'utf-8'));
+      } catch {
+        // Corrupt JSON — back up before overwriting
+        try {
+          const backupPath = `${fp}.bak.${Date.now()}`;
+          writeFileSync(backupPath, readFileSync(fp, 'utf-8'));
+        } catch { /* best-effort */ }
+        data = {};
+      }
+    }
+    if (!data[containerKey] || typeof data[containerKey] !== 'object') {
+      data[containerKey] = {};
+    }
+    (data[containerKey] as Record<string, unknown>)['maestro-tools'] = serverConfig;
+    writeFileSync(fp, JSON.stringify(data, null, 2), 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function removeExtraMcpServer(
+  targetId: ExtraMcpTargetId,
+  scope: 'global' | 'project',
+  projectPath: string,
+): boolean {
+  const spec = EXTRA_MCP_TARGETS.find((t) => t.id === targetId);
+  if (!spec) return false;
+  const fp = spec.configPath(scope, projectPath);
+  if (!fp || !existsSync(fp)) return false;
+
+  try {
+    const data = JSON.parse(readFileSync(fp, 'utf-8')) as Record<string, unknown>;
+    const containerKey = spec.format === 'json-vscode-servers' ? 'servers' : 'mcpServers';
+    const servers = data[containerKey] as Record<string, unknown> | undefined;
+    if (!servers || !('maestro-tools' in servers)) return false;
+    delete servers['maestro-tools'];
+    writeFileSync(fp, JSON.stringify(data, null, 2), 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}

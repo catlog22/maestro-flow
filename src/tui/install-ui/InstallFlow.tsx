@@ -7,12 +7,13 @@ import { InstallHub, buildHubItems } from './InstallHub.js';
 import { ComponentGrid } from './ComponentGrid.js';
 import { HooksConfig } from './HooksConfig.js';
 import { McpConfig } from './McpConfig.js';
+import { ExtraMcpConfig } from './ExtraMcpConfig.js';
 import { StatuslineConfig } from './StatuslineConfig.js';
 import { BackupConfig } from './BackupConfig.js';
 import { InstallConfirm, type InstallFlowConfig } from './InstallConfirm.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
-import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS } from '../../commands/install-backend.js';
+import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS, type ExtraMcpTargetId } from '../../commands/install-backend.js';
 import { detectStatusline, CODEX_HOOK_LEVEL_DESCRIPTIONS, type HookLevel } from '../../commands/hooks.js';
 import { getAllManifests } from '../../core/manifest.js';
 import { t } from '../../i18n/index.js';
@@ -33,6 +34,7 @@ type FlowStep =
   | 'mode' | 'hub'
   | 'components_config' | 'hooks_config' | 'mcp_config'
   | 'codex_hooks_config' | 'codex_mcp_config'
+  | 'extra_mcp_config'
   | 'statusline_config' | 'backup_config'
   | 'confirm' | 'executing' | 'complete';
 
@@ -73,15 +75,18 @@ export function InstallFlow({
     mcp: initialStepIds ? initialStepIds.includes('mcp') : true,
     codexHooks: initialStepIds ? initialStepIds.includes('codexHooks') : false,
     codexMcp: initialStepIds ? initialStepIds.includes('codexMcp') : false,
+    extraMcp: initialStepIds ? initialStepIds.includes('extraMcp') : false,
     statusline: initialStepIds ? initialStepIds.includes('statusline') : false,
     backup: initialStepIds ? initialStepIds.includes('backup') : true,
   });
 
-  // Fine-grained config — default to last manifest selections if available
+  // Fine-grained config — default to last manifest selections if available.
+  // Fresh install: only components with defaultSelected !== false are pre-selected.
+  // Opt-in components (qoder, trae, .agents/, cursor) require explicit toggle.
   const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>(
     () => lastManifest?.selectedComponentIds?.length
       ? lastManifest.selectedComponentIds
-      : COMPONENT_DEFS.map((d) => d.id),
+      : COMPONENT_DEFS.filter((d) => d.defaultSelected !== false).map((d) => d.id),
   );
   const [hookLevel, setHookLevel] = useState<HookLevel>(
     () => (lastManifest?.hookLevel as HookLevel) || 'standard',
@@ -95,6 +100,9 @@ export function InstallFlow({
   const [codexMcpEnabled, setCodexMcpEnabled] = useState(true);
   const [codexMcpTools, setCodexMcpTools] = useState<string[]>([...MCP_TOOLS]);
   const [codexMcpProjectRoot, setCodexMcpProjectRoot] = useState('');
+
+  // Extra MCP targets (Cursor / Qoder / Trae / Kiro / Roo / VS Code Copilot / Gemini CLI) — default empty
+  const [extraMcpTargetIds, setExtraMcpTargetIds] = useState<ExtraMcpTargetId[]>([]);
 
   // Statusline — detect existing config + theme
   const [installStatusline, setInstallStatusline] = useState(false);
@@ -138,6 +146,8 @@ export function InstallFlow({
     installCodexMcp: enabledSteps.codexMcp && codexMcpEnabled,
     codexMcpTools,
     codexMcpProjectRoot,
+    installExtraMcp: enabledSteps.extraMcp && extraMcpTargetIds.length > 0,
+    extraMcpTargetIds,
     installStatusline: enabledSteps.statusline && installStatusline,
     statuslineTheme,
     hookLevel,
@@ -152,11 +162,12 @@ export function InstallFlow({
   }), [mode, projectPath, enabledSteps, hookLevel, selectedComponents.length,
     fileCount, mcpTools, mcpEnabled, selectedComponentIds, mcpProjectRoot,
     codexHookLevel, codexMcpEnabled, codexMcpTools, codexMcpProjectRoot,
+    extraMcpTargetIds,
     installStatusline, statuslineTheme, backupClaudeMd, backupAll]);
 
   // Hub items with live summary
   const hubItems = useMemo(() => buildHubItems(
-    enabledSteps as { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; statusline: boolean; backup: boolean },
+    enabledSteps as { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; extraMcp: boolean; statusline: boolean; backup: boolean },
     {
       componentCount: selectedComponents.length,
       fileCount,
@@ -166,12 +177,14 @@ export function InstallFlow({
       codexHookLevel,
       codexMcpToolCount: codexMcpTools.length,
       codexMcpEnabled,
+      extraMcpTargetCount: extraMcpTargetIds.length,
       statuslineDetected,
       backupClaudeMd,
       backupAll,
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,
     mcpEnabled, codexHookLevel, codexMcpTools.length, codexMcpEnabled,
+    extraMcpTargetIds.length,
     statuslineDetected, backupClaudeMd, backupAll]);
 
   // Toggle category enabled/disabled
@@ -187,6 +200,7 @@ export function InstallFlow({
       mcp: 'mcp_config',
       codexHooks: 'codex_hooks_config',
       codexMcp: 'codex_mcp_config',
+      extraMcp: 'extra_mcp_config',
       statusline: 'statusline_config',
       backup: 'backup_config',
     };
@@ -220,6 +234,7 @@ export function InstallFlow({
       else if (key.escape) setStep(isSubcommand ? 'confirm' : 'hub');
       return;
     }
+    // extra_mcp_config has its own keybindings inside ExtraMcpConfig; do not intercept here
 
     // Confirm: handled by InstallConfirm component
     // Hub, ComponentGrid: handled by their own useInput
@@ -370,6 +385,16 @@ export function InstallFlow({
             onEnableChange={setCodexMcpEnabled}
             onToolsChange={setCodexMcpTools}
             onRootChange={setCodexMcpProjectRoot}
+          />
+        )}
+
+        {step === 'extra_mcp_config' && (
+          <ExtraMcpConfig
+            mode={mode}
+            selectedIds={extraMcpTargetIds}
+            onSelectionChange={setExtraMcpTargetIds}
+            onDone={returnFromConfig}
+            onBack={() => setStep(isSubcommand ? 'confirm' : 'hub')}
           />
         )}
 

@@ -92,11 +92,12 @@ export function InstallHub({ items, onToggle, onEnter, onInstall, onBack }: Inst
 // ---------------------------------------------------------------------------
 
 export function buildHubItems(
-  enabled: { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; statusline: boolean; backup: boolean },
+  enabled: { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; extraMcp: boolean; statusline: boolean; backup: boolean },
   summaries: {
     componentCount: number; fileCount: number; hookLevel: HookLevel;
     mcpToolCount: number; mcpEnabled: boolean;
     codexHookLevel: HookLevel; codexMcpToolCount: number; codexMcpEnabled: boolean;
+    extraMcpTargetCount: number;
     statuslineDetected: string | null;
     backupClaudeMd: boolean; backupAll: boolean;
   },
@@ -154,6 +155,14 @@ export function buildHubItems(
       enabled: enabled.codexMcp,
       summary: enabled.codexMcp && summaries.codexMcpEnabled
         ? t.install.hubTools.replace('{count}', String(summaries.codexMcpToolCount))
+        : t.install.hubSkipped,
+    },
+    {
+      id: 'extraMcp',
+      label: 'Extra MCP (Cursor/Qoder/Trae/Kiro/Roo/VS Code/Gemini)',
+      enabled: enabled.extraMcp,
+      summary: enabled.extraMcp && summaries.extraMcpTargetCount > 0
+        ? `${summaries.extraMcpTargetCount} target(s)`
         : t.install.hubSkipped,
     },
     {

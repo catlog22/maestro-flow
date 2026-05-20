@@ -63,6 +63,17 @@ export function InstallResult({ result }: InstallResultProps) {
           value={result.codexMcpRegistered ? 'maestro-tools registered' : t.install.confirmSkipped}
           valueColor={result.codexMcpRegistered ? C.success : C.neutral}
         />
+        {(result.extraMcpRegistered.length > 0 || result.extraMcpFailed.length > 0) && (
+          <Row
+            label="Extra MCP:"
+            value={
+              result.extraMcpFailed.length === 0
+                ? `${result.extraMcpRegistered.join(', ')}`
+                : `${result.extraMcpRegistered.join(', ')}${result.extraMcpRegistered.length ? ' | ' : ''}failed: ${result.extraMcpFailed.join(', ')}`
+            }
+            valueColor={result.extraMcpFailed.length === 0 ? C.success : C.warning}
+          />
+        )}
         {result.backupPath && (
           <Box>
             <Text color={C.primary}>{'Backup:'.padEnd(13)}</Text>
