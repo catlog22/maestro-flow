@@ -37,8 +37,8 @@ Follow '~/.maestro/workflows/merge.md' completely.
 After successful merge, ask user once: "Record milestone learnings?" If yes, persist via `Skill("spec-add", "learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2>")`.
 
 **Next-step routing on completion:**
-- View dashboard → Skill({ skill: "manage-status" })
-- Audit milestone → Skill({ skill: "maestro-milestone-audit" })
+- View dashboard → view_file(AbsolutePath="<agy-skills-dir>/manage-status/SKILL.md") + execute inline
+- Audit milestone → view_file(AbsolutePath="<agy-skills-dir>/maestro-milestone-audit/SKILL.md") + execute inline
 </execution>
 
 <error_codes>
@@ -64,17 +64,3 @@ After successful merge, ask user once: "Record milestone learnings?" If yes, per
 - [ ] Worktree removed and branch deleted (unless --no-cleanup)
 - [ ] `worktrees.json` registry updated (entry removed)
 </success_criteria>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

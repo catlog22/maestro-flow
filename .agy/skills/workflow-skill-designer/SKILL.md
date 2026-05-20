@@ -151,7 +151,7 @@ view_file("phases/02-lite-execute.md")
 // Execute with executionContext (Mode 1)
 
 // WRONG: Skill routing (unnecessary round-trip)
-Skill(skill="workflow-lite-plan", args="--in-memory")
+view_file(AbsolutePath="<agy-skills-dir>/workflow-lite-plan/SKILL.md") + execute inline (args: "--in-memory")
 ```
 
 ### Pattern 8: Phase File Hygiene
@@ -163,7 +163,7 @@ Phase files are internal execution documents. They MUST NOT contain:
 | Flag parsing (`$ARGUMENTS.includes(...)`) | Preferences collected in SKILL.md | SKILL.md via ask_question |
 | Invocation syntax (`/skill-name "..."`) | Not user-facing docs | Removed or SKILL.md only |
 | Conversion provenance (`Source: Converted from...`) | Implementation detail | Removed |
-| Skill routing for inter-phase (`Skill(skill="...")`) | Use direct phase read | Direct `view_file("phases/...")` |
+| Skill routing for inter-phase (`view_file(AbsolutePath="<agy-skills-dir>/.../SKILL.md") + execute inline`) | Use direct phase read | Direct `view_file("phases/...")` |
 
 ### Pattern 9: Compact Recovery (Phase Persistence)
 
@@ -504,17 +504,3 @@ When designing a new workflow skill, answer these questions:
 | Does it need preference collection? | Interactive Preference Collection | Collect via ask_question in SKILL.md, pass as workflowPreferences |
 | Does phase N hand off to phase M? | Direct Phase Handoff (Pattern 7) | Read phase doc directly, not Skill() routing |
 | Will later phases run after long context? | Compact Recovery (Pattern 9) | Add sentinel + checkpoints, mark 🔄 in Phase Reference table |
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

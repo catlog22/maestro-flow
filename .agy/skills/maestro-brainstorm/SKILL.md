@@ -66,16 +66,16 @@ Follow '~/.maestro/workflows/brainstorm.md' completely.
 **Next-step routing on completion:**
 
 Auto mode:
-- Project not initialized → Skill({ skill: "maestro-init" })
-- Project initialized, need spec package → Skill({ skill: "maestro-roadmap", args: "--mode full --from-brainstorm {session_id}" })
-- Project initialized, quick roadmap → Skill({ skill: "maestro-roadmap", args: "--from-brainstorm {session_id}" })
-- Need deeper analysis first → Skill({ skill: "maestro-analyze", args: "{topic}" })
+- Project not initialized → view_file(AbsolutePath="<agy-skills-dir>/maestro-init/SKILL.md") + execute inline
+- Project initialized, need spec package → view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--mode full --from-brainstorm {session_id}")
+- Project initialized, quick roadmap → view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--from-brainstorm {session_id}")
+- Need deeper analysis first → view_file(AbsolutePath="<agy-skills-dir>/maestro-analyze/SKILL.md") + execute inline (args: "{topic}")
 - `html-prototypes/` produced with 2+ files and user wants to browse → load `~/.maestro/workflows/brainstorm-visualize.md` and launch visualizer server (optional, user-triggered)
 - DESIGN.md established during Step 3.5 → suggest: "Run `/maestro-impeccable build <feature-description>` to build with the established design system"
 
 Single role mode:
-- More roles needed → Skill({ skill: "maestro-brainstorm", args: "{next_role} --session {session_id}" })
-- All roles done, run synthesis → Skill({ skill: "maestro-brainstorm", args: "{topic} --session {session_id}" })
+- More roles needed → view_file(AbsolutePath="<agy-skills-dir>/maestro-brainstorm/SKILL.md") + execute inline (args: "{next_role} --session {session_id}")
+- All roles done, run synthesis → view_file(AbsolutePath="<agy-skills-dir>/maestro-brainstorm/SKILL.md") + execute inline (args: "{topic} --session {session_id}")
 </execution>
 
 <error_codes>
@@ -116,17 +116,3 @@ Single role mode:
 - [ ] Framework reference included when guidance-specification.md exists
 - [ ] Session metadata updated
 </success_criteria>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

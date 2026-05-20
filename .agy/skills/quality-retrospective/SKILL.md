@@ -41,7 +41,7 @@ Follow `~/.maestro/workflows/retrospective.md` Stages 1–8 in order. Key invari
 1. **Read-only until Stage 6** — Stages 1–5 must not write anything except the in-memory retrospective record.
 2. **Parallel lens dispatch** — Stage 4 spawns one Agent per active lens in a single message (multiple Agent tool calls). All agents use `subagent_type: "general-purpose"` and `run_in_background: false`.
 3. **Match canonical issues schema** — Stage 6 issue routing must produce rows that pass `jq` parsing and match the schema in `workflows/issue.md` Step 4 exactly (status `"open"`, full `issue_history` entry, all required fields).
-4. **Reuse `manage-learn tip` for note routing** — do not duplicate the learning pipeline; invoke via `Skill({ skill: "manage-learn", args: "tip ..." })`.
+4. **Reuse `manage-learn tip` for note routing** — do not duplicate the learning pipeline; invoke via `view_file(AbsolutePath="<agy-skills-dir>/manage-learn/SKILL.md") + execute inline (args: "tip ...")`.
 5. **Backward-compat with phase-transition** — append a one-line summary per insight to `.workflow/specs/learnings.md` if and only if that file already exists. Never create it.
 6. **Stable insight IDs** — `INS-{8 hex}` from `hash(phase_num + lens + title)` so re-runs do not duplicate.
 7. **Archive before overwrite** — if existing `retrospective.{md,json}` are being replaced, move them to `{artifact_dir}/.history/` with a timestamp suffix first.
@@ -71,23 +71,9 @@ Follow `~/.maestro/workflows/retrospective.md` Stages 1–8 in order. Key invari
 - [ ] If routing enabled (default): every recommendation either created an artifact or was explicitly skipped by user
 - [ ] Spec entries (if any) appended as `<spec-entry>` to matching `.workflow/specs/{category-file}.md`
 - [ ] Issue rows (if any) match canonical issues.jsonl schema (status "open", full issue_history, all required fields)
-- [ ] Note tips (if any) created via `Skill({ skill: "manage-learn", args: "tip ..." })`
+- [ ] Note tips (if any) created via `view_file(AbsolutePath="<agy-skills-dir>/manage-learn/SKILL.md") + execute inline (args: "tip ...")`
 - [ ] `specs/learnings.md` appended with one `<spec-entry>` per insight regardless of routing target
 - [ ] No existing phase artifacts modified (verification.json, review.json, plan.json untouched)
 - [ ] Confirmation banner displays routing counts and next-step suggestions
 - [ ] Next step: `/manage-status` to review state, or `/manage-issue list --source retrospective` to triage created issues, or `/manage-learn list` to browse the knowhow library
 </success_criteria>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

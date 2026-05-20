@@ -232,7 +232,7 @@ All tasks completed (no pending, no in_progress)
       |   |   Output final summary with artifact paths
       |   +- "Keep Active":
       |   |   Update session status="paused"
-      |   |   Output: "Resume with: Skill(skill='team-coordinate', args='resume')"
+      |   |   Output: "Resume with: view_file(AbsolutePath="<agy-skills-dir>/team-coordinate/SKILL.md") + execute inline (args: "resume")"
       |   +- "Export Results":
       |       ask_question for target directory
       |       Copy deliverables to target
@@ -346,17 +346,3 @@ handleCallback receives message with consensus_blocked flag
 | Dynamic role-spec file not found | Error, coordinator must regenerate from task-analysis |
 | capability_gap when role limit (5) reached | Attempt merge, else pause for user |
 | Completion action fails | Default to Keep Active, log warning |
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

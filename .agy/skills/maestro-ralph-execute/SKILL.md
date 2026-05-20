@@ -143,7 +143,7 @@ Write enriched args back to status.json (resume-safe).
 
 1. Mark step running, write status.json
 2. Display: `[{index}/{total}] ◆ {skill} [decision] Retry: {retry}/{max}`
-3. `Skill({ skill: "maestro-ralph" })` — ralph detects running decision → evaluates → handoff
+3. `view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph/SKILL.md") + execute inline` — ralph detects running decision → evaluates → handoff
 4. **This execution ends here** — ralph handles the handoff back
 
 ### A_EXEC_INTERNAL
@@ -253,17 +253,3 @@ Write enriched args back to status.json (resume-safe).
 - [ ] Self-invocation continues until complete or paused
 
 </appendix>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

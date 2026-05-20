@@ -68,7 +68,7 @@ Use ask_question to confirm:
 
 ### 2.5. Skill chain configuration
 
-After confirming the injection point, ask whether this overlay should chain to another skill upon completion. This enables the overlay's injected content to hand off to a skill via ask_question at runtime — similar to how `/maestro` chains commands via `Skill({ skill: "...", args: "..." })`.
+After confirming the injection point, ask whether this overlay should chain to another skill upon completion. This enables the overlay's injected content to hand off to a skill via ask_question at runtime — similar to how `/maestro` chains commands via `view_file(AbsolutePath="<agy-skills-dir>/.../SKILL.md") + execute inline (args: "...")`.
 
 Use ask_question:
 - **"No chain"** — standard overlay, no skill handoff
@@ -117,14 +117,14 @@ After the above step completes, use ask_question:
 - "Alternative: /maestro-verify" — Run verification instead
 
 On user selection:
-- Proceed → Skill({ skill: "quality-review", args: "{phase}" })
-- Alternative → Skill({ skill: "maestro-verify", args: "{phase}" })
+- Proceed → view_file(AbsolutePath="<agy-skills-dir>/quality-review/SKILL.md") + execute inline (args: "{phase}")
+- Alternative → view_file(AbsolutePath="<agy-skills-dir>/maestro-verify/SKILL.md") + execute inline (args: "{phase}")
 - Skip → continue normally
 ```
 
 Handoff rules:
 - Always include a **"Skip"** option — the user can always decline the chain
-- Use `Skill({ skill: "<name>", args: "..." })` syntax consistent with maestro.md chainMap
+- Use `view_file(AbsolutePath="<agy-skills-dir>/<name>/SKILL.md") + execute inline (args: "...")` syntax consistent with maestro.md chainMap
 - Mark handoff heading with `(overlay)` tag
 - Support runtime variable placeholders: `{phase}`, `{description}`, `{session_id}`
 - Keep handoff block under 10 lines of markdown
@@ -175,17 +175,3 @@ After the report, remind the user they can run `maestro overlay list` for the in
 - [ ] Injection point preview shown (with existing overlays + `>>>` marker) and confirmed before drafting
 - [ ] If chain configured, `content` includes Skill Handoff block with ask_question + Skip option + `Skill()` calls
 </success_criteria>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

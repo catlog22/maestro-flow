@@ -50,7 +50,7 @@ After knowhow extraction (step 4), scan `learnings.md` for promotion candidates:
 
 3. **Wiki island check**: Auto-trigger `wiki-connect --fix` to link newly extracted knowledge.
 
-If user confirms promotion, invoke `Skill({ skill: "spec-add", args: "<category> <content>" })` with promoted content, preserving original date and source traceability.
+If user confirms promotion, invoke `view_file(AbsolutePath="<agy-skills-dir>/spec-add/SKILL.md") + execute inline (args: "<category> <content>")` with promoted content, preserving original date and source traceability.
 
 **Next-step routing on completion:**
 - Cut a release → `/maestro-milestone-release`
@@ -75,17 +75,3 @@ If user confirms promotion, invoke `Skill({ skill: "spec-add", args: "<category>
 - [ ] Roadmap snapshot saved
 - [ ] project.md Context updated with milestone summary
 </success_criteria>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

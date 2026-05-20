@@ -49,7 +49,7 @@ Fork and sync algorithm steps are defined in workflow `fork.md`.
 Fork mode:
 - Enter worktree → `cd {wt.path} && /maestro-analyze`
 - Automated → `maestro delegate "run full lifecycle for milestone" --cd {wt.path} --mode write`
-- Status → Skill({ skill: "manage-status" })
+- Status → view_file(AbsolutePath="<agy-skills-dir>/manage-status/SKILL.md") + execute inline
 
 Sync mode:
 - Sync complete → resume work in worktree
@@ -86,17 +86,3 @@ Sync mode:
 - [ ] Shared artifacts re-copied (project.md, roadmap.md, config.json, specs/)
 - [ ] Conflicts reported if any
 </success_criteria>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

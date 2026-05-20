@@ -279,6 +279,40 @@ function rewriteAgentCalls(body) {
   return out;
 }
 
+// Rewrite Skill(skill="X", args="Y") → view_file(SKILL.md) + inline-execute.
+//
+// Antigravity has no Skill() tool — agents cannot programmatically call
+// another skill. The equivalent is to `view_file` the target SKILL.md and
+// execute its instructions inline in the current agent context. Args are
+// passed as conceptual input variables in the prose annotation.
+//
+// Handles both function-style (skill=..., args=...) and JS-object style
+// ({ skill: ..., args: ... }).
+function rewriteSkillCalls(body) {
+  let out = body;
+
+  // JS-object form first (more specific). Matches Skill({ skill: "X", args: "Y" })
+  // and Skill({ skill: "X" }).
+  out = out.replace(
+    /Skill\s*\(\s*\{\s*skill\s*:\s*["']([^"']+)["'](?:\s*,\s*args\s*:\s*["']([^"']*)["'])?\s*\}\s*\)/g,
+    (_full, name, args) => formatInlineSkill(name, args)
+  );
+
+  // Function-style form. Matches Skill(skill="X", args="Y") and Skill(skill="X").
+  out = out.replace(
+    /Skill\s*\(\s*skill\s*=\s*["']([^"']+)["'](?:\s*,\s*args\s*=\s*["']([^"']*)["'])?\s*\)/g,
+    (_full, name, args) => formatInlineSkill(name, args)
+  );
+
+  return out;
+}
+
+function formatInlineSkill(name, args) {
+  const argLine = args ? ` (args: ${JSON.stringify(args)})` : '';
+  // Inline form — compact, fits in tables/state-machine DO clauses.
+  return `view_file(AbsolutePath="<agy-skills-dir>/${name}/SKILL.md") + execute inline${argLine}`;
+}
+
 const SUB_AGENT_PREAMBLE = (typeNames) => `\n## Sub-Agent Registration (Antigravity)\n\n` +
 `Before any \`invoke_subagent\` call below, register each sub-agent type once per session by reading the system_prompt from \`<agy-agents-dir>/<name>.md\` and passing it to \`define_subagent\`. The \`<agy-agents-dir>\` is:\n` +
 `- global install: \`~/.gemini/antigravity-cli/agents/\`\n` +
@@ -287,7 +321,7 @@ typeNames.map(n => `- \`define_subagent(name="${n}", description="<from agents/$
 `\n\n**ConversationId tracking**: \`invoke_subagent\` returns a ConversationId per spawned instance. Subsequent \`send_message(Recipient=<ConversationId>, Message=...)\` calls require that ConversationId — never use the role name as the recipient.\n\n` +
 `---\n`;
 
-const CONVERSION_NOTES = `\n<!--\nMaestro: converted from .claude/. Semantic differences worth knowing:\n\n- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json\n  (agy's manage_task handles run_command async tasks, NOT named-task tracking)\n- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on\n  .workflow/.team/<session>/.msg/messages.jsonl\n- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent\n- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at\n  .workflow/.team/<session>/\n- TodoWrite → write_to_file append on .workflow/todos.jsonl\n- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name\n-->\n`;
+const CONVERSION_NOTES = '';
 
 // ---------------------------------------------------------------------------
 // File conversion
@@ -306,9 +340,11 @@ function convertText(content, opts = {}) {
     if (subAgentTypes.length > 0) hasAgent = true;
   }
 
-  // Always rewrite Agent(...) call sites and apply simple replacements —
-  // agent files have prose mentions of Agent() that also need updating.
+  // Always rewrite Agent(...) and Skill(...) call sites + apply simple
+  // replacements. Agent files have prose mentions of these that also need
+  // updating; skills/commands have the actual call sites.
   let convertedBody = rewriteAgentCalls(body);
+  convertedBody = rewriteSkillCalls(convertedBody);
   convertedBody = applySimpleBodyReplacements(convertedBody);
 
   // Frontmatter rewrite

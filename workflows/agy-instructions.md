@@ -74,6 +74,22 @@ Antigravity uses an explicit two-phase model for sub-agents — unlike Claude's 
 
 **Background OS tasks vs sub-agents**: `manage_task` handles `run_command` async instances (list / kill / status / send_input). Do **not** repurpose it for named task tracking — use `.workflow/tasks/<id>.json` files instead.
 
+## Cross-Skill Invocation
+
+Agent-internal chaining uses the **inline-execute** pattern:
+
+```
+view_file(AbsolutePath="<agy-skills-dir>/<target-skill>/SKILL.md") + execute inline (args: "...")
+```
+
+`<agy-skills-dir>` resolves to:
+- global install: `~/.gemini/antigravity-cli/skills/`
+- workspace install: `<project>/.agents/skills/`
+
+The agent reads the target SKILL.md, treats its body as additional instructions, and executes them in the same conversation context. Args are passed conceptually as input variables — substitute them when running the loaded instructions.
+
+User-initiated invocation uses `/skills`.
+
 ## Cross-Worker Coordination
 
 Antigravity has no built-in message bus. For shared logs across workers, write JSONL lines to `.workflow/.team/<session>/.msg/messages.jsonl`:

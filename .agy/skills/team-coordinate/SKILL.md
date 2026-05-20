@@ -37,7 +37,7 @@ Universal team coordination skill: analyze task -> generate role-specs -> dispat
 
 ```
 +---------------------------------------------------+
-|  Skill(skill="team-coordinate")                 |
+|  view_file(AbsolutePath="<agy-skills-dir>/team-coordinate/SKILL.md") + execute inline                 |
 |  args="task description"                           |
 +-------------------+-------------------------------+
                     |
@@ -102,7 +102,7 @@ Always route to coordinator. Coordinator reads `roles/coordinator/role.md` and e
 
 User just provides task description.
 
-**Invocation**: `Skill(skill="team-coordinate", args="task description")`
+**Invocation**: `view_file(AbsolutePath="<agy-skills-dir>/team-coordinate/SKILL.md") + execute inline (args: "task description")`
 
 **Lifecycle**:
 ```
@@ -167,7 +167,7 @@ ask_question({
 | Choice | Steps |
 |--------|-------|
 | Archive & Clean | Update session status="completed" -> TeamDelete -> output final summary with artifact paths |
-| Keep Active | Update session status="paused" -> output: "Resume with: Skill(skill='team-coordinate', args='resume')" |
+| Keep Active | Update session status="paused" -> output: "Resume with: view_file(AbsolutePath="<agy-skills-dir>/team-coordinate/SKILL.md") + execute inline (args: "resume")" |
 | Export Results | ask_question(target path) -> copy artifacts to target -> Archive & Clean |
 
 ---
@@ -265,17 +265,3 @@ Coordinator supports `resume` / `continue` for interrupted sessions:
 | Fast-advance spawns wrong task | Coordinator reconciles on next callback |
 | capability_gap reported | Coordinator generates new role-spec via handleAdapt |
 | Completion action fails | Default to Keep Active, log warning |
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

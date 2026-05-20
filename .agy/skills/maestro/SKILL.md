@@ -105,7 +105,7 @@ S_CONFIRM:
   → END           WHEN: user cancels
 
 S_DISPATCH:
-  → END           DO: Skill({ skill: "maestro-ralph-execute" })
+  → END           DO: view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph-execute/SKILL.md") + execute inline
 
 S_FALLBACK:
   → S_CLASSIFY    WHEN: user provides new intent           DO: ask_question
@@ -219,17 +219,3 @@ Unlisted commands have no auto flags.
 - [ ] (super) Each milestone scored >= 80%
 
 </appendix>
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->

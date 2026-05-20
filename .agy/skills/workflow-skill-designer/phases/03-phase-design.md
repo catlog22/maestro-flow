@@ -34,7 +34,7 @@ Phase files are internal execution documents. They MUST NOT contain the followin
 | Flag parsing (`$ARGUMENTS.includes(...)`) | Grep: `\$ARGUMENTS\.includes` | SKILL.md via ask_question → `workflowPreferences` |
 | Invocation syntax (`/skill-name "..."`) | Grep: `\/\w+[\-:]\w+\s+"` | Removed entirely (phase files are not user-facing) |
 | Conversion provenance (`Source: Converted from...`) | Grep: `Source:.*Converted from` | Removed entirely (implementation detail) |
-| Skill routing for inter-phase (`Skill(skill="...")`) | Grep: `Skill\(skill=` | Direct `view_file("phases/0N-xxx.md")` |
+| Skill routing for inter-phase (`view_file(AbsolutePath="<agy-skills-dir>/.../SKILL.md") + execute inline`) | Grep: `Skill\(skill=` | Direct `view_file("phases/0N-xxx.md")` |
 
 ### Preference Reference Pattern
 
@@ -60,7 +60,7 @@ view_file("phases/02-lite-execute.md")
 // Execute with executionContext (Mode 1)
 
 // WRONG: Skill routing (unnecessary round-trip)
-Skill(skill="workflow-lite-plan", args="--in-memory")
+view_file(AbsolutePath="<agy-skills-dir>/workflow-lite-plan/SKILL.md") + execute inline (args: "--in-memory")
 ```
 
 ### Content Restriction Enforcement
@@ -456,17 +456,3 @@ Expected phase file sizes relative to their source commands:
 ## Next Phase
 
 Return to orchestrator, then auto-continue to [Phase 4: Validation & Integration](04-validation.md).
-
-<!--
-Maestro: converted from .claude/. Semantic differences worth knowing:
-
-- TaskCreate / TaskUpdate / TaskList / TaskGet → file-based at .workflow/tasks/<id>.json
-  (agy's manage_task handles run_command async tasks, NOT named-task tracking)
-- mcp__ccw-tools__team_msg(log|broadcast|read|get_state) → write_to_file/view_file on
-  .workflow/.team/<session>/.msg/messages.jsonl
-- Skill(skill=X, args=Y) → user-triggered slash command in agy; cannot be invoked from an agent
-- TeamCreate / TeamDelete → no agy equivalent; rely on directory scaffolding at
-  .workflow/.team/<session>/
-- TodoWrite → write_to_file append on .workflow/todos.jsonl
-- send_message Recipient is a ConversationId returned by invoke_subagent, not a role name
--->
