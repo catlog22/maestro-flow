@@ -139,18 +139,20 @@ S_FALLBACK:
 
 ### A_DECOMPOSE_TASKS
 
-Shares the decomposition contract with maestro-ralph `A_DECOMPOSE_TASKS` — **reference that spec; do not duplicate the table logic here.** Condensed:
+与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约 —— 引用该规范，不重复表格。Condensed:
 
-1. Classify intent breadth (broad: 重构/全面/重写/迁移/overhaul/migrate/rewrite; narrow: single file/function/bug). Skip entirely for narrow / single-step / {status,init,quick} chains
-2. Broad/medium → `ask_question` ≤3 rounds: Scope (in/out) | Constraints (compat/API/perf/test bar) | Definition of Done
-3. Derive `execution_criteria` (3-6 imperative rules) + `task_decomposition` (outcome sub-goals, each `done_when` objectively verifiable and mapped to a ralph evidence artifact: verification.json / review.json / uat.md / test path)
-4. Write `{session_dir}/goal-checklist.md` (same template as maestro-ralph) with `ALL_GOALS_DONE` sentinel; set `goal_checklist_path`
-5. Append a `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }` node as the FINAL node — after the last evidence-producing step (verify/review/test), before a milestone-complete/close-out step if the chain ends with one. (Audit needs evidence artifacts to exist.) ralph-execute then dynamically grows `steps[]` for unmet sub-goals
-6. **Emit the `/goal` bind prompt:**
+1. 分类意图广度（broad: 重构/全面/重写/迁移/overhaul/migrate/rewrite；narrow: 单文件/函数/bug）。narrow / 单步 / `{status,init,quick}` 链直接跳过
+2. broad/medium → `ask_question` ≤3 轮：Scope（in/out）| Constraints（兼容/API/perf/test）| Definition of Done
+3. 派生 `execution_criteria`（3-6 条命令式规则）+ `task_decomposition`（outcome 子目标，`done_when` 客观可校验，绑定到 ralph 产物：verification.json / review.json / uat.md / test path）
+4. **status.json 为唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition` / `goal_checklist_path`；从 status.json 投影渲染 `{session_dir}/goal-checklist.md`（同 maestro-ralph 的 Sync Rule，含 Resume 区块指向 `/maestro-ralph continue`）
+5. 在链路末尾（evidence 产出步骤之后、milestone-complete/close-out 之前）追加 `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }`。ralph-execute 在该节点动态生长 `steps[]` 以收敛未达成子目标
+6. **输出 `/goal` 绑定提示词（参考文档 + 内嵌 ralph 调用）：**
    ```
-   📋 任务分解完成。复制下面一行设定目标(推荐)：
-   /goal 当 {session_dir}/goal-checklist.md 中子目标全 [x] 且含 ALL_GOALS_DONE 时达成；否则按执行准则继续推进且不越边界契约
+   📋 任务分解完成。复制下面一行设定目标，会话在子目标全部达成前不停：
+
+   /goal 目标达成条件: {session_dir}/status.json 中 task_decomposition[*].status 全部为 "done"（等价: {session_dir}/goal-checklist.md 末尾含 ALL_GOALS_DONE）。未达成时: 阅读 {session_dir}/goal-checklist.md 取得"执行准则/边界契约/子目标"作为行动手册, 然后调用 /maestro-ralph continue 推进下一步; 严禁手动执行 skill 或越界。
    ```
+   `/goal` 仅用户可输入；判据以 status.json 为权威，哨兵为等价信号。
 
 ### A_CREATE_SESSION
 
@@ -208,7 +210,7 @@ Unlisted commands have no auto flags.
 
 - [ ] Intent classified with task_type, complexity, clarity_score
 - [ ] Broad lifecycle intents decomposed (S_DECOMPOSE, ≤3 boundary questions) sharing maestro-ralph contract; narrow/single-step skip
-- [ ] Decomposition writes additive block + goal-checklist.md + post-goal-audit node; emits /goal bind prompt (no self-call, no phantom create_goal)
+- [ ] status.json 为唯一真源；goal-checklist.md 为投影视图（Resume 区块内嵌 `/maestro-ralph continue`）；post-goal-audit 节点追加；/goal 提示词内含"读 checklist + 调 /maestro-ralph continue"双重指引
 - [ ] Chain selected and confirmed (or auto-confirmed)
 - [ ] Session dir created with status.json before execution; decomposition fields additive-only
 - [ ] Tracking via TodoWrite (Claude); status.json steps[] grown dynamically by ralph-execute post-goal-audit

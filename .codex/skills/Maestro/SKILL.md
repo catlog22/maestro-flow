@@ -251,18 +251,18 @@ Read `.workflow/state.json` and route by condition:
 
 ### A_DECOMPOSE_TASKS
 
-Shares the decomposition contract with maestro-ralph `A_DECOMPOSE_TASKS` — **reference that spec; do not duplicate.** Condensed:
+与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约 —— 引用该规范，不重复。Condensed:
 
-1. Classify intent breadth. Skip for narrow / single-step / {status,init,quick} chains
-2. Broad/medium → `AskUserQuestion` ≤3 rounds: Scope (in/out) | Constraints (compat/API/perf/test bar) | Definition of Done
-3. Derive `execution_criteria` (3-6 imperative rules) + `task_decomposition` (outcome sub-goals; each `done_when` objectively verifiable, mapped to a ralph evidence artifact: verification.json / review.json / uat.md / test path)
-4. Write `{session_dir}/goal-checklist.md` (same template as maestro-ralph) with `ALL_GOALS_DONE` sentinel; set `goal_checklist_path`
-5. Append `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }` as the FINAL node — after the last evidence-producing step (verify/review/test), before a milestone-complete/close-out step if present (audit needs evidence artifacts) → dynamic step growth for unmet sub-goals
+1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
+2. broad/medium → `AskUserQuestion` ≤3 轮：Scope（in/out）| Constraints（兼容/API/perf/test）| Definition of Done
+3. 派生 `execution_criteria`（3-6 条命令式规则）+ `task_decomposition`（outcome 子目标，`done_when` 可校验，绑定到 ralph evidence 产物）
+4. **status.json 为唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition` / `goal_checklist_path`；从 status.json 投影渲染 `{session_dir}/goal-checklist.md`（同 maestro-ralph Sync Rule，含 Resume 区块指向 `$maestro --continue`）
+5. 链路末尾（evidence 产出步骤后、milestone-complete/close-out 前）追加 `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }`。S_DECISION_EVAL 在该节点动态生长 `steps[]`
 6. **Register goal via `create_goal`:**
    ```
    create_goal({ objective: "Maestro {chain}: {intent} — converge {N} sub-goals within boundary",
      success_criteria: task_decomposition.map(g => `${g.id}: ${g.done_when}`),
-     constraints: [...execution_criteria, "stay within boundary_contract"] })
+     constraints: [...execution_criteria, "stay within boundary_contract; resume via $maestro --continue"] })
    ```
 
 ### A_CREATE_SESSION
@@ -277,9 +277,13 @@ Shares the decomposition contract with maestro-ralph `A_DECOMPOSE_TASKS` — **r
      "steps": [{ "index", "type": "skill|decision", "skill", "args", "status": "pending", "goal_ref": null }],
      "waves": [], "current_step": 0, "status": "running",
      "_comment": "↓ OPTIONAL additive block — present only if S_DECOMPOSE ran; absent → flat-chain behavior",
-     "boundary_contract": {}, "execution_criteria": [], "task_decomposition": [], "goal_checklist_path": "" }
+     "boundary_contract": {}, "execution_criteria": [],
+     "task_decomposition": [{ "id": "G1", "goal": "", "done_when": "", "evidence": "", "status": "pending|done", "completed_at": null }],
+     "task_decomposition_all_done": false,
+     "goal_checklist_path": "", "goal_checklist_synced_at": null }
    ```
    Decomposition fields written ONLY if A_DECOMPOSE_TASKS produced them (additive)
+4. goal-checklist.md 是 status.json 的投影：从 task_decomposition 渲染（同 maestro-ralph Sync Rule）；Resume 区块写入 `$maestro --continue`
 4. Initialize tracking:
    - If decomposed: goal already registered by A_DECOMPOSE_TASKS. Else: `create_goal({ objective: "Maestro {chain}: {N} steps [{skill list}]" })`
    - `update_plan({ plan: steps.map(step => ({ step, status: "pending" })) })`
@@ -310,13 +314,13 @@ Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechani
 
 ### A_GOAL_AUDIT_EVALUATE
 
-Entry action of S_DECISION_EVAL — mirrors maestro-ralph `A_GOAL_AUDIT_EVALUATE` (reference that spec; do not duplicate). Condensed:
+S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condensed:
 
-1. Read `session.task_decomposition` + `goal_checklist_path`
-2. For each sub-goal `status != "done"`: resolve its `evidence` artifact under current phase scratch dir
-3. Delegate read-only audit (`maestro delegate --role analyze --mode analysis`): for each unmet sub-goal, read evidence, judge against `done_when`, return `STATUS(all_met|has_unmet) / UNMET=[{id,gap,target_phase}]`
-4. For each met sub-goal → set `task_decomposition[i].status="done"` + flip `[ ]→[x]` in goal-checklist.md; persist
-5. Produce verdict (`all_met` / `has_unmet`) consumed by S_DECISION_EVAL transition. GUARD: retry >= max_retries AND still unmet → escalate
+1. 读 `session.task_decomposition`（status.json，真源）
+2. 对每个 `status != "done"` 的子目标：解析 `evidence` 产物
+3. `maestro delegate --role analyze --mode analysis` 读取 evidence、对照 done_when 判定，返回 `STATUS=all_met|has_unmet / UNMET=[{id,gap,target_phase}] / CONFIDENCE_SCORE`
+4. status.json 为写入目标：每个达成子目标 `status="done"` + `completed_at=now`；然后从 status.json 重渲染 checklist（Sync Rule）
+5. Verdict（`all_met` / `has_unmet`）由 S_DECISION_EVAL 消费。GUARD: retry >= max_retries AND still unmet → escalate
 
 ### A_APPLY_GOAL_FIX
 
@@ -324,9 +328,10 @@ Entry action of S_DECISION_EVAL — mirrors maestro-ralph `A_GOAL_AUDIT_EVALUATE
 
 ### A_APPLY_GOAL_DONE
 
-1. Set all `task_decomposition[*].status="done"`, persist; append `ALL_GOALS_DONE` to goal-checklist.md
-2. `update_goal({ status: "complete" })` — release decomposition goal
-3. Proceed to chain's terminal step
+1. status.json（真源）：全部 `task_decomposition[*].status="done"` + `completed_at=now` + `task_decomposition_all_done=true`
+2. 从 status.json 重渲染 `goal-checklist.md`（见 Sync Rule）；文件末追加 `ALL_GOALS_DONE`
+3. `update_goal({ status: "complete" })` —— 释放分解 goal
+4. 继续到 chain 的终结步骤
 
 ### A_FINALIZE
 
@@ -464,6 +469,7 @@ Entry action of S_DECISION_EVAL — mirrors maestro-ralph `A_GOAL_AUDIT_EVALUATE
 - [ ] Intent classified and chain resolved
 - [ ] Broad lifecycle intents decomposed (S_DECOMPOSE, ≤3 boundary questions) sharing maestro-ralph contract; narrow/single-step skip
 - [ ] Goal registered via built-in `create_goal`; status.json decomposition fields additive-only
+- [ ] status.json 为唯一真源；goal-checklist.md 是从 JSON 重渲染的投影视图（Resume 区块指向 `$maestro --continue`）
 - [ ] post-goal-audit node appended as final node (after evidence-producing steps); unmet sub-goals dynamically grow steps[] (goal_ref tagged)
 - [ ] Session dir initialized with status.json before first step
 - [ ] Every skill invoked DIRECTLY in-context — NO spawn_agents_on_csv, NO wave/CSV/worker
