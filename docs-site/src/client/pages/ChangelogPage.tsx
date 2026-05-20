@@ -17,6 +17,13 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.4.10',
+    date: '2026-05',
+    changes: [
+      { type: 'fix', text_en: 'Added .agy/agents and .agy/skills to npm package files; previously missing, agy CLI assets failed to install', text_zh: '将 .agy/agents 和 .agy/skills 加入 npm 包 files，修复 agy CLI 资源安装缺失问题' },
+    ],
+  },
+  {
     version: '0.4.9',
     date: '2026-05',
     changes: [
