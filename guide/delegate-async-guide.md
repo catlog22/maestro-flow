@@ -1,83 +1,82 @@
-# Delegate Async Execution Guide
+---
+title: "Delegate 异步执行指南"
+---
 
-Async task delegation via detached worker processes, with broker-managed lifecycle, message injection, and MCP notifications.
+通过独立 worker 进程进行异步任务委托，支持 broker 管理的生命周期、消息注入和 MCP 通知。
 
 ---
 
-## Quick Start
+## 快速开始
 
-### Launch via Claude Code MCP
+### 通过 Claude Code MCP 启动
 
 ```bash
-# Start Claude Code with Maestro MCP server
 claude --dangerously-load-development-channels server:maestro --dangerously-skip-permissions
 ```
 
-Once connected, delegate tools (`delegate_message`, `delegate_status`, `delegate_output`, `delegate_tail`, `delegate_cancel`) are available as MCP tools automatically.
+委托工具（`delegate_message`、`delegate_status`、`delegate_output`、`delegate_tail`、`delegate_cancel`）自动作为 MCP 工具可用。
 
-### Launch via CLI
+### 通过 CLI 启动
 
 ```bash
-# Async (background) — returns immediately with execId
-maestro delegate "analyze auth module for vulnerabilities" --to gemini --async
+# 异步（后台）—— 立即返回 execId
+maestro delegate "分析 auth 模块安全漏洞" --to gemini --async
 
-# Foreground — blocks until completion
+# 同步（前台）—— 阻塞直到完成
 maestro delegate "say hello" --to claude
 ```
 
 ---
 
-## Command Reference
+## 命令参考
 
-### Main Command
+### 主命令
 
 ```bash
 maestro delegate "<PROMPT>" [options]
 ```
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--to <tool>` | Agent: gemini, qwen, codex, claude, opencode | First enabled in config |
-| `--role <role>` | Capability role for auto tool selection (analyze, explore, review, implement, plan, brainstorm, research) | — |
-| `--mode <mode>` | `analysis` (read-only) or `write` (create/modify/delete) | `analysis` |
-| `--effort <level>` | Reasoning effort level (low, medium, high, max) | — |
-| `--model <model>` | Model override | Tool's `primaryModel` |
-| `--cd <dir>` | Working directory | Current directory |
-| `--rule <template>` | Load protocol + prompt template | — |
-| `--id <id>` | Execution ID | Auto: `{prefix}-{HHmmss}-{rand4}` |
-| `--resume [id]` | Resume previous session | — |
-| `--includeDirs <dirs>` | Additional directories (comma-separated) | — |
-| `--session <id>` | MCP session ID for notifications | Auto-detected |
-| `--backend <type>` | `direct` or `terminal` | `direct` |
-| `--async` | Run in background, return immediately | foreground |
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `--to <tool>` | Agent：gemini, qwen, codex, claude, opencode | 配置中第一个启用的 |
+| `--role <role>` | 能力角色（analyze, explore, review, implement, plan, brainstorm, research） | — |
+| `--mode <mode>` | `analysis`（只读）或 `write`（创建/修改/删除） | `analysis` |
+| `--effort <level>` | 推理强度（low, medium, high, max） | — |
+| `--model <model>` | 模型覆盖 | 工具的 `primaryModel` |
+| `--cd <dir>` | 工作目录 | 当前目录 |
+| `--rule <template>` | 加载协议 + prompt 模板 | — |
+| `--id <id>` | 执行 ID | 自动：`{prefix}-{HHmmss}-{rand4}` |
+| `--resume [id]` | 恢复前次会话 | — |
+| `--includeDirs <dirs>` | 额外目录（逗号分隔） | — |
+| `--session <id>` | MCP 会话 ID，用于通知 | 自动检测 |
+| `--backend <type>` | `direct` 或 `terminal` | `direct` |
+| `--async` | 后台运行，立即返回 | 前台 |
 
-### Subcommands
+### 子命令
 
 ```bash
-maestro delegate show                              # Recent 20 executions
-maestro delegate show --all                        # Up to 100
-maestro delegate status <id>                       # Broker + history state
-maestro delegate status <id> --events 10           # With more broker events
-maestro delegate output <id>                       # Assistant output
-maestro delegate output <id> --verbose             # With timestamps
-maestro delegate output <id> --all                 # Include thinking/reasoning entries
-maestro delegate output <id> --offset <n>          # Character offset to start from
-maestro delegate output <id> --limit <n>           # Max characters to return
-maestro delegate tail <id>                         # Recent events + history
+maestro delegate show                              # 最近 20 条执行
+maestro delegate show --all                        # 最多 100 条
+maestro delegate status <id>                       # Broker + 历史状态
+maestro delegate status <id> --events 10           # 带更多 broker 事件
+maestro delegate output <id>                       # Assistant 输出
+maestro delegate output <id> --verbose             # 带时间戳
+maestro delegate output <id> --all                 # 包含 thinking/reasoning 条目
+maestro delegate output <id> --offset <n>          # 字符偏移
+maestro delegate output <id> --limit <n>           # 最大字符数
+maestro delegate tail <id>                         # 最近事件 + 历史
 maestro delegate tail <id> --events 20 --history 20
-maestro delegate cancel <id>                       # Request cancellation
-maestro delegate message <id> "text"               # Inject follow-up message
+maestro delegate cancel <id>                       # 请求取消
+maestro delegate message <id> "text"               # 注入后续消息
 maestro delegate message <id> "text" --delivery after_complete
-maestro delegate messages <id>                     # List queued messages
+maestro delegate messages <id>                     # 列出排队消息
 ```
 
-### MCP Tools
+### MCP 工具
 
-All subcommands are also available as MCP tools:
-
-| CLI Subcommand | MCP Tool | Extra Params |
-|---------------|----------|-------------|
-| `message <id> "text"` | `delegate_message` | `delivery` (inject/after_complete) |
+| CLI 子命令 | MCP 工具 | 额外参数 |
+|-----------|---------|---------|
+| `message <id> "text"` | `delegate_message` | `delivery`（inject/after_complete） |
 | `messages <id>` | `delegate_messages` | — |
 | `status <id>` | `delegate_status` | `eventLimit` |
 | `output <id>` | `delegate_output` | — |
@@ -86,7 +85,7 @@ All subcommands are also available as MCP tools:
 
 ---
 
-## Job Lifecycle
+## 任务生命周期
 
 ```
 queued → running → completed
@@ -96,166 +95,121 @@ queued → running → completed
          input_required
 ```
 
-**Execution ID** format: `{prefix}-{HHmmss}-{rand4}` (e.g. `gem-143022-a7f2`)
+**执行 ID**：`{prefix}-{HHmmss}-{rand4}`（如 `gem-143022-a7f2`）
+前缀：gemini→`gem`，qwen→`qwn`，codex→`cdx`，claude→`cld`，opencode→`opc`
 
-Prefix mapping: gemini→`gem`, qwen→`qwn`, codex→`cdx`, claude→`cld`, opencode→`opc`
+<details>
+<summary>Delegate vs CLI 功能对比</summary>
 
----
+| 功能 | `maestro cli` | `maestro delegate` |
+|------|:---:|:---:|
+| 同步执行 | ✓ | ✓ |
+| 异步执行 | — | ✓ `--async` |
+| Prompt 输入 | `-p "..."` | 位置参数 `"..."` |
+| 工具选择 | `--tool` | `--to` |
+| Mode（analysis/write） | ✓ | ✓ |
+| 模型覆盖 | ✓ | ✓ |
+| 工作目录 | `--cd` | `--cd` |
+| Rule 模板 | `--rule` | `--rule` |
+| 自定义执行 ID | `--id` | `--id` |
+| 会话恢复 | `--resume` | `--resume` |
+| Backend 选择 | — | `--backend` |
+| MCP 会话绑定 | — | `--session` |
+| show（列出执行） | ✓ | ✓ |
+| output（获取结果） | ✓ | ✓ |
+| output --verbose | ✓ | ✓ |
+| watch（实时流） | ✓ | — |
+| status（broker + 历史） | — | ✓ |
+| tail（最近事件） | — | ✓ |
+| cancel | — | ✓ |
+| message 注入 | — | ✓ |
+| message after_complete | — | ✓ |
+| MCP 工具等价 | — | ✓（6 个工具） |
+| MCP channel 通知 | — | ✓ |
+| Snapshot（最新输出预览） | — | ✓ |
 
-## Delegate vs CLI: Feature Comparison
+**Delegate 可完全替代 CLI。** CLI 独有功能（`watch`、`output --tail`）仅为便捷快捷方式。
 
-| Feature | `maestro cli` | `maestro delegate` |
-|---------|:---:|:---:|
-| **Sync execution** (foreground, block until done) | ✅ | ✅ |
-| **Async execution** (background, return immediately) | — | ✅ `--async` |
-| **Prompt input** | `-p "..."` | positional `"..."` |
-| **Tool selection** | `--tool` | `--to` |
-| **Mode** (analysis/write) | ✅ | ✅ |
-| **Model override** | ✅ | ✅ |
-| **Working directory** | `--cd` | `--cd` |
-| **Rule templates** | `--rule` | `--rule` |
-| **Custom exec ID** | `--id` | `--id` |
-| **Session resume** | `--resume` | `--resume` |
-| **Include dirs** | `--includeDirs` | `--includeDirs` |
-| **Backend selection** | — | `--backend` (direct/terminal) |
-| **MCP session binding** | — | `--session` |
-| **show** (list executions) | ✅ | ✅ |
-| **output** (get result) | ✅ | ✅ |
-| **output --verbose** | ✅ | ✅ |
-| **output --tail/--lines** | ✅ | — |
-| **watch** (real-time stream) | ✅ | — |
-| **status** (broker + history) | — | ✅ |
-| **tail** (recent events) | — | ✅ |
-| **cancel** | — | ✅ |
-| **message inject** | — | ✅ |
-| **message after_complete** | — | ✅ |
-| **messages** (list queue) | — | ✅ |
-| **MCP tool equivalents** | — | ✅ (6 tools) |
-| **MCP channel notifications** | — | ✅ |
-| **Hook fallback notifications** | — | ✅ |
-| **Broker event tracking** | — | ✅ |
-| **Snapshot** (agent latest output preview) | — | ✅ (`status` Preview field) |
-
-### Summary
-
-**CLI-only (not needed in normal workflows):**
-- `watch` — real-time output streaming (debug/development use only)
-- `output --tail/--lines` — tail last N lines (convenience shortcut)
-
-**Delegate-only:**
-- Async execution with `--async`
-- Broker lifecycle management (status, tail, cancel)
-- Message injection and chaining (inject, after_complete)
-- MCP tools for programmatic access
-- MCP channel push notifications
-- Backend selection (direct/terminal)
-- **Snapshot** — `status` shows `Preview:` with the agent's latest output
-
-### Can delegate fully replace CLI?
-
-**Yes.** The two CLI-only features (`watch` and `output --tail`) are convenience shortcuts, not essential capabilities. In normal usage, delegate's `status` (with `Preview:` snapshot) and `output` cover the same needs. Delegate is the recommended interface — it adds async execution, message injection, cancellation, and MCP integration on top of everything CLI offers.
+</details>
 
 ---
 
-## Message Delivery
+## 消息投递
 
-### Delivery Modes
-
-| Mode | Behavior | Use For |
-|------|----------|---------|
-| `inject` | Routes to running worker via stdin; non-interactive adapters auto cancel + relaunch | Supplementary context, course correction |
-| `after_complete` | Queues message; relaunches delegate with queued message on completion | Chained tasks, post-processing |
-
-### Examples
+| 模式 | 行为 | 用途 |
+|------|------|------|
+| `inject` | 通过 stdin 路由到运行中的 worker | 补充上下文、纠偏 |
+| `after_complete` | 排队消息；完成后重新启动 | 链式任务、后处理 |
 
 ```bash
-# Inject supplementary context into a running delegate
+# 向运行中的 delegate 注入上下文
 maestro delegate message gem-143022-a7f2 "Also check src/utils/sanitize.ts"
 
-# Chain: analyze then auto-fix
-maestro delegate "analyze auth vulnerabilities" --to gemini --async
-maestro delegate message gem-143022-a7f2 "Fix all critical vulnerabilities" --delivery after_complete
+# 链式：分析 → 自动修复
+maestro delegate "分析 auth 安全漏洞" --to gemini --async
+maestro delegate message gem-143022-a7f2 "修复所有严重漏洞" --delivery after_complete
 ```
 
 ---
 
-## Prompt Construction
+## Prompt 构建
 
-Prompt assembly order:
+组装顺序：**Mode 协议** → **用户 prompt** → **Rule 模板**（如指定）
 
-1. **Mode protocol** — `~/.maestro/templates/cli/protocols/{mode}-protocol.md`
-2. **User prompt** — the prompt text
-3. **Rule template** — `~/.maestro/templates/cli/prompts/{rule}.txt` (if specified)
-
-### Prompt Template (6 Fields)
+### Prompt 模板（6 字段）
 
 ```
-PURPOSE: [goal] + [why] + [success criteria]
-TASK: [step 1] | [step 2] | [step 3]
+PURPOSE: [目标] + [原因] + [成功标准]
+TASK: [步骤 1] | [步骤 2] | [步骤 3]
 MODE: analysis|write
-CONTEXT: @[file patterns] | Memory: [prior work context]
-EXPECTED: [output format] + [quality criteria]
-CONSTRAINTS: [scope limits] | [special requirements]
+CONTEXT: @[文件模式] | Memory: [前序工作上下文]
+EXPECTED: [输出格式] + [质量标准]
+CONSTRAINTS: [范围限制] | [特殊要求]
 ```
 
-### Rule Templates
+### Rule 模板
 
-**Analysis**: `analysis-trace-code-execution`, `analysis-diagnose-bug-root-cause`, `analysis-analyze-code-patterns`, `analysis-review-architecture`, `analysis-review-code-quality`, `analysis-analyze-performance`, `analysis-assess-security-risks`
+**分析**：`analysis-trace-code-execution`、`analysis-diagnose-bug-root-cause`、`analysis-analyze-code-patterns`、`analysis-review-architecture`、`analysis-review-code-quality`、`analysis-analyze-performance`、`analysis-assess-security-risks`
 
-**Planning**: `planning-plan-architecture-design`, `planning-breakdown-task-steps`, `planning-design-component-spec`, `planning-plan-migration-strategy`
+**规划**：`planning-plan-architecture-design`、`planning-breakdown-task-steps`、`planning-design-component-spec`、`planning-plan-migration-strategy`
 
-**Development**: `development-implement-feature`, `development-refactor-codebase`, `development-generate-tests`, `development-implement-component-ui`, `development-debug-runtime-issues`
+**开发**：`development-implement-feature`、`development-refactor-codebase`、`development-generate-tests`、`development-implement-component-ui`、`development-debug-runtime-issues`
 
 ---
 
-## Notification System
+## 通知系统
 
-Delegate completion notifies the caller through dual channels:
+双通道：**MCP channel**（主要，推送）+ **Hook 回退**（JSONL 文件）
 
-1. **MCP channel** (primary) — push notification with structured `meta` (exec_id, event_type, status)
-2. **Hook fallback** — JSONL file read by `delegate-monitor` PostToolUse hook
-
-Notification format:
-```
-[DELEGATE DONE] gem-143022-a7f2 gemini/analysis completed
-```
-
-Throttling: `status_update` events at 10s, `snapshot` at 15s.
+节流：`status_update` 每 10s，`snapshot` 每 15s。
 
 ---
 
-## Workflows
+## 工作流
 
-### Launch → Monitor → Retrieve
+### 启动 → 监控 → 获取
 
 ```bash
-maestro delegate "analyze auth module" --to gemini --async
+maestro delegate "分析 auth 模块" --to gemini --async
 # → execId: gem-143022-a7f2
 
 maestro delegate status gem-143022-a7f2
 # → status: running
 
-# Wait for MCP notification or hook callback...
-
 maestro delegate output gem-143022-a7f2
-# → full analysis result
+# → 完整分析结果
 ```
 
-### Chain: Analyze → Auto-Fix
+### 链式：分析 → 自动修复
 
 ```bash
-maestro delegate "find all SQL injection vulnerabilities" --to gemini --async
-maestro delegate message gem-143022-a7f2 "Fix all critical vulnerabilities" --delivery after_complete
-# → message queues, auto-relaunches after analysis completes
+maestro delegate "查找所有 SQL 注入漏洞" --to gemini --async
+maestro delegate message gem-143022-a7f2 "修复所有严重漏洞" --delivery after_complete
 ```
 
-### Cancel → Redirect
+### 取消 → 重定向
 
 ```bash
 maestro delegate cancel gem-143022-a7f2
-maestro delegate status gem-143022-a7f2
-# → status: cancelled
-
-# Launch new delegate with adjusted scope
-maestro delegate "analyze only the payment module" --to gemini --async
+maestro delegate "只分析支付模块" --to gemini --async
 ```

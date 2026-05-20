@@ -1,4 +1,6 @@
-# Issue Discovery Guide
+---
+title: "Issue Discovery Guide"
+---
 
 A complete manual for the Maestro Issue system, covering issue discovery, management, and the full closure workflow.
 
@@ -6,23 +8,19 @@ A complete manual for the Maestro Issue system, covering issue discovery, manage
 
 ## 1. Overview
 
-### Positioning of the Issue System
+The Maestro Issue system is a problem-tracking mechanism independent of the Phase pipeline. The Phase pipeline (analyze -> plan -> execute -> verify) drives predefined development tasks, while the Issue system captures and manages problems discovered in the codebase.
 
-The Maestro Issue system is a problem-tracking mechanism independent of the Phase pipeline. The Phase pipeline (analyze → plan → execute → verify) drives predefined development tasks, while the Issue system captures and manages problems discovered in the codebase — whether security vulnerabilities, performance bottlenecks, reliability defects, or maintainability concerns.
-
-The two can operate independently or work in concert:
+The two can operate independently or in concert:
 
 - **Independent operation**: Discover and manage Issues directly without affecting Phase progress
 - **Linked mode**: Issues are injected into the Phase pipeline via the `--gaps` parameter to drive root cause analysis and remediation
 
-### The Role of discover
-
-`/manage-issue-discover` is the entry point of the Issue system, responsible for automatically discovering problems from the codebase. It provides two discovery modes:
+`/manage-issue-discover` is the entry point of the Issue system, providing two discovery modes:
 
 - **Multi-perspective full scan**: 8 specialized perspectives analyze in parallel, providing comprehensive coverage of code quality dimensions
 - **Prompt-driven exploration**: Deep, targeted exploration around user-specified concerns
 
-Discovery results are automatically deduplicated, Issue records are generated, and they enter the Issue closure workflow.
+Discovery results are automatically deduplicated, Issue records are generated, and they enter the closure workflow.
 
 ---
 
@@ -31,32 +29,21 @@ Discovery results are automatically deduplicated, Issue records are generated, a
 ### Basic Usage
 
 ```bash
-# Interactive mode selection
-/manage-issue-discover
-
-# Multi-perspective full scan
-/manage-issue-discover multi-perspective
-
-# Prompt-driven exploration
-/manage-issue-discover by-prompt "Check API error handling completeness"
-
-# Auto mode (skip confirmation)
-/manage-issue-discover multi-perspective -y
-
-# Specify file scope
-/manage-issue-discover multi-perspective --scope=src/auth/**
-
-# Deep exploration (by-prompt mode)
-/manage-issue-discover by-prompt "Database query performance" --depth=deep
+/manage-issue-discover                                    # Interactive mode selection
+/manage-issue-discover multi-perspective                  # 8-perspective full scan
+/manage-issue-discover by-prompt "Check API error handling"  # Prompt-driven
+/manage-issue-discover multi-perspective -y               # Skip confirmation
+/manage-issue-discover multi-perspective --scope=src/auth/**  # Specify scope
+/manage-issue-discover by-prompt "Database query perf" --depth=deep  # Deep exploration
 ```
 
 ### Parameter Reference
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| _(no parameter)_ | Interactive mode selection | — |
-| `multi-perspective` | 8-perspective parallel scan | — |
-| `by-prompt "..."` | Prompt-driven exploration | — |
+| _(no parameter)_ | Interactive mode selection | -- |
+| `multi-perspective` | 8-perspective parallel scan | -- |
+| `by-prompt "..."` | Prompt-driven exploration | -- |
 | `-y` / `--yes` | Skip confirmation prompts | Confirmation required |
 | `--scope=<pattern>` | File scan scope | `**/*` |
 | `--depth=standard\|deep` | Exploration depth (by-prompt only) | `standard` |
@@ -65,9 +52,17 @@ Discovery results are automatically deduplicated, Issue records are generated, a
 
 ### 8-Perspective Full Scan Mode
 
-Full scan mode launches parallel analysis from 8 specialized perspectives, each handled by an independent Agent:
+Launches parallel analysis from 8 specialized perspectives (4 Agents per batch):
 
-#### Perspective Definitions
+```
+Batch 1: security, performance, reliability, maintainability
+Batch 2: scalability, ux, accessibility, compliance
+```
+
+Each perspective Agent scans source files, records `file:line` evidence, assesses severity (critical/high/medium/low), and suggests remediation direction.
+
+<details>
+<summary>Perspective Definitions (8 dimensions)</summary>
 
 | Perspective | Focus Area | Core Question |
 |-------------|-----------|---------------|
@@ -80,122 +75,64 @@ Full scan mode launches parallel analysis from 8 specialized perspectives, each 
 | **ACCESSIBILITY** | Screen readers, keyboard navigation, color contrast, ARIA labels, focus management | What barriers exist for users with disabilities? |
 | **COMPLIANCE** | Missing logging, audit trails, data retention, privacy controls, regulatory requirements | Which regulatory or policy requirements are unmet? |
 
-#### Execution Flow
-
-The full scan runs in two concurrent batches (4 Agents per batch):
-
-```
-Batch 1: security, performance, reliability, maintainability
-Batch 2: scalability, ux, accessibility, compliance
-```
-
-Each perspective Agent will:
-
-1. Scan source files within the specified scope
-2. Identify issues and record `file:line` evidence
-3. Assess severity (critical / high / medium / low)
-4. Suggest remediation direction
+</details>
 
 #### Result Deduplication
 
-Raw findings from all perspectives are merged and deduplicated:
-
-- Grouped by `file:line`
-- Entries with description similarity > 80% are merged
-- The record with the higher severity is retained
+Raw findings from all perspectives are merged and deduplicated: grouped by `file:line`, entries with description similarity > 80% are merged, the record with the higher severity is retained.
 
 #### Output Example
 
 ```
 Discovery Session: DBP-20260513-143022
 Mode: multi-perspective
-Raw findings: 47
-Unique issues: 31
+Raw findings: 47 → Unique issues: 31
 
-Per-perspective breakdown:
-  SECURITY:        8 → 5 unique
-  PERFORMANCE:     7 → 5 unique
-  RELIABILITY:     6 → 4 unique
-  MAINTAINABILITY: 5 → 4 unique
-  SCALABILITY:     5 → 4 unique
-  UX:              6 → 4 unique
-  ACCESSIBILITY:   5 → 3 unique
-  COMPLIANCE:      5 → 2 unique
-
-Severity breakdown:
-  critical:  3
-  high:      8
-  medium:   12
-  low:       8
-
-Next steps:
-  /manage-issue list --severity critical
-  /manage-issue list
-  /manage-issue-discover by-prompt "..."
+Severity: critical(3) high(8) medium(12) low(8)
+Next: /manage-issue list --severity critical
 ```
 
 ---
 
 ### by-prompt Mode
 
-Prompt-driven mode performs deep, targeted exploration around user-specified concerns, suitable for focused investigation.
+Prompt-driven mode performs deep, targeted exploration around user-specified concerns.
 
-#### Execution Flow
+**Execution Flow**:
 
-1. **Decompose exploration dimensions**: The CLI delegate breaks the user Prompt into 3-5 searchable exploration dimensions, each containing a search pattern, file pattern, and finding criteria
-2. **Collect code context**: For each dimension, perform semantic search and pattern search, collecting matching code snippets
-3. **Iterative exploration loop** (up to 3 rounds):
-   - Round 1: Analyze context, identify issues and coverage gaps
-   - Round 2: Refine search patterns for gaps, search adjacent files, merge findings
-   - Round 3: Final sweep covering undiscovered high-severity patterns and cross-module interactions
-4. **Generate Issues**: Deduplicate and create Issue records
+1. Break the user Prompt into 3-5 exploration dimensions (search pattern + file pattern + finding criteria)
+2. For each dimension, perform semantic search and pattern search, collecting code snippets
+3. Iterative exploration (up to 3 rounds): identify issues -> refine search -> final sweep
+4. Deduplicate and create Issue records
 
-#### Use Cases
+**Use Cases**: Investigate specific module problems, targeted security audits, dependency analysis before refactoring, systematic investigation of user-reported issues.
 
-- Investigate problems in specific functional modules (e.g., "Check payment flow reliability")
-- Targeted security audits (e.g., "Find SQL injection risks")
-- Dependency analysis before code refactoring (e.g., "Analyze coupling between modules")
-- Systematic investigation of user-reported issues
-
-#### Options When No Prompt Is Specified
-
-If no text is provided after `by-prompt`, the system prompts selection from preset directions:
-
-- Error handling gaps
-- API contract violations
-- Test coverage gaps
-- Custom (custom input)
+**When no Prompt is specified**, the system prompts selection from preset directions: Error handling gaps / API contract violations / Test coverage gaps / Custom.
 
 ---
 
 ### Artifact Paths
 
-Each discovery session creates a complete artifact record under `.workflow/issues/discoveries/{SESSION_ID}/`:
+Each discovery session creates artifacts under `.workflow/issues/discoveries/{SESSION_ID}/` (Session ID format: `DBP-YYYYMMDD-HHmmss`):
 
 | File | Description |
 |------|-------------|
 | `discovery-state.json` | Session metadata and progress tracking |
 | `discovery-issues.jsonl` | Issues created in this session |
-| `{PERSPECTIVE}-findings.json` | Raw findings per perspective (full scan mode) |
-| `exploration-plan.json` | Exploration dimension definitions (by-prompt mode) |
+| `{PERSPECTIVE}-findings.json` | Raw findings per perspective (full scan) |
+| `exploration-plan.json` | Exploration dimension definitions (by-prompt) |
 | `{dimension}-context.md` | Code context collected per dimension |
 | `exploration-log.md` | Round-by-round exploration log |
-
-Session ID format: `DBP-{YYYYMMDD}-{HHmmss}`, e.g., `DBP-20260513-143022`.
 
 ---
 
 ### How Discovery Results Become Issues
 
-The discovery workflow automatically performs the following conversion:
-
-1. Raw findings are mapped to priority by severity: `critical → 1`, `high → 2`, `medium → 3`, `low → 4`
-2. An Issue ID is generated (`ISS-YYYYMMDD-NNN` format), scanning existing Issues to avoid conflicts
-3. A complete Issue record is constructed (including `context.location`, `fix_direction`, `tags`, etc.)
-4. The record is written to two locations simultaneously:
-   - `.workflow/issues/issues.jsonl` (global Issue list)
-   - `.workflow/issues/discoveries/{SESSION_ID}/discovery-issues.jsonl` (session record)
-5. The Issue starts in `registered` status, with source marked as `discovery`
+1. Severity mapped to priority: `critical->1`, `high->2`, `medium->3`, `low->4`
+2. Issue ID generated (`ISS-YYYYMMDD-NNN`), scanning to avoid conflicts
+3. Complete Issue record constructed (including `context.location`, `fix_direction`, `tags`)
+4. Written to both `issues.jsonl` (global) and `discovery-issues.jsonl` (session record)
+5. Initial status `registered`, source `discovery`
 
 ---
 
@@ -206,23 +143,11 @@ The discovery workflow automatically performs the following conversion:
 ### Basic Usage
 
 ```bash
-# Create
 /manage-issue create --title "Memory leak" --severity high
-
-# List
-/manage-issue list
 /manage-issue list --severity critical --status open
-
-# Details
 /manage-issue status ISS-20260513-001
-
-# Update
 /manage-issue update ISS-20260513-001 --status in_progress --priority 1
-
-# Close
 /manage-issue close ISS-20260513-001 --resolution "Fixed memory leak"
-
-# Link to task
 /manage-issue link ISS-20260513-001 --task TASK-003
 ```
 
@@ -230,7 +155,8 @@ The discovery workflow automatically performs the following conversion:
 
 ### Subcommand Details
 
-#### create — Create an Issue
+<details>
+<summary>create -- Create an Issue</summary>
 
 ```bash
 /manage-issue create --title "Title" [options]
@@ -238,96 +164,70 @@ The discovery workflow automatically performs the following conversion:
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--title TEXT` | Issue title (**required**, interactive prompt if missing) | — |
+| `--title TEXT` | Title (**required**) | Interactive prompt |
 | `--severity VALUE` | critical / high / medium / low | `medium` |
 | `--source VALUE` | planned / supplement / bug / review / verification / discovery / manual | `manual` |
-| `--phase VALUE` | Phase reference, e.g., `01-auth` | — |
-| `--milestone VALUE` | Milestone reference, e.g., `MVP` (auto-derived from `state.json`) | — |
+| `--phase VALUE` | Phase reference | -- |
+| `--milestone VALUE` | Milestone reference (auto-derived from `state.json`) | -- |
 | `--description TEXT` | Detailed description | Interactive prompt |
 | `--priority NUMBER` | 1-5, lower is higher priority | `3` |
-| `--tags TAG1,TAG2` | Tag list | — |
+| `--tags TAG1,TAG2` | Tag list | -- |
 
-After creation, the system will:
+After creation, the system auto-generates an ID (`ISS-YYYYMMDD-NNN`), prompts for additional context, and checks for cross-Milestone conflicts on `supplement` type Issues.
 
-1. Auto-generate an ID (`ISS-YYYYMMDD-NNN`, incrementing by date)
-2. Prompt for additional context (background, reproduction steps, related Issues)
-3. Check for cross-Milestone conflicts on `supplement` type Issues
+</details>
 
-#### list — List Issues
-
-```bash
-/manage-issue list [filter options]
-```
+<details>
+<summary>list -- List Issues</summary>
 
 | Option | Description |
 |--------|-------------|
-| `--status VALUE` | Filter by status: open / in_progress / completed / failed / deferred |
-| `--phase VALUE` | Filter by Phase reference |
-| `--milestone VALUE` | Filter by Milestone reference |
+| `--status VALUE` | open / in_progress / completed / failed / deferred |
+| `--phase VALUE` | Filter by Phase |
+| `--milestone VALUE` | Filter by Milestone |
 | `--severity VALUE` | Filter by severity |
 | `--source VALUE` | Filter by source |
-| `--all` | Include closed Issues (read from `issue-history.jsonl`) |
+| `--all` | Include closed (read from `issue-history.jsonl`) |
 
 Output is sorted by priority ascending, severity descending.
 
-#### status — View Issue Details
+</details>
+
+<details>
+<summary>status / update / close / link</summary>
+
+**status** displays full Issue details (title, status, severity, description, fix direction, context, tags, history, feedback):
 
 ```bash
 /manage-issue status ISS-20260513-001
 ```
 
-Displays the full Issue details: title, status, severity, priority, description, fix direction, context, tags, affected components, history, and feedback.
-
-#### update — Update an Issue
+**update** modifies fields; status changes are automatically recorded in `issue_history`:
 
 ```bash
-/manage-issue update ISS-20260513-001 [field options]
+/manage-issue update ISS-20260513-001 --status in_progress --priority 1 --add-tag urgent
+# Options: --severity, --tags, --phase, --milestone, --fix-direction, --description, --note
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--status VALUE` | New status: open / in_progress |
-| `--priority NUMBER` | New priority: 1-5 |
-| `--severity VALUE` | New severity |
-| `--tags TAG1,TAG2` | Replace tags |
-| `--add-tag TAG` | Append a tag |
-| `--phase VALUE` | Set Phase reference |
-| `--milestone VALUE` | Set Milestone reference |
-| `--fix-direction TEXT` | Set fix direction |
-| `--description TEXT` | Update description |
-| `--note TEXT` | Add a feedback entry |
-
-Status changes are automatically recorded in `issue_history`.
-
-#### close — Close an Issue
+**close** resolves and moves to history list:
 
 ```bash
-/manage-issue close ISS-20260513-001 --resolution "Fix description" [--status completed]
+/manage-issue close ISS-20260513-001 --resolution "Fix description" [--status completed|failed|deferred]
 ```
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--resolution TEXT` | Resolution description (**required**) | Interactive prompt |
-| `--status VALUE` | Final status: completed / failed / deferred | `completed` |
-
-Closing moves the Issue from the active list to the history list.
-
-#### link — Link an Issue to a Task
+**link** creates a bidirectional link (Issue `affected_components` <-> Task `issue_refs`):
 
 ```bash
 /manage-issue link ISS-20260513-001 --task TASK-003
 ```
 
-Creates a bidirectional link:
-
-- The Task ID is added to the Issue's `affected_components`
-- The Issue ID is added to the Task's `issue_refs`
+</details>
 
 ---
 
 ### issues.jsonl Format
 
-All Issues are stored in JSONL (one JSON object per line), based on the `issue.json` template:
+All Issues are stored in JSONL. Key fields:
 
 ```json
 {
@@ -339,159 +239,83 @@ All Issues are stored in JSONL (one JSON object per line), based on the `issue.j
   "source": "discovery",
   "phase_ref": "01-auth",
   "milestone_ref": "MVP",
-  "gap_ref": null,
-  "description": "Refresh token does not rotate correctly under concurrent request scenarios...",
-  "fix_direction": "Use database locks to ensure atomic token rotation",
-  "context": {
-    "location": "src/auth/token.ts:45",
-    "suggested_fix": "Introduce optimistic locking mechanism...",
-    "notes": "Discovered by SECURITY in DBP-20260513-143022"
-  },
+  "description": "...",
+  "fix_direction": "Use database locks to ensure atomic rotation",
+  "context": { "location": "src/auth/token.ts:45", "suggested_fix": "..." },
   "tags": ["SECURITY", "auth"],
   "affected_components": ["src/auth/token.ts"],
-  "feedback": [],
-  "issue_history": [
-    {
-      "timestamp": "2026-05-13T14:30:22.000Z",
-      "from_status": null,
-      "to_status": "registered",
-      "actor": "discovery-agent",
-      "note": "Issue created"
-    }
-  ],
-  "created_at": "2026-05-13T14:30:22.000Z",
-  "updated_at": "2026-05-13T14:30:22.000Z",
-  "resolved_at": null,
-  "resolution": null
+  "issue_history": [{ "from_status": null, "to_status": "registered", "note": "Issue created" }]
 }
 ```
 
-**Storage locations**:
-
-| File | Description |
-|------|-------------|
-| `.workflow/issues/issues.jsonl` | Active Issues (not closed) |
-| `.workflow/issues/issue-history.jsonl` | Closed Issues (archived) |
+| Storage Location | Description |
+|-----------------|-------------|
+| `.workflow/issues/issues.jsonl` | Active Issues |
+| `.workflow/issues/issue-history.jsonl` | Closed (archived) |
 
 ---
 
 ### Status Transitions
 
-The complete Issue status lifecycle:
-
 ```
-registered → open → in_progress → completed
-                                → failed
-                                → deferred
+registered -> open -> in_progress -> completed
+                                -> failed
+                                -> deferred
 ```
 
-| Status | Description | Typical Trigger |
-|--------|-------------|-----------------|
-| `registered` | Initial state, created by discover | Auto-discovery |
-| `open` | Confirmed, pending action | Manual creation or confirmation of discovery results |
+| Status | Description | Trigger |
+|--------|-------------|---------|
+| `registered` | Initial (created by discover) | Auto-discovery |
+| `open` | Confirmed, pending action | Manual creation/confirmation |
 | `in_progress` | Being worked on | Remediation started |
-| `completed` | Resolved | Fix completed and verified |
-| `failed` | Remediation failed | Fix attempt unsuccessful |
+| `completed` | Resolved | Fix verified |
+| `failed` | Remediation failed | Fix unsuccessful |
 | `deferred` | Postponed | Low priority or dependencies not ready |
-
-Each status change records the timestamp, before/after status, actor, and note in `issue_history`.
 
 ---
 
 ## 4. Issue Closure Workflow
 
-### Complete Process
-
-The standard closure workflow from discovery to resolution:
+### Standard Process
 
 ```
-discover → create → analyze → plan → execute → verify → close
+discover -> list -> analyze -> plan -> execute -> verify -> close
 ```
-
-#### 1. Discover Issues
 
 ```bash
-# Full scan
+# 1. Discover
 /manage-issue-discover multi-perspective
 
-# Or targeted exploration
-/manage-issue-discover by-prompt "Check authentication module security"
-```
-
-#### 2. Review Discovery Results
-
-```bash
-# Filter by severity
+# 2. Review results
 /manage-issue list --severity critical
-
-# View details
 /manage-issue status ISS-20260513-001
-```
 
-#### 3. Root Cause Analysis
-
-```bash
-# Perform root cause analysis on a single Issue
+# 3. Root cause analysis (--gaps injects Issue into Phase pipeline)
 /maestro-analyze --gaps ISS-20260513-001
-```
 
-The `--gaps` parameter injects the Issue as an analysis target into the Phase pipeline, generating a root cause report and Gap record.
-
-#### 4. Solution Planning
-
-```bash
-# Generate a remediation plan based on Gaps
+# 4. Solution planning
 /maestro-plan --gaps
-```
 
-#### 5. Execute Fix
-
-```bash
+# 5. Execute fix
 /maestro-execute
-```
 
-#### 6. Close Issue
-
-```bash
-/manage-issue close ISS-20260513-001 --resolution "Ensured atomic token rotation via optimistic locking"
+# 6. Close
+/manage-issue close ISS-20260513-001 --resolution "Fix description"
 ```
 
 ### Shortcut Path
 
-For urgent or simple issues, use `maestro-quick` to skip steps:
+For urgent/simple issues, use `maestro-quick` to skip intermediate steps:
 
 ```bash
-# Quick fix
 /maestro-quick "Fix token rotation race condition"
-
-# Then close
 /manage-issue close ISS-20260513-001 --resolution "Fixed via maestro-quick"
 ```
 
 ### Integration with Roadmap/Milestone
 
-The Issue system integrates deeply with the Roadmap/Milestone framework:
+- **Milestone association**: `--milestone` specifies ownership (auto-derived from `state.json` when unspecified); `supplement` type auto-checks cross-Milestone conflicts
+- **Phase association**: `--phase` links to Phase; `--gaps` converts to Gap for analysis flow; `link` bidirectionally links Issue and Task
+- **Roadmap feedback**: Issue statistics (count, severity distribution, fix rate) inform planning; high-density Issue Phases may need splitting; `supplement` can serve as next Milestone requirements
 
-#### Milestone Association
-
-- Specify the owning Milestone via `--milestone` when creating an Issue
-- When unspecified, it is auto-derived from `current_milestone` in `.workflow/state.json`
-- `supplement` type Issues automatically check for cross-Milestone file conflicts
-
-#### Phase Association
-
-- Issues can be linked to specific Phases via `--phase`
-- The `--gaps` parameter converts Issues into Gaps injected into the Phase analysis flow
-- Issues discovered during Phase execution can be bidirectionally linked to Tasks via the `link` command
-
-#### Roadmap Feedback
-
-Issue statistics (count, severity distribution, fix rate) inform Roadmap planning:
-
-- Phases with high Issue density may need splitting or priority adjustment
-- Cross-Milestone Issues require remediation time to be reserved during planning
-- `supplement` type Issues can serve as requirement inputs for the next Milestone
-
-#### Commander Agent Auto-Advancement
-
-The Commander Agent automatically identifies unanalyzed Issues and advances their processing, eliminating the need for manual step-by-step operation. Combined with Hook automation, a fully automated closure workflow from discovery to resolution can be achieved.
+The Commander Agent automatically identifies unanalyzed Issues and advances processing. Combined with Hook automation, a fully automated closure workflow can be achieved.

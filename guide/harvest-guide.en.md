@@ -1,4 +1,6 @@
-# Knowledge Harvest Guide
+---
+title: "Knowledge Harvest Guide"
+---
 
 The Maestro knowledge harvest system transforms knowledge fragments generated during execution from "session temporary files" into "persistent, searchable project assets."
 
@@ -8,21 +10,7 @@ The Maestro knowledge harvest system transforms knowledge fragments generated du
 
 ### Knowledge Loop
 
-Knowledge harvesting is the core component of the Maestro knowledge loop:
-
-```
-Execution artifacts → harvest extraction → route dispatch → persistent storage → downstream consumption
-       ↑                                                                        ↓
-       └──────────── feeds back into new execution ←───────────────────────────┘
-```
-
-Three phases of the loop:
-
-| Phase | Action | Corresponding Command |
-|-------|--------|----------------------|
-| **Extract** | Extract knowledge fragments from workflow artifacts | `/manage-harvest` |
-| **Route** | Auto-route by category to wiki / spec / issue | Harvest internal classification engine |
-| **Persist** | Write to persistent storage for subsequent command consumption | wiki / spec / issue infrastructure |
+Knowledge harvesting extracts fragments from execution artifacts, classifies and routes them, writes to persistent storage, and feeds back into new execution -- forming a complete knowledge loop. Three phases: **Extract** (`/manage-harvest`) -> **Route** (auto-classification engine) -> **Persist** (write to wiki/spec/issue).
 
 ### Three Knowledge Stores
 
@@ -34,10 +22,7 @@ Three phases of the loop:
 
 ### Relationship with Knowhow
 
-Harvest extracts fragments and routes them to wiki/spec/issue. Knowhow (`.workflow/knowhow/`) is an independent, complete knowledge document system created proactively via `/manage-knowhow-capture`. The two are complementary:
-
-- **Harvest**: Passive recovery — automatic extraction from existing artifacts
-- **Knowhow**: Active capture — manual or on-demand entry by humans or agents
+Harvest extracts fragments and routes them to wiki/spec/issue. Knowhow (`.workflow/knowhow/`) is an independent, complete knowledge document system created proactively via `/manage-knowhow-capture`. The two are complementary: **Harvest** = passive recovery, **Knowhow** = active capture.
 
 ---
 
@@ -65,18 +50,16 @@ Harvest extracts fragments and routes them to wiki/spec/issue. Knowhow (`.workfl
 
 ### Source Registry
 
-Harvest scans the following 8 artifact source types:
-
-| Source Type | Scan Path | Key Files | ID Pattern |
-|-------------|-----------|-----------|------------|
-| `analysis` | `.workflow/.analysis/ANL-*/` | `conclusions.json`, `*.md` | `ANL-*` |
-| `brainstorm` | `.workflow/scratch/brainstorm-*/` | `guidance-specification.md` | Directory name |
-| `lite-plan` | `.workflow/.lite-plan/*/` | `plan.json`, `plan-overview.md` | Directory name |
-| `lite-fix` | `.workflow/.lite-fix/*/` | `fix-plan.json` | Directory name |
-| `debug` | `.workflow/.debug/*/` | `debug-log.md`, `hypothesis-*.md` | Directory name |
-| `scratchpad` | `.workflow/.scratchpad/` | `*.md`, `*.json` | File name |
-| `session` | `.workflow/active/WFS-*/` | `workflow-session.json` | `WFS-*` |
-| `knowhow` | `.workflow/knowhow/` | `*.md`, `digest-*.md` | File name |
+| Source Type | Scan Path | Key Files |
+|-------------|-----------|-----------|
+| `analysis` | `.workflow/.analysis/ANL-*/` | `conclusions.json`, `*.md` |
+| `brainstorm` | `.workflow/scratch/brainstorm-*/` | `guidance-specification.md` |
+| `lite-plan` | `.workflow/.lite-plan/*/` | `plan.json`, `plan-overview.md` |
+| `lite-fix` | `.workflow/.lite-fix/*/` | `fix-plan.json` |
+| `debug` | `.workflow/.debug/*/` | `debug-log.md`, `hypothesis-*.md` |
+| `scratchpad` | `.workflow/.scratchpad/` | `*.md`, `*.json` |
+| `session` | `.workflow/active/WFS-*/` | `workflow-session.json` |
+| `knowhow` | `.workflow/knowhow/` | `*.md`, `digest-*.md` |
 
 Use `--source <type>` to limit scanning to a single type, `--source all` to scan all (default).
 
@@ -101,13 +84,13 @@ Each fragment is tagged with a category label and assigned a confidence score (0
 | Category | Default Route | Rationale |
 |----------|--------------|-----------|
 | `finding` | wiki (note) | Observations belong in the knowledge graph |
-| `decision` | wiki (spec) or spec (decision) | Architecture decisions → spec ADR or wiki spec entry |
-| `pattern` | spec (pattern) | Reusable code patterns → coding conventions |
-| `bug` | issue or spec (bug) | Active bugs → issue; fixed bugs → spec experience |
-| `risk` | issue | Unmitigated risks → trackable issue |
-| `task` | issue | Incomplete work → trackable issue |
-| `knowhow` | wiki (knowhow) | Generalizable insights → wiki knowledge |
-| `recommendation` | wiki (note) or issue | Actionable recommendations → issue; informational → wiki |
+| `decision` | wiki (spec) or spec (decision) | Architecture decisions -> spec ADR or wiki spec entry |
+| `pattern` | spec (pattern) | Reusable code patterns -> coding conventions |
+| `bug` | issue or spec (bug) | Active bugs -> issue; fixed bugs -> spec experience |
+| `risk` | issue | Unmitigated risks -> trackable issue |
+| `task` | issue | Incomplete work -> trackable issue |
+| `knowhow` | wiki (knowhow) | Generalizable insights -> wiki knowledge |
+| `recommendation` | wiki (note) or issue | Actionable recommendations -> issue; informational -> wiki |
 
 Use `--to wiki|spec|issue` to force override auto-classification. `--to auto` (default) uses the rules above.
 
@@ -132,47 +115,6 @@ Duplicate fragments are marked `[SKIP-DUP]` and recorded in the harvest report.
 | spec entries | `.workflow/specs/` | Entries routed to spec |
 | issue entries | `.workflow/issues/issues.jsonl` | Entries routed to issue |
 
-### Usage Scenarios
-
-**Scenario 1: Milestone Knowledge Harvest**
-
-A milestone is complete. Harvest knowledge from all analysis, debug, and planning artifacts:
-
-```bash
-/manage-harvest --recent 14            # Harvest last two weeks of artifacts
-/manage-harvest --to wiki --dry-run    # Preview the effect of routing everything to wiki
-```
-
-**Scenario 2: Precisely Harvest a Specific Analysis Session**
-
-```bash
-/manage-harvest ANL-auth-20260410      # Harvest specified analysis session
-```
-
-**Scenario 3: Harvest Bug Patterns from Debug Artifacts**
-
-```bash
-/manage-harvest --source debug         # Only harvest debug artifacts
-```
-
-### Follow-up Actions
-
-After harvesting completes, the command suggests follow-up routes:
-
-```bash
-# View wiki entries
-maestro wiki list --type note
-
-# Connect knowledge graph
-/wiki-connect --fix
-
-# Classify issues
-/manage-issue list --source harvest
-
-# View specs
-/spec-load --role implement
-```
-
 ---
 
 ## 3. manage-knowhow Details
@@ -181,7 +123,6 @@ maestro wiki list --type note
 
 ```bash
 /manage-knowhow                                  # List all (default)
-/manage-knowhow list                             # List all
 /manage-knowhow search "auth flow"               # Full-text search
 /manage-knowhow view KNW-20260510-1430           # View specified entry
 /manage-knowhow edit MEMORY.md                   # Edit system memory
@@ -196,30 +137,18 @@ maestro wiki list --type note
 | **workflow** | `.workflow/knowhow/` | `{PREFIX}-*.md` | `.workflow/wiki-index.json` (WikiIndexer) |
 | **system** | `~/.claude/projects/{project}/memory/` | `MEMORY.md` + topic `.md` files | None (flat files) |
 
-Workflow storage is for within-project knowledge; system storage is for cross-session persistent memory. The command automatically determines which storage to operate on based on ID prefix (`KNW-*`, `TIP-*`, etc.) or file name.
+Workflow storage is for within-project knowledge; system storage is for cross-session persistent memory. The command automatically determines which storage to operate on based on ID prefix.
 
-### Subcommands
+### Subcommands and Filter Flags
 
-| Subcommand | Purpose | Notes |
-|------------|---------|-------|
-| `list` | List all entries in both stores | Supports `--tag`, `--type`, `--store` filters |
-| `search <query>` | Full-text search across both stores | Sorted by relevance |
-| `view <id\|file>` | View full entry text | Auto-detects storage |
-| `edit <file>` | Edit system memory file | Can only edit system store |
-| `delete <id\|file>` | Delete entry (confirmation required) | `MEMORY.md` is protected, cannot be deleted |
-| `prune` | Batch cleanup of workflow entries | Requires at least one filter condition |
-
-### Filter Flags
-
-| Flag | Purpose |
-|------|---------|
-| `--store workflow\|system\|all` | Target storage (default `all`) |
-| `--tag <tag>` | Filter by tag |
-| `--type compact\|tip` | Filter by entry type |
-| `--before <YYYY-MM-DD>` | Date upper bound |
-| `--after <YYYY-MM-DD>` | Date lower bound |
-| `--dry-run` | Preview destructive operations |
-| `--confirm` | Skip confirmation prompts |
+| Subcommand | Purpose |
+|------------|---------|
+| `list` | List entries (supports `--tag`, `--type`, `--store` filters) |
+| `search <query>` | Full-text search, sorted by relevance |
+| `view <id\|file>` | View full entry text, auto-detects storage |
+| `edit <file>` | Edit system memory file |
+| `delete <id\|file>` | Delete entry (confirmation required, `MEMORY.md` is protected) |
+| `prune` | Batch cleanup (requires at least one filter condition, supports `--dry-run`) |
 
 ### 9 Knowhow Types
 
@@ -234,8 +163,6 @@ Workflow storage is for within-project knowledge; system storage is for cross-se
 | `asset` | `AST-` | Code assets | API contracts, data models, prompts |
 | `blueprint` | `BLP-` | Architecture blueprints | Module architecture design |
 | `document` | `DOC-` | General documents | General fallback type |
-
-All types share `WikiNodeType = 'knowhow'`, differentiated by the `type` field.
 
 ---
 
@@ -253,43 +180,22 @@ All types share `WikiNodeType = 'knowhow'`, differentiated by the `type` field.
 /manage-knowhow-capture                                # Interactive selection (9 types)
 ```
 
-### Capture Timing and Trigger Conditions
+### Capture Timing
 
-| Timing | Recommended Type | Description |
-|--------|-----------------|-------------|
-| End of complex task | `compact` / `session` | Save full context, recoverable next time |
-| Discovering reusable code pattern | `template` | Extract as template, avoid duplicate coding |
-| Completing an operational procedure | `recipe` | Record steps, team members can reuse |
-| Reviewing important external docs | `reference` | Save summary, avoid re-reading original |
-| Making architecture decision | `decision` | Record context, option comparison, rationale |
-| Flash of insight or trick | `tip` | Quick note, avoid forgetting |
-| Defining interface contracts | `asset` | Save API contracts, data models |
-| Designing module architecture | `blueprint` | Record architecture design and related code paths |
+| Timing | Recommended Type |
+|--------|-----------------|
+| End of complex task | `compact` / `session` |
+| Discovering reusable code pattern | `template` |
+| Completing an operational procedure | `recipe` |
+| Reviewing important external docs | `reference` |
+| Making architecture decision | `decision` |
+| Flash of insight or trick | `tip` |
+| Defining interface contracts | `asset` |
+| Designing module architecture | `blueprint` |
 
 ### Output Path and Naming Convention
 
-Files are written to `.workflow/knowhow/` with the naming format:
-
-```
-{PREFIX}-{YYYYMMDD}-{HHMM}.md
-```
-
-Examples: `KNW-20260513-1430.md`, `TPL-20260513-1500.md`
-
-Each file includes YAML frontmatter:
-
-```yaml
----
-title: "Descriptive title"
-type: template          # type
-category: coding        # spec category (coding/arch/test/debug/review/learning)
-created: "2026-05-13T14:30:00+08:00"
-tags: [typescript, auth]
-lang: typescript        # only for template
-source: "https://..."   # only for reference
-status: accepted        # only for decision
----
-```
+Files are written to `.workflow/knowhow/` with the naming format `{PREFIX}-{YYYYMMDD}-{HHMM}.md`, with YAML frontmatter (title, type, category, created, tags).
 
 ### Type Routing
 
@@ -307,72 +213,55 @@ The command supports automatic type recognition via tokens:
 | `blueprint`, `blp` | blueprint |
 | `document`, `doc` | document |
 
-### Content Structure by Type
-
-**session (KNW-)**: Auto-extracted from current conversation — session ID, objective, execution plan (verbatim), working files, decision table, constraints, dependencies, known issues, change list, TODOs.
-
-**template (TPL-)**: Requires language tag, parameter table, code block (copy-paste ready), dependency list.
-
-**recipe (RCP-)**: Objective, prerequisites, numbered steps, expected results, common pitfalls.
-
-**reference (REF-)**: Source URL, key takeaways, applicable scenarios, quick examples. Supports `--source` to extract directly from URL.
-
-**decision (DCS-)**: Context, option comparison table (at least 2 rejected options), rationale, consequences (positive and negative).
-
-**tip (TIP-)**: Minimal structure — title + content + auto-detected context.
-
 ---
 
 ## 5. Knowledge Flow Overview
 
-### Complete Process
+<details>
+<summary>Complete process diagram</summary>
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Execution Phase                      │
-│  maestro-analyze → maestro-plan → maestro-execute       │
-│       ↓              ↓                ↓                 │
-│   ANL-xxx/       plan-xxx/       code changes           │
-│   brainstorm/    lite-plan/      debug-log/             │
-└────────────┬────────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│                  Knowledge Harvest                       │
-│  /manage-harvest                                        │
-│  ├── Stage 1-2: Discover artifacts                      │
-│  ├── Stage 3:   Extract fragments (category + confidence)│
-│  ├── Stage 4:   Classify and route (auto / forced)      │
-│  ├── Stage 5:   Preview and confirm                     │
-│  ├── Stage 6:   Write to target storage + deduplicate   │
-│  └── Stage 7-8: Deduplication check + generate report   │
-└────┬──────────┬──────────┬──────────────────────────────┘
-     │          │          │
-     ▼          ▼          ▼
-  ┌──────┐  ┌──────┐  ┌────────┐
-  │ Wiki │  │ Spec │  │ Issue  │
-  └──┬───┘  └──┬───┘  └───┬────┘
-     │         │          │
-     ▼         ▼          ▼
-┌─────────────────────────────────────────────────────────┐
-│                   Downstream Consumption                 │
-│  wiki-connect / wiki-digest / spec-load / manage-issue   │
-│  Hook auto-injection / maestro-plan --gaps               │
-└─────────────────────────────────────────────────────────┘
++----------------------------------------------------------+
+|                     Execution Phase                       |
+|  maestro-analyze -> maestro-plan -> maestro-execute      |
+|       |              |                |                  |
+|   ANL-xxx/       plan-xxx/       code changes            |
+|   brainstorm/    lite-plan/      debug-log/              |
++------------+---------------------------------------------+
+             |
+             v
++----------------------------------------------------------+
+|                  Knowledge Harvest                        |
+|  /manage-harvest                                         |
+|  |-- Stage 1-2: Discover artifacts                       |
+|  |-- Stage 3:   Extract fragments (category+confidence)  |
+|  |-- Stage 4:   Classify and route (auto / forced)       |
+|  |-- Stage 5:   Preview and confirm                      |
+|  |-- Stage 6:   Write to target storage + deduplicate    |
+|  +-- Stage 7-8: Deduplication check + generate report    |
++----+----------+----------+-------------------------------+
+     |          |          |
+     v          v          v
+  +------+  +------+  +--------+
+  | Wiki |  | Spec |  | Issue  |
+  +--+---+  +--+---+  +---+----+
+     |         |          |
+     v         v          v
++----------------------------------------------------------+
+|                   Downstream Consumption                  |
+|  wiki-connect / wiki-digest / spec-load / manage-issue   |
+|  Hook auto-injection / maestro-plan --gaps               |
++----------------------------------------------------------+
 ```
+</details>
 
 ### Active Knowledge Capture Parallel Path
 
 ```
-Execution process → /manage-knowhow-capture → .workflow/knowhow/ → wiki-index.json → retrieval and reuse
-                                              ↓
-                              maestro knowhow search "keyword"
-                              /manage-knowhow search "keyword"
+Execution process -> /manage-knowhow-capture -> .workflow/knowhow/ -> wiki-index.json -> retrieval and reuse
 ```
 
 ### Collaboration with learn-* Commands
-
-The `learn-*` series commands are another entry point into the knowledge loop. They produce learning insights during review and reflection phases:
 
 | Command | Output | Routed To |
 |---------|--------|-----------|
@@ -382,28 +271,10 @@ The `learn-*` series commands are another entry point into the knowledge loop. T
 | `/learn-follow` | Follow-up learning records | knowhow (reference) |
 | `/learn-second-opinion` | Multi-perspective analysis results | wiki / spec |
 
-`quality-retrospective` also writes insights from Phase reviews into `specs/learnings.md`. These entries can subsequently be discovered and routed by harvest again.
-
 ### Recommended Workflow
 
-**Daily Development**
-
-```
-/maestro-execute → quick note on completion → /manage-knowhow-capture tip "discovered trick"
-```
-
-**Milestone Completion**
-
-```
-/manage-harvest --recent 30          # Harvest all artifacts
-/manage-knowhow-capture compact      # Save current session state
-/wiki-connect --fix                  # Connect knowledge graph
-```
-
-**Project Handoff**
-
-```
-/manage-knowhow list                 # View all knowledge entries
-/manage-knowhow search "core concept"     # Search key knowledge
-/spec-load --role implement          # Load implementation specs
-```
+| Scenario | Steps |
+|----------|-------|
+| **Daily Development** | `/maestro-execute` -> quick note on completion -> `/manage-knowhow-capture tip "discovered trick"` |
+| **Milestone Completion** | `/manage-harvest --recent 30` -> `/manage-knowhow-capture compact` -> `/wiki-connect --fix` |
+| **Project Handoff** | `/manage-knowhow list` -> `/manage-knowhow search "core concept"` -> `/spec-load --role implement` |

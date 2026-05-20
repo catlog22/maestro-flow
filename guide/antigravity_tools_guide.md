@@ -1,231 +1,131 @@
-# Antigravity Tools Guide
+---
+title: "Antigravity 工具指南"
+---
 
-This document provides a detailed overview of the tools available to the Antigravity AI assistant, including their purposes and schemas.
+Antigravity AI 助手可用工具，包含参数和 Schema。
 
-## 1. ask_permission
-Ask the user for permission after a failure due to insufficient permissions.
+## 工具参考
 
-**Parameters:**
-- `Action` (enum): `command`, `unsandboxed`, `mcp`, `custom`, `read_file`, `write_file`, `read_url`, `execute_url`
-- `Target` (string): The target of the action (e.g., command prefix, file path, domain).
-- `Reason` (string): Why the permission is needed.
-- `toolAction` (string): Brief summary of action.
-- `toolSummary` (string): Brief noun phrase description.
+| # | 工具 | 用途 |
+|---|------|------|
+| 1 | `ask_permission` | 权限不足后请求用户授权 |
+| 2 | `ask_question` | 向用户提问多选题 |
+| 3 | `define_subagent` | 定义新的子 Agent 类型 |
+| 4 | `generate_image` | 从文本生成或编辑图片 |
+| 5 | `grep_search` | 通过 ripgrep 精确匹配搜索 |
+| 6 | `invoke_subagent` | 按名称调用一个或多个子 Agent |
+| 7 | `list_dir` | 列出目录内容 |
+| 8 | `list_permissions` | 列出所有当前权限授予 |
+| 9 | `manage_subagents` | 列出、终止或全部终止子 Agent |
+| 10 | `manage_task` | 列出、终止、查看状态或发送输入给后台任务 |
+| 11 | `multi_replace_file_content` | 同一文件的多处非连续编辑 |
+| 12 | `read_url_content` | 获取 URL 内容（HTML → Markdown） |
+| 13 | `replace_file_content` | 文件单处连续块编辑 |
+| 14 | `run_command` | 在用户 shell 中执行命令 |
+| 15 | `schedule` | 一次性定时或周期性 cron 任务 |
+| 16 | `search_web` | 网页搜索 |
+| 17 | `send_message` | 向其他 Agent 发送消息 |
+| 18 | `view_file` | 查看文件内容（文本、图片、PDF） |
+| 19 | `write_to_file` | 创建或覆写文件 |
 
-## 2. ask_question
-Ask the user one or more multiple-choice questions.
+<details>
+<summary>参数详情</summary>
 
-**Parameters:**
-- `questions` (array): List of question objects.
-    - `question` (string): The question text.
-    - `options` (array): Selectable options.
-    - `is_multi_select` (boolean): Allow multiple selections.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 1. ask_permission
+- `Action`（enum）：`command`、`unsandboxed`、`mcp`、`custom`、`read_file`、`write_file`、`read_url`、`execute_url`
+- `Target`（string）：操作目标
+- `Reason`（string）：需要权限的原因
+- `toolAction`、`toolSummary`（string）
 
-## 3. define_subagent
-Defines a new type of subagent for specialized tasks.
+### 2. ask_question
+- `questions`（array）：`{question, options, is_multi_select}` 列表
+- `toolAction`、`toolSummary`（string）
 
-**Parameters:**
-- `name` (string): Unique name for the subagent.
-- `description` (string): What the subagent does.
-- `system_prompt` (string): Detailed instructions for the subagent.
-- `enable_write_tools` (boolean): Equip with edit/run tools.
-- `enable_mcp_tools` (boolean): Enable MCP tools.
-- `enable_subagent_tools` (boolean): Allow it to define its own subagents.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 3. define_subagent
+- `name`、`description`、`system_prompt`（string）
+- `enable_write_tools`、`enable_mcp_tools`、`enable_subagent_tools`（boolean）
+- `toolAction`、`toolSummary`（string）
 
-## 4. generate_image
-Generate or edit images based on a text prompt.
+### 4. generate_image
+- `Prompt`、`ImageName`（string）；`ImagePaths`（array，可选）
+- `toolAction`、`toolSummary`（string）
 
-**Parameters:**
-- `Prompt` (string): Description of the image.
-- `ImageName` (string): Filename for the result.
-- `ImagePaths` (array): Optional existing images to use/edit.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 5. grep_search
+- `SearchPath`、`Query`（string）
+- `IsRegex`、`CaseInsensitive`、`MatchPerLine`（boolean）
+- `Includes`（array，glob 模式）
+- `toolAction`、`toolSummary`（string）
 
-## 5. grep_search
-Find exact pattern matches within files or directories using ripgrep.
+### 6. invoke_subagent
+- `Subagents`（array）：`{TypeName, Role, Prompt, Workspace}` 列表
+  - `Workspace`：`inherit`、`branch` 或 `share`
+- `toolAction`、`toolSummary`（string）
 
-**Parameters:**
-- `SearchPath` (string): Absolute path to search.
-- `Query` (string): Term or pattern to look for.
-- `IsRegex` (boolean): Treat query as a regex.
-- `CaseInsensitive` (boolean): Ignore case.
-- `MatchPerLine` (boolean): Return specific lines and numbers.
-- `Includes` (array): Glob patterns to filter files.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 7. list_dir
+- `DirectoryPath`（string）；`toolAction`、`toolSummary`
 
-## 6. invoke_subagent
-Invokes one or more subagents by name.
+### 8. list_permissions
+- `toolAction`、`toolSummary`
 
-**Parameters:**
-- `Subagents` (array): List of subagents to launch.
-    - `TypeName` (string): Type of subagent.
-    - `Role` (string): Job title/role description.
-    - `Prompt` (string): Specific task description.
-    - `Workspace` (string): `inherit`, `branch`, or `share`.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 9. manage_subagents
+- `Action`（enum）：`list`、`kill`、`kill_all`
+- `ConversationIds`（array，用于 kill）；`toolAction`、`toolSummary`
 
-## 7. list_dir
-List contents of a directory.
+### 10. manage_task
+- `Action`（enum）：`list`、`kill`、`status`、`send_input`
+- `TaskId`（string，用于 kill/status/send_input）
+- `Input`（string，用于 send_input）；`toolAction`、`toolSummary`
 
-**Parameters:**
-- `DirectoryPath` (string): Absolute path to directory.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 11. multi_replace_file_content
+- `TargetFile`、`Instruction`、`Description`（string）
+- `ReplacementChunks`（array）：`{StartLine, EndLine, TargetContent, ReplacementContent, AllowMultiple}`
+- `TargetLintErrorIds`、`ArtifactMetadata`（可选）；`toolAction`、`toolSummary`
 
-## 8. list_permissions
-List all current permission grants.
+### 12. read_url_content
+- `Url`（string）；`toolAction`、`toolSummary`
 
-**Parameters:**
-- `toolAction` (string)
-- `toolSummary` (string)
+### 13. replace_file_content
+- `TargetFile`、`Instruction`、`Description`、`TargetContent`、`ReplacementContent`（string）
+- `StartLine`、`EndLine`（integer）；`AllowMultiple`（boolean）
+- `TargetLintErrorIds`（array，可选）；`toolAction`、`toolSummary`
 
-## 9. manage_subagents
-Manage existing subagents (list, kill, kill_all).
+### 14. run_command
+- `CommandLine`、`Cwd`（string）；`WaitMsBeforeAsync`（integer）
+- `toolAction`、`toolSummary`
 
-**Parameters:**
-- `Action` (enum): `list`, `kill`, `kill_all`
-- `ConversationIds` (array): IDs for 'kill' action.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 15. schedule
+- `Prompt`（string）；`DurationSeconds`（一次性）或 `CronExpression`（周期性）
+- `MaxIterations`（可选）；`toolAction`、`toolSummary`
 
-## 10. manage_task
-Manage background tasks (list, kill, status, send_input).
+### 16. search_web
+- `query`、`domain`（string）；`toolAction`、`toolSummary`
 
-**Parameters:**
-- `Action` (enum): `list`, `kill`, `status`, `send_input`
-- `TaskId` (string): Required for kill/status/send_input.
-- `Input` (string): Required for send_input.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 17. send_message
+- `Recipient`（会话 ID）、`Message`（string）；`toolAction`、`toolSummary`
 
-## 11. multi_replace_file_content
-Make multiple, non-contiguous edits to the same file.
+### 18. view_file
+- `AbsolutePath`（string）；`StartLine`、`EndLine`（integer，用于文本）
+- `IsSkillFile`（boolean）；`toolAction`、`toolSummary`
 
-**Parameters:**
-- `TargetFile` (string): Absolute path.
-- `Instruction` (string): Description of changes.
-- `Description` (string): Non-obvious rationale.
-- `ReplacementChunks` (array): List of chunks.
-    - `StartLine` (integer)
-    - `EndLine` (integer)
-    - `TargetContent` (string)
-    - `ReplacementContent` (string)
-    - `AllowMultiple` (boolean)
-- `TargetLintErrorIds` (array): Optional IDs of fixed lints.
-- `ArtifactMetadata` (object): Optional for artifact updates.
-- `toolAction` (string)
-- `toolSummary` (string)
+### 19. write_to_file
+- `TargetFile`、`CodeContent`、`Description`（string）
+- `Overwrite`、`IsArtifact`（boolean）；`ArtifactMetadata`（object）
+- `toolAction`、`toolSummary`
 
-## 12. read_url_content
-Fetch content from a URL (converts HTML to Markdown).
+</details>
 
-**Parameters:**
-- `Url` (string): URL to read.
-- `toolAction` (string)
-- `toolSummary` (string)
+## Agent 通信与协调
 
-## 13. replace_file_content
-Make a single contiguous block of edits to a file.
+### 通信流程
 
-**Parameters:**
-- `TargetFile` (string)
-- `Instruction` (string)
-- `Description` (string)
-- `StartLine` (integer)
-- `EndLine` (integer)
-- `TargetContent` (string)
-- `ReplacementContent` (string)
-- `AllowMultiple` (boolean)
-- `TargetLintErrorIds` (array)
-- `toolAction` (string)
-- `toolSummary` (string)
+1. **发起**：父 Agent 使用 `invoke_subagent` → 获得 `conversationID`
+2. **消息传递**：Agent 使用 `send_message` 指定目标 `conversationID`
+3. **被动唤醒**：子 Agent 响应时系统自动恢复空闲的父 Agent
 
-## 14. run_command
-Execute a command in the user's shell.
+### 工作空间模式
 
-**Parameters:**
-- `CommandLine` (string): Command string.
-- `Cwd` (string): Working directory.
-- `WaitMsBeforeAsync` (integer): Wait time before going async.
-- `toolAction` (string)
-- `toolSummary` (string)
-
-## 15. schedule
-Schedule a one-shot timer or recurring cron job.
-
-**Parameters:**
-- `Prompt` (string): Notification message.
-- `DurationSeconds` (string): For one-shot timer.
-- `CronExpression` (string): For recurring job.
-- `MaxIterations` (string): Optional limit for cron.
-- `toolAction` (string)
-- `toolSummary` (string)
-
-## 16. search_web
-Perform a web search for a given query.
-
-**Parameters:**
-- `query` (string)
-- `domain` (string): Optional domain priority.
-- `toolAction` (string)
-- `toolSummary` (string)
-
-## 17. send_message
-Send a message to another agent (subagent/peer).
-
-**Parameters:**
-- `Recipient` (string): Conversation ID.
-- `Message` (string)
-- `toolAction` (string)
-- `toolSummary` (string)
-
-## 18. view_file
-View file contents (text, image, pdf, etc.).
-
-**Parameters:**
-- `AbsolutePath` (string)
-- `StartLine` (integer): For text files.
-- `EndLine` (integer): For text files.
-- `IsSkillFile` (boolean): Reading for skill instructions.
-- `toolAction` (string)
-- `toolSummary` (string)
-
-## 19. write_to_file
-Create new files or overwrite existing ones.
-
-**Parameters:**
-- `TargetFile` (string)
-- `CodeContent` (string)
-- `Overwrite` (boolean)
-- `Description` (string)
-- `IsArtifact` (boolean)
-- `ArtifactMetadata` (object)
-- `toolAction` (string)
-- `toolSummary` (string)
-
-## 20. Agent Communication & Coordination
-
-Antigravity agents communicate through a structured messaging system that allows for complex multi-agent workflows.
-
-### Communication Flow
-1. **Initiation**: A parent agent uses `invoke_subagent` to start a new agent, receiving a unique `conversationID`.
-2. **Messaging**: Agents use `send_message` with the target's `conversationID` to exchange information.
-3. **Reactive Wakeup**: The system automatically resumes an idle parent agent when a subagent sends a response, eliminating the need for polling.
-
-### Collaboration Modes (Workspace)
-When invoking subagents, different workspace modes define how files are shared:
-- `inherit`: The subagent shares the same directory and state as the parent.
-- `branch`: The subagent gets an isolated copy/clone of the workspace.
-- `share`: The subagent uses a shared underlying repository (similar to git worktree), allowing independent branching with shared storage.
-
-### Best Practices
-- **Explicit Prompts**: When invoking a subagent, provide a clear, actionable task description.
-- **Background Tasks**: Use subagents for long-running research or complex coding tasks while the main agent continues other work.
-- **Message Clarity**: Ensure messages between agents are structured and contain all necessary context, as subagents have their own conversation history.
+| 模式 | 说明 |
+|------|------|
+| `inherit` | 与父 Agent 共享同一目录和状态 |
+| `branch` | 获得工作空间的独立副本/克隆 |
+| `share` | 共享底层仓库（类似 git worktree），独立分支 + 共享存储 |

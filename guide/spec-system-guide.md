@@ -1,103 +1,69 @@
-# Knowledge Management System Guide
+---
+title: "知识管理系统指南"
+---
 
-Maestro's knowledge management consists of **Spec** (coded constraints/tools) and **Wiki** (broad knowledge graph). Spec provides category-based project specifications, Wiki provides knowhow, design assets, and learning notes. Both layers are unified through `<entry>` tag format, WikiIndexer indexing, and category-based retrieval.
-
-## Table of Contents
-
-- [Spec System](#spec-system)
-  - [Scope](#scope)
-  - [File → Category Mapping](#file--category-mapping)
-  - [Entry Format](#entry-format)
-  - [Tool Discovery](#tool-discovery)
-  - [Commands](#spec-commands)
-  - [Progressive Fill](#progressive-fill)
-  - [Auto-Init](#auto-init)
-  - [Keyword System](#keyword-system)
-- [Wiki Knowledge Graph](#wiki-knowledge-graph)
-  - [Knowhow System](#knowhow-system)
-  - [Category-Based Retrieval](#category-based-retrieval)
-  - [Three-Layer Loading](#three-layer-loading)
-  - [Wiki Commands](#wiki-commands)
-- [Unified Index & Injection](#unified-index--injection)
-  - [Atomic Node Index](#atomic-node-index)
-  - [Write Path](#write-path)
-  - [Write Protection](#write-protection)
-  - [Auto-Injection](#auto-injection)
-  - [Session Dedup](#session-dedup)
-- [File Structure](#file-structure)
-- [CLI Reference](#cli-reference)
+Maestro 知识管理分为 **Spec**（编码约束/工具）和 **Wiki**（广义知识图谱）。Spec 提供基于 category 的项目规范，Wiki 提供操作经验、设计资产和学习笔记。两层通过 `<entry>` 标签格式、WikiIndexer 索引和 category 检索统一。
 
 ---
 
-## Spec System
+## Spec 系统
 
-### Scope
+### 作用域
 
-Spec supports 4 scopes via `--scope`:
+| 作用域 | 目录 | 自动初始化 |
+|-------|------|-----------|
+| `project`（默认） | `.workflow/specs/` | 是 |
+| `global` | `~/.maestro/specs/` | 是 |
+| `team` | `.workflow/collab/specs/` | 否 |
+| `personal` | `.workflow/collab/specs/{uid}/` | 否 |
 
-| Scope | Directory | Purpose | Auto-Init |
-|-------|-----------|---------|-----------|
-| `project` (default) | `.workflow/specs/` | Project-level specs, shared by all | Yes |
-| `global` | `~/.maestro/specs/` | Cross-project universal specs | Yes |
-| `team` | `.workflow/collab/specs/` | Team shared specs | No |
-| `personal` | `.workflow/collab/specs/{uid}/` | Personal preference overrides | No |
+**加载优先级**（由低到高）：global → project → team → personal。后层追加，不覆盖。
 
-**Loading priority** (low → high): global → project → team → personal. Later layers append, never overwrite.
+### 文件与 Category 映射
 
-### File → Category Mapping
+每个 spec 文件是一个 category 的主文档。`spec load --category` 加载主文档全文 + 跨文件 keyword 匹配条目。
 
-Each spec file is the **primary document** for a category. `spec load --category` loads the primary file in full, plus cross-file entries matched by keywords.
+| 文件 | Category | 隐式角色 | 用途 |
+|------|----------|---------|------|
+| `coding-conventions.md` | coding | implement | 命名、导入、格式、模式 |
+| `architecture-constraints.md` | arch | plan | 模块结构、层边界 |
+| `review-standards.md` | review | review | 质量规则、检查清单 |
+| `debug-notes.md` | debug | analyze | 调试技巧、根因记录 |
+| `test-conventions.md` | test | test | 测试框架、覆盖率要求 |
+| `learnings.md` | learning | implement | Bug、陷阱、经验教训 |
+| `ui-conventions.md` | ui | implement | UI/UX 约定、设计令牌 |
 
-| File | Category | Implicit Role | Purpose |
-|------|----------|---------------|---------|
-| `coding-conventions.md` | coding | implement | Naming, imports, formatting, coding patterns |
-| `architecture-constraints.md` | arch | plan | Module structure, layer boundaries, arch decisions |
-| `review-standards.md` | review | review | Quality rules, review checklists, enforcement standards |
-| `debug-notes.md` | debug | analyze | Debug tips, root cause records, known issues |
-| `test-conventions.md` | test | test | Test framework, patterns, coverage requirements |
-| `learnings.md` | learning | implement | Bugs, pitfalls, lessons learned |
-| `ui-conventions.md` | ui | implement | UI/UX conventions, design tokens, visual patterns |
+### 条目格式
 
-**Category → implicit delegate role**: each category maps to a delegate system role. This mapping is internal — users only interact with `category`, the role resolution is transparent.
+所有条目使用 `<spec-entry>` 闭合标签，**category** 为必需属性：
 
-```
-coding   → implement    arch     → plan
-review   → review       debug    → analyze
-test     → test         learning → implement
-ui       → implement
-```
-
-### Entry Format
-
-All entries use `<spec-entry>` closed tags with **`category`** as a required single-value attribute:
+<details>
+<summary>示例</summary>
 
 ```markdown
 <spec-entry category="coding" keywords="auth,token,rotation" date="2026-04-21">
-
 ### Token rotation needs email carried through refresh flow
-
 Revoked column must be set rather than deleting tokens.
-
 </spec-entry>
 ```
 
-| Attribute | Required | Format | Description |
-|-----------|----------|--------|-------------|
-| `category` | Yes | Single value | One of: coding, arch, review, debug, test, learning, ui |
-| `keywords` | Yes | Comma-separated, lowercase | Searchable keywords for cross-category discovery |
-| `date` | Yes | `YYYY-MM-DD` | Creation date |
-| `source` | No | String | Origin (manual / agent / phase) |
-| `ref` | No | Path | Reference to knowhow detail document |
+</details>
 
-**Two dimensions, clear separation**:
-- `category` = **who is responsible** (determines file routing, agent injection)
-- `keywords` = **what it's about** (enables cross-category discovery)
+| 属性 | 必需 | 说明 |
+|------|------|------|
+| `category` | 是 | 单值：coding, arch, review, debug, test, learning, ui |
+| `keywords` | 是 | 逗号分隔，小写，跨 category 发现 |
+| `date` | 是 | `YYYY-MM-DD` |
+| `source` | 否 | 来源（manual / agent / phase） |
+| `ref` | 否 | 指向 knowhow 详情文档的路径 |
 
-### Tool Discovery
+### Tool 发现
 
-Tools are no longer registered in a dedicated `tools.md` file. Instead, any knowhow document can be marked as a tool via the `tool: true` YAML frontmatter field.
+Tool 是标记了 `tool: true` YAML 头的 knowhow 文档。`spec load --category` 自动扫描 `knowhow/` 中匹配 category + tool 的条目，追加摘要。
 
-**Knowhow as tool** (in `knowhow/` folder):
+<details>
+<summary>Knowhow tool 示例 + spec ref 条目</summary>
+
 ```markdown
 ---
 title: Payment Gateway Idempotency Verification
@@ -107,148 +73,88 @@ keywords: [payment, gateway, idempotency, testing]
 tool: true
 ---
 
-## When to Use
-
-Use when testing payment integration endpoints for retry safety and webhook delivery guarantees.
-
 ## Steps
-
 1. Generate idempotency key (UUID v4)
 2. Submit charge request with key
-3. Retry same request with same key — assert identical response
-4. Submit different amount with same key — assert 409 conflict
-5. Verify gateway webhook delivers exactly once
-6. Assert ledger entry matches charge amount
+3. Retry same request with same key -- assert identical response
+4. Submit different amount with same key -- assert 409 conflict
 ```
 
-**Spec ref entry** (optional — index pointer in `specs/` for discoverability):
+可选的 spec ref 条目：
 ```markdown
 <spec-entry category="coding" keywords="payment,gateway,idempotency" date="2026-05-10"
   ref="knowhow/RCP-payment-idempotency.md">
-
 ### Payment Gateway Idempotency Verification
-
-Use when testing payment integration endpoints for retry safety and webhook delivery guarantees.
-
+Use when testing payment integration endpoints for retry safety.
 </spec-entry>
 ```
 
-**`spec load` display for ref entries** — summary + load command, not full content:
-```
-### Payment Gateway Idempotency Verification (tool)
+</details>
 
-Use when testing payment integration endpoints for retry safety and webhook delivery guarantees.
+- **注册**：`/maestro-tools-register` — 将可复用流程编码为 knowhow tool 文档
+- **执行**：`/maestro-tools-execute` — 按名称或 category 加载 tool，逐步执行
 
-→ Detail: maestro wiki load knowhow-payment-idempotency
-```
-
-**Tool discovery flow**: `spec load --category coding` automatically scans `knowhow/` for documents with matching `category` + `tool: true`, and appends tool summaries to the output. No explicit registration required.
-
-**Registration**: `/maestro-tools-register` — codify reusable processes as knowhow tool documents. Creates a knowhow file with `tool: true` and optionally a spec ref entry for index discoverability.
-
-**Execution**: `/maestro-tools-execute` — load tool by name or category from knowhow, execute step-by-step.
-
-### Spec Commands
+### Spec 命令
 
 ```bash
-# Initialize
 maestro spec init [--scope <scope>] [--uid <uid>]
-
-# Add entry
-maestro spec add coding "Always use named exports" --keywords "exports,naming"
-maestro spec add coding "OAuth PKCE" "Summary" --keywords "oauth,pkce" --ref "knowhow/RCP-oauth.md"
-echo '{"category":"coding","title":"...","content":"..."}' | maestro spec add --stdin
-maestro spec add coding "title" "content" --json   # JSON output
-
-# Load
-maestro spec load --category coding                 # Primary doc + cross-file keyword matches + tools
-maestro spec load --category coding --keyword auth  # With keyword filter
-maestro spec load --keyword auth                    # Keyword-only filter across all files
-echo '{"category":"coding"}' | maestro spec load --stdin
-
-# CLI equivalent
-maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 [--uid <uid>]
-maestro spec load --category <category> [--keyword <word>] [--uid <uid>] --json
+maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 [--ref <path>] [--json]
+maestro spec load --category <category>              # 主文档 + 跨文件 + tools
+maestro spec load --category <category> --keyword <kw>
+maestro spec load --keyword <kw>                     # 跨所有文件
 ```
 
 ### Progressive Fill
 
-Specs are progressively enriched by pipeline phases:
-
 ```
-maestro-init       → spec-setup (skeleton + scan)
-maestro-analyze    → Locked decisions → arch, code patterns → coding
-maestro-plan       → Design conventions → coding/arch, test strategy → test
-maestro-execute    → Learnings → learning, root causes → debug
-maestro-verify     → Quality findings → review
+maestro-init    → spec-setup     maestro-analyze → arch, coding
+maestro-plan    → coding, test   maestro-execute → learning, debug
+maestro-verify  → review
 ```
 
-### Auto-Init
+### 关键词系统
 
-`loadSpecs()` auto-detects and creates missing spec directories (with 6 seed files), no manual init required.
-
-### Keyword System
-
-- `spec add` auto-extracts 3-5 domain keywords
-- `spec load --keyword <kw>` matches `<spec-entry>` `keywords` attribute across all category files
-- Keywords enable cross-category discovery: an entry in `test-conventions.md` with `keywords="auth,jwt"` is discoverable via `spec load --category coding --keyword auth`
-- Legacy heading entries fallback to text search
+- `spec add` 自动提取 3-5 个领域关键词
+- `spec load --keyword <kw>` 跨所有 category 文件匹配 `<spec-entry>` 的 keywords
+- 旧版标题条目回退到文本搜索
 
 ---
 
-## Wiki Knowledge Graph
+## Wiki 知识图谱
 
-### Knowhow System
+### Knowhow 系统
 
-Knowhow is broad knowledge storage supporting multiple document types. All files stored in `.workflow/knowhow/`, distinguished by filename prefix:
+`.workflow/knowhow/` 中的广义知识存储，按文件名前缀区分：
 
-| Prefix | Type | Purpose |
-|--------|------|---------|
-| `KNW-` | session | Session compact records |
-| `TIP-` | tip | Quick context tips |
-| `TPL-` | template | Code/config templates |
-| `RCP-` | recipe | Step-by-step guides |
-| `REF-` | reference | External doc summaries |
-| `DCS-` | decision | Architecture/design decisions |
-| `AST-` | asset | General code assets (API contracts, data models, UI prototypes) |
-| `BLP-` | blueprint | Architecture blueprints, system designs |
-| `DOC-` | document | Long-form specs/documents (general fallback) |
+| 前缀 | 类型 | 用途 |
+|------|------|------|
+| `KNW-` | session | 会话压缩记录 |
+| `TIP-` | tip | 快速上下文提示 |
+| `TPL-` | template | 代码/配置模板 |
+| `RCP-` | recipe | 步骤指南 |
+| `REF-` | reference | 外部文档摘要 |
+| `DCS-` | decision | 架构/设计决策 |
+| `AST-` | asset | 代码资产（API 契约、数据模型） |
+| `BLP-` | blueprint | 架构蓝图 |
+| `DOC-` | document | 长文档（兜底） |
 
 #### YAML Frontmatter
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `title` | Yes | Document title |
-| `type` | Yes | Knowhow type (session, tip, template, recipe, etc.) |
-| `category` | No | Single-value category (coding, arch, review, debug, test, learning). Maps to delegate role for agent injection. |
-| `keywords` | No | Searchable keyword list. Used for cross-category discovery and wiki search. |
-| `tool` | No | `true` to mark this document as an executable tool. Discovered by `spec load` and `/maestro-tools-execute`. |
-| `summary` | No | One-line description with usage timing. Shown by `wiki list` and auto-injection. Falls back to first paragraph if absent. |
-| `created` | Auto | Creation timestamp |
-| Type-specific | No | `lang`, `source`, `status`, `assetType`, `codePaths` |
+| 字段 | 必需 | 说明 |
+|------|------|------|
+| `title` / `type` | 是 | 文档标题和 knowhow 类型 |
+| `category` | 否 | 单值 category，用于 agent 注入 |
+| `keywords` | 否 | 可搜索的关键词列表 |
+| `tool` | 否 | `true` 标记为可执行 tool |
+| `summary` | 否 | 一行描述，缺省取首段 |
+| 类型特有 | 否 | `lang`、`source`、`status`、`assetType`、`codePaths` |
 
-```markdown
----
-title: OAuth PKCE Authorization Flow
-type: recipe
-category: coding
-keywords: [oauth, pkce, auth, token]
-tool: true
-summary: "Use when implementing OAuth 2.0 login for public clients (SPA/mobile). Complete PKCE flow with code_verifier, token exchange, refresh rotation."
----
+#### 容器模式
 
-## Prerequisites
-...
+Knowhow 文件支持通过 `<knowhow-entry>` 标签的多条目模式。子条目继承容器的 `category`；条目级可覆盖。
 
-## Steps
-1. Generate code_verifier (43-128 chars, URL-safe random)
-2. Derive code_challenge = BASE64URL(SHA256(code_verifier))
-...
-```
-
-#### Container Pattern (`<knowhow-entry>`)
-
-Knowhow files support container multi-entry mode:
+<details>
+<summary>容器示例</summary>
 
 ```markdown
 ---
@@ -256,322 +162,176 @@ title: Session Compact 20260510
 type: session
 category: debug
 ---
-
-<knowhow-entry keywords="pattern,auth,jwt" date="2026-05-10" category="coding">
-
+<knowhow-entry keywords="auth,jwt" date="2026-05-10" category="coding">
 ### JWT Refresh Token Rotation
-
 Always rotate refresh tokens on use to prevent replay attacks.
-
 </knowhow-entry>
 ```
 
-Each `<knowhow-entry>` is parsed by WikiIndexer as an independent WikiEntry sub-node. Sub-entries inherit container's `category`. Entry-level `category` overrides container when present.
+</details>
 
-#### Code Asset Association (codePaths)
+#### Ref 模式（Spec → Knowhow 桥接）
 
-Code asset documents (AST-/BLP-) associate source code via frontmatter `codePaths`:
+Spec = 索引 + 规则（自动加载）。Knowhow = 详情文档（按需加载）。`ref` 从索引桥接到详情。
 
-```yaml
----
-title: Auth API Contract
-type: asset
-assetType: api-contract
-category: coding
-keywords: [auth, api, jwt]
-codePaths:
-  - src/api/auth/
-  - src/types/auth.ts
----
-```
-
-#### Ref Pattern (Spec → Knowhow Bridge)
-
-Spec is the index/rule layer, Knowhow is the detail layer. When a topic is too complex for inline spec-entry, use `ref` to bridge:
+<details>
+<summary>Inline vs Ref 模式对比</summary>
 
 ```markdown
-<!-- Inline mode (short insight) -->
+<!-- Inline（短内容） -->
 <spec-entry category="coding" keywords="auth,jwt" date="2026-05-10">
-
 ### JWT Token Rotation
-
 Always rotate refresh tokens on use.
-
 </spec-entry>
 
-<!-- Ref mode (complex topic → knowhow detail) -->
+<!-- Ref（复杂内容 → knowhow 详情） -->
 <spec-entry category="coding" keywords="oauth,pkce" date="2026-05-10"
   ref="knowhow/RCP-oauth-flow.md">
-
 ### OAuth 2.0 Integration
-
-Complete OAuth PKCE flow design. See referenced document.
-
+Complete OAuth PKCE flow design.
 </spec-entry>
 ```
 
-**`spec load` display comparison**:
+Inline 显示（完整内容）：`### JWT Token Rotation > coding . auth, jwt . 2026-05-10`
+Ref 显示（摘要 + 加载命令）：`-> 详情: maestro wiki load knowhow-oauth-flow`
 
-Inline entry (full content):
-```
-### JWT Token Rotation
-> coding · auth, jwt · 2026-05-10
+</details>
 
-Always rotate refresh tokens on use.
-```
+### 基于 Category 的检索
 
-Ref entry (summary + load command):
-```
-### OAuth 2.0 Integration
-
-Use when implementing OAuth 2.0 login for public clients. Complete PKCE flow design.
-
-→ Detail: maestro wiki load knowhow-oauth-flow
-```
-
-**Separation principle**:
-- **Spec** (`specs/`) = index + rules. Short entries, auto-loaded by agents
-- **Knowhow** (`knowhow/`) = detail docs. Full documents, loaded on demand
-- **ref** = bridge from index entry to detail doc
-
-### Category-Based Retrieval
-
-Wiki entries support `category` annotation, aligned with the spec categories:
-
-```
-coding | arch | review | debug | test | learning | ui
-```
-
-Each category implicitly maps to a delegate role for agent auto-injection.
-
-Declared via frontmatter `category: coding` or entry-level `category` attribute.
+Wiki 条目支持与 spec 一致的 `category` 标注。每个 category 映射到 delegate 角色，用于自动注入。
 
 ```bash
-# Browse knowledge index by category
-maestro wiki list --category coding
-
-# Filter by keyword
-maestro wiki list --keyword auth
-
-# List all tools
-maestro wiki list --tool
-
-# Load selected documents
-maestro wiki load knowhow-auth-api spec:project:arch-001
+maestro wiki list --category coding    # 按 category 浏览
+maestro wiki list --keyword auth       # 按关键词过滤
+maestro wiki list --tool               # 列出所有 tool
+maestro wiki load <id1> [id2...]       # 加载选定文档
 ```
 
-Sub-entries inherit container's category. Entry-level category overrides container when present.
+### 三层加载
 
-### Three-Layer Loading
+| 层级 | 命令 | 深度 | 用途 |
+|------|------|------|------|
+| 索引浏览 | `wiki list --category <cat>` | id + title | 浏览 |
+| 精确加载 | `wiki load <id1> [id2...]` | 完整内容 | 按 ID 加载 |
+| Hook 自动注入 | `loadWikiByCategory()` | title + summary | 上下文注入 |
 
-| Layer | Command | Depth | Use |
-|-------|---------|-------|-----|
-| Index browse | `maestro wiki list --category <cat>` | id + title | Browse, decide what to load |
-| Precise load | `maestro wiki load <id1> [id2...]` | Full body | Load selected docs by ID |
-| Hook auto-inject | `loadWikiByCategory()` | title + summary | Lightweight context injection (sync) |
-
-**Usage flow** (commands/agents):
-1. `maestro wiki list --category debug` → browse category-relevant doc index
-2. Analyze index, identify task-relevant entries
-3. `maestro wiki load <id1> <id2>` → load selected full docs
-4. Review loaded knowledge, then execute
-
-### Wiki Commands
+### Wiki 命令
 
 ```bash
-# Entry management
 maestro wiki list [--type <type>] [--category <cat>] [--keyword <kw>] [--tool] [-q <query>]
 maestro wiki load <id1> [id2...] [--json]
-maestro wiki get <id>
-maestro wiki search <query>
+maestro wiki get <id> | search <query>
 maestro wiki create --type knowhow --slug <slug> --title <title>
 maestro wiki append <containerId> --body <text> [--category <cat>] [--keywords <kw>]
 maestro wiki remove-entry <subEntryId>
 
-# Knowhow CLI
 maestro knowhow add --type <type> --title <title> --body <text>
 maestro knowhow add --type asset --asset-type api-contract --code-paths "src/api/"
-maestro knowhow list [--type <type>]
-maestro knowhow search <query>
+maestro knowhow list [--type <type>] | search <query>
 
-# Graph analysis
-maestro wiki health
-maestro wiki graph
-maestro wiki orphans
-maestro wiki hubs
+maestro wiki health | graph | orphans | hubs
 ```
 
 ---
 
-## Unified Index & Injection
+## 统一索引与注入
 
-### Atomic Node Index
+### 原子节点索引
 
-WikiIndexer parses `<spec-entry>` and `<knowhow-entry>` into independent WikiEntry sub-nodes:
-
-```
-Container file                      WikiEntry nodes
-┌───────────────────┐        ┌──────────────────────────┐
-│ specs/coding-     │   ──>  │ spec:project:coding      │ (container)
-│   <spec-entry>    │   ──>  │ spec:project:coding-001  │ (sub-node, parent=container)
-│   <spec-entry>    │   ──>  │ spec:project:coding-002  │
-└───────────────────┘        └──────────────────────────┘
-```
-
-Sub-nodes inherit container's `category`, `createdBy`, `sourceRef`. Entry-level `category` overrides container. Keywords bubble up to container frontmatter.
-
-### Write Path
-
-Spec and Knowhow share unified WikiWriter write path:
+WikiIndexer 将 `<spec-entry>` 和 `<knowhow-entry>` 解析为独立的 WikiEntry 子节点。子节点继承容器 `category`；条目级可覆盖。Keywords 冒泡上传。
 
 ```
-/spec-add coding "..."              ──┐
-maestro wiki append spec-...        ──┤──> WikiWriter.appendEntry()
-maestro wiki append knowhow-...     ──┘     │
-                                            ├── Detect container type → <spec-entry> or <knowhow-entry>
-                                            ├── Append entry block
-                                            ├── Bubble keywords to frontmatter
-                                            └── Refresh WikiIndex
++-------------------+        +----------------------------+
+| specs/coding-     |   →    | spec:project:coding        | (容器)
+|   <spec-entry>    |   →    | spec:project:coding-001    | (子节点)
++-------------------+        +----------------------------+
 ```
 
-### Write Protection
+### 写入路径
 
-| Operation | specs/*.md | knowhow/*.md | virtual (issue) |
-|-----------|:---------:|:-----------:|:---------------:|
-| Read | Y | Y | Y |
-| title/frontmatter update | Y | Y | -- |
-| body overwrite | **Forbidden (403)** | **Forbidden (403)** | -- |
-| Entry append (appendEntry) | Y | Y | -- |
-| Entry remove (removeEntry) | Y | Y | -- |
-| File delete | Y | Y | -- |
+所有写操作共享统一 WikiWriter：检测容器类型 → 追加条目块 → 冒泡关键词 → 刷新索引。
 
-### Auto-Injection
+### 写入保护
 
-#### Spec Injection (by category)
+| 操作 | specs | knowhow | virtual |
+|------|:-----:|:-------:|:-------:|
+| 读取 / 标题更新 / 追加 / 移除 / 删除 | ✓ | ✓ | ✓* |
+| 内容覆写 | **禁止** | **禁止** | — |
 
-`spec-injector` hook at `PreToolUse:Agent` auto-injects specs based on agent type → category mapping:
+### 自动注入
 
-```typescript
-const AGENT_CATEGORY_MAP: Record<string, string[]> = {
-  'code-developer':        ['coding', 'learning'],
-  'tdd-developer':         ['coding', 'test'],
-  'workflow-executor':     ['coding'],
-  'universal-executor':    ['coding'],
-  'test-fix-agent':        ['coding', 'test'],
-  'cli-lite-planning-agent': ['arch'],
-  'action-planning-agent':   ['arch'],
-  'workflow-planner':        ['arch'],
-  'workflow-reviewer':     ['review'],
-  'debug-explore-agent':   ['debug'],
-  'workflow-debugger':     ['debug'],
-};
-```
+**Spec 注入**：`spec-injector` 在 `PreToolUse:Agent` 时按 agent 类型自动注入 spec：
 
-For each mapped category:
-1. Load primary spec file in full
-2. Load cross-file entries with matching keywords
-3. Discover knowhow tools with matching category
+| Agent 类型 | 注入 Category |
+|-----------|--------------|
+| code-developer, tdd-developer | coding, learning |
+| workflow-planner, action-planning-agent | arch |
+| workflow-reviewer | review |
+| debug-explore-agent, workflow-debugger | debug |
 
-#### Wiki Injection (by category)
+**Wiki 注入**：同时从索引加载 category 相关 wiki（title + summary），受 context budget 控制（full/reduced/minimal/skip）。
 
-`spec-injector` simultaneously loads category-relevant wiki knowledge (title + summary) from `wiki-index.json`.
-
-Both layers merged and controlled by context budget (full/reduced/minimal/skip).
-
-#### Keyword Injection
-
-`keyword-spec-injector` at `UserPromptSubmit` extracts keywords from prompt, matches spec entries across all category files (max 5 per trigger, session-deduped).
-
-### Session Dedup
-
-- **Bridge file**: `{tmpdir}/maestro-spec-kw-{sessionId}.json`
-- Records injected keywords + entry IDs
-- Three injection points (user input / Agent launch / Coordinator) share bridge
+**关键词注入**：`keyword-spec-injector` 在 `UserPromptSubmit` 时提取关键词，匹配条目（每次最多 5 条，session 级去重）。
 
 ---
 
-## File Structure
+## 文件结构
 
 ```
-~/.maestro/
-└── specs/                              # scope: global
-    ├── coding-conventions.md
-    └── ...
+~/.maestro/specs/                    # scope: global
+    coding-conventions.md
 
 .workflow/
-├── specs/                              # scope: project
-│   ├── coding-conventions.md           # category: coding
-│   ├── architecture-constraints.md     # category: arch
-│   ├── review-standards.md             # category: review
-│   ├── debug-notes.md                  # category: debug
-│   ├── test-conventions.md             # category: test
-│   └── learnings.md                    # category: learning
-├── knowhow/                            # Broad knowledge (unified markdown)
-│   ├── KNW-20260427-1912.md            # Session records
-│   ├── TPL-20260427-1913.md            # Templates
-│   ├── RCP-20260428-0900.md            # Recipes / tool procedures (tool: true)
-│   ├── REF-20260428-1000.md            # References
-│   ├── DCS-20260429-1100.md            # Decisions
-│   ├── TIP-20260429-1200.md            # Tips
-│   ├── AST-auth-api.md                 # Code assets (API contracts)
-│   ├── BLP-microservice-arch.md        # Architecture blueprints
-│   └── DOC-api-design-standard.md      # Long-form documents
-├── collab/
-│   └── specs/                          # scope: team
-│       └── {uid}/                      # scope: personal
-├── issues/
-│   └── issues.jsonl                    # Issue tracking (virtual entry)
-├── learning/
-│   └── patterns.jsonl                  # SelfLearningService internal data
-└── wiki-index.json                     # Persisted index (auto-generated)
++-- specs/                           # scope: project
+|   +-- coding-conventions.md        # category: coding
+|   +-- architecture-constraints.md  # category: arch
+|   +-- review-standards.md          # category: review
+|   +-- debug-notes.md               # category: debug
+|   +-- test-conventions.md          # category: test
+|   +-- learnings.md                 # category: learning
++-- knowhow/                         # 广义知识
+|   +-- KNW-/TIP-/TPL-/RCP-/REF-/DCS-/AST-/BLP-/DOC-*.md
++-- collab/specs/                    # scope: team
+|       +-- {uid}/                   # scope: personal
++-- issues/issues.jsonl              # Issue 追踪（virtual）
++-- learning/patterns.jsonl          # SelfLearningService 数据
++-- wiki-index.json                  # 持久化索引（自动生成）
 ```
 
 ---
 
-## CLI Reference
+## CLI 参考
 
 ```bash
-# ── Spec ────────────────────────────────────────────────────────
+# -- Spec -----------------------------------------------------------------
 maestro spec init [--scope <scope>] [--uid <uid>]
 maestro spec load [--category <cat>] [--keyword <kw>] [--scope <scope>] [--json] [--uid <uid>] [--stdin]
 maestro spec add <category> "<title>" "<content>" [--keywords kw1,kw2] [--source <src>] [--ref <path>] [--knowhow-type <type>] [--uid <uid>] [--stdin] [--json]
 maestro spec list [--scope <scope>] [--uid <uid>]
-maestro spec ls [--scope <scope>] [--uid <uid>]               # list alias
 maestro spec status [--scope <scope>] [--uid <uid>]
 
-# ── Tool Discovery (via knowhow) ────────────────────────────────
-/maestro-tools-register "<description>"          # Create knowhow doc with tool: true
-/maestro-tools-execute "<name>" | --category <cat>  # Load and execute tool step-by-step
+# -- Tool 发现 ------------------------------------------------------------
+/maestro-tools-register "<description>"
+/maestro-tools-execute "<name>" | --category <cat>
 
-# ── Wiki Retrieval ────────────────────────────────────────────
+# -- Wiki -----------------------------------------------------------------
 maestro wiki list [--type <type>] [--category <cat>] [--keyword <kw>] [--tool] [-q <query>] [--group] [--json]
 maestro wiki load <id1> [id2...] [--json]
 maestro wiki get <id> [--json]
 maestro wiki search <query> [--json]
-
-# ── Wiki Write ────────────────────────────────────────────────
 maestro wiki create --type <spec|knowhow> --slug <slug> --title <title> [--body <text>]
 maestro wiki append <containerId> --body <text> [--category <cat>] [--keywords <kw>]
-maestro wiki remove-entry <subEntryId>
-maestro wiki update <id> [--title <title>] [--frontmatter <json>]
-maestro wiki delete <id>
+maestro wiki remove-entry <subEntryId> | update <id> [--title <title>] [--frontmatter <json>] | delete <id>
 
-# ── Wiki Graph ────────────────────────────────────────────────
-maestro wiki health
-maestro wiki graph
-maestro wiki orphans
-maestro wiki hubs [--limit N]
-maestro wiki backlinks <id>
-maestro wiki forward <id>
-
-# ── Knowhow ──────────────────────────────────────────────────
+# -- Knowhow --------------------------------------------------------------
 maestro knowhow add --type <type> --title <title> --body <text> [--keywords <csv>]
 maestro knowhow add --type asset --asset-type <type> --code-paths <paths>
-maestro knowhow list [--type <type>] [--json]
-maestro knowhow search <query> [--json]
-maestro knowhow get <id> [--json]
+maestro knowhow list [--type <type>] [--json] | search <query> [--json] | get <id> [--json]
 
-# ── Hook Management ───────────────────────────────────────────
-maestro hooks install --level standard
-maestro hooks status
+# -- 图 -------------------------------------------------------------------
+maestro wiki health | graph | orphans | hubs [--limit N] | backlinks <id> | forward <id>
+
+# -- Hooks ----------------------------------------------------------------
+maestro hooks install --level standard | status
 ```

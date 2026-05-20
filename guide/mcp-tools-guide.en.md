@@ -1,4 +1,6 @@
-# MCP Tools Reference
+---
+title: "MCP Tools Reference"
+---
 
 The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) to call directly within a session. All tools are registered via the stdio transport protocol and require no additional configuration.
 
@@ -10,18 +12,8 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 
 - [Overview](#overview)
 - [File Operations](#file-operations)
-  - [edit_file](#edit_file)
-  - [write_file](#write_file)
-  - [read_file](#read_file)
-  - [read_many_files](#read_many_files)
 - [Team Collaboration](#team-collaboration)
-  - [team_msg](#team_msg)
-  - [team_mailbox](#team_mailbox)
-  - [team_task](#team_task)
-  - [team_agent](#team_agent)
 - [Persistent Memory](#persistent-memory)
-  - [store_knowhow](#store_knowhow)
-- [CLI Terminal Commands](#cli-terminal-commands)
 
 ---
 
@@ -45,49 +37,32 @@ The Maestro MCP server exposes 9 tools for AI agents (Claude Code, Codex, etc.) 
 
 ### edit_file
 
-Two edit modes: **update** (text replacement) and **line** (position-driven operations). Supports dryRun preview, multi-edit batches, fuzzy matching, and auto line-ending adaptation (CRLF/LF).
+Two edit modes: **update** (text replacement) and **line** (position-driven operations). Supports dryRun preview, multi-edit batches, fuzzy matching, and CRLF/LF adaptation.
 
-#### edit_file Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `path` | string | Yes | — | Target file path |
-| `mode` | `"update"` \| `"line"` | No | `"update"` | Edit mode |
-| `dryRun` | boolean | No | `false` | Preview diff without modifying file |
-
-**Update mode parameters:**
+**Common params**: `path` (string, required), `mode` (update|line, default update), `dryRun` (boolean, default false)
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `oldText` | string | Yes* | Text to find |
-| `newText` | string | Yes* | Replacement text |
-| `edits` | `{oldText, newText}[]` | Yes* | Batch replacements (use instead of oldText/newText) |
+| `oldText` | string | update* | Text to find |
+| `newText` | string | update* | Replacement text |
+| `edits` | `{oldText, newText}[]` | update* | Batch replacements (use instead of oldText/newText) |
 | `replaceAll` | boolean | No | Replace all occurrences (default: first only) |
-
-**Line mode parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `operation` | `"insert_before"` \| `"insert_after"` \| `"replace"` \| `"delete"` | Yes | Line operation type |
-| `line` | number | Yes | Line number (1-based) |
+| `operation` | insert_before/insert_after/replace/delete | line | Line operation type |
+| `line` | number | line | Line number (1-based) |
 | `end_line` | number | No | End line for range operations |
 | `text` | string | No | Content for insert/replace |
 
-#### edit_file Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Text replacement
 { "path": "src/app.ts", "oldText": "hello", "newText": "world" }
-
-// Batch replacement
-{ "path": "src/app.ts", "edits": [{"oldText": "foo", "newText": "bar"}, {"oldText": "baz", "newText": "qux"}] }
-
-// Line insertion
+{ "path": "src/app.ts", "edits": [{"oldText": "foo", "newText": "bar"}] }
 { "path": "src/app.ts", "mode": "line", "operation": "insert_after", "line": 10, "text": "// added" }
-
-// Preview changes
 { "path": "src/app.ts", "oldText": "old", "newText": "new", "dryRun": true }
 ```
+
+</details>
 
 ---
 
@@ -95,82 +70,55 @@ Two edit modes: **update** (text replacement) and **line** (position-driven oper
 
 Create or overwrite files with auto-created parent directories. Supports optional backup and multiple encodings.
 
-#### write_file Parameters
-
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `path` | string | Yes | — | File path |
-| `content` | string | Yes | — | Content to write |
+| `path` | string | Yes | -- | File path |
+| `content` | string | Yes | -- | Content to write |
 | `createDirectories` | boolean | No | `true` | Auto-create parent directories |
 | `backup` | boolean | No | `false` | Create timestamped backup before overwrite |
-| `encoding` | `"utf8"` \| `"utf-8"` \| `"ascii"` \| `"latin1"` \| `"binary"` \| `"hex"` \| `"base64"` | No | `"utf8"` | File encoding |
+| `encoding` | utf8/ascii/latin1/binary/hex/base64 | No | `utf8` | File encoding |
 
-#### write_file Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Create file
 { "path": "src/new-module.ts", "content": "export const hello = 'world';" }
-
-// Overwrite with backup
 { "path": "config.json", "content": "{\"key\": \"value\"}", "backup": true }
 ```
 
+</details>
+
 ---
 
-### read_file
+### read_file / read_many_files
 
-Read a single file with optional line-based pagination. Useful for large files.
+| Parameter | read_file | read_many_files | Description |
+|-----------|-----------|-----------------|-------------|
+| `paths` | string (required) | string/string[] (required) | File path or directory |
+| `offset` | number (0-based) | -- | Line offset |
+| `limit` | number | -- | Lines to read |
+| `pattern` | -- | string | Glob filter |
+| `contentPattern` | -- | string | Regex content search |
+| `maxDepth` | -- | number (default 3) | Directory traversal depth |
+| `includeContent` | -- | boolean (default true) | Include file content |
+| `maxFiles` | -- | number (default 50) | Max files to return |
 
-#### read_file Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `path` | string | Yes | — | File path |
-| `offset` | number | No | — | Line offset (0-based) |
-| `limit` | number | No | — | Number of lines to read |
-
-#### read_file Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Read entire file
+// read_file
 { "path": "README.md" }
-
-// Paginated read (lines 100-149)
 { "path": "src/large-file.ts", "offset": 99, "limit": 50 }
-```
 
----
-
-### read_many_files
-
-Batch file reading, directory traversal, and content regex search. Supports glob pattern filtering and depth control.
-
-#### read_many_files Parameters
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `paths` | string \| string[] | Yes | — | File path(s) or directory |
-| `pattern` | string | No | — | Glob filter (e.g., `"*.ts"`) |
-| `contentPattern` | string | No | — | Regex content search |
-| `maxDepth` | number | No | `3` | Max directory traversal depth |
-| `includeContent` | boolean | No | `true` | Include file content in results |
-| `maxFiles` | number | No | `50` | Max files to return |
-
-#### read_many_files Examples
-
-```jsonc
-// Read multiple files
+// read_many_files
 { "paths": ["src/a.ts", "src/b.ts"] }
-
-// Traverse directory (TypeScript only)
 { "paths": "src/", "pattern": "*.ts" }
-
-// Content search
 { "paths": "src/", "contentPattern": "TODO|FIXME" }
-
-// List files only (no content)
 { "paths": "src/", "includeContent": false }
 ```
+
+</details>
 
 ---
 
@@ -178,230 +126,165 @@ Batch file reading, directory traversal, and content regex search. Supports glob
 
 ### team_msg
 
-Persistent JSONL message bus for agent team communication. Provides 10 operations with delivery status tracking.
-
-**Storage**: `.workflow/.team/{session-id}/.msg/messages.jsonl`
-
-#### team_msg Parameters
+Persistent JSONL message bus. **Storage**: `.workflow/.team/{session-id}/.msg/messages.jsonl`
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `operation` | enum (see below) | Yes | — | Operation type |
-| `session_id` | string | Yes* | — | Session ID (e.g., `TLS-my-project-2026-02-27`) |
-| `from` | string | No* | — | Sender role name |
+| `operation` | see table below | Yes | -- | Operation type |
+| `session_id` | string | Yes | -- | Session ID |
+| `from` | string | log/broadcast | -- | Sender role |
 | `to` | string | No | `"coordinator"` | Recipient role |
-| `type` | string | No | `"message"` | Message type |
 | `summary` | string | No | auto-generated | One-line summary |
-| `data` | object | No | — | Structured data payload |
-| `id` | string | No* | — | Message ID (for read/delete) |
+| `data` | object | No | -- | Structured data |
+| `id` | string | read/delete | -- | Message ID |
 | `last` | number | No | `20` | Last N messages (max 100) |
-| `role` | string | No* | — | Role name (for get_state/read_mailbox) |
-| `delivery_method` | string | No | — | Delivery method tracking |
+| `role` | string | get_state/read_mailbox | -- | Role name |
 
-**Operations:**
+| Operation | Description | Operation | Description |
+|-----------|-------------|-----------|-------------|
+| `log` | Append message | `broadcast` | Send to all members |
+| `read` | Read by ID | `list` | List recent messages |
+| `status` | Summarize per-role | `get_state` | Read role meta.json |
+| `read_mailbox` | Read unread, mark delivered | `mailbox_status` | Delivery status counts |
+| `delete` | Delete message | `clear` | Clear all messages |
 
-| Operation | Description |
-|-----------|-------------|
-| `log` | Append message to log |
-| `broadcast` | Send to all team members |
-| `read` | Read a specific message by ID |
-| `list` | List recent messages with from/to/type filters |
-| `status` | Summarize per-role activity |
-| `get_state` | Read role state from `meta.json` |
-| `read_mailbox` | Read unread messages for a role, mark delivered |
-| `mailbox_status` | Per-role delivery status counts |
-| `delete` | Delete a message by ID |
-| `clear` | Delete all messages for a session |
-
-#### team_msg Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Send message
-{ "operation": "log", "session_id": "TLS-proj-2026-04-21", "from": "planner", "to": "implementer", "summary": "plan ready", "data": {"phase": 1} }
-
-// Read mailbox
+{ "operation": "log", "session_id": "TLS-proj-2026-04-21", "from": "planner", "to": "implementer", "summary": "plan ready" }
 { "operation": "read_mailbox", "session_id": "TLS-proj-2026-04-21", "role": "implementer" }
-
-// View team status
 { "operation": "status", "session_id": "TLS-proj-2026-04-21" }
 ```
+
+</details>
 
 ---
 
 ### team_mailbox
 
-Mailbox-style agent messaging with delivery tracking and broker injection. Compared to `team_msg`, this tool focuses on point-to-point delivery confirmation.
-
-**Storage**: `.workflow/.team/{session-id}/.msg/mailbox.jsonl`
-
-#### team_mailbox Parameters
+Mailbox-style point-to-point messaging with broker injection. **Storage**: `.workflow/.team/{session-id}/.msg/mailbox.jsonl`
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `operation` | `"send"` \| `"read"` \| `"status"` | Yes | — | Operation type |
-| `session_id` | string | Yes | — | Session ID |
-| `from` | string | send | — | Sender role |
-| `to` | string | send | — | Recipient role |
-| `message` | string | send | — | Message content |
-| `type` | string | No | `"message"` | Message type |
-| `delivery_method` | `"inject"` \| `"poll"` \| `"broadcast"` | No | `"inject"` | Delivery method |
-| `data` | object | No | — | Structured data |
-| `role` | string | read | — | Role to read mailbox for |
+| `operation` | send/read/status | Yes | -- | Operation type |
+| `session_id` | string | Yes | -- | Session ID |
+| `from` / `to` | string | send | -- | Sender / recipient role |
+| `message` | string | send | -- | Message content |
+| `delivery_method` | inject/poll/broadcast | No | `inject` | Delivery method |
+| `role` | string | read | -- | Role to read mailbox for |
 | `limit` | number | No | `50` | Max messages (1-100) |
-| `mark_delivered` | boolean | No | `true` | Mark returned messages as delivered |
+| `mark_delivered` | boolean | No | `true` | Mark returned as delivered |
 
-#### team_mailbox Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Send message (auto-inject into running agent)
 { "operation": "send", "session_id": "TLS-proj-2026-04-21", "from": "coordinator", "to": "worker-1", "message": "start task A" }
-
-// Read mailbox
 { "operation": "read", "session_id": "TLS-proj-2026-04-21", "role": "worker-1" }
-
-// Check delivery status
 { "operation": "status", "session_id": "TLS-proj-2026-04-21" }
 ```
+
+</details>
 
 ---
 
 ### team_task
 
-Team task CRUD with session-scoped namespaces and state machine validation. Built on the CollabTask system.
+Team task CRUD with state machine validation. **Storage**: `.workflow/.team/{session_id}/tasks/{id}.json`
 
-**Storage**: `.workflow/.team/{session_id}/tasks/{id}.json`
-
-#### team_task Parameters
+**State transitions**: `open -> assigned -> in_progress -> pending_review -> done -> closed` (closed can reopen)
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `operation` | `"create"` \| `"update"` \| `"list"` \| `"get"` | Yes | — | Operation type |
-| `session_id` | string | Yes | — | Session ID |
-| `title` | string | create | — | Task title |
-| `description` | string | No | — | Task description |
-| `owner` | string | No | `"agent"` | Owner (assignee) |
-| `priority` | `"low"` \| `"medium"` \| `"high"` \| `"critical"` | No | `"medium"` | Priority |
-| `task_id` | string | update/get | — | Task ID (e.g., `ATASK-001`) |
-| `status` | `"open"` \| `"assigned"` \| `"in_progress"` \| `"pending_review"` \| `"done"` \| `"closed"` | No | — | Task status |
+| `operation` | create/update/list/get | Yes | -- | Operation type |
+| `session_id` | string | Yes | -- | Session ID |
+| `title` | string | create | -- | Task title |
+| `description` / `owner` | string | No | `"agent"` | Description / assignee |
+| `priority` | low/medium/high/critical | No | `medium` | Priority |
+| `task_id` | string | update/get | -- | Task ID |
+| `status` | open/assigned/in_progress/pending_review/done/closed | No | -- | Task status |
 
-**State transitions:**
-
-```
-open → assigned → in_progress → pending_review → done → closed
-                                                        ↘ open (reopen)
-```
-
-#### team_task Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Create task
 { "operation": "create", "session_id": "TLS-proj-2026-04-21", "title": "Implement auth", "priority": "high" }
-
-// Update status
 { "operation": "update", "session_id": "TLS-proj-2026-04-21", "task_id": "ATASK-001", "status": "in_progress" }
-
-// List tasks
 { "operation": "list", "session_id": "TLS-proj-2026-04-21" }
 ```
+
+</details>
 
 ---
 
 ### team_agent
 
-Agent lifecycle management — spawn, shutdown, and remove agents via the Delegate Broker.
-
-**Storage**: `.workflow/.team/{session_id}/members.json`
-
-#### team_agent Parameters
+Agent lifecycle management. **Storage**: `.workflow/.team/{session_id}/members.json`
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `operation` | `"spawn_agent"` \| `"shutdown_agent"` \| `"remove_agent"` \| `"members"` | Yes | — | Operation type |
-| `session_id` | string | Yes | — | Session ID |
-| `role` | string | spawn/shutdown/remove | — | Agent role name |
-| `prompt` | string | spawn | — | Agent instructions |
+| `operation` | spawn_agent/shutdown_agent/remove_agent/members | Yes | -- | Operation type |
+| `session_id` | string | Yes | -- | Session ID |
+| `role` | string | spawn/shutdown/remove | -- | Agent role name |
+| `prompt` | string | spawn | -- | Agent instructions |
 | `tool` | string | No | `"gemini"` | CLI tool to use |
 
-#### team_agent Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Spawn agent
 { "operation": "spawn_agent", "session_id": "TLS-proj-2026-04-21", "role": "researcher", "prompt": "Analyze auth patterns", "tool": "gemini" }
-
-// Shutdown agent
 { "operation": "shutdown_agent", "session_id": "TLS-proj-2026-04-21", "role": "researcher" }
-
-// List members
 { "operation": "members", "session_id": "TLS-proj-2026-04-21" }
 ```
 
+</details>
+
 ---
 
-## Knowhow
+## Persistent Memory
 
 ### store_knowhow
 
-Project-level knowledge reuse management, stored in `.workflow/knowhow/`. Provides 2 operations: add, search. Supports 6 content types with type-specific metadata.
-
-**Storage**: `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{HHMM}.md`
-
-**6 types**: session(KNW-), tip(TIP-), template(TPL-), recipe(RCP-), reference(REF-), decision(DCS-)
-
-**Auto-indexed**: WikiIndexer indexes entries as `type=knowhow`. Query via `maestro wiki list --type knowhow`.
-
-#### store_knowhow Parameters
+Project-level knowledge reuse in `.workflow/knowhow/`. 6 types: session(KNW-), tip(TIP-), template(TPL-), recipe(RCP-), reference(REF-), decision(DCS-). WikiIndexer auto-indexes as `type=knowhow`.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `operation` | `"add"` \| `"search"` | Yes | Operation type |
-| `type` | string | add | Content type: session\|tip\|template\|recipe\|reference\|decision |
-| `title` | string | add | Entry title |
-| `body` | string | add | Entry body (markdown) |
+| `operation` | add/search | Yes | Operation type |
+| `type` | string | add | session/tip/template/recipe/reference/decision |
+| `title` / `body` | string | add | Title / body (markdown) |
 | `tags` | string[] | No | Categorization tags |
 | `lang` | string | No | [template] Programming language |
 | `source` | string | No | [reference] Original URL |
-| `status` | string | No | [decision] proposed\|accepted\|superseded |
+| `status` | string | No | [decision] proposed/accepted/superseded |
 | `query` | string | search | Search keywords |
 | `limit` | number | No | Max results (default: 20) |
 
-#### store_knowhow Examples
+<details>
+<summary>Examples</summary>
 
 ```jsonc
-// Add a code template
 { "operation": "add", "type": "template", "title": "React Hook Form",
   "body": "import { useForm } from 'react-hook-form'; ...",
   "lang": "typescript", "tags": ["react", "form"] }
-
-// Add an architecture decision
 { "operation": "add", "type": "decision", "title": "Use PostgreSQL",
   "body": "ADR: PostgreSQL as primary database...",
   "status": "accepted", "tags": ["database", "architecture"] }
-
-// Add an external reference
-{ "operation": "add", "type": "reference", "title": "Stripe API",
-  "body": "Key endpoints for payment processing...",
-  "source": "https://docs.stripe.com/api", "tags": ["stripe", "api"] }
-
-// Full-text search
 { "operation": "search", "query": "authentication middleware" }
 ```
+
+</details>
 
 ---
 
 ## Architecture
 
 ```
-MCP Server (stdio)
-  └─ ToolRegistry
-       ├─ edit_file       ─ File editing (update/line)
-       ├─ write_file      ─ File writing
-       ├─ read_file       ─ Single file read
-       ├─ read_many_files ─ Batch read / search
-       ├─ team_msg        ─ Message bus (JSONL)
-       ├─ team_mailbox    ─ Mailbox delivery
-       ├─ team_task       ─ Task management
-       ├─ team_agent      ─ Agent lifecycle
-       └─ store_knowhow   ─ Knowhow
+MCP Server (stdio) -> ToolRegistry
+  +-- edit_file / write_file / read_file / read_many_files  (File Ops)
+  +-- team_msg / team_mailbox / team_task / team_agent      (Team)
+  +-- store_knowhow                                         (Memory)
 ```
 
-**Adapter**: Tools use Zod schemas internally and return `{success, result, error}` format. The `ccwResultToMcp()` adapter converts this to the MCP standard `{content, isError}` format.
+**Adapter**: Zod schema validation -> `{success, result, error}` -> `ccwResultToMcp()` -> MCP `{content, isError}`

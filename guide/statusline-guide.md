@@ -1,4 +1,6 @@
-# Maestro Statusline 指南
+---
+title: "Maestro Statusline 指南"
+---
 
 Maestro Statusline 是 Claude Code 的自定义状态栏，提供多行实时信息显示：模型、Token 用量、Git 状态、上下文消耗，以及工作流里程碑和 Session 依赖链。
 
@@ -47,21 +49,18 @@ Claude Code 在每次交互后将会话数据（JSON）通过 stdin 传给 `maes
 
 Statusline 支持智能多行显示，根据工作流状态和 session 链数量自动决定行数：
 
-### 无工作流（单行）
-
+**无工作流（单行）：**
 ```
 ⚡ Opus 4.6 | 📁 maestro2 ⎇ master | ↑12k ↓3k Σ15k +342 -87 | 📈 ███░░░ 28%
 ```
 
-### 有工作流，≤2 条链（双行）
-
+**有工作流，≤2 条链（双行）：**
 ```
 ⚡ Opus 4.6 | 📁 maestro2 ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | 📈 ███░░░ 28%
 🏁 MVP 1/2 ◆P2 | auth A→P→E→V ✓ · user-mgmt A→P ●
 ```
 
-### 有工作流，3+ 条链（多行展开）
-
+**有工作流，3+ 条链（多行展开）：**
 ```
 ⚡ Opus 4.6 | 📁 maestro2 ⎇ master | ↑12k ↓3k Σ15k | 📈 ███░░░ 28%
 🏁 MVP 1/2 ◆P2
@@ -70,7 +69,11 @@ Statusline 支持智能多行显示，根据工作流状态和 session 链数量
   settings A ○
 ```
 
-无工作流时仅显示单行。3 条及以上 session 链时，自动展开为每链一行。
+| 链数量 | 显示方式 |
+|--------|----------|
+| 0（无工作流） | 单行状态栏 |
+| 1–2 | 双行，链之间用 ` · ` 分隔 |
+| 3+ | 展开为多行，每条链缩进显示 |
 
 ---
 
@@ -110,18 +113,14 @@ Statusline 支持智能多行显示，根据工作流状态和 session 链数量
 
 ### 代码变更
 
-紧跟 token 用量之后，显示当前会话的代码变更统计：
-
 | 标记 | 含义 | 颜色 |
 |------|------|------|
 | `+N` | 新增行数 | 绿色 |
 | `-N` | 删除行数 | 红色 |
 
-数据来源于 Claude Code 的 `cost.total_lines_added` / `total_lines_removed`。仅在有变更时显示。
+数据来源于 `cost.total_lines_added` / `total_lines_removed`，仅在有变更时显示。
 
 ### 上下文颜色
-
-进度条颜色随消耗比例变化：
 
 | 范围 | 颜色 |
 |------|------|
@@ -138,11 +137,7 @@ Statusline 支持智能多行显示，根据工作流状态和 session 链数量
 
 仅在项目有 `.workflow/state.json` 且包含里程碑时显示。
 
-### 结构
-
-```
-🏁 MVP 1/2 ◆P2 | auth A→P→E→R→D→T→V ✓ · user-mgmt A→P ●
-```
+**结构：** `🏁 MVP 1/2 ◆P2 | auth A→P→E→R→D→T→V ✓ · user-mgmt A→P ●`
 
 | 部分 | 说明 |
 |------|------|
@@ -152,18 +147,15 @@ Statusline 支持智能多行显示，根据工作流状态和 session 链数量
 
 ### Session 链格式
 
-Session 链使用 **可读 slug + 类型流** 格式：
+Session 链使用 **可读 slug + 类型流** 格式：`auth A→P→E→R→D→T→V ✓`
 
-```
-auth A→P→E→R→D→T→V ✓
-```
-
-- **slug**（`auth`）：从 artifact 路径自动提取的可读名称，去除日期、类型前缀、phase 编号
-- **类型字母**（`A→P→E→V`）：每个 artifact 的类型缩写，按依赖顺序排列，各字母以对应类型颜色着色
-- **箭头**（`→`）：表示执行依赖顺序，使用 separator 颜色
+- **slug**（`auth`）：从 artifact 路径自动提取的可读名称
+- **类型字母**（`A→P→E→V`）：每个 artifact 的类型缩写，按依赖顺序排列
+- **箭头**（`→`）：执行依赖顺序
 - **状态后缀**：链末尾显示整条链的状态
 
-### Slug 提取规则
+<details>
+<summary>Slug 提取规则</summary>
 
 从 artifact 的 `path` 字段提取可读名称：
 
@@ -175,44 +167,30 @@ auth A→P→E→R→D→T→V ✓
 
 依次去除：数字前缀、`YYYYMMDD-` 日期前缀、类型名前缀（analyze/plan/execute 等）、尾部日期、`-P1` phase 编号。
 
+</details>
+
 ### 9 种 Artifact 类型
 
 | 类型 | 缩写 | 颜色 | 含义 |
 |------|------|------|------|
-| analyze | A | 青色（model） | 分析探索 |
-| plan | P | 金色（milestone） | 规划设计 |
-| execute | E | 绿色（phase） | 实现执行 |
-| verify | V | 蓝色（coord） | 验证确认 |
-| brainstorm | B | 紫色（team） | 头脑风暴 |
-| spec | S | 黄色（dir） | 规格定义 |
-| review | R | 橙色（ctxAlert） | 代码审查 |
-| debug | D | 红色（ctxCrit） | 调试诊断 |
-| test | T | 绿色（ctxOk） | 测试验证 |
+| analyze | A | 青色 | 分析探索 |
+| plan | P | 金色 | 规划设计 |
+| execute | E | 绿色 | 实现执行 |
+| verify | V | 蓝色 | 验证确认 |
+| brainstorm | B | 紫色 | 头脑风暴 |
+| spec | S | 黄色 | 规格定义 |
+| review | R | 橙色 | 代码审查 |
+| debug | D | 红色 | 调试诊断 |
+| test | T | 绿色 | 测试验证 |
 
 ### 链尾状态标记
 
 | 标记 | 含义 | 颜色 |
 |------|------|------|
-| `✓` | 链中所有 artifact 已完成 | 绿色 |
-| `●` | 最后一个 artifact 进行中 | 黄色 |
-| `✗` | 最后一个 artifact 失败 | 红色 |
-| `○` | 最后一个 artifact 待执行 | 灰色 |
-
-### 独立 Artifact
-
-未加入任何链的 artifact（无 `depends_on`，也不被其他 artifact 依赖）单独显示：
-
-```
-brainstorm-ux B ✓
-```
-
-### 自动多行
-
-| 链数量 | 显示方式 |
-|--------|----------|
-| 0 | 仅 milestone + phase header |
-| 1–2 | 单行，链之间用 ` · ` 分隔 |
-| 3+ | 展开为多行，每条链缩进显示 |
+| `✓` | 所有 artifact 已完成 | 绿色 |
+| `●` | 最后一个进行中 | 黄色 |
+| `✗` | 最后一个失败 | 红色 |
+| `○` | 最后一个待执行 | 灰色 |
 
 ### Chain 构建算法
 
@@ -225,8 +203,6 @@ brainstorm-ux B ✓
 ---
 
 ## 图标系统
-
-### 双图标集
 
 Statusline 支持两套图标，通过配置切换：
 
@@ -242,13 +218,10 @@ Statusline 支持两套图标，通过配置切换：
 | Git | `` (git_branch) | `⎇` (branch) |
 | Context | `` (line_chart) | `◔` (circle) |
 
-### Nerd Font 要求
-
 Nerd Font 图标需要终端安装并配置 Nerd Font 字体（如 JetBrainsMono Nerd Font）。
 
-**Windows Terminal**：Settings → Profile → Appearance → Font face → `JetBrainsMono Nerd Font`
-
-**VS Code**：Settings → `terminal.integrated.fontFamily` → `'JetBrainsMono Nerd Font'`
+- **Windows Terminal**：Settings → Profile → Appearance → Font face → `JetBrainsMono Nerd Font`
+- **VS Code**：Settings → `terminal.integrated.fontFamily` → `'JetBrainsMono Nerd Font'`
 
 > Claude Code 桌面版/Web 版不支持自定义字体，自动使用 Unicode 回退图标。默认 `nerdFont: false`。
 
@@ -256,17 +229,18 @@ Nerd Font 图标需要终端安装并配置 Nerd Font 字体（如 JetBrainsMono
 
 ## 配色主题
 
-Statusline 内置 5 套配色主题，通过配置切换：
+内置 5 套配色主题：
 
 | 主题 | 风格 | 特点 |
 |------|------|------|
-| `notion` | 默认 | 柔和暖色，Catppuccin 风格，低视觉疲劳 |
+| `notion` | 默认 | 柔和暖色，Catppuccin 风格 |
 | `cyberpunk` | 科技 | 霓虹高对比，赛博朋克风格 |
-| `pastel` | 小清新 | 柔和粉蓝绿，低饱和度，轻量感 |
+| `pastel` | 小清新 | 柔和粉蓝绿，低饱和度 |
 | `nord` | 北欧冷调 | 冰蓝灰绿，沉稳内敛 |
 | `monokai` | 经典编辑器 | 粉绿蓝紫，高辨识度 |
 
-### 各主题色彩对比
+<details>
+<summary>各主题色彩对比</summary>
 
 ```
 Notion:    Model(青)  Milestone(金)  Phase(绿)  Dir(黄)  Context(绿→黄→橙→红)
@@ -276,9 +250,7 @@ Nord:      Model(冰蓝)  Milestone(极光橙) Phase(极光绿)  Dir(极光黄) 
 Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context(绿→黄→橙→粉红)
 ```
 
-### 安装时选择
-
-通过 `maestro install` 安装时，在 Statusline 配置步骤中按 `1-5` 数字键选择主题。
+</details>
 
 ### 运行时切换
 
@@ -291,8 +263,6 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
   }
 }
 ```
-
-下次状态栏刷新即生效。
 
 ---
 
@@ -311,7 +281,7 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `theme` | string | `"notion"` | 配色主题（notion / cyberpunk / pastel / nord / monokai） |
+| `theme` | string | `"notion"` | 配色主题 |
 | `nerdFont` | boolean | `false` | 启用 Nerd Font 图标 |
 
 ### 环境变量
@@ -329,8 +299,6 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
 ## 数据来源
 
 ### Claude Code stdin JSON
-
-Claude Code 在每次更新时通过 stdin 传入以下字段：
 
 | 字段 | 说明 |
 |------|------|
@@ -359,33 +327,20 @@ Claude Code 在每次更新时通过 stdin 传入以下字段：
 
 ### 图标显示为方块
 
-终端字体不支持 Nerd Font。解决方案：
-
-1. 安装 Nerd Font：`winget install DEVCOM.JetBrainsMonoNerdFont`
-2. 配置终端使用该字体
-3. 设置 `~/.maestro/config.json` 中 `statusline.nerdFont: true`
-
-如果使用 Claude Code 桌面版，无法自定义字体，请保持 `nerdFont: false`（默认）。
+终端字体不支持 Nerd Font。解决：安装 Nerd Font（`winget install DEVCOM.JetBrainsMonoNerdFont`），配置终端字体，设置 `statusline.nerdFont: true`。Claude Code 桌面版请保持 `nerdFont: false`。
 
 ### 第二行不显示
 
-第二行仅在以下条件满足时显示：
-- 项目目录下存在 `.workflow/state.json`
-- state.json 中有 `current_milestone` 字段
-- 存在已注册的 artifacts
+需满足：项目有 `.workflow/state.json`、有 `current_milestone` 字段、有已注册 artifacts。
 
 ### 上下文百分比与 Claude Code 内置不一致
 
-Maestro 的上下文百分比会扣除 Claude Code 的 ~16.5% autocompact buffer，显示的是**可用上下文**的消耗比例，比 Claude Code 内置显示偏高。
+Maestro 扣除 ~16.5% autocompact buffer，显示**可用上下文**消耗比例，比 Claude Code 内置显示偏高。
 
 ### Token 用量不显示
 
-Token 数据需要 Claude Code 提供 `context_window.total_input_tokens` 和 `total_output_tokens` 字段。首次 API 调用前这些字段可能为 null。
-
-### 代码变更行数不显示
-
-需要 Claude Code 提供 `cost.total_lines_added` 和 `cost.total_lines_removed` 字段。仅在有实际代码变更时显示。
+首次 API 调用前 `total_input_tokens` / `total_output_tokens` 可能为 null。
 
 ### Session 链显示为空
 
-确保 `state.json` 中的 artifacts 包含 `id`、`type`、`status`、`path` 字段，且 `milestone` 与 `current_milestone` 匹配。链的构建依赖 `depends_on` 字段将 artifacts 连接起来。
+确保 artifacts 包含 `id`、`type`、`status`、`path` 字段，且 `milestone` 与 `current_milestone` 匹配。

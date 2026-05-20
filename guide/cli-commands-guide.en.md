@@ -1,42 +1,12 @@
-# CLI Terminal Commands Reference
+---
+title: "CLI Terminal Commands Reference"
+---
 
 Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers installation, delegation, coordination, wiki, hooks, collaboration, and more.
 
-> **Primary workflow entry point**: `/maestro-ralph` (slash command) is the recommended way to drive the full lifecycle. It builds adaptive command chains and internally dispatches via `maestro delegate` (CLI nodes) and `maestro coordinate` (skill nodes). See [Maestro Ralph Guide](./maestro-ralph-guide.md) for details.
+> **Primary workflow entry point**: `/maestro-ralph` (slash command) is the recommended way to drive the full lifecycle. See [Maestro Ralph Guide](./maestro-ralph-guide.md) for details.
 >
-> **Aliases**: Some commands have short aliases: `coord` → `coordinate`, `msg` → `agent-msg`, `kh` → `knowhow`, `bv` → `brainstorm-visualize`, `team` → `collab`.
-
----
-
-## Table of Contents
-
-- [Command Overview](#command-overview)
-- [Install & Update](#install--update)
-  - [maestro install](#maestro-install)
-  - [maestro uninstall](#maestro-uninstall)
-  - [maestro update](#maestro-update)
-- [Dashboard](#dashboard)
-  - [maestro view](#maestro-view)
-  - [maestro stop](#maestro-stop)
-- [Task Execution](#task-execution)
-  - [maestro delegate](#maestro-delegate)
-  - [maestro coordinate](#maestro-coordinate)
-  - [maestro cli](#maestro-cli)
-  - [maestro run](#maestro-run)
-  - [maestro serve](#maestro-serve)
-- [Project Management](#project-management)
-  - [maestro launcher](#maestro-launcher)
-  - [maestro spec](#maestro-spec)
-  - [maestro wiki](#maestro-wiki)
-  - [maestro hooks](#maestro-hooks)
-  - [maestro overlay](#maestro-overlay)
-- [Team Collaboration](#team-collaboration)
-  - [maestro collab](#maestro-collab)
-  - [maestro agent-msg](#maestro-agent-msg)
-- [Memory & Extensions](#memory--extensions)
-  - [maestro knowhow](#maestro-knowhow)
-  - [maestro brainstorm-visualize](#maestro-brainstorm-visualize)
-  - [maestro ext / maestro tool](#maestro-ext--maestro-tool)
+> **Aliases**: `coord`->`coordinate`, `msg`->`agent-msg`, `kh`->`knowhow`, `bv`->`brainstorm-visualize`, `team`->`collab`.
 
 ---
 
@@ -44,33 +14,34 @@ Maestro provides 21 terminal commands invoked via `maestro <command>`. Covers in
 
 | Command | Alias | Purpose |
 |---------|-------|---------|
-| `maestro install` | — | Install Maestro assets (interactive) |
-| `maestro uninstall` | — | Remove installed assets |
-| `maestro update` | — | Check/install latest version |
-| `maestro view` | — | Launch Dashboard kanban board |
-| `maestro stop` | — | Stop Dashboard server |
-| `maestro delegate` | — | Delegate task to AI agent |
-| `maestro coordinate` | `coord` | Graph workflow coordinator |
-| `maestro cli` | — | Run CLI agent tools |
-| `maestro run` | — | Execute a named workflow |
-| `maestro serve` | — | Start workflow server |
-| `maestro launcher` | — | Claude Code launcher |
-| `maestro spec` | — | Project spec management |
-| `maestro wiki` | — | Wiki knowledge graph queries |
-| `maestro hooks` | — | Hook management and evaluation |
-| `maestro overlay` | — | Command overlay management |
-| `maestro collab` | `team` | Human team collaboration |
-| `maestro agent-msg` | `msg` | Agent team message bus |
-| `maestro knowhow` | `kh` | Knowhow knowledge management |
-| `maestro brainstorm-visualize` | `bv` | Brainstorm visualization server |
-| `maestro ext` | — | Extension management |
-| `maestro tool` | — | Tool interaction (list/exec) |
+| `install` | -- | Install Maestro assets (interactive) |
+| `uninstall` | -- | Remove installed assets |
+| `update` | -- | Check/install latest version |
+| `view` | -- | Launch Dashboard kanban board |
+| `stop` | -- | Stop Dashboard server |
+| `delegate` | -- | Delegate task to AI agent |
+| `coordinate` | `coord` | Graph workflow coordinator |
+| `cli` | -- | Run CLI agent tools |
+| `run` | -- | Execute a named workflow |
+| `serve` | -- | Start workflow server |
+| `launcher` | -- | Claude Code launcher |
+| `spec` | -- | Project spec management |
+| `wiki` | -- | Wiki knowledge graph queries |
+| `hooks` | -- | Hook management and evaluation |
+| `overlay` | -- | Command overlay management |
+| `collab` | `team` | Human team collaboration |
+| `agent-msg` | `msg` | Agent team message bus |
+| `knowhow` | `kh` | Knowhow knowledge management |
+| `brainstorm-visualize` | `bv` | Brainstorm visualization server |
+| `ext` | -- | Extension management |
+| `tool` | -- | Tool interaction (list/exec) |
 
 ---
 
 ## Install & Update
 
-### maestro install
+<details>
+<summary>maestro install</summary>
 
 Install Maestro assets to project or global directory with interactive step selection.
 
@@ -88,46 +59,45 @@ maestro install mcp                       # Register MCP server
 | `--global` | Install global assets only |
 | `--path <dir>` | Install to specified project directory |
 | `--hooks <level>` | Hook level: none / minimal / standard / full |
-| `--codex-hooks <level>` | Codex hook level: none / minimal / standard / full |
-| `--codex-mcp` | Register Codex MCP server (maestro-tools) |
+| `--codex-hooks <level>` | Codex hook level |
+| `--codex-mcp` | Register Codex MCP server |
 
-> In interactive mode, the install flow now includes **Codex Hooks** and **Codex MCP** configuration steps.
+> Interactive mode now includes Codex Hooks and Codex MCP configuration steps.
 
----
+</details>
 
-### maestro uninstall
+<details>
+<summary>maestro uninstall / update</summary>
 
-Remove installed Maestro assets.
+**uninstall** -- Remove installed assets:
 
 ```bash
 maestro uninstall              # Interactive uninstall
-maestro uninstall --all        # Uninstall all recorded installations
-maestro uninstall --all -y     # Skip confirmation
+maestro uninstall --all -y     # Uninstall all, skip confirmation
 ```
 
----
-
-### maestro update
-
-Check for and install the latest version.
+**update** -- Check for and install the latest version:
 
 ```bash
 maestro update                 # Check and prompt to install
-maestro update --check         # Check only, don't install
+maestro update --check         # Check only
 ```
+
+</details>
 
 ---
 
 ## Dashboard
 
-### maestro view
+<details>
+<summary>maestro view / stop</summary>
 
-Launch the Dashboard kanban board (browser or TUI).
+**view** -- Launch the Dashboard kanban board (browser or TUI):
 
 ```bash
-maestro view                   # Launch board (auto-open browser)
+maestro view                   # Launch (auto-open browser)
 maestro view --tui             # Terminal UI mode
-maestro view --dev             # Vite dev mode (HMR)
+maestro view --dev             # Vite dev mode
 maestro view --port 8080       # Custom port
 ```
 
@@ -136,15 +106,11 @@ maestro view --port 8080       # Custom port
 | `--port`, `-p` | `3001` | Server port |
 | `--host` | `127.0.0.1` | Bind host |
 | `--path <dir>` | CWD | Workspace root |
-| `--no-browser` | — | Don't auto-open browser |
-| `--tui` | — | Terminal UI mode |
-| `--dev` | — | Vite dev server mode |
+| `--no-browser` | -- | Don't auto-open browser |
+| `--tui` | -- | Terminal UI mode |
+| `--dev` | -- | Vite dev server mode |
 
----
-
-### maestro stop
-
-Stop the Dashboard server. 3-stage strategy: graceful shutdown → port lookup kill → force kill.
+**stop** -- Stop Dashboard (graceful -> port lookup -> force kill):
 
 ```bash
 maestro stop                   # Graceful stop
@@ -152,15 +118,18 @@ maestro stop --force           # Force kill
 maestro stop --port 8080       # Custom port
 ```
 
+</details>
+
 ---
 
 ## Task Execution
 
-### maestro delegate
+<details>
+<summary>maestro delegate</summary>
 
 Delegate tasks to AI agent tools (gemini/qwen/codex/claude/opencode). Supports sync, async, and session resume.
 
-Used internally by `maestro-ralph` for CLI-type chain nodes (heavy exploration, code generation). Ralph sets `--mode`, `--rule`, and `--cd` automatically based on session context.
+Used internally by `maestro-ralph` for CLI-type chain nodes. Ralph sets `--mode`, `--rule`, and `--cd` automatically based on session context.
 
 ```bash
 maestro delegate "analyze auth module" --to gemini
@@ -178,29 +147,20 @@ maestro delegate "continue" --to gemini --resume
 | `--mode <mode>` | `analysis` | analysis (read-only) / write |
 | `--model <model>` | Tool default | Model override |
 | `--cd <dir>` | CWD | Working directory |
-| `--rule <template>` | — | Protocol + template loading |
+| `--rule <template>` | -- | Protocol + template loading |
 | `--id <id>` | Auto-generated | Execution ID |
-| `--resume [id]` | — | Resume last/specific session |
-| `--async` | — | Run detached in background |
+| `--resume [id]` | -- | Resume session |
+| `--async` | -- | Run detached in background |
 | `--backend <type>` | `direct` | Adapter backend: direct / terminal |
 
-**Subcommands:**
+**Subcommands**: `show [--all]`, `output <id>`, `status <id>`, `tail <id>`, `cancel <id>`, `message <id> <text>`, `messages <id>`
 
-| Subcommand | Description |
-|------------|-------------|
-| `show [--all]` | List execution history |
-| `output <id> [--verbose]` | Get output |
-| `status <id> [--events N]` | View status |
-| `tail <id>` | Recent events + history |
-| `cancel <id>` | Request cancellation |
-| `message <id> <text> [--delivery inject\|after_complete]` | Inject message |
-| `messages <id>` | View message queue |
+</details>
 
----
+<details>
+<summary>maestro coordinate</summary>
 
-### maestro coordinate
-
-Graph workflow coordinator with step mode and auto mode. Ralph sessions use this internally via the unified executor (`maestro-ralph-execute`) for skill-type chain nodes.
+Graph workflow coordinator with step mode and auto mode. Ralph sessions use this internally via `maestro-ralph-execute` for skill-type chain nodes.
 
 ```bash
 maestro coordinate list                                    # List chain graphs
@@ -215,63 +175,47 @@ maestro coordinate report --session <id> --node <id> --status SUCCESS
 |--------|-------------|
 | `--chain <name>` | Specify chain graph |
 | `--tool <tool>` | Agent tool (default: `claude`) |
-| `-y`, `--yes` | Auto-confirm mode |
+| `-y` | Auto-confirm mode |
 | `--parallel` | Enable fork/join parallel execution |
 | `--dry-run` | Preview execution plan |
-| `--continue`, `-c` | Resume session |
+| `-c` | Resume session |
 
----
+</details>
 
-### maestro cli
+<details>
+<summary>maestro cli / run / serve</summary>
 
-Unified CLI agent tool interface.
+**cli** -- Unified CLI agent tool interface:
 
 ```bash
 maestro cli -p "analyze code" --tool gemini --mode analysis
 maestro cli -p "fix bug" --tool gemini --mode write
-maestro cli show
-maestro cli output <id>
-maestro cli watch <id>
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `-p`, `--prompt` | **required** | Prompt text |
-| `--tool <name>` | First enabled tool | CLI tool |
-| `--mode <mode>` | `analysis` | Execution mode |
-| `--model <model>` | Tool default | Model override |
-| `--cd <dir>` | CWD | Working directory |
-| `--rule <template>` | — | Template loading |
-| `--id <id>` | Auto-generated | Execution ID |
-| `--resume [id]` | — | Resume session |
+Options same as `delegate` (`-p` required). Additional subcommands: `show`, `output <id>`, `watch <id>`.
 
----
-
-### maestro run
-
-Execute a named workflow. Can trigger ralph lifecycle sessions or individual workflow skills.
+**run** -- Execute a named workflow:
 
 ```bash
-maestro run <workflow>           # Execute workflow
-maestro run <workflow> --dry-run  # Preview
+maestro run <workflow>           # Execute
+maestro run <workflow> --dry-run # Preview
 maestro run <workflow> -c config.json
 ```
 
----
-
-### maestro serve
-
-Start the workflow server.
+**serve** -- Start the workflow server:
 
 ```bash
 maestro serve --port 3600 --host localhost
 ```
 
+</details>
+
 ---
 
 ## Project Management
 
-### maestro launcher
+<details>
+<summary>maestro launcher</summary>
 
 Unified Claude Code launcher with workflow profile and settings switching.
 
@@ -284,125 +228,91 @@ maestro launcher add-settings dev ./settings-dev.json
 maestro launcher scan ./configs          # Scan config files
 ```
 
----
+</details>
 
-### maestro spec
+<details>
+<summary>maestro spec</summary>
 
 Project spec management (init, load, list, status).
 
 ```bash
 maestro spec init                              # Initialize
-maestro spec load --category coding --keyword auth   # Load
+maestro spec load --category coding --keyword auth
 maestro spec list                              # List files
 maestro spec status                            # Status
-maestro spec add <category> "<title>" "<content>"    # Add entry
+maestro spec add <category> "<title>" "<content>"
 ```
 
----
+</details>
 
-### maestro wiki
+<details>
+<summary>maestro wiki</summary>
 
 Wiki knowledge graph queries and mutations. Offline by default, `--live` for HTTP API.
 
 ```bash
-# Listing + filters
-maestro wiki list --type spec                        # Filter by type
-maestro wiki list --tag security                     # Filter by tag
-maestro wiki list --created-by manage-harvest        # Filter by creator
-maestro wiki list --tag auth --status active          # Combined filters
-maestro wiki list --group                            # Group by type
+# Listing and search
+maestro wiki list --type spec --tag security --status active --group --json
 maestro wiki list -q "authentication"                # Inline BM25 search
-maestro wiki list --json                             # JSON output
-
-# Search
-maestro wiki search "auth token"                     # BM25 full-text search
+maestro wiki search "auth token"                     # Full-text search
 maestro wiki get <id>                                # Get single entry
 
 # Create (spec / memory / note)
 maestro wiki create --type spec --slug auth --title "Auth" --body "# Auth\n..."
-maestro wiki create --type memory --slug debug-01 --title "Debug" --body "..."
-maestro wiki create --type note --slug tip-01 --title "Tip" --body "..."
-  # Optional: --created-by, --source-ref, --parent, --frontmatter '{}'
+  # Optional: --created-by, --source-ref, --parent, --frontmatter
 
-# Spec entry append (unified write path)
-maestro wiki append <containerId> --body "Use named exports" --keywords "coding,exports"
-maestro wiki append spec-learnings --body "Token rotation..." --keywords "auth,token"
-
-# Spec entry removal
-maestro wiki remove-entry <entryId>                  # Remove sub-entry by ID
+# Entry append and removal
+maestro wiki append <containerId> --body "..." --keywords "coding,exports"
+maestro wiki remove-entry <entryId>
 
 # Update / delete
-maestro wiki update <id> --title "New Title"         # Frontmatter update
-maestro wiki delete <id>                             # Delete entire file
+maestro wiki update <id> --title "New Title"
+maestro wiki delete <id>
 
 # Graph analysis
-maestro wiki health                                  # Health score (0-100)
-maestro wiki orphans                                 # Orphan nodes
-maestro wiki hubs --limit 10                         # Top-N hub nodes
-maestro wiki backlinks <id>                          # Incoming links
-maestro wiki forward <id>                            # Outgoing links
-maestro wiki graph                                   # Full graph JSON
+maestro wiki health | orphans | hubs --limit 10 | backlinks <id> | forward <id> | graph
 ```
 
-| Subcommand | Purpose |
-|------------|---------|
-| `list` / `ls` | List + filter (type, tag, status, role, created-by, q) |
-| `get` | Get single entry (with body) |
-| `search` | BM25 full-text search |
-| `create` | Create spec/memory/note file |
-| `append` | Append `<spec-entry>` block to spec container |
-| `remove-entry` | Remove sub-entry from spec container by ID |
-| `update` | Update frontmatter (spec body is protected) |
-| `delete` / `rm` | Delete entire entry file |
-| `health` | Graph health score |
-| `orphans` | Orphan node list |
-| `hubs` | Hub node ranking |
-| `backlinks` | Incoming links |
-| `forward` | Outgoing links |
-| `graph` | Full graph JSON |
+> **Write protection**: `specs/*.md` body updates via `wiki update` are forbidden (403) -- use `wiki append` / `wiki remove-entry`. `memory/*.md` supports full CRUD. Virtual entries are read-only.
 
-> **Write protection**: `specs/*.md` body updates via `wiki update` are forbidden (403) — use `wiki append` / `wiki remove-entry` for entry-level operations. `memory/*.md` supports full CRUD. Virtual entries (issue/lesson) are read-only.
+</details>
 
----
-
-### maestro hooks
+<details>
+<summary>maestro hooks</summary>
 
 Hook management and evaluator execution. Supports both Claude Code and Codex platforms.
 
 ```bash
 # Claude Code
-maestro hooks install --level full                       # Install hooks
-maestro hooks uninstall                                  # Remove hooks
+maestro hooks install --level full
+maestro hooks uninstall
 
 # Codex
-maestro hooks install --target codex --level standard    # Install to Codex
-maestro hooks uninstall --target codex                   # Remove Codex hooks
+maestro hooks install --target codex --level standard
+maestro hooks uninstall --target codex
 
 # General
-maestro hooks status                   # Installation status (shows both Claude Code and Codex)
-maestro hooks list                     # List all hooks (including Codex)
-maestro hooks toggle spec-injector on  # Toggle hook
-maestro hooks run spec-injector        # Run evaluator
+maestro hooks status               # Installation status (both platforms)
+maestro hooks list                 # List all hooks
+maestro hooks toggle spec-injector on
+maestro hooks run spec-injector    # Run evaluator
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--target <target>` | Target platform: `claude` (default) or `codex` |
-| `--level <level>` | Hook level: minimal / standard / full |
-| `--global` | Install to global settings (default) |
-| `--project` | Install to project-level settings |
-
-Claude Code hooks: `spec-injector`, `delegate-monitor`, `team-monitor`, `telemetry`, `session-context`, `skill-context`, `coordinator-tracker`, `preflight-guard`, `spec-validator`, `keyword-spec-injector`, `workflow-guard`
-
-Codex hooks: `session-context`, `spec-injector`, `skill-context`, `keyword-spec-injector`, `delegate-monitor`, `coordinator-tracker`, `team-monitor`, `telemetry`, `workflow-guard`
+| `--target` | `claude` (default) or `codex` |
+| `--level` | minimal / standard / full |
+| `--global` | Install to global (default) |
+| `--project` | Install to project-level |
 
 > Codex hooks require `codex_hooks = true` in `~/.codex/config.toml`. Not supported on Windows.
 
----
+</details>
 
-### maestro overlay
+<details>
+<summary>maestro overlay</summary>
 
-Command overlay management — non-invasive patches for `.claude/commands`.
+Command overlay management -- non-invasive patches for `.claude/commands`.
 
 ```bash
 maestro overlay list                    # View and manage
@@ -410,17 +320,20 @@ maestro overlay apply                   # Reapply all (idempotent)
 maestro overlay add my-overlay.json     # Install
 maestro overlay remove my-overlay       # Remove
 maestro overlay bundle -o bundle.json   # Pack into portable file
-maestro overlay import-bundle bundle.json  # Import bundle
+maestro overlay import-bundle bundle.json
 maestro overlay push                    # Push for team sharing
 ```
+
+</details>
 
 ---
 
 ## Team Collaboration
 
-### maestro collab
+<details>
+<summary>maestro collab (team)</summary>
 
-Human team collaboration (alias: `team`).
+Human team collaboration.
 
 ```bash
 maestro collab join                    # Register as team member
@@ -435,11 +348,12 @@ maestro collab task status <id> in_progress
 maestro collab task assign <id> <uid>
 ```
 
----
+</details>
 
-### maestro agent-msg
+<details>
+<summary>maestro agent-msg (msg)</summary>
 
-Agent team message bus (alias: `msg`).
+Agent team message bus.
 
 ```bash
 maestro msg send "task done" -s <session> --from worker --to coordinator
@@ -448,13 +362,16 @@ maestro msg status -s <session>
 maestro msg broadcast "meeting" -s <session> --from coordinator
 ```
 
+</details>
+
 ---
 
 ## Memory & Extensions
 
-### maestro knowhow
+<details>
+<summary>maestro knowhow (kh)</summary>
 
-Knowhow knowledge management (alias: `kh`). 6 types: session, tip, template, recipe, reference, decision.
+Knowhow knowledge management. 6 types: session, tip, template, recipe, reference, decision.
 
 ```bash
 maestro kh add --type template --title "React Hook Form" --body "..." --lang typescript
@@ -466,11 +383,12 @@ maestro kh search "deploy"                # Keyword search
 maestro kh get knowhow-20260427-1912      # View detail
 ```
 
----
+</details>
 
-### maestro brainstorm-visualize
+<details>
+<summary>maestro brainstorm-visualize (bv) / ext / tool</summary>
 
-Brainstorm HTML prototype visualization server (alias: `bv`).
+**brainstorm-visualize** -- Brainstorm HTML prototype visualization server:
 
 ```bash
 maestro bv start --dir ./prototypes     # Start visualizer
@@ -478,14 +396,17 @@ maestro bv status <execId>              # View status
 maestro bv stop <execId>                # Stop server
 ```
 
----
-
-### maestro ext / maestro tool
-
-Extension and tool management.
+**ext** -- Extension management:
 
 ```bash
 maestro ext list                        # List extensions
-maestro tool list                       # List tools
-maestro tool exec read_file '{"path":"README.md"}'  # Execute tool
 ```
+
+**tool** -- Tool interaction:
+
+```bash
+maestro tool list                       # List tools
+maestro tool exec read_file '{"path":"README.md"}'
+```
+
+</details>
