@@ -50,7 +50,7 @@ Single source of truth: **[index/catalog.json](index/catalog.json)**
 
 | Field | Purpose |
 |-------|---------|
-| `commands[]` | 55 个 slash 命令，含分类和描述 |
+| `commands[]` | 56 个 slash 命令，含分类和描述 |
 | `skills[]` | 10 个 Skill，含分类和描述 |
 | `agents[]` | 22 个 Agent，含分类和描述 |
 | `cli_commands[]` | 21 个终端命令 |
@@ -178,24 +178,25 @@ $ARGUMENTS → Parse:
 
 ## Command Catalog Quick Reference
 
-### 核心工作流 (core)
+### 上游起源 + 核心 (core)
 
 | 命令 | 用途 |
 |------|------|
 | `/maestro` | 智能协调器，自动路由 |
 | `/maestro-init` | 项目初始化 |
-| `/maestro-roadmap` | 路线图生成 |
+| `/maestro-brainstorm` | 头脑风暴 — 发散探索，多角色创意 |
+| `/maestro-blueprint` | 正式规格文档化 — 7-phase 收敛规格链 |
+| `/maestro-roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
 | `/maestro-quick` | 快速任务 |
-| `/maestro-brainstorm` | 头脑风暴 |
 | `/maestro-overlay` | Overlay 管理 |
 | `/maestro-amend` | 修正补丁 |
 
-### Phase 管线 (pipeline)
+### 理解层 + 执行管线 (pipeline)
 
 | 命令 | 用途 |
 |------|------|
-| `/maestro-analyze` | 多维分析 |
-| `/maestro-plan` | 任务规划 |
+| `/maestro-analyze` | 双层分析 — 宏观(文本参数)探索影响面 / 微观(数字参数)Phase 级深入 |
+| `/maestro-plan` | 任务规划 — 支持 `--from analyze:ANL-xxx` 直达 |
 | `/maestro-execute` | 任务执行 |
 | `/maestro-verify` | 验证确认 |
 
@@ -223,11 +224,44 @@ $ARGUMENTS → Parse:
 
 ## Workflow Mapping
 
-| 任务类型 | 推荐工作流 | 命令序列 |
-|---------|-----------|---------|
-| 新项目 | 初始化路径 | `/maestro-init` → `/maestro-roadmap` |
-| 正常开发 | 主干管线 | `/maestro-analyze` → `/maestro-plan` → `/maestro-execute` → `/maestro-verify` |
-| 快速修复 | 快速渠道 | `/maestro-quick "修复描述"` |
+### 层级模型
+
+```
+Roadmap > Milestone > Phase > Task
+```
+
+- **Roadmap** = 项目级常驻规划文档
+- **Milestone** = 可独立交付的版本节点（v0.1.0-rc1, v0.2.0）
+- **Phase** = Milestone 内的同步屏障执行阶段
+- **Task** = Phase 内的具体代码修改单元（wave DAG 管理并行）
+
+### 命令拓扑
+
+```
+上游起源层（并列，可选）
+  brainstorm（发散/轻量）  |  blueprint（收敛/重型）
+
+理解层
+  analyze 双层: 宏观(文本参数) → scope_verdict | 微观(数字参数) → Phase 级决策
+
+编排层（可选）
+  roadmap — 消费上游 context，纯 Milestone > Phase 分解
+
+执行层
+  plan → execute → verify
+```
+
+### 合法路径
+
+| 路径 | 场景 | 命令序列 |
+|------|------|---------|
+| Path A | 完整新项目 | `brainstorm` → `blueprint`(可选) → `analyze "topic"` → `roadmap` → `analyze 1` → `plan 1` → `execute` → `verify` |
+| Path B | 旧项目大功能 | `analyze "feature X"` → `roadmap` → `analyze 1` → `plan 1` → `execute` → `verify` |
+| Path C | 中等功能 | `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` → `verify` |
+| Path D | 小改动 | `plan "fix auth bug"` → `execute` → `verify` |
+| Path E | 纯规格文档 | `blueprint "project idea"` → (供人阅读) |
+| Path F | 纯探索 | `brainstorm "idea"` → (供人决策) |
+| 快速修复 | 已知简单问题 | `/maestro-quick "修复描述"` |
 | Bug 追踪 | Issue 闭环 | `/manage-issue-discover` → `/manage-issue create` → analyze/plan/execute → close |
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
 | 代码审查 | 质量管线 | `/quality-review` → `/quality-auto-test` → `/quality-test` |
@@ -259,9 +293,9 @@ $ARGUMENTS → Parse:
 
 ## Statistics
 
-- **Slash 命令**: 55 个（7 个分类）
+- **Slash 命令**: 56 个（7 个分类）
 - **CLI 命令**: 21 个
 - **Skills**: 10 个（3 个分类）
 - **Agents**: 22 个（5 个分类）
 - **Guide 文档**: 17 个
-- **工作流**: 4 个主要模板
+- **工作流路径**: 6 个合法路径 (Path A-F) + 3 个辅助流程

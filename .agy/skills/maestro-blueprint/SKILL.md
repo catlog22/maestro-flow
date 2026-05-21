@@ -64,11 +64,11 @@ maestro-analyze → maestro-roadmap → maestro-plan
 </context>
 
 <interview_protocol>
-Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (clear idea + scope).
+Interview the user relentlessly about every aspect of the spec until shared understanding is reached. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one; if a question can be answered by exploring the codebase, explore the codebase instead. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (clear idea + scope).
 
-- One decision per turn via ask_question with 2–4 options + a (Recommended) default; every question must include a `Proceed now` option.
-- Never ask what code can verify — resolve via `state.json`, existing artifacts, `maestro spec load`, or codebase exploration.
-- Walk the decision dependency tree: scope → spec type → focus areas → requirement priorities. Do not open the next branch until the current one is settled.
+- Ask one question per turn via ask_question and wait for the user's feedback before continuing; every question must carry a recommended answer marked `(Recommended)`, 2–4 options total, and a `Proceed now` option.
+- Never ask what code can verify — resolve via `state.json`, existing artifacts, `maestro spec load`, or direct codebase exploration (Glob/Grep/Read) instead of prompting.
+- Walk the decision dependency tree depth-first: scope → spec type → focus areas → requirement priorities. Do not open the next branch until the current one is settled.
 - Scope guard: only decide the shape of the specification. Do not pre-resolve roadmap phases or plan tasks — those belong to downstream commands.
 
 Decision points: scope (full product / feature set / single feature) → spec type (service / api / library / platform) → focus areas → whether to run codebase exploration.

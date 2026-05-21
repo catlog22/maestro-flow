@@ -56,6 +56,8 @@ Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), outpu
 5. No args + roadmap → scope = "milestone" (unchanged)
 6. No args + no roadmap → search state.json for latest analyze artifact, fallback standalone
 
+**Ad-hoc milestone (D-008):** When scope resolves to "standalone" and `current_milestone == null`, plan auto-creates an adhoc milestone (`type: "adhoc"`) in state.json before proceeding. This ensures downstream milestone-audit/complete have a valid milestone context. See workflow plan.md § "Ad-hoc Milestone Auto-Creation".
+
 ### Role Knowledge
 `maestro wiki list --category arch` → select relevant → `maestro wiki load`
 </context>

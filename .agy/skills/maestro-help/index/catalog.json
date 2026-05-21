@@ -7,10 +7,11 @@
   "commands": [
     {"name": "maestro", "command": "/maestro", "category": "core", "description": "智能协调器 — 根据意图和项目状态自动选择最优命令链", "source": "../../commands/maestro.md"},
     {"name": "maestro-init", "command": "/maestro-init", "category": "core", "description": "项目初始化 — 创建 .workflow/ 目录结构和状态文件", "source": "../../commands/maestro-init.md"},
-    {"name": "maestro-roadmap", "command": "/maestro-roadmap", "category": "core", "description": "路线图生成 — 基于目标创建里程碑和 Phase 分解", "source": "../../commands/maestro-roadmap.md"},
-    {"name": "maestro-brainstorm", "command": "/maestro-brainstorm", "category": "core", "description": "多角色头脑风暴 — 生成分析文档和功能规格", "source": "../../commands/maestro-brainstorm.md"},
-    {"name": "maestro-analyze", "command": "/maestro-analyze", "category": "pipeline", "description": "多维度分析 — Phase 分析、CLI 辅助探索、gap 分析", "source": "../../commands/maestro-analyze.md"},
-    {"name": "maestro-plan", "command": "/maestro-plan", "category": "pipeline", "description": "任务规划 — 生成执行计划、碰撞检测、gap 修复计划", "source": "../../commands/maestro-plan.md"},
+    {"name": "maestro-roadmap", "command": "/maestro-roadmap", "category": "core", "description": "路线图编排 — 消费上游 context，纯 Milestone > Phase 分解（不做技术探索）", "source": "../../commands/maestro-roadmap.md"},
+    {"name": "maestro-brainstorm", "command": "/maestro-brainstorm", "category": "core", "description": "头脑风暴 — 发散探索，多角色创意，上游起源命令", "source": "../../commands/maestro-brainstorm.md"},
+    {"name": "maestro-blueprint", "command": "/maestro-blueprint", "category": "core", "description": "正式规格文档化 — 7-phase 收敛规格链，上游起源命令，产出 .workflow/blueprint/", "source": "../../commands/maestro-blueprint.md"},
+    {"name": "maestro-analyze", "command": "/maestro-analyze", "category": "pipeline", "description": "双层分析 — 宏观(文本参数)探索影响面+scope_verdict / 微观(数字参数)Phase 级深入", "source": "../../commands/maestro-analyze.md"},
+    {"name": "maestro-plan", "command": "/maestro-plan", "category": "pipeline", "description": "任务规划 — 支持 --from analyze:ANL-xxx 直达、碰撞检测、gap 修复计划", "source": "../../commands/maestro-plan.md"},
     {"name": "maestro-execute", "command": "/maestro-execute", "category": "pipeline", "description": "任务执行 — wave 并行执行、delegate 编排、自动提交", "source": "../../commands/maestro-execute.md"},
     {"name": "maestro-verify", "command": "/maestro-verify", "category": "pipeline", "description": "验证确认 — 成果检查、gap 发现、下一阶段建议", "source": "../../commands/maestro-verify.md"},
     {"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过 Phase 管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
@@ -149,16 +150,33 @@
   "essential_commands": [
     "/maestro",
     "/maestro-init",
-    "/maestro-roadmap",
+    "/maestro-brainstorm",
+    "/maestro-blueprint",
     "/maestro-analyze",
+    "/maestro-roadmap",
     "/maestro-plan",
     "/maestro-execute",
     "/maestro-verify",
-    "/maestro-quick",
-    "/quality-review",
-    "/manage-issue"
+    "/maestro-quick"
   ],
   "workflows": {
+    "topology": {
+      "hierarchy": "Roadmap > Milestone > Phase > Task",
+      "layers": {
+        "upstream_origin": ["brainstorm (发散/轻量)", "blueprint (收敛/重型)"],
+        "understanding": "analyze 双层: 宏观(文本参数) + 微观(数字参数)",
+        "orchestration": "roadmap (可选，消费上游 context)",
+        "execution": ["plan", "execute", "verify"]
+      }
+    },
+    "paths": {
+      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze 微观 → plan → execute → verify",
+      "B_large_feature": "analyze 宏观 → roadmap → analyze 微观 → plan → execute → verify",
+      "C_medium_feature": "analyze 宏观 → plan --from analyze:ANL-xxx → execute → verify",
+      "D_small_fix": "plan → execute → verify",
+      "E_spec_only": "blueprint → (供人阅读)",
+      "F_explore_only": "brainstorm → (供人决策)"
+    },
     "main_pipeline": {
       "name": "主干管线",
       "phases": ["analyze", "plan", "execute", "verify"],
@@ -176,9 +194,9 @@
     },
     "init_paths": {
       "name": "初始化路径",
-      "minimal": "/maestro-init → /maestro-roadmap",
-      "from_brainstorm": "/maestro-brainstorm → /maestro-init --from brainstorm:<id> → /maestro-roadmap",
-      "full_spec": "/maestro-init → /maestro-blueprint"
+      "from_brainstorm": "/maestro-brainstorm → /maestro-init --from brainstorm:<id> → /maestro-analyze 宏观",
+      "from_blueprint": "/maestro-blueprint → /maestro-init → /maestro-analyze 宏观",
+      "direct": "/maestro-init → /maestro-analyze 宏观"
     }
   }
 }

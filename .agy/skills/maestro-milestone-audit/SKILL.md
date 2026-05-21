@@ -36,8 +36,10 @@ Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json
 
 **Data source:**
 - `.workflow/state.json` — artifacts[], current_milestone, milestones[]
-- `.workflow/roadmap.md` — milestone-to-phase mapping
+- `.workflow/roadmap.md` — milestone-to-phase mapping (standard milestones only)
 - Plan scratch dirs — for task status verification
+
+**Adhoc milestone support (D-008):** When the target milestone has `type == "adhoc"` (or `type` field is missing, defaulting to `"standard"`), the audit skips roadmap.md parsing and phase coverage checks. It only validates artifact chain completeness (PLN→EXC exists) and runs integration checks.
 </context>
 
 <execution>
@@ -61,8 +63,8 @@ Audit checklist steps (phase coverage, ad-hoc completeness, execution completene
 </error_codes>
 
 <success_criteria>
-- [ ] All phases in milestone identified from roadmap
-- [ ] Artifact chains verified (ANL→PLN→EXC) per phase
+- [ ] All phases in milestone identified from roadmap (standard) or milestone_obj.phases (adhoc)
+- [ ] Artifact chains verified: ANL→PLN→EXC per phase (standard) or PLN→EXC exists (adhoc)
 - [ ] Ad-hoc artifacts checked for completion
 - [ ] Integration check completed (shared interfaces, data contracts)
 - [ ] Audit report written with clear PASS/FAIL verdict

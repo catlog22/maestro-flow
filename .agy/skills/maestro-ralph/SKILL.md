@@ -172,8 +172,9 @@ S_APPLY_VERDICT:
   → S_DISPATCH      WHEN: post-analyze-scope                 DO: A_APPLY_SCOPE_VERDICT
   → S_DISPATCH      WHEN: verdict == "fix"                  DO: A_APPLY_FIX
   → S_DISPATCH      WHEN: verdict == "escalate"             DO: A_APPLY_ESCALATE
-  → S_DISPATCH      WHEN: post-milestone + next milestone   DO: A_ADVANCE_MILESTONE
-  → END             WHEN: post-milestone + no next milestone DO: mark completed
+  → S_DISPATCH      WHEN: post-milestone + standard + next milestone   DO: A_ADVANCE_MILESTONE
+  → END             WHEN: post-milestone + standard + no next milestone DO: mark completed
+  → END             WHEN: post-milestone + adhoc                       DO: mark completed (adhoc self-contained)
   → END             WHEN: post-debug-escalate (always STOP)  DO: A_PAUSE_ESCALATE
   GUARD: retry_count >= max_retries → force escalate
   GUARD: confidence_score < 60 AND proceed → override to fix
@@ -460,7 +461,12 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 
 ### A_STRUCTURAL_EVALUATE
 
-**post-milestone:** Read state.json → next milestone? → insert lifecycle steps / complete
+**post-milestone:**
+1. Read state.json → resolve completed milestone object
+2. Determine milestone type: `milestone_obj.type` (default `"standard"` if missing)
+3. **Standard milestone** (`type != "adhoc"`): next milestone exists? → insert lifecycle steps / complete
+4. **Adhoc milestone** (`type == "adhoc"`): always END — adhoc milestones are self-contained, no successor to advance to. Set `current_milestone = null`.
+
 **post-debug-escalate:** Always STOP → set paused, display "请人工介入"
 
 ### A_SCOPE_EVALUATE

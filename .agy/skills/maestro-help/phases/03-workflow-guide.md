@@ -33,36 +33,46 @@ const taskPatterns = [
 
 #### Step 4.2: 推荐工作流
 
-**新项目** (复杂度: 高):
+**新项目 — Path A** (复杂度: 高):
 
 ```markdown
 ## 新项目工作流
 
-### 路径 1: 最简路径（适合快速启动）
-1. `/maestro-init` — 初始化 .workflow/ 目录
-2. `/maestro-roadmap "项目目标" -y` — 生成路线图
-3. 按里程碑执行: analyze → plan → execute → verify
+### 路径 A: 完整新项目
+1. `/maestro-brainstorm "项目描述"` — 发散探索，多角色创意
+2. `/maestro-blueprint` — (可选) 7-phase 正式规格文档化
+3. `/maestro-init --from brainstorm:ID`
+4. `/maestro-analyze "topic"` — 宏观分析，探索影响面 → scope_verdict
+5. `/maestro-roadmap --from analyze:ANL-xxx` — 纯编排，Milestone > Phase 分解
+6. `/maestro-analyze 1` — 微观分析，Phase 级深入
+7. `/maestro-plan 1` → `/maestro-execute` → `/maestro-verify`
 
-### 路径 2: 从头脑风暴开始（适合需要创意探索）
-1. `/maestro-brainstorm "项目描述"` — 多角色头脑风暴
-2. `/maestro-init --from brainstorm:ANL-xxx` — 基于分析初始化
-3. `/maestro-roadmap "创建路线图" -y`
+### 路径 E: 纯规格文档（不进执行链）
+1. `/maestro-blueprint "project idea"` — 供人阅读和决策
 
-### 路径 3: 完整规范链（适合大型项目）
-1. `/maestro-init`
-2. `/maestro-blueprint` — 6 阶段规范生成
+### 路径 F: 纯探索（不进执行链）
+1. `/maestro-brainstorm "idea"` — 供人决策
 ```
 
-**功能开发** (复杂度: 中):
+**旧项目大功能 — Path B** (复杂度: 高):
 
 ```markdown
-## 功能开发工作流
+## 旧项目大功能工作流
 
-### 主干管线（标准流程）
-1. `/maestro-analyze [phase]` — 分析需求和现有代码
-2. `/maestro-plan [phase]` — 生成执行计划
-3. `/maestro-execute [phase]` — 执行实现
-4. `/maestro-verify [phase]` — 验证成果
+1. `/maestro-analyze "feature X"` — 宏观分析 → scope_verdict=large
+2. `/maestro-roadmap --from analyze:ANL-xxx` — Milestone > Phase 分解
+3. `/maestro-analyze 1` — 微观分析
+4. `/maestro-plan 1` → `/maestro-execute` → `/maestro-verify`
+```
+
+**中等功能 — Path C** (复杂度: 中，跳过 roadmap):
+
+```markdown
+## 中等功能工作流
+
+1. `/maestro-analyze "feature X"` — 宏观分析 → scope_verdict=medium
+2. `/maestro-plan --from analyze:ANL-xxx` — 直达规划，跳过 roadmap
+3. `/maestro-execute` → `/maestro-verify`
 
 ### 快速渠道（简单功能）
 1. `/maestro-quick "功能描述"` — 一键完成
@@ -71,13 +81,22 @@ const taskPatterns = [
 1. `/maestro -y "功能描述"` — 自动选择并执行完整流程
 ```
 
-**Bug 修复** (复杂度: 低-中):
+**小改动 — Path D** (复杂度: 低):
 
 ```markdown
-## Bug 修复工作流
+## 小改动工作流
+
+1. `/maestro-plan "fix auth bug"` — 直接规划
+2. `/maestro-execute` → `/maestro-verify`
 
 ### 快速修复（已知问题）
 1. `/maestro-quick "修复 Bug 描述"`
+```
+
+**Bug 追踪** (Issue 闭环):
+
+```markdown
+## Bug 追踪工作流
 
 ### Issue 闭环（需要追踪）
 1. `/manage-issue-discover by-prompt "问题描述"` — 发现 Issue
@@ -109,7 +128,10 @@ const taskPatterns = [
 对需要全景视角的用户，展示 Mermaid 图：
 
 ```
-主干管线: analyze → plan → execute → verify → quality (review/test) → milestone-audit → milestone-complete
+上游起源: brainstorm(发散) | blueprint(收敛) → 可选
+理解层:   analyze "topic"(宏观) → scope_verdict 路由
+编排层:   roadmap(可选，仅 scope_verdict=large 时建议)
+执行层:   plan → execute → verify → quality → milestone-audit → milestone-complete
 快速渠道: maestro-quick → (直接完成)
 Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute → close
 全自动: /maestro -y → (自动路由)
@@ -122,11 +144,16 @@ Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute
 ```markdown
 ## 核心概念
 
-- **Milestone**: 项目阶段，包含多个 Phase
-- **Phase**: 单个工作单元，走 analyze → plan → execute → verify 生命周期
+- **Roadmap**: 项目级常驻规划文档，包含多个 Milestone
+- **Milestone**: 可独立交付的版本节点（v0.1.0-rc1），包含多个 Phase
+- **Phase**: Milestone 内的同步屏障执行阶段，走 analyze → plan → execute → verify 生命周期
+- **Task**: Phase 内的具体代码修改单元（wave DAG 管理并行）
+- **Blueprint**: 正式规格文档化命令（7-phase 收敛），与 brainstorm 并列作为上游起源
+- **Analyze 双层**: 宏观(文本参数)探索影响面产出 scope_verdict；微观(数字参数)Phase 级深入分析
+- **scope_verdict**: analyze 宏观完成后的路由建议 — large→roadmap, medium/small→直达 plan
 - **Overlay**: 非侵入式命令补丁，扩展命令行为而不修改源文件
 - **Delegate**: 将子任务委派给外部 AI 工具（Gemini/Claude/Codex）
-- **Spec**: 项目规范，自动注入到工作流中作为约束
+- **Spec**: 项目约束规则（coding/arch/debug/test），自动注入到工作流
 - **Wiki**: 知识图谱，存储详细技术文档
 - **Ralph**: 自适应决策引擎，动态调整执行链
 ```
@@ -146,14 +173,14 @@ Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute
 |---|------|------|---------|
 | 1 | `/maestro` | 智能协调器 | 不确定用哪个命令时，告诉它你的目标 |
 | 2 | `/maestro-init` | 初始化项目 | 首次使用，创建 .workflow/ 结构 |
-| 3 | `/maestro-roadmap` | 生成路线图 | 初始化后，规划里程碑 |
-| 4 | `/maestro-analyze` | 分析 | 开始一个 Phase 的分析 |
-| 5 | `/maestro-plan` | 规划 | 分析完成后，生成执行计划 |
-| 6 | `/maestro-execute` | 执行 | 计划完成后，执行实现 |
-| 7 | `/maestro-verify` | 验证 | 执行完成后，检查成果 |
-| 8 | `/maestro-quick` | 快速任务 | 简单任务跳过管线 |
-| 9 | `/quality-review` | 代码审查 | 执行后进行质量检查 |
-| 10 | `/manage-issue` | Issue 管理 | 追踪和解决 Bug |
+| 3 | `/maestro-brainstorm` | 头脑风暴 | 新项目发散探索、多角色创意 |
+| 4 | `/maestro-blueprint` | 规格文档化 | 正式 7-phase 收敛规格链 |
+| 5 | `/maestro-analyze` | 双层分析 | 宏观: `"topic"` 探索影响面；微观: `1` Phase 级深入 |
+| 6 | `/maestro-roadmap` | 路线图编排 | scope_verdict=large 时，Milestone > Phase 分解 |
+| 7 | `/maestro-plan` | 规划 | 分析完成后生成执行计划，支持 `--from analyze:ANL-xxx` 直达 |
+| 8 | `/maestro-execute` | 执行 | 计划完成后，执行实现 |
+| 9 | `/maestro-verify` | 验证 | 执行完成后，检查成果 |
+| 10 | `/maestro-quick` | 快速任务 | 简单任务跳过管线 |
 ```
 
 #### Step 5.2: 快速入门路径

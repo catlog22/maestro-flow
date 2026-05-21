@@ -28,8 +28,8 @@ Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json
 **Requires:** `/maestro-milestone-audit` should have passed.
 
 **State files:**
-- `.workflow/state.json` — artifacts[], milestones[], current_milestone, milestone_history[]
-- `.workflow/roadmap.md` — milestone structure
+- `.workflow/state.json` — artifacts[], milestones[] (with `type` field: `"standard"` | `"adhoc"`), current_milestone, milestone_history[]
+- `.workflow/roadmap.md` — milestone structure (standard milestones only; adhoc milestones may not have roadmap)
 - `.workflow/milestones/{milestone}/audit-report.md` — audit results
 </context>
 
@@ -54,8 +54,10 @@ If user confirms promotion, invoke `view_file(AbsolutePath="<agy-skills-dir>/spe
 
 **Next-step routing on completion:**
 - Cut a release → `/maestro-milestone-release`
-- Next milestone → `/maestro-analyze` or `/maestro-plan 1`
+- Next milestone → `/maestro-analyze` or `/maestro-plan 1` (standard milestones only)
 - View state → `/manage-status`
+
+**Adhoc milestone (D-008):** When completing an adhoc milestone, skip roadmap snapshot and do not advance to next milestone. Set `current_milestone = null`, `status = "idle"`. Adhoc milestones are self-contained — no successor in roadmap chain.
 </execution>
 
 <error_codes>
@@ -71,7 +73,7 @@ If user confirms promotion, invoke `view_file(AbsolutePath="<agy-skills-dir>/spe
 - [ ] Scratch artifacts moved to milestones/{M}/artifacts/
 - [ ] Artifact entries archived to milestone_history
 - [ ] Knowhow extracted to specs/learnings.md
-- [ ] state.json updated: next milestone as current, artifacts[] cleared
-- [ ] Roadmap snapshot saved
+- [ ] state.json updated: next milestone as current (standard) or current_milestone=null (adhoc), artifacts[] cleared
+- [ ] Roadmap snapshot saved (standard only; adhoc skips)
 - [ ] project.md Context updated with milestone summary
 </success_criteria>

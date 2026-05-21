@@ -70,7 +70,7 @@
 | 命令 | Guide 文档 |
 |------|-----------|
 | maestro-analyze/plan/execute/verify | `guide/command-usage-guide.md` (主干管线) |
-| maestro-init/roadmap | `guide/quick-start-guide.md` |
+| maestro-init/roadmap/blueprint | `guide/quick-start-guide.md` |
 | maestro-ralph | `guide/maestro-ralph-guide.md` |
 | maestro (协调器) | `guide/maestro-coordinator-guide.md` |
 | manage-* | `guide/command-usage-guide.md` (管理) |
@@ -91,9 +91,11 @@
 | 当前状态 | 推荐命令 | 原因 |
 |---------|---------|------|
 | 无 .workflow/ | `/maestro-init` | 项目未初始化，需要先创建工作区 |
-| init 完成，无 roadmap | `/maestro-roadmap` | 需要路线图指导后续 Phase |
-| roadmap 完成，phase=pending | `/maestro-analyze` | 准备开始分析阶段 |
-| analyze 完成 | `/maestro-plan` | 分析完成，进入规划 |
+| init 完成，无上游 context | `/maestro-brainstorm` 或 `/maestro-analyze "topic"` | 先探索再规划；brainstorm 用于发散，analyze 宏观用于代码库分析 |
+| analyze 完成，scope_verdict=large | `/maestro-roadmap --from analyze:ANL-xxx` | 大范围需求，需要 Milestone > Phase 分解 |
+| analyze 完成，scope_verdict=medium/small | `/maestro-plan --from analyze:ANL-xxx` | 跳过 roadmap，直接规划（Path C） |
+| roadmap 完成，phase=pending | `/maestro-analyze 1` | 微观分析：Phase 级深入探索 |
+| analyze (微观) 完成 | `/maestro-plan 1` | Phase 级规划 |
 | plan 完成 | `/maestro-execute` | 规划完成，开始执行 |
 | execute 完成 | `/maestro-verify` | 执行完成，验证成果 |
 | verify 有 gaps | `/maestro-analyze --gaps` | 发现差距，重新分析 |

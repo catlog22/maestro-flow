@@ -50,8 +50,13 @@ $ARGUMENTS — user intent text, or special keywords.
 1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
 2. **Session before execution** — status.json created before any step runs
 3. **Auto flags only to supporting commands** — unlisted commands execute as-is
-4. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`, `goal_checklist_path`) + `goal-checklist.md`, then EMIT the `/goal` bind prompt. Reference maestro-ralph `A_DECOMPOSE_TASKS` for the full spec; do not duplicate logic
-5. **Status JSON: schema-additive + step-dynamic** — decomposition fields OPTIONAL (absent → old flat-chain behavior); `steps[]` is a living array grown at runtime by ralph-execute's `post-goal-audit`. Never remove/rename existing fields
+4. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)。Reference maestro-ralph `A_DECOMPOSE_TASKS`
+5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
+6. **Default step type = internal** — chain 内每个 step 解析 `command_scope`/`command_path`（全局优先 `~/.claude/commands/{name}.md`，fallback 项目）
+7. **Topology awareness** — chain catalog 含 brainstorm / blueprint / analyze-macro(text) / analyze(numeric phase) / roadmap / plan(三路径) / execute / verify / ...；scope_verdict 路由由 ralph 在 `post-analyze-scope` 决定
+8. **D-007 milestone 反查** — 数字 phase 步骤的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查得出
+9. **每个 step 必须 `completion_confirmed: true`** — 基于 `--- COMPLETION STATUS ---` 的 `STATUS: DONE`
+10. **schema 向后兼容** — 新增字段全部可选；既有字段名不删不改
 </invariants>
 
 <state_machine>
@@ -128,9 +133,16 @@ S_FALLBACK:
 ### A_CLASSIFY_INTENT
 
 1. Read `~/.maestro/workflows/maestro.md` from deferred_reading
-2. Match intent to best task_type via chain catalog (semantic, AI-driven)
-3. Select chain from chainMap
-4. Determine per-step type: `internal` (Skill) or `external` (delegate)
+2. Match intent to task_type via chain catalog (semantic)
+3. Select chain from chainMap，遵循拓扑约束：
+   - 头脑风暴/探索 → `brainstorm`
+   - 正式规格/spec-generate/7-phase → `blueprint`
+   - 项目初始化 → `init`
+   - 宽/中等意图 + 无数字 phase → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
+   - 数字 phase 上下文 → `analyze {phase}` → `plan {phase}` → `execute {phase}` → `verify {phase}` → quality pipeline
+   - 已有 analyze artifact 想直达执行 → `plan --from analyze:{ANL_ID}` → execute → verify
+   - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → verify
+4. 每个 step 默认 `type: "internal"`；解析 `command_scope` + `command_path`（全局优先 fallback 项目）；写入 `step.stage` / `step.scope` / `step.source_artifact_ref`（如 `--from` 注入时）
 
 ### A_CLARIFY
 
@@ -139,36 +151,52 @@ S_FALLBACK:
 
 ### A_DECOMPOSE_TASKS
 
-与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约 —— 引用该规范，不重复表格。Condensed:
+与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约。Condensed:
 
-1. 分类意图广度（broad: 重构/全面/重写/迁移/overhaul/migrate/rewrite；narrow: 单文件/函数/bug）。narrow / 单步 / `{status,init,quick}` 链直接跳过
-2. broad/medium → `ask_question` ≤3 轮：Scope（in/out）| Constraints（兼容/API/perf/test）| Definition of Done
-3. 派生 `execution_criteria`（3-6 条命令式规则）+ `task_decomposition`（outcome 子目标，`done_when` 客观可校验，绑定到 ralph 产物：verification.json / review.json / uat.md / test path）
-4. **status.json 为唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition` / `goal_checklist_path`；从 status.json 投影渲染 `{session_dir}/goal-checklist.md`（同 maestro-ralph 的 Sync Rule，含 Resume 区块指向 `/maestro-ralph continue`）
-5. 在链路末尾（evidence 产出步骤之后、milestone-complete/close-out 之前）追加 `{ type: "decision", decision: "post-goal-audit", retry_count: 0, max_retries: 2 }`。ralph-execute 在该节点动态生长 `steps[]` 以收敛未达成子目标
-6. **输出 `/goal` 绑定提示词（参考文档 + 内嵌 ralph 调用）：**
+1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
+2. broad/medium → `ask_question` ≤3 轮：Scope / Constraints / Definition of Done
+3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
+4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
+5. 在最后一个 evidence-producing stage（verify/review/test）之后、`milestone-complete` 之前追加 `decision:post-goal-audit`。ralph-execute 在该节点按需动态生长 `steps[]`
+6. **输出 `/goal` 绑定提示词：**
    ```
    📋 任务分解完成。复制下面一行设定目标，会话在子目标全部达成前不停：
 
-   /goal 目标达成条件: {session_dir}/status.json 中 task_decomposition[*].status 全部为 "done"（等价: {session_dir}/goal-checklist.md 末尾含 ALL_GOALS_DONE）。未达成时: 阅读 {session_dir}/goal-checklist.md 取得"执行准则/边界契约/子目标"作为行动手册, 然后调用 /maestro-ralph continue 推进下一步; 严禁手动执行 skill 或越界。
+   /goal 目标达成条件: {session_dir}/status.json 中 task_decomposition[*].status == "done" 且 task_decomposition[*].completion_confirmed == true 且 steps[*].completion_confirmed == true。未达成时：阅读 {session_dir}/status.json 取得 execution_criteria / boundary_contract / task_decomposition / steps 作为行动手册，调用 /maestro-ralph continue 推进；严禁手动执行 skill 或越界修改 status.json.boundary_contract.out_of_scope。
    ```
-   `/goal` 仅用户可输入；判据以 status.json 为权威，哨兵为等价信号。
 
 ### A_CREATE_SESSION
 
-1. Read `.workflow/state.json` for project context (phase, milestone)
-2. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`:
+1. Read `.workflow/state.json` 获取 phase / milestone（含 D-007 反查 `phase_slugs`）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`（如存在）；读最新 blueprint artifact 注入 `blueprint_id`
+2. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）：
    ```json
-   { "session_id", "source": "maestro", "intent", "task_type", "chain_name",
-     "phase", "milestone", "auto_mode", "exec_mode", "cli_tool",
-     "context": { ... }, "steps": [{ "index", "skill", "args", "type", "status": "pending", "goal_ref": null }],
+   {
+     "session_id", "source": "maestro", "intent", "task_type", "chain_name",
+     "phase", "phase_is_new": false, "milestone": "",
+     "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
+     "auto_mode": false, "exec_mode": "auto", "cli_tool": "claude",
+     "context": { "scratch_dir": null, "plan_dir": null, "analysis_dir": null,
+       "brainstorm_dir": null, "blueprint_dir": null, "issue_id": null },
+     "steps": [{
+       "index": 0, "type": "internal|external|decision",
+       "skill": "", "args": "",
+       "stage": "", "scope": null,
+       "command_scope": "global|project|missing|null",
+       "command_path": "~/.claude/commands/{name}.md | .claude/commands/{name}.md | null",
+       "milestone_id": null, "source_artifact_ref": null,
+       "status": "pending", "goal_ref": null,
+       "completion_confirmed": false, "completion_status": null,
+       "completion_evidence": null, "completed_at": null
+     }],
      "waves": [], "current_step": 0, "status": "running",
-     "_comment": "↓ OPTIONAL additive block — present only if S_DECOMPOSE ran; absent → old flat-chain behavior",
-     "boundary_contract": {}, "execution_criteria": [], "task_decomposition": [], "goal_checklist_path": "" }
+     "boundary_contract": {}, "execution_criteria": [],
+     "task_decomposition": [], "task_decomposition_all_done": false
+   }
    ```
-   Decomposition fields written ONLY if A_DECOMPOSE_TASKS produced them (additive; never break flat-chain readers)
-3. Initialize tracking via `TodoWrite`. The decomposition goal is bound by the user via the emitted `/goal` prompt
-4. If `--super`: read `maestro-super.md`, follow it completely
+   Decomposition 字段仅在 A_DECOMPOSE_TASKS 产出时写入（additive）
+3. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E005 列出缺失 skill
+4. Initialize tracking via `TodoWrite`
+5. If `--super`: read `maestro-super.md`, follow it completely
 
 </actions>
 
@@ -183,6 +211,7 @@ S_FALLBACK:
 | maestro-init | `-y` | Skip interactive questioning |
 | maestro-analyze | `-y` | Skip scoping, auto-deepen |
 | maestro-brainstorm | `-y` | Skip questions, use defaults |
+| maestro-blueprint | `-y` | Skip interview, use recommended defaults |
 | maestro-roadmap | `-y` | Skip questions (create/revise/review) |
 | maestro-impeccable | `-y` | Auto-select design variant + skip confirmations |
 | maestro-plan | `-y` | Skip confirmations and clarification |
@@ -202,6 +231,7 @@ Unlisted commands have no auto flags.
 | E002 | error | Clarity too low after 2 rounds | Show parsed intent, ask rephrase |
 | E003 | error | Chain step failed + user abort | Record partial, suggest -c resume |
 | E004 | error | Resume session not found | Show available sessions |
+| E005 | error | command_scope == "missing" for one or more steps | List missing skills, abort build |
 | W001 | warning | Ambiguous intent, multiple chains | Present options |
 | W002 | warning | Step completed with warnings | Log and continue |
 | W003 | warning | State suggests different chain | Show discrepancy |
@@ -209,11 +239,15 @@ Unlisted commands have no auto flags.
 ### Success Criteria
 
 - [ ] Intent classified with task_type, complexity, clarity_score
-- [ ] Broad lifecycle intents decomposed (S_DECOMPOSE, ≤3 boundary questions) sharing maestro-ralph contract; narrow/single-step skip
-- [ ] status.json 为唯一真源；goal-checklist.md 为投影视图（Resume 区块内嵌 `/maestro-ralph continue`）；post-goal-audit 节点追加；/goal 提示词内含"读 checklist + 调 /maestro-ralph continue"双重指引
+- [ ] Chain catalog 覆盖 brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / verify / quality pipeline
+- [ ] D-007: 数字 phase 步骤的 `milestone_id` 通过 `state.json.milestones[].phase_slugs` 反查
+- [ ] macro analyze 后跟 `decision:post-analyze-scope`（由 ralph 评估 scope_verdict 决定下游链路）
+- [ ] plan 支持 `{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step
+- [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
+- [ ] status.json 唯一真源；无 markdown 清单；post-goal-audit 节点在 decomposed 时追加；/goal 提示词以 status.json 为判据
 - [ ] Chain selected and confirmed (or auto-confirmed)
 - [ ] Session dir created with status.json before execution; decomposition fields additive-only
-- [ ] Tracking via TodoWrite (Claude); status.json steps[] grown dynamically by ralph-execute post-goal-audit
+- [ ] 每个 step 含 `command_scope` + `command_path` + `completion_confirmed` 字段
 - [ ] Auto flags propagated to supporting commands only
 - [ ] All chains dispatched via maestro-ralph-execute
 - [ ] Low-complexity intents routed to maestro-quick
