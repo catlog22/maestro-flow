@@ -36,6 +36,20 @@ $ARGUMENTS — topic text and optional flags.
 - `tasks.csv`, `results.csv`, `discoveries.ndjson`, `context.md` — wave-engine bookkeeping
 </context>
 
+<interview_protocol>
+Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `--skip-questions`, `--continue` (existing session), or input is already specific.
+
+- One decision per turn via request_user_input with 2–4 options + a (Recommended) default; every question must include a `Proceed now` option.
+- Never ask what code can verify — resolve via `state.json`, the session directory, `maestro spec load`, or `maestro wiki search`.
+- Branch jumps allowed: the user may switch freely between mode / role / upstream / sub-pipeline branches; sequence is not enforced, but every decision point must end with a definite answer.
+- Scope guard: only ask about decisions owned by `brainstorm`. Do not pre-resolve roadmap/plan choices.
+
+Decision points: mode (auto / single-role / review-only) / role selection and `--count` / `--from` upstream source / whether to enable design-research and the DESIGN.md sub-pipeline.
+
+Exit: on consensus or `Proceed now`, write the table below into `guidance-specification.md` §11 and session metadata:
+`| # | Decision | Choice | Source (user / code / default) |`
+</interview_protocol>
+
 <csv_schema>
 ```csv
 id,title,description,role,topic,guidance_spec,deps,context_from,wave,status,findings,output_file,error
@@ -218,6 +232,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 </error_codes>
 
 <success_criteria>
+- [ ] Interactive mode: interview decision table written to `guidance-specification.md` §11 and session metadata
 - [ ] guidance-specification.md with RFC 2119 keywords, terminology, non-goals, feature decomposition (§10), decision tracking (§11)
 - [ ] If ui-designer selected: DESIGN.md established via impeccable explore
 - [ ] {role}/analysis.md written for each selected role with §1 Role Mandate / §2 Decision Digest (4 tables) / §3 Cross-Cutting Foundations / §4 File Index / §5 Outstanding TODOs

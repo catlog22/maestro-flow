@@ -1,7 +1,7 @@
 ---
 name: maestro-analyze
 description: Use when a topic needs structured multi-dimensional investigation before planning or decision-making
-argument-hint: [phase|topic] [-y] [-c] [-q] [--gaps [ISS-ID]] [--from <source>]
+argument-hint: [phase|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]
 allowed-tools:
   - ask_question
   - define_subagent
@@ -17,7 +17,7 @@ allowed-tools:
 <purpose>
 Perform multi-dimensional analysis of a technical proposal, decision, or architecture choice through iterative CLI-assisted exploration and interactive discussion. Produces a discussion timeline (discussion.md) with evolving understanding, multi-perspective findings, Decision Recording Protocol, Intent Coverage tracking, and a final conclusions package with Go/No-Go recommendation.
 
-Combines structured 6-dimension scoring with iterative deepening and decision extraction. Replaces both analysis and decision-capture workflows — produces analysis.md (scoring), context.md (Locked/Free/Deferred decisions for plan), and context-package.json (standardized context for cross-command consumption).
+Combines structured 6-dimension scoring with iterative deepening and decision extraction. Replaces both analysis and decision-capture workflows — produces analysis.md (scoring) AND context.md (Locked/Free/Deferred decisions for plan).
 
 Use `-q` for quick decision extraction only (skip exploration + scoring).
 
@@ -41,13 +41,26 @@ $ARGUMENTS -- phase number for milestone-scoped, topic text for adhoc/standalone
 - `-c` / `--continue`: Resume from existing session (auto-detect session folder + discussion.md)
 - `-q` / `--quick`: Quick mode — skip exploration + scoring, go straight to decision extraction (context.md only)
 - `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl.
-- `--from <source>`: Load upstream context package (brainstorm:ID, analyze:ID, @file, or path). Resolves to context-package.json for upstream context inheritance.
 
 Scope routing, output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Scope Routing and Output Structure sections).
 
 ### Role Knowledge
 `maestro wiki list --category debug` → select relevant → `maestro wiki load`
 </context>
+
+<interview_protocol>
+Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (explicit phase number or unambiguous topic).
+
+- One decision per turn via ask_question with 2–4 options + a (Recommended) default; every question must include a `Proceed now` option so the user can end the interview at any time.
+- Never ask what code can verify — resolve via `state.json`, `roadmap.md`, `issues.jsonl`, `maestro spec load`, `maestro wiki search`, Grep, or Read.
+- Walk the decision dependency tree strictly: scope → depth → dimensions → Go/No-Go threshold. Do not open the next branch until the current one is settled.
+- Scope guard: only ask about decisions owned by `analyze`. Do not prejudge plan/execute concerns.
+
+Decision points: scope (phase / topic / milestone-wide / adhoc / --gaps) → depth (quick / standard / deep) → dimensions (which of the 6 to keep) → Go/No-Go threshold.
+
+Exit: on `Proceed now` or when all decision points are settled, write the table below to the top of `discussion.md` and mirror it into `context.md` under an `Interview Decisions` section:
+`| # | Decision | Choice | Source (user / code / default) |`
+</interview_protocol>
 
 <execution>
 Follow '~/.maestro/workflows/analyze.md' completely.
@@ -77,7 +90,7 @@ Phase 4: Output context.md for downstream plan --gaps
   - Register ANL artifact in state.json
 ```
 
-**Handoff:** context.md is consumed by maestro-plan (loads Locked/Free/Deferred decisions). context-package.json is the standardized contract for any downstream command (`--from analyze:ID`). In --gaps mode, context.md contains issue root causes for `plan --gaps` consumption.
+**Handoff:** context.md is consumed by maestro-plan (loads Locked/Free/Deferred decisions). In --gaps mode, context.md contains issue root causes for `plan --gaps` consumption.
 
 **Next-step routing on completion:**
 
@@ -126,13 +139,12 @@ Gaps mode:
 - [ ] context.md written with aggregated root causes for plan --gaps
 
 Both modes (full + quick):
+- [ ] Interactive mode: interview decision table written to `discussion.md` and mirrored into `context.md` "Interview Decisions"
 - [ ] context.md written with all decisions classified as Locked/Free/Deferred
-- [ ] context-package.json written with constraints, requirements, insights, and open_questions
 - [ ] Gray areas identified through phase-specific analysis
 - [ ] Decision Recording Protocol applied to all decisions
 - [ ] Scope creep redirected to Deferred section
 - [ ] Deferred items auto-created as issues (if any)
-- [ ] Artifact registered in state.json with correct scope/milestone/phase (includes context_package field)
-- [ ] Upstream context loaded via `--from` when specified
+- [ ] Artifact registered in state.json with correct scope/milestone/phase
 - [ ] Next step routed (impeccable/plan for Go, brainstorm for No-Go)
 </success_criteria>

@@ -77,6 +77,20 @@ maestro-plan → maestro-execute → maestro-verify
 2. Optional — proceed without if unavailable.
 </context>
 
+<interview_protocol>
+Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `--revise`, `--review`, `-c/--continue`, or input is already specific (clear requirement + mode).
+
+- One decision per turn via AskUserQuestion with 2–4 options + a (Recommended) default; every question must include a `Proceed now` option.
+- Never ask what code can verify — resolve via `state.json`, existing `roadmap.md`, `project.md`, or `maestro spec load`.
+- Walk the decision dependency tree strictly: mode → requirement scope → decomposition strategy → phase dependencies/order. Do not open the next branch until the current one is settled.
+- Scope guard: only decide the shape of the roadmap. Do not pre-resolve intra-phase task breakdown — that belongs to `plan`.
+
+Decision points: mode (light / full) → scope (MVP / complete / phased) → strategy (progressive / direct / auto) → phase dependencies and order.
+
+Exit: on consensus or `Proceed now`, append the table below to a `Roadmap Decisions` section at the top of `.workflow/roadmap.md`:
+`| # | Decision | Choice | Source (user / code / default) |`
+</interview_protocol>
+
 <execution>
 
 ### Mode routing
@@ -142,6 +156,7 @@ Follow `~/.maestro/workflows/spec-generate.md` completely.
 <success_criteria>
 
 **Light mode:**
+- [ ] Interactive mode: interview decision table appended to `.workflow/roadmap.md` "Roadmap Decisions" section
 - [ ] Requirement parsed with goal, constraints, stakeholders
 - [ ] Decomposition strategy selected (progressive or direct)
 - [ ] Phases defined with success criteria, dependencies, and requirement mappings

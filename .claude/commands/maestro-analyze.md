@@ -46,6 +46,20 @@ Scope routing, output directory format, artifact registration schema, and output
 `maestro wiki list --category debug` → select relevant → `maestro wiki load`
 </context>
 
+<interview_protocol>
+Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (explicit phase number or unambiguous topic).
+
+- One decision per turn via AskUserQuestion with 2–4 options + a (Recommended) default; every question must include a `Proceed now` option so the user can end the interview at any time.
+- Never ask what code can verify — resolve via `state.json`, `roadmap.md`, `issues.jsonl`, `maestro spec load`, `maestro wiki search`, Grep, or Read.
+- Walk the decision dependency tree strictly: scope → depth → dimensions → Go/No-Go threshold. Do not open the next branch until the current one is settled.
+- Scope guard: only ask about decisions owned by `analyze`. Do not prejudge plan/execute concerns.
+
+Decision points: scope (phase / topic / milestone-wide / adhoc / --gaps) → depth (quick / standard / deep) → dimensions (which of the 6 to keep) → Go/No-Go threshold.
+
+Exit: on `Proceed now` or when all decision points are settled, write the table below to the top of `discussion.md` and mirror it into `context.md` under an `Interview Decisions` section:
+`| # | Decision | Choice | Source (user / code / default) |`
+</interview_protocol>
+
 <execution>
 Follow '~/.maestro/workflows/analyze.md' completely.
 
@@ -123,6 +137,7 @@ Gaps mode:
 - [ ] context.md written with aggregated root causes for plan --gaps
 
 Both modes (full + quick):
+- [ ] Interactive mode: interview decision table written to `discussion.md` and mirrored into `context.md` "Interview Decisions"
 - [ ] context.md written with all decisions classified as Locked/Free/Deferred
 - [ ] Gray areas identified through phase-specific analysis
 - [ ] Decision Recording Protocol applied to all decisions

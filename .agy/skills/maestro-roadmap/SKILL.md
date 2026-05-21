@@ -1,7 +1,7 @@
 ---
 name: maestro-roadmap
 description: Generate roadmap from requirements (light or full mode)
-argument-hint: <requirement> [--mode light|full] [-y] [-c] [-m progressive|direct|auto] [--from <source>] [--from-brainstorm SESSION-ID] [--revise [instructions]] [--review]
+argument-hint: <requirement> [--mode light|full] [-y] [-c] [-m progressive|direct|auto] [--from <source>] [--revise [instructions]] [--review]
 allowed-tools:
   - ask_question
   - define_subagent
@@ -45,7 +45,7 @@ $ARGUMENTS -- requirement text, @file reference, or brainstorm session reference
 - `--mode light|full`: Execution path (default: light)
 - `-y` / `--yes`: Auto mode — skip interactive questions, use recommended defaults
 - `-c` / `--continue`: Resume from last checkpoint
-- `--from <source>`: Load upstream context package (brainstorm:ID, @file, or path). Resolves to context-package.json
+- `--from <source>`: Load upstream context package (brainstorm:ID, @file, or path). Consumes context-package.json
 - `--from-brainstorm SESSION-ID`: (backward compat alias for `--from brainstorm:ID`)
 
 **Flags (light mode only):**
@@ -56,14 +56,14 @@ $ARGUMENTS -- requirement text, @file reference, or brainstorm session reference
 **Input types:**
 - Direct text: `"Implement user authentication system with OAuth and 2FA"`
 - File reference: `@requirements.md`
-- Context import: `--from brainstorm:WFS-xxx` or `--from @spec.md` or `--from path/`
+- Context import: `--from brainstorm:BRN-001` or `--from @requirements.md` or `--from path/`
 - Brainstorm import (alias): `--from-brainstorm WFS-xxx`
 - No args + `--revise` / `--review`: Operate on existing `.workflow/roadmap.md`
 
 **Pipeline position:**
 ```
 maestro-brainstorm (optional upstream)
-        ↓ context-package.json (via --from)
+        ↓ guidance-specification.md
 maestro-init (project setup)
         ↓ project.md, state.json, config.json
 maestro-roadmap [--mode light]     → roadmap.md directly
@@ -78,6 +78,20 @@ maestro-plan → maestro-execute → maestro-verify
 1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for phase decomposition — ensures roadmap respects documented decisions and boundaries.
 2. Optional — proceed without if unavailable.
 </context>
+
+<interview_protocol>
+Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `--revise`, `--review`, `-c/--continue`, or input is already specific (clear requirement + mode).
+
+- One decision per turn via ask_question with 2–4 options + a (Recommended) default; every question must include a `Proceed now` option.
+- Never ask what code can verify — resolve via `state.json`, existing `roadmap.md`, `project.md`, or `maestro spec load`.
+- Walk the decision dependency tree strictly: mode → requirement scope → decomposition strategy → phase dependencies/order. Do not open the next branch until the current one is settled.
+- Scope guard: only decide the shape of the roadmap. Do not pre-resolve intra-phase task breakdown — that belongs to `plan`.
+
+Decision points: mode (light / full) → scope (MVP / complete / phased) → strategy (progressive / direct / auto) → phase dependencies and order.
+
+Exit: on consensus or `Proceed now`, append the table below to a `Roadmap Decisions` section at the top of `.workflow/roadmap.md`:
+`| # | Decision | Choice | Source (user / code / default) |`
+</interview_protocol>
 
 <execution>
 
@@ -144,6 +158,7 @@ Follow `~/.maestro/workflows/spec-generate.md` completely.
 <success_criteria>
 
 **Light mode:**
+- [ ] Interactive mode: interview decision table appended to `.workflow/roadmap.md` "Roadmap Decisions" section
 - [ ] Requirement parsed with goal, constraints, stakeholders
 - [ ] Decomposition strategy selected (progressive or direct)
 - [ ] Phases defined with success criteria, dependencies, and requirement mappings
