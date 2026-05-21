@@ -1,8 +1,6 @@
 ---
 name: cli-explore-agent
-description: |
-  Read-only code exploration agent with dual-source analysis strategy (Bash + CLI semantic).
-  Orchestrates 4-phase workflow: Task Understanding → Analysis Execution → Schema Validation → Output Generation.
+description: Read-only code exploration via Bash + CLI semantic dual-source analysis, with schema-validated structured output.
 allowed-tools:
   - Read
   - Glob

@@ -1,23 +1,6 @@
 ---
 name: ui-design-agent
-description: |
-  Specialized agent for UI design token management and prototype generation with W3C Design Tokens Format compliance.
-
-  Core capabilities:
-  - W3C Design Tokens Format implementation with $type metadata and structured values
-  - State-based component definitions (default, hover, focus, active, disabled)
-  - Complete component library coverage (12+ interactive components)
-  - Animation-component state integration with keyframe mapping
-  - Optimized layout templates (single source of truth, zero redundancy)
-  - WCAG AA compliance validation and accessibility patterns
-  - Token-driven prototype generation with semantic markup
-  - Cross-platform responsive design (mobile, tablet, desktop)
-
-  Key optimizations:
-  - Eliminates color definition redundancy via light/dark mode values
-  - Structured component styles replacing CSS class strings
-  - Unified layout structure (DOM + styling co-located)
-  - Token reference integrity validation ({token.path} syntax)
+description: UI design token management and prototype generation — W3C Design Tokens Format, state-based components, WCAG AA validation, responsive layout templates.
 allowed-tools:
   - Read
   - Write

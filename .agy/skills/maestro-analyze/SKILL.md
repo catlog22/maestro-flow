@@ -34,12 +34,17 @@ Use `--gaps` for issue-focused root cause analysis (replaces manage-issue-analyz
 </deferred_reading>
 
 <context>
-$ARGUMENTS -- phase number for milestone-scoped, topic text for adhoc/standalone mode, no args for milestone-wide.
+$ARGUMENTS -- phase number for micro mode, topic text for macro/adhoc mode, no args for milestone-wide.
+
+**Dual-layer mode:**
+- **Macro mode** (text argument): Explore impact surface of a topic/requirement. Produces coarse-grained context with `scope_verdict` to route next step. Use before roadmap or for standalone analysis.
+- **Micro mode** (numeric argument): Phase-level deep analysis within an existing roadmap. Produces fine-grained context for plan consumption. `analyze 1` = Phase 1 of current milestone.
 
 **Flags:**
 - `-y` / `--yes`: Auto mode — skip interactive scoping, use recommended defaults, auto-deepen
 - `-c` / `--continue`: Resume from existing session (auto-detect session folder + discussion.md)
 - `-q` / `--quick`: Quick mode — skip exploration + scoring, go straight to decision extraction (context.md only)
+- `--from <source>`: Load upstream context package (brainstorm:ID, blueprint:BLP-xxx, @file, or path)
 - `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl.
 
 Scope routing, output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Scope Routing and Output Structure sections).
@@ -92,15 +97,21 @@ Phase 4: Output context.md for downstream plan --gaps
 
 **Handoff:** context.md is consumed by maestro-plan (loads Locked/Free/Deferred decisions). In --gaps mode, context.md contains issue root causes for `plan --gaps` consumption.
 
+**scope_verdict** (added to context.md in Step 6 Synthesis for macro/adhoc/standalone scopes):
+- `large` (3+ independent subsystems or hard serial dependencies) → suggest `/maestro-roadmap --from analyze:ANL-xxx`
+- `medium` (1-2 subsystems, parallelizable) → suggest `/maestro-plan --from analyze:ANL-xxx`
+- `small` (single-file or few-file change) → suggest `/maestro-plan --from analyze:ANL-xxx`
+
 **Next-step routing on completion:**
 
-Phase/Milestone scope:
+Phase/Milestone scope (micro mode):
 - Go recommendation, UI work needed → `/maestro-impeccable build {target}`
 - Go recommendation, ready to plan → `/maestro-plan` or `/maestro-plan {phase}`
 - No-Go recommendation → revisit requirements or `/maestro-brainstorm {topic}`
 
-Adhoc/Standalone scope:
-- Ready to plan → `/maestro-plan --dir {scratch_dir}`
+Macro/Adhoc/Standalone scope:
+- scope_verdict = large → `/maestro-roadmap --from analyze:ANL-xxx`
+- scope_verdict = medium/small → `/maestro-plan --from analyze:ANL-xxx`
 - Need more exploration → `/maestro-analyze {topic} -c`
 
 Gaps scope:

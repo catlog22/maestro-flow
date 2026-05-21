@@ -82,9 +82,9 @@ Follow '~/.maestro/workflows/brainstorm.md' completely.
 
 Auto mode:
 - Project not initialized → view_file(AbsolutePath="<agy-skills-dir>/maestro-init/SKILL.md") + execute inline
-- Project initialized, need spec package → view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--mode full --from brainstorm:{artifact_id}")
+- Project initialized, need formal spec package → view_file(AbsolutePath="<agy-skills-dir>/maestro-blueprint/SKILL.md") + execute inline (args: "--from brainstorm:{artifact_id}")
 - Project initialized, quick roadmap → view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--from brainstorm:{artifact_id}")
-- Need deeper analysis first → view_file(AbsolutePath="<agy-skills-dir>/maestro-analyze/SKILL.md") + execute inline (args: "{topic}")
+- Need deeper analysis first → view_file(AbsolutePath="<agy-skills-dir>/maestro-analyze/SKILL.md") + execute inline (args: "{topic} --from brainstorm:{artifact_id}")
 - `html-prototypes/` produced with 2+ files and user wants to browse → load `~/.maestro/workflows/brainstorm-visualize.md` and launch visualizer server (optional, user-triggered)
 - DESIGN.md established during Step 3.5 → suggest: "Run `/maestro-impeccable build <feature-description>` to build with the established design system"
 

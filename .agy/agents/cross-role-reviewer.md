@@ -1,10 +1,6 @@
 ---
 name: cross-role-reviewer
-description: |
-  Reviews multiple role analysis index files (analysis.md) from a brainstorm session.
-  Compares Decision Digests across roles to identify conflicts, gaps, and synergy opportunities.
-  Returns structured text — does NOT write files. The orchestrator applies
-  resolutions to guidance-specification.md and the role analysis files.
+description: Compares Decision Digests across role analysis files in a brainstorm session to surface conflicts, gaps, and synergies. Read-only — returns structured text for the orchestrator to apply.
 allowed-tools:
   - grep_search
   - view_file

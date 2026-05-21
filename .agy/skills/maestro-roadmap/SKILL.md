@@ -1,7 +1,7 @@
 ---
 name: maestro-roadmap
-description: Generate roadmap from requirements (light or full mode)
-argument-hint: <requirement> [--mode light|full] [-y] [-c] [-m progressive|direct|auto] [--from <source>] [--revise [instructions]] [--review]
+description: Generate roadmap with milestone/phase structure from requirements or upstream context
+argument-hint: <requirement> [-y] [-c] [-m progressive|direct|auto] [--from <source>] [--revise [instructions]] [--review]
 allowed-tools:
   - ask_question
   - define_subagent
@@ -35,40 +35,33 @@ For formal specification documents (Product Brief, PRD, Architecture, Epics), us
 </deferred_reading>
 
 <context>
-$ARGUMENTS -- requirement text, @file reference, or brainstorm session reference.
+$ARGUMENTS -- requirement text, @file reference, or upstream context source.
 
-**Flags (shared):**
-- `--mode light|full`: Execution path (default: light)
+**Flags:**
 - `-y` / `--yes`: Auto mode — skip interactive questions, use recommended defaults
 - `-c` / `--continue`: Resume from last checkpoint
-- `--from <source>`: Load upstream context package (brainstorm:ID, @file, or path). Consumes context-package.json
-- `--from-brainstorm SESSION-ID`: (backward compat alias for `--from brainstorm:ID`)
-
-**Flags (light mode only):**
 - `-m progressive|direct|auto`: Decomposition strategy (default: auto)
+- `--from <source>`: Load upstream context package (brainstorm:ID, blueprint:BLP-xxx, analyze:ANL-xxx, @file, or path). Consumes context-package.json
+- `--from-brainstorm SESSION-ID`: (backward compat alias for `--from brainstorm:ID`)
 - `--revise [instructions]`: Revise existing roadmap. If instructions provided, apply directly. If omitted, ask user. Preserves completed phase progress.
 - `--review`: Roadmap health assessment (read-only)
 
 **Input types:**
 - Direct text: `"Implement user authentication system with OAuth and 2FA"`
 - File reference: `@requirements.md`
-- Context import: `--from brainstorm:BRN-001` or `--from @requirements.md` or `--from path/`
-- Brainstorm import (alias): `--from-brainstorm WFS-xxx`
+- Context import: `--from brainstorm:BRN-001` or `--from analyze:ANL-xxx` or `--from blueprint:BLP-xxx`
 - No args + `--revise` / `--review`: Operate on existing `.workflow/roadmap.md`
 
 **Pipeline position:**
 ```
-maestro-brainstorm (optional upstream)
-        ↓ guidance-specification.md
-maestro-init (project setup)
-        ↓ project.md, state.json, config.json
-maestro-roadmap [--mode light]     → roadmap.md directly
-maestro-roadmap --mode full        → spec package + roadmap.md
+maestro-brainstorm ─┐
+maestro-blueprint  ─┤ (optional upstream, parallel)
+maestro-analyze    ─┘ context-package.json
         ↓
-maestro-plan → maestro-execute → maestro-verify
+maestro-roadmap → .workflow/roadmap.md (Milestone > Phase hierarchy)
+        ↓
+maestro-analyze {phase} → maestro-plan → maestro-execute → maestro-verify
 ```
-
-**Note (full mode):** `maestro-init` MUST run before `--mode full`. It creates the `.workflow/` directory and project context.
 
 ### Pre-load specs
 1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for phase decomposition — ensures roadmap respects documented decisions and boundaries.
@@ -83,7 +76,7 @@ Interview the user relentlessly until shared understanding is reached. Active on
 - Walk the decision dependency tree strictly: mode → requirement scope → decomposition strategy → phase dependencies/order. Do not open the next branch until the current one is settled.
 - Scope guard: only decide the shape of the roadmap. Do not pre-resolve intra-phase task breakdown — that belongs to `plan`.
 
-Decision points: mode (light / full) → scope (MVP / complete / phased) → strategy (progressive / direct / auto) → phase dependencies and order.
+Decision points: scope (MVP / complete / phased) → strategy (progressive / direct / auto) → milestone boundaries → phase dependencies and order.
 
 Exit: on consensus or `Proceed now`, append the table below to a `Roadmap Decisions` section at the top of `.workflow/roadmap.md`:
 `| # | Decision | Choice | Source (user / code / default) |`

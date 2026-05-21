@@ -1,6 +1,6 @@
 ---
 name: workflow-analyzer
-description: Multi-dimensional analysis with evidence-based scoring and recommendations
+description: Evaluates technical topics, proposals, or decisions across multiple dimensions with evidence-based scoring and recommendations.
 allowed-tools:
   - Read
   - Write
