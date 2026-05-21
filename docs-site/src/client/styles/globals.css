@@ -80,12 +80,20 @@
 
   /* Code block */
   --color-bg-code: #1E1E2E;
-  --color-text-code: #CDD6F4;
+  --color-text-code: #3C4043;
   --color-code-keyword: #CBA6F7;
   --color-code-string: #A6E3A1;
   --color-code-comment: #6C7086;
   --color-code-function: #89B4FA;
   --color-code-number: #FAB387;
+
+  /* Terminal block (Mac-style code blocks in guides) */
+  --color-terminal-titlebar: #f0f0f0;
+  --color-terminal-titlebar-border: #e0e0e0;
+  --color-terminal-body: #faf8f8;
+  --color-terminal-border: #e0e0e0;
+  --color-terminal-title-text: #80868b;
+  --color-terminal-shadow: 1.6px 1.6px 3.2px 0px rgba(41,41,41,0.15);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -161,6 +169,13 @@
     --color-bg-code: #11101A;
     --color-text-code: #CDD6F4;
 
+    --color-terminal-titlebar: #2a2a2e;
+    --color-terminal-titlebar-border: rgba(232,234,237,0.08);
+    --color-terminal-body: #1a1a22;
+    --color-terminal-border: rgba(232,234,237,0.12);
+    --color-terminal-title-text: rgba(232,234,237,0.5);
+    --color-terminal-shadow: 1.6px 1.6px 3.2px 0px rgba(0,0,0,0.4);
+
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -232,6 +247,13 @@
 
   --color-bg-code: #11101A;
   --color-text-code: #CDD6F4;
+
+  --color-terminal-titlebar: #2a2a2e;
+  --color-terminal-titlebar-border: rgba(232,234,237,0.08);
+  --color-terminal-body: #1a1a22;
+  --color-terminal-border: rgba(232,234,237,0.12);
+  --color-terminal-title-text: rgba(232,234,237,0.5);
+  --color-terminal-shadow: 1.6px 1.6px 3.2px 0px rgba(0,0,0,0.4);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);

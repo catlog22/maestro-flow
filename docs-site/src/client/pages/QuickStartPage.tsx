@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useI18n } from '@/client/i18n/index.js';
 import { Link } from 'react-router-dom';
+import { TerminalBlock } from '@/client/components/content/GuideComponents.js';
 
 // ---------------------------------------------------------------------------
 // QuickStartPage — Interactive single-page quick guide
@@ -423,7 +424,7 @@ const SCENARIOS: ScenarioData[] = [
 
 // -- Status Badge --
 
-function StatusBadge({ status }: { status: Status }) {
+function StatusBadge({ status, isZh }: { status: Status; isZh: boolean }) {
   const styles: Record<Status, string> = {
     core: 'bg-tint-blue text-accent-blue',
     recommended: 'bg-tint-green text-accent-green',
@@ -436,7 +437,7 @@ function StatusBadge({ status }: { status: Status }) {
   };
   return (
     <span className={`text-[length:10px] font-[var(--font-weight-semibold)] px-[var(--spacing-1-5)] py-[1px] rounded-[var(--radius-full)] ${styles[status]}`}>
-      {labels[status].zh}
+      {isZh ? labels[status].zh : labels[status].en}
     </span>
   );
 }
@@ -456,52 +457,7 @@ function LevelDots({ level }: { level: Level }) {
   );
 }
 
-// -- Mac-style Terminal Block --
-
-function TerminalBlock({ children, title, compact }: { children: React.ReactNode; title?: string; compact?: boolean }) {
-  return (
-    <div
-      className={[
-        'rounded-[8px] overflow-hidden',
-        'shadow-[1.6px_1.6px_3.2px_0px_rgba(41,41,41,0.15)]',
-        'dark:shadow-[1.6px_1.6px_3.2px_0px_rgba(0,0,0,0.4)]',
-        'border border-[#e0e0e0] dark:border-[rgba(232,234,237,0.12)]',
-      ].join(' ')}
-    >
-      {/* Title bar with Mac dots */}
-      <div
-        className={[
-          'flex items-center px-[12px]',
-          'bg-[#f0f0f0] dark:bg-[#2a2a2e]',
-          'border-b border-[#e0e0e0] dark:border-b-[rgba(232,234,237,0.08)]',
-          compact ? 'py-[5px]' : 'py-[7px]',
-        ].join(' ')}
-      >
-        {/* Three Mac dots */}
-        <span className="flex items-center gap-[6px] mr-[10px]">
-          <span className="w-[10px] h-[10px] rounded-full bg-[#ff5f57]" />
-          <span className="w-[10px] h-[10px] rounded-full bg-[#febc2e]" />
-          <span className="w-[10px] h-[10px] rounded-full bg-[#28c840]" />
-        </span>
-        {title && (
-          <span className="text-[11px] text-[#80868b] dark:text-[rgba(232,234,237,0.5)] font-[var(--font-weight-medium)] truncate">
-            {title}
-          </span>
-        )}
-      </div>
-      {/* Code area */}
-      <div
-        className={[
-          compact ? 'px-[12px] py-[6px]' : 'px-[14px] py-[10px]',
-          'bg-[#faf8f8] dark:bg-[#1a1a22]',
-          'font-[var(--font-mono)]',
-        ].join(' ')}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
+// TerminalBlock imported from GuideComponents
 
 // -- Pipeline Step --
 
@@ -566,7 +522,7 @@ function CommandCard({ cmd, isZh, isExpanded, onToggle }: CommandCardProps) {
           <code className="text-[length:13px] font-[var(--font-mono)] font-[var(--font-weight-semibold)] text-text-primary">
             {cmd.cmd}
           </code>
-          <StatusBadge status={cmd.status} />
+          <StatusBadge status={cmd.status} isZh={isZh} />
           <LevelDots level={cmd.level} />
           <svg
             className={[

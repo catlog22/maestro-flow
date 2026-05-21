@@ -75,6 +75,7 @@ export const guideRegistry: Array<{
   {
     slug: 'spec-injection',
     file: 'spec-injection-guide.md',
+    file_en: 'spec-injection-guide.en.md',
     title: 'Spec Injection Configuration',
     description: 'Keyword-granularity injection control, extra document binding, agent mapping overrides, CLI/TUI/Dashboard configuration',
     title_zh: 'Spec 注入配置指南',
@@ -84,6 +85,7 @@ export const guideRegistry: Array<{
   {
     slug: 'spec-analytics',
     file: 'spec-analytics-guide.md',
+    file_en: 'spec-analytics-guide.en.md',
     title: 'Spec Analytics Guide',
     description: 'Injection logging, hit rate statistics, keyword analysis, hook invocation tracking, and TUI visualization',
     title_zh: 'Spec 分析系统指南',
@@ -183,6 +185,7 @@ export const guideRegistry: Array<{
   {
     slug: 'role-routing',
     file: 'role-routing-guide.md',
+    file_en: 'role-routing-guide.en.md',
     title: 'Role Routing & Tool Config',
     description: 'Role-based CLI tool routing — 7 fixed roles, fallback chains, domain tags, workspace overrides',
     title_zh: '角色路由与工具配置',
@@ -192,6 +195,7 @@ export const guideRegistry: Array<{
   {
     slug: 'skill-config',
     file: 'skill-config-guide.md',
+    file_en: 'skill-config-guide.en.md',
     title: 'Skill Config Guide',
     description: 'Per-skill parameter defaults with TUI editor and hook-based auto-injection',
     title_zh: 'Skill 参数配置指南',
@@ -201,6 +205,7 @@ export const guideRegistry: Array<{
   {
     slug: 'maestro-coordinator',
     file: 'maestro-coordinator-guide.md',
+    file_en: 'maestro-coordinator-guide.en.md',
     title: 'Maestro Coordinator Guide',
     description: 'Static chain selector — intent analysis, chain routing, unified executor dispatch',
     title_zh: 'Maestro 智能协调器指南',
@@ -210,6 +215,7 @@ export const guideRegistry: Array<{
   {
     slug: 'maestro-ralph',
     file: 'maestro-ralph-guide.md',
+    file_en: 'maestro-ralph-guide.en.md',
     title: 'Maestro Ralph Lifecycle Engine',
     description: 'Adaptive lifecycle engine — closed-loop cycling with decision nodes, auto debug-fix retry',
     title_zh: 'Maestro Ralph 生命周期引擎指南',
@@ -285,6 +291,46 @@ export const guideRegistry: Array<{
     title_zh: '杂项命令指南',
     description_zh: 'amend、update、spec-remove、milestone-release — 补充工作流命令',
     icon: 'tool',
+  },
+  {
+    slug: 'statusline',
+    file: 'statusline-guide.md',
+    file_en: 'statusline-guide.en.md',
+    title: 'Statusline Guide',
+    description: 'Claude Code custom statusline — model, tokens, git status, context usage, milestone tracking',
+    title_zh: 'Statusline 状态栏指南',
+    description_zh: 'Claude Code 自定义状态栏 — 模型、Token、Git、上下文、里程碑追踪',
+    icon: 'monitor',
+  },
+  {
+    slug: 'knowledge-management',
+    file: 'knowledge-management-guide.md',
+    file_en: 'knowledge-management-guide.en.md',
+    title: 'Knowledge Management System',
+    description: 'Two knowledge types: constraints (specs) and accumulation (knowhow) — forced loading vs on-demand retrieval',
+    title_zh: '知识沉淀管理系统',
+    description_zh: '约束（Spec）与积累（Knowhow）两种知识 — 强制加载与按需检索',
+    icon: 'brain',
+  },
+  {
+    slug: 'team-lite-design',
+    file: 'team-lite-design.md',
+    file_en: 'team-lite-design.en.md',
+    title: 'Team Lite Design',
+    description: 'Minimal collaboration extension for 2-8 person teams — Git-native, file-driven, advisory',
+    title_zh: 'Team Lite 协作方案设计',
+    description_zh: '面向 2-8 人小团队的极简协作扩展 — Git-native + 文件驱动 + advisory',
+    icon: 'users',
+  },
+  {
+    slug: 'antigravity-tools',
+    file: 'antigravity_tools_guide.md',
+    file_en: 'antigravity_tools_guide.en.md',
+    title: 'Antigravity Tools Guide',
+    description: 'Antigravity AI assistant available tools with parameters and schema',
+    title_zh: 'Antigravity 工具指南',
+    description_zh: 'Antigravity AI 助手可用工具，包含参数和 Schema',
+    icon: 'rocket',
   },
 ];
 
