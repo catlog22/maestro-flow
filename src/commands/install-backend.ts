@@ -235,15 +235,32 @@ function getCodexConfigPath(scope: 'global' | 'project', projectPath: string): s
 /**
  * Remove the `[mcp_servers.maestro-tools]` and `[mcp_servers.maestro-tools.env]`
  * sections from a TOML string. Returns the cleaned content.
+ *
+ * Line-by-line parsing — robust against bracket characters inside values
+ * (e.g. `args = ["/c", "maestro-mcp"]`), which previously broke a regex-based
+ * implementation and left stale blocks behind, producing duplicate-key errors.
  */
 function removeCodexMcpBlock(content: string): string {
-  // Match from [mcp_servers.maestro-tools] (and any sub-tables like .env)
-  // up to the next top-level section header or end of file.
-  // The regex handles both the main section and its sub-sections.
-  return content.replace(
-    /\n?\[mcp_servers\.maestro-tools(?:\.[^\]]+)?\][^\[]*(?=\n\[|\s*$)/g,
-    '',
-  ).trim();
+  // A TOML table header starts at column 0 with `[` (or `[[` for arrays of tables)
+  // and is the only token on the line aside from optional trailing whitespace/comment.
+  const tableHeaderRe = /^\[\[?[^\]]+\]\]?\s*(?:#.*)?$/;
+  const maestroHeaderRe = /^\[mcp_servers\.maestro-tools(?:\.[^\]]+)?\]\s*(?:#.*)?$/;
+
+  const lines = content.split(/\r?\n/);
+  const out: string[] = [];
+  let skipping = false;
+
+  for (const line of lines) {
+    if (tableHeaderRe.test(line)) {
+      // Entering a new section — decide whether to skip it
+      skipping = maestroHeaderRe.test(line);
+      if (skipping) continue;
+    }
+    if (!skipping) out.push(line);
+  }
+
+  // Collapse 3+ consecutive blank lines left behind by removal
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function addCodexMcpServer(
