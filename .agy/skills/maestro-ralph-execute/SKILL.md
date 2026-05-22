@@ -27,32 +27,29 @@ Remaining  → session_id (if matches maestro-* or ralph-*)
 ```
 Also read `session.auto_mode` from status.json — if true, treat as `-y`.
 
-**Node types:**
+**Step kinds:**
 
-| Type | Execution | Flow after |
-|------|-----------|------------|
-| decision (ralph-only) | `Skill("maestro-ralph")` | Execution ends here |
-| internal (default) | `view_file({file_path: step.command_path})` + 内联解释执行 | Self-invoke next |
-| external (opt-in) | `maestro delegate --to claude --mode write` (STOP → callback) | Self-invoke next |
+| Kind | Identifier | Execution | Flow after |
+|------|-----------|-----------|------------|
+| decision step | `step.decision` 非空 | `Skill("maestro-ralph")` | Execution ends here |
+| 执行 step | `step.decision == null` | `view_file({file_path: step.command_path})` + 内联解释执行 | Self-invoke next |
 
 HARD RULES:
-- internal step：优先通过 `view_file({command_path})` 把命令 .md 加载进当前会话，再按内容执行；不要对 internal step 使用 `Skill({skill})` 调用
-- **必须遵循 `<required_reading>` / `<deferred_reading>` 标签**：命令 .md 通常采用"入口 + workflow"形式，主体逻辑放在 workflow 文件中并通过 `<required_reading>` 引用；不加载 required_reading 会导致命令执行不完整
-- decision 节点例外：A_EXEC_DECISION 必须使用 `view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph/SKILL.md") + execute inline` 进行 handoff（这是 decision 节点的唯一允许用法）
-- `command_path` 由 ralph 在 A_BUILD_STEPS 写入 status.json；ralph-execute 不再自行解析（缺失 → 报错 E002）
-- external 仅在 `step.type == "external"` 显式声明时使用，并 always append `-y` 到 prompt args
+- 执行 step：通过 `view_file({command_path})` 把命令 .md 加载进当前会话，再按内容执行
+- **必须遵循 `<required_reading>` / `<deferred_reading>` 标签**：命令 .md 通常采用"入口 + workflow"形式，主体逻辑放在 workflow 文件中并通过 `<required_reading>` 引用；缺失 required_reading 视为加载失败
+- decision step：A_EXEC_DECISION 通过 `view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph/SKILL.md") + execute inline` handoff 给 ralph 评估
+- `command_path` 由 ralph 在 A_BUILD_STEPS 写入 status.json（缺失 → 报错 E002）
 - 每个 step 必须产出 `--- COMPLETION STATUS ---` 块，否则视为 NEEDS_RETRY
 </context>
 
 <invariants>
-1. **Internal = Read + inline** — 通过 Read 读取 `step.command_path`，按其指令在当前 session 内执行
+1. **执行 = Read + inline** — 通过 Read 读取 `step.command_path`，按其指令在当前 session 内执行
 2. **Required reading must be loaded** — 命令 .md 中的 `<required_reading>` 引用的所有文件必须立即 Read；缺一 → 视为加载失败，pause session（E007）
 3. **Deferred reading recorded only** — `<deferred_reading>` 列出的文件路径需记录，执行过程按需 Read；不在加载阶段读取
 4. **Skill loaded confirmation** — 所有 required_reading 加载完成后必须输出一行确认：`✓ skill {step.skill} 加载完成 (required: N, deferred: M)`
-5. **External = explicit only** — `step.type == "external"` 才走 delegate；默认绝不发起
-6. **必须显式 completion confirmation** — 每个 step 完成时需有 `STATUS: DONE` 且写入 `step.completion_confirmed = true`
-7. **Self-invocation chain** — 持续直到全部 `completion_confirmed` 或 paused
-8. **status.json 每步骤后写盘** — resume-safe
+5. **必须显式 completion confirmation** — 每个 step 完成时需有 `STATUS: DONE` 且写入 `step.completion_confirmed = true`
+6. **Self-invocation chain** — 持续直到全部 `completion_confirmed` 或 paused
+7. **status.json 每步骤后写盘** — resume-safe
 </invariants>
 
 <state_machine>
@@ -78,11 +75,9 @@ S_RESOLVE_ARGS:
   → S_EXECUTE       DO: A_RESOLVE_ARGS
 
 S_EXECUTE:
-  → END             WHEN: step.type == "decision"           DO: A_EXEC_DECISION
-  → S_POST_EXEC     WHEN: step.type == "internal" + success DO: A_EXEC_INTERNAL
-  → S_HANDLE_FAIL   WHEN: step.type == "internal" + failure DO: A_EXEC_INTERNAL
-  → END             WHEN: step.type == "external"           DO: A_EXEC_EXTERNAL
-                     (STOP after background delegate; on callback → S_POST_EXEC or S_HANDLE_FAIL)
+  → END             WHEN: step.decision != null              DO: A_EXEC_DECISION
+  → S_POST_EXEC     WHEN: step.decision == null + success    DO: A_EXEC_STEP
+  → S_HANDLE_FAIL   WHEN: step.decision == null + failure    DO: A_EXEC_STEP
 
 S_POST_EXEC:
   → S_LOCATE        DO: A_MARK_COMPLETE + Skill("maestro-ralph-execute")
@@ -151,16 +146,16 @@ Write enriched args back to status.json.
 ### A_EXEC_DECISION
 
 1. Mark step running, write status.json
-2. Display: `[{index}/{total}] ◆ {decision} Retry: {retry}/{max}`
+2. Display: `[{index}/{total}] ◆ {step.decision} Retry: {retry}/{max}`
 3. `view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph/SKILL.md") + execute inline` — ralph 评估 + handoff
 4. 执行在此结束
 
-### A_EXEC_INTERNAL
+### A_EXEC_STEP
 
 1. Validate `step.command_path != null`；否则 raise E002，pause session
 2. Mark step running, write status.json
-3. Display: `[{index}/{total}] {step.skill} [internal · {step.command_scope}]`
-4. `view_file({ file_path: step.command_path })` — 把命令 .md 全文加载进当前会话（prefer Read over Skill for internal steps；decision 节点另行使用 Skill 见 A_EXEC_DECISION）
+3. Display: `[{index}/{total}] {step.skill} [{step.command_scope}]`
+4. `view_file({ file_path: step.command_path })` — 把命令 .md 全文加载进当前会话
 5. **解析 reading 标签**（"入口 + workflow"形式核心步骤）：
    - 抽取 frontmatter `argument-hint` / `allowed-tools`
    - 抽取 `<required_reading>` 块的所有 `@path` 引用 → 立刻 `view_file({ file_path: <expanded path> })` 加载（`~/` / `@~/` 展开为用户主目录）；任一文件缺失或读取失败 → raise E007，pause session
@@ -171,29 +166,10 @@ Write enriched args back to status.json.
    ✓ skill {step.skill} 加载完成 (required: {N}, deferred: {M})
    ```
    其中 N = required_reading 引用数，M = deferred_reading 路径数（缺省块按 0 计）
-7. 计算 `effective_args`：`step.args` + auto flag（`auto ? (flag_map[step.skill] || "") : ""`）
-8. 按读到的指令在本会话中**内联执行**：调用允许的工具完成命令所规定的工作，不再发起 delegate；执行过程中如触发 deferred_reading 引用的资源 → 按需 Read
+7. 计算 `effective_args`：`step.args` + (`auto ? " -y" : ""`)
+8. 按读到的指令在本会话中**内联执行**：调用允许的工具完成命令所规定的工作；执行过程中如触发 deferred_reading 引用的资源 → 按需 Read
 9. 执行结束：要求最后一段必须包含 `--- COMPLETION STATUS ---` 块（见 A_MARK_COMPLETE）
 10. Return success / failure
-
-**Auto flag map**: 所有 lifecycle skill → `-y`; `quality-test` → `-y --auto-fix`; 未列出 → 无 flag
-
-### A_EXEC_EXTERNAL
-
-仅当 `step.type == "external"` 时使用（默认链路不产生）。
-
-1. Mark step running, write status.json
-2. Display: `[{index}/{total}] ⚡ {step.skill} [external]`
-3. 始终在 prompt 内追加 `-y`（delegate session 非交互）：`flag = flag_map[step.skill] || "-y"`
-4. Execute:
-   ```
-   run_command({
-     command: `maestro delegate "/${step.skill} ${effective_args}" --to claude --mode write`,
-     run_in_background: true, timeout: 600000
-   })
-   STOP — wait for callback.
-   ```
-5. On callback: 把回调输出视为 step 的执行结果 → S_POST_EXEC / S_HANDLE_FAIL
 
 ### A_MARK_COMPLETE
 
@@ -238,14 +214,14 @@ Write enriched args back to status.json.
      Session:  {session_id} [{source}]
      Steps:    {completed}/{total}   confirmed: {confirmed}/{completed}
 
-     [✓] 0.   maestro-plan 1            [internal · global]
-     [✓] 1.   maestro-execute 1         [internal · project]
-     [✓] 2.   maestro-verify 1          [internal · global]
+     [✓] 0.   maestro-plan 1            [global]
+     [✓] 1.   maestro-execute 1         [project]
+     [✓] 2.   maestro-verify 1          [global]
      [✓] 3. ◆ post-verify               [decision]
      ...
    ============================================================
    ```
-   Icons: `✓` confirmed, `—` skipped, `✗` failed, `◆` decision, `⚡` external
+   Icons: `✓` confirmed, `—` skipped, `✗` failed, `◆` decision
 
 </actions>
 
@@ -258,9 +234,8 @@ Write enriched args back to status.json.
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
 | E001 | error | No running session found | Suggest /maestro or /maestro-ralph |
-| E002 | error | step.command_path missing for internal step | Pause, ask ralph to rebuild step |
+| E002 | error | step.command_path missing for 执行 step | Pause, ask ralph to rebuild step |
 | E003 | error | status.json corrupt | Show path, manual check |
-| E004 | error | Delegate failed + user abort | Mark paused, suggest resume |
 | E005 | error | COMPLETION STATUS block missing | Trigger NEEDS_RETRY |
 | E007 | error | required_reading file 缺失或读取失败 | List missing paths, pause session |
 | W001 | warning | Step completed with concerns | Log and continue |
@@ -269,14 +244,13 @@ Write enriched args back to status.json.
 ### Success Criteria
 
 - [ ] Session discovery covers maestro-* and ralph-*
-- [ ] `-y` parsed from args 或 session.auto_mode
+- [ ] `-y` parsed from args 或 session.auto_mode；auto=true 时透传 `-y` 到 skill args
 - [ ] Placeholders resolved；per-skill enrichment 正确
-- [ ] Decision 节点 Skill("maestro-ralph") handoff
-- [ ] Internal 节点通过 view_file({step.command_path}) 内联执行，禁止 Skill()
-- [ ] Internal 节点 Read 后必须解析并加载 `<required_reading>` 引用的文件；缺失 → E007 pause
+- [ ] Decision 节点（`step.decision != null`）Skill("maestro-ralph") handoff
+- [ ] 执行 step 通过 view_file({step.command_path}) 内联执行
+- [ ] 执行 step Read 后必须解析并加载 `<required_reading>` 引用的文件；缺失 → E007 pause
 - [ ] `<deferred_reading>` 仅记录路径到 `step.deferred_reads`，执行阶段按需 Read
 - [ ] required_reading 加载完成后输出 `✓ skill {name} 加载完成 (required: N, deferred: M)`
-- [ ] External 仅在显式声明时走 delegate，prompt 必带 `-y`
 - [ ] 每个 step 强制 `--- COMPLETION STATUS ---`；缺失 → NEEDS_RETRY
 - [ ] step.completion_confirmed = true 仅在 STATUS: DONE/DONE_WITH_CONCERNS 时设置
 - [ ] step.completion_evidence 记录 artifact path / 输出节选

@@ -1,7 +1,7 @@
 ---
 name: maestro
 description: Auto-route intent to optimal command chain
-argument-hint: <intent> [-y] [-c] [--dry-run] [--exec auto|cli|internal] [--tool <name>] [--super]
+argument-hint: <intent> [-y] [-c] [--dry-run] [--super]
 allowed-tools:
   - ask_question
   - define_subagent
@@ -41,18 +41,16 @@ $ARGUMENTS — user intent text, or special keywords.
 - `-y` / `--yes` — Auto mode: skip clarification, skip confirmation, auto-skip on errors
 - `-c` / `--continue` — Resume previous session
 - `--dry-run` — Show chain without executing
-- `--exec <mode>` — `auto` (default), `cli`, `internal`
-- `--tool <name>` — CLI tool for delegates (default: claude)
 - `--super` — Read and follow `maestro-super.md`
 </context>
 
 <invariants>
 1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
 2. **Session before execution** — status.json created before any step runs
-3. **Auto flags only to supporting commands** — unlisted commands execute as-is
+3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
 4. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)。Reference maestro-ralph `A_DECOMPOSE_TASKS`
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
-6. **Default step type = internal** — chain 内每个 step 解析 `command_scope`/`command_path`（全局优先 `~/.claude/commands/{name}.md`，fallback 项目）
+6. **执行步骤统一 Read .md 内联** — chain 内每个执行 step 解析 `command_scope`/`command_path`（全局优先 `~/.claude/commands/{name}.md`，fallback 项目），由 ralph-execute `view_file({command_path})` 内联执行；CLI 仅在 decision 节点做只读分析
 7. **Topology awareness** — chain catalog 含 brainstorm / blueprint / analyze-macro(text) / analyze(numeric phase) / roadmap / plan(三路径) / execute / verify / ...；scope_verdict 路由由 ralph 在 `post-analyze-scope` 决定
 8. **D-007 milestone 反查** — 数字 phase 步骤的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查得出
 9. **每个 step 必须 `completion_confirmed: true`** — 基于 `--- COMPLETION STATUS ---` 的 `STATUS: DONE`
@@ -142,7 +140,7 @@ S_FALLBACK:
    - 数字 phase 上下文 → `analyze {phase}` → `plan {phase}` → `execute {phase}` → `verify {phase}` → quality pipeline
    - 已有 analyze artifact 想直达执行 → `plan --from analyze:{ANL_ID}` → execute → verify
    - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → verify
-4. 每个 step 默认 `type: "internal"`；解析 `command_scope` + `command_path`（全局优先 fallback 项目）；写入 `step.stage` / `step.scope` / `step.source_artifact_ref`（如 `--from` 注入时）
+4. 执行 step 解析 `command_scope` + `command_path`（全局优先 fallback 项目）；写入 `step.stage` / `step.scope` / `step.source_artifact_ref`（如 `--from` 注入时）。decision 节点通过 `step.decision` 字段标识
 
 ### A_CLARIFY
 
@@ -158,9 +156,9 @@ S_FALLBACK:
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
 5. 在最后一个 evidence-producing stage（verify/review/test）之后、`milestone-complete` 之前追加 `decision:post-goal-audit`。ralph-execute 在该节点按需动态生长 `steps[]`
-6. **输出 `/goal` 绑定提示词：**
+6. **输出 `/goal` 绑定提示词（不阻塞，用户可在执行过程中随时输入）：**
    ```
-   📋 任务分解完成。复制下面一行设定目标，会话在子目标全部达成前不停：
+   📋 任务分解完成。可随时复制下面一行设定目标（执行过程中输入即可）：
 
    /goal 目标达成条件: {session_dir}/status.json 中 task_decomposition[*].status == "done" 且 task_decomposition[*].completion_confirmed == true 且 steps[*].completion_confirmed == true。未达成时：阅读 {session_dir}/status.json 取得 execution_criteria / boundary_contract / task_decomposition / steps 作为行动手册，调用 /maestro-ralph continue 推进；严禁手动执行 skill 或越界修改 status.json.boundary_contract.out_of_scope。
    ```
@@ -174,13 +172,14 @@ S_FALLBACK:
      "session_id", "source": "maestro", "intent", "task_type", "chain_name",
      "phase", "phase_is_new": false, "milestone": "",
      "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
-     "auto_mode": false, "exec_mode": "auto", "cli_tool": "claude",
+     "auto_mode": false, "cli_tool": "claude",   // cli_tool: decision 节点 delegate 评估时的 CLI 工具
      "context": { "scratch_dir": null, "plan_dir": null, "analysis_dir": null,
        "brainstorm_dir": null, "blueprint_dir": null, "issue_id": null },
      "steps": [{
-       "index": 0, "type": "internal|external|decision",
+       "index": 0,
        "skill": "", "args": "",
        "stage": "", "scope": null,
+       "decision": null,                 // 非 null → decision 节点；null → 执行节点
        "command_scope": "global|project|missing|null",
        "command_path": "~/.claude/commands/{name}.md | .claude/commands/{name}.md | null",
        "milestone_id": null, "source_artifact_ref": null,
@@ -203,25 +202,6 @@ S_FALLBACK:
 </state_machine>
 
 <appendix>
-
-### Auto-Yes Flag Map
-
-| Command | Auto Flag | Effect |
-|---------|-----------|--------|
-| maestro-init | `-y` | Skip interactive questioning |
-| maestro-analyze | `-y` | Skip scoping, auto-deepen |
-| maestro-brainstorm | `-y` | Skip questions, use defaults |
-| maestro-blueprint | `-y` | Skip interview, use recommended defaults |
-| maestro-roadmap | `-y` | Skip questions (create/revise/review) |
-| maestro-impeccable | `-y` | Auto-select design variant + skip confirmations |
-| maestro-plan | `-y` | Skip confirmations and clarification |
-| maestro-execute | `-y` | Skip confirmations, blocked auto-continue |
-| quality-auto-test | `-y` | Skip plan confirmation |
-| quality-test | `-y --auto-fix` | Auto-trigger gap-fix loop |
-| quality-retrospective | `-y` | Accept all routing recommendations |
-| maestro-milestone-complete | `-y` | Skip knowledge promotion |
-
-Unlisted commands have no auto flags.
 
 ### Error Codes
 
@@ -247,8 +227,8 @@ Unlisted commands have no auto flags.
 - [ ] status.json 唯一真源；无 markdown 清单；post-goal-audit 节点在 decomposed 时追加；/goal 提示词以 status.json 为判据
 - [ ] Chain selected and confirmed (or auto-confirmed)
 - [ ] Session dir created with status.json before execution; decomposition fields additive-only
-- [ ] 每个 step 含 `command_scope` + `command_path` + `completion_confirmed` 字段
-- [ ] Auto flags propagated to supporting commands only
+- [ ] 执行 step 含 `command_scope` + `command_path` + `completion_confirmed` 字段；decision step 通过 `step.decision` 字段标识
+- [ ] 用户传入 `-y` 时透传到 skill args
 - [ ] All chains dispatched via maestro-ralph-execute
 - [ ] Low-complexity intents routed to maestro-quick
 - [ ] (super) Requirements validated before roadmap
