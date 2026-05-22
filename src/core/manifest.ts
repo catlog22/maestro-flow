@@ -2,6 +2,10 @@
 // Installation Manifest
 // Tracks installed files for clean reinstall and uninstall.
 // Manifests stored at ~/.maestro/manifests/{id}.json
+//
+// Manifest is the single source of truth for an installation. Every install
+// step (files, hooks, MCP, statusline) records itself here so uninstall can
+// reverse exactly what was installed — no marker scanning, no guesswork.
 // ---------------------------------------------------------------------------
 
 import { join } from 'node:path';
@@ -13,7 +17,6 @@ import {
   writeFileSync,
   unlinkSync,
   rmSync,
-  statSync,
 } from 'node:fs';
 import { paths } from '../config/paths.js';
 import { hasAnyMarkers, removeAllSections } from './tag-injector.js';
@@ -27,8 +30,37 @@ export interface ManifestEntry {
   type: 'file' | 'dir';
 }
 
+/** Claude Code / Codex / Antigravity hook installation record. */
+export interface HookRecord {
+  /** Absolute path to the settings/hooks config file written. */
+  settingsPath: string;
+  /** Hook names registered (matches keys in HOOK_DEFS / CODEX_HOOK_DEFS / AGY_HOOK_DEFS). */
+  installed: string[];
+}
+
+/** Statusline installation record (Claude Code settings.statusLine). */
+export interface StatuslineRecord {
+  settingsPath: string;
+  /** Theme stored to maestro config; null when no theme was persisted. */
+  theme?: string;
+}
+
+/** Single MCP server registration record. */
+export interface McpRecord {
+  /** Absolute path to the config file containing the registration. */
+  configPath: string;
+  /** Server name under mcpServers / servers key. */
+  serverName: string;
+}
+
+/** Extra MCP target registration (Cursor / Qoder / Trae / Kiro / Roo / VS Code / Gemini). */
+export interface ExtraMcpRecord extends McpRecord {
+  targetId: string;
+}
+
 export interface Manifest {
   id: string;
+  /** Manifest schema version. Bumped when fields change in a backward-incompatible way. */
   version: string;
   scope: 'global' | 'project';
   targetPath: string;
@@ -38,7 +70,23 @@ export interface Manifest {
   hookLevel?: string;
   /** Component IDs selected during interactive install (omitted = all) */
   selectedComponentIds?: string[];
+
+  // --- Extended tracking (schema v2) ---
+  hooks?: {
+    claude?: HookRecord;
+    codex?: HookRecord;
+    agy?: HookRecord;
+  };
+  statusline?: StatuslineRecord;
+  mcp?: {
+    claude?: McpRecord;
+    codex?: McpRecord;
+    extras?: ExtraMcpRecord[];
+  };
 }
+
+/** Current manifest schema version. */
+const SCHEMA_VERSION = '2.0';
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -68,7 +116,7 @@ export function createManifest(
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').split('.')[0];
   return {
     id: `${scope}-${ts}`,
-    version: '1.0',
+    version: SCHEMA_VERSION,
     scope,
     targetPath,
     installedAt: new Date().toISOString(),
@@ -85,6 +133,45 @@ export function addFile(manifest: Manifest, filePath: string): void {
 export function addDir(manifest: Manifest, dirPath: string): void {
   manifest.entries.push({ path: dirPath, type: 'dir' });
 }
+
+// --- Extended tracking helpers ---
+
+export function recordClaudeHooks(manifest: Manifest, record: HookRecord): void {
+  manifest.hooks ??= {};
+  manifest.hooks.claude = record;
+}
+
+export function recordCodexHooks(manifest: Manifest, record: HookRecord): void {
+  manifest.hooks ??= {};
+  manifest.hooks.codex = record;
+}
+
+export function recordAgyHooks(manifest: Manifest, record: HookRecord): void {
+  manifest.hooks ??= {};
+  manifest.hooks.agy = record;
+}
+
+export function recordStatusline(manifest: Manifest, record: StatuslineRecord): void {
+  manifest.statusline = record;
+}
+
+export function recordClaudeMcp(manifest: Manifest, record: McpRecord): void {
+  manifest.mcp ??= {};
+  manifest.mcp.claude = record;
+}
+
+export function recordCodexMcp(manifest: Manifest, record: McpRecord): void {
+  manifest.mcp ??= {};
+  manifest.mcp.codex = record;
+}
+
+export function recordExtraMcp(manifest: Manifest, record: ExtraMcpRecord): void {
+  manifest.mcp ??= {};
+  manifest.mcp.extras ??= [];
+  manifest.mcp.extras.push(record);
+}
+
+// --- Save / Load ---
 
 export function saveManifest(manifest: Manifest): string {
   ensureDir();

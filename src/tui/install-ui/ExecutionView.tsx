@@ -14,6 +14,7 @@ import {
   addMcpServer,
   copyRecursive,
   createBackup,
+  uninstallManifest,
   type ScannedComponent,
   type CopyStats,
 } from '../../commands/install-backend.js';
@@ -22,7 +23,8 @@ import {
   addFile,
   saveManifest,
   findManifest,
-  cleanManifestFiles,
+  recordClaudeHooks,
+  recordClaudeMcp,
 } from '../../core/manifest.js';
 import { installHooksByLevel, type HookLevel } from '../../commands/hooks.js';
 import { type InstallConfig, type InstallResult } from './types.js';
@@ -84,12 +86,12 @@ export function ExecutionView({
           }
         }
 
-        // 3. Clean previous installation
+        // 3. Clean previous installation (full uninstall — files + hooks + mcp + statusline)
         const existingManifest = findManifest(config.mode, targetPath);
         if (existingManifest) {
           if (cancelled) return;
           setStatus('Cleaning previous installation...');
-          cleanManifestFiles(existingManifest, { skipContentManaged: true });
+          uninstallManifest(existingManifest, { skipContentManaged: true });
         }
 
         // 4. Ensure home directory exists
@@ -147,12 +149,16 @@ export function ExecutionView({
         if (config.mcpEnabled && config.mcpTools.length > 0) {
           if (cancelled) return;
           setStatus('Registering MCP server...');
-          mcpRegistered = addMcpServer(
+          const path = addMcpServer(
             config.mode,
             config.projectPath,
             config.mcpTools,
             config.mcpProjectRoot || undefined,
           );
+          mcpRegistered = !!path;
+          if (path) {
+            recordClaudeMcp(manifest, { configPath: path, serverName: 'maestro-tools' });
+          }
         }
 
         // 11. Hook installation
@@ -169,6 +175,10 @@ export function ExecutionView({
             installedHooks: hookRes.installedHooks,
             level: config.hookLevel,
           };
+          recordClaudeHooks(manifest, {
+            settingsPath: hookRes.settingsPath,
+            installed: hookRes.installedHooks,
+          });
         }
 
         // 12. Save manifest

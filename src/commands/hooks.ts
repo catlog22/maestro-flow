@@ -149,13 +149,28 @@ function getMaestroBinDir(): string {
 
 const HOOK_MARKER = 'maestro';
 
-export function removeMaestroHooks(settings: ClaudeSettings): void {
+/**
+ * Remove maestro hooks from Claude settings.
+ *
+ * @param settings  Parsed settings.json object (mutated in place)
+ * @param hookNames Optional whitelist of hook names to remove. When omitted,
+ *                  every command containing the "maestro" substring is stripped
+ *                  (legacy uninstall behavior).
+ */
+export function removeMaestroHooks(settings: ClaudeSettings, hookNames?: string[]): void {
   if (!settings.hooks) return;
+  const targets = hookNames && hookNames.length > 0
+    ? new Set(hookNames.map((n) => `hooks run ${n}`))
+    : null;
+
   for (const eventKey of ['PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Notification', 'Stop'] as const) {
     const groups = settings.hooks[eventKey] as HookGroup[] | undefined;
     if (!groups) continue;
     for (const group of groups) {
-      group.hooks = group.hooks.filter((h) => !h.command.includes(HOOK_MARKER));
+      group.hooks = group.hooks.filter((h) => {
+        if (targets) return ![...targets].some((needle) => h.command.includes(needle));
+        return !h.command.includes(HOOK_MARKER);
+      });
     }
     settings.hooks[eventKey] = groups.filter((g) => g.hooks.length > 0) as never;
     if ((settings.hooks[eventKey] as HookGroup[]).length === 0) {
@@ -165,6 +180,52 @@ export function removeMaestroHooks(settings: ClaudeSettings): void {
   if (Object.keys(settings.hooks).length === 0) {
     delete settings.hooks;
   }
+}
+
+/**
+ * Remove the maestro-installed statusline from Claude settings.
+ * Returns true if a statusline was removed.
+ */
+export function removeClaudeStatusline(settingsPath: string): boolean {
+  if (!existsSync(settingsPath)) return false;
+  try {
+    const settings = loadClaudeSettings(settingsPath);
+    if (!settings.statusLine?.command?.includes(HOOK_MARKER)) return false;
+    delete settings.statusLine;
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Uninstall hooks recorded under a HookRecord from a Claude settings file.
+ * Removes only the hooks listed in `installed` — does NOT strip statusline.
+ * Returns the number of hook entries removed.
+ */
+export function uninstallClaudeHooks(settingsPath: string, installed: string[]): number {
+  if (!existsSync(settingsPath) || installed.length === 0) return 0;
+  try {
+    const settings = loadClaudeSettings(settingsPath);
+    const before = countHookEntries(settings.hooks as Record<string, HookGroup[]> | undefined);
+    removeMaestroHooks(settings, installed);
+    const after = countHookEntries(settings.hooks as Record<string, HookGroup[]> | undefined);
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    return Math.max(0, before - after);
+  } catch {
+    return 0;
+  }
+}
+
+function countHookEntries(hooks: Record<string, HookGroup[]> | undefined): number {
+  if (!hooks) return 0;
+  let count = 0;
+  for (const groups of Object.values(hooks)) {
+    if (!Array.isArray(groups)) continue;
+    for (const g of groups) count += g.hooks.length;
+  }
+  return count;
 }
 
 function findHookInSettings(settings: ClaudeSettings, hookName: string): boolean {
@@ -251,10 +312,9 @@ export function installHooksByLevel(
 
   const settings = loadClaudeSettings(settingsPath);
 
-  // --- Statusline (skip if managed separately) ---
-  if (!opts.skipStatusline) {
-    settings.statusLine = { type: 'command', command: 'maestro-statusline' };
-  }
+  // Note: statusline is NEVER auto-installed by hooks. It is opt-in only,
+  // controlled by the dedicated `installStatusline` flag in the install flow.
+  // The `skipStatusline` option is kept for API back-compat but ignored.
 
   // --- Remove existing maestro hooks to avoid duplicates ---
   removeMaestroHooks(settings);
@@ -317,14 +377,21 @@ export function loadCodexHooks(hooksPath: string): CodexHooksFile {
   catch { return {}; }
 }
 
-export function removeCodexMaestroHooks(hooksFile: CodexHooksFile): void {
+export function removeCodexMaestroHooks(hooksFile: CodexHooksFile, hookNames?: string[]): void {
   if (!hooksFile.hooks) return;
+  const targets = hookNames && hookNames.length > 0
+    ? new Set(hookNames.map((n) => `hooks run ${n}`))
+    : null;
+
   const events = ['SessionStart', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop'] as const;
   for (const eventKey of events) {
     const groups = hooksFile.hooks[eventKey] as CodexHookGroup[] | undefined;
     if (!groups) continue;
     for (const group of groups) {
-      group.hooks = group.hooks.filter((h) => !h.command.includes(HOOK_MARKER));
+      group.hooks = group.hooks.filter((h) => {
+        if (targets) return ![...targets].some((needle) => h.command.includes(needle));
+        return !h.command.includes(HOOK_MARKER);
+      });
     }
     hooksFile.hooks[eventKey] = groups.filter((g) => g.hooks.length > 0) as never;
     if ((hooksFile.hooks[eventKey] as CodexHookGroup[]).length === 0) {
@@ -334,6 +401,33 @@ export function removeCodexMaestroHooks(hooksFile: CodexHooksFile): void {
   if (Object.keys(hooksFile.hooks).length === 0) {
     delete hooksFile.hooks;
   }
+}
+
+/**
+ * Uninstall codex hooks recorded under a HookRecord. Returns number of entries removed.
+ */
+export function uninstallCodexHooks(hooksPath: string, installed: string[]): number {
+  if (!existsSync(hooksPath) || installed.length === 0) return 0;
+  try {
+    const hooksFile = loadCodexHooks(hooksPath);
+    const before = countCodexHookEntries(hooksFile);
+    removeCodexMaestroHooks(hooksFile, installed);
+    const after = countCodexHookEntries(hooksFile);
+    writeFileSync(hooksPath, JSON.stringify(hooksFile, null, 2));
+    return Math.max(0, before - after);
+  } catch {
+    return 0;
+  }
+}
+
+function countCodexHookEntries(hooksFile: CodexHooksFile): number {
+  if (!hooksFile.hooks) return 0;
+  let count = 0;
+  for (const groups of Object.values(hooksFile.hooks)) {
+    if (!Array.isArray(groups)) continue;
+    for (const g of groups as CodexHookGroup[]) count += g.hooks.length;
+  }
+  return count;
 }
 
 /**
@@ -517,9 +611,33 @@ export function loadAgyHooks(hooksPath: string): AgyHooksFile {
 }
 
 /** Strip all maestro-prefixed top-level entries (preserves user-defined hooks). */
-export function removeAgyMaestroHooks(hooksFile: AgyHooksFile): void {
+export function removeAgyMaestroHooks(hooksFile: AgyHooksFile, hookNames?: string[]): void {
+  const exact = hookNames && hookNames.length > 0
+    ? new Set(hookNames.map((n) => `${AGY_HOOK_NAME_PREFIX}${n}`))
+    : null;
   for (const key of Object.keys(hooksFile)) {
-    if (key.startsWith(AGY_HOOK_NAME_PREFIX)) delete hooksFile[key];
+    if (exact) {
+      if (exact.has(key)) delete hooksFile[key];
+    } else if (key.startsWith(AGY_HOOK_NAME_PREFIX)) {
+      delete hooksFile[key];
+    }
+  }
+}
+
+/**
+ * Uninstall agy hooks recorded under a HookRecord. Returns number of entries removed.
+ */
+export function uninstallAgyHooks(hooksPath: string, installed: string[]): number {
+  if (!existsSync(hooksPath) || installed.length === 0) return 0;
+  try {
+    const hooksFile = loadAgyHooks(hooksPath);
+    const before = Object.keys(hooksFile).filter((k) => k.startsWith(AGY_HOOK_NAME_PREFIX)).length;
+    removeAgyMaestroHooks(hooksFile, installed);
+    const after = Object.keys(hooksFile).filter((k) => k.startsWith(AGY_HOOK_NAME_PREFIX)).length;
+    writeFileSync(hooksPath, JSON.stringify(hooksFile, null, 2));
+    return Math.max(0, before - after);
+  } catch {
+    return 0;
   }
 }
 
@@ -1022,7 +1140,6 @@ export function registerHooksCommand(program: Command): void {
       } else {
         const result = installHooksByLevel(level, { project: opts.project });
         console.log(`Maestro hooks installed (level: ${level}):`);
-        console.log(`  Statusline: installed`);
         for (const name of result.installedHooks) {
           const def = HOOK_DEFS[name];
           const matcher = def.matcher ? ` [${def.matcher}]` : '';

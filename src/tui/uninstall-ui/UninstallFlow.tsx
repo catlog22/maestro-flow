@@ -3,23 +3,13 @@ import { Box, Text, useInput, useApp, useStdout } from 'ink';
 import Gradient from 'ink-gradient';
 import BigText from 'ink-big-text';
 import Spinner from 'ink-spinner';
-import { join, basename, dirname } from 'node:path';
+import { basename, dirname } from 'node:path';
 import { C, SYM, SP, BORDER, pad, wrapCursor, KeyHints, SectionHeader, CursorMarker, StepProgress } from '../shared/index.js';
-import { existsSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import {
-  cleanManifestFiles,
-  deleteManifest,
   type Manifest,
   type ManifestEntry,
 } from '../../core/manifest.js';
-import { deleteOverlayManifest } from '../../core/overlay/applier.js';
-import { removeMcpServer } from '../../commands/install-backend.js';
-import {
-  removeMaestroHooks,
-  loadClaudeSettings,
-  getClaudeSettingsPath,
-} from '../../commands/hooks.js';
+import { uninstallManifest, type UninstallResult } from '../../commands/install-backend.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
@@ -28,41 +18,12 @@ import { t } from '../../i18n/index.js';
 
 type FlowStep = 'select' | 'detail' | 'confirm' | 'executing' | 'complete';
 
-interface UninstallResult {
-  filesRemoved: number;
-  filesSkipped: number;
-  mcpCleaned: boolean;
-  hooksCleaned: boolean;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function executeUninstall(manifest: Manifest): UninstallResult {
-  const { removed, skipped } = cleanManifestFiles(manifest);
-
-  const targetBase = manifest.scope === 'global' ? homedir() : manifest.targetPath;
-  deleteOverlayManifest(manifest.scope, targetBase);
-
-  const mcpCleaned = removeMcpServer(manifest.scope, manifest.targetPath);
-
-  let hooksCleaned = false;
-  const settingsPath = manifest.scope === 'global'
-    ? getClaudeSettingsPath()
-    : join(manifest.targetPath, '.claude', 'settings.json');
-
-  if (existsSync(settingsPath)) {
-    const settings = loadClaudeSettings(settingsPath);
-    const hadHooks = !!settings.hooks;
-    if (settings.statusLine?.command?.includes('maestro')) delete settings.statusLine;
-    removeMaestroHooks(settings);
-    if (hadHooks && !settings.hooks) hooksCleaned = true;
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-  }
-
-  deleteManifest(manifest);
-  return { filesRemoved: removed, filesSkipped: skipped, mcpCleaned, hooksCleaned };
+  return uninstallManifest(manifest);
 }
 
 /** Group manifest entries by parent directory for display. */
@@ -354,16 +315,32 @@ export function UninstallFlow({ manifests }: UninstallFlowProps) {
                   <Text>{t.uninstall.resultPreserved.replace('{count}', String(result.filesSkipped))}</Text>
                 </Box>
               )}
+              {(result.claudeHooksRemoved + result.codexHooksRemoved + result.agyHooksRemoved) > 0 && (
+                <Box>
+                  <Text color={C.primary}>{pad('Hooks:', SP.labelWidth)}</Text>
+                  <Text color={C.success}>
+                    {[
+                      result.claudeHooksRemoved && `${result.claudeHooksRemoved} claude`,
+                      result.codexHooksRemoved && `${result.codexHooksRemoved} codex`,
+                      result.agyHooksRemoved && `${result.agyHooksRemoved} agy`,
+                    ].filter(Boolean).join(', ')}
+                  </Text>
+                </Box>
+              )}
               <Box>
-                <Text color={C.primary}>{pad('MCP:', SP.labelWidth)}</Text>
-                <Text color={result.mcpCleaned ? C.success : C.neutral}>
-                  {result.mcpCleaned ? t.uninstall.resultMcpCleaned : t.uninstall.resultMcpNotFound}
+                <Text color={C.primary}>{pad('Statusline:', SP.labelWidth)}</Text>
+                <Text color={result.statuslineRemoved ? C.success : C.neutral}>
+                  {result.statuslineRemoved ? 'removed' : 'not installed'}
                 </Text>
               </Box>
               <Box>
-                <Text color={C.primary}>{pad('Hooks:', SP.labelWidth)}</Text>
-                <Text color={result.hooksCleaned ? C.success : C.neutral}>
-                  {result.hooksCleaned ? t.uninstall.resultHooksRemoved : t.uninstall.resultHooksNotFound}
+                <Text color={C.primary}>{pad('MCP:', SP.labelWidth)}</Text>
+                <Text color={(result.mcpRemoved.claude || result.mcpRemoved.codex || result.mcpRemoved.extras.length > 0) ? C.success : C.neutral}>
+                  {[
+                    result.mcpRemoved.claude && 'claude',
+                    result.mcpRemoved.codex && 'codex',
+                    result.mcpRemoved.extras.length > 0 && result.mcpRemoved.extras.join('+'),
+                  ].filter(Boolean).join(', ') || t.uninstall.resultMcpNotFound}
                 </Text>
               </Box>
             </Box>

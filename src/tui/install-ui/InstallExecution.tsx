@@ -17,6 +17,7 @@ import {
   copyRecursive,
   injectDocFile,
   createTargetBackup,
+  uninstallManifest,
   type CopyStats,
 } from '../../commands/install-backend.js';
 import {
@@ -24,14 +25,30 @@ import {
   addFile,
   saveManifest,
   findManifest,
-  cleanManifestFiles,
+  recordClaudeHooks,
+  recordCodexHooks,
+  recordStatusline,
+  recordClaudeMcp,
+  recordCodexMcp,
+  recordExtraMcp,
 } from '../../core/manifest.js';
-import { installHooksByLevel, installCodexHooksByLevel, installStatusline as installStatuslineFn, type HookLevel } from '../../commands/hooks.js';
+import {
+  installHooksByLevel,
+  installCodexHooksByLevel,
+  installStatusline as installStatuslineFn,
+} from '../../commands/hooks.js';
 import type { InstallFlowConfig } from './InstallConfirm.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // InstallExecution — animated per-step progress
+//
+// Flow (idempotent re-install):
+//   1. Find prior manifest for (scope, targetPath)
+//   2. uninstallManifest(prior, { skipContentManaged: true }) — full reverse
+//   3. createManifest() — fresh slate
+//   4. For each enabled step: execute + record into new manifest
+//   5. saveManifest()
 // ---------------------------------------------------------------------------
 
 export interface InstallFlowResult {
@@ -75,7 +92,6 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
       try {
         const targetBase = config.mode === 'global' ? homedir() : config.projectPath;
         const targetPath = config.mode === 'global' ? paths.home : config.projectPath;
-        let manifestPath = '';
         let filesInstalled = 0;
         let dirsCreated = 0;
         let filesSkipped = 0;
@@ -89,34 +105,40 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
         let backupPath: string | null = null;
         const warnings: string[] = [];
 
-        // Components
+        // --- Backup (before any destructive cleanup) ---
+        if (config.installComponents && (config.backupClaudeMd || config.backupAll)) {
+          if (cancelled) return;
+          setStatus(t.install.execBackingUp);
+          const components = scanComponents(pkgRoot, config.mode, config.projectPath)
+            .filter((c) => c.available && config.selectedComponentIds.includes(c.def.id));
+          backupPath = createTargetBackup(components, {
+            backupClaudeMd: config.backupClaudeMd,
+            backupAll: config.backupAll,
+          });
+        }
+
+        // --- Full uninstall of prior installation ---
+        if (cancelled) return;
+        setStatus(t.install.execCleaning);
+        const disabledItems = scanDisabledItems(targetBase);
+        const prior = findManifest(config.mode, targetPath);
+        if (prior) {
+          // skipContentManaged: tag injection updates CLAUDE.md/AGENTS.md in
+          // place, so don't strip them here — they'll be re-written below.
+          uninstallManifest(prior, { skipContentManaged: true });
+        }
+
+        // --- Fresh manifest ---
+        paths.ensure(paths.home);
+        const manifest = createManifest(config.mode, targetPath, {
+          hookLevel: config.installHooks ? config.hookLevel : 'none',
+          selectedComponentIds: config.installComponents ? config.selectedComponentIds : [],
+        });
+
+        // --- Components ---
         if (config.installComponents) {
           if (cancelled) return;
           setStatus(t.install.execScanning);
-          const disabledItems = scanDisabledItems(targetBase);
-
-          // Backup before clean
-          if (config.backupClaudeMd || config.backupAll) {
-            if (cancelled) return;
-            setStatus(t.install.execBackingUp);
-            const components = scanComponents(pkgRoot, config.mode, config.projectPath)
-              .filter((c) => c.available && config.selectedComponentIds.includes(c.def.id));
-            backupPath = createTargetBackup(components, {
-              backupClaudeMd: config.backupClaudeMd,
-              backupAll: config.backupAll,
-            });
-          }
-
-          if (cancelled) return;
-          setStatus(t.install.execCleaning);
-          const existing = findManifest(config.mode, targetPath);
-          if (existing) cleanManifestFiles(existing, { skipContentManaged: true });
-
-          paths.ensure(paths.home);
-          const manifest = createManifest(config.mode, targetPath, {
-            hookLevel: config.installHooks ? config.hookLevel : 'none',
-            selectedComponentIds: config.selectedComponentIds,
-          });
           const stats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
 
           const components = scanComponents(pkgRoot, config.mode, config.projectPath)
@@ -144,43 +166,54 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
 
           restoreDisabledState(disabledItems, targetBase);
           applyOverlaysPostInstall(config.mode, targetBase);
-          manifestPath = saveManifest(manifest);
 
           filesInstalled = stats.files;
           dirsCreated = stats.dirs;
           filesSkipped = stats.skipped;
         }
 
-        // Hooks (skip statusline if managed separately)
-        if (config.installHooks) {
+        // --- Hooks (Claude) ---
+        // Statusline is NOT installed here — it has its own opt-in branch below.
+        if (config.installHooks && config.hookLevel !== 'none') {
           if (cancelled) return;
           setStatus(t.install.execInstallingHooks.replace('{level}', config.hookLevel));
           const result = installHooksByLevel(config.hookLevel, {
             project: config.mode === 'project',
-            skipStatusline: config.installStatusline,
           });
           hooksInstalled = result.installedHooks.length;
+          recordClaudeHooks(manifest, {
+            settingsPath: result.settingsPath,
+            installed: result.installedHooks,
+          });
         }
 
-        // Statusline (separate install)
+        // --- Statusline (opt-in) ---
         if (config.installStatusline) {
           if (cancelled) return;
           setStatus(t.install.execInstallingStatusline);
-          installStatuslineFn({
+          const settingsPath = installStatuslineFn({
             project: config.mode === 'project',
             theme: config.statuslineTheme,
           });
           statuslineInstalled = true;
+          recordStatusline(manifest, {
+            settingsPath,
+            theme: config.statuslineTheme,
+          });
         }
 
-        // MCP
+        // --- Claude MCP ---
         if (config.installMcp) {
           if (cancelled) return;
           setStatus(t.install.execRegisteringMcp);
-          mcpRegistered = addMcpServer(config.mode, config.projectPath, config.mcpTools, config.mcpProjectRoot || undefined);
+          const path = addMcpServer(config.mode, config.projectPath, config.mcpTools, config.mcpProjectRoot || undefined);
+          mcpRegistered = !!path;
+          if (path) {
+            recordClaudeMcp(manifest, { configPath: path, serverName: 'maestro-tools' });
+          }
         }
 
-        // Codex Hooks
+        // --- Codex Hooks ---
         if (config.installCodexHooks) {
           if (cancelled) return;
           setStatus(t.install.execInstallingCodexHooks.replace('{level}', config.codexHookLevel));
@@ -188,32 +221,49 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
             project: config.mode === 'project',
           });
           codexHooksInstalled = result.installedHooks.length;
+          recordCodexHooks(manifest, {
+            settingsPath: result.settingsPath,
+            installed: result.installedHooks,
+          });
         }
 
-        // Codex MCP
+        // --- Codex MCP ---
         if (config.installCodexMcp) {
           if (cancelled) return;
           setStatus(t.install.execRegisteringCodexMcp);
-          codexMcpRegistered = addCodexMcpServer(config.mode, config.projectPath, config.codexMcpTools, config.codexMcpProjectRoot || undefined);
+          const path = addCodexMcpServer(config.mode, config.projectPath, config.codexMcpTools, config.codexMcpProjectRoot || undefined);
+          codexMcpRegistered = !!path;
+          if (path) {
+            recordCodexMcp(manifest, { configPath: path, serverName: 'maestro-tools' });
+          }
         }
 
-        // Extra MCP targets (opt-in: Cursor / Qoder / Trae / Kiro / Roo / VS Code Copilot / Gemini CLI)
+        // --- Extra MCP targets ---
         if (config.installExtraMcp) {
           for (const targetId of config.extraMcpTargetIds) {
             if (cancelled) return;
             setStatus(`Registering MCP for ${targetId}...`);
-            const ok = addExtraMcpServer(
+            const path = addExtraMcpServer(
               targetId,
               config.mode,
               config.projectPath,
               config.mcpTools,
               config.mcpProjectRoot || undefined,
             );
-            (ok ? extraMcpRegistered : extraMcpFailed).push(targetId);
+            if (path) {
+              extraMcpRegistered.push(targetId);
+              recordExtraMcp(manifest, {
+                targetId,
+                configPath: path,
+                serverName: 'maestro-tools',
+              });
+            } else {
+              extraMcpFailed.push(targetId);
+            }
           }
         }
 
-        // CLI tools config — first install creates, upgrade merges missing tools
+        // --- CLI tools config ---
         if (!cancelled) {
           const { initCliToolsConfig } = await import('../../config/cli-tools-config.js');
           const result = await initCliToolsConfig();
@@ -221,9 +271,19 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           else if (result.added.length > 0) setStatus(`cli-tools.json: added ${result.added.join(', ')}`);
         }
 
+        // --- Save manifest (single write at the end) ---
+        const manifestPath = saveManifest(manifest);
+
         setDone(true);
         setStatus(t.install.execComplete);
-        onComplete({ filesInstalled, dirsCreated, filesSkipped, hooksInstalled, mcpRegistered, codexHooksInstalled, codexMcpRegistered, extraMcpRegistered, extraMcpFailed, manifestPath, statuslineInstalled, backupPath, migrationWarnings: warnings });
+        onComplete({
+          filesInstalled, dirsCreated, filesSkipped,
+          hooksInstalled, mcpRegistered,
+          codexHooksInstalled, codexMcpRegistered,
+          extraMcpRegistered, extraMcpFailed,
+          manifestPath,
+          statuslineInstalled, backupPath, migrationWarnings: warnings,
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }

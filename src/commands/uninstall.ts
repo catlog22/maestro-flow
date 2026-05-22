@@ -2,33 +2,23 @@
 // `maestro uninstall` — remove installed maestro assets using manifests
 //
 // Interactive Ink TUI by default. Supports --all -y for non-interactive.
-// Cleans up files, MCP config, and hooks.
+// All removal goes through the unified uninstallManifest() function which
+// reads the manifest as the source of truth — no marker scanning.
 // ---------------------------------------------------------------------------
 
 import type { Command } from 'commander';
-import { join } from 'node:path';
-import { existsSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { confirm } from '@inquirer/prompts';
 import { ExitPromptError } from '@inquirer/core';
 import {
   getAllManifests,
-  cleanManifestFiles,
-  deleteManifest,
   type Manifest,
 } from '../core/manifest.js';
-import { deleteOverlayManifest } from '../core/overlay/applier.js';
-import { removeMcpServer } from './install-backend.js';
-import {
-  removeMaestroHooks,
-  loadClaudeSettings,
-  getClaudeSettingsPath,
-} from './hooks.js';
+import { uninstallManifest, type UninstallResult } from './install-backend.js';
 import { runUninstallFlow } from '../tui/uninstall-ui/index.js';
 import { t } from '../i18n/index.js';
 
 // ---------------------------------------------------------------------------
-// Helpers (used by --all -y non-interactive path)
+// Helpers
 // ---------------------------------------------------------------------------
 
 function formatManifest(m: Manifest): string {
@@ -36,30 +26,17 @@ function formatManifest(m: Manifest): string {
   return `[${m.scope}] ${m.targetPath} (${(m.entries ?? []).length} entries, ${date})`;
 }
 
-function uninstallManifest(manifest: Manifest): { removed: number; skipped: number; mcp: boolean; hooks: boolean } {
-  const { removed, skipped } = cleanManifestFiles(manifest);
-
-  const targetBase = manifest.scope === 'global' ? homedir() : manifest.targetPath;
-  deleteOverlayManifest(manifest.scope, targetBase);
-
-  const mcp = removeMcpServer(manifest.scope, manifest.targetPath);
-
-  let hooks = false;
-  const settingsPath = manifest.scope === 'global'
-    ? getClaudeSettingsPath()
-    : join(manifest.targetPath, '.claude', 'settings.json');
-
-  if (existsSync(settingsPath)) {
-    const settings = loadClaudeSettings(settingsPath);
-    const hadHooks = !!settings.hooks;
-    if (settings.statusLine?.command?.includes('maestro')) delete settings.statusLine;
-    removeMaestroHooks(settings);
-    if (hadHooks && !settings.hooks) hooks = true;
-    writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-  }
-
-  deleteManifest(manifest);
-  return { removed, skipped, mcp, hooks };
+function formatResult(r: UninstallResult): string {
+  const parts: string[] = [`${r.filesRemoved} removed`];
+  if (r.filesSkipped > 0) parts.push(`${r.filesSkipped} preserved`);
+  if (r.claudeHooksRemoved > 0) parts.push(`${r.claudeHooksRemoved} claude hooks`);
+  if (r.codexHooksRemoved > 0) parts.push(`${r.codexHooksRemoved} codex hooks`);
+  if (r.agyHooksRemoved > 0) parts.push(`${r.agyHooksRemoved} agy hooks`);
+  if (r.statuslineRemoved) parts.push('statusline');
+  if (r.mcpRemoved.claude) parts.push('claude mcp');
+  if (r.mcpRemoved.codex) parts.push('codex mcp');
+  if (r.mcpRemoved.extras.length) parts.push(`${r.mcpRemoved.extras.length} extra mcp`);
+  return parts.join(', ');
 }
 
 // ---------------------------------------------------------------------------
@@ -101,11 +78,7 @@ export function registerUninstallCommand(program: Command): void {
         for (const m of manifests) {
           console.error(`\n${formatManifest(m)}`);
           const r = uninstallManifest(m);
-          const parts = [`${r.removed} removed`];
-          if (r.skipped > 0) parts.push(`${r.skipped} preserved`);
-          if (r.mcp) parts.push('MCP cleaned');
-          if (r.hooks) parts.push('hooks cleaned');
-          console.error(`  ${parts.join(', ')}`);
+          console.error(`  ${formatResult(r)}`);
         }
         console.error('\nDone.');
         return;
