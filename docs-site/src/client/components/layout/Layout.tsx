@@ -27,7 +27,7 @@ export function Layout({ children }: { children?: ReactNode }) {
 function AnnouncementBanner() {
   return (
     <div className="fixed top-0 left-0 right-0 z-[101] bg-[#2E7D32] text-white text-[length:14px] text-center py-[8px] px-[var(--spacing-4)] leading-[1.4]">
-      Maestro v0.4.16 已发布 — Ralph CLI 子命令族 + 三存储知识淘汰入口。详见{' '}
+      Maestro v0.4.17 已发布 — 双平台 ralph skill 支持 (claude/codex) + --platform 过滤。详见{' '}
       <Link
         to="/changelog"
         className="text-white font-[var(--font-weight-semibold)] underline hover:no-underline"
