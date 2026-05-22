@@ -264,3 +264,16 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.4.16',
+  title: 'Ralph CLI 子命令族 + 三存储知识淘汰入口',
+  highlights: [
+    '新增 maestro ralph 子命令族（session/skills/next/check/complete）+ step 加载脚本化',
+    '新增 manage-knowledge-audit 命令：spec / wiki / knowhow 三存储的对称淘汰入口',
+    'ralph-execute 描述精简：A_EXEC_STEP 改为纯指令、路径展开 + emit 格式重设计',
+    'statusline line 2 链式渲染简化，48h 过期 + 兼容旧 schema',
+    'install manifest 记录 hook level，TUI 默认值从上次安装恢复',
+  ],
+  actions: [],
+});
