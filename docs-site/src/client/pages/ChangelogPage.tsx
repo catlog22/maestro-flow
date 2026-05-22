@@ -17,6 +17,16 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.4.15',
+    date: '2026-05',
+    changes: [
+      { type: 'fix', text_en: 'install: fix statusline being installed when unchecked; manifest v2 now tracks hooks/statusline/MCP entries for precise uninstall', text_zh: 'install: 修复 statusline 未勾选仍被安装；manifest v2 统一跟踪 hooks/statusline/MCP 全量条目实现精确卸载' },
+      { type: 'fix', text_en: 'uninstall: hooks removal upgraded from marker-scan to name-based precise deletion (claude/codex/agy); third-party MCP targets (Cursor/Qoder/etc.) now support precise uninstall', text_zh: '卸载: hooks 卸载由全扫 marker 升级为按名精确删除（claude/codex/agy）；第三方 MCP 目标（Cursor/Qoder 等）支持精确卸载' },
+      { type: 'refactor', text_en: 'maestro: -y flag only propagated when user explicitly specifies; Goal Prompt no longer blocks, user can input /goal anytime during execution', text_zh: 'maestro: -y 仅在用户显式指定时透传；Goal Prompt 输出后不再 STOP，可在执行中随时输入 /goal' },
+      { type: 'refactor', text_en: 'maestro: streamlined command parameters and node type descriptions, unified execution step handling', text_zh: 'maestro: 精简命令参数和节点类型描述，统一执行步骤处理' },
+    ],
+  },
+  {
     version: '0.4.14',
     date: '2026-05',
     changes: [
