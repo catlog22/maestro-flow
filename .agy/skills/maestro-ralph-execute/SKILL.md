@@ -42,7 +42,7 @@ HARD RULES:
 </context>
 
 <invariants>
-1. **执行 = `ralph next` + inline + `ralph complete`** — 调 `maestro ralph next` 拿到完整 skill .md body（`<required_reading>` 块内的 @ 引用已就地展开为 inline 内容），按 stdout 直接内联执行；末尾元数据为 HTML 注释 (`<!-- maestro ralph: ... -->`)，含 step 索引与 completion 协议提示
+1. **执行 = `ralph next` + inline + `ralph complete`** — 调 `maestro ralph next` 拿到 skill 内容，按 stdout 内联执行
 2. **Required reading 由 CLI 负责** — `ralph next` 自动展开 + 加载 `<required_reading>` 引用的所有文件，缺失 → 退出码 1（E007），不写 active_step_index，不进入执行
 3. **Deferred reading recorded only** — `<deferred_reading>` 路径由 CLI 记录到 `step.load.deferred_files`，执行阶段按需 Read
 4. **一致性取代锁** — 同一 session 同时最多一个 step 持 `active_step_index`；CLI 校验失败直接退出码 3，不静默推进
@@ -153,23 +153,20 @@ Write enriched args back to status.json.
 
 ### A_EXEC_STEP
 
-CLI-driven, 4 steps total. The CLI owns state writes — this action only orchestrates.
+1. **Load** — `run_command("maestro ralph next")`
+   - 退出码 0 → 按 stdout 内联执行
+   - 退出码 2 → 交给 S_LOCATE
+   - 退出码 3 → active_step_index 已被占用
+   - 退出码 1 → pause session
+2. **Inline execution** — 按 stdout 执行；deferred_reading 按需 Read
+3. **Complete**:
+   - `run_command("maestro ralph complete N --status DONE [--evidence <path>]")`
+   - `run_command("maestro ralph complete N --status DONE_WITH_CONCERNS --concerns \"...\"")`
+   - `run_command("maestro ralph retry N")`
+   - `run_command("maestro ralph complete N --status BLOCKED --reason \"...\"")`
+4. **Propagate context signals** — 关键信号 (`PHASE: N` / `scratch_dir: path` / `BLP-xxx`) 写入 `status.json.context`
 
-1. **Load step via CLI** — `run_command("maestro ralph next", run_in_background: false)` （前台同步执行；stdout 即 skill .md 全文 + 内联展开后的 required_reading 内容）
-   - CLI returns 退出码 0 → 收到 skill .md body（frontmatter 已剥离）；其中 `<required_reading>` 块内的 @ 引用被 `<!-- inlined @<path> -->` ... `<!-- /inlined -->` 注释对包裹的实际文件内容替换；末尾追加单个 HTML 注释块带 step / completion 协议
-   - 退出码 2 → 无 pending 执行 step（可能下一步是 decision 节点或 session 已完成），交给 S_LOCATE 自然路由
-   - 退出码 3 → `active_step_index` 已被占用，提示用户先 `ralph complete` 或编辑 status.json
-   - 退出码 1 → E006/E007/E010 致命错误，pause session 并显示 CLI stderr
-2. **Inline execution** — 直接按 stdout 内容在本会话内执行（视同已 Read 命令 .md 并展开 required_reading）；deferred_reading 列出的资源按需 Read
-3. **Confirm completion via CLI** — 末尾调用 CLI 写入完成状态（**不再使用 `--- COMPLETION STATUS ---` 文本块**）：
-   - 成功 → `run_command("maestro ralph complete N --status DONE [--evidence <path>]")`
-   - 有遗留问题 → `run_command("maestro ralph complete N --status DONE_WITH_CONCERNS --concerns \"...\"")`
-   - 工具/参数错误待重试 → `run_command("maestro ralph retry N")`
-   - 外部阻塞（缺依赖/被占用） → `run_command("maestro ralph complete N --status BLOCKED --reason \"...\"")`
-   - 注：CLI 拒绝 `NEEDS_CONTEXT`；context 不足由 harness 自动压缩处理
-4. **Propagate context signals** — 若执行过程中产出关键信号（`PHASE: N` / `scratch_dir: path` / `BLP-xxx` 等），调用 `Bash` 写入 `.workflow/.maestro/{session}/status.json` 的 `context` 字段（小幅 `jq`/Edit）—— 不再由 ralph-execute 内嵌扫描
-
-完成后：S_LOCATE 触发 `view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph-execute/SKILL.md") + execute inline` 自调用，由 CLI 一致性校验决定推进或暂停。
+完成后 S_LOCATE 触发 `view_file(AbsolutePath="<agy-skills-dir>/maestro-ralph-execute/SKILL.md") + execute inline` 自调用。
 
 ### A_RETRY
 
