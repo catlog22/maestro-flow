@@ -182,7 +182,7 @@ S_FALLBACK:
        "stage": "", "scope": null,
        "decision": null,                 // 非 null → decision 节点；null → 执行节点
        "command_scope": "global|project|missing|null",
-       "command_path": "~/.claude/commands/{name}.md | .claude/commands/{name}.md | null",
+       "command_path": "<absolute path resolved by `maestro ralph skills --json --quiet`> | null",
        "milestone_id": null, "source_artifact_ref": null,
        "status": "pending", "goal_ref": null,
        "completion_confirmed": false, "completion_status": null,

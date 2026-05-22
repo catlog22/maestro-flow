@@ -76,8 +76,8 @@ S_RESOLVE_ARGS:
 
 S_EXECUTE:
   → END             WHEN: step.decision != null              DO: A_EXEC_DECISION
-  → S_POST_EXEC     WHEN: step.decision == null + success    DO: A_EXEC_STEP
-  → S_HANDLE_FAIL   WHEN: step.decision == null + failure    DO: A_EXEC_STEP
+  → S_POST_EXEC     WHEN: step.decision == null + ralph complete invoked with DONE|DONE_WITH_CONCERNS  DO: A_EXEC_STEP
+  → S_HANDLE_FAIL   WHEN: step.decision == null + ralph next exit≠0 OR ralph complete with NEEDS_RETRY|BLOCKED  DO: A_EXEC_STEP
 
 S_POST_EXEC:
   → S_LOCATE        DO: run_command("maestro ralph complete ...") + Skill("maestro-ralph-execute")
@@ -104,8 +104,8 @@ S_FALLBACK:
 
 1. If session_id provided → load `.workflow/.maestro/{session_id}/status.json`
 2. Else: scan `.workflow/.maestro/*/status.json`, filter `status == "running"`, sort DESC, take first
-3. Extract: session_id, source, steps[], current_step, phase, milestone, intent, auto_mode, context, cli_tool
-4. Find first step with `status == "pending"` → next step
+3. Extract: session_id, source, steps[], phase, milestone, intent, auto_mode, context, cli_tool, active_step_index
+4. **不在此处选 pending step**——pending 选择由 `maestro ralph next` CLI 内部完成；A_LOCATE_SESSION 只确认 session 存在且 running，由 A_EXEC_STEP 调 CLI 推进
 
 ### A_RESOLVE_ARGS
 
