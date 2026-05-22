@@ -36,6 +36,8 @@ export interface HookRecord {
   settingsPath: string;
   /** Hook names registered (matches keys in HOOK_DEFS / CODEX_HOOK_DEFS / AGY_HOOK_DEFS). */
   installed: string[];
+  /** Level selected at install time (none/minimal/standard/full). */
+  level?: string;
 }
 
 /** Statusline installation record (Claude Code settings.statusLine). */

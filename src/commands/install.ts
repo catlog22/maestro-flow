@@ -295,6 +295,7 @@ function forceInstall(
     recordClaudeHooks(manifest, {
       settingsPath: hookResult.settingsPath,
       installed: hookResult.installedHooks,
+      level: hookLevel,
     });
     console.error(t.install.forceHooksResult
       .replace('{level}', hookLevel)
@@ -309,6 +310,7 @@ function forceInstall(
     recordCodexHooks(manifest, {
       settingsPath: codexResult.settingsPath,
       installed: codexResult.installedHooks,
+      level: codexHookLevel,
     });
     console.error(`  Codex Hooks (${codexHookLevel}): ${codexResult.installedHooks.length} hooks → ${codexResult.settingsPath}`);
   }
@@ -323,6 +325,7 @@ function forceInstall(
     recordAgyHooks(manifest, {
       settingsPath: agyResult.settingsPath,
       installed: agyResult.installedHooks,
+      level: agyHookLevel,
     });
     console.error(`  Agy Hooks (${agyHookLevel}): ${agyResult.installedHooks.length} hooks → ${agyResult.settingsPath}`);
   }

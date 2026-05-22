@@ -68,15 +68,28 @@ export function InstallFlow({
     } catch { return null; }
   }, []);
 
+  // Derive "was previously enabled" flags from lastManifest records so the
+  // installer remembers user intent across runs. Each section knows whether
+  // it was installed last time by checking the relevant manifest field.
+  const prior = useMemo(() => ({
+    claudeHooks: !!(lastManifest?.hooks?.claude?.installed?.length),
+    codexHooks: !!(lastManifest?.hooks?.codex?.installed?.length),
+    agyHooks: !!(lastManifest?.hooks?.agy?.installed?.length),
+    claudeMcp: !!lastManifest?.mcp?.claude,
+    codexMcp: !!lastManifest?.mcp?.codex,
+    extraMcp: !!(lastManifest?.mcp?.extras?.length),
+    statusline: !!lastManifest?.statusline,
+  }), [lastManifest]);
+
   // Which categories are enabled
   const [enabledSteps, setEnabledSteps] = useState<Record<string, boolean>>({
     components: initialStepIds ? initialStepIds.includes('components') : true,
-    hooks: initialStepIds ? initialStepIds.includes('hooks') : true,
-    mcp: initialStepIds ? initialStepIds.includes('mcp') : true,
-    codexHooks: initialStepIds ? initialStepIds.includes('codexHooks') : false,
-    codexMcp: initialStepIds ? initialStepIds.includes('codexMcp') : false,
-    extraMcp: initialStepIds ? initialStepIds.includes('extraMcp') : false,
-    statusline: initialStepIds ? initialStepIds.includes('statusline') : false,
+    hooks: initialStepIds ? initialStepIds.includes('hooks') : (lastManifest ? prior.claudeHooks : true),
+    mcp: initialStepIds ? initialStepIds.includes('mcp') : (lastManifest ? prior.claudeMcp : true),
+    codexHooks: initialStepIds ? initialStepIds.includes('codexHooks') : prior.codexHooks,
+    codexMcp: initialStepIds ? initialStepIds.includes('codexMcp') : prior.codexMcp,
+    extraMcp: initialStepIds ? initialStepIds.includes('extraMcp') : prior.extraMcp,
+    statusline: initialStepIds ? initialStepIds.includes('statusline') : prior.statusline,
     backup: initialStepIds ? initialStepIds.includes('backup') : true,
   });
 
@@ -89,24 +102,32 @@ export function InstallFlow({
       : COMPONENT_DEFS.filter((d) => d.defaultSelected !== false).map((d) => d.id),
   );
   const [hookLevel, setHookLevel] = useState<HookLevel>(
-    () => (lastManifest?.hookLevel as HookLevel) || 'standard',
+    () => (lastManifest?.hooks?.claude?.level as HookLevel)
+      || (lastManifest?.hookLevel as HookLevel)
+      || 'standard',
   );
   const [mcpEnabled, setMcpEnabled] = useState(true);
   const [mcpTools, setMcpTools] = useState<string[]>([...MCP_TOOLS]);
   const [mcpProjectRoot, setMcpProjectRoot] = useState('');
 
-  // Codex config
-  const [codexHookLevel, setCodexHookLevel] = useState<HookLevel>('standard');
+  // Codex config — read level from lastManifest.hooks.codex if present
+  const [codexHookLevel, setCodexHookLevel] = useState<HookLevel>(
+    () => (lastManifest?.hooks?.codex?.level as HookLevel) || 'standard',
+  );
   const [codexMcpEnabled, setCodexMcpEnabled] = useState(true);
   const [codexMcpTools, setCodexMcpTools] = useState<string[]>([...MCP_TOOLS]);
   const [codexMcpProjectRoot, setCodexMcpProjectRoot] = useState('');
 
-  // Extra MCP targets (Cursor / Qoder / Trae / Kiro / Roo / VS Code Copilot / Gemini CLI) — default empty
-  const [extraMcpTargetIds, setExtraMcpTargetIds] = useState<ExtraMcpTargetId[]>([]);
+  // Extra MCP targets — restore last selection if previous install used any
+  const [extraMcpTargetIds, setExtraMcpTargetIds] = useState<ExtraMcpTargetId[]>(
+    () => (lastManifest?.mcp?.extras?.map((e) => e.targetId as ExtraMcpTargetId)) ?? [],
+  );
 
-  // Statusline — detect existing config + theme
-  const [installStatusline, setInstallStatusline] = useState(false);
-  const [statuslineTheme, setStatuslineTheme] = useState('notion');
+  // Statusline — restore previous on/off + theme
+  const [installStatusline, setInstallStatusline] = useState(() => prior.statusline);
+  const [statuslineTheme, setStatuslineTheme] = useState(
+    () => lastManifest?.statusline?.theme || 'notion',
+  );
   const statuslineDetected = useMemo(
     () => detectStatusline({ project: mode === 'project' }),
     [mode],

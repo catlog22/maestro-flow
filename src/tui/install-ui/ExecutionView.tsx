@@ -178,6 +178,7 @@ export function ExecutionView({
           recordClaudeHooks(manifest, {
             settingsPath: hookRes.settingsPath,
             installed: hookRes.installedHooks,
+            level: config.hookLevel,
           });
         }
 

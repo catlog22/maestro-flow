@@ -184,6 +184,7 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           recordClaudeHooks(manifest, {
             settingsPath: result.settingsPath,
             installed: result.installedHooks,
+            level: config.hookLevel,
           });
         }
 
@@ -224,6 +225,7 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           recordCodexHooks(manifest, {
             settingsPath: result.settingsPath,
             installed: result.installedHooks,
+            level: config.codexHookLevel,
           });
         }
 
