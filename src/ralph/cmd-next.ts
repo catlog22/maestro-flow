@@ -25,6 +25,8 @@ import { resolveSession, writeStatus, workflowRoot } from './status-store.js';
 import { checkStatus } from './status-checker.js';
 import { hasErrors } from './cmd-check.js';
 import { loadSkill, normalizeStoredPath } from './skill-resolver.js';
+import { loadSkillConfig } from '../config/skill-config.js';
+import { workflowRoot as wfRoot } from './status-store.js';
 
 export interface NextCmdOptions {
   sessionId?: string;
@@ -132,6 +134,11 @@ function emitPrompt(
   // LLM sees a fully-expanded skill body (no separate banner blocks).
   const body = inlineRequiredReading(loaded.body, loaded.requiredBodies);
 
+  // Skill config defaults — mirrors `src/hooks/skill-context.ts` behavior so
+  // ralph-driven invocations get the same param injection as direct
+  // `/<skill>` calls in Claude Code.
+  const configSection = buildSkillConfigSection(step.skill, args);
+
   const argsLine = args ? ` args=${JSON.stringify(args)}` : '';
   const meta = [
     '',
@@ -143,7 +150,41 @@ function emitPrompt(
     `       maestro ralph complete ${idx} --status BLOCKED --reason "<external blocker>" -->`,
   ].join('\n');
 
-  process.stdout.write(body + meta + '\n');
+  const tail = configSection ? '\n\n' + configSection + meta : meta;
+  process.stdout.write(body + tail + '\n');
+}
+
+/**
+ * Render skill-config defaults as a markdown section the LLM can read.
+ *
+ * Skip any parameter whose name appears literally in `args` — that's the same
+ * "user explicitly specified — don't override" rule the hook uses.
+ *
+ * Returns null when there are no defaults or all are already overridden.
+ */
+function buildSkillConfigSection(skillName: string, args: string): string | null {
+  if (!skillName) return null;
+  let config;
+  try {
+    config = loadSkillConfig(wfRoot());
+  } catch {
+    return null;
+  }
+  const defaults = config.skills[skillName];
+  if (!defaults || !defaults.params || Object.keys(defaults.params).length === 0) {
+    return null;
+  }
+  const lines: string[] = [];
+  for (const [param, value] of Object.entries(defaults.params)) {
+    if (args.includes(param)) continue; // user already specified
+    lines.push(`${param}: ${value}`);
+  }
+  if (lines.length === 0) return null;
+  return [
+    `## Skill Config Defaults (${skillName})`,
+    'The following parameter defaults are configured. Apply these unless the user explicitly specified otherwise:',
+    ...lines,
+  ].join('\n');
 }
 
 /**
