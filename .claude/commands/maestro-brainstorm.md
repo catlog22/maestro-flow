@@ -130,4 +130,9 @@ Single role mode:
 - [ ] `{role}/analysis-F-*.md` written when guidance §10 feature list available
 - [ ] §2 Decisions table references guidance decision IDs
 - [ ] Session metadata updated
+- [ ] Session sealed via finish-work (auto mode only)
 </success_criteria>
+
+<on_complete>
+@~/.maestro/workflows/finish-work.md — SESSION_DIR={output_dir}, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
+</on_complete>

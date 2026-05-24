@@ -18,9 +18,11 @@
 
 import { z } from 'zod';
 import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { getProjectRoot } from '../utils/path-validator.js';
+import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
 
 // --- Types ---
 
@@ -173,93 +175,70 @@ function executeAdd(params: Params): CcwToolResult {
   };
 }
 
-function executeSearch(params: Params): CcwToolResult {
-  const { query, limit } = params;
+// Cached WikiIndexer instance per project root. Lazy-initialized so the
+// import cost is only paid when search is invoked.
+let _searchIndexer: WikiIndexer | null = null;
+let _searchIndexerRoot: string | null = null;
 
+function getSearchIndexer(): WikiIndexer {
+  const workflowRoot = join(getProjectRoot(), '.workflow');
+  if (_searchIndexer && _searchIndexerRoot === workflowRoot) return _searchIndexer;
+  _searchIndexer = new WikiIndexer({ workflowRoot });
+  _searchIndexerRoot = workflowRoot;
+  return _searchIndexer;
+}
+
+function deriveTypeLabel(entry: WikiEntry): string {
+  const kind = (entry.ext as { virtualKind?: string })?.virtualKind;
+  if (kind) return kind;
+  if (entry.type === 'knowhow') {
+    const filename = entry.source.path.split('/').pop() ?? '';
+    const m = filename.match(/^([A-Z]{3})-/);
+    if (m) {
+      const cat = Object.entries(PREFIX_MAP).find(([, p]) => p === m[1])?.[0];
+      if (cat) return cat;
+    }
+  }
+  return entry.type;
+}
+
+async function executeSearch(params: Params): Promise<CcwToolResult> {
+  const { query, limit } = params;
   if (!query) return { success: false, error: 'Parameter "query" is required for search operation' };
 
-  const dir = getKnowhowDir();
-  if (!existsSync(dir)) {
+  const workflowRoot = join(getProjectRoot(), '.workflow');
+  if (!existsSync(workflowRoot)) {
     return { success: true, result: { operation: 'search', query, matches: [], total_matches: 0 } };
   }
 
-  const queryLower = query.toLowerCase();
-  const queryTerms = tokenizeQuery(queryLower);
-
-  const results: Array<{
-    id: string; filename: string; title: string; type: string;
-    lang?: string; source?: string; status?: string;
-    score: number; excerpt: string;
-  }> = [];
-
-  for (const name of readdirSync(dir)) {
-    if (!name.endsWith('.md')) continue;
-    try {
-      const raw = readFileSync(join(dir, name), 'utf-8');
-      const { data, body: bodyText } = parseFrontmatter(raw);
-      const contentLower = raw.toLowerCase();
-      const matchCount = queryTerms.filter((t) => contentLower.includes(t)).length;
-      if (matchCount === 0) continue;
-
-      const score = matchCount / queryTerms.length;
-      const prefix = name.match(/^([A-Z]+)-\d{8}/)?.[1] ?? '';
-      const typeCat = Object.entries(PREFIX_MAP).find(([, p]) => p === prefix)?.[0] ?? '';
-
-      results.push({
-        id: (data.id as string) || name.replace('.md', ''),
-        filename: name,
-        title: (data.title as string) || 'Untitled',
-        type: typeCat,
-        lang: data.lang as string | undefined,
-        source: data.source as string | undefined,
-        status: data.status as string | undefined,
-        score: Math.round(score * 100) / 100,
-        excerpt: bodyText.substring(0, 200) + (bodyText.length > 200 ? '...' : ''),
-      });
-    } catch {
-      continue;
-    }
+  let entries: WikiEntry[];
+  try {
+    const indexer = getSearchIndexer();
+    entries = await indexer.search(query, limit ?? 20);
+  } catch (err) {
+    return { success: false, error: `WikiIndexer search failed: ${(err as Error).message}` };
   }
 
-  results.sort((a, b) => b.score - a.score);
-  const limited = results.slice(0, limit);
+  const matches = entries.map((e) => ({
+    id: e.id,
+    filename: e.source.path,
+    title: e.title || 'Untitled',
+    type: deriveTypeLabel(e),
+    category: e.category,
+    status: e.status,
+    tags: e.tags,
+    excerpt: (e.summary || '').slice(0, 200) + ((e.summary?.length ?? 0) > 200 ? '...' : ''),
+  }));
 
   return {
     success: true,
     result: {
       operation: 'search',
       query,
-      matches: limited,
-      total_matches: results.length,
+      matches,
+      total_matches: matches.length,
     },
   };
-}
-
-/**
- * Tokenize search query — handles both English (space-split) and CJK (n-gram).
- * English: split by whitespace. Chinese: extract 2-4 char n-grams.
- */
-function tokenizeQuery(query: string): string[] {
-  // English terms: split on whitespace
-  const terms = query.split(/\s+/).filter(Boolean);
-
-  // For CJK sequences without spaces, generate n-grams
-  const cjkTerms: string[] = [];
-  const cjkSeqs = query.match(/[\u4e00-\u9fff\u3400-\u4dbf]{2,}/g) ?? [];
-  for (const seq of cjkSeqs) {
-    // Full sequence
-    if (seq.length >= 2 && seq.length <= 6) cjkTerms.push(seq);
-    // 2-4 char n-grams
-    for (let n = 2; n <= Math.min(4, seq.length); n++) {
-      for (let i = 0; i <= seq.length - n; i++) {
-        cjkTerms.push(seq.substring(i, i + n));
-      }
-    }
-  }
-
-  // Merge: non-CJK terms + CJK n-grams, deduplicated
-  const all = new Set([...terms.filter(t => !/^[\u4e00-\u9fff\u3400-\u4dbf]+$/.test(t)), ...cjkTerms]);
-  return [...all];
 }
 
 // --- Tool Schema ---

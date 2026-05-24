@@ -4,7 +4,13 @@ import { basename, dirname, extname, join, relative, resolve, sep } from 'node:p
 import { toForwardSlash } from '../../shared/utils.js';
 import { parseFrontmatter } from './frontmatter-util.js';
 import { parseSpecEntries, parseKnowhowEntries } from './spec-entry-parser.js';
-import { adaptIssueRow, loadVirtualEntries } from './virtual-wiki-adapters.js';
+import {
+  adaptCodebaseDocIndex,
+  adaptIssueRow,
+  loadSessionArchiveEntries,
+  loadVirtualEntries,
+  loadVirtualJsonEntries,
+} from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
 import { existsSync, readdirSync } from 'node:fs';
 import type {
@@ -383,6 +389,40 @@ export class WikiIndexer {
       out.push(...(await loadVirtualEntries(abs, adaptIssueRow, rel)));
     }
 
+    // Codebase: .workflow/codebase/doc-index.json → component/feature/req/ADR
+    const codebaseIndex = join(this.workflowRoot, 'codebase', 'doc-index.json');
+    if (existsSync(codebaseIndex) && this.isInsideRoot(codebaseIndex)) {
+      const rel = toForwardSlash(relative(this.workflowRoot, codebaseIndex));
+      out.push(...(await loadVirtualJsonEntries(codebaseIndex, adaptCodebaseDocIndex, rel)));
+    }
+
+    // Sessions: scan archive.json under scratch/ (sealed) and
+    // milestones/{M}/artifacts/ (archived). Adapter filters out active.
+    // archive.json carries lifecycle + content_refs; context-package.json
+    // is a lazy peek for summary enrichment.
+    out.push(...(await this.scanSessionArchives(join(this.workflowRoot, 'scratch'))));
+    const milestonesRoot = join(this.workflowRoot, 'milestones');
+    if (existsSync(milestonesRoot)) {
+      for (const m of await safeReaddir(milestonesRoot)) {
+        const artifactsDir = join(milestonesRoot, m, 'artifacts');
+        if (!existsSync(artifactsDir)) continue;
+        out.push(...(await this.scanSessionArchives(artifactsDir)));
+      }
+    }
+
+    return out;
+  }
+
+  private async scanSessionArchives(root: string): Promise<WikiEntry[]> {
+    if (!existsSync(root)) return [];
+    const out: WikiEntry[] = [];
+    for (const name of await safeReaddir(root)) {
+      const sessionDir = join(root, name);
+      const arch = join(sessionDir, 'archive.json');
+      if (!existsSync(arch) || !this.isInsideRoot(arch)) continue;
+      const rel = toForwardSlash(relative(this.workflowRoot, arch));
+      out.push(...(await loadSessionArchiveEntries(arch, rel)));
+    }
     return out;
   }
 

@@ -30,21 +30,60 @@ export interface SearchResult {
   score: number;
 }
 
+// CJK character range: CJK Unified Ideographs + CJK Extension A.
+// Used to detect runs that need n-gram splitting (BM25 can't match
+// otherwise — a single 4-char Chinese term would never overlap a 2-char
+// query substring). Hiragana/katakana/hangul are out of scope for now.
+const CJK_RUN = /[一-鿿㐀-䶿]+/g;
+const HAS_CJK = /[一-鿿㐀-䶿]/;
+
 /**
- * Tokenize into lowercase terms. Strips non-word chars, drops tokens shorter
- * than 2 characters, and filters a tiny English stop-word set.
+ * Extract 2- and 3-char n-grams from a CJK run. 2/3 covers the majority of
+ * Chinese terms while keeping the inverted index size bounded; 4+ grams
+ * explode postings without proportional recall gain.
+ */
+function cjkNgrams(run: string): string[] {
+  const out: string[] = [];
+  for (let n = 2; n <= 3; n++) {
+    if (run.length < n) break;
+    for (let i = 0; i <= run.length - n; i++) {
+      out.push(run.substring(i, i + n));
+    }
+  }
+  return out;
+}
+
+/**
+ * Tokenize into lowercase terms. Strategy:
+ *   1. Lowercase, split on non-word chars (\p{L}\p{N})
+ *   2. For each chunk: if contains CJK → emit 2/3-char n-grams; otherwise
+ *      keep the chunk if it passes length + stop-word filters.
  *
- * CJK characters are not split by this regex; callers searching Chinese
- * corpora should feed substrings directly — ranking is approximate then.
+ * Query and document use the same function so n-grams from both sides
+ * intersect in the inverted index → BM25 ranking works for CJK corpora.
  */
 export function tokenize(text: string): string[] {
   if (!text) return [];
   const out: string[] = [];
   const parts = text.toLowerCase().split(/[^\p{L}\p{N}]+/u);
   for (const p of parts) {
-    if (p.length < 2) continue;
-    if (STOP_WORDS.has(p)) continue;
-    out.push(p);
+    if (!p) continue;
+    if (HAS_CJK.test(p)) {
+      // A chunk may mix CJK and Latin (e.g. "用户auth"); slice each CJK run
+      // for n-gram emission and keep any Latin remainder as its own token.
+      const cjkRuns = p.match(CJK_RUN) ?? [];
+      for (const run of cjkRuns) {
+        for (const g of cjkNgrams(run)) out.push(g);
+      }
+      const latinRemainder = p.replace(CJK_RUN, ' ').split(/\s+/).filter(Boolean);
+      for (const lr of latinRemainder) {
+        if (lr.length >= 2 && !STOP_WORDS.has(lr)) out.push(lr);
+      }
+    } else {
+      if (p.length < 2) continue;
+      if (STOP_WORDS.has(p)) continue;
+      out.push(p);
+    }
   }
   return out;
 }

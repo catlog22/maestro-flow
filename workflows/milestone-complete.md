@@ -35,7 +35,29 @@ Archive completed milestone, move artifacts to history, and prepare for next.
    - **Standard milestone**: `cp .workflow/roadmap.md .workflow/milestones/{milestone}/roadmap-snapshot.md`
    - **Adhoc milestone**: Skip roadmap snapshot (roadmap may not exist)
 
-3. Archive scratch directories: copy each milestone artifact's `.workflow/{artifact.path}` to `.workflow/milestones/{milestone}/artifacts/{basename}/`
+3. Archive scratch directories: copy each milestone artifact's `.workflow/{artifact.path}` to `.workflow/milestones/{milestone}/artifacts/{basename}/`. After each copy:
+
+   a. If the destination contains `archive.json` with `lifecycle.status == "sealed"`:
+      - Set `lifecycle.status = "archived"`
+      - Set `lifecycle.archived_at = now`
+      - Set `lifecycle.linked_milestone = {milestone}` if currently null
+
+   b. If the destination contains `context-package.json`, prune it (scheme C — non-destructive):
+      - Read full content as `orig`
+      - Compute `pruned` = {
+          `open_questions`: items without `answer` and without `resolved_in`,
+          `constraints`: items where `status == "open"`,
+          `insights`: items beyond index 20 (keep top 20 by source order),
+          `references`: items whose `path` does not exist on disk (relative to session dir)
+        }
+      - If any `pruned.*` is non-empty:
+        - Write `{session_dir}/context-package.pruned.json` containing the dropped items
+        - Rewrite `context-package.json` keeping only:
+          `open_questions` answered/resolved, `constraints` status=locked, `insights[0..20]`, `references` whose paths exist; all other top-level fields unchanged
+        - Update `archive.json.pruned = { "at": now, "counts": { open_questions, constraints, insights, references }, "ref": "context-package.pruned.json" }`
+      - Otherwise leave both files untouched and set `archive.json.pruned = { "at": now, "counts": {...zeros}, "ref": null }`
+
+   c. If the session dir lacks `archive.json` (legacy session prior to lifecycle convention), skip (a) and (b) silently — legacy sessions are not indexed.
 
 ---
 

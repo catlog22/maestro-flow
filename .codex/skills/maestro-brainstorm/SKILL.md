@@ -428,4 +428,9 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] context-package.json generated with per-item `ref` traceability
 - [ ] discoveries.ndjson append-only throughout
 - [ ] context.md aggregates session results with next-step routing
+- [ ] Session sealed via finish-work (auto mode only)
 </success_criteria>
+
+<on_complete>
+@~/.maestro/workflows/finish-work.md — SESSION_DIR={output_dir}, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
+</on_complete>

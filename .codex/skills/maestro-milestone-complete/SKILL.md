@@ -51,6 +51,18 @@ Copy each milestone artifact's directory to `.workflow/milestones/{milestone}/ar
 - If `artifact.path` is absolute, use as-is
 - Copy the entire resolved directory to `.workflow/milestones/{milestone}/artifacts/{artifact.name}/`
 
+**After each copy** (per archived session dir):
+
+a. If destination contains `archive.json` with `lifecycle.status == "sealed"`:
+   - Set `lifecycle.status = "archived"`, `lifecycle.archived_at = now`, `lifecycle.linked_milestone = {milestone}` (if null).
+
+b. If destination contains `context-package.json`, prune (scheme C — non-destructive):
+   - Compute `pruned` = { `open_questions` without answer/resolved_in; `constraints` status=open; `insights` beyond top 20; `references` whose path does not exist on disk }
+   - If any `pruned.*` non-empty: write `context-package.pruned.json` with the dropped items; rewrite `context-package.json` keeping only answered/resolved questions, locked constraints, `insights[0..20]`, valid-path references; update `archive.json.pruned = { at: now, counts, ref: "context-package.pruned.json" }`
+   - Otherwise: set `archive.json.pruned = { at: now, counts: zeros, ref: null }`
+
+c. If session dir lacks `archive.json` (legacy): skip a+b silently — legacy sessions are not indexed.
+
 Snapshot `roadmap.md` as `roadmap-snapshot.md` in the milestone archive.
 
 ### Step 3: Extract Learnings

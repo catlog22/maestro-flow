@@ -163,4 +163,9 @@ Both modes (full + quick):
 - [ ] Deferred items auto-created as issues (if any)
 - [ ] Artifact registered in state.json with correct scope/milestone/phase
 - [ ] Next step routed (impeccable/plan for Go, brainstorm for No-Go)
+- [ ] Session sealed via finish-work (archive.json written, optional spec/knowhow extraction)
 </success_criteria>
+
+<on_complete>
+@~/.maestro/workflows/finish-work.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
+</on_complete>

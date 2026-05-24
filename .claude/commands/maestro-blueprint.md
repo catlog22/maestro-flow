@@ -128,4 +128,9 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 - [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented caveats
 - [ ] Artifact registered in state.json (type=blueprint)
 - [ ] context-package.json generated for downstream consumption
+- [ ] On gate Pass/Review: session sealed via finish-work (archive.json + optional spec/knowhow extraction). On Fail: skip — session stays active, excluded from wiki search.
 </success_criteria>
+
+<on_complete>
+@~/.maestro/workflows/finish-work.md — SESSION_DIR={session_dir}, SESSION_TYPE=blueprint, SESSION_ID={session_id}, LINKED_MILESTONE=null
+</on_complete>

@@ -296,5 +296,10 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] Upstream context loaded via `--from` when specified
 - [ ] discoveries.ndjson append-only throughout
 - [ ] Next step routed (plan for Go, brainstorm for No-Go, plan --gaps for Gaps)
+- [ ] Session sealed via finish-work (archive.json written, optional spec/knowhow extraction)
 </success_criteria>
+
+<on_complete>
+@~/.maestro/workflows/finish-work.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
+</on_complete>
 </output>
