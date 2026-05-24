@@ -17,7 +17,7 @@ export async function runCheck(opts: CheckCmdOptions): Promise<number> {
   if (!resolved) {
     const msg = opts.sessionId
       ? `[ralph check] session not found: ${opts.sessionId}`
-      : '[ralph check] no ralph-* sessions found';
+      : '[ralph check] no maestro-* / ralph-* sessions found in .workflow/.maestro/';
     if (opts.json) {
       process.stdout.write(JSON.stringify({ ok: false, error: msg }) + '\n');
     } else {

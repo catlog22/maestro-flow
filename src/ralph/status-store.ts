@@ -18,13 +18,20 @@ function ralphRoot(workflowRoot: string): string {
   return join(workflowRoot, '.workflow', '.maestro');
 }
 
-/** List all ralph-* session directories sorted by mtime DESC. */
+/**
+ * List all maestro / ralph session directories sorted by mtime DESC.
+ *
+ * Both prefixes share the same status.json schema (see status-schema.ts).
+ * `ralph-*` sessions come from `/maestro-ralph` (adaptive chain), `maestro-*`
+ * sessions come from `/maestro` (static chain). The CLI treats them
+ * uniformly — both are driven by `maestro-ralph-execute`.
+ */
 export function listRalphSessions(workflowRoot: string): string[] {
   const root = ralphRoot(workflowRoot);
   if (!existsSync(root)) return [];
   const entries: Array<{ name: string; mtimeMs: number }> = [];
   for (const name of readdirSync(root)) {
-    if (!name.startsWith('ralph-')) continue;
+    if (!isSessionDirName(name)) continue;
     const full = join(root, name);
     try {
       const st = statSync(full);
@@ -33,6 +40,10 @@ export function listRalphSessions(workflowRoot: string): string[] {
   }
   entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return entries.map(e => e.name);
+}
+
+function isSessionDirName(name: string): boolean {
+  return name.startsWith('ralph-') || name.startsWith('maestro-');
 }
 
 /**

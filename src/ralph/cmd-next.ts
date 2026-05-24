@@ -35,7 +35,7 @@ export interface NextCmdOptions {
 export async function runNext(opts: NextCmdOptions): Promise<number> {
   const resolved = resolveSession(workflowRoot(), opts.sessionId);
   if (!resolved) {
-    console.error('[ralph next] no ralph-* session found');
+    console.error('[ralph next] no maestro-* / ralph-* session found in .workflow/.maestro/');
     return 1;
   }
   const { sessionId, statusPath, data } = resolved;
@@ -71,15 +71,23 @@ export async function runNext(opts: NextCmdOptions): Promise<number> {
     }
   }
 
-  // Pick next pending execution step (skip decision nodes — those are handed
-  // back to /maestro-ralph by ralph-execute.md, not loaded by this CLI).
+  // Pick next pending execution step. Decision nodes (step.decision != null)
+  // are intentionally skipped — this CLI only loads executable skill steps.
+  // Decision evaluation belongs to the calling skill, which may either:
+  //   - v1 (split):   /maestro-ralph-execute handoff → /maestro-ralph (S_DECISION_EVAL)
+  //   - v1 (codex):   $maestro-ralph-execute handoff → $maestro-ralph
+  //   - v2 (single):  /maestro-ralph-beta inline tick (S_TICK_DECISION)
+  // The CLI must NOT prescribe a specific skill name — that's the caller's
+  // routing concern.
   const next = data.steps.find(s => s.status === 'pending' && !s.decision);
   if (!next) {
     // All execution steps done. Surface decision nodes as a hint.
     const pendingDecision = data.steps.find(s => s.status === 'pending' && s.decision);
     if (pendingDecision) {
       console.error(`[ralph next] no pending execution step; next is a decision node: ${pendingDecision.decision}`);
-      console.error('  → ralph-execute should hand off to /maestro-ralph for evaluation');
+      console.error('  → decision nodes are not loadable via this CLI — the calling skill must evaluate them');
+      console.error('    inline (e.g. S_DECISION_EVAL / S_TICK_DECISION via `maestro delegate --role analyze`)');
+      console.error('  → do NOT re-invoke `maestro ralph next` for the same step; route by step.decision instead');
       return 2;
     }
     console.error('[ralph next] no pending steps — all complete');

@@ -14,8 +14,8 @@ export async function runSession(opts: SessionCmdOptions): Promise<number> {
     if (opts.sessionId) {
       console.error(`[ralph session] not found: ${opts.sessionId}`);
     } else {
-      console.error('[ralph session] no ralph-* sessions found');
-      console.error('                use /maestro-ralph "<intent>" to create one');
+      console.error('[ralph session] no maestro-* / ralph-* sessions found in .workflow/.maestro/');
+      console.error('                use /maestro "<intent>" or /maestro-ralph "<intent>" to create one');
     }
     return 1;
   }

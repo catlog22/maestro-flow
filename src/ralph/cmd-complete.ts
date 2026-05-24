@@ -31,7 +31,7 @@ export interface CompleteCmdOptions {
 export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
   const resolved = resolveSession(workflowRoot(), opts.sessionId);
   if (!resolved) {
-    console.error('[ralph complete] no ralph-* session found');
+    console.error('[ralph complete] no maestro-* / ralph-* session found in .workflow/.maestro/');
     return 1;
   }
   const { sessionId, statusPath, data } = resolved;
