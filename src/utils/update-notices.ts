@@ -277,3 +277,16 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.4.18',
+  title: '统一知识检索 + maestro-next 单链推荐',
+  highlights: [
+    '新增 codebase/session 虚拟节点：wiki 检索自动聚合源码与当前会话',
+    '新增 workflows/finish-work.md：收尾工作流统一驱动 store-knowhow',
+    '新增 maestro-next 命令：从命令池单链推荐下一步并执行',
+    'ralph CLI 同时识别 maestro-* 与 ralph-* 两类 session',
+    '统一 codex skills spawn_agents_on_csv 契约：强制 worker 终止 + 严格 output_schema',
+  ],
+  actions: [],
+});
