@@ -290,3 +290,15 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.4.19',
+  title: 'team-swarm 蚁群智能 + Agy hooks 安装支持',
+  highlights: [
+    '新增 team-swarm 技能：ACO 驱动多智能体探索 + 信息素优化控制器',
+    '安装器新增 Agy (Antigravity) hooks 配置步骤，与 Claude/Codex hooks 独立',
+    'InstallFlow 改为按 scope+target 加载 manifest 默认值，避免跨 scope 污染',
+    'maestro-next 命令优化：单链推荐改进 + 多源 session 识别',
+  ],
+  actions: [],
+});
