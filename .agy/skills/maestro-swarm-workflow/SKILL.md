@@ -20,16 +20,16 @@ swarm-workflow provides parallel compute bursts within individual steps.
 
 Scripts: `~/.maestro/workflows/swarm/wf-*.js`
 
-| Script | Accelerates | Pattern |
-|--------|-------------|---------|
-| `wf-analyze` | maestro-analyze | cli-explore-agent → 6-dimension parallel scoring → synthesis |
-| `wf-brainstorm` | maestro-brainstorm | multi-role parallel analysis → cross-role-reviewer → guidance |
-| `wf-review` | quality-review | 6-dimension workflow-reviewer → adversarial verify → report |
-| `wf-verify` | maestro-verify | 3-layer workflow-verifier + convergence + antipattern → aggregate |
-| `wf-grill` | maestro-grill | cli-explore-agent → parallel branch stress-testing → contradiction synthesis |
-| `wf-plan` | maestro-plan | parallel context exploration → workflow-planner → plan-checker |
-| `wf-execute` | maestro-execute | wave-based parallel workflow-executor (worktree isolation) |
-| `wf-milestone-audit` | maestro-milestone-audit | parallel coverage + execution + integration-checker |
+| Script | Accelerates | Adversarial Pattern |
+|--------|-------------|---------------------|
+| `wf-analyze` | maestro-analyze | explore → 6-dim scoring → **skeptic cross-verify** → **3-way advocacy (go/no-go/conditional) + referee** |
+| `wf-brainstorm` | maestro-brainstorm | multi-role analysis → **3-specialist cross-review** → **3-proposal competition** → **arbitrator** |
+| `wf-review` | quality-review | 6-dim scan → **3-vote adversarial verify (prosecutor/defense/judge)** → **3-perspective report + arbitrated verdict** |
+| `wf-verify` | maestro-verify | 3-layer + antipattern + convergence → **prosecutor vs defender debate** → **judge verdict** |
+| `wf-grill` | maestro-grill | explore → parallel branch stress → **meta-skeptic challenge** → **3-vote verdict (optimist/pessimist/realist)** |
+| `wf-plan` | maestro-plan | parallel context → **3-strategy competing proposals** → **judge panel scoring** → **3-critic adversarial check** |
+| `wf-execute` | maestro-execute | wave-based parallel execution → **adversarial convergence spot-check** → **3-vote status determination** |
+| `wf-milestone-audit` | maestro-milestone-audit | parallel 3-dim audit → **adversarial dimension challenge** → **3-vote verdict (strict/lenient/objective)** |
 
 Integration modes:
 - **Standalone**: `/maestro-swarm-workflow "analyze auth module"` — direct invocation
@@ -174,11 +174,15 @@ Intent-to-script routing（按关键词匹配，--script 优先级最高）：
 
 Workflow 返回 JSON 后：
 
-1. **摘要输出**：按脚本类型格式化关键指标
-   - analyze: overall_score, scope_verdict, go_no_go, critical findings count
-   - brainstorm: role count, conflict/synergy count, top guidance items
-   - review: verdict (APPROVE/REQUEST_CHANGES/BLOCK), confirmed vs false-positive count
-   - verify: overall_passed, confidence, gap count, antipattern blocker count
+1. **摘要输出**：按脚本类型格式化关键指标（含对抗决策结果）
+   - analyze: overall_score, scope_verdict, adversarial_outcome (go/no-go/conditional advocacy + referee), scores_challenged count
+   - brainstorm: role count, conflict/synergy count, 3-proposal competition result, arbitration notes
+   - review: verdict (APPROVE/REQUEST_CHANGES/BLOCK), 3-vote tally, confirmed vs false-positive count, adversarial_verdict
+   - verify: overall_status, prosecutor vs defender confidence, adversarial_outcome, gap count
+   - grill: overall_verdict, meta-skeptic quality rating, 3-vote verdict tally, overblown findings count
+   - plan: selected_strategy (breadth/depth/risk), judge panel scores, 3-critic adversarial check verdict
+   - execute: 3-vote status (DONE/DONE_WITH_CONCERNS/NEEDS_RETRY), convergence trust %, discrepancy count
+   - milestone-audit: 3-vote verdict, dimensions_overturned count, next_step
 
 2. **Artifact 写入**（可选）：
    - 若当前在 ralph session 中（检测 `.workflow/.maestro/ralph-*/status.json` 状态为 running）：
@@ -186,10 +190,14 @@ Workflow 返回 JSON 后：
    - 否则写入 `.workflow/scratch/{YYYYMMDD}-swarm-{script}-{slug}/results.json`
 
 3. **Ralph 兼容产出**：
-   - analyze → `analysis.md` + `context.md`（decisions）+ `conclusions.json`
-   - brainstorm → `guidance-specification.md`
-   - review → `review.json`
-   - verify → `verification.json`
+   - analyze → `analysis.md` + `context.md`（decisions）+ `conclusions.json` + `adversarial-debate.json`
+   - brainstorm → `guidance-specification.md` + `proposals-competition.json`
+   - review → `review.json`（含 adversarial_verdict + 3-vote tally）
+   - verify → `verification.json`（含 adversarial_outcome: prosecutor/defender debate）
+   - grill → `grill-results.json`（含 meta-challenge + 3-vote verdict）
+   - plan → `plan.json`（含 competition scores + critic feedback）
+   - execute → `execution-report.json`（含 convergence_checks + 3-vote status）
+   - milestone-audit → `audit-report.json`（含 dimension challenges + 3-vote verdict）
 
 4. **RunId 提示**：显示 `Resume: /maestro-swarm-workflow --resume {runId}` 用于增量重跑
 

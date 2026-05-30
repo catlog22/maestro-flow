@@ -50,6 +50,7 @@ HARD RULES:
 6. **Self-invocation chain** — 持续直到全部 `completion_confirmed` 或 paused
 7. **status.json 每步骤后由 CLI 原子写盘** — resume-safe
 8. **STATUS 枚举受限** — 仅 `DONE | DONE_WITH_CONCERNS | NEEDS_RETRY | BLOCKED`；`NEEDS_CONTEXT` 已废除
+9. **CLI 输出禁止截断** — `maestro ralph next` 的 stdout 包含完整 skill prompt，必须全量捕获。**严禁** `| head`、`| tail`、`2>&1 | head -N` 等任何截断管道。Bash timeout 可加长但不可截断输出
 </invariants>
 
 <state_machine>
@@ -153,7 +154,7 @@ Write enriched args back to status.json.
 
 ### A_EXEC_STEP
 
-1. **Load** — `run_command("maestro ralph next")`
+1. **Load** — `run_command("maestro ralph next --session <session_id>")` — **必须全量捕获 stdout，严禁 `| head`/`| tail` 等截断管道**（stdout 含完整 skill prompt，截断会导致执行内容不完整）
    - 退出码 0 → 按 stdout 内联执行
    - 退出码 2 → 交给 S_LOCATE
    - 退出码 3 → active_step_index 已被占用
