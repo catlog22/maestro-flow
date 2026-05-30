@@ -314,3 +314,16 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.4.21',
+  title: '原生图索引模块 + 对抗蚁群工作流',
+  highlights: [
+    '移除 UA 外部依赖，创建原生 src/graph/ 模块：类型、合并、加载、查询、FsAnalyzer',
+    '新增 maestro kg index 命令：本地代码库扫描生成 knowledge-graph.json',
+    '图索引增强：调用图提取(calls)、测试配对(tested_by)、git 感知枚举、拓扑排序 tour',
+    '新增 team-adversarial-swarm：ACO 蚁群 + 模块化 Workflow + 对抗决策门',
+    '新增 maestro-universal-workflow：动态对抗工作流生成',
+  ],
+  actions: [],
+});
