@@ -48,7 +48,7 @@ $ARGUMENTS -- phase number for micro mode, topic text for macro/adhoc mode, no a
 - `-y` / `--yes`: Auto mode — skip interactive scoping, use recommended defaults, auto-deepen
 - `-c` / `--continue`: Resume from existing session (auto-detect session folder + discussion.md)
 - `-q` / `--quick`: Quick mode — skip exploration + scoring, go straight to decision extraction (context.md only)
-- `--from <source>`: Load upstream context package (brainstorm:ID, blueprint:BLP-xxx, @file, or path)
+- `--from <source>`: Load upstream context package (grill:ID, brainstorm:ID, blueprint:BLP-xxx, @file, or path)
 - `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl.
 
 Scope routing, output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Scope Routing and Output Structure sections).

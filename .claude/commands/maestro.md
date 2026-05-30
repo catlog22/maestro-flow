@@ -50,10 +50,11 @@ $ARGUMENTS — user intent text, or special keywords.
 4. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)。Reference maestro-ralph `A_DECOMPOSE_TASKS`
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
 6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --json --quiet` 预校验（project 覆盖 global）；decision 节点不走 CLI，走 `Skill("maestro-ralph")` handoff
-7. **Topology awareness** — chain catalog 含 brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / verify / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
-8. **D-007 milestone 反查** — 数字 phase 的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查
-9. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
-10. **schema** — `ralph_protocol_version: "1"` 标记 CLI-driven session；新增字段全部可选
+7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / verify / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
+8. **Grill is interactive-only** — `-y` auto mode MUST skip grill stage and route directly to brainstorm; grill requires Socratic Q&A with the user
+9. **D-007 milestone 反查** — 数字 phase 的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查
+10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
+11. **schema** — `ralph_protocol_version: "1"` 标记 CLI-driven session；新增字段全部可选
 </invariants>
 
 <state_machine>
@@ -132,6 +133,7 @@ S_FALLBACK:
 1. Read `~/.maestro/workflows/maestro.md` from deferred_reading
 2. Match intent to task_type via chain catalog (semantic)
 3. Select chain from chainMap，遵循拓扑约束：
+   - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式跳过 grill，直接走 brainstorm**）
    - 头脑风暴/探索 → `brainstorm`
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
@@ -216,7 +218,8 @@ S_FALLBACK:
 ### Success Criteria
 
 - [ ] Intent classified with task_type, complexity, clarity_score
-- [ ] Chain catalog 覆盖 brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / verify / quality pipeline
+- [ ] Chain catalog 覆盖 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / verify / quality pipeline
+- [ ] `-y` 模式不触发 grill（交互式压力测试不支持自动模式，跳过直接走 brainstorm）
 - [ ] D-007: 数字 phase 步骤的 `milestone_id` 通过 `state.json.milestones[].phase_slugs` 反查
 - [ ] macro analyze 后跟 `decision:post-analyze-scope`（由 ralph 评估 scope_verdict 决定下游链路）
 - [ ] plan 支持 `{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step

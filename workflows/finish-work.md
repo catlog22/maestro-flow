@@ -4,7 +4,7 @@ Last step of session commands. Inline-extracts spec/knowhow from this single ses
 
 ## Inputs
 
-Caller passes: `SESSION_DIR`, `SESSION_TYPE` (brainstorm | analyze | blueprint | plan | execute | verify), `SESSION_ID`, `LINKED_MILESTONE` (optional).
+Caller passes: `SESSION_DIR`, `SESSION_TYPE` (grill | brainstorm | analyze | blueprint | plan | execute | verify), `SESSION_ID`, `LINKED_MILESTONE` (optional).
 
 ## Steps
 
@@ -14,7 +14,9 @@ Scan `SESSION_DIR` for any of these files (any absent → skip silently):
 
 | File | Source | Used for |
 |------|--------|----------|
-| `context-package.json` | brainstorm/analyze/blueprint | constraints + insights |
+| `context-package.json` | grill/brainstorm/analyze/blueprint | constraints + insights |
+| `terminology.md` | grill | domain terms with code references |
+| `grill-report.md` | grill | stress-test decisions + risk register |
 | `conclusions.json` | analyze | decisions |
 | `reflection-log.md` | execute | lessons + pitfalls |
 | `{role}/analysis.md` | brainstorm | role decisions |
@@ -33,6 +35,9 @@ Iterate detected files; build a `fragments[]` array. Each fragment: `{ kind, cat
 | `conclusions.json#recommendations[]` (priority ≥ medium) | knowhow | knowhow (`REF`) | derived from area |
 | `reflection-log.md` "## Lessons" / "## Pitfalls" sections | learning | spec (category `learning`) or knowhow (`KNW`) by length: < 200 chars → spec, else knowhow | `learning` |
 | `{role}/analysis.md` §2 Decisions[status=locked] | rule | spec | role-derived (`arch` for system-architect, `coding` for code-quality, etc.) |
+| `grill-report.md` "## Synthesis" locked decisions | rule | spec | `arch` if scope/integration/security branch, else `coding` |
+| `grill-report.md` "## Risk Register" items (severity ≥ medium) | knowhow | knowhow (`REF`) | `debug` |
+| `terminology.md` locked terms | knowhow | knowhow (`REF`) | `coding` |
 
 **Confidence scoring** (drop if < 0.5):
 - +0.3 if `status == "locked"` or section is explicit "## Decisions"

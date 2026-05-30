@@ -43,7 +43,8 @@ $ARGUMENTS — user intent text, or special flags.
 3. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`). Reference maestro-ralph `A_DECOMPOSE_TASKS`
 4. **Goal is tool-created** — `A_DECOMPOSE_TASKS` calls `create_goal` with sub-goal success criteria. `update_goal` on convergence; held while aborted/paused
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md`；step 含 `command_scope` + `command_path` + `completion_confirmed`
-6. **Topology awareness** — chain catalog 含 brainstorm / blueprint / analyze-macro(text) / analyze(numeric) / roadmap / plan(三路径) / execute / verify / ...
+6. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro(text) / analyze(numeric) / roadmap / plan(三路径) / execute / verify / ...
+6.5. **Grill is interactive-only** — auto_mode MUST skip grill stage and route directly to brainstorm; grill requires Socratic Q&A with the user
 7. **D-007 milestone 反查** — 数字 phase 步骤的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查
 8. **schema 向后兼容** — decomposition 字段可选；`steps[]` 由 post-goal-audit 动态生长（goal_ref tagged）；既有字段不删不改；`waves` 保留空数组
 9. **Sequential execution** — one step at a time in index order; each step's result read before the next starts
@@ -154,6 +155,7 @@ Extract:
 
 | task_type | When user intent is about... |
 |-----------|---------------------------|
+| `grill` | Stress-test, challenge assumptions, Socratic questioning on a plan/idea (**skip when auto_mode — grill is interactive-only**) |
 | `quick` | Simple/small task, add a feature, quick change |
 | `blueprint` | Formal spec generation (Product Brief / PRD / Architecture / Epics) |
 | `analyze_macro` | Broad/medium intent w/o numeric phase — explore impact, produce scope_verdict |
@@ -208,7 +210,8 @@ Extract:
 1. `issue_id` present → prefer issue chains
 2. UI/design/界面/页面/原型 → prefer `ui_design`
 3. 正式规格/spec-generate/7-phase → `blueprint` (single-step) 或 `blueprint-driven`
-4. 头脑风暴/探索 → `brainstorm-driven`
+4. 压力测试/拷问/grill/stress-test → `grill` (single-step); **auto_mode → skip grill, route to `brainstorm-driven` instead**
+5. 头脑风暴/探索 → `brainstorm-driven`
 5. Broad/medium intent + 无数字 phase → `analyze_macro`（产 scope_verdict）；后续 large→roadmap链；medium/small→`plan_from_analyze`
 6. 已有 analyze artifact 直达 plan → `plan_from_analyze`
 7. 已有 blueprint artifact 直达 plan → `plan_from_blueprint`
@@ -384,6 +387,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 
 | Chain | Command + Args |
 |-------|---------------|
+| `grill` | `maestro-grill "{intent}"` |
 | `status` | `manage-status` |
 | `init` | `maestro-init` |
 | `blueprint` | `maestro-blueprint "{intent}"` |
@@ -444,6 +448,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `deploy` | maestro-verify → maestro-milestone-release |
 | `blueprint-driven` | maestro-init → [B] maestro-blueprint → [B] maestro-plan --from blueprint:{BLP} → [B] maestro-execute → maestro-verify |
 | `analyze-macro-driven` | [B] maestro-analyze "{intent}" → ◆ post-analyze-scope → (large: [B] maestro-roadmap --from analyze:{ANL} → [B] maestro-analyze {phase} → [B] maestro-plan {phase}) / (medium\|small: [B] maestro-plan --from analyze:{ANL}) → [B] maestro-execute → maestro-verify |
+| `grill-brainstorm` | [B] maestro-grill → [B] maestro-brainstorm --from grill:{GRL} → [B] maestro-plan → [B] maestro-execute → maestro-verify (**auto_mode: skip grill step, fall back to brainstorm-driven**) |
 | `brainstorm-driven` | [B] maestro-brainstorm → [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `ui-craft-build` | maestro-impeccable build → [B] maestro-plan → [B] maestro-execute → maestro-verify |
 | `roadmap-driven` | maestro-init → [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → maestro-verify |

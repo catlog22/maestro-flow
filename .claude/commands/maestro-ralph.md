@@ -129,20 +129,20 @@ S_INFER:
 
 S_RESOLVE_SCOPE:
   → S_QUALITY_MODE  DO: A_RESOLVE_SCOPE_VERDICT
-                     GUARD: position ∈ {brainstorm, blueprint, init} → skip (scope_verdict = null)
+                     GUARD: position ∈ {grill, brainstorm, blueprint, init} → skip (scope_verdict = null)
 
 S_QUALITY_MODE:
   → S_PLANNING_MODE DO: A_DETERMINE_QUALITY_MODE
 
 S_PLANNING_MODE:
   → S_DECOMPOSE     DO: A_DETERMINE_PLANNING_MODE
-                     GUARD: lifecycle_position ∈ {brainstorm, blueprint, init, analyze-macro, roadmap} → skip (force independent)
+                     GUARD: lifecycle_position ∈ {grill, brainstorm, blueprint, init, analyze-macro, roadmap} → skip (force independent)
 
 S_DECOMPOSE:
   → S_BUILD_CHAIN   DO: A_DECOMPOSE_TASKS
                      GUARD: broad intent → MUST clarify boundary even if auto_confirm
                      GUARD: narrow intent → auto-derive, skip questions
-                     GUARD: position ∈ {brainstorm, blueprint, init} → skip decomposition
+                     GUARD: position ∈ {grill, brainstorm, blueprint, init} → skip decomposition
 
 S_BUILD_CHAIN:
   → S_CREATE_SESSION DO: A_BUILD_STEPS
@@ -242,6 +242,7 @@ resolve_milestone(phase_number):
 
 | Pattern | Position |
 |---------|----------|
+| 压力测试 / 拷问 / 验证假设 / grill / stress-test | `grill`（**auto_confirm=true 时跳过，直接 `brainstorm`**） |
 | brainstorm / 头脑风暴 / 探索 / ideate / 设计思路 | `brainstorm` |
 | blueprint / 规格 / 正式文档 / spec-generate / 7-phase | `blueprint` |
 | broad/medium intent 无数字 phase (重构/全面/重写/迁移/新功能 X) | `analyze-macro` |
@@ -262,7 +263,7 @@ resolve_milestone(phase_number):
 | `phase_is_new == true` (新 phase) | `analyze` |
 | no milestones AND no roadmap.md AND has analyze macro artifact | `roadmap` |
 | no milestones AND no roadmap.md AND no analyze artifact | `analyze-macro` |
-| `phase == null` (brainstorm/blueprint/init/roadmap/analyze-macro override 已定) | n/a |
+| `phase == null` (grill/brainstorm/blueprint/init/roadmap/analyze-macro override 已定) | n/a |
 | phase 已存在 + 无任何 artifact | `analyze` |
 | phase 已存在 + 最新 artifact = analyze | `plan` |
 | phase 已存在 + 最新 artifact = plan | `execute` |
@@ -317,7 +318,7 @@ resolve_milestone(phase_number):
 
 | Condition | Mode | Reason |
 |-----------|------|--------|
-| lifecycle_position ∈ {brainstorm, init, roadmap} | `independent` | 前期阶段不涉及多 phase 规划 |
+| lifecycle_position ∈ {grill, brainstorm, init, roadmap} | `independent` | 前期阶段不涉及多 phase 规划 |
 | `phase_is_new == true` | `independent` | 新 phase 尚无里程碑上下文 |
 | intent 显式指定 phase 编号（如 "phase 2"、"P3"） | `independent` | 用户明确针对单个 phase |
 | milestone 仅含 1 个 phase（读 state.json） | `independent` | 统一无意义 |
@@ -380,7 +381,8 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 
 | Stage | Skill (independent) | Skill (unified) | Decision after | quality_mode |
 |-------|---------------------|-----------------|----------------|--------------|
-| brainstorm | `maestro-brainstorm "{intent}"` | *(same)* | — | all |
+| grill | `maestro-grill "{intent}"` | *(same)* | — | all (**skip when auto_confirm**) |
+| brainstorm | `maestro-brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `maestro-brainstorm "{intent}"` *(otherwise)* | *(same)* | — | all |
 | blueprint | `maestro-blueprint "{intent}"` | *(same)* | — | all |
 | init | `maestro-init` | *(same)* | — | all |
 | analyze-macro | `maestro-analyze "{intent}"` | *(same)* | `post-analyze-scope` | all |
@@ -405,6 +407,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 1. **起点**：从 `session.lifecycle_position` 开始
 2. **跳过已完成**：跳过当前 milestone+phase 下已有 completed artifact 的 stage（按 `session.phase` 过滤）；unified 按 milestone 过滤
 3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
+3.5. **grill auto_confirm 跳过**：`auto_confirm == true` 时删除 `grill` stage（grill 为交互式苏格拉底拷问，不支持自动模式）；brainstorm args 不含 `--from grill:*`
 4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
 5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（verify/review/test）之后、`milestone-complete` 之前插入 `decision:post-goal-audit`
 6. **终点硬约束**：chain 以 `milestone-complete` 结尾
@@ -741,7 +744,8 @@ decision:post-goal-audit {retry+1}
 - [ ] Phase 先于 position 解析；phase_is_new 标记写入 session
 - [ ] D-007 反查：phase 数字 → `session.milestone`，禁止读 current_milestone；写入 step.milestone_id
 - [ ] phase_is_new=true → lifecycle_position 强制 `analyze`
-- [ ] Intent overrides 识别 brainstorm / blueprint / analyze-macro
+- [ ] Intent overrides 识别 grill / brainstorm / blueprint / analyze-macro
+- [ ] auto_confirm=true 时 grill stage 跳过（交互式拷问不支持自动模式）
 - [ ] A_RESOLVE_SCOPE_VERDICT 读 macro analyze conclusions.scope_verdict，写入 session.scope_verdict + analyze_macro_id
 - [ ] 链路起点 = analyze-macro 时：large→roadmap+analyze+plan(phase)；medium/small→直跳 plan --from analyze:{ANL_ID}（跳过 roadmap+analyze）
 - [ ] post-analyze-scope decision 节点在 macro analyze 之后插入；A_SCOPE_EVALUATE/A_APPLY_SCOPE_VERDICT 重塑链路

@@ -11,8 +11,9 @@ allowed-tools:
 ---
 <purpose>
 Initialize the project-level specs directory by scanning the codebase for conventions, patterns, and tech stack.
-Core files (coding, arch, knowhow) are always created. Optional files (quality, debug, test, review) are created only when relevant signals are detected.
-All output lands in `.workflow/specs/`.
+Core files (coding, arch, learnings) are always created. Optional spec files (quality, test, ui) are created only when relevant signals are detected.
+Additionally, generates recipe-type knowhow docs in `.workflow/knowhow/` for detected operational workflows (test / debug / build / dev / lint) — capturing "how to do X in this project" so future agents can find them via `maestro wiki search`.
+Spec output lands in `.workflow/specs/`; recipe output lands in `.workflow/knowhow/`.
 </purpose>
 
 <required_reading>
@@ -37,12 +38,15 @@ Follow '~/.maestro/workflows/specs-setup.md' completely.
 | E001 | fatal | `.workflow/` directory not initialized -- run `/maestro-init` first | parse_input |
 | E002 | fatal | No source files found in project -- nothing to scan | scan_codebase |
 | W001 | warning | Convention detection uncertain for one or more categories -- marked `[UNCERTAIN]` | generate_specs |
+| W002 | warning | Workflow recipe signals detected but commands ambiguous -- recipe skipped | generate_recipes |
+| W003 | warning | Existing recipe slug found -- new content written as `.proposed.md` for manual diff | generate_recipes |
 </error_codes>
 
 <success_criteria>
 - [ ] `.workflow/specs/` directory created
-- [ ] Core files always created: `coding-conventions.md`, `architecture-constraints.md`, `knowhow.md`
-- [ ] Optional files created when detected: `quality-rules.md` (linter/CI), `test-conventions.md` (test framework), `debug-notes.md` (on demand), `review-standards.md` (on demand)
-- [ ] Report displayed with summary and next steps
+- [ ] Core spec files always created: `coding-conventions.md`, `architecture-constraints.md`, `learnings.md`
+- [ ] Optional spec files created when detected: `quality-rules.md` (linter/CI), `test-conventions.md` (test framework), `ui-conventions.md` (frontend framework). `debug-notes.md` / `review-standards.md` deferred (on demand via `/spec-add`).
+- [ ] Workflow recipe knowhow created in `.workflow/knowhow/` for each detected operational workflow (test / debug / build / dev / lint). Each recipe matches the `recipe` schema in `~/.maestro/workflows/knowhow.md` Part B and contains at least one runnable command.
+- [ ] Report displayed grouped by destination (specs / recipes / skipped / deferred), with `.proposed.md` files surfaced when an existing recipe slug was preserved.
 </success_criteria>
 </output>

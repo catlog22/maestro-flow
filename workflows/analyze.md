@@ -49,7 +49,7 @@ $ARGUMENTS: "[phase|topic] [-y] [-c] [-q] [--from <source>]"
 -y / --yes  -- Auto mode, skip interactive scoping, auto-deepen
 -c / --continue -- Resume from existing session
 -q / --quick -- Quick mode, skip exploration + scoring, go straight to decision extraction
---from <source>  -- Load upstream context package (brainstorm:ID, analyze:ID, @file, or path). Replaces --from-brainstorm
+--from <source>  -- Load upstream context package (grill:ID, brainstorm:ID, analyze:ID, @file, or path). Replaces --from-brainstorm
 ```
 
 ## Scope Routing
@@ -128,6 +128,7 @@ Parse $ARGUMENTS to determine mode and flags:
 4. Find prior analyze artifacts from `state.json.artifacts[]` where type=analyze and same milestone → load their `context.md` to skip already-decided areas
 5. **Load upstream context** (priority order):
    a. If `--from` specified: resolve source → load `context-package.json` (see §9 of workflow-structure-guide.md)
+      - `--from grill:ID` → `state.json.artifacts[type=grill, id=ID].context_package` → load
       - `--from brainstorm:ID` → `state.json.artifacts[type=brainstorm, id=ID].context_package` → load
       - `--from @file` → create import session, delegate extraction → load context-package.json
       - `--from path/` → load `path/context-package.json`

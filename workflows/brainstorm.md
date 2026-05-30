@@ -125,6 +125,7 @@ Parse $ARGUMENTS to determine execution mode:
 **Parameter Parsing**:
 - `--count N`: cap at 9, default 3
 - `--session ID`: target specific session
+- `--from <source>`: load upstream context package (grill:ID, blueprint:ID, @file, or path)
 - `--style-skill PKG`: validate `.claude/skills/style-{PKG}/SKILL.md` exists
 - Missing/empty args without flags = error E001
 
@@ -138,6 +139,26 @@ Parse $ARGUMENTS to determine execution mode:
 - Phase mode (number): resolve `state.json.artifacts[phase == phaseNum].path` → `.workflow/{path}/.brainstorming/` (ERROR if phase not found)
 - All output: `.workflow/scratch/{YYYYMMDD}-brainstorm-{slug}/`
 - Existing session: use existing session directory
+
+---
+
+### Step 1.3: Load Upstream Context (if `--from` specified)
+
+Resolve upstream source and load `context-package.json`:
+- `--from grill:ID` → `state.json.artifacts[type=grill, id=ID].context_package` → load
+- `--from blueprint:ID` → `state.json.artifacts[type=blueprint, id=ID].context_package` → load
+- `--from @file` → read file directly as upstream material
+- `--from path/` → load `path/context-package.json`
+
+From loaded context-package, pre-seed brainstorm session:
+- `domain.terminology[]` → pre-populate Step 2 terminology (skip re-extraction for locked terms)
+- `constraints[status=locked]` → inject into guidance §4-N as pre-decided constraints (skip re-asking)
+- `non_goals[]` → pre-populate Step 2 non-goals (skip re-asking for these)
+- `open_questions[]` → seed Step 3 Phase 1 probing questions
+- `insights[]` → pass to role-design-author in Step 4 as additional context
+- `requirements[]` → seed Step 3 Phase 4.5 feature decomposition
+
+Store as `upstream_context` (in-memory). If source not found, warn (W007) and continue without upstream.
 
 ---
 
@@ -229,8 +250,10 @@ Extract core terminology and define scope boundaries before framework generation
 1. Analyze topic description and any project context (project.md, roadmap.md, project_context from Step 1.8)
 2. Extract 5-10 core domain terms:
    - term (canonical), definition, aliases, category (core|technical|business)
+   - If `upstream_context` loaded (Step 1.3): merge `upstream_context.domain.terminology[]` — locked terms are pre-populated, only extract NEW terms not already in upstream
 3. AskUserQuestion for Non-Goals (multiSelect=true):
-   - Generate 4-5 context-aware exclusion candidates based on topic
+   - If `upstream_context` loaded: pre-select `upstream_context.non_goals[]`, ask only for additions
+   - Else: generate 4-5 context-aware exclusion candidates based on topic
    - Include "其他（请补充）" option for custom exclusions
    - If user selects "其他", follow up with free-text question
 4. Store terminology table and non_goals to session state

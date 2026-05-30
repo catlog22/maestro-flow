@@ -209,10 +209,106 @@ Auto-generated from project analysis. Update manually as patterns evolve.
 
 These are NOT created during setup. They are created on demand when `spec-add debug` or `spec-add review` is first used.
 
-### Step 6: Summary
+### Step 6: Generate Workflow Knowhow Recipes (when signals detected)
 
-Display list of created files with categories. Note that `debug-notes.md` and `review-standards.md` are created on demand via `/spec-add`.
+Spec files in Step 4-5 capture *conventions*. This step captures *operational workflows* — "how to do X in this project" — as **recipe-type knowhow** so future agents can discover them via `maestro wiki search` and `maestro knowhow list --type recipe`.
+
+Output directory: `.workflow/knowhow/` (knowhow store, NOT `.workflow/specs/`).
+Schema: matches `recipe` type defined in `~/.maestro/workflows/knowhow.md` Part B.
+
+**Detection → recipe matrix:**
+
+| Recipe slug | Trigger signals | Step extraction source |
+|-------------|----------------|------------------------|
+| `test-workflow` | Test framework detected in Step 5b (jest/vitest/pytest/mocha/go test/cargo test) | `package.json` `scripts.test*`, `pytest.ini`/`pyproject.toml [tool.pytest]`, `go test ./...`, test layout from Step 5b |
+| `debug-workflow` | `.vscode/launch.json` OR logging lib import (pino/winston/loguru/zap/log) OR error tracker SDK (sentry/bugsnag/rollbar) OR `DEBUG=` env usage in code | launch.json entries, `--inspect` flags in scripts, logger config files, observed `log.debug(...)` / `logger.info(...)` patterns |
+| `build-workflow` | `scripts.build` in package.json OR Makefile `build:` target OR `cargo build` OR `gradle build` OR `go build` | Verbatim script chain; multi-step pipelines noted explicitly |
+| `dev-workflow` | `scripts.dev`/`scripts.start` OR `manage.py runserver` OR `air`/`reflex` config OR docker-compose dev override | Dev command + detected port from config + hot-reload flag |
+| `lint-workflow` | Linter+formatter pair detected: eslint+prettier / ruff+black / golangci-lint+gofmt / rustfmt+clippy | Configured commands, pre-commit hooks from `.pre-commit-config.yaml` or `husky/`, CI lint job |
+
+**Skip rule:** If signals are missing, skip the recipe — do NOT generate placeholders.
+
+**Idempotency rule:** Before writing, glob `.workflow/knowhow/RCP-*-{slug}.md`. If a file matching the slug exists, do NOT overwrite — write `.workflow/knowhow/RCP-{YYYYMMDD-HHMM}-{slug}.proposed.md` instead and mention it in Step 7 summary so the user can diff and merge manually.
+
+**Filename:** `.workflow/knowhow/RCP-{YYYYMMDD-HHMM}-{slug}.md` (timestamp aligns with rest of knowhow store, slug disambiguates).
+
+**Tags rule:** Match content language (English codebase → English tags). Always include `workflow`, the slug, and the detected framework (e.g. `vitest`, `pytest`). Add `auto-generated` so users can identify spec-setup output for later pruning.
+
+**Recipe template** (one file per detected workflow):
+
+```markdown
+---
+title: "{Project name} — {Workflow name}"
+type: recipe
+tags: [workflow, {slug}, {framework}, auto-generated]
+created: {ISO timestamp}
+source: spec-setup
+---
+
+# {title}
+
+## Goal
+{One sentence stating the operational outcome — "Run the test suite locally and in CI", "Reproduce and inspect a runtime bug with full stack context", etc.}
+
+## Prerequisites
+- {Required runtime/version from manifest, e.g. "Node.js >= 18"}
+- {Required env vars detected in .env.example or code}
+- {Required services if docker-compose detected}
+
+## Steps
+1. {Copy-paste-ready command 1 — derived from detected scripts}
+2. {Command 2}
+3. ...
+
+## Expected Outcome
+{Concrete success signal — "All tests green, coverage report at coverage/index.html" / "Dev server reachable at http://localhost:PORT with HMR active"}
+
+## Common Pitfalls
+- {Inferred from detected patterns — e.g. "Vitest watch mode locks DB if integration suite is selected"}
+- {Generic gotchas: port conflicts, missing env, stale dist/}
+
+## Related
+- [[test-conventions]] / [[architecture-constraints]] — convention specs (link when they exist)
+```
+
+**Per-recipe extraction guides:**
+
+- **`test-workflow`** — Steps must list: (a) install command if first run, (b) full-suite command, (c) watch/filter command, (d) coverage command. For pytest, include marker selection if `pytest.ini` declares markers. For Go, document `-race` and `-tags` flags if used in CI.
+- **`debug-workflow`** — Steps must cover: (a) attach/launch via debugger (cite the exact `launch.json` configuration name), (b) increase log verbosity (cite the env var or config flag actually used in code), (c) reproduce-and-capture pattern (point at the project's logging entry pattern with one file:line example). Mention error-tracker DSN env if Sentry/Bugsnag SDK is wired.
+- **`build-workflow`** — Reproduce the `scripts.build` chain verbatim; if it spans multiple commands, number them. Note the output directory (`dist/`, `build/`, `target/`) and any required `prepublishOnly`/`postbuild` side effects.
+- **`dev-workflow`** — Dev server command, detected default port, hot-reload flag, and any companion process (e.g. `npm run dev` + `npm run mcp` if both are typically run together — detect this when both appear under `scripts` and one is `dev`).
+- **`lint-workflow`** — Linter command, formatter command, fix command (`--fix` / `--write`), pre-commit hook trigger if `husky/_/pre-commit` or `.pre-commit-config.yaml` exists.
+
+**Quality bar:** Every generated recipe must contain at least one runnable command. If signals are present but no concrete command can be extracted with confidence, do NOT write the file — emit `W002: <slug> signals detected but commands ambiguous, skipped` and continue.
+
+**Wiki indexing:** Files in `.workflow/knowhow/` are auto-indexed by WikiIndexer (`type=knowhow`). No separate index step required — they appear in `maestro wiki list --type knowhow` after the next index pass.
+
+### Step 7: Summary
+
+Display list of all created files grouped by destination:
+
+```
+## Specs (.workflow/specs/)
+- coding-conventions.md
+- architecture-constraints.md
+- learnings.md
+- {optional spec files created}
+
+## Workflow Recipes (.workflow/knowhow/)
+- RCP-{ts}-test-workflow.md       (vitest detected)
+- RCP-{ts}-debug-workflow.md      (pino + .vscode/launch.json detected)
+- {other recipes}
+
+## Skipped (signals missing)
+- build-workflow — no build script detected
+- {other skips}
+
+## Deferred (created on demand)
+- debug-notes.md, review-standards.md — use /spec-add when needed
+```
+
+Note that `debug-notes.md` and `review-standards.md` are created on demand via `/spec-add`, and any `.proposed.md` files indicate an existing recipe was not overwritten — review and merge manually.
 
 ## Output
 
-All files listed above under `.workflow/`.
+All files listed above under `.workflow/specs/` and `.workflow/knowhow/`.

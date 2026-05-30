@@ -70,7 +70,7 @@ Interview the user relentlessly until shared understanding is reached. Active on
 - Branch jumps allowed: the user may switch freely between mode / role / upstream / sub-pipeline branches; sequence is not enforced, but every decision point must end with a definite answer.
 - Scope guard: only ask about decisions owned by `brainstorm`. Do not pre-resolve roadmap/plan choices.
 
-Decision points: mode (auto / single-role / review-only) / role selection and `--count` / `--from` upstream source / whether to enable design-research and the DESIGN.md sub-pipeline.
+Decision points: mode (auto / single-role / review-only) / role selection and `--count` / `--from` upstream source (grill:ID, blueprint:ID, @file, path) / whether to enable design-research and the DESIGN.md sub-pipeline.
 
 Exit: on consensus or explicit user signal to proceed, finalize session metadata. The §11 table (already populated incrementally) uses this schema:
 `| # | Decision | Choice | Source (user / code / default) |`
@@ -86,6 +86,7 @@ Auto mode:
 - Project initialized, need formal spec package → view_file(AbsolutePath="<agy-skills-dir>/maestro-blueprint/SKILL.md") + execute inline (args: "--from brainstorm:{artifact_id}")
 - Project initialized, quick roadmap → view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--from brainstorm:{artifact_id}")
 - Need deeper analysis first → view_file(AbsolutePath="<agy-skills-dir>/maestro-analyze/SKILL.md") + execute inline (args: "{topic} --from brainstorm:{artifact_id}")
+- Need stress-testing first → view_file(AbsolutePath="<agy-skills-dir>/maestro-grill/SKILL.md") + execute inline (args: "{topic}")
 - `html-prototypes/` produced with 2+ files and user wants to browse → load `~/.maestro/workflows/brainstorm-visualize.md` and launch visualizer server (optional, user-triggered)
 - DESIGN.md established during Step 3.5 → suggest: "Run `/maestro-impeccable build <feature-description>` to build with the established design system"
 
