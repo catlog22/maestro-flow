@@ -302,3 +302,15 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.4.20',
+  title: 'UA 知识图谱集成 + Swarm Workflow 并行加速',
+  highlights: [
+    '新增 Understand-Anything 知识图谱：深度集成 Wiki 搜索与 codebase-rebuild 管道',
+    '新增 maestro-swarm-workflow 并行加速层：8 个固定 Workflow 脚本覆盖核心命令',
+    '新增 maestro-companion 技能：任务上下文管理与知识路由',
+    'plan 命令修复：P3 agent 强制调用 + read_first/action 字段对齐',
+  ],
+  actions: [],
+});
