@@ -17,6 +17,17 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.4.20',
+    date: '2026-05',
+    changes: [
+      { type: 'feat', text_en: 'kg: deep integration of Understand-Anything knowledge graph with Wiki search and codebase-rebuild pipeline', text_zh: 'kg: Understand-Anything 知识图谱与 Wiki 搜索、codebase-rebuild 管道深度集成' },
+      { type: 'feat', text_en: 'commands: new maestro-swarm-workflow parallel acceleration layer — 8 fixed Workflow scripts covering core commands', text_zh: 'commands: 新增 maestro-swarm-workflow 并行加速层 — 8 个固定 Workflow 脚本覆盖核心命令' },
+      { type: 'feat', text_en: 'skills: new maestro-companion for task context management and knowledge routing', text_zh: 'skills: 新增 maestro-companion 任务上下文管理与知识路由技能' },
+      { type: 'fix', text_en: 'plan: enforce P3 agent invocation and align read_first/action fields', text_zh: 'plan: 强制 P3 agent 调用并对齐 read_first/action 字段' },
+      { type: 'docs', text_en: 'github skills: added Phase 3 (Phase Files Design) and Phase 4 (Validation & Integration) documentation', text_zh: 'github skills: 新增 Phase 3（阶段文件设计）和 Phase 4（验证与集成）文档' },
+    ],
+  },
+  {
     version: '0.4.19',
     date: '2026-05',
     changes: [
