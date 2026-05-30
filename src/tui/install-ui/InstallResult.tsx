@@ -66,6 +66,9 @@ export function InstallResult({ result }: InstallResultProps) {
         {result.agyHooksInstalled > 0 && (
           <Row label="Agy Hooks:" value={t.install.resultHooks.replace('{count}', String(result.agyHooksInstalled))} />
         )}
+        {result.kgVendorInstalled && (
+          <Row label="KG Vendor:" value="Understand-Anything installed" />
+        )}
         {(result.extraMcpRegistered.length > 0 || result.extraMcpFailed.length > 0) && (
           <Row
             label="Extra MCP:"

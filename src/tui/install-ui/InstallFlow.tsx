@@ -10,10 +10,11 @@ import { McpConfig } from './McpConfig.js';
 import { ExtraMcpConfig } from './ExtraMcpConfig.js';
 import { StatuslineConfig } from './StatuslineConfig.js';
 import { BackupConfig } from './BackupConfig.js';
+import { KgVendorConfig } from './KgVendorConfig.js';
 import { InstallConfirm, type InstallFlowConfig } from './InstallConfirm.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
-import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS, type ExtraMcpTargetId } from '../../commands/install-backend.js';
+import { scanComponents, countExistingTargetFiles, checkUaVendorStatus, MCP_TOOLS, COMPONENT_DEFS, type ExtraMcpTargetId } from '../../commands/install-backend.js';
 import { detectStatusline, CODEX_HOOK_LEVEL_DESCRIPTIONS, type HookLevel } from '../../commands/hooks.js';
 import { findManifest, type Manifest } from '../../core/manifest.js';
 import { paths } from '../../config/paths.js';
@@ -37,6 +38,7 @@ type FlowStep =
   | 'codex_hooks_config' | 'codex_mcp_config'
   | 'agy_hooks_config'
   | 'extra_mcp_config'
+  | 'kg_vendor_config'
   | 'statusline_config' | 'backup_config'
   | 'confirm' | 'executing' | 'complete';
 
@@ -94,6 +96,7 @@ export function InstallFlow({
     codexMcp: initialStepIds ? initialStepIds.includes('codexMcp') : prior.codexMcp,
     agyHooks: initialStepIds ? initialStepIds.includes('agyHooks') : prior.agyHooks,
     extraMcp: initialStepIds ? initialStepIds.includes('extraMcp') : prior.extraMcp,
+    kgVendor: initialStepIds ? initialStepIds.includes('kgVendor') : false,
     statusline: initialStepIds ? initialStepIds.includes('statusline') : prior.statusline,
     backup: initialStepIds ? initialStepIds.includes('backup') : true,
   });
@@ -149,6 +152,9 @@ export function InstallFlow({
   const [backupClaudeMd, setBackupClaudeMd] = useState(true);
   const [backupAll, setBackupAll] = useState(false);
 
+  // KG vendor status
+  const kgVendorStatus = useMemo(() => checkUaVendorStatus(), []);
+
   const [result, setResult] = useState<InstallFlowResult | null>(null);
 
   // When user switches mode at the mode step, re-sync every "default-from-prior"
@@ -167,6 +173,7 @@ export function InstallFlow({
       codexMcp: prior.codexMcp,
       agyHooks: prior.agyHooks,
       extraMcp: prior.extraMcp,
+      kgVendor: false,
       statusline: prior.statusline,
       backup: true,
     });
@@ -215,6 +222,7 @@ export function InstallFlow({
     codexMcpProjectRoot,
     installAgyHooks: enabledSteps.agyHooks,
     agyHookLevel,
+    installKgVendor: enabledSteps.kgVendor,
     installExtraMcp: enabledSteps.extraMcp && extraMcpTargetIds.length > 0,
     extraMcpTargetIds,
     installStatusline: enabledSteps.statusline && installStatusline,
@@ -235,8 +243,17 @@ export function InstallFlow({
     installStatusline, statuslineTheme, backupClaudeMd, backupAll]);
 
   // Hub items with live summary
+  // KG vendor hub summary
+  const kgVendorSummary = useMemo(() => {
+    if (!enabledSteps.kgVendor) return t.install.hubSkipped;
+    if (kgVendorStatus.installed && kgVendorStatus.coreBuilt) {
+      return `Installed (v${kgVendorStatus.version || 'unknown'})`;
+    }
+    return 'Not installed — will clone + build';
+  }, [enabledSteps.kgVendor, kgVendorStatus]);
+
   const hubItems = useMemo(() => buildHubItems(
-    enabledSteps as { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; agyHooks: boolean; extraMcp: boolean; statusline: boolean; backup: boolean },
+    enabledSteps as { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; agyHooks: boolean; extraMcp: boolean; kgVendor: boolean; statusline: boolean; backup: boolean },
     {
       componentCount: selectedComponents.length,
       fileCount,
@@ -248,13 +265,14 @@ export function InstallFlow({
       codexMcpEnabled,
       agyHookLevel,
       extraMcpTargetCount: extraMcpTargetIds.length,
+      kgVendorSummary,
       statuslineDetected,
       backupClaudeMd,
       backupAll,
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,
     mcpEnabled, codexHookLevel, codexMcpTools.length, codexMcpEnabled,
-    agyHookLevel, extraMcpTargetIds.length,
+    agyHookLevel, extraMcpTargetIds.length, kgVendorSummary,
     statuslineDetected, backupClaudeMd, backupAll]);
 
   // Toggle category enabled/disabled. When turning a hook step from off→on,
@@ -283,6 +301,7 @@ export function InstallFlow({
       codexMcp: 'codex_mcp_config',
       agyHooks: 'agy_hooks_config',
       extraMcp: 'extra_mcp_config',
+      kgVendor: 'kg_vendor_config',
       statusline: 'statusline_config',
       backup: 'backup_config',
     };
@@ -311,7 +330,7 @@ export function InstallFlow({
       if (key.escape) setStep(isSubcommand ? 'confirm' : 'hub');
       return;
     }
-    if (step === 'hooks_config' || step === 'mcp_config' || step === 'codex_hooks_config' || step === 'codex_mcp_config' || step === 'agy_hooks_config' || step === 'statusline_config' || step === 'backup_config') {
+    if (step === 'hooks_config' || step === 'mcp_config' || step === 'codex_hooks_config' || step === 'codex_mcp_config' || step === 'agy_hooks_config' || step === 'kg_vendor_config' || step === 'statusline_config' || step === 'backup_config') {
       if (key.return) returnFromConfig();
       else if (key.escape) setStep(isSubcommand ? 'confirm' : 'hub');
       return;
@@ -339,7 +358,7 @@ export function InstallFlow({
       ];
 
   // Map current step to progress key
-  const progressKey = ['components_config', 'hooks_config', 'mcp_config', 'codex_hooks_config', 'codex_mcp_config', 'agy_hooks_config', 'statusline_config', 'backup_config'].includes(step)
+  const progressKey = ['components_config', 'hooks_config', 'mcp_config', 'codex_hooks_config', 'codex_mcp_config', 'agy_hooks_config', 'kg_vendor_config', 'statusline_config', 'backup_config'].includes(step)
     ? (isSubcommand ? step.replace('_config', '') : 'hub')
     : step;
   const stepIndex = progressSteps.findIndex((s) => s.key === progressKey);
@@ -354,6 +373,7 @@ export function InstallFlow({
     codex_hooks_config: t.install.footerHooks,
     codex_mcp_config: t.install.footerMcp,
     agy_hooks_config: t.install.footerHooks,
+    kg_vendor_config: t.install.kgVendorHint,
     statusline_config: t.install.footerStatusline,
     backup_config: t.install.footerBackup,
     confirm: t.install.footerConfirm,
@@ -491,6 +511,10 @@ export function InstallFlow({
             onDone={returnFromConfig}
             onBack={() => setStep(isSubcommand ? 'confirm' : 'hub')}
           />
+        )}
+
+        {step === 'kg_vendor_config' && (
+          <KgVendorConfig status={kgVendorStatus} />
         )}
 
         {step === 'statusline_config' && (

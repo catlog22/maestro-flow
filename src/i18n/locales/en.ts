@@ -119,6 +119,17 @@ export const en: LocaleStrings = {
       full: '+ workflow-guard (PreToolUse on shell/file writes)',
     },
 
+    // KG Vendor (Knowledge Graph / Understand-Anything)
+    confirmLabelKgVendor: 'KG Vendor:',
+    kgVendorTitle: 'Knowledge Graph Vendor',
+    kgVendorStatusLabel: 'Status:',
+    kgVendorInstalled: 'Installed',
+    kgVendorNotInstalled: 'Not installed',
+    kgVendorPathLabel: 'Path:',
+    kgVendorDesc: 'Understand-Anything vendor provides tree-sitter code analysis and knowledge graph generation capabilities.',
+    kgVendorHint: '[Enter] Done  [Esc] Back',
+    execInstallingKgVendor: 'Installing KG vendor (Understand-Anything)...',
+
     // Execution
     execPreparing: 'Preparing...',
     execScanning: 'Scanning disabled items...',

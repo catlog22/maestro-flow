@@ -94,7 +94,7 @@ export function InstallHub({ items, onToggle, onEnter, onInstall, onBack }: Inst
 // ---------------------------------------------------------------------------
 
 export function buildHubItems(
-  enabled: { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; agyHooks: boolean; extraMcp: boolean; statusline: boolean; backup: boolean },
+  enabled: { components: boolean; hooks: boolean; mcp: boolean; codexHooks: boolean; codexMcp: boolean; agyHooks: boolean; extraMcp: boolean; statusline: boolean; backup: boolean; kgVendor: boolean },
   summaries: {
     componentCount: number; fileCount: number; hookLevel: HookLevel;
     mcpToolCount: number; mcpEnabled: boolean;
@@ -103,6 +103,7 @@ export function buildHubItems(
     extraMcpTargetCount: number;
     statuslineDetected: string | null;
     backupClaudeMd: boolean; backupAll: boolean;
+    kgVendorSummary: string;
   },
 ): HubItem[] {
   const statuslineSummary = enabled.statusline
@@ -175,6 +176,12 @@ export function buildHubItems(
       summary: enabled.extraMcp && summaries.extraMcpTargetCount > 0
         ? `${summaries.extraMcpTargetCount} target(s)`
         : t.install.hubSkipped,
+    },
+    {
+      id: 'kgVendor',
+      label: 'KG Vendor (Understand-Anything)',
+      enabled: enabled.kgVendor,
+      summary: summaries.kgVendorSummary,
     },
     {
       id: 'statusline',

@@ -119,6 +119,17 @@ export const zh: LocaleStrings = {
       full: '+ 工作流防护 (PreToolUse 拦截 shell/文件写入)',
     },
 
+    // KG Vendor (Knowledge Graph / Understand-Anything)
+    confirmLabelKgVendor: 'KG Vendor：',
+    kgVendorTitle: 'Knowledge Graph Vendor',
+    kgVendorStatusLabel: '状态：',
+    kgVendorInstalled: '已安装',
+    kgVendorNotInstalled: '未安装',
+    kgVendorPathLabel: '路径：',
+    kgVendorDesc: 'Understand-Anything vendor 提供 tree-sitter 代码分析和知识图谱生成能力。',
+    kgVendorHint: '[Enter] 完成  [Esc] 返回',
+    execInstallingKgVendor: '正在安装 KG vendor (Understand-Anything)...',
+
     // Execution
     execPreparing: '准备中...',
     execScanning: '扫描禁用项...',

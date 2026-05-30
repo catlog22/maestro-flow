@@ -15,6 +15,7 @@ import type { Command } from 'commander';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { initCliToolsConfigSync } from '../config/cli-tools-config.js';
 import { runInstallWizard, runInstallFlow } from '../tui/install-ui/index.js';
 import { paths } from '../config/paths.js';
@@ -148,8 +149,9 @@ export function registerInstallCommand(program: Command): void {
     .option('--codex-hooks <level>', 'Codex hook level for --force mode: none, minimal, standard, full')
     .option('--codex-mcp', 'Register Codex MCP server in --force mode')
     .option('--agy-hooks <level>', 'Agy (Antigravity) hook level for --force mode: none, minimal, standard, full')
+    .option('--kg-vendor', 'Install KG vendor (Understand-Anything) in --force mode')
     .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string }) => {
+    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; kgVendor?: boolean; components?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -193,7 +195,7 @@ export function registerInstallCommand(program: Command): void {
 function forceInstall(
   pkgRoot: string,
   version: string,
-  opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string },
+  opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; kgVendor?: boolean; components?: string },
 ): void {
   console.error(t.install.forceVersion.replace('{version}', version));
   console.error('');
@@ -344,6 +346,22 @@ function forceInstall(
       console.error(`  Codex MCP: maestro-tools registered → ${path}`);
     } else {
       console.error(`  Codex MCP: failed`);
+    }
+  }
+
+  // KG Vendor (Understand-Anything)
+  if (opts.kgVendor) {
+    console.error('  KG Vendor: installing Understand-Anything...');
+    try {
+      const isWin = process.platform === 'win32';
+      const scriptPath = join(pkgRoot, 'scripts', isWin ? 'ua-vendor-setup.ps1' : 'ua-vendor-setup.sh');
+      const cmd = isWin
+        ? `powershell -ExecutionPolicy Bypass -File "${scriptPath}" -Force`
+        : `bash "${scriptPath}" --force`;
+      execSync(cmd, { stdio: 'inherit', timeout: 600_000 });
+      console.error('  KG Vendor: installed successfully');
+    } catch (err) {
+      console.error(`  KG Vendor: failed — ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

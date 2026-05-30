@@ -188,6 +188,114 @@ Suggest next: manage-status (review) or manage-codebase-refresh (incremental upd
 
 ---
 
+## Knowledge Graph Pipeline (Steps 10–17)
+
+> **Optional.** Only runs when UA vendor is installed at
+> `~/.maestro/vendor/ua/understand-anything-plugin/packages/core/dist/index.js`.
+> If not found, skip Steps 10–17 with warning:
+> *"KG pipeline skipped: run `scripts/ua-vendor-setup.sh` first"*
+
+All intermediate artifacts are written to `.workflow/codebase/.kg-tmp/`.
+
+### Step 10: KG Pipeline — Project Scan
+
+```
+node ~/.maestro/vendor/ua/understand-anything-plugin/skills/understand/scan-project.mjs \
+  "$PROJECT_ROOT" \
+  "$PROJECT_ROOT/.workflow/codebase/.kg-tmp/scan-result.json"
+```
+
+Output: `.workflow/codebase/.kg-tmp/scan-result.json`
+
+### Step 11: KG Pipeline — Compute Batches
+
+```
+node ~/.maestro/vendor/ua/understand-anything-plugin/skills/understand/compute-batches.mjs \
+  "$PROJECT_ROOT"
+```
+
+Output: `.workflow/codebase/.kg-tmp/batches.json`
+
+### Step 12: KG Pipeline — File Analysis (Parallel Delegates)
+
+```
+For each batch in batches.json, dispatch a delegate:
+
+  maestro delegate "<prompt from kg-file-analyze template>" \
+    --rule kg-file-analyze --mode analysis --cd "$PROJECT_ROOT"
+
+Run up to 5 delegates concurrently (run_in_background: true).
+Each produces batch-N.json in .kg-tmp/
+```
+
+### Step 13: KG Pipeline — Merge Batch Graphs
+
+```
+node scripts/merge-batch-graphs.mjs "$PROJECT_ROOT" \
+  --intermediate-dir "$PROJECT_ROOT/.workflow/codebase/.kg-tmp"
+```
+
+Output: `.workflow/codebase/.kg-tmp/assembled-graph.json`
+
+### Step 14: KG Pipeline — Architecture Analysis
+
+```
+maestro delegate "<prompt>" --rule kg-architecture --mode analysis
+```
+
+This **replaces** the original Architecture mapper (Mapper 2).
+Mapper 2 no longer runs independently — its output is produced here instead.
+
+Output: `.workflow/codebase/.kg-tmp/layers.json`
+
+### Step 15: KG Pipeline — Tour Generation
+
+```
+maestro delegate "<prompt>" --rule kg-tour-build --mode analysis
+```
+
+Output: `.workflow/codebase/.kg-tmp/tour.json`
+
+### Step 16: KG Pipeline — Validation
+
+```
+Run inline validation (Node.js script from UA, adapted):
+  - Check all nodes have required fields (id, type, name, filePath)
+  - Check referential integrity (all edge source/target refs exist as node ids)
+  - Check layer coverage (every file-type node appears in exactly 1 layer)
+  - Check tour structure (all tour step refs resolve to valid nodes)
+
+If validation fails: log errors but still write the graph (with "valid": false flag).
+```
+
+### Step 17: KG Pipeline — Save Knowledge Graph
+
+```
+Assemble final KnowledgeGraph JSON:
+
+{
+  "version": "1.0.0",
+  "valid": true|false,
+  "project": {
+    "name": "<from state.json or package.json>",
+    "languages": [<detected>],
+    "frameworks": [<detected>],
+    "description": "<from project.md>",
+    "analyzedAt": "<ISO timestamp>",
+    "gitCommitHash": "<current HEAD>"
+  },
+  "nodes": [<from assembled-graph.json>],
+  "edges": [<from assembled-graph.json>],
+  "layers": [<from Step 14 layers.json>],
+  "tour": [<from Step 15 tour.json>]
+}
+
+Write to: .workflow/codebase/knowledge-graph.json
+Clean up: remove .workflow/codebase/.kg-tmp/ directory
+```
+
+---
+
 ## Error Handling
 
 | Error | Action |
@@ -196,6 +304,9 @@ Suggest next: manage-status (review) or manage-codebase-refresh (incremental upd
 | .workflow/ missing | Fail: "Run /workflow:init first" |
 | File read errors | Log warning, skip file, continue scan |
 | Existing codebase/ without --force | Prompt user for confirmation |
+| UA vendor not installed | Skip Steps 10–17 with warning, continue normally |
+| KG batch delegate failed | Log warning, continue with remaining batches |
+| KG validation failed | Write knowledge-graph.json with `"valid": false`, log errors |
 
 ## Output Files
 
@@ -206,5 +317,6 @@ Suggest next: manage-status (review) or manage-codebase-refresh (incremental upd
 | `.workflow/codebase/tech-registry/{slug}.md` | Per-component documentation |
 | `.workflow/codebase/feature-maps/_index.md` | Feature index |
 | `.workflow/codebase/feature-maps/{slug}.md` | Per-feature documentation |
+| `.workflow/codebase/knowledge-graph.json` | Knowledge Graph with nodes, edges, layers, and tour (if UA vendor installed) |
 | `.workflow/state.json` | Updated: last_codebase_rebuild timestamp |
 | `.workflow/project.md` | Updated: Tech Stack section refreshed |

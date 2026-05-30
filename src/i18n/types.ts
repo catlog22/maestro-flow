@@ -107,6 +107,17 @@ export interface LocaleStrings {
     // Agy Hooks (Antigravity)
     agyHooksLevelDescriptions: Record<string, string>;
 
+    // KG Vendor (Knowledge Graph / Understand-Anything)
+    confirmLabelKgVendor: string;
+    kgVendorTitle: string;
+    kgVendorStatusLabel: string;
+    kgVendorInstalled: string;
+    kgVendorNotInstalled: string;
+    kgVendorPathLabel: string;
+    kgVendorDesc: string;
+    kgVendorHint: string;
+    execInstallingKgVendor: string;
+
     // Execution
     execPreparing: string;
     execScanning: string;

@@ -22,6 +22,7 @@ export interface InstallFlowConfig {
   codexMcpProjectRoot: string;
   installAgyHooks: boolean;
   agyHookLevel: HookLevel;
+  installKgVendor: boolean;
   installExtraMcp: boolean;
   extraMcpTargetIds: ExtraMcpTargetId[];
   installStatusline: boolean;
@@ -138,6 +139,16 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
           />
         ) : (
           <Row label="Extra MCP" value={t.install.confirmSkipped} valueColor={C.neutral} />
+        )}
+
+        {config.installKgVendor ? (
+          <Row
+            label={t.install.confirmLabelKgVendor}
+            value="Understand-Anything vendor"
+            valueColor={C.success}
+          />
+        ) : (
+          <Row label={t.install.confirmLabelKgVendor} value={t.install.confirmSkipped} valueColor={C.neutral} />
         )}
 
         <Row

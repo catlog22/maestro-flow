@@ -378,6 +378,34 @@ export type { CopyStats } from '../core/tag-injector.js';
 import type { CopyStats } from '../core/tag-injector.js';
 
 // ---------------------------------------------------------------------------
+// UA (Understand-Anything) vendor status
+// ---------------------------------------------------------------------------
+
+export interface UaVendorStatus {
+  installed: boolean;
+  path: string;
+  coreBuilt: boolean;
+  version?: string;
+}
+
+export function checkUaVendorStatus(): UaVendorStatus {
+  const vendorPath = join(homedir(), '.maestro', 'vendor', 'ua');
+  const pluginPath = join(vendorPath, 'understand-anything-plugin');
+  const coreDist = join(pluginPath, 'packages', 'core', 'dist', 'index.js');
+
+  const installed = existsSync(pluginPath);
+  const coreBuilt = existsSync(coreDist);
+
+  let version: string | undefined;
+  try {
+    const pkg = JSON.parse(readFileSync(join(pluginPath, 'package.json'), 'utf-8'));
+    version = pkg.version;
+  } catch { /* not installed or unreadable */ }
+
+  return { installed, path: vendorPath, coreBuilt, version };
+}
+
+// ---------------------------------------------------------------------------
 // Recursive copy with manifest tracking
 // ---------------------------------------------------------------------------
 

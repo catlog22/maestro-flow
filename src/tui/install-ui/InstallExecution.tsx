@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { paths } from '../../config/paths.js';
 import { C } from '../shared/index.js';
 import {
@@ -64,6 +65,7 @@ export interface InstallFlowResult {
   agyHooksInstalled: number;
   extraMcpRegistered: string[];
   extraMcpFailed: string[];
+  kgVendorInstalled: boolean;
   manifestPath: string;
   statuslineInstalled: boolean;
   backupPath: string | null;
@@ -265,6 +267,25 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           });
         }
 
+        // --- KG Vendor (Understand-Anything) ---
+        let kgVendorInstalled = false;
+        if (config.installKgVendor) {
+          if (cancelled) return;
+          setStatus(t.install.execInstallingKgVendor);
+          try {
+            const isWin = process.platform === 'win32';
+            const scriptPath = join(pkgRoot, 'scripts', isWin ? 'ua-vendor-setup.ps1' : 'ua-vendor-setup.sh');
+            const cmd = isWin
+              ? `powershell -ExecutionPolicy Bypass -File "${scriptPath}" -Force`
+              : `bash "${scriptPath}" --force`;
+            execSync(cmd, { stdio: 'pipe', timeout: 600_000 });
+            kgVendorInstalled = true;
+          } catch (err) {
+            // Non-fatal: log warning but continue installation
+            warnings.push(`KG vendor install failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
         // --- Extra MCP targets ---
         if (config.installExtraMcp) {
           for (const targetId of config.extraMcpTargetIds) {
@@ -309,6 +330,7 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           codexHooksInstalled, codexMcpRegistered,
           agyHooksInstalled,
           extraMcpRegistered, extraMcpFailed,
+          kgVendorInstalled,
           manifestPath,
           statuslineInstalled, backupPath, migrationWarnings: warnings,
         });
