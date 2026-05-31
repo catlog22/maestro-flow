@@ -62,7 +62,7 @@ def load_verified_scores(scores_file: Path) -> Dict[str, float]:
     """Load pre-computed verified_scores from scorer role output (if exists)."""
     if not scores_file.exists():
         return {}
-    data = json.loads(scores_file.read_text())
+    data = json.loads(scores_file.read_text(encoding="utf-8"))
     return {
         ant_id: entry["verified_score"]
         for ant_id, entry in data.get("scores", {}).items()

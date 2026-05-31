@@ -114,11 +114,11 @@ class PheromoneState:
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False))
+        path.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
 
     @classmethod
     def load(cls, path: Path) -> "PheromoneState":
-        return cls.from_dict(json.loads(path.read_text()))
+        return cls.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
     def select_neighbors(
         self,

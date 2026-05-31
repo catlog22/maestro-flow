@@ -89,7 +89,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     paths = SessionPaths(Path(args.session))
     if not paths.config.exists():
         _fail(2, f"config not found: {paths.config}")
-    config = json.loads(paths.config.read_text())
+    config = json.loads(paths.config.read_text(encoding="utf-8"))
 
     paths.ensure_dirs()
 
@@ -107,7 +107,7 @@ def cmd_init(args: argparse.Namespace) -> None:
         "start_nodes": config.get("task_space", {}).get("start_nodes", "any"),
         "edges": config.get("task_space", {}).get("edges", "complete"),
     }
-    paths.task_space.write_text(json.dumps(task_space, indent=2, ensure_ascii=False))
+    paths.task_space.write_text(json.dumps(task_space, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Initialize pheromone
     aco_cfg = config.get("aco", {})
@@ -148,9 +148,9 @@ def _pick_start_node(nodes: List[str], state: PheromoneState, mode: str) -> str:
 
 def cmd_select(args: argparse.Namespace) -> None:
     paths = SessionPaths(Path(args.session))
-    config = json.loads(paths.config.read_text())
+    config = json.loads(paths.config.read_text(encoding="utf-8"))
     state = PheromoneState.load(paths.pheromone_current)
-    task_space = json.loads(paths.task_space.read_text())
+    task_space = json.loads(paths.task_space.read_text(encoding="utf-8"))
 
     n_ants = config.get("swarm", {}).get("n_ants", 5)
     nodes = task_space["nodes"]
@@ -190,7 +190,7 @@ def _load_iteration_artifacts(paths: SessionPaths, iteration: int) -> List[dict]
     artifacts = []
     for f in files:
         try:
-            artifacts.append(json.loads(Path(f).read_text()))
+            artifacts.append(json.loads(Path(f).read_text(encoding="utf-8")))
         except json.JSONDecodeError as e:
             print(f"warning: skipped malformed artifact {f}: {e}", file=sys.stderr)
     return artifacts
@@ -213,9 +213,9 @@ def _validate_artifact(art: dict, valid_nodes: set) -> Optional[str]:
 
 def cmd_update(args: argparse.Namespace) -> None:
     paths = SessionPaths(Path(args.session))
-    config = json.loads(paths.config.read_text())
+    config = json.loads(paths.config.read_text(encoding="utf-8"))
     state = PheromoneState.load(paths.pheromone_current)
-    task_space = json.loads(paths.task_space.read_text())
+    task_space = json.loads(paths.task_space.read_text(encoding="utf-8"))
     valid_nodes = set(task_space["nodes"])
 
     artifacts = _load_iteration_artifacts(paths, args.iter)
@@ -266,7 +266,7 @@ def cmd_update(args: argparse.Namespace) -> None:
     # Elitist: re-load best history, deposit extra on best path
     best_data = None
     if paths.best.exists():
-        best_data = json.loads(paths.best.read_text())
+        best_data = json.loads(paths.best.read_text(encoding="utf-8"))
     current_best = max(scored, key=lambda x: x["score"]) if scored else None
     if current_best:
         best_art = next(a for a in artifacts if a["ant_id"] == current_best["ant_id"])
@@ -281,7 +281,7 @@ def cmd_update(args: argparse.Namespace) -> None:
                 "evidence": best_art.get("evidence", []),
                 "updated_at": time.time(),
             }
-            paths.best.write_text(json.dumps(best_data, indent=2, ensure_ascii=False))
+            paths.best.write_text(json.dumps(best_data, indent=2, ensure_ascii=False), encoding="utf-8")
         # Elite deposit
         state.deposit(best_data["path"], best_data["score"])
 
@@ -292,14 +292,14 @@ def cmd_update(args: argparse.Namespace) -> None:
 
     # Persist trails
     trails_file = paths.trails / f"{args.iter}.jsonl"
-    trails_file.write_text("\n".join(json.dumps(t, ensure_ascii=False) for t in trail_log))
+    trails_file.write_text("\n".join(json.dumps(t, ensure_ascii=False) for t in trail_log), encoding="utf-8")
 
     mean_score = sum(s["score"] for s in scored) / len(scored) if scored else 0.0
     best_score = best_data["score"] if best_data else 0.0
     prev_best = 0.0
     history_files = sorted(paths.pheromone_history.glob("*.json"))
     if len(history_files) >= 2:
-        prev = json.loads(history_files[-2].read_text())
+        prev = json.loads(history_files[-2].read_text(encoding="utf-8"))
         prev_best = prev.get("stats", {}).get("best_known", best_score)
     delta = best_score - prev_best
 
@@ -323,7 +323,7 @@ def cmd_update(args: argparse.Namespace) -> None:
 
 def cmd_converged(args: argparse.Namespace) -> None:
     paths = SessionPaths(Path(args.session))
-    config = json.loads(paths.config.read_text())
+    config = json.loads(paths.config.read_text(encoding="utf-8"))
     cv = config.get("convergence", {})
 
     state = PheromoneState.load(paths.pheromone_current)
@@ -339,7 +339,7 @@ def cmd_converged(args: argparse.Namespace) -> None:
     }
 
     if paths.best.exists():
-        metrics["best_score"] = json.loads(paths.best.read_text()).get("score", 0.0)
+        metrics["best_score"] = json.loads(paths.best.read_text(encoding="utf-8")).get("score", 0.0)
 
     # max_iterations
     max_iter = cv.get("max_iterations", 5)
@@ -397,7 +397,7 @@ def cmd_report(args: argparse.Namespace) -> None:
 
     best = None
     if paths.best.exists():
-        best = json.loads(paths.best.read_text())
+        best = json.loads(paths.best.read_text(encoding="utf-8"))
 
     # Top-K trails across all iterations
     all_trails = []
@@ -410,7 +410,7 @@ def cmd_report(args: argparse.Namespace) -> None:
     # Convergence curve
     curve = []
     for hf in sorted(paths.pheromone_history.glob("*.json"), key=lambda p: int(p.stem)):
-        snap = json.loads(hf.read_text())
+        snap = json.loads(hf.read_text(encoding="utf-8"))
         curve.append({
             "iteration": snap["iteration"],
             "entropy": snap["stats"]["entropy"],
