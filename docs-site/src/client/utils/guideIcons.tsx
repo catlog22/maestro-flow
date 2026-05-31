@@ -179,6 +179,32 @@ const iconMap: Record<string, React.FC<IconProps>> = {
       <path d="M8 16a4 4 0 0 1 8 0" />
     </svg>
   ),
+  'workflow': ({ className }: IconProps) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="6" height="6" rx="1" />
+      <rect x="15" y="3" width="6" height="6" rx="1" />
+      <rect x="9" y="15" width="6" height="6" rx="1" />
+      <path d="M6 9v3a1 1 0 0 0 1 1h4" />
+      <path d="M18 9v3a1 1 0 0 1-1 1h-4" />
+    </svg>
+  ),
+  'shield': ({ className }: IconProps) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  ),
+  'bug': ({ className }: IconProps) => (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="8" y="6" width="8" height="14" rx="4" />
+      <path d="M19 13h2" />
+      <path d="M5 13H3" />
+      <path d="M19 9h2" />
+      <path d="M5 9H3" />
+      <path d="M19 17h2" />
+      <path d="M5 17H3" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  ),
 };
 
 export function getGuideIcon(iconName: string, className = 'w-3.5 h-3.5') {

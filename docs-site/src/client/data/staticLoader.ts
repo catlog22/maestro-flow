@@ -332,6 +332,36 @@ export const guideRegistry: Array<{
     description_zh: 'Antigravity AI 助手可用工具，包含参数和 Schema',
     icon: 'rocket',
   },
+  {
+    slug: 'workflow-enhancement',
+    file: 'workflow-enhancement-guide.md',
+    file_en: 'workflow-enhancement-guide.en.md',
+    title: 'Workflow Enhancement Guide',
+    description: 'Dynamic adversarial workflow generation and parallel workflow acceleration',
+    title_zh: '工作流增强指南',
+    description_zh: '动态对抗工作流生成和并行工作流加速',
+    icon: 'workflow',
+  },
+  {
+    slug: 'security-audit',
+    file: 'security-audit-guide.md',
+    file_en: 'security-audit-guide.en.md',
+    title: 'Security Audit Guide',
+    description: 'OWASP Top 10, STRIDE threat modeling, and supply chain analysis',
+    title_zh: '安全审计指南',
+    description_zh: 'OWASP Top 10、STRIDE 威胁建模和供应链分析',
+    icon: 'shield',
+  },
+  {
+    slug: 'team-swarm',
+    file: 'team-swarm-guide.md',
+    file_en: 'team-swarm-guide.en.md',
+    title: 'Team Swarm Intelligence Guide',
+    description: 'ACO swarm optimization with adversarial decision patterns',
+    title_zh: '团队蚁群智能指南',
+    description_zh: 'ACO 蚁群优化与对抗决策模式',
+    icon: 'bug',
+  },
 ];
 
 // Use import.meta.glob to load all markdown files
