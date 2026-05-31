@@ -22,6 +22,8 @@ Combines structured 6-dimension scoring with iterative deepening and decision ex
 Use `-q` for quick decision extraction only (skip exploration + scoring).
 
 Use `--gaps` for issue-focused root cause analysis (replaces manage-issue-analyze). Loads issues from issues.jsonl, performs CLI exploration against issue context/location, synthesizes root cause into issue.analysis, and outputs context.md for downstream `plan --gaps`.
+
+Pipeline position: downstream of maestro-grill, maestro-brainstorm, and maestro-blueprint (optional upstream enrichment); upstream of maestro-plan and maestro-roadmap (consumes analysis context).
 </purpose>
 
 <required_reading>
@@ -47,31 +49,47 @@ $ARGUMENTS -- phase number for micro mode, topic text for macro/adhoc mode, no a
 - Mixed input like `"1 phase"` is treated as text → macro mode (only bare numerics trigger micro)
 
 **Flags:**
-- `-y` / `--yes`: Auto mode — skip interactive scoping, use recommended defaults, auto-deepen
-- `-c` / `--continue`: Resume from existing session (auto-detect session folder + discussion.md)
-- `-q` / `--quick`: Quick mode — skip exploration + scoring, go straight to decision extraction (context.md only)
-- `--from <source>`: Load upstream context package (grill:ID, brainstorm:ID, blueprint:BLP-xxx, @file, or path)
-- `--gaps [ISS-ID]`: Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl.
 
-Scope routing, output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Scope Routing and Output Structure sections).
+| Flag | Effect | Default |
+|------|--------|---------|
+| `-y` / `--yes` | Auto mode — skip interactive scoping, use recommended defaults, auto-deepen | false |
+| `-c` / `--continue` | Resume from existing session (auto-detect session folder + discussion.md) | false |
+| `-q` / `--quick` | Quick mode — skip exploration + scoring, go straight to decision extraction (context.md only) | false |
+| `--from <source>` | Load upstream context package (grill:ID, brainstorm:ID, blueprint:BLP-xxx, @file, or path) | — |
+| `--gaps [ISS-ID]` | Issue root cause analysis mode. If ISS-ID provided, analyze single issue. If omitted, analyze all open/registered issues from issues.jsonl | — |
+
+**Scope routing:**
+| Input | Mode | Scope |
+|-------|------|-------|
+| Pure digits (e.g. `1`, `42`) | micro | Phase-level deep analysis |
+| Non-numeric text (e.g. `auth-refactor`) | macro | Topic impact surface |
+| No positional arg + roadmap | micro | Milestone-wide |
+| No positional arg + no roadmap | macro | Fallback |
+| `--gaps [ISS-ID]` | gaps | Issue root cause analysis |
+
+Output directory format, artifact registration schema, and output artifact listing are defined in workflow analyze.md (Output Structure section).
+
+### Pre-load
+
+1. **Codebase docs**: IF `.workflow/codebase/doc-index.json` exists → Read ARCHITECTURE.md for module boundaries
+2. **Specs**: `maestro spec load --category arch` — load architecture constraints
+3. **Wiki search**: `maestro wiki search "{topic keywords}" --json` → top 5-10 entries as prior knowledge
+4. All optional — proceed without if unavailable (log warning)
 
 ### Role Knowledge
 `maestro wiki list --category debug` → select relevant → `maestro wiki load`
 </context>
 
 <interview_protocol>
-Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (explicit phase number or unambiguous topic).
+Follows @~/.maestro/workflows/interview-mechanics.md standard.
 
-- One decision per turn via ask_question with 2–4 options + a (Recommended) default. The user controls termination — keep interviewing until convergence; they can interrupt naturally or via `Other` at any time.
-- Search-first when uncertain: before asking, resolve via `state.json`, `roadmap.md`, `issues.jsonl`, `maestro spec load`, `maestro wiki search`, Grep, Read, or — for open-ended multi-file scans — spawn `invoke_subagent([{ TypeName: "<TypeName>", Role: "<Role>", Prompt: "<Prompt>", Workspace: "inherit" }])` / `maestro delegate ... --role explore`. Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
-- Writeback cadence: each settled decision is immediately appended/updated in `discussion.md` (top table) and mirrored into `context.md` "Interview Decisions". Do NOT batch writeback to the end — partial decisions must already be on disk before the next question.
-- Walk the decision dependency tree strictly: scope → depth → dimensions → Go/No-Go threshold. Do not open the next branch until the current one is settled.
-- Scope guard: only ask about decisions owned by `analyze`. Do not prejudge plan/execute concerns.
-
-Decision points: scope (phase / topic / milestone-wide / adhoc / --gaps) → depth (quick / standard / deep) → dimensions (which of the 6 to keep) → Go/No-Go threshold.
-
-Exit: when all decision points are settled (or user explicitly signals to proceed), finalize session metadata. The decision table (populated incrementally during interview) uses this schema:
-`| # | Decision | Choice | Source (user / code / default) |`
+**Interaction mode**: convergent menu-driven
+**Decision tree** (strict order): scope (phase / topic / milestone-wide / adhoc / --gaps) → depth (quick / standard / deep) → dimensions (which of the 6 to keep) → Go/No-Go threshold
+**Scope guard**: only analyze decisions; do not prejudge plan/execute concerns
+**Writeback target**: discussion.md (top table) + context.md "Interview Decisions"
+**Additional search sources**: issues.jsonl (--gaps mode), roadmap.md
+**Additional skip conditions**: input is already specific (explicit phase number or unambiguous topic)
+**Exit condition**: all decision points settled → finalize session metadata
 </interview_protocol>
 
 <execution>
@@ -108,23 +126,52 @@ Phase 4: Output context.md for downstream plan --gaps
 - `large` (3+ independent subsystems or hard serial dependencies) → suggest `/maestro-roadmap --from analyze:ANL-xxx`
 - `medium` (1-2 subsystems, parallelizable) → suggest `/maestro-plan --from analyze:ANL-xxx`
 - `small` (single-file or few-file change) → suggest `/maestro-plan --from analyze:ANL-xxx`
-
-**Next-step routing on completion:**
-
-Phase/Milestone scope (micro mode):
-- Go recommendation, UI work needed → `/maestro-impeccable build {target}`
-- Go recommendation, ready to plan → `/maestro-plan` or `/maestro-plan {phase}`
-- No-Go recommendation → revisit requirements or `/maestro-brainstorm {topic}`
-
-Macro/Adhoc/Standalone scope:
-- scope_verdict = large → `/maestro-roadmap --from analyze:ANL-xxx`
-- scope_verdict = medium/small → `/maestro-plan --from analyze:ANL-xxx`
-- Need more exploration → `/maestro-analyze {topic} -c`
-
-Gaps scope:
-- Issues analyzed → `/maestro-plan --gaps` (plan fix tasks linked to issues)
-- Need more context → `/maestro-analyze --gaps {ISS-ID}` (re-analyze specific issue)
 </execution>
+
+<completion>
+### Standalone report
+
+```
+=== ANALYSIS READY ===
+Artifact: ANL-{id}
+Scope: {micro|macro|adhoc|gaps}
+Go/No-Go: {GO|NO-GO|CONDITIONAL}
+Confidence: {high|medium|low}
+Outputs: analysis.md, context.md, conclusions.json, discussion.md
+Session dir: {output_dir}
+===
+```
+
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Phase/Milestone scope, Go, UI work needed | `/maestro-impeccable build {target}` |
+| Phase/Milestone scope, Go, ready to plan | `/maestro-plan` or `/maestro-plan {phase}` |
+| Phase/Milestone scope, No-Go | Revisit requirements or `/maestro-brainstorm {topic}` |
+| Macro/Adhoc, scope_verdict = large | `/maestro-roadmap --from analyze:ANL-xxx` |
+| Macro/Adhoc, scope_verdict = medium/small | `/maestro-plan --from analyze:ANL-xxx` |
+| Need more exploration | `/maestro-analyze {topic} -c` |
+| Gaps scope, issues analyzed | `/maestro-plan --gaps` |
+| Gaps scope, need more context | `/maestro-analyze --gaps {ISS-ID}` |
+
+### Session seal
+
+@~/.maestro/workflows/finish-work.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
@@ -168,6 +215,3 @@ Both modes (full + quick):
 - [ ] Session sealed via finish-work (archive.json written, optional spec/knowhow extraction)
 </success_criteria>
 
-<on_complete>
-@~/.maestro/workflows/finish-work.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
-</on_complete>

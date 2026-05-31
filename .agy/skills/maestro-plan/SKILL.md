@@ -122,7 +122,13 @@ For each created TASK-{NNN}.json that has issue_id:
 
 This ensures issue → TASK traceability. The `task_refs[]` and `task_plan_dir` fields on the issue allow the dashboard to resolve and display associated TASK details.
 
-**Report format on completion:**
+### Mode: Revise / Check
+
+Follow workflow plan.md § "Revise Mode" and § "Check Mode" respectively. These modes bypass the standard P1-P5 create pipeline.
+</execution>
+
+<completion>
+### Standalone report
 
 ```
 === PLAN READY ===
@@ -133,20 +139,16 @@ Collision: {collision_status}
 
 Plan: scratch/{YYYYMMDD}-plan-P{N}-{slug}/plan.json
 Tasks: scratch/{YYYYMMDD}-plan-P{N}-{slug}/.task/TASK-*.json
-
-Next steps:
-  /maestro-execute              -- Execute the plan
-  /maestro-execute --dir {dir}  -- Execute specific plan
-  /maestro-plan {phase}         -- Re-plan with modifications
 ```
 
-**Completion (when invoked from ralph):**
-End the step by calling the CLI (no `--- COMPLETION STATUS ---` text block):
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
 ```
-maestro ralph complete <idx> --status DONE [--evidence scratch/{YYYYMMDD}-plan-P{N}-{slug}/plan.json]
+maestro ralph complete <idx> --status {STATUS} [--evidence scratch/{YYYYMMDD}-plan-P{N}-{slug}/plan.json]
 ```
 
-STATUS verdicts (CLI-enforced enum):
+Status verdicts:
 - **DONE** — Plan created/revised and confirmed → next step picks up automatically
 - **DONE_WITH_CONCERNS** — Plan produced but with explicit caveats; pass `--concerns "..."`
 - **NEEDS_RETRY** — Plan failed (tooling error, transient issue); ralph will retry
@@ -154,10 +156,14 @@ STATUS verdicts (CLI-enforced enum):
 
 > Ambiguous requirements are NOT a completion status — resolve them in-place via `ask_question` during planning (≤3 rounds), then proceed to DONE. `NEEDS_CONTEXT` has been removed; context shortage is handled by the harness's automatic compaction.
 
-### Mode: Revise / Check
+### Next-step routing
 
-Follow workflow plan.md § "Revise Mode" and § "Check Mode" respectively. These modes bypass the standard P1-P5 create pipeline.
-</execution>
+| Condition | Suggestion |
+|-----------|-----------|
+| Plan confirmed for execution | `/maestro-execute` |
+| Plan confirmed, specific directory | `/maestro-execute --dir {dir}` |
+| Re-plan with modifications | `/maestro-plan {phase}` |
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |

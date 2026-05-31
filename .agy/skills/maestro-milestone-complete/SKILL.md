@@ -15,12 +15,22 @@ allowed-tools:
 ---
 
 <purpose>
-Mark a milestone as complete after its audit has passed. Archives all scratch artifacts to `milestones/{M}/artifacts/`, moves artifact entries from `state.json.artifacts[]` to `milestone_history`, extracts final knowhow, and advances to the next milestone.
+Mark a milestone as complete after its audit has passed. Performs 6-step archival:
+validation → directory archival → artifact history → knowhow extraction → state advancement → cleanup.
+
+Produces `milestones/{M}/artifacts/` archive and `specs/learnings.md` knowhow entries.
+Supports two milestone types: standard (advances to next milestone) and adhoc (self-contained, sets idle).
+
+Pipeline position: downstream of `maestro-milestone-audit` (requires PASS verdict). Upstream of `maestro-milestone-release` (cut a release) or next milestone planning (`maestro-analyze` / `maestro-plan`).
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/milestone-complete.md
 </required_reading>
+
+<deferred_reading>
+- [state.json](~/.maestro/templates/state.json) — read when updating milestone_history and advancing state
+</deferred_reading>
 
 <context>
 Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json).
@@ -52,13 +62,43 @@ After knowhow extraction (step 4), scan `learnings.md` for promotion candidates:
 
 If user confirms promotion, invoke `view_file(AbsolutePath="<agy-skills-dir>/spec-add/SKILL.md") + execute inline (args: "<category> <content>")` with promoted content, preserving original date and source traceability.
 
-**Next-step routing on completion:**
-- Cut a release → `/maestro-milestone-release`
-- Next milestone → `/maestro-analyze` or `/maestro-plan 1` (standard milestones only)
-- View state → `/manage-status`
-
 **Adhoc milestone (D-008):** When completing an adhoc milestone, skip roadmap snapshot and do not advance to next milestone. Set `current_milestone = null`, `status = "idle"`. Adhoc milestones are self-contained — no successor in roadmap chain.
 </execution>
+
+<completion>
+### Standalone report
+
+```
+=== MILESTONE COMPLETE ===
+Milestone: {milestone_id}
+Status: ARCHIVED
+Artifacts archived: {count}
+Knowhow extracted: {count} entries
+Next milestone: {next_id | "none (adhoc)"}
+==============================
+```
+
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Cut a release | `/maestro-milestone-release` |
+| Next milestone (standard) | `/maestro-analyze` or `/maestro-plan 1` |
+| View state | `/manage-status` |
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
@@ -66,6 +106,8 @@ If user confirms promotion, invoke `view_file(AbsolutePath="<agy-skills-dir>/spe
 | E001 | error | Milestone identifier required | Check arguments |
 | E002 | error | Audit not passed | Run maestro-milestone-audit first |
 | E003 | error | Incomplete artifacts remain | Complete remaining work first |
+| W001 | warning | Knowhow extraction produced 0 entries | Review milestone work for missed learnings |
+| W002 | warning | Wiki-connect found unlinked knowledge islands | Run `/manage-wiki --fix` manually |
 </error_codes>
 
 <success_criteria>

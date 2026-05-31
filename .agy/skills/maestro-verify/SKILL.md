@@ -39,7 +39,22 @@ Registers VRF artifact in state.json on completion.
 <context>
 $ARGUMENTS — phase number or no args for milestone-wide, with optional flags.
 
-Flags (`--skip-tests`, `--skip-antipattern`, `--dir`), scope routing, output paths, and VRF artifact registration schema are defined in workflow `verify.md`.
+### Flags
+
+| Flag | Effect | Default |
+|------|--------|---------|
+| `--skip-tests` | Skip Nyquist test coverage validation (V2), only run Goal-Backward verification | false |
+| `--skip-antipattern` | Skip anti-pattern scan step | false |
+| `--dir <path>` | Verify a single plan directory instead of milestone-wide | — (milestone mode) |
+
+**Scope routing:**
+| Input | Scope | Resolution |
+|-------|-------|------------|
+| `--dir scratch/{dir}` | single plan | Verify one plan, write verification.json into plan dir |
+| numeric arg | phase | Verify all execute artifacts for that phase |
+| no args | milestone | Aggregate all execute artifacts for current milestone |
+
+Output paths and VRF artifact registration schema are defined in workflow `verify.md`.
 
 ### Pre-load context (before verification)
 
@@ -65,28 +80,48 @@ Follow '~/.maestro/workflows/verify.md' completely.
 
 On confirm → `Skill("spec-add", "<category> <content>")`.
 
-**Next-step routing on completion:**
-- All checks pass, no gaps → /quality-review
-- Gaps found (must-have failures or anti-pattern blockers) → /maestro-plan --gaps
-- Low test coverage (Nyquist gaps) → /quality-auto-test
+</execution>
 
-**Gap-fix closure loop:**
-Gaps found → maestro-plan --gaps → maestro-execute → maestro-verify (re-run)
+<completion>
+### Standalone report
 
-**Completion status:**
 ```
---- COMPLETION STATUS ---
+=== VERIFY COMPLETE ===
 STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_RETRY
 CONCERNS: {description if applicable}
 NEXT: /quality-review
---- END STATUS ---
+=== END VERIFY ===
 ```
 
 Status mapping:
 - **DONE** — All checks pass, no gaps → NEXT: /quality-review
 - **DONE_WITH_CONCERNS** — Gaps found (must-have failures or anti-pattern blockers) → NEXT: /maestro-execute (after /maestro-plan --gaps)
 - **NEEDS_RETRY** — Verification could not complete (missing artifacts, corrupt data)
-</execution>
+
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| All checks pass, no gaps | `/quality-review` |
+| Gaps found (must-have failures or anti-pattern blockers) | `/maestro-plan --gaps` |
+| Low test coverage (Nyquist gaps) | `/quality-auto-test` |
+
+**Gap-fix closure loop:**
+Gaps found → maestro-plan --gaps → maestro-execute → maestro-verify (re-run)
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |

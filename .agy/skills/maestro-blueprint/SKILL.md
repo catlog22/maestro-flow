@@ -22,6 +22,8 @@ Parallel to `brainstorm` as an upstream origin command:
 - **blueprint** = convergent documentation (heavyweight, 6-phase formal spec chain)
 
 Output: `.workflow/blueprint/BLP-{slug}-{date}/` containing Product Brief, PRD, Architecture, and Epics.
+
+Pipeline position: downstream of maestro-brainstorm (optional). Upstream of maestro-analyze, maestro-roadmap, and maestro-plan.
 </purpose>
 
 <required_reading>
@@ -36,10 +38,13 @@ Output: `.workflow/blueprint/BLP-{slug}-{date}/` containing Product Brief, PRD, 
 $ARGUMENTS -- idea text, @file reference, or upstream context source.
 
 **Flags:**
-- `-y` / `--yes`: Auto mode — skip interactive questions, use recommended defaults
-- `-c` / `--continue`: Resume from last checkpoint (reads blueprint-config.json)
-- `--from <source>`: Load upstream context package (brainstorm:ID, @file, or path). Consumes context-package.json
-- `--from-brainstorm SESSION-ID`: (backward compat alias for `--from brainstorm:ID`)
+
+| Flag | Effect | Default |
+|------|--------|---------|
+| `-y` / `--yes` | Auto mode — skip interactive questions, use recommended defaults | false |
+| `-c` / `--continue` | Resume from last checkpoint (reads blueprint-config.json) | false |
+| `--from <source>` | Load upstream context package (brainstorm:ID, @file, or path). Consumes context-package.json | — |
+| `--from-brainstorm SESSION-ID` | Backward compat alias for `--from brainstorm:ID` | — |
 
 **Input types:**
 - Direct text: `"Build a real-time collaboration platform with WebSocket"`
@@ -58,23 +63,22 @@ maestro-analyze → maestro-roadmap → maestro-plan
 
 **Output boundary**: ALL file writes MUST target `.workflow/blueprint/BLP-{slug}-{date}/` or `.workflow/state.json` only. NEVER modify source code or files outside these paths.
 
-### Pre-load specs
-1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for architecture decisions (Phase 4).
-2. Optional — proceed without if unavailable.
+### Pre-load
+
+1. **Specs**: `maestro spec load --category arch` — load architecture constraints for Phase 4 decisions
+2. **Wiki search**: `maestro wiki search "{topic keywords}" --json` → prior knowledge context
+3. All optional — proceed without if unavailable
 </context>
 
 <interview_protocol>
-Interview the user relentlessly about every aspect of the spec until shared understanding is reached. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one; if a question can be answered by exploring the codebase, explore the codebase instead. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (clear idea + scope).
+Follows @~/.maestro/workflows/interview-mechanics.md standard.
 
-- Ask one question per turn via ask_question and wait for the user's feedback before continuing; every question must carry a recommended answer marked `(Recommended)`, 2–4 options total. The user controls termination — keep interviewing until convergence; they can interrupt naturally or via `Other` at any time.
-- Search-first when uncertain: before asking, resolve via `state.json`, existing artifacts, `maestro spec load`, direct codebase exploration (Glob/Grep/Read), or — for open-ended multi-file scans — spawn `invoke_subagent([{ TypeName: "<TypeName>", Role: "<Role>", Prompt: "<Prompt>", Workspace: "inherit" }])` / `maestro delegate ... --role explore`. Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
-- Writeback cadence: each settled decision is immediately persisted into `blueprint-config.json` before the next question. Do NOT batch writeback to the end — partial decisions must already be on disk.
-- Walk the decision dependency tree depth-first: scope → spec type → focus areas → requirement priorities. Do not open the next branch until the current one is settled.
-- Scope guard: only decide the shape of the specification. Do not pre-resolve roadmap phases or plan tasks — those belong to downstream commands.
-
-Decision points: scope (full product / feature set / single feature) → spec type (service / api / library / platform) → focus areas → whether to run codebase exploration.
-
-Exit: on consensus or explicit user signal to proceed, finalize blueprint-config.json (decisions already written incrementally) and proceed to Phase 1.
+**Interaction mode**: convergent menu-driven, depth-first
+**Decision tree** (strict depth-first): scope (full product / feature set / single feature) → spec type (service / api / library / platform) → focus areas → whether to run codebase exploration → requirement priorities
+**Scope guard**: only specification shape; do not pre-resolve roadmap phases or plan tasks
+**Writeback target**: blueprint-config.json (each decision persisted before next question)
+**Additional skip conditions**: none beyond standard (-y, -c)
+**Exit condition**: all decision points settled → finalize blueprint-config.json, proceed to Phase 1
 </interview_protocol>
 
 <execution>
@@ -88,15 +92,44 @@ P0: Spec Study → P1: Discovery → P1.5: Req Expansion → P2: Product Brief �
 
 P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail (<60%) → P6.5 Auto-Fix (max 2 iter) → re-check
 
-### Next-step routing on completion
+</execution>
+
+<completion>
+### Standalone report
+
+```
+=== BLUEPRINT READY ===
+Session: BLP-{slug}-{date}
+Phases completed: P0–P6
+Readiness score: {score}%
+Gate verdict: {Pass|Review|Fail}
+Output: .workflow/blueprint/BLP-{slug}-{date}/
+Key artifacts: product-brief.md, requirements/, architecture/, epics/, readiness-report.md
+===
+```
+
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Need codebase analysis | /maestro-analyze {topic} --from blueprint:BLP-xxx |
-| Ready for roadmap | /maestro-roadmap --from blueprint:BLP-xxx |
-| Small scope, direct plan | /maestro-plan --from blueprint:BLP-xxx |
-| Need project setup | /maestro-init |
-</execution>
+| Need codebase analysis | `/maestro-analyze {topic} --from blueprint:BLP-xxx` |
+| Ready for roadmap | `/maestro-roadmap --from blueprint:BLP-xxx` |
+| Small scope, direct plan | `/maestro-plan --from blueprint:BLP-xxx` |
+| Need project setup | `/maestro-init` |
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |

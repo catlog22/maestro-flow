@@ -18,6 +18,8 @@ allowed-tools:
 Execute all tasks in a plan using wave-based parallel execution with dependency-aware ordering. Each plan is executed independently (plans串行, plan内wave并行). Task summaries are written to the plan's scratch directory under `.summaries/`. Registers EXC artifact in state.json.
 
 Invoked after /maestro-plan produces a confirmed plan. When called without args on a milestone, finds all pending plans and executes them sequentially.
+
+Pipeline position: upstream from maestro-plan (consumes confirmed plan), downstream to maestro-verify.
 </purpose>
 
 <required_reading>
@@ -32,7 +34,26 @@ Invoked after /maestro-plan produces a confirmed plan. When called without args 
 <context>
 $ARGUMENTS — phase number, or no args for milestone-wide execution, with optional flags.
 
-Scope routing, flags, resolution logic, output directory format, artifact registration schema, and incremental knowhow extraction are defined in workflow `execute.md`.
+### Flags
+
+| Flag | Effect | Default |
+|------|--------|---------|
+| `--auto-commit` | Auto-commit after each completed task | false |
+| `--method agent\|cli\|auto` | Execution method: Agent tool, CLI delegate, or auto-select | `auto` |
+| `--executor <tool>` | Explicit executor tool for CLI delegate mode | First enabled in config |
+| `--dir <path>` | Execute a specific plan directory instead of auto-discovery | — |
+| `-y` / `--yes` | Auto mode — skip interactive questions | false |
+
+### Scope routing
+
+| Input | Scope | Resolution |
+|-------|-------|------------|
+| numeric arg | phase | Resolve plan from roadmap phase |
+| `--dir <path>` | explicit | Use specified plan directory |
+| no args + milestone | milestone | Find all pending plans, execute sequentially |
+| no args + no milestone | error E001 | No plan found |
+
+Full resolution logic, output directory format, artifact registration schema, and incremental knowhow extraction are defined in workflow `execute.md`.
 
 ### Pre-load context (before task execution)
 
@@ -83,7 +104,10 @@ For each completed/failed TASK with issue_id:
   Write updated issue back to issues.jsonl
 ```
 
-**Report format on completion:**
+</execution>
+
+<completion>
+### Standalone report
 
 ```
 === EXECUTION COMPLETE ===
@@ -93,24 +117,30 @@ Failed:    {failed_count} tasks
 
 Summaries: {plan_dir}/.summaries/
 Tasks:     {plan_dir}/.task/
-
-Next steps:
-  /maestro-verify              -- Verify execution results
-  /maestro-verify --dir {dir}  -- Verify specific plan
-  /manage-status               -- View project dashboard
 ```
 
-**Completion status:**
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
 ```
---- COMPLETION STATUS ---
-STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_RETRY
-CONCERNS: {failed_count} tasks failed (if any)
-NEXT: /maestro-verify
---- END STATUS ---
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 ```
 
-If failed tasks exist, suggest /quality-debug for investigation.
-</execution>
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| All tasks completed successfully | `/maestro-verify` |
+| Specific plan needs verification | `/maestro-verify --dir {dir}` |
+| Failed tasks exist | `/quality-debug` |
+| View project dashboard | `/manage-status` |
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |

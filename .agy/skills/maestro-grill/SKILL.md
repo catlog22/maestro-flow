@@ -37,56 +37,81 @@ $ARGUMENTS -- topic/plan text for interactive mode, or --from source for upstrea
 - **Resume mode** (`-c` or `--session ID`): Continue from a previous grill session
 
 **Flags:**
-- `-y` / `--yes`: Auto mode — CLI exploration replaces human answers
-- `-c` / `--continue`: Resume from last grill session
-- `--session ID`: Resume specific session
-- `--depth shallow|standard|deep`: Branch count 3/5/8 (default: standard)
-- `--from <source>`: Load upstream material (`blueprint:ID`, `@file`, or path)
+
+| Flag | Effect | Default |
+|------|--------|---------|
+| `-y` / `--yes` | Auto mode — CLI exploration replaces human answers | `false` |
+| `-c` / `--continue` | Resume from last grill session | — |
+| `--session ID` | Resume specific session | — |
+| `--depth shallow\|standard\|deep` | Branch count 3/5/8 | `standard` |
+| `--from <source>` | Load upstream material (`blueprint:ID`, `@file`, or path) | — |
 
 **Output directory**: `.workflow/scratch/{YYYYMMDD}-grill-{slug}/`
 **Produced files**: `grill-report.md`, `terminology.md`, `context-package.json`
 
-### Role Knowledge
-`maestro wiki search "{topic keywords}"` → load relevant entries before grilling.
-`maestro spec load --category arch` → load architecture constraints.
+### Pre-load
+
+1. **Specs**: `maestro spec load --category arch` — load architecture constraints
+2. **Wiki search**: `maestro wiki search "{topic keywords}"` → load relevant entries before grilling
+3. All optional — proceed without if unavailable
 </context>
 
 <interview_protocol>
-Grill the user relentlessly until every branch of the decision tree is walked. This is NOT a menu-driven interview — it is adversarial Socratic questioning. Active only in interactive mode; skip when `-y/--yes` or `-c/--continue`.
+Follows @~/.maestro/workflows/interview-mechanics.md standard.
 
-Core protocol:
-- **One question per turn**. Each question probes ONE specific aspect. Never ask compound questions.
-- **Code-grounded**: Before asking, search the codebase for evidence. Use findings to sharpen the question or challenge the user's answer. Never ask what code can verify — search first, then confront.
-- **Escalating depth**: Start with scope boundaries, progress to data model, edge cases, failure modes. Each branch goes basic → specific → adversarial.
-- **Immediate writeback**: After each answered question, immediately append the Q&A + decision to `grill-report.md`. Do NOT batch — partial progress must be on disk before the next question.
-- **Challenge contradictions**: If an answer conflicts with code evidence or a prior answer, immediately surface the contradiction and demand resolution.
-- **Terminology enforcement**: When the user uses a term that conflicts with codebase naming, challenge it immediately. Propose the code-consistent alternative. Update `terminology.md` as terms crystallize.
-
-Question framing rules:
-- Reference specific code findings: "The codebase uses `{symbol}` at `{file:line}` — your proposal calls it `{term}`. Which wins?"
-- Use concrete scenarios: "What happens when a user does {action} while {condition} is true?"
-- Probe boundaries: "You said {X} is in scope — does that include {edge_case}, or is that separate?"
-- Challenge scale: "This touches `{table}` — at 10x current data volume, which query breaks first?"
-
-Branch walking order: Scope & Boundaries → Data Model & State → Edge Cases & Failure Modes → Integration & Dependencies → Scale & Performance → Security & Access Control → Observability & Operations → Migration & Rollback. Number of branches determined by `--depth`.
-
-Exit: When all depth-selected branches are fully walked (every question answered or explicitly deferred), finalize the report and generate context-package.json.
+**Interaction mode override**: adversarial Socratic — NOT menu-driven
+**Question style**:
+  - Reference specific code: "The codebase uses `{symbol}` at `{file:line}` — your proposal calls it `{term}`. Which wins?"
+  - Concrete scenarios: "What happens when {action} while {condition}?"
+  - Challenge contradictions: immediately surface conflicts with code evidence or prior answers
+  - Escalating depth: per branch basic → specific → adversarial
+**Branch traversal** (depth-gated, --depth controls count): Scope & Boundaries → Data Model & State → Edge Cases & Failure Modes → Integration & Dependencies → Scale & Performance → Security & Access Control → Observability & Operations → Migration & Rollback
+**Writeback target**: grill-report.md (Q&A append per question) + terminology.md (term crystallization)
+**Additional skip conditions**: none beyond standard (-y, -c)
+**Exit condition**: all depth-selected branches fully walked → finalize report + context-package.json
 </interview_protocol>
 
 <execution>
 Follow '~/.maestro/workflows/grill.md' completely.
-
-**Next-step routing on completion:**
-
-Standard routing:
-- Need multi-role elaboration → view_file(AbsolutePath="<agy-skills-dir>/maestro-brainstorm/SKILL.md") + execute inline (args: "{topic} --from grill:{artifact_id}")
-- Need deep technical analysis → view_file(AbsolutePath="<agy-skills-dir>/maestro-analyze/SKILL.md") + execute inline (args: "{topic} --from grill:{artifact_id}")
-- Scope is clear, ready for roadmap → view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--from grill:{artifact_id}")
-- Need formal spec package → view_file(AbsolutePath="<agy-skills-dir>/maestro-blueprint/SKILL.md") + execute inline (args: "--from grill:{artifact_id}")
-
-Resume routing:
-- More branches to walk → view_file(AbsolutePath="<agy-skills-dir>/maestro-grill/SKILL.md") + execute inline (args: "{topic} -c")
 </execution>
+
+<completion>
+### Standalone report
+
+```
+=== GRILL READY ===
+Topic: {topic}
+Branches walked: {count}/{depth_target}
+Decisions locked: {locked_count}
+Open risks: {risk_count}
+Output: {output_dir}
+Artifact: GRL-{id}
+=== END GRILL ===
+```
+
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Need multi-role elaboration | `view_file(AbsolutePath="<agy-skills-dir>/maestro-brainstorm/SKILL.md") + execute inline (args: "{topic} --from grill:{artifact_id}")` |
+| Need deep technical analysis | `view_file(AbsolutePath="<agy-skills-dir>/maestro-analyze/SKILL.md") + execute inline (args: "{topic} --from grill:{artifact_id}")` |
+| Scope is clear, ready for roadmap | `view_file(AbsolutePath="<agy-skills-dir>/maestro-roadmap/SKILL.md") + execute inline (args: "--from grill:{artifact_id}")` |
+| Need formal spec package | `view_file(AbsolutePath="<agy-skills-dir>/maestro-blueprint/SKILL.md") + execute inline (args: "--from grill:{artifact_id}")` |
+| More branches to walk | `view_file(AbsolutePath="<agy-skills-dir>/maestro-grill/SKILL.md") + execute inline (args: "{topic} -c")` |
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |

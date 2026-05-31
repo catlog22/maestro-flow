@@ -17,6 +17,8 @@ allowed-tools:
 
 <purpose>
 Package a completed milestone into a releasable version. Bumps the project version (e.g. `package.json`, `pyproject.toml`, or language-specific manifest), generates or appends a changelog entry from phase/milestone summaries and git log, creates an annotated git tag, and optionally pushes to the remote. Runs after `/maestro-milestone-complete` has archived the milestone; serves as the final delivery step in the SDLC loop.
+
+Pipeline position: downstream of `/maestro-milestone-complete` (consumes archived milestone + audit verdict). Terminal command — no downstream consumer.
 </purpose>
 
 <required_reading>
@@ -27,11 +29,14 @@ Package a completed milestone into a releasable version. Bumps the project versi
 $ARGUMENTS -- optional explicit version string and flags.
 
 **Flags:**
-- `<version>` -- explicit version (e.g. `1.2.0`). If omitted, version is derived from `--bump` or prompted.
-- `--bump patch|minor|major` -- semver bump relative to the current version (default: `minor`)
-- `--dry-run` -- compute the next version, changelog diff, and tag name without writing files or creating tags
-- `--no-tag` -- skip git tag creation (version bump + changelog only)
-- `--no-push` -- skip `git push --follow-tags` after tagging
+
+| Flag | Effect | Default |
+|------|--------|---------|
+| `<version>` | Explicit version (e.g. `1.2.0`). If omitted, version is derived from `--bump` or prompted | — |
+| `--bump patch\|minor\|major` | Semver bump relative to the current version | `minor` |
+| `--dry-run` | Compute the next version, changelog diff, and tag name without writing files or creating tags | `false` |
+| `--no-tag` | Skip git tag creation (version bump + changelog only) | `false` |
+| `--no-push` | Skip `git push --follow-tags` after tagging | `false` |
 
 **State files:**
 - `.workflow/state.json` -- current_milestone, previous release version
@@ -45,6 +50,13 @@ $ARGUMENTS -- optional explicit version string and flags.
 - Working tree must be clean (no uncommitted changes) unless `--dry-run`
 </context>
 
+<interview_protocol>
+Follows @~/.maestro/workflows/interview-mechanics.md standard.
+
+**Decision points**: version bump type (major / minor / patch / custom), changelog review and confirmation
+**Scope guard**: only release decisions; do not prejudge next milestone scope
+</interview_protocol>
+
 <execution>
 Follow '~/.maestro/workflows/milestone-release.md' completely.
 
@@ -57,7 +69,12 @@ Follow '~/.maestro/workflows/milestone-release.md' completely.
 6. Create annotated git tag `v{version}` with release notes body (unless `--no-tag`)
 7. Push commit + tag to remote (unless `--no-push`)
 
-**Report format on completion:**
+For `--dry-run`, print the computed version, changelog diff, and tag name without side effects.
+</execution>
+
+<completion>
+### Standalone report
+
 ```
 === RELEASE COMPLETE ===
 Version:   v{previous} → v{new}
@@ -65,14 +82,28 @@ Milestone: {milestone_name}
 Tag:       v{new} {pushed|local-only}
 Changelog: {N} entries written to CHANGELOG.md
 Manifest:  {file_path} updated
-
-Next steps:
-  /maestro-plan {next_phase}   -- Start next milestone's first phase
-  /manage-status               -- View project dashboard
 ```
 
-For `--dry-run`, print the computed version, changelog diff, and tag name without side effects.
-</execution>
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Release successful, starting next milestone | `/maestro-plan {next_phase}` |
+| Want to view project dashboard | `/manage-status` |
+</completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
