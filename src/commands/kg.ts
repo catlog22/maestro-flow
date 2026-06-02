@@ -15,6 +15,13 @@ import type { KnowledgeGraph, GraphNode } from '../graph/types.js';
 import { loadGraph } from '../graph/loader.js';
 import { searchNodes, findPath, diffChanges, countBy, truncate } from '../graph/query.js';
 import { FsAnalyzer } from '../graph/analyzers/fs-analyzer.js';
+import { DatabaseConnection, getDatabasePath, QueryBuilder } from '../graph/db/index.js';
+import { GraphTraverser } from '../graph/traversal.js';
+import { GraphQueryManager } from '../graph/graph-queries.js';
+import { IncrementalSync } from '../graph/sync/incremental-sync.js';
+import { FileWatcher } from '../graph/sync/watcher.js';
+import { parseQuery } from '../graph/search/query-parser.js';
+import { migrateJsonToSqlite, exportSqliteToJson } from '../graph/migration.js';
 
 import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
@@ -86,12 +93,30 @@ async function findRelatedWikiEntries(nodeId: string, filePath?: string): Promis
   }
 }
 
+// ── SQLite helpers ────────────────────────────────────────────────────
+
+function openSqliteOrExit(): { conn: DatabaseConnection; queries: QueryBuilder } {
+  const dbPath = getDatabasePath();
+  if (!existsSync(dbPath)) {
+    console.error(`SQLite graph not found: ${dbPath}`);
+    console.error('  Hint: run "maestro kg index --sqlite" to create one');
+    process.exit(1);
+  }
+  const conn = new DatabaseConnection();
+  conn.open(dbPath);
+  return { conn, queries: new QueryBuilder(conn) };
+}
+
+function hasSqliteDb(): boolean {
+  return existsSync(getDatabasePath());
+}
+
 // ── Registration ───────────────────────────────────────────────────────
 
 export function registerKgCommand(program: Command): void {
   const kg = program
     .command('kg')
-    .description('Query codebase knowledge graph (.workflow/codebase/knowledge-graph.json)');
+    .description('Query codebase knowledge graph (JSON or SQLite backend)');
 
   // ── stats ──────────────────────────────────────────────────────────
   kg
@@ -141,8 +166,39 @@ export function registerKgCommand(program: Command): void {
     .option('--type <nodeType>', 'Filter by node type')
     .option('--json', 'Output as JSON')
     .action((text: string, opts) => {
-      const graph = loadGraphOrExit();
       const limit = Number(opts.limit) || 10;
+
+      if (hasSqliteDb()) {
+        const { conn, queries } = openSqliteOrExit();
+        try {
+          const parsed = parseQuery(text);
+          const kinds = parsed.kinds.length > 0 ? parsed.kinds : undefined;
+          const results = queries.searchNodes(parsed.text || text, {
+            kinds,
+            languages: parsed.languages.length > 0 ? parsed.languages : undefined,
+            pathFilters: parsed.pathFilters.length > 0 ? parsed.pathFilters : undefined,
+            nameFilters: parsed.nameFilters.length > 0 ? parsed.nameFilters : undefined,
+            limit,
+          });
+
+          if (opts.json) {
+            console.log(JSON.stringify({ query: text, total: results.length, nodes: results }, null, 2));
+            return;
+          }
+
+          console.log(`Query: "${text}"  (${results.length} results, SQLite)`);
+          for (const n of results) {
+            const exported = n.isExported ? 'Exported ' : '';
+            const desc = n.signature ? truncate(n.signature, 60) : `${exported}${n.kind} "${n.name}" in ${n.filePath}`;
+            console.log(`  [${n.kind}] ${n.id} -- ${desc}`);
+          }
+        } finally {
+          conn.close();
+        }
+        return;
+      }
+
+      const graph = loadGraphOrExit();
       const matches = searchNodes(graph, text, { limit, type: opts.type });
       const total = searchNodes(graph, text, { limit: Infinity, type: opts.type }).length;
 
@@ -434,6 +490,7 @@ export function registerKgCommand(program: Command): void {
     .command('index')
     .description('Scan codebase and generate knowledge graph')
     .option('--src <path>', 'Source directory to scan', 'src')
+    .option('--sqlite', 'Use SQLite backend (recommended for large projects)')
     .option('--json', 'Output stats as JSON after indexing')
     .action(async (opts) => {
       const srcPath = resolve(opts.src);
@@ -442,6 +499,53 @@ export function registerKgCommand(program: Command): void {
         process.exit(1);
       }
 
+      // SQLite mode — use IncrementalSync for full index
+      if (opts.sqlite) {
+        const dbPath = getDatabasePath();
+        const outDir = resolve('.workflow', 'codebase');
+        mkdirSync(outDir, { recursive: true });
+
+        const conn = new DatabaseConnection();
+        const isNew = !existsSync(dbPath);
+        if (isNew) conn.initialize(dbPath);
+        else conn.open(dbPath);
+
+        const queries = new QueryBuilder(conn);
+        if (!isNew) queries.clear();
+
+        console.log(`Indexing ${srcPath} to SQLite ...`);
+        const sync = new IncrementalSync(srcPath, conn);
+        const result = sync.sync();
+
+        queries.setMetadata('projectRoot', srcPath);
+
+        const stats = queries.getStats(conn.getSize());
+        conn.close();
+
+        if (opts.json) {
+          console.log(JSON.stringify({ ...stats, ...result, output: dbPath }, null, 2));
+          return;
+        }
+
+        console.log('');
+        console.log(`Nodes: ${stats.nodeCount}`);
+        for (const [kind, count] of Object.entries(stats.nodesByKind)) {
+          console.log(`  ${kind}: ${count}`);
+        }
+        console.log('');
+        console.log(`Edges: ${stats.edgeCount}`);
+        for (const [kind, count] of Object.entries(stats.edgesByKind)) {
+          console.log(`  ${kind}: ${count}`);
+        }
+        console.log('');
+        console.log(`Files: ${stats.fileCount}`);
+        console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
+        console.log(`Duration: ${result.durationMs}ms`);
+        console.log(`Written to: ${dbPath}`);
+        return;
+      }
+
+      // JSON mode (legacy)
       const analyzer = new FsAnalyzer();
       console.log(`Scanning ${srcPath} ...`);
 
@@ -521,6 +625,279 @@ export function registerKgCommand(program: Command): void {
       console.log(`Layers: ${stats.layers}`);
       console.log(`Tour steps: ${stats.tourSteps}`);
       console.log('');
+      console.log(`Written to: ${outPath}`);
+    });
+
+  // ── sync (incremental) ────────────────────────────────────────────
+  kg
+    .command('sync')
+    .description('Incremental sync — only re-index changed files (SQLite)')
+    .option('--json', 'Output as JSON')
+    .action((opts) => {
+      const { conn, queries } = openSqliteOrExit();
+      try {
+        const projectRoot = queries.getMetadata('projectRoot') ?? process.cwd();
+        const sync = new IncrementalSync(projectRoot, conn);
+        const result = sync.sync();
+        if (opts.json) {
+          console.log(JSON.stringify(result, null, 2));
+        } else {
+          console.log(`Sync complete: ${result.filesChanged} files changed, ${result.nodesAdded} nodes, ${result.edgesAdded} edges (${result.durationMs}ms)`);
+        }
+      } finally {
+        conn.close();
+      }
+    });
+
+  // ── watch ──────────────────────────────────────────────────────────
+  kg
+    .command('watch')
+    .description('Watch for file changes and auto-sync (SQLite)')
+    .option('--debounce <ms>', 'Debounce delay in milliseconds', '2000')
+    .action((opts) => {
+      const dbPath = getDatabasePath();
+      if (!existsSync(dbPath)) {
+        console.error(`SQLite graph not found. Run "maestro kg index --sqlite" first.`);
+        process.exit(1);
+      }
+
+      const conn = new DatabaseConnection();
+      conn.open(dbPath);
+      const queries = new QueryBuilder(conn);
+      const projectRoot = queries.getMetadata('projectRoot') ?? process.cwd();
+      const debounceMs = Number(opts.debounce) || 2000;
+
+      const watcher = new FileWatcher(
+        projectRoot,
+        async () => {
+          const sync = new IncrementalSync(projectRoot, conn);
+          const result = sync.sync();
+          return { filesChanged: result.filesChanged, durationMs: result.durationMs };
+        },
+        {
+          debounceMs,
+          onSyncComplete: (result) => {
+            if (result.filesChanged > 0) {
+              console.log(`[sync] ${result.filesChanged} files updated (${result.durationMs}ms)`);
+            }
+          },
+          onSyncError: (err) => {
+            console.error(`[sync error] ${err.message}`);
+          },
+        },
+      );
+
+      const started = watcher.start();
+      if (!started) {
+        console.error('Could not start file watcher (unsupported filesystem?)');
+        conn.close();
+        process.exit(1);
+      }
+
+      console.log(`Watching for changes (debounce: ${debounceMs}ms) — press Ctrl+C to stop`);
+
+      process.on('SIGINT', () => {
+        watcher.stop();
+        conn.close();
+        console.log('\nWatcher stopped.');
+        process.exit(0);
+      });
+    });
+
+  // ── callers ────────────────────────────────────────────────────────
+  kg
+    .command('callers <node-id>')
+    .description('Show callers of a function/method (SQLite)')
+    .option('--depth <n>', 'Max traversal depth', '2')
+    .option('--json', 'Output as JSON')
+    .action((nodeId: string, opts) => {
+      const { conn, queries } = openSqliteOrExit();
+      try {
+        const traverser = new GraphTraverser(queries);
+        const callers = traverser.getCallers(nodeId, Number(opts.depth) || 2);
+
+        if (opts.json) {
+          console.log(JSON.stringify(callers.map(c => ({
+            id: c.node.id, kind: c.node.kind, name: c.node.name,
+            filePath: c.node.filePath, edgeKind: c.edge.kind,
+          })), null, 2));
+          return;
+        }
+
+        console.log(`Callers of ${nodeId} (${callers.length}):`);
+        for (const { node, edge } of callers) {
+          console.log(`  [${node.kind}] ${node.id} --${edge.kind}-->`);
+          if (node.signature) console.log(`    ${node.signature}`);
+        }
+      } finally {
+        conn.close();
+      }
+    });
+
+  // ── callees ────────────────────────────────────────────────────────
+  kg
+    .command('callees <node-id>')
+    .description('Show callees of a function/method (SQLite)')
+    .option('--depth <n>', 'Max traversal depth', '2')
+    .option('--json', 'Output as JSON')
+    .action((nodeId: string, opts) => {
+      const { conn, queries } = openSqliteOrExit();
+      try {
+        const traverser = new GraphTraverser(queries);
+        const callees = traverser.getCallees(nodeId, Number(opts.depth) || 2);
+
+        if (opts.json) {
+          console.log(JSON.stringify(callees.map(c => ({
+            id: c.node.id, kind: c.node.kind, name: c.node.name,
+            filePath: c.node.filePath, edgeKind: c.edge.kind,
+          })), null, 2));
+          return;
+        }
+
+        console.log(`Callees of ${nodeId} (${callees.length}):`);
+        for (const { node, edge } of callees) {
+          console.log(`  --${edge.kind}--> [${node.kind}] ${node.id}`);
+          if (node.signature) console.log(`    ${node.signature}`);
+        }
+      } finally {
+        conn.close();
+      }
+    });
+
+  // ── impact ─────────────────────────────────────────────────────────
+  kg
+    .command('impact <node-id>')
+    .description('Show transitive impact radius (SQLite)')
+    .option('--depth <n>', 'Max depth', '3')
+    .option('--json', 'Output as JSON')
+    .action((nodeId: string, opts) => {
+      const { conn, queries } = openSqliteOrExit();
+      try {
+        const traverser = new GraphTraverser(queries);
+        const subgraph = traverser.getImpactRadius(nodeId, Number(opts.depth) || 3);
+
+        if (opts.json) {
+          const nodes = [...subgraph.nodes.values()].map(n => ({
+            id: n.id, kind: n.kind, name: n.name, filePath: n.filePath,
+          }));
+          console.log(JSON.stringify({ nodeCount: nodes.length, edgeCount: subgraph.edges.length, nodes }, null, 2));
+          return;
+        }
+
+        console.log(`Impact radius for ${nodeId}: ${subgraph.nodes.size} nodes, ${subgraph.edges.length} edges`);
+        for (const node of subgraph.nodes.values()) {
+          if (node.id === nodeId) continue;
+          console.log(`  [${node.kind}] ${node.id}`);
+        }
+      } finally {
+        conn.close();
+      }
+    });
+
+  // ── dead-code ──────────────────────────────────────────────────────
+  kg
+    .command('dead-code')
+    .description('Find unreferenced symbols (SQLite)')
+    .option('--kinds <kinds>', 'Comma-separated node kinds to check', 'function,method,class')
+    .option('--json', 'Output as JSON')
+    .action((opts) => {
+      const { conn, queries } = openSqliteOrExit();
+      try {
+        const kinds = opts.kinds.split(',').map((k: string) => k.trim());
+        const manager = new GraphQueryManager(queries);
+        const deadCode = manager.findDeadCode(kinds);
+
+        if (opts.json) {
+          console.log(JSON.stringify(deadCode.map(n => ({
+            id: n.id, kind: n.kind, name: n.name, filePath: n.filePath,
+            startLine: n.startLine, signature: n.signature,
+          })), null, 2));
+          return;
+        }
+
+        console.log(`Dead code (${deadCode.length} unreferenced symbols):`);
+        for (const node of deadCode) {
+          console.log(`  [${node.kind}] ${node.name} — ${node.filePath}:${node.startLine}`);
+        }
+      } finally {
+        conn.close();
+      }
+    });
+
+  // ── cycles ─────────────────────────────────────────────────────────
+  kg
+    .command('cycles')
+    .description('Find circular import dependencies (SQLite)')
+    .option('--json', 'Output as JSON')
+    .action((opts) => {
+      const { conn, queries } = openSqliteOrExit();
+      try {
+        const manager = new GraphQueryManager(queries);
+        const cycles = manager.findCircularDependencies();
+
+        if (opts.json) {
+          console.log(JSON.stringify(cycles, null, 2));
+          return;
+        }
+
+        if (cycles.length === 0) {
+          console.log('No circular dependencies detected.');
+          return;
+        }
+
+        console.log(`Circular dependencies (${cycles.length}):`);
+        for (let i = 0; i < cycles.length; i++) {
+          console.log(`  Cycle ${i + 1}: ${cycles[i].join(' → ')} → ${cycles[i][0]}`);
+        }
+      } finally {
+        conn.close();
+      }
+    });
+
+  // ── migrate ────────────────────────────────────────────────────────
+  kg
+    .command('migrate')
+    .description('Convert JSON knowledge graph to SQLite')
+    .option('--json', 'Output result as JSON')
+    .action((opts) => {
+      const jsonPath = resolve('.workflow', 'codebase', 'knowledge-graph.json');
+      if (!existsSync(jsonPath)) {
+        console.error(`JSON graph not found: ${jsonPath}`);
+        console.error('  Hint: run "maestro kg index" to generate a JSON graph first');
+        process.exit(1);
+      }
+
+      console.log('Migrating JSON graph to SQLite ...');
+      const result = migrateJsonToSqlite(jsonPath);
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      console.log(`Migrated: ${result.nodes} nodes, ${result.edges} edges`);
+      console.log(`Written to: ${result.dbPath}`);
+    });
+
+  // ── export-json ────────────────────────────────────────────────────
+  kg
+    .command('export-json')
+    .description('Export SQLite graph as JSON')
+    .option('--out <path>', 'Output path', '.workflow/codebase/knowledge-graph-export.json')
+    .action((opts) => {
+      const dbPath = getDatabasePath();
+      if (!existsSync(dbPath)) {
+        console.error(`SQLite graph not found: ${dbPath}`);
+        process.exit(1);
+      }
+
+      console.log('Exporting SQLite graph to JSON ...');
+      const graph = exportSqliteToJson(dbPath);
+      const outPath = resolve(opts.out);
+      const outDir = resolve(outPath, '..');
+      mkdirSync(outDir, { recursive: true });
+      writeFileSync(outPath, JSON.stringify(graph, null, 2), 'utf-8');
+      console.log(`Exported: ${graph.nodes.length} nodes, ${graph.edges.length} edges`);
       console.log(`Written to: ${outPath}`);
     });
 }
