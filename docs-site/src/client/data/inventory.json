@@ -492,6 +492,110 @@
       "description": "Load and execute tool specs by role or name — supports direct invocation by name or role-based recommendation",
       "argumentHint": "[tool-name | --role <role>]",
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "AskUserQuestion", "Agent"]
+    },
+    {
+      "name": "maestro-ralph",
+      "file": ".claude/commands/maestro-ralph.md",
+      "category": "maestro",
+      "description": "Closed-loop decision engine for the maestro workflow lifecycle — reads project state, infers position, builds adaptive chain, delegates execution",
+      "argumentHint": "<intent> [-y] | status | continue",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-ralph-beta",
+      "file": ".claude/commands/maestro-ralph-beta.md",
+      "category": "maestro",
+      "description": "Beta version of Ralph lifecycle engine with loop-runner endpoint — self-running loop controller for adaptive maestro workflow",
+      "argumentHint": "<intent> [-y] | continue | status",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-ralph-execute",
+      "file": ".claude/commands/maestro-ralph-execute.md",
+      "category": "maestro",
+      "description": "Single-step executor for ralph (adaptive) and maestro (static) sessions — locate session, find next step, resolve args, execute, update, self-invoke next",
+      "argumentHint": "[-y] [session-id]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill"]
+    },
+    {
+      "name": "maestro-next",
+      "file": ".claude/commands/maestro-next.md",
+      "category": "maestro",
+      "description": "Single-command recommendation engine — parses intent and project state, recommends one atomic command via routing-table scoring",
+      "argumentHint": "<intent> [-y] [--dry-run] [--top N] [--list]",
+      "allowedTools": ["Read", "Bash", "Glob", "Grep", "Skill", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-blueprint",
+      "file": ".claude/commands/maestro-blueprint.md",
+      "category": "maestro",
+      "description": "Generate formal specification package (Product Brief, PRD, Architecture, Epics) through 6-phase document chain with multi-CLI analysis",
+      "argumentHint": "<idea or @file> [-y] [-c] [--from <source>]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-grill",
+      "file": ".claude/commands/maestro-grill.md",
+      "category": "maestro",
+      "description": "Socratic stress-testing of plans, ideas, or requirements against codebase reality with adversarial questioning and code evidence verification",
+      "argumentHint": "<topic|plan> [-y] [-c] [--from <source>] [--depth shallow|standard|deep]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-swarm-workflow",
+      "file": ".claude/commands/maestro-swarm-workflow.md",
+      "category": "maestro",
+      "description": "Parallel workflow accelerator — route intent to fixed Workflow scripts for multi-agent concurrent execution",
+      "argumentHint": "<intent> [--script <name>] [--dims <d1,d2>] [--roles <r1,r2>] [--count N] [--tier quick|standard] [--resume <runId>]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Workflow", "Glob", "Grep", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-universal-workflow",
+      "file": ".claude/commands/maestro-universal-workflow.md",
+      "category": "maestro",
+      "description": "Dynamic adversarial workflow generator — scan library, match or generate, execute, persist",
+      "argumentHint": "<intent> [--name <slug>] [--depth shallow|standard|deep] [--dry-run] [--from <script>] [--resume <runId>]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Workflow", "Glob", "Grep", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-companion",
+      "file": ".claude/commands/maestro-companion.md",
+      "category": "maestro",
+      "description": "Knowledge companion — side-car utility for task context loading, structured companion doc recording, insight capture, and skill routing",
+      "argumentHint": "[before|note|after|route] [--task <description>] [--type <task_type>] [--category <cat>]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill", "AskUserQuestion"]
+    },
+    {
+      "name": "maestro-guard",
+      "file": ".claude/commands/maestro-guard.md",
+      "category": "maestro",
+      "description": "Manage editing boundary restrictions — configure directory-level write boundaries enforced by the workflow-guard PreToolUse hook",
+      "argumentHint": "<on|off|status|allow <path>|deny <path>>",
+      "allowedTools": ["Read", "Write", "Bash", "Glob"]
+    },
+    {
+      "name": "maestro-ui-codify",
+      "file": ".claude/commands/maestro-ui-codify.md",
+      "category": "maestro",
+      "description": "Extract design system from code, generate reference package, persist as knowledge assets — 4-phase pipeline: validate, extract, package, knowhow",
+      "argumentHint": "<source-path> [--package-name <name>] [--output-dir <path>] [--overwrite]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "Skill"]
+    },
+    {
+      "name": "security-audit",
+      "file": ".claude/commands/security-audit.md",
+      "category": "quality",
+      "description": "OWASP Top 10 and STRIDE security auditing with supply chain analysis — three tiers: quick, standard, deep",
+      "argumentHint": "[quick|standard|deep] [--scope <path>]",
+      "allowedTools": ["Read", "Write", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
+    },
+    {
+      "name": "manage-knowledge-audit",
+      "file": ".claude/commands/manage-knowledge-audit.md",
+      "category": "manage",
+      "description": "Audit and prune knowledge across spec/knowhow/artifact tri-store — detect contradictions, staleness, orphans; apply keep/deprecate/delete decisions",
+      "argumentHint": "--scope <spec|knowhow|artifact|all> [--level P0|P1|P2] [--since YYYY-MM-DD] [--milestone <name>] [--interactive] [--mark|--delete|--purge] [--dry-run] [--report]",
+      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     }
   ],
   "claude_skills": [

@@ -682,6 +682,72 @@
       "prev_commands": [],
       "next_commands": [],
       "flags": ["\"<intent>\" (意图描述)", "-y (自动模式)", "-c (恢复会话)"]
+    },
+    "maestro-ralph": {
+      "name": "maestro-ralph",
+      "name_zh": "Ralph 决策引擎",
+      "description": "Closed-loop decision engine for the maestro workflow lifecycle -- reads project state, infers position, builds adaptive chain, delegates execution",
+      "description_zh": "闭环决策引擎 — 读取项目状态，推断当前位置，构建自适应命令链，委派执行。支持 intent/status/continue 三种入口",
+      "workflow": "Use when optimal command sequence is unclear",
+      "workflow_zh": "当最优命令序列不明确时使用，自动推断并构建执行链",
+      "prev_commands": [],
+      "next_commands": ["maestro-ralph-execute"],
+      "flags": ["<intent> (意图描述)", "-y (自动模式)", "status (显示进度)", "continue (继续执行)"]
+    },
+    "maestro-ralph-execute": {
+      "name": "maestro-ralph-execute",
+      "name_zh": "Ralph 步进执行器",
+      "description": "Single-step executor for ralph (adaptive) and maestro (static) sessions -- locate session, find next step, resolve args, execute, update, self-invoke next",
+      "description_zh": "单步执行器 — 定位会话，查找下一步，解析参数，执行，更新状态，自动调用下一步。与 ralph 互调形成自延续工作循环",
+      "workflow": "Ralph session step executor",
+      "workflow_zh": "ralph 会话的步进执行器，每次调用执行一个步骤",
+      "prev_commands": ["maestro-ralph"],
+      "next_commands": ["maestro-ralph"],
+      "flags": ["-y (自动模式)", "[session-id] (会话 ID)"]
+    },
+    "maestro-guard": {
+      "name": "maestro-guard",
+      "name_zh": "编辑边界控制",
+      "description": "Manage editing boundary restrictions -- configure directory-level write boundaries enforced by the workflow-guard PreToolUse hook",
+      "description_zh": "编辑边界控制 — 配置目录级写入边界，由 workflow-guard PreToolUse 钩子强制执行。启用后，对允许路径外的 Write/Edit 调用将被阻止",
+      "workflow": "Configure before constrained editing tasks",
+      "workflow_zh": "在需要限制编辑范围的任务前配置",
+      "prev_commands": [],
+      "next_commands": [],
+      "flags": ["on (启用守卫)", "off (禁用守卫)", "status (显示配置)", "allow <path> (添加允许路径)", "deny <path> (切换到拒绝模式)"]
+    },
+    "maestro-ui-codify": {
+      "name": "maestro-ui-codify",
+      "name_zh": "UI 设计系统提取",
+      "description": "Extract design system from code, generate reference package, persist as knowledge assets -- 4-phase pipeline: validate, extract, package, knowhow",
+      "description_zh": "从代码中提取 UI 设计系统 — 4 阶段管线：验证参数 → 3 并行代理提取样式/动画/布局 → 生成参考包 → 持久化为知识资产",
+      "workflow": "Extract design tokens from existing code",
+      "workflow_zh": "从现有代码中提取设计标记，生成可复用的设计系统知识包",
+      "prev_commands": [],
+      "next_commands": [],
+      "flags": ["<source-path> (源代码路径，必填)", "--package-name <name> (包名称)", "--output-dir <path> (输出目录)", "--overwrite (覆盖已有)"]
+    },
+    "security-audit": {
+      "name": "security-audit",
+      "name_zh": "安全审计",
+      "description": "OWASP Top 10 and STRIDE security auditing with supply chain analysis -- three tiers: quick, standard, deep",
+      "description_zh": "系统性安全审计 — 覆盖 OWASP Top 10、依赖供应链、密钥泄露检测、CI/CD 管线审查和可选 STRIDE 威胁建模。三级深度控制",
+      "workflow": "Run before releases or after security-sensitive changes",
+      "workflow_zh": "发布前或安全敏感变更后运行",
+      "prev_commands": [],
+      "next_commands": [],
+      "flags": ["quick|standard|deep (审计深度，默认 quick)", "--scope <path> (限定扫描范围)"]
+    },
+    "maestro-universal-workflow": {
+      "name": "maestro-universal-workflow",
+      "name_zh": "通用工作流",
+      "description": "Dynamic adversarial workflow generator -- scan library, match or generate, execute, persist",
+      "description_zh": "动态对抗式工作流生成器 — 扫描工作流库，匹配或生成专用脚本，执行并持久化。支持 shallow/standard/deep 三级对抗深度",
+      "workflow": "Independent use for ad-hoc complex workflows",
+      "workflow_zh": "独立使用，适合需要对抗式决策的复杂临时工作流",
+      "prev_commands": [],
+      "next_commands": [],
+      "flags": ["<intent> (意图描述)", "--name <slug> (脚本名称)", "--depth shallow|standard|deep (对抗深度)", "--dry-run (演练)", "--from <script> (从脚本导入)", "--resume <runId> (恢复运行)"]
     }
   },
   "skills": {

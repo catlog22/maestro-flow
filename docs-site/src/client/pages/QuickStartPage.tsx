@@ -84,6 +84,21 @@ const COMMANDS: CommandData[] = [
   },
   // Pipeline
   {
+    id: 'grill', cmd: '/maestro-grill', category: 'pipeline', status: 'recommended', level: 2,
+    zh: {
+      desc: '苏格拉底式压力测试 — 对抗性提问验证方案假设，用代码证据挑战模糊术语',
+      when: '在 brainstorm 或 roadmap 之前，需要验证方案假设和需求可行性',
+      how: '/maestro-grill "多租户架构方案"',
+      tips: ['支持 shallow/standard/deep 三级深度', '产出验证过的 context-package，可直接导入下游命令', '与 brainstorm 互补：grill 是收敛验证，brainstorm 是发散探索'],
+    },
+    en: {
+      desc: 'Socratic stress-testing — adversarial questioning verifies assumptions with code evidence',
+      when: 'Before brainstorm or roadmap, need to verify assumptions and feasibility',
+      how: '/maestro-grill "multi-tenancy architecture"',
+      tips: ['Supports shallow/standard/deep depth levels', 'Produces verified context-package for downstream commands', 'Complements brainstorm: grill converges/verifies, brainstorm diverges/explores'],
+    },
+  },
+  {
     id: 'analyze', cmd: '/maestro-analyze', category: 'pipeline', status: 'core', level: 1,
     zh: {
       desc: '双层分析：Micro（数字参数）Phase 级 6 维度深度分析，Macro（文本参数）宏观需求探索',
@@ -206,6 +221,36 @@ const COMMANDS: CommandData[] = [
   },
   // Quick
   {
+    id: 'security-audit', cmd: '/security-audit', category: 'quality', status: 'recommended', level: 2,
+    zh: {
+      desc: '系统性安全审计 — 覆盖 OWASP Top 10、供应链、密钥泄露、CI/CD 管线',
+      when: '发布前、安全敏感变更后、定期安全检查',
+      how: '/security-audit standard',
+      tips: ['quick（5 分钟快速扫描）/ standard（全面审计）/ deep（含 STRIDE 威胁建模）', '--scope 限定扫描范围，避免全量扫描耗时过长', '会生成安全报告和修复优先级排序'],
+    },
+    en: {
+      desc: 'Systematic security audit — OWASP Top 10, supply chain, secrets leak, CI/CD pipeline',
+      when: 'Before releases, after security-sensitive changes, periodic security checks',
+      how: '/security-audit standard',
+      tips: ['quick (5-min scan) / standard (full audit) / deep (with STRIDE threat modeling)', '--scope limits scan area to avoid long full scans', 'Generates security report with fix priority ranking'],
+    },
+  },
+  {
+    id: 'next', cmd: '/maestro-next', category: 'quick', status: 'stable', level: 1,
+    zh: {
+      desc: '单命令推荐引擎 — 解析意图和项目状态，推荐一个最合适的命令',
+      when: '不确定该用哪个命令时，轻量级路由入口',
+      how: '/maestro-next "我想优化性能"',
+      tips: ['不创建 session，不写 status.json，纯推荐', '--top 3 显示前 3 个候选命令', '与 /maestro 的区别：next 只推荐不执行'],
+    },
+    en: {
+      desc: 'Single-command recommendation — parses intent and project state, recommends one command',
+      when: 'Unsure which command to use, lightweight routing entry',
+      how: '/maestro-next "I want to optimize performance"',
+      tips: ['No session created, no status.json written, pure recommendation', '--top 3 shows top 3 candidate commands', 'Unlike /maestro: next only recommends, doesn\'t execute'],
+    },
+  },
+  {
     id: 'quick', cmd: '/maestro-quick', category: 'quick', status: 'core', level: 1,
     zh: {
       desc: '跳过管线，直接完成任务（分析→执行一步到位）',
@@ -310,6 +355,51 @@ const COMMANDS: CommandData[] = [
       when: 'Complex projects need auto debug-fix-retry closed loop',
       how: '/maestro-ralph "refactor auth module" -y',
       tips: ['Unlike /maestro: ralph has decision nodes, chain grows dynamically', 'Best for high-uncertainty large tasks'],
+    },
+  },
+  {
+    id: 'swarm', cmd: '/maestro-swarm-workflow', category: 'advanced', status: 'stable', level: 3,
+    zh: {
+      desc: '并行工作流加速层 — 多 agent 并发执行，覆盖 analyze/brainstorm/review/verify 等 8 种脚本',
+      when: '需要加速分析、审查、验证等可并行化的工作流步骤',
+      how: '/maestro-swarm-workflow "审查 auth 模块安全性"',
+      tips: ['--script 指定预构建脚本（analyze/brainstorm/review/verify/grill/plan/execute/milestone-audit）', '--count N 控制并发 agent 数量', '--resume 恢复中断的运行'],
+    },
+    en: {
+      desc: 'Parallel workflow accelerator — multi-agent concurrent execution with 8 pre-built scripts',
+      when: 'Need to accelerate parallelizable workflow steps like analysis, review, verification',
+      how: '/maestro-swarm-workflow "review auth module security"',
+      tips: ['--script specifies pre-built script (analyze/brainstorm/review/verify/grill/plan/execute/milestone-audit)', '--count N controls concurrent agent count', '--resume resumes interrupted runs'],
+    },
+  },
+  {
+    id: 'universal', cmd: '/maestro-universal-workflow', category: 'advanced', status: 'stable', level: 3,
+    zh: {
+      desc: '动态对抗式工作流生成器 — 按需生成专用工作流脚本，支持三级对抗深度',
+      when: '标准脚本不满足需求，需要定制化对抗式决策工作流',
+      how: '/maestro-universal-workflow "评估 3 种缓存策略的优劣" --depth standard',
+      tips: ['shallow（单 skeptic）/ standard（3 票多数决）/ deep（交叉验证+元怀疑论）', '--dry-run 只生成脚本不执行', '生成的脚本自动保存到 ~/.maestro/workflows/dynamic/ 可复用'],
+    },
+    en: {
+      desc: 'Dynamic adversarial workflow generator — generates custom workflows with 3 depth levels',
+      when: 'Standard scripts don\'t fit, need custom adversarial decision workflows',
+      how: '/maestro-universal-workflow "evaluate 3 caching strategies" --depth standard',
+      tips: ['shallow (single skeptic) / standard (3-vote majority) / deep (cross-verify + meta-skeptic)', '--dry-run generates script without executing', 'Generated scripts auto-saved to ~/.maestro/workflows/dynamic/ for reuse'],
+    },
+  },
+  {
+    id: 'guard', cmd: '/maestro-guard', category: 'advanced', status: 'stable', level: 3,
+    zh: {
+      desc: '编辑边界控制 — 配置目录级写入边界，防止代理误改不相关文件',
+      when: '在敏感代码区域工作时，限制代理只能修改指定目录',
+      how: '/maestro-guard on',
+      tips: ['on 启用守卫 / off 禁用 / status 查看配置', 'allow <path> 添加允许编辑的路径', 'deny <path> 切换到拒绝模式（仅允许指定路径）'],
+    },
+    en: {
+      desc: 'Editing boundary control — configure directory-level write boundaries to prevent unintended edits',
+      when: 'Working in sensitive code areas, restrict agent to only modify specified directories',
+      how: '/maestro-guard on',
+      tips: ['on enables guard / off disables / status shows config', 'allow <path> adds allowed edit path', 'deny <path> switches to deny mode (only specified paths allowed)'],
     },
   },
 ];
@@ -418,6 +508,45 @@ const SCENARIOS: ScenarioData[] = [
       title: 'Quality Loop',
       desc: 'Test fail → diagnose → fix → retest',
       steps: ['/quality-test 1', '# on failure', '/quality-debug --from-uat 1', '/maestro-plan 1 --gaps', '/maestro-execute 1', '/quality-auto-test 1 --re-run'],
+    },
+  },
+  {
+    id: 'knowledge', icon: '📚',
+    zh: {
+      title: '知识管理闭环',
+      desc: '执行后提取知识 → 沉淀到 wiki/spec → 下次规划时自动注入',
+      steps: ['/manage-harvest --recent 3', '# 提取最近 3 个会话的知识', '/wiki-connect --fix', '# 发现并修复知识图谱中的隐藏关联', '/wiki-digest --recent 7', '# 生成最近 7 天的知识摘要'],
+    },
+    en: {
+      title: 'Knowledge Loop',
+      desc: 'Extract knowledge after execution → persist to wiki/spec → auto-inject in next planning',
+      steps: ['/manage-harvest --recent 3', '# extract knowledge from last 3 sessions', '/wiki-connect --fix', '# discover and fix hidden connections in wiki graph', '/wiki-digest --recent 7', '# generate knowledge digest for last 7 days'],
+    },
+  },
+  {
+    id: 'security-flow', icon: '🛡️',
+    zh: {
+      title: '安全审计与修复',
+      desc: '发布前安全扫描 → 发现漏洞 → 修复 → 验证',
+      steps: ['/security-audit standard', '# 全面安全审计', '/manage-issue create --title "修复 XSS 漏洞" --severity critical', '# 创建安全 Issue', '/maestro-quick --full "修复 XSS 漏洞"', '# 带验证的快速修复', '/security-audit quick', '# 复查确认'],
+    },
+    en: {
+      title: 'Security Audit & Fix',
+      desc: 'Pre-release security scan → discover vulnerabilities → fix → verify',
+      steps: ['/security-audit standard', '# full security audit', '/manage-issue create --title "Fix XSS vulnerability" --severity critical', '# create security issue', '/maestro-quick --full "Fix XSS vulnerability"', '# quick fix with verification', '/security-audit quick', '# re-audit to confirm'],
+    },
+  },
+  {
+    id: 'templates', icon: '📐',
+    zh: {
+      title: '工作流模板复用',
+      desc: '将常用流程模板化，一键复用',
+      steps: ['/maestro-composer "每周依赖更新流程"', '# 生成可复用模板', '/maestro-player weekly-deps --context repo=main', '# 执行模板', '# 检查点自动持久化，中断后可恢复'],
+    },
+    en: {
+      title: 'Workflow Template Reuse',
+      desc: 'Template common flows for one-click reuse',
+      steps: ['/maestro-composer "weekly dependency update flow"', '# generate reusable template', '/maestro-player weekly-deps --context repo=main', '# execute template', '# checkpoints auto-persist, resume on interrupt'],
     },
   },
 ];
@@ -789,6 +918,8 @@ export default function QuickStartPage() {
             { icon: '2', color: 'bg-tint-green text-accent-green', zh: '简单任务用 quick', en: 'Quick for simple tasks', zhDesc: 'Bug 修复、小改动不需要走完整管线。/maestro-quick 一步到位。', enDesc: 'Bug fixes and small changes don\'t need full pipeline. /maestro-quick does it in one step.' },
             { icon: '3', color: 'bg-tint-purple text-accent-purple', zh: '-y 省时间', en: '-y saves time', zhDesc: '大多数命令支持 -y 自动确认。熟悉后加上 -y 可以大幅提升效率。', enDesc: 'Most commands support -y auto-confirm. Add -y once familiar to boost efficiency.' },
             { icon: '4', color: 'bg-tint-orange text-accent-orange', zh: '质量闭环别跳过', en: 'Don\'t skip quality loop', zhDesc: '执行后一定要 verify + test。质量管线是代码质量的最后一道防线。', enDesc: 'Always verify + test after execute. Quality pipeline is the last line of defense.' },
+            { icon: '5', color: 'bg-tint-blue text-accent-blue', zh: '知识要沉淀', en: 'Persist knowledge', zhDesc: '每个阶段结束后用 /manage-harvest 提取知识。积累的知识会在下次 /maestro-plan 时自动注入。', enDesc: 'Use /manage-harvest after each phase. Accumulated knowledge auto-injects in next /maestro-plan.' },
+            { icon: '6', color: 'bg-tint-green text-accent-green', zh: '不确定时用 ralph', en: 'When unsure, use ralph', zhDesc: '/maestro-ralph 自动推断最优命令链，适合不确定该走哪条路的复杂场景。', enDesc: '/maestro-ralph auto-infers the optimal command chain for complex scenarios with uncertain paths.' },
           ].map((item) => (
             <div key={item.icon} className="flex gap-[var(--spacing-3)] p-[var(--spacing-3)] border border-border rounded-[var(--radius-lg)] bg-bg-card">
               <span className={`flex items-center justify-center w-7 h-7 rounded-full ${item.color} text-[length:13px] font-[var(--font-weight-bold)] shrink-0`}>
