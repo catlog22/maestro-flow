@@ -218,7 +218,13 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 执行参数: <args>
 ```
 
-`--dry-run` 展示后结束；`-y` 直接 S_EXECUTE；否则 AskUserQuestion 提供：执行 top pick / 选备选 / 修改参数 / 取消。
+`--dry-run` 展示后结束；`-y` 直接 S_EXECUTE；否则：
+
+AskUserQuestion (single-select, header: "执行确认"):
+- **执行推荐** (Recommended) — run top pick with shown args
+- **选择备选** — pick from alternative commands
+- **修改参数** — adjust args before executing
+- **取消** — do nothing
 
 </presentation>
 

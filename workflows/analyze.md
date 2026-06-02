@@ -286,7 +286,7 @@ Append initial Intent Coverage Check to discussion.md.
 
 **Step 4.6: Baseline Confidence Scoring**
 
-Dimensions = the 6 analysis dimensions. Factors (weights): findings_depth(.30), evidence_strength(.25), coverage_breadth(.20), user_validation(.15), consistency(.10). Score each factor per dimension from Round 1 results. Append baseline confidence table to discussion.md. Thresholds: <60% 继续深入 | 60-80% 可选 | 80-95% 接近收敛 | >95% 建议收敛.
+Dimensions = the 6 analysis dimensions. Factors (weights): findings_depth(.30), evidence_strength(.25), coverage_breadth(.20), user_validation(.15), consistency(.10). Score each factor per dimension from Round 1 results. Append baseline confidence table to discussion.md. Thresholds: <60% 继续深入 | 60-80% 需用户确认收敛 | >80% 建议收敛.
 
 ### Step 5: Interactive Discussion Loop
 
@@ -297,20 +297,26 @@ Generate 1-2 sentence recap linking previous round conclusions to current starti
 
 **5.2: Present Findings** from latest exploration/analysis
 
-**5.3: Gather Feedback** (AskUserQuestion, single-select, header: "分析反馈"):
-- **继续深入**: Deepen analysis — auto or user-specified direction
-- **调整方向**: Different focus or specific questions
-- **补充信息**: User has additional context, constraints, or corrections
-- **分析完成**: Sufficient — exit to Phase 4
+**5.3: Gather Feedback**
+
+AskUserQuestion (single-select, header: "分析反馈"):
+- **继续深入** (Recommended) — deepen lowest-confidence dimension
+- **调整方向** — different focus or specific questions
+- **补充信息** — user has additional context, constraints, or corrections
+- **分析完成** — sufficient, exit to scoring
+
+Question text: `Round {N} | Confidence: {overall}% | 最弱: {weakest_dim} ({dim_score}%)`
 
 **5.4: Process Response** (always record user choice + impact to discussion.md):
 
 | Choice | Action |
 |--------|--------|
-| 继续深入 | Sub-question (max 4 options: 3 context-driven + 1 heuristic frame-breaker) → CLI/agent exploration → merge findings |
+| 继续深入 | AskUserQuestion sub-direction (below) → CLI/agent exploration → merge findings |
 | 调整方向 | Capture new direction → new CLI exploration → Record Decision (old vs new, reason, impact) |
 | 补充信息 | Capture user input → integrate → answer questions via CLI if needed → Record corrections |
 | 分析完成 | Exit loop → Record why concluding |
+
+**继续深入 sub-direction**: AskUserQuestion (single-select, header: "深入方向", max 4 options: 3 context-driven from unresolved questions/low-confidence findings/unexplored dimensions + 1 heuristic "换角度审视"). "Other" auto-provided for custom direction.
 
 **5.5: Update discussion.md** after each round:
 - **Append** Round N: user input, direction, Q&A, corrections, new insights
@@ -347,7 +353,7 @@ Re-evaluate factors per dimension. Show delta: `Confidence: {prev}% → {current
 - **Stall Detection**: delta < 5% for 2 consecutive rounds → "分析可能停滞，建议切换方向或收敛"
 
 **5.10: Pre-Synthesis Readiness Gate** (on "分析完成"):
-Block if: ❌ items without deferral | any dimension < 40% | no pressure pass | unresolved contradictions. If blocked → AskUserQuestion: 补充后继续 or 忽略风险并继续 (record `residual_risks[]`).
+Block if: ❌ items without deferral | any dimension < 40% | no pressure pass | unresolved contradictions | overall confidence < 80%. If blocked → AskUserQuestion: 补充后继续 or 忽略风险并继续 (record `residual_risks[]`, note accepted confidence level).
 
 **Auto mode (-y)**: auto-deepen ≤3 rounds, readiness gate auto-overrides with residual risk recording.
 
@@ -603,11 +609,11 @@ Display summary:
 - Key conclusions (if full mode)
 - Session stats
 
-**Next Step Selection** (AskUserQuestion, single-select, header: "Next Step"):
-- **快速执行**: Skill({ skill: "maestro-quick", args: "{task_description} --full" }) — build context from conclusions
-- **进入规划**: Phase mode → Skill({ skill: "maestro-plan", args: "{phase}" }); Scratch mode → Skill({ skill: "maestro-plan", args: "--dir {output_dir}" }) — plan directly against scratch directory
-- **产出Issue**: Convert recommendations to tracked issues
-- **完成**: No further action
+AskUserQuestion (single-select, header: "Next Step"):
+- **快速执行** — build context from conclusions, invoke maestro-quick
+- **进入规划** — phase planning (maestro-plan)
+- **产出Issue** — convert recommendations to tracked issues
+- **完成** — no further action
 
 Handle selection:
 

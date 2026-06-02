@@ -71,10 +71,10 @@ maestro wiki load <knowhow-id>
 
 ### Step 3: Confirm Execution
 
-Ask user:
-- Execute steps as-is?
-- Adjust parameters/scope?
-- View only, do not execute?
+AskUserQuestion (single-select, header: "执行方式"):
+- **Execute as-is** (Recommended) — run all steps with current parameters
+- **Adjust parameters** — modify scope or parameters before executing
+- **View only** — display steps without executing
 
 ### Step 4: Step-by-Step Execution
 

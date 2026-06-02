@@ -145,7 +145,11 @@ Layer 1 did not match. Check for chain-level keywords — even if the prompt als
 | design system, tokens, design foundation, design infrastructure | foundation |
 | real-time, live, browser | live |
 
-Ambiguous + no `-y` → AskUserQuestion.
+Ambiguous + no `-y`:
+
+AskUserQuestion (single-select, header: "意图确认"):
+- Options: top 2-3 matched chains from Layer 2 table, each with label = chain name, description = matched keywords
+- Last option: **"直接构建"** — skip chain, route to Layer 3 craft
 
 ### Layer 3: Concrete build task → Direct craft
 

@@ -145,13 +145,20 @@ S_COMPLETE:
    - **skill/command**: `Skill(skill, resolved_args)` → extract session_id, output_path, artifacts
    - **cli**: `Bash(run_in_background: true)` → STOP, wait for callback → `maestro delegate output <id>`
    - **agent**: `Agent(subagent_type, resolved_args)`
-   - **checkpoint**: write checkpoint snapshot. If auto_continue==false: AskUserQuestion (Continue/Pause/Abort)
+   - **checkpoint**: write checkpoint snapshot. If auto_continue==false:
+     AskUserQuestion (single-select, header: "Checkpoint"):
+     - **Continue** — proceed to next step
+     - **Pause** — save progress, exit (resume with `-c`)
+     - **Abort** — stop workflow
 4. Set step status="completed" (or "skipped"/"failed"), write status.json
 
 ### A_COMPLETE_SESSION
 
 Set status="completed", completed_at. Display summary: session, template, steps completed, context, per-step results, artifacts, session dir.
-AskUserQuestion: Keep session / Run again / Done.
+AskUserQuestion (single-select, header: "完成"):
+- **Keep session** — preserve artifacts for reference
+- **Run again** — re-execute with same template
+- **Done** — clean up and exit
 
 </actions>
 
