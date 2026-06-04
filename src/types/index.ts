@@ -17,6 +17,9 @@ export interface SpecInjectionConfig {
   maxContentLength?: number;
   /** Analytics/logging configuration */
   analytics?: SpecAnalyticsConfig;
+  /** Override global specs directory (defaults to ~/.maestro/specs/).
+   *  Primarily useful in tests to isolate from the real global specs store. */
+  globalSpecsDir?: string;
 }
 
 export interface AlwaysInjectConfig {

@@ -7,7 +7,8 @@
  */
 
 import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
 import { parseSpecEntries, formatSpecEntries, type SpecEntryParsed } from './spec-entry-parser.js';
 import { paths } from '../config/paths.js';
 import {
@@ -96,12 +97,14 @@ export function resolveSpecDir(projectPath: string, scope: SpecScope, uid?: stri
  * Content from later layers is appended (never replaces earlier content).
  * Each layer's content is prefixed with a header for clarity.
  *
- * @param scope   Controls which extra layers to include beyond baseline.
- *                - 'project': baseline only (default)
- *                - 'global': global + baseline
- *                - 'team': baseline + team shared
- *                - 'personal': baseline + team shared + personal (requires uid)
- *                - undefined: same as 'project'; uid alone still triggers team+personal for backward compat
+ * @param scope   Controls which extra layers to include beyond global + baseline.
+ *                - 'team' | 'personal': also include team-shared and/or personal layer
+ *                - 'project' | 'global' | undefined: global + baseline only
+ *                  (uid alone also triggers team+personal for backward compat)
+ *
+ * The global layer (`~/.maestro/specs/`) is always included as lowest priority.
+ * Its entries load in full regardless of the query category (allPrimary=true),
+ * because global specs are intended to apply across all projects and contexts.
  */
 export interface LoadSpecsOptions {
   /** Override global specs directory (for testing). Defaults to ~/.maestro/specs/ */
@@ -127,8 +130,8 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
 
   // First pass: collect results per layer (skip empty)
   const layerResults: Array<{ label: string; sections: string[]; matched: string[] }> = [];
-  for (const { dir, label } of layers) {
-    const { sections, matched } = loadFromDir(dir, category, keyword, options);
+  for (const { dir, label, allPrimary } of layers) {
+    const { sections, matched } = loadFromDir(dir, category, keyword, options, allPrimary);
     if (sections.length > 0) {
       layerResults.push({ label, sections, matched });
     }
@@ -176,13 +179,20 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
 interface LayerDef {
   dir: string;
   label: string;
+  /** When true, all known spec files in this layer are treated as primary docs —
+   *  cross-category filtering is skipped so global specs load regardless of the
+   *  inferred prompt category. */
+  allPrimary?: boolean;
 }
 
 function buildLayers(projectPath: string, uid?: string, scope?: SpecScope, globalDir?: string): LayerDef[] {
   const layers: LayerDef[] = [];
 
-  // Global layer — always included as lowest priority
-  layers.push({ dir: globalDir ?? paths.specs, label: LAYER_LABELS.global });
+  // Global layer — always included as lowest priority.
+  // allPrimary=true: user-managed global specs are intended to be cross-project
+  // and cross-category; skip cross-category filtering so every known spec file
+  // in this layer loads fully regardless of the inferred prompt category.
+  layers.push({ dir: globalDir ?? paths.specs, label: LAYER_LABELS.global, allPrimary: true });
 
   // Baseline — always included
   layers.push({
@@ -216,6 +226,7 @@ function loadFromDir(
   category?: SpecCategory,
   keyword?: string,
   options?: LoadSpecsOptions,
+  allPrimary?: boolean,
 ): { sections: string[]; matched: string[] } {
   if (!existsSync(specsDir)) return { sections: [], matched: [] };
 
@@ -243,9 +254,11 @@ function loadFromDir(
     const body = stripFrontmatter(raw).trim();
     if (!body) continue;
 
-    // Primary category doc → full load; other files → keyword-filtered only
+    // Primary category doc → full load; other files → keyword-filtered only.
+    // allPrimary (global layer): treat every known spec file as primary so
+    // global specs load in full regardless of the inferred prompt category.
     const fileCategory = CATEGORY_MAP[file];
-    const isPrimaryDoc = category && (fileCategory === category || options?.extraSpecFiles?.includes(file));
+    const isPrimaryDoc = allPrimary || (category && (fileCategory === category || options?.extraSpecFiles?.includes(file)));
 
     const workflowRoot = join(specsDir, '..');
     const formatted = formatFileContent(body, keyword, isPrimaryDoc ? undefined : category, workflowRoot, options);
@@ -536,10 +549,32 @@ export interface ExtraDocsResult {
 }
 
 /**
+ * Resolve a doc path to an absolute filesystem path.
+ *
+ * Resolution order:
+ *   1. `knowhow/…`  → `{projectPath}/.workflow/knowhow/…`
+ *   2. Absolute path (`/…`) → used as-is
+ *   3. `~/…`        → `{homedir()}/…` (tilde expansion)
+ *   4. Relative     → `{projectPath}/…`
+ */
+function resolveDocPath(projectPath: string, docPath: string): string {
+  if (docPath.startsWith('knowhow/')) {
+    return join(projectPath, '.workflow', docPath);
+  }
+  if (isAbsolute(docPath)) return docPath;
+  if (docPath.startsWith('~/')) {
+    return join(homedir(), docPath.slice(2));
+  }
+  return join(projectPath, docPath);
+}
+
+/**
  * Load additional documents from arbitrary paths.
  *
  * Path resolution:
  *   - Starts with `knowhow/` → resolved from `.workflow/knowhow/`
+ *   - Absolute path (`/…`) → used as-is
+ *   - Starts with `~/` → tilde-expanded to home directory
  *   - Otherwise → resolved relative to projectPath
  *
  * Returns concatenated markdown content and loaded count.
@@ -550,9 +585,7 @@ export function loadExtraDocs(projectPath: string, docPaths?: string[]): ExtraDo
   const sections: string[] = [];
 
   for (const docPath of docPaths) {
-    const absPath = docPath.startsWith('knowhow/')
-      ? join(projectPath, '.workflow', docPath)
-      : join(projectPath, docPath);
+    const absPath = resolveDocPath(projectPath, docPath);
 
     try {
       if (!existsSync(absPath)) continue;

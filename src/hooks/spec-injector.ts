@@ -115,6 +115,7 @@ export function evaluateSpecInjection(
   for (const category of categories) {
     // Build loader options with keyword filters and extra spec files
     const loaderOpts: LoadSpecsOptions = {};
+    if (config?.globalSpecsDir) loaderOpts.globalDir = config.globalSpecsDir;
     if (kwFilters.include?.length) loaderOpts.includeKeywords = kwFilters.include;
     if (kwFilters.exclude?.length) loaderOpts.excludeKeywords = kwFilters.exclude;
 
@@ -172,6 +173,7 @@ export function evaluateSpecInjection(
     // Always-inject keyword-matched entries (load from all specs, filter by keywords)
     if (always.keywords?.length) {
       const kwOpts: LoadSpecsOptions = { includeKeywords: always.keywords };
+      if (config?.globalSpecsDir) kwOpts.globalDir = config.globalSpecsDir;
       const kwResult = loadSpecs(projectPath, undefined, resolvedUid, undefined, undefined, kwOpts);
       if (kwResult.content) {
         sections.push(kwResult.content);
@@ -181,9 +183,11 @@ export function evaluateSpecInjection(
 
     // Always-inject full categories
     if (always.categories?.length) {
+      const catOpts: LoadSpecsOptions = {};
+      if (config?.globalSpecsDir) catOpts.globalDir = config.globalSpecsDir;
       for (const cat of always.categories) {
         if (allCategories.includes(cat)) continue; // Already loaded above
-        const catResult = loadSpecs(projectPath, cat as SpecCategory, resolvedUid);
+        const catResult = loadSpecs(projectPath, cat as SpecCategory, resolvedUid, undefined, undefined, catOpts);
         if (catResult.content) {
           sections.push(catResult.content);
           totalCount += catResult.totalLoaded;

@@ -35,6 +35,7 @@ export class SpecInjectionPlugin implements MaestroPlugin {
       const uid = resolveUidSafe();
 
       const loaderOpts: LoadSpecsOptions = {};
+      if (config.globalSpecsDir) loaderOpts.globalDir = config.globalSpecsDir;
       if (config.keywordFilters?.include?.length) loaderOpts.includeKeywords = config.keywordFilters.include;
       if (config.keywordFilters?.exclude?.length) loaderOpts.excludeKeywords = config.keywordFilters.exclude;
 

@@ -2,8 +2,9 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { loadSpecs } from '../spec-loader.js';
+import { tmpdir, homedir } from 'node:os';
+import { loadSpecs, loadExtraDocs } from '../spec-loader.js';
+import { SPEC_SEED_DOCS } from '../spec-seeds.js';
 
 // ---------------------------------------------------------------------------
 // Test project setup — temporary directory with spec files
@@ -24,8 +25,13 @@ function writeSpec(dir: string, filename: string, content: string): void {
 }
 
 function setupBaseline(): void {
-  // Pre-create empty global dir to prevent autoInitSeeds from writing seed files
-  if (!existsSync(GLOBAL_DIR)) mkdirSync(GLOBAL_DIR, { recursive: true });
+  // Write empty stubs for every seed filename so autoInitSeeds does not create
+  // populated seed files in GLOBAL_DIR.  Individual global-layer tests overwrite
+  // specific files with their own content via writeSpec().
+  mkdirSync(GLOBAL_DIR, { recursive: true });
+  for (const doc of SPEC_SEED_DOCS) {
+    writeFileSync(join(GLOBAL_DIR, doc.filename), '');
+  }
   writeSpec(BASELINE_DIR, 'coding-conventions.md', '# Coding Conventions\n\nUse camelCase.');
   writeSpec(BASELINE_DIR, 'learnings.md', '# Learnings\n\nPattern X works.');
 }
@@ -67,7 +73,11 @@ describe('loadSpecs — single directory (no uid)', () => {
   });
 
   it('returns empty when no specs directory', () => {
-    const result = loadSpecs('/nonexistent/path', undefined, undefined, undefined, undefined, TEST_OPTS);
+    // Use a fresh temp dir with no .workflow/specs/ — guarantees no stray seed files
+    const emptyProject = join(tmpdir(), `maestro-empty-proj-${Date.now()}`);
+    mkdirSync(emptyProject, { recursive: true });
+    const result = loadSpecs(emptyProject, undefined, undefined, undefined, undefined, TEST_OPTS);
+    rmSync(emptyProject, { recursive: true, force: true });
     assert.strictEqual(result.content, '');
     assert.strictEqual(result.totalLoaded, 0);
   });
@@ -176,5 +186,104 @@ describe('loadSpecs — three-layer (uid provided)', () => {
     assert.ok(result.content.includes('Found bug in module X'));
     // coding-conventions should NOT be included
     assert.ok(!result.content.includes('Use camelCase'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Global layer: allPrimary — cross-category entries load in full
+// ---------------------------------------------------------------------------
+
+describe('loadSpecs — global layer loads across categories', () => {
+  beforeEach(() => setupBaseline());
+  afterEach(() => cleanup());
+
+  it('loads arch spec from global layer when querying coding category', () => {
+    // Add arch spec to global dir
+    writeSpec(GLOBAL_DIR, 'architecture-constraints.md', '# Global Arch\n\nNo circular deps.');
+
+    const result = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, TEST_OPTS);
+    // Global arch spec must appear even though query category is coding
+    assert.ok(result.content.includes('No circular deps'), 'global arch spec should load for coding queries');
+    // Baseline coding spec also present
+    assert.ok(result.content.includes('Coding Conventions'));
+  });
+
+  it('loads all global specs in full regardless of category', () => {
+    writeSpec(GLOBAL_DIR, 'architecture-constraints.md', '# Global Arch\n\nLayer separation required.');
+    writeSpec(GLOBAL_DIR, 'debug-notes.md', '# Global Debug\n\nAlways check logs.');
+
+    const result = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, TEST_OPTS);
+    assert.ok(result.content.includes('Layer separation required'));
+    assert.ok(result.content.includes('Always check logs'));
+  });
+
+  it('global layer has layer header when it contributes content alongside baseline', () => {
+    writeSpec(GLOBAL_DIR, 'architecture-constraints.md', '# Global Arch\n\nConstraint here.');
+
+    const result = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, TEST_OPTS);
+    assert.ok(result.content.includes('# Global Specs'));
+    assert.ok(result.content.includes('# Baseline Specs'));
+  });
+
+  it('global layer with no matching files does not emit headers', () => {
+    // GLOBAL_DIR is empty (only pre-created, no files written)
+    const result = loadSpecs(TEST_DIR, 'coding', undefined, undefined, undefined, TEST_OPTS);
+    assert.ok(!result.content.includes('# Global Specs'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadExtraDocs — path resolution
+// ---------------------------------------------------------------------------
+
+describe('loadExtraDocs — path resolution', () => {
+  const EXTRA_DIR = join(tmpdir(), `maestro-extradocs-${Date.now()}`);
+  const EXTRA_FILE = join(EXTRA_DIR, 'my-rules.md');
+
+  beforeEach(() => {
+    mkdirSync(EXTRA_DIR, { recursive: true });
+    writeFileSync(EXTRA_FILE, '# My Rules\n\nAlways prefer composition.');
+  });
+
+  afterEach(() => {
+    if (existsSync(EXTRA_DIR)) rmSync(EXTRA_DIR, { recursive: true, force: true });
+  });
+
+  it('resolves absolute paths correctly', () => {
+    const result = loadExtraDocs('/any/project/root', [EXTRA_FILE]);
+    assert.ok(result.content.includes('Always prefer composition'));
+    assert.strictEqual(result.count, 1);
+  });
+
+  it('resolves tilde paths relative to home directory', () => {
+    // Only meaningful if the file lives under homedir(); use relative home path
+    const home = homedir();
+    if (!EXTRA_FILE.startsWith(home)) {
+      // tmpdir is not under home — skip tilde test on this platform
+      return;
+    }
+    const tildePath = '~/' + EXTRA_FILE.slice(home.length + 1);
+    const result = loadExtraDocs('/any/project/root', [tildePath]);
+    assert.ok(result.content.includes('Always prefer composition'));
+    assert.strictEqual(result.count, 1);
+  });
+
+  it('resolves relative paths against projectPath', () => {
+    const projectDir = join(tmpdir(), `maestro-relpath-${Date.now()}`);
+    const relFile = 'docs/extra.md';
+    const absRelFile = join(projectDir, relFile);
+    mkdirSync(join(projectDir, 'docs'), { recursive: true });
+    writeFileSync(absRelFile, '# Extra\n\nRelative content.');
+
+    const result = loadExtraDocs(projectDir, [relFile]);
+    assert.ok(result.content.includes('Relative content'));
+
+    rmSync(projectDir, { recursive: true, force: true });
+  });
+
+  it('returns empty for non-existent absolute path', () => {
+    const result = loadExtraDocs('/any/project', ['/nonexistent/absolute/path.md']);
+    assert.strictEqual(result.content, '');
+    assert.strictEqual(result.count, 0);
   });
 });

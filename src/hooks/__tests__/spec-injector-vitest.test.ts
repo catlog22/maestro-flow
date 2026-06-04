@@ -11,6 +11,14 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { evaluateSpecInjection } from '../spec-injector.js';
+import { SPEC_SEED_DOCS } from '../../tools/spec-seeds.js';
+
+/** Write empty stubs for all seed filenames so autoInitSeeds doesn't populate the dir. */
+function makeEmptyGlobalDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'maestro-empty-global-'));
+  for (const doc of SPEC_SEED_DOCS) writeFileSync(join(dir, doc.filename), '');
+  return dir;
+}
 
 // ---------------------------------------------------------------------------
 // Test lifecycle
@@ -182,7 +190,15 @@ describe('evaluateSpecInjection — edge cases', () => {
   });
 
   it('returns inject: false when no specs directory exists', () => {
-    const result = evaluateSpecInjection('code-developer', '/nonexistent/path');
+    // Use isolated temp dirs; pre-populate global with empty stubs so autoInitSeeds
+    // doesn't write full seed content (which would trigger injection).
+    const emptyGlobal = makeEmptyGlobalDir();
+    const emptyProject = mkdtempSync(join(tmpdir(), 'maestro-empty-project-'));
+    const result = evaluateSpecInjection('code-developer', emptyProject, undefined, {
+      globalSpecsDir: emptyGlobal,
+    });
+    rmSync(emptyGlobal, { recursive: true, force: true });
+    rmSync(emptyProject, { recursive: true, force: true });
     expect(result.inject).toBe(false);
   });
 
