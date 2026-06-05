@@ -1,15 +1,16 @@
 ---
 name: spec-load
 description: Load specs and lessons for current context
-argument-hint: [--category <category>] [--keyword <word>]
+argument-hint: [--scope <scope>] [--category <category>] [--keyword <word>]
 allowed-tools:
   - grep_search
   - run_command
   - view_file
 ---
 <purpose>
-Load relevant specs filtered by category (file-level) and/or keyword (entry-level).
+Load relevant specs filtered by scope, category (file-level) and/or keyword (entry-level).
 Category-based loading: loads the category's primary doc in full + matching entries from other files.
+By default, loads from both global (~/.maestro/specs/) and project (.workflow/specs/) layers.
 </purpose>
 
 <required_reading>
@@ -20,6 +21,11 @@ Category-based loading: loads the category's primary doc in full + matching entr
 $ARGUMENTS -- optional flags and keyword
 
 **Flags:**
+- `--scope <scope>` — Load scope (default: global + project merged):
+  - `project`: project baseline only (.workflow/specs/)
+  - `global`: global + project merged (~/.maestro/specs/ + .workflow/specs/)
+  - `team`: project + team shared (.workflow/collab/specs/)
+  - `personal`: project + team + personal (requires uid)
 - `--category <category>` — Load by category: primary category doc (full) + cross-file entries with matching category attr. Categories: coding, arch, test, review, debug, learning, ui.
 - `--keyword <word>` — Filter by keyword within entries
 
@@ -37,7 +43,8 @@ $ARGUMENTS -- optional flags and keyword
 
 **Examples:**
 ```
-/spec-load --category coding            # coding全文 + 跨文件coding条目
+/spec-load --category coding            # coding全文 + 跨文件coding条目 (global + project)
+/spec-load --scope global --category arch  # 明确包含全局 arch 规范
 /spec-load --category review            # review-standards + quality-rules + 跨文件review条目
 /spec-load --category coding --keyword auth
 /spec-load --keyword auth
@@ -56,7 +63,7 @@ Follow '~/.maestro/workflows/specs-load.md' completely.
 <error_codes>
 | Code | Severity | Description | Stage |
 |------|----------|-------------|-------|
-| E001 | fatal | `.workflow/specs/` not initialized -- run `/spec-setup` first | detect_context |
+| E001 | warning | `.workflow/specs/` not initialized -- run `/spec-setup` first (global specs still available) | detect_context |
 | W001 | warning | No matching specs found for keyword -- showing all specs in category instead | load_specs |
 </error_codes>
 
