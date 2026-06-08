@@ -117,10 +117,31 @@ export function registerSpecCommand(program: Command): void {
     .action(async (opts) => {
       const { logCliEndpoint } = await import('../hooks/spec-analytics.js');
       logCliEndpoint(process.cwd(), 'spec list', { scope: opts.scope });
-      const { existsSync, readdirSync } = await import('node:fs');
+      const { existsSync, readdirSync, readFileSync: readFs } = await import('node:fs');
+      const { join: pathJoin } = await import('node:path');
       const { resolveSpecDir } = await import('../tools/spec-loader.js');
+      const { parseSpecEntries: parseEntries } = await import('../tools/spec-entry-parser.js');
 
       const uid = await resolveUid(opts);
+
+      const printFileEntries = (specsDir: string, file: string) => {
+        try {
+          const raw = readFs(pathJoin(specsDir, file), 'utf-8');
+          const { entries } = parseEntries(raw);
+          if (entries.length === 0) {
+            console.log(`  ${file}`);
+          } else {
+            console.log(`  ${file} (${entries.length} entries)`);
+            for (const e of entries) {
+              let label = e.title || e.content.replace(/\n/g, ' ').trim();
+              if (label.length > 50) label = label.slice(0, 50) + '...';
+              console.log(`    L${String(e.lineStart).padEnd(4)} ${label}`);
+            }
+          }
+        } catch {
+          console.log(`  ${file}`);
+        }
+      };
 
       // When --scope is explicitly given, show that scope only
       if (opts.scope) {
@@ -145,9 +166,7 @@ export function registerSpecCommand(program: Command): void {
         }
 
         console.log(`${label} (${files.length} files)  [${specsDir}]\n`);
-        for (const file of files) {
-          console.log(`  ${file}`);
-        }
+        for (const file of files) printFileEntries(specsDir, file);
         return;
       }
 
@@ -173,15 +192,83 @@ export function registerSpecCommand(program: Command): void {
           console.log(`${label}: (empty)  [${specsDir}]`);
         } else {
           console.log(`${label} (${files.length} files)  [${specsDir}]`);
-          for (const file of files) {
-            console.log(`  ${file}`);
-          }
+          for (const file of files) printFileEntries(specsDir, file);
         }
         console.log('');
       }
 
       if (totalFiles === 0) {
         console.log('No spec files found in any scope. Run "maestro spec init" to initialize.');
+      }
+    });
+
+  // ── search ────────────────────────────────────────────────────────────
+  spec
+    .command('search <query...>')
+    .description('Search spec entries by keyword or text')
+    .option('--scope <scope>', 'Spec scope: project|global|team|personal (omit for all)')
+    .option('--uid <uid>', 'User id for personal scope')
+    .option('--json', 'Output as JSON')
+    .action(async (queryParts: string[], opts) => {
+      const { existsSync, readdirSync, readFileSync: readFs } = await import('node:fs');
+      const { join: pathJoin } = await import('node:path');
+      const { resolveSpecDir } = await import('../tools/spec-loader.js');
+      const { parseSpecEntries: parseEntries } = await import('../tools/spec-entry-parser.js');
+
+      const q = queryParts.join(' ').toLowerCase();
+      const uid = await resolveUid(opts);
+
+      const dirs: Array<{ dir: string; label: string }> = [];
+      if (opts.scope) {
+        const scope = validateScope(opts.scope);
+        if (scope === 'personal' && !uid) {
+          console.error('Error: personal scope requires --uid or team membership.');
+          process.exit(1);
+        }
+        dirs.push({ dir: resolveSpecDir(process.cwd(), scope, uid), label: SCOPE_LABELS[scope] });
+      } else {
+        for (const s of ['global', 'project', 'team'] as const) {
+          dirs.push({ dir: resolveSpecDir(process.cwd(), s), label: SCOPE_LABELS[s] });
+        }
+      }
+
+      const results: Array<{ file: string; scope: string; category: string; lineStart: number; title: string; desc: string }> = [];
+
+      for (const { dir, label } of dirs) {
+        if (!existsSync(dir)) continue;
+        let files: string[];
+        try { files = readdirSync(dir).filter(f => f.endsWith('.md')); } catch { continue; }
+
+        for (const file of files) {
+          try {
+            const raw = readFs(pathJoin(dir, file), 'utf-8');
+            const { entries } = parseEntries(raw);
+            for (const e of entries) {
+              const text = `${e.title} ${e.content} ${e.keywords.join(' ')}`.toLowerCase();
+              if (text.includes(q)) {
+                const hasTitle = !!e.title;
+                const title = e.title || e.content.replace(/\n/g, ' ').trim().slice(0, 60);
+                let desc = '';
+                if (hasTitle) {
+                  desc = e.content.replace(/^###\s+.+\n*/, '').replace(/\n/g, ' ').trim();
+                  if (desc.length > 60) desc = desc.slice(0, 60) + '...';
+                }
+                results.push({ file, scope: label, category: e.category, lineStart: e.lineStart, title, desc });
+              }
+            }
+          } catch { continue; }
+        }
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify({ query: q, count: results.length, results }, null, 2));
+        return;
+      }
+
+      console.log(`Found ${results.length} entries matching "${q}"`);
+      for (const r of results) {
+        console.log(`  [${r.category}] ${r.file}:${r.lineStart}  ${r.title}`);
+        if (r.desc) console.log(`    ${r.desc}`);
       }
     });
 

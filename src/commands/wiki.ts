@@ -14,6 +14,7 @@ import type { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { truncate } from '../utils/cli-format.js';
 import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import { WikiWriter, WikiWriteError } from '#maestro-dashboard/wiki/writer.js';
 import { computeHealth, detectOrphans, detectHubs } from '#maestro-dashboard/wiki/graph-analysis.js';
@@ -37,6 +38,23 @@ function getOfflineClients(): { indexer: WikiIndexer; writer: WikiWriter } {
     _writer = new WikiWriter(workflowRoot, _indexer);
   }
   return { indexer: _indexer!, writer: _writer! };
+}
+
+function extractSnippet(body: string, query: string, maxLen = 50): string | null {
+  if (!body || !query) return null;
+  const lower = body.toLowerCase();
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  for (const term of terms) {
+    const idx = lower.indexOf(term);
+    if (idx === -1) continue;
+    let line = 1;
+    for (let i = 0; i < idx; i++) if (body[i] === '\n') line++;
+    const ls = body.lastIndexOf('\n', idx) + 1;
+    const le = body.indexOf('\n', idx);
+    const raw = body.slice(ls, le === -1 ? body.length : le).trim();
+    return `L${line}: ${raw.length > maxLen ? raw.slice(0, maxLen) + '...' : raw}`;
+  }
+  return null;
 }
 
 export function registerWikiCommand(program: Command): void {
@@ -82,16 +100,22 @@ export function registerWikiCommand(program: Command): void {
           return;
         }
         if (opts.group) {
-          const groups = (data.groups ?? {}) as Record<string, Array<{ id: string; title: string }>>;
+          const groups = (data.groups ?? {}) as Record<string, Array<{ id: string; title: string; summary?: string }>>;
           for (const [type, items] of Object.entries(groups)) {
             if (items.length === 0) continue;
             console.log(`\n[${type}] (${items.length})`);
-            for (const e of items) console.log(`  ${e.id}  ${e.title}`);
+            for (const e of items) {
+              const desc = e.summary ? `  ${truncate(e.summary, 50)}` : '';
+              console.log(`  ${e.id}  ${e.title}${desc}`);
+            }
           }
         } else {
-          const entries = (data.entries ?? []) as Array<{ id: string; type: string; title: string }>;
+          const entries = (data.entries ?? []) as Array<{ id: string; type: string; title: string; summary?: string }>;
           console.log(`Found ${entries.length} entries`);
-          for (const e of entries) console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+          for (const e of entries) {
+            const desc = e.summary ? `  ${truncate(e.summary, 50)}` : '';
+            console.log(`  [${e.type}] ${e.id}  ${e.title}${desc}`);
+          }
         }
         return;
       }
@@ -117,7 +141,10 @@ export function registerWikiCommand(program: Command): void {
         for (const [type, items] of Object.entries(groups)) {
           if (items.length === 0) continue;
           console.log(`\n[${type}] (${items.length})`);
-          for (const e of items) console.log(`  ${e.id}  ${e.title}`);
+          for (const e of items) {
+            const desc = e.summary ? `  ${truncate(e.summary, 50)}` : '';
+            console.log(`  ${e.id}  ${e.title}${desc}`);
+          }
         }
       } else {
         const entries = await indexer.query(filters);
@@ -126,7 +153,13 @@ export function registerWikiCommand(program: Command): void {
           return;
         }
         console.log(`Found ${entries.length} entries`);
-        for (const e of entries) console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+        for (const e of entries) {
+          console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+          if (opts.query) {
+            const snippet = extractSnippet(e.body, opts.query);
+            if (snippet) console.log(`    ${snippet}`);
+          }
+        }
       }
     });
 
@@ -245,9 +278,12 @@ export function registerWikiCommand(program: Command): void {
           console.log(JSON.stringify(data, null, 2));
           return;
         }
-        const entries = (data.entries ?? []) as Array<{ id: string; type: string; title: string }>;
+        const entries = (data.entries ?? []) as Array<{ id: string; type: string; title: string; summary?: string }>;
         console.log(`Query: "${q}"  (${entries.length} results)`);
-        for (const e of entries) console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+        for (const e of entries) {
+          console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+          if (e.summary) console.log(`    ${truncate(e.summary, 60)}`);
+        }
         return;
       }
 
@@ -259,7 +295,12 @@ export function registerWikiCommand(program: Command): void {
         return;
       }
       console.log(`Query: "${q}"  (${entries.length} results)`);
-      for (const e of entries) console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+      for (const e of entries) {
+        console.log(`  [${e.type}] ${e.id}  ${e.title}`);
+        if (e.summary) console.log(`    ${truncate(e.summary, 60)}`);
+        const snippet = extractSnippet(e.body, q);
+        if (snippet) console.log(`    ${snippet}`);
+      }
     });
 
   // ── health ────────────────────────────────────────────────────────────
