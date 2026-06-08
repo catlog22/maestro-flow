@@ -70,20 +70,20 @@ Statusline 支持两种布局模式，通过 `layout` 配置项切换：
 
 **无工作流（双行）：**
 ```
-✎ Opus 4.6 🧠 medium 10k | ⚙ full-lifecycle verify [3/6] | ▸ Fixing auth | 👥 alice
+✎ Opus 4.6 | ⚙ full-lifecycle verify [3/6] | ▸ Fixing auth | 👥 alice
 ■ maestro2  ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | ◔ ███░░░ 28%
 ```
 
 **有工作流（三行）：**
 ```
-✎ Opus 4.6 🧠 medium 10k | ⚙ full-lifecycle verify [3/6] | ▸ Fixing auth | 👥 alice
+✎ Opus 4.6 | ⚙ full-lifecycle verify [3/6] | ▸ Fixing auth | 👥 alice
 ■ maestro2  ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | ◔ ███░░░ 28%
 ⚑ MVP 1/2 ◆ P2 | auth ✓ · user-mgmt ⚙ execute (2/4)
 ```
 
 | 行 | compact | expanded |
 |----|---------|----------|
-| 1 | Model + Thinking + Coord + Task + Team + Dir + Tokens + Context | Model + Thinking + Coord + Task + Team |
+| 1 | Model + Coord + Task + Team + Dir + Tokens + Context | Model + Coord + Task + Team |
 | 2 | 工作流时间线（有工作流时） | Dir + Git + Tokens + Context |
 | 3 | — | 工作流时间线（有工作流时） |
 
@@ -110,7 +110,6 @@ Statusline 支持两种布局模式，通过 `layout` 配置项切换：
 | Segment | 说明 | 示例 |
 |---------|------|------|
 | Model | 当前模型名称 | `✎ Opus 4.6` |
-| Thinking | 思考强度（有 extended thinking 时显示） | `🧠 medium 10k` |
 | Coordinator | 链式协调器进度 | `⚙ full-lifecycle verify [3/6]` |
 | Task | 当前进行中的任务 | `▸ Fixing auth module` |
 | Team | 活跃团队成员 | `👥 alice (P3/001) \| bob +2` |
@@ -122,16 +121,6 @@ Statusline 支持两种布局模式，通过 `layout` 配置项切换：
 | Dir + Git | 目录名 + Git 分支状态 | `■ maestro2 ⎇ master △↑1` |
 | Tokens + Lines | Token 用量 + 代码变更 | `↑12k ↓3k Σ15k +342 -87` |
 | Context | 上下文消耗进度条 | `◔ ██████░░░░ 62%` |
-
-### 思考强度（Thinking）
-
-当 Claude Code 启用了 extended thinking 并传入 `model.thinking_budget_tokens` 时显示：
-
-| Budget 范围 | 强度标签 | 示例 |
-|-------------|----------|------|
-| ≤ 5,000 tokens | `light` | `🧠 light 4k` |
-| 5,001–16,000 tokens | `medium` | `🧠 medium 10k` |
-| > 16,000 tokens | `deep` | `🧠 deep 32k` |
 
 ### Git 状态标记
 
@@ -349,7 +338,6 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
 | 字段 | 说明 |
 |------|------|
 | `model.display_name` | 当前模型名称 |
-| `model.thinking_budget_tokens` | extended thinking 的 token 预算（可选，有则显示思考强度） |
 | `workspace.current_dir` | 当前工作目录 |
 | `session_id` | 会话 ID |
 | `context_window.remaining_percentage` | 上下文剩余百分比 |

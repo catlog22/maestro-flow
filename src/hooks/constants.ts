@@ -87,7 +87,6 @@ const ICONS_NERD = {
   dir:       '\uEA83',     //  nf-cod-folder
   git:       '\uE725',     //  nf-dev-git_branch
   ctx:       '\uF201',     //  nf-fa-line_chart
-  thinking:  '\uF5C3',     //  nf-fa-brain
 } as const;
 
 const ICONS_UNICODE = {
@@ -100,7 +99,6 @@ const ICONS_UNICODE = {
   dir:       '\u25A0',    // ■ square
   git:       '\u2387',    // ⎇ branch
   ctx:       '\u25D4',    // ◔ circle with quarter
-  thinking:  '\u{1F9E0}', // 🧠 brain
 } as const;
 
 export const ICONS = _slConfig.nerdFont ? ICONS_NERD : ICONS_UNICODE;
@@ -165,7 +163,6 @@ interface ThemeColors {
   ctxAlert:  RGB;
   ctxCrit:   RGB;
   separator: RGB;
-  thinking:  RGB;
 }
 
 /** All available themes */
@@ -184,7 +181,6 @@ export const THEMES: Record<string, ThemeColors> = {
     ctxAlert:  [250, 179, 135],
     ctxCrit:   [243, 139, 168],
     separator: [88, 91, 112],
-    thinking:  [245, 194, 231],
   },
   cyberpunk: {
     model:     [0, 255, 204],
@@ -200,7 +196,6 @@ export const THEMES: Record<string, ThemeColors> = {
     ctxAlert:  [255, 140, 0],
     ctxCrit:   [255, 50, 50],
     separator: [60, 60, 80],
-    thinking:  [255, 100, 220],
   },
   pastel: {
     model:     [150, 200, 230],
@@ -216,7 +211,6 @@ export const THEMES: Record<string, ThemeColors> = {
     ctxAlert:  [240, 180, 140],
     ctxCrit:   [230, 150, 150],
     separator: [160, 160, 170],
-    thinking:  [215, 185, 235],
   },
   nord: {
     model:     [136, 192, 208],
@@ -232,7 +226,6 @@ export const THEMES: Record<string, ThemeColors> = {
     ctxAlert:  [208, 135, 112],
     ctxCrit:   [191, 97, 106],
     separator: [76, 86, 106],
-    thinking:  [197, 166, 210],
   },
   monokai: {
     model:     [102, 217, 239],
@@ -248,7 +241,6 @@ export const THEMES: Record<string, ThemeColors> = {
     ctxAlert:  [253, 151, 31],
     ctxCrit:   [249, 38, 114],
     separator: [117, 113, 94],
-    thinking:  [255, 100, 160],
   },
 };
 

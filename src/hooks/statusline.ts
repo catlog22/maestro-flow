@@ -35,11 +35,7 @@ import { findWorkspaceRoot } from './workspace.js';
 // ---------------------------------------------------------------------------
 
 interface StatuslineInput {
-  model?: {
-    display_name?: string;
-    /** Extended thinking budget (tokens); present when Claude is using extended thinking */
-    thinking_budget_tokens?: number;
-  };
+  model?: { display_name?: string };
   workspace?: { current_dir?: string };
   session_id?: string;
   context_window?: {
@@ -61,7 +57,7 @@ interface BridgeData {
 }
 
 /** Segment key — maps to TEXT_COLORS */
-type SegKey = 'model' | 'thinking' | 'milestone' | 'phase' | 'coord' | 'task' | 'team' | 'dir' | 'ctxOk' | 'ctxWarn' | 'ctxAlert' | 'ctxCrit';
+type SegKey = 'model' | 'milestone' | 'phase' | 'coord' | 'task' | 'team' | 'dir' | 'ctxOk' | 'ctxWarn' | 'ctxAlert' | 'ctxCrit';
 
 interface Segment {
   text: string;
@@ -116,22 +112,6 @@ function formatTokens(n: number): string {
 /** Build token usage text: "↑12k ↓3k Σ15k" */
 function buildTokenText(input: number, output: number): string {
   return `↑${formatTokens(input)} ↓${formatTokens(output)} Σ${formatTokens(input + output)}`;
-}
-
-// ---------------------------------------------------------------------------
-// Thinking intensity
-// ---------------------------------------------------------------------------
-
-/** Map budget_tokens to a human-readable intensity label */
-function thinkingIntensity(budget: number): string {
-  if (budget <= 5000)  return 'light';
-  if (budget <= 16000) return 'medium';
-  return 'deep';
-}
-
-/** Build thinking segment text: "🧠 medium 10k" */
-function buildThinkingText(budget: number): string {
-  return `${ICONS.thinking} ${thinkingIntensity(budget)} ${formatTokens(budget)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -746,7 +726,6 @@ export function formatStatusline(data: StatuslineInput): string {
   const dir = data.workspace?.current_dir || process.cwd();
   const session = data.session_id || '';
   const remaining = data.context_window?.remaining_percentage;
-  const thinkingBudget = data.model?.thinking_budget_tokens;
 
   // ---- Collect data ----
   const wf    = readWorkflowState(dir);
@@ -761,12 +740,9 @@ export function formatStatusline(data: StatuslineInput): string {
     if (session) writeBridge(session, remaining, usedPct);
   }
 
-  // ---- Segment group A: Model | Thinking | Coord | Task | Team ----
+  // ---- Segment group A: Model | Coord | Task | Team ----
   const segA: Segment[] = [];
   segA.push({ key: 'model', text: `${ICONS.model} ${model}` });
-  if (thinkingBudget && thinkingBudget > 0) {
-    segA.push({ key: 'thinking', text: buildThinkingText(thinkingBudget) });
-  }
   if (coord) segA.push({ key: 'coord', text: `${ICONS.coord} ${coord}` });
   if (task)  segA.push({ key: 'task',  text: `${ICONS.task} ${task}` });
   if (team)  segA.push({ key: 'team',  text: `${ICONS.team} ${team}` });
