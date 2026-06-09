@@ -47,49 +47,80 @@ Claude Code 在每次交互后将会话数据（JSON）通过 stdin 传给 `maes
 
 ## 多行布局
 
-Statusline 支持智能多行显示，根据工作流状态和 session 链数量自动决定行数：
+Statusline 支持两种布局模式，通过 `layout` 配置项切换：
+
+### compact（默认）
+
+所有状态段合并为一行，工作流时间线在第二行：
 
 **无工作流（单行）：**
 ```
-⚡ Opus 4.6 | 📁 maestro2 ⎇ master | ↑12k ↓3k Σ15k +342 -87 | 📈 ███░░░ 28%
+✎ Opus 4.6 | ■ maestro2  ⎇ master | ↑12k ↓3k Σ15k +342 -87 | ◔ ███░░░ 28%
 ```
 
-**有工作流，≤2 条链（双行）：**
+**有工作流（双行）：**
 ```
-⚡ Opus 4.6 | 📁 maestro2 ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | 📈 ███░░░ 28%
-🏁 MVP 1/2 ◆P2 | auth A→P→E→V ✓ · user-mgmt A→P ●
-```
-
-**有工作流，3+ 条链（多行展开）：**
-```
-⚡ Opus 4.6 | 📁 maestro2 ⎇ master | ↑12k ↓3k Σ15k | 📈 ███░░░ 28%
-🏁 MVP 1/2 ◆P2
-  auth A→P→E→R→D→T→V ✓
-  user-mgmt A→P→E ●
-  settings A ○
+✎ Opus 4.6 | ■ maestro2  ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | ◔ ███░░░ 28%
+⚑ MVP 1/2 ◆ P2 | auth ✓ · user-mgmt ⚙ execute (2/4)
 ```
 
-| 链数量 | 显示方式 |
-|--------|----------|
-| 0（无工作流） | 单行状态栏 |
-| 1–2 | 双行，链之间用 ` · ` 分隔 |
-| 3+ | 展开为多行，每条链缩进显示 |
+### expanded（三行模式）
+
+将状态信息拆成两行，工作流时间线在第三行，信息更不拥挤：
+
+**无工作流（双行）：**
+```
+✎ Opus 4.6 | ⚙ full-lifecycle verify [3/6] | ▸ Fixing auth | 👥 alice
+■ maestro2  ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | ◔ ███░░░ 28%
+```
+
+**有工作流（三行）：**
+```
+✎ Opus 4.6 | ⚙ full-lifecycle verify [3/6] | ▸ Fixing auth | 👥 alice
+■ maestro2  ⎇ master △↑1 | ↑12k ↓3k Σ15k +342 -87 | ◔ ███░░░ 28%
+⚑ MVP 1/2 ◆ P2 | auth ✓ · user-mgmt ⚙ execute (2/4)
+```
+
+| 行 | compact | expanded |
+|----|---------|----------|
+| 1 | Model + Coord + Task + Team + Dir + Tokens + Context | Model + Coord + Task + Team |
+| 2 | 工作流时间线（有工作流时） | Dir + Git + Tokens + Context |
+| 3 | — | 工作流时间线（有工作流时） |
+
+启用三行模式：
+
+```json
+{
+  "statusline": {
+    "layout": "expanded"
+  }
+}
+```
+
+或通过环境变量：`MAESTRO_STATUSLINE_LAYOUT=expanded`
 
 ---
 
-## Line 1 — 状态栏
+## Line 1 — 状态栏（compact）/ Line 1+2（expanded）
 
 从左到右依次显示以下 segment（条件显示，空值自动隐藏）：
 
+**Line 1（两种模式均显示）：**
+
 | Segment | 说明 | 示例 |
 |---------|------|------|
-| Model | 当前模型名称 | `⚡ Opus 4.6` |
+| Model | 当前模型名称 | `✎ Opus 4.6` |
 | Coordinator | 链式协调器进度 | `⚙ full-lifecycle verify [3/6]` |
 | Task | 当前进行中的任务 | `▸ Fixing auth module` |
 | Team | 活跃团队成员 | `👥 alice (P3/001) \| bob +2` |
-| Dir + Git | 目录名 + Git 分支状态 | `📁 maestro2 ⎇ master △↑1` |
+
+**compact 模式 Line 1 追加 / expanded 模式 Line 2：**
+
+| Segment | 说明 | 示例 |
+|---------|------|------|
+| Dir + Git | 目录名 + Git 分支状态 | `■ maestro2 ⎇ master △↑1` |
 | Tokens + Lines | Token 用量 + 代码变更 | `↑12k ↓3k Σ15k +342 -87` |
-| Context | 上下文消耗进度条 | `📈 ██████░░░░ 62%` |
+| Context | 上下文消耗进度条 | `◔ ██████░░░░ 62%` |
 
 ### Git 状态标记
 
@@ -274,7 +305,8 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
 {
   "statusline": {
     "theme": "notion",
-    "nerdFont": true
+    "nerdFont": true,
+    "layout": "expanded"
   }
 }
 ```
@@ -283,6 +315,7 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
 |------|------|--------|------|
 | `theme` | string | `"notion"` | 配色主题 |
 | `nerdFont` | boolean | `false` | 启用 Nerd Font 图标 |
+| `layout` | `"compact"` \| `"expanded"` | `"compact"` | `compact`=默认两行；`expanded`=三行（Model/Team 单行 + Dir/Context 单行 + 工作流行） |
 
 ### 环境变量
 
@@ -291,6 +324,8 @@ Monokai:   Model(蓝)   Milestone(粉红)   Phase(荧光绿)  Dir(黄)   Context
 | `MAESTRO_STATUSLINE_THEME=nord` | 强制指定主题 |
 | `MAESTRO_NERD_FONT=1` | 强制启用 Nerd Font |
 | `MAESTRO_NERD_FONT=0` | 强制禁用 Nerd Font |
+| `MAESTRO_STATUSLINE_LAYOUT=expanded` | 强制启用三行展开模式 |
+| `MAESTRO_STATUSLINE_LAYOUT=compact` | 强制使用紧凑单行模式 |
 
 优先级：环境变量 > config.json > 默认值。
 

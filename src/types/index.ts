@@ -67,6 +67,8 @@ export interface StatuslineConfig {
   style?: string;
   theme?: string;
   nerdFont?: boolean;
+  /** 'compact' = default 2-line; 'expanded' = 3-line (model/coord/task/team + dir/tokens/ctx + workflow) */
+  layout?: 'compact' | 'expanded';
 }
 
 export interface MaestroConfig {
