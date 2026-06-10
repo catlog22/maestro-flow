@@ -34,7 +34,7 @@ $ARGUMENTS — target and optional flags.
 <execution>
 
 ### Phase 1: Resolve Target + Load Context
-Resolve target to content. Load specs, wiki search, prior lessons for context brief.
+Resolve target to content. Load specs, `maestro search`, prior lessons for context brief.
 
 ### Phase 2: Execute Mode
 

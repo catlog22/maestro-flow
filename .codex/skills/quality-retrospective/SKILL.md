@@ -241,7 +241,7 @@ If `--no-route`: skip this stage.
 For each insight in `synthResult.insights`, route based on `routing` field:
 
 **Spec routing** (`routing: "spec"`):
-Map category (pattern/convention → `coding`, architecture → `arch`, quality → `quality`). Append `<spec-entry>` with category, auto-extracted keywords, date, source="retrospective", title, summary, evidence, phase/lens/INS-id.
+Map category (pattern/convention → `coding`, architecture → `arch`, quality → `quality`). Append `<spec-entry>` with category, auto-extracted keywords, date, title, description, source="retrospective", evidence, phase/lens/INS-id.
 
 **Issue routing** (`routing: "issue"`, severity critical/high):
 Append to `.workflow/issues/issues.jsonl` with `ISS-<date>-<seq>` id, source="retrospective", phase/INS-id context, and history entry.

@@ -350,24 +350,24 @@ Blocked/failed tasks cascade: mark all downstream dependents as `skipped` with e
 4. **Register EXC artifact in state.json**: Find matching plan artifact, create `{ id: "EXC-{next_id}", type: "execute", milestone, phase, scope, path, status: "completed", depends_on: plan_artifact.id, harvested: false, created_at, completed_at }`. `milestone` MUST come from D-007 `phase_slugs` reverse lookup (numeric phase) — inherit from matching plan artifact if available, otherwise reverse-lookup directly.
 
 5. **Extract incremental specs**: Read `.summaries/`, use `maestro spec add` CLI:
-   - Learnings/pitfalls → `maestro spec add learning "<title>" "<content>" --keywords ... --source execute:{PLAN_DIR}`
-   - Design rationale → `maestro spec add coding "<title>" "<content>" --keywords ...`
-   - Root cause/workaround → `maestro spec add debug "<title>" "<content>" --keywords ...`
+   - Learnings/pitfalls → `maestro spec add learning "<title>" "<content>" --keywords ... --description "<summary>" --source execute:{PLAN_DIR}`
+   - Design rationale → `maestro spec add coding "<title>" "<content>" --keywords ... --description "<summary>"`
+   - Root cause/workaround → `maestro spec add debug "<title>" "<content>" --keywords ... --description "<summary>"`
    Mark artifact `harvested: true`
 
 6. **Post-task Knowledge Inquiry**: After each task completes, evaluate inquiry triggers:
 
    - **Execution deviation**: If task summary mentions approach change, dependency swap, or plan deviation:
      → Prompt: "TASK-{NNN} deviated from the plan. Record as architecture constraint?"
-     → On confirm: `maestro spec add arch "<decision>" "<rationale>" --keywords ... --source execute:{PLAN_DIR}`
+     → On confirm: `maestro spec add arch "<decision>" "<rationale>" --keywords ... --description "<summary>" --source execute:{PLAN_DIR}`
 
    - **Retry success**: If task required >=2 retries before completion:
      → Prompt: "TASK-{NNN} succeeded after {N} retries. Document this fix pattern?"
-     → On confirm: `maestro spec add debug "<pattern>" "<content>" --keywords ... --source execute:{PLAN_DIR}`
+     → On confirm: `maestro spec add debug "<pattern>" "<content>" --keywords ... --description "<summary>" --source execute:{PLAN_DIR}`
 
    - **Implicit knowledge**: If task summary contains design rationale ("chose X because", "rejected Y due to"):
      → Prompt: "Design decision detected. Record as a learning?"
-     → On confirm: `maestro spec add learning "<decision>" "<rationale>" --keywords ... --source execute:{PLAN_DIR}`
+     → On confirm: `maestro spec add learning "<decision>" "<rationale>" --keywords ... --description "<summary>" --source execute:{PLAN_DIR}`
 
    Use `request_user_input` for prompts:
    ```json

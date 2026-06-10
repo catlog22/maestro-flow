@@ -13,6 +13,7 @@ export interface SpecEntry {
   id: string;
   type: SpecType;
   title: string;
+  description?: string;
   content: string;
   file: string;
   timestamp: string;

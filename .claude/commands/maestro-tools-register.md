@@ -128,7 +128,7 @@ summary: "Use when <timing>. <scope description>"
 **Optionally register spec ref entry** for index discoverability:
 ```bash
 maestro spec add <category> "<title>" "Use when <timing>. <scope summary>" --keywords "<csv>" \
-  --ref "knowhow/RCP-<slug>.md" --knowhow-type recipe
+  --description "<one-line summary>" --ref "knowhow/RCP-<slug>.md" --knowhow-type recipe
 ```
 
 ### Step 6: Verify

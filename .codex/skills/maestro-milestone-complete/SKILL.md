@@ -78,8 +78,12 @@ Snapshot `roadmap.md` as `roadmap-snapshot.md` in the milestone archive.
 
 **Write**: Append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format:
 ```
-<spec-entry category="learning" keywords="kw1, kw2" date="YYYY-MM-DD" source="milestone-complete:{milestone}">
+<spec-entry category="learning" keywords="kw1, kw2" date="YYYY-MM-DD" title="{title}" description="{one-line summary}" source="milestone-complete:{milestone}">
+
+### {title}
+
 Learning content here.
+
 </spec-entry>
 ```
 

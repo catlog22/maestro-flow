@@ -470,7 +470,7 @@ Clear `.workflow/.scratchpad/.companion-active`.
 
 ```
 Knowledge accumulation reminders:
-  Reusable pattern found?        /spec-add <category> "title" "content"
+  Reusable pattern found?        /spec-add <category> "title" "content" --description "summary"
   Solved a complex problem?      /manage-knowhow-capture recipe "description"
   Made an architecture decision? /manage-knowhow-capture decision "description"
   Discovered a useful trick?     /manage-knowhow-capture tip "content"

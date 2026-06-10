@@ -109,7 +109,8 @@ After each task completion, check triggers:
 | retry_count >= 2 | "Document fix pattern?" | spec-add debug |
 | Summary contains design rationale ("chose X because") | "Record as knowhow?" | spec-add learning |
 
-On confirm → `Skill("spec-add", "<category> <content>")`.
+On confirm → `Skill("spec-add", "<category> <content> --description \"<summary>\"")`.
+Include `--description` with a one-line summary for search result display.
 
 ### Issue Status Sync
 

@@ -8,7 +8,7 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 <purpose>
 Knowledge synthesis that generates actionable digests from the wiki knowledge graph.
 Clusters entries by semantic theme, identifies knowledge gaps, and produces a coverage
-heatmap. Unlike `maestro wiki list` (raw entries), this synthesizes and interprets
+heatmap. Unlike `maestro search` (raw entries), this synthesizes and interprets
 the knowledge base with gap analysis and recommended actions.
 </purpose>
 
@@ -32,7 +32,7 @@ $ARGUMENTS — scope and optional flags.
 <execution>
 
 ### Stage 1: Scope & Load
-Load entries via `maestro wiki list` / `maestro search`. Run `maestro wiki health` for baseline.
+Load entries via `maestro search`. Run `maestro wiki health` for baseline.
 
 ### Stage 2: Theme Clustering
 Group entries into 3-5 themes via: tag co-occurrence, title BM25 similarity, relationship proximity, type grouping.

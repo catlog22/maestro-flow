@@ -20,7 +20,7 @@ $ARGUMENTS — entry ID to remove (e.g., `spec-learnings-003`)
 **Entry ID format**: `spec-{file-stem}-{NNN}` — sub-node ID from WikiIndexer atomic indexing.
 
 **Discovery**:
-- `maestro wiki list --type spec --json` — list all spec entries
+- `maestro search --type spec --json` — list all spec entries
 - `/spec-load --keyword <term>` — find by keyword
 - `maestro search "<query>"` — BM25 search
 

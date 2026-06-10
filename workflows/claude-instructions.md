@@ -43,7 +43,7 @@ KG stays fresh via hooks (`kg-sync` on UserPromptSubmit, `kg-context-injector` o
 
 When execution surfaces non-obvious knowledge, persist it:
 
-- **Spec entry** (short rule/constraint) → `/spec-add <category> "title" "content" --keywords kw1,kw2`
+- **Spec entry** (short rule/constraint) → `/spec-add <category> "title" "content" --keywords kw1,kw2 --description "summary"`
 - **Knowhow document** (detailed recipe/template/decision) → `/manage-knowhow-capture`
   - Use `--spec-category <cat>` to bridge knowhow into agent injection
   - Files use `{PREFIX}-{YYYYMMDD}-{slug}.md` naming for readable filenames

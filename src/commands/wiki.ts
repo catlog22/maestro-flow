@@ -569,6 +569,8 @@ export function registerWikiCommand(program: Command): void {
     .option('--category <cat>', 'Entry category (coding, arch, debug, learning, ...) — inherits from container if omitted')
     .requiredOption('--body <text>', 'Entry content')
     .option('--keywords <kw>', 'Comma-separated keywords')
+    .option('--title <title>', 'Entry title (defaults to first line of body)')
+    .option('--description <desc>', 'One-line description for search results')
     .action(async (containerId, opts, cmd) => {
       // Offline mode only — no live mode for append
       const { writer } = getOfflineClients();
@@ -578,6 +580,8 @@ export function registerWikiCommand(program: Command): void {
           category: opts.category,
           content: opts.body,
           keywords: opts.keywords,
+          title: opts.title,
+          description: opts.description,
         });
         console.log(`Appended: ${entry.id}`);
         console.log(`  Container: ${containerId}`);

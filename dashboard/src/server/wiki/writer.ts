@@ -44,6 +44,10 @@ export interface AppendEntryReq {
   content: string;
   /** Optional keywords (comma-separated or array). */
   keywords?: string[] | string;
+  /** Explicit title. Falls back to first line of content. */
+  title?: string;
+  /** One-line description for search results. Falls back to content[:240]. */
+  description?: string;
 }
 
 export class WikiWriteError extends Error {
@@ -252,8 +256,8 @@ export class WikiWriter {
         : [];
 
     const date = new Date().toISOString().slice(0, 10);
-    const firstLine = req.content.trim().split('\n')[0].substring(0, 80);
-    const kwStr = kws.length > 0 ? kws.join(',') : firstLine.toLowerCase()
+    const entryTitle = req.title || req.content.trim().split('\n')[0].substring(0, 80);
+    const kwStr = kws.length > 0 ? kws.join(',') : entryTitle.toLowerCase()
       .replace(/[^a-z0-9\u4e00-\u9fff_-]/g, ' ')
       .split(/\s+/)
       .filter((w) => w.length >= 3)
@@ -266,7 +270,9 @@ export class WikiWriter {
       : kwStr;
     const entryTag = this.isKnowhowPath(absPath) ? 'knowhow-entry' : 'spec-entry';
     const categoryAttr = req.category ? ` category="${req.category}"` : '';
-    const entryBlock = `\n<${entryTag}${categoryAttr} keywords="${effectiveKws}" date="${date}">\n\n### ${firstLine}\n\n${req.content.trim()}\n\n</${entryTag}>\n`;
+    const titleAttr = ` title="${entryTitle}"`;
+    const descAttr = req.description ? ` description="${req.description}"` : '';
+    const entryBlock = `\n<${entryTag}${categoryAttr} keywords="${effectiveKws}" date="${date}"${titleAttr}${descAttr}>\n\n### ${entryTitle}\n\n${req.content.trim()}\n\n</${entryTag}>\n`;
 
     return this.withLock(absPath, async () => {
       let existing: string;

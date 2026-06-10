@@ -49,7 +49,7 @@ Default to `list` if no arguments. Parse first token as subcommand.
 ### Step 3: Execute Subcommand
 
 **list**: Show entries from both stores (or filtered by `--store`, `--tag`, `--type`).
-- Workflow: use `maestro wiki list --type knowhow --json` or read `.workflow/wiki-index.json`, display ID, type, category, date, tags, title
+- Workflow: use `maestro search --type knowhow --json` or read `.workflow/wiki-index.json`, display ID, type, category, date, tags, title
 - System: list `.md` files in system memory directory
 
 **search `<query>`**: Full-text grep across both stores. Rank by match count.

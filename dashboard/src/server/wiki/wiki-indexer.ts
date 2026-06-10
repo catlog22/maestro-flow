@@ -232,7 +232,7 @@ export class WikiIndexer {
             id: `${idPrefix}${se.id}`,
             type: 'spec',
             title: se.title,
-            summary: se.content.slice(0, 240).replace(/\s+/g, ' '),
+            summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
             tags: se.keywords,
             status: 'active',
             created: container.created,
@@ -288,7 +288,7 @@ export class WikiIndexer {
             id: `knowhow-${se.id}`,
             type: 'knowhow' as const,
             title: se.title,
-            summary: se.content.slice(0, 240).replace(/\s+/g, ' '),
+            summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
             tags: se.keywords,
             status: 'active' as const,
             created: entry.created,
@@ -469,7 +469,7 @@ export class WikiIndexer {
     const stem = basename(fileName, extname(fileName));
 
     const title = asString(data.title) || firstHeading(content) || stem;
-    const summary = asString(data.summary) || firstParagraph(content);
+    const summary = asString(data.description) || asString(data.summary) || firstParagraph(content);
     const tags = extractTags(data);
     const status = asStatus(data.status) ?? inferStatus(type);
     const related = normalizeRelated(data.related);

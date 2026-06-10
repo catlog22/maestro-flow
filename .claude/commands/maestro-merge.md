@@ -48,7 +48,7 @@ Follow '~/.maestro/workflows/merge.md' completely.
 - REQUIRED: Worktree cleaned up (unless --no-cleanup).
 
 **Knowledge inquiry on completion:**
-After successful merge, ask user once: "Record milestone learnings?" If yes, persist via `Skill("spec-add", "learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2>")`.
+After successful merge, ask user once: "Record milestone learnings?" If yes, persist via `Skill("spec-add", "learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`.
 
 **Next-step routing on completion:**
 - View dashboard → Skill({ skill: "manage-status" })

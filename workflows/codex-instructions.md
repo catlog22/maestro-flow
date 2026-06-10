@@ -68,14 +68,13 @@ Available CLI endpoints are dynamically defined by the config file
 
 **Before planning or implementing any task, search wiki and spec first** — the knowledge base contains reusable methods, tools, and hard-won experience. Load the right knowledge at the right time: search before you plan, load relevant entries before you implement, and revisit when you hit unfamiliar territory mid-task.
 
+- `maestro search "<query>" [--type spec|knowhow|issue] [--category <cat>]` — BM25 full-text across all knowledge types
 - `maestro spec load --category <cat>` — load rules by category (coding/arch/debug/test/review/learning)
 - `maestro spec load --keyword <kw>` — cross-category keyword match
-- `maestro wiki search "<query>"` — full-text search across all knowhow
-- `maestro wiki list --category <cat>` → `maestro wiki load <id>` — browse then load full detail
 
 ### Knowledge Capture
 
-- **Spec writes** → always `<spec-entry>` closed-tag format with `category`, `keywords`, `date`, `source`. Never raw Markdown. Route through `spec-add` when possible.
+- **Spec writes** → always `<spec-entry>` closed-tag format with `title`, `description`, `category`, `keywords`, `date`, `source`. Never raw Markdown. Route through `spec-add` when possible.
 - **Capture signal** → when execution surfaces non-obvious knowledge (plan deviation, retry pattern, root cause, constraint violation), ask user once whether to persist it. Match category to content: decisions→`arch`, pitfalls→`debug`/`learning`, patterns→`coding`, rules→`quality`.
 - **Promotion** → at milestone close, scan learnings for repeated keywords (≥2 entries) and offer to graduate them into formal conventions.
 - **Traceability** → every entry needs a source anchor: `file:line`, `INS-{id}`, commit, or phase path.

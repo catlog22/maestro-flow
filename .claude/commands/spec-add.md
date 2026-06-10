@@ -24,6 +24,7 @@ Entries use `category` attribute to declare which category they belong to.
 $ARGUMENTS -- expects `[--scope <scope>] [--uid <uid>] <category> <content>`
 
 **Options:**
+- `--description <desc>` — One-line description for search results (falls back to content[:240])
 - `--ref <path>` — Create as index entry referencing a knowhow document. If the path exists, only creates the spec index entry. If path doesn't exist, also creates the knowhow file.
 - `--knowhow-type <type>` — Knowhow document type when creating with --ref (asset, blueprint, document, template, recipe, reference, decision)
 
@@ -34,12 +35,13 @@ Scope-to-directory mapping, category-to-file mapping, and entry format defined i
 # English content → English keywords
 /spec-add coding "Named exports" "Always use named exports" --keywords "exports,naming"
 
-# Chinese content → Chinese keywords (匹配中文 prompt)
+# With description for search results
+/spec-add coding "OAuth PKCE Flow" "完整 PKCE 集成流程" --keywords "oauth,pkce" --description "OAuth 2.0 PKCE 认证流程规范"
+
+# Chinese content → Chinese keywords
 /spec-add coding "命名导出规范" "始终使用命名导出" --keywords "导出,命名,模块"
 
-# Mixed → bilingual keywords
-/spec-add coding "OAuth PKCE Flow" "完整 PKCE 集成流程" --ref knowhow/RCP-oauth-pkce.md --keywords "oauth,pkce,认证,授权"
-
+# Ref mode
 /spec-add arch "OAuth PKCE 集成" "完整流程设计" --ref knowhow/AST-oauth-flow.md
 ```
 </context>

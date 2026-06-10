@@ -112,7 +112,7 @@ If missing: DO NOT report completion.
 | Architecture constraint violations | "Update architecture-constraints.md?" | spec-add arch |
 | Recurring test coverage gap (same module across tasks) | "Add to test-conventions.md?" | spec-add test |
 
-On confirm → `Skill("spec-add", "<category> <content>")`.
+On confirm → `Skill("spec-add", "<category> <content> --description \"<summary>\"")`.
 
 </execution>
 

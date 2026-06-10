@@ -141,6 +141,7 @@ export function appendSpecEntry(
   source?: string,
   scope?: SpecScope,
   uid?: string,
+  description?: string,
 ): SpecAddResult {
   const evidence = source ?? captureGitEvidence(projectPath);
 
@@ -189,7 +190,7 @@ export function appendSpecEntry(
 
   // Generate and append entry
   const date = new Date().toISOString().slice(0, 10);
-  const entry = formatNewEntry(category, keywords, date, title, content, evidence);
+  const entry = formatNewEntry(category, keywords, date, title, content, evidence, undefined, description);
   writeFileSync(filePath, existing + '\n\n' + entry, 'utf-8');
 
   return { ok: true, file: filePath, category, title, duplicate: false, evidence };

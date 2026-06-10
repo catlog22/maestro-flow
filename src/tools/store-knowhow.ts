@@ -52,6 +52,7 @@ const ParamsSchema = z.object({
   // add params
   type: z.enum(CATEGORIES).optional(),
   title: z.string().optional(),
+  description: z.string().optional(), // one-line summary for search results
   body: z.string().optional(),
   tags: z.array(z.string()).optional(),
   // type-specific fields (persisted to frontmatter)
@@ -114,7 +115,7 @@ function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: s
 // --- Operations ---
 
 function executeAdd(params: Params): CcwToolResult {
-  const { type, title, body, tags, lang, source, status, assetType, codePaths, category, specCategory } = params;
+  const { type, title, description, body, tags, lang, source, status, assetType, codePaths, category, specCategory } = params;
 
   if (!type) return { success: false, error: 'Parameter "type" is required for add operation' };
   if (!title) return { success: false, error: 'Parameter "title" is required for add operation' };
@@ -147,6 +148,7 @@ function executeAdd(params: Params): CcwToolResult {
   const now = new Date().toISOString();
   const fmLines = ['---'];
   fmLines.push(`title: ${escapeYamlValue(title)}`);
+  if (description) fmLines.push(`description: ${escapeYamlValue(description)}`);
   fmLines.push(`type: ${type}`);
   fmLines.push(`created: ${now}`);
   if (tags && tags.length > 0) {
@@ -257,6 +259,7 @@ export const schema: ToolSchema = {
 
 *   **add** — Create a new knowhow entry.
     Required: type, title, body
+    Optional: description (one-line summary for search results), tags
     Type-specific fields:
       template:  lang (programming language)
       reference: source (URL)
@@ -297,6 +300,10 @@ Entries are automatically indexed by WikiIndexer (type=knowhow, category={type})
       title: {
         type: 'string',
         description: 'Entry title. Required for add.',
+      },
+      description: {
+        type: 'string',
+        description: 'One-line description for search results. Falls back to first paragraph of body.',
       },
       body: {
         type: 'string',

@@ -81,7 +81,7 @@ Append to state.json.artifacts[]:
 | Non-obvious fix / workaround | "Record as learning?" | spec-add learning |
 | Root cause = architectural boundary violation | "Update architecture-constraints.md?" | spec-add arch |
 
-On confirm → `Skill("spec-add", "<category> <content>")`.
+On confirm → `Skill("spec-add", "<category> <content> --description \"<summary>\"")`.
 
 **Next-step routing on completion:**
 - Root cause found, fix needed → `/maestro-plan {phase} --gaps`

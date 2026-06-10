@@ -17,7 +17,7 @@ $spec-add "quality All API endpoints must return structured error objects"
 
 **Valid categories**: coding, arch, quality, debug, test, review, learning, tools, bug, pattern, decision, rule, validation.
 
-**CLI alternative**: `maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 --source <src>`. Used by workflow agents (analyze, plan, execute) for programmatic spec enrichment.
+**CLI alternative**: `maestro spec add <category> "<title>" "<content>" --keywords kw1,kw2 --description "<desc>" --source <src>`. Used by workflow agents (analyze, plan, execute) for programmatic spec enrichment.
 </purpose>
 
 <context>
@@ -73,14 +73,16 @@ Auto-extract 3-5 relevant keywords from the content. Keywords should be:
 Append `<spec-entry>` closed-tag block to target file:
 
 ```markdown
-<spec-entry category="{category}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}">
+<spec-entry category="{category}" keywords="{kw1},{kw2},{kw3}" date="{YYYY-MM-DD}" title="{title}" description="{one-line summary}">
 
-### {title extracted from content}
+### {title}
 
 {content}
 
 </spec-entry>
 ```
+
+`title` and `description` attributes are written on the tag for search indexing. `description` is optional — falls back to content[:240].
 
 ### Step 6: Confirm
 

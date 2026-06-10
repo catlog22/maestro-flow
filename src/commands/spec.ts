@@ -348,6 +348,7 @@ export function registerSpecCommand(program: Command): void {
     .argument('<title>', 'Entry title')
     .argument('[content]', 'Entry content (if omitted, reads from remaining args)')
     .option('--keywords <words>', 'Comma-separated keywords')
+    .option('--description <desc>', 'One-line description for search results')
     .option('--source <source>', 'Source reference (e.g., analyze:ANL-xxx)')
     .option('--ref <path>', 'Create as index entry referencing a knowhow document')
     .option('--knowhow-type <type>', 'Knowhow type for --ref (asset, blueprint, document, template, etc.)')
@@ -517,6 +518,7 @@ export function registerSpecCommand(program: Command): void {
         opts.source as string | undefined,
         scope,
         uid,
+        opts.description as string | undefined,
       );
 
       if (opts.json) {

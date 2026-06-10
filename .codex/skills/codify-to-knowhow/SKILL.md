@@ -303,7 +303,7 @@ for (const spec of manifest.specs) {
 
   const entryBlock = `
 
-<spec-entry roles="${manifest.roles.join(',')}" keywords="${spec.keywords}" date="${today}"${refAttr}>
+<spec-entry roles="${manifest.roles.join(',')}" keywords="${spec.keywords}" date="${today}" title="${spec.title}" description="${spec.description || ''}"${refAttr}>
 
 ### ${spec.title}
 
@@ -312,7 +312,8 @@ ${spec.body}
 </spec-entry>`;
 
   // Prefer CLI, fallback to direct append
-  const cliResult = Bash(`maestro spec add ${spec.category} "${spec.title}" "${spec.body}" --keywords "${spec.keywords}" 2>/dev/null`);
+  const descFlag = spec.description ? ` --description "${spec.description}"` : '';
+  const cliResult = Bash(`maestro spec add ${spec.category} "${spec.title}" "${spec.body}" --keywords "${spec.keywords}"${descFlag} 2>/dev/null`);
 
   if (cliResult.exitCode !== 0) {
     // Fallback: direct file append

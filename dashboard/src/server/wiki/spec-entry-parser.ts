@@ -15,6 +15,7 @@ export interface SpecEntry {
   id: string;
   type: string;
   title: string;
+  description?: string;
   content: string;
   file: string;
   timestamp: string;
@@ -129,11 +130,12 @@ function parseEntryBlocks(
     }
 
     const titleMatch = innerContent.match(/^###\s+(.+)$/m);
-    const title = titleMatch ? titleMatch[1].trim() : innerContent.split('\n')[0].trim();
+    const title = attrs.title || (titleMatch ? titleMatch[1].trim() : innerContent.split('\n')[0].trim());
     const type = attrs.type ?? detectEntryType(title, fileName);
     const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
     const kws = attrs.keywords ? attrs.keywords.split(',').map((k) => k.trim()) : [];
     const ref = attrs.ref || undefined;
+    const description = attrs.description || undefined;
     const entryCategory = attrs.category
       || (typeof frontmatter?.category === 'string' ? frontmatter.category : null)
       || FILE_CATEGORY_MAP[stem]
@@ -143,6 +145,7 @@ function parseEntryBlocks(
       id,
       type,
       title,
+      description,
       content: innerContent,
       file: fileName,
       timestamp: attrs.date ?? '',
