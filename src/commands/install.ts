@@ -51,10 +51,20 @@ import {
 } from './install-backend.js';
 import { t } from '../i18n/index.js';
 import { registerFontsSubcommand } from './font-guide.js';
+import { isCodeGraphAvailable } from '../graph/codegraph-adapter.js';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+function printCodeGraphHint(): void {
+  if (!isCodeGraphAvailable()) {
+    console.error('');
+    console.error('  Optional: @colbymchenry/codegraph (tree-sitter code analysis)');
+    console.error('  Enables function-level KG with callers/callees for `maestro kg` commands.');
+    console.error('  Install: npm install -g @colbymchenry/codegraph');
+  }
+}
 
 function resolveMode(opts: { global?: boolean; path?: string }): { mode: 'global' | 'project'; projectPath: string } {
   if (opts.path) {
@@ -166,6 +176,7 @@ export function registerInstallCommand(program: Command): void {
         forceInstall(pkgRoot, version, opts);
       } else {
         await runInstallFlow(pkgRoot, version);
+        printCodeGraphHint();
       }
     });
 
@@ -372,6 +383,8 @@ function forceInstall(
   } else if (cliToolsResult.added.length > 0) {
     console.error(`  cli-tools.json: added missing tools → ${cliToolsResult.added.join(', ')}`);
   }
+
+  printCodeGraphHint();
 
   console.error('');
   console.error(t.install.forceDone);
