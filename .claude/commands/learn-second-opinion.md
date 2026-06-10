@@ -33,7 +33,7 @@ $ARGUMENTS — target and optional mode flag.
 
 **Flags**: `--mode review|challenge|consult` (default: review)
 
-**Pre-load** (optional): `Skill("spec-load")` for conventions + `maestro wiki search "<target topic>"` for related entries.
+**Pre-load** (optional): `Skill("spec-load")` for conventions + `maestro search "<target topic>"` for related entries.
 
 **Output**: `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md`
 </context>

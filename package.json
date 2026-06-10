@@ -85,5 +85,8 @@
     "typescript": "^5.7.0",
     "vitest": "^4.1.4"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "optionalDependencies": {
+    "@colbymchenry/codegraph": "^0.9.8"
+  }
 }

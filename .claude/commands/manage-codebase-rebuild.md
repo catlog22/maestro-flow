@@ -55,7 +55,7 @@ Follow '~/.maestro/workflows/codebase-rebuild.md' completely.
 - View updated project state → `/manage-status`
 - Incremental updates later → `/quality-sync`
 - Verify KG stats → `maestro kg stats`
-- Verify wiki integration → `maestro wiki list --keyword kg`
+- Verify wiki integration → `maestro search "kg" --type knowhow`
 - Future change impact → `maestro kg diff-wiki`
 </execution>
 

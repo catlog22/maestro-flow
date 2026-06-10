@@ -42,7 +42,7 @@ $ARGUMENTS -- topic/plan text for interactive mode, or --from source for upstrea
 **Produced files**: `grill-report.md`, `terminology.md`, `context-package.json`
 
 ### Role Knowledge
-`maestro wiki search "{topic keywords}"` → load relevant entries before grilling.
+`maestro search "{topic keywords}"` → load relevant entries before grilling.
 `maestro spec load --category arch` → load architecture constraints.
 </context>
 

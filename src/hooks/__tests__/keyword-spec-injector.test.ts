@@ -276,7 +276,7 @@ Content ${i + 1}.
 // ---------------------------------------------------------------------------
 
 describe('evaluateKeywordInjection — output format', () => {
-  it('wraps content in spec-keyword-match tags', () => {
+  it('wraps content in maestro-context with a keyword section', () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth" date="2026-04-21">
 
@@ -291,9 +291,11 @@ Implement auth guards.
     try {
       const result = evaluateKeywordInjection('implement auth guard', testDir, sid);
       expect(result.inject).toBe(true);
-      expect(result.content).toContain('<spec-keyword-match');
-      expect(result.content).toContain('</spec-keyword-match>');
-      expect(result.content).toContain('count="1"');
+      expect(result.content).toContain('<maestro-context');
+      expect(result.content).toContain('</maestro-context>');
+      expect(result.content).toMatch(/budget="\d+\/\d+"/);
+      expect(result.content).toContain('## keyword[');
+      expect(result.content).toContain('auth');
     } finally {
       const path = bridgePath(sid);
       if (existsSync(path)) rmSync(path);

@@ -58,9 +58,9 @@ Output paths and VRF artifact registration schema are defined in workflow `verif
 
 1. **Codebase docs**: If `.workflow/codebase/` exists, read `ARCHITECTURE.md` for expected module wiring and `FEATURES.md` for component mapping. Use in Layer 3 (Connection) checks.
 2. **Review specs**: Run `maestro spec load --category review` to load review standards. Use as quality baseline for anti-pattern scan and constraint checks.
-3. **Wiki constraints**: Run `maestro wiki search "architecture constraint" --json 2>/dev/null`. If results found, include documented invariants as additional truth checks in Layer 1.
+3. **Wiki constraints**: Run `maestro search "architecture constraint" --json 2>/dev/null`. If results found, include documented invariants as additional truth checks in Layer 1.
 4. **Role Knowledge**:
-   - Browse: `maestro wiki list --category review`
+   - Browse: `maestro search --category review`
    - Load task-relevant entries: `maestro wiki load <id1> [id2...]`
 5. All are optional — proceed without if unavailable.
 </context>

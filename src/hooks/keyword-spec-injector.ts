@@ -8,6 +8,7 @@
 import { buildKeywordIndex, lookupKeywords, type IndexedEntry } from '../tools/spec-keyword-index.js';
 import { readSpecBridge, markInjected, filterUnjected } from './spec-bridge.js';
 import { logInjectionEvent } from './spec-analytics.js';
+import { wrapMaestroContext, type ContextSection } from './context-format.js';
 
 // ============================================================================
 // Types
@@ -141,8 +142,26 @@ export function evaluateKeywordInjection(
   // 5. Limit to avoid context bloat
   const toInject = unjected.slice(0, MAX_ENTRIES_PER_INJECTION);
 
-  // 6. Build injection content
-  const content = formatInjectionContent(toInject);
+  // 6. Build injection sections — keyword matches + (optional) KG symbols,
+  //    merged into ONE <maestro-context> block.
+  const sections: ContextSection[] = [buildKeywordSection(toInject)];
+
+  // 6b. KG symbol lookup — append code graph context if available
+  try {
+    const symbolSection = evaluateKgSymbolLookup(prompt, projectPath);
+    if (symbolSection) {
+      sections.push(symbolSection);
+    }
+  } catch {
+    // KG lookup is best-effort — silently skip on any failure
+  }
+
+  // Per-injector budget reporting (format-only; no cross-injector pooling yet).
+  const usedChars = sections.reduce(
+    (sum, s) => sum + s.lines.reduce((acc, l) => acc + l.length, 0),
+    0,
+  );
+  const content = wrapMaestroContext(sections, { used: usedChars, max: usedChars });
 
   // 7. Mark as injected
   const injectedKeywords = [...new Set(toInject.flatMap(e => e.keywords))];
@@ -224,12 +243,97 @@ function extractCjkTokens(text: string): string[] {
 }
 
 /**
- * Format matched entries for injection as context.
+ * Build a keyword-match section for the unified <maestro-context> block.
+ *
+ * Section label: `keyword[kw1,kw2]` listing the distinct keywords matched.
+ * Each line is compact: `<category> · <keywords> · <title>: <oneline body>`.
  */
-function formatInjectionContent(entries: IndexedEntry[]): string {
-  const sections = entries.map(e =>
-    `--- ${e.file} [${e.keywords.join(', ')}] ---\n\n${e.content}`,
-  );
+function buildKeywordSection(entries: IndexedEntry[]): ContextSection {
+  const allKeywords = [...new Set(entries.flatMap(e => e.keywords))];
+  const label = `keyword[${allKeywords.join(',')}]`;
 
-  return `<spec-keyword-match count="${entries.length}">\n\n${sections.join('\n\n---\n\n')}\n\n</spec-keyword-match>`;
+  const lines = entries.map(e => {
+    const body = e.content
+      .replace(/^#{1,6}\s+.*$/gm, '') // strip markdown headings (title is added separately)
+      .replace(/\s+/g, ' ')
+      .trim();
+    const kws = e.keywords.join(',');
+    const titlePrefix = e.title ? `${e.title}: ` : '';
+    return `${e.category} · ${kws} · ${titlePrefix}${body}`;
+  });
+
+  return { label, lines };
+}
+
+// ============================================================================
+// KG Symbol Lookup
+// ============================================================================
+
+const KG_SYMBOL_PATTERN = /\b[a-z]+[A-Z][a-zA-Z0-9]*\b|\b[a-z]+_[a-z0-9_]+\b/g;
+const KG_MAX_SYMBOLS = 3;
+const KG_MAX_RESULTS_PER_SYMBOL = 2;
+const KG_MAX_CONTENT_LENGTH = 512;
+
+/**
+ * Extract camelCase/snake_case symbols from prompt and look up in KG.
+ * Returns a `kg-symbols` ContextSection or null if nothing found.
+ * Entire function is best-effort — returns null on any failure.
+ */
+function evaluateKgSymbolLookup(prompt: string, projectPath: string): ContextSection | null {
+  // 1. Extract symbols from prompt
+  const matches = prompt.match(KG_SYMBOL_PATTERN);
+  if (!matches || matches.length === 0) return null;
+
+  // Deduplicate and limit
+  const symbols = [...new Set(matches)].slice(0, KG_MAX_SYMBOLS);
+
+  // 2. Check if SQLite DB exists
+  let dbPath: string;
+  try {
+    const { existsSync } = require('node:fs');
+    const { getDatabasePath } = require('../graph/db/index.js');
+    dbPath = getDatabasePath(projectPath);
+    if (!existsSync(dbPath)) return null;
+  } catch {
+    return null;
+  }
+
+  // 3. Open DB and search
+  let conn: any;
+  try {
+    const { DatabaseConnection } = require('../graph/db/index.js');
+    const { QueryBuilder } = require('../graph/db/index.js');
+
+    conn = new DatabaseConnection();
+    conn.open(dbPath);
+    const qb = new QueryBuilder(conn);
+
+    const lines: string[] = [];
+    let totalLen = 0;
+
+    for (const sym of symbols) {
+      if (totalLen >= KG_MAX_CONTENT_LENGTH) break;
+
+      const nodes = qb.searchNodes(sym, { limit: KG_MAX_RESULTS_PER_SYMBOL });
+      for (const node of nodes) {
+        const line = `[${node.kind}] ${node.name}` +
+          (node.filePath ? ` (${node.filePath}:${node.startLine})` : '') +
+          (node.signature ? ` — ${node.signature}` : '');
+
+        if (totalLen + line.length > KG_MAX_CONTENT_LENGTH) break;
+        lines.push(line);
+        totalLen += line.length;
+      }
+    }
+
+    conn.close();
+
+    if (lines.length === 0) return null;
+
+    return { label: 'kg-symbols', lines };
+  } catch {
+    // Ensure DB is closed on error
+    try { conn?.close(); } catch { /* ignore */ }
+    return null;
+  }
 }

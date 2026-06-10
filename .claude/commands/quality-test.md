@@ -41,8 +41,8 @@ Follow '~/.maestro/workflows/test.md' completely.
 **Command-specific extensions (not in workflow):**
 
 **Knowledge context loading** (before test design):
-- Wiki search: `maestro wiki search "<phase/feature keywords>" --json` → prior test strategies, recipes, decisions
-- Role knowledge: `maestro wiki list --category test` → select relevant → `maestro wiki load <id>`
+- Wiki search: `maestro search "<phase/feature keywords>" --json` → prior test strategies, recipes, decisions
+- Role knowledge: `maestro search --category test` → select relevant → `maestro wiki load <id>`
 - Specs + tools: `maestro spec load --category test` → test conventions + discoverable knowhow tools
 
 **Test tool discovery** (knowhow tools as scenario source):

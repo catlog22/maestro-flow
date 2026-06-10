@@ -50,9 +50,9 @@ Extract conclusions from related artifacts that may affect this review. Pass as 
 
 ### Pre-load (optional, proceed without)
 - Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → component boundaries, layer rules
-- Wiki constraints: `maestro wiki search "architecture constraint" --json` → documented decisions
+- Wiki constraints: `maestro search "architecture constraint" --json` → documented decisions
 - Specs: `maestro spec load --category review` → review standards, checklists, knowhow tools
-- Role knowledge: `maestro wiki list --category review` → select relevant → `maestro wiki load`
+- Role knowledge: `maestro search --category review` → select relevant → `maestro wiki load`
 
 **Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
 </context>

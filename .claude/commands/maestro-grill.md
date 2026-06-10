@@ -50,7 +50,7 @@ $ARGUMENTS -- topic/plan text for interactive mode, or --from source for upstrea
 ### Pre-load
 
 1. **Specs**: `maestro spec load --category arch` — load architecture constraints
-2. **Wiki search**: `maestro wiki search "{topic keywords}"` → load relevant entries before grilling
+2. **Wiki search**: `maestro search "{topic keywords}"` → load relevant entries before grilling
 3. All optional — proceed without if unavailable
 </context>
 

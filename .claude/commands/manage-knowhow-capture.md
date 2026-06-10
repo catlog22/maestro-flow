@@ -13,7 +13,7 @@ allowed-tools:
 ---
 <purpose>
 Capture reusable knowledge into `.workflow/knowhow/` with type-specific structured fields.
-Auto-indexed by WikiIndexer (type=knowhow), searchable via `maestro knowhow search`.
+Auto-indexed by WikiIndexer (type=knowhow), searchable via `maestro search --type knowhow`.
 </purpose>
 
 <required_reading>

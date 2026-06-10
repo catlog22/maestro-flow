@@ -23,7 +23,7 @@ $ARGUMENTS — target and optional flags.
 |-------|-----------|
 | File path (contains `/` or `\`) | Read source file |
 | Wiki ID (`<type>-<slug>`) | `maestro wiki get <id>` |
-| Topic string | `maestro wiki search "<topic>"` → top result; fallback: Grep src/ |
+| Topic string | `maestro search "<topic>"` → top result; fallback: Grep src/ |
 
 **Flags**:
 - `--depth shallow` (default): key patterns and structure only

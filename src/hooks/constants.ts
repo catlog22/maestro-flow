@@ -70,6 +70,9 @@ export const COORD_BRIDGE_PREFIX = 'maestro-coord-';
 /** Spec keyword injection dedup bridge file prefix in os.tmpdir() */
 export const SPEC_KW_BRIDGE_PREFIX = 'maestro-spec-kw-';
 
+/** KG sync cooldown bridge file prefix in os.tmpdir() */
+export const KG_SYNC_BRIDGE_PREFIX = 'maestro-kg-sync-';
+
 /** Max ms to wait for stdin before exiting (Windows pipe safety) */
 export const STDIN_TIMEOUT_MS = 3000;
 

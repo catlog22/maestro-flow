@@ -67,7 +67,7 @@ maestro-analyze {phase} → maestro-plan → maestro-execute → maestro-verify
 ### Pre-load
 
 1. **Specs**: `maestro spec load --category arch` — load architecture constraints for phase decomposition
-2. **Wiki search**: `maestro wiki search "{requirement keywords}" --json` → prior knowledge
+2. **Wiki search**: `maestro search "{requirement keywords}" --json` → prior knowledge
 3. All optional — proceed without if unavailable
 </context>
 

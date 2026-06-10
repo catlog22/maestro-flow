@@ -30,6 +30,7 @@ export default defineConfig({
       'src/hooks/__tests__/keyword-spec-injector.test.ts',
       'src/hooks/__tests__/wiki-role-loader.test.ts',
       'src/hooks/__tests__/spec-injector-vitest.test.ts',
+      'src/hooks/__tests__/kg-hooks.test.ts',
       'src/team/__tests__/team-phase-integration.test.ts',
       'src/graph/__tests__/graph-enhanced.test.ts',
     ],

@@ -32,7 +32,7 @@ $ARGUMENTS — scope and optional flags.
 <execution>
 
 ### Stage 1: Scope & Load
-Load entries via `maestro wiki list/search`. Run `maestro wiki health` for baseline.
+Load entries via `maestro wiki list` / `maestro search`. Run `maestro wiki health` for baseline.
 
 ### Stage 2: Theme Clustering
 Group entries into 3-5 themes via: tag co-occurrence, title BM25 similarity, relationship proximity, type grouping.

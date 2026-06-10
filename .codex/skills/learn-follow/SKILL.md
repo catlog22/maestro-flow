@@ -20,7 +20,7 @@ $ARGUMENTS — target and optional flags.
 **Target resolution (auto-detected):**
 - File path → Read source file
 - Wiki ID (`type-slug`) → Fetch via `maestro wiki get`
-- Topic string → Search via `maestro wiki search`, use top result
+- Topic string → Search via `maestro search`, use top result
 
 **Flags:**
 - `--depth shallow` — Key patterns and structure only (default)

@@ -16,6 +16,46 @@ import { evaluateKeywordInjection } from './keyword-spec-injector.js';
 import { loadWikiByCategory } from './wiki-role-loader.js';
 import type { SpecInjectionConfig } from '../types/index.js';
 import { logInjectionEvent } from './spec-analytics.js';
+import { wrapMaestroContext, type ContextSection } from './context-format.js';
+
+// ---------------------------------------------------------------------------
+// Content → compact lines helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a loaded markdown block into compact section lines.
+ *
+ * The loaders (loadSpecs/loadExtraDocs/loadWikiByCategory) return pre-formatted
+ * markdown. To fit the unified <maestro-context> shape we flatten that markdown
+ * into non-empty lines, dropping separator rules and blank lines while keeping
+ * headings (as `# ...`) so structure survives. Each line becomes a bullet via
+ * wrapMaestroContext.
+ *
+ * FUTURE WORK: emit truly structured one-line entries (e.g.
+ * `coding · auth,token · <oneline>`) by having the loaders expose parsed
+ * spec-entry data instead of concatenated markdown. Done here as format-only.
+ */
+function markdownToLines(markdown: string): string[] {
+  return markdown
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && !/^-{3,}\s*$/.test(l));
+}
+
+/**
+ * Per-injector budget reporting for the wrapper attribute.
+ *
+ * FUTURE WORK: this is local char accounting only — cross-injector budget
+ * pooling (shared token accounting across spec/keyword/kg hooks in one turn)
+ * is intentionally not implemented yet to avoid behavioral risk.
+ */
+function computeBudgetInfo(sections: ContextSection[]): { used: number; max: number } {
+  const used = sections.reduce(
+    (sum, s) => sum + s.lines.reduce((acc, l) => acc + l.length, 0),
+    0,
+  );
+  return { used, max: used };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,35 +77,51 @@ const AGENT_CATEGORY_MAP: Record<string, SpecCategory[]> = {
   // Execution agents → coding specs
   'code-developer':      ['coding', 'learning', 'ui'],
   'tdd-developer':       ['coding', 'test'],
-  'workflow-executor':   ['coding'],
+  'workflow-executor':   ['coding', 'learning', 'ui'],
   'universal-executor':  ['coding', 'ui'],
   'test-fix-agent':      ['coding', 'test'],
+  'impeccable-agent':    ['coding', 'ui'],
+  'ui-design-agent':     ['coding', 'ui'],
 
   // Exploration agents → coding + arch specs
   'Explore':             ['coding', 'arch'],
   'general-purpose':     ['coding', 'learning'],
   'claude-code-guide':   ['coding'],
+  'cli-explore-agent':   ['coding', 'arch'],
 
   // Planning agents → arch specs
   'cli-lite-planning-agent': ['arch', 'coding'],
   'action-planning-agent':   ['arch'],
-  'workflow-planner':        ['arch'],
+  'workflow-planner':        ['arch', 'coding'],
   'workflow-collab-planner': ['arch'],
+  'workflow-roadmapper':     ['arch'],
+  'role-design-author':      ['arch', 'coding'],
+  'team-supervisor':         ['arch'],
+  'team-worker':             ['coding', 'learning'],
   'Plan':                    ['arch', 'coding'],
 
   // Review agents → review specs
-  'workflow-reviewer':   ['review'],
-  'workflow-review':     ['review', 'coding'],
+  'workflow-reviewer':         ['review', 'coding'],
+  'workflow-review':           ['review', 'coding'],
+  'workflow-verifier':         ['review', 'test'],
+  'workflow-plan-checker':     ['review', 'arch'],
+  'workflow-integration-checker': ['review', 'test'],
+  'workflow-nyquist-auditor':  ['review'],
+  'cross-role-reviewer':       ['review'],
 
   // Debug agents → debug specs
   'debug-explore-agent': ['debug'],
   'workflow-debugger':   ['debug'],
 
   // Context / research agents
-  'context-search-agent':      ['coding', 'arch'],
-  'workflow-research-agent':   ['coding'],
-  'workflow-codebase-mapper':  ['arch'],
-  'workflow-analyzer':         ['coding', 'arch'],
+  'context-search-agent':         ['coding', 'arch'],
+  'workflow-research-agent':      ['coding'],
+  'workflow-codebase-mapper':     ['arch'],
+  'workflow-analyzer':            ['coding', 'arch'],
+  'workflow-external-researcher': ['coding', 'arch'],
+  'workflow-phase-researcher':    ['coding', 'arch'],
+  'workflow-project-researcher':  ['coding', 'arch'],
+  'workflow-research-synthesizer': ['coding', 'arch'],
 
   // General — used by Codex SessionStart (no agent type available)
   'general':             ['coding', 'learning'],
@@ -108,7 +164,7 @@ export function evaluateSpecInjection(
   const resolvedUid = uid ?? resolveUidSafe();
   const kwFilters = resolveKeywordFilters(agentType, config);
 
-  const sections: string[] = [];
+  const ctxSections: ContextSection[] = [];
   const allCategories: string[] = [];
   let totalCount = 0;
 
@@ -124,7 +180,7 @@ export function evaluateSpecInjection(
     // Load specs by category (primary doc + keyword cross-match + tool discovery)
     const specResult = loadSpecs(projectPath, category as SpecCategory, resolvedUid, undefined, undefined, loaderOpts);
     if (specResult.content) {
-      sections.push(specResult.content);
+      ctxSections.push({ label: `specs[${category}]`, lines: markdownToLines(specResult.content) });
       allCategories.push(category);
       totalCount += specResult.totalLoaded;
     }
@@ -133,7 +189,7 @@ export function evaluateSpecInjection(
     if (catDocConfig?.docs?.length) {
       const docsResult = loadExtraDocs(projectPath, catDocConfig.docs);
       if (docsResult.content) {
-        sections.push(docsResult.content);
+        ctxSections.push({ label: `docs[${category}]`, lines: markdownToLines(docsResult.content) });
         totalCount += docsResult.count;
       }
     }
@@ -141,7 +197,7 @@ export function evaluateSpecInjection(
     // Wiki category knowledge injection
     const wikiResult = loadWikiByCategory(projectPath, category);
     if (wikiResult) {
-      sections.push(wikiResult.content);
+      ctxSections.push({ label: `wiki[${category}]`, lines: markdownToLines(wikiResult.content) });
       totalCount += wikiResult.entryCount;
     }
   }
@@ -151,7 +207,7 @@ export function evaluateSpecInjection(
   if (agentExtras?.length) {
     const extrasResult = loadExtraDocs(projectPath, agentExtras);
     if (extrasResult.content) {
-      sections.push(extrasResult.content);
+      ctxSections.push({ label: 'extras', lines: markdownToLines(extrasResult.content) });
       totalCount += extrasResult.count;
     }
   }
@@ -164,7 +220,7 @@ export function evaluateSpecInjection(
     if (always.docs?.length) {
       const alwaysResult = loadExtraDocs(projectPath, always.docs);
       if (alwaysResult.content) {
-        sections.push(alwaysResult.content);
+        ctxSections.push({ label: 'always-docs', lines: markdownToLines(alwaysResult.content) });
         totalCount += alwaysResult.count;
       }
     }
@@ -174,7 +230,7 @@ export function evaluateSpecInjection(
       const kwOpts: LoadSpecsOptions = { includeKeywords: always.keywords };
       const kwResult = loadSpecs(projectPath, undefined, resolvedUid, undefined, undefined, kwOpts);
       if (kwResult.content) {
-        sections.push(kwResult.content);
+        ctxSections.push({ label: `always-keyword[${always.keywords.join(',')}]`, lines: markdownToLines(kwResult.content) });
         totalCount += kwResult.totalLoaded;
       }
     }
@@ -185,14 +241,14 @@ export function evaluateSpecInjection(
         if (allCategories.includes(cat)) continue; // Already loaded above
         const catResult = loadSpecs(projectPath, cat as SpecCategory, resolvedUid);
         if (catResult.content) {
-          sections.push(catResult.content);
+          ctxSections.push({ label: `always-specs[${cat}]`, lines: markdownToLines(catResult.content) });
           totalCount += catResult.totalLoaded;
         }
       }
     }
   }
 
-  if (sections.length === 0) {
+  if (ctxSections.length === 0) {
     logInjectionEvent(projectPath, {
       source: 'spec-injector',
       agentType,
@@ -205,7 +261,10 @@ export function evaluateSpecInjection(
     return { inject: false };
   }
 
-  let rawContent = sections.join('\n\n---\n\n');
+  // Apply maxContentLength as a per-section line budget guard before wrapping:
+  // flatten, then let context-budget decide tier. We wrap first so the budget
+  // operates on the final shape the agent will see.
+  let rawContent = wrapMaestroContext(ctxSections, computeBudgetInfo(ctxSections));
 
   // Apply maxContentLength before context budget
   if (config?.maxContentLength && rawContent.length > config.maxContentLength) {

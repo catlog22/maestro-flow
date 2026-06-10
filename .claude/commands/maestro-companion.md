@@ -114,7 +114,7 @@ Display loaded rules summary (entry count + key rule names).
 maestro knowhow list --store workflow
 
 # With --task: search relevant entries
-maestro knowhow search "<task_keyword>"
+maestro search --type knowhow "<task_keyword>"
 ```
 
 Display available knowhow entries (ID + title). Hint: `maestro wiki load <id>` for details.
@@ -341,7 +341,7 @@ Mid-task commands:
   /maestro-companion note "finding or decision"
   /maestro-companion note --file src/auth.ts "changed token validation"
   /spec-load --keyword <keyword>
-  maestro wiki search "<query>"
+  maestro search "<query>"
 ```
 
 ---

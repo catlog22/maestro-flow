@@ -22,7 +22,7 @@ $ARGUMENTS — entry ID to remove (e.g., `spec-learnings-003`)
 **Discovery**:
 - `maestro wiki list --type spec --json` — list all spec entries
 - `/spec-load --keyword <term>` — find by keyword
-- `maestro wiki search "<query>"` — BM25 search
+- `maestro search "<query>"` — BM25 search
 
 **Flags:**
 - `--cascade` — When the target spec is a ref-type entry (created via `spec-add --ref` and linked to a knowhow document), also delete the referenced knowhow file. Without this flag, ref-type removal leaves an orphan knowhow file.

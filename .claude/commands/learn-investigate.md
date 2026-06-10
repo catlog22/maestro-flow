@@ -30,7 +30,7 @@ $ARGUMENTS — question text and optional flags.
 - `.workflow/knowhow/KNW-investigate-{slug}/report.md` — final report
 - `.workflow/specs/learnings.md` — appended `<spec-entry>` blocks
 
-**Storage read**: source files in scope + `maestro wiki search` + `.workflow/specs/learnings.md` + `debug-notes.md` + `codebase/architecture.md`
+**Storage read**: source files in scope + `maestro search` + `.workflow/specs/learnings.md` + `debug-notes.md` + `codebase/architecture.md`
 </context>
 
 <state_machine>
@@ -83,7 +83,7 @@ S_REPORT:
 ### A_FRAME_QUESTION
 
 1. Parse question, generate slug, create KNW-investigate-{slug}/
-2. Search prior knowledge: `maestro wiki search "<question>"` + search .workflow/specs/learnings.md + read debug-notes.md
+2. Search prior knowledge: `maestro search "<question>"` + search .workflow/specs/learnings.md + read debug-notes.md
 3. Write initial understanding.md (question, prior knowledge summary, scope, timestamp)
 
 ### A_COLLECT_EVIDENCE

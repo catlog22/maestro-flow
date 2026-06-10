@@ -49,7 +49,7 @@ Milestone: $ARGUMENTS (optional -- defaults to current_milestone from state.json
 
 ### Role Knowledge
 
-1. Browse: `maestro wiki list --category review`
+1. Browse: `maestro search --category review`
 2. Select entries relevant to milestone integration audit
 3. Load: `maestro wiki load <id1> [id2...]`
 </context>

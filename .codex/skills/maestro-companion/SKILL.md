@@ -81,7 +81,7 @@ Display loaded rules summary (entry count + key rule names).
 
 ### Step 2: Browse Knowhow Index
 
-Run `maestro knowhow list --store workflow`. With `--task`, also run `maestro knowhow search "<task_keyword>"`. Display available entries (ID + title). Hint: `maestro wiki load <id>` for details.
+Run `maestro knowhow list --store workflow`. With `--task`, also run `maestro search "<task_keyword>" --type knowhow`. Display available entries (ID + title). Hint: `maestro wiki load <id>` for details.
 
 ### Step 3: Check Codebase Index
 

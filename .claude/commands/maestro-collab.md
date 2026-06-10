@@ -25,7 +25,7 @@ $ARGUMENTS — requirement text and optional flags.
 - `--rule <template>`: Shared rule template for all delegates
 - `-y`: Skip plan confirmation
 
-**Pre-load** (optional): `maestro spec load --category arch` + `maestro wiki list --category arch` → include in delegate prompts.
+**Pre-load** (optional): `maestro spec load --category arch` + `maestro search --category arch` → include in delegate prompts.
 
 **Output**: `.workflow/scratch/{YYYYMMDD}-collab-{slug}/`
 - `collab-report.md` — merged findings with consensus/conflict/unique tags

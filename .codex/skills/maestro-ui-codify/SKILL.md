@@ -395,7 +395,7 @@ Open preview:
   file://{absolute_path}/preview.html
 
 Next steps:
-  maestro wiki list --category coding    # Browse by role
+  maestro search --category coding    # Browse by role
   maestro spec load --keyword {package_name}    # Load related specs
 ```
 

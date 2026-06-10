@@ -37,7 +37,7 @@ $ARGUMENTS -- phase number, topic text, and optional flags.
 Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `--continue`, or input is already specific (explicit phase number or unambiguous topic).
 
 - One decision per turn via AskUserQuestion with 2–4 options + a (Recommended) default. The user controls termination — keep interviewing until convergence; they can interrupt naturally at any time.
-- Search-first when uncertain: before asking, resolve via `state.json`, `roadmap.md`, `issues.jsonl`, `maestro spec load`, `maestro wiki search`, Grep, Read, or — for open-ended multi-file scans — `maestro delegate ... --role explore`. Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
+- Search-first when uncertain: before asking, resolve via `state.json`, `roadmap.md`, `issues.jsonl`, `maestro spec load`, `maestro search`, Grep, Read, or — for open-ended multi-file scans — `maestro delegate ... --role explore`. Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
 - Writeback cadence: each settled decision is immediately appended/updated in `context.md` "Interview Decisions" (and mirrored into `analysis.md` in full mode). Do NOT batch writeback to the end — partial decisions must already be on disk before the next question.
 - Walk the decision dependency tree strictly: scope → depth → dimensions → Go/No-Go threshold. Do not open the next branch until the current one is settled.
 - Scope guard: only ask about decisions owned by `analyze`. Do not prejudge plan/execute concerns.

@@ -71,7 +71,7 @@ export const HOOK_LEVELS: readonly HookLevel[] = ['none', 'minimal', 'standard',
 export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Statusline + spec-injector',
-  standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
+  standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + kg-sync + kg-context-injector',
   full: '+ workflow-guard (PreToolUse)',
 };
 
@@ -86,6 +86,8 @@ export const HOOK_DEFS: Record<string, HookDef> = {
   'preflight-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit|Agent', level: 'standard', requiresWorkspace: true },
   'spec-validator': { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-sync': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-context-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
 };
 
@@ -107,6 +109,8 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
   'spec-injector':         { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true, statusMessage: 'Loading project specs' },
   'skill-context':         { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'keyword-spec-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-sync':               { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-context-injector':   { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
   'delegate-monitor':      { event: 'PostToolUse', matcher: 'Bash', level: 'standard' },
   'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'team-monitor':          { event: 'Stop', level: 'standard' },
@@ -117,7 +121,7 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
 export const CODEX_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Session context (SessionStart)',
-  standard: '+ spec/keyword-injector + skill-context + delegate-monitor + coordinator/team/telemetry(Stop)',
+  standard: '+ spec/keyword-injector + skill-context + kg-sync + kg-context-injector + delegate-monitor + coordinator/team/telemetry(Stop)',
   full: '+ workflow-guard (PreToolUse, Bash only)',
 };
 
@@ -542,6 +546,8 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
   'session-context':       { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'skill-context':         { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'keyword-spec-injector': { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
+  'kg-sync':               { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
+  'kg-context-injector':   { event: 'PreToolUse', matcher: 'invoke_subagent', level: 'standard', requiresWorkspace: true },
   'delegate-monitor':      { event: 'PostToolUse', matcher: 'run_command|invoke_subagent', level: 'standard' },
   'team-monitor':          { event: 'Stop', level: 'standard' },
   'telemetry':             { event: 'Stop', level: 'standard' },
@@ -834,6 +840,52 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     }
   },
 
+  'kg-sync': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['kgSync'] === false) return;
+
+    const raw = await readStdin();
+    const data = raw ? JSON.parse(raw) : {};
+    const sessionId: string = data.session_id ?? '';
+    if (!sessionId) return;
+
+    const cwd: string = data.cwd ?? process.cwd();
+
+    const { evaluateKgSync } = await import('../hooks/kg-sync-hook.js');
+    evaluateKgSync(cwd, sessionId);
+    // Fire-and-forget — no stdout output, purely side-effect
+  },
+
+  'kg-context-injector': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['kgContextInjector'] === false) return;
+
+    const raw = await readStdin();
+    const data = JSON.parse(raw);
+    const toolInput = data.tool_input ?? {};
+    const agentType: string = toolInput.subagent_type ?? '';
+    if (!agentType) return;
+
+    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
+    const originalPrompt: string = toolInput.prompt ?? '';
+
+    const { evaluateKgContextInjection } = await import('../hooks/kg-context-injector.js');
+    const result = evaluateKgContextInjection(agentType, originalPrompt, cwd);
+    if (result.inject && result.content) {
+      const augmentedPrompt = `${result.content}\n\n${originalPrompt}`;
+
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          updatedInput: {
+            ...toolInput,
+            prompt: augmentedPrompt,
+          },
+        },
+      }));
+    }
+  },
+
   'workflow-guard': async () => {
     const config = loadHooksConfig();
     if (config.toggles['workflowGuard'] === false) return;
@@ -943,7 +995,9 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const result = evaluateSpecInjection(agentType, cwd, sessionId, specConfig);
     if (result.inject && result.content) {
       const originalPrompt: string = toolInput.prompt ?? '';
-      const augmentedPrompt = `${result.content}\n\n---\n\n${originalPrompt}`;
+      // result.content is already a self-delimiting <maestro-context> block;
+      // prepend with a single blank-line gap, no extra --- separator.
+      const augmentedPrompt = `${result.content}\n\n${originalPrompt}`;
 
       process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
@@ -1422,6 +1476,8 @@ export function registerHooksCommand(program: Command): void {
           : name === 'coordinator-tracker' ? 'coordinatorTracker'
           : name === 'spec-validator' ? 'specValidator'
           : name === 'keyword-spec-injector' ? 'keywordSpecInjector'
+          : name === 'kg-sync' ? 'kgSync'
+          : name === 'kg-context-injector' ? 'kgContextInjector'
           : name;
         const enabled = config.toggles[toggleKey] !== false;
         const matcher = def.matcher ? ` [${def.matcher}]` : '';

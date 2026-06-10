@@ -4,6 +4,8 @@ export { SyncHook, AsyncSeriesHook, AsyncSeriesBailHook, AsyncSeriesWaterfallHoo
 export { WorkflowHookRegistry } from './workflow-hooks.js';
 export { HookManager } from './hook-manager.js';
 export { runPreflight, type PreflightResult, type PreflightDeps } from './preflight-core.js';
+export { evaluateKgSync } from './kg-sync-hook.js';
+export { evaluateKgContextInjection } from './kg-context-injector.js';
 export type {
   RunContext,
   NodeContext,

@@ -56,7 +56,7 @@ $codify-to-knowhow ".workflow/reference_style/my-style-v1"
 - `<package-path>` (positional, required): Directory containing `knowhow-manifest.json`
 
 **Upstream**: `maestro-ui-codify`, `learn-decompose`, or any skill that generates a manifest
-**Downstream**: `maestro wiki list --category coding`, `maestro spec load --keyword <slug>`
+**Downstream**: `maestro search --category coding`, `maestro spec load --keyword <slug>`
 </context>
 
 <manifest_schema>
@@ -396,7 +396,7 @@ Ref Links: spec -> knowhow bridge established
 Wiki Index: refreshed
 
 Next steps:
-  maestro wiki list --category coding    # Browse by role
+  maestro search --category coding    # Browse by role
   maestro spec load --keyword {slug}    # Load related specs
   maestro wiki load <id>                # Load full entry
 ```

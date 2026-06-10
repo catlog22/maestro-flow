@@ -59,7 +59,7 @@ Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), outpu
 **Exception (`--from analyze:ANL-xxx` / `blueprint:BLP-xxx`):** When scope is set to "standalone" by `--from`, skip adhoc milestone auto-creation — the upstream analyze/blueprint artifact already provides the milestone context (or is intentionally milestone-free). Adhoc creation in this path would conflict with the `--from` semantic of "this is a one-shot plan rooted in an existing artifact".
 
 ### Role Knowledge
-`maestro wiki list --category arch` → select relevant → `maestro wiki load`
+`maestro search --category arch` → select relevant → `maestro wiki load`
 </context>
 
 <execution>
@@ -113,7 +113,7 @@ During P1 Context Collection, after loading context files and before parallel ex
 
 ```
 phase_keywords = extract key terms from goal/title (2-5 terms)
-wiki_result = Bash("maestro wiki search ${phase_keywords} --json 2>/dev/null")
+wiki_result = Bash("maestro search ${phase_keywords} --json 2>/dev/null")
 
 IF wiki_result exit code != 0 OR empty:
   display "W003: Wiki search unavailable, continuing without prior knowledge"

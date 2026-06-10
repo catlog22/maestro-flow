@@ -45,9 +45,9 @@ Extract conclusions from related artifacts that may affect this debug session �
 
 ### Pre-load (optional, proceed without)
 - Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → module boundaries
-- Wiki: `maestro wiki search "<symptom keywords>" --json` → prior investigations
+- Wiki: `maestro search "<symptom keywords>" --json` → prior investigations
 - Specs: `maestro spec load --category debug --keyword "<symptom>"` → known issues/workarounds
-- Role knowledge: `maestro wiki list --category debug` → select relevant → `maestro wiki load`
+- Role knowledge: `maestro search --category debug` → select relevant → `maestro wiki load`
 
 **Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
 </context>

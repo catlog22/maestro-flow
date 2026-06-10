@@ -185,47 +185,22 @@ export function registerKnowhowCommand(program: Command): void {
     .option('--limit <n>', 'Max results', (v) => parseInt(v, 10), 20)
     .action(async (queryParts: string[], opts) => {
       console.warn('[deprecated] Use "maestro search --type knowhow" instead');
-      const q = queryParts.join(' ').toLowerCase();
-      const terms = q.split(/\s+/).filter(Boolean);
-      const dir = getKnowhowDir();
-
-      if (!existsSync(dir)) {
-        console.log('No knowhow entries yet.');
-        return;
-      }
-
-      const results: Array<{ id: string; title: string; type: string; score: number; excerpt: string }> = [];
-      for (const name of readdirSync(dir)) {
-        if (!name.endsWith('.md')) continue;
-        const raw = readFileSync(join(dir, name), 'utf-8');
-        const contentLower = raw.toLowerCase();
-        const matchCount = terms.filter((t) => contentLower.includes(t)).length;
-        if (matchCount === 0) continue;
-
-        const { data, body } = parseFrontmatter(raw);
-        const prefix = name.match(/^([A-Z]+)-\d{8}/)?.[1] ?? '';
-        const typeCat = Object.entries(PREFIX_MAP).find(([, p]) => p === prefix)?.[0] ?? '';
-        results.push({
-          id: `knowhow-${slugify(name.replace(/^...-/, '').replace('.md', ''))}`,
-          title: data.title || 'Untitled',
-          type: typeCat,
-          score: Math.round((matchCount / terms.length) * 100) / 100,
-          excerpt: body.replace(/\s+/g, ' ').slice(0, 200),
-        });
-      }
-
-      results.sort((a, b) => b.score - a.score);
-      const limited = results.slice(0, opts.limit);
+      const q = queryParts.join(' ');
+      const limit = opts.limit > 0 ? opts.limit : 20;
+      const { runUnifiedSearch } = await import('./search.js');
+      const results = await runUnifiedSearch(q, { type: 'knowhow', limit });
 
       if (opts.json) {
-        console.log(JSON.stringify({ query: q, matches: limited, total_matches: results.length }, null, 2));
+        console.log(JSON.stringify({ query: q, matches: results, total_matches: results.length }, null, 2));
         return;
       }
 
-      console.log(`Query: "${q}"  (${limited.length}/${results.length} results)`);
-      for (const r of limited) {
-        console.log(`  [${r.type}] ${r.title}  (score: ${r.score})`);
-        console.log(`    ${r.excerpt.slice(0, 120)}...`);
+      console.log(`Query: "${q}"  (${results.length} results)`);
+      for (const r of results) {
+        const scoreTag = r.score !== null ? `  (score: ${r.score.toFixed(2)})` : '';
+        console.log(`  [${r.type}] ${r.id}  ${r.title}${scoreTag}`);
+        const excerpt = r.snippet || r.summary;
+        if (excerpt) console.log(`    ${excerpt}`);
       }
     });
 

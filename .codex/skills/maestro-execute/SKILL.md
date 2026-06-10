@@ -236,7 +236,7 @@ If exit code is 1, present warnings and ask whether to proceed.
 
 7. **Load codebase + wiki context** (optional, passed to all agents):
    - If `.workflow/codebase/ARCHITECTURE.md` exists: read and include as `codebase_context` in agent instructions
-   - Run `maestro wiki search "<phase keywords>" --json 2>/dev/null`; if results: include top 5 entries as `wiki_context`
+   - Run `maestro search "<phase keywords>" --json 2>/dev/null`; if results: include top 5 entries as `wiki_context`
    - Both are optional — proceed without if unavailable
 
 7. **User validation**: Display task/wave breakdown. Skip if AUTO_YES.

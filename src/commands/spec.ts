@@ -211,71 +211,9 @@ export function registerSpecCommand(program: Command): void {
     .option('--json', 'Output as JSON')
     .action(async (queryParts: string[], opts) => {
       console.warn('[deprecated] Use "maestro search --type spec" instead');
-      const { existsSync, readdirSync, readFileSync: readFs } = await import('node:fs');
-      const { join: pathJoin } = await import('node:path');
-      const { resolveSpecDir } = await import('../tools/spec-loader.js');
-      const { parseSpecEntries: parseEntries } = await import('../tools/spec-entry-parser.js');
-
-      const q = queryParts.join(' ').toLowerCase();
-      const uid = await resolveUid(opts);
-
-      const dirs: Array<{ dir: string; label: string }> = [];
-      if (opts.scope) {
-        const scope = validateScope(opts.scope);
-        if (scope === 'personal' && !uid) {
-          console.error('Error: personal scope requires --uid or team membership.');
-          process.exit(1);
-        }
-        dirs.push({ dir: resolveSpecDir(process.cwd(), scope, uid), label: SCOPE_LABELS[scope] });
-      } else {
-        for (const s of ['global', 'project', 'team'] as const) {
-          dirs.push({ dir: resolveSpecDir(process.cwd(), s), label: SCOPE_LABELS[s] });
-        }
-      }
-
-      const results: Array<{ file: string; scope: string; category: string; lineStart: number; title: string; desc: string }> = [];
-
-      for (const { dir, label } of dirs) {
-        if (!existsSync(dir)) continue;
-        let files: string[];
-        try { files = readdirSync(dir).filter(f => f.endsWith('.md')); } catch { continue; }
-
-        for (const file of files) {
-          try {
-            const raw = readFs(pathJoin(dir, file), 'utf-8');
-            const { entries } = parseEntries(raw);
-            for (const e of entries) {
-              const text = `${e.title} ${e.content} ${e.keywords.join(' ')}`.toLowerCase();
-              if (text.includes(q)) {
-                const hasTitle = !!e.title;
-                const title = e.title || e.content.replace(/\n/g, ' ').trim().slice(0, 60);
-                let desc = '';
-                if (hasTitle) {
-                  desc = e.content.replace(/^###\s+.+\n*/, '').replace(/\n/g, ' ').trim();
-                  if (desc.length > 60) desc = desc.slice(0, 60) + '...';
-                }
-                results.push({ file, scope: label, category: e.category, lineStart: e.lineStart, title, desc });
-              }
-            }
-
-            // Fallback: search YAML frontmatter title + full body for files with no <spec-entry> tags
-            if (entries.length === 0) {
-              const titleMatch = raw.match(/^title:\s*["']?(.+?)["']?\s*$/m);
-              const fullText = `${titleMatch?.[1] || ''} ${raw}`.toLowerCase();
-              if (fullText.includes(q)) {
-                results.push({
-                  file,
-                  scope: label,
-                  category: 'unknown',
-                  lineStart: 1,
-                  title: titleMatch?.[1] || file.replace('.md', ''),
-                  desc: raw.replace(/---[\s\S]*?---/, '').trim().slice(0, 60) + '...',
-                });
-              }
-            }
-          } catch { continue; }
-        }
-      }
+      const q = queryParts.join(' ');
+      const { runUnifiedSearch } = await import('./search.js');
+      const results = await runUnifiedSearch(q, { type: 'spec', limit: 20 });
 
       if (opts.json) {
         console.log(JSON.stringify({ query: q, count: results.length, results }, null, 2));
@@ -284,8 +222,14 @@ export function registerSpecCommand(program: Command): void {
 
       console.log(`Found ${results.length} entries matching "${q}"`);
       for (const r of results) {
-        console.log(`  [${r.category}] ${r.file}:${r.lineStart}  ${r.title}`);
-        if (r.desc) console.log(`    ${r.desc}`);
+        const cat = r.category ? `[${r.category}] ` : '';
+        const path = r.source?.path ? `${r.source.path}  ` : '';
+        console.log(`  ${cat}${path}${r.id}  ${r.title}`);
+        if (r.snippet) {
+          console.log(`    ${r.snippet}`);
+        } else if (r.summary) {
+          console.log(`    ${r.summary}`);
+        }
       }
     });
 

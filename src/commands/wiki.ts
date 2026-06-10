@@ -14,7 +14,7 @@ import type { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { truncate } from '../utils/cli-format.js';
+import { truncate, extractSnippet } from '../utils/cli-format.js';
 import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import { WikiWriter, WikiWriteError } from '#maestro-dashboard/wiki/writer.js';
 import { computeHealth, detectOrphans, detectHubs } from '#maestro-dashboard/wiki/graph-analysis.js';
@@ -38,23 +38,6 @@ function getOfflineClients(): { indexer: WikiIndexer; writer: WikiWriter } {
     _writer = new WikiWriter(workflowRoot, _indexer);
   }
   return { indexer: _indexer!, writer: _writer! };
-}
-
-function extractSnippet(body: string, query: string, maxLen = 50): string | null {
-  if (!body || !query) return null;
-  const lower = body.toLowerCase();
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  for (const term of terms) {
-    const idx = lower.indexOf(term);
-    if (idx === -1) continue;
-    let line = 1;
-    for (let i = 0; i < idx; i++) if (body[i] === '\n') line++;
-    const ls = body.lastIndexOf('\n', idx) + 1;
-    const le = body.indexOf('\n', idx);
-    const raw = body.slice(ls, le === -1 ? body.length : le).trim();
-    return `L${line}: ${raw.length > maxLen ? raw.slice(0, maxLen) + '...' : raw}`;
-  }
-  return null;
 }
 
 export function registerWikiCommand(program: Command): void {
@@ -268,6 +251,7 @@ export function registerWikiCommand(program: Command): void {
     .description('BM25 search (alias for `list -q`)')
     .option('--json', 'Output as JSON')
     .action(async (queryParts, opts, cmd) => {
+      console.warn('[deprecated] Use "maestro search" instead');
       const live = cmd.parent!.opts().live as boolean | undefined;
       const q = queryParts.join(' ');
 
