@@ -276,7 +276,10 @@ function forceInstall(
 
   for (const comp of toInstall) {
     console.error(`  ${comp.def.label} → ${comp.targetDir}`);
-    if (comp.def.inject) {
+    if (comp.def.build) {
+      const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
+      totalStats.files += result.files;
+    } else if (comp.def.inject) {
       const result = injectDocFile(comp.sourceFull, comp.targetDir, totalStats, manifest, comp.def.section);
       if (result.action === 'migrated') {
         console.error(`    ✓ migrated legacy ${comp.def.label} to tag-based injection`);

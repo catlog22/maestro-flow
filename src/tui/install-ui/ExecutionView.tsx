@@ -116,7 +116,12 @@ export function ExecutionView({
           const comp = selectedComponents[i];
           setStatus(`Installing ${comp.def.label}...`);
           const beforeFiles = totalStats.files;
-          copyRecursive(comp.sourceFull, comp.targetDir, totalStats, manifest);
+          if (comp.def.build) {
+            const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
+            totalStats.files += result.files;
+          } else {
+            copyRecursive(comp.sourceFull, comp.targetDir, totalStats, manifest);
+          }
           const delta = totalStats.files - beforeFiles;
           setProgress(`(${delta} files)`);
         }

@@ -367,7 +367,8 @@ export function scanComponents(
 ): ScannedComponent[] {
   return COMPONENT_DEFS.map((def) => {
     const sourceFull = join(pkgRoot, def.sourcePath);
-    const fileCount = countFiles(sourceFull);
+    const countDir = def.sourceCountDir ? join(pkgRoot, def.sourceCountDir) : sourceFull;
+    const fileCount = countFiles(countDir);
     const targetDir = def.target(mode, projectPath);
     return { def, sourceFull, targetDir, fileCount, available: fileCount > 0 };
   });

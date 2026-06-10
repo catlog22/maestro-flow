@@ -156,7 +156,10 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           for (const comp of components) {
             if (cancelled) return;
             setStatus(t.install.execInstalling.replace('{name}', comp.def.label));
-            if (comp.def.inject) {
+            if (comp.def.build) {
+              const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
+              stats.files += result.files;
+            } else if (comp.def.inject) {
               const result = injectDocFile(comp.sourceFull, comp.targetDir, stats, manifest, comp.def.section);
               if (result.warning) warnings.push(result.warning);
             } else {

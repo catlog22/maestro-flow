@@ -30,7 +30,7 @@ dashboard/node_modules/
 # Antigravity CLI auto-creates this for project discovery (empty on Windows without symlink permission)
 .antigravitycli/
 
-# Agent Skills open-standard mirror — build artifact (not committed),
-# but IS published via package.json#files. Regenerate via `npm run build:mirrors`
-# before publishing; prepublishOnly hook auto-runs it.
+# Platform mirrors — build artifacts generated from .claude/ at install time.
+# Not committed; regenerate via `npm run build:mirrors` before publishing.
+.agy/
 .agents/
