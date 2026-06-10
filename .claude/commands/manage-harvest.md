@@ -53,7 +53,7 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 
 **Next-step routing on completion:**
 - Review wiki entries → `maestro wiki list --type note`
-- Connect wiki graph → `/wiki-connect --fix`
+- Connect wiki graph → `/manage-wiki connect --fix`
 - Triage issues → `/manage-issue list --source harvest`
 - View specs → `/spec-load --role implement`
 - Full retrospective → `/quality-retrospective`

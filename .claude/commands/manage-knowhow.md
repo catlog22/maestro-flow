@@ -13,8 +13,10 @@ allowed-tools:
 ---
 <purpose>
 Unified memory management across two stores:
-1. **Workflow knowhow** (`.workflow/knowhow/`) — Session compacts and tips with JSON index, created by `manage-knowhow-capture`
+1. **Workflow knowhow** (`.workflow/knowhow/`) — Session compacts, tips, insights, and all reusable knowledge, created by `manage-knowhow-capture`
 2. **System memory** (`~/.claude/projects/{project}/memory/`) — Claude Code auto-memory (MEMORY.md + topic files), persists across conversations
+
+Also scans `.workflow/specs/learnings.md` for legacy insight entries (backward compat with former `manage-learn`).
 
 Provides list/search/view/edit/delete/prune operations. Default store is `all` (show both).
 </purpose>

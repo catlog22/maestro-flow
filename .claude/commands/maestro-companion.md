@@ -127,7 +127,7 @@ ls .workflow/codebase/doc-index.json
 
 - Exists → display "Codebase docs ready, last updated: {timestamp}"
 - Missing → suggest `/manage-codebase-rebuild`
-- Stale (>7 days) → suggest `/manage-codebase-refresh`
+- Stale (>7 days) → suggest `/quality-sync`
 
 ### 4. Create companion document
 

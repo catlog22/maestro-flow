@@ -1,7 +1,7 @@
 ---
 name: manage-wiki
 description: Manage wiki graph — health, cleanup, search, stats
-argument-hint: "<subcommand: health|search|cleanup|stats> [query] [--fix] [--dry-run]"
+argument-hint: "<subcommand: health|search|cleanup|stats|connect|digest> [query] [--fix] [--dry-run]"
 allowed-tools:
   - Read
   - Write
@@ -12,9 +12,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Unified wiki graph management command. Provides interactive access to wiki health monitoring, entry search, orphan cleanup, and graph statistics — the day-to-day operations that keep the knowledge graph healthy.
-
-Complements `/wiki-connect` (link discovery) and `/wiki-digest` (synthesis) with operational tooling.
+Unified wiki graph management command. Provides interactive access to wiki health monitoring, entry search, orphan cleanup, graph statistics, link discovery, and knowledge synthesis — the single entry point for all wiki graph operations.
 </purpose>
 
 <required_reading>
@@ -31,16 +29,26 @@ $ARGUMENTS — subcommand and optional flags.
 | `search <query>` | Interactive BM25 search with follow-up actions |
 | `cleanup` | Find and resolve orphans, broken links, stale entries |
 | `stats` | Graph statistics — type distribution, tag frequency, growth trends |
+| `connect` | Find and link hidden connections — orphan rescue, missing links, transitive gaps |
+| `digest [topic]` | Generate knowledge digest with theme clustering and gap analysis |
 | No args | Same as `health` |
 
 **Flags:**
 - `--type <type>` — Filter by wiki type: spec, knowhow, note, issue
-- `--fix` — Auto-fix issues found during cleanup (remove broken links, suggest connections)
+- `--fix` — Auto-fix issues found during cleanup/connect (remove broken links, apply connections)
 - `--json` — Output in JSON format
+- `--min-similarity N` — (connect) Minimum similarity threshold for link candidates
+- `--max N` — (connect) Maximum number of suggestions
+- `--format brief|full` — (digest) Output format
+- `--recent N` — (digest) Scope to N most recent entries
+- `--create-issues` — (digest) Create issues for identified knowledge gaps
 </context>
 
 <execution>
-Follow '~/.maestro/workflows/wiki-manage.md' completely.
+**Subcommand routing:**
+- `health|search|cleanup|stats` → Follow `~/.maestro/workflows/wiki-manage.md` completely.
+- `connect` → Follow `~/.maestro/workflows/wiki-connect.md` completely (Stages 1-6).
+- `digest` → Follow `~/.maestro/workflows/wiki-digest.md` completely (Stages 1-8).
 </execution>
 
 <error_codes>
@@ -54,9 +62,10 @@ Follow '~/.maestro/workflows/wiki-manage.md' completely.
 </error_codes>
 
 <success_criteria>
-- [ ] Subcommand parsed (health/search/cleanup/stats)
+- [ ] Subcommand parsed (health/search/cleanup/stats/connect/digest)
 - [ ] Wiki data loaded via `maestro wiki` CLI
 - [ ] Results displayed in formatted output
-- [ ] If cleanup --fix: issues resolved and delta reported
+- [ ] If cleanup/connect --fix: issues resolved and delta reported
+- [ ] If digest: themes clustered, gaps identified, coverage heatmap generated
 - [ ] Next-step suggestions provided
 </success_criteria>

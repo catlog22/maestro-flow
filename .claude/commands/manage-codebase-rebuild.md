@@ -53,7 +53,7 @@ Follow '~/.maestro/workflows/codebase-rebuild.md' completely.
 
 **Next-step routing on completion:**
 - View updated project state → `/manage-status`
-- Incremental updates later → `/manage-codebase-refresh`
+- Incremental updates later → `/quality-sync`
 - Verify KG stats → `maestro kg stats`
 - Verify wiki integration → `maestro wiki list --keyword kg`
 - Future change impact → `maestro kg diff-wiki`
@@ -80,6 +80,6 @@ Follow '~/.maestro/workflows/codebase-rebuild.md' completely.
 - [ ] KG pipeline executed (`maestro kg index`)
 - [ ] knowledge-graph.json generated in .workflow/codebase/
 - [ ] KG nodes indexed as virtual wiki entries (automatic via WikiIndexer on next wiki access)
-- [ ] Next step routing: `/manage-status` or `/manage-codebase-refresh` for incremental updates later
+- [ ] Next step routing: `/manage-status` or `/quality-sync` for incremental updates later
 - [ ] KG impact check available: `maestro kg diff-wiki` for future change impact analysis
 </success_criteria>

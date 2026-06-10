@@ -74,7 +74,7 @@ After knowhow extraction (step 4), scan `learnings.md` for promotion candidates:
 2. **Convention drift detection**: Compare executed task summaries against `coding-conventions.md` and `architecture-constraints.md`:
    → Ask: "Were any established conventions bypassed during this milestone? Should conventions be updated?"
 
-3. **Wiki island check**: Auto-trigger `wiki-connect --fix` to link newly extracted knowledge.
+3. **Wiki island check**: Auto-trigger `manage-wiki connect --fix` to link newly extracted knowledge.
 
 If user confirms promotion, invoke `Skill({ skill: "spec-add", args: "<category> <content>" })` with promoted content, preserving original date and source traceability.
 

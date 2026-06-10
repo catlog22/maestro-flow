@@ -6,7 +6,7 @@
  * discovers knowhow tools with matching category, returns concatenated content.
  */
 
-import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, mkdirSync, writeFileSync, appendFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSpecEntries, formatSpecEntries, type SpecEntryParsed } from './spec-entry-parser.js';
 import { paths } from '../config/paths.js';
@@ -160,6 +160,11 @@ export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: st
     }
   }
 
+  // Hit tracking: silently log which specs were loaded for decay analysis
+  if (totalCount > 0) {
+    recordHit(projectPath, category, keyword, allMatched);
+  }
+
   return {
     content: allSections.length > 0
       ? `# Project Specs (${totalCount} loaded)\n\n${allSections.join('\n\n---\n\n')}`
@@ -270,7 +275,10 @@ function shouldInclude(filename: string, category?: SpecCategory, extraSpecFiles
 
   // Category filter: include primary doc + all other files (for keyword cross-matching)
   const cat = CATEGORY_MAP[filename];
-  if (!cat) return false; // Unknown file
+  if (!cat) {
+    console.warn(`[spec] file not in category map, skipped: ${filename}`);
+    return false;
+  }
 
   // Primary category doc → always include (full load)
   if (cat === category) return true;
@@ -570,4 +578,28 @@ export function loadExtraDocs(projectPath: string, docPaths?: string[]): ExtraDo
     content: sections.length > 0 ? sections.join('\n\n---\n\n') : '',
     count: sections.length,
   };
+}
+
+// ============================================================================
+// Hit tracking — append-only JSONL log for decay analysis
+// ============================================================================
+
+function recordHit(
+  projectPath: string,
+  category: SpecCategory | undefined,
+  keyword: string | undefined,
+  matchedFiles: string[],
+): void {
+  try {
+    const hitLog = join(projectPath, SPECS_DIR, '.hit-log.jsonl');
+    const entry = JSON.stringify({
+      ts: new Date().toISOString(),
+      cat: category ?? null,
+      kw: keyword ?? null,
+      files: matchedFiles,
+    });
+    appendFileSync(hitLog, entry + '\n', 'utf-8');
+  } catch {
+    // Best-effort — never block loading
+  }
 }

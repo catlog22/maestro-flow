@@ -33,6 +33,7 @@ Follow '~/.maestro/workflows/sync.md' completely.
 **Next-step routing on completion:**
 - Docs refreshed → `/manage-status`
 - Major structural changes detected → `/manage-codebase-rebuild` (full rebuild recommended)
+- Incremental refresh (replaces former `/manage-codebase-refresh`) → use `--since` flag
 </execution>
 
 <error_codes>

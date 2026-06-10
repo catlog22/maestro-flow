@@ -38,8 +38,9 @@ $ARGUMENTS — type token + description + optional flags.
 | `asset`/`ast`/`资产`/`契约` | asset | AST- | assetType, codePaths, category |
 | `blueprint`/`blp`/`蓝图` | blueprint | BLP- | codePaths, category |
 | `document`/`doc`/`文档` | document | DOC- | (general fallback) |
+| `insight`/`ins`/`洞察`/`经验` | insight | INS- | content, tags, phase (replaces former manage-learn) |
 | Short text + `--tag` | tip | TIP- | — |
-| No args | — | — | AskUserQuestion (9 options) |
+| No args | — | — | AskUserQuestion (10 options) |
 
 **Output**: `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{HHMM}.md` with YAML frontmatter (title, type, category, created, tags, source, lang, status)
 </context>

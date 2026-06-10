@@ -163,13 +163,13 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 | 测试 / test / UAT | `quality-test` / `quality-auto-test` |
 | 重构 / refactor / 技术债 | `quality-refactor` |
 | 同步文档 / sync docs | `quality-sync` |
-| 回顾 / retro | `quality-retrospective` / `learn-retro` |
+| 回顾 / retro | `quality-retrospective` |
 | issue / 缺陷管理 | `manage-issue` / `manage-issue-discover` |
-| wiki / 知识图谱 | `manage-wiki` / `wiki-connect` / `wiki-digest` |
+| wiki / 知识图谱 | `manage-wiki` (含 connect/digest 子命令) |
 | spec / 规则 / 约束 | `spec-load` / `spec-add` / `spec-setup` |
 | 项目初始化 / init | `maestro-init` |
 | 状态 / status / 仪表盘 | `manage-status` |
-| 文档重建 / codebase 文档 | `manage-codebase-rebuild` / `manage-codebase-refresh` |
+| 文档重建 / codebase 文档 | `manage-codebase-rebuild` / `quality-sync` |
 | 安全 / security / OWASP | `security-audit` |
 | 跟读 / 学习 / 阅读源码 | `learn-follow` / `learn-investigate` |
 | 第二意见 / challenge / consult | `learn-second-opinion` |
@@ -185,9 +185,9 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 |----|------|---------|
 | Learning | 接触新代码/未知模块 | `learn-follow` → `learn-decompose` → `learn-second-opinion` |
 | Knowledge | 提炼经验 / 沉淀知识 | `manage-harvest` → `manage-knowhow-capture` → `spec-add` |
-| Wiki | 知识图谱整理 | `manage-wiki` → `wiki-connect` → `wiki-digest` |
+| Wiki | 知识图谱整理 | `manage-wiki health` → `manage-wiki connect` → `manage-wiki digest` |
 | Issue | 缺陷管理 | `manage-issue-discover` → `manage-issue` |
-| 文档同步 | 代码大改后 | `quality-sync` → `manage-codebase-refresh` |
+| 文档同步 | 代码大改后 | `quality-sync` → `manage-codebase-rebuild` (if major) |
 | 重构 | 技术债积累 | `quality-refactor` → `quality-review` |
 | 发布 | 里程碑结束 | `maestro-milestone-audit` → `maestro-milestone-release` |
 | 并行开发 | 多 milestone 并行 | `maestro-fork` → ... → `maestro-merge` |
