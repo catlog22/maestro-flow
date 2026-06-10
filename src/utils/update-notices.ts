@@ -350,3 +350,23 @@ NOTICES.push({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.0',
+  title: '知识系统改革 + Install 管线重构 + 命令规范化',
+  highlights: [
+    '.agy/ 从 git 移除，install 时从 .claude/ 实时转换——镜像不再占版本库空间',
+    '知识系统统一搜索入口 + KG Hook 自动注入 + CodeGraph 函数级调用图',
+    'spec/knowhow 条目新增 title/description 属性，搜索结果更丰富',
+    'ralph skills --platform 强制化：新增 agent/agy 平台，缺失时警告',
+    'maestro-verify 合并到 maestro-execute 作为内置验证 gate',
+  ],
+  actions: [
+    {
+      id: 'reinstall-agy-global',
+      description: '重新安装全局 agy skills + agents（.agy/ 不再从 git 获取，需从 .claude/ 实时生成）',
+      defaultYes: true,
+      run: () => runShell('maestro install --force --global --components agy-context,agy-skills,agy-agents,agy-md-chinese'),
+    },
+  ],
+});
