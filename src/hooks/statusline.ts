@@ -23,6 +23,7 @@ import {
   TEXT_COLORS,
   ansiFg,
   getCtxLevel,
+  STATUSLINE_LAYOUT,
 } from './constants.js';
 import { readCoordBridge } from './coordinator-tracker.js';
 import { resolveSelf } from '../tools/team-members.js';
@@ -712,7 +713,14 @@ function filterAndCapChains(chains: ArtifactChain[], orphans: ArtifactInfo[]): F
 // Main formatter
 // ---------------------------------------------------------------------------
 
-/** Main statusline handler — two-line output */
+/**
+ * Main statusline handler.
+ *
+ * compact (default): Line 1 = all segments; Line 2 = workflow (if active)
+ * expanded:          Line 1 = Model/Thinking/Coord/Task/Team
+ *                    Line 2 = Dir+Git/Tokens/Context
+ *                    Line 3 = workflow (if active)
+ */
 export function formatStatusline(data: StatuslineInput): string {
   const model = data.model?.display_name || 'Claude';
   const dir = data.workspace?.current_dir || process.cwd();
@@ -732,23 +740,23 @@ export function formatStatusline(data: StatuslineInput): string {
     if (session) writeBridge(session, remaining, usedPct);
   }
 
-  // ---- Line 1: Model | Coord | Task | Team | Dir+Git | Context ----
-  const segments: Segment[] = [];
+  // ---- Segment group A: Model | Coord | Task | Team ----
+  const segA: Segment[] = [];
+  segA.push({ key: 'model', text: `${ICONS.model} ${model}` });
+  if (coord) segA.push({ key: 'coord', text: `${ICONS.coord} ${coord}` });
+  if (task)  segA.push({ key: 'task',  text: `${ICONS.task} ${task}` });
+  if (team)  segA.push({ key: 'team',  text: `${ICONS.team} ${team}` });
 
-  segments.push({ key: 'model', text: `${ICONS.model} ${model}` });
-
-  if (coord) segments.push({ key: 'coord', text: `${ICONS.coord} ${coord}` });
-  if (task) segments.push({ key: 'task', text: `${ICONS.task} ${task}` });
-  if (team) segments.push({ key: 'team', text: `${ICONS.team} ${team}` });
+  // ---- Segment group B: Dir+Git | Tokens+Lines | Context ----
+  const segB: Segment[] = [];
 
   let dirText = `${ICONS.dir} ${basename(dir)}`;
   if (git) dirText += `  ${formatGitSuffix(git)}`;
-  segments.push({ key: 'dir', text: dirText });
+  segB.push({ key: 'dir', text: dirText });
 
-  // Token usage + lines changed
-  const inputTokens = data.context_window?.total_input_tokens;
+  const inputTokens  = data.context_window?.total_input_tokens;
   const outputTokens = data.context_window?.total_output_tokens;
-  const linesAdded = data.cost?.total_lines_added ?? 0;
+  const linesAdded   = data.cost?.total_lines_added   ?? 0;
   const linesRemoved = data.cost?.total_lines_removed ?? 0;
 
   const statParts: string[] = [];
@@ -756,54 +764,59 @@ export function formatStatusline(data: StatuslineInput): string {
     statParts.push(buildTokenText(inputTokens, outputTokens));
   }
   if (linesAdded > 0 || linesRemoved > 0) {
-    const added = ansiFg(TEXT_COLORS.ctxOk) + `+${linesAdded}` + ANSI_RESET;
+    const added   = ansiFg(TEXT_COLORS.ctxOk)  + `+${linesAdded}`   + ANSI_RESET;
     const removed = ansiFg(TEXT_COLORS.ctxCrit) + `-${linesRemoved}` + ANSI_RESET;
     statParts.push(`${added} ${removed}`);
   }
   if (statParts.length > 0) {
-    segments.push({ key: 'task', text: statParts.join(' ') });
+    segB.push({ key: 'task', text: statParts.join(' ') });
   }
 
-  // Context bar
   if (remaining != null) {
-    const level = getCtxLevel(usedPct);
+    const level  = getCtxLevel(usedPct);
     const ctxKey = `ctx${level.charAt(0).toUpperCase()}${level.slice(1)}` as SegKey;
-    segments.push({ key: ctxKey, text: buildContextText(usedPct) });
+    segB.push({ key: ctxKey, text: buildContextText(usedPct) });
   }
 
-  const line1 = renderColoredText(segments);
+  // ---- Build rendered lines ----
+  let line1: string;
+  let line2: string | null = null;
 
-  // ---- Line 2: Milestone ◆Phase | Session chains (conditional) ----
-  if (!wf.milestone) return line1;
+  if (STATUSLINE_LAYOUT === 'expanded') {
+    // expanded: two info lines before optional workflow line
+    line1 = renderColoredText(segA);
+    line2  = renderColoredText(segB);
+  } else {
+    // compact (default): merge both groups into one line
+    line1 = renderColoredText([...segA, ...segB]);
+  }
+
+  // ---- Workflow line: Milestone ◆Phase | chains ----
+  if (!wf.milestone) {
+    return line2 !== null ? line1 + '\n' + line2 : line1;
+  }
 
   const sep = ansiFg(TEXT_COLORS.separator) + ' | ' + ANSI_RESET;
   const dot = ansiFg(TEXT_COLORS.separator) + ' · ' + ANSI_RESET;
 
-  // Milestone + phase header
   let header = ansiFg(TEXT_COLORS.milestone) + `${ICONS.milestone} ${wf.milestone}` + ANSI_RESET;
   if (wf.total > 0) header += ansiFg(TEXT_COLORS.milestone) + ` ${wf.completed}/${wf.total}` + ANSI_RESET;
   if (wf.currentPhase) header += ' ' + ansiFg(TEXT_COLORS.phase) + `${ICONS.phase} P${wf.currentPhase}` + ANSI_RESET;
 
-  // Filter (48h TTL on completed) + cap (max 3 visible)
   const view = filterAndCapChains(wf.chains, wf.orphans);
-
   const chainParts: string[] = [];
-  for (const chain of view.chains) {
-    chainParts.push(renderChain(chain));
-  }
-  for (const orphan of view.orphans) {
-    chainParts.push(renderOrphan(orphan));
-  }
-  if (view.hidden > 0) {
-    chainParts.push(ansiFg(TEXT_COLORS.separator) + `+${view.hidden}` + ANSI_RESET);
-  }
+  for (const chain of view.chains)   chainParts.push(renderChain(chain));
+  for (const orphan of view.orphans) chainParts.push(renderOrphan(orphan));
+  if (view.hidden > 0) chainParts.push(ansiFg(TEXT_COLORS.separator) + `+${view.hidden}` + ANSI_RESET);
 
-  if (chainParts.length === 0) {
-    return line1 + '\n' + header;
-  }
+  const workflowLine = chainParts.length === 0
+    ? header
+    : header + sep + chainParts.join(dot);
 
-  // Single-line: header + chains joined by dots (cap=3 keeps it compact)
-  return line1 + '\n' + header + sep + chainParts.join(dot);
+  if (line2 !== null) {
+    return line1 + '\n' + line2 + '\n' + workflowLine;
+  }
+  return line1 + '\n' + workflowLine;
 }
 
 /** Entry point — reads stdin JSON, writes formatted statusline to stdout */

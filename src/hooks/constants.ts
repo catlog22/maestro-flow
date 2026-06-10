@@ -11,16 +11,20 @@ import { homedir } from 'node:os';
 interface StatuslineConfig {
   nerdFont: boolean;
   theme: string;
+  layout: 'compact' | 'expanded';
 }
 
 function readStatuslineConfig(): StatuslineConfig {
   let nerdFont = false;
   let theme = 'notion';
+  let layout: 'compact' | 'expanded' = 'compact';
 
   // Env overrides
   if (process.env.MAESTRO_NERD_FONT === '1') nerdFont = true;
   else if (process.env.MAESTRO_NERD_FONT === '0') nerdFont = false;
   if (process.env.MAESTRO_STATUSLINE_THEME) theme = process.env.MAESTRO_STATUSLINE_THEME;
+  if (process.env.MAESTRO_STATUSLINE_LAYOUT === 'expanded') layout = 'expanded';
+  else if (process.env.MAESTRO_STATUSLINE_LAYOUT === 'compact') layout = 'compact';
 
   // Config file
   try {
@@ -33,13 +37,20 @@ function readStatuslineConfig(): StatuslineConfig {
       if (cfg.statusline?.nerdFont === true) nerdFont = true;
       if (cfg.statusline?.nerdFont === false && !process.env.MAESTRO_NERD_FONT) nerdFont = false;
       if (cfg.statusline?.theme && !process.env.MAESTRO_STATUSLINE_THEME) theme = cfg.statusline.theme;
+      if (!process.env.MAESTRO_STATUSLINE_LAYOUT &&
+          (cfg.statusline?.layout === 'expanded' || cfg.statusline?.layout === 'compact')) {
+        layout = cfg.statusline.layout;
+      }
     }
   } catch { /* ignore */ }
 
-  return { nerdFont, theme };
+  return { nerdFont, theme, layout };
 }
 
 const _slConfig = readStatuslineConfig();
+
+/** Active layout — 'compact' (default 2-line) or 'expanded' (3-line) */
+export const STATUSLINE_LAYOUT = _slConfig.layout;
 
 /** Ignore bridge metrics older than this (seconds) */
 export const STALE_SECONDS = 60;
