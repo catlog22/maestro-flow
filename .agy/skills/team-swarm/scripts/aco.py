@@ -16,6 +16,7 @@ import argparse
 import glob
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -65,6 +66,26 @@ def _emit(payload: dict) -> None:
 def _fail(code: int, msg: str):
     _emit({"status": "error", "message": msg})
     sys.exit(code)
+
+
+_CODE_FENCE_RE = re.compile(r"```(?:json)?\s*\n(.*?)\n\s*```", re.DOTALL)
+
+
+def _extract_json(text: str) -> dict:
+    """Extract JSON from text that may be wrapped in markdown code fences or BOM."""
+    text = text.strip().lstrip("﻿")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    m = _CODE_FENCE_RE.search(text)
+    if m:
+        return json.loads(m.group(1).strip())
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        return json.loads(text[start : end + 1])
+    raise json.JSONDecodeError("no valid JSON object found", text, 0)
 
 
 # ---------------------------------------------------------------------------
@@ -190,8 +211,8 @@ def _load_iteration_artifacts(paths: SessionPaths, iteration: int) -> List[dict]
     artifacts = []
     for f in files:
         try:
-            artifacts.append(json.loads(Path(f).read_text(encoding="utf-8")))
-        except json.JSONDecodeError as e:
+            artifacts.append(_extract_json(Path(f).read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"warning: skipped malformed artifact {f}: {e}", file=sys.stderr)
     return artifacts
 
@@ -288,7 +309,12 @@ def cmd_update(args: argparse.Namespace) -> None:
     state.clip()
     state.iteration = args.iter
     state.save(paths.pheromone_current)
-    state.save(paths.pheromone_history / f"{args.iter}.json")
+    # Save history with best_known for accurate delta computation
+    history_data = state.to_dict()
+    history_data["stats"]["best_known"] = best_data["score"] if best_data else 0.0
+    history_path = paths.pheromone_history / f"{args.iter}.json"
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_path.write_text(json.dumps(history_data, indent=2, ensure_ascii=False), encoding="utf-8")
 
     # Persist trails
     trails_file = paths.trails / f"{args.iter}.jsonl"
@@ -365,7 +391,7 @@ def cmd_converged(args: argparse.Namespace) -> None:
         trail_files = sorted(paths.trails.glob("*.jsonl"))
         per_iter_best = []
         for tf in trail_files:
-            lines = [json.loads(l) for l in tf.read_text().splitlines() if l.strip()]
+            lines = [json.loads(l) for l in tf.read_text(encoding="utf-8").splitlines() if l.strip()]
             if lines:
                 per_iter_best.append(max(l.get("verified_score", 0) for l in lines))
         if len(per_iter_best) > patience:
@@ -402,7 +428,7 @@ def cmd_report(args: argparse.Namespace) -> None:
     # Top-K trails across all iterations
     all_trails = []
     for tf in sorted(paths.trails.glob("*.jsonl")):
-        for line in tf.read_text().splitlines():
+        for line in tf.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 all_trails.append(json.loads(line))
     top_k = sorted(all_trails, key=lambda x: -x.get("verified_score", 0))[:5]

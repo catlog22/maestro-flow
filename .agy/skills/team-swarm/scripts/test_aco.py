@@ -81,7 +81,7 @@ def write_config(session: Path, overrides: Optional[dict] = None) -> dict:
     if overrides:
         _deep_merge(cfg, overrides)
     session.mkdir(parents=True, exist_ok=True)
-    (session / "swarm-config.json").write_text(json.dumps(cfg))
+    (session / "swarm-config.json").write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
     return cfg
 
 
@@ -116,7 +116,7 @@ def write_ant(session: Path, iteration: int, ant_idx: int,
                                "content": str(path)},
     }
     p = artifacts / f"ant-{iteration}-{ant_idx}.json"
-    p.write_text(json.dumps(art))
+    p.write_text(json.dumps(art, ensure_ascii=False), encoding="utf-8")
     return p
 
 
@@ -337,7 +337,7 @@ def test_hallucination_flagging():
                 "ANT-1-2": {"verified_score": 0.80, "rationale": "ok"},
                 "ANT-1-3": {"verified_score": 0.65, "rationale": "ok"},
             },
-        }))
+        }, ensure_ascii=False), encoding="utf-8")
 
         up = run_aco(session, "update", "--iter", "1")
         check("ANT-1-1 flagged as hallucination (|0.95-0.20|=0.75 > 0.4)",
@@ -371,9 +371,9 @@ def test_invalid_artifacts():
                                 "guided_by": "x", "deviation_from_hint": False}],
             "self_score": 0.5, "self_confidence": 0.5,
             "evidence": ["x"], "candidate_solution": {"summary": "x"},
-        }))
+        }, ensure_ascii=False), encoding="utf-8")
 
-        (artifacts / "ant-1-3.json").write_text("{ malformed json")
+        (artifacts / "ant-1-3.json").write_text("{ malformed json", encoding="utf-8")
 
         up = run_aco(session, "update", "--iter", "1")
         check("only 1 valid ant processed (2 rejected)",
@@ -386,7 +386,7 @@ def test_config_validation():
     with tempfile.TemporaryDirectory() as td:
         session = Path(td)
         session.mkdir(exist_ok=True)
-        (session / "swarm-config.json").write_text(json.dumps({"task_space": {}, "aco": {}}))
+        (session / "swarm-config.json").write_text(json.dumps({"task_space": {}, "aco": {}}), encoding="utf-8")
         r = run_aco(session, "init", expect_exit=2)
         check("missing nodes -> exit 2", r["status"] == "error")
         check("error message mentions nodes",
@@ -425,7 +425,7 @@ def test_auto_discover_from_glob():
     with tempfile.TemporaryDirectory() as td:
         td_path = Path(td)
         for name in ["alpha.txt", "beta.txt", "gamma.txt"]:
-            (td_path / name).write_text("data")
+            (td_path / name).write_text("data", encoding="utf-8")
 
         session = td_path / "session"
         session.mkdir()
@@ -436,10 +436,131 @@ def test_auto_discover_from_glob():
             "scoring": {"mode": "fallback"},
             "ant_prompt": {"objective": "x"},
             "convergence": {"max_iterations": 1},
-        }))
+        }, ensure_ascii=False), encoding="utf-8")
         r = run_aco(session, "init")
         check("auto_discover finds 3 files", r["n_nodes"] == 3,
               f"got {r['n_nodes']}")
+
+
+# ---------------------------------------------------------------------------
+# Chinese content + markdown-wrapped JSON
+# ---------------------------------------------------------------------------
+
+def test_chinese_content_roundtrip():
+    section("aco.py — Chinese content preserved through pipeline")
+
+    with tempfile.TemporaryDirectory() as td:
+        session = Path(td)
+        write_config(session, {
+            "ant_prompt": {"objective": "分析代码库的安全漏洞",
+                           "evidence_requirements": ["识别 OWASP Top 10 风险"]},
+            "task_space": {"nodes": ["认证模块", "API网关", "数据库层", "前端入口", "日志系统"]},
+        })
+        r = run_aco(session, "init")
+        check("chinese nodes: init ok", r["status"] == "ok")
+        check("chinese nodes: 5 nodes", r["n_nodes"] == 5)
+
+        task_space = json.loads((session / "task-space.json").read_text(encoding="utf-8"))
+        check("chinese preserved in task-space", "认证模块" in task_space["nodes"])
+
+        run_aco(session, "select", "--iter", "1")
+
+        artifacts = session / "artifacts"
+        artifacts.mkdir(exist_ok=True)
+        art = {
+            "schema_version": "1.0", "ant_id": "ANT-1-1", "iteration": 1,
+            "assignment": {"start_node": "认证模块", "max_path_length": 3},
+            "path": ["认证模块", "API网关", "数据库层"],
+            "path_decisions": [
+                {"from": "认证模块", "to": "API网关", "rationale": "认证流经过网关",
+                 "guided_by": "pheromone", "deviation_from_hint": False},
+                {"from": "API网关", "to": "数据库层", "rationale": "检查SQL注入",
+                 "guided_by": "pheromone", "deviation_from_hint": False},
+            ],
+            "self_score": 0.85, "self_confidence": 0.8,
+            "evidence": ["发现未参数化的SQL查询 src/db/query.ts:42"],
+            "candidate_solution": {"type": "string", "summary": "SQL注入修复方案",
+                                   "content": "使用参数化查询替代字符串拼接"},
+        }
+        (artifacts / "ant-1-1.json").write_text(
+            json.dumps(art, ensure_ascii=False), encoding="utf-8")
+        write_ant(session, 1, 2, ["前端入口", "API网关"], 0.6, 0.7)
+        write_ant(session, 1, 3, ["日志系统", "数据库层"], 0.4, 0.5)
+
+        up = run_aco(session, "update", "--iter", "1")
+        check("chinese update: 3 ants processed", up["n_ants_processed"] == 3)
+        check("chinese update: best_score > 0", up["best_score"] > 0)
+
+        best = json.loads((session / "best.json").read_text(encoding="utf-8"))
+        check("chinese preserved in best.json", "认证模块" in best["path"])
+        check("chinese evidence preserved", "SQL" in best["evidence"][0])
+
+        trails = (session / "trails" / "1.jsonl").read_text(encoding="utf-8")
+        check("chinese in trails JSONL", "认证模块" in trails)
+
+        cv = run_aco(session, "converged")
+        check("chinese converged check ok", cv["status"] == "ok")
+
+
+def test_markdown_wrapped_json():
+    section("aco.py — markdown-wrapped JSON artifacts parsed correctly")
+
+    with tempfile.TemporaryDirectory() as td:
+        session = Path(td)
+        write_config(session)
+        run_aco(session, "init")
+        run_aco(session, "select", "--iter", "1")
+
+        artifacts = session / "artifacts"
+        artifacts.mkdir(exist_ok=True)
+
+        art_json = json.dumps({
+            "schema_version": "1.0", "ant_id": "ANT-1-1", "iteration": 1,
+            "assignment": {"start_node": "a", "max_path_length": 3},
+            "path": ["a", "b", "c"],
+            "path_decisions": [
+                {"from": "a", "to": "b", "rationale": "r", "guided_by": "pheromone", "deviation_from_hint": False},
+                {"from": "b", "to": "c", "rationale": "r", "guided_by": "pheromone", "deviation_from_hint": False},
+            ],
+            "self_score": 0.7, "self_confidence": 0.8,
+            "evidence": ["found issue"],
+            "candidate_solution": {"summary": "fix it", "content": "details"},
+        }, ensure_ascii=False)
+        (artifacts / "ant-1-1.json").write_text(
+            f"```json\n{art_json}\n```", encoding="utf-8")
+
+        write_ant(session, 1, 2, ["b", "c"], 0.5, 0.6)
+        write_ant(session, 1, 3, ["c", "d"], 0.3, 0.4)
+
+        up = run_aco(session, "update", "--iter", "1")
+        check("markdown-wrapped: 3 ants processed", up["n_ants_processed"] == 3)
+        check("markdown-wrapped: ANT-1-1 included in results", up["best_score"] > 0)
+
+
+def test_best_known_delta():
+    section("aco.py — best_known tracked for accurate delta computation")
+
+    with tempfile.TemporaryDirectory() as td:
+        session = Path(td)
+        write_config(session, {"convergence": {"max_iterations": 5}})
+        run_aco(session, "init")
+
+        for k in range(1, 3):
+            run_aco(session, "select", "--iter", str(k))
+            score = 0.5 + k * 0.1
+            write_ant(session, k, 1, ["a", "b"], score, 0.9)
+            write_ant(session, k, 2, ["b", "c"], 0.3, 0.5)
+            write_ant(session, k, 3, ["c", "d"], 0.2, 0.4)
+            run_aco(session, "update", "--iter", str(k))
+
+        h1 = json.loads((session / "pheromone" / "history" / "1.json").read_text(encoding="utf-8"))
+        check("history iter 1 has best_known", "best_known" in h1["stats"])
+        check("best_known > 0 in iter 1", h1["stats"]["best_known"] > 0)
+
+        h2 = json.loads((session / "pheromone" / "history" / "2.json").read_text(encoding="utf-8"))
+        check("best_known increases across iterations",
+              h2["stats"]["best_known"] >= h1["stats"]["best_known"],
+              f"iter1={h1['stats']['best_known']:.3f} iter2={h2['stats']['best_known']:.3f}")
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +581,9 @@ def main():
     test_config_validation()
     test_idempotent_update()
     test_auto_discover_from_glob()
+    test_chinese_content_roundtrip()
+    test_markdown_wrapped_json()
+    test_best_known_delta()
 
     print("\n" + "=" * 60)
     print(f"Results: {PASS} passed, {FAIL} failed")
