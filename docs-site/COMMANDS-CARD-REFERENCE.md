@@ -47,16 +47,6 @@
 
 ---
 
-### `maestro-verify` — 验证阶段
-
-**Usage:** `/maestro-verify [phase] [--skip-tests] [--skip-antipattern] [--dir <path>]`
-
-目标回溯验证：3 层必要项检查 → 反模式扫描 → 奈奎斯特测试覆盖率审计 → 缺口修复计划生成
-
-**Flags:** [phase] (阶段) · --skip-tests (跳过测试检查) · --skip-antipattern (跳过反模式扫描) · --dir <path> (草稿目录模式)
-
----
-
 ### `maestro-quick` — 快速任务
 
 **Usage:** `/maestro-quick [description] [--full] [--discuss]`

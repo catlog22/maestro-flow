@@ -53,8 +53,7 @@ Use this decision table to suggest the next action:
 |---------------|------------|
 | No phases planned | `Skill({ skill: "maestro-brainstorm" })` or `Skill({ skill: "maestro-plan" })` |
 | Phase planned, not executed | `Skill({ skill: "maestro-execute", args: "<N>" })` |
-| Phase executed, not verified | `Skill({ skill: "maestro-verify", args: "<N>" })` |
-| Phase verified with gaps | `Skill({ skill: "maestro-plan", args: "<N> --gaps" })` |
+| Phase executed, not reviewed | `Skill({ skill: "quality-review", args: "<N>" })` |
 | Phase reviewed PASS/WARN | `Skill({ skill: "quality-test", args: "<N>" })` |
 | UAT passed | `Skill({ skill: "maestro-milestone-audit" })` |
 | All milestone phases done | `Skill({ skill: "maestro-milestone-audit" })` |

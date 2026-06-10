@@ -115,13 +115,6 @@ describe('parseSkillInvocation', () => {
     assert.strictEqual(result.phaseNum, 1);
   });
 
-  it('matches /maestro-verify with phase number', () => {
-    const result = parseSkillInvocation('/maestro-verify 3');
-    assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-verify');
-    assert.strictEqual(result.phaseNum, 3);
-  });
-
   it('matches /maestro-milestone-audit without number', () => {
     const result = parseSkillInvocation('/maestro-milestone-audit');
     assert.ok(result);

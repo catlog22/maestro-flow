@@ -13,8 +13,7 @@
     {"name": "maestro-analyze", "command": "/maestro-analyze", "category": "pipeline", "description": "双层分析 — 宏观(文本参数)探索影响面+scope_verdict / 微观(数字参数)Phase 级深入", "source": "../../commands/maestro-analyze.md"},
     {"name": "maestro-plan", "command": "/maestro-plan", "category": "pipeline", "description": "任务规划 — 支持 --from analyze:ANL-xxx 直达、碰撞检测、gap 修复计划", "source": "../../commands/maestro-plan.md"},
     {"name": "maestro-execute", "command": "/maestro-execute", "category": "pipeline", "description": "任务执行 — wave 并行执行、delegate 编排、自动提交", "source": "../../commands/maestro-execute.md"},
-    {"name": "maestro-verify", "command": "/maestro-verify", "category": "pipeline", "description": "验证确认 — 成果检查、gap 发现、下一阶段建议", "source": "../../commands/maestro-verify.md"},
-    {"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过 Phase 管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
+{"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过 Phase 管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
     {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 创建、查看、删除命令补丁", "source": "../../commands/maestro-overlay.md"},
     {"name": "maestro-amend", "command": "/maestro-amend", "category": "core", "description": "修正补丁 — 从工作流信号自动生成 overlay", "source": "../../commands/maestro-amend.md"},
     {"name": "maestro-fork", "command": "/maestro-fork", "category": "worktree", "description": "Worktree 分叉 — 基于 milestone 创建隔离开发环境", "source": "../../commands/maestro-fork.md"},
@@ -154,7 +153,6 @@
     "/maestro-roadmap",
     "/maestro-plan",
     "/maestro-execute",
-    "/maestro-verify",
     "/maestro-quick"
   ],
   "workflows": {
@@ -168,16 +166,16 @@
       }
     },
     "paths": {
-      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze 微观 → plan → execute → verify",
-      "B_large_feature": "analyze 宏观 → roadmap → analyze 微观 → plan → execute → verify",
-      "C_medium_feature": "analyze 宏观 → plan --from analyze:ANL-xxx → execute → verify",
-      "D_small_fix": "plan → execute → verify",
+      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze 微观 → plan → execute → quality-review",
+      "B_large_feature": "analyze 宏观 → roadmap → analyze 微观 → plan → execute → quality-review",
+      "C_medium_feature": "analyze 宏观 → plan --from analyze:ANL-xxx → execute → quality-review",
+      "D_small_fix": "plan → execute → quality-review",
       "E_spec_only": "blueprint → (供人阅读)",
       "F_explore_only": "brainstorm → (供人决策)"
     },
     "main_pipeline": {
       "name": "主干管线",
-      "phases": ["analyze", "plan", "execute", "verify"],
+      "phases": ["analyze", "plan", "execute"],
       "quality": ["quality-auto-test", "quality-review", "quality-test"],
       "close": ["maestro-milestone-audit", "maestro-milestone-complete"]
     },

@@ -46,18 +46,18 @@ describe('Scenario A: maestro status.json tracking', () => {
     assert.strictEqual(result.intent, 'implement OAuth2 authentication with refresh tokens');
     assert.strictEqual(result.phase, 2);
     assert.strictEqual(result.steps_total, 6);
-    assert.strictEqual(result.steps_completed, 3); // plan + execute + verify completed
+    assert.strictEqual(result.steps_completed, 2); // plan + execute completed
     assert.strictEqual(result.status, 'paused');
 
-    // Current step: quality-review (index 3)
+    // Current step: quality-review (index 2)
     assert.ok(result.current_step);
-    assert.strictEqual(result.current_step.index, 3);
+    assert.strictEqual(result.current_step.index, 2);
     assert.strictEqual(result.current_step.skill, 'quality-review');
     assert.strictEqual(result.current_step.args, '2');
 
-    // Next step: quality-test (index 4)
+    // Next step: quality-test (index 3)
     assert.ok(result.next_step);
-    assert.strictEqual(result.next_step.index, 4);
+    assert.strictEqual(result.next_step.index, 3);
     assert.strictEqual(result.next_step.skill, 'quality-test');
     assert.strictEqual(result.next_step.args, '2');
 
@@ -78,7 +78,7 @@ describe('Scenario A: maestro status.json tracking', () => {
     // Verify hint content
     assert.ok(hint.includes('## Coordinator Session Active'));
     assert.ok(hint.includes('full-lifecycle'));
-    assert.ok(hint.includes('[3/6]'));
+    assert.ok(hint.includes('[2/6]'));
     assert.ok(hint.includes('paused'));
     assert.ok(hint.includes('Last: quality-review'));
     assert.ok(hint.includes('Next: quality-test 2'));
@@ -100,7 +100,7 @@ describe('Scenario B: link-coordinate Bash output capture', () => {
     assert.strictEqual(result.session_id, 'coord-1744668285953-d428');
     assert.strictEqual(result.status, 'step_paused');
     assert.strictEqual(result.graph_id, 'full-lifecycle');
-    assert.strictEqual(result.current_node, 'verify');
+    assert.strictEqual(result.current_node, 'review');
     assert.strictEqual(result.steps_completed, 3);
     assert.strictEqual(result.steps_failed, 0);
     assert.strictEqual(result.history.length, 3);
@@ -116,18 +116,17 @@ describe('Scenario B: link-coordinate Bash output capture', () => {
     assert.strictEqual(result.phase, 2);
     assert.strictEqual(result.status, 'step_paused');
 
-    // History: 3 command nodes completed (plan, execute, verify)
+    // History: 3 command nodes completed (plan, execute, review)
     assert.strictEqual(result.steps_completed, 3);
   });
 
   it('resolves next node from chain graph for current walker position', () => {
-    // Walker is at "verify", next: verify → check_verify (decision)
-    // Default edge of check_verify → fix_plan (command, cmd: maestro-plan)
-    // The "passed" edge goes to review, but resolveNextNode follows default
-    const next = resolveNextNode(MOCK_WS, 'full-lifecycle', 'verify');
+    // Walker is at "review", next: review → check_review (decision)
+    // Default edge of check_review → test (command, cmd: quality-test)
+    const next = resolveNextNode(MOCK_WS, 'full-lifecycle', 'review');
     assert.ok(next, 'should resolve through decision node to next command');
-    assert.strictEqual(next.skill, 'maestro-plan');
-    assert.strictEqual(next.args, '{phase} --gaps');
+    assert.strictEqual(next.skill, 'quality-test');
+    assert.strictEqual(next.args, '{phase}');
   });
 
   it('generates correct next-step hint for B类 session', () => {
@@ -167,10 +166,10 @@ describe('Scenario C: chain graph traversal', () => {
     assert.strictEqual(next, null);
   });
 
-  it('follows multi-hop: execute → verify (direct command edge)', () => {
+  it('follows direct edge: execute → review', () => {
     const next = resolveNextNode(MOCK_WS, 'full-lifecycle', 'execute');
     assert.ok(next);
-    assert.strictEqual(next.skill, 'maestro-verify');
+    assert.strictEqual(next.skill, 'quality-review');
   });
 });
 

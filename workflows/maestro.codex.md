@@ -40,7 +40,7 @@ Instead of regex, extract a structured intent tuple using LLM semantic understan
 
 ```json
 {
-  "action":    "<create|fix|analyze|plan|execute|verify|review|test|debug|refactor|explore|manage|transition|continue|sync|learn|retrospect>",
+  "action":    "<create|fix|analyze|plan|execute|review|test|debug|refactor|explore|manage|transition|continue|sync|learn|retrospect>",
   "object":    "<feature|bug|issue|code|test|spec|phase|milestone|doc|performance|security|ui|memory|codebase|config>",
   "scope":     "<module/file/area or null>",
   "issue_id":  "<ISS-XXXXXXXX-NNN if mentioned, else null>",
@@ -65,7 +65,7 @@ Route via `action × object` matrix. If `issue_id` present → issue pipeline di
 | execute | issue→issue_execute | execute |
 | manage | issue→issue, milestone→milestone_audit, phase→phase_transition, memory/doc/codebase→memory/sync/codebase_refresh | status |
 | transition | phase→phase_transition, milestone→milestone_complete | phase_transition |
-| verify, review, test, debug, refactor, continue, sync, learn, retrospect, release, amend, compose | — | self-named |
+| review, test, debug, refactor, continue, sync, learn, retrospect, release, amend, compose | — | self-named |
 
 **Clarity scoring**: 3 = action+object+scope, 2 = action+object, 1 = action only, 0 = empty.
 If `clarity < 2` and not `AUTO_YES`: request user input (max 2 rounds).
@@ -81,16 +81,15 @@ Returns `{ chain, argsOverride? }`. Steps resolved from `chainMap[chain]`.
 | No phases | `brainstorm-driven` |
 | pending + has context | `plan` |
 | pending, no context | `analyze` |
-| exploring/planning + has plan | `execute-verify` |
+| exploring/planning + has plan | `execute` |
 | exploring/planning, no plan | `plan` |
-| executing, all tasks done | `verify` |
+| executing, all tasks done | `review` |
 | executing, tasks remain | `execute` |
-| verifying, passed + no review | `review` |
-| verifying, passed + BLOCK | `review-fix` |
-| verifying, passed + UAT pending | `test` |
-| verifying, passed + UAT passed | `milestone-close` |
-| verifying, passed + UAT failed | `debug` |
-| verifying, not passed | `quality-loop-partial` |
+| exec completed + no review | `review` |
+| exec completed + review BLOCK | `review-fix` |
+| exec completed + UAT pending | `test` |
+| exec completed + UAT passed | `milestone-close` |
+| exec completed + UAT failed | `debug` |
 | testing, UAT passed | `milestone-close` |
 | testing, UAT not passed | `debug` |
 | completed | `milestone-close` |
@@ -108,7 +107,6 @@ const chainMap = {
   'ui_design':          [{ cmd: 'maestro-impeccable',         args: '"{phase}" --chain build' }],
   'plan':               [{ cmd: 'maestro-plan',            args: '{phase}' }],
   'execute':            [{ cmd: 'maestro-execute',         args: '{phase}' }],
-  'verify':             [{ cmd: 'maestro-verify',          args: '{phase}' }],
   'test_gen':           [{ cmd: 'quality-auto-test',        args: '{phase}' }],
   'auto_test':          [{ cmd: 'quality-auto-test',        args: '{phase}' }],
   'test':               [{ cmd: 'quality-test',            args: '{phase}' }],
@@ -141,36 +139,27 @@ const chainMap = {
     { cmd: 'maestro-init' },
     { cmd: 'maestro-roadmap', args: '--mode full "{description}"' },
     { cmd: 'maestro-plan',          args: '{phase}' },
-    { cmd: 'maestro-execute',       args: '{phase}' },
-    { cmd: 'maestro-verify',        args: '{phase}' }
+    { cmd: 'maestro-execute',       args: '{phase}' }
   ],
   'brainstorm-driven': [
     { cmd: 'maestro-brainstorm', args: '"{description}"' },
     { cmd: 'maestro-plan',       args: '{phase}' },
-    { cmd: 'maestro-execute',    args: '{phase}' },
-    { cmd: 'maestro-verify',     args: '{phase}' }
+    { cmd: 'maestro-execute',    args: '{phase}' }
   ],
   'impeccable-build': [
     { cmd: 'maestro-impeccable', args: '"{phase}" --chain build' },
     { cmd: 'maestro-plan',      args: '{phase}' },
-    { cmd: 'maestro-execute',   args: '{phase}' },
-    { cmd: 'maestro-verify',    args: '{phase}' }
+    { cmd: 'maestro-execute',   args: '{phase}' }
   ],
   'full-lifecycle': [
     { cmd: 'maestro-plan',          args: '{phase}' },
     { cmd: 'maestro-execute',       args: '{phase}' },
-    { cmd: 'maestro-verify',        args: '{phase}' },
     { cmd: 'quality-review',        args: '{phase}' },
     { cmd: 'quality-test',          args: '{phase}' },
     { cmd: 'maestro-milestone-audit' },
     { cmd: 'maestro-milestone-complete' }
   ],
-  'execute-verify': [
-    { cmd: 'maestro-execute', args: '{phase}' },
-    { cmd: 'maestro-verify',  args: '{phase}' }
-  ],
   'quality-loop': [
-    { cmd: 'maestro-verify',   args: '{phase}' },
     { cmd: 'quality-review',   args: '{phase}' },
     { cmd: 'quality-test',     args: '{phase}' },
     { cmd: 'quality-debug',    args: '--from-uat {phase}' },
@@ -185,14 +174,12 @@ const chainMap = {
     { cmd: 'maestro-init' },
     { cmd: 'maestro-roadmap',  args: '"{description}"' },
     { cmd: 'maestro-plan',     args: '{phase}' },
-    { cmd: 'maestro-execute',  args: '{phase}' },
-    { cmd: 'maestro-verify',   args: '{phase}' }
+    { cmd: 'maestro-execute',  args: '{phase}' }
   ],
   'next-milestone': [
     { cmd: 'maestro-roadmap',  args: '"{description}"' },
     { cmd: 'maestro-plan',     args: '{phase}' },
-    { cmd: 'maestro-execute',  args: '{phase}' },
-    { cmd: 'maestro-verify',   args: '{phase}' }
+    { cmd: 'maestro-execute',  args: '{phase}' }
   ],
   'analyze-plan-execute': [
     { cmd: 'maestro-analyze', args: '"{description}" -q' },
@@ -203,17 +190,15 @@ const chainMap = {
   // ── SKILL.md simplified aliases (--chain <name> shortcuts) ───────────────
   'feature': [
     { cmd: 'maestro-plan',    args: '{phase}' },
-    { cmd: 'maestro-execute', args: '{phase}' },
-    { cmd: 'maestro-verify',  args: '{phase}' }
+    { cmd: 'maestro-execute', args: '{phase}' }
   ],
   'quality-fix': [
     { cmd: 'maestro-analyze',      args: '--gaps "{description}"' },
     { cmd: 'maestro-plan',         args: '--gaps' },
-    { cmd: 'maestro-execute',      args: '' },
-    { cmd: 'maestro-verify',       args: '{phase}' }
+    { cmd: 'maestro-execute',      args: '' }
   ],
   'deploy': [
-    { cmd: 'maestro-verify',           args: '{phase}' },
+    { cmd: 'maestro-execute',         args: '{phase}' },
     { cmd: 'maestro-milestone-release' }
   ],
 
@@ -238,8 +223,7 @@ const chainMap = {
   ],
   'quality-loop-partial': [
     { cmd: 'maestro-plan',    args: '{phase} --gaps' },
-    { cmd: 'maestro-execute', args: '{phase}' },
-    { cmd: 'maestro-verify',  args: '{phase}' }
+    { cmd: 'maestro-execute', args: '{phase}' }
   ],
   'milestone-release': [
     { cmd: 'maestro-milestone-audit' },

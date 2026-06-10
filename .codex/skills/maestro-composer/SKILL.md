@@ -122,7 +122,6 @@ If spec not found, use built-in fallback:
 | `review` | skill | `quality-review` |
 | `brainstorm` | skill | `maestro-brainstorm` |
 | `analysis` | cli | `maestro delegate --role analyze --mode analysis` |
-| `verify` | skill | `maestro-verify` |
 | `refactor` | skill | `quality-refactor` |
 | `debug` | skill | `quality-debug` |
 | `spec` | skill | `maestro-blueprint` |

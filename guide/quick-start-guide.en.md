@@ -58,8 +58,7 @@ The core project progression — each Phase goes through `Analyze → Plan → E
 # Full mode — covers all phases in current milestone
 /maestro-analyze                       # Analyze
 /maestro-plan                          # Plan
-/maestro-execute                       # Execute
-/maestro-verify                        # Verify
+/maestro-execute                       # Execute (with built-in verification gate E2.7)
 
 # Per-phase mode (micro layer: Phase-level deep analysis)
 /maestro-analyze 1                     # Analyze Phase 1 only (6-dimension scoring)
@@ -317,7 +316,7 @@ Displays Phase progress, Issue status (Backlog → In Progress → Review → Do
 ### New Project
 
 ```bash
-/maestro-init → /maestro-roadmap → /maestro-plan 1 → /maestro-execute 1 → /maestro-verify 1 → /maestro-milestone-audit
+/maestro-init → /maestro-roadmap → /maestro-plan 1 → /maestro-execute 1 → /maestro-milestone-audit
 ```
 
 ### One-Click Full Auto

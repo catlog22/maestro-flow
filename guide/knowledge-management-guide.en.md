@@ -192,7 +192,7 @@ maestro-init    → spec-setup (skeleton + scan)
 maestro-analyze → lock decisions → arch, code patterns → coding
 maestro-plan    → design conventions → coding/arch, test strategy → test
 maestro-execute → lessons learned → learning, root causes → debug
-maestro-verify  → quality discoveries → review
+maestro-execute → built-in verification (E2.7) → quality discoveries → review
 ```
 
 <details>

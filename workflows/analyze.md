@@ -9,7 +9,7 @@ maestro-brainstorm (optional upstream)
         ↓ ideas, scored options
 maestro-analyze ← THIS
         ↓ analysis.md, discussion.md, conclusions.json, context.md, context-package.json
-maestro-plan → maestro-execute → maestro-verify
+maestro-plan → maestro-execute (includes verification)
 ```
 
 ## Architecture

@@ -152,7 +152,7 @@ Display:
     /maestro-analyze {firstPending.phase}
     /maestro-plan {firstPending.phase}
     /maestro-execute {firstPending.phase}
-    /maestro-verify {firstPending.phase}
+    /quality-review {firstPending.phase}
     # ... repeat for next phases in milestone
 
   Or delegate (automated):

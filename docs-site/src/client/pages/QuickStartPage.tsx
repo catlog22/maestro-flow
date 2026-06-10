@@ -143,21 +143,6 @@ const COMMANDS: CommandData[] = [
       tips: ['Review plan content before execution', 'Use --dir to target a specific plan directory'],
     },
   },
-  {
-    id: 'verify', cmd: '/maestro-verify', category: 'pipeline', status: 'core', level: 1,
-    zh: {
-      desc: '验证执行结果，检查代码质量和规范符合度',
-      when: '执行完成后，需要确认实现质量和完整性',
-      how: '/maestro-verify 1',
-      tips: ['会生成 verification.json，列出通过/未通过的检查项', '验证失败时配合 quality-debug 诊断'],
-    },
-    en: {
-      desc: 'Verify execution results, check code quality and spec compliance',
-      when: 'After execution, confirm implementation quality and completeness',
-      how: '/maestro-verify 1',
-      tips: ['Generates verification.json with pass/fail items', 'On failure, use quality-debug to diagnose'],
-    },
-  },
   // Quality
   {
     id: 'auto-test', cmd: '/quality-auto-test', category: 'quality', status: 'recommended', level: 2,
@@ -424,12 +409,12 @@ const SCENARIOS: ScenarioData[] = [
     zh: {
       title: '新项目起步（Path A）',
       desc: '大型项目完整工作流：宏观分析 → roadmap 分解 → 逐 Phase 推进',
-      steps: ['/maestro-init', '/maestro-analyze "项目目标"', '# scope_verdict=large → roadmap', '/maestro-roadmap -y', '/maestro-analyze 1', '/maestro-plan 1', '/maestro-execute 1', '/maestro-verify 1'],
+      steps: ['/maestro-init', '/maestro-analyze "项目目标"', '# scope_verdict=large → roadmap', '/maestro-roadmap -y', '/maestro-analyze 1', '/maestro-plan 1', '/maestro-execute 1'],
     },
     en: {
       title: 'New Project (Path A)',
       desc: 'Large project full workflow: macro analyze → roadmap decomposition → per-phase execution',
-      steps: ['/maestro-init', '/maestro-analyze "project goals"', '# scope_verdict=large → roadmap', '/maestro-roadmap -y', '/maestro-analyze 1', '/maestro-plan 1', '/maestro-execute 1', '/maestro-verify 1'],
+      steps: ['/maestro-init', '/maestro-analyze "project goals"', '# scope_verdict=large → roadmap', '/maestro-roadmap -y', '/maestro-analyze 1', '/maestro-plan 1', '/maestro-execute 1'],
     },
   },
   {
@@ -437,12 +422,12 @@ const SCENARIOS: ScenarioData[] = [
     zh: {
       title: '中等功能（Path B）',
       desc: '跳过 roadmap，analyze 直达 plan — 适合 1-2 个子系统的功能',
-      steps: ['/maestro-analyze "功能描述"', '# scope_verdict=medium → 直达 plan', '/maestro-plan --from analyze:ANL-xxx', '/maestro-execute', '/maestro-verify'],
+      steps: ['/maestro-analyze "功能描述"', '# scope_verdict=medium → 直达 plan', '/maestro-plan --from analyze:ANL-xxx', '/maestro-execute'],
     },
     en: {
       title: 'Medium Feature (Path B)',
       desc: 'Skip roadmap, analyze direct to plan — for features spanning 1-2 subsystems',
-      steps: ['/maestro-analyze "feature description"', '# scope_verdict=medium → direct to plan', '/maestro-plan --from analyze:ANL-xxx', '/maestro-execute', '/maestro-verify'],
+      steps: ['/maestro-analyze "feature description"', '# scope_verdict=medium → direct to plan', '/maestro-plan --from analyze:ANL-xxx', '/maestro-execute'],
     },
   },
   {
@@ -821,8 +806,7 @@ export default function QuickStartPage() {
         <div className="flex items-center justify-center gap-0 flex-wrap">
           <PipelineStep label={isZh ? '分析' : 'Analyze'} cmd="/maestro-analyze" color="blue" isZh={isZh} />
           <PipelineStep label={isZh ? '规划' : 'Plan'} cmd="/maestro-plan" color="purple" isZh={isZh} />
-          <PipelineStep label={isZh ? '执行' : 'Execute'} cmd="/maestro-execute" color="orange" isZh={isZh} />
-          <PipelineStep label={isZh ? '验证' : 'Verify'} cmd="/maestro-verify" color="green" isLast isZh={isZh} />
+          <PipelineStep label={isZh ? '执行' : 'Execute'} cmd="/maestro-execute" color="orange" isLast isZh={isZh} />
         </div>
       </div>
 

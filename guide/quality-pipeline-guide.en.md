@@ -62,7 +62,7 @@ Artifact path: `scratch/{YYYYMMDD}-test-P{N}-{slug}/` (uat.md, test-plan.json, t
 | Condition | Next Step |
 |-----------|-----------|
 | All passed | `/maestro-milestone-audit` |
-| `--auto-fix` succeeded | `/maestro-verify {phase}` |
+| `--auto-fix` succeeded | `/quality-review {phase}` |
 | Issues remain | `/quality-debug --from-uat {phase}` |
 | Insufficient coverage | `/quality-auto-test {phase}` |
 
@@ -97,7 +97,7 @@ Artifact path: `scratch/{YYYYMMDD}-auto-test-P{N}-{slug}/` (test-plan.json, scen
 
 | Condition | Next Step |
 |-----------|-----------|
-| Converged (≥95%) | `/maestro-verify {phase}` |
+| Converged (≥95%) | `/quality-test {phase}` |
 | Bugs found | `/quality-debug --from-uat {phase}` |
 | Max iterations, >80% | `/quality-test {phase}` |
 | Max iterations, <80% | `/quality-debug {phase}` |
@@ -218,7 +218,7 @@ Code just executed
   │    └─ Issues found ──> /quality-debug --from-uat <phase>
   │
   ├─ Need automated testing? ──> /quality-auto-test <phase>
-  │    ├─ Converged ──> /maestro-verify <phase>
+  │    ├─ Converged ──> /quality-test <phase>
   │    └─ Bugs found ──> /quality-debug --from-uat <phase>
   │
   ├─ Known bugs? ──> /quality-debug "<issue>"
@@ -242,10 +242,10 @@ Code just executed
 
 ## Integration with Phase Pipeline
 
-After `maestro-verify` confirms Phase goals, quality commands are the standard entry point:
+After `maestro-execute` (with built-in verification gate E2.7) confirms Phase goals, quality commands are the standard entry point:
 
 ```bash
-/maestro-execute 1 → /maestro-verify 1 → /quality-review 1 → /quality-auto-test 1 → /quality-test 1 → /quality-retrospective 1
+/maestro-execute 1 → /quality-review 1 → /quality-auto-test 1 → /quality-test 1 → /quality-retrospective 1
 ```
 
 `--gaps` is the core bridge between quality and Phase pipelines:

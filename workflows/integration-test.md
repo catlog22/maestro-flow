@@ -179,7 +179,7 @@ List output files: state.json, reflection-log.md, summary.json.
 
 | Result | Suggestion |
 |--------|------------|
-| Converged (>=95%) | Skill({ skill: "maestro-verify", args: "{phase}" }) to update validation |
+| Converged (>=95%) | Skill({ skill: "quality-review", args: "{phase}" }) to update validation |
 | Max iter, >80% | Skill({ skill: "quality-test", args: "{phase}" }) for manual UAT on remaining gaps |
 | Max iter, <80% | Skill({ skill: "quality-debug" }) for deep investigation |
 | Bugs discovered | Skill({ skill: "maestro-plan", args: "{phase} --gaps" }) to plan fixes |

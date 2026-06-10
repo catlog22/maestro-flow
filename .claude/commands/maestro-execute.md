@@ -17,7 +17,7 @@ Execute all tasks in a plan using wave-based parallel execution with dependency-
 
 Invoked after /maestro-plan produces a confirmed plan. When called without args on a milestone, finds all pending plans and executes them sequentially.
 
-Pipeline position: upstream from maestro-plan (consumes confirmed plan), downstream to maestro-verify.
+Pipeline position: upstream from maestro-plan (consumes confirmed plan). Verification is built-in (E2.7).
 </purpose>
 
 <required_reading>
@@ -158,8 +158,7 @@ Status verdicts:
 
 | Condition | Suggestion |
 |-----------|-----------|
-| All tasks completed successfully | `/maestro-verify` |
-| Specific plan needs verification | `/maestro-verify --dir {dir}` |
+| All tasks completed successfully | `/quality-review` |
 | Failed tasks exist | `/quality-debug` |
 | View project dashboard | `/manage-status` |
 </completion>

@@ -415,7 +415,7 @@ CONSTRAINTS:
 | Result | Suggestion |
 |--------|------------|
 | All fixes verified | Run tests: `Skill({ skill: "quality-test", args: "{phase}" })` |
-| Fixes applied, not verified | Re-verify: `Skill({ skill: "maestro-verify", args: "{phase}" })` |
+| Fixes applied, not verified | Re-execute: `Skill({ skill: "maestro-execute", args: "{phase}" })` |
 | Confirmed but no fix | Plan fixes: `Skill({ skill: "maestro-plan", args: "{phase} --gaps" })` |
 | All inconclusive | Resume with more context or manual investigation |
 | From UAT, all diagnosed | `Skill({ skill: "quality-test", args: "{phase} --auto-fix" })` |

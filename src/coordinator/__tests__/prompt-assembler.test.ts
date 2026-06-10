@@ -133,9 +133,9 @@ describe('Phase 2: buildCommand', () => {
   });
 
   it('trims whitespace for empty args', () => {
-    const node = makeNode({ cmd: 'maestro-verify' });
+    const node = makeNode({ cmd: 'quality-review' });
     const result = assembler.buildCommand(node, '', false);
-    assert.strictEqual(result, '/maestro-verify');
+    assert.strictEqual(result, '/quality-review');
   });
 });
 

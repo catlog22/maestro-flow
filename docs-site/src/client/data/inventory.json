@@ -84,14 +84,6 @@
       "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
     },
     {
-      "name": "maestro-verify",
-      "file": ".claude/commands/maestro-verify.md",
-      "category": "maestro",
-      "description": "Goal-Backward verification with 3-layer must-have checks, anti-pattern scan, Nyquist test coverage validation, and gap-fix plan generation",
-      "argumentHint": "[phase] [--skip-tests] [--skip-antipattern] [--dir <path>]",
-      "allowedTools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent", "AskUserQuestion"]
-    },
-    {
       "name": "maestro-quick",
       "file": ".claude/commands/maestro-quick.md",
       "category": "maestro",

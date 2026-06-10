@@ -13,7 +13,7 @@ const STATUS_NEXT_COMMAND: Record<string, string> = {
   planning: '/maestro-execute {N}',
   executing: '/maestro-execute {N}',
   verifying: '/quality-review {N}',
-  reviewing: '/maestro-verify {N}',
+  reviewing: '/quality-review {N}',
   completed: '/maestro-milestone-audit',
   blocked: '/quality-debug',
 };

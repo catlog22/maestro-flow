@@ -53,7 +53,7 @@ cd /project
 
 # Terminal B: Advance M2 in worktree
 cd .worktrees/m2-production/
-/maestro-analyze 3 && /maestro-plan 3 && /maestro-execute 3 && /maestro-verify 3
+/maestro-analyze 3 && /maestro-plan 3 && /maestro-execute 3
 
 # M2 complete, merge back
 /maestro-merge -m 2

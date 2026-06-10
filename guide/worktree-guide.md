@@ -55,7 +55,7 @@ cd /project
 
 # 终端 B：worktree 中推进 M2
 cd .worktrees/m2-production/
-/maestro-analyze && /maestro-plan && /maestro-execute && /maestro-verify
+/maestro-analyze && /maestro-plan && /maestro-execute
 
 # M2 完成，回 main 合并
 /maestro-merge -m 2

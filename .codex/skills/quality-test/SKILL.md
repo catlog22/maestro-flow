@@ -247,15 +247,14 @@ CONSTRAINTS:
 
 Max 2 iterations:
 1. `maestro-plan "{phase} --gaps"` (registered -> planning)
-2. `maestro-execute "{phase}"` (planning -> executing)
-3. `maestro-verify "{phase}"` (resolved -> completed, unresolved -> failed)
+2. `maestro-execute "{phase}"` (planning -> executing, resolved -> completed, unresolved -> failed)
 
 ### A_REPORT
 
 1. UAT confidence scoring (4 dims: scenario_coverage, diagnostic_depth, observation_quality, closure_completeness). Readiness gate: block if scenario_coverage < 40% or blocker without diagnosis.
 2. Display summary: smoke results, pass/fail/skip counts, diagnosis stats, auto-fix results
 3. Register artifact in state.json (type: test)
-4. Route: all passed -> milestone-audit; auto-fix succeeded -> maestro-verify; gaps remain -> quality-debug; low coverage -> quality-auto-test
+4. Route: all passed -> milestone-audit; auto-fix succeeded -> maestro-execute; gaps remain -> quality-debug; low coverage -> quality-auto-test
 
 </actions>
 
@@ -265,7 +264,7 @@ Max 2 iterations:
 | Condition | Recovery |
 |-----------|----------|
 | Phase/task target required, no active sessions | Prompt for phase number |
-| No verification.json (phase not verified) | Suggest maestro-verify |
+| No verification.json (phase not verified) | Suggest maestro-execute |
 | Smoke test failed (app won't start) | Suggest quality-debug |
 | Coverage below threshold | Suggest quality-auto-test |
 </error_codes>

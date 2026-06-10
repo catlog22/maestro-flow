@@ -559,7 +559,7 @@ Next steps:
 |--------|------------|
 | All requirements verified | Skill({ skill: "maestro-phase-transition", args: "{phase}" }) |
 | Failures found | Skill({ skill: "quality-debug", args: "--from-business-test {phase}" }) |
-| `--re-run` all pass after fix | Skill({ skill: "maestro-verify", args: "{phase}" }) |
+| `--re-run` all pass after fix | Skill({ skill: "maestro-execute", args: "{phase}" }) |
 | Low coverage (< 60%) | Skill({ skill: "quality-auto-test", args: "{phase}" }) |
 | Need integration tests | Skill({ skill: "quality-auto-test", args: "{phase}" }) |
 

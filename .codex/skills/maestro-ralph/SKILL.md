@@ -162,7 +162,7 @@ S_DISPATCH:
   → END             DO: $maestro-ralph-execute
 
 S_DECISION_EVAL: (decision 节点 == `step.decision` 非空，下述 gate 名取自该字段)
-  → S_APPLY_VERDICT WHEN: quality-gate (post-verify, post-business-test, post-review, post-test)
+  → S_APPLY_VERDICT WHEN: quality-gate (post-execute, post-business-test, post-review, post-test)
                      DO: A_DELEGATE_EVALUATE
   → S_APPLY_VERDICT WHEN: goal-gate (post-goal-audit)
                      DO: A_GOAL_AUDIT_EVALUATE
@@ -269,8 +269,7 @@ resolve_milestone(phase_number):
 | phase 已存在 + 无任何 artifact | `analyze` |
 | phase 已存在 + 最新 artifact = analyze | `plan` |
 | phase 已存在 + 最新 artifact = plan | `execute` |
-| phase 已存在 + 最新 artifact = execute | `verify` |
-| phase 已存在 + 最新 artifact = verify | → refine from result files |
+| phase 已存在 + 最新 artifact = execute | `review` |
 
 **关键不变量**：artifact 过滤按 `session.phase`，不读 `state.json.current_phase`。`phase_is_new` → 直接 `analyze`。
 
@@ -289,12 +288,10 @@ resolve_milestone(phase_number):
 | `medium` / `small` | analyze-macro → plan --from analyze:{ANL_ID} → execute → ...（跳过 roadmap + analyze-phase） |
 | `unknown` | 默认走 large 路径，post-analyze-scope 决策节点再纠正 |
 
-**Refine from verify results:**
+**Refine from review results:**
 
 | Condition | Position |
 |-----------|----------|
-| verification.json: passed==false or gaps[] | `verify-failed` |
-| passed==true, no review.json | `business-test` |
 | review.json: verdict=="BLOCK" | `review-failed` |
 | review.json: verdict!="BLOCK" | `test` |
 | uat.md: all passed | `milestone-audit` |
@@ -304,7 +301,7 @@ resolve_milestone(phase_number):
 
 决定下游质量管线长度。读 `session.quality_mode_override`（CLI 标志 `--quality`），无则按规则推断：
 
-| Condition | Mode | Pipeline (verify 之后) |
+| Condition | Mode | Pipeline (execute 之后) |
 |-----------|------|-------------------------|
 | Has `specs/REQ-*.md` + 当前 phase 业务范围明确 | `full` | business-test → review → test-gen → test |
 | Default | `standard` | review → test-gen (当 coverage<80%) → test |
@@ -391,8 +388,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 | roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | *(same)* | — | all |
 | analyze | `maestro-analyze {phase}` | `maestro-analyze` | — | all |
 | plan | `maestro-plan {phase}` *(scope=phase)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | `maestro-plan` | — | all |
-| execute | `maestro-execute {phase}` | `maestro-execute` | — | all |
-| verify | `maestro-verify {phase}` | `maestro-verify` | `post-verify` | all |
+| execute | `maestro-execute {phase}` | `maestro-execute` | `post-execute` | all |
 | business-test | `quality-auto-test {phase}` | `quality-auto-test` | `post-business-test` | full only |
 | review | `quality-review {phase}` | `quality-review` | `post-review` | all (quick: append `--tier quick`) |
 | test-gen | `quality-auto-test {phase}` | `quality-auto-test` | — | full / standard if coverage<80% |
@@ -448,7 +444,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 3. Map result files:
    | Decision | Files |
    |----------|-------|
-   | post-verify | verification.json |
+   | post-execute | verification.json |
    | post-business-test | .tests/auto-test/report.json |
    | post-review | review.json |
    | post-test | uat.md, .tests/test-results.json |
@@ -620,9 +616,9 @@ Runs only when `task_decomposition` present.
     "index": 0,
     "skill": "",                  // 执行 step 有值；decision 节点为空字符串/null
     "args": "",
-    "stage": "",                  // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|verify|...
+    "stage": "",                  // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|...
     "scope": null,                // "phase"|"standalone"|"milestone"|null（plan 等需要）
-    "decision": null,             // 非 null → decision 节点（值为 gate 名，如 "post-verify"）；null → 执行 step
+    "decision": null,             // 非 null → decision 节点（值为 gate 名，如 "post-execute"）；null → 执行 step
     "retry_count": 0,             // decision 节点专用
     "max_retries": 2,             // decision 节点专用
     "command_scope": "global|project|missing|null",  // 执行 step；decision 节点固定 null
@@ -660,13 +656,12 @@ Runs only when `task_decomposition` present.
 
 所有插入的执行 step 按 A_BUILD_STEPS 规则 9 解析 `command_path` + `command_scope`；`decision:*` 条目为 decision 节点（`step.decision` 字段）。
 
-**post-verify:**
+**post-execute:**
 ```
 quality-debug "{gap_summary}"
 maestro-plan --gaps {phase}
 maestro-execute {phase}
-maestro-verify {phase}
-decision:post-verify {retry+1}
+decision:post-execute {retry+1}
 ```
 
 **post-business-test:**
@@ -674,8 +669,7 @@ decision:post-verify {retry+1}
 quality-debug --from-business-test "{gap_summary}"
 maestro-plan --gaps {phase}
 maestro-execute {phase}
-maestro-verify {phase}
-decision:post-verify {retry: 0}
+decision:post-execute {retry: 0}
 quality-auto-test {phase}
 decision:post-business-test {retry+1}
 ```
@@ -694,8 +688,7 @@ decision:post-review {retry+1}
 quality-debug --from-uat "{gap_summary}"
 maestro-plan --gaps {phase}
 maestro-execute {phase}
-maestro-verify {phase}
-decision:post-verify {retry: 0}
+decision:post-execute {retry: 0}
 quality-auto-test {phase}
 decision:post-business-test {retry: 0}
 quality-review {phase}
@@ -710,7 +703,6 @@ decision:post-test {retry+1}
 # for each unmet sub-goal G{n}, scoped to target_phase:
 maestro-plan --gaps {target_phase} "G{n}: {gap}"     [goal_ref: G{n}]
 maestro-execute {target_phase}                       [goal_ref: G{n}]
-maestro-verify {target_phase}                        [goal_ref: G{n}]
 # after all unmet groups inserted:
 decision:post-goal-audit {retry+1}
 ```

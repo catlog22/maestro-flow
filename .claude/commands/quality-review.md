@@ -13,7 +13,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Run multi-dimensional code review on a completed phase's changed files. Answers the question "is this code good?" -- complementing maestro-verify ("is the goal met?") and quality-test ("does it work for users?"). Three review levels (quick/standard/deep) scale with task depth, auto-detected from file count. Level definitions, dimension lists, deep-dive rules, and issue creation thresholds defined in workflow review.md.
+Run multi-dimensional code review on a completed phase's changed files. Answers the question "is this code good?" -- complementing maestro-execute's built-in verification ("is the goal met?") and quality-test ("does it work for users?"). Three review levels (quick/standard/deep) scale with task depth, auto-detected from file count. Level definitions, dimension lists, deep-dive rules, and issue creation thresholds defined in workflow review.md.
 </purpose>
 
 <required_reading>
@@ -99,7 +99,7 @@ NEXT: /quality-refactor
 
 Status mapping:
 - **DONE** — PASS verdict, no critical findings → NEXT: /quality-refactor
-- **DONE_WITH_CONCERNS** — WARN verdict, issues found but non-blocking → NEXT: /maestro-verify
+- **DONE_WITH_CONCERNS** — WARN verdict, issues found but non-blocking → NEXT: /quality-test
 - **NEEDS_RETRY** — BLOCK verdict, critical findings require fix first
 </execution>
 

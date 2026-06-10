@@ -195,7 +195,6 @@ $ARGUMENTS → Parse:
 | `/maestro-analyze` | 双层分析 — 宏观(文本参数)探索影响面 / 微观(数字参数)Phase 级深入 |
 | `/maestro-plan` | 任务规划 — 支持 `--from analyze:ANL-xxx` 直达 |
 | `/maestro-execute` | 任务执行 |
-| `/maestro-verify` | 验证确认 |
 
 ### 质量管线 (quality)
 
@@ -245,17 +244,17 @@ Roadmap > Milestone > Phase > Task
   roadmap — 消费上游 context，纯 Milestone > Phase 分解
 
 执行层
-  plan → execute → verify
+  plan → execute
 ```
 
 ### 合法路径
 
 | 路径 | 场景 | 命令序列 |
 |------|------|---------|
-| Path A | 完整新项目 | `brainstorm` → `blueprint`(可选) → `analyze "topic"` → `roadmap` → `analyze 1` → `plan 1` → `execute` → `verify` |
-| Path B | 旧项目大功能 | `analyze "feature X"` → `roadmap` → `analyze 1` → `plan 1` → `execute` → `verify` |
-| Path C | 中等功能 | `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` → `verify` |
-| Path D | 小改动 | `plan "fix auth bug"` → `execute` → `verify` |
+| Path A | 完整新项目 | `brainstorm` → `blueprint`(可选) → `analyze "topic"` → `roadmap` → `analyze 1` → `plan 1` → `execute` |
+| Path B | 旧项目大功能 | `analyze "feature X"` → `roadmap` → `analyze 1` → `plan 1` → `execute` |
+| Path C | 中等功能 | `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` |
+| Path D | 小改动 | `plan "fix auth bug"` → `execute` |
 | Path E | 纯规格文档 | `blueprint "project idea"` → (供人阅读) |
 | Path F | 纯探索 | `brainstorm "idea"` → (供人决策) |
 | 快速修复 | 已知简单问题 | `/maestro-quick "修复描述"` |

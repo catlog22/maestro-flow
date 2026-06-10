@@ -95,7 +95,7 @@ Mode 3 (Smart Recommendations) 需要检测项目状态：
 4. 如有对应 guide 文档，读取相关段落
 
 Guide 映射：
-- analyze/plan/execute/verify → `guide/command-usage-guide.md`
+- analyze/plan/execute → `guide/command-usage-guide.md`
 - init/roadmap/blueprint → `guide/quick-start-guide.md`
 - ralph → `guide/maestro-ralph-guide.md`
 - maestro (协调器) → `guide/maestro-coordinator-guide.md`
@@ -115,9 +115,7 @@ Guide 映射：
 | roadmap 完成，phase=pending | `/maestro-analyze 1` | 微观分析：Phase 级深入探索 |
 | analyze (微观) 完成 | `/maestro-plan 1` | Phase 级规划 |
 | plan 完成 | `/maestro-execute` | 开始执行 |
-| execute 完成 | `/maestro-verify` | 验证成果 |
-| verify 有 gaps | `/maestro-analyze --gaps` | 重新分析 |
-| verify 通过 | `/quality-review` | 进入质量管线 |
+| execute 完成 | `/quality-review` | 进入质量管线 |
 | quality 全通过 | `/maestro-milestone-audit` | 里程碑审计 |
 | 所有 Phase 完成 | `/maestro-milestone-complete` | 关闭里程碑 |
 
@@ -126,16 +124,16 @@ Guide 映射：
 根据任务类型推荐工作流和命令序列：
 
 **Path A — 完整新项目**:
-- `brainstorm` → `blueprint`(可选) → `analyze "topic"`(宏观) → `roadmap` → `analyze 1`(微观) → `plan 1` → `execute` → `verify`
+- `brainstorm` → `blueprint`(可选) → `analyze "topic"`(宏观) → `roadmap` → `analyze 1`(微观) → `plan 1` → `execute` → `quality-review`
 
 **Path B — 旧项目大功能**:
-- `analyze "feature X"`(宏观) → `roadmap` → `analyze 1`(微观) → `plan 1` → `execute` → `verify`
+- `analyze "feature X"`(宏观) → `roadmap` → `analyze 1`(微观) → `plan 1` → `execute` → `quality-review`
 
 **Path C — 中等功能（跳过 roadmap）**:
-- `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` → `verify`
+- `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` → `quality-review`
 
 **Path D — 小改动**:
-- `plan "fix auth bug"` → `execute` → `verify`
+- `plan "fix auth bug"` → `execute` → `quality-review`
 - 快速: `/maestro-quick "功能描述"`
 - 全自动: `/maestro -y "功能描述"`
 
@@ -165,7 +163,6 @@ Guide 映射：
 | `/maestro-roadmap` | 路线图编排 | scope_verdict=large 时，Milestone > Phase 分解 |
 | `/maestro-plan` | 规划 | 分析完成后，支持 `--from analyze:ANL-xxx` 直达 |
 | `/maestro-execute` | 执行 | 计划完成后 |
-| `/maestro-verify` | 验证 | 执行完成后 |
 | `/maestro-quick` | 快速任务 | 简单任务跳过管线 |
 
 快速上手路径：

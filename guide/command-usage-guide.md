@@ -48,7 +48,7 @@ graph TB
         AN["/maestro-analyze"]
         PL["/maestro-plan"]
         EX["/maestro-execute"]
-        VF["/maestro-verify"]
+        VF["/maestro-execute (verify)"]
     end
 
     subgraph quality["质量管线"]
@@ -200,7 +200,7 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 | 分析 | `/maestro-analyze` | context.md, analysis.md | ANL-{NNN} |
 | 规划 | `/maestro-plan` | plan.json + TASK-*.json | PLN-{NNN} |
 | 执行 | `/maestro-execute` | .summaries/, 代码变更 | EXC-{NNN} |
-| 验证 | `/maestro-verify` | verification.json | VRF-{NNN} |
+| 验证 | `/maestro-execute` (E2.7) | verification.json | VRF-{NNN} |
 | 审计 | `/maestro-milestone-audit` | audit-report.md | — |
 | 完成 | `/maestro-milestone-complete` | 归档到 milestones/ | — |
 
@@ -280,7 +280,7 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 ## 四、质量管线
 
 ```bash
-/maestro-execute → /maestro-verify → /quality-auto-test → /quality-review → /quality-test → /maestro-milestone-audit
+/maestro-execute → /quality-auto-test → /quality-review → /quality-test → /maestro-milestone-audit
 ```
 
 | 命令 | 用途 | 关键参数 |

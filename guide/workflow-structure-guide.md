@@ -354,7 +354,7 @@ Learn 特殊前缀：`KNW-follow-`, `KNW-decompose-`, `KNW-retro-`, `KNW-opinion
 | analyze | ANL-{NNN} | phase, adhoc, standalone | maestro-analyze |
 | plan | PLN-{NNN} | phase, adhoc | maestro-plan |
 | execute | EXC-{NNN} | phase | maestro-execute |
-| verify | VRF-{NNN} | phase, milestone | maestro-verify |
+| verify | VRF-{NNN} | phase, milestone | maestro-execute (E2.7) |
 | review | REV-{NNN} | phase | quality-review |
 | debug | DBG-{NNN} | phase, standalone | quality-debug |
 | test | TST-{NNN} | phase | quality-test |

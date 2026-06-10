@@ -69,7 +69,7 @@
 
 | 命令 | Guide 文档 |
 |------|-----------|
-| maestro-analyze/plan/execute/verify | `guide/command-usage-guide.md` (主干管线) |
+| maestro-analyze/plan/execute | `guide/command-usage-guide.md` (主干管线) |
 | maestro-init/roadmap/blueprint | `guide/quick-start-guide.md` |
 | maestro-ralph | `guide/maestro-ralph-guide.md` |
 | maestro (协调器) | `guide/maestro-coordinator-guide.md` |
@@ -97,9 +97,7 @@
 | roadmap 完成，phase=pending | `/maestro-analyze 1` | 微观分析：Phase 级深入探索 |
 | analyze (微观) 完成 | `/maestro-plan 1` | Phase 级规划 |
 | plan 完成 | `/maestro-execute` | 规划完成，开始执行 |
-| execute 完成 | `/maestro-verify` | 执行完成，验证成果 |
-| verify 有 gaps | `/maestro-analyze --gaps` | 发现差距，重新分析 |
-| verify 通过 | `/quality-review` | 进入质量管线 |
+| execute 完成 | `/quality-review` | 执行完成，进入质量管线 |
 | quality 全通过 | `/maestro-milestone-audit` | 准备里程碑审计 |
 | 所有 Phase 完成 | `/maestro-milestone-complete` | 里程碑可以关闭 |
 

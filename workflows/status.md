@@ -77,7 +77,7 @@ CONTEXT: key_decisions, blockers, deferred
 If issue_state exists: display ISSUES panel (open count, critical count, by-status breakdown, critical issues list).
 - Omit critical sub-section if none. Note blockers→issues migration if applicable. Note deferred items.
 
-If issue_state is null: "No issues tracked. Use /manage-issue create or /maestro-verify to discover issues."
+If issue_state is null: "No issues tracked. Use /manage-issue create to discover issues."
 
 Status icons:
 - `[x]` completed
@@ -116,7 +116,7 @@ Based on current project state, suggest the next command:
 | Phase pending, needs decisions | /maestro-analyze \<N\> -q |
 | Phase planned, not executed | /maestro-execute \<N\> |
 | Phase executing, tasks blocked | /quality-debug \<N\> |
-| Phase executed, not verified | /maestro-verify \<N\> |
+| Phase executed, not verified | /quality-review \<N\> |
 | Phase verified with gaps | /maestro-plan \<N\> --gaps |
 | Phase verified, not reviewed | /quality-review \<N\> |
 | Phase reviewed, BLOCK verdict | /maestro-plan \<N\> --gaps |

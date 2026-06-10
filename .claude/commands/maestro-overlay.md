@@ -73,7 +73,7 @@ After confirming the injection point, ask whether this overlay should chain to a
 
 Use AskUserQuestion:
 - **"No chain"** — standard overlay, no skill handoff
-- **"Chain to skill"** → ask for the target skill name (e.g., `quality-review`, `maestro-verify`, `quality-test`)
+- **"Chain to skill"** → ask for the target skill name (e.g., `quality-review`, `maestro-execute`, `quality-test`)
 - **"Chain with alternatives"** → ask for primary skill + 1-2 alternative skills
 
 If chain is selected, record the skill name(s) for use in Step 3.
@@ -115,11 +115,11 @@ Build a slug from the user's intent (kebab-case, lowercase). Write to `~/.maestr
 After the above step completes, use AskUserQuestion:
 - "Proceed to /quality-review" — Hand off to quality review
 - "Skip" — Continue with current command flow
-- "Alternative: /maestro-verify" — Run verification instead
+- "Alternative: /maestro-execute" — Run execution with built-in verification instead
 
 On user selection:
 - Proceed → Skill({ skill: "quality-review", args: "{phase}" })
-- Alternative → Skill({ skill: "maestro-verify", args: "{phase}" })
+- Alternative → Skill({ skill: "maestro-execute", args: "{phase}" })
 - Skip → continue normally
 ```
 

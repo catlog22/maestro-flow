@@ -24,7 +24,7 @@ Parse $ARGUMENTS → extract flags, remainder is intent text.
 
 Check `.workflow/state.json` existence.
 
-**If exists:** Read state.json + roadmap.md. Derive progress by grouping artifacts by phase, determining furthest artifact type per phase (analyze→plan→execute→verify), and identifying pending plans. Build `$PROJECT_STATE`:
+**If exists:** Read state.json + roadmap.md. Derive progress by grouping artifacts by phase, determining furthest artifact type per phase (analyze→plan→execute), and identifying pending plans. Build `$PROJECT_STATE`:
 ```json
 {
   "initialized": true,
@@ -91,9 +91,8 @@ Directly match user intent to the best `task_type` (maps to chain in chainMap). 
 |-----------|---------------------------|
 | `quick` | Simple/small task, add a feature, quick change |
 | `plan` | Plan, design, architect a phase |
-| `execute` | Implement, develop, code a phase |
+| `execute` | Implement, develop, code a phase (includes built-in verification gate) |
 | `analyze` | Understand, investigate, evaluate code |
-| `verify` | Check goals met, validate results |
 | `review` | Code quality review |
 | `test` | Run or create tests, UAT |
 | `test_gen` | Generate tests for coverage gaps |
@@ -127,12 +126,11 @@ Directly match user intent to the best `task_type` (maps to chain in chainMap). 
 | `team_qa` | Team QA, debugging |
 | `team_tech_debt` | Team tech debt remediation |
 | `team_lifecycle` | Team full lifecycle (plan+dev+test+review) |
-| `full-lifecycle` | Complete phase: plan→execute→verify→review→test→audit |
+| `full-lifecycle` | Complete phase: plan→execute→review→test→audit |
 | `brainstorm-driven` | Start from exploration/brainstorm |
 | `spec-driven` | From spec/requirements (heavy, with init) |
 | `roadmap-driven` | From requirements (light, with init) |
 | `analyze-plan-execute` | Fast track: analyze→plan→execute |
-| `execute-verify` | Resume after planning |
 | `review-fix` | Fix review-blocked issues |
 | `quality-loop` | Full quality improvement cycle |
 | `quality-loop-partial` | Partial quality fix |
@@ -181,8 +179,7 @@ Full `chainMap` and `detectNextAction` are in the [Reference Data](#reference-da
 
 Cross-validate intent against project state:
 - `execute` but no plan → warn, prepend `maestro-plan`
-- `verify` but not executed → warn, prepend `maestro-execute`
-- `test` but not verified → warn, prepend `maestro-verify`
+- `test` but not executed → warn, prepend `maestro-execute`
 - `milestone_close` but not all phases executed → warn, suggest completing first
 
 Display warning but let user override.
@@ -221,7 +218,7 @@ Step type is selected **per step**, not per chain. Pre-compute and write to each
 If execMode is 'cli' or 'internal' → force that type for all steps ("cli" or "skill").
 In 'auto' mode, select per step:
   CLI steps (heavy, context-isolated): maestro-plan, maestro-execute, maestro-analyze, maestro-brainstorm, maestro-roadmap, maestro-impeccable, quality-refactor → type: "cli"
-  Skill steps (everything else): current-session Skill() call — verify, review, test, debug, milestone-*, manage-*, spec-*, quick, etc. → type: "skill"
+  Skill steps (everything else): current-session Skill() call — review, test, debug, milestone-*, manage-*, spec-*, quick, etc. → type: "skill"
 ```
 
 **Trade-off:** CLI = context isolation + template prompts. Skill = current-session Skill() call, direct visibility + synchronous + user can intervene.
@@ -311,7 +308,6 @@ const chainMap = {
   'impeccable_improve':   [{ cmd: 'maestro-impeccable', args: '"{description}" --chain improve' }],
   'plan':               [{ cmd: 'maestro-plan', args: '{phase}' }],
   'execute':            [{ cmd: 'maestro-execute', args: '{phase}' }],
-  'verify':             [{ cmd: 'maestro-verify', args: '{phase}' }],
   'test_gen':           [{ cmd: 'quality-auto-test', args: '{phase}' }],
   'auto_test':          [{ cmd: 'quality-auto-test', args: '{phase}' }],
   'test':               [{ cmd: 'quality-test', args: '{phase}' }],
@@ -353,20 +349,19 @@ const chainMap = {
   'team_tech_debt':     [{ cmd: 'team-tech-debt', args: '"{description}"' }],
 
   // ── Multi-step chains ──
-  'full-lifecycle':       [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-milestone-audit' }],
-  'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '--mode full "{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'roadmap-driven':       [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'brainstorm-driven':    [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'full-lifecycle':       [{ cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'maestro-milestone-audit' }],
+  'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '--mode full "{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
+  'roadmap-driven':       [{ cmd: 'maestro-init' }, { cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
+  'brainstorm-driven':    [{ cmd: 'maestro-brainstorm', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'brainstorm_visualize': [{ cmd: 'brainstorm-visualize', args: '"{description}"' }],
-  'impeccable-build':       [{ cmd: 'maestro-impeccable', args: '"{description}" --chain build' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'impeccable-driven':      [{ cmd: 'maestro-impeccable', args: '"{description}" --chain build' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'impeccable-build':       [{ cmd: 'maestro-impeccable', args: '"{description}" --chain build' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
+  'impeccable-driven':      [{ cmd: 'maestro-impeccable', args: '"{description}" --chain build' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'analyze-plan-execute': [{ cmd: 'maestro-analyze', args: '"{description}" -q' }, { cmd: 'maestro-plan', args: '--dir {scratch_dir}' }, { cmd: 'maestro-execute', args: '--dir {scratch_dir}' }],
-  'execute-verify':       [{ cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
-  'quality-loop':         [{ cmd: 'maestro-verify', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-auto-test', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'quality-debug', args: '--from-uat {phase}' }, { cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
+  'quality-loop':         [{ cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-auto-test', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'quality-debug', args: '--from-uat {phase}' }, { cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'milestone-close':      [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
-  'next-milestone':       [{ cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'next-milestone':       [{ cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'review-fix':           [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'quality-review', args: '{phase}' }],
-  'quality-loop-partial': [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }, { cmd: 'maestro-verify', args: '{phase}' }],
+  'quality-loop-partial': [{ cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'issue-full':           [{ cmd: 'maestro-analyze', args: '--gaps {issue_id}' }, { cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'quality-review', args: '{phase}' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
   'issue-quick':          [{ cmd: 'maestro-plan', args: '--gaps' }, { cmd: 'maestro-execute', args: '' }, { cmd: 'manage-issue', args: 'close {issue_id} --resolution fixed' }],
   'milestone-release':    [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-release' }],
@@ -404,15 +399,13 @@ detectNextAction(state):
 
   Route by phase_status (ps):
     pending:    has context artifact → 'plan'; has analysis → 'analyze-quick'; else → 'analyze'
-    exploring/planning: has plan → 'execute-verify'; else → 'plan'
-    executing:  all tasks done → 'verify'; has blockers → 'debug'; else → 'execute'
-    verifying:
-      verification passed:
-        no review → 'review'
-        review BLOCK → 'review-fix'
-        uat pending → 'test'; uat passed → 'milestone-close'; uat failed → 'debug'
-        default → 'test'
-      verification not passed → 'quality-loop-partial'
+    exploring/planning: has plan → 'execute'; else → 'plan'
+    executing:  all tasks done → 'review'; has blockers → 'debug'; else → 'execute'
+    exec completed (verification is built-in):
+      no review → 'review'
+      review BLOCK → 'review-fix'
+      uat pending → 'test'; uat passed → 'milestone-close'; uat failed → 'debug'
+      default → 'test'
     testing:    uat passed → 'milestone-close'; else → 'debug'
     completed:  → 'milestone-close'
     forked:     worktrees.json exists → 'merge'; else → 'status'
@@ -424,19 +417,18 @@ detectNextAction(state):
 
 | Chain | Steps | Use Case |
 |-------|-------|----------|
-| `full-lifecycle` | plan → execute → verify → review → test → audit | Full milestone completion |
-| `blueprint-driven` | init → blueprint → plan → execute → verify | From idea/requirements (heavy) |
-| `roadmap-driven` | init → roadmap → plan → execute → verify | From requirements (light) |
-| `brainstorm-driven` | brainstorm → plan → execute → verify | From exploration |
-| `impeccable-build` | impeccable --chain build → plan → execute → verify | From design system generation |
+| `full-lifecycle` | plan → execute → review → test → audit | Full milestone completion |
+| `blueprint-driven` | init → blueprint → plan → execute | From idea/requirements (heavy) |
+| `roadmap-driven` | init → roadmap → plan → execute | From requirements (light) |
+| `brainstorm-driven` | brainstorm → plan → execute | From exploration |
+| `impeccable-build` | impeccable --chain build → plan → execute | From design system generation |
 | `analyze-plan-execute` | analyze -q → plan --dir → execute --dir | Fast track (scratch mode) |
-| `execute-verify` | execute → verify | Resume after planning |
 | `review-fix` | plan --gaps → execute → review | Fix review-blocked issues |
-| `quality-loop` | verify → review → test-gen → test → debug → plan --gaps → execute | Fix quality issues |
-| `quality-loop-partial` | plan --gaps → execute → verify | Partial quality fix cycle |
+| `quality-loop` | review → test-gen → test → debug → plan --gaps → execute | Fix quality issues |
+| `quality-loop-partial` | plan --gaps → execute | Partial quality fix cycle |
 | `milestone-close` | audit → complete | Close a milestone |
 | `milestone-release` | audit → release | Release with version tag |
-| `next-milestone` | roadmap → plan → execute → verify | Next milestone (auto-loads deferred) |
+| `next-milestone` | roadmap → plan → execute | Next milestone (auto-loads deferred) |
 | `issue-full` | analyze → plan → execute → review → close | Issue with quality gate |
 | `issue-quick` | plan → execute → close | Issue fast path |
 
@@ -456,8 +448,8 @@ detectNextAction(state):
 | `"这个问题需要看看"` | analyze | maestro-analyze |
 | `"创建一个 issue 跟踪"` | issue | manage-issue |
 | `"discover issues"` | issue_discover | manage-issue-discover |
-| `"brainstorm notifications"` | brainstorm-driven | brainstorm→plan→execute→verify |
-| `"spec generate auth"` | spec-driven | init→spec→plan→execute→verify |
+| `"brainstorm notifications"` | brainstorm-driven | brainstorm→plan→execute |
+| `"spec generate auth"` | spec-driven | init→spec→plan→execute |
 | `"ui design landing"` | impeccable_build | maestro-impeccable --chain build |
 | `"优化界面交互"` | impeccable_improve | maestro-impeccable --chain improve |
 | `"refactor auth module"` | refactor | quality-refactor "auth module" |
@@ -466,10 +458,10 @@ detectNextAction(state):
 | `"next phase"` | milestone-close | audit→complete |
 | `-y "implement X"` | execute | maestro-execute (auto) |
 | `"release v1.2"` | release | maestro-milestone-release |
-| `"从需求开始做完整个项目"` | spec-driven | init→spec→plan→execute→verify |
+| `"从需求开始做完整个项目"` | spec-driven | init→spec→plan→execute |
 | `"分析完直接改"` | analyze-plan-execute | analyze→plan→execute |
 | `"review 有问题需要修"` | review-fix | plan --gaps→execute→review |
-| `"全面质量检查"` | quality-loop | verify→review→test→debug→plan→execute |
+| `"全面质量检查"` | quality-loop | review→test→debug→plan→execute |
 
 ### Error Codes
 
@@ -488,7 +480,7 @@ detectNextAction(state):
 1. **Semantic Routing** — LLM-native `action × object` extraction; disambiguates "问题" by context
 2. **State-Aware** — Reads `.workflow/state.json` before routing
 3. **Quality Gates** — Issue chains auto-include review; `issue-full` is default for issue execution
-4. **Per-Step Type** — Each step independently typed as `"skill"` or `"cli"`. Heavy steps (plan, execute, analyze, brainstorm) → CLI for context isolation. Observable steps (verify, review, test, debug, manage-*) → Skill (current-session) for direct visibility. `--exec cli|internal` forces all steps.
+4. **Per-Step Type** — Each step independently typed as `"skill"` or `"cli"`. Heavy steps (plan, execute, analyze, brainstorm) → CLI for context isolation. Observable steps (review, test, debug, manage-*) → Skill (current-session) for direct visibility. `--exec cli|internal` forces all steps.
 5. **Unified Executor** — All execution dispatched to `maestro-ralph-execute`, which handles both maestro (static chain) and ralph (adaptive chain with decision nodes) sessions.
 6. **Phase Propagation** — Auto-detects and passes phase numbers to downstream commands
 7. **Auto Mode** — `-y` propagates through chain, skipping all confirmations

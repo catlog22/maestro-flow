@@ -13,21 +13,7 @@
       "type": "command",
       "cmd": "maestro-execute",
       "args": "{phase}",
-      "next": "verify"
-    },
-    "verify": {
-      "type": "command",
-      "cmd": "maestro-verify",
-      "args": "{phase}",
-      "next": "check_verify"
-    },
-    "check_verify": {
-      "type": "decision",
-      "eval": "ctx.result.verification_status",
-      "edges": [
-        { "value": "passed", "target": "review" },
-        { "default": true, "target": "fix_plan" }
-      ]
+      "next": "review"
     },
     "review": {
       "type": "command",
@@ -52,7 +38,7 @@
       "type": "command",
       "cmd": "maestro-execute",
       "args": "{phase}",
-      "next": "verify"
+      "next": "review"
     },
     "test": {
       "type": "command",

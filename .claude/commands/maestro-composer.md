@@ -126,7 +126,7 @@ Read deferred `node-catalog.md` (fallback to built-in mapping):
 | review | `quality-review` |
 | brainstorm | `maestro-brainstorm` |
 | analysis | `maestro delegate --role analyze` |
-| verify | `maestro-verify` |
+| verify | `maestro-execute` |
 | refactor | `quality-refactor` |
 | debug | `quality-debug` |
 

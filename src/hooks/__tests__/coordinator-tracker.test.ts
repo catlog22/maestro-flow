@@ -41,7 +41,7 @@ describe('readMaestroSession', () => {
         { index: 0, skill: 'maestro-analyze', args: '2', status: 'completed' },
         { index: 1, skill: 'maestro-plan', args: '2', status: 'completed' },
         { index: 2, skill: 'maestro-execute', args: '2', status: 'running' },
-        { index: 3, skill: 'maestro-verify', args: '2', status: 'pending' },
+        { index: 3, skill: 'quality-review', args: '2', status: 'pending' },
       ],
       current_step: 2,
       status: 'running',
@@ -55,7 +55,7 @@ describe('readMaestroSession', () => {
     assert.strictEqual(result.steps_total, 4);
     assert.strictEqual(result.steps_completed, 2);
     assert.strictEqual(result.current_step?.skill, 'maestro-execute');
-    assert.strictEqual(result.next_step?.skill, 'maestro-verify');
+    assert.strictEqual(result.next_step?.skill, 'quality-review');
     assert.strictEqual(result.status, 'running');
     assert.strictEqual(result.auto_mode, false);
   });
@@ -98,7 +98,7 @@ describe('parseCoordinateOutput', () => {
       session_id: 'coord-1744668285953-d428',
       status: 'step_paused',
       graph_id: 'full-lifecycle',
-      current_node: 'maestro-verify',
+      current_node: 'quality-review',
       steps_completed: 3,
       steps_failed: 0,
       history: [
@@ -217,7 +217,7 @@ describe('buildNextStepHint', () => {
       phase: null,
       steps_total: 6,
       steps_completed: 3,
-      current_step: { index: 3, skill: 'maestro-verify', args: '2' },
+      current_step: { index: 3, skill: 'quality-review', args: '2' },
       next_step: { index: 4, skill: 'quality-review', args: '2' },
       remaining_steps: [
         { skill: 'quality-review', args: '2' },

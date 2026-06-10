@@ -156,7 +156,7 @@ Writes heartbeat to `.workflow/collab/activity.jsonl` once per turn.
 
 **Event**: `UserPromptSubmit` | **Level**: `standard`
 
-Matches Skill invocations and injects workflow state + phase artifact tree + prior results via `additionalContext` (does not rewrite prompt). Supported patterns: `/maestro-execute {N}`, `/maestro-plan {N}`, `/maestro-verify {N}`, `/maestro-analyze {N}`, `/maestro-phase-transition`, `/quality-review {N}`, `/quality-test {N}`, `/maestro`, `/maestro-coordinate`, `/maestro-link-coordinate`
+Matches Skill invocations and injects workflow state + phase artifact tree + prior results via `additionalContext` (does not rewrite prompt). Supported patterns: `/maestro-execute {N}`, `/maestro-plan {N}`, `/maestro-analyze {N}`, `/maestro-phase-transition`, `/quality-review {N}`, `/quality-test {N}`, `/maestro`, `/maestro-coordinate`, `/maestro-link-coordinate`
 
 Coordinator Skills additionally inject coordinator-tracker bridge next-step prompt: `Chain: full-lifecycle [3/6] | Status: paused | Next: quality-review 2 | Resume: /maestro -c`
 

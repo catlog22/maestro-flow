@@ -61,7 +61,7 @@ maestro-analyze    ─┘ context-package.json
         ↓
 maestro-roadmap → .workflow/roadmap.md (Milestone > Phase hierarchy)
         ↓
-maestro-analyze {phase} → maestro-plan → maestro-execute → maestro-verify
+maestro-analyze {phase} → maestro-plan → maestro-execute
 ```
 
 ### Pre-load

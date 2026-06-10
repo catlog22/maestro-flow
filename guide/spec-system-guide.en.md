@@ -111,7 +111,7 @@ maestro spec load --keyword <kw>             # Cross all files
 ```
 maestro-init    -> spec-setup     maestro-analyze -> plan, implement
 maestro-plan    -> implement, test maestro-execute -> implement, analyze
-maestro-verify  -> review
+maestro-execute -> review (via E2.7 verification gate)
 ```
 
 ### Keyword System

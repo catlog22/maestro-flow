@@ -26,7 +26,7 @@ Scripts: `~/.maestro/workflows/swarm/wf-*.js`
 | `wf-analyze` | maestro-analyze | explore → 6-dim scoring → **skeptic cross-verify** → **3-way advocacy (go/no-go/conditional) + referee** |
 | `wf-brainstorm` | maestro-brainstorm | multi-role analysis → **3-specialist cross-review** → **3-proposal competition** → **arbitrator** |
 | `wf-review` | quality-review | 6-dim scan → **3-vote adversarial verify (prosecutor/defense/judge)** → **3-perspective report + arbitrated verdict** |
-| `wf-verify` | maestro-verify | 3-layer + antipattern + convergence → **prosecutor vs defender debate** → **judge verdict** |
+| `wf-verify` | maestro-execute (verification gate) | 3-layer + antipattern + convergence → **prosecutor vs defender debate** → **judge verdict** |
 | `wf-grill` | maestro-grill | explore → parallel branch stress → **meta-skeptic challenge** → **3-vote verdict (optimist/pessimist/realist)** |
 | `wf-plan` | maestro-plan | parallel context → **3-strategy competing proposals** → **judge panel scoring** → **3-critic adversarial check** |
 | `wf-execute` | maestro-execute | wave-based parallel execution → **adversarial convergence spot-check** → **3-vote status determination** |

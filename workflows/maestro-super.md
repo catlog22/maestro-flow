@@ -34,7 +34,7 @@ Each milestone must pass a readiness score before advancing. Prevents premature 
 | Documentation (API docs, README, setup guide) | 10% | 60% |
 | **Weighted total** | | **≥ 80%** |
 
-Score is computed via `maestro-verify` + Gemini analysis. If score < 80%, generate fix plan and re-execute until threshold is met (max 3 retries per milestone, then report blockers).
+Score is computed via `maestro-execute` verification gate + Gemini analysis. If score < 80%, generate fix plan and re-execute until threshold is met (max 3 retries per milestone, then report blockers).
 
 ## 6. Completion Criteria
 

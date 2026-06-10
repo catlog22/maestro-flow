@@ -130,8 +130,7 @@ ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 | 有 roadmap，未启动 phase | analyze | `maestro-analyze {phase}` |
 | 最新 artifact = analyze | plan | `maestro-plan {phase}` |
 | 最新 artifact = plan | execute | `maestro-execute {phase}` |
-| 最新 artifact = execute | verify | `maestro-verify {phase}` |
-| verify passed | review | `quality-review {phase}` |
+| 最新 artifact = execute | review | `quality-review {phase}` |
 | review verdict=PASS | test-gen | `quality-auto-test {phase}` |
 | 测试全绿 | milestone-audit | `maestro-milestone-audit` |
 | 当前 milestone 全 phase 完成 | milestone-complete | `maestro-milestone-complete` |
@@ -140,7 +139,7 @@ ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 **Maestro Lifecycle 主线：**
 ```
 brainstorm → blueprint → init → analyze-macro → roadmap
-   → [per phase] analyze → plan → execute → verify
+   → [per phase] analyze → plan → execute
    → [quality gate] review → auto-test → test
    → milestone-audit → milestone-complete → milestone-release
 ```
@@ -175,7 +174,7 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 | 分析 / analyze / 多维度调研 | `maestro-analyze` |
 | 规划 / plan / 任务分解 | `maestro-plan` |
 | 实现 / 执行 / execute | `maestro-execute` |
-| 验证 / verify / 验收 | `maestro-verify` |
+| 验证 / verify / 验收 | `quality-review` |
 | 调试 / debug / 排查 / bug | `quality-debug` |
 | 审查 / review / 代码审查 | `quality-review` |
 | 测试 / test / UAT | `quality-test` / `quality-auto-test` |

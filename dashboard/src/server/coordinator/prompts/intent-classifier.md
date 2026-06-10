@@ -17,7 +17,6 @@ Given a user intent string and the current workflow state snapshot, classify the
 | ui_design | maestro-impeccable "{phase}" --chain build | UI design prototyping |
 | plan | maestro-plan {phase} | Plan phase execution |
 | execute | maestro-execute {phase} | Implement/build/develop |
-| verify | maestro-verify {phase} | Verify phase results |
 | review | quality-review {phase} | Code review |
 | business_test | quality-business-test {phase} | PRD-forward business testing |
 | test_gen | quality-test-gen {phase} | Generate tests |
@@ -39,14 +38,14 @@ Given a user intent string and the current workflow state snapshot, classify the
 ### Multi-Step Chains
 | Chain Name | Steps | When to Use |
 |-----------|-------|-------------|
-| spec-driven | init → roadmap --mode full → plan → execute → verify | New project from specifications |
-| brainstorm-driven | brainstorm → plan → execute → verify | Start from brainstorming |
-| ui-craft-build | maestro-impeccable --chain build → plan → execute → verify | Start from UI design |
-| full-lifecycle | plan → execute → verify → review → test → phase-transition | Complete phase lifecycle |
-| execute-verify | execute → verify | Quick execute then verify |
-| quality-loop | verify → review → test → debug → plan-gaps → execute | Full quality cycle |
+| spec-driven | init → roadmap --mode full → plan → execute | New project from specifications |
+| brainstorm-driven | brainstorm → plan → execute | Start from brainstorming |
+| ui-craft-build | maestro-impeccable --chain build → plan → execute | Start from UI design |
+| full-lifecycle | plan → execute → review → test → phase-transition | Complete phase lifecycle |
+| execute-review | execute → review | Quick execute then review |
+| quality-loop | review → test → debug → plan-gaps → execute | Full quality cycle |
 | milestone-close | milestone-audit → milestone-complete | Close milestone |
-| roadmap-driven | init → roadmap → plan → execute → verify | Start from roadmap |
+| roadmap-driven | init → roadmap → plan → execute | Start from roadmap |
 | analyze-plan-execute | analyze -q → plan --dir → execute --dir | Fast track scratch mode |
 
 ## State-Based Routing (for "continue"/"next" intents)
@@ -58,8 +57,8 @@ When the user says "continue", "next", or similar, use the workflow state to det
 | Not initialized | init |
 | Pending + no context artifacts | analyze |
 | Pending + has context | plan |
-| Exploring/Planning + has plan | execute-verify |
-| Executing + all tasks done | verify |
+| Exploring/Planning + has plan | execute-review |
+| Executing + all tasks done | review |
 | Verifying + passed + no review | review |
 | Verifying + passed + no UAT | test |
 | Verifying + passed + UAT passed | phase_transition |

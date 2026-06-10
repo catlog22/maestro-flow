@@ -162,7 +162,7 @@ S_DISPATCH:
   → END             DO: Skill({ skill: "maestro-ralph-execute" })
 
 S_DECISION_EVAL: (decision 节点 == `step.decision` 非空，下述 gate 名取自该字段)
-  → S_APPLY_VERDICT WHEN: quality-gate (post-verify, post-business-test, post-review, post-test)
+  → S_APPLY_VERDICT WHEN: quality-gate (post-execute, post-business-test, post-review, post-test)
                      DO: A_DELEGATE_EVALUATE
   → S_APPLY_VERDICT WHEN: goal-gate (post-goal-audit)
                      DO: A_GOAL_AUDIT_EVALUATE
@@ -391,8 +391,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 | roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | *(same)* | — | all |
 | analyze | `maestro-analyze {phase}` | `maestro-analyze` | — | all |
 | plan | `maestro-plan {phase}` *(scope=phase)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | `maestro-plan` | — | all |
-| execute | `maestro-execute {phase}` | `maestro-execute` | — | all |
-| verify | `maestro-verify {phase}` | `maestro-verify` | `post-verify` | all |
+| execute | `maestro-execute {phase}` | `maestro-execute` | `post-execute` | all |
 | business-test | `quality-auto-test {phase}` | `quality-auto-test` | `post-business-test` | full only |
 | review | `quality-review {phase}` | `quality-review` | `post-review` | all (quick: append `--tier quick`) |
 | test-gen | `quality-auto-test {phase}` | `quality-auto-test` | — | full / standard if coverage<80% |
@@ -449,7 +448,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 3. Map result files:
    | Decision | Files |
    |----------|-------|
-   | post-verify | verification.json |
+   | post-execute | verification.json |
    | post-business-test | .tests/auto-test/report.json |
    | post-review | review.json |
    | post-test | uat.md, .tests/test-results.json |
@@ -622,7 +621,7 @@ Runs only when `task_decomposition` present.
     "args": "",
     "stage": "",                  // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|verify|...
     "scope": null,                // "phase"|"standalone"|"milestone"|null（plan 等需要）
-    "decision": null,             // 非 null → decision 节点（值为 gate 名，如 "post-verify"）；null → 执行 step
+    "decision": null,             // 非 null → decision 节点（值为 gate 名，如 "post-execute"）；null → 执行 step
     "retry_count": 0,             // decision 节点专用
     "max_retries": 2,             // decision 节点专用
     "command_scope": "global|project|missing|null",  // 执行 step；decision 节点固定 null
@@ -660,13 +659,12 @@ Runs only when `task_decomposition` present.
 
 所有插入的执行 step 按 A_BUILD_STEPS 规则 9 解析 `command_path` + `command_scope`；`decision:*` 条目为 decision 节点（`step.decision` 字段）。
 
-**post-verify:**
+**post-execute:**
 ```
 quality-debug "{gap_summary}"
 maestro-plan --gaps {phase}
 maestro-execute {phase}
-maestro-verify {phase}
-decision:post-verify {retry+1}
+decision:post-execute {retry+1}
 ```
 
 **post-business-test:**
@@ -674,8 +672,7 @@ decision:post-verify {retry+1}
 quality-debug --from-business-test "{gap_summary}"
 maestro-plan --gaps {phase}
 maestro-execute {phase}
-maestro-verify {phase}
-decision:post-verify {retry: 0}
+decision:post-execute {retry: 0}
 quality-auto-test {phase}
 decision:post-business-test {retry+1}
 ```
@@ -694,8 +691,7 @@ decision:post-review {retry+1}
 quality-debug --from-uat "{gap_summary}"
 maestro-plan --gaps {phase}
 maestro-execute {phase}
-maestro-verify {phase}
-decision:post-verify {retry: 0}
+decision:post-execute {retry: 0}
 quality-auto-test {phase}
 decision:post-business-test {retry: 0}
 quality-review {phase}
@@ -710,7 +706,6 @@ decision:post-test {retry+1}
 # for each unmet sub-goal G{n}, scoped to target_phase:
 maestro-plan --gaps {target_phase} "G{n}: {gap}"     [goal_ref: G{n}]
 maestro-execute {target_phase}                       [goal_ref: G{n}]
-maestro-verify {target_phase}                        [goal_ref: G{n}]
 # after all unmet groups inserted:
 decision:post-goal-audit {retry+1}
 ```

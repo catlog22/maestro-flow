@@ -1,6 +1,6 @@
 # Test Generation Workflow
 
-Generate missing automated tests for a phase based on gap analysis from maestro-verify (Nyquist audit) and quality-test (UAT coverage gaps). Classifies changed files into unit/E2E/skip, discovers test infrastructure, generates a test plan for user approval, then writes tests using RED-GREEN methodology.
+Generate missing automated tests for a phase based on gap analysis from maestro-execute verification gate (Nyquist audit) and quality-test (UAT coverage gaps). Classifies changed files into unit/E2E/skip, discovers test infrastructure, generates a test plan for user approval, then writes tests using RED-GREEN methodology.
 
 Tests expose bugs -- fixing is for quality-debug or maestro-execute.
 
@@ -220,7 +220,7 @@ Display: phase, framework, files/cases generated, passing/failing counts,
 
 | Result | Suggestion |
 |--------|------------|
-| All tests passing | Skill({ skill: "maestro-verify", args: "{phase}" }) to update Nyquist coverage |
+| All tests passing | Skill({ skill: "quality-review", args: "{phase}" }) to update Nyquist coverage |
 | Bugs discovered (failing tests) | Skill({ skill: "quality-debug", args: "--from-uat {phase}" }) to investigate |
 | Regressions found | Skill({ skill: "quality-debug" }) immediately |
 | Coverage still low | Run again with `--layer` for uncovered layers |

@@ -402,7 +402,7 @@ Execute the loop: plan --gaps -> execute -> re-verify.
 
 1. Run Skill({ skill: "maestro-plan", args: "{phase} --gaps" }) -- generates fix tasks from gaps
 2. Run Skill({ skill: "maestro-execute", args: "{phase}" }) -- executes fix tasks
-3. Run Skill({ skill: "maestro-verify", args: "{phase}" }) -- re-verify
+3. Run Skill({ skill: "maestro-execute", args: "{phase}" }) -- re-verify via verification gate
 
 If re-verify passes: update uat.md gaps as resolved, report success.
 If re-verify still has gaps: report remaining gaps, suggest manual intervention.

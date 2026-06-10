@@ -2,7 +2,7 @@
   "$schema": "./chain-graph.schema.json",
   "id": "full-lifecycle",
   "name": "Full Lifecycle",
-  "description": "Plan -> Execute -> Verify -> Review -> Test -> Milestone Audit/Complete with decision points",
+  "description": "Plan -> Execute -> Review -> Test -> Milestone Audit/Complete with decision points",
   "version": "2.0.0",
   "tags": ["lifecycle", "milestone"],
   "entry": "plan",
@@ -25,39 +25,7 @@
       "cmd": "maestro-execute",
       "description": "Run wave-based parallel task execution with atomic commits",
       "args": "{phase}",
-      "next": "verify"
-    },
-    "verify": {
-      "type": "command",
-      "cmd": "maestro-verify",
-      "description": "Goal-backward 3-layer verification with anti-pattern scan",
-      "args": "{phase}",
-      "next": "check_verify",
-      "max_visits": 3
-    },
-    "check_verify": {
-      "type": "decision",
-      "eval": "ctx.result.verification_status",
-      "edges": [
-        { "value": "passed", "target": "review" },
-        { "default": true, "target": "fix_plan" }
-      ]
-    },
-    "fix_plan": {
-      "type": "command",
-      "cmd": "maestro-plan",
-      "description": "Re-plan to address verification gaps and failures",
-      "args": "{phase} --gaps",
-      "auto_flag": "--auto",
-      "next": "fix_execute"
-    },
-    "fix_execute": {
-      "type": "command",
-      "cmd": "maestro-execute",
-      "description": "Re-execute tasks from updated gap-fix plan",
-      "args": "{phase}",
-      "next": "verify",
-      "max_visits": 3
+      "next": "review"
     },
     "review": {
       "type": "command",

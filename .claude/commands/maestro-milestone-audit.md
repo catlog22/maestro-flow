@@ -22,7 +22,7 @@ Audit milestone completion using the artifact registry. Checks:
 Data source: `state.json.artifacts[]` filtered by current milestone.
 Produces audit report at `.workflow/milestones/{milestone}/audit-report.md`.
 
-Pipeline position: downstream of maestro-verify (all phases verified), upstream of maestro-milestone-complete.
+Pipeline position: downstream of maestro-execute (which includes verification), upstream of maestro-milestone-complete.
 </purpose>
 
 <required_reading>

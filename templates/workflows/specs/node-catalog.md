@@ -9,7 +9,6 @@ Only commands that exist in `~/.claude/commands/` are listed.
 |----------|-------------|--------------|----------------------|
 | `maestro-plan` | requirement | plan | `"{goal}"` |
 | `maestro-execute` | plan | code | `{phase}` |
-| `maestro-verify` | code | verification | `{phase}` |
 | `maestro-analyze` | requirement | analysis | `"{goal}"` |
 | `maestro-brainstorm` | topic | brainstorm-analysis | `"{goal}"` |
 | `maestro-spec-generate` | requirement | specification | `"{goal}"` |
@@ -133,7 +132,6 @@ Deliver: [specify expected output format]
 | `refactor` | skill | `quality-refactor` |
 | `integration-test` | skill | `quality-integration-test` |
 | `debug` | skill | `quality-debug` |
-| `verify` | skill | `maestro-verify` |
 | `agent` | agent | (infer subagent_type from description) |
 | `checkpoint` | checkpoint | — |
 

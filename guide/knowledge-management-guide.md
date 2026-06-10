@@ -227,7 +227,7 @@ maestro-init    → spec-setup（骨架 + 扫描）
 maestro-analyze → 锁定决策 → arch，代码模式 → coding
 maestro-plan    → 设计约定 → coding/arch，测试策略 → test
 maestro-execute → 经验教训 → learning，根因 → debug
-maestro-verify  → 质量发现 → review
+maestro-execute → 内置验证（E2.7）→ 质量发现 → review
 ```
 
 <details>

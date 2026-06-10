@@ -91,13 +91,13 @@ Append to state.json.artifacts[]:
 ```
 
 **Next-step routing on completion:**
-- Converged (>=95%) → `/maestro-verify {phase}`
+- Converged (>=95%) → `/quality-review {phase}`
 - All requirements verified (spec source) → `/maestro-milestone-audit`
 - Bugs discovered → `/quality-debug --from-uat {phase}`
 - Max iter, >80% → `/quality-test {phase}` for manual UAT
 - Max iter, <80% → `/quality-debug {phase}`
 - Coverage still low → `/quality-auto-test {phase} --layer {missing}`
-- Re-run all pass → `/maestro-verify {phase}`
+- Re-run all pass → `/quality-review {phase}`
 - Single pass, all pass → `/quality-test {phase}`
 </execution>
 

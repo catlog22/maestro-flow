@@ -196,8 +196,8 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro
 
      [✓] 0.   maestro-plan 1            [global]
      [✓] 1.   maestro-execute 1         [project]
-     [✓] 2.   maestro-verify 1          [global]
-     [✓] 3. ◆ post-verify               [decision]
+     [✓] 2.   quality-review 1           [global]
+     [✓] 3. ◆ post-review               [decision]
      ...
    ============================================================
    ```

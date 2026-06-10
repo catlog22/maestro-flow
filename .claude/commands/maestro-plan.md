@@ -185,7 +185,7 @@ Status verdicts:
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | No args and no roadmap (cannot determine scope) | Provide phase number or topic, or create roadmap |
-| E003 | error | --gaps requires prior verification/issues to exist | Run maestro-verify first |
+| E003 | error | --gaps requires prior verification/issues to exist | Run maestro-execute first (verification is built-in) |
 | E004 | error | No plan found to revise (--revise without target) | Use --dir to specify plan, or create plan first |
 | E005 | error | Plan directory not found (--check) | Check path, use --dir |
 | W001 | warning | Exploration agent returned incomplete results | Retry exploration or proceed with available context |

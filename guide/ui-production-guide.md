@@ -194,8 +194,7 @@ S_PARSE → S_SETUP → S_CHAIN → S_GATE → S_REPORT
 ```bash
 /maestro-impeccable "1" --chain build  # 设计先行
 /maestro-plan 1                         # 基于设计规划
-/maestro-execute 1                      # 执行实现
-/maestro-verify 1                       # 验证目标
+/maestro-execute 1                      # 执行实现（含内置验证门控 E2.7）
 ```
 
 ### 单命令模式

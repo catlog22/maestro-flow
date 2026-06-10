@@ -57,12 +57,6 @@
       "parameters": "<phase> [--auto-commit] [--method agent|cli] [--dir <path>]"
     },
     {
-      "name": "maestro-verify",
-      "description": "Goal-Backward verification with 3-layer must-have checks, anti-pattern scan, Nyquist test coverage validation",
-      "category": "maestro",
-      "parameters": "<phase> [--skip-tests] [--skip-antipattern]"
-    },
-    {
       "name": "maestro-brainstorm",
       "description": "Unified brainstorming with dual-mode operation - auto pipeline and single role analysis",
       "category": "maestro",

@@ -378,7 +378,7 @@ Blocked/failed tasks cascade: mark all downstream dependents as `skipped` with e
 
 8. **Auto-sync** (if config.json.codebase.auto_sync_after_execute == true): detect changed files, trigger codebase doc update.
 
-9. **Display completion report**: Phase, completed/blocked counts, wave progress, paths to `.summaries/` and `.task/`, next step suggestions (`maestro-verify`, `manage-status`).
+9. **Display completion report**: Phase, completed/blocked counts, wave progress, paths to `.summaries/` and `.task/`, next step suggestions (`quality-review`, `manage-status`).
 
 ### Shared Discovery Board Protocol
 

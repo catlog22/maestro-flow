@@ -7,7 +7,7 @@
       "description_zh": "智能协调器 — 分析用户意图，读取项目状态，选择并执行最优命令链",
       "workflow": "入口命令，自动路由到最优命令链",
       "workflow_zh": "所有工作流的统一入口，可路由至任意下游命令",
-      "next_commands": ["maestro-init", "maestro-plan", "maestro-execute", "maestro-verify", "maestro-brainstorm"],
+      "next_commands": ["maestro-init", "maestro-plan", "maestro-execute", "maestro-brainstorm"],
       "flags": ["-y (自动模式)", "-c (恢复会话)", "--dry-run (演练)", "--chain (强制指定链)", "--exec auto|cli|skill (执行引擎)", "--tool <name> (指定工具)"]
     },
     "maestro-init": {
@@ -38,21 +38,10 @@
       "description": "Execute phase plan with wave-based parallel execution and atomic commits",
       "description_zh": "按波次并行执行阶段任务，支持依赖感知调度和原子提交。消费 plan.json 生成的任务定义",
       "workflow": "plan → **execute** → verify",
-      "workflow_zh": "消费 maestro-plan 产出的 plan.json，执行完成后由 maestro-verify 验证",
+      "workflow_zh": "消费 maestro-plan 产出的 plan.json，执行时内置验证门控（E2.7）",
       "prev_commands": ["maestro-plan"],
-      "next_commands": ["maestro-verify"],
-      "flags": ["[phase] (阶段)", "--auto-commit (自动提交)", "--method agent|codex|gemini|cli|auto (执行方式)", "--executor <tool> (指定执行工具)", "--dir <path> (草稿目录模式)", "-y (自动模式)"]
-    },
-    "maestro-verify": {
-      "name": "maestro-verify",
-      "name_zh": "验证阶段",
-      "description": "Goal-Backward verification with 3-layer must-have checks, anti-pattern scan, Nyquist test coverage validation, and gap-fix plan generation",
-      "description_zh": "目标回溯验证：3 层必要项检查 → 反模式扫描 → 奈奎斯特测试覆盖率审计 → 缺口修复计划生成",
-      "workflow": "execute → **verify** → [quality-review] → phase-transition",
-      "workflow_zh": "执行完成后验证，通过后继续 quality-review 或直接 phase-transition",
-      "prev_commands": ["maestro-execute"],
       "next_commands": ["quality-review", "maestro-milestone-audit"],
-      "flags": ["[phase] (阶段)", "--skip-tests (跳过测试检查)", "--skip-antipattern (跳过反模式扫描)", "--dir <path> (草稿目录模式)"]
+      "flags": ["[phase] (阶段)", "--auto-commit (自动提交)", "--method agent|codex|gemini|cli|auto (执行方式)", "--executor <tool> (指定执行工具)", "--dir <path> (草稿目录模式)", "-y (自动模式)"]
     },
     "maestro-quick": {
       "name": "maestro-quick",
@@ -62,7 +51,7 @@
       "workflow": "独立使用，适合不需要完整规划流程的小任务",
       "workflow_zh": "适用场景：bug 修复、小功能、文档更新。替代 plan+execute 组合",
       "prev_commands": [],
-      "next_commands": ["maestro-verify"],
+      "next_commands": ["quality-review"],
       "flags": ["[description] (任务描述)", "--full (包含所有代理)", "--discuss (执行前讨论)"]
     },
     "maestro-brainstorm": {
@@ -127,7 +116,7 @@
       "description_zh": "审核当前里程碑的跨阶段集成差距，检查功能完整性和接口一致性",
       "workflow": "所有阶段完成后 → **milestone-audit** → milestone-complete",
       "workflow_zh": "里程碑归档前的质量门控",
-      "prev_commands": ["maestro-verify"],
+      "prev_commands": ["maestro-execute"],
       "next_commands": ["maestro-milestone-complete"],
       "flags": ["[milestone] (可选，如 'v1.0')"]
     },
@@ -191,9 +180,9 @@
       "name_zh": "代码审查",
       "description": "Tiered code review (quick/standard/deep) with parallel agents, severity classification, and auto-issue creation",
       "description_zh": "分层代码审查：quick（5 分钟）/ standard（全面）/ deep（深度，含安全审计）。并行代理审查，自动创建 BLOCK/WARN/INFO 分级问题",
-      "workflow": "verify → **quality-review** → [phase-transition | quality-auto-test]",
-      "workflow_zh": "验证通过后执行，发现问题可继续 quality-auto-test 或直接 phase-transition",
-      "prev_commands": ["maestro-verify"],
+      "workflow": "execute → **quality-review** → [phase-transition | quality-auto-test]",
+      "workflow_zh": "执行完成后执行，发现问题可继续 quality-auto-test 或直接 phase-transition",
+      "prev_commands": ["maestro-execute"],
       "next_commands": ["maestro-milestone-audit", "quality-auto-test"],
       "flags": ["<phase> (必填)", "--level quick|standard|deep (审查级别)", "--dimensions security,architecture,... (审查维度)", "--skip-specs (跳过规格检查)"]
     },
@@ -215,7 +204,7 @@
       "description_zh": "统一自动测试 via CSV 层级管线：智能路由（spec/gap/code）→ 按层并行写测试 → 并行诊断失败 → 迭代收敛。替代原 quality-test-gen + quality-business-test + quality-integration-test",
       "workflow": "quality-review → **quality-auto-test** → quality-test",
       "workflow_zh": "验证后执行自动测试（智能路由选择 spec/gap/code 来源），然后 UAT",
-      "prev_commands": ["quality-review", "maestro-verify", "maestro-execute"],
+      "prev_commands": ["quality-review", "maestro-execute"],
       "next_commands": ["quality-test", "quality-debug"],
       "flags": ["<phase> (必填)", "--max-iter <N> (最大迭代，1=单次生成)", "--layer <L0-L3> (限制层级)", "--strategy (覆盖策略)", "--dry-run (仅生成计划)", "--re-run (重跑失败)", "-c N (并发数)"]
     },
@@ -412,9 +401,9 @@
       "name_zh": "修补命令",
       "description": "Collect deficiency signals from workflow artifacts, sessions, and user reports, then generate overlays to amend workflow commands",
       "description_zh": "从工作流产物、会话和用户报告中收集缺陷信号，生成叠加层修补工作流命令。支持从验证结果、审查报告、会话和问题中提取改进信号",
-      "workflow": "verify/review 后使用，修补发现的命令缺陷",
+      "workflow": "execute/review 后使用，修补发现的命令缺陷",
       "workflow_zh": "自动分析缺陷来源，生成 overlay 修补命令行为",
-      "prev_commands": ["maestro-verify", "quality-review"],
+      "prev_commands": ["maestro-execute", "quality-review"],
       "next_commands": ["maestro-overlay"],
       "flags": ["[description] (缺陷描述)", "--from-verify <dir> (从验证结果提取)", "--from-review <dir> (从审查结果提取)", "--from-session <id> (从会话提取)", "--from-issues ISS-xxx,... (从问题提取)", "--scan (扫描所有来源)", "--dry-run (演练)"]
     },
@@ -556,9 +545,9 @@
       "name_zh": "质量复盘",
       "description": "Multi-lens 复盘 of completed phase(s); routes insights to spec/note/issue stores and the lessons library",
       "description_zh": "执行后多视角复盘：技术/流程/质量/决策 4 个并行视角，提取可复用洞察，路由到 spec/memory/issue 存储",
-      "workflow": "maestro-verify 通过后使用",
+      "workflow": "maestro-execute 完成后使用",
       "workflow_zh": "自动扫描未复盘的已完成阶段，所有洞察持久化到 lessons.jsonl",
-      "prev_commands": ["maestro-verify"],
+      "prev_commands": ["maestro-execute"],
       "next_commands": ["manage-learn", "spec-add"],
       "flags": ["[phase|N..M] (阶段或范围)", "--lens technical|process|quality|decision (视角)", "--all (所有阶段)", "--no-route (不路由到存储)", "--compare N (与阶段 N 对比)", "--auto-yes (自动模式)"]
     },

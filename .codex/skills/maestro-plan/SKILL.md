@@ -229,7 +229,7 @@ Collision detection against same-milestone plans.
 | Condition | Recovery |
 |-----------|----------|
 | No args and no roadmap and no analyze artifact in state.json | Provide phase number, topic, or run analyze first |
-| --gaps but no gap source | Run maestro-verify first |
+| --gaps but no gap source | Run maestro-execute first |
 | Planning agent fails | Retry once with simplified context |
 | Plan-checker exceeds 3 rounds | Accept with warnings |
 </error_codes>

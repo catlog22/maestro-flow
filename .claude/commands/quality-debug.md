@@ -87,7 +87,7 @@ On confirm → `Skill("spec-add", "<category> <content> --description \"<summary
 - Root cause found, fix needed → `/maestro-plan {phase} --gaps`
 - Root cause found (from UAT), auto-fix → `/quality-test {phase} --auto-fix`
 - Inconclusive, need more info → `/quality-debug {issue} -c` (resume session)
-- Standalone fix already applied → `/maestro-verify {phase}`
+- Standalone fix already applied → `/maestro-execute {phase}`
 </execution>
 
 <error_codes>

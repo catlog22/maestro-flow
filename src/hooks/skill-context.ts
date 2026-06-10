@@ -92,7 +92,6 @@ export interface SkillContextInput {
 const SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
   { pattern: /\/maestro-execute\s+(\d+)/, skill: 'maestro-execute' },
   { pattern: /\/maestro-plan\s+(\d+)/, skill: 'maestro-plan' },
-  { pattern: /\/maestro-verify\s+(\d+)/, skill: 'maestro-verify' },
   { pattern: /\/maestro-analyze\s+(\d+)/, skill: 'maestro-analyze' },
   { pattern: /\/maestro-milestone-audit(?:\s+(\d+))?/, skill: 'maestro-milestone-audit' },
   { pattern: /\/quality-review\s+(\d+)/, skill: 'quality-review' },

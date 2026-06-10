@@ -194,8 +194,7 @@ Reverse-engineer a design system from existing source code, generate a reference
 ```bash
 /maestro-impeccable "1" --chain build  # Design first
 /maestro-plan 1                         # Plan based on design
-/maestro-execute 1                      # Execute implementation
-/maestro-verify 1                       # Verify goals
+/maestro-execute 1                      # Execute implementation (with built-in verification gate E2.7)
 ```
 
 ### Single Command Mode

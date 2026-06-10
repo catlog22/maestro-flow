@@ -2,7 +2,7 @@
   "$schema": "./chain-graph.schema.json",
   "id": "ui-craft-build",
   "name": "UI Craft Build",
-  "description": "UI Craft Build -> Plan -> Execute -> Verify pipeline",
+  "description": "UI Craft Build -> Plan -> Execute pipeline",
   "version": "1.0.0",
   "tags": ["lifecycle", "ui-design"],
   "entry": "ui_design",
@@ -32,33 +32,12 @@
       "cmd": "maestro-execute",
       "description": "Run wave-based parallel task execution",
       "args": "{phase}",
-      "next": "verify"
-    },
-    "verify": {
-      "type": "command",
-      "cmd": "maestro-verify",
-      "description": "Goal-backward 3-layer verification",
-      "args": "{phase}",
-      "next": "check_verify",
-      "max_visits": 2
-    },
-    "check_verify": {
-      "type": "decision",
-      "eval": "ctx.result.verification_status",
-      "edges": [
-        { "value": "passed", "target": "done" },
-        { "default": true, "target": "done_with_issues" }
-      ]
+      "next": "done"
     },
     "done": {
       "type": "terminal",
       "status": "success",
       "summary": "UI craft build pipeline completed successfully"
-    },
-    "done_with_issues": {
-      "type": "terminal",
-      "status": "paused",
-      "summary": "UI craft build pipeline completed with verification issues"
     }
   }
 }

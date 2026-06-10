@@ -1,3 +1,9 @@
+# ⚠️ DEPRECATED — Merged into execute.md (E2.7)
+
+Verification is now a built-in gate in `execute.md` step E2.7. This file is kept for reference only.
+
+---
+
 # Verify Workflow
 
 Dual verification: Goal-Backward structural verification + Nyquist test coverage validation.
@@ -520,7 +526,7 @@ Next steps:
 |--------|------------|
 | All passed, no gaps | Skill({ skill: "quality-review", args: "{phase}" }) for code review, then Skill({ skill: "quality-test" }) for UAT |
 | Critical gaps found | Skill({ skill: "quality-debug" }) for investigation |
-| Minor gaps only | Skill({ skill: "maestro-plan", args: "--gaps" }) -> Skill({ skill: "maestro-execute" }) -> re-run Skill({ skill: "maestro-verify" }) |
+| Minor gaps only | Skill({ skill: "maestro-plan", args: "--gaps" }) -> Skill({ skill: "maestro-execute" }) |
 | Low test coverage | Skill({ skill: "quality-auto-test", args: "{phase}" }) to generate missing tests |
 | Human verification needed | Skill({ skill: "quality-test", args: "{phase}" }) for interactive UAT |
 

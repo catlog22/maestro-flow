@@ -270,7 +270,7 @@ You MUST call report_agent_job_result EXACTLY ONCE before exiting.
 3. Conditional: traceability.md (spec route), issue creation (code_defect -> issues.jsonl)
 4. Register artifact in state.json (type: test)
 5. Display summary: route, iterations, convergence status, per-layer pass rates, bugs discovered
-6. Route: converged -> maestro-verify; bugs -> quality-debug; >80% -> quality-test; <80% -> quality-debug; single pass all pass -> quality-test
+6. Route: converged -> quality-review; bugs -> quality-debug; >80% -> quality-test; <80% -> quality-debug; single pass all pass -> quality-test
 
 </actions>
 
@@ -314,6 +314,6 @@ Protocol: read before writing tests, append-only, dedup by type+key.
 - [ ] TST artifact registered in state.json
 - [ ] If spec: traceability.md written; if failures: issues auto-created in issues.jsonl
 - [ ] If gap source: validation.json gaps updated (MISSING→COVERED)
-- [ ] Next step routed (converged → verify, bugs → debug, >80% → quality-test, <80% → debug)
+- [ ] Next step routed (converged → quality-review, bugs → debug, >80% → quality-test, <80% → debug)
 </success_criteria>
 </output>

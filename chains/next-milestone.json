@@ -32,13 +32,6 @@
       "cmd": "maestro-execute",
       "description": "Execute planned tasks with wave-based parallel execution",
       "args": "{phase}",
-      "next": "verify"
-    },
-    "verify": {
-      "type": "command",
-      "cmd": "maestro-verify",
-      "description": "Goal-backward verification of execution results",
-      "args": "{phase}",
       "next": "done"
     },
     "done": {

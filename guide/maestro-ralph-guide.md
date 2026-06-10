@@ -183,9 +183,8 @@ brainstorm → init → roadmap → analyze → plan → execute
   "steps": [
     { "index": 0, "type": "skill", "skill": "maestro-plan", "args": "1", "status": "completed" },
     { "index": 1, "type": "skill", "skill": "maestro-execute", "args": "1", "status": "completed" },
-    { "index": 2, "type": "skill", "skill": "maestro-verify", "args": "1", "status": "completed" },
-    { "index": 3, "type": "decision", "skill": "maestro-ralph", "args": "{\"decision\":\"post-verify\",\"retry_count\":0,\"max_retries\":2}", "status": "running" },
-    { "index": 4, "type": "skill", "skill": "quality-review", "args": "1", "status": "pending" }
+    { "index": 2, "type": "decision", "skill": "maestro-ralph", "args": "{\"decision\":\"post-verify\",\"retry_count\":0,\"max_retries\":2}", "status": "running" },
+    { "index": 3, "type": "skill", "skill": "quality-review", "args": "1", "status": "pending" }
   ],
   "current_step": 3
 }

@@ -109,7 +109,7 @@ maestro spec load --keyword <kw>                     # 跨所有文件
 ```
 maestro-init    → spec-setup     maestro-analyze → arch, coding
 maestro-plan    → coding, test   maestro-execute → learning, debug
-maestro-verify  → review
+maestro-execute → review (via E2.7 verification gate)
 ```
 
 ### 关键词系统

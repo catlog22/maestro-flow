@@ -58,8 +58,7 @@ maestro hooks install --level standard
 # 全量模式——覆盖当前里程碑所有 Phase
 /maestro-analyze                        # 分析
 /maestro-plan                           # 规划
-/maestro-execute                        # 执行
-/maestro-verify                         # 验证
+/maestro-execute                        # 执行（含内置验证门控 E2.7）
 
 # 逐 Phase 模式（micro 层：Phase 级深度分析）
 /maestro-analyze 1                      # 只分析 Phase 1（6 维度评分）
@@ -317,7 +316,7 @@ maestro stop              # 停止服务
 ### 新项目
 
 ```bash
-/maestro-init → /maestro-roadmap → /maestro-plan 1 → /maestro-execute 1 → /maestro-verify 1 → /maestro-milestone-audit
+/maestro-init → /maestro-roadmap → /maestro-plan 1 → /maestro-execute 1 → /maestro-milestone-audit
 ```
 
 ### 一键全自动

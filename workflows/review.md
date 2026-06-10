@@ -38,7 +38,7 @@ When external review feedback is received (from human reviewers, PR comments, or
 ## Prerequisites
 
 - Phase execution completed (task summaries exist)
-- Recommended: maestro-verify already run (review uses verification gaps as context)
+- Recommended: maestro-execute verification gate already run (review uses verification gaps as context)
 
 ---
 

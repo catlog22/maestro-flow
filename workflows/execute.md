@@ -1,8 +1,8 @@
 # Execute Workflow
 
-Wave-based parallel execution with atomic commits, breakpoint resume, and optional sync/reflection.
+Wave-based parallel execution with atomic commits, breakpoint resume, built-in verification gate, and optional sync/reflection.
 
-Core principle: **Execute per-plan, not per-phase.** Each plan's wave DAG runs independently. Multiple plans execute sequentially.
+Core principle: **Execute per-plan, not per-phase.** Each plan's wave DAG runs independently. Multiple plans execute sequentially. Verification is an integral post-gate — not a separate command.
 
 ---
 
@@ -69,6 +69,7 @@ For each PLAN_DIR in PLAN_DIRS (sequential):
 | `--method agent\|codex\|gemini\|cli\|auto` | Override execution method (default: config.json.execution.method) |
 | `--executor <tool>` | Default CLI tool: gemini\|codex\|qwen\|opencode\|claude (default: first enabled in cli-tools.json) |
 | `--dir <path>` | Use arbitrary directory instead of phase resolution (skip roadmap validation) |
+| `--skip-verify` | Skip E2.7 verification gate (trust execution output) |
 | `-y` | Auto-approve execution options (skip confirmation prompt) |
 
 ---
@@ -117,9 +118,18 @@ AskUserQuestion({
       header: "Review",
       multiSelect: false,
       options: [
-        { label: "Skip (Recommended)", description: "No code review, proceed to verification" },
-        // One option per enabled CLI tool with review capability:
+        { label: "Skip", description: "No code review" },
         ...availableTools.map(t => ({ label: `${t} Review`, description: `${t} CLI: git diff quality review` }))
+      ]
+    },
+    {
+      question: "Verification gate? (external model checks convergence + structure + anti-patterns)",
+      header: "Verify",
+      multiSelect: false,
+      options: [
+        { label: "Auto (Recommended)", description: `Delegate to ${availableTools[0] || 'first enabled tool'} for convergence + 3-layer structure + anti-pattern check` },
+        ...availableTools.map(t => ({ label: t, description: `${t}: verification gate` })),
+        { label: "Skip", description: "No verification gate" }
       ]
     }
   ]
@@ -146,7 +156,17 @@ Other text parsing — match tool names dynamically from enabled tools:
 
 **Question 2 (Review):** store as `codeReviewTool`
 
-Store: `executionMethod`, `domainRouting`, `codeReviewTool`
+**Question 3 (Verify):**
+
+| Answer | verificationTool |
+|--------|-----------------|
+| "Auto" | First enabled tool from config |
+| Tool name | That tool |
+| "Skip" | `"Skip"` |
+
+`--skip-verify` flag overrides to `"Skip"`.
+
+Store: `executionMethod`, `domainRouting`, `codeReviewTool`, `verificationTool`
 
 ---
 
@@ -166,6 +186,7 @@ If executionContext is available in memory:
   executorAssignments = executionContext.executorAssignments || {}
   domainRouting = E0.5 domainRouting || executionContext.domainRouting || {}
   codeReviewTool = E0.5 selection || executionContext.codeReviewTool || "Skip"
+  verificationTool = E0.5 selection || executionContext.verificationTool || "Auto"
   Skip disk reload
 ```
 
@@ -179,6 +200,7 @@ defaultExecutor = --executor flag || config.json.execution.default_executor || f
 executorAssignments = plan.json.executor_assignments || {}
 domainRouting = E0.5 domainRouting || built from delegate-config domain tags (frontend→tag match, backend→tag match, default→"agent")
 codeReviewTool = E0.5 selection || "Skip"
+verificationTool = E0.5 selection || "Auto"
 ```
 
 ### Detect completed tasks (breakpoint resume)
@@ -415,6 +437,128 @@ Wait for completion, log findings summary
 
 ---
 
+## E2.7: Verification Gate
+
+**Purpose:** External model verifies execution output actually achieves convergence criteria and structural integrity. Replaces the standalone `maestro-verify` — verification is now an integral post-gate within execution. The executing agent does NOT verify itself; a separate model performs the cross-check.
+
+**Skip if** `verificationTool == "Skip"` OR `--skip-verify` flag OR no completed tasks.
+
+### Step 1: Collect Verification Inputs
+
+```
+modified_files = collect all files changed by completed tasks (from .summaries/ + git diff)
+convergence_criteria = collect convergence.criteria from all completed .task/*.json
+success_criteria = index.json.success_criteria (if exists)
+must_haves = success_criteria || convergence_criteria aggregated
+summaries_content = concatenate all .summaries/TASK-*-summary.md
+```
+
+### Step 2: Resolve Verification Tool
+
+```
+IF verificationTool == "Auto": resolve to first enabled tool from delegate-config
+ELSE: use specified tool name
+```
+
+### Step 3: Dispatch Verification (external model)
+
+Single delegate call covers convergence review + structure verify + anti-pattern scan:
+
+```
+Bash({
+  command: 'maestro delegate "PURPOSE: Verify execution output meets all convergence criteria and structural integrity; success = all criteria verified with file:line evidence
+TASK:
+1. CONVERGENCE: For each criterion below, check if the actual code satisfies it — read the files, verify the behavior exists, report status with evidence
+2. STRUCTURE Layer 1 (Existence): Verify all expected output files exist on disk
+3. STRUCTURE Layer 2 (Substance): Verify files have real implementation — flag stubs, placeholders, TODO-only, empty returns
+4. STRUCTURE Layer 3 (Wiring): Verify files are imported and used by the system — flag orphaned files
+5. ANTI-PATTERNS: Scan modified files for TODO/FIXME/HACK, placeholder content, console.log/print debug statements, disabled tests
+MODE: analysis
+CONTEXT: @${modified_files as glob patterns}
+EXPECTED: JSON {
+  convergence: [{ criterion: string, status: \"verified\"|\"failed\"|\"uncertain\", evidence: string }],
+  structure: {
+    existence: [{ path: string, status: \"exists\"|\"missing\" }],
+    substance: [{ path: string, status: \"real\"|\"stub\", evidence: string }],
+    wiring: [{ path: string, status: \"wired\"|\"orphaned\", importers: string[] }]
+  },
+  anti_patterns: [{ type: string, file: string, line: number, severity: \"blocker\"|\"warning\"|\"info\" }],
+  gaps: [{ id: string, type: string, severity: \"critical\"|\"high\"|\"medium\"|\"low\", description: string, fix_direction: string }],
+  overall: \"passed\"|\"gaps_found\"
+}
+CONSTRAINTS: Read-only | Check ALL criteria exhaustively | Evidence must be file:line references | Do NOT assume — verify by reading code
+
+## Convergence Criteria (verify each one)
+${must_haves.map((c, i) => (i+1) + \". \" + c).join(\"\\n\")}
+
+## Modified Files
+${modified_files.join(\"\\n\")}
+
+## Task Summaries (executor self-reports — verify independently)
+${summaries_content}
+" --to ${verificationTool} --mode analysis',
+  run_in_background: true
+})
+```
+
+### Step 4: Process Results
+
+```
+On callback:
+  Parse JSON result from delegate output
+
+  // Write verification.json (downstream compatibility for quality-review, quality-test, etc.)
+  Write ${PLAN_DIR}/verification.json:
+  {
+    "phase": PHASE_NUM,
+    "status": result.overall,
+    "verified_at": ISO_timestamp,
+    "verifier": verificationTool,
+    "must_haves": {
+      "truths": result.convergence,
+      "artifacts": [...result.structure.existence, ...result.structure.substance],
+      "key_links": result.structure.wiring
+    },
+    "gaps": result.gaps,
+    "antipatterns": result.anti_patterns,
+    "coverage_score": verified_count / total_count
+  }
+
+  IF result.overall == "passed":
+    Log "✓ Verification Gate: PASSED — all criteria verified by ${verificationTool}"
+    Continue to E3
+
+  IF result.overall == "gaps_found":
+    Log verification report with per-criterion status
+
+    // Auto-create issues from critical/high gaps
+    For each gap with severity critical|high:
+      Create issue in .workflow/issues/issues.jsonl:
+        id: "ISS-{YYYYMMDD}-{NNN}", status: "registered",
+        priority: severity_to_priority(gap.severity), source: "verification-gate",
+        phase_ref: PHASE_NUM, gap_ref: gap.id
+
+    // Gate decision
+    IF any critical gaps:
+      Set index.json.status = "verification_failed"
+      Log: "✗ Verification Gate: FAILED — {N} critical gaps. Run /maestro-plan --gaps to fix."
+      STOP pipeline (do not proceed to E3)
+    ELSE (medium/low only):
+      Log warnings, continue to E3
+```
+
+### Step 5: Register VRF Artifact
+
+```
+IF verification ran (not skipped):
+  Create VRF artifact in state.json:
+    { id: "VRF-{next_id}", type: "verify", milestone, phase,
+      path: "${PLAN_DIR}/verification.json", status: result.overall == "passed" ? "completed" : "gaps_found",
+      depends_on: EXC_artifact.id, created_at, completed_at }
+```
+
+---
+
 ## E3: Auto Sync
 
 **Purpose:** Update codebase documentation after execution.
@@ -460,8 +604,10 @@ If config.json.workflow.reflection == true:
 ## Final State Update
 
 ```
-If all tasks completed:
-  index.json.status = "verifying", set completed_at → "Run /workflow:verify"
+If all tasks completed AND verification passed (or skipped):
+  index.json.status = "verified", set completed_at
+Elif all tasks completed AND verification failed:
+  index.json.status = "verification_failed", set completed_at
 Else:
   index.json.status = "executing" (partial) → "Re-run /workflow:execute to resume"
 

@@ -39,7 +39,7 @@ graph TB
         AN["/maestro-analyze"]
         PL["/maestro-plan"]
         EX["/maestro-execute"]
-        VF["/maestro-verify"]
+        VF["/maestro-execute (verify)"]
     end
 
     subgraph quality["Quality Pipeline"]
@@ -186,7 +186,7 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 | Analyze | `/maestro-analyze` | context.md, analysis.md | ANL-{NNN} |
 | Plan | `/maestro-plan` | plan.json + TASK-*.json | PLN-{NNN} |
 | Execute | `/maestro-execute` | .summaries/, code changes | EXC-{NNN} |
-| Verify | `/maestro-verify` | verification.json | VRF-{NNN} |
+| Verify | `/maestro-execute` (E2.7) | verification.json | VRF-{NNN} |
 | Audit | `/maestro-milestone-audit` | audit-report.md | — |
 | Complete | `/maestro-milestone-complete` | archived to milestones/ | — |
 
@@ -266,7 +266,7 @@ Discover → Create → Analyze → Plan → Execute → Close
 ## 4. Quality Pipeline
 
 ```bash
-/maestro-execute → /maestro-verify → /quality-auto-test → /quality-review → /quality-test → /maestro-milestone-audit
+/maestro-execute → /quality-auto-test → /quality-review → /quality-test → /maestro-milestone-audit
 ```
 
 | Command | Purpose | Key Parameters |

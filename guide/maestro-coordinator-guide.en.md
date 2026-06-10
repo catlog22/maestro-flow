@@ -60,7 +60,6 @@ Maestro uses an `action x object` matrix for semantic routing:
 | `analyze` | Analyze, evaluate, investigate |
 | `plan` | Design approach, plan, decompose |
 | `execute` | Implement, develop, code |
-| `verify` | Validate goals |
 | `review` | Code review |
 | `test` | Run/create tests |
 | `debug` | Diagnose, troubleshoot |
@@ -91,7 +90,6 @@ Maestro uses an `action x object` matrix for semantic routing:
 | `analyze` | `maestro-analyze {phase}` |
 | `plan` | `maestro-plan {phase}` |
 | `execute` | `maestro-execute {phase}` |
-| `verify` | `maestro-verify {phase}` |
 | `review` | `quality-review {phase}` |
 | `test` | `quality-test {phase}` |
 | `debug` | `quality-debug "{description}"` |
@@ -101,10 +99,10 @@ Maestro uses an `action x object` matrix for semantic routing:
 
 | Chain Name | Steps | Use Case |
 |------------|-------|----------|
-| `full-lifecycle` | plan → execute → verify → review → test → audit | Complete milestone |
-| `roadmap-driven` | init → roadmap → plan → execute → verify | Starting from requirements |
-| `brainstorm-driven` | brainstorm → plan → execute → verify | Starting from exploration |
-| `execute-verify` | execute → verify | Resume after planning |
+| `full-lifecycle` | plan → execute → review → test → audit | Complete milestone |
+| `roadmap-driven` | init → roadmap → plan → execute | Starting from requirements |
+| `brainstorm-driven` | brainstorm → plan → execute | Starting from exploration |
+| `execute-review` | execute → review | Resume after planning |
 | `review-fix` | plan --gaps → execute → review | Fix review issues |
 | `issue-full` | analyze → plan → execute → review → close | Issue closed-loop |
 | `milestone-close` | audit → complete | Close milestone |

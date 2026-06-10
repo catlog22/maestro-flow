@@ -60,7 +60,6 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 | `analyze` | 分析、评估、调查 |
 | `plan` | 设计方案、规划、分解 |
 | `execute` | 实现、开发、编码 |
-| `verify` | 验证目标 |
 | `review` | 代码审查 |
 | `test` | 运行/创建测试 |
 | `debug` | 诊断、排查 |
@@ -91,7 +90,6 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 | `analyze` | `maestro-analyze {phase}` |
 | `plan` | `maestro-plan {phase}` |
 | `execute` | `maestro-execute {phase}` |
-| `verify` | `maestro-verify {phase}` |
 | `review` | `quality-review {phase}` |
 | `test` | `quality-test {phase}` |
 | `debug` | `quality-debug "{description}"` |
@@ -101,10 +99,10 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 
 | 链名 | 步骤 | 场景 |
 |------|------|------|
-| `full-lifecycle` | plan → execute → verify → review → test → audit | 完整 milestone |
-| `roadmap-driven` | init → roadmap → plan → execute → verify | 从需求开始 |
-| `brainstorm-driven` | brainstorm → plan → execute → verify | 从探索开始 |
-| `execute-verify` | execute → verify | 规划完成后恢复 |
+| `full-lifecycle` | plan → execute → review → test → audit | 完整 milestone |
+| `roadmap-driven` | init → roadmap → plan → execute | 从需求开始 |
+| `brainstorm-driven` | brainstorm → plan → execute | 从探索开始 |
+| `execute-review` | execute → review | 规划完成后恢复 |
 | `review-fix` | plan --gaps → execute → review | 修复 review 问题 |
 | `issue-full` | analyze → plan → execute → review → close | Issue 闭环 |
 | `milestone-close` | audit → complete | 关闭 milestone |

@@ -90,7 +90,6 @@ export async function preloadCommands(): Promise<void> {
     'maestro-init',
     'maestro-plan',
     'maestro-execute',
-    'maestro-verify',
     'maestro-quick',
     'maestro-brainstorm',
     'maestro-analyze',

@@ -688,12 +688,12 @@ Files:
 
 | Result | Suggestion |
 |--------|------------|
-| Converged (>=threshold) | `/maestro-verify {phase}` to update validation |
+| Converged (>=threshold) | `/quality-review {phase}` to update validation |
 | All requirements verified (spec) | `/maestro-milestone-audit` |
 | Bugs discovered (code_defects) | `/quality-debug --from-auto-test {phase}` |
 | Max iter, >80% | `/quality-test {phase}` for manual UAT on remaining gaps |
 | Max iter, <80% | `/quality-debug {phase}` for deep investigation |
 | Coverage still low | `/quality-auto-test {phase} --layer {missing}` |
-| Re-run all pass | `/maestro-verify {phase}` |
+| Re-run all pass | `/quality-review {phase}` |
 | Single pass (max_iter=1), bugs found | `/quality-debug --from-auto-test {phase}` |
 | Single pass, all pass | `/quality-test {phase}` |

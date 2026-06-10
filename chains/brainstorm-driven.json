@@ -2,7 +2,7 @@
   "$schema": "./chain-graph.schema.json",
   "id": "brainstorm-driven",
   "name": "Brainstorm-Driven",
-  "description": "Brainstorm -> Init -> Analyze -> Plan -> Execute -> Verify pipeline",
+  "description": "Brainstorm -> Init -> Analyze -> Plan -> Execute pipeline",
   "version": "1.0.0",
   "tags": ["lifecycle", "brainstorm"],
   "entry": "brainstorm",
@@ -47,39 +47,7 @@
       "cmd": "maestro-execute",
       "description": "Run wave-based parallel task execution",
       "args": "{phase}",
-      "next": "verify"
-    },
-    "verify": {
-      "type": "command",
-      "cmd": "maestro-verify",
-      "description": "Goal-backward 3-layer verification",
-      "args": "{phase}",
-      "next": "check_verify",
-      "max_visits": 2
-    },
-    "check_verify": {
-      "type": "decision",
-      "eval": "ctx.result.verification_status",
-      "edges": [
-        { "value": "passed", "target": "done" },
-        { "default": true, "target": "fix_plan" }
-      ]
-    },
-    "fix_plan": {
-      "type": "command",
-      "cmd": "maestro-plan",
-      "description": "Re-plan to address verification gaps",
-      "args": "{phase} --gaps",
-      "auto_flag": "--auto",
-      "next": "fix_execute"
-    },
-    "fix_execute": {
-      "type": "command",
-      "cmd": "maestro-execute",
-      "description": "Re-execute from gap-fix plan",
-      "args": "{phase}",
-      "next": "verify",
-      "max_visits": 2
+      "next": "done"
     },
     "done": {
       "type": "terminal",

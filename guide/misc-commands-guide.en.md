@@ -14,7 +14,7 @@ Unlike `/maestro-overlay` (explicit single creation), `/maestro-amend` automatic
 
 ### Use Cases
 
-- `/maestro-verify` exposed missing command steps
+- `/maestro-execute` built-in verification gate (E2.7) exposed missing command steps
 - `/quality-review` identified process-level deficiencies
 - Workflow execution deviations traced to incomplete command definitions
 - Issue tracking shows recurring problems rooted in command design
