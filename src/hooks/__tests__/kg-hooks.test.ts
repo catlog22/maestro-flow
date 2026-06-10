@@ -7,11 +7,10 @@ import { evaluateKgContextInjection } from '../kg-context-injector.js';
 // ---------------------------------------------------------------------------
 
 describe('evaluateKgSync', () => {
-  it('returns no-db for non-existent project path', async () => {
+  it('returns codegraph status for non-existent project path', async () => {
     const result = await evaluateKgSync('/tmp/non-existent-project-xyz-98765', 'test-session');
-    // Without a real DB file, should get either 'no-db' or 'no-graph-module'
     expect(result.synced).toBe(false);
-    expect(result.reason).toMatch(/^(no-db|no-graph-module)$/);
+    expect(result.reason).toMatch(/^(codegraph-unavailable|codegraph-not-initialized|no-changes)$/);
   });
 
   it('result shape includes synced and reason fields', async () => {
@@ -34,29 +33,28 @@ describe('evaluateKgSync', () => {
 // ---------------------------------------------------------------------------
 
 describe('evaluateKgContextInjection', () => {
-  it('returns no-kg for non-existent project path', () => {
-    const result = evaluateKgContextInjection(
+  it('returns codegraph-unavailable or not-initialized for non-existent project path', async () => {
+    const result = await evaluateKgContextInjection(
       'code-developer',
       'Check the `DatabaseConnection` class in src/graph/db/connection.ts',
       '/tmp/non-existent-project-xyz-98765',
     );
-    // Without a real DB, should get either 'no-kg' or 'kg-unavailable'
     expect(result.inject).toBe(false);
-    expect(result.reason).toMatch(/^(no-kg|kg-unavailable)$/);
+    expect(result.reason).toMatch(/^(codegraph-unavailable|codegraph-not-initialized|no-matches)$/);
   });
 
-  it('never throws on missing project', () => {
-    expect(() => {
+  it('never throws on missing project', async () => {
+    await expect(
       evaluateKgContextInjection(
         'code-developer',
         'some prompt with `SomeClass`',
         '/tmp/does-not-exist-at-all',
-      );
-    }).not.toThrow();
+      ),
+    ).resolves.not.toThrow();
   });
 
-  it('result shape always includes inject and optional reason', () => {
-    const result = evaluateKgContextInjection(
+  it('result shape always includes inject and optional reason', async () => {
+    const result = await evaluateKgContextInjection(
       'general',
       'prompt text',
       '/tmp/non-existent-project-xyz-98765',

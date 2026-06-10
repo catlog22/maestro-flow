@@ -49,7 +49,7 @@ function writeSpecFile(filename: string, content: string): void {
 // ---------------------------------------------------------------------------
 
 describe('evaluateKeywordInjection — basic matching', () => {
-  it('injects when prompt contains matching keyword', () => {
+  it('injects when prompt contains matching keyword', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth,token" date="2026-04-21">
 
@@ -62,7 +62,7 @@ Always rotate refresh tokens.
 
     const sid = newSessionId();
     try {
-      const result = evaluateKeywordInjection('implement auth token rotation', testDir, sid);
+      const result = await evaluateKeywordInjection('implement auth token rotation', testDir, sid);
       expect(result.inject).toBe(true);
       expect(result.content).toContain('Token Rotation');
       expect(result.matchedKeywords).toContain('auth');
@@ -73,7 +73,7 @@ Always rotate refresh tokens.
     }
   });
 
-  it('does not inject when no keywords match', () => {
+  it('does not inject when no keywords match', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth,token" date="2026-04-21">
 
@@ -85,11 +85,11 @@ Content.
 `);
 
     const sid = newSessionId();
-    const result = evaluateKeywordInjection('fix the database connection', testDir, sid);
+    const result = await evaluateKeywordInjection('fix the database connection', testDir, sid);
     expect(result.inject).toBe(false);
   });
 
-  it('does not inject for empty prompt', () => {
+  it('does not inject for empty prompt', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth" date="2026-04-21">
 
@@ -101,14 +101,14 @@ Content.
 `);
 
     const sid = newSessionId();
-    const result = evaluateKeywordInjection('', testDir, sid);
+    const result = await evaluateKeywordInjection('', testDir, sid);
     expect(result.inject).toBe(false);
   });
 
-  it('does not inject when no specs exist', () => {
+  it('does not inject when no specs exist', async () => {
     // No spec files written
     const sid = newSessionId();
-    const result = evaluateKeywordInjection('implement auth', testDir, sid);
+    const result = await evaluateKeywordInjection('implement auth', testDir, sid);
     expect(result.inject).toBe(false);
   });
 });
@@ -118,7 +118,7 @@ Content.
 // ---------------------------------------------------------------------------
 
 describe('evaluateKeywordInjection — tokenization', () => {
-  it('filters out stop words from prompt', () => {
+  it('filters out stop words from prompt', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="the,and,for" date="2026-04-21">
 
@@ -131,11 +131,11 @@ Should not match common words.
 
     const sid = newSessionId();
     // 'the', 'and', 'for' are stop words and should not trigger matching
-    const result = evaluateKeywordInjection('the code and the function for this', testDir, sid);
+    const result = await evaluateKeywordInjection('the code and the function for this', testDir, sid);
     expect(result.inject).toBe(false);
   });
 
-  it('filters keywords shorter than MIN_KEYWORD_LENGTH (3)', () => {
+  it('filters keywords shorter than MIN_KEYWORD_LENGTH (3)', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="ab,xy" date="2026-04-21">
 
@@ -147,12 +147,12 @@ Content.
 `);
 
     const sid = newSessionId();
-    const result = evaluateKeywordInjection('ab xy test', testDir, sid);
+    const result = await evaluateKeywordInjection('ab xy test', testDir, sid);
     // 'ab' and 'xy' are < 3 chars, should not match
     expect(result.inject).toBe(false);
   });
 
-  it('lowercases prompt words for matching', () => {
+  it('lowercases prompt words for matching', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth" date="2026-04-21">
 
@@ -165,7 +165,7 @@ Content.
 
     const sid = newSessionId();
     try {
-      const result = evaluateKeywordInjection('Fix the AUTH module', testDir, sid);
+      const result = await evaluateKeywordInjection('Fix the AUTH module', testDir, sid);
       expect(result.inject).toBe(true);
     } finally {
       const path = bridgePath(sid);
@@ -179,7 +179,7 @@ Content.
 // ---------------------------------------------------------------------------
 
 describe('evaluateKeywordInjection — session dedup', () => {
-  it('does not re-inject the same entry in the same session', () => {
+  it('does not re-inject the same entry in the same session', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth" date="2026-04-21">
 
@@ -193,11 +193,11 @@ Content.
     const sid = newSessionId();
     try {
       // First injection
-      const first = evaluateKeywordInjection('implement auth', testDir, sid);
+      const first = await evaluateKeywordInjection('implement auth', testDir, sid);
       expect(first.inject).toBe(true);
 
       // Second injection with same keyword — should be deduped
-      const second = evaluateKeywordInjection('check auth again', testDir, sid);
+      const second = await evaluateKeywordInjection('check auth again', testDir, sid);
       expect(second.inject).toBe(false);
     } finally {
       const path = bridgePath(sid);
@@ -205,7 +205,7 @@ Content.
     }
   });
 
-  it('injects new entries even if some are deduped', () => {
+  it('injects new entries even if some are deduped', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth" date="2026-04-21">
 
@@ -227,11 +227,11 @@ Content B.
     const sid = newSessionId();
     try {
       // First injection — matches 'auth'
-      const first = evaluateKeywordInjection('fix auth module', testDir, sid);
+      const first = await evaluateKeywordInjection('fix auth module', testDir, sid);
       expect(first.inject).toBe(true);
 
       // Second injection — 'auth' deduped, but 'cache' is new
-      const second = evaluateKeywordInjection('check auth and cache', testDir, sid);
+      const second = await evaluateKeywordInjection('check auth and cache', testDir, sid);
       expect(second.inject).toBe(true);
       expect(second.content).toContain('Cache Pattern');
     } finally {
@@ -246,7 +246,7 @@ Content B.
 // ---------------------------------------------------------------------------
 
 describe('evaluateKeywordInjection — max entries', () => {
-  it('limits injection to MAX_ENTRIES_PER_INJECTION (5)', () => {
+  it('limits injection to MAX_ENTRIES_PER_INJECTION (5)', async () => {
     // Create 8 entries that all match keyword "api"
     const entries = Array.from({ length: 8 }, (_, i) => `
 <spec-entry category="coding" keywords="api" date="2026-04-${String(i + 10).padStart(2, '0')}">
@@ -261,7 +261,7 @@ Content ${i + 1}.
 
     const sid = newSessionId();
     try {
-      const result = evaluateKeywordInjection('implement api endpoint', testDir, sid);
+      const result = await evaluateKeywordInjection('implement api endpoint', testDir, sid);
       expect(result.inject).toBe(true);
       expect(result.matchedEntries).toBeLessThanOrEqual(5);
     } finally {
@@ -276,7 +276,7 @@ Content ${i + 1}.
 // ---------------------------------------------------------------------------
 
 describe('evaluateKeywordInjection — output format', () => {
-  it('wraps content in maestro-context with a keyword section', () => {
+  it('wraps content in maestro-context with a keyword section', async () => {
     writeSpecFile('coding-conventions.md', `
 <spec-entry category="coding" keywords="auth" date="2026-04-21">
 
@@ -289,7 +289,7 @@ Implement auth guards.
 
     const sid = newSessionId();
     try {
-      const result = evaluateKeywordInjection('implement auth guard', testDir, sid);
+      const result = await evaluateKeywordInjection('implement auth guard', testDir, sid);
       expect(result.inject).toBe(true);
       expect(result.content).toContain('<maestro-context');
       expect(result.content).toContain('</maestro-context>');

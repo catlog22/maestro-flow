@@ -26,7 +26,7 @@ export class SpecInjectionPlugin implements MaestroPlugin {
   ) {}
 
   apply(registry: WorkflowHookRegistry): void {
-    registry.transformPrompt.tap(this.name, (prompt: string) => {
+    registry.transformPrompt.tap(this.name, async (prompt: string) => {
       const parts: string[] = [prompt];
       const config = loadSpecInjectionConfig(this.projectPath);
 
@@ -74,7 +74,7 @@ export class SpecInjectionPlugin implements MaestroPlugin {
 
       // Keyword-based injection (with session dedup)
       if (this.sessionId) {
-        const kwResult = evaluateKeywordInjection(prompt, this.projectPath, this.sessionId);
+        const kwResult = await evaluateKeywordInjection(prompt, this.projectPath, this.sessionId);
         if (kwResult.inject && kwResult.content) {
           parts.push(kwResult.content);
         }

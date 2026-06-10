@@ -829,7 +829,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const workspace = resolveWorkspace({ cwd });
     if (!workspace) return;
 
-    const result = evaluateKeywordInjection(prompt, workspace, sessionId);
+    const result = await evaluateKeywordInjection(prompt, workspace, sessionId);
     if (result.inject && result.content) {
       process.stdout.write(JSON.stringify({
         hookSpecificOutput: {
@@ -870,7 +870,7 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const originalPrompt: string = toolInput.prompt ?? '';
 
     const { evaluateKgContextInjection } = await import('../hooks/kg-context-injector.js');
-    const result = evaluateKgContextInjection(agentType, originalPrompt, cwd);
+    const result = await evaluateKgContextInjection(agentType, originalPrompt, cwd);
     if (result.inject && result.content) {
       const augmentedPrompt = `${result.content}\n\n${originalPrompt}`;
 

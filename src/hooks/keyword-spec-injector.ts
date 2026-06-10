@@ -69,11 +69,11 @@ const MAX_ENTRIES_PER_INJECTION = 5;
  * @param projectPath Working directory for spec file resolution
  * @param sessionId   Session ID for dedup bridge
  */
-export function evaluateKeywordInjection(
+export async function evaluateKeywordInjection(
   prompt: string,
   projectPath: string,
   sessionId: string,
-): KeywordInjectionResult {
+): Promise<KeywordInjectionResult> {
   // 1. Tokenize prompt into candidate keywords
   const promptKeywords = tokenizePrompt(prompt);
   if (promptKeywords.length === 0) {
@@ -148,7 +148,7 @@ export function evaluateKeywordInjection(
 
   // 6b. KG symbol lookup — append code graph context if available
   try {
-    const symbolSection = evaluateKgSymbolLookup(prompt, projectPath);
+    const symbolSection = await evaluateKgSymbolLookup(prompt, projectPath);
     if (symbolSection) {
       sections.push(symbolSection);
     }
@@ -279,61 +279,45 @@ const KG_MAX_CONTENT_LENGTH = 512;
  * Returns a `kg-symbols` ContextSection or null if nothing found.
  * Entire function is best-effort — returns null on any failure.
  */
-function evaluateKgSymbolLookup(prompt: string, projectPath: string): ContextSection | null {
-  // 1. Extract symbols from prompt
+async function evaluateKgSymbolLookup(prompt: string, projectPath: string): Promise<ContextSection | null> {
   const matches = prompt.match(KG_SYMBOL_PATTERN);
   if (!matches || matches.length === 0) return null;
 
-  // Deduplicate and limit
   const symbols = [...new Set(matches)].slice(0, KG_MAX_SYMBOLS);
 
-  // 2. Check if SQLite DB exists
-  let dbPath: string;
   try {
-    const { existsSync } = require('node:fs');
-    const { getDatabasePath } = require('../graph/db/index.js');
-    dbPath = getDatabasePath(projectPath);
-    if (!existsSync(dbPath)) return null;
-  } catch {
-    return null;
-  }
+    const { isCodeGraphAvailable, CodeGraphAdapter } = require('../graph/codegraph-adapter.js');
+    if (!isCodeGraphAvailable()) return null;
 
-  // 3. Open DB and search
-  let conn: any;
-  try {
-    const { DatabaseConnection } = require('../graph/db/index.js');
-    const { QueryBuilder } = require('../graph/db/index.js');
+    const adapter = new CodeGraphAdapter(projectPath);
+    try {
+      if (!adapter.isInitialized()) return null;
 
-    conn = new DatabaseConnection();
-    conn.open(dbPath);
-    const qb = new QueryBuilder(conn);
+      const lines: string[] = [];
+      let totalLen = 0;
 
-    const lines: string[] = [];
-    let totalLen = 0;
+      for (const sym of symbols) {
+        if (totalLen >= KG_MAX_CONTENT_LENGTH) break;
 
-    for (const sym of symbols) {
-      if (totalLen >= KG_MAX_CONTENT_LENGTH) break;
+        const results = await adapter.searchNodes(sym, { limit: KG_MAX_RESULTS_PER_SYMBOL });
+        for (const r of results) {
+          const node = r.node ?? r;
+          const line = `[${node.kind}] ${node.name}` +
+            (node.filePath ? ` (${node.filePath}:${node.startLine})` : '') +
+            (node.signature ? ` — ${node.signature}` : '');
 
-      const nodes = qb.searchNodes(sym, { limit: KG_MAX_RESULTS_PER_SYMBOL });
-      for (const node of nodes) {
-        const line = `[${node.kind}] ${node.name}` +
-          (node.filePath ? ` (${node.filePath}:${node.startLine})` : '') +
-          (node.signature ? ` — ${node.signature}` : '');
-
-        if (totalLen + line.length > KG_MAX_CONTENT_LENGTH) break;
-        lines.push(line);
-        totalLen += line.length;
+          if (totalLen + line.length > KG_MAX_CONTENT_LENGTH) break;
+          lines.push(line);
+          totalLen += line.length;
+        }
       }
+
+      if (lines.length === 0) return null;
+      return { label: 'kg-symbols', lines };
+    } finally {
+      try { adapter.close(); } catch { /* best-effort */ }
     }
-
-    conn.close();
-
-    if (lines.length === 0) return null;
-
-    return { label: 'kg-symbols', lines };
   } catch {
-    // Ensure DB is closed on error
-    try { conn?.close(); } catch { /* ignore */ }
     return null;
   }
 }

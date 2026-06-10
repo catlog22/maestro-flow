@@ -99,7 +99,7 @@ function openSqliteOrExit(): { conn: DatabaseConnection; queries: QueryBuilder }
   const dbPath = getDatabasePath();
   if (!existsSync(dbPath)) {
     console.error(`SQLite graph not found: ${dbPath}`);
-    console.error('  Hint: run "maestro kg index --sqlite" to create one');
+    console.error('  Hint: legacy commands require a SQLite index (from older maestro versions)');
     process.exit(1);
   }
   const conn = new DatabaseConnection();
@@ -109,6 +109,24 @@ function openSqliteOrExit(): { conn: DatabaseConnection; queries: QueryBuilder }
 
 function hasSqliteDb(): boolean {
   return existsSync(getDatabasePath());
+}
+
+// ── CodeGraph helpers ─────────────────────────────────────────────────
+
+async function requireCodeGraph(): Promise<{ adapter: InstanceType<typeof import('../graph/codegraph-adapter.js').CodeGraphAdapter> }> {
+  const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
+  if (!isCodeGraphAvailable()) {
+    console.error('CodeGraph not installed.');
+    console.error('  Install: npm install -g @colbymchenry/codegraph');
+    process.exit(1);
+  }
+  const adapter = new CodeGraphAdapter(resolve('.'));
+  if (!adapter.isInitialized()) {
+    console.error('CodeGraph not initialized for this project.');
+    console.error('  Run: maestro kg index');
+    process.exit(1);
+  }
+  return { adapter };
 }
 
 // ── Registration ───────────────────────────────────────────────────────
@@ -488,10 +506,8 @@ export function registerKgCommand(program: Command): void {
   // ── index ─────────────────────────────────────────────────────────
   kg
     .command('index')
-    .description('Scan codebase and generate knowledge graph')
+    .description('Scan codebase and generate knowledge graph (CodeGraph)')
     .option('--src <path>', 'Source directory to scan', 'src')
-    .option('--sqlite', 'Use SQLite backend (recommended for large projects)')
-    .option('--no-codegraph', 'Force regex-only extraction (skip tree-sitter)')
     .option('--json', 'Output stats as JSON after indexing')
     .action(async (opts) => {
       const srcPath = resolve(opts.src);
@@ -500,110 +516,59 @@ export function registerKgCommand(program: Command): void {
         process.exit(1);
       }
 
-      // CodeGraph tree-sitter engine (preferred when available)
-      if (opts.codegraph !== false) {
-        try {
-          const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-          if (isCodeGraphAvailable()) {
-            console.log('Using CodeGraph tree-sitter engine...');
-            const projectRoot = resolve('.');
-            const adapter = new CodeGraphAdapter(projectRoot);
-            try {
-              const result = await adapter.index({ verbose: true });
-              const stats = await adapter.stats();
+      // CodeGraph tree-sitter engine
+      try {
+        const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
+        if (isCodeGraphAvailable()) {
+          console.log('Using CodeGraph tree-sitter engine...');
+          const projectRoot = resolve('.');
+          const adapter = new CodeGraphAdapter(projectRoot);
+          try {
+            const result = await adapter.index({ verbose: true });
+            const stats = await adapter.stats();
 
-              if (opts.json) {
-                console.log(JSON.stringify({ ...stats, ...result, engine: 'codegraph' }, null, 2));
-                return;
-              }
-
-              console.log('');
-              console.log(`Nodes: ${stats.nodeCount}`);
-              for (const [kind, count] of Object.entries(stats.nodesByKind)) {
-                console.log(`  ${kind}: ${count}`);
-              }
-              console.log('');
-              console.log(`Edges: ${stats.edgeCount}`);
-              for (const [kind, count] of Object.entries(stats.edgesByKind)) {
-                console.log(`  ${kind}: ${count}`);
-              }
-              console.log('');
-              console.log(`Files: ${stats.fileCount}`);
-              console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
-              console.log(`Duration: ${result.durationMs}ms`);
-              if (result.errors.length > 0) {
-                console.log(`Errors: ${result.errors.length}`);
-                for (const err of result.errors.slice(0, 5)) {
-                  console.log(`  [${err.severity}] ${err.message}${err.filePath ? ` (${err.filePath})` : ''}`);
-                }
-                if (result.errors.length > 5) {
-                  console.log(`  ... and ${result.errors.length - 5} more`);
-                }
-              }
+            if (opts.json) {
+              console.log(JSON.stringify({ ...stats, ...result, engine: 'codegraph' }, null, 2));
               return;
-            } finally {
-              adapter.close();
             }
+
+            console.log('');
+            console.log(`Nodes: ${stats.nodeCount}`);
+            for (const [kind, count] of Object.entries(stats.nodesByKind)) {
+              console.log(`  ${kind}: ${count}`);
+            }
+            console.log('');
+            console.log(`Edges: ${stats.edgeCount}`);
+            for (const [kind, count] of Object.entries(stats.edgesByKind)) {
+              console.log(`  ${kind}: ${count}`);
+            }
+            console.log('');
+            console.log(`Files: ${stats.fileCount}`);
+            console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
+            console.log(`Duration: ${result.durationMs}ms`);
+            if (result.errors.length > 0) {
+              console.log(`Errors: ${result.errors.length}`);
+              for (const err of result.errors.slice(0, 5)) {
+                console.log(`  [${err.severity}] ${err.message}${err.filePath ? ` (${err.filePath})` : ''}`);
+              }
+              if (result.errors.length > 5) {
+                console.log(`  ... and ${result.errors.length - 5} more`);
+              }
+            }
+            return;
+          } finally {
+            adapter.close();
           }
-        } catch (cgErr) {
-          // CodeGraph not loadable — fall through to legacy paths
-          if (process.env.DEBUG) {
-            console.error('CodeGraph error:', cgErr instanceof Error ? cgErr.message : cgErr);
-          }
+        }
+      } catch (cgErr) {
+        if (process.env.DEBUG) {
+          console.error('CodeGraph error:', cgErr instanceof Error ? cgErr.message : cgErr);
         }
       }
 
-      // SQLite mode — use IncrementalSync for full index
-      if (opts.sqlite) {
-        if (opts.codegraph === false) {
-          console.log('CodeGraph disabled, using regex analyzer...');
-        } else {
-          console.log('CodeGraph not available, using regex analyzer...');
-        }
-
-        const dbPath = getDatabasePath();
-        const outDir = resolve('.workflow', 'codebase');
-        mkdirSync(outDir, { recursive: true });
-
-        const conn = new DatabaseConnection();
-        const isNew = !existsSync(dbPath);
-        if (isNew) conn.initialize(dbPath);
-        else conn.open(dbPath);
-
-        const queries = new QueryBuilder(conn);
-        if (!isNew) queries.clear();
-
-        console.log(`Indexing ${srcPath} to SQLite ...`);
-        const sync = new IncrementalSync(srcPath, conn);
-        const result = sync.sync();
-
-        queries.setMetadata('projectRoot', srcPath);
-
-        const stats = queries.getStats(conn.getSize());
-        conn.close();
-
-        if (opts.json) {
-          console.log(JSON.stringify({ ...stats, ...result, output: dbPath }, null, 2));
-          return;
-        }
-
-        console.log('');
-        console.log(`Nodes: ${stats.nodeCount}`);
-        for (const [kind, count] of Object.entries(stats.nodesByKind)) {
-          console.log(`  ${kind}: ${count}`);
-        }
-        console.log('');
-        console.log(`Edges: ${stats.edgeCount}`);
-        for (const [kind, count] of Object.entries(stats.edgesByKind)) {
-          console.log(`  ${kind}: ${count}`);
-        }
-        console.log('');
-        console.log(`Files: ${stats.fileCount}`);
-        console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
-        console.log(`Duration: ${result.durationMs}ms`);
-        console.log(`Written to: ${dbPath}`);
-        return;
-      }
+      console.error('CodeGraph not available. Install: npm install -g @colbymchenry/codegraph');
+      console.error('Falling back to JSON analyzer...');
+      console.error('');
 
       // JSON mode (legacy)
       const analyzer = new FsAnalyzer();
@@ -691,81 +656,39 @@ export function registerKgCommand(program: Command): void {
   // ── sync (incremental) ────────────────────────────────────────────
   kg
     .command('sync')
-    .description('Incremental sync — only re-index changed files (SQLite)')
-    .option('--no-codegraph', 'Force regex-only extraction (skip tree-sitter)')
+    .description('Incremental sync — only re-index changed files (CodeGraph)')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
-      // CodeGraph tree-sitter sync (preferred when available)
-      if (opts.codegraph !== false) {
-        try {
-          const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-          if (isCodeGraphAvailable()) {
-            console.log('Using CodeGraph tree-sitter engine...');
-            const projectRoot = resolve('.');
-            const adapter = new CodeGraphAdapter(projectRoot);
-            try {
-              const result = await adapter.sync();
-              if (opts.json) {
-                console.log(JSON.stringify({ ...result, engine: 'codegraph' }, null, 2));
-              } else {
-                const changed = result.filesAdded + result.filesModified + result.filesRemoved;
-                console.log(`Sync complete: ${changed} files changed (${result.filesAdded} added, ${result.filesModified} modified, ${result.filesRemoved} removed), ${result.nodesUpdated} nodes updated (${result.durationMs}ms)`);
-              }
-              return;
-            } finally {
-              adapter.close();
-            }
-          }
-        } catch {
-          // CodeGraph not loadable — fall through to IncrementalSync
-        }
-      }
-
-      // Fallback: IncrementalSync (regex-based)
-      if (opts.codegraph === false) {
-        console.log('CodeGraph disabled, using regex analyzer...');
-      } else {
-        console.log('CodeGraph not available, using regex analyzer...');
-      }
-      const { conn, queries } = openSqliteOrExit();
+      const { adapter } = await requireCodeGraph();
       try {
-        const projectRoot = queries.getMetadata('projectRoot') ?? process.cwd();
-        const sync = new IncrementalSync(projectRoot, conn);
-        const result = sync.sync();
+        const result = await adapter.sync();
         if (opts.json) {
-          console.log(JSON.stringify(result, null, 2));
+          console.log(JSON.stringify({ ...result, engine: 'codegraph' }, null, 2));
         } else {
-          console.log(`Sync complete: ${result.filesChanged} files changed, ${result.nodesAdded} nodes, ${result.edgesAdded} edges (${result.durationMs}ms)`);
+          const changed = result.filesAdded + result.filesModified + result.filesRemoved;
+          console.log(`Sync complete: ${changed} files changed (${result.filesAdded} added, ${result.filesModified} modified, ${result.filesRemoved} removed), ${result.nodesUpdated} nodes updated (${result.durationMs}ms)`);
         }
       } finally {
-        conn.close();
+        adapter.close();
       }
     });
 
   // ── watch ──────────────────────────────────────────────────────────
   kg
     .command('watch')
-    .description('Watch for file changes and auto-sync (SQLite)')
+    .description('Watch for file changes and auto-sync (CodeGraph)')
     .option('--debounce <ms>', 'Debounce delay in milliseconds', '2000')
-    .action((opts) => {
-      const dbPath = getDatabasePath();
-      if (!existsSync(dbPath)) {
-        console.error(`SQLite graph not found. Run "maestro kg index --sqlite" first.`);
-        process.exit(1);
-      }
-
-      const conn = new DatabaseConnection();
-      conn.open(dbPath);
-      const queries = new QueryBuilder(conn);
-      const projectRoot = queries.getMetadata('projectRoot') ?? process.cwd();
+    .action(async (opts) => {
+      const { adapter } = await requireCodeGraph();
+      const projectRoot = resolve('.');
       const debounceMs = Number(opts.debounce) || 2000;
 
       const watcher = new FileWatcher(
         projectRoot,
         async () => {
-          const sync = new IncrementalSync(projectRoot, conn);
-          const result = sync.sync();
-          return { filesChanged: result.filesChanged, durationMs: result.durationMs };
+          const result = await adapter.sync();
+          const filesChanged = result.filesAdded + result.filesModified + result.filesRemoved;
+          return { filesChanged, durationMs: result.durationMs };
         },
         {
           debounceMs,
@@ -783,7 +706,7 @@ export function registerKgCommand(program: Command): void {
       const started = watcher.start();
       if (!started) {
         console.error('Could not start file watcher (unsupported filesystem?)');
-        conn.close();
+        adapter.close();
         process.exit(1);
       }
 
@@ -791,7 +714,7 @@ export function registerKgCommand(program: Command): void {
 
       process.on('SIGINT', () => {
         watcher.stop();
-        conn.close();
+        adapter.close();
         console.log('\nWatcher stopped.');
         process.exit(0);
       });
@@ -800,225 +723,72 @@ export function registerKgCommand(program: Command): void {
   // ── callers ────────────────────────────────────────────────────────
   kg
     .command('callers <node-id>')
-    .description('Show callers of a function/method')
+    .description('Show callers of a function/method (CodeGraph)')
     .option('--depth <n>', 'Max traversal depth', '2')
     .option('--json', 'Output as JSON')
-    .option('--no-codegraph', 'Force regex-only (skip tree-sitter)')
     .action(async (nodeId: string, opts) => {
       const depth = Number(opts.depth) || 2;
-
-      // Prefer CodeGraph when available
-      if (opts.codegraph !== false) {
-        try {
-          const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-          if (isCodeGraphAvailable()) {
-            const adapter = new CodeGraphAdapter(resolve('.'));
-            try {
-              if (adapter.isInitialized()) {
-                const callers = await adapter.getCallers(nodeId, depth);
-                if (opts.json) {
-                  console.log(JSON.stringify(callers.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-                    id: c.node.id, kind: c.node.kind, name: c.node.name,
-                    filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
-                  })), null, 2));
-                  return;
-                }
-                console.log(`Callers of ${nodeId} (${callers.length}):`);
-                for (const { node, edge } of callers) {
-                  console.log(`  [${node.kind}] ${node.id} --${edge?.kind ?? 'calls'}-->`);
-                  if (node.signature) console.log(`    ${node.signature}`);
-                }
-                return;
-              }
-            } finally {
-              adapter.close();
-            }
-          }
-        } catch { /* fall through to legacy */ }
-      }
-
-      // Fallback: Maestro SQLite
-      const { conn, queries } = openSqliteOrExit();
+      const { adapter } = await requireCodeGraph();
       try {
-        const traverser = new GraphTraverser(queries);
-        const callers = traverser.getCallers(nodeId, depth);
-
+        const callers = await adapter.getCallers(nodeId, depth);
         if (opts.json) {
-          console.log(JSON.stringify(callers.map(c => ({
+          console.log(JSON.stringify(callers.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
             id: c.node.id, kind: c.node.kind, name: c.node.name,
-            filePath: c.node.filePath, edgeKind: c.edge.kind,
+            filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
           })), null, 2));
           return;
         }
-
         console.log(`Callers of ${nodeId} (${callers.length}):`);
         for (const { node, edge } of callers) {
-          console.log(`  [${node.kind}] ${node.id} --${edge.kind}-->`);
+          console.log(`  [${node.kind}] ${node.id} --${edge?.kind ?? 'calls'}-->`);
           if (node.signature) console.log(`    ${node.signature}`);
         }
       } finally {
-        conn.close();
+        adapter.close();
       }
     });
 
   // ── callees ────────────────────────────────────────────────────────
   kg
     .command('callees <node-id>')
-    .description('Show callees of a function/method')
+    .description('Show callees of a function/method (CodeGraph)')
     .option('--depth <n>', 'Max traversal depth', '2')
     .option('--json', 'Output as JSON')
-    .option('--no-codegraph', 'Force regex-only (skip tree-sitter)')
     .action(async (nodeId: string, opts) => {
       const depth = Number(opts.depth) || 2;
-
-      // Prefer CodeGraph when available
-      if (opts.codegraph !== false) {
-        try {
-          const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-          if (isCodeGraphAvailable()) {
-            const adapter = new CodeGraphAdapter(resolve('.'));
-            try {
-              if (adapter.isInitialized()) {
-                const callees = await adapter.getCallees(nodeId, depth);
-                if (opts.json) {
-                  console.log(JSON.stringify(callees.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-                    id: c.node.id, kind: c.node.kind, name: c.node.name,
-                    filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
-                  })), null, 2));
-                  return;
-                }
-                console.log(`Callees of ${nodeId} (${callees.length}):`);
-                for (const { node, edge } of callees) {
-                  console.log(`  --${edge?.kind ?? 'calls'}--> [${node.kind}] ${node.id}`);
-                  if (node.signature) console.log(`    ${node.signature}`);
-                }
-                return;
-              }
-            } finally {
-              adapter.close();
-            }
-          }
-        } catch { /* fall through to legacy */ }
-      }
-
-      // Fallback: Maestro SQLite
-      const { conn, queries } = openSqliteOrExit();
+      const { adapter } = await requireCodeGraph();
       try {
-        const traverser = new GraphTraverser(queries);
-        const callees = traverser.getCallees(nodeId, depth);
-
+        const callees = await adapter.getCallees(nodeId, depth);
         if (opts.json) {
-          console.log(JSON.stringify(callees.map(c => ({
+          console.log(JSON.stringify(callees.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
             id: c.node.id, kind: c.node.kind, name: c.node.name,
-            filePath: c.node.filePath, edgeKind: c.edge.kind,
+            filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
           })), null, 2));
           return;
         }
-
         console.log(`Callees of ${nodeId} (${callees.length}):`);
         for (const { node, edge } of callees) {
-          console.log(`  --${edge.kind}--> [${node.kind}] ${node.id}`);
+          console.log(`  --${edge?.kind ?? 'calls'}--> [${node.kind}] ${node.id}`);
           if (node.signature) console.log(`    ${node.signature}`);
         }
       } finally {
-        conn.close();
+        adapter.close();
       }
     });
 
   // ── search ─────────────────────────────────────────────────────────
   kg
     .command('search <text>')
-    .description('Search nodes with optional context and wiki cross-references')
+    .description('Search nodes with optional context and wiki cross-references (CodeGraph)')
     .option('--context', 'Include caller/callee counts for each result')
     .option('--wiki', 'Include related wiki entries for each result')
     .option('--limit <n>', 'Max results', '10')
     .option('--json', 'Output as JSON')
-    .option('--no-codegraph', 'Force regex-only (skip tree-sitter)')
     .action(async (text: string, opts) => {
       const limit = Number(opts.limit) || 10;
-
-      // Prefer CodeGraph when available
-      if (opts.codegraph !== false) {
-        try {
-          const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-          if (isCodeGraphAvailable()) {
-            const adapter = new CodeGraphAdapter(resolve('.'));
-            try {
-              if (adapter.isInitialized()) {
-                const cgResults = await adapter.searchNodes(text, { limit });
-
-                const enriched: Array<{
-                  id: string; kind: string; name: string; filePath: string;
-                  signature?: string; isExported?: boolean;
-                  callerCount?: number; calleeCount?: number;
-                  wiki?: WikiMatch[];
-                }> = [];
-
-                for (const r of cgResults) {
-                  const n = r.node ?? r;
-                  const entry: typeof enriched[number] = {
-                    id: n.id, kind: n.kind, name: n.name, filePath: n.filePath,
-                    signature: n.signature || undefined,
-                    isExported: n.isExported || undefined,
-                  };
-
-                  if (opts.context) {
-                    const callers = await adapter.getCallers(n.id, 1);
-                    const callees = await adapter.getCallees(n.id, 1);
-                    entry.callerCount = callers.length;
-                    entry.calleeCount = callees.length;
-                  }
-
-                  if (opts.wiki) {
-                    entry.wiki = await findRelatedWikiEntries(n.id, n.filePath);
-                  }
-
-                  enriched.push(entry);
-                }
-
-                if (opts.json) {
-                  console.log(JSON.stringify({ query: text, total: enriched.length, nodes: enriched, engine: 'codegraph' }, null, 2));
-                  return;
-                }
-
-                console.log(`Search: "${text}"  (${enriched.length} results, CodeGraph)`);
-                for (const n of enriched) {
-                  const exported = n.isExported ? 'Exported ' : '';
-                  const desc = n.signature ? truncate(n.signature, 60) : `${exported}${n.kind} "${n.name}" in ${n.filePath}`;
-                  let line = `  [${n.kind}] ${n.id} -- ${desc}`;
-                  if (n.callerCount !== undefined) {
-                    line += `  (callers: ${n.callerCount}, callees: ${n.calleeCount})`;
-                  }
-                  console.log(line);
-                  if (n.wiki && n.wiki.length > 0) {
-                    for (const w of n.wiki) {
-                      console.log(`    wiki: [${w.type}] ${w.id} -- ${w.title} (${w.matchReason})`);
-                    }
-                  }
-                }
-                return;
-              }
-            } finally {
-              adapter.close();
-            }
-          }
-        } catch { /* fall through to legacy */ }
-      }
-
-      // Fallback: Maestro SQLite
-      const { conn, queries } = openSqliteOrExit();
+      const { adapter } = await requireCodeGraph();
       try {
-        const parsed = parseQuery(text);
-        const kinds = parsed.kinds.length > 0 ? parsed.kinds : undefined;
-        const results = queries.searchNodes(parsed.text || text, {
-          kinds,
-          languages: parsed.languages.length > 0 ? parsed.languages : undefined,
-          pathFilters: parsed.pathFilters.length > 0 ? parsed.pathFilters : undefined,
-          nameFilters: parsed.nameFilters.length > 0 ? parsed.nameFilters : undefined,
-          limit,
-        });
-
-        const traverser = opts.context ? new GraphTraverser(queries) : null;
+        const cgResults = await adapter.searchNodes(text, { limit });
 
         const enriched: Array<{
           id: string; kind: string; name: string; filePath: string;
@@ -1027,16 +797,19 @@ export function registerKgCommand(program: Command): void {
           wiki?: WikiMatch[];
         }> = [];
 
-        for (const n of results) {
+        for (const r of cgResults) {
+          const n = r.node ?? r;
           const entry: typeof enriched[number] = {
             id: n.id, kind: n.kind, name: n.name, filePath: n.filePath,
             signature: n.signature || undefined,
             isExported: n.isExported || undefined,
           };
 
-          if (traverser) {
-            entry.callerCount = traverser.getCallers(n.id, 1).length;
-            entry.calleeCount = traverser.getCallees(n.id, 1).length;
+          if (opts.context) {
+            const callers = await adapter.getCallers(n.id, 1);
+            const callees = await adapter.getCallees(n.id, 1);
+            entry.callerCount = callers.length;
+            entry.calleeCount = callees.length;
           }
 
           if (opts.wiki) {
@@ -1047,11 +820,11 @@ export function registerKgCommand(program: Command): void {
         }
 
         if (opts.json) {
-          console.log(JSON.stringify({ query: text, total: enriched.length, nodes: enriched }, null, 2));
+          console.log(JSON.stringify({ query: text, total: enriched.length, nodes: enriched, engine: 'codegraph' }, null, 2));
           return;
         }
 
-        console.log(`Search: "${text}"  (${enriched.length} results, SQLite)`);
+        console.log(`Search: "${text}"  (${enriched.length} results, CodeGraph)`);
         for (const n of enriched) {
           const exported = n.isExported ? 'Exported ' : '';
           const desc = n.signature ? truncate(n.signature, 60) : `${exported}${n.kind} "${n.name}" in ${n.filePath}`;
@@ -1067,199 +840,94 @@ export function registerKgCommand(program: Command): void {
           }
         }
       } finally {
-        conn.close();
+        adapter.close();
       }
     });
 
   // ── context ──────────────────────────────────────────────────────
   kg
     .command('context <node-id>')
-    .description('Show full context: callers, callees, file siblings, and wiki')
+    .description('Show full context: callers, callees, file siblings, and wiki (CodeGraph)')
     .option('--depth <n>', 'Max traversal depth', '2')
     .option('--wiki', 'Include related wiki entries')
     .option('--json', 'Output as JSON')
-    .option('--no-codegraph', 'Force regex-only (skip tree-sitter)')
     .action(async (nodeId: string, opts) => {
       const depth = Number(opts.depth) || 2;
-
-      // Prefer CodeGraph when available
-      if (opts.codegraph !== false) {
-        try {
-          const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-          if (isCodeGraphAvailable()) {
-            const adapter = new CodeGraphAdapter(resolve('.'));
-            try {
-              if (adapter.isInitialized()) {
-                const resolved = await adapter.resolveNode(nodeId);
-                if (resolved) {
-                  const callers = await adapter.getCallers(nodeId, depth);
-                  const callees = await adapter.getCallees(nodeId, depth);
-                  const fileSiblings = resolved.filePath
-                    ? (await adapter.getNodesInFile(resolved.filePath)).filter((n: any) => n.id !== resolved.id) // eslint-disable-line @typescript-eslint/no-explicit-any
-                    : [];
-                  const wikiMatches = opts.wiki
-                    ? await findRelatedWikiEntries(nodeId, resolved.filePath)
-                    : [];
-
-                  if (opts.json) {
-                    console.log(JSON.stringify({
-                      node: {
-                        id: resolved.id, kind: resolved.kind, name: resolved.name,
-                        filePath: resolved.filePath, signature: resolved.signature,
-                        startLine: resolved.startLine, endLine: resolved.endLine,
-                        isExported: resolved.isExported,
-                      },
-                      callers: callers.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-                        id: c.node.id, kind: c.node.kind, name: c.node.name,
-                        filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
-                      })),
-                      callees: callees.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-                        id: c.node.id, kind: c.node.kind, name: c.node.name,
-                        filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
-                      })),
-                      fileSiblings: fileSiblings.map((n: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
-                        id: n.id, kind: n.kind, name: n.name,
-                      })),
-                      wiki: wikiMatches,
-                      engine: 'codegraph',
-                    }, null, 2));
-                    return;
-                  }
-
-                  // Text output
-                  console.log(`Node: ${resolved.id}`);
-                  console.log(`  Kind:       ${resolved.kind}`);
-                  console.log(`  Name:       ${resolved.name}`);
-                  if (resolved.filePath) console.log(`  File:       ${resolved.filePath}:${resolved.startLine}-${resolved.endLine}`);
-                  if (resolved.signature) console.log(`  Signature:  ${truncate(resolved.signature, 80)}`);
-                  if (resolved.isExported) console.log(`  Exported:   yes`);
-
-                  if (callers.length > 0) {
-                    console.log('');
-                    console.log(`Callers (${callers.length}, depth ${depth}):`);
-                    for (const { node: c, edge } of callers) {
-                      console.log(`  [${c.kind}] ${c.id} --${edge?.kind ?? 'calls'}-->`);
-                      if (c.signature) console.log(`    ${truncate(c.signature, 70)}`);
-                    }
-                  }
-
-                  if (callees.length > 0) {
-                    console.log('');
-                    console.log(`Callees (${callees.length}, depth ${depth}):`);
-                    for (const { node: c, edge } of callees) {
-                      console.log(`  --${edge?.kind ?? 'calls'}--> [${c.kind}] ${c.id}`);
-                      if (c.signature) console.log(`    ${truncate(c.signature, 70)}`);
-                    }
-                  }
-
-                  if (fileSiblings.length > 0) {
-                    console.log('');
-                    console.log(`File siblings in ${resolved.filePath} (${fileSiblings.length}):`);
-                    for (const s of fileSiblings) {
-                      console.log(`  [${s.kind}] ${s.id} -- ${s.name}`);
-                    }
-                  }
-
-                  if (wikiMatches.length > 0) {
-                    console.log('');
-                    console.log(`Related wiki entries (${wikiMatches.length}):`);
-                    for (const w of wikiMatches) {
-                      console.log(`  [${w.type}] ${w.id} -- ${w.title} (${w.matchReason})`);
-                    }
-                  }
-                  return;
-                }
-              }
-            } finally {
-              adapter.close();
-            }
-          }
-        } catch { /* fall through to legacy */ }
-      }
-
-      // Fallback: Maestro SQLite
-      const { conn, queries } = openSqliteOrExit();
+      const { adapter } = await requireCodeGraph();
       try {
-        const node = queries.getNodeById(nodeId);
-        if (!node) {
+        const resolved = await adapter.resolveNode(nodeId);
+        if (!resolved) {
           console.error(`Node not found: ${nodeId}`);
           process.exit(1);
         }
 
-        const traverser = new GraphTraverser(queries);
-        const callers = traverser.getCallers(nodeId, depth);
-        const callees = traverser.getCallees(nodeId, depth);
-
-        const fileSiblings = node.filePath
-          ? queries.getNodesByFile(node.filePath).filter(n => n.id !== nodeId)
+        const callers = await adapter.getCallers(nodeId, depth);
+        const callees = await adapter.getCallees(nodeId, depth);
+        const fileSiblings = resolved.filePath
+          ? (await adapter.getNodesInFile(resolved.filePath)).filter((n: any) => n.id !== resolved.id) // eslint-disable-line @typescript-eslint/no-explicit-any
           : [];
-
         const wikiMatches = opts.wiki
-          ? await findRelatedWikiEntries(nodeId, node.filePath)
+          ? await findRelatedWikiEntries(nodeId, resolved.filePath)
           : [];
 
         if (opts.json) {
           console.log(JSON.stringify({
             node: {
-              id: node.id, kind: node.kind, name: node.name,
-              filePath: node.filePath, signature: node.signature,
-              startLine: node.startLine, endLine: node.endLine,
-              isExported: node.isExported,
+              id: resolved.id, kind: resolved.kind, name: resolved.name,
+              filePath: resolved.filePath, signature: resolved.signature,
+              startLine: resolved.startLine, endLine: resolved.endLine,
+              isExported: resolved.isExported,
             },
-            callers: callers.map(c => ({
+            callers: callers.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
               id: c.node.id, kind: c.node.kind, name: c.node.name,
-              filePath: c.node.filePath, edgeKind: c.edge.kind,
+              filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
             })),
-            callees: callees.map(c => ({
+            callees: callees.map((c: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
               id: c.node.id, kind: c.node.kind, name: c.node.name,
-              filePath: c.node.filePath, edgeKind: c.edge.kind,
+              filePath: c.node.filePath, edgeKind: c.edge?.kind ?? 'calls',
             })),
-            fileSiblings: fileSiblings.map(n => ({
+            fileSiblings: fileSiblings.map((n: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
               id: n.id, kind: n.kind, name: n.name,
             })),
             wiki: wikiMatches,
+            engine: 'codegraph',
           }, null, 2));
           return;
         }
 
-        // Focal node
-        console.log(`Node: ${node.id}`);
-        console.log(`  Kind:       ${node.kind}`);
-        console.log(`  Name:       ${node.name}`);
-        if (node.filePath) console.log(`  File:       ${node.filePath}:${node.startLine}-${node.endLine}`);
-        if (node.signature) console.log(`  Signature:  ${truncate(node.signature, 80)}`);
-        if (node.isExported) console.log(`  Exported:   yes`);
+        console.log(`Node: ${resolved.id}`);
+        console.log(`  Kind:       ${resolved.kind}`);
+        console.log(`  Name:       ${resolved.name}`);
+        if (resolved.filePath) console.log(`  File:       ${resolved.filePath}:${resolved.startLine}-${resolved.endLine}`);
+        if (resolved.signature) console.log(`  Signature:  ${truncate(resolved.signature, 80)}`);
+        if (resolved.isExported) console.log(`  Exported:   yes`);
 
-        // Callers
         if (callers.length > 0) {
           console.log('');
           console.log(`Callers (${callers.length}, depth ${depth}):`);
           for (const { node: c, edge } of callers) {
-            console.log(`  [${c.kind}] ${c.id} --${edge.kind}-->`);
+            console.log(`  [${c.kind}] ${c.id} --${edge?.kind ?? 'calls'}-->`);
             if (c.signature) console.log(`    ${truncate(c.signature, 70)}`);
           }
         }
 
-        // Callees
         if (callees.length > 0) {
           console.log('');
           console.log(`Callees (${callees.length}, depth ${depth}):`);
           for (const { node: c, edge } of callees) {
-            console.log(`  --${edge.kind}--> [${c.kind}] ${c.id}`);
+            console.log(`  --${edge?.kind ?? 'calls'}--> [${c.kind}] ${c.id}`);
             if (c.signature) console.log(`    ${truncate(c.signature, 70)}`);
           }
         }
 
-        // File siblings
         if (fileSiblings.length > 0) {
           console.log('');
-          console.log(`File siblings in ${node.filePath} (${fileSiblings.length}):`);
+          console.log(`File siblings in ${resolved.filePath} (${fileSiblings.length}):`);
           for (const s of fileSiblings) {
             console.log(`  [${s.kind}] ${s.id} -- ${s.name}`);
           }
         }
 
-        // Wiki
         if (wikiMatches.length > 0) {
           console.log('');
           console.log(`Related wiki entries (${wikiMatches.length}):`);
@@ -1268,14 +936,14 @@ export function registerKgCommand(program: Command): void {
           }
         }
       } finally {
-        conn.close();
+        adapter.close();
       }
     });
 
   // ── impact ─────────────────────────────────────────────────────────
   kg
     .command('impact <node-id>')
-    .description('Show transitive impact radius (SQLite)')
+    .description('Show transitive impact radius (legacy, requires SQLite index)')
     .option('--depth <n>', 'Max depth', '3')
     .option('--json', 'Output as JSON')
     .action((nodeId: string, opts) => {
@@ -1305,7 +973,7 @@ export function registerKgCommand(program: Command): void {
   // ── dead-code ──────────────────────────────────────────────────────
   kg
     .command('dead-code')
-    .description('Find unreferenced symbols (SQLite)')
+    .description('Find unreferenced symbols (legacy, requires SQLite index)')
     .option('--kinds <kinds>', 'Comma-separated node kinds to check', 'function,method,class')
     .option('--json', 'Output as JSON')
     .action((opts) => {
@@ -1335,7 +1003,7 @@ export function registerKgCommand(program: Command): void {
   // ── cycles ─────────────────────────────────────────────────────────
   kg
     .command('cycles')
-    .description('Find circular import dependencies (SQLite)')
+    .description('Find circular import dependencies (legacy, requires SQLite index)')
     .option('--json', 'Output as JSON')
     .action((opts) => {
       const { conn, queries } = openSqliteOrExit();

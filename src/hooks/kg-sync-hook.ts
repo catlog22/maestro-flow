@@ -2,9 +2,8 @@
  * KG Sync Hook — UserPromptSubmit
  *
  * Silently syncs the Knowledge Graph when source files have changed.
- * Runs as a background side-effect on each user prompt — never blocks
- * or modifies the prompt. Gracefully degrades when the KG database
- * or better-sqlite3 is unavailable.
+ * Uses CodeGraph as the sole sync engine. Gracefully degrades when
+ * CodeGraph is unavailable.
  *
  * Design: Pure evaluateXxx function + thin runner in hooks.ts.
  * Bridge file in os.tmpdir() for cooldown dedup across invocations.
@@ -49,28 +48,30 @@ interface KgSyncBridge {
 
 /**
  * Evaluate whether a KG sync is needed and perform it if so.
- *
- * @param projectPath  Working directory (project root)
- * @param sessionId    Session ID for bridge file scoping
- * @returns KgSyncResult indicating what happened
+ * Uses CodeGraph as the sole sync engine.
  */
 export async function evaluateKgSync(
   projectPath: string,
   sessionId: string,
 ): Promise<KgSyncResult> {
-  // Step 1: Check if KG database exists
-  let getDatabasePath: (root?: string) => string;
+  // Step 1: Check if CodeGraph is available and initialized
+  let cgMod: any;
   try {
-    // Dynamic require to avoid crash when better-sqlite3 is unavailable
-    const dbMod = require('../graph/db/index.js');
-    getDatabasePath = dbMod.getDatabasePath;
+    cgMod = require('../graph/codegraph-adapter.js');
+    if (!cgMod.isCodeGraphAvailable()) {
+      return { synced: false, reason: 'codegraph-unavailable' };
+    }
   } catch {
-    return { synced: false, reason: 'no-graph-module' };
+    return { synced: false, reason: 'codegraph-unavailable' };
   }
 
-  const dbPath = getDatabasePath(projectPath);
-  if (!existsSync(dbPath)) {
-    return { synced: false, reason: 'no-db' };
+  const adapter = new cgMod.CodeGraphAdapter(projectPath);
+  try {
+    if (!adapter.isInitialized()) {
+      return { synced: false, reason: 'codegraph-not-initialized' };
+    }
+  } catch {
+    return { synced: false, reason: 'codegraph-unavailable' };
   }
 
   // Step 2: Cooldown check via bridge file
@@ -78,6 +79,7 @@ export async function evaluateKgSync(
   if (bridge) {
     const elapsed = Math.floor(Date.now() / 1000) - bridge.last_sync;
     if (elapsed < COOLDOWN_SECONDS) {
+      try { adapter.close(); } catch { /* best-effort */ }
       return { synced: false, reason: 'cooldown' };
     }
   }
@@ -85,66 +87,27 @@ export async function evaluateKgSync(
   // Step 3: Git quick check — any source files changed?
   const hasSourceChanges = detectSourceChanges(projectPath);
   if (!hasSourceChanges) {
-    // Update bridge timestamp even when no changes, to avoid re-checking git
     writeBridge(sessionId);
+    try { adapter.close(); } catch { /* best-effort */ }
     return { synced: false, reason: 'no-changes' };
   }
 
-  // Step 4: Perform incremental sync — prefer CodeGraph, fallback to IncrementalSync
+  // Step 4: Perform incremental sync via CodeGraph
   const start = Date.now();
-
-  // Step 4a: Try CodeGraph tree-sitter engine first
   try {
-    const cgMod = require('../graph/codegraph-adapter.js');
-    if (cgMod.isCodeGraphAvailable()) {
-      const adapter = new cgMod.CodeGraphAdapter(projectPath);
-      try {
-        if (adapter.isInitialized()) {
-          const result = await adapter.sync();
-          const filesChanged = result.filesAdded + result.filesModified + result.filesRemoved;
-          writeBridge(sessionId);
-          return {
-            synced: true,
-            filesChanged,
-            durationMs: Date.now() - start,
-          };
-        }
-      } finally {
-        try { adapter.close(); } catch { /* best-effort */ }
-      }
-    }
+    const result = await adapter.sync();
+    const filesChanged = result.filesAdded + result.filesModified + result.filesRemoved;
+    writeBridge(sessionId);
+    return {
+      synced: true,
+      filesChanged,
+      durationMs: Date.now() - start,
+    };
   } catch {
-    // CodeGraph not available — fall through to IncrementalSync
-  }
-
-  // Step 4b: Fallback to IncrementalSync (regex-based)
-  try {
-    const dbMod = require('../graph/db/index.js');
-    const syncMod = require('../graph/sync/incremental-sync.js');
-    const DatabaseConnection = dbMod.DatabaseConnection;
-    const IncrementalSync = syncMod.IncrementalSync;
-
-    const conn = new DatabaseConnection();
-    try {
-      conn.open(dbPath);
-      const syncer = new IncrementalSync(projectPath, conn);
-      const result = syncer.sync();
-
-      // Step 5: Write bridge with timestamp
-      writeBridge(sessionId);
-
-      return {
-        synced: true,
-        filesChanged: result.filesChanged,
-        durationMs: Date.now() - start,
-      };
-    } finally {
-      try { conn.close(); } catch { /* best-effort */ }
-    }
-  } catch {
-    // Graph modules failed at runtime — degrade silently
-    writeBridge(sessionId); // avoid retrying immediately
+    writeBridge(sessionId);
     return { synced: false, reason: 'sync-error' };
+  } finally {
+    try { adapter.close(); } catch { /* best-effort */ }
   }
 }
 
@@ -152,10 +115,6 @@ export async function evaluateKgSync(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Quick git status check filtered to source extensions.
- * Returns true if any source files have uncommitted changes.
- */
 function detectSourceChanges(projectPath: string): boolean {
   try {
     const output = execSync('git status --porcelain', {
@@ -169,9 +128,7 @@ function detectSourceChanges(projectPath: string): boolean {
 
     const lines = output.trim().split('\n');
     for (const line of lines) {
-      // Format: "XY filename" — filename starts at index 3
       const filePath = line.slice(3).trim();
-      // Handle renamed files: "R  old -> new"
       const actualPath = filePath.includes(' -> ')
         ? filePath.split(' -> ')[1]
         : filePath;
@@ -183,7 +140,6 @@ function detectSourceChanges(projectPath: string): boolean {
     }
     return false;
   } catch {
-    // Not a git repo or git not available — skip
     return false;
   }
 }
@@ -211,6 +167,6 @@ function writeBridge(sessionId: string): void {
     };
     writeFileSync(bridgePath(sessionId), JSON.stringify(data), 'utf-8');
   } catch {
-    // Best-effort — don't fail the hook if bridge write fails
+    // Best-effort
   }
 }
