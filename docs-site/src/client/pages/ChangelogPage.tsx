@@ -17,6 +17,15 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.2',
+    date: '2026-06',
+    changes: [
+      { type: 'fix', text_en: 'skill-scanner: add ~/.agents/skills/ global scanning for agent platform (parity with claude/codex/agy)', text_zh: 'skill-scanner: agent 平台添加 ~/.agents/skills/ 全局扫描（与 claude/codex/agy 一致）' },
+      { type: 'fix', text_en: 'codex skills: unify invocation syntax — Skill({}) and /name replaced with $name across 45 files', text_zh: 'codex skills: 统一调用语法——Skill({}) 和 /name 全部替换为 $name，涉及 45 个文件' },
+      { type: 'fix', text_en: 'codex maestro SKILL.md: AskUserQuestion → request_user_input, command_path aligned to .codex/skills/', text_zh: 'codex maestro SKILL.md: AskUserQuestion 改为 request_user_input，command_path 对齐 .codex/skills/ 路径' },
+    ],
+  },
+  {
     version: '0.5.1',
     date: '2026-06',
     changes: [
