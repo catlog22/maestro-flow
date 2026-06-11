@@ -2,7 +2,7 @@
 name: maestro
 description: Auto-route intent to optimal command chain
 argument-hint: "\"intent text\" [-y] [-c|--continue] [--dry-run] [--super]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -120,7 +120,7 @@ S_ABORTED:
   → END           DO: A_ABORT_REPORT
 
 S_FALLBACK:
-  → S_CLASSIFY    WHEN: user provides new intent            DO: AskUserQuestion
+  → S_CLASSIFY    WHEN: user provides new intent            DO: request_user_input
   → END           WHEN: user cancels
 
 </transitions>
@@ -259,7 +259,7 @@ Read `.workflow/state.json` and route by condition:
 
 ### A_CLARIFY_INTENT
 
-1. `AskUserQuestion` with available chain types
+1. `request_user_input` with available chain types
 2. Re-classify with user response
 
 ### A_DECOMPOSE_TASKS
@@ -267,7 +267,7 @@ Read `.workflow/state.json` and route by condition:
 与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约。Condensed:
 
 1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
-2. broad/medium → `AskUserQuestion` ≤3 轮：Scope / Constraints / Definition of Done
+2. broad/medium → `request_user_input` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
 5. 链路末尾（evidence 产出步骤后、milestone-complete/close-out 前）追加 `decision:post-goal-audit`。S_DECISION_EVAL 据此动态生长 `steps[]`
@@ -282,7 +282,10 @@ Read `.workflow/state.json` and route by condition:
 
 1. Read `.workflow/state.json` 获取 phase / milestone（D-007 反查 `phase_slugs`）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`；读最新 blueprint artifact 注入 `blueprint_id`
 2. Resolve chain's skill list from Chain Map (see appendix)
-3. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）:
+3. **Prevalidate via `Bash("maestro ralph skills --platform codex --json --quiet")`** 一次性拉取所有可用 codex skills（global `~/.codex/skills/` + project `.codex/skills/`，project 覆盖 global），匹配 skill 名得到：
+   - 命中 → `command_scope = "global" | "project"`，`command_path = <绝对 SKILL.md 路径>`
+   - 未命中 → `command_scope = "missing"`, `command_path = null`
+4. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）:
    ```json
    {
      "session_id", "source": "maestro", "intent", "task_type", "chain_name",
@@ -296,7 +299,7 @@ Read `.workflow/state.json` and route by condition:
        "skill": "", "args": "",
        "stage": "", "scope": null,
        "command_scope": "global|project|missing|null",
-       "command_path": "~/.claude/commands/{name}.md | .claude/commands/{name}.md | null",
+       "command_path": "~/.codex/skills/{name}/SKILL.md | .codex/skills/{name}/SKILL.md | null",
        "milestone_id": null, "source_artifact_ref": null,
        "status": "pending", "goal_ref": null,
        "completion_confirmed": false, "completion_status": null,
@@ -310,8 +313,8 @@ Read `.workflow/state.json` and route by condition:
    }
    ```
    Decomposition fields written ONLY if A_DECOMPOSE_TASKS produced them (additive)
-4. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E006 列出缺失 skill
-5. Initialize tracking:
+5. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E006 列出缺失 skill
+6. Initialize tracking:
    - If decomposed: goal already registered by A_DECOMPOSE_TASKS. Else: `create_goal({ objective: "Maestro {chain}: {N} steps [{skill list}]" })`
    - `update_plan({ plan: steps.map(step => ({ step, status: "pending" })) })`
 

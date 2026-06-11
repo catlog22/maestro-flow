@@ -2,7 +2,7 @@
 name: maestro-quick
 description: Quick task execution, skip optional agents
 argument-hint: "\"task description\" [--discuss] [--full]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

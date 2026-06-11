@@ -2,7 +2,7 @@
 name: quality-refactor
 description: Use when accumulated tech debt needs systematic identification and safe reduction
 argument-hint: "<phase|--dir path> [--max-iterations N]"
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -114,7 +114,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
    - Module path (e.g., "src/auth") -> scan that directory
    - Feature area (e.g., "authentication") -> search for related files
    - "all" -> full codebase scan
-4. If empty: prompt user via AskUserQuestion with options (Module path / Feature area / Full codebase)
+4. If empty: prompt user via request_user_input with options (Module path / Feature area / Full codebase)
 5. Detect `--max-iterations N` (default: 3)
 
 ### Step 2: Create Scratch Directory
@@ -149,7 +149,7 @@ Confirm with user before proceeding.
    - implementation steps, risk level
 3. Order: high risk last, dependencies respected, quick wins first
 4. Update `index.json` plan fields
-5. Present plan to user via AskUserQuestion -- show affected files, risk areas, ask for approval
+5. Present plan to user via request_user_input -- show affected files, risk areas, ask for approval
 
 ### Step 5: Execute with Reflection via CSV Waves
 

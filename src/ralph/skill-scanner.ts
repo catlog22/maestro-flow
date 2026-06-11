@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Skill scanner — discovers commands + skills across claude and codex platforms.
+// Skill scanner — discovers commands + skills across all platforms.
 //
 // Sources (project overrides global by `(platform, name)`):
 //   - <cwd>/.claude/commands/*.md           type: command, scope: project, platform: claude
@@ -8,8 +8,10 @@
 //   - ~/.claude/skills/*/SKILL.md           type: skill,   scope: global,  platform: claude
 //   - <cwd>/.codex/skills/*/SKILL.md        type: skill,   scope: project, platform: codex
 //   - ~/.codex/skills/*/SKILL.md            type: skill,   scope: global,  platform: codex
-//
-// Agents are explicitly NOT scanned.
+//   - <cwd>/.agents/skills/*/SKILL.md       type: skill,   scope: project, platform: agent
+//   - ~/.agents/skills/*/SKILL.md           type: skill,   scope: global,  platform: agent
+//   - <cwd>/.agy/skills/*/SKILL.md          type: skill,   scope: project, platform: agy
+//   - ~/.agy/skills/*/SKILL.md              type: skill,   scope: global,  platform: agy
 // ---------------------------------------------------------------------------
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
@@ -138,6 +140,10 @@ export function scanAllSkills(
       type: 'skill', scope: 'project', platform: 'codex', nameFn: skillName,
     },
     // Agent Skills open-standard (.agents/)
+    {
+      files: collectSkillFiles(join(home, '.agents', 'skills')),
+      type: 'skill', scope: 'global', platform: 'agent', nameFn: skillName,
+    },
     {
       files: collectSkillFiles(join(workflowRoot, '.agents', 'skills')),
       type: 'skill', scope: 'project', platform: 'agent', nameFn: skillName,

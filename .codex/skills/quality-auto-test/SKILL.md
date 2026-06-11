@@ -2,7 +2,7 @@
 name: quality-auto-test
 description: Use when test coverage needs automated expansion or existing tests need iterative convergence
 argument-hint: "<phase> [-y] [-c N] [--max-iter N] [--layer L0-L3] [--dry-run] [--re-run]"
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

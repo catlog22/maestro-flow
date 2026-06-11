@@ -2,7 +2,7 @@
 name: spec-map
 description: Map codebase tech-stack, architecture, features, and concerns
 argument-hint: "[-y|--yes] [-c|--concurrency 4] [--continue] \"[focus area]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

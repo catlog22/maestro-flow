@@ -2,7 +2,7 @@
 name: quality-debug
 description: Use when bugs, test failures, or unexpected behavior need systematic root cause investigation
 argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"[bug description] [--from-uat <phase>] [--parallel]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -406,19 +406,19 @@ CONSTRAINTS:
 5. **Register artifact** (phase-scoped only): Append to `state.json.artifacts[]` with `type: "debug"`, `id: DBG-NNN`, `depends_on: triggering_review_id || exec_art.id`.
 
 6. **Post-debug Knowledge Inquiry**: Prompt user to capture knowledge when:
-   - Recurring root cause pattern detected -> `/spec-add debug`
-   - Non-obvious fix strategy used -> `/spec-add learning`
-   - Architectural gap identified -> `/spec-add arch`
+   - Recurring root cause pattern detected -> `$spec-add debug`
+   - Non-obvious fix strategy used -> `$spec-add learning`
+   - Architectural gap identified -> `$spec-add arch`
 
 8. **Next step routing**:
 
 | Result | Suggestion |
 |--------|------------|
-| All fixes verified | Run tests: `Skill({ skill: "quality-test", args: "{phase}" })` |
-| Fixes applied, not verified | Re-execute: `Skill({ skill: "maestro-execute", args: "{phase}" })` |
-| Confirmed but no fix | Plan fixes: `Skill({ skill: "maestro-plan", args: "{phase} --gaps" })` |
+| All fixes verified | Run tests: `$quality-test "{phase}"` |
+| Fixes applied, not verified | Re-execute: `$maestro-execute "{phase}"` |
+| Confirmed but no fix | Plan fixes: `$maestro-plan "{phase} --gaps"` |
 | All inconclusive | Resume with more context or manual investigation |
-| From UAT, all diagnosed | `Skill({ skill: "quality-test", args: "{phase} --auto-fix" })` |
+| From UAT, all diagnosed | `$quality-test "{phase} --auto-fix"` |
 
 9. Display summary.
 

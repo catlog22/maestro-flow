@@ -2,7 +2,7 @@
 name: manage-knowhow-capture
 description: Capture reusable knowledge as templates, recipes, or tips
 argument-hint: "[type] [description] [--lang lang] [--source url] [--tag tag1,tag2]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -43,7 +43,7 @@ Verify `.workflow/` exists (E001). Create `.workflow/knowhow/` if missing.
 
 ### Step 2: Detect Type
 
-Parse first token as type. If absent or ambiguous, ask user via AskUserQuestion.
+Parse first token as type. If absent or ambiguous, ask user via request_user_input.
 
 | Token | Type |
 |-------|------|
@@ -119,7 +119,7 @@ Display: type, ID, file path, and type-specific summary.
 <error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
-| E001 | error | `.workflow/` not initialized — run `Skill({ skill: "maestro-init" })` first |
+| E001 | error | `.workflow/` not initialized — run `$maestro-init` first |
 | E002 | error | Template: no code provided after prompt |
 | E003 | error | Recipe: no steps provided after prompt |
 | W001 | warning | No active workflow session — compact captures conversation only |

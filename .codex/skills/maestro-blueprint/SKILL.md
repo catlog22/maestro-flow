@@ -82,10 +82,10 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Need codebase analysis | /maestro-analyze {topic} --from blueprint:BLP-xxx |
-| Ready for roadmap | /maestro-roadmap --from blueprint:BLP-xxx |
-| Small scope, direct plan | /maestro-plan --from blueprint:BLP-xxx |
-| Need project setup | /maestro-init |
+| Need codebase analysis | $maestro-analyze {topic} --from blueprint:BLP-xxx |
+| Ready for roadmap | $maestro-roadmap --from blueprint:BLP-xxx |
+| Small scope, direct plan | $maestro-plan --from blueprint:BLP-xxx |
+| Need project setup | $maestro-init |
 </execution>
 
 <invariants>

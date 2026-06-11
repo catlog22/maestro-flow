@@ -55,7 +55,7 @@ Update `doc-index.json` timestamps and `state.json.codebase_last_refreshed`. Dis
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | fatal | `.workflow/` not initialized |
-| E002 | fatal | No codebase docs exist -- use `Skill({ skill: "codebase-rebuild" })` instead |
+| E002 | fatal | No codebase docs exist -- use `$manage-codebase-rebuild` instead |
 | W001 | warning | No changes detected since last refresh |
 </error_codes>
 

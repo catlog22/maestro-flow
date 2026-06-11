@@ -2,7 +2,7 @@
 name: learn-retro
 description: Retrospective of git activity and decision quality
 argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"[--lens git|decision|all] [--days N] [--author <name>] [--area <path>] [--phase N] [--compare]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -90,7 +90,7 @@ Write `KNW-retro-{date}.md` + `KNW-retro-{date}.json` with metrics, sessions, ho
 ### Phase 5: Persist
 Append insights to `.workflow/specs/learnings.md` (source: "retro-git" or "retro-decision"). Display summary.
 
-**Next steps:** `/learn-follow <path>`, `/quality-auto-test <area>`, `/learn-investigate <question>`
+**Next steps:** `$learn-follow <path>`, `$quality-auto-test <area>`, `$learn-investigate <question>`
 </execution>
 
 <error_codes>

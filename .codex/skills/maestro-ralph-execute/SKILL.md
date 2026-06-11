@@ -8,9 +8,9 @@ allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 Single-step executor for ralph (adaptive) and maestro (static) sessions.
 Each invocation: locate session → find next step → resolve args → execute → update → self-invoke next.
 
-Mutual invocation with `/maestro-ralph` forms a self-perpetuating work loop.
+Mutual invocation with `$maestro-ralph` forms a self-perpetuating work loop.
 
-**Session**: `.workflow/.maestro/{session_id}/status.json` — 工作流唯一真源。session_id 格式 `ralph-{YYYYMMDD-HHmmss}`（/maestro-ralph 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（/maestro 创建，静态链）。两类都由本 skill 推进；省略 `[session-id]` 时取最新 `status=="running"`。Schema 详见 `/maestro-ralph` 的 Session Schema。
+**Session**: `.workflow/.maestro/{session_id}/status.json` — 工作流唯一真源。session_id 格式 `ralph-{YYYYMMDD-HHmmss}`（$maestro-ralph 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（$maestro 创建，静态链）。两类都由本 skill 推进；省略 `[session-id]` 时取最新 `status=="running"`。Schema 详见 `$maestro-ralph` 的 Session Schema。
 </purpose>
 
 <context>
@@ -92,7 +92,7 @@ S_COMPLETE:
   → END             DO: A_COMPLETE_SESSION
 
 S_FALLBACK:
-  → END             DO: display "无运行中的会话。使用 /maestro 或 /maestro-ralph 创建。"
+  → END             DO: display "无运行中的会话。使用 $maestro 或 $maestro-ralph 创建。"
 
 </transitions>
 
@@ -179,7 +179,7 @@ Write enriched args back to status.json.
 ### A_PAUSE_SESSION
 
 通常由 `ralph complete N --status BLOCKED --reason "..."` 触发，CLI 已写 `session.status = "paused"`。手动 pause 场景下直接编辑 status.json。
-Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro-ralph continue 恢复。`
+Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。$maestro-ralph continue 恢复。`
 
 ### A_COMPLETE_SESSION
 
@@ -213,7 +213,7 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro
 
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
-| E001 | error | No running session found | Suggest /maestro or /maestro-ralph |
+| E001 | error | No running session found | Suggest $maestro or $maestro-ralph |
 | E006 | error | command_path missing/unreachable for 执行 step | `ralph next` 拒绝；编辑 status.json 或重 build |
 | E007 | error | required_reading 引用文件缺失 | `ralph next` 拒绝；CLI stderr 列出缺失路径 |
 | E008 | error | `ralph complete` idx ≠ active_step_index | 编辑 status.json 修正一致性 |

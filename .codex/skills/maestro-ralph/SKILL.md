@@ -10,15 +10,15 @@ Reads project state → infers position → builds adaptive chain → delegates 
 
 ### Session
 
-`.workflow/.maestro/{session_id}/status.json` — 工作流唯一真源（schema 见 `<appendix>`）。session_id 格式：`ralph-{YYYYMMDD-HHmmss}`（本 skill 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（`/maestro` coordinator 创建，静态链）。两类都由 `/maestro-ralph-execute` 推进。session-id 省略时取最新 `status=="running"`。
+`.workflow/.maestro/{session_id}/status.json` — 工作流唯一真源（schema 见 `<appendix>`）。session_id 格式：`ralph-{YYYYMMDD-HHmmss}`（本 skill 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（`$maestro` coordinator 创建，静态链）。两类都由 `$maestro-ralph-execute` 推进。session-id 省略时取最新 `status=="running"`。
 
 ### Entry points
 
-- **`/maestro-ralph "intent"`** — 新建 session：infer → decompose → build → emit /goal prompt（如有 decomposition）→ dispatch ralph-execute
-- **`/maestro-ralph continue [session-id]`** — 恢复执行；省略=最新 running（首选直接 `/maestro-ralph-execute [session-id]`）
-- **`/maestro-ralph status [session-id]`** — 显示进度；省略=最新 ralph session
+- **`$maestro-ralph "intent"`** — 新建 session：infer → decompose → build → emit /goal prompt（如有 decomposition）→ dispatch ralph-execute
+- **`$maestro-ralph continue [session-id]`** — 恢复执行；省略=最新 running（首选直接 `$maestro-ralph-execute [session-id]`）
+- **`$maestro-ralph status [session-id]`** — 显示进度；省略=最新 ralph session
 
-> 推进规则：**step 推进由 `/maestro-ralph-execute` 负责**；ralph 仅在 build / decision 评估时介入。decision 节点由 ralph-execute 自动 `$maestro-ralph` 直调 handoff，无需用户手动切换。
+> 推进规则：**step 推进由 `$maestro-ralph-execute` 负责**；ralph 仅在 build / decision 评估时介入。decision 节点由 ralph-execute 自动 `$maestro-ralph` 直调 handoff，无需用户手动切换。
 
 Initial decomposition (S_DECOMPOSE): boundary-clarified via ≤3 questions for broad intents (重构/全面/迁移/重写). 写入 status.json 的 `boundary_contract` / `execution_criteria` / `task_decomposition`，附 `/goal` prompt。
 
@@ -31,12 +31,12 @@ Key difference from maestro coordinator:
 - ralph: living chain → decision nodes re-evaluate → chain grows/shrinks dynamically
 
 Session: `.workflow/.maestro/ralph-{YYYYMMDD-HHmmss}/status.json`
-Mutual invocation with `/maestro-ralph-execute` forms a self-perpetuating work loop.
+Mutual invocation with `$maestro-ralph-execute` forms a self-perpetuating work loop.
 
 ### Execution Flow
 
 ```
- /maestro-ralph "intent" ─▶ ralph        infer → decompose → build chain
+ $maestro-ralph "intent" ─▶ ralph        infer → decompose → build chain
                               │           resolves command_path per step
                               │           writes status.json
                               │           emits /goal prompt
@@ -582,7 +582,7 @@ Runs only when `task_decomposition` present.
 
 1. Set session status = "paused", write status.json
 2. Display: ◆ 已达最大重试次数，debug 已执行。请人工介入。
-3. Display: /maestro-ralph continue 恢复
+3. Display: $maestro-ralph continue 恢复
 
 </actions>
 
@@ -714,7 +714,7 @@ decision:post-goal-audit {retry+1}
 ```
 📋 任务分解完成。可随时复制以下 /goal 设定终止条件（执行过程中输入即可）：
 
-/goal 直到 {session_dir}/status.json 的 task_decomposition[*] 与 steps[*] 全部 completion_confirmed=true 才停。每轮以 status.json 为唯一行动手册，通过 /maestro-ralph-execute 推进 step；decision 节点由其自动 handoff 回 ralph 评估。禁止手动执行 skill 或修改 boundary_contract.out_of_scope。
+/goal 直到 {session_dir}/status.json 的 task_decomposition[*] 与 steps[*] 全部 completion_confirmed=true 才停。每轮以 status.json 为唯一行动手册，通过 $maestro-ralph-execute 推进 step；decision 节点由其自动 handoff 回 ralph 评估。禁止手动执行 skill 或修改 boundary_contract.out_of_scope。
 ```
 
 `/goal` 由用户输入；ralph 输出提示词后继续 handoff，不阻塞。

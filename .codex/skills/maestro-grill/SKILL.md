@@ -11,7 +11,7 @@ Positioned BEFORE brainstorm in the pipeline: grill stress-tests and sharpens; b
 
 Codex specifics:
 - **No agent spawning** — codebase exploration runs directly via Glob/Grep/Read in coordinator context.
-- **request_user_input** replaces AskUserQuestion for Socratic Q&A.
+- **request_user_input** replaces request_user_input for Socratic Q&A.
 - **CLI delegation** for auto mode: `exec_command("maestro delegate ... --role analyze --mode analysis")`.
 </purpose>
 

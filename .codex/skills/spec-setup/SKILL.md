@@ -53,7 +53,7 @@ Create `.workflow/specs/` directory and write:
 
 ### Step 5: Display Report
 
-List created files with categories. Show next steps: `/spec-add <category> <content>`, available categories (core + extended), `/spec-remove`, wiki graph commands.
+List created files with categories. Show next steps: `$spec-add <category> <content>`, available categories (core + extended), `$spec-remove`, wiki graph commands.
 
 </execution>
 
@@ -61,7 +61,7 @@ List created files with categories. Show next steps: `/spec-add <category> <cont
 
 | Code | Severity | Description |
 |------|----------|-------------|
-| E001 | fatal | `.workflow/` not initialized -- run `Skill({ skill: "maestro-init" })` first |
+| E001 | fatal | `.workflow/` not initialized -- run `$maestro-init` first |
 | E002 | fatal | No source files found in project |
 | W001 | warning | Convention detection uncertain -- marked `[UNCERTAIN]` |
 

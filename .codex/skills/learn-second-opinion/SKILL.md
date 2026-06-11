@@ -2,7 +2,7 @@
 name: learn-second-opinion
 description: Get alternative perspectives -- review, challenge, or consult
 argument-hint: "[-y|--yes] [-c|--concurrency 3] [--continue] \"<target> [--mode review|challenge|consult]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -88,14 +88,14 @@ Single agent via spawn_agents_on_csv (max_concurrency: 1) with the same `output_
 - "What's the implicit contract that isn't enforced?"
 
 #### Consult Mode
-Interactive loop via AskUserQuestion. Agent studies target, answers questions with code references. Compile Q&A into report on exit.
+Interactive loop via request_user_input. Agent studies target, answers questions with code references. Compile Q&A into report on exit.
 
 ### Phase 3: Persist
 1. Write `KNW-opinion-{slug}-{date}.md` with per-persona findings + synthesis
 2. Append non-trivial findings to `.workflow/specs/learnings.md` (source: "second-opinion")
 3. Display summary with verdict and next steps
 
-**Next steps:** `/manage-issue create`, `/learn-decompose <path>`, `/learn-follow <path>`
+**Next steps:** `$manage-issue create`, `$learn-decompose <path>`, `$learn-follow <path>`
 </execution>
 
 <error_codes>

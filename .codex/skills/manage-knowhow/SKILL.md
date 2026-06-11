@@ -2,7 +2,7 @@
 name: manage-knowhow
 description: Manage knowhow entries (workflow and system)
 argument-hint: "[list|search|view|edit|delete|prune] [query|id|file] [--store workflow|system|all] [--tag tag] [--type type]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -73,7 +73,7 @@ After write operations, verify:
 <error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
-| E001 | error | No stores found — for workflow store run `Skill({ skill: "manage-knowhow-capture" })`; for system store run `Skill({ skill: "manage-memory-capture" })` or create MEMORY.md |
+| E001 | error | No stores found — for workflow store run `$manage-knowhow-capture`; for system store run `$manage-memory-capture` or create MEMORY.md |
 | E002 | error | Entry ID or filename not found |
 | E003 | error | Prune requires at least one filter flag |
 | E004 | error | Cannot delete MEMORY.md — use `edit` subcommand instead |

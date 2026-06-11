@@ -2,13 +2,13 @@
 name: maestro-milestone-release
 description: Bump version, generate changelog, tag milestone
 argument-hint: "[<version>] [--bump patch|minor|major] [--dry-run] [--no-tag] [--no-push]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
 Package a completed milestone into a releasable version. Bumps project version in manifest,
 generates CHANGELOG.md entry from phase/milestone summaries and git log, creates annotated
-git tag, optionally pushes to remote. Runs after `/maestro-milestone-complete`.
+git tag, optionally pushes to remote. Runs after `$maestro-milestone-complete`.
 </purpose>
 
 <required_reading>

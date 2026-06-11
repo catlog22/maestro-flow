@@ -2,7 +2,7 @@
 name: learn-follow
 description: Guided reading of code or wiki to extract patterns
 argument-hint: "<path|wiki-id|topic> [--depth shallow|deep] [--save-wiki]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -60,7 +60,7 @@ Cross-reference against `coding-conventions.md`: documented vs undocumented patt
 2. Append new patterns to `.workflow/specs/learnings.md` (source: "follow", stable INS-ids)
 3. If `--save-wiki`: create wiki note entry
 
-**Next steps:** `/learn-decompose <path>`, `/spec-add coding ...`, `/learn-second-opinion <file>`
+**Next steps:** `$learn-decompose <path>`, `$spec-add coding ...`, `$learn-second-opinion <file>`
 </execution>
 
 <error_codes>

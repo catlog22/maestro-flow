@@ -2,7 +2,7 @@
 name: quality-review
 description: Use after execution to evaluate code quality across correctness, security, performance, and architecture
 argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"<phase> [--level quick|standard|deep] [--dimensions list]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

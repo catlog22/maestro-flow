@@ -51,18 +51,18 @@ Use this decision table to suggest the next action:
 
 | Current State | Suggestion |
 |---------------|------------|
-| No phases planned | `Skill({ skill: "maestro-brainstorm" })` or `Skill({ skill: "maestro-plan" })` |
-| Phase planned, not executed | `Skill({ skill: "maestro-execute", args: "<N>" })` |
-| Phase executed, not reviewed | `Skill({ skill: "quality-review", args: "<N>" })` |
-| Phase reviewed PASS/WARN | `Skill({ skill: "quality-test", args: "<N>" })` |
-| UAT passed | `Skill({ skill: "maestro-milestone-audit" })` |
-| All milestone phases done | `Skill({ skill: "maestro-milestone-audit" })` |
+| No phases planned | `$maestro-brainstorm` or `$maestro-plan` |
+| Phase planned, not executed | `$maestro-execute "<N>"` |
+| Phase executed, not reviewed | `$quality-review "<N>"` |
+| Phase reviewed PASS/WARN | `$quality-test "<N>"` |
+| UAT passed | `$maestro-milestone-audit` |
+| All milestone phases done | `$maestro-milestone-audit` |
 </execution>
 
 <error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
-| E001 | fatal | `.workflow/` not initialized -- run `Skill({ skill: "maestro-init" })` first |
+| E001 | fatal | `.workflow/` not initialized -- run `$maestro-init` first |
 | E002 | fatal | `state.json` missing or corrupt |
 </error_codes>
 

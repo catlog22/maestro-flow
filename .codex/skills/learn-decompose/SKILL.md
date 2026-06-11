@@ -2,7 +2,7 @@
 name: learn-decompose
 description: Extract design patterns from code into specs and wiki
 argument-hint: "[-y|--yes] [-c|--concurrency 4] [--continue] \"<path|module> [--patterns <list>] [--save-spec] [--save-wiki]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

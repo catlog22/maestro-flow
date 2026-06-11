@@ -86,14 +86,14 @@ Append `<spec-entry>` closed-tag block to target file:
 
 ### Step 6: Confirm
 
-Display: category, target file, extracted keywords, and commands for verify (`/spec-load`) and remove (`/spec-remove`).
+Display: category, target file, extracted keywords, and commands for verify (`$spec-load`) and remove (`$spec-remove`).
 </execution>
 
 <error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
 | E001 | fatal | Category and content are both required |
-| E002 | fatal | `.workflow/specs/` not initialized -- run `Skill({ skill: "spec-setup" })` first |
+| E002 | fatal | `.workflow/specs/` not initialized -- run `$spec-setup` first |
 | E003 | fatal | Invalid category -- must be one of: coding, arch, quality, debug, test, review, learning, ui, bug, pattern, decision, rule, validation |
 </error_codes>
 

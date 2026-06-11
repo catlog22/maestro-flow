@@ -10,16 +10,16 @@ allowed-tools:
   - Glob
   - Grep
   - Skill
-  - AskUserQuestion
+  - request_user_input
 ---
 <purpose>
 Closed-loop runner for the maestro workflow lifecycle.
-Single skill — every invocation routes by session state, executes one tick, and self-invokes `Skill("maestro-ralph-beta")` until all `completion_confirmed` or paused.
+Single skill — every invocation routes by session state, executes one tick, and self-invokes `$maestro-ralph-beta` until all `completion_confirmed` or paused.
 
 Entry points:
-- **`/maestro-ralph-beta "intent"`** — New session: infer → decompose → build → tick
-- **`/maestro-ralph-beta continue`** — Resume: locate session → tick
-- **`/maestro-ralph-beta status`** — Display session progress
+- **`$maestro-ralph-beta "intent"`** — New session: infer → decompose → build → tick
+- **`$maestro-ralph-beta continue`** — Resume: locate session → tick
+- **`$maestro-ralph-beta status`** — Display session progress
 
 Tick kinds:
 - **执行 step** (`step.decision == null`): `maestro ralph next` → inline → `maestro ralph complete` → self-invoke
@@ -47,7 +47,7 @@ Remaining     → intent (new session)
 </context>
 
 <invariants>
-1. **Self-invocation = `Skill("maestro-ralph-beta")`** — 每次 tick 末尾强制自调用；除非 router 命中终止条件
+1. **Self-invocation = `$maestro-ralph-beta`** — 每次 tick 末尾强制自调用；除非 router 命中终止条件
 2. **status.json 是唯一真源；写入权限分层**：
    - **Step 级字段**（`step.completion_*`, `step.status` 执行 step running↔completed, `step.load.*`, `step.retried`，以及执行 step 的 `active_step_index` 占用/释放）→ 由 `maestro ralph next/complete/retry` CLI 写入
    - **会话级结构**（`session.status`, `passed_gates`, `steps[]` 增删/reindex, `task_decomposition[*]`, `boundary_contract`, `context.*`, `scope_verdict`, `consec_exit2_count`, decision step 的 `status`/`retry_count`/`active_step_index` 占用与释放）→ 由 maestro-ralph-beta 写入
@@ -74,13 +74,13 @@ Remaining     → intent (new session)
 2. intent == "continue" AND active session exists              → A_RESUME_SESSION → S_TICK_LOCATE
 3. intent non-empty AND intent ∉ {"continue","status"} AND active session exists
                                                                → S_FALLBACK                → END
-   display "已有 active session {id}；先 /maestro-ralph-beta continue 续跑或显式 abandon"
+   display "已有 active session {id}；先 $maestro-ralph-beta continue 续跑或显式 abandon"
 4. live session AND active_step.status == "running" AND active_step.decision != null
                                                                → S_TICK_LOCATE → S_TICK_DECISION
 5. live session AND has pending step                            → S_TICK_LOCATE
 6. live session AND all completion_confirmed                   → S_COMPLETE                → END
 7. active session AND session.status == "paused" AND no intent → S_FALLBACK                → END
-   display "Session {id} paused；输入 /maestro-ralph-beta continue 显式恢复"
+   display "Session {id} paused；输入 $maestro-ralph-beta continue 显式恢复"
 8. no active session AND intent non-empty                      → S_BUILD_PHASE
 9. no active session AND no intent                             → S_FALLBACK                → END
 ```
@@ -152,10 +152,10 @@ S_BUILD_CHAIN:
 
 S_CREATE_SESSION:
   → S_CONFIRM       WHEN: not auto_confirm                 DO: A_CREATE_SESSION
-  → S_TICK_LOCATE   WHEN: auto_confirm                     DO: A_CREATE_SESSION + Skill("maestro-ralph-beta")
+  → S_TICK_LOCATE   WHEN: auto_confirm                     DO: A_CREATE_SESSION + $maestro-ralph-beta
 
 S_CONFIRM:
-  → S_TICK_LOCATE   WHEN: user selects "Proceed"           DO: Skill("maestro-ralph-beta")
+  → S_TICK_LOCATE   WHEN: user selects "Proceed"           DO: $maestro-ralph-beta
   → S_BUILD_CHAIN   WHEN: user selects "Edit"
   → END             WHEN: user selects "Cancel"
 
@@ -171,8 +171,8 @@ S_TICK:
   → S_TICK_EXEC     WHEN: next_pending_step.decision == null   DO: A_RESOLVE_ARGS
 
 S_TICK_EXEC: Entry: A_EXEC_STEP
-  → S_TICK_LOCATE   WHEN: ralph complete with DONE|DONE_WITH_CONCERNS   DO: Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: ralph next exit == 2                          DO: Skill("maestro-ralph-beta")
+  → S_TICK_LOCATE   WHEN: ralph complete with DONE|DONE_WITH_CONCERNS   DO: $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: ralph next exit == 2                          DO: $maestro-ralph-beta
   → S_HANDLE_FAIL   WHEN: ralph next exit == 1 OR exit >= 3
   → S_HANDLE_FAIL   WHEN: ralph complete with NEEDS_RETRY|BLOCKED
 
@@ -187,13 +187,13 @@ S_TICK_DECISION: (gate 名取自 `step.decision`)
                      DO: A_STRUCTURAL_EVALUATE
 
 S_TICK_APPLY:
-  → S_TICK_LOCATE   WHEN: verdict == "proceed"                          DO: A_APPLY_PROCEED + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: post-goal-audit + unmet sub-goals              DO: A_APPLY_GOAL_FIX + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: post-goal-audit + all sub-goals met            DO: A_APPLY_GOAL_DONE + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: post-analyze-scope                             DO: A_APPLY_SCOPE_VERDICT + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: verdict == "fix"                              DO: A_APPLY_FIX + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: verdict == "escalate"                         DO: A_APPLY_ESCALATE + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: post-milestone + standard + next milestone    DO: A_ADVANCE_MILESTONE + Skill("maestro-ralph-beta")
+  → S_TICK_LOCATE   WHEN: verdict == "proceed"                          DO: A_APPLY_PROCEED + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: post-goal-audit + unmet sub-goals              DO: A_APPLY_GOAL_FIX + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: post-goal-audit + all sub-goals met            DO: A_APPLY_GOAL_DONE + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: post-analyze-scope                             DO: A_APPLY_SCOPE_VERDICT + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: verdict == "fix"                              DO: A_APPLY_FIX + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: verdict == "escalate"                         DO: A_APPLY_ESCALATE + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: post-milestone + standard + next milestone    DO: A_ADVANCE_MILESTONE + $maestro-ralph-beta
   → END             WHEN: post-milestone + standard + no next milestone DO: mark completed
   → END             WHEN: post-milestone + adhoc                        DO: mark completed (adhoc self-contained)
   → END             WHEN: post-debug-escalate (always STOP)              DO: A_PAUSE_ESCALATE
@@ -201,13 +201,13 @@ S_TICK_APPLY:
   GUARD: confidence_score < 60 AND proceed → override to fix
   GUARD: confidence_score > 95 AND fix AND retry > 0 → suggest proceed
   GUARD: auto_confirm → skip user prompt, apply adjusted verdict
-  GUARD: not auto_confirm → AskUserQuestion with override options
+  GUARD: not auto_confirm → request_user_input with override options
 
 S_HANDLE_FAIL:
-  → S_TICK_LOCATE   WHEN: auto + not retried                            DO: A_RETRY + Skill("maestro-ralph-beta")
+  → S_TICK_LOCATE   WHEN: auto + not retried                            DO: A_RETRY + $maestro-ralph-beta
   → END             WHEN: auto + retried                                DO: A_PAUSE_SESSION
-  → S_TICK_LOCATE   WHEN: interactive + user selects retry              DO: A_RETRY + Skill("maestro-ralph-beta")
-  → S_TICK_LOCATE   WHEN: interactive + user selects skip               DO: A_SKIP_STEP + Skill("maestro-ralph-beta")
+  → S_TICK_LOCATE   WHEN: interactive + user selects retry              DO: A_RETRY + $maestro-ralph-beta
+  → S_TICK_LOCATE   WHEN: interactive + user selects skip               DO: A_SKIP_STEP + $maestro-ralph-beta
   → END             WHEN: interactive + user selects abort              DO: A_PAUSE_SESSION
 
 # === Terminal ===
@@ -219,8 +219,8 @@ S_COMPLETE:
   → END             DO: A_COMPLETE_SESSION
 
 S_FALLBACK:
-  → S_BUILD_PHASE   WHEN: user provides intent (no active session)      DO: AskUserQuestion
-  → S_TICK_LOCATE   WHEN: user selects "continue active session"         DO: A_RESUME_SESSION + Skill("maestro-ralph-beta")
+  → S_BUILD_PHASE   WHEN: user provides intent (no active session)      DO: request_user_input
+  → S_TICK_LOCATE   WHEN: user selects "continue active session"         DO: A_RESUME_SESSION + $maestro-ralph-beta
   → END             WHEN: user cancels OR no active session for resume
 
 </transitions>
@@ -252,7 +252,7 @@ S_FALLBACK:
 | 3 | 未派生 → 取最新 in-progress artifact 的 phase | false |
 | 4 | 仍无 → state.json 首个 incomplete phase | false |
 | 5 | position 将是 brainstorm/blueprint/init/roadmap/analyze-macro → phase = null | n/a |
-| 6 | 仍模糊 → `AskUserQuestion` | 由用户回答确定 |
+| 6 | 仍模糊 → `request_user_input` | 由用户回答确定 |
 
 **D-007 Phase→Milestone 反查**（数字 phase 已解析时）：
 ```
@@ -348,9 +348,9 @@ resolve_milestone(phase_number):
 | intent 显式指定 phase 编号（如 "phase 2"、"P3"） | `independent` |
 | milestone 仅含 1 个 phase | `independent` |
 | milestone 含多个 phase + `auto_confirm` | `unified` |
-| milestone 含多个 phase + 非 `auto_confirm` | → AskUserQuestion |
+| milestone 含多个 phase + 非 `auto_confirm` | → request_user_input |
 
-**AskUserQuestion** (仅当 milestone 含 ≥2 phase 且非 auto_confirm):
+**request_user_input** (仅当 milestone 含 ≥2 phase 且非 auto_confirm):
 
 ```
 question: "当前里程碑含 {N} 个 phase，选择规划模式？"
@@ -373,7 +373,7 @@ options:
 | named single file/function/bug, "fix X", "add Y to Z" | narrow | skip — auto-derive |
 | otherwise | medium | clarify unless auto_confirm |
 
-**2. Clarify boundary** (broad/medium) — `AskUserQuestion`, ≤3 rounds, options pre-filled from intent + a quick Glob/Grep scan of the target module:
+**2. Clarify boundary** (broad/medium) — `request_user_input`, ≤3 rounds, options pre-filled from intent + a quick Glob/Grep scan of the target module:
 
 | Round | Question | Drives |
 |-------|----------|--------|
@@ -655,7 +655,7 @@ Write enriched args back to status.json.
    - 删除 `goal-audit` 之前未完成的 `roadmap` + `analyze` (phase) step
    - 下一个未完成的 `plan` step → `maestro-plan --from analyze:{analyze_macro_id}`，去掉 `{phase}`，`source_artifact_ref = analyze:{analyze_macro_id}`
    - 后续 `execute` / `verify` 同 standalone scope
-4. `unknown`：非 auto_confirm → AskUserQuestion 二选一（large / medium-small）；auto_confirm → 默认 large
+4. `unknown`：非 auto_confirm → request_user_input 二选一（large / medium-small）；auto_confirm → 默认 large
 5. release 协议 — 完成分支；reindex
 6. Display: ◆ Scope verdict: {verdict} → {kept|collapsed to standalone via analyze:{ANL_ID}}
 
@@ -690,13 +690,13 @@ Write enriched args back to status.json.
 ### A_PAUSE_SESSION
 
 `session.status = "paused"` (CLI 通过 `ralph complete N --status BLOCKED` 自动写；手动场景直接编辑)
-Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro-ralph-beta continue 恢复。`
+Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。$maestro-ralph-beta continue 恢复。`
 
 ### A_PAUSE_ESCALATE
 
 1. `session.status = "paused"`
 2. Display: ◆ 已达最大重试次数，debug 已执行。请人工介入。
-3. Display: /maestro-ralph-beta continue 恢复
+3. Display: $maestro-ralph-beta continue 恢复
 
 ### A_COMPLETE_SESSION
 
@@ -847,7 +847,7 @@ decomposition 产出后，链路概览之后逐字显示：
 ```
 📋 任务分解完成。可随时复制以下 /goal 设定终止条件：
 
-/goal 直到 {session_dir}/status.json 的 task_decomposition[*] 与 steps[*] 全部 completion_confirmed=true 才停。每轮以 status.json 为唯一行动手册，通过 /maestro-ralph-beta 推进 tick；decision 节点由 ralph 内联评估。禁止手动执行 skill 或修改 boundary_contract.out_of_scope。
+/goal 直到 {session_dir}/status.json 的 task_decomposition[*] 与 steps[*] 全部 completion_confirmed=true 才停。每轮以 status.json 为唯一行动手册，通过 $maestro-ralph-beta 推进 tick；decision 节点由 ralph 内联评估。禁止手动执行 skill 或修改 boundary_contract.out_of_scope。
 ```
 
 ### Error Codes
@@ -873,7 +873,7 @@ decomposition 产出后，链路概览之后逐字显示：
 
 ### Success Criteria
 
-- [ ] Tick 末尾自调用 `Skill("maestro-ralph-beta")`，直到全部 `completion_confirmed` 或 paused
+- [ ] Tick 末尾自调用 `$maestro-ralph-beta`，直到全部 `completion_confirmed` 或 paused
 - [ ] 同一 session 同时仅一个 step 持 `active_step_index`；切换前必经 release
 - [ ] Decision step 全程不调 `maestro ralph next` / `complete`，由 maestro-ralph-beta 内联评估并 release
 - [ ] `task_decomposition` 存在时，chain 含 `decision:post-goal-audit`，且最终 `task_decomposition_all_done == true` 才允许 S_COMPLETE

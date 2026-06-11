@@ -2,7 +2,7 @@
 name: manage-codebase-rebuild
 description: Rebuild all codebase documentation from scratch
 argument-hint: "[-y|--yes] [-c|--concurrency 5] [--continue] \"[--force] [--skip-commit]\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -351,8 +351,8 @@ Generators: {completed}/{total} succeeded
 {if failures: "W001: {failed_generator} failed -- partial results available"}
 
 Next steps:
-  Skill({ skill: "manage-status" })
-  Skill({ skill: "manage-codebase-refresh" })
+  $manage-status
+  $manage-codebase-refresh
   maestro kg stats           # verify KG
   maestro search "kg" --type knowhow  # verify wiki integration
   maestro kg diff-wiki       # future change impact

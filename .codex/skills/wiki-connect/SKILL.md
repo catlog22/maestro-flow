@@ -2,7 +2,7 @@
 name: wiki-connect
 description: Find and link hidden connections in wiki graph
 argument-hint: "[--scope <type>] [--min-similarity N] [--fix] [--max N]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -49,7 +49,7 @@ Re-run `maestro wiki health` for delta.
 ### Stage 6: Persist
 Write `KNW-wiki-connections-{date}.md`. Append graph insights to `specs/learnings.md` (source: "wiki-connect").
 
-**Next steps:** `/wiki-digest <topic>`, `/manage-wiki health`, `/learn-follow <wiki-id>`, `maestro wiki graph`
+**Next steps:** `$wiki-digest <topic>`, `$manage-wiki health`, `$learn-follow <wiki-id>`, `maestro wiki graph`
 </execution>
 
 <error_codes>

@@ -2,7 +2,7 @@
 name: maestro-player
 description: Play workflow templates with checkpoint resume
 argument-hint: "<template-slug|path> [--context key=value...] [-c [session-id]] [--list] [--dry-run]"
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -123,7 +123,7 @@ S_COMPLETE:
 
 1. Resolve template: absolute/relative/slug → index.json lookup
 2. Parse --context key=value, validate template JSON
-3. Collect missing required vars via AskUserQuestion
+3. Collect missing required vars via request_user_input
 4. Bind {variable} placeholders (leave {N-xxx.field}/{prev_*} for runtime)
 
 ### A_INIT_SESSION
@@ -135,7 +135,7 @@ S_COMPLETE:
 
 ### A_EXECUTE_WAVE
 
-1. **Checkpoint**: handle inline — save snapshot, update context.last_checkpoint, mark completed. If auto_continue==false: AskUserQuestion (Continue/Pause/Abort).
+1. **Checkpoint**: handle inline — save snapshot, update context.last_checkpoint, mark completed. If auto_continue==false: request_user_input (Continue/Pause/Abort).
 
 2. **Skill nodes**: resolve runtime references → write wave-{N}.csv (only rows with status == "pending") → spawn:
 ```

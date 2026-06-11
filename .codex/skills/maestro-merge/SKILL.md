@@ -2,7 +2,7 @@
 name: maestro-merge
 description: Merge milestone worktree branch back to main
 argument-hint: "-m <milestone-number> [--force] [--dry-run] [--no-cleanup] [--continue]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

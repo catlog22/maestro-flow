@@ -2,7 +2,7 @@
 name: maestro-learn
 description: Route learning intent to learn-* commands
 argument-hint: "\"intent text\" [-y] [--dry-run] [--chain <name>]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -51,7 +51,7 @@ $ARGUMENTS — learning intent text, or flags.
 | retro, git, commit, decision | `retro` |
 | thorough, deep | `deep-understand` |
 
-No match → present menu via AskUserQuestion. Max 1 clarification.
+No match → present menu via request_user_input. Max 1 clarification.
 
 ### Step 2: Resolve Target & Build Args
 Map chain to skill invocations. Extract target and flags from arguments.

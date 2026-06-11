@@ -2,7 +2,7 @@
 name: wiki-digest
 description: Generate wiki digest with theme clustering and gap analysis
 argument-hint: "[<topic>|--recent N] [--type <type>] [--format brief|full] [--create-issues]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -62,7 +62,7 @@ For each gap: dedup against issues.jsonl, append with `type: "knowledge-gap"`, `
 ### Stage 8: Persist
 Append meta-insights to `specs/learnings.md` (source: "wiki-digest"). Display summary.
 
-**Next steps:** `/learn-follow <wiki-id>`, `/wiki-connect --fix`, `/manage-wiki cleanup`, `/learn-decompose <path>`
+**Next steps:** `$learn-follow <wiki-id>`, `$wiki-connect --fix`, `$manage-wiki cleanup`, `$learn-decompose <path>`
 </execution>
 
 <error_codes>

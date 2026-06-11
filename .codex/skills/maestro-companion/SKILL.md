@@ -2,7 +2,7 @@
 name: maestro-companion
 description: Knowledge companion — load context, record companion doc, capture insights, route to skills
 argument-hint: "[before|note|after|route] [--task <description>] [--type <task_type>] [--category <cat>]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -414,8 +414,8 @@ If promotable entries exist, ask user:
 
 | Selection | Action |
 |-----------|--------|
-| Spec | `Skill({ skill: "spec-add" })` — guide user through category + content |
-| Knowhow | `Skill({ skill: "manage-knowhow-capture" })` — guide through type + content |
+| Spec | `$spec-add` — guide user through category + content |
+| Knowhow | `$manage-knowhow-capture` — guide through type + content |
 | Both | `spec-add` first, then `manage-knowhow-capture` |
 | Skip | Proceed to Step 4 |
 
@@ -449,7 +449,7 @@ Extract intent text from $ARGUMENTS after removing the `route` keyword.
 ### Step 2: Delegate to maestro-next
 
 ```
-Skill({ skill: "maestro-next", args: "<intent_text>" })
+$maestro-next "<intent_text>"
 ```
 
 Reuses maestro-next routing table and scoring logic to recommend the best single command.

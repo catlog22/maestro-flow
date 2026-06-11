@@ -2,7 +2,7 @@
 name: quality-sync
 description: Sync codebase docs by tracing git diff impact
 argument-hint: "[--full] [--since <commit|HEAD~N>] [--dry-run]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -95,7 +95,7 @@ Display summary: files changed, components affected, features affected, docs upd
 
 | Code | Severity | Description |
 |------|----------|-------------|
-| E001 | error | `.workflow/` not initialized -- run `Skill({ skill: "maestro-init" })` first |
+| E001 | error | `.workflow/` not initialized -- run `$maestro-init` first |
 | W001 | warning | No changes detected since last sync |
 
 </error_codes>

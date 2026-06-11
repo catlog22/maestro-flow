@@ -7,7 +7,7 @@ allowed-tools: Read, Write, Bash, Glob, Grep, request_user_input
 <purpose>
 Signal-driven overlay generator — collect workflow deficiency signals from multiple sources, diagnose which commands need amendment, batch-generate targeted overlays. All amendments use overlay system (`~/.maestro/overlays/*.json`) — non-invasive, idempotent, survives reinstall.
 
-Differs from `/maestro-overlay` (single explicit intent). This command **discovers** what needs amending by analyzing workflow artifacts.
+Differs from `$maestro-overlay` (single explicit intent). This command **discovers** what needs amending by analyzing workflow artifacts.
 </purpose>
 
 <required_reading>
@@ -29,7 +29,7 @@ $ARGUMENTS — optional description and/or source flags.
 | `--scan` | Auto-scan .workflow/ | Discover all workflow-related signals |
 | _(positional text)_ | User description | Direct observation |
 
-Multiple combinable. No flags + no description → interactive (scan + AskUserQuestion).
+Multiple combinable. No flags + no description → interactive (scan + request_user_input).
 
 **Control**: `--dry-run` (preview, don't install), `-y` (skip confirmations)
 
@@ -112,7 +112,7 @@ Per signal, determine:
 | Entirely new concern | _(new section)_ | new-section |
 
 Read pristine source from `$PKG_ROOT/.claude/commands/<name>.md` to confirm section.
-Classify: command deficiency → proceed; code bug → skip (suggest /maestro-quick).
+Classify: command deficiency → proceed; code bug → skip (suggest $maestro-quick).
 
 ### A_GROUP_OVERLAYS
 
@@ -142,7 +142,7 @@ On validation failure: fix JSON, retry (max 2).
 | Code | Condition | Recovery |
 |------|-----------|----------|
 | E001 | No signals from any source | Verify artifact paths or provide description |
-| E003 | All signals are code bugs, not command gaps | Use /maestro-quick or /maestro-plan --gaps |
+| E003 | All signals are code bugs, not command gaps | Use $maestro-quick or $maestro-plan --gaps |
 | E004 | Overlay validation failed after 2 retries | Review JSON manually |
 | W001 | Some signals skipped (code bugs) | Route to appropriate fix command |
 | W002 | Target command has >= 3 existing overlays | Consider consolidating |

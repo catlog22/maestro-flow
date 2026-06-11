@@ -59,7 +59,7 @@ Show matched entries grouped by filename and category, with `<spec-entry>` tags 
 <error_codes>
 | Code | Severity | Description |
 |------|----------|-------------|
-| E001 | fatal | `.workflow/specs/` not initialized -- run `Skill({ skill: "spec-setup" })` first |
+| E001 | fatal | `.workflow/specs/` not initialized -- run `$spec-setup` first |
 | W001 | warning | No matching specs for keyword -- showing all in category |
 </error_codes>
 

@@ -2,7 +2,7 @@
 name: maestro-tools-execute
 description: Load and execute tool specs by role or name
 argument-hint: "[tool-name | --category <category>]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -44,7 +44,7 @@ maestro spec load --category <category>
 Extract tool entries from output, list available tools.
 
 **Empty args**:
-Load all tool entries, present to user with AskUserQuestion for selection.
+Load all tool entries, present to user with request_user_input for selection.
 
 ### Step 2: Display Tool
 
@@ -75,7 +75,7 @@ Follow the tool definition steps in order:
 
 **Blocker handling**:
 - Step fails → report error, ask user: retry / skip / abort
-- Needs user input → AskUserQuestion for parameters
+- Needs user input → request_user_input for parameters
 - Prerequisites unmet → show missing items, ask how to proceed
 
 ### Step 5: Report Results

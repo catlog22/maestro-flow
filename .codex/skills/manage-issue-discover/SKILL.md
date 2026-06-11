@@ -2,7 +2,7 @@
 name: manage-issue-discover
 description: Discover issues via multi-perspective analysis
 argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"[by-prompt 'what to look for']\""
-allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>

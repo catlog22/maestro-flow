@@ -2,7 +2,7 @@
 name: maestro-composer
 description: Compose reusable workflow templates from natural language
 argument-hint: "\"workflow description\" [--resume] [--edit <template-path>]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -63,20 +63,20 @@ $ARGUMENTS — natural language workflow description, or flags.
 
 **Resume** (`--resume`):
 1. Scan `.workflow/templates/design-drafts/WFD-*/` for in-progress designs
-2. Multiple → AskUserQuestion for selection
+2. Multiple → request_user_input for selection
 3. Load draft → skip to last incomplete phase
 
 **Edit** (`--edit <path>`):
 1. Load template JSON
 2. Show pipeline visualization (Phase 4 format)
-3. AskUserQuestion: which nodes to modify/add/remove
+3. request_user_input: which nodes to modify/add/remove
 4. Re-enter at Phase 3
 
 ---
 
 ### Phase 1: Parse — Semantic Intent Extraction
 
-**Step 1.1** — Parse `$ARGUMENTS`. If empty, AskUserQuestion:
+**Step 1.1** — Parse `$ARGUMENTS`. If empty, request_user_input:
 ```
 "Describe the workflow you want to automate.
 Include: what steps to run, in what order, and what varies each time.
@@ -104,7 +104,7 @@ Example: 'analyze the code, then plan, implement, and test the feature'"
 
 **Step 1.6** — Write `intent.json` to `.workflow/templates/design-drafts/WFD-<slug>-<date>/`.
 
-**Step 1.7 — Interactive confirmation**: Display description, task type, complexity, detected steps (numbered with type_hint), and variables. AskUserQuestion: `Continue to resolution` / `Edit steps` / `Add a step` / `Cancel`
+**Step 1.7 — Interactive confirmation**: Display description, task type, complexity, detected steps (numbered with type_hint), and variables. request_user_input: `Continue to resolution` / `Edit steps` / `Add a step` / `Cancel`
 
 ---
 
@@ -138,7 +138,7 @@ If spec not found, use built-in fallback:
 
 **Step 2.4** — Write `nodes.json`.
 
-**Step 2.5 — Interactive confirmation**: Display resolved nodes table (ID, type, executor, args) and parallel groups. AskUserQuestion: `Continue to checkpoint injection` / `Change executor` / `Change node type` / `Back to intent` / `Cancel`
+**Step 2.5 — Interactive confirmation**: Display resolved nodes table (ID, type, executor, args) and parallel groups. request_user_input: `Continue to checkpoint injection` / `Change executor` / `Change node type` / `Back to intent` / `Cancel`
 
 ---
 
@@ -169,7 +169,7 @@ Set `auto_continue: false` for checkpoints before user-facing deliverables.
 
 **Step 4.1** — Render ASCII pipeline: vertical node chain with `|` connectors showing each node (ID, type, executor, args) and checkpoint nodes (auto-continue vs pause-for-user). Footer: required variables, checkpoint counts, node counts.
 
-**Step 4.2** — AskUserQuestion: `Confirm & Save` / `Edit a node` / `Add a node` / `Remove a node` / `Rename template` / `Re-run checkpoint injection` / `Cancel`
+**Step 4.2** — request_user_input: `Confirm & Save` / `Edit a node` / `Add a node` / `Remove a node` / `Rename template` / `Re-run checkpoint injection` / `Cancel`
 
 **Step 4.3** — Loop edits until Confirm or Cancel.
 
@@ -195,7 +195,7 @@ Set `auto_continue: false` for checkpoints before user-facing deliverables.
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | Empty description and no flags | AskUserQuestion for description |
+| E001 | error | Empty description and no flags | request_user_input for description |
 | E002 | error | 0 steps extracted | Ask to rephrase with action verbs |
 | E003 | error | Node count exceeds 20 | Suggest splitting into sub-workflows |
 | E004 | error | DAG cycle detected | Show cycle, ask to resolve |

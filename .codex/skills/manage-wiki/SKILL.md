@@ -2,7 +2,7 @@
 name: manage-wiki
 description: Manage wiki graph -- health, cleanup, search, stats
 argument-hint: "[health|search|cleanup|stats] [options]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
