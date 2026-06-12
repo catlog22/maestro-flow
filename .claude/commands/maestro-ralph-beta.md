@@ -299,14 +299,15 @@ resolve_milestone(phase_number):
 | phase 已存在 + 无任何 artifact | `analyze` |
 | phase 已存在 + 最新 artifact = analyze | `plan` |
 | phase 已存在 + 最新 artifact = plan | `execute` |
-| phase 已存在 + 最新 artifact = execute | `verify` |
-| phase 已存在 + 最新 artifact = verify | → refine from result files |
+| phase 已存在 + 最新 artifact = execute | → refine from post-execute results |
 
-**Refine from verify results:**
+**Refine from post-execute results:**
+
+在 execute artifact 的 scratch dir 中检查结果文件（verification.json 由 execute 内置 gate 产出）：
 
 | Condition | Position |
 |-----------|----------|
-| verification.json: passed==false or gaps[] | `verify-failed` |
+| 无 verification.json 或 passed==false 或 gaps[] | `execute` (触发 post-execute fix loop) |
 | passed==true, no review.json | `business-test` |
 | review.json: verdict=="BLOCK" | `review-failed` |
 | review.json: verdict!="BLOCK" | `test` |
@@ -332,7 +333,7 @@ resolve_milestone(phase_number):
 
 读 `session.quality_mode_override`（CLI `--quality`），无则按规则推断：
 
-| Condition | Mode | Pipeline (verify 之后) |
+| Condition | Mode | Pipeline (execute 之后) |
 |-----------|------|-------------------------|
 | Has `specs/REQ-*.md` + 当前 phase 业务范围明确 | `full` | business-test → review → test-gen → test |
 | Default | `standard` | review → test-gen (当 coverage<80%) → test |
@@ -361,7 +362,7 @@ options:
   - label: "统一规划 (Recommended)"
     description: "一次性分析+规划整个里程碑所有 phase，analyze/plan 走里程碑级，适合 phase 间关联紧密"
   - label: "独立规划"
-    description: "逐个 phase 走完整生命周期（analyze→plan→execute→verify→...），适合 phase 间独立性高"
+    description: "逐个 phase 走完整生命周期（analyze→plan→execute→...），适合 phase 间独立性高"
 ```
 
 写入 `session.planning_mode`（`"unified"` 或 `"independent"`）。
@@ -393,7 +394,7 @@ narrow → derive defaults from intent + codebase, skip questions.
 { "id": "G1", "goal": "<deliverable>", "boundary": "<in/out note>",
   "done_when": "<objectively checkable condition>",
   "evidence": "verification.json|review.json|uat.md|<test path>",
-  "lifecycle": ["analyze","execute","verify"], "status": "pending" }
+  "lifecycle": ["analyze","execute"], "status": "pending" }
 ```
 `done_when` 必须客观可验证，且引用 ralph 已产出的 artifact；`lifecycle` 字段映射到产出 evidence 的生命周期 stage。
 
@@ -430,7 +431,7 @@ narrow → derive defaults from intent + codebase, skip questions.
 2. **跳过已完成**：跳过当前 milestone+phase 下已有 completed artifact 的 stage（按 `session.phase` 过滤）；unified 按 milestone 过滤
 3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
 4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
-5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（verify/review/test）之后、`milestone-complete` 之前插入 `decision:post-goal-audit`
+5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后、`milestone-complete` 之前插入 `decision:post-goal-audit`
 6. **终点硬约束**：chain 以 `milestone-complete` 结尾
 7. **goal_ref 传播**：`task_decomposition` 存在时，每个 step 按 `step.stage ∈ g.lifecycle` 匹配 `step.goal_ref = g.id`（多匹配取字典序最小）；decision 节点不打 goal_ref
 8. **占位符**：independent 保留 `{phase}` `{intent}`；unified 不带 `{phase}`
@@ -657,7 +658,7 @@ Write enriched args back to status.json.
 3. `medium` / `small`：
    - 删除 `goal-audit` 之前未完成的 `roadmap` + `analyze` (phase) step
    - 下一个未完成的 `plan` step → `maestro-plan --from analyze:{analyze_macro_id}`，去掉 `{phase}`，`source_artifact_ref = analyze:{analyze_macro_id}`
-   - 后续 `execute` / `verify` 同 standalone scope
+   - 后续 `execute` 等沿用同一 standalone scope
 4. `unknown`：非 auto_confirm → AskUserQuestion 二选一（large / medium-small）；auto_confirm → 默认 large
 5. release 协议 — 完成分支；reindex
 6. Display: ◆ Scope verdict: {verdict} → {kept|collapsed to standalone via analyze:{ANL_ID}}
@@ -754,7 +755,7 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro
     "index": 0,
     "skill": "",                   // 执行 step 有值；decision 节点为空字符串/null
     "args": "",
-    "stage": "",                   // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|verify|...
+    "stage": "",                   // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|...
     "scope": null,                 // "phase"|"standalone"|"milestone"|null（plan 等需要）
     "decision": null,              // null = 执行 step；非 null = decision step (值为 gate 名)
     "retry_count": 0,              // decision step
