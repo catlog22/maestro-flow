@@ -368,11 +368,5 @@ registerNotice({
       defaultYes: true,
       run: () => runShell('maestro install --force --global --components agy-context,agy-skills,agy-agents,agy-md-chinese'),
     },
-    {
-      id: 'install-codegraph',
-      description: '安装 @colbymchenry/codegraph（tree-sitter 代码分析，启用函数级 KG）',
-      defaultYes: false,
-      run: () => runShell('npm install -g @colbymchenry/codegraph'),
-    },
   ],
 });

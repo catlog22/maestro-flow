@@ -2,9 +2,7 @@
  * KG Context Injector — PreToolUse:Agent Hook
  *
  * Injects Knowledge Graph code structure context (callers, callees, exported
- * symbols) into subagent prompts using CodeGraph as the sole data source.
- *
- * Requires @colbymchenry/codegraph — gracefully returns no-inject when unavailable.
+ * symbols) into subagent prompts using MaestroGraph as the data source.
  */
 
 import { createRequire } from 'node:module';
@@ -115,36 +113,32 @@ export async function evaluateKgContextInjection(
   }
 
   try {
-    const { isCodeGraphAvailable, CodeGraphAdapter } = require('../graph/codegraph-adapter.js');
-    if (!isCodeGraphAvailable()) {
-      return { inject: false, reason: 'codegraph-unavailable' };
+    const { MaestroGraph } = await import('../graph/kg/engine.js');
+    if (!MaestroGraph.isInitialized(projectPath)) {
+      return { inject: false, reason: 'maestrograph-not-initialized' };
     }
 
-    const adapter = new CodeGraphAdapter(projectPath);
+    const mg = await MaestroGraph.open(projectPath);
     try {
-      if (!adapter.isInitialized()) {
-        return { inject: false, reason: 'codegraph-not-initialized' };
-      }
-
       const sections: ContextSection[] = [];
 
       for (const sym of symbols) {
-        const results = await adapter.searchNodes(sym, { limit: 1 });
+        const results = mg.searchCode(sym, { limit: 1 });
         if (results.length === 0) continue;
-        const node = results[0].node ?? results[0];
+        const node = results[0];
 
-        const callers = await adapter.getCallers(node.id, 1);
-        const callees = await adapter.getCallees(node.id, 1);
-        sections.push(buildRichSymbolSection(node, callers, callees));
+        const callers = mg.getCallers(node.id, 1);
+        const callees = mg.getCallees(node.id, 1);
+        sections.push(buildRichSymbolSection(node as any, callers as any, callees as any));
       }
 
       for (const fp of files) {
-        const fileNodes = await adapter.getNodesInFile(fp);
+        const fileNodes = mg.getQueryBuilder().getNodesByFile(fp);
         if (fileNodes.length === 0) continue;
         const exported = fileNodes
-          .filter((n: EnhancedNode) => n.isExported)
+          .filter((n: any) => n.isExported)
           .slice(0, 8)
-          .map((n: EnhancedNode) => `${n.kind}:${n.name}`);
+          .map((n: any) => `${n.kind}:${n.name}`);
         if (exported.length > 0) {
           sections.push({
             label: `kg-file[${fp}]`,
@@ -168,9 +162,9 @@ export async function evaluateKgContextInjection(
 
       return { inject: true, content };
     } finally {
-      try { adapter.close(); } catch { /* best-effort */ }
+      try { mg.close(); } catch { /* best-effort */ }
     }
   } catch {
-    return { inject: false, reason: 'codegraph-unavailable' };
+    return { inject: false, reason: 'maestrograph-unavailable' };
   }
 }

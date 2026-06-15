@@ -144,7 +144,7 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
         <Row
           label={t.install.confirmLabelCodeGraph}
           value={config.installCodeGraph
-            ? '@colbymchenry/codegraph (tree-sitter KG)'
+            ? 'MaestroGraph tree-sitter (built-in)'
             : t.install.confirmSkipped}
           valueColor={config.installCodeGraph ? C.success : C.neutral}
         />

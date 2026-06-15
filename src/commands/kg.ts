@@ -110,21 +110,24 @@ function hasSqliteDb(): boolean {
   return existsSync(getDatabasePath());
 }
 
-// ── CodeGraph helpers ─────────────────────────────────────────────────
+// ── MaestroGraph helpers ─────────────────────────────────────────────────
 
-async function requireCodeGraph(): Promise<{ adapter: InstanceType<typeof import('../graph/codegraph-adapter.js').CodeGraphAdapter> }> {
-  const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-  if (!isCodeGraphAvailable()) {
-    console.error('CodeGraph not installed.');
-    console.error('  Install: npm install -g @colbymchenry/codegraph');
+async function requireCodeGraph(): Promise<{ adapter: any }> {
+  const { MaestroGraph } = await import('../graph/kg/engine.js');
+  if (!MaestroGraph.isInitialized(resolve('.'))) {
+    console.error('MaestroGraph not initialized for this project.');
+    console.error('  Run: maestro kg sync');
     process.exit(1);
   }
-  const adapter = new CodeGraphAdapter(resolve('.'));
-  if (!adapter.isInitialized()) {
-    console.error('CodeGraph not initialized for this project.');
-    console.error('  Run: maestro kg index');
-    process.exit(1);
-  }
+  const mg = await MaestroGraph.open(resolve('.'));
+  const adapter = {
+    searchNodes: (q: string, opts?: { limit?: number }) => mg.searchCode(q, opts),
+    getCallers: (id: string, d?: number) => mg.getCallers(id, d),
+    getCallees: (id: string, d?: number) => mg.getCallees(id, d),
+    getNodesInFile: (fp: string) => mg.getQueryBuilder().getNodesByFile(fp),
+    stats: () => mg.getStats(),
+    close: () => mg.close(),
+  };
   return { adapter };
 }
 
@@ -549,59 +552,52 @@ export function registerKgCommand(program: Command): void {
         process.exit(1);
       }
 
-      // CodeGraph tree-sitter engine
+      // MaestroGraph tree-sitter engine
       try {
-        const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-        if (isCodeGraphAvailable()) {
-          console.log('Using CodeGraph tree-sitter engine...');
-          const projectRoot = resolve('.');
-          const adapter = new CodeGraphAdapter(projectRoot);
-          try {
-            const result = await adapter.index({ verbose: true });
-            const stats = await adapter.stats();
+        const { MaestroGraph } = await import('../graph/kg/engine.js');
+        console.log('Using MaestroGraph tree-sitter engine...');
+        const projectRoot = resolve('.');
+        const mg = MaestroGraph.isInitialized(projectRoot)
+          ? await MaestroGraph.open(projectRoot)
+          : await MaestroGraph.init(projectRoot);
+        try {
+          const results = await mg.sync();
+          const stats = mg.getStats();
+          const totalDuration = results.reduce((sum, r) => sum + r.durationMs, 0);
 
-            if (opts.json) {
-              console.log(JSON.stringify({ ...stats, ...result, engine: 'codegraph' }, null, 2));
-              return;
-            }
-
-            console.log('');
-            console.log(`Nodes: ${stats.nodeCount}`);
-            for (const [kind, count] of Object.entries(stats.nodesByKind)) {
-              console.log(`  ${kind}: ${count}`);
-            }
-            console.log('');
-            console.log(`Edges: ${stats.edgeCount}`);
-            for (const [kind, count] of Object.entries(stats.edgesByKind)) {
-              console.log(`  ${kind}: ${count}`);
-            }
-            console.log('');
-            console.log(`Files: ${stats.fileCount}`);
-            console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
-            console.log(`Duration: ${result.durationMs}ms`);
-            if (result.errors.length > 0) {
-              console.log(`Errors: ${result.errors.length}`);
-              for (const err of result.errors.slice(0, 5)) {
-                console.log(`  [${err.severity}] ${err.message}${err.filePath ? ` (${err.filePath})` : ''}`);
-              }
-              if (result.errors.length > 5) {
-                console.log(`  ... and ${result.errors.length - 5} more`);
-              }
-            }
+          if (opts.json) {
+            console.log(JSON.stringify({ ...stats, results, engine: 'maestrograph' }, null, 2));
             return;
-          } finally {
-            adapter.close();
           }
-        }
-      } catch (cgErr) {
-        if (process.env.DEBUG) {
-          console.error('CodeGraph error:', cgErr instanceof Error ? cgErr.message : cgErr);
-        }
-      }
 
-      console.error('CodeGraph not available. Install: npm install -g @colbymchenry/codegraph');
-      console.error('Falling back to JSON analyzer...');
-      console.error('');
+          console.log('');
+          console.log(`Nodes: ${stats.nodeCount}`);
+          for (const [kind, count] of Object.entries(stats.nodesByKind)) {
+            console.log(`  ${kind}: ${count}`);
+          }
+          console.log('');
+          console.log(`Edges: ${stats.edgeCount}`);
+          for (const [kind, count] of Object.entries(stats.edgesByKind)) {
+            console.log(`  ${kind}: ${count}`);
+          }
+          console.log('');
+          console.log(`Files: ${stats.fileCount}`);
+          console.log(`DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
+          console.log(`Duration: ${totalDuration}ms`);
+          for (const r of results) {
+            console.log(`  ${r.source}: +${r.nodesAdded} -${r.nodesRemoved} nodes, +${r.edgesAdded} edges (${r.durationMs}ms)`);
+          }
+          return;
+        } finally {
+          mg.close();
+        }
+      } catch (mgErr) {
+        if (process.env.DEBUG) {
+          console.error('MaestroGraph error:', mgErr instanceof Error ? mgErr.message : mgErr);
+        }
+        console.error('MaestroGraph engine failed. Falling back to JSON analyzer...');
+        console.error('');
+      }
 
       // JSON mode (legacy)
       const analyzer = new FsAnalyzer();

@@ -97,30 +97,26 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions): P
 }
 
 /**
- * Search CodeGraph for AST nodes matching the query. Gracefully returns
- * empty when CodeGraph is not installed or not indexed.
+ * Search MaestroGraph for code nodes matching the query. Gracefully returns
+ * empty when MaestroGraph is not initialized.
  */
 async function runCodeSearch(q: string, limit: number): Promise<CodeSearchResult[]> {
   try {
-    const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../graph/codegraph-adapter.js');
-    if (!isCodeGraphAvailable()) return [];
-    const adapter = new CodeGraphAdapter(resolve('.'));
-    if (!adapter.isInitialized()) return [];
+    const { MaestroGraph } = await import('../graph/kg/engine.js');
+    if (!MaestroGraph.isInitialized(resolve('.'))) return [];
+    const mg = await MaestroGraph.open(resolve('.'));
     try {
-      const results = await adapter.searchNodes(q, { limit });
-      return results.map((r: { node?: any; score?: number } & Record<string, any>) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-        const n = r.node ?? r;
-        return {
-          id: n.id,
-          kind: n.kind,
-          name: n.name,
-          filePath: n.filePath,
-          score: typeof r.score === 'number' ? r.score : null,
-          signature: n.signature || undefined,
-        };
-      });
+      const results = mg.searchCode(q, { limit });
+      return results.map((n: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+        id: n.id,
+        kind: n.kind,
+        name: n.name,
+        filePath: n.filePath,
+        score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
+        signature: n.signature || undefined,
+      }));
     } finally {
-      adapter.close();
+      mg.close();
     }
   } catch {
     return [];

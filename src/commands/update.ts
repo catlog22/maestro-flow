@@ -14,7 +14,6 @@ import { getPackageVersion } from '../utils/get-version.js';
 import { getAllManifests } from '../core/manifest.js';
 import { loadMigrations, planMigrations, runPendingMigrations } from '../utils/migration-registry.js';
 import { applyNotices, planNotices, printNoticePlan } from '../utils/update-notices.js';
-import { isCodeGraphAvailable } from '../graph/codegraph-adapter.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -432,13 +431,6 @@ export function registerUpdateCommand(program: Command): void {
 
       // --- Post-update: run pending migrations via new binary ---
       await runMigrationsForAllProjects();
-
-      if (!isCodeGraphAvailable()) {
-        console.error('');
-        console.error('  Optional: @colbymchenry/codegraph (tree-sitter code analysis)');
-        console.error('  Enables function-level KG with callers/callees for `maestro kg` commands.');
-        console.error('  Install: npm install -g @colbymchenry/codegraph');
-      }
 
       if (viewServerWasRunning) {
         console.error('');

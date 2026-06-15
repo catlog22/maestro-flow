@@ -131,7 +131,7 @@ export const zh: LocaleStrings = {
     execInstallingCodexHooks: '正在安装 Codex {level} hooks...',
     execInstallingAgyHooks: '正在安装 Agy {level} hooks...',
     execInstallingStatusline: '正在安装 statusline...',
-    execInstallingCodeGraph: '正在安装 @colbymchenry/codegraph...',
+    execInstallingCodeGraph: '正在安装 tree-sitter 代码分析...',
     execRegisteringMcp: '注册 MCP 服务器...',
     execRegisteringCodexMcp: '注册 Codex MCP 服务器...',
     execComplete: '完成',
@@ -148,7 +148,7 @@ export const zh: LocaleStrings = {
     resultManifest: '清单：',
     resultStatuslineInstalled: '已安装',
     resultCodeGraphInstalled: '已安装（函数级 KG 已启用）',
-    resultCodeGraphFailed: '安装失败——手动执行：npm install -g @colbymchenry/codegraph',
+    resultCodeGraphFailed: '代码分析组件初始化失败',
     resultExit: '重启 Claude Code 以加载变更。按 Enter 退出。',
 
     // Force install

@@ -48,30 +48,19 @@ interface KgSyncBridge {
 
 /**
  * Evaluate whether a KG sync is needed and perform it if so.
- * Uses CodeGraph as the sole sync engine.
+ * Uses MaestroGraph as the sync engine.
  */
 export async function evaluateKgSync(
   projectPath: string,
   sessionId: string,
 ): Promise<KgSyncResult> {
-  // Step 1: Check if CodeGraph is available and initialized
-  let cgMod: any;
   try {
-    cgMod = require('../graph/codegraph-adapter.js');
-    if (!cgMod.isCodeGraphAvailable()) {
-      return { synced: false, reason: 'codegraph-unavailable' };
-    }
-  } catch {
-    return { synced: false, reason: 'codegraph-unavailable' };
-  }
-
-  const adapter = new cgMod.CodeGraphAdapter(projectPath);
-  try {
-    if (!adapter.isInitialized()) {
-      return { synced: false, reason: 'codegraph-not-initialized' };
+    const { MaestroGraph } = await import('../graph/kg/engine.js');
+    if (!MaestroGraph.isInitialized(projectPath)) {
+      return { synced: false, reason: 'maestrograph-not-initialized' };
     }
 
-    // Step 2: Cooldown check via bridge file
+    // Cooldown check via bridge file
     const bridge = readBridge(sessionId);
     if (bridge) {
       const elapsed = Math.floor(Date.now() / 1000) - bridge.last_sync;
@@ -80,24 +69,29 @@ export async function evaluateKgSync(
       }
     }
 
-    // Step 3: Git quick check — any source files changed?
+    // Git quick check — any source files changed?
     if (!detectSourceChanges(projectPath)) {
       writeBridge(sessionId);
       return { synced: false, reason: 'no-changes' };
     }
 
-    // Step 4: Perform incremental sync via CodeGraph
+    // Perform sync via MaestroGraph
     const start = Date.now();
     try {
-      const result = await adapter.sync();
-      const filesChanged = result.filesAdded + result.filesModified + result.filesRemoved;
-      writeBridge(sessionId);
-      return { synced: true, filesChanged, durationMs: Date.now() - start };
+      const mg = await MaestroGraph.open(projectPath);
+      try {
+        const results = await mg.sync();
+        const filesChanged = results.reduce((sum, r) => sum + r.nodesAdded + r.nodesRemoved, 0);
+        writeBridge(sessionId);
+        return { synced: true, filesChanged, durationMs: Date.now() - start };
+      } finally {
+        mg.close();
+      }
     } catch {
       return { synced: false, reason: 'sync-error' };
     }
-  } finally {
-    try { adapter.close(); } catch { /* best-effort */ }
+  } catch {
+    return { synced: false, reason: 'maestrograph-unavailable' };
   }
 }
 

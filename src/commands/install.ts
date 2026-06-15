@@ -53,22 +53,7 @@ import {
 } from './install-backend.js';
 import { t } from '../i18n/index.js';
 import { registerFontsSubcommand } from './font-guide.js';
-import { isCodeGraphAvailable } from '../graph/codegraph-adapter.js';
 import { execSync } from 'node:child_process';
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
-function installCodeGraph(): { installed: boolean; error?: string } {
-  if (isCodeGraphAvailable()) return { installed: true };
-  try {
-    execSync('npm install -g @colbymchenry/codegraph', { stdio: 'pipe', timeout: 120_000 });
-    return { installed: true };
-  } catch (err) {
-    return { installed: false, error: err instanceof Error ? err.message : String(err) };
-  }
-}
 
 function resolveMode(opts: { global?: boolean; path?: string }): { mode: 'global' | 'project'; projectPath: string } {
   if (opts.path) {
@@ -163,9 +148,8 @@ export function registerInstallCommand(program: Command): void {
     .option('--codex-mcp', 'Register Codex MCP server in --force mode')
     .option('--agy-hooks <level>', 'Agy (Antigravity) hook level for --force mode: none, minimal, standard, full')
     .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
-    .option('--codegraph', 'Install @colbymchenry/codegraph for function-level KG (with --force)')
     .option('--statusline [theme]', 'Install statusline with optional theme (with --force)')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; codegraph?: boolean; statusline?: boolean | string }) => {
+    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -401,21 +385,6 @@ function forceInstall(
     console.error('  Initialized cli-tools.json (auto-detected CLI availability)');
   } else if (cliToolsResult.added.length > 0) {
     console.error(`  cli-tools.json: added missing tools → ${cliToolsResult.added.join(', ')}`);
-  }
-
-  // CodeGraph installation
-  if (opts.codegraph) {
-    const cgResult = installCodeGraph();
-    if (cgResult.installed) {
-      console.error('  CodeGraph: installed (function-level KG enabled)');
-    } else {
-      console.error(`  CodeGraph: failed — ${cgResult.error}`);
-      console.error('  Run manually: npm install -g @colbymchenry/codegraph');
-    }
-  } else if (!isCodeGraphAvailable()) {
-    console.error('');
-    console.error('  Optional: @colbymchenry/codegraph (tree-sitter code analysis)');
-    console.error('  Use --codegraph flag or toggle in interactive install to enable.');
   }
 
   console.error('');

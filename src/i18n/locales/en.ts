@@ -131,7 +131,7 @@ export const en: LocaleStrings = {
     execInstallingCodexHooks: 'Installing Codex {level} hooks...',
     execInstallingAgyHooks: 'Installing Agy {level} hooks...',
     execInstallingStatusline: 'Installing statusline...',
-    execInstallingCodeGraph: 'Installing @colbymchenry/codegraph...',
+    execInstallingCodeGraph: 'Installing tree-sitter code analysis...',
     execRegisteringMcp: 'Registering MCP server...',
     execRegisteringCodexMcp: 'Registering Codex MCP server...',
     execComplete: 'Complete',
@@ -148,7 +148,7 @@ export const en: LocaleStrings = {
     resultManifest: 'Manifest:',
     resultStatuslineInstalled: 'installed',
     resultCodeGraphInstalled: 'installed (function-level KG enabled)',
-    resultCodeGraphFailed: 'install failed — run manually: npm install -g @colbymchenry/codegraph',
+    resultCodeGraphFailed: 'code analysis component initialization failed',
     resultExit: 'Restart Claude Code to pick up changes. Press Enter to exit.',
 
     // Force install

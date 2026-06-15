@@ -189,8 +189,8 @@ export function buildHubItems(
       enabled: enabled.codegraph,
       summary: enabled.codegraph
         ? (summaries.codegraphAvailable
-          ? 'already installed — will verify'
-          : 'npm install -g @colbymchenry/codegraph')
+          ? 'built-in (MaestroGraph tree-sitter)'
+          : 'MaestroGraph tree-sitter (built-in)')
         : t.install.hubSkipped,
     },
     {

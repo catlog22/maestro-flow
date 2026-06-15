@@ -10,17 +10,9 @@ import {
 } from '../query/traversal.js';
 import type { KgQueryBuilder } from '../db/queries.js';
 
-// CodeGraph adapter (old system)
+// CodeGraph adapter stub (legacy system removed — MaestroGraph is the sole engine)
 async function getCodeGraphAdapter() {
-  try {
-    const { isCodeGraphAvailable, CodeGraphAdapter } = await import('../../codegraph-adapter.js');
-    if (!isCodeGraphAvailable()) return null;
-    const adapter = new CodeGraphAdapter(resolve('.'));
-    if (!adapter.isInitialized()) return null;
-    return adapter;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------

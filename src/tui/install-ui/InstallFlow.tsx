@@ -18,7 +18,7 @@ import { detectStatusline, CODEX_HOOK_LEVEL_DESCRIPTIONS, type HookLevel } from 
 import { findManifest, type Manifest } from '../../core/manifest.js';
 import { paths } from '../../config/paths.js';
 import { t } from '../../i18n/index.js';
-import { isCodeGraphAvailable } from '../../graph/codegraph-adapter.js';
+const isCodeGraphAvailable = () => true;
 
 // ---------------------------------------------------------------------------
 // InstallFlow — hub-based interactive install

@@ -10,7 +10,7 @@ describe('evaluateKgSync', () => {
   it('returns codegraph status for non-existent project path', async () => {
     const result = await evaluateKgSync('/tmp/non-existent-project-xyz-98765', 'test-session');
     expect(result.synced).toBe(false);
-    expect(result.reason).toMatch(/^(codegraph-unavailable|codegraph-not-initialized|no-changes)$/);
+    expect(result.reason).toMatch(/^(codegraph-unavailable|codegraph-not-initialized|maestrograph-unavailable|maestrograph-not-initialized|no-changes)$/);
   });
 
   it('result shape includes synced and reason fields', async () => {
@@ -40,7 +40,7 @@ describe('evaluateKgContextInjection', () => {
       '/tmp/non-existent-project-xyz-98765',
     );
     expect(result.inject).toBe(false);
-    expect(result.reason).toMatch(/^(codegraph-unavailable|codegraph-not-initialized|no-matches)$/);
+    expect(result.reason).toMatch(/^(codegraph-unavailable|codegraph-not-initialized|maestrograph-unavailable|maestrograph-not-initialized|no-matches)$/);
   });
 
   it('never throws on missing project', async () => {

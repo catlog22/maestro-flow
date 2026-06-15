@@ -297,20 +297,9 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
           }
         }
 
-        // --- CodeGraph (optional tree-sitter dependency) ---
+        // --- CodeGraph (now built-in via MaestroGraph tree-sitter) ---
         if (config.installCodeGraph) {
-          if (cancelled) return;
-          setStatus(t.install.execInstallingCodeGraph);
-          try {
-            const { execSync } = await import('node:child_process');
-            execSync('npm install -g @colbymchenry/codegraph', {
-              stdio: 'pipe',
-              timeout: 120_000,
-            });
-            codegraphInstalled = true;
-          } catch (err) {
-            codegraphError = err instanceof Error ? err.message : String(err);
-          }
+          codegraphInstalled = true;
         }
 
         // --- CLI tools config ---

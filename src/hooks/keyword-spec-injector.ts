@@ -251,22 +251,19 @@ async function evaluateKgSymbolLookup(prompt: string, projectPath: string): Prom
   const symbols = [...new Set(matches)].slice(0, KG_MAX_SYMBOLS);
 
   try {
-    const { isCodeGraphAvailable, CodeGraphAdapter } = require('../graph/codegraph-adapter.js');
-    if (!isCodeGraphAvailable()) return null;
+    const { MaestroGraph } = await import('../graph/kg/engine.js');
+    if (!MaestroGraph.isInitialized(projectPath)) return null;
 
-    const adapter = new CodeGraphAdapter(projectPath);
+    const mg = await MaestroGraph.open(projectPath);
     try {
-      if (!adapter.isInitialized()) return null;
-
       const lines: string[] = [];
       let totalLen = 0;
 
       for (const sym of symbols) {
         if (totalLen >= KG_MAX_CONTENT_LENGTH) break;
 
-        const results = await adapter.searchNodes(sym, { limit: KG_MAX_RESULTS_PER_SYMBOL });
-        for (const r of results) {
-          const node = r.node ?? r;
+        const results = mg.searchCode(sym, { limit: KG_MAX_RESULTS_PER_SYMBOL });
+        for (const node of results) {
           const line = `[${node.kind}] ${node.name}` +
             (node.filePath ? ` (${node.filePath}:${node.startLine})` : '') +
             (node.signature ? ` — ${node.signature}` : '');
@@ -280,7 +277,7 @@ async function evaluateKgSymbolLookup(prompt: string, projectPath: string): Prom
       if (lines.length === 0) return null;
       return { label: 'kg-symbols', lines };
     } finally {
-      try { adapter.close(); } catch { /* best-effort */ }
+      try { mg.close(); } catch { /* best-effort */ }
     }
   } catch {
     return null;
