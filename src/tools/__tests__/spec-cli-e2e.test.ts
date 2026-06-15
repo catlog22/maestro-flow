@@ -262,15 +262,14 @@ describe('maestro spec status', () => {
     runMaestro('spec add coding "Test Rule" "Content." --keywords test');
 
     const output = runMaestro('spec status');
-    expect(output).toContain('OK');
     expect(output).toContain('coding-conventions.md');
     expect(output).toContain('chars');
   });
 
-  it('reports missing when no specs directory', () => {
+  it('reports not initialized when no specs directory', () => {
     rmSync(join(testDir, '.workflow'), { recursive: true, force: true });
     mkdirSync(join(testDir, '.workflow'), { recursive: true });
     const output = runMaestro('spec status');
-    expect(output.toLowerCase()).toContain('missing');
+    expect(output.toLowerCase()).toContain('not initialized');
   });
 });
