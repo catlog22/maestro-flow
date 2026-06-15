@@ -13,98 +13,51 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-Closed-loop deep debugging: understand what changed (archaeology) → diagnose why (hypothesis-driven) → fix and confirm → generalize the pattern (举一反三) → discover similar issues → persist decisions and learnings.
+Closed-loop deep debugging: archaeology (what changed) → explore (call chains, error gaps) → diagnose (hypothesis-driven) → fix & confirm → generalize (举一反三) → discover siblings → persist learnings.
 
-Unlike `quality-debug` (fast bug fix in execution pipeline), this command treats every bug as a learning signal. It digs into git history before forming hypotheses, confirms fixes with CLI-assisted review, and scans the codebase for siblings of the root cause.
+Unlike `quality-debug` (fast fix), this treats every bug as a learning signal — digs into git history before hypotheses, confirms fixes with CLI review, scans for siblings of the root cause.
 
 Core philosophy:
 - **Archaeology before hypothesis** — look at what changed before guessing why
 - **Fix one, find many** — a single bug reveals a class of bugs
-- **Decision journal** — things needing human judgment get recorded, not lost
-- **CLI-assisted review** — delegate to external tools for second-opinion analysis
+- **Decision journal** — human-judgment items recorded, not lost
+- **CLI-assisted review** — delegate for second-opinion analysis
 
-Entry points:
-- **`/odyssey-debug "issue"`** — New session: full 9-phase cycle
-- **`/odyssey-debug -c`** — Resume last interrupted session
-- **`/odyssey-debug "issue" --skip-fix`** — Analysis-only mode (archaeology + diagnosis + generalize, no code changes)
+Entry: `/odyssey-debug "issue"` (full cycle) | `-c` (resume) | `--skip-fix` (analysis-only)
 </purpose>
 
 <context>
 $ARGUMENTS — issue description and optional flags.
 
-**Flags:**
-- `--skip-fix`: Analysis-only mode — run archaeology, diagnosis, and generalization but do not modify code
-- `--skip-generalize`: Skip the generalization and discovery phases (quick fix without learning)
-- `--auto`: CLI delegate calls run without per-step confirmation
-- `-y`: Auto-confirm mode — all decision points auto-select defaults; undecidable items recorded as `status: "deferred"` and skipped
-- `-c`: Resume the most recent interrupted session
+**Flags:** `--skip-fix` analysis-only | `--skip-generalize` quick fix | `--auto` no delegate confirmation | `-y` auto-confirm all decisions | `-c` resume last session
 
-**Session directory:**
-`SESSION_DIR = .workflow/scratch/{YYYYMMDD}-debug-odyssey-{slug}/`
+**Session**: `SESSION_DIR = .workflow/scratch/{YYYYMMDD}-debug-odyssey-{slug}/`
 
 **Output — 4 files:**
 ```
 SESSION_DIR/
-  ├── session.json       # session state + confirmation result + extracted pattern
-  ├── evidence.ndjson    # ALL evidence trail (phase field distinguishes origin)
-  ├── explore.json       # structured CLI exploration snapshot (call chains, error gaps, patterns)
-  └── understanding.md   # evolving narrative across all 9 sections
+  ├── session.json       # state + confirmation + patterns + phase_goals
+  ├── evidence.ndjson    # append-only evidence trail (phase field distinguishes origin)
+  ├── explore.json       # structured CLI exploration snapshot
+  └── understanding.md   # evolving narrative — 9 sections
 ```
 
 **session.json schema:**
 ```json
 {
-  "session_id": "debug-odyssey-{YYYYMMDD-HHmmss}",
-  "issue": "",
- 
+  "session_id": "debug-odyssey-{YYYYMMDD-HHmmss}", "issue": "",
   "flags": { "skip_fix": false, "skip_generalize": false, "auto": false, "auto_confirm": false },
-  "current_state": "S_INTAKE",
-  "diagnosis_retries": 0,
-  "root_cause": null,
-  "pattern": null,
-  "confirmation": null,
-  "phase_goals": [],
-  "phase_goals_all_done": false,
-  "created_at": "",
-  "updated_at": ""
+  "current_state": "S_INTAKE", "diagnosis_retries": 0,
+  "root_cause": null, "patterns": [], "confirmation": null,
+  "phase_goals": [], "phase_goals_all_done": false, "self_iteration_log": [],
+  "generalization_stats": null,
+  "created_at": "", "updated_at": ""
 }
 ```
 
-**phase_goals[] — 自动从 flags 派生的可验证子目标：**
+**evidence.ndjson — unified trail:**
 ```json
-[
-  { "id": "G1", "goal": "Root cause identified",
-    "done_when": "evidence.ndjson contains phase=diagnosis entry with result=confirmed",
-    "evidence": "understanding.md §5", "phase": "S_DIAGNOSE",
-    "status": "pending", "completion_confirmed": false, "completed_at": null },
-  { "id": "G2", "goal": "Explore context gathered",
-    "done_when": "explore.json written with ≥1 category populated",
-    "evidence": "explore.json", "phase": "S_EXPLORE",
-    "status": "pending", "completion_confirmed": false, "completed_at": null },
-  { "id": "G3", "goal": "Fix applied and confirmed",
-    "done_when": "session.json.confirmation.overall == confirmed",
-    "evidence": "session.json.confirmation", "phase": "S_CONFIRM",
-    "skip_when": "skip_fix", "status": "pending", "completion_confirmed": false, "completed_at": null },
-  { "id": "G4", "goal": "Pattern generalized",
-    "done_when": "session.json.pattern populated with signature",
-    "evidence": "understanding.md §7", "phase": "S_GENERALIZE",
-    "skip_when": "skip_generalize", "status": "pending", "completion_confirmed": false, "completed_at": null },
-  { "id": "G5", "goal": "Discoveries triaged",
-    "done_when": "all scan hits classified in evidence.ndjson phase=discovery",
-    "evidence": "evidence.ndjson phase=discovery", "phase": "S_DISCOVER",
-    "skip_when": "skip_generalize", "status": "pending", "completion_confirmed": false, "completed_at": null },
-  { "id": "G6", "goal": "Learnings persisted",
-    "done_when": "spec entries created OR no actionable learnings",
-    "evidence": "understanding.md §9", "phase": "S_RECORD",
-    "status": "pending", "completion_confirmed": false, "completed_at": null }
-]
-```
-`skip_when` 字段引用 `flags` 中的布尔值；为 true 时该 goal 自动标 `status: "skipped", completion_confirmed: true`。
-```
-
-**evidence.ndjson — unified trail with phase discrimination:**
-```json
-{"ts": "", "phase": "archaeology|explore|diagnosis|discovery|decision", "type": "", "source": "", "content": "", "note": "", ...}
+{"ts":"","phase":"archaeology|explore|diagnosis|discovery|decision|self-iteration","type":"","source":"","content":"","note":""}
 ```
 Phase-specific fields:
 - `archaeology`: `sha`, `author`, `date`, `message`, `relevance` (high|medium|low)
@@ -112,388 +65,255 @@ Phase-specific fields:
 - `diagnosis`: `hypothesis`, `result` (confirmed|disproved|inconclusive)
 - `discovery`: `file`, `line`, `classification` (safe|risk|bug), `action` (fix|issue|decision|skip)
 - `decision`: `question`, `options`, `context`, `status` (pending|resolved|deferred), `resolution`
+- `self-iteration`: `stage`, `round`, `assessment`, `expansion`
 
-**explore.json — structured CLI exploration snapshot:**
+**explore.json schema:**
 ```json
 {
-  "call_chains": [{ "entry": "", "chain": ["file:line"] }],
-  "recent_changes": [{ "file": "", "commits": [{ "sha": "", "message": "", "date": "" }] }],
-  "error_gaps": [{ "file": "", "line": 0, "description": "" }],
-  "similar_patterns": [{ "file": "", "line": 0, "description": "" }],
-  "cli_tool": "",
-  "timestamp": ""
+  "call_chains": [{"entry":"","chain":["file:line"]}],
+  "recent_changes": [{"file":"","commits":[{"sha":"","message":"","date":""}]}],
+  "error_gaps": [{"file":"","line":0,"description":""}],
+  "similar_patterns": [{"file":"","line":0,"description":""}],
+  "cli_tool": "", "timestamp": ""
 }
 ```
 
-**understanding.md — progressive sections (written by the phase that owns them):**
-1. Issue & Scope ← S_INTAKE
-2. Archaeology Summary ← S_ARCHAEOLOGY
-3. Exploration — Call Chains & Error Gaps ← S_EXPLORE
-4. Hypotheses & Testing ← S_DIAGNOSE
-5. Root Cause ← S_DIAGNOSE (confirmed)
-6. Fix & Confirmation ← S_FIX + S_CONFIRM
-7. Generalization — Pattern & Scan Results ← S_GENERALIZE
-8. Discoveries & Decisions ← S_DISCOVER
-9. Learnings ← S_RECORD
+**phase_goals[] — auto-derived from flags:**
 
-**Pre-load (optional, proceed without):**
-- Prior sessions: `Glob(".workflow/scratch/*-debug-odyssey-*")` → related sessions
-- Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → module boundaries
-- Wiki: `maestro search "<issue keywords>" --json` → prior investigations
-- Specs: `maestro spec load --category debug --keyword "<symptom>"` → known issues
+| ID | Goal | done_when | phase | skip_when |
+|----|------|-----------|-------|-----------|
+| G1 | Root cause identified | evidence.ndjson has phase=diagnosis result=confirmed | S_DIAGNOSE | — |
+| G2 | Explore context gathered | explore.json ≥1 category populated | S_EXPLORE | — |
+| G3 | Fix applied and confirmed | confirmation.overall == confirmed | S_CONFIRM | skip_fix |
+| G4 | Pattern generalized | patterns[] ≥1 entry | S_GENERALIZE | skip_generalize |
+| G5 | Discoveries triaged | all scan hits classified | S_DISCOVER | skip_generalize |
+| G6 | Learnings persisted | spec entries created OR no actionable learnings | S_RECORD | — |
+
+When `flags[skip_when] == true` → auto set `status: "skipped"`, `completion_confirmed: true`.
+
+**understanding.md — 9 sections (written by owning phase):**
+1. Issue & Scope ← S_INTAKE | 2. Archaeology Summary ← S_ARCHAEOLOGY | 3. Exploration ← S_EXPLORE
+4. Hypotheses & Testing ← S_DIAGNOSE | 5. Root Cause ← S_DIAGNOSE | 6. Fix & Confirmation ← S_FIX+S_CONFIRM
+7. Generalization ← S_GENERALIZE | 8. Discoveries & Decisions ← S_DISCOVER | 9. Learnings ← S_RECORD
+
+### Pre-load（可选，缺失不阻塞）
+
+| 层级 | 命令 | 作用 |
+|------|------|------|
+| Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界，作为所有分析的上下文 |
+| Wiki search | `maestro search "<issue keywords>" --json` | 先前调查、相关决策（取 top 5） |
+| Specs + tools | `maestro spec load --category debug --keyword "<symptom>"` | 已知 issue/workaround + 可发现的 knowhow 工具 |
+| Role knowledge | `maestro search --category debug` → 选相关 → `maestro wiki load <id>` | 累积领域知识 |
+| Prior sessions | `Glob(".workflow/scratch/*-debug-odyssey-*")` | 相关 odyssey 会话 |
+
+### Knowledge Persistence（S_RECORD 中写入产出文件）
+
+S_RECORD 阶段将可沉淀知识 **写入 understanding.md §9 Learnings**，按以下分类结构化：
+
+| 分类 | 写入内容 | 后续建议命令 |
+|------|---------|-------------|
+| 反复根因模式 | 模式描述 + 触发条件 + 修复模板 | `/spec-add debug "..."` |
+| 非显而易见 workaround | 问题场景 + 解决方案 + 适用范围 | `/spec-add learning "..."` |
+| 架构边界违反 | 违反描述 + 正确边界 + 检查方法 | `/spec-add arch "..."` |
+| 可复用泛化 pattern | pattern 签名 + 风险说明 + fix 模板 | `/spec-add coding "..."` |
+
+**两步模式：** 执行中写入产出文件（临时记录）→ 任务完成后用户通过 next_step_routing 沉淀为永久知识。执行过程中不调用外部 Skill。
 </context>
+
+<self_iteration>
+**Quality Gate (适用: S_ARCHAEOLOGY, S_EXPLORE, S_DIAGNOSE, S_GENERALIZE)**
+
+| 维度 | sufficient | insufficient |
+|------|-----------|-------------|
+| Coverage | 已知相关文件/模块均已分析 | 遗漏 grep/git log 可发现的目标 |
+| Depth | ≥80% 发现有 file:line 级证据 | 多数仅泛泛描述 |
+| Actionability | 每条结论有具体后续动作 | 仅"建议关注"类无操作性结论 |
+
+**规则:** 阶段完成 → 评估 3 维度 → 任一 insufficient → 重入（每阶段最多 2 轮）。
+- Round 1: 扩范围 — 增加目录、git log depth ×2、增加 delegate 角度
+- Round 2: 换视角 — 不同 CLI tool、反向追踪、手动 code reading
+
+**退出:** 全 sufficient → 推进 | 2 轮上限 → 记录 gap 继续。记录至 `evidence.ndjson` + `session.json.self_iteration_log[]`.
+</self_iteration>
 
 <state_machine>
 
 <states>
-S_INTAKE       — 解析问题、加载上下文、检查/恢复已有 session     PERSIST: session.json + understanding.md §1
-S_ARCHAEOLOGY  — 考古：git history + CLI 分析过去修改            PERSIST: evidence.ndjson (phase=archaeology) + understanding.md §2
-S_EXPLORE      — CLI 辅助探索：调用链、错误间隙、相似模式         PERSIST: explore.json + evidence.ndjson (phase=explore) + understanding.md §3
-S_DIAGNOSE     — 假设驱动的根因分析                             PERSIST: evidence.ndjson (phase=diagnosis|decision) + understanding.md §4-5
-S_FIX          — 实现修复（--skip-fix 时跳过）                   PERSIST: code changes + evidence.ndjson (phase=decision)
-S_CONFIRM      — 测试 + CLI review 双重确认（--skip-fix 时跳过） PERSIST: session.json.confirmation + understanding.md §6
-S_GENERALIZE   — 举一反三：提取 pattern，扫描相似代码            PERSIST: session.json.pattern + understanding.md §7
-S_DISCOVER     — 评估发现的相似问题，创建 issue / 记录决策        PERSIST: evidence.ndjson (phase=discovery|decision) + understanding.md §8
-S_RECORD       — 知识沉淀：spec-entry + understanding.md §9      PERSIST: understanding.md §9 + spec entries
+S_INTAKE       — 解析问题、加载上下文、检查/恢复 session     PERSIST: session.json + understanding.md §1
+S_ARCHAEOLOGY  — 考古：git history + CLI 分析              PERSIST: evidence.ndjson (archaeology) + understanding.md §2
+S_EXPLORE      — CLI 探索：调用链、错误间隙、相似模式        PERSIST: explore.json + evidence.ndjson (explore) + understanding.md §3
+S_DIAGNOSE     — 假设驱动根因分析                          PERSIST: evidence.ndjson (diagnosis|decision) + understanding.md §4-5
+S_FIX          — 实现修复 (skip_fix 时跳过)                PERSIST: code changes + evidence.ndjson (decision)
+S_CONFIRM      — 测试 + CLI review 双重确认 (skip_fix 时跳过) PERSIST: session.json.confirmation + understanding.md §6
+S_GENERALIZE   — 举一反三：提取 pattern，扫描相似代码       PERSIST: session.json.patterns + understanding.md §7
+S_DISCOVER     — 评估发现，创建 issue / 记录决策            PERSIST: evidence.ndjson (discovery|decision) + understanding.md §8
+S_RECORD       — 知识沉淀 + 目标审计                       PERSIST: understanding.md §9 + spec entries
 </states>
 
 <transitions>
+S_INTAKE → S_INTAKE       : -c + session found → A_RESUME_SESSION
+S_INTAKE → S_ARCHAEOLOGY  : issue parsed → A_INTAKE
+S_INTAKE → S_INTAKE       : no issue, no session → AskUserQuestion
 
-S_INTAKE:
-  → S_INTAKE       WHEN: -c flag + session found               DO: A_RESUME_SESSION (restore current_state, jump)
-  → S_ARCHAEOLOGY  WHEN: issue parsed                          DO: A_INTAKE
-  → S_INTAKE       WHEN: no issue AND no session               DO: AskUserQuestion "描述要调试的问题"
+S_ARCHAEOLOGY → S_EXPLORE     : A_ARCHAEOLOGY complete
+S_EXPLORE     → S_DIAGNOSE    : A_EXPLORE complete
 
-S_ARCHAEOLOGY:
-  → S_EXPLORE      DO: A_ARCHAEOLOGY
+S_DIAGNOSE → S_FIX          : root cause confirmed, !skip_fix
+S_DIAGNOSE → S_GENERALIZE   : root cause confirmed, skip_fix, !skip_generalize
+S_DIAGNOSE → S_RECORD       : root cause confirmed, skip_fix, skip_generalize
+S_DIAGNOSE → S_DIAGNOSE     : all hypotheses failed, retries < 3 → A_ESCALATE_DIAGNOSIS
+S_DIAGNOSE → S_RECORD       : all hypotheses failed, retries >= 3 → mark INCONCLUSIVE
 
-S_EXPLORE:
-  → S_DIAGNOSE     DO: A_EXPLORE
+S_FIX     → S_CONFIRM       : fix implemented
+S_CONFIRM → S_GENERALIZE    : confirmed, !skip_generalize
+S_CONFIRM → S_RECORD        : confirmed, skip_generalize
+S_CONFIRM → S_FIX           : needs_rework
 
-S_DIAGNOSE:
-  → S_FIX          WHEN: root cause confirmed AND not skip_fix           DO: A_DIAGNOSE
-  → S_GENERALIZE   WHEN: root cause confirmed AND skip_fix AND not skip_generalize  DO: A_DIAGNOSE
-  → S_RECORD       WHEN: root cause confirmed AND skip_fix AND skip_generalize      DO: A_DIAGNOSE
-  → S_DIAGNOSE     WHEN: all hypotheses failed, retries < 3     DO: A_ESCALATE_DIAGNOSIS
-  → S_RECORD       WHEN: all hypotheses failed, retries >= 3    DO: mark INCONCLUSIVE
-
-S_FIX:
-  → S_CONFIRM      DO: A_FIX
-
-S_CONFIRM:
-  → S_GENERALIZE   WHEN: confirmed AND not skip_generalize      DO: A_CONFIRM
-  → S_RECORD       WHEN: confirmed AND skip_generalize           DO: A_CONFIRM
-  → S_FIX          WHEN: confirmation failed                     DO: A_CONFIRM (回到修复)
-
-S_GENERALIZE:
-  → S_DISCOVER     WHEN: similar code found                     DO: A_GENERALIZE
-  → S_RECORD       WHEN: no similar code found                  DO: A_GENERALIZE
-
-S_DISCOVER:
-  → S_RECORD       DO: A_DISCOVER
-
-S_RECORD:
-  → END            DO: A_RECORD
-
+S_GENERALIZE → S_DISCOVER   : similar code found
+S_GENERALIZE → S_RECORD     : no similar code
+S_DISCOVER   → S_RECORD     : triage complete
+S_RECORD     → END          : A_RECORD complete
 </transitions>
 
 <actions>
 
 ### A_INTAKE
-
-1. Parse arguments: extract issue description, flags
-2. Generate slug from issue, create `SESSION_DIR`
-3. Search prior knowledge:
-   - `maestro search "<issue keywords>"` → related specs/knowhow
-   - `Glob(".workflow/scratch/*-debug-odyssey-*")` → prior odyssey sessions
-   - Read `.workflow/codebase/ARCHITECTURE.md` if exists → module map
-4. Identify relevant files: Grep issue keywords → candidate file list
-5. Derive `phase_goals[]` from flags:
-   - Start with full G1-G6 template
-   - For each goal with `skip_when`: if `flags[skip_when] == true` → set `status: "skipped"`, `completion_confirmed: true`, `completed_at: now()`
-   - Remaining goals stay `status: "pending"`
-6. Write initial `session.json` (with phase_goals) + `understanding.md` §1 (issue statement, prior knowledge summary)
-7. Emit Goal Prompt (see Appendix: Goal Prompt Template)
+1. Parse arguments: issue description, flags
+2. Generate slug, create `SESSION_DIR`
+3. Search: `maestro search "<keywords>"` + Glob prior sessions + ARCHITECTURE.md + Grep keywords
+4. Derive `phase_goals[]` from flags (apply `skip_when`)
+5. Write `session.json` + `understanding.md` §1
+6. Emit Goal Prompt (see Appendix)
 
 ### A_RESUME_SESSION
-
-1. Find latest session: `Glob(".workflow/scratch/*-debug-odyssey-*/session.json")` → most recent
-2. Read `session.json` → restore `current_state`
-3. Display session summary: issue, current phase, progress
-4. Jump to saved `current_state` and continue
+Find latest session via Glob → read `session.json` → display summary → jump to `current_state`.
 
 ### A_ARCHAEOLOGY
-
-Git history analysis + CLI-assisted review of past modifications.
-
-**Step 1 — Git archaeology (parallel agents):**
-
-Spawn 2 Agents in single message:
+**Git archaeology (2 parallel Agents):**
 
 | Agent | Task |
 |-------|------|
-| Timeline | `git log --oneline -20 -- {relevant_files}` → change timeline with authors, dates, messages |
-| Blame | Top 3 suspicious files: `git blame -L {region}` → who last touched critical paths |
+| Timeline | `git log --oneline -20 -- {files}` → change timeline |
+| Blame | Top 3 suspicious files: `git blame -L {region}` → critical paths |
 
-Each finding → append `evidence.ndjson`:
-```json
-{"ts": "", "phase": "archaeology", "type": "git-log|git-blame", "source": "file:line", "sha": "", "author": "", "date": "", "message": "", "relevance": "high|medium|low", "note": ""}
-```
+Append findings to `evidence.ndjson` (phase: "archaeology").
 
-**Step 2 — CLI-assisted change review:**
+**CLI-assisted change review:**
 ```bash
-maestro delegate "PURPOSE: Review recent modifications to files related to: {issue}
-TASK: Analyze intent behind recent changes | Identify risky modifications | Flag changes that could have introduced the bug
+maestro delegate "PURPOSE: Review recent modifications related to: {issue}
+TASK: Analyze intent behind changes | Identify risky modifications | Flag potential bug sources
 MODE: analysis
-CONTEXT: @{relevant_files} | Git log: {top_10_commits_summary}
+CONTEXT: @{relevant_files} | Git log: {top_10_commits}
 EXPECTED: JSON [{commit_sha, risk_level, analysis, could_cause_issue, explanation}]
 CONSTRAINTS: Focus on behavioral changes, not formatting
 " --role analyze --mode analysis
 ```
-Run_in_background, STOP, wait for callback. Append results to `evidence.ndjson` (`phase: "archaeology"`).
+Run_in_background, STOP, wait for callback. Append results to evidence.
 
-**Step 3 — Synthesis:**
-Update `understanding.md` §2: timeline, suspicious modifications, hypotheses from change history.
-Save `current_state = "S_EXPLORE"`.
+Update `understanding.md` §2.
 
 ### A_EXPLORE
+Skip if no enabled CLI tools (W006).
 
-CLI-assisted codebase exploration — gather structured context (call chains, error gaps, similar patterns) to enrich subsequent diagnosis. Analogous to quality-debug Step 5.5.
-
-**Skip if** no enabled CLI tools (`cli-tools.json` all disabled).
-
-**Step 1 — CLI exploration delegate:**
 ```bash
-maestro delegate "PURPOSE: Gather codebase evidence for bug investigation: {issue}
-TASK: Trace call chains for affected functions | Find recent changes to related files | Identify error handling gaps | Check for similar patterns elsewhere
+maestro delegate "PURPOSE: Gather codebase evidence for: {issue}
+TASK: Trace call chains | Find recent changes | Identify error gaps | Check similar patterns
 MODE: analysis
 CONTEXT: @**/*
-EXPECTED: JSON { call_chains: [{entry, chain: [file:line...]}], recent_changes: [{file, commits: [{sha, message, date}]}], error_gaps: [{file, line, description}], similar_patterns: [{file, line, description}] }
-CONSTRAINTS: Focus on code paths related to symptoms | Max 20 entries per category
-
-Symptoms: {issue_description}
-Archaeology hints: {top_suspicious_commits_from_archaeology}
+EXPECTED: JSON {call_chains, recent_changes, error_gaps, similar_patterns}
+CONSTRAINTS: Max 20 entries/category | Symptom-related code paths
+Symptoms: {issue}  Archaeology hints: {suspicious_commits}
 " --role explore --mode analysis
 ```
 Run_in_background, STOP, wait for callback.
 
-**Step 2 — Write explore.json:**
-Parse CLI output → write `SESSION_DIR/explore.json`:
-```json
-{
-  "call_chains": [...],
-  "recent_changes": [...],
-  "error_gaps": [...],
-  "similar_patterns": [...],
-  "cli_tool": "{tool_used}",
-  "timestamp": "{ISO}"
-}
-```
-
-**Step 3 — Append to evidence.ndjson:**
-For each category in explore.json, append summary entries:
-```json
-{"ts": "", "phase": "explore", "type": "cli-exploration", "category": "call_chain|recent_change|error_gap|similar_pattern", "source": "file:line", "detail": "", "note": ""}
-```
-
-**Step 4 — Update understanding.md §3:**
-Exploration Summary: key call chains, notable error gaps, similar patterns worth investigating.
-Pass `explore.json` as supplementary context to diagnosis agents.
-
-Mark `phase_goals[G2].status = "done"`, `completion_confirmed = true`, `completed_at = now()`.
-Save `current_state = "S_DIAGNOSE"`.
+Parse → write `explore.json` + append `evidence.ndjson` (phase: "explore"). Update §3. Mark G2 done.
 
 ### A_DIAGNOSE
-
-Hypothesis-driven root cause analysis informed by archaeology + exploration.
-
-**Step 1 — Form hypotheses:**
-Filter `evidence.ndjson` for `phase ∈ ["archaeology", "explore"]`, generate ranked list:
-- `[HIGH]` — supported by archaeology evidence
-- `[MEDIUM]` — plausible but less evidence
-- `[LOW]` — worth checking
-
-Write to `understanding.md` §4.
-
-**Step 2 — Test each hypothesis (rank order):**
-For each: design test → execute (Read, Grep, trace) → append `evidence.ndjson`:
-```json
-{"ts": "", "phase": "diagnosis", "type": "hypothesis-test", "hypothesis": "", "result": "confirmed|disproved|inconclusive", "source": "file:line", "content": "", "note": ""}
-```
-Update `understanding.md` §4.
-
-**Step 3 — Record decisions needed:**
-If ambiguity requires human judgment → append `evidence.ndjson`:
-```json
-{"ts": "", "phase": "decision", "type": "diagnosis-decision", "question": "", "options": [], "context": "", "status": "pending", "resolution": null}
-```
-- **Normal**: `AskUserQuestion` for blocking items.
-- **`-y` mode**: set `status: "deferred"`, skip — do not block; continue with best-effort hypothesis.
-
-**Step 4 — Root cause declaration:**
-Confirmed hypothesis → update `session.json.root_cause`, write `understanding.md` §5.
-Mark `phase_goals[G1].status = "done"`, `completion_confirmed = true`, `completed_at = now()`.
-Save next state.
+1. **Form hypotheses** from evidence (archaeology + explore), ranked [HIGH]/[MEDIUM]/[LOW] → §4
+2. **Test each** (rank order): design test → execute → append evidence (phase: "diagnosis")
+3. **Decision journal**: ambiguity → evidence (phase: "decision"); Normal: AskUserQuestion | `-y`: defer
+4. **Root cause**: confirmed → `session.json.root_cause` + §5. Mark G1 done.
 
 ### A_ESCALATE_DIAGNOSIS
-
-1. Increment `session.json.diagnosis_retries`
-2. If < 3: broaden scope + CLI deep analysis:
-   ```bash
-   maestro delegate "PURPOSE: Deep analysis — all previous hypotheses failed
-   TASK: Find alternative root causes | Consider module interactions | Check dependency updates
-   MODE: analysis
-   CONTEXT: @**/* | Failed hypotheses: {list}
-   EXPECTED: New hypothesis candidates with evidence
-   " --role analyze --mode analysis
-   ```
-   Append to `evidence.ndjson` (`phase: "diagnosis"`), form new hypotheses, return to S_DIAGNOSE.
-3. If >= 3:
-   - **Normal**: `AskUserQuestion` — broaden / new hypothesis / mark INCONCLUSIVE
-   - **`-y` mode**: auto mark INCONCLUSIVE, record `{"phase": "decision", "type": "escalation-decision", "status": "deferred", "resolution": "auto-inconclusive"}`, proceed to S_RECORD
+Increment `diagnosis_retries`. If < 3: broaden scope via `maestro delegate --role analyze` (same delegate format), form new hypotheses, return to S_DIAGNOSE. If >= 3: Normal → AskUserQuestion (broaden/new/INCONCLUSIVE) | `-y` → auto INCONCLUSIVE, proceed to S_RECORD. See Appendix: `-y` behavior.
 
 ### A_FIX
-
-1. Present root cause and proposed fix to user
-2. **Normal**: `AskUserQuestion`: "确认修复方向？" → proceed / modify / skip to generalization
-   **`-y` mode**: auto proceed with suggested fix, record `{"phase": "decision", "type": "fix-direction", "status": "deferred", "resolution": "auto-proceed"}`
-3. Implement fix
-4. Append `evidence.ndjson`:
-   ```json
-   {"ts": "", "phase": "decision", "type": "fix-decision", "question": "Fix approach", "resolution": "what was changed", "files_modified": [], "status": "resolved"}
-   ```
-5. Save `current_state = "S_CONFIRM"`
+1. Present root cause + proposed fix. Normal: AskUserQuestion | `-y`: auto proceed (see Appendix)
+2. Implement fix
+3. Record in evidence (phase: "decision")
 
 ### A_CONFIRM
-
-**Step 1 — Test verification:** Auto-detect framework, run tests covering modified files.
-
-**Step 2 — CLI-assisted fix review:**
+1. **Tests**: auto-detect framework, run covering tests
+2. **CLI fix review**:
 ```bash
 maestro delegate "PURPOSE: Review fix for: {issue}
 TASK: Verify correctness | Check regressions | Assess completeness | Review edge cases
 MODE: analysis
-CONTEXT: @{modified_files} | Root cause: {summary} | Diff: {git_diff_summary}
+CONTEXT: @{modified_files} | Root cause: {summary} | Diff: {git_diff}
 EXPECTED: JSON {verdict, findings [{severity, description, suggestion}], regression_risk}
 CONSTRAINTS: Focus on correctness, not style
 " --role review --mode analysis
 ```
 Run_in_background, STOP, wait for callback.
 
-**Step 3 — Write to session.json.confirmation:**
-```json
-{
-  "test_result": { "passed": true, "test_count": 0, "failures": [] },
-  "cli_review": { "verdict": "", "findings": [], "regression_risk": "" },
-  "overall": "confirmed|needs_rework",
-  "timestamp": ""
-}
-```
-Update `understanding.md` §6.
-
-If `needs_rework`: return to S_FIX.
-If `confirmed`: mark `phase_goals[G3].status = "done"`, `completion_confirmed = true`, `completed_at = now()`. Advance.
+3. Write `session.json.confirmation`: `{test_result, cli_review, overall: "confirmed|needs_rework", timestamp}`
+4. Update §6. `needs_rework` → S_FIX. `confirmed` → mark G3 done, advance.
 
 ### A_GENERALIZE
+举一反三: multi-layer pattern extraction → 4-agent scan → cross-layer dedup → iterative deepening.
 
-举一反三: extract pattern from root cause, scan for siblings.
+**Pattern extraction** from root cause + fix:
 
-**Step 1 — Pattern extraction:**
-Write to `session.json.pattern`:
-```json
-{
-  "pattern_name": "",
-  "description": "The class of bug this represents",
-  "signature": "Regex or structural pattern to grep for",
-  "risk": "Why this pattern is dangerous",
-  "fix_template": "How to fix instances"
-}
-```
+| Layer | Method | Example |
+|-------|--------|---------|
+| Syntax | Regex patterns (direct Grep) | `eval(`, missing `await`, unclosed resource |
+| Semantic | Anti-pattern description (Agent-driven) | Unhandled async errors, unvalidated input |
+| Structural | Architecture-level (file/module similarity) | Same import structure, missing override |
 
-**Step 2 — Codebase scan (parallel agents):**
+Write `session.json.patterns[]`: `[{id, source, layer, signature, description, risk, fix_template}]`
 
-| Agent | Strategy | Scope |
-|-------|----------|-------|
-| Pattern grep | `Grep` with signature regex | full project |
-| Structural | Read similar files, check for same anti-pattern | Related modules |
+**4-agent parallel codebase scan:**
 
-**Step 3 — Write understanding.md §7:**
-Pattern description, original instance, scan results (file:line + risk), recommended action per hit.
+| Agent | Strategy | Input | Scope |
+|-------|----------|-------|-------|
+| Syntax grep | Grep syntax-layer regex | P*.signature | Full project |
+| Semantic scan | Understand + check anti-pattern | P*.description | Related modules |
+| Structural match | Find structurally similar files | Buggy file structure | Full project |
+| Historical grep | `git log -S "{pattern}"` | P*.signature | Full git history |
 
-Mark `phase_goals[G4].status = "done"`, `completion_confirmed = true`, `completed_at = now()`.
-Save next state (S_DISCOVER if hits, S_RECORD if none).
+Returns: `[{pattern_id, file, line, context, risk_level, layer, confidence}]`
+
+**Cross-layer dedup**: same file:line multi-layer hit → boost confidence | single-layer → `needs_review` | historical hit on fixed record → `regression_risk`
+
+**Iterative deepening**: module with ≥3 hits → targeted deep scan (max 1 round).
+
+**Quality Gate** (self-iteration) → if insufficient, expand and re-scan.
+
+Write §7 + `session.json.generalization_stats`: `{patterns_extracted, total_hits, cross_layer_confirmed, regression_risks, by_layer, deepening_triggered}`. Mark G4 done.
 
 ### A_DISCOVER
-
-Evaluate generalization hits and route.
-
-**Step 1 — Triage:**
-For each hit: read context (±10 lines), classify as `safe` / `risk` / `bug`.
-
-**Step 2 — Route:**
-
-| Classification | Normal | `-y` mode |
-|---------------|--------|-----------|
-| `bug` | `AskUserQuestion`: fix now / create issue / record decision | auto create issue, record `status: "deferred"` |
-| `risk` | Record + optionally create issue | Record only, skip issue creation |
-| `safe` | Skip | Skip |
-
-Append `evidence.ndjson` per actionable discovery:
-```json
-{"ts": "", "phase": "discovery", "type": "scan-hit", "file": "", "line": 0, "classification": "", "description": "", "action": "", "issue_id": null}
-```
-
-**Step 3 — Decision journal for ambiguous items:**
-```json
-{"ts": "", "phase": "decision", "type": "discovery-decision", "question": "", "options": ["fix now", "create issue", "accept risk"], "status": "pending", "resolution": null}
-```
-- **Normal**: `AskUserQuestion` for pending decisions (batch if multiple).
-- **`-y` mode**: all discovery decisions set `status: "deferred"`, skip — displayed in completion summary as "待决策" items.
-
-Update `understanding.md` §8.
-Mark `phase_goals[G5].status = "done"`, `completion_confirmed = true`, `completed_at = now()`.
-Save `current_state = "S_RECORD"`.
+1. **Triage** each hit: read ±10 lines context → classify `safe`/`risk`/`bug`
+2. **Route**: see Appendix `-y` behavior table. Append evidence (phase: "discovery" + "decision")
+3. Update §8. Mark G5 done.
 
 ### A_RECORD
-
-**Step 1 — Finalize understanding.md §9:** Learnings summary.
-
-**Step 2 — Persist learnings:**
-
-| Condition | Action |
-|-----------|--------|
-| Recurring root cause pattern | `Skill("spec-add", "debug ...")` |
-| Non-obvious workaround | `Skill("spec-add", "learning ...")` |
-| Architectural boundary violation | `Skill("spec-add", "arch ...")` |
-
-**Step 3 — Mark G6 and pending decisions:**
-Mark `phase_goals[G6].status = "done"`, `completion_confirmed = true`, `completed_at = now()`.
-Filter `evidence.ndjson` for `phase == "decision" AND status ∈ ["pending", "deferred"]`:
-- **Normal**: display checklist, `AskUserQuestion` to resolve each.
-- **`-y` mode**: skip — display count of deferred decisions in completion summary only.
-
-**Step 4 — Goal audit:**
-Check `phase_goals[*].completion_confirmed`:
-- All true (including skipped) → set `phase_goals_all_done = true`
-- Any false:
-  - **Normal**: display unmet goals table, `AskUserQuestion`: 回退补完 / 标记跳过 / 接受现状
-    - 回退补完 → set `current_state` to the unmet goal's `phase`, return
-    - 标记跳过 → set unmet goals `status: "skipped"`, `completion_confirmed: true`
-    - 接受现状 → set `phase_goals_all_done = false`, proceed to completion
-  - **`-y` mode**: auto accept current state, set `phase_goals_all_done = false`, proceed
-
-**Step 5 — Session completion:**
-Update `session.json`: `current_state = "COMPLETED"`, `updated_at = now()`
-
+1. Finalize `understanding.md` §9
+2. **Write learnings** to understanding.md §9: 按 Knowledge Persistence 表分类记录（临时），completion summary 列出建议的 `/spec-add` 命令
+3. Mark G6 done. Process pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count)
+4. **Goal audit**: all `completion_confirmed` true → `phase_goals_all_done = true`. Any false: Normal → AskUserQuestion (回退/跳过/接受) | `-y` → auto accept
+5. **Completion**: `current_state = "COMPLETED"`, emit summary:
 ```
 --- DEBUG ODYSSEY COMPLETE ---
 Issue:      {issue}
 Root cause: {root_cause.hypothesis}
 Fix:        {applied|skipped|inconclusive}
-Pattern:    {pattern_name} ({N} similar hits)
+Patterns:   {patterns_extracted} ({by_layer} distribution)
+Scan hits:  {total_hits} ({cross_layer_confirmed} cross-layer confirmed)
 Issues:     {N} created
 Decisions:  {N} resolved, {M} pending, {K} deferred
 Learnings:  {N} spec entries persisted
+Self-iter:  {N} quality gate rounds across {M} stages
 Goals:      {done}/{total} confirmed ({skipped} skipped)
 ---
 ```
@@ -504,7 +324,7 @@ Goals:      {done}/{total} confirmed ({skipped} skipped)
 
 ### Goal Prompt Template
 
-A_INTAKE 完成后显示（session 创建后、开始考古前）：
+**时机守卫：仅在 A_INTAKE 完成后显示一次。A_RECORD 完成时禁止重新显示。**
 
 ```
 📋 Debug Odyssey 会话已创建。可随时复制以下 /goal 设定终止条件：
@@ -512,33 +332,27 @@ A_INTAKE 完成后显示（session 创建后、开始考古前）：
 /goal 直到 {SESSION_DIR}/session.json 的 phase_goals[*] 全部 completion_confirmed=true 且 phase_goals_all_done=true 才停。每轮以 session.json 为唯一行动手册，按状态机推进阶段。禁止跳过未完成的 phase_goal（除非 flags 指定 skip）。遇到 phase=decision 的 pending 条目必须 AskUserQuestion，不得自行 resolve。
 ```
 
-`/goal` 由用户输入；odyssey 输出提示词后继续执行，不阻塞。
+Odyssey 输出提示词后继续执行不阻塞。`/goal` 由用户任意时刻输入。
 
 ### `-y` Auto-Confirm Behavior
 
-`-y` 模式下所有 `AskUserQuestion` 决策点自动处理：
+| Decision Point | Normal | `-y` mode |
+|---------------|--------|-----------|
+| A_DIAGNOSE ambiguity | AskUserQuestion blocks | record `deferred`, best-effort continue |
+| A_ESCALATE 3-strike | AskUserQuestion 3-way | auto INCONCLUSIVE |
+| A_FIX direction | AskUserQuestion confirm | auto proceed with suggested fix |
+| A_DISCOVER bug triage | AskUserQuestion route | auto create issue |
+| A_DISCOVER ambiguous | AskUserQuestion batch | all `deferred` |
+| A_RECORD decisions | AskUserQuestion per-item | skip, show deferred count |
+| A_RECORD goal audit | AskUserQuestion 3-way | auto accept current state |
 
-| 决策点 | Normal | `-y` mode |
-|--------|--------|-----------|
-| A_DIAGNOSE 歧义决策 | AskUserQuestion 阻塞 | record `deferred`, skip, best-effort 继续 |
-| A_ESCALATE 3 次失败 | AskUserQuestion 三选一 | auto INCONCLUSIVE |
-| A_FIX 修复方向 | AskUserQuestion 确认 | auto proceed with suggested fix |
-| A_DISCOVER bug 分类 | AskUserQuestion 路由 | auto create issue |
-| A_DISCOVER 模糊项 | AskUserQuestion 批量 | all `deferred` |
-| A_RECORD 决策清单 | AskUserQuestion 逐项 | skip, 仅显示 deferred 计数 |
-| A_RECORD 目标审计 | AskUserQuestion 三选一 | auto accept current state |
-
-`deferred` 状态的条目在完成摘要中显示为"待决策"，后续可通过 `-c` 恢复会话手动处理。
+`deferred` items shown as "待决策" in completion summary; recoverable via `-c`.
 
 ### Phase Goal Lifecycle
 
-```
-pending → done (completion_confirmed=true)     ← 正常完成
-pending → skipped (completion_confirmed=true)   ← flags 跳过 或 用户手动跳过
-pending → failed (completion_confirmed=false)   ← INCONCLUSIVE 等失败路径
-```
+`pending → done (confirmed=true)` normal | `pending → skipped (confirmed=true)` flags/manual | `pending → failed (confirmed=false)` INCONCLUSIVE
 
-Goal audit 在 A_RECORD Step 4 执行。`phase_goals_all_done` 仅当所有 goal 的 `completion_confirmed == true` 时为 true。
+`phase_goals_all_done = true` only when ALL goals have `completion_confirmed == true`.
 
 </appendix>
 
@@ -547,52 +361,47 @@ Goal audit 在 A_RECORD Step 4 执行。`phase_goals_all_done` 仅当所有 goal
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | No issue description and no session to resume | Provide issue or use -c |
-| E003 | error | Resume requested but no session found | Start new session |
+| E001 | error | No issue and no session to resume | Provide issue or use -c |
+| E003 | error | Resume but no session found | Start new session |
 | E004 | error | Delegate execution failed | Retry or proceed without CLI |
-| W001 | warning | No relevant git history found | Proceed with limited context |
-| W006 | warning | CLI exploration skipped (no enabled tools) | Proceed to diagnosis without explore.json |
+| W001 | warning | No relevant git history | Proceed with limited context |
 | W002 | warning | All hypotheses inconclusive after 3 retries | INCONCLUSIVE |
-| W003 | warning | Generalization scan returned 0 hits | Skip discovery |
+| W003 | warning | Generalization scan 0 hits | Skip discovery |
 | W004 | warning | Delegate parse failed | Use raw output |
-| W005 | warning | Pending decisions remain unresolved | Filter evidence.ndjson phase=decision |
+| W005 | warning | Pending decisions unresolved | Filter evidence.ndjson phase=decision |
+| W006 | warning | CLI exploration skipped (no tools) | Proceed without explore.json |
 </error_codes>
 
 <success_criteria>
-- [ ] Session directory created with session.json + understanding.md
-- [ ] Prior knowledge searched (maestro search + existing sessions)
-- [ ] Git archaeology completed (log + blame), entries in evidence.ndjson phase=archaeology
-- [ ] CLI-assisted change review executed (delegate --role analyze)
-- [ ] CLI exploration executed (delegate --role explore), explore.json written
-- [ ] Explore evidence appended to evidence.ndjson phase=explore
-- [ ] Hypotheses formed from archaeology + explore, evidence logged phase=diagnosis
-- [ ] Root cause declared with confidence and evidence refs
+- [ ] Session directory created with 4 output files
+- [ ] Prior knowledge searched (maestro search + sessions + architecture)
+- [ ] Git archaeology (log + blame) + CLI change review, evidence.ndjson phase=archaeology
+- [ ] CLI exploration, explore.json written, evidence phase=explore
+- [ ] Hypotheses formed from archaeology + explore, tested and logged phase=diagnosis
+- [ ] Root cause declared with evidence refs
 - [ ] understanding.md tracks all 9 sections progressively
-- [ ] Fix implemented and confirmed (unless --skip-fix)
-- [ ] session.json.confirmation written with test + review results (unless --skip-fix)
-- [ ] Pattern extracted with grep-able signature (unless --skip-generalize)
-- [ ] Codebase scanned, hits logged phase=discovery (unless --skip-generalize)
+- [ ] Fix implemented + confirmed with test + CLI review (unless --skip-fix)
+- [ ] Multi-layer patterns (syntax/semantic/structural) extracted (unless --skip-generalize)
+- [ ] 4-agent scan + cross-layer dedup + iterative deepening for ≥3 hits/module
 - [ ] Discoveries classified and routed (fix/issue/decision/skip)
-- [ ] Decision entries captured phase=decision for items needing human judgment
+- [ ] Decision journal: all human-judgment items in evidence.ndjson phase=decision
+- [ ] phase_goals derived from flags, skip_when applied, each phase marks its goal
+- [ ] Goal audit in A_RECORD — unmet goals surfaced, phase_goals_all_done set correctly
+- [ ] Goal Prompt displayed once after session creation
+- [ ] `-y`: all decisions auto-resolve/defer, deferred count in summary
+- [ ] State saved at each transition (resumable via -c)
+- [ ] Quality Gate self-iteration when insufficient, logged in self_iteration_log
 - [ ] Spec entries persisted for reusable learnings
-- [ ] phase_goals[] derived from flags at intake, skip_when goals auto-marked
-- [ ] Each phase marks its corresponding phase_goal on completion
-- [ ] Goal audit executed in A_RECORD Step 4 — unmet goals surfaced
-- [ ] phase_goals_all_done set correctly based on all completion_confirmed
-- [ ] Goal Prompt Template displayed after session creation
-- [ ] `-y` mode: all AskUserQuestion points auto-resolve or defer, no blocking prompts
-- [ ] `-y` mode: deferred decisions counted in completion summary
-- [ ] Session state saved at each phase transition (resumable via -c)
-- [ ] Completion summary displayed with goal stats
+- [ ] Completion summary with all stats
 </success_criteria>
 
 <next_step_routing>
 | Condition | Next step |
 |-----------|-----------|
-| Issues created from discoveries | `/manage-issue list --source debug-odyssey` |
-| Pattern worth documenting deeper | `/learn-decompose <affected-module>` |
+| Issues from discoveries | `/manage-issue list --source debug-odyssey` |
+| Pattern worth documenting | `/learn-decompose <module>` |
 | Fix needs formal review | `/quality-review <phase>` |
-| Want second opinion on root cause | `/learn-second-opinion <understanding.md>` |
-| Related question to investigate | `/learn-investigate "<question>"` |
-| Decisions still pending | Filter `evidence.ndjson` for `phase=decision, status=pending` |
+| Second opinion on root cause | `/learn-second-opinion <understanding.md>` |
+| Related question | `/learn-investigate "<question>"` |
+| Decisions still pending | Filter evidence.ndjson phase=decision status=pending |
 </next_step_routing>

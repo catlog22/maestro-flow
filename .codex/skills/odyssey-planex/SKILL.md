@@ -1,17 +1,13 @@
 ---
 name: odyssey-planex
 description: Requirement-driven iterative cycle — plan, execute, strict verify, fix loop until acceptance criteria met
-argument-hint: "<requirement> [--max-iterations N] [--auto] [-y] [-c]"
+argument-hint: "<requirement> [--max-iterations N] [--skip-generalize] [--auto] [-y] [-c]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
 Requirement-to-delivery closed loop: parse requirement → define strict acceptance criteria →
 plan tasks → execute → verify against criteria → fix gaps → iterate until ALL criteria pass.
-
-Unlike `$maestro-execute` (single-pass task execution), this treats acceptance criteria as an
-iron gate. Every verify failure triggers a targeted fix cycle. The loop continues until the
-requirement is fully met or max iterations reached.
 
 Core philosophy:
 - **Acceptance criteria are sacred** — no "close enough", no manual override
@@ -24,42 +20,105 @@ Core philosophy:
 $ARGUMENTS — requirement description and optional flags.
 
 **Flags:**
-- `--max-iterations N`: Max verify→fix cycles (default: 3)
-- `--auto`: CLI delegates without confirmation
-- `-y`: Auto-confirm — decisions as `deferred`
-- `-c`: Resume most recent session
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--max-iterations N` | Max verify→fix cycles before escalation | 3 |
+| `--skip-generalize` | Skip S_GENERALIZE + S_DISCOVER | false |
+| `--auto` | CLI delegate calls without confirmation | false |
+| `-y` | Auto-confirm — decisions recorded as `deferred` | false |
+| `-c` | Resume most recent session | — |
 
 **Session**: `SESSION_DIR = .workflow/scratch/{YYYYMMDD}-planex-odyssey-{slug}/`
 
 **Output — 3 files:**
 ```
 SESSION_DIR/
-  ├── session.json       # state + criteria + iterations + plan + phase_goals
-  ├── evidence.ndjson    # ALL evidence (phase distinguishes)
-  └── understanding.md   # evolving narrative
+  ├── session.json       # state + criteria + iterations + plan
+  ├── evidence.ndjson    # append-only log (phase distinguishes origin)
+  └── understanding.md   # evolving narrative (8 sections, one per phase)
 ```
 
-**evidence.ndjson phases:** `planning`, `execution`, `verification`, `fix`, `decision`
-
-**acceptance_criteria[]:**
+**session.json schema:**
 ```json
-[{"id":"AC1","criterion":"","verify_method":"test|grep|cli-review|manual","status":"pending","evidence":"","passed_at":null}]
+{
+  "session_id": "planex-odyssey-{YYYYMMDD-HHmmss}",
+  "requirement": "",
+  "flags": { "max_iterations": 3, "skip_generalize": false, "auto": false, "auto_confirm": false },
+  "current_state": "S_INTAKE",
+  "acceptance_criteria": [
+    {"id":"AC1","criterion":"","verify_method":"test|grep|cli-review|manual","status":"pending","evidence":"","passed_at":null}
+  ],
+  "plan": { "tasks": [{"id":"T1","title":"","description":"","criteria_refs":["AC1"],"status":"pending","files_modified":[]}], "created_at":"" },
+  "iterations": [
+    {"iteration":1,"started_at":"","completed_at":"","criteria_before":{"passed":0,"total":0},"criteria_after":{"passed":0,"total":0},"gaps_fixed":[],"files_modified":[]}
+  ],
+  "current_iteration": 0,
+  "patterns": [
+    {"id":"P1","source":"AC1 fix","layer":"syntax|semantic|structural","signature":"","description":"","risk":"","fix_template":""}
+  ],
+  "generalization_stats": {"patterns_extracted":0,"total_hits":0,"cross_layer_confirmed":0,"by_layer":{"syntax":0,"semantic":0,"structural":0},"deepening_triggered":false},
+  "phase_goals": [],
+  "phase_goals_all_done": false,
+  "self_iteration_log": [],
+  "created_at": "", "updated_at": ""
+}
 ```
 
-**iterations[]:**
-```json
-[{"iteration":1,"started_at":"","completed_at":"","criteria_before":{"passed":0,"total":0},"criteria_after":{"passed":0,"total":0},"gaps_fixed":[],"files_modified":[]}]
-```
+**evidence.ndjson** — one JSON per line, `phase` field = `planning|execution|verification|fix|decision|generalization|discovery|self-iteration`
+
+**understanding.md sections:** §1 Requirement & Criteria ← S_INTAKE, §2 Plan ← S_PLAN, §3 Execution ← S_EXECUTE, §4 Verification (per iter) ← S_VERIFY, §5 Fix Log (per iter) ← S_FIX, §6 Generalization ← S_GENERALIZE, §7 Discoveries ← S_DISCOVER, §8 Learnings ← S_RECORD
 
 **phase_goals[]:**
-| ID | Goal | Phase | skip_when |
-|----|------|-------|-----------|
-| G1 | Criteria defined | S_INTAKE | — |
-| G2 | Plan created | S_PLAN | — |
-| G3 | Implementation complete | S_EXECUTE | — |
-| G4 | All criteria pass | S_VERIFY | — |
-| G5 | Learnings persisted | S_RECORD | — |
+| ID | Goal | Done When | Phase | Skip When |
+|----|------|-----------|-------|-----------|
+| G1 | Acceptance criteria defined | ≥1 criterion in acceptance_criteria[] | S_INTAKE | — |
+| G2 | Plan created | session.json.plan populated | S_PLAN | — |
+| G3 | Implementation complete | all plan tasks executed | S_EXECUTE | — |
+| G4 | All criteria pass | all acceptance_criteria[].status == passed | S_VERIFY | — |
+| G5 | Pattern generalized | patterns[] populated ≥1 entry | S_GENERALIZE | skip_generalize |
+| G6 | Discoveries triaged | all scan hits classified | S_DISCOVER | skip_generalize |
+| G7 | Learnings persisted | spec entries created OR no actionable | S_RECORD | — |
+
+### Pre-load（可选，缺失不阻塞）
+
+| 层级 | 命令 | 作用 |
+|------|------|------|
+| Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界 |
+| Wiki search | `maestro search "<requirement keywords>" --json` | 先前实现（top 5） |
+| Coding specs | `maestro spec load --category coding` | 编码规范 + knowhow 工具 |
+| UI specs（条件） | 若涉及前端 → `maestro spec load --category ui` | UI 规范 |
+| Role knowledge | `maestro search --category coding` → 选相关 → `maestro wiki load <id>` | 领域知识 |
+| Prior sessions | `Glob(".workflow/scratch/*-planex-odyssey-*")` | 相关会话 |
+
+### Knowledge Persistence（S_RECORD 中写入产出文件）
+
+S_RECORD 将可沉淀知识 **写入 understanding.md §8 Learnings**，按分类结构化：
+
+| 分类 | 写入内容 | 后续建议命令 |
+|------|---------|-------------|
+| 多轮 fix cycle pattern | 问题场景 + 迭代过程 + 最终方案 | `$spec-add debug "..."` |
+| 可复用实现模式 | 模式描述 + 适用场景 + 代码模板 | `$spec-add coding "..."` |
+| 验收标准模板 | 标准模板 + verify_method 建议 | `$spec-add review "..."` |
+| 泛化 pattern | pattern 签名 + 风险说明 + fix 模板 | `$spec-add coding "..."` |
+
+**两步模式：** 执行中写入产出文件（临时记录）→ 任务完成后用户沉淀为永久知识。执行过程中不调用外部 skill。
 </context>
+
+<self_iteration>
+**Quality Gate** — auto-evaluate after each analytical stage. Insufficient → re-enter with expanded strategy.
+
+| Dimension | Sufficient | Insufficient |
+|-----------|-----------|-------------|
+| Coverage | All known files/modules analyzed | Missed targets discoverable via grep/git log |
+| Depth | ≥80% findings have file:line evidence | Most findings lack specifics |
+| Actionability | Each conclusion has concrete next action | Only vague "consider" recommendations |
+
+**Rules:** stage complete → evaluate 3 dims → any insufficient → re-enter (max **2 rounds** per stage). Record to evidence.ndjson `{"phase":"self-iteration","type":"quality-gate","stage":"S_XXX","round":N,"assessment":{...},"expansion":"strategy"}`.
+
+**Expansion:** Round 1 = broaden scope (more dirs, more delegate angles). Round 2 = shift perspective (different CLI tool, reverse-trace from expected result).
+
+**Applies to:** S_PLAN, S_VERIFY, S_GENERALIZE
+</self_iteration>
 
 <csv_schema>
 
@@ -79,11 +138,7 @@ SESSION_DIR/
 }
 ```
 
-**Termination Contract:**
-```
-You MUST call report_agent_job_result EXACTLY ONCE before exiting.
-Do NOT write to tasks.csv, wave-*.csv, results.csv. Do NOT call spawn_agents_on_csv.
-```
+**Termination Contract:** You MUST call `report_agent_job_result` EXACTLY ONCE before exiting. Do NOT write to tasks.csv, wave-*.csv, results.csv. Do NOT call spawn_agents_on_csv.
 
 ### tasks.csv
 
@@ -92,7 +147,8 @@ id,title,description,task_type,criterion_refs,deps,wave,status,findings,evidence
 ```
 
 **Waves:**
-- Wave 1: Verification agents (one per criterion with verify_method=cli-review) — parallel
+- Wave 1: Verification agents (one per `cli-review` criterion) — parallel
+- Wave 2: Generalization agents (syntax-grep, semantic-scan, structural-match, historical-grep) — parallel
 </csv_schema>
 
 <invariants>
@@ -110,22 +166,18 @@ id,title,description,task_type,criterion_refs,deps,wave,status,findings,evidence
 
 <execution>
 
-### Stage 1: Intake (S_INTAKE)
+### S_INTAKE
 
-1. Parse requirement, flags
-2. Create `SESSION_DIR`
-3. **Define acceptance criteria:**
-   - Analyze requirement → derive testable criteria
-   - Each gets `verify_method`: `test` | `grep` | `cli-review` | `manual`
-   - **Normal**: `request_user_input` to confirm criteria
-   - **`-y`**: auto-derive, record `deferred`
-4. Search prior knowledge: `maestro search`, related sessions
-5. Derive `phase_goals[]`, write `session.json` + `understanding.md` §1
-6. Display **Goal Prompt block** (Appendix). Mark `phase_goals[G1]` done.
+1. Parse requirement and flags, create SESSION_DIR
+2. **Define acceptance criteria** — analyze requirement → derive testable criteria. Each gets `verify_method`: test | grep | cli-review | manual
+   - **Normal**: `request_user_input` to confirm/edit
+   - **`-y`**: auto-derive, record `{"phase":"decision","type":"criteria-confirmation","status":"deferred"}`
+3. Search prior knowledge: `maestro search`, related sessions
+4. Write session.json + understanding.md §1. Mark G1 done. Display Goal Prompt (see Appendix).
 
-### Stage 2: Plan (S_PLAN)
+### S_PLAN
 
-1. Decompose requirement into tasks mapped to criteria
+1. Decompose requirement into ordered tasks mapped to acceptance criteria
 2. CLI-assisted planning (optional):
    ```bash
    maestro delegate "PURPOSE: Create plan for: {requirement}
@@ -135,35 +187,31 @@ id,title,description,task_type,criterion_refs,deps,wave,status,findings,evidence
    EXPECTED: JSON [{task_id, title, description, criteria_refs, deps}]
    " --role analyze --mode analysis
    ```
-   Run_in_background, STOP, wait.
-3. Write `session.json.plan`, append `evidence.ndjson` (phase: "planning")
-4. Update `understanding.md` §2. Mark `phase_goals[G2]` done. Save `current_state = "S_EXECUTE"`.
+   Run_in_background, STOP, wait for callback.
+3. Write session.json.plan, append evidence (planning), update understanding.md §2. Mark G2 done.
 
-### Stage 3: Execute (S_EXECUTE)
+### S_EXECUTE
 
-1. Implement tasks sequentially
-2. Per task: code changes → evidence.ndjson (phase: "execution") → update task status
-3. Update `understanding.md` §3. Mark `phase_goals[G3]` done. Save `current_state = "S_VERIFY"`.
+1. Execute tasks sequentially — implement code changes
+2. Per task: record evidence (execution), update task status
+3. Update understanding.md §3. Mark G3 done.
 
-### Stage 4: Verify (S_VERIFY)
+### S_VERIFY
 
 Iron gate — every acceptance criterion verified.
 
-**Step 1 — Verify by method:**
-
+**Verify each criterion by method:**
 | Method | Action |
 |--------|--------|
-| `test` | Run tests, check pass/fail |
-| `grep` | Grep expected pattern |
-| `cli-review` | `maestro delegate --role review` with criterion focus |
+| `test` | Run relevant tests, check pass/fail |
+| `grep` | Grep for expected pattern |
+| `cli-review` | `spawn_agents_on_csv` Wave 1 (see below) |
 | `manual` | **Normal**: `request_user_input` / **`-y`**: `deferred` |
 
-For `cli-review` criteria, use `spawn_agents_on_csv` (Wave 1):
+**Wave 1 — cli-review verification via spawn_agents_on_csv:**
 ```csv
 "verify-AC1","Verify AC1","Review against criterion: {AC1.criterion}","verification","AC1","","1","pending","","",""
-"verify-AC2","Verify AC2","Review against criterion: {AC2.criterion}","verification","AC2","","1","pending","","",""
 ```
-
 ```javascript
 spawn_agents_on_csv({ csv_path: "tasks.csv", id_column: "id",
   instruction: VERIFICATION_INSTRUCTION + TERMINATION_CONTRACT,
@@ -171,54 +219,88 @@ spawn_agents_on_csv({ csv_path: "tasks.csv", id_column: "id",
   output_csv_path: "wave-1-results.csv", output_schema: SHARED_OUTPUT_SCHEMA })
 ```
 
-**Step 2 — Record results per criterion.** Append evidence.ndjson (phase: "verification").
+Record per criterion to evidence (verification). Update acceptance_criteria[].status. Append to iterations[]. Update understanding.md §4 with pass/fail table.
 
-**Step 3 — Route:**
-- All passed → mark `phase_goals[G4]` done → S_RECORD
-- Some failed + iteration < max → S_FIX
-- Some failed + iteration >= max:
-  - **Normal**: `request_user_input` — continue / lower bar / accept
-  - **`-y`**: `deferred`, proceed to S_RECORD
+**Route:** all passed → mark G4 done → next state. Some failed + iteration < max → S_FIX. Some failed + iteration >= max → **Normal**: `request_user_input` (continue/lower/accept) / **`-y`**: `deferred`, proceed S_RECORD.
 
-Update `understanding.md` §4 with pass/fail table.
+### S_FIX
 
-### Stage 5: Fix (S_FIX)
+1. Increment current_iteration
+2. For each failed criterion: diagnose gap → targeted code fix
+3. CLI fix review (optional): `maestro delegate --role review --mode analysis` for regression check
+4. Append evidence (fix), update understanding.md §5 → S_VERIFY (loop)
 
-1. Increment iteration counter
-2. For each failed criterion: diagnose gap → targeted fix
-3. CLI fix review (optional): `maestro delegate --role review` for regression check
-4. Append evidence.ndjson (phase: "fix"). Update `understanding.md` §5.
-5. → S_VERIFY (loop back)
+### S_GENERALIZE
 
-### Stage 6: Record (S_RECORD)
+Skip if `--skip-generalize`. Extract reusable patterns, scan codebase for similar sites.
 
-1. Finalize `understanding.md` §6: iteration summary, what needed rework
-2. Persist learnings: `$spec-add` for patterns
-3. Pending decisions: **Normal** → `request_user_input`. **`-y`** → skip.
-4. Goal audit: check `phase_goals[*].completion_confirmed`
-5. Mark `phase_goals[G5]` done. Completion:
+**Pattern extraction (3 layers):**
+| Layer | Method | Example |
+|-------|--------|---------|
+| Syntax | Code regex patterns | validation/error handling patterns |
+| Semantic | Logic pattern description | missing similar checks at other entry points |
+| Structural | File/module structure match | sibling modules lacking same treatment |
+
+**Wave 2 — 4-agent scan via spawn_agents_on_csv:**
+```csv
+"gen-syntax","Syntax Grep","Grep patterns across project","generalization","syntax","","2","pending","","",""
+"gen-semantic","Semantic Scan","Check related modules for anti-pattern","generalization","semantic","","2","pending","","",""
+"gen-structural","Structural Match","Find files needing same treatment","generalization","structural","","2","pending","","",""
+"gen-historical","Historical Grep","git log -S for similar patterns","generalization","historical","","2","pending","","",""
+```
+
+Each returns: `[{pattern_id, file, line, context, risk_level, layer, confidence}]`
+
+**Cross-layer dedup:** multi-layer hit on same file:line → boost confidence. Historical hit with existing fix → `already_handled`. Single layer only → `needs_review`.
+
+**Quality Gate** (self-iteration) → evaluate coverage/depth/actionability.
+
+Write understanding.md §6, generalization_stats. Mark G5 done.
+
+### S_DISCOVER
+
+1. **Triage:** per hit, read context (+-10 lines), classify as `already_handled` | `needs_treatment` | `low_risk`
+2. **Route:**
+   | Classification | Normal | `-y` |
+   |---------------|--------|------|
+   | needs_treatment | `request_user_input`: create issue / plan next iter | auto create issue, `deferred` |
+   | low_risk | Record only | Record only |
+   | already_handled | Skip | Skip |
+3. Append evidence (discovery + decision), update understanding.md §7. Mark G6 done.
+
+### S_RECORD
+
+1. Finalize understanding.md §8 — iteration summary, what worked, what needed rework
+2. Write learnings to understanding.md §8: 按 Knowledge Persistence 表分类记录（临时），completion summary 列出建议的后续命令
+3. Pending decisions: **Normal** → `request_user_input`. **`-y`** → display deferred count.
+4. Goal audit: check all phase_goals[*].completion_confirmed. Mark G7 done.
+5. Output completion summary:
    ```
    --- PLANEX ODYSSEY COMPLETE ---
    Requirement: {requirement}
    Criteria:    {passed}/{total} passed
    Iterations:  {N} cycles
-   Decisions:   {N} resolved, {M} pending, {K} deferred
+   Patterns:    {patterns_extracted} ({by_layer} distribution)
+   Scan hits:   {total_hits} ({cross_layer_confirmed} cross-layer confirmed)
+   Issues:      {N} created | Decisions: {N} resolved, {M} pending, {K} deferred
    Learnings:   {N} spec entries
-   Goals:       {done}/{total} ({skipped} skipped)
+   Self-iter:   {N} rounds across {M} stages
+   Goals:       {done}/{total} confirmed ({skipped} skipped)
    Status:      {ALL_PASSED|PARTIAL|ESCALATED}
    ---
    ```
 
-**Next steps:** `$odyssey-review-test <changed-files>`, `$odyssey-debug "<failing>"`,
-`$quality-review <phase>`, `$manage-issue list --source odyssey-planex`
+**Next steps:** `$odyssey-review-test-fix <changed-files>`, `$odyssey-debug "<failing>"`, `$quality-review`, `$manage-issue list --source odyssey-planex`
 </execution>
 
 <appendix>
 
 ### Goal Prompt Template
 
+**⚠️ 时机守卫：仅在 Stage 1 完成后显示一次（session 创建后、开始 Plan 前）。Stage 9 完成时禁止重新显示。**
+
 ```
-📋 Planex Odyssey 会话已创建。可随时复制以下 /goal 设定终止条件：
+📋 Planex Odyssey 会话已创建。可随时复制以下 /goal 设定终止条件（执行过程中输入即可）：
 
 /goal 直到 {SESSION_DIR}/session.json 的 acceptance_criteria[*] 全部 status==passed
 且 phase_goals_all_done=true 才停。每轮以 session.json 为唯一行动手册。
@@ -226,57 +308,64 @@ verify 失败时自动进入 fix 循环，不超过 max_iterations 次。
 遇到 phase=decision 的 pending 条目必须 request_user_input，不得自行 resolve。
 ```
 
+完成时仅输出 completion summary，不重复此提示。
+
 ### `-y` Auto-Confirm Behavior
 
-| 决策点 | Normal | `-y` |
-|--------|--------|------|
-| S_INTAKE 验收标准 | request_user_input | auto-derive, `deferred` |
-| S_VERIFY manual 标准 | request_user_input | `deferred` |
-| S_VERIFY max iteration | request_user_input | auto accept, `deferred` |
-| S_RECORD 决策清单 | request_user_input | skip |
-| S_RECORD 目标审计 | request_user_input | auto accept |
+| Decision Point | Normal | `-y` |
+|----------------|--------|------|
+| S_INTAKE criteria confirmation | request_user_input | auto-derive, `deferred` |
+| S_VERIFY manual criterion | request_user_input | `deferred` |
+| S_VERIFY max iteration reached | request_user_input | auto accept, `deferred` |
+| S_DISCOVER classification routing | request_user_input | auto create issue, `deferred` |
+| S_DISCOVER ambiguous items | request_user_input | all `deferred` |
+| S_RECORD decision list | request_user_input | skip |
+| S_RECORD goal audit | request_user_input | auto accept |
 
 ### Iteration Model
 
 ```
-S_EXECUTE → S_VERIFY ──all pass──→ S_RECORD
-                │
-           some fail + iter < max
-                │
+S_EXECUTE → S_VERIFY ──all pass──→ S_GENERALIZE → S_DISCOVER → S_RECORD
+                │                       │
+           some fail + iter < max       no hits ─→ S_RECORD
                 ▼
              S_FIX ──→ S_VERIFY (loop)
 ```
 
+Max iterations (default 3) prevents infinite loops. Each iteration records criteria_before, gaps_fixed, criteria_after.
+
 ### Phase Goal Lifecycle
 
-```
-pending → done | skipped | failed
-```
+`pending → done | skipped | failed`
 
 </appendix>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | No requirement | Provide requirement |
-| E003 | error | Resume no session | Start new |
+| E001 | error | No requirement provided | Provide requirement |
+| E003 | error | Resume but no session found | Start new |
 | E004 | error | Delegate failed | Retry or skip |
 | W001 | warning | No criteria derived | Manual definition |
 | W002 | warning | Max iterations, criteria failing | Escalate |
 | W003 | warning | CLI regression concern | Review before next |
+| W004 | warning | Delegate parse failed | Raw output |
 </error_codes>
 
 <success_criteria>
-- [ ] Requirement parsed, acceptance criteria defined (≥1)
-- [ ] Each criterion has verify_method
-- [ ] Plan with tasks mapped to criteria
+- [ ] Requirement parsed and ≥1 acceptance criterion defined with verify_method
+- [ ] Plan created with tasks mapped to criteria
 - [ ] Tasks executed with evidence logged
-- [ ] Every criterion verified per iteration
-- [ ] Failing criteria trigger targeted fix only
-- [ ] cli-review criteria verified via spawn_agents_on_csv
+- [ ] Every criterion verified by its method after each iteration
+- [ ] Failing criteria trigger targeted fix (not full re-implementation)
 - [ ] Iteration count tracked, max respected
-- [ ] understanding.md §4 updated per iteration
-- [ ] Goal Prompt displayed, phase_goals tracked
-- [ ] `-y`: no blocking, deferred counted
-- [ ] Resumable via -c
+- [ ] understanding.md updated per phase (§1-§8)
+- [ ] Multi-layer generalization + 4-agent scan (unless --skip-generalize)
+- [ ] Discoveries classified and routed (unless --skip-generalize)
+- [ ] Quality Gate self-iteration triggered when insufficient, logged in self_iteration_log
+- [ ] phase_goals G1-G7 tracked and audited
+- [ ] Goal Prompt displayed once after intake
+- [ ] `-y` mode: no blocking prompts, deferred counted
+- [ ] Session resumable via -c
+- [ ] Completion summary with iteration stats
 </success_criteria>
