@@ -226,6 +226,258 @@ function phase5_jsxChildren(
 }
 
 // ---------------------------------------------------------------------------
+// Phase 5.5: 接口/抽象分派
+// Java/Kotlin/C#/TS/Swift/Scala — implements/extends 的方法桥接
+// ---------------------------------------------------------------------------
+
+function phase5_5_interfaceDispatch(
+  adapter: CallbackQueryAdapter,
+  edges: UnifiedEdge[],
+): void {
+  const interfaces = adapter.getNodesByKind('interface');
+  const traits = adapter.getNodesByKind('trait');
+  const protocols = adapter.getNodesByKind('protocol');
+  const classes = adapter.getNodesByKind('class');
+  const abstractTypes = [...interfaces, ...traits, ...protocols];
+
+  for (const abs of abstractTypes) {
+    const absOutgoing = adapter.getOutgoingEdges(abs.id, 'contains');
+    const absMethods = new Map<string, string>();
+    for (const edge of absOutgoing) {
+      const methodNode = adapter.getNodesByKind('method').find(n => n.id === edge.target);
+      if (methodNode) absMethods.set(methodNode.name, methodNode.id);
+    }
+    if (absMethods.size === 0) continue;
+
+    for (const cls of classes) {
+      const implEdges = adapter.getIncomingEdges(abs.id, 'implements')
+        .concat(adapter.getIncomingEdges(abs.id, 'extends'));
+      const isImpl = implEdges.some(e => e.source === cls.id);
+      if (!isImpl) continue;
+
+      const clsOutgoing = adapter.getOutgoingEdges(cls.id, 'contains');
+      for (const ce of clsOutgoing) {
+        const clsMethod = adapter.getNodesByKind('method').find(n => n.id === ce.target);
+        if (clsMethod && absMethods.has(clsMethod.name)) {
+          edges.push({
+            source: absMethods.get(clsMethod.name)!,
+            target: clsMethod.id,
+            kind: 'calls',
+            provenance: 'callback-synth',
+            metadata: { phase: '5.5', channel: 'interface-dispatch' },
+          });
+        }
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6: Vue SFC 模板
+// kebab-case 子组件 + @click 事件处理器 + composable 解构
+// ---------------------------------------------------------------------------
+
+function phase6_vueSFC(
+  nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
+  edges: UnifiedEdge[],
+): void {
+  const vueFiles = nodes.filter(n => n.filePath.endsWith('.vue'));
+  const componentMap = new Map<string, string>();
+  for (const n of nodes) {
+    if (n.name.charAt(0) === n.name.charAt(0).toUpperCase() && n.name.length > 1) {
+      componentMap.set(n.name.toLowerCase(), n.id);
+      const kebab = n.name.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+      componentMap.set(kebab, n.id);
+    }
+  }
+
+  for (const vueNode of vueFiles) {
+    const methods = nodes.filter(n => n.filePath === vueNode.filePath && n.name !== vueNode.name);
+    for (const method of methods) {
+      const methodLower = method.name.toLowerCase();
+      if (methodLower.startsWith('on') || methodLower.startsWith('handle')) {
+        edges.push({
+          source: vueNode.id,
+          target: method.id,
+          kind: 'calls',
+          provenance: 'callback-synth',
+          metadata: { phase: 6, channel: 'vue-event-handler' },
+        });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: Go gRPC Stub→Impl
+// UnimplementedXxxServer → 手写实现的方法名子集匹配
+// ---------------------------------------------------------------------------
+
+function phase7_goGrpc(
+  nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
+  edges: UnifiedEdge[],
+): void {
+  const unimplPattern = /^Unimplemented\w+Server$/;
+  const stubs = nodes.filter(n => unimplPattern.test(n.name));
+
+  for (const stub of stubs) {
+    const serviceName = stub.name.replace(/^Unimplemented/, '').replace(/Server$/, '');
+    const implCandidates = nodes.filter(n =>
+      n.name.endsWith(serviceName) || n.name.endsWith(serviceName + 'Server') ||
+      n.name.endsWith(serviceName + 'Handler'));
+
+    for (const impl of implCandidates) {
+      if (impl.id === stub.id) continue;
+      edges.push({
+        source: stub.id,
+        target: impl.id,
+        kind: 'calls',
+        provenance: 'callback-synth',
+        metadata: { phase: 7, channel: 'grpc-stub-impl' },
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 8: React Native 跨语言事件通道
+// ObjC sendEventWithName / Swift sendEvent / Java .emit()
+// → JS .addListener()
+// ---------------------------------------------------------------------------
+
+function phase8_reactNativeBridge(
+  nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
+  edges: UnifiedEdge[],
+): void {
+  const nativeSenders = nodes.filter(n =>
+    n.name === 'sendEventWithName' || n.name === 'sendEvent' ||
+    (n.name === 'emit' && (n.filePath.endsWith('.m') || n.filePath.endsWith('.mm') ||
+      n.filePath.endsWith('.swift') || n.filePath.endsWith('.java') || n.filePath.endsWith('.kt'))));
+  const jsListeners = nodes.filter(n =>
+    n.name === 'addListener' && (n.filePath.endsWith('.js') || n.filePath.endsWith('.ts') ||
+      n.filePath.endsWith('.tsx') || n.filePath.endsWith('.jsx')));
+
+  let fanout = 0;
+  for (const sender of nativeSenders) {
+    for (const listener of jsListeners) {
+      if (fanout >= EVENT_FANOUT_CAP) break;
+      edges.push({
+        source: sender.id,
+        target: listener.id,
+        kind: 'calls',
+        provenance: 'callback-synth',
+        metadata: { phase: 8, channel: 'rn-bridge' },
+      });
+      fanout++;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 9: Fabric Native Impl
+// codegenNativeComponent spec → native class (后缀约定匹配)
+// ---------------------------------------------------------------------------
+
+function phase9_fabricNative(
+  nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
+  edges: UnifiedEdge[],
+): void {
+  const codegenPattern = /codegenNativeComponent|TurboModule/;
+  const specNodes = nodes.filter(n => codegenPattern.test(n.name) || codegenPattern.test(n.qualifiedName));
+
+  for (const spec of specNodes) {
+    const baseName = spec.name
+      .replace(/NativeComponent$/, '')
+      .replace(/^codegen/, '')
+      .replace(/Spec$/, '');
+    if (!baseName) continue;
+
+    const nativeImpls = nodes.filter(n =>
+      n.name.includes(baseName) &&
+      (n.filePath.endsWith('.m') || n.filePath.endsWith('.mm') ||
+        n.filePath.endsWith('.swift') || n.filePath.endsWith('.java') || n.filePath.endsWith('.kt')));
+
+    for (const impl of nativeImpls) {
+      edges.push({
+        source: spec.id,
+        target: impl.id,
+        kind: 'calls',
+        provenance: 'callback-synth',
+        metadata: { phase: 9, channel: 'fabric-native' },
+      });
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 10: MyBatis Java↔XML
+// Java mapper 接口方法 → XML statement 后缀匹配
+// ---------------------------------------------------------------------------
+
+function phase10_mybatis(
+  nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
+  edges: UnifiedEdge[],
+): void {
+  const mapperMethods = nodes.filter(n =>
+    n.filePath.endsWith('.java') &&
+    (n.qualifiedName.includes('Mapper.') || n.qualifiedName.includes('Dao.')));
+  const xmlStatements = nodes.filter(n =>
+    n.filePath.endsWith('.xml') && n.name.length > 0);
+
+  for (const method of mapperMethods) {
+    const methodName = method.name;
+    for (const stmt of xmlStatements) {
+      if (stmt.name === methodName || stmt.id.endsWith(`:${methodName}`)) {
+        edges.push({
+          source: method.id,
+          target: stmt.id,
+          kind: 'calls',
+          provenance: 'callback-synth',
+          metadata: { phase: 10, channel: 'mybatis-mapper' },
+        });
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 11: Gin 中间件链
+// c.handlers[c.index](c) → .Use()/.GET()/.POST() 注册的处理函数
+// ---------------------------------------------------------------------------
+
+function phase11_ginMiddleware(
+  nodes: Array<{ id: string; name: string; qualifiedName: string; filePath: string }>,
+  edges: UnifiedEdge[],
+): void {
+  const routeRegistrars = nodes.filter(n =>
+    /^(Use|GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS|Handle|Group)$/.test(n.name) &&
+    n.filePath.endsWith('.go'));
+
+  const handlerFunctions = nodes.filter(n =>
+    n.filePath.endsWith('.go') &&
+    (n.name.endsWith('Handler') || n.name.endsWith('Middleware') ||
+      n.name.includes('handle') || n.name.includes('middleware')));
+
+  let fanout = 0;
+  for (const registrar of routeRegistrars) {
+    for (const handler of handlerFunctions) {
+      if (fanout >= CC_FANOUT_CAP) break;
+      if (handler.filePath === registrar.filePath ||
+        handler.qualifiedName.split('.')[0] === registrar.qualifiedName.split('.')[0]) {
+        edges.push({
+          source: registrar.id,
+          target: handler.id,
+          kind: 'calls',
+          provenance: 'callback-synth',
+          metadata: { phase: 11, channel: 'gin-middleware' },
+        });
+        fanout++;
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 主入口 — 14 阶段回调合成
 // ---------------------------------------------------------------------------
 
@@ -269,13 +521,26 @@ export function runCallbackSynthesis(
   // Phase 5: JSX 子组件渲染
   phase5_jsxChildren(allNodes, allEdges);
 
-  // Phase 6-11: 框架特化阶段 (待从 CodeGraph 移植)
-  // Phase 6: Vue SFC 模板 — kebab-case 子组件 + @click 事件处理器
-  // Phase 7: Go gRPC Stub→Impl — UnimplementedXxxServer → 手写实现
+  // Phase 5.5: 接口/抽象分派
+  phase5_5_interfaceDispatch(adapter, allEdges);
+
+  // Phase 6: Vue SFC 模板
+  phase6_vueSFC(allNodes, allEdges);
+
+  // Phase 7: Go gRPC Stub→Impl
+  phase7_goGrpc(allNodes, allEdges);
+
   // Phase 8: React Native 跨语言事件通道
-  // Phase 9: Fabric Native Impl — codegenNativeComponent spec → native class
-  // Phase 10: MyBatis Java↔XML — Java mapper 接口 → XML statement
-  // Phase 11: Gin 中间件链 — c.handlers[c.index](c) → .Use()/.GET()
+  phase8_reactNativeBridge(allNodes, allEdges);
+
+  // Phase 9: Fabric Native Impl
+  phase9_fabricNative(allNodes, allEdges);
+
+  // Phase 10: MyBatis Java↔XML
+  phase10_mybatis(allNodes, allEdges);
+
+  // Phase 11: Gin 中间件链
+  phase11_ginMiddleware(allNodes, allEdges);
 
   // 全局去重
   const seen = new Set<string>();
