@@ -1,19 +1,19 @@
 // src/graph/kg/extraction/code/tree-sitter.ts
-// tree-sitter WASM 解析核心 — 延迟加载 + 缓存
-// 参考: codegraph/src/extraction/tree-sitter.ts + grammars.ts
-//
-// 设计: 通过动态 require @colbymchenry/codegraph 的 tree-sitter 实例,
-// 避免在 MaestroGraph 中重新打包 19 个 WASM grammar (~15MB)。
-// 若 codegraph 未安装, 优雅降级到无代码提取模式。
+// tree-sitter WASM 解析核心 — 直接加载 web-tree-sitter + tree-sitter-wasms
+// 参考: codegraph/src/extraction/grammars.ts + tree-sitter.ts
 
 import { createRequire } from 'node:module';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import { ensureWasmStability, ParserResetCounter } from './wasm-stability.js';
 import type { Language } from '../../db/types.js';
 
 const require = createRequire(import.meta.url);
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
-// tree-sitter 类型 (从 @colbymchenry/codegraph 或 web-tree-sitter 加载)
+// tree-sitter 类型 (web-tree-sitter)
 // ---------------------------------------------------------------------------
 
 interface TreeSitterLanguage {
@@ -51,12 +51,43 @@ interface TreeSitterModule {
   Language: {
     load(path: string): Promise<TreeSitterLanguage>;
   };
-  Parser: new () => TreeSitterParser;
+  Parser: (new () => TreeSitterParser) & {
+    init(): Promise<void>;
+  };
 }
 
 // ---------------------------------------------------------------------------
-// Language → grammar 名映射
+// Language → WASM grammar 文件名映射 (对齐 codegraph grammars.ts)
 // ---------------------------------------------------------------------------
+
+type GrammarLanguage = Exclude<Language, 'svelte' | 'vue' | 'liquid' | 'yaml' | 'twig' | 'xml' | 'properties' | 'unknown'>;
+
+const WASM_GRAMMAR_FILES: Record<GrammarLanguage, string> = {
+  typescript: 'tree-sitter-typescript.wasm',
+  tsx: 'tree-sitter-tsx.wasm',
+  javascript: 'tree-sitter-javascript.wasm',
+  jsx: 'tree-sitter-javascript.wasm',
+  python: 'tree-sitter-python.wasm',
+  go: 'tree-sitter-go.wasm',
+  rust: 'tree-sitter-rust.wasm',
+  java: 'tree-sitter-java.wasm',
+  c: 'tree-sitter-c.wasm',
+  cpp: 'tree-sitter-cpp.wasm',
+  csharp: 'tree-sitter-c_sharp.wasm',
+  php: 'tree-sitter-php.wasm',
+  ruby: 'tree-sitter-ruby.wasm',
+  swift: 'tree-sitter-swift.wasm',
+  kotlin: 'tree-sitter-kotlin.wasm',
+  dart: 'tree-sitter-dart.wasm',
+  pascal: 'tree-sitter-pascal.wasm',
+  scala: 'tree-sitter-scala.wasm',
+  lua: 'tree-sitter-lua.wasm',
+  luau: 'tree-sitter-luau.wasm',
+  objc: 'tree-sitter-objc.wasm',
+};
+
+// 自定义 WASM — ABI 版本不兼容 tree-sitter-wasms 的语言
+const VENDORED_WASM_LANGUAGES = new Set<string>(['pascal', 'scala', 'lua', 'luau']);
 
 export const LANGUAGE_TO_GRAMMAR: Record<Language, string> = {
   typescript: 'tree-sitter-typescript',
@@ -98,10 +129,12 @@ export class TreeSitterEngine {
   private static _instance: TreeSitterEngine | null = null;
   private _module: TreeSitterModule | null = null;
   private _grammarCache: Map<string, TreeSitterLanguage> = new Map();
+  private _unavailableGrammars: Map<string, string> = new Map();
   private _parserPool: TreeSitterParser[] = [];
   private _resetCounter: ParserResetCounter;
   private _available: boolean | null = null;
   private _initPromise: Promise<void> | null = null;
+  private _parserInitialized = false;
 
   private constructor() {
     this._resetCounter = new ParserResetCounter();
@@ -114,7 +147,6 @@ export class TreeSitterEngine {
     return TreeSitterEngine._instance;
   }
 
-  /** 检查 tree-sitter 是否可用 */
   isAvailable(): boolean {
     if (this._available !== null) return this._available;
     this._available = this.tryLoadModule();
@@ -122,27 +154,15 @@ export class TreeSitterEngine {
   }
 
   private tryLoadModule(): boolean {
-    // 尝试从 @colbymchenry/codegraph 加载 tree-sitter
-    try {
-      const cgPkg = require('@colbymchenry/codegraph');
-      // codegraph 可能 re-export tree-sitter, 或内嵌
-      if (cgPkg.TreeSitter || cgPkg.Parser) {
-        this._module = (cgPkg.TreeSitter ?? cgPkg) as TreeSitterModule;
-        return true;
-      }
-    } catch { /* codegraph not installed */ }
-
-    // 尝试直接加载 web-tree-sitter
     try {
       const ts = require('web-tree-sitter');
-      this._module = ts as unknown as TreeSitterModule;
+      this._module = ts as TreeSitterModule;
       return true;
     } catch { /* web-tree-sitter not installed */ }
 
     return false;
   }
 
-  /** 异步初始化 (应用 WASM 稳定性 flag) */
   async ensureInitialized(): Promise<void> {
     if (this._initPromise) return this._initPromise;
     this._initPromise = this._init();
@@ -150,45 +170,48 @@ export class TreeSitterEngine {
   }
 
   private async _init(): Promise<void> {
-    // 应用 WASM 稳定性机制 (必须在 WASM 加载前)
     ensureWasmStability();
-    if (!this.isAvailable()) {
-      throw new Error('tree-sitter not available. Install @colbymchenry/codegraph or web-tree-sitter.');
+    if (!this.isAvailable() || !this._module) {
+      throw new Error('web-tree-sitter not available. Run: npm install web-tree-sitter tree-sitter-wasms');
+    }
+    if (!this._parserInitialized) {
+      // web-tree-sitter 0.25: Parser.init() 初始化 WASM 运行时
+      await this._module.Parser.init();
+      this._parserInitialized = true;
     }
   }
 
-  /**
-   * 加载指定语言的 grammar (延迟加载 + 缓存)
-   */
   async loadGrammar(language: Language): Promise<TreeSitterLanguage | null> {
+    await this.ensureInitialized();
     if (!this._module) return null;
-    const grammarName = LANGUAGE_TO_GRAMMAR[language];
-    if (!grammarName) return null;
 
-    if (this._grammarCache.has(grammarName)) {
-      return this._grammarCache.get(grammarName)!;
+    const wasmFile = WASM_GRAMMAR_FILES[language as GrammarLanguage];
+    if (!wasmFile) return null;
+
+    if (this._grammarCache.has(wasmFile)) {
+      return this._grammarCache.get(wasmFile)!;
     }
+    if (this._unavailableGrammars.has(wasmFile)) return null;
 
     try {
-      // 尝试从 codegraph 包的 wasm 目录加载
-      const grammarPath = this.resolveGrammarPath(grammarName);
-      if (grammarPath) {
-        const grammar = await this._module.Language.load(grammarPath);
-        this._grammarCache.set(grammarName, grammar);
-        return grammar;
+      const wasmPath = this.resolveGrammarPath(language as GrammarLanguage, wasmFile);
+      if (!wasmPath) {
+        this._unavailableGrammars.set(wasmFile, 'WASM file not found');
+        return null;
       }
+      const grammar = await this._module.Language.load(wasmPath);
+      this._grammarCache.set(wasmFile, grammar);
+      return grammar;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this._unavailableGrammars.set(wasmFile, msg);
       if (process.env.DEBUG) {
-        console.warn(`[MaestroGraph] Failed to load grammar ${grammarName}:`, err);
+        console.warn(`[MaestroGraph] Failed to load grammar ${wasmFile}: ${msg}`);
       }
+      return null;
     }
-
-    return null;
   }
 
-  /**
-   * 解析源码 → AST tree
-   */
   async parse(
     sourceCode: string,
     language: Language,
@@ -199,11 +222,9 @@ export class TreeSitterEngine {
     const grammar = await this.loadGrammar(language);
     if (!grammar) return null;
 
-    // 从池中获取 parser 或新建
     let parser = this._parserPool.pop() ?? new this._module.Parser();
     parser.setLanguage(grammar);
 
-    // 周期性重置检查 (WASM 内存回收)
     if (this._resetCounter.tickAndCheckReset()) {
       parser.delete();
       parser = new this._module.Parser();
@@ -212,7 +233,6 @@ export class TreeSitterEngine {
 
     try {
       const tree = parser.parse(sourceCode);
-      // 归还 parser 到池
       this._parserPool.push(parser);
       return tree;
     } catch (err) {
@@ -224,26 +244,32 @@ export class TreeSitterEngine {
     }
   }
 
-  /** 解析 grammar wasm 文件路径 */
-  private resolveGrammarPath(grammarName: string): string | null {
-    try {
-      // 尝试 codegraph 包内的 wasm 目录
-      const cgPath = require.resolve('@colbymchenry/codegraph');
-      const wasmDir = cgPath.replace(/[/\\]index\.js$/, '/wasm');
-      const candidate = `${wasmDir}/${grammarName}.wasm`;
-      return candidate;
-    } catch {
-      return null;
+  private resolveGrammarPath(language: GrammarLanguage, wasmFile: string): string | null {
+    // 自定义 WASM — 从本地 wasm/ 目录加载
+    if (VENDORED_WASM_LANGUAGES.has(language)) {
+      const vendoredPath = join(__dirname, 'wasm', wasmFile);
+      if (existsSync(vendoredPath)) return vendoredPath;
     }
+
+    // 标准 grammar — 从 tree-sitter-wasms 包加载
+    try {
+      return require.resolve(`tree-sitter-wasms/out/${wasmFile}`);
+    } catch { /* not found */ }
+
+    // 回退: 本地 wasm/ 目录
+    const localPath = join(__dirname, 'wasm', wasmFile);
+    if (existsSync(localPath)) return localPath;
+
+    return null;
   }
 
-  /** 销毁所有 parser (进程退出时) */
   dispose(): void {
     for (const parser of this._parserPool) {
       try { parser.delete(); } catch { /* ignore */ }
     }
     this._parserPool = [];
     this._grammarCache.clear();
+    this._unavailableGrammars.clear();
   }
 }
 

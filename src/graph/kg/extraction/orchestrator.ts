@@ -155,7 +155,7 @@ export async function syncKnowledgeGraph(
 
     if (shouldSync('codegraph')) {
       const startMs = Date.now();
-      const candidateDirs = ['src', 'lib', 'app', 'packages', 'apps'];
+      const candidateDirs = ['src', 'lib', 'app', 'packages', 'apps', 'dashboard/src'];
       const srcDirs = candidateDirs
         .map(d => resolve(projectPath, d))
         .filter(d => existsSync(d));

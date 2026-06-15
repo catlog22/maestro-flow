@@ -58,29 +58,50 @@ export function searchUnified(
   const includeCode = options?.includeCode !== false;
   const includeKnowledge = options?.includeKnowledge !== false;
 
-  // 清洗查询
-  const sanitized = sanitizeFtsQuery(query);
+  // 清洗查询 — 保留原始查询 + camelCase 分词两种策略
   const searchTerms = extractSearchTerms(query);
   const meaningfulTerms = removeStopWords(searchTerms);
   const effectiveQuery = meaningfulTerms.length > 0 ? meaningfulTerms.join(' ') : query;
 
   const allResults: UnifiedSearchResult[] = [];
 
-  // 代码 FTS5 搜索 (P2: _bm25Score 透传给 computeScore)
+  // 代码 FTS5 搜索 — 双策略: 原始查询 + camelCase 分词
   if (includeCode) {
     const codeKinds = options?.kinds as string[] | undefined;
-    const codeResults = queries.searchCodeFTS(effectiveQuery, {
+    const seenIds = new Set<string>();
+
+    // 策略 1: 原始查询（精确匹配 camelCase 符号名）
+    const exactResults = queries.searchCodeFTS(query, {
       limit: limit * 2,
       kinds: codeKinds,
       languages: options?.languages as any, // eslint-disable-line @typescript-eslint/no-explicit-any
     });
-
-    for (const node of codeResults) {
+    for (const node of exactResults) {
+      if (seenIds.has(node.id)) continue;
+      seenIds.add(node.id);
       allResults.push({
         node,
         score: computeScore(node, query),
         matchReason: { kind: 'direct', field: 'name' },
       });
+    }
+
+    // 策略 2: 分词后查询（覆盖多词搜索场景）
+    if (effectiveQuery !== query) {
+      const tokenResults = queries.searchCodeFTS(effectiveQuery, {
+        limit: limit * 2,
+        kinds: codeKinds,
+        languages: options?.languages as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      });
+      for (const node of tokenResults) {
+        if (seenIds.has(node.id)) continue;
+        seenIds.add(node.id);
+        allResults.push({
+          node,
+          score: computeScore(node, query),
+          matchReason: { kind: 'direct', field: 'name' },
+        });
+      }
     }
   }
 
