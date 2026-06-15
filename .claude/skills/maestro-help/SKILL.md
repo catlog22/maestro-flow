@@ -291,7 +291,7 @@ Roadmap > Milestone > Phase > Task
 
 - **Slash 命令**: 56 个（7 个分类）
 - **CLI 命令**: 21 个
-- **Skills**: 10 个（3 个分类）
+- **Skills**: 11 个（4 个分类）
 - **Agents**: 22 个（5 个分类）
 - **Guide 文档**: 17 个
 - **工作流路径**: 6 个合法路径 (Path A-F) + 3 个辅助流程

@@ -10,7 +10,7 @@ import { CliAgentRunner } from '../agents/cli-agent-runner.js';
 import { CliHistoryStore, type EntryLike } from '../agents/cli-history-store.js';
 import type { ExecutionMeta } from '../agents/cli-history-store.js';
 import { generateCliExecId } from '../agents/cli-agent-runner.js';
-import { loadCliToolsConfig, selectTool, selectToolByRole, resolveProxyEnv } from '../config/cli-tools-config.js';
+import { loadCliToolsConfig, selectTool, selectToolByRole, resolveProxyEnv, checkProxyReachable } from '../config/cli-tools-config.js';
 import { paths } from '../config/paths.js';
 import { DelegateBrokerClient, type JsonObject, type DelegateJobEvent, type DelegateJobRecord, type DelegateQueuedMessage } from '../async/index.js';
 import { handleDelegateMessage } from '../async/delegate-control.js';
@@ -377,14 +377,51 @@ export function registerDelegateCommand(program: Command): void {
           process.stderr.write(`Warning: --to overrides --role; using tool "${opts.to}" directly.\n`);
         }
         selected = selectTool(opts.to, config);
+        if (!selected) {
+          const tools = config.tools ?? {};
+          const exists = opts.to in tools;
+          const available = Object.entries(tools)
+            .filter(([, e]) => e.enabled)
+            .map(([n]) => n);
+          if (exists) {
+            console.error(
+              `Error: tool "${opts.to}" is disabled.\n` +
+              `Enable it in cli-tools.json or use one of: ${available.join(', ') || '(none)'}`,
+            );
+          } else {
+            console.error(
+              `Error: unknown tool "${opts.to}".\n` +
+              `Available tools: ${available.join(', ') || '(none)'}`,
+            );
+          }
+          // Attempt fallback to first enabled tool
+          selected = selectTool(undefined, config);
+          if (selected) {
+            process.stderr.write(`Falling back to "${selected.name}".\n`);
+          } else {
+            process.exit(1);
+          }
+        }
       } else if (opts.role) {
         selected = selectToolByRole(opts.role, config);
       } else {
         selected = selectTool(undefined, config);
       }
 
-      const toolName = selected?.name ?? opts.to ?? 'gemini';
-      const model = opts.model ?? selected?.entry?.primaryModel;
+      if (!selected) {
+        const available = Object.entries(config.tools ?? {})
+          .filter(([, e]) => e.enabled)
+          .map(([n]) => n);
+        console.error(
+          'Error: no enabled tool found.\n' +
+          `Configured tools: ${Object.keys(config.tools ?? {}).join(', ') || '(none)'}\n` +
+          `Enabled: ${available.join(', ') || '(none)'}`,
+        );
+        process.exit(1);
+      }
+
+      const toolName = selected.name;
+      const model = opts.model ?? selected.entry.primaryModel;
       const mode = opts.mode as 'analysis' | 'write';
 
       if (mode !== 'analysis' && mode !== 'write') {
@@ -403,7 +440,7 @@ export function registerDelegateCommand(program: Command): void {
         }
         reasoningEffort = opts.effort as Effort;
       } else {
-        reasoningEffort = selected?.entry?.reasoningEffort;
+        reasoningEffort = selected.entry.reasoningEffort;
       }
 
       // Resolve stale-stream timeout: CLI --timeout overrides cli-tools.json
@@ -416,14 +453,26 @@ export function registerDelegateCommand(program: Command): void {
         }
         streamTimeout = parsed;
       } else {
-        streamTimeout = selected?.entry?.streamTimeoutMs;
+        streamTimeout = selected.entry.streamTimeoutMs;
       }
 
       const backend = (opts.backend === 'terminal' ? 'terminal' : 'direct') as 'direct' | 'terminal';
       const execId = opts.id ?? generateCliExecId(toolName);
       const resume = opts.resume === true ? 'last' : opts.resume;
       const includeDirs = opts.includeDirs?.split(',').map(d => d.trim()).filter(Boolean);
-      const proxyEnv = resolveProxyEnv(config, toolName);
+      let proxyEnv = resolveProxyEnv(config, toolName);
+      if (Object.keys(proxyEnv).length > 0) {
+        const proxyUrl = proxyEnv.HTTP_PROXY || proxyEnv.HTTPS_PROXY;
+        if (proxyUrl) {
+          const reachable = await checkProxyReachable(proxyUrl);
+          if (!reachable) {
+            process.stderr.write(
+              `Warning: proxy ${proxyUrl} is unreachable, proceeding without proxy.\n`,
+            );
+            proxyEnv = {};
+          }
+        }
+      }
       const request: DelegateExecutionRequest = {
         prompt,
         tool: toolName,
@@ -436,8 +485,8 @@ export function registerDelegateCommand(program: Command): void {
         includeDirs,
         sessionId: opts.session ?? resolveRelaySessionId(),
         backend,
-        settingsFile: selected?.entry?.settingsFile,
-        baseTool: selected?.entry?.baseTool,
+        settingsFile: selected.entry.settingsFile,
+        baseTool: selected.entry.baseTool,
         role: opts.role,
         reasoningEffort,
         streamTimeout,

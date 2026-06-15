@@ -73,7 +73,8 @@
     {"name": "team-review", "category": "team", "description": "代码审查团队: 多维度扫描和漏洞审查", "source": "../team-review/SKILL.md"},
     {"name": "team-tech-debt", "category": "team", "description": "技术债务团队: 债务识别和清理", "source": "../team-tech-debt/SKILL.md"},
     {"name": "team-testing", "category": "team", "description": "测试团队: 测试规划和执行", "source": "../team-testing/SKILL.md"},
-    {"name": "codify-to-knowhow", "category": "knowledge", "description": "Manifest 驱动的知识资产生成器", "source": "../codify-to-knowhow/SKILL.md"}
+    {"name": "codify-to-knowhow", "category": "knowledge", "description": "Manifest 驱动的知识资产生成器", "source": "../codify-to-knowhow/SKILL.md"},
+    {"name": "insight-challenge", "category": "quality", "description": "对抗性审查 — 质疑发现、验证声明、产出结构化裁决", "source": "../insight-challenge/SKILL.md"}
   ],
   "agents": [
     {"name": "workflow-analyzer", "description": "多维度分析 — 证据评分和推荐", "category": "workflow"},
@@ -124,7 +125,7 @@
   ],
   "categories": {
     "commands": ["core", "pipeline", "milestone", "manage", "quality", "spec", "learn", "wiki", "worktree", "team", "ralph", "ui", "tools"],
-    "skills": ["meta", "team", "knowledge"],
+    "skills": ["meta", "team", "knowledge", "quality"],
     "agents": ["workflow", "team", "planning", "cli", "ui"]
   },
   "guide_files": [

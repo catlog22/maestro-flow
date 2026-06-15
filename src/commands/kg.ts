@@ -786,17 +786,37 @@ export function registerKgCommand(program: Command): void {
     .description('Search nodes with optional context and wiki cross-references (CodeGraph)')
     .option('--context', 'Include caller/callee counts for each result')
     .option('--wiki', 'Include related wiki entries for each result')
+    .option('--kind <types>', 'Filter by node kind (comma-separated: function,class,interface,method,type_alias,const)')
     .option('--limit <n>', 'Max results', '10')
     .option('--json', 'Output as JSON')
     .action(async (text: string, opts) => {
       const limit = Number(opts.limit) || 10;
+      const kinds = opts.kind ? (opts.kind as string).split(',').map((s: string) => s.trim()).filter(Boolean) : undefined;
       const { adapter } = await requireCodeGraph();
       try {
-        const cgResults = await adapter.searchNodes(text, { limit });
+        // Multi-kind: query each kind separately and merge, because the
+        // upstream CodeGraph API may not support multiple kinds in one call.
+        let cgResults: Array<{ node?: any; score?: number } & Record<string, any>>; // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (kinds && kinds.length > 1) {
+          const seen = new Set<string>();
+          const merged: typeof cgResults = [];
+          for (const k of kinds) {
+            const partial = await adapter.searchNodes(text, { limit, kinds: [k] });
+            for (const r of partial) {
+              const id = (r.node ?? r).id;
+              if (!seen.has(id)) { seen.add(id); merged.push(r); }
+            }
+          }
+          merged.sort((a, b) => ((b.score ?? 0) - (a.score ?? 0)));
+          cgResults = merged.slice(0, limit);
+        } else {
+          cgResults = await adapter.searchNodes(text, { limit, kinds });
+        }
 
         const enriched: Array<{
           id: string; kind: string; name: string; filePath: string;
           signature?: string; isExported?: boolean;
+          score?: number;
           callerCount?: number; calleeCount?: number;
           wiki?: WikiMatch[];
         }> = [];
@@ -807,6 +827,7 @@ export function registerKgCommand(program: Command): void {
             id: n.id, kind: n.kind, name: n.name, filePath: n.filePath,
             signature: n.signature || undefined,
             isExported: n.isExported || undefined,
+            score: typeof r.score === 'number' ? r.score : undefined,
           };
 
           if (opts.context) {
@@ -835,6 +856,9 @@ export function registerKgCommand(program: Command): void {
           let line = `  [${n.kind}] ${n.id} -- ${desc}`;
           if (n.callerCount !== undefined) {
             line += `  (callers: ${n.callerCount}, callees: ${n.calleeCount})`;
+          }
+          if (n.score !== undefined) {
+            line += `  (score: ${n.score.toFixed(2)})`;
           }
           console.log(line);
           if (n.wiki && n.wiki.length > 0) {

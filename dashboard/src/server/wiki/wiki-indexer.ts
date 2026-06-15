@@ -49,6 +49,7 @@ export class WikiIndexer {
   private graphCache: WikiGraph | null = null;
   private searchCache: InvertedIndex | null = null;
   private inflight: Promise<WikiIndex> | null = null;
+  private mtimeSnapshot: Map<string, number> = new Map();
 
   constructor(config: WikiIndexerConfig) {
     this.workflowRoot = resolve(config.workflowRoot);
@@ -59,8 +60,65 @@ export class WikiIndexer {
   }
 
   async get(): Promise<WikiIndex> {
-    if (this.cache) return this.cache;
+    if (this.cache) {
+      if (!await this.hasSourceChanges()) return this.cache;
+      this.cache = null;
+      this.graphCache = null;
+      this.searchCache = null;
+    }
     return this.rebuild();
+  }
+
+  /**
+   * Quick mtime scan of known source directories. If any file's mtime
+   * changed since the last rebuild, the cache is stale.
+   */
+  private async hasSourceChanges(): Promise<boolean> {
+    if (this.mtimeSnapshot.size === 0) return true;
+    const dirs = [
+      join(this.workflowRoot, 'specs'),
+      join(this.workflowRoot, 'knowhow'),
+      join(this.workflowRoot, 'issues'),
+    ];
+    const singletons = ['project.md', 'roadmap.md'];
+    for (const s of singletons) {
+      const p = join(this.workflowRoot, s);
+      try {
+        const st = await stat(p);
+        const prev = this.mtimeSnapshot.get(p);
+        if (prev === undefined || st.mtimeMs !== prev) return true;
+      } catch {
+        if (this.mtimeSnapshot.has(p)) return true;
+      }
+    }
+    for (const dir of dirs) {
+      try {
+        const st = await stat(dir);
+        const prev = this.mtimeSnapshot.get(dir);
+        if (prev === undefined || st.mtimeMs !== prev) return true;
+      } catch {
+        if (this.mtimeSnapshot.has(dir)) return true;
+      }
+    }
+    return false;
+  }
+
+  private async captureMtimeSnapshot(): Promise<Map<string, number>> {
+    const snap = new Map<string, number>();
+    const dirs = [
+      join(this.workflowRoot, 'specs'),
+      join(this.workflowRoot, 'knowhow'),
+      join(this.workflowRoot, 'issues'),
+    ];
+    const singletons = ['project.md', 'roadmap.md'];
+    for (const s of singletons) {
+      const p = join(this.workflowRoot, s);
+      try { snap.set(p, (await stat(p)).mtimeMs); } catch { /* missing is fine */ }
+    }
+    for (const dir of dirs) {
+      try { snap.set(dir, (await stat(dir)).mtimeMs); } catch { /* missing */ }
+    }
+    return snap;
   }
 
   async rebuild(): Promise<WikiIndex> {
@@ -72,16 +130,27 @@ export class WikiIndexer {
 
       // Stable collision suffix — use original id for counting so the
       // third duplicate becomes -3 (not another -2).
+      // Collisions are expected across multi-source JSONL files; warn only
+      // when MAESTRO_DEBUG is set to avoid polluting CLI search output.
       const seen = new Map<string, number>();
+      const debugCollisions = process.env.MAESTRO_DEBUG === '1';
+      let collisionCount = 0;
       for (const d of entries) {
         const original = d.id;
         const n = seen.get(original) ?? 0;
         if (n > 0) {
-          // eslint-disable-next-line no-console
-          console.warn(`[wiki-indexer] id collision '${original}' — suffixing`);
+          if (debugCollisions) {
+            // eslint-disable-next-line no-console
+            console.warn(`[wiki-indexer] id collision '${original}' — suffixing to ${original}-${n + 1}`);
+          }
           d.id = `${original}-${n + 1}`;
+          collisionCount++;
         }
         seen.set(original, n + 1);
+      }
+      if (collisionCount > 0 && debugCollisions) {
+        // eslint-disable-next-line no-console
+        console.warn(`[wiki-indexer] ${collisionCount} id collision(s) resolved by suffixing`);
       }
 
       const byId: Record<string, WikiEntry> = {};
@@ -110,6 +179,9 @@ export class WikiIndexer {
       this.cache = index;
       this.graphCache = null;
       this.searchCache = null;
+
+      // Snapshot mtimes of source directories for incremental staleness check
+      this.mtimeSnapshot = await this.captureMtimeSnapshot();
 
       // Persist lightweight index to disk (fire-and-forget).
       this.persistIndex(index).catch(() => {});
@@ -175,13 +247,20 @@ export class WikiIndexer {
     return this.searchCache;
   }
 
-  async search(query: string, limit = 50): Promise<WikiEntry[]> {
+  async searchWithScores(query: string, limit = 50): Promise<Array<{ entry: WikiEntry; score: number }>> {
     const index = await this.get();
     const bm25 = await this.getSearchIndex();
     const ranked = searchBM25(bm25, query, limit);
-    return ranked
-      .map((r) => index.byId[r.docId])
-      .filter((d): d is WikiEntry => Boolean(d));
+    const out: Array<{ entry: WikiEntry; score: number }> = [];
+    for (const r of ranked) {
+      const entry = index.byId[r.docId];
+      if (entry) out.push({ entry, score: r.score });
+    }
+    return out;
+  }
+
+  async search(query: string, limit = 50): Promise<WikiEntry[]> {
+    return (await this.searchWithScores(query, limit)).map(r => r.entry);
   }
 
   // -------------------------------------------------------------------------
@@ -387,13 +466,26 @@ export class WikiIndexer {
   private async scanVirtual(): Promise<WikiEntry[]> {
     const out: WikiEntry[] = [];
 
+    // Issues: collect from all JSONL files, then deduplicate by ID keeping the
+    // entry with the most recent updated timestamp.  This avoids collision
+    // warnings when the same issue ID appears across multiple JSONL sources
+    // (e.g. issues.jsonl and review-issues.jsonl).
+    const allIssues: WikiEntry[] = [];
     for (const name of await safeReaddir(join(this.workflowRoot, 'issues'))) {
       if (extname(name).toLowerCase() !== '.jsonl') continue;
       const abs = join(this.workflowRoot, 'issues', name);
       if (!this.isInsideRoot(abs)) continue;
       const rel = toForwardSlash(relative(this.workflowRoot, abs));
-      out.push(...(await loadVirtualEntries(abs, adaptIssueRow, rel)));
+      allIssues.push(...(await loadVirtualEntries(abs, adaptIssueRow, rel)));
     }
+    const issueBest = new Map<string, WikiEntry>();
+    for (const e of allIssues) {
+      const existing = issueBest.get(e.id);
+      if (!existing || e.updated > existing.updated) {
+        issueBest.set(e.id, e);
+      }
+    }
+    out.push(...issueBest.values());
 
     // Codebase: .workflow/codebase/doc-index.json → component/feature/req/ADR
     const codebaseIndex = join(this.workflowRoot, 'codebase', 'doc-index.json');
@@ -483,12 +575,11 @@ export class WikiIndexer {
     const parent = asString(data.parent) || null;
 
     const rel = toForwardSlash(relative(this.workflowRoot, absPath));
-    // Knowhow files live under knowhow/ with prefix-<slug>.md naming.
-    // Strip the 4-char prefix (KNW-/TIP-/TPL-/RCP-/REF-/DCS-/AST-/BLP-) from the id-generating
-    // stem so the id matches what WikiWriter produced at create time (`knowhow-<slug>`).
-    let idStem = stem;
-    if (/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|DOC)-/i.test(stem)) idStem = stem.slice(4);
-    const id = `${type}-${slugify(idStem)}`;
+    // Knowhow files use prefix-<slug>.md naming (KNW-, TIP-, TPL-, etc.).
+    // Keep the full stem (including prefix) to avoid collisions when multiple
+    // prefixed files share the same timestamp slug (e.g. KNW-20260427-1912 vs
+    // DCS-20260427-1912 both slugifying to the same value).
+    const id = `${type}-${slugify(stem)}`;
 
     return {
       id,

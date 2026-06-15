@@ -1,17 +1,48 @@
 import type { WikiEntry } from './wiki-types.js';
 
 /**
- * BM25-lite full-text search.
- * k1 and b are the standard Lucene defaults. Tweak if ranking feels off.
+ * BM25F full-text search with per-field boosting.
+ *
+ * Uses true field-level term frequencies with independent B parameters per
+ * field, replacing the previous approach of repeating title/tags strings to
+ * simulate boosting (which distorted avgDocLength and TF distributions).
  */
 const BM25_K1 = 1.5;
-const BM25_B = 0.75;
 
 const STOP_WORDS = new Set([
   'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for',
   'is', 'it', 'with', 'as', 'at', 'by', 'be', 'are', 'was', 'were',
   'this', 'that', 'from', 'but', 'not',
 ]);
+
+// ---------------------------------------------------------------------------
+// Field configuration
+// ---------------------------------------------------------------------------
+
+type FieldName = 'title' | 'summary' | 'tags' | 'body';
+
+interface FieldConfig {
+  boost: number;
+  b: number;
+}
+
+const FIELD_CONFIGS: Record<FieldName, FieldConfig> = {
+  title:   { boost: 3,   b: 0.3  },
+  summary: { boost: 1.5, b: 0.75 },
+  tags:    { boost: 2,   b: 0    },
+  body:    { boost: 1,   b: 0.75 },
+};
+
+const KG_FIELD_CONFIGS: Record<FieldName, FieldConfig> = {
+  title:   { boost: 2, b: 0.3 },
+  summary: { boost: 0, b: 0   },
+  tags:    { boost: 1, b: 0   },
+  body:    { boost: 0, b: 0   },
+};
+
+// ---------------------------------------------------------------------------
+// Public types — kept unchanged for backward compatibility
+// ---------------------------------------------------------------------------
 
 export interface Posting {
   docId: string;
@@ -23,6 +54,10 @@ export interface InvertedIndex {
   docLengths: Map<string, number>;
   avgDocLength: number;
   totalDocs: number;
+  /** BM25F internals — opaque to external consumers. */
+  _fieldPostings?: Map<string, FieldPosting[]>;
+  _fieldLengths?: Map<string, FieldLengths>;
+  _avgFieldLengths?: FieldLengths;
 }
 
 export interface SearchResult {
@@ -30,18 +65,24 @@ export interface SearchResult {
   score: number;
 }
 
-// CJK character range: CJK Unified Ideographs + CJK Extension A.
-// Used to detect runs that need n-gram splitting (BM25 can't match
-// otherwise — a single 4-char Chinese term would never overlap a 2-char
-// query substring). Hiragana/katakana/hangul are out of scope for now.
+// ---------------------------------------------------------------------------
+// Internal BM25F types
+// ---------------------------------------------------------------------------
+
+type FieldLengths = Record<FieldName, number>;
+
+interface FieldPosting {
+  docId: string;
+  fieldTfs: Record<FieldName, number>;
+}
+
+// ---------------------------------------------------------------------------
+// CJK support
+// ---------------------------------------------------------------------------
+
 const CJK_RUN = /[一-鿿㐀-䶿]+/g;
 const HAS_CJK = /[一-鿿㐀-䶿]/;
 
-/**
- * Extract 2- and 3-char n-grams from a CJK run. 2/3 covers the majority of
- * Chinese terms while keeping the inverted index size bounded; 4+ grams
- * explode postings without proportional recall gain.
- */
 function cjkNgrams(run: string): string[] {
   const out: string[] = [];
   for (let n = 2; n <= 3; n++) {
@@ -53,15 +94,6 @@ function cjkNgrams(run: string): string[] {
   return out;
 }
 
-/**
- * Tokenize into lowercase terms. Strategy:
- *   1. Lowercase, split on non-word chars (\p{L}\p{N})
- *   2. For each chunk: if contains CJK → emit 2/3-char n-grams; otherwise
- *      keep the chunk if it passes length + stop-word filters.
- *
- * Query and document use the same function so n-grams from both sides
- * intersect in the inverted index → BM25 ranking works for CJK corpora.
- */
 export function tokenize(text: string): string[] {
   if (!text) return [];
   const out: string[] = [];
@@ -69,8 +101,6 @@ export function tokenize(text: string): string[] {
   for (const p of parts) {
     if (!p) continue;
     if (HAS_CJK.test(p)) {
-      // A chunk may mix CJK and Latin (e.g. "用户auth"); slice each CJK run
-      // for n-gram emission and keep any Latin remainder as its own token.
       const cjkRuns = p.match(CJK_RUN) ?? [];
       for (const run of cjkRuns) {
         for (const g of cjkNgrams(run)) out.push(g);
@@ -88,63 +118,121 @@ export function tokenize(text: string): string[] {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Field text extraction
+// ---------------------------------------------------------------------------
+
 function isKgVirtual(entry: WikiEntry): boolean {
   const vk = entry.ext?.virtualKind;
   return vk === 'kg-node' || vk === 'kg-layer' || vk === 'kg-tour-step';
 }
 
-function documentText(entry: WikiEntry): string {
-  // KG virtual entries: index only title + tags to avoid code identifiers
-  // polluting search results for natural-language wiki queries.
-  if (isKgVirtual(entry)) {
-    return [
-      entry.title, entry.title,  // 2x title (vs 3x for regular entries)
-      entry.tags.join(' '),
-      entry.category ?? '',
-    ].join(' ');
-  }
-  return [
-    entry.title, entry.title, entry.title,  // 3x title weight
-    entry.summary,
-    entry.tags.join(' '), entry.tags.join(' '),  // 2x tags weight
-    entry.category ?? '',
-    entry.body,
-  ].join(' ');
+function extractFieldTexts(entry: WikiEntry): Record<FieldName, string> {
+  return {
+    title: entry.title,
+    summary: entry.summary,
+    tags: entry.tags.join(' ') + (entry.category ? ' ' + entry.category : ''),
+    body: entry.body,
+  };
 }
 
+function getFieldConfigs(entry: WikiEntry): Record<FieldName, FieldConfig> {
+  return isKgVirtual(entry) ? KG_FIELD_CONFIGS : FIELD_CONFIGS;
+}
+
+// ---------------------------------------------------------------------------
+// Index building
+// ---------------------------------------------------------------------------
+
 export function buildInvertedIndex(entries: WikiEntry[]): InvertedIndex {
+  const fieldPostings = new Map<string, FieldPosting[]>();
+  const fieldLengths = new Map<string, FieldLengths>();
+
+  // Legacy flat postings + docLengths for backward-compat consumers
   const postings = new Map<string, Posting[]>();
   const docLengths = new Map<string, number>();
   let totalLength = 0;
 
+  const totalFieldLengths: FieldLengths = { title: 0, summary: 0, tags: 0, body: 0 };
+  const fields: FieldName[] = ['title', 'summary', 'tags', 'body'];
+
   for (const entry of entries) {
-    const tokens = tokenize(documentText(entry));
-    docLengths.set(entry.id, tokens.length);
-    totalLength += tokens.length;
+    const texts = extractFieldTexts(entry);
+    const configs = getFieldConfigs(entry);
 
-    const termCounts = new Map<string, number>();
-    for (const t of tokens) termCounts.set(t, (termCounts.get(t) ?? 0) + 1);
+    const perField: Record<FieldName, Map<string, number>> = {
+      title: new Map(), summary: new Map(), tags: new Map(), body: new Map(),
+    };
+    const lengths: FieldLengths = { title: 0, summary: 0, tags: 0, body: 0 };
 
-    for (const [term, tf] of termCounts) {
-      let list = postings.get(term);
-      if (!list) {
-        list = [];
-        postings.set(term, list);
+    const flatTermCounts = new Map<string, number>();
+
+    for (const f of fields) {
+      if (configs[f].boost === 0) continue;
+      const tokens = tokenize(texts[f]);
+      lengths[f] = tokens.length;
+      totalFieldLengths[f] += tokens.length;
+      for (const t of tokens) {
+        perField[f].set(t, (perField[f].get(t) ?? 0) + 1);
+        flatTermCounts.set(t, (flatTermCounts.get(t) ?? 0) + 1);
       }
+    }
+
+    fieldLengths.set(entry.id, lengths);
+
+    // Build field-level postings
+    const allTerms = new Set<string>();
+    for (const f of fields) {
+      for (const t of perField[f].keys()) allTerms.add(t);
+    }
+    for (const term of allTerms) {
+      let list = fieldPostings.get(term);
+      if (!list) { list = []; fieldPostings.set(term, list); }
+      list.push({
+        docId: entry.id,
+        fieldTfs: {
+          title: perField.title.get(term) ?? 0,
+          summary: perField.summary.get(term) ?? 0,
+          tags: perField.tags.get(term) ?? 0,
+          body: perField.body.get(term) ?? 0,
+        },
+      });
+    }
+
+    // Flat postings for legacy compatibility
+    const flatTotal = [...flatTermCounts.values()].reduce((a, b) => a + b, 0);
+    docLengths.set(entry.id, flatTotal);
+    totalLength += flatTotal;
+    for (const [term, tf] of flatTermCounts) {
+      let list = postings.get(term);
+      if (!list) { list = []; postings.set(term, list); }
       list.push({ docId: entry.id, tf });
     }
   }
 
   const totalDocs = entries.length;
-  const avgDocLength = totalDocs === 0 ? 0 : totalLength / totalDocs;
+  const avgFieldLengths: FieldLengths = {
+    title: totalDocs ? totalFieldLengths.title / totalDocs : 0,
+    summary: totalDocs ? totalFieldLengths.summary / totalDocs : 0,
+    tags: totalDocs ? totalFieldLengths.tags / totalDocs : 0,
+    body: totalDocs ? totalFieldLengths.body / totalDocs : 0,
+  };
 
-  return { postings, docLengths, avgDocLength, totalDocs };
+  return {
+    postings,
+    docLengths,
+    avgDocLength: totalDocs === 0 ? 0 : totalLength / totalDocs,
+    totalDocs,
+    _fieldPostings: fieldPostings,
+    _fieldLengths: fieldLengths,
+    _avgFieldLengths: avgFieldLengths,
+  };
 }
 
-/**
- * BM25 score for a single query against a pre-built inverted index.
- * Returns results sorted by score descending, limited to `limit`.
- */
+// ---------------------------------------------------------------------------
+// BM25F scoring
+// ---------------------------------------------------------------------------
+
 export function searchBM25(
   index: InvertedIndex,
   query: string,
@@ -153,18 +241,64 @@ export function searchBM25(
   const terms = tokenize(query);
   if (terms.length === 0 || index.totalDocs === 0) return [];
 
+  // Use BM25F when field data is available, otherwise fall back to flat BM25
+  if (index._fieldPostings && index._fieldLengths && index._avgFieldLengths) {
+    return searchBM25F(index, terms, limit);
+  }
+  return searchBM25Flat(index, terms, limit);
+}
+
+function searchBM25F(index: InvertedIndex, terms: string[], limit: number): SearchResult[] {
+  const fp = index._fieldPostings!;
+  const fl = index._fieldLengths!;
+  const afl = index._avgFieldLengths!;
+  const fields: FieldName[] = ['title', 'summary', 'tags', 'body'];
+
+  const scores = new Map<string, number>();
+  for (const term of terms) {
+    const postings = fp.get(term);
+    if (!postings || postings.length === 0) continue;
+
+    const df = postings.length;
+    const idf = Math.log(1 + (index.totalDocs - df + 0.5) / (df + 0.5));
+
+    for (const { docId, fieldTfs } of postings) {
+      const docFL = fl.get(docId);
+      if (!docFL) continue;
+
+      // BM25F: compute weighted pseudo-TF across all fields
+      let tfTilde = 0;
+      for (const f of fields) {
+        const boost = FIELD_CONFIGS[f].boost;
+        const b = FIELD_CONFIGS[f].b;
+        if (boost === 0 || fieldTfs[f] === 0) continue;
+        const norm = 1 - b + b * (docFL[f] / (afl[f] || 1));
+        tfTilde += boost * (fieldTfs[f] / (norm || 1));
+      }
+
+      const termScore = idf * ((tfTilde * (BM25_K1 + 1)) / (tfTilde + BM25_K1));
+      scores.set(docId, (scores.get(docId) ?? 0) + termScore);
+    }
+  }
+
+  const ranked: SearchResult[] = [];
+  for (const [docId, score] of scores) ranked.push({ docId, score });
+  ranked.sort((a, b) => b.score - a.score || a.docId.localeCompare(b.docId));
+  return ranked.slice(0, limit);
+}
+
+function searchBM25Flat(index: InvertedIndex, terms: string[], limit: number): SearchResult[] {
   const scores = new Map<string, number>();
   for (const term of terms) {
     const postings = index.postings.get(term);
     if (!postings || postings.length === 0) continue;
 
-    // BM25 idf: ln(1 + (N - df + 0.5) / (df + 0.5))
     const df = postings.length;
     const idf = Math.log(1 + (index.totalDocs - df + 0.5) / (df + 0.5));
 
     for (const { docId, tf } of postings) {
       const dl = index.docLengths.get(docId) ?? 0;
-      const denom = tf + BM25_K1 * (1 - BM25_B + (BM25_B * dl) / (index.avgDocLength || 1));
+      const denom = tf + BM25_K1 * (1 - BM25_K1 + (BM25_K1 * dl) / (index.avgDocLength || 1));
       const termScore = idf * ((tf * (BM25_K1 + 1)) / (denom || 1));
       scores.set(docId, (scores.get(docId) ?? 0) + termScore);
     }

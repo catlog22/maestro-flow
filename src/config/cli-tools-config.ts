@@ -331,6 +331,41 @@ export function resolveProxyEnv(
   return env;
 }
 
+/**
+ * Quick TCP probe to check if the proxy is reachable.
+ * Returns true if a connection can be established within the timeout.
+ */
+export async function checkProxyReachable(
+  proxyUrl: string,
+  timeoutMs = 3000,
+): Promise<boolean> {
+  let host: string;
+  let port: number;
+  try {
+    const url = new URL(proxyUrl);
+    host = url.hostname;
+    port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80);
+  } catch {
+    return false;
+  }
+
+  const { createConnection } = await import('node:net');
+  return new Promise<boolean>((resolve) => {
+    const socket = createConnection({ host, port, timeout: timeoutMs }, () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.on('error', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.on('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
+
 /** Load global and workspace configs separately (un-merged) for introspection. */
 export async function loadConfigSources(workDir?: string): Promise<{
   globalPath: string;
