@@ -2,7 +2,7 @@
 // 参考: plan-maestrograph.md CLI 命令设计 + src/commands/kg.ts (现有命令)
 
 import type { Command } from 'commander';
-import { existsSync } from 'node:fs';
+import { existsSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MaestroGraph } from '../engine.js';
 import { searchUnified, parseQuery } from '../query/search.js';
@@ -372,5 +372,173 @@ export function registerKgCommands(program: Command): void {
       } finally {
         mg.close();
       }
+    });
+
+  // ── migrate ──────────────────────────────────────────────────────
+  kg
+    .command('migrate')
+    .description('Migrate legacy knowledge sources to MaestroGraph')
+    .option('--dry-run', 'Show what would be migrated without writing')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      const projectRoot = resolve('.');
+      const workflowRoot = resolve(projectRoot, '.workflow');
+
+      // Detect legacy sources
+      const legacySources = [
+        {
+          name: 'codegraph-sqlite',
+          path: resolve(projectRoot, '.codegraph'),
+          estimateNodes: (p: string) => existsSync(p) ? 50 : 0,
+        },
+        {
+          name: 'specs',
+          path: resolve(workflowRoot, 'specs'),
+          estimateNodes: (p: string) => {
+            if (!existsSync(p)) return 0;
+            try {
+              const { readdirSync } = require('node:fs');
+              return readdirSync(p).filter((f: string) => f.endsWith('.md')).length;
+            } catch { return 0; }
+          },
+        },
+        {
+          name: 'knowhow',
+          path: resolve(workflowRoot, 'knowhow'),
+          estimateNodes: (p: string) => {
+            if (!existsSync(p)) return 0;
+            try {
+              const { readdirSync } = require('node:fs');
+              return readdirSync(p).filter((f: string) => f.endsWith('.md')).length;
+            } catch { return 0; }
+          },
+        },
+        {
+          name: 'domain-glossary',
+          path: resolve(workflowRoot, 'domain', 'glossary.json'),
+          estimateNodes: (p: string) => {
+            if (!existsSync(p)) return 0;
+            try {
+              const { readFileSync } = require('node:fs');
+              const data = JSON.parse(readFileSync(p, 'utf-8'));
+              return Array.isArray(data) ? data.length : Object.keys(data).length;
+            } catch { return 0; }
+          },
+        },
+        {
+          name: 'issues',
+          path: resolve(workflowRoot, 'issues', 'issues.jsonl'),
+          estimateNodes: (p: string) => {
+            if (!existsSync(p)) return 0;
+            try {
+              const { readFileSync } = require('node:fs');
+              return readFileSync(p, 'utf-8').trim().split('\n').filter(Boolean).length;
+            } catch { return 0; }
+          },
+        },
+      ];
+
+      const detected = legacySources.map(s => ({
+        name: s.name,
+        path: s.path,
+        detected: existsSync(s.path),
+        estimatedNodes: s.estimateNodes(s.path),
+      }));
+
+      if (opts.dryRun) {
+        if (opts.json) {
+          console.log(JSON.stringify({ dryRun: true, sources: detected }, null, 2));
+          return;
+        }
+        console.log('Legacy source detection (dry run):');
+        for (const s of detected) {
+          const icon = s.detected ? '✓' : '✗';
+          console.log(`  ${icon} ${s.name}: ${s.path} (${s.estimatedNodes} estimated nodes)`);
+        }
+        return;
+      }
+
+      const hasAny = detected.some(s => s.detected);
+      if (!hasAny) {
+        console.log('No legacy sources detected. Nothing to migrate.');
+        return;
+      }
+
+      console.log('Migrating legacy sources to MaestroGraph...');
+      const startMs = Date.now();
+
+      const results = await syncKnowledgeGraph(projectRoot);
+
+      const durationMs = Date.now() - startMs;
+      const totalNodes = results.reduce((sum, r) => sum + r.nodesAdded, 0);
+      const totalEdges = results.reduce((sum, r) => sum + r.edgesAdded, 0);
+
+      if (opts.json) {
+        console.log(JSON.stringify({
+          sources: detected,
+          results,
+          summary: { nodesImported: totalNodes, edgesCreated: totalEdges, durationMs },
+        }, null, 2));
+        return;
+      }
+
+      console.log('Sources detected:');
+      for (const s of detected) {
+        const icon = s.detected ? '✓' : '✗';
+        console.log(`  ${icon} ${s.name} (${s.estimatedNodes} estimated nodes)`);
+      }
+      console.log('\nMigration results:');
+      for (const r of results) {
+        console.log(`  ${r.source}: +${r.nodesAdded} nodes, +${r.edgesAdded} edges (${r.durationMs}ms)`);
+      }
+      console.log(`\nTotal: ${totalNodes} nodes imported, ${totalEdges} edges created in ${durationMs}ms`);
+    });
+
+  // ── rebuild ──────────────────────────────────────────────────────
+  kg
+    .command('rebuild')
+    .description('Rebuild MaestroGraph database from scratch')
+    .option('--json', 'Output as JSON')
+    .option('--confirm', 'Skip confirmation warning')
+    .action(async (opts) => {
+      const projectRoot = resolve('.');
+      const dbPath = getKgDatabasePath(projectRoot);
+
+      if (existsSync(dbPath)) {
+        if (!opts.confirm) {
+          console.log(`⚠ Existing database will be deleted: ${dbPath}`);
+          console.log('  Use --confirm to suppress this warning.');
+        }
+        unlinkSync(dbPath);
+        console.log('Deleted existing database.');
+      }
+
+      console.log('Rebuilding MaestroGraph from scratch...');
+      const startMs = Date.now();
+
+      // Create fresh DB
+      const mg = await MaestroGraph.init(projectRoot);
+      mg.close();
+
+      // Full sync from all sources
+      const results = await syncKnowledgeGraph(projectRoot, { full: true });
+
+      const durationMs = Date.now() - startMs;
+      const totalNodes = results.reduce((sum, r) => sum + r.nodesAdded, 0);
+      const totalEdges = results.reduce((sum, r) => sum + r.edgesAdded, 0);
+
+      if (opts.json) {
+        console.log(JSON.stringify({
+          results,
+          summary: { nodesImported: totalNodes, edgesCreated: totalEdges, durationMs },
+        }, null, 2));
+        return;
+      }
+
+      console.log('\nRebuild results:');
+      for (const r of results) {
+        console.log(`  ${r.source}: +${r.nodesAdded} nodes, +${r.edgesAdded} edges (${r.durationMs}ms)`);
+      }
+      console.log(`\nTotal: ${totalNodes} nodes, ${totalEdges} edges rebuilt in ${durationMs}ms`);
     });
 }

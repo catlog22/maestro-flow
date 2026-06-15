@@ -5,6 +5,8 @@
 import type Database from 'better-sqlite3';
 import type { UnifiedEdge, EdgeProvenance } from '../db/types.js';
 import { makeNodeId } from '../db/connection.js';
+import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 
 // D3.5: 通用名称黑名单 — 降权处理
 const GENERIC_NAMES = new Set([
@@ -29,7 +31,7 @@ export interface KnowledgeResolutionResult {
   durationMs: number;
 }
 
-export function resolveKnowledgeEdges(db: Database.Database): KnowledgeResolutionResult {
+export function resolveKnowledgeEdges(db: Database.Database, options?: { projectPath?: string }): KnowledgeResolutionResult {
   const startMs = Date.now();
   const allEdges: UnifiedEdge[] = [];
 
@@ -65,12 +67,17 @@ export function resolveKnowledgeEdges(db: Database.Database): KnowledgeResolutio
     })();
   }
 
+  // D6.1: resolution.jsonl 可观测性日志
+  if (options?.projectPath && allEdges.length > 0) {
+    logResolutionEdges(options.projectPath, allEdges);
+  }
+
   return {
     definesEdges: allEdges.filter(e => e.kind === 'defines').length,
     constrainsEdges: allEdges.filter(e => e.kind === 'constrains').length,
     documentsEdges: allEdges.filter(e => e.kind === 'documents').length,
-    derivedFromEdges: 0,  // 已在提取时建立
-    relatesToEdges: 0,     // 已在提取时建立
+    derivedFromEdges: 0,
+    relatesToEdges: 0,
     totalEdgesCreated: allEdges.length,
     durationMs: Date.now() - startMs,
   };
@@ -270,4 +277,27 @@ export function expandRelated(
   }
 
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// D6.1: Resolution 可观测性日志 — .workflow/kg/resolution.jsonl
+// ---------------------------------------------------------------------------
+
+function logResolutionEdges(projectPath: string, edges: UnifiedEdge[]): void {
+  const logPath = resolve(projectPath, '.workflow', 'kg', 'resolution.jsonl');
+  const dir = dirname(logPath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+  const ts = new Date().toISOString();
+  const lines = edges.map(e => JSON.stringify({
+    timestamp: ts,
+    rule: e.kind,
+    sourceId: e.source,
+    targetId: e.target,
+    confidence: (e.metadata as Record<string, unknown>)?.confidence ?? 'exact',
+    matchDetail: (e.metadata as Record<string, unknown>)?.matchedKeyword
+      ?? (e.metadata as Record<string, unknown>)?.matchedTerm ?? '',
+  }));
+
+  appendFileSync(logPath, lines.join('\n') + '\n', 'utf-8');
 }

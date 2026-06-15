@@ -174,7 +174,7 @@ export async function syncKnowledgeGraph(
     // ── Cross-source edge resolution ────────────────────────────────
 
     const resolveStartMs = Date.now();
-    const resolveResult = resolveKnowledgeEdges(mg.getConnection().raw);
+    const resolveResult = resolveKnowledgeEdges(mg.getConnection().raw, { projectPath });
     results.push({
       source: 'knowledge-resolution',
       nodesAdded: 0,

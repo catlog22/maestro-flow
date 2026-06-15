@@ -76,7 +76,7 @@ export class MaestroGraph {
 
   resolveKnowledgeEdges(): KnowledgeResolutionResult {
     if (!this.conn) throw new Error('MaestroGraph not open');
-    return resolveKnowledgeEdgesImpl(this.conn.raw);
+    return resolveKnowledgeEdgesImpl(this.conn.raw, { projectPath: this.projectRoot });
   }
 
   // ── Query ─────────────────────────────────────────────────────────
