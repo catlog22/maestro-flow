@@ -210,7 +210,7 @@ Update `understanding.md` §4 with pass/fail table.
    ---
    ```
 
-**Next steps:** `$odyssey-review <changed-files>`, `$odyssey-debug "<failing>"`,
+**Next steps:** `$odyssey-review-test <changed-files>`, `$odyssey-debug "<failing>"`,
 `$quality-review <phase>`, `$manage-issue list --source odyssey-planex`
 </execution>
 

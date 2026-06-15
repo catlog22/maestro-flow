@@ -1,5 +1,5 @@
 ---
-name: odyssey-review
+name: odyssey-review-test
 description: Deep review cycle — archaeology, exploration, multi-dimensional review, generalization, discovery, and detailed knowledge persistence
 argument-hint: "<target> [--scope <path>] [--dimensions <list>] [--skip-generalize] [--auto] [-y] [-c]"
 allowed-tools:
@@ -188,14 +188,82 @@ Mark `phase_goals[G1]` done. Save next state.
 
 ### A_GENERALIZE
 
-From review findings, extract generalizable patterns and scan codebase.
+举一反三: 从 review findings 中提取 pattern，多层策略扫描全项目。
 
-**Step 1 — Pattern extraction:** Pick highest-severity findings → derive pattern signature.
-Write to `session.json.pattern`.
+**Step 1 — Multi-layer pattern extraction:**
+从所有 findings 中提取可泛化的 pattern，不仅限于最高严重度：
 
-**Step 2 — Codebase scan:** Spawn 2 Agents (pattern grep + structural search).
+| Layer | 提取方式 | 示例 |
+|-------|---------|------|
+| **Syntax** | 代码模式 regex（直接 Grep） | `eval(`, `innerHTML =`, `sql.*\+` |
+| **Semantic** | 逻辑反模式描述（Agent 理解后扫描） | 缺少错误处理的 async 调用、未验证的用户输入 |
+| **Structural** | 架构级模式（文件/模块结构相似） | 相同 import 结构、相同基类但缺少 override |
 
-**Step 3 — Write understanding.md §5.** Mark `phase_goals[G3]` done.
+For each finding with severity >= medium:
+1. 判断属于哪个 layer
+2. 生成对应的 `signature`（regex for syntax, description for semantic, structure for structural）
+3. 记录到 `session.json.patterns[]`（注意是数组，非单个）
+
+Write to `session.json.patterns`:
+```json
+[
+  {"id":"P1","source_finding":"F1","layer":"syntax|semantic|structural","signature":"","description":"","risk":"","fix_template":""}
+]
+```
+
+**Step 2 — Multi-strategy codebase scan (4 parallel Agents):**
+
+Spawn 4 Agents in single message:
+
+| Agent | 策略 | 输入 | 范围 |
+|-------|------|------|------|
+| Syntax grep | Grep syntax-layer patterns | P*.signature (regex) | `--scope` 或全项目 |
+| Semantic scan | 理解 semantic-layer 描述，逐文件检查同类问题 | P*.description | 相关模块 |
+| Structural match | 找结构相似的文件，检查是否有相同反模式 | 原始 finding 的文件结构特征 | 全项目 |
+| Historical grep | `git log -S "{pattern}" --oneline` 查找曾经引入/修复同类问题的历史 | P*.signature | git 全历史 |
+
+Each agent returns: `[{pattern_id, file, line, context, risk_level, layer, confidence}]`
+
+**Step 3 — Cross-layer dedup + risk assessment:**
+- 同一 file:line 被多个 layer 命中 → 提升 confidence（交叉验证）
+- 仅单 layer 命中 → 标记 `needs_review`
+- Historical grep 命中已修复记录 → 标记 `regression_risk`
+
+**Step 4 — CLI-assisted pattern validation (optional):**
+```bash
+maestro delegate "PURPOSE: Validate generalization patterns from code review
+TASK: For each pattern, verify if the scan hits are true positives | Identify false positives | Assess regression risk
+MODE: analysis
+CONTEXT: @{hit_files} | Patterns: {patterns_summary} | Original findings: {source_findings}
+EXPECTED: JSON [{pattern_id, hit_file, verdict (true_positive|false_positive|uncertain), explanation}]
+CONSTRAINTS: Conservative — when uncertain, classify as true_positive
+" --role analyze --mode analysis
+```
+Run_in_background, STOP, wait for callback. Update hit classifications.
+
+**Step 5 — Write understanding.md §5:**
+- Per-pattern summary: layer, signature, hit count, true positive rate
+- Cross-layer reinforcement matrix（哪些 pattern 被多 layer 验证）
+- Risk heatmap: files with most pattern hits
+- Regression indicators from historical grep
+
+**Step 6 — Generalization statistics to session.json:**
+```json
+{
+  "generalization_stats": {
+    "patterns_extracted": 0,
+    "total_hits": 0,
+    "true_positives": 0,
+    "false_positives": 0,
+    "uncertain": 0,
+    "cross_layer_confirmed": 0,
+    "regression_risks": 0,
+    "by_layer": {"syntax": 0, "semantic": 0, "structural": 0}
+  }
+}
+```
+
+Mark `phase_goals[G3]` done.
 
 ### A_DISCOVER
 

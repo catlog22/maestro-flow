@@ -350,7 +350,7 @@ Max iterations (default 3) prevents infinite loops. Each iteration records:
 <next_step_routing>
 | Condition | Next step |
 |-----------|-----------|
-| All criteria passed | `/odyssey-review <changed-files>` |
+| All criteria passed | `/odyssey-review-test <changed-files>` |
 | Max iterations, still failing | `/odyssey-debug "<failing criterion>"` |
 | Want formal review | `/quality-review <phase>` |
 | Issues from fix cycles | `/manage-issue list --source planex-odyssey` |

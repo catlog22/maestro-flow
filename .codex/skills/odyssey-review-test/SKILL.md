@@ -1,5 +1,5 @@
 ---
-name: odyssey-review
+name: odyssey-review-test
 description: Deep review cycle — archaeology, exploration, multi-dimensional review, generalization, discovery, and detailed knowledge persistence
 argument-hint: "<target> [--scope <path>] [--dimensions <list>] [--skip-generalize] [--auto] [-y] [-c]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
@@ -97,7 +97,7 @@ id,title,description,task_type,dimension,deps,wave,status,findings,evidence,erro
 **Waves:**
 - Wave 1: Archaeology (git-timeline, git-blame) — parallel
 - Wave 2: Review dimensions (correctness, security, performance, architecture) — parallel
-- Wave 3: Generalization (pattern-grep, structural-search) — parallel
+- Wave 3: Generalization — 4 agents (syntax-grep, semantic-scan, structural-match, historical-grep) — parallel
 </csv_schema>
 
 <invariants>
@@ -172,22 +172,64 @@ Update `understanding.md` §4. Mark `phase_goals[G1]` done.
 
 ### Stage 5: Generalization (S_GENERALIZE)
 
-Skip if `--skip-generalize`. From top findings → extract pattern → scan codebase.
+Skip if `--skip-generalize`. 举一反三：多层泛化策略扫描全项目。
 
-Append Wave 3 rows to `tasks.csv`:
+**Step 1 — Multi-layer pattern extraction:**
+从 severity >= medium 的 findings 中提取 pattern，按 3 层分类：
+
+| Layer | 提取方式 | 示例 |
+|-------|---------|------|
+| **Syntax** | regex 直接 Grep | `eval(`, `innerHTML =` |
+| **Semantic** | Agent 理解反模式后扫描 | 缺少错误处理的 async 调用 |
+| **Structural** | 文件/模块结构相似 | 相同基类缺少 override |
+
+Write `session.json.patterns[]`:
+```json
+[{"id":"P1","source_finding":"F1","layer":"syntax|semantic|structural","signature":"","description":"","risk":"","fix_template":""}]
+```
+
+**Step 2 — Multi-strategy scan (spawn_agents_on_csv, Wave 3):**
+
+Append Wave 3 rows — 4 agents parallel:
 ```csv
-"gen-pattern","Pattern Grep","Grep for pattern signature across project","generalization","","","3","pending","","",""
-"gen-structural","Structural Search","Find files with same anti-pattern","generalization","","","3","pending","","",""
+"gen-syntax","Syntax Grep","Grep syntax-layer pattern signatures across project","generalization","syntax","","3","pending","","",""
+"gen-semantic","Semantic Scan","Understand semantic-layer descriptions, check related modules for same anti-pattern","generalization","semantic","","3","pending","","",""
+"gen-structural","Structural Match","Find files with similar imports/structure, check for same anti-pattern","generalization","structural","","3","pending","","",""
+"gen-historical","Historical Grep","git log -S pattern to find introduction/fix history of similar issues","generalization","historical","","3","pending","","",""
 ```
 
 ```javascript
 spawn_agents_on_csv({ csv_path: "tasks.csv", id_column: "id",
   instruction: GENERALIZATION_INSTRUCTION + TERMINATION_CONTRACT,
-  max_concurrency: 2, max_runtime_seconds: 300,
+  max_concurrency: 4, max_runtime_seconds: 600,
   output_csv_path: "wave-3-results.csv", output_schema: SHARED_OUTPUT_SCHEMA })
 ```
 
-Write `understanding.md` §5. Mark `phase_goals[G3]` done.
+**Step 3 — Cross-layer dedup + risk assessment:**
+- 同一 file:line 多 layer 命中 → 提升 confidence（交叉验证）
+- 仅单 layer 命中 → 标 `needs_review`
+- Historical 命中已修复记录 → 标 `regression_risk`
+
+**Step 4 — CLI pattern validation (optional):**
+```bash
+maestro delegate "PURPOSE: Validate generalization patterns
+TASK: Verify scan hits are true positives | Identify false positives | Assess regression risk
+MODE: analysis
+CONTEXT: @{hit_files} | Patterns: {patterns} | Original findings: {source}
+EXPECTED: JSON [{pattern_id, hit_file, verdict (true_positive|false_positive|uncertain)}]
+" --role analyze --mode analysis
+```
+Run_in_background, STOP, wait.
+
+**Step 5 — Write understanding.md §5:**
+Per-pattern summary, cross-layer matrix, risk heatmap, regression indicators.
+
+Write `session.json.generalization_stats`:
+```json
+{"patterns_extracted":0,"total_hits":0,"true_positives":0,"false_positives":0,"cross_layer_confirmed":0,"regression_risks":0,"by_layer":{"syntax":0,"semantic":0,"structural":0}}
+```
+
+Mark `phase_goals[G3]` done.
 
 ### Stage 6: Discovery (S_DISCOVER)
 
