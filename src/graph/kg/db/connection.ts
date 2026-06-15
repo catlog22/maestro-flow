@@ -51,6 +51,12 @@ export class KgDatabaseConnection {
 
   close(): void {
     if (this.db) {
+      try {
+        this.db.pragma('mmap_size = 0');
+        this.db.pragma('wal_checkpoint(TRUNCATE)');
+      } catch (err) {
+        console.warn('[MaestroGraph] checkpoint failed on close:', (err as Error).message);
+      }
       this.db.close();
       this.db = null;
     }
@@ -58,14 +64,16 @@ export class KgDatabaseConnection {
 
   private applyPragmas(): void {
     const db = this.raw;
-    // D1.4: 跨进程写锁保护 — busy_timeout 5s
     db.pragma('busy_timeout = 5000');
     db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');
     db.pragma('synchronous = NORMAL');
     db.pragma('cache_size = -64000');
     db.pragma('temp_store = MEMORY');
-    db.pragma('mmap_size = 268435456');
+    // Windows 上 mmap 会锁定文件阻止扩容，导致 WAL checkpoint 失败 → DB 损坏
+    if (process.platform !== 'win32') {
+      db.pragma('mmap_size = 268435456');
+    }
   }
 
   private loadSchema(): void {

@@ -189,21 +189,25 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS nodes_ad AFTER DELETE ON nodes BEGIN
     INSERT INTO code_fts(code_fts, rowid, id, name, qualified_name, docstring, signature)
-    VALUES ('delete', OLD.rowid, OLD.id, OLD.name, OLD.qualified_name, OLD.docstring, OLD.signature);
+    SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.qualified_name, OLD.docstring, OLD.signature
+    WHERE OLD.source_type = 'codegraph';
 
     INSERT INTO knowledge_fts(knowledge_fts, rowid, id, name, definition, body, aliases, keywords)
-    VALUES ('delete', OLD.rowid, OLD.id, OLD.name, OLD.definition, OLD.body, OLD.aliases, OLD.keywords);
+    SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.definition, OLD.body, OLD.aliases, OLD.keywords
+    WHERE OLD.source_type != 'codegraph';
 END;
 
 CREATE TRIGGER IF NOT EXISTS nodes_au AFTER UPDATE ON nodes BEGIN
     INSERT INTO code_fts(code_fts, rowid, id, name, qualified_name, docstring, signature)
-    VALUES ('delete', OLD.rowid, OLD.id, OLD.name, OLD.qualified_name, OLD.docstring, OLD.signature);
+    SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.qualified_name, OLD.docstring, OLD.signature
+    WHERE OLD.source_type = 'codegraph';
     INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature)
     SELECT NEW.rowid, NEW.id, NEW.name, NEW.qualified_name, NEW.docstring, NEW.signature
     WHERE NEW.source_type = 'codegraph';
 
     INSERT INTO knowledge_fts(knowledge_fts, rowid, id, name, definition, body, aliases, keywords)
-    VALUES ('delete', OLD.rowid, OLD.id, OLD.name, OLD.definition, OLD.body, OLD.aliases, OLD.keywords);
+    SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.definition, OLD.body, OLD.aliases, OLD.keywords
+    WHERE OLD.source_type != 'codegraph';
     INSERT INTO knowledge_fts(rowid, id, name, definition, body, aliases, keywords)
     SELECT NEW.rowid, NEW.id, NEW.name, NEW.definition, NEW.body, NEW.aliases, NEW.keywords
     WHERE NEW.source_type != 'codegraph';
