@@ -193,7 +193,7 @@ export function registerInstallCommand(program: Command): void {
 function forceInstall(
   pkgRoot: string,
   version: string,
-  opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; codegraph?: boolean; statusline?: boolean | string },
+  opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string },
 ): void {
   console.error(t.install.forceVersion.replace('{version}', version));
   console.error('');

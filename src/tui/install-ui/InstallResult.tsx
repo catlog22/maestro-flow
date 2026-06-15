@@ -67,7 +67,7 @@ export function InstallResult({ result }: InstallResultProps) {
           <Row label="Agy Hooks:" value={t.install.resultHooks.replace('{count}', String(result.agyHooksInstalled))} />
         )}
         <Row
-          label="CodeGraph:"
+          label="Code Analysis:"
           value={
             result.codegraphInstalled
               ? t.install.resultCodeGraphInstalled

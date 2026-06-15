@@ -185,12 +185,10 @@ export function buildHubItems(
     },
     {
       id: 'codegraph',
-      label: 'CodeGraph',
+      label: 'Code Analysis',
       enabled: enabled.codegraph,
       summary: enabled.codegraph
-        ? (summaries.codegraphAvailable
-          ? 'built-in (MaestroGraph tree-sitter)'
-          : 'MaestroGraph tree-sitter (built-in)')
+        ? 'MaestroGraph tree-sitter (built-in)'
         : t.install.hubSkipped,
     },
     {
