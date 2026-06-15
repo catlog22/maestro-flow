@@ -23,12 +23,28 @@ Core philosophy:
 - **Evidence-based progress** — every iteration logged with pass/fail per criterion
 </purpose>
 
+<boundary>
+**范围内:** 单一需求的实现闭环 — 从需求解析到验收标准全部通过 + 泛化同类场景
+**范围外:** 多需求编排 → `/maestro-roadmap` | 深度 debugging → `/odyssey-debug` | 代码审查 → `/odyssey-review-test-fix` | UI 优化 → `/odyssey-ui`
+**探索自由度:** 边界内自由探索 — 可自主分解任务、选择实现策略、迭代修复。verify→fix 循环内可尝试不同方案。
+**模板支持:** `--template <name>` 从预定义需求模板启动，自动生成匹配的验收标准和任务分解：
+
+| Template | 预设 criteria 模式 | 适用场景 |
+|----------|-------------------|---------|
+| `feature` | 用户故事验收 + 边界测试 + UI 验证 | 新功能开发 |
+| `bugfix` | 回归测试 + 根因确认 + 边界覆盖 | Bug 修复 |
+| `refactor` | 行为不变验证 + 性能基准 + API 兼容 | 重构 |
+| `migration` | 数据一致性 + 回滚验证 + 性能对比 | 数据/API 迁移 |
+| `api-endpoint` | 请求/响应契约 + 错误处理 + 权限校验 | API 开发 |
+</boundary>
+
 <context>
 $ARGUMENTS — requirement description and optional flags.
 
 **Flags:**
 | Flag | Description | Default |
 |------|-------------|---------|
+| `--template <name>` | 预定义需求模板 | — |
 | `--max-iterations N` | Max verify→fix cycles before escalation | 3 |
 | `--skip-generalize` | Skip S_GENERALIZE + S_DISCOVER | false |
 | `--auto` | CLI delegate calls without confirmation | false |

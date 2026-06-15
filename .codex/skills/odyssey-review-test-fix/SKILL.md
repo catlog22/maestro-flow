@@ -18,6 +18,12 @@ targeted fixes, codebase-wide generalization, decision journal. `--skip-fix` for
 - **CLI-assisted** — delegate for multi-angle analysis
 </purpose>
 
+<boundary>
+**范围内:** 目标代码多维度审查 → 修复 critical/high → 泛化 pattern
+**范围外:** 深度根因 → `$odyssey-debug` | 需求实现 → `$odyssey-planex` | UI 优化 → `$odyssey-ui`
+**探索自由度:** 边界内自由 — 跨维度关联、追溯历史、泛化全项目。修复仅限 critical/high。
+</boundary>
+
 <context>
 $ARGUMENTS — target and optional flags.
 

@@ -26,10 +26,25 @@ Core philosophy:
 Entry: `/odyssey-debug "issue"` (full cycle) | `-c` (resume) | `--skip-fix` (analysis-only)
 </purpose>
 
+<boundary>
+**范围内:** 单一 bug/issue 的完整闭环 — 考古 → 探索 → 诊断 → 修复 → 确认 → 泛化同类 → 沉淀
+**范围外:** 新功能开发 → `/odyssey-planex` | 代码质量审查 → `/odyssey-review-test-fix` | UI 视觉优化 → `/odyssey-ui` | 架构重设计 → `/maestro-plan`
+**探索自由度:** 边界内自由探索 — 可追踪任意调用链、分析任意历史、测试任意假设。泛化阶段可扫描全项目寻找同类问题。
+**模板支持:** `--template <name>` 从预定义调查策略启动，跳过假设生成直接进入针对性诊断：
+
+| Template | 调查策略 | 适用场景 |
+|----------|---------|---------|
+| `performance` | profiling → hot path → allocation → cache | 性能劣化 |
+| `memory-leak` | heap snapshot → retention chain → lifecycle | 内存泄漏 |
+| `race-condition` | timeline → concurrent access → lock analysis | 竞态条件 |
+| `regression` | git bisect → diff analysis → boundary check | 回归问题 |
+| `crash` | stack trace → null chain → error propagation | 崩溃/异常 |
+</boundary>
+
 <context>
 $ARGUMENTS — issue description and optional flags.
 
-**Flags:** `--skip-fix` analysis-only | `--skip-generalize` quick fix | `--auto` no delegate confirmation | `-y` auto-confirm all decisions | `-c` resume last session
+**Flags:** `--skip-fix` analysis-only | `--skip-generalize` quick fix | `--template <name>` 预定义策略 | `--auto` no delegate confirmation | `-y` auto-confirm all decisions | `-c` resume last session
 
 **Session**: `SESSION_DIR = .workflow/scratch/{YYYYMMDD}-debug-odyssey-{slug}/`
 

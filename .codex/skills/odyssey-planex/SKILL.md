@@ -16,6 +16,13 @@ Core philosophy:
 - **Evidence-based progress** — every iteration logged with pass/fail per criterion
 </purpose>
 
+<boundary>
+**范围内:** 单一需求的实现闭环 — 需求 → 验收标准 → 计划 → 实现 → 验证 → 迭代 → 泛化
+**范围外:** 多需求编排 → `/maestro-roadmap` | 深度 debug → `$odyssey-debug` | 代码审查 → `$odyssey-review-test-fix` | UI 优化 → `$odyssey-ui`
+**探索自由度:** 边界内自由 — 可自主分解任务、选择实现策略、verify→fix 循环内尝试不同方案
+**模板:** `--template <name>` — feature | bugfix | refactor | migration | api-endpoint
+</boundary>
+
 <context>
 $ARGUMENTS — requirement description and optional flags.
 
@@ -23,6 +30,7 @@ $ARGUMENTS — requirement description and optional flags.
 | Flag | Description | Default |
 |------|-------------|---------|
 | `--max-iterations N` | Max verify→fix cycles before escalation | 3 |
+| `--template <name>` | 预定义需求模板 | — |
 | `--skip-generalize` | Skip S_GENERALIZE + S_DISCOVER | false |
 | `--auto` | CLI delegate calls without confirmation | false |
 | `-y` | Auto-confirm — decisions recorded as `deferred` | false |

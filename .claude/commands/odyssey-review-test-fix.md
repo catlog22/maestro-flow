@@ -25,6 +25,12 @@ automated fix, codebase-wide generalization, decision journal. Use `--skip-fix` 
 - **CLI-assisted** — delegate for multi-angle analysis and verification
 </purpose>
 
+<boundary>
+**范围内:** 目标代码的多维度深度审查 → 修复 critical/high 发现 → 泛化 pattern 到全项目
+**范围外:** 深度根因调查（根因不明时）→ `/odyssey-debug` | 需求实现 → `/odyssey-planex` | UI 视觉优化 → `/odyssey-ui`
+**探索自由度:** 边界内自由探索 — 可跨维度关联发现、追溯 git 历史、泛化扫描全项目。修复仅限 critical/high findings。
+</boundary>
+
 <context>
 $ARGUMENTS — target and optional flags.
 
