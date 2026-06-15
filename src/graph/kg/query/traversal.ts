@@ -50,24 +50,29 @@ export function bfs(
   let frontier = [startNodeId];
 
   for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
+    if (nodes.size >= maxNodes) break;
+
+    // 批量获取整层 frontier 的邻居边
+    const neighbors = getNeighborsBatch(queries, frontier, direction, edgeKinds);
+
     const nextFrontier: string[] = [];
+    const neighborIdsToLoad: string[] = [];
 
-    for (const nodeId of frontier) {
-      if (nodes.size >= maxNodes) break;
+    for (const { edge, neighborId } of neighbors) {
+      if (nodes.size + neighborIdsToLoad.length >= maxNodes) break;
+      if (visited.has(neighborId)) continue;
+      visited.add(neighborId);
+      nextFrontier.push(neighborId);
+      neighborIdsToLoad.push(neighborId);
+      edges.push(edge);
+    }
 
-      const neighbors = getNeighbors(queries, nodeId, direction, edgeKinds);
-
-      for (const { edge, neighborId } of neighbors) {
-        if (visited.has(neighborId)) continue;
-        visited.add(neighborId);
-        nextFrontier.push(neighborId);
-
-        // 加载邻居节点
-        const neighborNode = queries.getNode(neighborId);
-        if (neighborNode) nodes.set(neighborId, neighborNode);
-
-        edges.push(edge);
-      }
+    // 批量加载邻居节点
+    if (neighborIdsToLoad.length > 0) {
+      const loadedNodes = queries.getNodesByIds(neighborIdsToLoad);
+      loadedNodes.forEach((node, id) => {
+        nodes.set(id, node);
+      });
     }
 
     frontier = nextFrontier;
@@ -230,6 +235,38 @@ function getNeighbors(
       if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
       neighbors.push({ edge, neighborId: edge.source });
     }
+  }
+
+  return neighbors;
+}
+
+/** 批量获取多个节点的邻居 — 整层 frontier 一次 SQL 查询 */
+function getNeighborsBatch(
+  queries: KgQueryBuilder,
+  nodeIds: string[],
+  direction: 'outgoing' | 'incoming' | 'both',
+  edgeKinds: Set<string> | null,
+): Neighbor[] {
+  const neighbors: Neighbor[] = [];
+
+  if (direction === 'outgoing' || direction === 'both') {
+    const outgoingMap = queries.getOutgoingEdgesBatch(nodeIds);
+    outgoingMap.forEach((edges) => {
+      for (const edge of edges) {
+        if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
+        neighbors.push({ edge, neighborId: edge.target });
+      }
+    });
+  }
+
+  if (direction === 'incoming' || direction === 'both') {
+    const incomingMap = queries.getIncomingEdgesBatch(nodeIds);
+    incomingMap.forEach((edges) => {
+      for (const edge of edges) {
+        if (edgeKinds && !edgeKinds.has(edge.kind)) continue;
+        neighbors.push({ edge, neighborId: edge.source });
+      }
+    });
   }
 
   return neighbors;

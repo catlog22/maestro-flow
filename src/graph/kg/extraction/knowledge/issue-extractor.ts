@@ -79,16 +79,8 @@ export function extractIssues(
         updatedAt: now,
       });
 
-      // resolves edges — 如果 issue 有 resolution 引用代码变更
-      if (issue.fix_direction) {
-        edges.push({
-          source: nodeId,
-          target: issue.fix_direction,  // 临时, knowledge-resolver 会替换
-          kind: 'resolves',
-          provenance: 'harvest',
-          metadata: { fixDirection: issue.fix_direction, pendingResolution: true },
-        });
-      }
+      // resolves edges 由 knowledge-resolver 负责建立
+      // 不在提取阶段创建 pending edges（FK 约束要求 target 必须是有效 nodeId）
     } catch {
       // 解析失败的行跳过
     }

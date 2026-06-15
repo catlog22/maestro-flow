@@ -240,11 +240,18 @@ function phase5_5_interfaceDispatch(
   const classes = adapter.getNodesByKind('class');
   const abstractTypes = [...interfaces, ...traits, ...protocols];
 
+  // 预缓存：一次性加载所有 method 节点，按 id 索引
+  const allMethods = adapter.getNodesByKind('method');
+  const methodById = new Map<string, { id: string; name: string; qualifiedName: string; filePath: string }>();
+  for (const m of allMethods) {
+    methodById.set(m.id, m);
+  }
+
   for (const abs of abstractTypes) {
     const absOutgoing = adapter.getOutgoingEdges(abs.id, 'contains');
     const absMethods = new Map<string, string>();
     for (const edge of absOutgoing) {
-      const methodNode = adapter.getNodesByKind('method').find(n => n.id === edge.target);
+      const methodNode = methodById.get(edge.target);
       if (methodNode) absMethods.set(methodNode.name, methodNode.id);
     }
     if (absMethods.size === 0) continue;
@@ -257,7 +264,7 @@ function phase5_5_interfaceDispatch(
 
       const clsOutgoing = adapter.getOutgoingEdges(cls.id, 'contains');
       for (const ce of clsOutgoing) {
-        const clsMethod = adapter.getNodesByKind('method').find(n => n.id === ce.target);
+        const clsMethod = methodById.get(ce.target);
         if (clsMethod && absMethods.has(clsMethod.name)) {
           edges.push({
             source: absMethods.get(clsMethod.name)!,

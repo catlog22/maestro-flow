@@ -75,23 +75,24 @@ export function registerKgCommands(program: Command): void {
     .action(async (text: string, opts) => {
       const mg = await MaestroGraph.open(resolve('.'));
       try {
-        const results = mg.searchUnified(text, {
+        const output = mg.searchUnified(text, {
           sourceTypes: opts.source?.split(','),
-          limit: Number(opts.limit) || 20,
+          limit: Math.min(Number(opts.limit) || 20, 500),
         });
+        const results = output.directMatches;
 
         if (opts.json) {
           console.log(JSON.stringify({ query: text, results: results.map(r => ({
-            id: r.id, kind: r.kind, name: r.name, sourceType: r.sourceType,
-            definition: r.definition.substring(0, 200),
-          }))}, null, 2));
+            id: r.node.id, kind: r.node.kind, name: r.node.name, sourceType: r.node.sourceType,
+            definition: r.node.definition.substring(0, 200), score: r.score,
+          })), summary: output.summary }, null, 2));
           return;
         }
 
         console.log(`Query: "${text}" (${results.length} results)`);
         for (const r of results) {
-          const def = r.definition ? ` — ${r.definition.substring(0, 80)}` : '';
-          console.log(`  [${r.sourceType}:${r.kind}] ${r.name}${def}`);
+          const def = r.node.definition ? ` — ${r.node.definition.substring(0, 80)}` : '';
+          console.log(`  [${r.node.sourceType}:${r.node.kind}] ${r.node.name}${def}`);
         }
       } finally {
         mg.close();
@@ -113,16 +114,8 @@ export function registerKgCommands(program: Command): void {
           process.exit(1);
         }
 
-        // 图遍历获取关联节点
-        const { KgQueryBuilder } = await import('../db/queries.js');
-        const { KgDatabaseConnection } = await import('../db/connection.js');
-        const conn = new KgDatabaseConnection();
-        conn.open(getKgDatabasePath(resolve('.')));
-        const queries = new KgQueryBuilder(conn);
-
-        const traversal = bfs(queries, nodeId, {
-          maxDepth: Number(opts.depth) || 1,
-          maxNodes: 50,
+        const traversal = mg.traverse(nodeId, {
+          maxDepth: Math.min(Number(opts.depth) || 1, 10),
         });
 
         if (opts.json) {
@@ -133,7 +126,6 @@ export function registerKgCommands(program: Command): void {
             })),
             edges: traversal.edges,
           }, null, 2));
-          conn.close();
           return;
         }
 
@@ -148,8 +140,6 @@ export function registerKgCommands(program: Command): void {
             console.log(`  [${related.sourceType}:${related.kind}] ${related.name}`);
           }
         }
-
-        conn.close();
       } finally {
         mg.close();
       }
@@ -161,31 +151,28 @@ export function registerKgCommands(program: Command): void {
     .description('Find shortest path between two nodes')
     .option('--json', 'Output as JSON')
     .action(async (fromId: string, toId: string, opts) => {
-      const { KgQueryBuilder } = await import('../db/queries.js');
-      const { KgDatabaseConnection } = await import('../db/connection.js');
-      const conn = new KgDatabaseConnection();
-      conn.open(getKgDatabasePath(resolve('.')));
-      const queries = new KgQueryBuilder(conn);
+      const mg = await MaestroGraph.open(resolve('.'));
+      try {
+        const queries = mg.getQueryBuilder();
+        const path = findShortestPath(queries, fromId, toId);
 
-      const path = findShortestPath(queries, fromId, toId);
-
-      if (opts.json) {
-        console.log(JSON.stringify({ from: fromId, to: toId, path }, null, 2));
-        conn.close();
-        return;
-      }
-
-      if (!path) {
-        console.log(`No path found from ${fromId} to ${toId}`);
-      } else {
-        console.log(`Path (${path.length} hops):`);
-        for (const nodeId of path) {
-          const node = queries.getNode(nodeId);
-          console.log(`  [${node?.sourceType ?? '?'}:${node?.kind ?? '?'}] ${node?.name ?? nodeId}`);
+        if (opts.json) {
+          console.log(JSON.stringify({ from: fromId, to: toId, path }, null, 2));
+          return;
         }
-      }
 
-      conn.close();
+        if (!path) {
+          console.log(`No path found from ${fromId} to ${toId}`);
+        } else {
+          console.log(`Path (${path.length} hops):`);
+          for (const nodeId of path) {
+            const node = mg.getNode(nodeId);
+            console.log(`  [${node?.sourceType ?? '?'}:${node?.kind ?? '?'}] ${node?.name ?? nodeId}`);
+          }
+        }
+      } finally {
+        mg.close();
+      }
     });
 
   // ── callers ───────────────────────────────────────────────────────
@@ -195,28 +182,24 @@ export function registerKgCommands(program: Command): void {
     .option('--depth <n>', 'Traversal depth', '1')
     .option('--json', 'Output as JSON')
     .action(async (nodeId: string, opts) => {
-      const { KgQueryBuilder } = await import('../db/queries.js');
-      const { KgDatabaseConnection } = await import('../db/connection.js');
-      const conn = new KgDatabaseConnection();
-      conn.open(getKgDatabasePath(resolve('.')));
-      const queries = new KgQueryBuilder(conn);
+      const mg = await MaestroGraph.open(resolve('.'));
+      try {
+        const callers = mg.getCallers(nodeId, Math.min(Number(opts.depth) || 1, 10));
 
-      const callers = getCallers(queries, nodeId, Number(opts.depth) || 1);
+        if (opts.json) {
+          console.log(JSON.stringify(callers.map(c => ({
+            id: c.node.id, name: c.node.name, kind: c.node.kind, edgeKind: c.edge.kind,
+          })), null, 2));
+          return;
+        }
 
-      if (opts.json) {
-        console.log(JSON.stringify(callers.map(c => ({
-          id: c.node.id, name: c.node.name, kind: c.node.kind, edgeKind: c.edge.kind,
-        })), null, 2));
-        conn.close();
-        return;
+        console.log(`Callers of ${nodeId} (${callers.length}):`);
+        for (const { node, edge } of callers) {
+          console.log(`  [${node.kind}] ${node.name} --${edge.kind}-->`);
+        }
+      } finally {
+        mg.close();
       }
-
-      console.log(`Callers of ${nodeId} (${callers.length}):`);
-      for (const { node, edge } of callers) {
-        console.log(`  [${node.kind}] ${node.name} --${edge.kind}-->`);
-      }
-
-      conn.close();
     });
 
   // ── callees ───────────────────────────────────────────────────────
@@ -226,28 +209,24 @@ export function registerKgCommands(program: Command): void {
     .option('--depth <n>', 'Traversal depth', '1')
     .option('--json', 'Output as JSON')
     .action(async (nodeId: string, opts) => {
-      const { KgQueryBuilder } = await import('../db/queries.js');
-      const { KgDatabaseConnection } = await import('../db/connection.js');
-      const conn = new KgDatabaseConnection();
-      conn.open(getKgDatabasePath(resolve('.')));
-      const queries = new KgQueryBuilder(conn);
+      const mg = await MaestroGraph.open(resolve('.'));
+      try {
+        const callees = mg.getCallees(nodeId, Math.min(Number(opts.depth) || 1, 10));
 
-      const callees = getCallees(queries, nodeId, Number(opts.depth) || 1);
+        if (opts.json) {
+          console.log(JSON.stringify(callees.map(c => ({
+            id: c.node.id, name: c.node.name, kind: c.node.kind, edgeKind: c.edge.kind,
+          })), null, 2));
+          return;
+        }
 
-      if (opts.json) {
-        console.log(JSON.stringify(callees.map(c => ({
-          id: c.node.id, name: c.node.name, kind: c.node.kind, edgeKind: c.edge.kind,
-        })), null, 2));
-        conn.close();
-        return;
+        console.log(`Callees of ${nodeId} (${callees.length}):`);
+        for (const { node, edge } of callees) {
+          console.log(`  --${edge.kind}--> [${node.kind}] ${node.name}`);
+        }
+      } finally {
+        mg.close();
       }
-
-      console.log(`Callees of ${nodeId} (${callees.length}):`);
-      for (const { node, edge } of callees) {
-        console.log(`  --${edge.kind}--> [${node.kind}] ${node.name}`);
-      }
-
-      conn.close();
     });
 
   // ── impact ────────────────────────────────────────────────────────
@@ -257,31 +236,27 @@ export function registerKgCommands(program: Command): void {
     .option('--depth <n>', 'Max depth', '3')
     .option('--json', 'Output as JSON')
     .action(async (nodeId: string, opts) => {
-      const { KgQueryBuilder } = await import('../db/queries.js');
-      const { KgDatabaseConnection } = await import('../db/connection.js');
-      const conn = new KgDatabaseConnection();
-      conn.open(getKgDatabasePath(resolve('.')));
-      const queries = new KgQueryBuilder(conn);
+      const mg = await MaestroGraph.open(resolve('.'));
+      try {
+        const impact = mg.getImpact(nodeId, Math.min(Number(opts.depth) || 3, 10));
 
-      const impact = getImpactRadius(queries, nodeId, Number(opts.depth) || 3);
+        if (opts.json) {
+          console.log(JSON.stringify({
+            nodeCount: impact.nodes.size,
+            edgeCount: impact.edges.length,
+            nodes: [...impact.nodes.values()].map(n => ({ id: n.id, kind: n.kind, name: n.name })),
+          }, null, 2));
+          return;
+        }
 
-      if (opts.json) {
-        console.log(JSON.stringify({
-          nodeCount: impact.nodes.size,
-          edgeCount: impact.edges.length,
-          nodes: [...impact.nodes.values()].map(n => ({ id: n.id, kind: n.kind, name: n.name })),
-        }, null, 2));
-        conn.close();
-        return;
+        console.log(`Impact radius for ${nodeId}: ${impact.nodes.size} nodes, ${impact.edges.length} edges`);
+        for (const node of impact.nodes.values()) {
+          if (node.id === nodeId) continue;
+          console.log(`  [${node.sourceType}:${node.kind}] ${node.name}`);
+        }
+      } finally {
+        mg.close();
       }
-
-      console.log(`Impact radius for ${nodeId}: ${impact.nodes.size} nodes, ${impact.edges.length} edges`);
-      for (const node of impact.nodes.values()) {
-        if (node.id === nodeId) continue;
-        console.log(`  [${node.sourceType}:${node.kind}] ${node.name}`);
-      }
-
-      conn.close();
     });
 
   // ── stats ─────────────────────────────────────────────────────────

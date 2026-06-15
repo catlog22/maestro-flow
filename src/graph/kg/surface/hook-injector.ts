@@ -4,7 +4,10 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { KgDatabaseConnection, getKgDatabasePath } from '../db/connection.js';
+import { createRequire } from 'node:module';
+import { getKgDatabasePath } from '../db/connection.js';
+
+const esmRequire = createRequire(import.meta.url);
 import { buildContext, getAgentCategories } from '../query/context-builder.js';
 import type { BuiltContext, ContextSection } from '../query/context-builder.js';
 import { precheckKg } from './mcp-tools.js';
@@ -67,48 +70,44 @@ export async function evaluateUnifiedInjection(
   }
 
   try {
-    const { KgQueryBuilder } = await import('../db/queries.js');
-    const { KgDatabaseConnection } = await import('../db/connection.js');
-    const conn = new KgDatabaseConnection();
-    conn.open(getKgDatabasePath(projectPath));
-    const queries = new KgQueryBuilder(conn);
+    const { MaestroGraph } = await import('../engine.js');
+    const mg = await MaestroGraph.open(projectPath);
 
-    // Step 1: FTS5 搜索 — 一次查询覆盖所有知识层
-    const context = buildContext(queries, prompt, {
-      expandDepth: 1,
-      agentType: agentType ?? undefined,
-    });
+    let context: Awaited<ReturnType<typeof buildContext>>;
+    try {
+      const queries = mg.getQueryBuilder();
 
-    // Step 2: Agent-type 特化 — PreToolUse 时加载 role-based spec
-    if (agentType) {
-      const categories = getAgentCategories(agentType);
-      if (categories.length > 0) {
-        // 追加 role-specific specs
-        const roleSpecs = queries.searchKnowledgeFTS(agentType, {
-          limit: 5,
-          sourceTypes: ['spec' as any], // eslint-disable-line @typescript-eslint/no-explicit-any
-        });
-        if (roleSpecs.length > 0) {
-          context.sections.push({
-            label: `role-specs[${categories.join(',')}]`,
-            lines: roleSpecs.map(s => `[spec:${s.category}] ${s.name}: ${s.definition.substring(0, 200)}`),
-            sourceType: 'spec',
-            relevance: 5,
+      context = buildContext(queries, prompt, {
+        expandDepth: 1,
+        agentType: agentType ?? undefined,
+      });
+
+      if (agentType) {
+        const categories = getAgentCategories(agentType);
+        if (categories.length > 0) {
+          const roleSpecs = queries.searchKnowledgeFTS(agentType, {
+            limit: 5,
+            sourceTypes: ['spec' as any], // eslint-disable-line @typescript-eslint/no-explicit-any
           });
+          if (roleSpecs.length > 0) {
+            context.sections.push({
+              label: `role-specs[${categories.join(',')}]`,
+              lines: roleSpecs.map(s => `[spec:${s.category}] ${s.name}: ${s.definition.substring(0, 200)}`),
+              sourceType: 'spec',
+              relevance: 5,
+            });
+          }
         }
       }
+    } finally {
+      mg.close();
     }
 
-    conn.close();
-
-    // Step 3: 组装输出
     if (context.sections.length === 0) {
       return { inject: false, reason: 'no-relevant-context' };
     }
 
-    const content = formatMaestroContext(context);
-
-    return { inject: true, content };
+    return { inject: true, content: formatMaestroContext(context) };
   } catch (err) {
     if (process.env.DEBUG) {
       console.warn('[MaestroGraph] Unified injection error:', err);
@@ -168,25 +167,28 @@ function isUnifiedInjectorEnabled(projectPath: string): boolean {
 // D6.3: 快速损坏检测 (< 50ms)
 // ---------------------------------------------------------------------------
 
-let _healthCache: { ts: number; ok: boolean } | null = null;
+const _healthCache = new Map<string, { ts: number; ok: boolean }>();
 const HEALTH_CACHE_TTL = 60_000; // 60 秒
 
 function quickHealthCheck(projectPath: string): boolean {
   const now = Date.now();
-  if (_healthCache && now - _healthCache.ts < HEALTH_CACHE_TTL) {
-    return _healthCache.ok;
+  const cacheKey = projectPath;
+  const cached = _healthCache.get(cacheKey);
+  if (cached && now - cached.ts < HEALTH_CACHE_TTL) {
+    return cached.ok;
   }
 
   try {
-    const conn = new KgDatabaseConnection();
-    conn.open(getKgDatabasePath(projectPath));
-    const qc = conn.raw.prepare('PRAGMA quick_check(1)').get();
+    const Database = esmRequire('better-sqlite3');
+    const dbPath = getKgDatabasePath(projectPath);
+    const db = new Database(dbPath, { readonly: true });
+    const qc = db.prepare('PRAGMA quick_check(1)').get();
     const ok = qc && (qc as Record<string, unknown>).quick_check === 'ok';
-    conn.close();
-    _healthCache = { ts: now, ok: Boolean(ok) };
+    db.close();
+    _healthCache.set(cacheKey, { ts: now, ok: Boolean(ok) });
     return Boolean(ok);
   } catch {
-    _healthCache = { ts: now, ok: false };
+    _healthCache.set(cacheKey, { ts: now, ok: false });
     return false;
   }
 }

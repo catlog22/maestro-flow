@@ -36,6 +36,8 @@ export async function syncKnowledgeGraph(
     };
 
     // ── Knowledge sources (优先同步) ───────────────────────────────
+    // 同步前清理旧节点（ON DELETE CASCADE 会级联删除关联 edges）
+    const queries = mg.getQueryBuilder();
 
     if (shouldSync('domain')) {
       const startMs = Date.now();
@@ -43,14 +45,18 @@ export async function syncKnowledgeGraph(
         resolve(workflowRoot, 'domain', 'glossary.json'),
         workflowRoot,
       );
-      if (domainResult.nodes.length > 0) {
-        mg.insertExtractionResults(domainResult);
-      }
+      const removed = mg.getConnection().transaction(() => {
+        const n = queries.deleteNodesBySourceType('domain');
+        if (domainResult.nodes.length > 0) {
+          mg.insertExtractionResults(domainResult);
+        }
+        return n;
+      });
       results.push({
         source: 'domain',
         nodesAdded: domainResult.nodes.length,
         nodesUpdated: 0,
-        nodesRemoved: 0,
+        nodesRemoved: removed,
         edgesAdded: domainResult.edges.length,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
@@ -61,14 +67,18 @@ export async function syncKnowledgeGraph(
       const startMs = Date.now();
       const specDir = resolve(workflowRoot, 'specs');
       const specResult = extractSpec(specDir, workflowRoot);
-      if (specResult.nodes.length > 0) {
-        mg.insertExtractionResults(specResult);
-      }
+      const removed = mg.getConnection().transaction(() => {
+        const n = queries.deleteNodesBySourceType('spec');
+        if (specResult.nodes.length > 0) {
+          mg.insertExtractionResults(specResult);
+        }
+        return n;
+      });
       results.push({
         source: 'spec',
         nodesAdded: specResult.nodes.length,
         nodesUpdated: 0,
-        nodesRemoved: 0,
+        nodesRemoved: removed,
         edgesAdded: specResult.edges.length,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
@@ -79,14 +89,18 @@ export async function syncKnowledgeGraph(
       const startMs = Date.now();
       const knowhowDir = resolve(workflowRoot, 'knowhow');
       const wikiResult = extractWiki(knowhowDir, workflowRoot);
-      if (wikiResult.nodes.length > 0) {
-        mg.insertExtractionResults(wikiResult);
-      }
+      const removed = mg.getConnection().transaction(() => {
+        const n = queries.deleteNodesBySourceType('knowhow');
+        if (wikiResult.nodes.length > 0) {
+          mg.insertExtractionResults(wikiResult);
+        }
+        return n;
+      });
       results.push({
         source: 'knowhow',
         nodesAdded: wikiResult.nodes.length,
         nodesUpdated: 0,
-        nodesRemoved: 0,
+        nodesRemoved: removed,
         edgesAdded: wikiResult.edges.length,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
@@ -97,14 +111,18 @@ export async function syncKnowledgeGraph(
       const startMs = Date.now();
       const codebaseDir = resolve(workflowRoot, 'codebase');
       const codebaseResult = extractCodebase(codebaseDir, workflowRoot);
-      if (codebaseResult.nodes.length > 0) {
-        mg.insertExtractionResults(codebaseResult);
-      }
+      const removed = mg.getConnection().transaction(() => {
+        const n = queries.deleteNodesBySourceType('codebase');
+        if (codebaseResult.nodes.length > 0) {
+          mg.insertExtractionResults(codebaseResult);
+        }
+        return n;
+      });
       results.push({
         source: 'codebase',
         nodesAdded: codebaseResult.nodes.length,
         nodesUpdated: 0,
-        nodesRemoved: 0,
+        nodesRemoved: removed,
         edgesAdded: codebaseResult.edges.length,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
@@ -115,14 +133,18 @@ export async function syncKnowledgeGraph(
       const startMs = Date.now();
       const issuesPath = resolve(workflowRoot, 'issues', 'issues.jsonl');
       const issueResult = extractIssues(issuesPath, workflowRoot);
-      if (issueResult.nodes.length > 0) {
-        mg.insertExtractionResults(issueResult);
-      }
+      const removed = mg.getConnection().transaction(() => {
+        const n = queries.deleteNodesBySourceType('issue');
+        if (issueResult.nodes.length > 0) {
+          mg.insertExtractionResults(issueResult);
+        }
+        return n;
+      });
       results.push({
         source: 'issue',
         nodesAdded: issueResult.nodes.length,
         nodesUpdated: 0,
-        nodesRemoved: 0,
+        nodesRemoved: removed,
         edgesAdded: issueResult.edges.length,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,

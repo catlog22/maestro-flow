@@ -277,6 +277,12 @@ export class KgQueryBuilder {
     ).run(sourceType, filePath).changes;
   }
 
+  deleteNodesBySourceType(sourceType: SourceType): number {
+    return this.db.prepare(
+      'DELETE FROM nodes WHERE source_type = ?'
+    ).run(sourceType).changes;
+  }
+
   // ── Edge CRUD ──────────────────────────────────────────────────────
 
   insertEdge(edge: UnifiedEdge): void {
@@ -334,6 +340,44 @@ export class KgQueryBuilder {
       'SELECT * FROM edges WHERE target = ?'
     ).all(nodeId) as EdgeRow[];
     return rows.map(rowToEdge);
+  }
+
+  getOutgoingEdgesBatch(nodeIds: string[]): Map<string, UnifiedEdge[]> {
+    const result = new Map<string, UnifiedEdge[]>();
+    if (nodeIds.length === 0) return result;
+    for (const id of nodeIds) result.set(id, []);
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < nodeIds.length; i += BATCH_SIZE) {
+      const batch = nodeIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT * FROM edges WHERE source IN (${placeholders})`
+      ).all(...batch) as EdgeRow[];
+      for (const row of rows) {
+        const edge = rowToEdge(row);
+        result.get(edge.source)?.push(edge);
+      }
+    }
+    return result;
+  }
+
+  getIncomingEdgesBatch(nodeIds: string[]): Map<string, UnifiedEdge[]> {
+    const result = new Map<string, UnifiedEdge[]>();
+    if (nodeIds.length === 0) return result;
+    for (const id of nodeIds) result.set(id, []);
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < nodeIds.length; i += BATCH_SIZE) {
+      const batch = nodeIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map(() => '?').join(',');
+      const rows = this.db.prepare(
+        `SELECT * FROM edges WHERE target IN (${placeholders})`
+      ).all(...batch) as EdgeRow[];
+      for (const row of rows) {
+        const edge = rowToEdge(row);
+        result.get(edge.target)?.push(edge);
+      }
+    }
+    return result;
   }
 
   deleteEdgesByProvenanceAndSource(provenance: string, sourcePrefix: string): number {
@@ -537,8 +581,9 @@ export class KgQueryBuilder {
 
   // LIKE fallback — 当 FTS5 无结果时
   private searchNodesLike(query: string, opts: { limit?: number; kinds?: string[]; languages?: string[] }): UnifiedNode[] {
-    let sql = `SELECT * FROM nodes WHERE source_type = 'codegraph' AND (name LIKE ? OR qualified_name LIKE ? OR docstring LIKE ? OR signature LIKE ?)`;
-    const params: unknown[] = [`%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`];
+    const escaped = escapeLikePattern(query);
+    let sql = `SELECT * FROM nodes WHERE source_type = 'codegraph' AND (name LIKE ? ESCAPE '\\' OR qualified_name LIKE ? ESCAPE '\\' OR docstring LIKE ? ESCAPE '\\' OR signature LIKE ? ESCAPE '\\')`;
+    const params: unknown[] = [`%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`];
     if (opts.kinds && opts.kinds.length > 0) {
       sql += ` AND kind IN (${opts.kinds.map(() => '?').join(',')})`;
       params.push(...opts.kinds);
@@ -554,8 +599,9 @@ export class KgQueryBuilder {
   }
 
   private searchKnowledgeLike(query: string, opts: { limit?: number; sourceTypes?: SourceType[] }): UnifiedNode[] {
-    let sql = `SELECT * FROM nodes WHERE source_type != 'codegraph' AND (name LIKE ? OR definition LIKE ? OR aliases LIKE ? OR keywords LIKE ? OR body LIKE ?)`;
-    const params: unknown[] = [`%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`];
+    const escaped = escapeLikePattern(query);
+    let sql = `SELECT * FROM nodes WHERE source_type != 'codegraph' AND (name LIKE ? ESCAPE '\\' OR definition LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\')`;
+    const params: unknown[] = [`%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`];
     if (opts.sourceTypes && opts.sourceTypes.length > 0) {
       sql += ` AND source_type IN (${opts.sourceTypes.map(() => '?').join(',')})`;
       params.push(...opts.sourceTypes);
@@ -565,6 +611,14 @@ export class KgQueryBuilder {
     const rows = this.db.prepare(sql).all(...params) as NodeRow[];
     return rows.map(rowToNode);
   }
+}
+
+// ---------------------------------------------------------------------------
+// LIKE 通配符转义 (AC13)
+// ---------------------------------------------------------------------------
+
+function escapeLikePattern(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&');
 }
 
 // ---------------------------------------------------------------------------

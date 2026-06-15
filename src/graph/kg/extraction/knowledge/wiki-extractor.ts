@@ -84,19 +84,8 @@ export function extractWiki(
       updatedAt: now,
     });
 
-    // documents edges — 从 keywords 匹配代码节点 (后续由 knowledge-resolver 建立)
-    // 此处只记录待解析的 keywords
-    if (fm.keywords && fm.keywords.length > 0) {
-      for (const kw of fm.keywords) {
-        edges.push({
-          source: nodeId,
-          target: kw,  // 临时 target, resolution 阶段会替换为实际 code node id
-          kind: 'documents',
-          provenance: 'knowhow',
-          metadata: { keyword: kw, pendingResolution: true },
-        });
-      }
-    }
+    // documents edges 由 knowledge-resolver 的 resolveDocumentsEdges 负责建立
+    // 不在提取阶段创建 pending edges（FK 约束要求 target 必须是有效 nodeId）
   }
 
   return {

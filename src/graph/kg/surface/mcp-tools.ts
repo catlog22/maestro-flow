@@ -185,15 +185,15 @@ export async function handleMcpTool(
 
     switch (toolName) {
       case 'maestro_kg_search': {
-        const searchResults = mg.searchUnified(safeStr(input.query, ''), {
+        const searchOutput = mg.searchUnified(safeStr(input.query, ''), {
           sourceTypes: input.sourceTypes as any, // eslint-disable-line @typescript-eslint/no-explicit-any
           limit: safeInt(input.limit, 20, 100),
         });
-        result = { results: searchResults.map(r => ({
-          id: r.id, kind: r.kind, name: r.name, sourceType: r.sourceType,
-          definition: r.definition.substring(0, 300),
-          filePath: r.filePath, startLine: r.startLine,
-        }))};
+        result = { results: searchOutput.directMatches.map(r => ({
+          id: r.node.id, kind: r.node.kind, name: r.node.name, sourceType: r.node.sourceType,
+          definition: r.node.definition.substring(0, 300),
+          filePath: r.node.filePath, startLine: r.node.startLine, score: r.score,
+        })), summary: searchOutput.summary };
         break;
       }
 

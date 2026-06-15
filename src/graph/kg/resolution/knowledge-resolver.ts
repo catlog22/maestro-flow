@@ -8,6 +8,12 @@ import { makeNodeId } from '../db/connection.js';
 import { appendFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 
+function safeJsonParse<T>(str: string | null | undefined, fallback: T): T {
+  if (!str) return fallback;
+  try { return JSON.parse(str) as T; }
+  catch { return fallback; }
+}
+
 // D3.5: 通用名称黑名单 — 降权处理
 const GENERIC_NAMES = new Set([
   'Error', 'Config', 'State', 'Event', 'Action', 'Type', 'Result',
@@ -50,13 +56,14 @@ export function resolveKnowledgeEdges(db: Database.Database, options?: { project
   // Rule 5: domain_term → domain_term (relates_to) — glossary relationships
   // (已由 domain-extractor 在提取时建立, 此处补充遗漏)
 
-  // 写入 edges
-  if (allEdges.length > 0) {
-    const stmt = db.prepare(
-      `INSERT OR IGNORE INTO edges (source, target, kind, metadata, line, col, provenance)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
-    db.transaction(() => {
+  // 幂等写入：先清除旧的 knowledge-resolver 边，再插入新边
+  db.transaction(() => {
+    db.prepare(`DELETE FROM edges WHERE provenance = 'knowledge-resolver'`).run();
+    if (allEdges.length > 0) {
+      const stmt = db.prepare(
+        `INSERT INTO edges (source, target, kind, metadata, line, col, provenance)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
       for (const edge of allEdges) {
         stmt.run(
           edge.source, edge.target, edge.kind,
@@ -64,8 +71,8 @@ export function resolveKnowledgeEdges(db: Database.Database, options?: { project
           edge.line ?? null, edge.column ?? null, edge.provenance ?? null,
         );
       }
-    })();
-  }
+    }
+  })();
 
   // D6.1: resolution.jsonl 可观测性日志
   if (options?.projectPath && allEdges.length > 0) {
@@ -96,8 +103,8 @@ function resolveDefinesEdges(db: Database.Database): UnifiedEdge[] {
 
   const allAliases: Array<{ domainId: string; alias: string; keywords: string[] }> = [];
   for (const domain of domainNodes) {
-    const aliases: string[] = JSON.parse(domain.aliases || '[]');
-    const keywords: string[] = JSON.parse(domain.keywords || '[]');
+    const aliases: string[] = safeJsonParse(domain.aliases, []);
+    const keywords: string[] = safeJsonParse(domain.keywords, []);
     for (const alias of [domain.name, ...aliases]) {
       allAliases.push({ domainId: domain.id, alias, keywords });
     }
@@ -165,34 +172,62 @@ function resolveConstrainsEdges(db: Database.Database): UnifiedEdge[] {
     `SELECT id, keywords, category FROM nodes WHERE source_type = 'spec' AND status = 'active'`
   ).all() as Array<{ id: string; keywords: string | null; category: string | null }>;
 
-  const edges: UnifiedEdge[] = [];
+  // 收集所有 spec 的 keywords，建立 keyword → spec 映射
+  const keywordToSpecs = new Map<string, Array<{ id: string; keywords: string[] }>>();
+  const allKeywords: string[] = [];
 
   for (const spec of specNodes) {
-    const keywords: string[] = JSON.parse(spec.keywords || '[]');
+    const keywords: string[] = safeJsonParse(spec.keywords, []);
     if (keywords.length === 0) continue;
+    for (const kw of keywords) {
+      if (!keywordToSpecs.has(kw)) {
+        keywordToSpecs.set(kw, []);
+        allKeywords.push(kw);
+      }
+      keywordToSpecs.get(kw)!.push({ id: spec.id, keywords });
+    }
+  }
 
-    // IN-clause 批量匹配 — name 精确 + 所有 keywords 的 file_path LIKE
-    const namePlaceholders = keywords.map(() => '?').join(',');
-    const pathClauses = keywords.map(() => `file_path LIKE '%' || ? || '%'`).join(' OR ');
-    const codeMatches = db.prepare(
+  if (allKeywords.length === 0) return [];
+
+  // 分批 IN-clause 查询代码节点 (每批 500)
+  const BATCH_SIZE = 500;
+  const allCodeMatches: Array<{ id: string; name: string; kind: string; file_path: string }> = [];
+
+  for (let i = 0; i < allKeywords.length; i += BATCH_SIZE) {
+    const batch = allKeywords.slice(i, i + BATCH_SIZE);
+    const namePlaceholders = batch.map(() => '?').join(',');
+    const pathClauses = batch.map(() => `file_path LIKE '%' || ? || '%'`).join(' OR ');
+    const matches = db.prepare(
       `SELECT id, name, kind, file_path FROM nodes
        WHERE source_type = 'codegraph'
          AND kind IN ('function', 'method', 'class', 'interface')
-         AND (name IN (${namePlaceholders}) OR ${pathClauses})
-       LIMIT 500`
-    ).all(...keywords, ...keywords) as Array<{
+         AND (name IN (${namePlaceholders}) OR ${pathClauses})`
+    ).all(...batch, ...batch) as Array<{
       id: string; name: string; kind: string; file_path: string;
     }>;
+    allCodeMatches.push(...matches);
+  }
 
-    for (const match of codeMatches) {
-      edges.push({
-        source: spec.id,
-        target: match.id,
-        kind: 'constrains',
-        provenance: 'knowledge-resolver' as EdgeProvenance,
-        metadata: { matchedKeyword: keywords.find(kw =>
-          match.name === kw || match.file_path.includes(kw)) ?? '' },
-      });
+  // 应用层关联：按 keyword 匹配 spec → code
+  const edges: UnifiedEdge[] = [];
+  const seen = new Set<string>();
+
+  for (const match of allCodeMatches) {
+    for (const [kw, specs] of keywordToSpecs) {
+      if (match.name !== kw && !match.file_path.includes(kw)) continue;
+      for (const spec of specs) {
+        const key = `${spec.id}->${match.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        edges.push({
+          source: spec.id,
+          target: match.id,
+          kind: 'constrains',
+          provenance: 'knowledge-resolver' as EdgeProvenance,
+          metadata: { matchedKeyword: kw },
+        });
+      }
     }
   }
 
@@ -208,24 +243,53 @@ function resolveDocumentsEdges(db: Database.Database): UnifiedEdge[] {
     `SELECT id, keywords, name FROM nodes WHERE source_type = 'knowhow' AND status = 'active'`
   ).all() as Array<{ id: string; keywords: string | null; name: string }>;
 
-  const edges: UnifiedEdge[] = [];
+  // 收集所有 search terms，建立 term → knowhow 映射
+  const termToKnowhows = new Map<string, string[]>();
+  const allTerms: string[] = [];
 
   for (const knowhow of knowhowNodes) {
-    const keywords: string[] = JSON.parse(knowhow.keywords || '[]');
+    const keywords: string[] = safeJsonParse(knowhow.keywords, []);
     const searchTerms = [knowhow.name, ...keywords];
-    if (searchTerms.length === 0) continue;
+    for (const term of searchTerms) {
+      if (!term) continue;
+      if (!termToKnowhows.has(term)) {
+        termToKnowhows.set(term, []);
+        allTerms.push(term);
+      }
+      termToKnowhows.get(term)!.push(knowhow.id);
+    }
+  }
 
-    const placeholders = searchTerms.map(() => '?').join(',');
-    const codeMatches = db.prepare(
+  if (allTerms.length === 0) return [];
+
+  // 分批 IN-clause 查询代码节点 (每批 500)
+  const BATCH_SIZE = 500;
+  const allCodeMatches: Array<{ id: string; name: string; kind: string }> = [];
+
+  for (let i = 0; i < allTerms.length; i += BATCH_SIZE) {
+    const batch = allTerms.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map(() => '?').join(',');
+    const matches = db.prepare(
       `SELECT id, name, kind FROM nodes
        WHERE source_type = 'codegraph'
-         AND name IN (${placeholders})
-       LIMIT 100`
-    ).all(...searchTerms) as Array<{ id: string; name: string; kind: string }>;
+         AND name IN (${placeholders})`
+    ).all(...batch) as Array<{ id: string; name: string; kind: string }>;
+    allCodeMatches.push(...matches);
+  }
 
-    for (const match of codeMatches) {
+  // 应用层关联：按 term 匹配 knowhow → code
+  const edges: UnifiedEdge[] = [];
+  const seen = new Set<string>();
+
+  for (const match of allCodeMatches) {
+    const knowhowIds = termToKnowhows.get(match.name);
+    if (!knowhowIds) continue;
+    for (const knowhowId of knowhowIds) {
+      const key = `${knowhowId}->${match.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       edges.push({
-        source: knowhow.id,
+        source: knowhowId,
         target: match.id,
         kind: 'documents',
         provenance: 'knowledge-resolver' as EdgeProvenance,
