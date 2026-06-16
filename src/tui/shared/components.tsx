@@ -105,6 +105,30 @@ export function Checkbox({ checked, highlighted }: CheckboxProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Breadcrumb — navigation path (Hub > Section > Panel)
+// ---------------------------------------------------------------------------
+
+interface BreadcrumbProps {
+  path: string[];
+}
+
+export function Breadcrumb({ path }: BreadcrumbProps) {
+  return (
+    <Box>
+      {path.map((segment, i) => (
+        <Box key={i}>
+          {i > 0 && <Text dimColor> {'>'} </Text>}
+          <Text color={i === path.length - 1 ? C.primary : C.neutral} bold={i === path.length - 1}>
+            {segment}
+          </Text>
+        </Box>
+      ))}
+      <Text dimColor>{'  '}[Esc] back</Text>
+    </Box>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // StepProgress — flow step progress indicators
 // ---------------------------------------------------------------------------
 

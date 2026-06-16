@@ -149,7 +149,10 @@ export function registerInstallCommand(program: Command): void {
     .option('--agy-hooks <level>', 'Agy (Antigravity) hook level for --force mode: none, minimal, standard, full')
     .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
     .option('--statusline [theme]', 'Install statusline with optional theme (with --force)')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string }) => {
+    .option('--export [path]', 'Export current install config as profile JSON')
+    .option('--import <path>', 'Import profile and install non-interactively')
+    .option('--load <path>', 'Load profile into interactive TUI (pre-fill state)')
+    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string; export?: boolean | string; import?: string; load?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -161,6 +164,31 @@ export function registerInstallCommand(program: Command): void {
       }
 
       const version = getVersion(pkgRoot);
+
+      // Profile export — read current manifest and dump as profile JSON
+      if (opts.export !== undefined) {
+        const { exportProfileFromManifest } = await import('../core/install-profile.js');
+        const targetPath = typeof opts.export === 'string' ? opts.export : undefined;
+        const outPath = exportProfileFromManifest(opts.global ? 'global' : 'project', targetPath);
+        console.error(`✓ Profile exported to: ${outPath}`);
+        return;
+      }
+
+      // Profile import — non-interactive install from profile
+      if (opts.import) {
+        const { importProfile } = await import('../core/install-profile.js');
+        const profile = importProfile(opts.import);
+        console.error(`Importing profile: ${profile.name} (${profile.scope})`);
+        forceInstall(pkgRoot, version, {
+          global: profile.scope === 'global',
+          hooks: profile.claude.hooks.basePreset,
+          codexHooks: profile.codex.hooks.basePreset,
+          agyHooks: profile.agy.hooks.basePreset,
+          components: profile.components.selectedIds.join(','),
+          statusline: profile.claude.statusline.enabled ? profile.claude.statusline.theme : undefined,
+        });
+        return;
+      }
 
       if (opts.force) {
         forceInstall(pkgRoot, version, opts);

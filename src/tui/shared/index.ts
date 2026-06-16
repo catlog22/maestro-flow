@@ -10,5 +10,6 @@ export {
   StatusBadge,
   CursorMarker,
   Checkbox,
+  Breadcrumb,
   StepProgress,
 } from './components.js';

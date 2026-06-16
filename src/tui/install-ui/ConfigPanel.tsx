@@ -2,8 +2,9 @@ import React, { useState, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { InstallConfig } from './types.js';
 import { McpConfig } from './McpConfig.js';
-import { HooksConfig } from './HooksConfig.js';
+import { HooksConfig, type HooksSelection } from './HooksConfig.js';
 import { BackupConfig } from './BackupConfig.js';
+import { getHooksForLevel, type HookLevel } from '../../commands/hooks.js';
 import { C, BORDER } from '../shared/index.js';
 
 // ---------------------------------------------------------------------------
@@ -97,8 +98,13 @@ export function ConfigPanel({
         )}
         {activeTab === 1 && (
           <HooksConfig
-            level={config.hookLevel}
-            onLevelChange={(level) => onConfigChange({ hookLevel: level })}
+            selection={{
+              basePreset: config.hookLevel,
+              selectedHooks: getHooksForLevel(config.hookLevel, 'claude'),
+              isCustom: false,
+            }}
+            onSelectionChange={(sel: HooksSelection) => onConfigChange({ hookLevel: sel.basePreset })}
+            tool="claude"
           />
         )}
         {activeTab === 2 && (

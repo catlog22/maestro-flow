@@ -134,6 +134,41 @@ function hookIncludedInLevel(hookLevel: HookLevel, targetLevel: HookLevel): bool
   return LEVEL_ORDER[hookLevel] <= LEVEL_ORDER[targetLevel];
 }
 
+/** Return hook names included at a given level for a specific tool (claude/codex/agy). */
+export function getHooksForLevel(
+  level: HookLevel,
+  tool: 'claude' | 'codex' | 'agy' = 'claude',
+): string[] {
+  if (level === 'none') return [];
+  const defs = tool === 'codex' ? CODEX_HOOK_DEFS
+    : tool === 'agy' ? AGY_HOOK_DEFS
+    : HOOK_DEFS;
+  return Object.entries(defs)
+    .filter(([, def]) => hookIncludedInLevel(def.level, level))
+    .map(([name]) => name);
+}
+
+/** Return all hook names for a specific tool. */
+export function getAllHookNames(tool: 'claude' | 'codex' | 'agy' = 'claude'): string[] {
+  const defs = tool === 'codex' ? CODEX_HOOK_DEFS
+    : tool === 'agy' ? AGY_HOOK_DEFS
+    : HOOK_DEFS;
+  return Object.keys(defs);
+}
+
+/** Get the hook event and level info for display. */
+export function getHookInfo(
+  hookName: string,
+  tool: 'claude' | 'codex' | 'agy' = 'claude',
+): { event: string; level: HookLevel; matcher?: string } | null {
+  const defs = tool === 'codex' ? CODEX_HOOK_DEFS
+    : tool === 'agy' ? AGY_HOOK_DEFS
+    : HOOK_DEFS;
+  const def = defs[hookName];
+  if (!def) return null;
+  return { event: def.event, level: def.level, matcher: def.matcher };
+}
+
 // ---------------------------------------------------------------------------
 // Settings helpers
 // ---------------------------------------------------------------------------

@@ -26,8 +26,8 @@ export const C = {
 /** Standardized UI symbols */
 export const SYM = {
   // Multi-select checkboxes
-  checkOn: '[x]',
-  checkOff: '[ ]',
+  checkOn: '✓',
+  checkOff: '·',
   // Single-select radio
   radioOn: '●',
   radioOff: '○',
@@ -35,9 +35,9 @@ export const SYM = {
   cursor: '▸',
   cursorBlank: ' ',
   // Step progress
-  stepDone: '[x]',
-  stepActive: '[>]',
-  stepPending: '[ ]',
+  stepDone: '✓',
+  stepActive: '▸',
+  stepPending: '·',
   // Status indicators
   enabled: '✓',
   disabled: '✗',

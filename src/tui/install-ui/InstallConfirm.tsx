@@ -2,11 +2,12 @@ import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { HookLevel } from '../../commands/hooks.js';
 import type { ExtraMcpTargetId } from '../../commands/install-backend.js';
+import type { HooksSelection } from './HooksConfig.js';
 import { t } from '../../i18n/index.js';
-import { C, BORDER } from '../shared/index.js';
+import { C, SYM, BORDER } from '../shared/index.js';
 
 // ---------------------------------------------------------------------------
-// InstallConfirm — summary before execution
+// InstallConfirm — summary before execution, split into Will Install / Skipped
 // ---------------------------------------------------------------------------
 
 export interface InstallFlowConfig {
@@ -36,6 +37,10 @@ export interface InstallFlowConfig {
   mcpProjectRoot: string;
   backupClaudeMd: boolean;
   backupAll: boolean;
+  // Granular hook selections
+  claudeHooksSelection?: HooksSelection;
+  codexHooksSelection?: HooksSelection;
+  agyHooksSelection?: HooksSelection;
 }
 
 interface InstallConfirmProps {
@@ -47,10 +52,29 @@ interface InstallConfirmProps {
 function Row({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
     <Box>
-      <Text bold>{label.padEnd(14)}</Text>
+      <Text color={C.success}>{SYM.checkOn} </Text>
+      <Text bold>{label.padEnd(16)}</Text>
       <Text color={valueColor}>{value}</Text>
     </Box>
   );
+}
+
+function SkippedRow({ label }: { label: string }) {
+  return (
+    <Box>
+      <Text color={C.neutral}>{SYM.checkOff} </Text>
+      <Text color={C.neutral}>{label}</Text>
+    </Box>
+  );
+}
+
+function hookSummary(sel?: HooksSelection, fallbackLevel?: HookLevel): string {
+  if (sel) {
+    return sel.isCustom
+      ? `custom (${sel.selectedHooks.length} hooks, based on ${sel.basePreset})`
+      : `${sel.basePreset} (${sel.selectedHooks.length} hooks)`;
+  }
+  return fallbackLevel ?? 'standard';
 }
 
 export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProps) {
@@ -63,115 +87,80 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
     ? '~/.maestro/ + ~/.claude/'
     : config.projectPath || './';
 
+  // Collect items that will be installed vs skipped
+  const willInstall: { label: string; value: string }[] = [];
+  const skipped: string[] = [];
+
+  if (config.installComponents) {
+    willInstall.push({ label: 'Components', value: `${config.componentCount} selected · ${config.fileCount} files` });
+  } else { skipped.push('Components'); }
+
+  if (config.installHooks) {
+    willInstall.push({ label: 'Hooks (Claude)', value: hookSummary(config.claudeHooksSelection, config.hookLevel) });
+  } else { skipped.push('Hooks (Claude)'); }
+
+  if (config.installMcp) {
+    willInstall.push({ label: 'MCP Server', value: `${config.mcpToolCount} tools` });
+  } else { skipped.push('MCP Server'); }
+
+  if (config.installStatusline) {
+    willInstall.push({ label: 'Statusline', value: `${config.statuslineTheme} theme` });
+  } else { skipped.push('Statusline'); }
+
+  if (config.installCodexHooks) {
+    willInstall.push({ label: 'Codex Hooks', value: hookSummary(config.codexHooksSelection, config.codexHookLevel) });
+  } else { skipped.push('Codex Hooks'); }
+
+  if (config.installCodexMcp) {
+    willInstall.push({ label: 'Codex MCP', value: `${config.codexMcpTools.length} tools` });
+  } else { skipped.push('Codex MCP'); }
+
+  if (config.installAgyHooks) {
+    willInstall.push({ label: 'Agy Hooks', value: hookSummary(config.agyHooksSelection, config.agyHookLevel) });
+  } else { skipped.push('Agy Hooks'); }
+
+  if (config.installExtraMcp) {
+    willInstall.push({ label: 'Extra MCP', value: `${config.extraMcpTargetIds.join(', ')}` });
+  } else { skipped.push('Extra MCP'); }
+
+  if (config.installCodeGraph) {
+    willInstall.push({ label: 'CodeGraph', value: 'built-in' });
+  }
+
+  if (config.backupClaudeMd || config.backupAll) {
+    willInstall.push({ label: 'Backup', value: config.backupAll ? t.install.backupAllLabel : t.install.backupClaudeMdLabel });
+  } else { skipped.push('Backup'); }
+
   return (
     <Box flexDirection="column">
-      <Text bold color={C.primary}>{t.install.confirmTitle}</Text>
-
-      <Box flexDirection="column" {...BORDER.primary} paddingX={1} marginTop={1}>
-        <Row label={t.install.confirmLabelMode} value={config.mode} />
-        <Row label={t.install.confirmLabelTarget} value={target} />
-
-        {config.installComponents ? (
-          <Row
-            label={t.install.confirmLabelComponents}
-            value={`${config.componentCount} selected (${t.install.hubFiles.replace('{count}', String(config.fileCount))})`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label={t.install.confirmLabelComponents} value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        {config.installHooks ? (
-          <Row
-            label={t.install.confirmLabelHooks}
-            value={`${config.hookLevel} — ${t.install.hooksLevelDescriptions[config.hookLevel]}`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label={t.install.confirmLabelHooks} value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        {config.installMcp ? (
-          <Row
-            label={t.install.confirmLabelMcp}
-            value={`${config.mcpToolCount} tools (${config.mcpTools.join(', ')})`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label={t.install.confirmLabelMcp} value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        {config.installCodexHooks ? (
-          <Row
-            label={t.install.confirmLabelCodexHooks}
-            value={`${config.codexHookLevel} — ${t.install.codexHooksLevelDescriptions[config.codexHookLevel]}`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label={t.install.confirmLabelCodexHooks} value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        {config.installCodexMcp ? (
-          <Row
-            label={t.install.confirmLabelCodexMcp}
-            value={`${config.codexMcpTools.length} tools`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label={t.install.confirmLabelCodexMcp} value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        {config.installAgyHooks ? (
-          <Row
-            label={t.install.confirmLabelAgyHooks}
-            value={`${config.agyHookLevel} — ${t.install.agyHooksLevelDescriptions[config.agyHookLevel]}`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label={t.install.confirmLabelAgyHooks} value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        {config.installExtraMcp ? (
-          <Row
-            label="Extra MCP"
-            value={`${config.extraMcpTargetIds.length} target(s): ${config.extraMcpTargetIds.join(', ')}`}
-            valueColor={C.success}
-          />
-        ) : (
-          <Row label="Extra MCP" value={t.install.confirmSkipped} valueColor={C.neutral} />
-        )}
-
-        <Row
-          label={t.install.confirmLabelCodeGraph}
-          value={config.installCodeGraph
-            ? 'MaestroGraph tree-sitter (built-in, no install needed)'
-            : t.install.confirmSkipped}
-          valueColor={config.installCodeGraph ? C.success : C.neutral}
-        />
-
-        <Row
-          label={t.install.confirmLabelStatusline}
-          value={config.installStatusline
-            ? `${t.install.statuslineEnabled} (${config.statuslineTheme})`
-            : t.install.confirmSkipped}
-          valueColor={config.installStatusline ? C.success : C.neutral}
-        />
-
-        <Row
-          label={t.install.confirmLabelBackup}
-          value={
-            config.backupAll
-              ? t.install.backupAllLabel
-              : config.backupClaudeMd
-                ? t.install.backupClaudeMdLabel
-                : t.install.confirmSkipped
-          }
-          valueColor={config.backupClaudeMd || config.backupAll ? C.success : C.neutral}
-        />
-      </Box>
+      <Text bold color={C.primary}>Ready to Install</Text>
 
       <Box marginTop={1}>
-        <Text dimColor>{t.install.footerConfirm}</Text>
+        <Text bold>Scope: </Text>
+        <Text>{config.mode}</Text>
+        <Text dimColor>  → {target}</Text>
+      </Box>
+
+      {/* Will Install section */}
+      <Box flexDirection="column" {...BORDER.success} paddingX={1} marginTop={1}>
+        <Text bold color={C.success}>Will Install</Text>
+        {willInstall.map((item) => (
+          <Row key={item.label} label={item.label} value={item.value} valueColor={C.success} />
+        ))}
+      </Box>
+
+      {/* Skipped section */}
+      {skipped.length > 0 && (
+        <Box flexDirection="column" {...BORDER.detail} paddingX={1} marginTop={1}>
+          <Text bold color={C.neutral}>Skipped</Text>
+          {skipped.map((label) => (
+            <SkippedRow key={label} label={label} />
+          ))}
+        </Box>
+      )}
+
+      <Box marginTop={1}>
+        <Text dimColor>[Enter] Confirm & Install  [Esc] Back</Text>
       </Box>
     </Box>
   );
