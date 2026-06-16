@@ -112,13 +112,15 @@ export interface LoadSpecsOptions {
   excludeKeywords?: string[];
   /** Extra spec filenames to include for the category (dynamic CATEGORY_MAP extension) */
   extraSpecFiles?: string[];
+  /** Linked workspace specs directories (read-only, inserted between global and baseline layers) */
+  linkedWorkspaces?: Array<{ name: string; specsDir: string }>;
 }
 
 export function loadSpecs(projectPath: string, category?: SpecCategory, uid?: string, keyword?: string, scope?: SpecScope, options?: LoadSpecsOptions): SpecLoadResult {
   const globalDir = options?.globalDir ?? paths.specs;
 
   // Build ordered list of (directory, label) pairs to scan
-  const layers = buildLayers(projectPath, uid, scope, globalDir);
+  const layers = buildLayers(projectPath, uid, scope, globalDir, options?.linkedWorkspaces);
 
   // Auto-init baseline and global layers.
   // Team/personal are per-user — auto-creating them for arbitrary uids is wrong.
@@ -183,11 +185,20 @@ interface LayerDef {
   label: string;
 }
 
-function buildLayers(projectPath: string, uid?: string, scope?: SpecScope, globalDir?: string): LayerDef[] {
+function buildLayers(projectPath: string, uid?: string, scope?: SpecScope, globalDir?: string, linkedWorkspaces?: Array<{ name: string; specsDir: string }>): LayerDef[] {
   const layers: LayerDef[] = [];
 
   // Global layer — always included as lowest priority
   layers.push({ dir: globalDir ?? paths.specs, label: LAYER_LABELS.global });
+
+  // Linked workspace layers — between global and baseline (read-only)
+  if (linkedWorkspaces) {
+    for (const lw of linkedWorkspaces) {
+      if (existsSync(lw.specsDir)) {
+        layers.push({ dir: lw.specsDir, label: `# Linked Specs (${lw.name})` });
+      }
+    }
+  }
 
   // Baseline — always included
   layers.push({

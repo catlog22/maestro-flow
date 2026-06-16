@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { paths } from './paths.js';
-import type { MaestroConfig, HooksConfig, SpecInjectionConfig, SpecAnalyticsConfig } from '../types/index.js';
+import type { MaestroConfig, HooksConfig, SpecInjectionConfig, SpecAnalyticsConfig, WorkspaceConfig, WorkspaceLink } from '../types/index.js';
 
 const DEFAULT_CONFIG: MaestroConfig = {
   version: '0.1.0',
@@ -75,6 +75,50 @@ export function saveAnalyticsConfig(projectPath: string, config: SpecAnalyticsCo
   const injConfig = loadSpecInjectionConfig(projectPath);
   injConfig.analytics = config;
   saveSpecInjectionConfig(projectPath, injConfig);
+}
+
+// ---------------------------------------------------------------------------
+// Workspace Config — project-level (.workflow/config.json)
+// ---------------------------------------------------------------------------
+
+export interface ResolvedWorkspaceLink extends WorkspaceLink {
+  resolvedPath: string;
+  workflowRoot: string;
+  valid: boolean;
+}
+
+export function loadWorkspaceConfig(projectPath: string): WorkspaceConfig {
+  const configPath = join(projectPath, '.workflow', 'config.json');
+  if (!existsSync(configPath)) return { linked: [] };
+  try {
+    const raw = JSON.parse(readFileSync(configPath, 'utf-8'));
+    const ws = raw.workspaces as WorkspaceConfig | undefined;
+    return ws && Array.isArray(ws.linked) ? ws : { linked: [] };
+  } catch {
+    return { linked: [] };
+  }
+}
+
+export function saveWorkspaceConfig(projectPath: string, config: WorkspaceConfig): void {
+  const configPath = join(projectPath, '.workflow', 'config.json');
+  let existing: Record<string, unknown> = {};
+  try {
+    existing = JSON.parse(readFileSync(configPath, 'utf-8'));
+  } catch {
+    // Start fresh
+  }
+  existing['workspaces'] = config;
+  paths.ensure(join(projectPath, '.workflow'));
+  writeFileSync(configPath, JSON.stringify(existing, null, 2), 'utf-8');
+}
+
+export function resolveWorkspaceLinks(projectPath: string, config: WorkspaceConfig): ResolvedWorkspaceLink[] {
+  return config.linked.map(link => {
+    const resolvedPath = resolve(projectPath, link.path);
+    const workflowRoot = join(resolvedPath, '.workflow');
+    const valid = existsSync(workflowRoot);
+    return { ...link, resolvedPath, workflowRoot, valid };
+  });
 }
 
 // ---------------------------------------------------------------------------

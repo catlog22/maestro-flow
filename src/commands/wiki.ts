@@ -19,10 +19,11 @@ import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import { WikiWriter, WikiWriteError } from '#maestro-dashboard/wiki/writer.js';
 import { computeHealth, detectOrphans, detectHubs } from '#maestro-dashboard/wiki/graph-analysis.js';
 import type { WikiEntry, WikiFilters, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
+import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 
 // Inline type to avoid cross-build dependency on dashboard dist-server.
 // Must match WikiScope in dashboard/src/server/wiki/wiki-types.ts.
-type WikiScope = 'project' | 'global' | 'team' | 'personal';
+type WikiScope = 'project' | 'global' | 'team' | 'personal' | 'linked';
 
 const DEFAULT_BASE = process.env.MAESTRO_DASHBOARD_URL ?? 'http://127.0.0.1:3001';
 
@@ -34,7 +35,13 @@ let _writer: WikiWriter | null = null;
 function getOfflineClients(): { indexer: WikiIndexer; writer: WikiWriter } {
   if (!_indexer) {
     const workflowRoot = resolve('.workflow');
-    _indexer = new WikiIndexer({ workflowRoot });
+    const projectPath = process.cwd();
+    const wsConfig = loadWorkspaceConfig(projectPath);
+    const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
+    const linkedWorkspaces = resolved
+      .filter(lw => lw.valid)
+      .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
+    _indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
     _writer = new WikiWriter(workflowRoot, _indexer);
   }
   return { indexer: _indexer!, writer: _writer! };

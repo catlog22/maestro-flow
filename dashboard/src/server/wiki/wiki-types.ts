@@ -14,7 +14,7 @@ export type WikiStatus =
   | 'blocked'
   | 'archived';
 
-export type WikiScope = 'project' | 'global' | 'team' | 'personal';
+export type WikiScope = 'project' | 'global' | 'team' | 'personal' | 'linked';
 
 export interface WikiSource {
   kind: 'file' | 'virtual';
@@ -22,6 +22,8 @@ export interface WikiSource {
   path: string;
   /** 1-based line number for virtual JSONL rows. */
   line?: number;
+  /** Name of the linked workspace this entry originates from. Undefined for local entries. */
+  workspace?: string;
 }
 
 export interface WikiEntry {
@@ -87,6 +89,8 @@ export interface WikiFilters {
   createdBy?: string;
   /** Filter for tool documents only (ext.tool === true). */
   tool?: boolean;
+  /** Filter by source workspace name. */
+  workspace?: string;
 }
 
 // ── Persisted index (written to .workflow/wiki-index.json) ────────────

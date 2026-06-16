@@ -18,6 +18,8 @@ import type { SpecInjectionConfig } from '../types/index.js';
 import { logInjectionEvent } from './spec-analytics.js';
 import { wrapMaestroContext, type ContextSection } from './context-format.js';
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
+import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
+import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Content → compact lines helper
@@ -165,6 +167,13 @@ export function evaluateSpecInjection(
   const resolvedUid = uid ?? resolveUidSafe();
   const kwFilters = resolveKeywordFilters(agentType, config);
 
+  // Resolve linked workspace specs for cross-workspace injection
+  const wsConfig = loadWorkspaceConfig(projectPath);
+  const resolvedLinks = resolveWorkspaceLinks(projectPath, wsConfig);
+  const linkedSpecs = resolvedLinks
+    .filter(lw => lw.valid && lw.share.includes('spec'))
+    .map(lw => ({ name: lw.name, specsDir: join(lw.workflowRoot, 'specs') }));
+
   const ctxSections: ContextSection[] = [];
   const allCategories: string[] = [];
   let totalCount = 0;
@@ -174,6 +183,7 @@ export function evaluateSpecInjection(
     const loaderOpts: LoadSpecsOptions = {};
     if (kwFilters.include?.length) loaderOpts.includeKeywords = kwFilters.include;
     if (kwFilters.exclude?.length) loaderOpts.excludeKeywords = kwFilters.exclude;
+    if (linkedSpecs.length > 0) loaderOpts.linkedWorkspaces = linkedSpecs;
 
     const catDocConfig = config?.categoryDocs?.[category];
     if (catDocConfig?.specFiles?.length) loaderOpts.extraSpecFiles = catDocConfig.specFiles;

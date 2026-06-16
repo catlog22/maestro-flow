@@ -28,8 +28,15 @@ import type {
 import { buildGraph, type WikiGraph } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, type InvertedIndex } from './search.js';
 
+export interface LinkedWorkspaceConfig {
+  name: string;
+  workflowRoot: string;
+  shareTypes: Array<'spec' | 'knowhow' | 'domain' | 'codebase'>;
+}
+
 export interface WikiIndexerConfig {
   workflowRoot: string;
+  linkedWorkspaces?: LinkedWorkspaceConfig[];
 }
 
 /**
@@ -45,6 +52,11 @@ export interface WikiIndexerConfig {
  */
 export class WikiIndexer {
   private readonly workflowRoot: string;
+  private readonly linkedWorkspaces: Array<{
+    name: string;
+    workflowRoot: string;
+    shareTypes: Set<string>;
+  }>;
   private cache: WikiIndex | null = null;
   private graphCache: WikiGraph | null = null;
   private searchCache: InvertedIndex | null = null;
@@ -53,6 +65,11 @@ export class WikiIndexer {
 
   constructor(config: WikiIndexerConfig) {
     this.workflowRoot = resolve(config.workflowRoot);
+    this.linkedWorkspaces = (config.linkedWorkspaces ?? []).map(lw => ({
+      name: lw.name,
+      workflowRoot: resolve(lw.workflowRoot),
+      shareTypes: new Set(lw.shareTypes),
+    }));
   }
 
   getWorkflowRoot(): string {
@@ -81,6 +98,13 @@ export class WikiIndexer {
       join(this.workflowRoot, 'issues'),
       join(this.workflowRoot, 'domain'),
     ];
+    // Include linked workspace directories in staleness check
+    for (const lw of this.linkedWorkspaces) {
+      if (lw.shareTypes.has('spec')) dirs.push(join(lw.workflowRoot, 'specs'));
+      if (lw.shareTypes.has('knowhow')) dirs.push(join(lw.workflowRoot, 'knowhow'));
+      if (lw.shareTypes.has('domain')) dirs.push(join(lw.workflowRoot, 'domain'));
+      if (lw.shareTypes.has('codebase')) dirs.push(join(lw.workflowRoot, 'codebase'));
+    }
     const singletons = ['project.md', 'roadmap.md'];
     for (const s of singletons) {
       const p = join(this.workflowRoot, s);
@@ -112,6 +136,12 @@ export class WikiIndexer {
       join(this.workflowRoot, 'issues'),
       join(this.workflowRoot, 'domain'),
     ];
+    for (const lw of this.linkedWorkspaces) {
+      if (lw.shareTypes.has('spec')) dirs.push(join(lw.workflowRoot, 'specs'));
+      if (lw.shareTypes.has('knowhow')) dirs.push(join(lw.workflowRoot, 'knowhow'));
+      if (lw.shareTypes.has('domain')) dirs.push(join(lw.workflowRoot, 'domain'));
+      if (lw.shareTypes.has('codebase')) dirs.push(join(lw.workflowRoot, 'codebase'));
+    }
     const singletons = ['project.md', 'roadmap.md'];
     for (const s of singletons) {
       const p = join(this.workflowRoot, s);
@@ -128,7 +158,8 @@ export class WikiIndexer {
     this.inflight = (async () => {
       const fileEntries = await this.scanFiles();
       const virtualEntries = await this.scanVirtual();
-      const entries = [...fileEntries, ...virtualEntries];
+      const linkedEntries = await this.scanLinkedWorkspaces();
+      const entries = [...fileEntries, ...virtualEntries, ...linkedEntries];
 
       // Stable collision suffix — use original id for counting so the
       // third duplicate becomes -3 (not another -2).
@@ -620,6 +651,286 @@ export class WikiIndexer {
     return out;
   }
 
+  // -------------------------------------------------------------------------
+  // Linked workspace scanning
+  // -------------------------------------------------------------------------
+
+  private async scanLinkedWorkspaces(): Promise<WikiEntry[]> {
+    const out: WikiEntry[] = [];
+    for (const lw of this.linkedWorkspaces) {
+      if (!existsSync(lw.workflowRoot)) {
+        if (process.env.MAESTRO_DEBUG === '1') {
+          // eslint-disable-next-line no-console
+          console.warn(`[wiki-indexer] linked workspace "${lw.name}" not found: ${lw.workflowRoot}`);
+        }
+        continue;
+      }
+      const entries = await this.scanLinkedWorkspace(lw);
+      out.push(...entries);
+    }
+    return out;
+  }
+
+  private async scanLinkedWorkspace(lw: {
+    name: string;
+    workflowRoot: string;
+    shareTypes: Set<string>;
+  }): Promise<WikiEntry[]> {
+    const out: WikiEntry[] = [];
+    const idPrefix = `ws:${lw.name}:`;
+
+    if (lw.shareTypes.has('spec')) {
+      const specsDir = join(lw.workflowRoot, 'specs');
+      for (const name of await safeReaddir(specsDir)) {
+        if (extname(name).toLowerCase() !== '.md') continue;
+        const absPath = join(specsDir, name);
+        const entry = await this.parseLinkedFileEntry(absPath, 'spec', lw.name, lw.workflowRoot);
+        if (!entry) continue;
+        const stem = basename(name, extname(name));
+        entry.id = `${idPrefix}spec:${slugify(stem)}`;
+        entry.scope = 'linked';
+        entry.source = { kind: 'file', path: `specs/${name}`, workspace: lw.name };
+        out.push(entry);
+
+        const specEntries = parseSpecEntries(entry.body, name, {
+          category: entry.category ?? undefined,
+          keywords: entry.tags,
+        });
+        for (const se of specEntries) {
+          out.push({
+            id: `${idPrefix}spec:${se.id}`,
+            type: 'spec',
+            title: se.title,
+            summary: se.description || se.content.slice(0, 240).replace(/\s+/g, ' '),
+            tags: se.keywords,
+            status: 'active',
+            created: entry.created,
+            updated: entry.updated,
+            related: [],
+            source: { kind: 'file', path: `specs/${name}`, workspace: lw.name },
+            body: se.content,
+            ext: { entryType: se.type, timestamp: se.timestamp },
+            scope: 'linked',
+            category: se.category || entry.category,
+            specCategory: entry.specCategory,
+            createdBy: entry.createdBy,
+            sourceRef: entry.sourceRef,
+            parent: entry.id,
+          });
+        }
+      }
+    }
+
+    if (lw.shareTypes.has('knowhow')) {
+      const knowhowDir = join(lw.workflowRoot, 'knowhow');
+      const knowhowFiles = await this.scanLinkedKnowhowDir(knowhowDir, lw.name, lw.workflowRoot);
+      for (const { entry } of knowhowFiles) {
+        if (!entry) continue;
+        entry.id = `${idPrefix}${entry.id}`;
+        entry.scope = 'linked';
+        out.push(entry);
+      }
+    }
+
+    if (lw.shareTypes.has('domain')) {
+      const domainEntries = await this.scanLinkedDomain(lw.workflowRoot, lw.name);
+      for (const e of domainEntries) {
+        e.id = `${idPrefix}${e.id}`;
+        out.push(e);
+      }
+    }
+
+    if (lw.shareTypes.has('codebase')) {
+      const codebaseIndex = join(lw.workflowRoot, 'codebase', 'doc-index.json');
+      if (existsSync(codebaseIndex)) {
+        const rel = `codebase/doc-index.json`;
+        const entries = await loadVirtualJsonEntries(codebaseIndex, adaptCodebaseDocIndex, rel);
+        for (const e of entries) {
+          e.id = `${idPrefix}${e.id}`;
+          e.source = { ...e.source, workspace: lw.name };
+          e.scope = 'linked';
+          out.push(e);
+        }
+      }
+
+      const kgPath = join(lw.workflowRoot, 'codebase', 'knowledge-graph.json');
+      if (existsSync(kgPath)) {
+        const kgRel = `codebase/knowledge-graph.json`;
+        const kgEntries = await loadVirtualJsonEntries(kgPath, adaptKnowledgeGraph, kgRel);
+        for (const e of kgEntries) {
+          e.id = `${idPrefix}${e.id}`;
+          e.source = { ...e.source, workspace: lw.name };
+          e.scope = 'linked';
+          out.push(e);
+        }
+      }
+    }
+
+    return out;
+  }
+
+  private async parseLinkedFileEntry(
+    absPath: string,
+    type: WikiNodeType,
+    wsName: string,
+    wsWorkflowRoot: string,
+  ): Promise<WikiEntry | null> {
+    const requested = resolve(absPath);
+    const root = resolve(wsWorkflowRoot);
+    if (!requested.startsWith(root + sep) && requested !== root) return null;
+
+    try {
+      const ls = await lstat(absPath);
+      if (ls.isSymbolicLink() || !ls.isFile()) return null;
+    } catch {
+      return null;
+    }
+
+    let raw: string;
+    let stats;
+    try {
+      raw = await readFile(absPath, 'utf-8');
+      stats = await stat(absPath);
+    } catch {
+      return null;
+    }
+
+    const { data, content } = parseFrontmatter(raw);
+    const fileName = basename(absPath);
+    const stem = basename(fileName, extname(fileName));
+
+    const title = asString(data.title) || firstHeading(content) || stem;
+    const summary = asString(data.description) || asString(data.summary) || firstParagraph(content);
+    const tags = extractTags(data);
+    const status = asStatus(data.status) ?? inferStatus(type);
+    const related = normalizeRelated(data.related);
+    const ext = extractExt(data);
+
+    const category = asString(data.category) || null;
+    const specCategory = asString(data.specCategory) || null;
+    const createdBy = asString(data.createdBy) || null;
+    const sourceRef = asString(data.sourceRef) || null;
+    const parent = asString(data.parent) || null;
+
+    const rel = toForwardSlash(relative(wsWorkflowRoot, absPath));
+    const id = `${type}-${slugify(stem)}`;
+
+    return {
+      id,
+      type,
+      title,
+      summary,
+      tags,
+      status,
+      created: new Date(stats.birthtimeMs || stats.mtimeMs).toISOString(),
+      updated: new Date(stats.mtimeMs).toISOString(),
+      related,
+      source: { kind: 'file', path: rel, workspace: wsName },
+      body: content,
+      ext,
+      scope: 'linked',
+      category,
+      specCategory,
+      createdBy,
+      sourceRef,
+      parent,
+    };
+  }
+
+  private async scanLinkedKnowhowDir(
+    dir: string,
+    wsName: string,
+    wsWorkflowRoot: string,
+  ): Promise<Array<{ entry: WikiEntry | null }>> {
+    const results: Array<{ entry: WikiEntry | null }> = [];
+    for (const name of await safeReaddir(dir)) {
+      const fullPath = join(dir, name);
+      let stats: Awaited<ReturnType<typeof stat>> | null = null;
+      try { stats = await stat(fullPath); } catch { continue; }
+
+      if (stats.isDirectory()) {
+        const nested = await this.scanLinkedKnowhowDir(fullPath, wsName, wsWorkflowRoot);
+        results.push(...nested);
+      } else if (stats.isFile() && extname(name).toLowerCase() === '.md') {
+        const entry = await this.parseLinkedFileEntry(fullPath, 'knowhow', wsName, wsWorkflowRoot);
+        if (entry) {
+          if (!entry.category) {
+            const upper = name.toUpperCase();
+            if (upper.startsWith('KNW-')) entry.category = 'session';
+            else if (upper.startsWith('TPL-')) entry.category = 'template';
+            else if (upper.startsWith('RCP-')) entry.category = 'recipe';
+            else if (upper.startsWith('REF-')) entry.category = 'reference';
+            else if (upper.startsWith('DCS-')) entry.category = 'decision';
+            else if (upper.startsWith('TIP-')) entry.category = 'tip';
+            else if (upper.startsWith('AST-')) entry.category = 'asset';
+            else if (upper.startsWith('BLP-')) entry.category = 'blueprint';
+            else if (upper.startsWith('DOC-')) entry.category = 'document';
+          }
+        }
+        results.push({ entry });
+      }
+    }
+    return results;
+  }
+
+  private async scanLinkedDomain(wsWorkflowRoot: string, wsName: string): Promise<WikiEntry[]> {
+    const glossaryPath = join(wsWorkflowRoot, 'domain', 'glossary.json');
+    try {
+      const raw = await readFile(glossaryPath, 'utf-8');
+      const glossary = JSON.parse(raw);
+      if (!Array.isArray(glossary.terms)) return [];
+
+      let glossaryStat: Awaited<ReturnType<typeof stat>>;
+      try { glossaryStat = await stat(glossaryPath); } catch { return []; }
+      const fileDate = new Date(glossaryStat.mtimeMs).toISOString();
+
+      return glossary.terms.map((term: Record<string, unknown>) => {
+        const id = term.id as string;
+        const canonical = term.canonical as string;
+        const definition = (term.definition as string) ?? '';
+        const aliases = (term.aliases as string[]) ?? [];
+        const keywords = (term.keywords as string[]) ?? [];
+        const relationships = (term.relationships as string[]) ?? [];
+        const status = ((term.status as string) ?? 'active') === 'active' ? 'active' : 'archived';
+
+        const bodyLines = [`# ${canonical}`, '', definition, ''];
+        if (aliases.length) bodyLines.push(`Aliases: ${aliases.join(', ')}`);
+        if (relationships.length) bodyLines.push(`Related: ${relationships.join(', ')}`);
+        if (keywords.length) bodyLines.push(`Keywords: ${keywords.join(', ')}`);
+
+        return {
+          id: `domain-${id}`,
+          type: 'domain' as const,
+          title: canonical,
+          summary: definition,
+          tags: [...aliases, ...keywords],
+          status: status as 'active' | 'archived',
+          created: fileDate,
+          updated: fileDate,
+          related: relationships.map(r => `domain-${r}`),
+          source: { kind: 'file' as const, path: 'domain/glossary.json', workspace: wsName },
+          body: bodyLines.join('\n'),
+          ext: {
+            tier: term.tier ?? 'core',
+            sourceKind: (term.source as Record<string, unknown>)?.kind ?? 'unknown',
+          },
+          scope: 'linked' as const,
+          category: 'domain',
+          specCategory: null,
+          createdBy: null,
+          sourceRef: null,
+          parent: null,
+        } satisfies WikiEntry;
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // File parsing
+  // -------------------------------------------------------------------------
+
   private async parseFileEntry(
     absPath: string,
     type: WikiNodeType,
@@ -855,6 +1166,7 @@ export function filterEntries(entries: WikiEntry[], filters: WikiFilters): WikiE
     if (filters.category && d.category !== filters.category) return false;
     if (filters.createdBy && d.createdBy !== filters.createdBy) return false;
     if (filters.tool && d.ext?.tool !== true && d.ext?.tool !== 'true') return false;
+    if (filters.workspace && d.source.workspace !== filters.workspace) return false;
     if (filters.q) {
       const q = filters.q.toLowerCase();
       if (!d.title.toLowerCase().includes(q) && !d.summary.toLowerCase().includes(q)) {

@@ -53,6 +53,8 @@ export function registerSpecCommand(program: Command): void {
     .action(async (opts) => {
       const { logCliEndpoint } = await import('../hooks/spec-analytics.js');
       const { loadSpecs } = await import('../tools/spec-loader.js');
+      const { loadWorkspaceConfig, resolveWorkspaceLinks } = await import('../config/index.js');
+      const { join } = await import('node:path');
       logCliEndpoint(process.cwd(), 'spec load', { category: opts.category, scope: opts.scope, keyword: opts.keyword, stdin: !!opts.stdin });
 
       let projectPath = process.cwd();
@@ -84,7 +86,13 @@ export function registerSpecCommand(program: Command): void {
         process.exit(1);
       }
 
-      const result = loadSpecs(projectPath, opts.category, uid, keyword, scope);
+      const wsConfig = loadWorkspaceConfig(projectPath);
+      const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
+      const linkedSpecs = resolved
+        .filter(lw => lw.valid && lw.share.includes('spec'))
+        .map(lw => ({ name: lw.name, specsDir: join(lw.workflowRoot, 'specs') }));
+      const loaderOpts = linkedSpecs.length > 0 ? { linkedWorkspaces: linkedSpecs } : undefined;
+      const result = loadSpecs(projectPath, opts.category, uid, keyword, scope, loaderOpts);
 
       if (opts.stdin) {
         if (result.content) {

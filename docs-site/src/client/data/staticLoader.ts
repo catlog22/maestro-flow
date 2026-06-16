@@ -362,6 +362,15 @@ export const guideRegistry: Array<{
     description_zh: 'ACO 蚁群优化与对抗决策模式',
     icon: 'bug',
   },
+  {
+    slug: 'workspace',
+    file: 'workspace-guide.md',
+    title: 'Cross-Workspace Knowledge Sharing',
+    description: 'Link workspaces for shared specs, knowhow, domain glossary, and codebase knowledge across projects',
+    title_zh: '跨工作空间知识共享指南',
+    description_zh: '关联多个项目实现 Spec、Knowhow、Domain、Codebase 的跨工作空间检索与注入',
+    icon: 'link',
+  },
 ];
 
 // Use import.meta.glob to load all markdown files

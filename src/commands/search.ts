@@ -6,11 +6,12 @@
  */
 
 import type { Command } from 'commander';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
 import { truncate, extractSnippet, highlightTerms } from '../utils/cli-format.js';
 import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
+import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 
 // Valid type filter values — matches WikiNodeType.
 const VALID_TYPES = ['project', 'roadmap', 'spec', 'issue', 'knowhow', 'note', 'domain'] as const;
@@ -25,6 +26,7 @@ export interface SearchResult {
   score: number | null;
   snippet: string | null;
   source: WikiEntry['source'];
+  workspace?: string;
 }
 
 /** A code search result from CodeGraph. */
@@ -51,7 +53,13 @@ let _indexer: WikiIndexer | null = null;
 function getIndexer(): WikiIndexer {
   if (!_indexer) {
     const workflowRoot = resolve('.workflow');
-    _indexer = new WikiIndexer({ workflowRoot });
+    const projectPath = process.cwd();
+    const wsConfig = loadWorkspaceConfig(projectPath);
+    const resolved = resolveWorkspaceLinks(projectPath, wsConfig);
+    const linkedWorkspaces = resolved
+      .filter(lw => lw.valid)
+      .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
+    _indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
   }
   return _indexer;
 }
@@ -93,6 +101,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions): P
     score,
     snippet: extractSnippet(entry.body, q),
     source: entry.source,
+    workspace: entry.source.workspace,
   }));
 }
 
@@ -131,6 +140,7 @@ export function registerSearchCommand(program: Command): void {
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, test, review, learning)')
     .option('--code', 'Include CodeGraph code results')
     .option('--all', 'Search all sources (wiki + code) with normalized ranking')
+    .option('--workspace <name>', 'Filter results to a specific linked workspace')
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
     .action(async (queryParts: string[], opts) => {
@@ -143,7 +153,10 @@ export function registerSearchCommand(program: Command): void {
         process.exit(1);
       }
 
-      const wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, limit });
+      let wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, limit });
+      if (opts.workspace) {
+        wikiResults = wikiResults.filter(r => r.workspace === opts.workspace);
+      }
       const codeResults = includeCode ? await runCodeSearch(q, limit) : [];
 
       // --all: normalize and merge scores for unified ranking
@@ -205,9 +218,10 @@ export function registerSearchCommand(program: Command): void {
           const indent = includeCode ? '    ' : '  ';
           const typeTag = `[${r.type}]`;
           const catTag = r.category ? ` ${r.category}` : '';
+          const wsTag = r.workspace ? ` [ws:${r.workspace}]` : '';
           const scoreTag = r.score !== null ? `  (${r.score.toFixed(2)})` : '';
           const title = isTTY ? highlightTerms(r.title, qTerms) : r.title;
-          console.log(`${indent}${typeTag}${catTag}  ${r.id}  ${title}${scoreTag}`);
+          console.log(`${indent}${typeTag}${catTag}${wsTag}  ${r.id}  ${title}${scoreTag}`);
           if (r.snippet) {
             const snippet = isTTY ? highlightTerms(r.snippet, qTerms) : r.snippet;
             console.log(`${indent}  ${snippet}`);
