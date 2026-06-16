@@ -98,6 +98,7 @@ SESSION_DIR/
   "generalization_stats": { "patterns_extracted": 0, "total_hits": 0, "cross_layer_confirmed": 0, "regression_risks": 0, "by_layer": {}, "deepening_triggered": false },
   "phase_goals": [], "phase_goals_all_done": false,
   "self_iteration_log": [],
+  "cross_phase_loops": 0, "max_loops": 3,
   "created_at": "", "updated_at": ""
 }
 ```
@@ -198,8 +199,11 @@ S_GENERALIZE:
   → S_DISCOVER     WHEN hits found                DO A_GENERALIZE
   → S_RECORD       WHEN no hits                   DO A_GENERALIZE
 
-S_DISCOVER     → S_RECORD       DO A_DISCOVER
-S_RECORD       → END            DO A_RECORD
+S_DISCOVER → S_AUDIT        : discovery reveals new component to audit, loops < max_loops → cross_phase_loops++
+S_DISCOVER → S_FIX          : discovery finds fixable sibling, !skip_fix, loops < max_loops → cross_phase_loops++
+S_DISCOVER → S_RECORD       : triage complete OR loops >= max_loops (剩余项 → issue/decision)
+
+S_RECORD   → END            DO A_RECORD
 </transitions>
 
 <actions>

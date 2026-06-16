@@ -75,7 +75,8 @@ SESSION_DIR/
   "confirmation": { "test_result": {}, "cli_review": {}, "overall": "confirmed|needs_rework" },
   "generalization_stats": { "patterns_extracted": 0, "total_hits": 0, "true_positives": 0, "false_positives": 0, "cross_layer_confirmed": 0, "regression_risks": 0, "by_layer": {} },
   "phase_goals": [], "phase_goals_all_done": false,
-  "self_iteration_log": []
+  "self_iteration_log": [],
+  "cross_phase_loops": 0, "max_loops": 3
 }
 ```
 
@@ -269,6 +270,7 @@ Update `understanding.md` §6. Write `session.json.generalization_stats`. Mark G
 ### S_DISCOVER
 Classify hits: `bug` / `risk` / `safe`.
 **Normal**: `request_user_input` for bug routing. **`-y`**: auto create issue, `deferred`.
+**Cross-phase loop**: fixable sibling → S_FIX (!skip_fix, loops < max_loops → cross_phase_loops++); new review target → S_REVIEW (loops < max_loops); triage complete OR budget exhausted → S_RECORD.
 Append evidence (phase: discovery + decision). Update `understanding.md` §7. Mark G5 done.
 
 ### S_RECORD

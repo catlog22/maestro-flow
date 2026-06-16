@@ -75,6 +75,7 @@ SESSION_DIR/
   "phase_goals": [],
   "phase_goals_all_done": false,
   "self_iteration_log": [],
+  "cross_phase_loops": 0, "max_loops": 3,
   "created_at": "", "updated_at": ""
 }
 ```
@@ -236,7 +237,7 @@ spawn_agents_on_csv({ csv_path: "tasks.csv", id_column: "id",
 
 Record per criterion to evidence (verification). Update acceptance_criteria[].status. Append to iterations[]. Update understanding.md §4 with pass/fail table.
 
-**Route:** all passed → mark G4 done → next state. Some failed + iteration < max → S_FIX. Some failed + iteration >= max → **Normal**: `request_user_input` (continue/lower/accept) / **`-y`**: `deferred`, proceed S_RECORD.
+**Route:** all passed → mark G4 done → next state. Some failed + iteration < max → S_FIX. Fundamental plan flaw → S_PLAN (loops < max_loops → cross_phase_loops++, 重规划). Some failed + iteration >= max → **Normal**: `request_user_input` (continue/lower/accept) / **`-y`**: `deferred`, proceed S_RECORD.
 
 ### S_FIX
 
@@ -281,7 +282,8 @@ Write understanding.md §6, generalization_stats. Mark G5 done.
    | needs_treatment | `request_user_input`: create issue / plan next iter | auto create issue, `deferred` |
    | low_risk | Record only | Record only |
    | already_handled | Skip | Skip |
-3. Append evidence (discovery + decision), update understanding.md §7. Mark G6 done.
+3. **Cross-phase loop**: needs_treatment area → S_EXECUTE (loops < max_loops → cross_phase_loops++); triage complete OR budget exhausted → S_RECORD
+4. Append evidence (discovery + decision), update understanding.md §7. Mark G6 done.
 
 ### S_RECORD
 

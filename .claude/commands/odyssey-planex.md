@@ -101,6 +101,7 @@ SESSION_DIR/
   "phase_goals": [],
   "phase_goals_all_done": false,
   "self_iteration_log": [],
+  "cross_phase_loops": 0, "max_loops": 3,
   "created_at": "", "updated_at": ""
 }
 ```
@@ -185,6 +186,7 @@ S_EXECUTE → S_VERIFY
 S_VERIFY → S_GENERALIZE  WHEN all passed AND NOT skip_generalize
 S_VERIFY → S_RECORD      WHEN all passed AND skip_generalize
 S_VERIFY → S_FIX         WHEN some failed AND iteration < max
+S_VERIFY → S_PLAN        WHEN fundamental plan flaw discovered, loops < max_loops → cross_phase_loops++ (重规划)
 S_VERIFY → S_RECORD      WHEN some failed AND iteration >= max (escalate)
 
 S_FIX → S_VERIFY (loop)
@@ -192,7 +194,9 @@ S_FIX → S_VERIFY (loop)
 S_GENERALIZE → S_DISCOVER  WHEN hits found
 S_GENERALIZE → S_RECORD    WHEN no hits
 
-S_DISCOVER → S_RECORD
+S_DISCOVER → S_EXECUTE     : discovery finds area needing same implementation, loops < max_loops → cross_phase_loops++
+S_DISCOVER → S_RECORD      : triage complete OR loops >= max_loops (剩余项 → issue)
+
 S_RECORD → END
 </transitions>
 

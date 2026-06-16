@@ -77,6 +77,7 @@ Phase-specific fields:
   "current_state": "S_INTAKE", "diagnosis_retries": 0,
   "root_cause": null, "patterns": [], "confirmation": null,
   "phase_goals": [], "phase_goals_all_done": false, "self_iteration_log": [],
+  "cross_phase_loops": 0, "max_loops": 3,
   "generalization_stats": null,
   "created_at": "", "updated_at": ""
 }
@@ -326,7 +327,8 @@ Skip if no generalization hits.
 
 1. **Triage** each hit: read ±10 lines → classify `safe`/`risk`/`bug`
 2. **Route**: see Appendix `-y` behavior. Append evidence (phase: "discovery" + "decision")
-3. Update §8. Mark G5 done.
+3. **Cross-phase loop**: discovery finds new bug → S_DIAGNOSE (loops < max_loops → cross_phase_loops++); same-pattern bug + fix template → S_FIX; triage complete OR loops >= max_loops → S_RECORD (剩余 → issue)
+4. Update §8. Mark G5 done.
 
 ### Stage 9: Record (S_RECORD)
 1. Finalize `understanding.md` §9

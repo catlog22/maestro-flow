@@ -85,6 +85,7 @@ SESSION_DIR/
   "root_cause": null, "patterns": [], "confirmation": null,
   "phase_goals": [], "phase_goals_all_done": false, "self_iteration_log": [],
   "generalization_stats": null,
+  "cross_phase_loops": 0, "max_loops": 3,
   "created_at": "", "updated_at": ""
 }
 ```
@@ -205,8 +206,12 @@ S_CONFIRM → S_FIX           : needs_rework
 
 S_GENERALIZE → S_DISCOVER   : similar code found
 S_GENERALIZE → S_RECORD     : no similar code
-S_DISCOVER   → S_RECORD     : triage complete
-S_RECORD     → END          : A_RECORD complete
+
+S_DISCOVER → S_DIAGNOSE     : discovery finds new bug worth investigating, loops < max_loops → cross_phase_loops++
+S_DISCOVER → S_FIX          : discovery finds same-pattern bug, fix template applies, loops < max_loops → cross_phase_loops++
+S_DISCOVER → S_RECORD       : triage complete OR loops >= max_loops (剩余项 → issue/decision)
+
+S_RECORD   → END            : A_RECORD complete
 </transitions>
 
 <actions>

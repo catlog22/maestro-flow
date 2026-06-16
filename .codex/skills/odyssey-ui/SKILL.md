@@ -74,6 +74,7 @@ SESSION_DIR/
   "diverge_result": { "improvements_proposed": 0, "creative_ideas": 0 },
   "patterns": [], "generalization_stats": null,
   "phase_goals": [], "phase_goals_all_done": false, "self_iteration_log": [],
+  "cross_phase_loops": 0, "max_loops": 3,
   "created_at": "", "updated_at": "" }
 ```
 
@@ -296,7 +297,8 @@ Skip if no generalization hits.
 
 1. **Triage** each hit: read +-10 lines -> classify `safe` / `risk` / `bug`
 2. **Route**: see appendix `-y` behavior. Append evidence (phase: "discovery" + "decision")
-3. Update SS7. Mark G6 done.
+3. **Cross-phase loop**: new component to audit → S_AUDIT (loops < max_loops → cross_phase_loops++); fixable sibling → S_FIX (!skip_fix, loops < max_loops); triage complete OR budget exhausted → S_RECORD
+4. Update SS7. Mark G6 done.
 
 ### S_RECORD
 1. Finalize SS8: structured by Knowledge Persistence table (temporary)
