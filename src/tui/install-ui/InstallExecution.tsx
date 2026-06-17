@@ -39,7 +39,7 @@ import {
   installAgyHooksByLevel,
   installStatusline as installStatuslineFn,
 } from '../../commands/hooks.js';
-import type { InstallFlowConfig } from './InstallConfirm.js';
+import type { InstallFlowConfig } from './types.js';
 import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,9 @@
 import { renderTui } from '../render.js';
 
+export type { InstallFlowConfig } from './types.js';
+export type { HooksSelection } from './HooksConfig.js';
+
+/** @deprecated Use runInstallFlow instead */
 export async function runInstallWizard(
   pkgRoot: string,
   version: string,
@@ -10,7 +14,12 @@ export async function runInstallWizard(
 
 export interface InstallFlowOptions {
   /** 'mode' is accepted for backward compat but maps to 'hub' internally */
-  initialStep?: 'mode' | 'hub' | 'components_config' | 'hooks_config' | 'mcp_config' | 'statusline_config' | 'backup_config' | 'confirm';
+  initialStep?: 'mode' | 'hub'
+    | 'components_config' | 'hooks_config' | 'mcp_config'
+    | 'codex_hooks_config' | 'codex_mcp_config'
+    | 'agy_hooks_config' | 'extra_mcp_config'
+    | 'statusline_config' | 'backup_config'
+    | 'confirm';
   initialMode?: 'global' | 'project';
   initialStepIds?: string[];
 }

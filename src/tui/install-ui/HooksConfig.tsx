@@ -123,7 +123,17 @@ export function HooksConfig({
     ? `Custom (based on ${basePreset}, ${selectedHooks.length}/${hookCount} hooks)`
     : `${basePreset} (${selectedHooks.length}/${hookCount} hooks)`;
 
-  let hookFlatIdx = 0;
+  // Pre-compute flat index for each hook to avoid mutable counter in render
+  const hookFlatIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    let idx = 0;
+    for (const group of eventGroups) {
+      for (const hook of group.hooks) {
+        map.set(hook.name, idx++);
+      }
+    }
+    return map;
+  }, [eventGroups]);
 
   return (
     <Box flexDirection="column">
@@ -154,7 +164,7 @@ export function HooksConfig({
           <Box key={group.event} flexDirection="column">
             <Text color={C.neutral} dimColor>  {group.event}</Text>
             {group.hooks.map((hook) => {
-              const idx = HOOK_LEVELS.length + hookFlatIdx++;
+              const idx = HOOK_LEVELS.length + (hookFlatIndexMap.get(hook.name) ?? 0);
               const hl = cursor === idx;
               const checked = selectedHooks.includes(hook.name);
               return (

@@ -10,7 +10,8 @@ import { McpConfig } from './McpConfig.js';
 import { ExtraMcpConfig } from './ExtraMcpConfig.js';
 import { StatuslineConfig } from './StatuslineConfig.js';
 import { BackupConfig } from './BackupConfig.js';
-import { InstallConfirm, type InstallFlowConfig } from './InstallConfirm.js';
+import { InstallConfirm } from './InstallConfirm.js';
+import type { InstallFlowConfig } from './types.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
 import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS, type ExtraMcpTargetId } from '../../commands/install-backend.js';
@@ -20,6 +21,7 @@ import { exportProfile, importProfile, listProfiles, type InstallProfile } from 
 import { paths } from '../../config/paths.js';
 import { t } from '../../i18n/index.js';
 
+// CodeGraph is built-in (tree-sitter). !isCodeGraphAvailable() → false → toggle defaults off (no action needed).
 const isCodeGraphAvailable = () => true;
 
 // ---------------------------------------------------------------------------
@@ -154,6 +156,12 @@ export function InstallFlow({
   const [backupAll, setBackupAll] = useState(false);
   const [result, setResult] = useState<InstallFlowResult | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const profileTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear profile message timers on unmount
+  useEffect(() => () => {
+    if (profileTimerRef.current) clearTimeout(profileTimerRef.current);
+  }, []);
 
   // Re-sync on mode change
   const isFirstRender = useRef(true);
@@ -349,10 +357,10 @@ export function InstallFlow({
       };
       const path = exportProfile(profile);
       setProfileMessage(`✓ Exported to ${path}`);
-      setTimeout(() => setProfileMessage(null), 3000);
+      profileTimerRef.current = setTimeout(() => setProfileMessage(null), 3000);
     } catch (err) {
       setProfileMessage(`✗ Export failed: ${err instanceof Error ? err.message : String(err)}`);
-      setTimeout(() => setProfileMessage(null), 3000);
+      profileTimerRef.current = setTimeout(() => setProfileMessage(null), 3000);
     }
   }, [mode, enabledSteps, selectedComponentIds, claudeHooksSelection, mcpEnabled, mcpTools, mcpProjectRoot,
     codexHooksSelection, codexMcpEnabled, codexMcpTools, codexMcpProjectRoot,
@@ -364,7 +372,7 @@ export function InstallFlow({
       const profiles = listProfiles();
       if (profiles.length === 0) {
         setProfileMessage('No profiles found in ~/.maestro/install-profiles/');
-        setTimeout(() => setProfileMessage(null), 3000);
+        profileTimerRef.current = setTimeout(() => setProfileMessage(null), 3000);
         return;
       }
       const profile = importProfile(profiles[0].filePath);
@@ -410,10 +418,10 @@ export function InstallFlow({
       setBackupClaudeMd(profile.backup.claudeMd);
       setBackupAll(profile.backup.all);
       setProfileMessage(`✓ Loaded profile: ${profiles[0].name}`);
-      setTimeout(() => setProfileMessage(null), 3000);
+      profileTimerRef.current = setTimeout(() => setProfileMessage(null), 3000);
     } catch (err) {
       setProfileMessage(`✗ Import failed: ${err instanceof Error ? err.message : String(err)}`);
-      setTimeout(() => setProfileMessage(null), 3000);
+      profileTimerRef.current = setTimeout(() => setProfileMessage(null), 3000);
     }
   }, []);
 

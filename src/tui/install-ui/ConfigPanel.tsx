@@ -98,12 +98,15 @@ export function ConfigPanel({
         )}
         {activeTab === 1 && (
           <HooksConfig
-            selection={{
+            selection={config.hooksSelection ?? {
               basePreset: config.hookLevel,
               selectedHooks: getHooksForLevel(config.hookLevel, 'claude'),
               isCustom: false,
             }}
-            onSelectionChange={(sel: HooksSelection) => onConfigChange({ hookLevel: sel.basePreset })}
+            onSelectionChange={(sel: HooksSelection) => onConfigChange({
+              hookLevel: sel.basePreset,
+              hooksSelection: sel,
+            })}
             tool="claude"
           />
         )}

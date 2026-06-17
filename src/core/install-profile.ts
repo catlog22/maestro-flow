@@ -120,6 +120,14 @@ function validateProfile(raw: Record<string, unknown>): void {
   checkLevel('claude.hooks.basePreset', (claude?.hooks as Record<string, unknown>)?.basePreset);
   checkLevel('codex.hooks.basePreset', (codex?.hooks as Record<string, unknown>)?.basePreset);
   checkLevel('agy.hooks.basePreset', (agy?.hooks as Record<string, unknown>)?.basePreset);
+
+  const checkProjectRoot = (path: string, val: unknown) => {
+    if (typeof val === 'string' && val && (val.includes('..') || val.includes('\0'))) {
+      throw new Error(`Invalid profile: ${path} must not contain path traversal`);
+    }
+  };
+  checkProjectRoot('claude.mcp.projectRoot', (claude?.mcp as Record<string, unknown>)?.projectRoot);
+  checkProjectRoot('codex.mcp.projectRoot', (codex?.mcp as Record<string, unknown>)?.projectRoot);
 }
 
 export function importProfile(filePath: string): InstallProfile {

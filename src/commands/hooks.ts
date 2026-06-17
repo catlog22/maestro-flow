@@ -1169,7 +1169,7 @@ export function registerHooksCommand(program: Command): void {
       // Workspace gate — hooks with requiresWorkspace exit silently
       // when no Maestro workspace (.workflow/ + valid state.json) is found.
       // This avoids stdin parsing + evaluator overhead for non-workflow projects.
-      const def = HOOK_DEFS[name] ?? CODEX_HOOK_DEFS[name];
+      const def = HOOK_DEFS[name] ?? CODEX_HOOK_DEFS[name] ?? AGY_HOOK_DEFS[name];
       const cwd = process.cwd();
       if (def?.requiresWorkspace) {
         if (!resolveWorkspace({ cwd })) {

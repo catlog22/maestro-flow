@@ -1,47 +1,10 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { HookLevel } from '../../commands/hooks.js';
-import type { ExtraMcpTargetId } from '../../commands/install-backend.js';
 import type { HooksSelection } from './HooksConfig.js';
+import type { InstallFlowConfig } from './types.js';
 import { t } from '../../i18n/index.js';
 import { C, SYM, BORDER } from '../shared/index.js';
-
-// ---------------------------------------------------------------------------
-// InstallConfirm — summary before execution, split into Will Install / Skipped
-// ---------------------------------------------------------------------------
-
-export interface InstallFlowConfig {
-  mode: 'global' | 'project';
-  projectPath: string;
-  installComponents: boolean;
-  installHooks: boolean;
-  installMcp: boolean;
-  installCodexHooks: boolean;
-  codexHookLevel: HookLevel;
-  installCodexMcp: boolean;
-  codexMcpTools: string[];
-  codexMcpProjectRoot: string;
-  installAgyHooks: boolean;
-  agyHookLevel: HookLevel;
-  installExtraMcp: boolean;
-  extraMcpTargetIds: ExtraMcpTargetId[];
-  installCodeGraph: boolean;
-  installStatusline: boolean;
-  statuslineTheme: string;
-  hookLevel: HookLevel;
-  componentCount: number;
-  fileCount: number;
-  mcpToolCount: number;
-  selectedComponentIds: string[];
-  mcpTools: string[];
-  mcpProjectRoot: string;
-  backupClaudeMd: boolean;
-  backupAll: boolean;
-  // Granular hook selections
-  claudeHooksSelection?: HooksSelection;
-  codexHooksSelection?: HooksSelection;
-  agyHooksSelection?: HooksSelection;
-}
 
 interface InstallConfirmProps {
   config: InstallFlowConfig;

@@ -124,7 +124,12 @@ export function GroupedHub({
 
   const focusedItem = cursor < flat.length ? flat[cursor].item : null;
 
-  let globalItemIndex = 0;
+  // Pre-compute flat index for each entry to avoid mutable counter in render
+  const flatIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    flat.forEach((entry, i) => map.set(`${entry.groupIdx}-${entry.itemIdx}`, i));
+    return map;
+  }, [flat]);
 
   return (
     <Box flexDirection="column">
@@ -148,13 +153,13 @@ export function GroupedHub({
       <Box marginTop={SP.sectionGap}>
         {/* Left: grouped list */}
         <Box flexDirection="column" width={44}>
-          {groups.map((group) => {
-            const groupItems = flat.filter((e) => groups[e.groupIdx] === group);
+          {groups.map((group, gi) => {
+            const groupItems = flat.filter((e) => e.groupIdx === gi);
             return (
               <Box key={group.id} flexDirection="column">
                 <Text color={C.neutral} dimColor>{'─'.repeat(2)} {group.title} {'─'.repeat(Math.max(0, 36 - group.title.length))}</Text>
                 {groupItems.map((entry) => {
-                  const idx = globalItemIndex++;
+                  const idx = flatIndexMap.get(`${entry.groupIdx}-${entry.itemIdx}`) ?? 0;
                   const hl = cursor === idx;
                   const item = entry.item;
                   return (
