@@ -8,6 +8,7 @@ import type {
   UnifiedNodeKind, UnifiedEdgeKind, Language,
   SourceType, EdgeProvenance, UnifiedGraphStats, Visibility,
 } from './types.js';
+import { tokenize as camelTokenize } from '../resolution/name-matcher.js';
 
 // ---------------------------------------------------------------------------
 // Row ↔ Object mappers
@@ -200,6 +201,13 @@ export class KgQueryBuilder {
     let count = 0;
     this.conn.transaction(() => {
       for (const node of nodes) {
+        let keywords = node.keywords;
+        if (node.sourceType === 'codegraph' && keywords.length === 0) {
+          const nameTokens = camelTokenize(node.name);
+          const qnTokens = node.qualifiedName ? camelTokenize(node.qualifiedName.split('.').pop() || '') : [];
+          const merged = [...new Set([...nameTokens, ...qnTokens])];
+          if (merged.length > 1) keywords = merged;
+        }
         stmt.run(
           node.id, node.kind, node.name, node.qualifiedName, node.filePath, node.language,
           node.startLine, node.endLine, node.startColumn, node.endColumn,
@@ -209,7 +217,7 @@ export class KgQueryBuilder {
           node.typeParameters.length > 0 ? JSON.stringify(node.typeParameters) : null,
           node.sourceType, node.definition || null,
           node.aliases.length > 0 ? JSON.stringify(node.aliases) : null,
-          node.keywords.length > 0 ? JSON.stringify(node.keywords) : null,
+          keywords.length > 0 ? JSON.stringify(keywords) : null,
           node.category || null, node.roles.length > 0 ? JSON.stringify(node.roles) : null,
           node.priority || null, node.status || null,
           node.body || null, Object.keys(node.metadata).length > 0 ? JSON.stringify(node.metadata) : null,
@@ -524,7 +532,7 @@ export class KgQueryBuilder {
     if (!sanitized) return [];
     try {
       let sql = `
-        SELECT n.*, bm25(code_fts, 0, 20, 5, 1, 2) AS score
+        SELECT n.*, bm25(code_fts, 0, 20, 5, 1, 2, 10) AS score
         FROM code_fts JOIN nodes n ON code_fts.id = n.id
         WHERE code_fts MATCH ? AND n.source_type = 'codegraph'
       `;
@@ -541,11 +549,13 @@ export class KgQueryBuilder {
       params.push(opts.limit ?? 20);
 
       const rows = this.db.prepare(sql).all(...params) as Array<NodeRow & { score?: number }>;
-      return rows.map(r => {
+      const results = rows.map(r => {
         const node = rowToNode(r) as UnifiedNode & { _bm25Score?: number };
         if (typeof r.score === 'number') node._bm25Score = -r.score;
         return node;
       });
+      if (results.length > 0) return results;
+      return this.searchNodesLike(query, opts);
     } catch (err) {
       if (process.env.DEBUG) console.warn('[KG] code FTS5 failed, LIKE fallback:', err);
       return this.searchNodesLike(query, opts);

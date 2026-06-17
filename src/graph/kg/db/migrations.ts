@@ -25,6 +25,63 @@ const MIGRATIONS: MigrationStep[] = [
     description: 'Credibility tracking — decay scoring + usage counters',
     sql: CREDIBILITY_MIGRATION_SQL,
   },
+  {
+    version: 4,
+    description: 'code_fts adds keywords column for camelCase sub-word search',
+    sql: `
+      -- Drop old triggers and FTS table
+      DROP TRIGGER IF EXISTS nodes_ai;
+      DROP TRIGGER IF EXISTS nodes_ad;
+      DROP TRIGGER IF EXISTS nodes_au;
+      DROP TABLE IF EXISTS code_fts;
+
+      -- Recreate code_fts with keywords column
+      CREATE VIRTUAL TABLE code_fts USING fts5(
+        id, name, qualified_name, docstring, signature, keywords,
+        tokenize = 'unicode61 remove_diacritics 2',
+        content = 'nodes', content_rowid = 'rowid'
+      );
+
+      -- Backfill existing codegraph nodes
+      INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
+      SELECT rowid, id, name, qualified_name, docstring, signature, keywords
+      FROM nodes WHERE source_type = 'codegraph';
+
+      -- Recreate triggers with keywords column
+      CREATE TRIGGER nodes_ai AFTER INSERT ON nodes BEGIN
+        INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
+        SELECT NEW.rowid, NEW.id, NEW.name, NEW.qualified_name, NEW.docstring, NEW.signature, NEW.keywords
+        WHERE NEW.source_type = 'codegraph';
+        INSERT INTO knowledge_fts(rowid, id, name, definition, body, aliases, keywords)
+        SELECT NEW.rowid, NEW.id, NEW.name, NEW.definition, NEW.body, NEW.aliases, NEW.keywords
+        WHERE NEW.source_type != 'codegraph';
+      END;
+
+      CREATE TRIGGER nodes_ad AFTER DELETE ON nodes BEGIN
+        INSERT INTO code_fts(code_fts, rowid, id, name, qualified_name, docstring, signature, keywords)
+        SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.qualified_name, OLD.docstring, OLD.signature, OLD.keywords
+        WHERE OLD.source_type = 'codegraph';
+        INSERT INTO knowledge_fts(knowledge_fts, rowid, id, name, definition, body, aliases, keywords)
+        SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.definition, OLD.body, OLD.aliases, OLD.keywords
+        WHERE OLD.source_type != 'codegraph';
+      END;
+
+      CREATE TRIGGER nodes_au AFTER UPDATE ON nodes BEGIN
+        INSERT INTO code_fts(code_fts, rowid, id, name, qualified_name, docstring, signature, keywords)
+        SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.qualified_name, OLD.docstring, OLD.signature, OLD.keywords
+        WHERE OLD.source_type = 'codegraph';
+        INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
+        SELECT NEW.rowid, NEW.id, NEW.name, NEW.qualified_name, NEW.docstring, NEW.signature, NEW.keywords
+        WHERE NEW.source_type = 'codegraph';
+        INSERT INTO knowledge_fts(knowledge_fts, rowid, id, name, definition, body, aliases, keywords)
+        SELECT 'delete', OLD.rowid, OLD.id, OLD.name, OLD.definition, OLD.body, OLD.aliases, OLD.keywords
+        WHERE OLD.source_type != 'codegraph';
+        INSERT INTO knowledge_fts(rowid, id, name, definition, body, aliases, keywords)
+        SELECT NEW.rowid, NEW.id, NEW.name, NEW.definition, NEW.body, NEW.aliases, NEW.keywords
+        WHERE NEW.source_type != 'codegraph';
+      END;
+    `,
+  },
 ];
 
 export function applyMigrations(conn: KgDatabaseConnection): void {
