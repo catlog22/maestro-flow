@@ -16,6 +16,8 @@ import { extractLiquid } from './liquid-extractor.js';
 import { extractMybatisXml } from './mybatis-extractor.js';
 import { extractDfm } from './dfm-extractor.js';
 import { createHash } from 'node:crypto';
+import { PluginEngine } from './plugin-engine.js';
+import type { PluginExtractedSymbol } from './plugin-types.js';
 
 // ---------------------------------------------------------------------------
 // 扫描配置
@@ -24,6 +26,8 @@ import { createHash } from 'node:crypto';
 interface ScanOptions {
   /** 源码根目录 */
   srcDir: string;
+  /** 项目根目录（用于插件加载） */
+  projectRoot?: string;
   /** 排除的目录模式 */
   excludeDirs?: string[];
   /** 排除的文件模式 (glob) */
@@ -39,6 +43,9 @@ interface ScanOptions {
 const DEFAULT_EXCLUDE_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', '.next', '__pycache__',
   '.workflow', '.codegraph', 'coverage', '.cache',
+  '.venv', 'venv', 'env', '.tox', '.mypy_cache', '.pytest_cache',
+  '.claude', '.agy', '.agents', '.codex', '.history',
+  '.idea', '.vscode', '.vs',
 ]);
 
 const BINARY_EXTENSIONS = new Set([
@@ -149,6 +156,12 @@ export async function extractCode(
   const engine = getTreeSitterEngine();
   const hasTreeSitter = engine.isAvailable();
 
+  // 插件引擎
+  const projectRoot = options.projectRoot ?? resolve(options.srcDir, '..');
+  const pluginEngine = new PluginEngine(projectRoot);
+  let hasPlugins = false;
+  try { hasPlugins = await pluginEngine.load(); } catch { /* plugins optional */ }
+
   // 扫描文件
   const scannedFiles = scanFiles(options);
   const results: ExtractionResult[] = [];
@@ -218,11 +231,28 @@ export async function extractCode(
         continue;
       }
 
-      const extracted = extractor.extract(tree, sourceCode, file.path);
+      let extracted = extractor.extract(tree, sourceCode, file.path);
+
+      // 插件扩展提取
+      if (hasPlugins) {
+        try {
+          const pluginResult = await pluginEngine.run(file.path, sourceCode, file.language, tree, extracted);
+          if (pluginResult.symbols.length > 0 || (pluginResult.references?.length ?? 0) > 0 || (pluginResult.edges?.length ?? 0) > 0) {
+            extracted = pluginEngine.mergeResults(extracted, pluginResult);
+          }
+        } catch { /* plugin errors don't block core extraction */ }
+      }
 
       // 将 ExtractedSymbol 转换为 UnifiedNode
       const now = Date.now();
-      const nodes: UnifiedNode[] = extracted.symbols.map(s => symbolToNode(s, now));
+      const nodes: UnifiedNode[] = extracted.symbols.map(s => {
+        const node = symbolToNode(s, now);
+        const pSym = s as PluginExtractedSymbol;
+        if (pSym.pluginMetadata) {
+          node.metadata = { ...node.metadata, plugin: pSym.pluginMetadata };
+        }
+        return node;
+      });
 
       // 引用 → unresolved_refs (由 resolution 阶段解析)
       // 此处只计数, 实际写入在 resolution 阶段

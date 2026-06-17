@@ -171,6 +171,7 @@ export async function syncKnowledgeGraph(
         if (!existsSync(srcDir)) continue;
         const codeResult = await extractCode({
           srcDir,
+          projectRoot: projectPath,
           includeTests: false,
           maxFileSize: 500 * 1024,
         });
