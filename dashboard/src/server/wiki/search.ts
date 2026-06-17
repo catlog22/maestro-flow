@@ -40,6 +40,13 @@ const KG_FIELD_CONFIGS: Record<FieldName, FieldConfig> = {
   body:    { boost: 0, b: 0   },
 };
 
+const SCRATCH_FIELD_CONFIGS: Record<FieldName, FieldConfig> = {
+  title:   { boost: 1,   b: 0.3  },
+  summary: { boost: 0.5, b: 0.75 },
+  tags:    { boost: 0.5, b: 0    },
+  body:    { boost: 0.3, b: 0.75 },
+};
+
 // ---------------------------------------------------------------------------
 // Public types — kept unchanged for backward compatibility
 // ---------------------------------------------------------------------------
@@ -127,6 +134,10 @@ function isKgVirtual(entry: WikiEntry): boolean {
   return vk === 'kg-node' || vk === 'kg-layer' || vk === 'kg-tour-step';
 }
 
+function isScratchDoc(entry: WikiEntry): boolean {
+  return entry.ext?.virtualKind === 'scratch-doc';
+}
+
 function extractFieldTexts(entry: WikiEntry): Record<FieldName, string> {
   return {
     title: entry.title,
@@ -137,7 +148,9 @@ function extractFieldTexts(entry: WikiEntry): Record<FieldName, string> {
 }
 
 function getFieldConfigs(entry: WikiEntry): Record<FieldName, FieldConfig> {
-  return isKgVirtual(entry) ? KG_FIELD_CONFIGS : FIELD_CONFIGS;
+  if (isKgVirtual(entry)) return KG_FIELD_CONFIGS;
+  if (isScratchDoc(entry)) return SCRATCH_FIELD_CONFIGS;
+  return FIELD_CONFIGS;
 }
 
 // ---------------------------------------------------------------------------

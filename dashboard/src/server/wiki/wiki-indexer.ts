@@ -97,6 +97,7 @@ export class WikiIndexer {
       join(this.workflowRoot, 'knowhow'),
       join(this.workflowRoot, 'issues'),
       join(this.workflowRoot, 'domain'),
+      join(this.workflowRoot, 'scratch'),
     ];
     // Include linked workspace directories in staleness check
     for (const lw of this.linkedWorkspaces) {
@@ -135,6 +136,7 @@ export class WikiIndexer {
       join(this.workflowRoot, 'knowhow'),
       join(this.workflowRoot, 'issues'),
       join(this.workflowRoot, 'domain'),
+      join(this.workflowRoot, 'scratch'),
     ];
     for (const lw of this.linkedWorkspaces) {
       if (lw.shareTypes.has('spec')) dirs.push(join(lw.workflowRoot, 'specs'));
@@ -425,6 +427,10 @@ export class WikiIndexer {
     const domainEntries = await this.scanDomain();
     out.push(...domainEntries);
 
+    // scratch/*/*.md — session working documents (lowest search priority via SCRATCH_FIELD_CONFIGS)
+    const scratchEntries = await this.scanScratchDocuments();
+    out.push(...scratchEntries);
+
     return out;
   }
 
@@ -447,6 +453,38 @@ export class WikiIndexer {
       }
     }
     return results;
+  }
+
+  /**
+   * Scan .workflow/scratch session directories for .md working documents.
+   * These are indexed as 'note' type with ext.virtualKind='scratch-doc'
+   * so search.ts applies SCRATCH_FIELD_CONFIGS (lowest BM25 weight).
+   */
+  private async scanScratchDocuments(): Promise<WikiEntry[]> {
+    const scratchRoot = join(this.workflowRoot, 'scratch');
+    if (!existsSync(scratchRoot)) return [];
+    const out: WikiEntry[] = [];
+
+    for (const sessionName of await safeReaddir(scratchRoot)) {
+      const sessionDir = join(scratchRoot, sessionName);
+      let dirStat: Awaited<ReturnType<typeof stat>> | null = null;
+      try { dirStat = await stat(sessionDir); } catch { continue; }
+      if (!dirStat.isDirectory()) continue;
+
+      for (const fileName of await safeReaddir(sessionDir)) {
+        if (extname(fileName).toLowerCase() !== '.md') continue;
+        const absPath = join(sessionDir, fileName);
+        const entry = await this.parseFileEntry(absPath, 'note');
+        if (!entry) continue;
+
+        const stem = basename(fileName, extname(fileName));
+        entry.id = `scratch-${slugify(sessionName)}-${slugify(stem)}`;
+        entry.ext = { ...entry.ext, virtualKind: 'scratch-doc', sessionDir: sessionName };
+        entry.category = entry.category || 'scratch';
+        out.push(entry);
+      }
+    }
+    return out;
   }
 
   /**
