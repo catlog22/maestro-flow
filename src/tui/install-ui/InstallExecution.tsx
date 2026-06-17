@@ -52,19 +52,21 @@ function StepRow({ step }: { step: ExecutionStep }) {
   );
 }
 
-const STEP_LABELS: Record<string, string> = {
-  backup: 'Backup',
-  cleanup: 'Cleanup',
-  components: 'Components',
-  hooks: 'Hooks (Claude)',
-  statusline: 'Statusline',
-  mcp: 'MCP Server',
-  codexHooks: 'Codex Hooks',
-  codexMcp: 'Codex MCP',
-  agyHooks: 'Agy Hooks',
-  extraMcp: 'Extra MCP',
-  manifest: 'Save Manifest',
-};
+function getStepLabels(): Record<string, string> {
+  return {
+    backup: t.install.hubLabelBackup,
+    cleanup: t.install.execCleaning.replace('...', ''),
+    components: t.install.hubLabelComponents,
+    hooks: t.install.hubLabelHooks,
+    statusline: t.install.hubLabelStatusline,
+    mcp: t.install.hubLabelMcpServer,
+    codexHooks: t.install.hubLabelCodexHooks,
+    codexMcp: t.install.hubLabelCodexMcp,
+    agyHooks: t.install.hubLabelAgyHooks,
+    extraMcp: t.install.hubLabelExtraMcp,
+    manifest: 'Manifest',
+  };
+}
 
 export function InstallExecution({ config, pkgRoot, version, onComplete }: InstallExecutionProps) {
   const stepKeys = useMemo(() => {
@@ -83,10 +85,12 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
     return keys;
   }, [config]);
 
+  const stepLabels = useMemo(() => getStepLabels(), []);
+
   const [steps, setSteps] = useState<ExecutionStep[]>(() =>
     stepKeys.map((key) => ({
       key,
-      label: STEP_LABELS[key] ?? key,
+      label: stepLabels[key] ?? key,
       status: 'pending' as StepStatus,
       detail: '',
     })),
@@ -147,7 +151,7 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box>
-        <Text bold color={C.primary}>Installing...</Text>
+        <Text bold color={C.primary}>{t.install.execTitle}</Text>
         <Text dimColor>{'  '}{timeStr}</Text>
       </Box>
 

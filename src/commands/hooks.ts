@@ -71,8 +71,8 @@ export const HOOK_LEVELS: readonly HookLevel[] = ['none', 'minimal', 'standard',
 export const HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Statusline + spec-injector',
-  standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + kg-sync + kg-auto-init + kg-context-injector',
-  full: '+ workflow-guard (PreToolUse)',
+  standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + kg-sync + kg-auto-init + kg-context-injector + kg-unified-injector (opt-in)',
+  full: '+ workflow-guard (PreToolUse) + prompt-guard (UserPromptSubmit)',
 };
 
 export const HOOK_DEFS: Record<string, HookDef> = {
@@ -89,7 +89,10 @@ export const HOOK_DEFS: Record<string, HookDef> = {
   'kg-sync': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-auto-init': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-context-injector': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
+  'kg-unified-injector': { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
   'workflow-guard': { event: 'PreToolUse', matcher: 'Bash|Write|Edit', level: 'full', requiresWorkspace: true },
+  'prompt-guard': { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
 };
 
 // ---------------------------------------------------------------------------
@@ -117,14 +120,19 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
   'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
   'team-monitor':          { event: 'Stop', level: 'standard' },
   'telemetry':             { event: 'Stop', level: 'standard' },
+  'preflight-guard':       { event: 'PreToolUse', matcher: 'Bash', level: 'standard', requiresWorkspace: true, statusMessage: 'Running preflight checks' },
+  'spec-validator':        { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true, statusMessage: 'Validating against specs' },
+  'kg-unified-injector':   { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
+  'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'Bash', level: 'full', requiresWorkspace: true, statusMessage: 'Checking command safety' },
+  'prompt-guard':          { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
 };
 
 export const CODEX_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Session context (SessionStart)',
-  standard: '+ spec/keyword-injector + skill-context + kg-sync + kg-auto-init(SessionStart) + kg-context-injector + delegate-monitor + coordinator/team/telemetry(Stop)',
-  full: '+ workflow-guard (PreToolUse, Bash only)',
+  standard: '+ spec/keyword-injector + skill-context + kg-sync + kg-auto-init(SessionStart) + kg-context-injector + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards + kg-unified-injector (opt-in)',
+  full: '+ workflow-guard (PreToolUse, Bash only) + prompt-guard (UserPromptSubmit)',
 };
 
 /** Numeric ordering for level comparison */
@@ -591,17 +599,21 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
   'telemetry':             { event: 'Stop', level: 'standard' },
   'coordinator-tracker':   { event: 'Stop', level: 'standard', requiresWorkspace: true },
 
+  'kg-unified-injector':   { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
+  'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'invoke_subagent', level: 'standard', requiresWorkspace: true },
+
   // Full — guards
   'preflight-guard':       { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content|invoke_subagent', level: 'standard', requiresWorkspace: true },
   'spec-validator':        { event: 'PreToolUse', matcher: 'write_to_file|replace_file_content|multi_replace_file_content', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content', level: 'full', requiresWorkspace: true },
+  'prompt-guard':          { event: 'PreInvocation', level: 'full', requiresWorkspace: false },
 };
 
 export const AGY_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'spec-injector (PreToolUse on invoke_subagent)',
-  standard: '+ session/skill/keyword context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards',
-  full: '+ workflow-guard (PreToolUse on shell/file writes)',
+  standard: '+ session/skill/keyword context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards + kg-unified-injector (opt-in)',
+  full: '+ workflow-guard (PreToolUse on shell/file writes) + prompt-guard (PreInvocation)',
 };
 
 // File-schema types matching Antigravity's published shape.
@@ -932,6 +944,59 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
           updatedInput: {
             ...toolInput,
             prompt: augmentedPrompt,
+          },
+        },
+      }));
+    }
+  },
+
+  'kg-unified-injector': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['kgUnifiedInjector'] !== true) return;
+
+    const raw = await readStdin();
+    const data = JSON.parse(raw);
+    const prompt: string = data.user_prompt ?? data.prompt ?? '';
+    const sessionId: string = data.session_id ?? '';
+    if (!prompt || !sessionId) return;
+
+    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
+
+    const { evaluateUnifiedInjection } = await import('../graph/kg/surface/hook-injector.js');
+    const result = await evaluateUnifiedInjection(prompt, null, cwd, sessionId);
+    if (result.inject && result.content) {
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: data.hook_event_name || 'UserPromptSubmit',
+          additionalContext: result.content,
+        },
+      }));
+    }
+  },
+
+  'kg-unified-injector-agent': async () => {
+    const config = loadHooksConfig();
+    if (config.toggles['kgUnifiedInjector'] !== true) return;
+
+    const raw = await readStdin();
+    const data = JSON.parse(raw);
+    const toolInput = data.tool_input ?? {};
+    const agentType: string = toolInput.subagent_type ?? '';
+    if (!agentType) return;
+
+    const cwd = resolveWorkspace(data) ?? data.cwd ?? process.cwd();
+    const sessionId: string = data.session_id ?? '';
+    const originalPrompt: string = toolInput.prompt ?? '';
+
+    const { evaluateUnifiedInjection } = await import('../graph/kg/surface/hook-injector.js');
+    const result = await evaluateUnifiedInjection(originalPrompt, agentType, cwd, sessionId);
+    if (result.inject && result.content) {
+      process.stdout.write(JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          updatedInput: {
+            ...toolInput,
+            prompt: `${result.content}\n\n${originalPrompt}`,
           },
         },
       }));
@@ -1534,6 +1599,8 @@ export function registerHooksCommand(program: Command): void {
           : name === 'kg-sync' ? 'kgSync'
           : name === 'kg-auto-init' ? 'kgAutoInit'
           : name === 'kg-context-injector' ? 'kgContextInjector'
+          : name === 'kg-unified-injector' ? 'kgUnifiedInjector'
+          : name === 'kg-unified-injector-agent' ? 'kgUnifiedInjector'
           : name;
         const enabled = config.toggles[toggleKey] !== false;
         const matcher = def.matcher ? ` [${def.matcher}]` : '';

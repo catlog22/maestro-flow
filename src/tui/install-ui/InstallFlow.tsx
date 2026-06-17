@@ -56,16 +56,17 @@ export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initia
 
   // Breadcrumb path
   const breadcrumbPath = useMemo((): string[] | null => {
+    const hub = t.install.stepMenu;
     switch (s.step) {
-      case 'components_config': return ['Hub', 'Core', 'Components'];
-      case 'hooks_config': return ['Hub', 'Claude Code', 'Hooks'];
-      case 'mcp_config': return ['Hub', 'Claude Code', 'MCP Server'];
-      case 'statusline_config': return ['Hub', 'Claude Code', 'Statusline'];
-      case 'codex_hooks_config': return ['Hub', 'Codex', 'Hooks'];
-      case 'codex_mcp_config': return ['Hub', 'Codex', 'MCP'];
-      case 'agy_hooks_config': return ['Hub', 'Other Tools', 'Agy Hooks'];
-      case 'extra_mcp_config': return ['Hub', 'Other Tools', 'Extra MCP'];
-      case 'backup_config': return ['Hub', 'Core', 'Backup'];
+      case 'components_config': return [hub, t.install.groupCore, t.install.hubLabelComponents];
+      case 'hooks_config': return [hub, t.install.groupClaude, t.install.hubLabelHooks];
+      case 'mcp_config': return [hub, t.install.groupClaude, t.install.hubLabelMcpServer];
+      case 'statusline_config': return [hub, t.install.groupClaude, t.install.hubLabelStatusline];
+      case 'codex_hooks_config': return [hub, t.install.groupCodex, t.install.hubLabelCodexHooks];
+      case 'codex_mcp_config': return [hub, t.install.groupCodex, t.install.hubLabelCodexMcp];
+      case 'agy_hooks_config': return [hub, t.install.groupOther, t.install.hubLabelAgyHooks];
+      case 'extra_mcp_config': return [hub, t.install.groupOther, t.install.hubLabelExtraMcp];
+      case 'backup_config': return [hub, t.install.groupCore, t.install.hubLabelBackup];
       default: return null;
     }
   }, [s.step]);

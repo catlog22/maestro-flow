@@ -37,6 +37,60 @@ export const zh: LocaleStrings = {
     hubFiles: '{count} 个文件',
     hubTools: '{count} 个工具',
 
+    // Grouped Hub
+    groupCore: '核心',
+    groupClaude: 'Claude Code',
+    groupCodex: 'Codex',
+    groupOther: '其他工具',
+    hubScope: '范围：',
+    hubGlobal: '全局',
+    hubProject: '项目',
+    hubLastInstall: '上次：{date}',
+    hubExecuteInstall: '执行安装',
+    hubExportConfig: '导出配置',
+    hubImportConfig: '导入配置',
+    hubKeyHints: '[↑↓] 导航  [Space] 切换  [Enter] 配置  [Tab] 下一组  [g/p] 范围  [e] 导出  [i] 导入  [Esc] 退出',
+
+    // Hub item labels
+    hubLabelComponents: '组件',
+    hubLabelBackup: '备份',
+    hubLabelHooks: 'Hooks',
+    hubLabelMcpServer: 'MCP 服务器',
+    hubLabelStatusline: 'Statusline',
+    hubLabelCodexHooks: 'Codex Hooks',
+    hubLabelCodexMcp: 'Codex MCP',
+    hubLabelAgyHooks: 'Agy Hooks',
+    hubLabelExtraMcp: '扩展 MCP',
+
+    // Hub item details
+    hubDetailComponents: '工作流模板、Agent 定义、Skill 文件、Overlay、CLI 模板。\n\n{count} 个组件已选择\n~{files} 个文件待安装',
+    hubDetailBackup: '覆盖前创建时间戳备份。',
+    hubDetailHooks: 'Claude Code 事件钩子。\n预设：{level}\n控制：上下文注入、KG 同步、工具验证等。',
+    hubDetailMcp: '在 Claude Code 设置中注册 maestro-tools MCP 服务器。\n\n工具：读写/编辑文件、团队消息、知识存储。',
+    hubDetailStatusline: 'Claude Code 状态栏主题。\n主题：{theme}\n需要 Nerd Font 字体。',
+    hubDetailCodexHooks: 'Codex (OpenAI) 事件钩子。\n适配 Codex 事件模型的同一 hook 库。',
+    hubDetailCodexMcp: '在 Codex 配置中注册 maestro-tools MCP 服务器。',
+    hubDetailAgyHooks: 'Antigravity (Gemini CLI) 事件钩子。\n适配 Agy 事件模型的同一 hook 库。',
+    hubDetailExtraMcp: '在其他 IDE/CLI 中注册 maestro-tools：\nCursor、Qoder、Trae、Kiro、Roo、VS Code、Gemini CLI。',
+
+    // Hooks granular
+    hooksIndividual: '单独 Hooks',
+    hooksCustomStatus: '自定义（基于 {preset}，{count}/{total} 个 hooks）',
+    hooksPresetStatus: '{preset}（{count}/{total} 个 hooks）',
+    hooksKeyHints: '[1-4] 预设  [↑↓] 导航  [Space] 切换  [a] 全选  [n] 全不选  [Enter] 完成  [Esc] 返回',
+
+    // Confirm (new)
+    confirmReady: '准备安装',
+    confirmWillInstall: '将安装',
+    confirmSkippedSection: '已跳过',
+    confirmKeyHints: '[Enter] 确认安装  [Esc] 返回配置',
+
+    // Execution (new)
+    execTitle: '安装中...',
+
+    // Breadcrumb
+    breadcrumbBack: '[Esc] 返回',
+
     // Components
     componentsTitle: '选择组件',
     componentsNone: '未找到组件。',
@@ -48,8 +102,8 @@ export const zh: LocaleStrings = {
     hooksLevelDescriptions: {
       none: '无 Hooks',
       minimal: 'Statusline + spec-injector',
-      standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
-      full: '+ workflow-guard (PreToolUse)',
+      standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + preflight/spec 守护',
+      full: '+ workflow-guard (PreToolUse) + prompt-guard (UserPromptSubmit)',
     },
 
     // MCP
@@ -99,15 +153,14 @@ export const zh: LocaleStrings = {
     confirmLabelCodexHooks: 'Codex Hooks：',
     confirmLabelCodexMcp: 'Codex MCP：',
     confirmLabelAgyHooks: 'Agy Hooks：',
-    confirmLabelCodeGraph: 'CodeGraph：',
     confirmSkipped: '已跳过',
 
     // Codex Hooks
     codexHooksLevelDescriptions: {
       none: '无 Hooks',
       minimal: '会话上下文 (SessionStart)',
-      standard: '+ 规范/关键词注入 + skill 感知 + delegate 监控 + 协调器/团队/遥测(Stop)',
-      full: '+ 工作流防护 (PreToolUse，仅 Bash)',
+      standard: '+ 规范/关键词注入 + skill 感知 + delegate 监控 + 协调器/团队/遥测(Stop) + preflight/spec 守护',
+      full: '+ 工作流防护 (PreToolUse，仅 Bash) + prompt-guard (UserPromptSubmit)',
     },
     codexHooksWinWarning: '警告：Codex hooks 暂不支持 Windows。',
     codexHooksFeatureFlagHint: '在 ~/.codex/config.toml 的 [features] 中添加 codex_hooks = true 以启用 hooks。',
@@ -117,7 +170,7 @@ export const zh: LocaleStrings = {
       none: '无 Hooks',
       minimal: 'spec-injector (PreToolUse 拦截 invoke_subagent)',
       standard: '+ 会话/skill/关键词上下文 (PreInvocation) + delegate 监控 (PostToolUse) + 团队/遥测/协调器 (Stop) + preflight/spec 守护',
-      full: '+ 工作流防护 (PreToolUse 拦截 shell/文件写入)',
+      full: '+ 工作流防护 (PreToolUse 拦截 shell/文件写入) + prompt-guard (PreInvocation)',
     },
 
     // Execution
@@ -131,7 +184,6 @@ export const zh: LocaleStrings = {
     execInstallingCodexHooks: '正在安装 Codex {level} hooks...',
     execInstallingAgyHooks: '正在安装 Agy {level} hooks...',
     execInstallingStatusline: '正在安装 statusline...',
-    execInstallingCodeGraph: '正在安装 tree-sitter 代码分析...',
     execRegisteringMcp: '注册 MCP 服务器...',
     execRegisteringCodexMcp: '注册 Codex MCP 服务器...',
     execComplete: '完成',
@@ -147,8 +199,6 @@ export const zh: LocaleStrings = {
     resultHooks: '{count} 个已安装',
     resultManifest: '清单：',
     resultStatuslineInstalled: '已安装',
-    resultCodeGraphInstalled: '已安装（函数级 KG 已启用）',
-    resultCodeGraphFailed: '代码分析组件初始化失败',
     resultExit: '重启 Claude Code 以加载变更。按 Enter 退出。',
 
     // Force install

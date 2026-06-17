@@ -60,8 +60,6 @@ export interface InstallResult {
   extraMcpRegistered: string[];
   extraMcpFailed: string[];
   manifestPath: string;
-  codegraphInstalled: boolean;
-  codegraphError: string | null;
   statuslineInstalled: boolean;
   backupPath: string | null;
   migrationWarnings: string[];
@@ -103,8 +101,6 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   let agyHooksInstalled = 0;
   const extraMcpRegistered: string[] = [];
   const extraMcpFailed: string[] = [];
-  let codegraphInstalled = false;
-  const codegraphError: string | null = null;
   let statuslineInstalled = false;
   let backupPath: string | null = null;
   const warnings: string[] = [];
@@ -284,11 +280,6 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     progress('extraMcp', 'done', `${extraMcpRegistered.length} targets`);
   }
 
-  // --- CodeGraph ---
-  if (config.installCodeGraph) {
-    codegraphInstalled = true;
-  }
-
   // --- CLI tools config ---
   const { initCliToolsConfig } = await import('../config/cli-tools-config.js');
   await initCliToolsConfig();
@@ -305,7 +296,6 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     codexHooksInstalled, codexMcpRegistered,
     agyHooksInstalled,
     extraMcpRegistered, extraMcpFailed,
-    codegraphInstalled, codegraphError,
     manifestPath,
     statuslineInstalled, backupPath, migrationWarnings: warnings,
   };

@@ -86,27 +86,23 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
     willInstall.push({ label: 'Extra MCP', value: `${config.extraMcpTargetIds.join(', ')}` });
   } else { skipped.push('Extra MCP'); }
 
-  if (config.installCodeGraph) {
-    willInstall.push({ label: 'CodeGraph', value: 'built-in' });
-  }
-
   if (config.backupClaudeMd || config.backupAll) {
     willInstall.push({ label: 'Backup', value: config.backupAll ? t.install.backupAllLabel : t.install.backupClaudeMdLabel });
   } else { skipped.push('Backup'); }
 
   return (
     <Box flexDirection="column">
-      <Text bold color={C.primary}>Ready to Install</Text>
+      <Text bold color={C.primary}>{t.install.confirmReady}</Text>
 
       <Box marginTop={1}>
-        <Text bold>Scope: </Text>
+        <Text bold>{t.install.confirmLabelMode} </Text>
         <Text>{config.mode}</Text>
         <Text dimColor>  → {target}</Text>
       </Box>
 
       {/* Will Install section */}
       <Box flexDirection="column" {...BORDER.success} paddingX={1} marginTop={1}>
-        <Text bold color={C.success}>Will Install</Text>
+        <Text bold color={C.success}>{t.install.confirmWillInstall}</Text>
         {willInstall.map((item) => (
           <Row key={item.label} label={item.label} value={item.value} valueColor={C.success} />
         ))}
@@ -115,7 +111,7 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
       {/* Skipped section */}
       {skipped.length > 0 && (
         <Box flexDirection="column" {...BORDER.detail} paddingX={1} marginTop={1}>
-          <Text bold color={C.neutral}>Skipped</Text>
+          <Text bold color={C.neutral}>{t.install.confirmSkippedSection}</Text>
           {skipped.map((label) => (
             <SkippedRow key={label} label={label} />
           ))}
@@ -123,7 +119,7 @@ export function InstallConfirm({ config, onConfirm, onBack }: InstallConfirmProp
       )}
 
       <Box marginTop={1}>
-        <Text dimColor>[Enter] Confirm & Install  [Esc] Back</Text>
+        <Text dimColor>{t.install.confirmKeyHints}</Text>
       </Box>
     </Box>
   );

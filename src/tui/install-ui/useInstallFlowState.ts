@@ -15,8 +15,6 @@ import { exportProfile, importProfile, listProfiles, configToProfile, profileToS
 import { paths } from '../../config/paths.js';
 import { buildGroupedHubItems } from './GroupedHub.js';
 
-const isCodeGraphAvailable = () => true;
-
 export type FlowStep =
   | 'hub'
   | 'components_config' | 'hooks_config' | 'mcp_config'
@@ -80,7 +78,6 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     agyHooks: initialStepIds ? initialStepIds.includes('agyHooks') : prior.agyHooks,
     extraMcp: initialStepIds ? initialStepIds.includes('extraMcp') : prior.extraMcp,
     statusline: initialStepIds ? initialStepIds.includes('statusline') : prior.statusline,
-    codegraph: initialStepIds ? initialStepIds.includes('codegraph') : !isCodeGraphAvailable(),
     backup: initialStepIds ? initialStepIds.includes('backup') : true,
   });
 
@@ -156,7 +153,6 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       agyHooks: prior.agyHooks,
       extraMcp: prior.extraMcp,
       statusline: prior.statusline || !lastManifest,
-      codegraph: !isCodeGraphAvailable(),
       backup: true,
     });
     setSelectedComponentIds(
@@ -198,7 +194,6 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     agyHookLevel,
     installExtraMcp: enabledSteps.extraMcp && extraMcpTargetIds.length > 0,
     extraMcpTargetIds,
-    installCodeGraph: enabledSteps.codegraph,
     installStatusline: enabledSteps.statusline && installStatusline,
     statuslineTheme,
     hookLevel,
@@ -240,7 +235,6 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       agyHookIsCustom: agyHooksSelection.isCustom,
       extraMcpTargetCount: extraMcpTargetIds.length,
       statuslineDetected, statuslineTheme,
-      codegraphAvailable: isCodeGraphAvailable(),
       backupClaudeMd, backupAll,
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,

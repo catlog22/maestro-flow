@@ -120,8 +120,8 @@ export function HooksConfig({
 
   // Status line
   const statusText = isCustom
-    ? `Custom (based on ${basePreset}, ${selectedHooks.length}/${hookCount} hooks)`
-    : `${basePreset} (${selectedHooks.length}/${hookCount} hooks)`;
+    ? t.install.hooksCustomStatus.replace('{preset}', basePreset).replace('{count}', String(selectedHooks.length)).replace('{total}', String(hookCount))
+    : t.install.hooksPresetStatus.replace('{preset}', basePreset).replace('{count}', String(selectedHooks.length)).replace('{total}', String(hookCount));
 
   // Pre-compute flat index for each hook to avoid mutable counter in render
   const hookFlatIndexMap = useMemo(() => {
@@ -159,7 +159,7 @@ export function HooksConfig({
 
       {/* Individual hooks — grouped by event */}
       <Box flexDirection="column" marginTop={SP.sectionGap}>
-        <Text color={C.neutral} dimColor>{'─'.repeat(2)} Individual Hooks {'─'.repeat(30)}</Text>
+        <Text color={C.neutral} dimColor>{'─'.repeat(2)} {t.install.hooksIndividual} {'─'.repeat(30)}</Text>
         {eventGroups.map((group) => (
           <Box key={group.event} flexDirection="column">
             <Text color={C.neutral} dimColor>  {group.event}</Text>
@@ -190,7 +190,7 @@ export function HooksConfig({
         <Text color={isCustom ? C.warning : C.success}>{statusText}</Text>
       </Box>
 
-      <KeyHints hints="[1-4] Preset  [↑↓] Navigate  [Space] Toggle  [a] All  [n] None  [Enter] Done  [Esc] Back" />
+      <KeyHints hints={t.install.hooksKeyHints} />
     </Box>
   );
 }

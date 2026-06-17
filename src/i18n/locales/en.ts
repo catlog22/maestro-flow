@@ -37,6 +37,60 @@ export const en: LocaleStrings = {
     hubFiles: '{count} files',
     hubTools: '{count} tools',
 
+    // Grouped Hub
+    groupCore: 'Core',
+    groupClaude: 'Claude Code',
+    groupCodex: 'Codex',
+    groupOther: 'Other Tools',
+    hubScope: 'Scope:',
+    hubGlobal: 'Global',
+    hubProject: 'Project',
+    hubLastInstall: 'last: {date}',
+    hubExecuteInstall: 'Execute Install',
+    hubExportConfig: 'Export Config',
+    hubImportConfig: 'Import Config',
+    hubKeyHints: '[↑↓] Navigate  [Space] Toggle  [Enter] Configure  [Tab] Next group  [g/p] Scope  [e] Export  [i] Import  [Esc] Exit',
+
+    // Hub item labels
+    hubLabelComponents: 'Components',
+    hubLabelBackup: 'Backup',
+    hubLabelHooks: 'Hooks',
+    hubLabelMcpServer: 'MCP Server',
+    hubLabelStatusline: 'Statusline',
+    hubLabelCodexHooks: 'Codex Hooks',
+    hubLabelCodexMcp: 'Codex MCP',
+    hubLabelAgyHooks: 'Agy Hooks',
+    hubLabelExtraMcp: 'Extra MCP',
+
+    // Hub item details
+    hubDetailComponents: 'Workflow templates, agent definitions, skill files, overlays, CLI templates.\n\n{count} components selected\n~{files} files to install',
+    hubDetailBackup: 'Create timestamped backup of existing files before overwriting.',
+    hubDetailHooks: 'Claude Code event hooks.\nPreset: {level}\nControls: context injection, KG sync, tool validation, etc.',
+    hubDetailMcp: 'Register maestro-tools MCP server in Claude Code settings.\n\nTools: read/write/edit files, team messaging, knowhow storage.',
+    hubDetailStatusline: 'Status bar theme for Claude Code.\nTheme: {theme}\nRequires Nerd Font glyphs.',
+    hubDetailCodexHooks: 'Codex (OpenAI) event hooks.\nSame hook library adapted for Codex event model.',
+    hubDetailCodexMcp: 'Register maestro-tools MCP server in Codex config.',
+    hubDetailAgyHooks: 'Antigravity (Gemini CLI) event hooks.\nSame hook library adapted for Agy event model.',
+    hubDetailExtraMcp: 'Register maestro-tools in additional IDEs/CLIs:\nCursor, Qoder, Trae, Kiro, Roo, VS Code, Gemini CLI.',
+
+    // Hooks granular
+    hooksIndividual: 'Individual Hooks',
+    hooksCustomStatus: 'Custom (based on {preset}, {count}/{total} hooks)',
+    hooksPresetStatus: '{preset} ({count}/{total} hooks)',
+    hooksKeyHints: '[1-4] Preset  [↑↓] Navigate  [Space] Toggle  [a] All  [n] None  [Enter] Done  [Esc] Back',
+
+    // Confirm (new)
+    confirmReady: 'Ready to Install',
+    confirmWillInstall: 'Will Install',
+    confirmSkippedSection: 'Skipped',
+    confirmKeyHints: '[Enter] Confirm & Install  [Esc] Back',
+
+    // Execution (new)
+    execTitle: 'Installing...',
+
+    // Breadcrumb
+    breadcrumbBack: '[Esc] back',
+
     // Components
     componentsTitle: 'Select Components',
     componentsNone: 'No components found.',
@@ -48,8 +102,8 @@ export const en: LocaleStrings = {
     hooksLevelDescriptions: {
       none: 'No hooks',
       minimal: 'Statusline + spec-injector',
-      standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context',
-      full: '+ workflow-guard (PreToolUse)',
+      standard: '+ delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context + preflight/spec guards',
+      full: '+ workflow-guard (PreToolUse) + prompt-guard (UserPromptSubmit)',
     },
 
     // MCP
@@ -99,15 +153,14 @@ export const en: LocaleStrings = {
     confirmLabelCodexHooks: 'Codex Hooks:',
     confirmLabelCodexMcp: 'Codex MCP:',
     confirmLabelAgyHooks: 'Agy Hooks:',
-    confirmLabelCodeGraph: 'CodeGraph:',
     confirmSkipped: 'skipped',
 
     // Codex Hooks
     codexHooksLevelDescriptions: {
       none: 'No hooks',
       minimal: 'Session context (SessionStart)',
-      standard: '+ spec/keyword-injector + skill-context + delegate-monitor + coordinator/team/telemetry(Stop)',
-      full: '+ workflow-guard (PreToolUse, Bash only)',
+      standard: '+ spec/keyword-injector + skill-context + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards',
+      full: '+ workflow-guard (PreToolUse, Bash only) + prompt-guard (UserPromptSubmit)',
     },
     codexHooksWinWarning: 'Warning: Codex hooks are not yet supported on Windows.',
     codexHooksFeatureFlagHint: 'Add codex_hooks = true to [features] in ~/.codex/config.toml to enable hooks.',
@@ -117,7 +170,7 @@ export const en: LocaleStrings = {
       none: 'No hooks',
       minimal: 'spec-injector (PreToolUse on invoke_subagent)',
       standard: '+ session/skill/keyword context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards',
-      full: '+ workflow-guard (PreToolUse on shell/file writes)',
+      full: '+ workflow-guard (PreToolUse on shell/file writes) + prompt-guard (PreInvocation)',
     },
 
     // Execution
@@ -131,7 +184,6 @@ export const en: LocaleStrings = {
     execInstallingCodexHooks: 'Installing Codex {level} hooks...',
     execInstallingAgyHooks: 'Installing Agy {level} hooks...',
     execInstallingStatusline: 'Installing statusline...',
-    execInstallingCodeGraph: 'Installing tree-sitter code analysis...',
     execRegisteringMcp: 'Registering MCP server...',
     execRegisteringCodexMcp: 'Registering Codex MCP server...',
     execComplete: 'Complete',
@@ -147,8 +199,6 @@ export const en: LocaleStrings = {
     resultHooks: '{count} installed',
     resultManifest: 'Manifest:',
     resultStatuslineInstalled: 'installed',
-    resultCodeGraphInstalled: 'installed (function-level KG enabled)',
-    resultCodeGraphFailed: 'code analysis component initialization failed',
     resultExit: 'Restart Claude Code to pick up changes. Press Enter to exit.',
 
     // Force install

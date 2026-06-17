@@ -241,7 +241,6 @@ async function forceInstall(
     agyHookLevel,
     installExtraMcp: false,
     extraMcpTargetIds: [],
-    installCodeGraph: false,
     installStatusline: !!opts.statusline,
     statuslineTheme,
     hookLevel,

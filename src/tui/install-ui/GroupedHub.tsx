@@ -135,17 +135,17 @@ export function GroupedHub({
     <Box flexDirection="column">
       {/* Scope selector */}
       <Box>
-        <Text bold color={C.primary}>Scope: </Text>
+        <Text bold color={C.primary}>{t.install.hubScope} </Text>
         <Text color={mode === 'global' ? C.success : C.neutral} bold={mode === 'global'}>
-          {mode === 'global' ? '● ' : '○ '}Global
+          {mode === 'global' ? '● ' : '○ '}{t.install.hubGlobal}
         </Text>
         <Text>  </Text>
         <Text color={mode === 'project' ? C.success : C.neutral} bold={mode === 'project'}>
-          {mode === 'project' ? '● ' : '○ '}Project
+          {mode === 'project' ? '● ' : '○ '}{t.install.hubProject}
         </Text>
         <Text dimColor>  [g/p]</Text>
         {lastInstallDate && (
-          <Text dimColor>  last: {lastInstallDate}</Text>
+          <Text dimColor>  {t.install.hubLastInstall.replace('{date}', lastInstallDate)}</Text>
         )}
       </Box>
 
@@ -187,19 +187,19 @@ export function GroupedHub({
               color={cursor === flat.length ? C.successBright : C.neutral}
               bold={cursor === flat.length}
             >
-              {cursor === flat.length ? SYM.cursor : ' '} Execute Install
+              {cursor === flat.length ? SYM.cursor : ' '} {t.install.hubExecuteInstall}
             </Text>
             <Text
               color={cursor === flat.length + 1 ? C.primary : C.neutral}
               bold={cursor === flat.length + 1}
             >
-              {cursor === flat.length + 1 ? SYM.cursor : ' '} Export Config  [e]
+              {cursor === flat.length + 1 ? SYM.cursor : ' '} {t.install.hubExportConfig}  [e]
             </Text>
             <Text
               color={cursor === flat.length + 2 ? C.primary : C.neutral}
               bold={cursor === flat.length + 2}
             >
-              {cursor === flat.length + 2 ? SYM.cursor : ' '} Import Config  [i]
+              {cursor === flat.length + 2 ? SYM.cursor : ' '} {t.install.hubImportConfig}  [i]
             </Text>
           </Box>
         </Box>
@@ -220,7 +220,7 @@ export function GroupedHub({
         )}
       </Box>
 
-      <KeyHints hints={`[↑↓] Navigate  [Space] Toggle  [Enter] Configure  [Tab] Next group  [g/p] Scope  [e] Export  [i] Import  [Esc] Exit`} />
+      <KeyHints hints={t.install.hubKeyHints} />
     </Box>
   );
 }
@@ -242,7 +242,6 @@ export function buildGroupedHubItems(
     extraMcpTargetCount: number;
     statuslineDetected: string | null;
     statuslineTheme?: string;
-    codegraphAvailable: boolean;
     backupClaudeMd: boolean; backupAll: boolean;
   },
 ): HubGroup[] {
@@ -265,97 +264,90 @@ export function buildGroupedHubItems(
   return [
     {
       id: 'core',
-      title: 'Core',
+      title: t.install.groupCore,
       items: [
         {
           id: 'components',
-          label: 'Components',
+          label: t.install.hubLabelComponents,
           enabled: enabled.components,
           summary: `${summaries.componentCount} sel · ${summaries.fileCount}f`,
-          detail: `Workflow templates, agent definitions, skill files, overlays, CLI templates.\n\n${summaries.componentCount} components selected\n~${summaries.fileCount} files to install`,
+          detail: t.install.hubDetailComponents.replace('{count}', String(summaries.componentCount)).replace('{files}', String(summaries.fileCount)),
         },
         {
           id: 'backup',
-          label: 'Backup',
+          label: t.install.hubLabelBackup,
           enabled: enabled.backup,
           summary: backupSummary,
-          detail: 'Create timestamped backup of existing files before overwriting.',
-        },
-        {
-          id: 'codegraph',
-          label: 'CodeGraph',
-          enabled: enabled.codegraph,
-          summary: 'built-in',
-          detail: 'MaestroGraph tree-sitter based code analysis. Built-in, no install needed.',
+          detail: t.install.hubDetailBackup,
         },
       ],
     },
     {
       id: 'claude',
-      title: 'Claude Code',
+      title: t.install.groupClaude,
       items: [
         {
           id: 'hooks',
-          label: 'Hooks',
+          label: t.install.hubLabelHooks,
           enabled: enabled.hooks,
           summary: hookSummary(summaries.hookLevel, summaries.hookSelectedCount, summaries.hookTotalCount, summaries.hookIsCustom),
-          detail: `Claude Code event hooks.\nPreset: ${summaries.hookLevel}\nControls: context injection, KG sync, tool validation, etc.`,
+          detail: t.install.hubDetailHooks.replace('{level}', summaries.hookLevel),
         },
         {
           id: 'mcp',
-          label: 'MCP Server',
+          label: t.install.hubLabelMcpServer,
           enabled: enabled.mcp,
-          summary: summaries.mcpEnabled ? `${summaries.mcpToolCount} tools` : '—',
-          detail: 'Register maestro-tools MCP server in Claude Code settings.\n\nTools: read/write/edit files, team messaging, knowhow storage.',
+          summary: summaries.mcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.mcpToolCount)) : '—',
+          detail: t.install.hubDetailMcp,
         },
         {
           id: 'statusline',
-          label: 'Statusline',
+          label: t.install.hubLabelStatusline,
           enabled: enabled.statusline,
           summary: summaries.statuslineDetected
-            ? `detected: ${summaries.statuslineDetected}`
+            ? t.install.statuslineDetected.replace('{cmd}', summaries.statuslineDetected)
             : (summaries.statuslineTheme || 'notion'),
-          detail: `Status bar theme for Claude Code.\nTheme: ${summaries.statuslineTheme || 'notion'}\nRequires Nerd Font glyphs.`,
+          detail: t.install.hubDetailStatusline.replace('{theme}', summaries.statuslineTheme || 'notion'),
         },
       ],
     },
     {
       id: 'codex',
-      title: 'Codex',
+      title: t.install.groupCodex,
       items: [
         {
           id: 'codexHooks',
-          label: 'Hooks',
+          label: t.install.hubLabelCodexHooks,
           enabled: enabled.codexHooks,
           summary: hookSummary(summaries.codexHookLevel, summaries.codexHookSelectedCount, summaries.codexHookTotalCount, summaries.codexHookIsCustom),
-          detail: 'Codex (OpenAI) event hooks.\nSame hook library adapted for Codex event model.',
+          detail: t.install.hubDetailCodexHooks,
         },
         {
           id: 'codexMcp',
-          label: 'MCP',
+          label: t.install.hubLabelCodexMcp,
           enabled: enabled.codexMcp,
-          summary: summaries.codexMcpEnabled ? `${summaries.codexMcpToolCount} tools` : '—',
-          detail: 'Register maestro-tools MCP server in Codex config.',
+          summary: summaries.codexMcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.codexMcpToolCount)) : '—',
+          detail: t.install.hubDetailCodexMcp,
         },
       ],
     },
     {
       id: 'other',
-      title: 'Other Tools',
+      title: t.install.groupOther,
       items: [
         {
           id: 'agyHooks',
-          label: 'Agy Hooks',
+          label: t.install.hubLabelAgyHooks,
           enabled: enabled.agyHooks,
           summary: hookSummary(summaries.agyHookLevel, summaries.agyHookSelectedCount, summaries.agyHookTotalCount, summaries.agyHookIsCustom),
-          detail: 'Antigravity (Gemini CLI) event hooks.\nSame hook library adapted for Agy event model.',
+          detail: t.install.hubDetailAgyHooks,
         },
         {
           id: 'extraMcp',
-          label: 'Extra MCP',
+          label: t.install.hubLabelExtraMcp,
           enabled: enabled.extraMcp,
           summary: summaries.extraMcpTargetCount > 0 ? `${summaries.extraMcpTargetCount} targets` : '0 targets',
-          detail: 'Register maestro-tools in additional IDEs/CLIs:\nCursor, Qoder, Trae, Kiro, Roo, VS Code, Gemini CLI.',
+          detail: t.install.hubDetailExtraMcp,
         },
       ],
     },

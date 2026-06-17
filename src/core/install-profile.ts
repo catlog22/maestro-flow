@@ -69,9 +69,6 @@ export interface InstallProfile {
     enabled: boolean;
     targetIds: ExtraMcpTargetId[];
   };
-  codeGraph: {
-    enabled: boolean;
-  };
   backup: {
     claudeMd: boolean;
     all: boolean;
@@ -211,7 +208,6 @@ export function exportProfileFromManifest(
       enabled: !!(manifest?.mcp?.extras?.length),
       targetIds: (manifest?.mcp?.extras?.map((e) => e.targetId) ?? []) as ExtraMcpTargetId[],
     },
-    codeGraph: { enabled: true },
     backup: { claudeMd: true, all: false },
   };
 
@@ -260,7 +256,6 @@ export function configToProfile(
       },
     },
     extraMcp: { enabled: config.installExtraMcp, targetIds: config.extraMcpTargetIds },
-    codeGraph: { enabled: config.installCodeGraph },
     backup: { claudeMd: config.backupClaudeMd, all: config.backupAll },
   };
 }
@@ -297,7 +292,6 @@ export function profileToStateValues(profile: InstallProfile): ProfileApplyResul
       agyHooks: profile.agy.hooks.enabled,
       extraMcp: profile.extraMcp.enabled,
       statusline: profile.claude.statusline.enabled,
-      codegraph: profile.codeGraph.enabled,
       backup: profile.backup.claudeMd || profile.backup.all,
     },
     selectedComponentIds: profile.components.selectedIds,

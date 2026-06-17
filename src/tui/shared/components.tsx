@@ -5,6 +5,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { C, SYM, SP } from './tokens.js';
+import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------
 // KeyHints — context-sensitive keyboard shortcut footer
@@ -123,7 +124,7 @@ export function Breadcrumb({ path }: BreadcrumbProps) {
           </Text>
         </Box>
       ))}
-      <Text dimColor>{'  '}[Esc] back</Text>
+      <Text dimColor>{'  '}{t.install.breadcrumbBack}</Text>
     </Box>
   );
 }
