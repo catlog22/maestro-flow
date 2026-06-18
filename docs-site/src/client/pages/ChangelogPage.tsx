@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.31',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'KG custom extractor plugin system — declarative config + script plugins + generator command', text_zh: 'KG 自定义提取器插件机制——声明式配置 + 脚本插件 + 生成命令' },
+      { type: 'fix', text_en: 'Switch kg CLI to MaestroGraph surface — compatibility aliases for index/sync-all/search, symbol name resolution for context/callers/callees/impact', text_zh: '切换 kg 命令到 MaestroGraph——兼容别名 index/sync-all/search，context/callers/callees/impact 支持符号名解析' },
+      { type: 'refactor', text_en: 'Core workflow files optimization — 13 files, -675 lines removed', text_zh: '核心 workflow 文件精简优化——13 个文件 -675 行' },
+      { type: 'refactor', text_en: 'Full command and workflow instruction optimization — purpose trimming + structure completion + Phase Gates normalization', text_zh: '全量优化命令文件和 workflow 指令——purpose 精简 + 结构补全 + Phase Gates 规范化' },
+      { type: 'docs', text_en: 'Instruction authoring guide update — optimization principles and anti-patterns for model behavior consistency', text_zh: '更新指令文件编写指南——优化原则与反模式，确保模型行为一致性' },
+      { type: 'docs', text_en: 'docs-site: add Odyssey command family documentation with category registration and i18n', text_zh: 'docs-site 新增 Odyssey 命令族文档——类别注册 + i18n' },
+    ],
+  },
+  {
     version: '0.5.3',
     date: '2026-06',
     changes: [

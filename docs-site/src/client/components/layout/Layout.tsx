@@ -27,7 +27,7 @@ export function Layout({ children }: { children?: ReactNode }) {
 function AnnouncementBanner() {
   return (
     <div className="fixed top-0 left-0 right-0 z-[101] bg-[#2E7D32] text-white text-[length:14px] text-center py-[8px] px-[var(--spacing-4)] leading-[1.4]">
-      Maestro v0.5.3 已发布 — MaestroGraph 自研 KG 引擎 + Odyssey 长时命令族。详见{' '}
+      Maestro v0.5.31 已发布 — KG 提取器插件 + kg 命令切换 MaestroGraph + workflow 精简优化。详见{' '}
       <Link
         to="/changelog"
         className="text-white font-[var(--font-weight-semibold)] underline hover:no-underline"
