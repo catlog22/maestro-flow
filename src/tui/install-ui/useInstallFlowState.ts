@@ -8,7 +8,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { HooksSelection } from './HooksConfig.js';
 import type { InstallFlowConfig } from './types.js';
 import type { InstallFlowResult } from './InstallExecution.js';
-import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS, type ExtraMcpTargetId } from '../../commands/install-backend.js';
+import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS, migrateComponentIds, type ExtraMcpTargetId } from '../../commands/install-backend.js';
 import { detectStatusline, getHooksForLevel, getAllHookNames, type HookLevel } from '../../commands/hooks.js';
 import { findManifest, type Manifest } from '../../core/manifest.js';
 import { exportProfile, importProfile, listProfiles, configToProfile, profileToStateValues } from '../../core/install-profile.js';
@@ -84,7 +84,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   // --- Component selection ---
   const [selectedComponentIds, setSelectedComponentIds] = useState<string[]>(
     () => lastManifest?.selectedComponentIds?.length
-      ? lastManifest.selectedComponentIds
+      ? migrateComponentIds(lastManifest.selectedComponentIds)
       : COMPONENT_DEFS.filter((d) => d.defaultSelected !== false).map((d) => d.id),
   );
 
@@ -157,7 +157,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     });
     setSelectedComponentIds(
       lastManifest?.selectedComponentIds?.length
-        ? lastManifest.selectedComponentIds
+        ? migrateComponentIds(lastManifest.selectedComponentIds)
         : COMPONENT_DEFS.filter((d) => d.defaultSelected !== false).map((d) => d.id),
     );
     setClaudeHooksSelection(makeHooksSelection((lastManifest?.hooks?.claude?.level as HookLevel) || 'standard', 'claude'));

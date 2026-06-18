@@ -55,7 +55,7 @@ const __dirname = dirname(__filename);
 export const PRESERVE_FILES = new Set(['settings.json', 'settings.local.json']);
 
 // Re-export component definitions from shared module
-export { COMPONENT_DEFS, type ComponentDef } from '../core/component-defs.js';
+export { COMPONENT_DEFS, migrateComponentIds, type ComponentDef } from '../core/component-defs.js';
 
 // ---------------------------------------------------------------------------
 // Disabled items — preserve disabled state across reinstalls

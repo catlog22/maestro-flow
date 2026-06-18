@@ -121,25 +121,9 @@ const NON_CORE_SKILL_NAMES = new Set([
   ...META_SKILLS.map((s) => s.name),
 ]);
 
-function makeOptionalSkillDef(
-  entry: OptionalSkillEntry,
-  category: string,
-): ComponentDef {
-  return {
-    id: entry.name,
-    label: entry.label,
-    description: entry.description,
-    sourcePath: join('.claude', 'skills'),
-    target: (mode, projectPath) =>
-      mode === 'global'
-        ? join(homedir(), '.claude', 'skills')
-        : join(projectPath, '.claude', 'skills'),
-    alwaysGlobal: false,
-    category,
-    defaultSelected: false,
-    fileFilter: (name) => name === entry.name,
-  };
-}
+const EXTRA_TEAM_SKILL_NAMES = new Set(EXTRA_TEAM_SKILLS.map((s) => s.name));
+const SCHOLAR_SKILL_NAMES = new Set(SCHOLAR_SKILLS.map((s) => s.name));
+const META_SKILL_NAMES = new Set(META_SKILLS.map((s) => s.name));
 
 // ---------------------------------------------------------------------------
 // Definitions
@@ -435,9 +419,72 @@ export const COMPONENT_DEFS: ComponentDef[] = [
     },
   },
   // -------------------------------------------------------------------------
-  // Optional skill packages — individually selectable extras
+  // Optional skill packages — group bundles (use `install toggle` for individual control)
   // -------------------------------------------------------------------------
-  ...EXTRA_TEAM_SKILLS.map((s) => makeOptionalSkillDef(s, 'extra-team')),
-  ...SCHOLAR_SKILLS.map((s) => makeOptionalSkillDef(s, 'extra-scholar')),
-  ...META_SKILLS.map((s) => makeOptionalSkillDef(s, 'extra-meta')),
+  {
+    id: 'skills-extra-team',
+    label: 'Extra Team Skills',
+    description: `${EXTRA_TEAM_SKILLS.length} additional team skills (arch-opt, brainstorm, frontend, etc.)`,
+    sourcePath: join('.claude', 'skills'),
+    target: (mode, projectPath) =>
+      mode === 'global'
+        ? join(homedir(), '.claude', 'skills')
+        : join(projectPath, '.claude', 'skills'),
+    alwaysGlobal: false,
+    category: 'skills',
+    defaultSelected: false,
+    fileFilter: (name) => EXTRA_TEAM_SKILL_NAMES.has(name),
+  },
+  {
+    id: 'skills-scholar',
+    label: 'Scholar Skills',
+    description: `${SCHOLAR_SKILLS.length} academic writing & research skills`,
+    sourcePath: join('.claude', 'skills'),
+    target: (mode, projectPath) =>
+      mode === 'global'
+        ? join(homedir(), '.claude', 'skills')
+        : join(projectPath, '.claude', 'skills'),
+    alwaysGlobal: false,
+    category: 'skills',
+    defaultSelected: false,
+    fileFilter: (name) => SCHOLAR_SKILL_NAMES.has(name),
+  },
+  {
+    id: 'skills-meta',
+    label: 'Meta Skills',
+    description: `${META_SKILLS.length} skill tooling (generator, tuning, simplify, etc.)`,
+    sourcePath: join('.claude', 'skills'),
+    target: (mode, projectPath) =>
+      mode === 'global'
+        ? join(homedir(), '.claude', 'skills')
+        : join(projectPath, '.claude', 'skills'),
+    alwaysGlobal: false,
+    category: 'skills',
+    defaultSelected: false,
+    fileFilter: (name) => META_SKILL_NAMES.has(name),
+  },
 ];
+
+// ---------------------------------------------------------------------------
+// Manifest migration — map old individual skill IDs to new group bundles
+// ---------------------------------------------------------------------------
+
+const VALID_IDS = new Set(COMPONENT_DEFS.map((d) => d.id));
+
+const LEGACY_SKILL_TO_GROUP = new Map<string, string>();
+for (const s of EXTRA_TEAM_SKILLS) LEGACY_SKILL_TO_GROUP.set(s.name, 'skills-extra-team');
+for (const s of SCHOLAR_SKILLS) LEGACY_SKILL_TO_GROUP.set(s.name, 'skills-scholar');
+for (const s of META_SKILLS) LEGACY_SKILL_TO_GROUP.set(s.name, 'skills-meta');
+
+export function migrateComponentIds(ids: string[]): string[] {
+  const result = new Set<string>();
+  for (const id of ids) {
+    if (VALID_IDS.has(id)) {
+      result.add(id);
+    } else {
+      const groupId = LEGACY_SKILL_TO_GROUP.get(id);
+      if (groupId) result.add(groupId);
+    }
+  }
+  return Array.from(result);
+}

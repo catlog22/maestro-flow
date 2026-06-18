@@ -157,7 +157,7 @@ export function GroupedHub({
             const groupItems = flat.filter((e) => e.groupIdx === gi);
             return (
               <Box key={group.id} flexDirection="column">
-                <Text color={C.neutral} dimColor>{'─'.repeat(2)} {group.title} {'─'.repeat(Math.max(0, 36 - group.title.length))}</Text>
+                <Text color={C.primary}>{'─'.repeat(2)} {group.title} {'─'.repeat(Math.max(0, 36 - group.title.length))}</Text>
                 {groupItems.map((entry) => {
                   const idx = flatIndexMap.get(`${entry.groupIdx}-${entry.itemIdx}`) ?? 0;
                   const hl = cursor === idx;
