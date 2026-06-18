@@ -390,3 +390,16 @@ registerNotice({
     },
   ],
 });
+
+registerNotice({
+  version: '0.5.32',
+  title: 'Install Toggle 独立控制 + 脚本插件安全加固',
+  highlights: [
+    '新增 maestro install toggle：按技能/命令独立启禁用，三态 Tab 视图',
+    '细粒度安装选择：每个新增技能独立可选 + 命令族分组选择',
+    'KG 代码索引流式写入 + 原子提交，大仓库不再 OOM',
+    'Odyssey 全族零遗留执行强化：6 项系统性修复消除过早停止',
+    '脚本插件默认禁用（secure by default），需显式启用',
+  ],
+  actions: [],
+});
