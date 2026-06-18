@@ -177,30 +177,7 @@ export async function syncKnowledgeGraph(
 
       let totalNodes = 0;
       let totalEdges = 0;
-      const pendingResults: import('../db/types.js').ExtractionResult[] = [];
-      const BATCH_SIZE = 50;
-
-      const flushBatch = (): void => {
-        if (pendingResults.length === 0) return;
-        mg.getConnection().transaction(() => {
-          for (const result of pendingResults) {
-            try {
-              mg.insertExtractionResults(result);
-            } catch (err) {
-              try {
-                mg.getQueryBuilder().insertNodes(result.nodes);
-                mg.getQueryBuilder().upsertFile(result.fileRecord);
-                if (process.env.DEBUG) {
-                  process.stderr.write(`[MaestroGraph] Partial write for ${result.fileRecord.path}: edges skipped (${err instanceof Error ? err.message : String(err)})\n`);
-                }
-              } catch (innerErr) {
-                process.stderr.write(`[MaestroGraph] Failed to index ${result.fileRecord.path}: ${innerErr instanceof Error ? innerErr.message : String(innerErr)}\n`);
-              }
-            }
-          }
-        });
-        pendingResults.length = 0;
-      };
+      const allResults: import('../db/types.js').ExtractionResult[] = [];
 
       for (const srcDir of srcDirs) {
         if (!existsSync(srcDir)) continue;
@@ -214,8 +191,7 @@ export async function syncKnowledgeGraph(
           createMaestroIgnore: options?.codegraph?.createMaestroIgnore,
         }, async (result) => {
           if (result.nodes.length > 0) {
-            pendingResults.push(result);
-            if (pendingResults.length >= BATCH_SIZE) flushBatch();
+            allResults.push(result);
           }
         });
 
@@ -223,27 +199,31 @@ export async function syncKnowledgeGraph(
         totalEdges += stats.edgesCreated;
       }
 
-      // Atomic swap: delete old + flush remaining in one transaction
-      mg.getConnection().transaction(() => {
-        queries.deleteNodesBySourceType('codegraph');
-        for (const result of pendingResults) {
+      const removedCode = mg.getConnection().transaction(() => {
+        const removed = queries.deleteNodesBySourceType('codegraph');
+        for (const result of allResults) {
           try {
             mg.insertExtractionResults(result);
-          } catch {
+          } catch (err) {
             try {
               mg.getQueryBuilder().insertNodes(result.nodes);
               mg.getQueryBuilder().upsertFile(result.fileRecord);
-            } catch { /* skip */ }
+              if (process.env.DEBUG) {
+                process.stderr.write(`[MaestroGraph] Partial write for ${result.fileRecord.path}: edges skipped (${err instanceof Error ? err.message : String(err)})\n`);
+              }
+            } catch (innerErr) {
+              process.stderr.write(`[MaestroGraph] Failed to index ${result.fileRecord.path}: ${innerErr instanceof Error ? innerErr.message : String(innerErr)}\n`);
+            }
           }
         }
+        return removed;
       });
-      pendingResults.length = 0;
 
       results.push({
         source: 'codegraph',
         nodesAdded: totalNodes,
         nodesUpdated: 0,
-        nodesRemoved: 0,
+        nodesRemoved: removedCode,
         edgesAdded: totalEdges,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
