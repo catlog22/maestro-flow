@@ -114,6 +114,13 @@ const META_SKILLS: OptionalSkillEntry[] = [
   { name: 'delegation-check', label: 'Delegation Check', description: 'Check delegation prompt contracts' },
 ];
 
+const NON_CORE_SKILL_NAMES = new Set([
+  ...BUILTIN_TEAM_SKILLS,
+  ...EXTRA_TEAM_SKILLS.map((s) => s.name),
+  ...SCHOLAR_SKILLS.map((s) => s.name),
+  ...META_SKILLS.map((s) => s.name),
+]);
+
 function makeOptionalSkillDef(
   entry: OptionalSkillEntry,
   category: string,
@@ -234,9 +241,7 @@ export const COMPONENT_DEFS: ComponentDef[] = [
         : join(projectPath, '.claude', 'skills'),
     alwaysGlobal: false,
     category: 'skills',
-    fileFilter: (name) =>
-      !name.startsWith('team-') && !name.startsWith('scholar-') &&
-      !META_SKILLS.some((s) => s.name === name),
+    fileFilter: (name) => !NON_CORE_SKILL_NAMES.has(name),
   },
   {
     id: 'skills-team',

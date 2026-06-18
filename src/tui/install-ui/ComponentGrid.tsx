@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { CyberItem } from './CyberItem.js';
 import {
@@ -48,9 +48,17 @@ export function ComponentGrid({
   onDone,
 }: ComponentGridProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const prevCountRef = useRef(components.length);
 
   const count = components.length;
   const safeIndex = clampIndex(selectedIndex, count);
+
+  useEffect(() => {
+    if (components.length !== prevCountRef.current) {
+      setSelectedIndex(0);
+      prevCountRef.current = components.length;
+    }
+  }, [components.length]);
 
   const groups = useMemo((): CategoryGroup[] => {
     const ungrouped: ScannedComponent[] = [];

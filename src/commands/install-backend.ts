@@ -12,7 +12,6 @@ import {
   readdirSync,
   statSync,
   copyFileSync,
-  cpSync,
   readFileSync,
   writeFileSync,
   renameSync,
@@ -23,8 +22,6 @@ import {
   addDir,
   cleanManifestFiles,
   deleteManifest,
-  findManifest,
-  manifestFile,
   type Manifest,
 } from '../core/manifest.js';
 import { applyOverlays, ensureOverlayDir, deleteOverlayManifest } from '../core/overlay/applier.js';
@@ -106,6 +103,7 @@ export function scanDisabledItems(targetBase: string): DisabledItem[] {
   scanDir(join(targetBase, '.claude', 'commands'), '.md.disabled', 'command', false);
   scanDir(join(targetBase, '.claude', 'agents'), '.md.disabled', 'agent', false);
   scanDir(join(targetBase, '.codex', 'skills'), '', 'skill', true);
+  scanDir(join(targetBase, '.codex', 'commands'), '.md.disabled', 'command', false);
   scanDir(join(targetBase, '.codex', 'agents'), '.md.disabled', 'agent', false);
 
   return items;
@@ -124,149 +122,14 @@ export function restoreDisabledState(items: DisabledItem[], targetBase: string):
   return restored;
 }
 
-// ---------------------------------------------------------------------------
-// Toggle — list installed items with enable/disable state
-// ---------------------------------------------------------------------------
-
-export type ToggleState = 'on' | 'off' | 'available';
-
-export interface ToggleItem {
-  name: string;
-  type: 'command' | 'skill' | 'agent';
-  state: ToggleState;
-  /** Source path in pkgRoot (for install from source) */
-  sourcePath: string;
-  /** Target active path */
-  targetActive: string;
-  /** Target disabled path */
-  targetDisabled: string;
-}
-
-export function scanToggleItems(pkgRoot: string, targetBase: string): ToggleItem[] {
-  const items = new Map<string, ToggleItem>();
-
-  const addSource = (dir: string, targetDir: string, type: ToggleItem['type'], isSkill: boolean) => {
-    if (!existsSync(dir)) return;
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (isSkill) {
-        if (!entry.isDirectory() || entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
-        if (!existsSync(join(dir, entry.name, 'SKILL.md'))) continue;
-        const key = `${type}:${entry.name}`;
-        items.set(key, {
-          name: entry.name, type, state: 'available',
-          sourcePath: join(dir, entry.name),
-          targetActive: join(targetDir, entry.name, 'SKILL.md'),
-          targetDisabled: join(targetDir, entry.name, 'SKILL.md.disabled'),
-        });
-      } else {
-        if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
-        const name = entry.name.replace('.md', '');
-        const key = `${type}:${name}`;
-        items.set(key, {
-          name, type, state: 'available',
-          sourcePath: join(dir, entry.name),
-          targetActive: join(targetDir, entry.name),
-          targetDisabled: join(targetDir, `${entry.name}.disabled`),
-        });
-      }
-    }
-  };
-
-  const markTarget = (dir: string, type: ToggleItem['type'], isSkill: boolean) => {
-    if (!existsSync(dir)) return;
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (isSkill) {
-        if (!entry.isDirectory()) continue;
-        const key = `${type}:${entry.name}`;
-        const hasActive = existsSync(join(dir, entry.name, 'SKILL.md'));
-        const hasDisabled = existsSync(join(dir, entry.name, 'SKILL.md.disabled'));
-        if (hasActive || hasDisabled) {
-          const existing = items.get(key);
-          const state: ToggleState = hasActive ? 'on' : 'off';
-          if (existing) {
-            existing.state = state;
-          } else {
-            items.set(key, {
-              name: entry.name, type, state,
-              sourcePath: '',
-              targetActive: join(dir, entry.name, 'SKILL.md'),
-              targetDisabled: join(dir, entry.name, 'SKILL.md.disabled'),
-            });
-          }
-        }
-      } else {
-        if (!entry.isFile()) continue;
-        const isDisabled = entry.name.endsWith('.md.disabled');
-        const isMd = entry.name.endsWith('.md') && !isDisabled;
-        if (!isMd && !isDisabled) continue;
-        const name = isDisabled ? entry.name.replace('.md.disabled', '') : entry.name.replace('.md', '');
-        const key = `${type}:${name}`;
-        const state: ToggleState = isMd ? 'on' : 'off';
-        const existing = items.get(key);
-        if (existing) {
-          if (existing.state !== 'on') existing.state = state;
-        } else {
-          items.set(key, {
-            name, type, state,
-            sourcePath: '',
-            targetActive: join(dir, `${name}.md`),
-            targetDisabled: join(dir, `${name}.md.disabled`),
-          });
-        }
-      }
-    }
-  };
-
-  const srcClaude = join(pkgRoot, '.claude');
-  const tgtClaude = join(targetBase, '.claude');
-
-  addSource(join(srcClaude, 'commands'), join(tgtClaude, 'commands'), 'command', false);
-  addSource(join(srcClaude, 'skills'), join(tgtClaude, 'skills'), 'skill', true);
-  addSource(join(srcClaude, 'agents'), join(tgtClaude, 'agents'), 'agent', false);
-
-  markTarget(join(tgtClaude, 'commands'), 'command', false);
-  markTarget(join(tgtClaude, 'skills'), 'skill', true);
-  markTarget(join(tgtClaude, 'agents'), 'agent', false);
-
-  return [...items.values()].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
-}
-
-export function applyToggle(item: ToggleItem, pkgRoot: string): boolean {
-  if (item.state === 'on') {
-    if (existsSync(item.targetActive)) {
-      renameSync(item.targetActive, item.targetDisabled);
-      return true;
-    }
-  } else if (item.state === 'off') {
-    if (existsSync(item.targetDisabled)) {
-      renameSync(item.targetDisabled, item.targetActive);
-      return true;
-    }
-  } else {
-    if (!item.sourcePath) return false;
-    const targetDir = dirname(item.targetActive);
-    if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true });
-    const srcStat = statSync(item.sourcePath);
-    if (srcStat.isDirectory()) {
-      cpSync(item.sourcePath, targetDir, { recursive: true });
-    } else {
-      copyFileSync(item.sourcePath, item.targetActive);
-    }
-    return true;
-  }
-  return false;
-}
-
-export function updateManifestDisabledItems(
-  scope: 'global' | 'project',
-  targetPath: string,
-  disabledNames: string[],
-): void {
-  const manifest = findManifest(scope, targetPath);
-  if (!manifest) return;
-  manifest.disabledItems = disabledNames;
-  writeFileSync(manifestFile(manifest.id), JSON.stringify(manifest, null, 2), 'utf-8');
-}
+// Toggle — re-exported from core/toggle.ts (single responsibility extraction)
+export {
+  scanToggleItems,
+  applyToggle,
+  updateManifestDisabledItems,
+  type ToggleItem,
+  type ToggleState,
+} from '../core/toggle.js';
 
 // ---------------------------------------------------------------------------
 // Overlay post-install hook

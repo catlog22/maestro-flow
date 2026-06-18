@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { C, SYM, KeyHints } from '../shared/index.js';
 import {
@@ -61,6 +61,10 @@ export function ToggleView({ pkgRoot, targetBase, scope, targetPath, filter }: T
 
   const count = tabItems.length;
   const safeIdx = count > 0 ? Math.min(cursor, count - 1) : 0;
+
+  useEffect(() => {
+    if (cursor >= count) setCursor(Math.max(0, count - 1));
+  }, [activeTab, count, cursor]);
 
   const handleToggle = useCallback(
     (idx: number) => {

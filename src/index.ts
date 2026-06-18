@@ -25,6 +25,11 @@ export {
 export type { MigrateResult, MigrateAction, CopyStats } from './core/tag-injector.js';
 export { COMPONENT_DEFS } from './core/component-defs.js';
 export type { ComponentDef } from './core/component-defs.js';
+export {
+  scanDisabledItems,
+  restoreDisabledState,
+} from './commands/install-backend.js';
+export type { DisabledItem } from './commands/install-backend.js';
 export { ADDON_REGISTRY, HARNESS_DIRS } from './core/addon-registry.js';
 export type { AddonDef, AddonTarget, HarnessType } from './core/addon-registry.js';
 export type * from './types/index.js';

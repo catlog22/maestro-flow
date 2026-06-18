@@ -12,7 +12,6 @@ import {
   copyFileSync,
   readFileSync,
   writeFileSync,
-  renameSync,
   statSync,
 } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
@@ -31,9 +30,15 @@ import {
   COMPONENT_DEFS,
 } from 'maestro-flow';
 import type { Manifest, ManifestEntry, ComponentDef } from 'maestro-flow';
+import {
+  scanDisabledItems,
+  restoreDisabledState,
+  type DisabledItem,
+} from '../../../../src/commands/install-backend.js';
 
 export { createManifest, saveManifest, findManifest, getAllManifests, injectDocFile };
-export type { Manifest, ManifestEntry };
+export { scanDisabledItems, restoreDisabledState };
+export type { Manifest, ManifestEntry, DisabledItem };
 
 // ---------------------------------------------------------------------------
 // Dashboard-specific types
@@ -55,11 +60,7 @@ export interface DetectionResult {
   disabledItems: DisabledItem[];
 }
 
-export interface DisabledItem {
-  name: string;
-  relativePath: string;
-  type: 'skill' | 'command' | 'agent';
-}
+
 
 export interface InstallResult {
   success: boolean;
@@ -144,72 +145,6 @@ export function scanAvailableSources(
       available: fileCount > 0,
     };
   });
-}
-
-// ---------------------------------------------------------------------------
-// Disabled items
-// ---------------------------------------------------------------------------
-
-export function scanDisabledItems(targetPath: string): DisabledItem[] {
-  const items: DisabledItem[] = [];
-
-  const scanDir = (
-    dir: string,
-    suffix: string,
-    type: DisabledItem['type'],
-    isSkillDir: boolean,
-  ) => {
-    if (!existsSync(dir)) return;
-    try {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (isSkillDir && entry.isDirectory()) {
-          const disabledPath = join(dir, entry.name, 'SKILL.md.disabled');
-          if (existsSync(disabledPath)) {
-            items.push({
-              name: entry.name,
-              relativePath: relative(targetPath, disabledPath),
-              type,
-            });
-          }
-        } else if (!isSkillDir && entry.isFile() && entry.name.endsWith(suffix)) {
-          items.push({
-            name: entry.name.replace(suffix, ''),
-            relativePath: relative(targetPath, join(dir, entry.name)),
-            type,
-          });
-        }
-      }
-    } catch { /* ignore */ }
-  };
-
-  scanDir(join(targetPath, '.claude', 'skills'), '', 'skill', true);
-  scanDir(join(targetPath, '.claude', 'commands'), '.md.disabled', 'command', false);
-  scanDir(join(targetPath, '.claude', 'agents'), '.md.disabled', 'agent', false);
-
-  return items;
-}
-
-export function restoreDisabledState(items: DisabledItem[], targetBase: string): number {
-  let restored = 0;
-  for (const item of items) {
-    if (item.type === 'skill') {
-      const enabledPath = join(targetBase, '.claude', 'skills', item.name, 'SKILL.md');
-      const disabledPath = enabledPath + '.disabled';
-      if (existsSync(enabledPath) && !existsSync(disabledPath)) {
-        renameSync(enabledPath, disabledPath);
-        restored++;
-      }
-    } else {
-      const subdir = item.type === 'command' ? 'commands' : 'agents';
-      const enabledPath = join(targetBase, '.claude', subdir, `${item.name}.md`);
-      const disabledPath = enabledPath + '.disabled';
-      if (existsSync(enabledPath) && !existsSync(disabledPath)) {
-        renameSync(enabledPath, disabledPath);
-        restored++;
-      }
-    }
-  }
-  return restored;
 }
 
 // ---------------------------------------------------------------------------
