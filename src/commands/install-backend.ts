@@ -125,79 +125,131 @@ export function restoreDisabledState(items: DisabledItem[], targetBase: string):
 // Toggle — list installed items with enable/disable state
 // ---------------------------------------------------------------------------
 
-export interface InstalledItem {
+export type ToggleState = 'on' | 'off' | 'available';
+
+export interface ToggleItem {
   name: string;
   type: 'command' | 'skill' | 'agent';
-  enabled: boolean;
-  /** Absolute path to the active file (.md or SKILL.md) */
-  activePath: string;
-  /** Absolute path to the disabled file (.md.disabled or SKILL.md.disabled) */
-  disabledPath: string;
+  state: ToggleState;
+  /** Source path in pkgRoot (for install from source) */
+  sourcePath: string;
+  /** Target active path */
+  targetActive: string;
+  /** Target disabled path */
+  targetDisabled: string;
 }
 
-export function scanInstalledItems(targetBase: string): InstalledItem[] {
-  const items: InstalledItem[] = [];
+export function scanToggleItems(pkgRoot: string, targetBase: string): ToggleItem[] {
+  const items = new Map<string, ToggleItem>();
 
-  const scanFlat = (dir: string, type: InstalledItem['type']) => {
+  const addSource = (dir: string, targetDir: string, type: ToggleItem['type'], isSkill: boolean) => {
     if (!existsSync(dir)) return;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
-      if (entry.name.endsWith('.md.disabled')) {
-        const name = entry.name.replace('.md.disabled', '');
-        items.push({
-          name, type, enabled: false,
-          activePath: join(dir, `${name}.md`),
-          disabledPath: join(dir, entry.name),
+      if (isSkill) {
+        if (!entry.isDirectory() || entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+        if (!existsSync(join(dir, entry.name, 'SKILL.md'))) continue;
+        const key = `${type}:${entry.name}`;
+        items.set(key, {
+          name: entry.name, type, state: 'available',
+          sourcePath: join(dir, entry.name),
+          targetActive: join(targetDir, entry.name, 'SKILL.md'),
+          targetDisabled: join(targetDir, entry.name, 'SKILL.md.disabled'),
         });
-      } else if (entry.name.endsWith('.md')) {
+      } else {
+        if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
         const name = entry.name.replace('.md', '');
-        items.push({
-          name, type, enabled: true,
-          activePath: join(dir, entry.name),
-          disabledPath: join(dir, `${entry.name}.disabled`),
+        const key = `${type}:${name}`;
+        items.set(key, {
+          name, type, state: 'available',
+          sourcePath: join(dir, entry.name),
+          targetActive: join(targetDir, entry.name),
+          targetDisabled: join(targetDir, `${entry.name}.disabled`),
         });
       }
     }
   };
 
-  const scanSkills = (dir: string) => {
+  const markTarget = (dir: string, type: ToggleItem['type'], isSkill: boolean) => {
     if (!existsSync(dir)) return;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const skillMd = join(dir, entry.name, 'SKILL.md');
-      const skillMdDisabled = join(dir, entry.name, 'SKILL.md.disabled');
-      if (existsSync(skillMdDisabled)) {
-        items.push({
-          name: entry.name, type: 'skill', enabled: false,
-          activePath: skillMd, disabledPath: skillMdDisabled,
-        });
-      } else if (existsSync(skillMd)) {
-        items.push({
-          name: entry.name, type: 'skill', enabled: true,
-          activePath: skillMd, disabledPath: skillMdDisabled,
-        });
+      if (isSkill) {
+        if (!entry.isDirectory()) continue;
+        const key = `${type}:${entry.name}`;
+        const hasActive = existsSync(join(dir, entry.name, 'SKILL.md'));
+        const hasDisabled = existsSync(join(dir, entry.name, 'SKILL.md.disabled'));
+        if (hasActive || hasDisabled) {
+          const existing = items.get(key);
+          const state: ToggleState = hasActive ? 'on' : 'off';
+          if (existing) {
+            existing.state = state;
+          } else {
+            items.set(key, {
+              name: entry.name, type, state,
+              sourcePath: '',
+              targetActive: join(dir, entry.name, 'SKILL.md'),
+              targetDisabled: join(dir, entry.name, 'SKILL.md.disabled'),
+            });
+          }
+        }
+      } else {
+        if (!entry.isFile()) continue;
+        const isDisabled = entry.name.endsWith('.md.disabled');
+        const isMd = entry.name.endsWith('.md') && !isDisabled;
+        if (!isMd && !isDisabled) continue;
+        const name = isDisabled ? entry.name.replace('.md.disabled', '') : entry.name.replace('.md', '');
+        const key = `${type}:${name}`;
+        const state: ToggleState = isMd ? 'on' : 'off';
+        const existing = items.get(key);
+        if (existing) {
+          existing.state = state;
+        } else {
+          items.set(key, {
+            name, type, state,
+            sourcePath: '',
+            targetActive: join(dir, `${name}.md`),
+            targetDisabled: join(dir, `${name}.md.disabled`),
+          });
+        }
       }
     }
   };
 
-  scanFlat(join(targetBase, '.claude', 'commands'), 'command');
-  scanSkills(join(targetBase, '.claude', 'skills'));
-  scanFlat(join(targetBase, '.claude', 'agents'), 'agent');
+  const srcClaude = join(pkgRoot, '.claude');
+  const tgtClaude = join(targetBase, '.claude');
 
-  return items.sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
+  addSource(join(srcClaude, 'commands'), join(tgtClaude, 'commands'), 'command', false);
+  addSource(join(srcClaude, 'skills'), join(tgtClaude, 'skills'), 'skill', true);
+  addSource(join(srcClaude, 'agents'), join(tgtClaude, 'agents'), 'agent', false);
+
+  markTarget(join(tgtClaude, 'commands'), 'command', false);
+  markTarget(join(tgtClaude, 'skills'), 'skill', true);
+  markTarget(join(tgtClaude, 'agents'), 'agent', false);
+
+  return [...items.values()].sort((a, b) => a.type.localeCompare(b.type) || a.name.localeCompare(b.name));
 }
 
-export function toggleItem(item: InstalledItem): boolean {
-  if (item.enabled) {
-    if (existsSync(item.activePath)) {
-      renameSync(item.activePath, item.disabledPath);
+export function applyToggle(item: ToggleItem, pkgRoot: string): boolean {
+  if (item.state === 'on') {
+    if (existsSync(item.targetActive)) {
+      renameSync(item.targetActive, item.targetDisabled);
+      return true;
+    }
+  } else if (item.state === 'off') {
+    if (existsSync(item.targetDisabled)) {
+      renameSync(item.targetDisabled, item.targetActive);
       return true;
     }
   } else {
-    if (existsSync(item.disabledPath)) {
-      renameSync(item.disabledPath, item.activePath);
-      return true;
+    if (!item.sourcePath) return false;
+    const targetDir = dirname(item.targetActive);
+    if (!existsSync(targetDir)) mkdirSync(targetDir, { recursive: true });
+    const srcStat = statSync(item.sourcePath);
+    if (srcStat.isDirectory()) {
+      copyRecursive(item.sourcePath, dirname(item.targetActive), { files: 0, dirs: 0, skipped: 0 }, { id: '', version: '', scope: 'global', targetPath: '', installedAt: '', entries: [] } as Manifest);
+    } else {
+      copyFileSync(item.sourcePath, item.targetActive);
     }
+    return true;
   }
   return false;
 }

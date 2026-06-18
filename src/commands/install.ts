@@ -116,15 +116,16 @@ function registerToggleSubcommand(install: Command): void {
     .option('--list', 'List all items with their status (no TUI)')
     .action(async (opts: { global?: boolean; path?: string; type?: string; enable?: string; disable?: string; list?: boolean }) => {
       const { homedir } = await import('node:os');
-      const { scanInstalledItems, toggleItem, updateManifestDisabledItems } = await import('./install-backend.js');
+      const { scanToggleItems, applyToggle, updateManifestDisabledItems } = await import('./install-backend.js');
 
+      const pkgRoot = getPackageRoot();
       const mode: 'global' | 'project' = opts.path ? 'project' : 'global';
       const targetBase = opts.path ? resolve(opts.path) : homedir();
       const targetPath = opts.path ? resolve(opts.path) : (await import('../config/paths.js')).paths.home;
 
       // Non-interactive: --list
       if (opts.list) {
-        const items = scanInstalledItems(targetBase);
+        const items = scanToggleItems(pkgRoot, targetBase);
         const filtered = opts.type ? items.filter(i => i.type === opts.type) : items;
         let currentType = '';
         for (const item of filtered) {
@@ -132,33 +133,34 @@ function registerToggleSubcommand(install: Command): void {
             currentType = item.type;
             console.error(`\n  ${currentType}s:`);
           }
-          const status = item.enabled ? '✓' : '✗';
-          console.error(`    ${status} ${item.name}`);
+          const sym = item.state === 'on' ? '✓' : item.state === 'off' ? '✗' : '·';
+          const label = item.state === 'available' ? ' (not installed)' : item.state === 'off' ? ' (disabled)' : '';
+          console.error(`    ${sym} ${item.name}${label}`);
         }
-        const enabled = filtered.filter(i => i.enabled).length;
-        console.error(`\n  ${enabled}/${filtered.length} enabled\n`);
+        const on = filtered.filter(i => i.state === 'on').length;
+        console.error(`\n  ${on}/${filtered.length} enabled\n`);
         return;
       }
 
       // Non-interactive: --enable / --disable
       if (opts.enable || opts.disable) {
-        const items = scanInstalledItems(targetBase);
+        const items = scanToggleItems(pkgRoot, targetBase);
         let changed = 0;
         if (opts.enable) {
           for (const name of opts.enable.split(',')) {
-            const item = items.find(i => i.name === name.trim() && !i.enabled);
-            if (item && toggleItem(item)) { item.enabled = true; changed++; console.error(`  ✓ enabled: ${item.name}`); }
+            const item = items.find(i => i.name === name.trim() && i.state !== 'on');
+            if (item && applyToggle(item, pkgRoot)) { item.state = 'on'; changed++; console.error(`  ✓ enabled: ${item.name}`); }
           }
         }
         if (opts.disable) {
           for (const name of opts.disable.split(',')) {
-            const item = items.find(i => i.name === name.trim() && i.enabled);
-            if (item && toggleItem(item)) { item.enabled = false; changed++; console.error(`  ✗ disabled: ${item.name}`); }
+            const item = items.find(i => i.name === name.trim() && i.state === 'on');
+            if (item && applyToggle(item, pkgRoot)) { item.state = 'off'; changed++; console.error(`  ✗ disabled: ${item.name}`); }
           }
         }
         if (changed > 0) {
-          const disabledNames = items.filter(i => !i.enabled).map(i => `${i.type}:${i.name}`);
-          updateManifestDisabledItems(mode, targetPath, disabledNames);
+          const disabled = items.filter(i => i.state === 'off').map(i => `${i.type}:${i.name}`);
+          updateManifestDisabledItems(mode, targetPath, disabled);
           console.error(`\n  ${changed} items toggled, manifest updated.`);
         }
         return;
@@ -168,6 +170,7 @@ function registerToggleSubcommand(install: Command): void {
       const { renderTui } = await import('../tui/render.js');
       const { ToggleView } = await import('../tui/install-ui/ToggleView.js');
       await renderTui(ToggleView, {
+        pkgRoot,
         targetBase,
         scope: mode,
         targetPath,

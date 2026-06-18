@@ -2,71 +2,103 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { C, SYM, KeyHints } from '../shared/index.js';
 import {
-  scanInstalledItems,
-  toggleItem,
+  scanToggleItems,
+  applyToggle,
   updateManifestDisabledItems,
-  type InstalledItem,
+  type ToggleItem,
+  type ToggleState,
 } from '../../commands/install-backend.js';
 
 // ---------------------------------------------------------------------------
-// ToggleView — standalone TUI for enabling/disabling commands, skills, agents
+// ToggleView — Tab-based TUI for managing commands, skills, agents
+//
+// Three states per item:
+//   on        = installed & enabled  (✓ green)
+//   off       = installed & disabled (✗ red)
+//   available = in source, not yet installed (· dim)
+//
+// Tab switches between Commands / Skills / Agents tabs.
+// Space toggles: available→on, on→off, off→on
 // ---------------------------------------------------------------------------
 
-const TYPE_LABELS: Record<string, string> = {
-  command: '── Commands ──────────────────',
-  skill: '── Skills ────────────────────',
-  agent: '── Agents ────────────────────',
+const TABS = [
+  { type: 'command', label: 'Commands' },
+  { type: 'skill', label: 'Skills' },
+  { type: 'agent', label: 'Agents' },
+] as const;
+
+const STATE_DISPLAY: Record<ToggleState, { sym: string; color: string; label: string }> = {
+  on: { sym: SYM.checkOn, color: C.success, label: '' },
+  off: { sym: SYM.checkOff, color: C.error, label: '[disabled]' },
+  available: { sym: '·', color: C.neutral, label: '[not installed]' },
 };
 
-const TYPE_ORDER = ['command', 'skill', 'agent'];
-
 export interface ToggleViewProps {
+  pkgRoot: string;
   targetBase: string;
   scope: 'global' | 'project';
   targetPath: string;
   filter?: string;
 }
 
-export function ToggleView({ targetBase, scope, targetPath, filter }: ToggleViewProps) {
+export function ToggleView({ pkgRoot, targetBase, scope, targetPath, filter }: ToggleViewProps) {
   const { exit } = useApp();
-  const [items, setItems] = useState<InstalledItem[]>(() => {
-    const all = scanInstalledItems(targetBase);
-    return filter ? all.filter((i) => i.type === filter) : all;
+  const [allItems, setAllItems] = useState<ToggleItem[]>(() => scanToggleItems(pkgRoot, targetBase));
+  const [activeTab, setActiveTab] = useState(() => {
+    if (filter) {
+      const idx = TABS.findIndex((t) => t.type === filter);
+      return idx >= 0 ? idx : 0;
+    }
+    return 0;
   });
   const [cursor, setCursor] = useState(0);
   const [dirty, setDirty] = useState(false);
 
-  const count = items.length;
+  const tabItems = useMemo(
+    () => allItems.filter((i) => i.type === TABS[activeTab].type),
+    [allItems, activeTab],
+  );
 
-  const groups = useMemo(() => {
-    const map = new Map<string, InstalledItem[]>();
-    for (const item of items) {
-      if (!map.has(item.type)) map.set(item.type, []);
-      map.get(item.type)!.push(item);
-    }
-    return TYPE_ORDER
-      .filter((t) => map.has(t))
-      .map((t) => ({ type: t, label: TYPE_LABELS[t] || t, items: map.get(t)! }));
-  }, [items]);
+  const count = tabItems.length;
+  const safeIdx = count > 0 ? Math.min(cursor, count - 1) : 0;
 
-  const handleToggle = useCallback((idx: number) => {
-    if (idx < 0 || idx >= count) return;
-    const item = items[idx];
-    if (toggleItem(item)) {
-      setItems((prev) => {
-        const next = [...prev];
-        next[idx] = { ...next[idx], enabled: !next[idx].enabled };
-        return next;
-      });
-      setDirty(true);
-    }
-  }, [items, count]);
+  const handleToggle = useCallback(
+    (idx: number) => {
+      if (idx < 0 || idx >= count) return;
+      const item = tabItems[idx];
+      if (applyToggle(item, pkgRoot)) {
+        setAllItems((prev) => {
+          const key = `${item.type}:${item.name}`;
+          return prev.map((it) => {
+            if (`${it.type}:${it.name}` !== key) return it;
+            const nextState: ToggleState =
+              it.state === 'on' ? 'off' : 'on';
+            return { ...it, state: nextState };
+          });
+        });
+        setDirty(true);
+      }
+    },
+    [tabItems, count, pkgRoot],
+  );
+
+  const switchTab = useCallback(
+    (dir: 1 | -1) => {
+      const tabs = filter ? [TABS.findIndex((t) => t.type === filter)] : [0, 1, 2];
+      if (tabs.length <= 1) return;
+      setActiveTab((prev) => (prev + dir + TABS.length) % TABS.length);
+      setCursor(0);
+    },
+    [filter],
+  );
 
   const handleSave = useCallback(() => {
-    const disabledNames = items.filter((i) => !i.enabled).map((i) => `${i.type}:${i.name}`);
-    updateManifestDisabledItems(scope, targetPath, disabledNames);
+    const disabled = allItems
+      .filter((i) => i.state === 'off')
+      .map((i) => `${i.type}:${i.name}`);
+    updateManifestDisabledItems(scope, targetPath, disabled);
     exit();
-  }, [items, scope, targetPath, exit]);
+  }, [allItems, scope, targetPath, exit]);
 
   useInput((input, key) => {
     if (key.escape) {
@@ -78,6 +110,10 @@ export function ToggleView({ targetBase, scope, targetPath, filter }: ToggleView
       handleSave();
       return;
     }
+    if (key.tab) {
+      switchTab(key.shift ? -1 : 1);
+      return;
+    }
     if (key.upArrow) {
       setCursor((i) => (i - 1 + count) % count);
       return;
@@ -87,72 +123,68 @@ export function ToggleView({ targetBase, scope, targetPath, filter }: ToggleView
       return;
     }
     if (input === ' ') {
-      handleToggle(cursor);
+      handleToggle(safeIdx);
       return;
-    }
-    // Number keys
-    const num = parseInt(input, 10);
-    if (!Number.isNaN(num) && num >= 1 && num <= Math.min(count, 9)) {
-      handleToggle(num - 1);
     }
   });
 
-  if (count === 0) {
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Text bold color={C.primary}>Maestro Toggle</Text>
-        <Text dimColor>No installed items found. Run `maestro install` first.</Text>
-      </Box>
-    );
-  }
-
-  const enabledCount = items.filter((i) => i.enabled).length;
-  let globalIndex = 0;
+  const tabCounts = useMemo(() => {
+    const m: Record<string, { on: number; total: number }> = {};
+    for (const t of TABS) {
+      const list = allItems.filter((i) => i.type === t.type);
+      m[t.type] = { on: list.filter((i) => i.state === 'on').length, total: list.length };
+    }
+    return m;
+  }, [allItems]);
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold color={C.primary}>Maestro Toggle — Enable/Disable Commands & Skills</Text>
-      <Text dimColor>Changes take effect immediately (file rename). Manifest updated on exit.</Text>
+      <Text bold color={C.primary}>Maestro Toggle</Text>
+      <Text dimColor>␣ toggle  Tab switch  ↵ save & exit</Text>
 
-      <Box flexDirection="column" marginTop={1}>
-        {groups.map((group) => {
-          const rows = group.items.map((item) => {
-            const i = globalIndex++;
-            const hl = i === cursor;
-            return (
-              <Box key={item.name}>
-                <Text color={C.neutral}>{String(i + 1).padStart(2)}. </Text>
-                <Text color={item.enabled ? (hl ? C.successBright : C.success) : (hl ? C.error : C.neutral)}>
-                  {item.enabled ? SYM.checkOn : SYM.checkOff}
-                </Text>
-                <Text> </Text>
-                <Text color={hl ? C.primary : undefined} bold={hl}>
-                  {item.name.padEnd(30)}
-                </Text>
-                {!item.enabled && <Text color={C.neutral} dimColor>[disabled]</Text>}
-              </Box>
-            );
-          });
-
+      {/* Tab bar */}
+      <Box marginTop={1} gap={2}>
+        {TABS.map((tab, i) => {
+          const active = i === activeTab;
+          const c = tabCounts[tab.type];
           return (
-            <React.Fragment key={group.type}>
-              <Box marginTop={1}>
-                <Text color={C.neutral} dimColor>{group.label}</Text>
-              </Box>
-              {rows}
-            </React.Fragment>
+            <Text key={tab.type} bold={active} color={active ? C.primary : C.neutral}>
+              {active ? '▸ ' : '  '}{tab.label} ({c.on}/{c.total})
+            </Text>
           );
         })}
       </Box>
 
-      <Box marginTop={1}>
-        <Text dimColor>
-          {enabledCount}/{count} enabled
-          {dirty ? '  (changes pending)' : ''}
-        </Text>
+      {/* Items */}
+      <Box flexDirection="column" marginTop={1}>
+        {count === 0 ? (
+          <Text dimColor>  No items in this category.</Text>
+        ) : (
+          tabItems.map((item, i) => {
+            const hl = i === safeIdx;
+            const d = STATE_DISPLAY[item.state];
+            return (
+              <Box key={item.name}>
+                <Text color={hl ? C.primary : C.neutral}>{hl ? SYM.cursor : ' '} </Text>
+                <Text color={hl ? (item.state === 'on' ? C.successBright : d.color) : d.color}>
+                  {d.sym}
+                </Text>
+                <Text> </Text>
+                <Text color={hl ? C.primary : undefined} bold={hl}>
+                  {item.name.padEnd(32)}
+                </Text>
+                {d.label && <Text dimColor>{d.label}</Text>}
+              </Box>
+            );
+          })
+        )}
       </Box>
 
-      <KeyHints hints="↑↓ navigate  ␣ toggle  ↵ save & exit  esc quit" />
+      {dirty && (
+        <Box marginTop={1}>
+          <Text color={C.warning}>  Changes applied. Press ↵ to save manifest.</Text>
+        </Box>
+      )}
     </Box>
   );
 }
