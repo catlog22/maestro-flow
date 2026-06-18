@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.32',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'New `maestro install toggle` — per-skill/command enable/disable controller with tri-state Tab view', text_zh: '新增 `maestro install toggle` 命令/技能独立控制器，三态 Tab 视图' },
+      { type: 'feat', text_en: 'Granular skill selection install — each new skill independently selectable + command group selection', text_zh: '细粒度技能选择安装——每个新增技能独立可选 + 命令族分组选择' },
+      { type: 'feat', text_en: 'Script plugins disabled by default — secure by default, explicit opt-in required', text_zh: '脚本插件默认禁用——secure by default，需显式启用' },
+      { type: 'fix', text_en: 'Odyssey zero-residual execution hardening — 6 systematic fixes eliminating premature stops', text_zh: 'Odyssey 零遗留执行强化——6 项系统性修复消除过早停止' },
+      { type: 'fix', text_en: 'KG code index streaming writes + atomic commits — no more OOM on large repos', text_zh: 'KG 代码索引流式写入 + 原子提交，大仓库不再 OOM' },
+      { type: 'fix', text_en: 'Install toggle multi-dimensional review fixes — module split, dedup, boundary corrections', text_zh: 'Install toggle 多维度审查修复——拆分模块、消除重复、修复边界' },
+    ],
+  },
+  {
     version: '0.5.31',
     date: '2026-06',
     changes: [
