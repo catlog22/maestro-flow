@@ -43,6 +43,13 @@ describe('isMaestroWorkspace', () => {
     assert.strictEqual(isMaestroWorkspace(TEST_DIR), false);
   });
 
+  it('returns true for KG-only MaestroGraph workspace', () => {
+    const kgDir = join(TEST_DIR, '.workflow', 'kg');
+    mkdirSync(kgDir, { recursive: true });
+    writeFileSync(join(kgDir, 'maestro.db'), '');
+    assert.strictEqual(isMaestroWorkspace(TEST_DIR), true);
+  });
+
   it('returns false when state.json lacks version', () => {
     const wfDir = join(TEST_DIR, '.workflow');
     mkdirSync(wfDir, { recursive: true });

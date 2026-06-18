@@ -40,7 +40,7 @@
     "dashboard/package.json"
   ],
   "scripts": {
-    "build": "cd dashboard && npx tsc -p tsconfig.node.json && cd .. && tsc && node -e \"const fs=require('fs');const p=require('path');const s='src/tools/impeccable/live/static',d='dist/src/tools/impeccable/live/static';if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});for(const f of fs.readdirSync(s)){fs.copyFileSync(p.join(s,f),p.join(d,f))}}\" && node -e \"const fs=require('fs');const s='src/graph/db/schema.sql',d='dist/src/graph/db/schema.sql';if(fs.existsSync(s)){fs.mkdirSync(require('path').dirname(d),{recursive:true});fs.copyFileSync(s,d)}\"",
+    "build": "cd dashboard && npx tsc -p tsconfig.node.json && cd .. && tsc && node -e \"const fs=require('fs');const p=require('path');const s='src/tools/impeccable/live/static',d='dist/src/tools/impeccable/live/static';if(fs.existsSync(s)){fs.mkdirSync(d,{recursive:true});for(const f of fs.readdirSync(s)){fs.copyFileSync(p.join(s,f),p.join(d,f))}}\" && node -e \"const fs=require('fs');const p=require('path');for(const [s,d] of [['src/graph/db/schema.sql','dist/src/graph/db/schema.sql'],['src/graph/kg/schema.sql','dist/src/graph/kg/schema.sql']]){if(fs.existsSync(s)){fs.mkdirSync(p.dirname(d),{recursive:true});fs.copyFileSync(s,d)}}\"",
     "dev": "tsc --watch",
     "start": "node bin/maestro.js",
     "mcp": "node bin/maestro-mcp.js",

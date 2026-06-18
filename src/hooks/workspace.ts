@@ -13,10 +13,14 @@ import { join, dirname } from 'node:path';
 
 /**
  * Check if a `.workflow/` directory is a Maestro workspace by verifying
- * `state.json` contains Maestro-specific fields (`version` + `phases_summary`).
- * This prevents false positives from other tools that use `.workflow/`.
+ * either the workflow state fingerprint or a MaestroGraph database exists.
+ * This prevents false positives from other tools that use `.workflow/`, while
+ * still allowing KG-only workspaces to use code-search hooks before workflow
+ * state init.
  */
 export function isMaestroWorkspace(dir: string): boolean {
+  if (existsSync(join(dir, '.workflow', 'kg', 'maestro.db'))) return true;
+
   const statePath = join(dir, '.workflow', 'state.json');
   if (!existsSync(statePath)) return false;
   try {
