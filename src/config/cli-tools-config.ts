@@ -132,6 +132,7 @@ export async function loadCliToolsConfig(workDir?: string): Promise<CliToolsConf
         version: workspace.version ?? global.version,
         tools: { ...global.tools, ...workspace.tools },
         roles: { ...global.roles, ...workspace.roles },
+        proxy: workspace.proxy ?? global.proxy,
       };
     } catch {
       // No workspace config — use global as-is
@@ -249,6 +250,7 @@ export async function saveCliToolsConfig(
     version: update.version ?? existing.version ?? '1.1.0',
     tools: mergedTools,
     roles: { ...existing.roles, ...update.roles },
+    proxy: update.proxy ?? existing.proxy,
   };
 
   // Ensure directory exists and write

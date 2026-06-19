@@ -224,6 +224,7 @@ export function registerInstallCommand(program: Command): void {
       // Profile import — non-interactive install from profile
       if (opts.import) {
         const { importProfile } = await import('../core/install-profile.js');
+        const { migrateComponentIds: migrateIds } = await import('./install-backend.js');
         const profile = importProfile(opts.import);
         console.error(`Importing profile: ${profile.name} (${profile.scope})`);
         await forceInstall(pkgRoot, version, {
@@ -231,7 +232,7 @@ export function registerInstallCommand(program: Command): void {
           hooks: profile.claude.hooks.basePreset,
           codexHooks: profile.codex.hooks.basePreset,
           agyHooks: profile.agy.hooks.basePreset,
-          components: profile.components.selectedIds.join(','),
+          components: migrateIds(profile.components.selectedIds).join(','),
           statusline: profile.claude.statusline.enabled ? profile.claude.statusline.theme : undefined,
         });
         return;
@@ -278,6 +279,7 @@ async function forceInstall(
   opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string },
 ): Promise<void> {
   const { executeInstallPipeline } = await import('../core/install-executor.js');
+  const { migrateComponentIds } = await import('./install-backend.js');
 
   console.error(t.install.forceVersion.replace('{version}', version));
   console.error('');
@@ -292,7 +294,9 @@ async function forceInstall(
 
   const components = scanComponents(pkgRoot, mode, projectPath);
   const available = components.filter((c) => c.available);
-  const componentIds = opts.components?.split(',');
+  const componentIds = opts.components
+    ? migrateComponentIds(opts.components.split(','))
+    : undefined;
   const toInstall = componentIds
     ? available.filter(c => componentIds.includes(c.def.id))
     : available;

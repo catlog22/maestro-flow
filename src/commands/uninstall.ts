@@ -75,12 +75,20 @@ export function registerUninstallCommand(program: Command): void {
           }
         }
 
+        let successCount = 0;
+        let failCount = 0;
         for (const m of manifests) {
           console.error(`\n${formatManifest(m)}`);
-          const r = uninstallManifest(m);
-          console.error(`  ${formatResult(r)}`);
+          try {
+            const r = uninstallManifest(m);
+            console.error(`  ${formatResult(r)}`);
+            successCount++;
+          } catch (err) {
+            failCount++;
+            console.error(`  ✗ Failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
         }
-        console.error('\nDone.');
+        console.error('\nDone.' + (failCount > 0 ? ` (${successCount} succeeded, ${failCount} failed)` : ''));
         return;
       }
 

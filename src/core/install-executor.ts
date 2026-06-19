@@ -139,6 +139,8 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   if (prior?.disabledItems?.length) {
     manifest.disabledItems = prior.disabledItems;
   }
+  // Save manifest early so interrupted installs leave a trackable manifest on disk
+  saveManifest(manifest);
 
   // --- Components ---
   if (config.installComponents) {

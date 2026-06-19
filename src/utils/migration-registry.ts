@@ -11,7 +11,7 @@
  *   const results = runPendingMigrations(workflowRoot);
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -134,6 +134,19 @@ export function runPendingMigrations(workflowRoot: string): {
     const result = step.migrate(join(workflowRoot, '.workflow'));
     results.push({ step, result });
     if (!result.success) break; // stop on failure
+  }
+
+  // Write target version to state.json after successful migration
+  const allSucceeded = results.every(r => r.result.success);
+  if (allSucceeded && results.length > 0) {
+    const statePath = join(workflowRoot, '.workflow', 'state.json');
+    try {
+      const existing = existsSync(statePath) ? JSON.parse(readFileSync(statePath, 'utf8')) : {};
+      existing.version = plan.targetVersion;
+      writeFileSync(statePath, JSON.stringify(existing, null, 2) + '\n');
+    } catch {
+      // Best-effort version write — migration already applied
+    }
   }
 
   return { plan, results };
