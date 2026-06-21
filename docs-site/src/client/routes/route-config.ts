@@ -73,8 +73,21 @@ export const getSkillsByCategory = (categoryId: string): {
 };
 
 // ---------------------------------------------------------------------------
-// Search functionality
+// Search functionality — tokenized scoring with bilingual support
 // ---------------------------------------------------------------------------
+
+import commandsZhData from '../i18n/locales/commands-zh-CN.json';
+
+const zhCommands = commandsZhData.commands as Record<string, {
+  name_zh?: string;
+  description_zh?: string;
+  workflow_zh?: string;
+  flags?: string[];
+}>;
+const zhSkills = (commandsZhData.skills || {}) as Record<string, {
+  name_zh?: string;
+  description_zh?: string;
+}>;
 
 export interface SearchResult {
   type: 'command' | 'claude_skill' | 'codex_skill';
@@ -82,59 +95,123 @@ export interface SearchResult {
   slug: string;
   category: string;
   description: string;
+  descriptionZh?: string;
+  score: number;
+  matchedField?: string;
 }
 
-export const searchInventory = (query: string): SearchResult[] => {
-  const lowerQuery = query.toLowerCase();
+function tokenize(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[\s\-_/]+/)
+    .filter((t) => t.length > 0);
+}
+
+function scoreMatch(tokens: string[], fields: Array<{ text: string; weight: number; field: string }>): { score: number; matchedField: string } {
+  let totalScore = 0;
+  let bestField = '';
+  let bestFieldScore = 0;
+
+  for (const { text, weight, field } of fields) {
+    if (!text) continue;
+    const lower = text.toLowerCase();
+    let fieldScore = 0;
+
+    for (const token of tokens) {
+      if (lower === token) {
+        fieldScore += 100 * weight;
+      } else if (lower.startsWith(token)) {
+        fieldScore += 60 * weight;
+      } else if (lower.includes(token)) {
+        fieldScore += 30 * weight;
+      }
+    }
+
+    if (fieldScore > bestFieldScore) {
+      bestFieldScore = fieldScore;
+      bestField = field;
+    }
+    totalScore += fieldScore;
+  }
+
+  return { score: totalScore, matchedField: bestField };
+}
+
+export const searchInventory = (query: string, categoryFilter?: string): SearchResult[] => {
+  const tokens = tokenize(query);
+  if (tokens.length === 0) return [];
+
   const results: SearchResult[] = [];
 
-  // Search commands
   inventory.commands.forEach((cmd) => {
-    if (
-      cmd.name.toLowerCase().includes(lowerQuery) ||
-      cmd.description.toLowerCase().includes(lowerQuery)
-    ) {
+    if (categoryFilter && cmd.category !== categoryFilter) return;
+    const zh = zhCommands[cmd.name];
+    const { score, matchedField } = scoreMatch(tokens, [
+      { text: cmd.name, weight: 3, field: 'name' },
+      { text: cmd.description, weight: 1, field: 'description' },
+      { text: zh?.name_zh || '', weight: 2.5, field: 'name_zh' },
+      { text: zh?.description_zh || '', weight: 1, field: 'description_zh' },
+      { text: zh?.workflow_zh || '', weight: 0.5, field: 'workflow_zh' },
+    ]);
+
+    if (score > 0) {
       results.push({
         type: 'command',
         name: cmd.name,
         slug: getCommandSlug(cmd.name),
         category: cmd.category,
         description: cmd.description,
+        descriptionZh: zh?.description_zh,
+        score,
+        matchedField,
       });
     }
   });
 
-  // Search Claude skills
   inventory.claude_skills.forEach((skill) => {
-    if (
-      skill.name.toLowerCase().includes(lowerQuery) ||
-      skill.description.toLowerCase().includes(lowerQuery)
-    ) {
+    if (categoryFilter && skill.category !== categoryFilter) return;
+    const zh = zhSkills[skill.name];
+    const { score, matchedField } = scoreMatch(tokens, [
+      { text: skill.name, weight: 3, field: 'name' },
+      { text: skill.description, weight: 1, field: 'description' },
+      { text: zh?.name_zh || '', weight: 2.5, field: 'name_zh' },
+      { text: zh?.description_zh || '', weight: 1, field: 'description_zh' },
+    ]);
+
+    if (score > 0) {
       results.push({
         type: 'claude_skill',
         name: skill.name,
         slug: skill.name,
         category: skill.category,
         description: skill.description,
+        descriptionZh: zh?.description_zh,
+        score,
+        matchedField,
       });
     }
   });
 
-  // Search Codex skills
   inventory.codex_skills.forEach((skill) => {
-    if (
-      skill.name.toLowerCase().includes(lowerQuery) ||
-      skill.description.toLowerCase().includes(lowerQuery)
-    ) {
+    if (categoryFilter && skill.category !== categoryFilter) return;
+    const { score, matchedField } = scoreMatch(tokens, [
+      { text: skill.name, weight: 3, field: 'name' },
+      { text: skill.description, weight: 1, field: 'description' },
+    ]);
+
+    if (score > 0) {
       results.push({
         type: 'codex_skill',
         name: skill.name,
         slug: skill.name,
         category: skill.category,
         description: skill.description,
+        score,
+        matchedField,
       });
     }
   });
 
+  results.sort((a, b) => b.score - a.score);
   return results;
 };

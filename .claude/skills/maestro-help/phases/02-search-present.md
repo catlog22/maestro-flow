@@ -67,16 +67,18 @@
 
 **Guide 映射**:
 
-| 命令 | Guide 文档 |
-|------|-----------|
-| maestro-analyze/plan/execute | `guide/command-usage-guide.md` (主干管线) |
-| maestro-init/roadmap/blueprint | `guide/quick-start-guide.md` |
-| maestro-ralph | `guide/maestro-ralph-guide.md` |
-| maestro (协调器) | `guide/maestro-coordinator-guide.md` |
-| manage-* | `guide/command-usage-guide.md` (管理) |
-| quality-* | `guide/command-usage-guide.md` (质量) |
-| delegate | `guide/delegate-async-guide.md` |
-| overlay/amend | `guide/overlay-guide.md` |
+| 命令 | Guide 文档 | 状态 |
+|------|-----------|------|
+| maestro-analyze/plan/execute | `guide/command-usage-guide.md` (主干管线) | planned |
+| maestro-init/roadmap/blueprint | `guide/quick-start-guide.md` | planned |
+| maestro-ralph | `guide/maestro-ralph-guide.md` | planned |
+| maestro (协调器) | `guide/maestro-coordinator-guide.md` | planned |
+| manage-* | `guide/command-usage-guide.md` (管理) | planned |
+| quality-* | `guide/command-usage-guide.md` (质量) | planned |
+| delegate | `guide/delegate-async-guide.md` | planned |
+| overlay/amend | `guide/overlay-guide.md` | planned |
+
+> **注意**: Guide 文档目前尚未创建（标记为 planned），命令详情回退到 catalog 描述和 source 文件。
 
 ### Mode 3: Smart Recommendations
 
@@ -114,21 +116,59 @@
 ```markdown
 ## Skills ({total} 个)
 
-### Meta (2)
+### Meta (6)
 - **workflow-skill-designer** — 设计 orchestrator+phases 工作流 skill
 - **skill-iter-tune** — 迭代 execute-evaluate-improve 调优
+- **prompt-generator** — 生成或转换 prompt 文件
+- **skill-generator** — 创建新 skill（sequential/autonomous 模式）
+- **skill-simplify** — SKILL.md 简化与功能完整性验证
+- **skill-tuning** — 通用 skill 诊断和优化
 
-### Team (6)
+### Team (25)
 - **team-coordinate** — 通用团队协调，动态生成 role-specs
 - **team-executor** — 团队执行，恢复会话
-- **team-lifecycle-v4** — 8 角色完整生命周期
-- **team-quality-assurance** — QA 质量保障流水线
+- **team-lifecycle-v4** — 完整生命周期流水线
+- **team-quality-assurance** — QA 质量保障
 - **team-review** — 多维度代码审查
 - **team-tech-debt** — 技术债务识别和清理
-- **team-testing** — 测试规划和执行
+- **team-testing** — 渐进式测试覆盖
+- **team-adversarial-swarm** — ACO 群智能 + 对抗决策门
+- **team-arch-opt** — 架构优化
+- **team-brainstorm** — 头脑风暴
+- **team-designer** — 团队 skill 生成器（v4 架构）
+- **team-frontend** — 前端开发（内置 ui-ux-pro-max）
+- **team-frontend-debug** — 前端调试（Chrome DevTools MCP）
+- **team-interactive-craft** — 交互组件制作（零依赖）
+- **team-issue** — Issue 解决
+- **team-motion-design** — 动效设计
+- **team-perf-opt** — 性能优化
+- **team-planex** — Plan-and-Execute 管线
+- **team-roadmap-dev** — 路线图驱动开发
+- **team-swarm** — 群智能（ACO + Python 控制器）
+- **team-ui-polish** — UI 打磨（Impeccable 标准）
+- **team-uidesign** — UI 设计（Token→审计→实现）
+- **team-ultra-analyze** — 深度协作分析
+- **team-ux-improve** — UX 改进
+- **team-visual-a11y** — 视觉无障碍 QA
 
 ### Knowledge (1)
 - **codify-to-knowhow** — Manifest 驱动的知识资产生成
+
+### Quality (2)
+- **insight-challenge** — 对抗性审查
+- **delegation-check** — 委派提示词分离违规检查
+
+### Scholar (10)
+- **scholar-writing** — 端到端学术论文写作
+- **scholar-review** — 学术论文审查（自审 + 回复）
+- **scholar-rebuttal-pro** — 审稿回复（证据策略）
+- **scholar-ideation** — 研究构思
+- **scholar-experiment** — 实验结果分析
+- **scholar-citation-verify** — 四层引用验证
+- **scholar-anti-ai-writing** — 去除 AI 写作痕迹
+- **scholar-latex-organizer** — LaTeX 模板整理
+- **scholar-publish** — 会议发表准备
+- **scholar-thesis-docx** — 学位论文 Word 文档
 ```
 
 **Agents**:

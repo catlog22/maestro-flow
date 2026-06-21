@@ -16,3 +16,6 @@ export type { CommandCardProps } from './CommandCard.js';
 
 export { SkillCard } from './SkillCard.js';
 export type { SkillCardProps } from './SkillCard.js';
+
+export { ExecutionFlow } from './ExecutionFlow.js';
+export type { CommandExample, ExecutionStep } from './ExecutionFlow.js';

@@ -47,11 +47,11 @@ Single source of truth: **[index/catalog.json](index/catalog.json)**
 
 | Field | Purpose |
 |-------|---------|
-| `commands[]` | 56 个 slash 命令，含分类和描述 |
-| `skills[]` | 10 个 Skill，含分类和描述 |
-| `agents[]` | 22 个 Agent，含分类和描述 |
+| `commands[]` | 64 个 slash 命令，含分类和描述 |
+| `skills[]` | 44 个 Skill，含分类和描述 |
+| `agents[]` | 24 个 Agent，含分类和描述 |
 | `cli_commands[]` | 21 个终端命令 |
-| `guide_files[]` | 17 个 Guide 文档索引 |
+| `guide_files[]` | 17 个 Guide 文档索引（planned，尚未创建） |
 | `essential_commands[]` | 10 个核心命令（新手用） |
 | `workflows` | 主干管线、快速渠道、Issue 闭环、初始化路径 |
 
@@ -187,6 +187,11 @@ $ARGUMENTS → Parse:
 | `/maestro-quick` | 快速任务 |
 | `/maestro-overlay` | Overlay 管理 |
 | `/maestro-amend` | 修正补丁 |
+| `/maestro-grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
+| `/maestro-next` | 智能导航 — 检测状态并推荐下一步最优命令 |
+| `/maestro-companion` | 知识伴侣 — 上下文加载、洞察捕获、技能路由 |
+| `/maestro-swarm-workflow` | Swarm 并行加速器 — 多 agent 并发执行 |
+| `/maestro-universal-workflow` | 动态对抗工作流生成器 |
 
 ### 理解层 + 执行管线 (pipeline)
 
@@ -214,9 +219,23 @@ $ARGUMENTS → Parse:
 | `/manage-issue` | Issue 管理 |
 | `/manage-issue-discover` | Issue 发现 |
 | `/manage-knowhow` | 知识管理 |
+| `/manage-knowhow-capture` | 知识捕获 |
 | `/manage-status` | 状态查看 |
 | `/manage-wiki` | Wiki 管理 |
 | `/manage-harvest` | 收获 |
+| `/manage-codebase-rebuild` | 代码库重建 |
+| `/manage-kg-extractors` | 知识图谱提取器管理 |
+| `/manage-knowledge-audit` | 知识审计 |
+
+### Odyssey 长周期循环 (odyssey)
+
+| 命令 | 用途 |
+|------|------|
+| `/odyssey-debug` | 长周期调试 — 考古、诊断、修复、泛化 |
+| `/odyssey-improve` | 长周期代码改进 — 多维审计、深度诊断、定向修复 |
+| `/odyssey-review-test-fix` | 深度审查修复循环 |
+| `/odyssey-planex` | 需求驱动迭代 — 计划/执行/验证/修复循环 |
+| `/odyssey-ui` | 长周期 UI 优化 — 视觉调研、多维审计、修复 |
 
 ## Workflow Mapping
 
@@ -235,7 +254,7 @@ Roadmap > Milestone > Phase > Task
 
 ```
 上游起源层（并列，可选）
-  brainstorm（发散/轻量）  |  blueprint（收敛/重型）
+  brainstorm（发散/轻量）  |  blueprint（收敛/重型）  |  grill（压力测试）
 
 理解层
   analyze 双层: 宏观(文本参数) → scope_verdict | 微观(数字参数) → Phase 级决策
@@ -245,6 +264,13 @@ Roadmap > Milestone > Phase > Task
 
 执行层
   plan → execute
+
+Odyssey 长周期循环（独立路径）
+  odyssey-debug / odyssey-improve / odyssey-review-test-fix / odyssey-planex / odyssey-ui
+
+自适应引擎（高级）
+  ralph / ralph-beta → 自运行决策循环
+  swarm-workflow / universal-workflow → 多 agent 并行执行
 ```
 
 ### 合法路径
@@ -262,6 +288,9 @@ Roadmap > Milestone > Phase > Task
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
 | 代码审查 | 质量管线 | `/quality-review` → `/quality-auto-test` → `/quality-test` |
 | 团队开发 | Team Lite | `/maestro-collab` |
+| 长周期调试 | Odyssey 深度循环 | `/odyssey-debug "问题描述"` |
+| 长周期改进 | Odyssey 深度循环 | `/odyssey-improve "改进目标"` |
+| 需求迭代 | Odyssey 深度循环 | `/odyssey-planex "需求描述"` |
 
 ## Core Rules
 
@@ -289,9 +318,9 @@ Roadmap > Milestone > Phase > Task
 
 ## Statistics
 
-- **Slash 命令**: 56 个（7 个分类）
+- **Slash 命令**: 64 个（13 个分类：core/pipeline/milestone/manage/quality/spec/learn/worktree/team/ralph/ui/tools/odyssey）
 - **CLI 命令**: 21 个
-- **Skills**: 11 个（4 个分类）
-- **Agents**: 22 个（5 个分类）
-- **Guide 文档**: 17 个
-- **工作流路径**: 6 个合法路径 (Path A-F) + 3 个辅助流程
+- **Skills**: 44 个（5 个分类：meta/team/knowledge/quality/scholar）
+- **Agents**: 24 个（4 个分类：workflow/team/cli/ui）
+- **Guide 文档**: 17 个（planned，尚未创建）
+- **工作流路径**: 7 个合法路径 (Path A-G) + 4 个辅助流程

@@ -23,15 +23,15 @@ export function SearchInput({ className = '', placeholder }: SearchInputProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (query.length < 2) {
+    if (query.length < 1) {
       setResults([]);
       return;
     }
     const timer = setTimeout(() => {
       const searchResults = searchInventory(query);
-      setResults(searchResults.slice(0, 8));
+      setResults(searchResults.slice(0, 12));
       setFocusedIndex(-1);
-    }, 150);
+    }, 100);
     return () => clearTimeout(timer);
   }, [query]);
 

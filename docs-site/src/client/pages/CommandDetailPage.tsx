@@ -1,7 +1,10 @@
 import { useI18n } from '@/client/i18n/index.js';
 import { MarkdownRenderer } from '@/client/components/content/MarkdownRenderer.js';
+import { ExecutionFlow } from '@/client/components/content/ExecutionFlow.js';
+import { TerminalBlock } from '@/client/components/content/GuideComponents.js';
 import { loadCommand, type CommandContent } from '@/client/data/index.js';
 import { getCommandMetadata, type CommandMetadata } from '@/client/data/commandMetadata.js';
+import { getCommandExamples } from '@/client/data/commandExamples.js';
 import { getCategoryIcon } from '@/client/utils/categoryIcons.js';
 import type { Category, Command } from '@/client/routes/route-config.js';
 import { Link } from 'react-router-dom';
@@ -24,6 +27,7 @@ export default function CommandDetailPage({ commandName, category, command }: Co
   const [error, setError] = useState<string | null>(null);
 
   const meta = getCommandMetadata(commandName);
+  const examples = getCommandExamples(commandName);
   const isZh = locale === 'zh-CN';
 
   useEffect(() => {
@@ -84,9 +88,11 @@ export default function CommandDetailPage({ commandName, category, command }: Co
       {/* Usage */}
       {(content?.argumentHint || command.argumentHint) && (
         <Section title={t('content.usage')}>
-          <code className="block px-[var(--spacing-4)] py-[var(--spacing-3)] bg-bg-code text-text-code rounded-[var(--radius-lg)] text-[length:var(--font-size-sm)] font-mono overflow-x-auto">
-            /{command.name} {content?.argumentHint || command.argumentHint}
-          </code>
+          <TerminalBlock title="Terminal" compact>
+            <code className="text-[length:12px] text-[#bd9cfe] dark:text-[#bd9cfe]">
+              /{command.name} {content?.argumentHint || command.argumentHint}
+            </code>
+          </TerminalBlock>
         </Section>
       )}
 
@@ -107,6 +113,13 @@ export default function CommandDetailPage({ commandName, category, command }: Co
               </div>
             ))}
           </div>
+        </Section>
+      )}
+
+      {/* Execution Flow Simulation */}
+      {examples && examples.length > 0 && (
+        <Section title={isZh ? '执行流程模拟' : 'Execution Flow'}>
+          <ExecutionFlow examples={examples} isZh={isZh} />
         </Section>
       )}
 
@@ -168,9 +181,9 @@ export default function CommandDetailPage({ commandName, category, command }: Co
       {/* File reference */}
       {command.file && (
         <Section title={t('content.file_reference')}>
-          <code className="inline-block px-[var(--spacing-2)] py-[var(--spacing-1)] bg-bg-secondary border border-border-divider rounded-[var(--radius-sm)] text-[length:12px] text-accent-purple font-mono">
-            {command.file}
-          </code>
+          <TerminalBlock title="Source" compact>
+            <code className="text-[length:12px] text-[#bd9cfe] dark:text-[#bd9cfe]">{command.file}</code>
+          </TerminalBlock>
         </Section>
       )}
 
@@ -198,11 +211,11 @@ function WorkflowSection({ meta, isZh, commandName }: { meta: CommandMetadata; i
     <div className="flex flex-col gap-[var(--spacing-4)]">
       {/* Workflow position string */}
       {workflowText && (
-        <div className="px-[var(--spacing-4)] py-[var(--spacing-3)] bg-bg-secondary rounded-[var(--radius-lg)] border border-border-divider">
-          <p className="text-[length:var(--font-size-sm)] text-text-secondary font-mono leading-relaxed">
+        <TerminalBlock title="Workflow" compact>
+          <code className="text-[length:12px] text-[#bd9cfe] dark:text-[#bd9cfe]">
             {workflowText}
-          </p>
-        </div>
+          </code>
+        </TerminalBlock>
       )}
 
       {/* Prev / Next command links */}

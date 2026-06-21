@@ -54,22 +54,25 @@ for (const { patterns, mode } of modeMap) {
 
 ```javascript
 // Strip common prefixes for matching
-const commandPrefixes = ["/", "maestro-", "manage-", "quality-", "spec-", "learn-", "wiki-"]
+const commandPrefixes = ["/", "maestro-", "manage-", "quality-", "spec-", "learn-", "odyssey-"]
 
 // Known command names from catalog (without prefix)
 const knownCommands = [
-  "maestro", "analyze", "plan", "execute", "verify", "init", "roadmap",
+  "maestro", "analyze", "plan", "execute", "init", "roadmap",
   "brainstorm", "blueprint", "quick", "overlay", "amend", "fork", "merge", "collab",
   "milestone-audit", "milestone-complete", "milestone-release",
-  "composer", "player", "ralph", "ralph-execute", "learn",
+  "composer", "guard", "player", "ralph", "ralph-execute", "ralph-beta",
+  "grill", "next", "swarm-workflow", "universal-workflow", "companion",
   "impeccable", "ui-codify", "update",
   "tools-register", "tools-execute",
   "issue", "issue-discover", "knowhow", "knowhow-capture",
-  "status", "wiki", "harvest", "codebase-refresh", "codebase-rebuild",
+  "status", "wiki", "harvest", "codebase-rebuild",
+  "kg-extractors", "knowledge-audit",
   "review", "auto-test", "test", "debug", "refactor", "sync", "retrospective",
+  "security-audit",
   "setup", "load", "add", "remove",
-  "retro", "follow", "decompose", "investigate", "second-opinion",
-  "connect", "digest"
+  "follow", "decompose", "investigate", "second-opinion",
+  "odyssey-debug", "odyssey-planex", "odyssey-ui", "odyssey-improve", "odyssey-review-test-fix"
 ]
 
 const normalizedName = text.replace(/^\//, "").replace(/-/g, "-")
