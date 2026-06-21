@@ -44,6 +44,7 @@ Follow '~/.maestro/workflows/harvest.md' Stages 1-8 in order.
 2. **Dedup before write** — check harvest-log.jsonl and existing stores before each write.
 3. **Never modify source artifacts** — harvest is purely extractive.
 4. **Dedup contract with parallel writers** — when appending to `issues.jsonl`, set `source: "harvest"` on each row so concurrent writers (e.g. `manage-issue-discover` with `source: "discover"`) can be distinguished and deduplicated.
+5. **Conflict pre-check on spec routing** — when routing to spec (Stage 6b), compare new entry against existing specs with same keywords/category. If semantic conflict detected, set `confidence="low"` on the new entry and log conflict note. Use `maestro spec conflict mark` if contradiction is clear.
 
 Extraction patterns, classification rules, routing infrastructure, and fragment ID scheme defined in workflow harvest.md.
 
@@ -58,6 +59,8 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 | Wiki graph needs linking | `/manage-wiki connect --fix` |
 | Issues created | `/manage-issue list --source harvest` |
 | Specs extracted | `/spec-load --role implement` |
+| Specs extracted (冲突审查) | `/manage-knowledge-audit --scope spec` — 新写入的 spec 可能与现有条目矛盾 |
+| Spec 冲突标记已存在 | `maestro spec conflict list` — 查看当前冲突状态 |
 | Full phase retrospective | `/quality-retrospective` |
 </completion>
 

@@ -50,6 +50,7 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 - Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → component boundaries, layer rules
 - Wiki constraints: `maestro search "architecture constraint" --json` → documented decisions
 - Specs: `maestro spec load --category review` → review standards, checklists, knowhow tools
+- Conflict state: `maestro spec conflict list` → 当前已标记冲突的 spec 条目（review 时优先关注）
 - Role knowledge: `maestro search --category review` → select relevant → `maestro wiki load`
 
 **Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
@@ -73,6 +74,7 @@ Follow '~/.maestro/workflows/review.md' completely.
 - REQUIRED: review.json written with findings, severity distribution, and verdict.
 - REQUIRED: Issues auto-created based on level thresholds.
 - REQUIRED: index.json updated with review status.
+- REQUIRED: Spec conflict check — if any finding directly contradicts a loaded spec entry (code behavior ≠ spec rule), suggest `maestro spec conflict mark` on the spec entry. Code is the single source of truth.
 
 **Output writes to REVIEW_DIR** (not EXEC_DIR):
 - `REVIEW_DIR/review.json` — findings, severity distribution, verdict
@@ -127,6 +129,7 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 | PASS verdict | `/quality-test {phase}` |
 | WARN verdict (non-blocking issues) | `/quality-test {phase}` (proceed with caveats) |
 | BLOCK verdict (critical findings) | `/maestro-plan {phase} --gaps` (fix first) |
+| Spec contradictions found | `maestro spec conflict list` → `/manage-knowledge-audit --scope spec` |
 | Want code cleanup | `/quality-refactor {phase}` |
 </completion>
 

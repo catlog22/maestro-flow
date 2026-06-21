@@ -43,10 +43,12 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 **GATE 1: Load → Detect** (Stages 1-2 → Stage 4)
 - REQUIRED: Scope 解析通过，互斥标志校验完成。
 - REQUIRED: 三存储按 scope 加载完成。
+- REQUIRED: 加载已有冲突标记: `maestro spec conflict list` → 合并到 finding 池。
 - BLOCKED if scope 非法或存储不可读: E001/E002。
 
 **GATE 2: Detect → Decision** (Stage 4 → Stage 5)
 - REQUIRED: Finding 池按 P0/P1/P2 分级输出。
+- REQUIRED: 已标记 `contested` 的条目自动归入 P0 finding（来源: conflict-marker）。
 - REQUIRED: 未 harvest 的 artifact 删除前触发抢救确认（W002）。
 - BLOCKED if finding 为空: 无需淘汰，直接输出报告。
 
@@ -61,6 +63,31 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 - **Deprecate over delete**: 文本存储首选 `status="deprecated"`，保留历史。
 - **Purge 仅 artifact**: `--purge` 不作用于 spec/knowhow。
 - **Rescue before delete**: 未抽取 artifact 删除前强制提示先 `/manage-harvest`。
+
+### Conflict Resolution Integration
+
+四态决策（扩展自三态 keep/deprecate/delete）：
+
+| 动作 | 适用场景 | 执行 |
+|------|---------|------|
+| `keep` | 内容正确，无需变更 | 写 audit-log ignore 记录 |
+| `contest` | 矛盾真实存在，需进一步审查 | `maestro spec conflict mark <file> <line> --note "<evidence>"` |
+| `deprecate` | 内容过时或被取代 | 注入 `status="deprecated"` + `maestro spec conflict clear <file> <line>` |
+| `delete` | 内容明确错误 | 移除 entry + `maestro spec conflict clear <file> <line>` |
+
+**关键**: deprecate/delete 执行时，如果目标条目有 conflict-marker，必须同步调用 `maestro spec conflict clear` 清除标记，避免悬空冲突。
+
+### Code-as-Truth 校验（审查核心原则）
+
+**代码是唯一真理源。** Spec/knowhow 中的任何声明，必须与代码实际行为一致。
+
+当 detector 发现 spec 条目声称某行为/规则时：
+1. **代码校验**: grep/read 代码中相关实现，确认 spec 声明是否与代码一致
+2. **不一致处理**:
+   - 代码正确、spec 过时 → `deprecate` 或 `delete` spec 条目
+   - 代码正确、spec 不完整 → `contest` 并建议补充
+   - 代码有 bug、spec 正确 → `keep` spec，生成 issue 修代码
+3. **禁止**: 仅凭 spec 文本判断正确性。每个 finding 的 evidence 必须包含代码引用（文件:行号）
 </execution>
 
 <completion>
@@ -71,6 +98,8 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 | 复审淘汰记录 | 查看 `audit-report-{date}.md` |
 | 抢救未抽取 artifact | `/manage-harvest <artifact-id>` |
 | 验证 spec 现状 | `/spec-load --role implement` |
+| 查看冲突标记 | `maestro spec conflict list` |
+| 清除已解决冲突 | `maestro spec conflict clear-all <file>` |
 | 周期巡检 | `--scope all --report` |
 </completion>
 

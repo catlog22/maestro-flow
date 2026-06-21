@@ -57,6 +57,7 @@ Follow '~/.maestro/workflows/harvest.md' Stages 1–8 (standard mode) or Stage 9
 4. **Never modify source artifacts** — purely extractive
 5. **Confidence filtering** — below threshold logged but not routed
 6. **Spec format enforcement** — all spec routing must use `<spec-entry>` closed-tag format with `title`, `description`, `keywords`, `date`, `source="harvest"` attributes
+7. **Conflict pre-check on spec routing** — when routing to spec, compare new entry against existing specs with same keywords/category. If semantic conflict detected, set `confidence="low"` on the new entry and log conflict note. Use `maestro spec conflict mark` if contradiction is clear
 
 **Routing rules:**
 - Universal design patterns → `coding` or `arch` category
@@ -66,7 +67,7 @@ Follow '~/.maestro/workflows/harvest.md' Stages 1–8 (standard mode) or Stage 9
 - Spec: `maestro wiki append spec-<file> --body "<content>" --keywords "<kws>"` (unified write path) or `$spec-add "<category> <content>"`
 - Issue: append to `issues.jsonl` matching canonical schema, with `source: "harvest"` field (distinguishes from `manage-issue-discover`, which uses `source: "discover"` — required for cross-skill dedup when both write concurrently)
 
-**Next steps:** `$manage-wiki health`, `maestro search --type note`, `$wiki-connect --fix`, `$wiki-digest`, `$manage-issue list --source harvest`
+**Next steps:** `$manage-wiki health`, `maestro search --type note`, `$wiki-connect --fix`, `$wiki-digest`, `$manage-issue list --source harvest`, `$manage-knowledge-audit --scope spec` (when specs extracted, check for conflicts)
 
 **Prune mode** (`--prune`): Classifies artifacts (active/graduated/stale/protected), graduates harvested artifacts to wiki knowhow, archives from `artifacts[]` → `artifact_archive[]`, prunes resolved entries from accumulated_context. Files on disk are never deleted. Always backs up state.json before writing.
 </execution>
