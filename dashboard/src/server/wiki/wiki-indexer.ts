@@ -324,8 +324,6 @@ export class WikiIndexer {
       if (!await isAvailable()) return null;
 
       const cached = loadEmbeddingIndex(this.workflowRoot);
-      if (cached) return cached;
-
       const index = await this.get();
       const docs = index.entries.map(e => ({
         id: e.id,
@@ -334,7 +332,15 @@ export class WikiIndexer {
         tags: e.tags,
       }));
 
-      const embIdx = await buildEmbeddingIndex(docs);
+      const currentIds = new Set(docs.map(d => d.id));
+      const cachedIds = cached ? new Set(cached.docIds) : new Set<string>();
+      const unchanged = cached
+        && currentIds.size === cachedIds.size
+        && [...currentIds].every(id => cachedIds.has(id));
+
+      if (cached && unchanged) return cached;
+
+      const embIdx = await buildEmbeddingIndex(docs, cached);
       saveEmbeddingIndex(embIdx, this.workflowRoot);
       return embIdx;
     } catch {
