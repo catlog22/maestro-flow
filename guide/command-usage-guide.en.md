@@ -323,6 +323,8 @@ Discover → Create → Analyze → Plan → Execute → Close
 | Issue discovery & closed-loop | [Issue Discover Guide](./issue-discover-guide.md) |
 | Learning toolkit | [Learn Tools Guide](./learn-tools-guide.md) |
 | Knowledge graph management | [Knowledge Management Guide](./knowledge-management-guide.md) |
+| Search system | [Search System Guide](./search-system-guide.md) |
+| Installation guide | [Install Guide](./install-guide.md) |
 | CLI command reference | [CLI Commands Guide](./cli-commands-guide.md) |
 | Spec system | [Spec System Guide](./spec-system-guide.md) |
 | Spec injection mechanism | [Spec Injection Guide](./spec-injection-guide.md) |

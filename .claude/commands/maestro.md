@@ -166,6 +166,7 @@ S_FALLBACK:
 
 ### A_CREATE_SESSION
 
+0. **Specs 预检**：当 chain 包含 `analyze-macro` / `analyze` / `plan` / `execute` 等执行 stage 且 `.workflow/specs/` 目录不存在时，在 steps 最前面插入 `spec-setup`（stage=`spec-setup`，无 decision）。确保下游可获得项目约束规则注入。chain ∈ {grill, brainstorm, blueprint, init, status, quick} 时跳过
 1. Read `.workflow/state.json` 获取 phase / milestone（含 D-007 反查 `phase_slugs`）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`（如存在）；读最新 blueprint artifact 注入 `blueprint_id`
 2. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）：
    ```json
@@ -225,6 +226,7 @@ S_FALLBACK:
 - [ ] plan 支持 `{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
 - [ ] status.json 唯一真源；无 markdown 清单；post-goal-audit 节点在 decomposed 时追加；/goal 提示词以 status.json 为判据
+- [ ] Specs 预检：chain 含执行 stage + `.workflow/specs/` 不存在 → steps 最前面插入 `spec-setup`
 - [ ] Chain selected and confirmed (or auto-confirmed)
 - [ ] Session dir created with status.json before execution; decomposition fields additive-only
 - [ ] 执行 step 含 `command_scope` + `command_path` + `completion_confirmed`；decision step 由 `step.decision` 标识

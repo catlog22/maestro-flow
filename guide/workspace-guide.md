@@ -75,6 +75,8 @@ maestro workspace unlink shared
 
 ## CLI 命令参考
 
+> **别名**：`workspace` 可简写为 `ws`，`list` 可简写为 `ls`。例如 `maestro ws ls` 等价于 `maestro workspace list`。
+
 ### `maestro workspace link <path>`
 
 关联一个 Maestro 工作空间。

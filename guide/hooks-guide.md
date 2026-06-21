@@ -59,7 +59,13 @@ Maestro Hook 系统为 Claude Code、Codex 和 Agy (Antigravity) 提供自动化
 | `preflight-guard` | PreToolUse | Bash\|Write\|Edit\|Agent | standard | — | 命令执行前预检守卫 |
 | `spec-validator` | PreToolUse | Write\|Edit | standard | — | 规范写入验证 |
 | `keyword-spec-injector` | UserPromptSubmit | — | standard | — | 关键词匹配注入规范 |
+| `kg-sync` | UserPromptSubmit | — | standard | 必需 | 知识图谱增量同步（CooldownGuard 30s 去抖） |
+| `kg-auto-init` | UserPromptSubmit | — | standard | 必需 | 知识图谱自动初始化（CooldownGuard 5min 去抖） |
+| `kg-context-injector` | PreToolUse | Agent | standard | 必需 | 子代理执行前注入知识图谱上下文 |
+| `kg-unified-injector` | UserPromptSubmit | — | standard | 必需 | 统一知识注入（规范+知识图谱，opt-in） |
+| `kg-unified-injector-agent` | PreToolUse | Agent | standard | 必需 | 子代理统一知识注入（opt-in） |
 | `workflow-guard` | PreToolUse | Bash\|Write\|Edit | full | 必需 | 保护关键文件和操作 |
+| `prompt-guard` | UserPromptSubmit | — | full | — | 用户 prompt 安全检查 |
 
 > **性能优化**：Stop 事件 Hook 每轮仅触发 1 次；`delegate-monitor` 通过 Bash\|Agent matcher 过滤。相比无 matcher 的 PostToolUse，每轮子进程 spawn 减少约 72%。
 
@@ -71,11 +77,17 @@ Maestro Hook 系统为 Claude Code、Codex 和 Agy (Antigravity) 提供自动化
 | `spec-injector` | SessionStart | startup | standard | 必需 | 会话启动注入规范 |
 | `skill-context` | UserPromptSubmit | — | standard | 必需 | Skill 调用注入上下文 |
 | `keyword-spec-injector` | UserPromptSubmit | — | standard | 必需 | 关键词匹配注入规范 |
+| `kg-sync` | UserPromptSubmit | — | standard | 必需 | 知识图谱增量同步 |
+| `kg-auto-init` | SessionStart | startup | standard | 必需 | 知识图谱自动初始化 |
+| `kg-context-injector` | PreToolUse | Agent | standard | 必需 | 子代理知识图谱上下文注入 |
+| `kg-unified-injector` | UserPromptSubmit | — | standard | 必需 | 统一知识注入（opt-in） |
+| `kg-unified-injector-agent` | PreToolUse | Agent | standard | 必需 | 子代理统一知识注入（opt-in） |
 | `delegate-monitor` | PostToolUse | Bash | standard | — | 监控异步委托 |
 | `coordinator-tracker` | Stop | — | standard | 必需 | 协调器进度追踪 |
 | `team-monitor` | Stop | — | standard | — | 团队心跳记录 |
 | `telemetry` | Stop | — | standard | — | 遥测采集 |
 | `workflow-guard` | PreToolUse | Bash | full | 必需 | 保护文件（仅 Bash） |
+| `prompt-guard` | UserPromptSubmit | — | full | — | 用户 prompt 安全检查 |
 
 > **与 Claude Code 差异**：Codex `spec-injector` 用 SessionStart（无法拦截 Agent）；`workflow-guard` 仅防护 Bash；并发执行；正则 matcher。
 

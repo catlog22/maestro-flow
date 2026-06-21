@@ -14,7 +14,9 @@ title: "Delegate 异步执行指南"
 claude --dangerously-load-development-channels server:maestro --dangerously-skip-permissions
 ```
 
-委托工具（`delegate_message`、`delegate_status`、`delegate_output`、`delegate_tail`、`delegate_cancel`）自动作为 MCP 工具可用。
+MCP server 注册 9 个内置工具（`edit_file`、`write_file`、`read_file`、`read_many_files`、`team_msg`、`team_mailbox`、`store_knowhow`、`team_tasks_mcp`、`team_agents`），**不含 delegate 系列工具**。Delegate 子命令（`message`、`status`、`output`、`tail`、`cancel`）仅通过 CLI 使用，不注册为 MCP 工具。
+
+异步 delegate 完成时，通知通过 MCP channel 推送到 Claude Code（`<channel source="maestro" ...>`），无需手动查询。要查看详细结果，在 shell 中执行 `maestro delegate status <exec_id>` 或 `maestro delegate output <exec_id>`。
 
 ### 通过 CLI 启动
 
@@ -41,7 +43,7 @@ maestro delegate "<PROMPT>" [options]
 | `--to <tool>` | Agent：gemini, qwen, codex, claude, opencode | 配置中第一个启用的 |
 | `--role <role>` | 能力角色（analyze, explore, review, implement, plan, brainstorm, research） | — |
 | `--mode <mode>` | `analysis`（只读）或 `write`（创建/修改/删除） | `analysis` |
-| `--effort <level>` | 推理强度（low, medium, high, max） | — |
+| `--effort <level>` | 推理强度（low, medium, high, max） | 工具的 `reasoningEffort` 配置 |
 | `--model <model>` | 模型覆盖 | 工具的 `primaryModel` |
 | `--cd <dir>` | 工作目录 | 当前目录 |
 | `--rule <template>` | 加载协议 + prompt 模板 | — |
@@ -50,6 +52,7 @@ maestro delegate "<PROMPT>" [options]
 | `--includeDirs <dirs>` | 额外目录（逗号分隔） | — |
 | `--session <id>` | MCP 会话 ID，用于通知 | 自动检测 |
 | `--backend <type>` | `direct` 或 `terminal` | `direct` |
+| `--timeout <ms>` | 静默超时（ms）——CLI 无输出超过此时间则强制终止 | 600000（10 分钟） |
 | `--async` | 后台运行，立即返回 | 前台 |
 
 ### 子命令
@@ -59,8 +62,9 @@ maestro delegate show                              # 最近 20 条执行
 maestro delegate show --all                        # 最多 100 条
 maestro delegate status <id>                       # Broker + 历史状态
 maestro delegate status <id> --events 10           # 带更多 broker 事件
-maestro delegate output <id>                       # Assistant 输出
-maestro delegate output <id> --verbose             # 带时间戳
+maestro delegate output <id>                       # Assistant 输出（仅最后一条回复）
+maestro delegate output <id> --full                # 完整输出（含工具调用等所有条目）
+maestro delegate output <id> --verbose             # 带元数据和时间戳
 maestro delegate output <id> --all                 # 包含 thinking/reasoning 条目
 maestro delegate output <id> --offset <n>          # 字符偏移
 maestro delegate output <id> --limit <n>           # 最大字符数

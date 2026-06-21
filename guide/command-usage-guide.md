@@ -350,6 +350,8 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 | Issue 发现与闭环 | [Issue Discover Guide](./issue-discover-guide.md) |
 | 学习工具集 | [Learn Tools Guide](./learn-tools-guide.md) |
 | 知识图谱管理 | [Knowledge Management Guide](./knowledge-management-guide.md) |
+| 搜索系统 | [Search System Guide](./search-system-guide.md) |
+| 安装指南 | [Install Guide](./install-guide.md) |
 | CLI 命令参考 | [CLI Commands Guide](./cli-commands-guide.md) |
 | Spec 规范系统 | [Spec System Guide](./spec-system-guide.md) |
 | Spec 注入机制 | [Spec Injection Guide](./spec-injection-guide.md) |

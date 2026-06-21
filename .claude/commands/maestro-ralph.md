@@ -354,6 +354,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 | brainstorm | `maestro-brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `maestro-brainstorm "{intent}"` *(otherwise)* | *(same)* | — | all |
 | blueprint | `maestro-blueprint "{intent}"` | *(same)* | — | all |
 | init | `maestro-init` | *(same)* | — | all |
+| spec-setup | `spec-setup` | *(same)* | — | all (**仅当 `.workflow/specs/` 不存在时插入**) |
 | analyze-macro | `maestro-analyze "{intent}"` | *(same)* | `post-analyze-scope` | all |
 | roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | *(same)* | — | all |
 | analyze | `maestro-analyze {phase}` | `maestro-analyze` | — | all |
@@ -372,6 +373,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`.
 **Build rules (按顺序应用):**
 
 0. **planning_mode 选列**：`unified` → Skill (unified) 列；`independent` → Skill (independent) 列
+0.5. **specs 预检**：当 `lifecycle_position ∉ {grill, brainstorm, blueprint, init}` 且 `.workflow/specs/` 目录不存在时，在链路最前面插入 `spec-setup` 步骤（stage=`spec-setup`，无 decision）。确保下游 analyze/plan/execute 可获得项目约束规则注入
 1. **起点**：从 `session.lifecycle_position` 开始
 2. **跳过已完成**：跳过当前 milestone+phase 下已有 completed artifact 的 stage（按 `session.phase` 过滤）；unified 按 milestone 过滤
 3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
@@ -731,6 +733,7 @@ decision:post-goal-audit {retry+1}
 - [ ] post-goal-audit decision 仅在 decomposed 时插入，位于 milestone-complete 之前
 - [ ] Unmet sub-goals 动态 grow steps[]（goal_ref tagged）；max retries → escalate
 - [ ] planning_mode 显式决定；unified=无 `{phase}`, independent=带 `{phase}`
+- [ ] specs 预检：lifecycle_position 在 init 之后 + `.workflow/specs/` 不存在 → 链路最前面插入 `spec-setup`
 - [ ] Chain 必须以 `milestone-complete` 结尾
 - [ ] Decision nodes 由 maestro delegate --role analyze 评估
 - [ ] Ralph 不执行 step，只 evaluate；Skill("maestro-ralph-execute") handoff
