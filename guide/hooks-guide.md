@@ -23,7 +23,7 @@ Maestro Hook 系统为 Claude Code、Codex 和 Agy (Antigravity) 提供自动化
 |----|---------|---------|
 | Claude Code Hooks | `settings.json` | 子进程 `maestro hooks run <name>` |
 | Codex Hooks | `hooks.json` | 子进程 `maestro hooks run <name>` |
-| Agy (Antigravity) Hooks | `~/.gemini/antigravity-cli/` | Skills + Agents 自动发现 |
+| Agy (Antigravity) Hooks | `~/.gemini/config/hooks.json` | 子进程 `maestro hooks run <name>` |
 | Coordinator Hooks | `WorkflowHookRegistry` | 进程内插件 |
 
 ### 协议
@@ -93,16 +93,33 @@ Maestro Hook 系统为 Claude Code、Codex 和 Agy (Antigravity) 提供自动化
 
 ### Agy (Antigravity) Hook 清单（v0.4.19+）
 
-Agy 使用 Skills + Agents 自动发现机制，而非传统 Hook 注册：
+Agy 通过 `hooks.json` 注册 Hook（前缀 `maestro-`），使用 `PreInvocation` / `PreToolUse` / `PostToolUse` / `Stop` 事件类型：
 
-| 组件 | 安装路径 | 用途 |
-|------|---------|------|
-| `agy-context` | `~/.gemini/antigravity-cli/skills/` | 会话上下文注入 |
-| `agy-md-chinese` | `~/.gemini/antigravity-cli/skills/` | 中文回复规范注入 |
-| `agy-skills` | `~/.gemini/antigravity-cli/skills/` | Skill 自动发现 |
-| `agy-agents` | `~/.gemini/antigravity-cli/agents/` | Agent 定义同步 |
+| Hook | 事件类型 | Matcher | 级别 | Workspace | 用途 |
+|------|---------|---------|------|-----------|------|
+| `spec-injector` | PreToolUse | invoke_subagent | minimal | 必需 | 按 agent 类型自动注入项目规范 |
+| `session-context` | PreInvocation | — | standard | 必需 | 会话启动注入工作流状态 |
+| `skill-context` | PreInvocation | — | standard | 必需 | Skill 调用注入上下文 |
+| `keyword-spec-injector` | PreInvocation | — | standard | 必需 | 关键词匹配注入规范 |
+| `kg-sync` | PreInvocation | — | standard | 必需 | 知识图谱增量同步 |
+| `kg-auto-init` | PreInvocation | — | standard | 必需 | 知识图谱自动初始化 |
+| `kg-context-injector` | PreToolUse | invoke_subagent | standard | 必需 | 子代理知识图谱上下文注入 |
+| `kg-unified-injector` | PreInvocation | — | standard | 必需 | 统一知识注入（opt-in） |
+| `kg-unified-injector-agent` | PreToolUse | invoke_subagent | standard | 必需 | 子代理统一知识注入（opt-in） |
+| `delegate-monitor` | PostToolUse | run_command\|invoke_subagent | standard | — | 监控异步委托 |
+| `team-monitor` | Stop | — | standard | — | 团队心跳记录 |
+| `telemetry` | Stop | — | standard | — | 遥测采集 |
+| `coordinator-tracker` | Stop | — | standard | 必需 | 协调器进度追踪 |
+| `preflight-guard` | PreToolUse | run_command\|write_to_file\|replace_file_content\|multi_replace_file_content\|invoke_subagent | standard | 必需 | 命令执行前预检守卫 |
+| `spec-validator` | PreToolUse | write_to_file\|replace_file_content\|multi_replace_file_content | standard | 必需 | 规范写入验证 |
+| `workflow-guard` | PreToolUse | run_command\|write_to_file\|replace_file_content\|multi_replace_file_content | full | 必需 | 保护文件和操作 |
+| `prompt-guard` | PreInvocation | — | full | — | 用户 prompt 安全检查 |
 
-> **与 Claude/Codex 差异**：Agy 不使用 stdin/stdout JSON 协议，而是通过目录约定自动发现 skills 和 agents。安装时将 `.claude/commands/` 和 `.claude/skills/` 镜像到 `~/.gemini/antigravity-cli/` 对应目录。
+**安装路径**：
+- 全局 → `~/.gemini/config/hooks.json`
+- 项目级 → `<project>/.agents/hooks.json`
+
+> **与 Claude/Codex 差异**：Agy 使用 `PreInvocation`（对应 Claude 的 `UserPromptSubmit`）做上下文注入；matcher 使用 Agy 工具名（如 `invoke_subagent`、`run_command`、`write_to_file`）；所有 Hook 以 `maestro-` 前缀注册到 `hooks.json` 顶层。
 
 ---
 
@@ -114,7 +131,7 @@ Hook 按**累积级别**安装，高级别包含所有低级别：
 |------|---------|---------|
 | `none` | 无 Hook | 完全手动控制 |
 | `minimal` | Statusline + spec-injector | 日常开发 |
-| `standard` | + delegate-monitor + team/telemetry/coordinator(Stop) + session-context + skill-context | 团队协作 |
+| `standard` | + delegate-monitor + kg-sync + kg-auto-init + kg-context-injector + kg-unified-injector(opt-in) + team/telemetry/coordinator(Stop) + session-context + skill-context + preflight/spec guards | 团队协作 |
 | `full` | + workflow-guard | 严格工作流 |
 
 ### 安装命令
