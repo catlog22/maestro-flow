@@ -921,6 +921,7 @@ export class FsAnalyzer implements CodeAnalyzer {
     }
 
     // 2c. Test file pairing: create tested_by edges
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
     for (const test of testFiles) {
       const prodPath = findProductionFile(test.relPath, fileSet);
       if (prodPath) {
@@ -932,8 +933,7 @@ export class FsAnalyzer implements CodeAnalyzer {
           direction: 'forward',
           weight: 0.8,
         });
-        // Add "tested" tag to the production node
-        const prodNode = nodes.find(n => n.id === prodFileId);
+        const prodNode = nodeById.get(prodFileId);
         if (prodNode && !prodNode.tags.includes('tested')) {
           prodNode.tags.push('tested');
         }

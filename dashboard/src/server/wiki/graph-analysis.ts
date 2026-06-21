@@ -70,9 +70,11 @@ export function buildGraph(index: WikiIndex): WikiGraph {
     return hit ?? null;
   };
 
+  const fwdSets = new Map<string, Set<string>>();
   const pushFwd = (source: string, targetId: string) => {
-    if (!forwardLinks[source]) forwardLinks[source] = [];
-    if (!forwardLinks[source].includes(targetId)) forwardLinks[source].push(targetId);
+    let s = fwdSets.get(source);
+    if (!s) { s = new Set(); fwdSets.set(source, s); }
+    s.add(targetId);
   };
 
   for (const d of index.entries) {
@@ -100,6 +102,8 @@ export function buildGraph(index: WikiIndex): WikiGraph {
       }
     }
   }
+
+  for (const [k, v] of fwdSets) forwardLinks[k] = [...v];
 
   return {
     forwardLinks,

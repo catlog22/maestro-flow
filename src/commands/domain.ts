@@ -105,8 +105,12 @@ export function registerDomainCommand(program: Command): void {
       }
 
       console.log(`Domain terms (${terms.length}):\n`);
-      const maxId = Math.max(...terms.map(t => t.id.length), 4);
-      const maxCan = Math.max(...terms.map(t => t.canonical.length), 9);
+      let maxId = 4;
+      let maxCan = 9;
+      for (const t of terms) {
+        if (t.id.length > maxId) maxId = t.id.length;
+        if (t.canonical.length > maxCan) maxCan = t.canonical.length;
+      }
       console.log(`  ${'ID'.padEnd(maxId)}  ${'Canonical'.padEnd(maxCan)}  Tier       Status      Definition`);
       console.log(`  ${'─'.repeat(maxId)}  ${'─'.repeat(maxCan)}  ${'─'.repeat(10)} ${'─'.repeat(11)} ${'─'.repeat(40)}`);
       for (const t of terms) {
