@@ -2,6 +2,9 @@ import { readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Extension, ExtensionContext, Tool } from '../types/index.js';
 import type { ToolRegistry } from './tool-registry.js';
+import { NodeKindRegistry } from '../graph/kg/db/node-kind-registry.js';
+import { KnowledgeExtractorRegistry } from '../graph/kg/extraction/knowledge-extractor-registry.js';
+import type { KnowledgeExtractorEntry } from '../graph/kg/extraction/knowledge-extractor-registry.js';
 
 export class ExtensionLoader {
   private loaded = new Map<string, Extension>();
@@ -32,6 +35,8 @@ export class ExtensionLoader {
 
       const ctx: ExtensionContext = {
         registerTool: (tool: Tool) => this.registry.register(tool),
+        registerNodeKind: (kind, meta) => NodeKindRegistry.register(kind, meta),
+        registerKnowledgeExtractor: (entry) => KnowledgeExtractorRegistry.register(entry as KnowledgeExtractorEntry),
         config: {},
         log: (msg: string) => console.log(`[ext:${ext.name}] ${msg}`),
       };

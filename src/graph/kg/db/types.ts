@@ -41,7 +41,8 @@ export const KNOWLEDGE_NODE_KINDS = [
 ] as const;
 
 export const UNIFIED_NODE_KINDS = [...CODE_NODE_KINDS, ...KNOWLEDGE_NODE_KINDS] as const;
-export type UnifiedNodeKind = (typeof UNIFIED_NODE_KINDS)[number];
+export type BuiltinNodeKind = (typeof UNIFIED_NODE_KINDS)[number];
+export type UnifiedNodeKind = BuiltinNodeKind | (string & {});
 export type CodeNodeKind = (typeof CODE_NODE_KINDS)[number];
 export type KnowledgeNodeKind = (typeof KNOWLEDGE_NODE_KINDS)[number];
 

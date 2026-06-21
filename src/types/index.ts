@@ -137,6 +137,13 @@ export interface Extension {
 
 export interface ExtensionContext {
   registerTool: (tool: Tool) => void;
+  registerNodeKind: (kind: string, meta?: { category?: 'code' | 'knowledge' | 'custom'; description?: string }) => void;
+  registerKnowledgeExtractor: (entry: {
+    name: string;
+    sourceType: string;
+    extractFn: (sourcePath: string, workflowRoot: string) => { nodes: unknown[]; edges: unknown[]; fileRecord: unknown };
+    resolvePath: (workflowRoot: string) => string;
+  }) => void;
   config: Record<string, unknown>;
   log: (msg: string) => void;
 }

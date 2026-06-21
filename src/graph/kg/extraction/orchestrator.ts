@@ -4,11 +4,7 @@
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { MaestroGraph } from '../engine.js';
-import { extractDomain } from './knowledge/domain-extractor.js';
-import { extractSpec } from './knowledge/spec-extractor.js';
-import { extractWiki } from './knowledge/wiki-extractor.js';
-import { extractCodebase } from './knowledge/codebase-extractor.js';
-import { extractIssues } from './knowledge/issue-extractor.js';
+import { KnowledgeExtractorRegistry } from './knowledge-extractor-registry.js';
 import { forEachCodeExtractionResult } from './code/code-extractor.js';
 import { resolveKnowledgeEdges } from '../resolution/knowledge-resolver.js';
 import type { SyncResult, SourceType } from '../db/types.js';
@@ -46,116 +42,27 @@ export async function syncKnowledgeGraph(
     };
 
     // ── Knowledge sources (优先同步) ───────────────────────────────
-    // 同步前清理旧节点（ON DELETE CASCADE 会级联删除关联 edges）
     const queries = mg.getQueryBuilder();
 
-    if (shouldSync('domain')) {
-      const startMs = Date.now();
-      const domainResult = extractDomain(
-        resolve(workflowRoot, 'domain', 'glossary.json'),
-        workflowRoot,
-      );
-      const removed = mg.getConnection().transaction(() => {
-        const n = queries.deleteNodesBySourceType('domain');
-        if (domainResult.nodes.length > 0) {
-          mg.insertExtractionResults(domainResult);
-        }
-        return n;
-      });
-      results.push({
-        source: 'domain',
-        nodesAdded: domainResult.nodes.length,
-        nodesUpdated: 0,
-        nodesRemoved: removed,
-        edgesAdded: domainResult.edges.length,
-        edgesRemoved: 0,
-        durationMs: Date.now() - startMs,
-      });
-    }
+    for (const entry of KnowledgeExtractorRegistry.getAll()) {
+      if (!shouldSync(entry.sourceType)) continue;
 
-    if (shouldSync('spec')) {
       const startMs = Date.now();
-      const specDir = resolve(workflowRoot, 'specs');
-      const specResult = extractSpec(specDir, workflowRoot);
+      const sourcePath = entry.resolvePath(workflowRoot);
+      const extractionResult = entry.extractFn(sourcePath, workflowRoot);
       const removed = mg.getConnection().transaction(() => {
-        const n = queries.deleteNodesBySourceType('spec');
-        if (specResult.nodes.length > 0) {
-          mg.insertExtractionResults(specResult);
+        const n = queries.deleteNodesBySourceType(entry.sourceType);
+        if (extractionResult.nodes.length > 0) {
+          mg.insertExtractionResults(extractionResult);
         }
         return n;
       });
       results.push({
-        source: 'spec',
-        nodesAdded: specResult.nodes.length,
+        source: entry.sourceType,
+        nodesAdded: extractionResult.nodes.length,
         nodesUpdated: 0,
         nodesRemoved: removed,
-        edgesAdded: specResult.edges.length,
-        edgesRemoved: 0,
-        durationMs: Date.now() - startMs,
-      });
-    }
-
-    if (shouldSync('knowhow')) {
-      const startMs = Date.now();
-      const knowhowDir = resolve(workflowRoot, 'knowhow');
-      const wikiResult = extractWiki(knowhowDir, workflowRoot);
-      const removed = mg.getConnection().transaction(() => {
-        const n = queries.deleteNodesBySourceType('knowhow');
-        if (wikiResult.nodes.length > 0) {
-          mg.insertExtractionResults(wikiResult);
-        }
-        return n;
-      });
-      results.push({
-        source: 'knowhow',
-        nodesAdded: wikiResult.nodes.length,
-        nodesUpdated: 0,
-        nodesRemoved: removed,
-        edgesAdded: wikiResult.edges.length,
-        edgesRemoved: 0,
-        durationMs: Date.now() - startMs,
-      });
-    }
-
-    if (shouldSync('codebase')) {
-      const startMs = Date.now();
-      const codebaseDir = resolve(workflowRoot, 'codebase');
-      const codebaseResult = extractCodebase(codebaseDir, workflowRoot);
-      const removed = mg.getConnection().transaction(() => {
-        const n = queries.deleteNodesBySourceType('codebase');
-        if (codebaseResult.nodes.length > 0) {
-          mg.insertExtractionResults(codebaseResult);
-        }
-        return n;
-      });
-      results.push({
-        source: 'codebase',
-        nodesAdded: codebaseResult.nodes.length,
-        nodesUpdated: 0,
-        nodesRemoved: removed,
-        edgesAdded: codebaseResult.edges.length,
-        edgesRemoved: 0,
-        durationMs: Date.now() - startMs,
-      });
-    }
-
-    if (shouldSync('issue')) {
-      const startMs = Date.now();
-      const issuesPath = resolve(workflowRoot, 'issues', 'issues.jsonl');
-      const issueResult = extractIssues(issuesPath, workflowRoot);
-      const removed = mg.getConnection().transaction(() => {
-        const n = queries.deleteNodesBySourceType('issue');
-        if (issueResult.nodes.length > 0) {
-          mg.insertExtractionResults(issueResult);
-        }
-        return n;
-      });
-      results.push({
-        source: 'issue',
-        nodesAdded: issueResult.nodes.length,
-        nodesUpdated: 0,
-        nodesRemoved: removed,
-        edgesAdded: issueResult.edges.length,
+        edgesAdded: extractionResult.edges.length,
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
       });
