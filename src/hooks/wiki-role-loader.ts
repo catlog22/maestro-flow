@@ -31,7 +31,8 @@ export function loadWikiByCategory(projectPath: string, category: string): WikiC
   let index: { entries?: Array<{ type: string; title: string; summary: string; category?: string | null; specCategory?: string | null; updated: string }> };
   try {
     index = JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    console.warn(`[wiki-role-loader] Corrupt wiki-index.json at ${indexPath}: ${(err as Error).message}`);
     return null;
   }
 

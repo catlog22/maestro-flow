@@ -79,19 +79,24 @@ export class GlossaryLock {
   }
 
   acquire(): void {
-    if (existsSync(this.lockPath)) {
-      try {
-        const content = readFileSync(this.lockPath, 'utf-8').trim();
-        const pid = parseInt(content, 10);
-        const lockAge = Date.now() - statSync(this.lockPath).mtimeMs;
-        if (lockAge < STALE_TIMEOUT_MS && !isNaN(pid) && isProcessAlive(pid)) {
-          throw new Error(`glossary.json locked by PID ${pid}. Delete ${this.lockPath} if stale.`);
-        }
-      } catch (e) {
-        if ((e as Error).message.includes('locked by PID')) throw e;
-      }
-      try { unlinkSync(this.lockPath); } catch { /* already gone */ }
+    try {
+      writeFileSync(this.lockPath, String(process.pid), { flag: 'wx' });
+      this.held = true;
+      return;
+    } catch {
+      // EEXIST — lock file exists, check if stale
     }
+    try {
+      const content = readFileSync(this.lockPath, 'utf-8').trim();
+      const pid = parseInt(content, 10);
+      const lockAge = Date.now() - statSync(this.lockPath).mtimeMs;
+      if (lockAge < STALE_TIMEOUT_MS && !isNaN(pid) && isProcessAlive(pid)) {
+        throw new Error(`glossary.json locked by PID ${pid}. Delete ${this.lockPath} if stale.`);
+      }
+    } catch (e) {
+      if ((e as Error).message.includes('locked by PID')) throw e;
+    }
+    try { unlinkSync(this.lockPath); } catch { /* already gone */ }
     try {
       writeFileSync(this.lockPath, String(process.pid), { flag: 'wx' });
       this.held = true;

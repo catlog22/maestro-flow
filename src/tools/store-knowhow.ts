@@ -18,30 +18,28 @@
 
 import { z } from 'zod';
 import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { getProjectRoot } from '../utils/path-validator.js';
 import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
-
-// --- Types ---
-
-const CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision', 'asset', 'blueprint', 'document'] as const;
-type KnowHowCategory = (typeof CATEGORIES)[number];
-
-const PREFIX_MAP: Record<KnowHowCategory, string> = {
-  session: 'KNW',
-  tip: 'TIP',
-  template: 'TPL',
-  recipe: 'RCP',
-  reference: 'REF',
-  decision: 'DCS',
-  asset: 'AST',
-  blueprint: 'BLP',
-  document: 'DOC',
-};
+import {
+  KNOWHOW_CATEGORIES as CATEGORIES,
+  KNOWHOW_PREFIX_MAP as PREFIX_MAP,
+  type KnowHowCategory,
+  slugify,
+  escapeYamlValue,
+  getKnowhowDir as _getKnowhowDir,
+  generateKnowhowFilename as generateId,
+} from '../utils/frontmatter.js';
 
 const DECISION_STATUSES = ['proposed', 'accepted', 'superseded'] as const;
+
+// --- Storage ---
+
+function getKnowhowDir(): string {
+  return _getKnowhowDir(getProjectRoot());
+}
 
 // --- Zod Schema ---
 
@@ -70,47 +68,7 @@ const ParamsSchema = z.object({
 
 type Params = z.infer<typeof ParamsSchema>;
 
-// --- Storage ---
-
-function getKnowhowDir(): string {
-  return join(getProjectRoot(), '.workflow', 'knowhow');
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-function generateId(type: KnowHowCategory, title?: string): { id: string; filename: string } {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
-  const prefix = PREFIX_MAP[type];
-  const slug = title ? slugify(title).slice(0, 40) : '';
-  const filename = slug
-    ? `${prefix}-${ts}-${slug}.md`
-    : `${prefix}-${ts}-${pad(now.getHours())}${pad(now.getMinutes())}.md`;
-  const idSuffix = slug || `${pad(now.getHours())}${pad(now.getMinutes())}`;
-  return { id: `knowhow-${slugify(ts)}-${idSuffix}`, filename };
-}
-
-function escapeYamlValue(value: string): string {
-  if (/[:\n"'#,{}[\]]/.test(value)) return JSON.stringify(value);
-  return value;
-}
-
-function parseFrontmatter(raw: string): { data: Record<string, unknown>; body: string } {
-  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-  if (!match) return { data: {}, body: raw };
-  const data: Record<string, unknown> = {};
-  for (const line of match[1].split('\n')) {
-    const kv = line.match(/^(\w[\w\s]*?):\s*(.*)$/);
-    if (kv) data[kv[1].trim()] = kv[2].trim();
-  }
-  return { data, body: raw.slice(match[0].length) };
-}
+// --- Storage (delegated to shared module) ---
 
 // --- Operations ---
 

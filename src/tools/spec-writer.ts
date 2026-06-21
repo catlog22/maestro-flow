@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { formatNewEntry, parseSpecEntries } from './spec-entry-parser.js';
 import { resolveSpecDir, CATEGORY_MAP, type SpecCategory, type SpecScope } from './spec-loader.js';
 import { ensureSpecFile } from './spec-init.js';
+import { slugify } from '../utils/frontmatter.js';
 
 // ============================================================================
 // Size guard — prevent oversized entries in spec files
@@ -74,12 +75,7 @@ function categoryToFilename(category: SpecCategory): string | undefined {
 // Internal: knowhow redirect for oversized content
 // ============================================================================
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
+// slugify imported from utils/frontmatter.ts
 
 /**
  * Create a knowhow file with the full content and return the relative ref path.

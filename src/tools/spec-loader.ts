@@ -16,6 +16,7 @@ import {
   hasFrontmatter,
   renderSeedContent,
 } from './spec-seeds.js';
+import { stripFrontmatter } from '../utils/frontmatter.js';
 
 // ============================================================================
 // Types
@@ -480,14 +481,6 @@ function discoverKnowhowTools(workflowRoot: string, category: SpecCategory): { c
   return { content, count: tools.length };
 }
 
-function stripFrontmatter(raw: string): string {
-  const trimmed = raw.trimStart();
-  if (!trimmed.startsWith('---')) return raw;
-  const endIdx = trimmed.indexOf('\n---', 3);
-  if (endIdx === -1) return raw;
-  return trimmed.substring(endIdx + 4).trim();
-}
-
 // ============================================================================
 // Auto-init seed files
 // ============================================================================
@@ -508,7 +501,6 @@ const autoInitChecked = new Set<string>();
  */
 function autoInitSeeds(specsDir: string): void {
   if (autoInitChecked.has(specsDir)) return;
-  autoInitChecked.add(specsDir);
 
   // For project-local paths, only auto-init when .workflow/ already exists.
   // Global path (under ~/.maestro/) always qualifies.
@@ -540,8 +532,9 @@ function autoInitSeeds(specsDir: string): void {
         writeFileSync(filePath, merged, 'utf-8');
       }
     }
+    autoInitChecked.add(specsDir);
   } catch {
-    // Best-effort — don't block loading
+    // Best-effort — don't block loading; don't mark as checked so retry is possible
   }
 }
 

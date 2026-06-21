@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseSpecEntries, type SpecEntryParsed, type ConfidenceLevel, VALID_CONFIDENCE_LEVELS } from './spec-entry-parser.js';
+import { stripFrontmatter } from '../utils/frontmatter.js';
 
 // ============================================================================
 // Types
@@ -312,10 +313,4 @@ function removeAttribute(tagLine: string, attr: string): string {
   return tagLine.replace(new RegExp(`\\s*${attr}="[^"]*"`, 'g'), '');
 }
 
-function stripFrontmatter(raw: string): string {
-  const trimmed = raw.trimStart();
-  if (!trimmed.startsWith('---')) return raw;
-  const endIdx = trimmed.indexOf('\n---', 3);
-  if (endIdx === -1) return raw;
-  return trimmed.substring(endIdx + 4).trim();
-}
+// stripFrontmatter imported from utils/frontmatter.ts

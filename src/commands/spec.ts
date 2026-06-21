@@ -453,17 +453,14 @@ export function registerSpecCommand(program: Command): void {
 
         // If ref file doesn't exist AND --knowhow-type given → create knowhow doc first
         if (!fileExists(absRefPath) && knowhowType) {
-          const KNOWHOW_PREFIX_MAP: Record<string, string> = {
-            session: 'KNW', tip: 'TIP', template: 'TPL', recipe: 'RCP',
-            reference: 'REF', decision: 'DCS', asset: 'AST', blueprint: 'BLP',
-            document: 'DOC',
-          };
+          const { KNOWHOW_PREFIX_MAP } = await import('../utils/frontmatter.js');
           const prefix = KNOWHOW_PREFIX_MAP[knowhowType] ?? 'DOC';
           const dir = pathJoin(process.cwd(), '.workflow', 'knowhow');
           if (!fileExists(dir)) mkDir(dir, { recursive: true });
 
+          const { escapeYamlValue } = await import('../utils/frontmatter.js');
           const now = new Date();
-          const fmLines = ['---', `title: ${title}`, `type: ${knowhowType}`, `category: ${category}`, `created: ${now.toISOString()}`];
+          const fmLines = ['---', `title: ${escapeYamlValue(title)}`, `type: ${knowhowType}`, `category: ${category}`, `created: ${now.toISOString()}`];
           if (keywords.length > 0) {
             fmLines.push('keywords:');
             for (const t of keywords) fmLines.push(`  - ${t}`);

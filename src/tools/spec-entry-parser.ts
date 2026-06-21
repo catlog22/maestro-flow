@@ -284,11 +284,12 @@ export function formatNewEntry(
   conflictMarker?: string,
   conflictNote?: string,
 ): string {
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const kwStr = keywords.map(k => k.toLowerCase().trim()).filter(Boolean).join(',');
-  const sourceAttr = source ? ` source="${source}"` : '';
-  const refAttr = ref ? ` ref="${ref}"` : '';
-  const descAttr = description ? ` description="${description}"` : '';
-  const titleAttr = ` title="${title}"`;
+  const sourceAttr = source ? ` source="${esc(source)}"` : '';
+  const refAttr = ref ? ` ref="${esc(ref)}"` : '';
+  const descAttr = description ? ` description="${esc(description)}"` : '';
+  const titleAttr = ` title="${esc(title)}"`;
   const confidenceAttr = confidence ? ` confidence="${confidence}"` : '';
   const conflictMarkerAttr = conflictMarker ? ` conflict-marker="${conflictMarker}"` : '';
   const conflictNoteAttr = conflictNote ? ` conflict-note="${conflictNote}"` : '';
@@ -327,7 +328,6 @@ function parseLegacyEntries(
 ): LegacyEntry[] {
   const lines = content.split('\n');
   const legacy: LegacyEntry[] = [];
-  let currentOffset = 0;
 
   // Build a set of line numbers that are inside <spec-entry> blocks
   const consumedLines = new Set<number>();

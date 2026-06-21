@@ -8,34 +8,16 @@
 
 import type { Command } from 'commander';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { readdirSync } from 'node:fs';
-
-const CATEGORIES = ['session', 'tip', 'template', 'recipe', 'reference', 'decision', 'asset', 'blueprint', 'document'] as const;
-const PREFIX_MAP: Record<string, string> = {
-  session: 'KNW', tip: 'TIP', template: 'TPL',
-  recipe: 'RCP', reference: 'REF', decision: 'DCS',
-  asset: 'AST', blueprint: 'BLP', document: 'DOC',
-};
-
-function getKnowhowDir(): string {
-  return resolve('.workflow/knowhow');
-}
-
-function slugify(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
-
-function parseFrontmatter(raw: string): { data: Record<string, string>; body: string } {
-  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-  if (!match) return { data: {}, body: raw };
-  const data: Record<string, string> = {};
-  for (const line of match[1].split('\n')) {
-    const kv = line.match(/^(\w[\w\s]*?):\s*(.*)$/);
-    if (kv) data[kv[1].trim()] = kv[2].trim();
-  }
-  return { data, body: raw.slice(match[0].length) };
-}
+import {
+  KNOWHOW_CATEGORIES as CATEGORIES,
+  KNOWHOW_PREFIX_MAP as PREFIX_MAP,
+  slugify,
+  escapeYamlValue,
+  parseFrontmatter,
+  getKnowhowDir,
+} from '../utils/frontmatter.js';
 
 export function registerKnowhowCommand(program: Command): void {
   const knowhow = program
@@ -109,7 +91,7 @@ export function registerKnowhowCommand(program: Command): void {
         : `${prefix}-${ts}-${pad(now.getHours())}${pad(now.getMinutes())}.md`;
 
       const { writeFileSync } = await import('node:fs');
-      const fmLines = ['---', `title: ${opts.title}`, `type: ${type}`, `created: ${now.toISOString()}`];
+      const fmLines = ['---', `title: ${escapeYamlValue(opts.title)}`, `type: ${type}`, `created: ${now.toISOString()}`];
       if (tags.length > 0) {
         fmLines.push('keywords:');
         for (const t of tags) fmLines.push(`  - ${t}`);
