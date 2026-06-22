@@ -23,6 +23,7 @@ import {
   getPackageRoot,
   scanComponents,
   MCP_TOOLS,
+  type ExtraMcpTargetId,
 } from './install-backend.js';
 import { t } from '../i18n/index.js';
 import { registerFontsSubcommand } from './font-guide.js';
@@ -192,14 +193,16 @@ export function registerInstallCommand(program: Command): void {
     .option('--path <dir>', 'Install to project directory (with --force)')
     .option('--hooks <level>', 'Hook level for --force mode: none, minimal, standard, full')
     .option('--codex-hooks <level>', 'Codex hook level for --force mode: none, minimal, standard, full')
+    .option('--mcp', 'Register Claude MCP server in --force mode')
     .option('--codex-mcp', 'Register Codex MCP server in --force mode')
     .option('--agy-hooks <level>', 'Agy (Antigravity) hook level for --force mode: none, minimal, standard, full')
+    .option('--extra-mcp <targets>', 'Comma-separated extra MCP targets (cursor,qoder,trae,kiro,roo,vscode,gemini)')
     .option('--components <ids>', 'Comma-separated component IDs to install (with --force)')
     .option('--statusline [theme]', 'Install statusline with optional theme (with --force)')
     .option('--export [path]', 'Export current install config as profile JSON')
     .option('--import <path>', 'Import profile and install non-interactively')
     .option('--load <path>', 'Load profile into interactive TUI (pre-fill state)')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string; export?: boolean | string; import?: string; load?: string }) => {
+    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; mcp?: boolean; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; extraMcp?: string; components?: string; statusline?: boolean | string; export?: boolean | string; import?: string; load?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -230,10 +233,16 @@ export function registerInstallCommand(program: Command): void {
         await forceInstall(pkgRoot, version, {
           global: profile.scope === 'global',
           hooks: profile.claude.hooks.basePreset,
+          mcp: profile.claude.mcp.enabled || undefined,
           codexHooks: profile.codex.hooks.basePreset,
+          codexMcp: profile.codex.mcp.enabled || undefined,
           agyHooks: profile.agy.hooks.basePreset,
+          extraMcp: profile.extraMcp.enabled ? profile.extraMcp.targetIds.join(',') : undefined,
           components: migrateIds(profile.components.selectedIds).join(','),
           statusline: profile.claude.statusline.enabled ? profile.claude.statusline.theme : undefined,
+          claudeHooksSelection: profile.claude.hooks.isCustom ? profile.claude.hooks : undefined,
+          codexHooksSelection: profile.codex.hooks.isCustom ? profile.codex.hooks : undefined,
+          agyHooksSelection: profile.agy.hooks.isCustom ? profile.agy.hooks : undefined,
         });
         return;
       }
@@ -273,10 +282,26 @@ export function registerInstallCommand(program: Command): void {
 // Non-interactive (force) install — uses shared executor with console progress
 // ---------------------------------------------------------------------------
 
+interface ForceInstallOpts {
+  global?: boolean;
+  path?: string;
+  hooks?: string;
+  mcp?: boolean;
+  codexHooks?: string;
+  codexMcp?: boolean;
+  agyHooks?: string;
+  extraMcp?: string;
+  components?: string;
+  statusline?: boolean | string;
+  claudeHooksSelection?: { basePreset: string; selectedHooks: string[]; isCustom: boolean };
+  codexHooksSelection?: { basePreset: string; selectedHooks: string[]; isCustom: boolean };
+  agyHooksSelection?: { basePreset: string; selectedHooks: string[]; isCustom: boolean };
+}
+
 async function forceInstall(
   pkgRoot: string,
   version: string,
-  opts: { global?: boolean; path?: string; hooks?: string; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; components?: string; statusline?: boolean | string },
+  opts: ForceInstallOpts,
 ): Promise<void> {
   const { executeInstallPipeline } = await import('../core/install-executor.js');
   const { migrateComponentIds } = await import('./install-backend.js');
@@ -306,21 +331,28 @@ async function forceInstall(
   const agyHookLevel = (opts.agyHooks ?? 'none') as HookLevel;
   const statuslineTheme = typeof opts.statusline === 'string' ? opts.statusline : 'notion';
 
+  const hasCustomClaude = opts.claudeHooksSelection?.isCustom && opts.claudeHooksSelection.selectedHooks.length > 0;
+  const hasCustomCodex = opts.codexHooksSelection?.isCustom && opts.codexHooksSelection.selectedHooks.length > 0;
+  const hasCustomAgy = opts.agyHooksSelection?.isCustom && opts.agyHooksSelection.selectedHooks.length > 0;
+  const extraMcpTargetIds: ExtraMcpTargetId[] = opts.extraMcp
+    ? opts.extraMcp.split(',').map(s => s.trim()) as ExtraMcpTargetId[]
+    : [];
+
   const config: import('../tui/install-ui/types.js').InstallFlowConfig = {
     mode,
     projectPath,
     installComponents: true,
-    installHooks: hookLevel !== 'none' && HOOK_LEVELS.includes(hookLevel),
-    installMcp: false,
-    installCodexHooks: codexHookLevel !== 'none' && HOOK_LEVELS.includes(codexHookLevel),
+    installHooks: (hookLevel !== 'none' && HOOK_LEVELS.includes(hookLevel)) || !!hasCustomClaude,
+    installMcp: !!opts.mcp,
+    installCodexHooks: (codexHookLevel !== 'none' && HOOK_LEVELS.includes(codexHookLevel)) || !!hasCustomCodex,
     codexHookLevel,
     installCodexMcp: !!opts.codexMcp,
     codexMcpTools: [...MCP_TOOLS],
     codexMcpProjectRoot: '',
-    installAgyHooks: agyHookLevel !== 'none' && HOOK_LEVELS.includes(agyHookLevel),
+    installAgyHooks: (agyHookLevel !== 'none' && HOOK_LEVELS.includes(agyHookLevel)) || !!hasCustomAgy,
     agyHookLevel,
-    installExtraMcp: false,
-    extraMcpTargetIds: [],
+    installExtraMcp: extraMcpTargetIds.length > 0,
+    extraMcpTargetIds,
     installStatusline: !!opts.statusline,
     statuslineTheme,
     hookLevel,
@@ -332,6 +364,9 @@ async function forceInstall(
     mcpProjectRoot: '',
     backupClaudeMd: true,
     backupAll: false,
+    claudeHooksSelection: opts.claudeHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
+    codexHooksSelection: opts.codexHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
+    agyHooksSelection: opts.agyHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
   };
 
   const result = await executeInstallPipeline({

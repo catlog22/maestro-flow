@@ -348,9 +348,9 @@ export function installStatusline(opts: {
  */
 export function installHooksByLevel(
   level: HookLevel,
-  opts: { project?: boolean; settingsPath?: string; skipStatusline?: boolean } = {},
+  opts: { project?: boolean; settingsPath?: string; skipStatusline?: boolean; selectedHooks?: string[] } = {},
 ): InstallHooksResult {
-  if (level === 'none') {
+  if (level === 'none' && !opts.selectedHooks?.length) {
     return { settingsPath: '', installedHooks: [], level };
   }
 
@@ -368,12 +368,13 @@ export function installHooksByLevel(
   // --- Remove existing maestro hooks to avoid duplicates ---
   removeMaestroHooks(settings);
 
-  // --- Register hooks matching the requested level ---
+  // --- Register hooks matching the requested level (or custom list) ---
   if (!settings.hooks) settings.hooks = {};
 
+  const customSet = opts.selectedHooks ? new Set(opts.selectedHooks) : null;
   const installedHooks: string[] = [];
   for (const [name, def] of Object.entries(HOOK_DEFS)) {
-    if (!hookIncludedInLevel(def.level, level)) continue;
+    if (customSet ? !customSet.has(name) : !hookIncludedInLevel(def.level, level)) continue;
 
     const eventKey = def.event;
     if (!settings.hooks[eventKey]) settings.hooks[eventKey] = [] as never;
@@ -497,9 +498,9 @@ export function checkCodexHooksFeatureFlag(opts: { project?: boolean } = {}): bo
  */
 export function installCodexHooksByLevel(
   level: HookLevel,
-  opts: { project?: boolean; hooksPath?: string } = {},
+  opts: { project?: boolean; hooksPath?: string; selectedHooks?: string[] } = {},
 ): InstallHooksResult {
-  if (level === 'none') {
+  if (level === 'none' && !opts.selectedHooks?.length) {
     return { settingsPath: '', installedHooks: [], level };
   }
 
@@ -509,12 +510,13 @@ export function installCodexHooksByLevel(
   // Remove existing maestro hooks to avoid duplicates
   removeCodexMaestroHooks(hooksFile);
 
-  // Register hooks matching the requested level
+  // Register hooks matching the requested level (or custom list)
   if (!hooksFile.hooks) hooksFile.hooks = {};
 
+  const customSet = opts.selectedHooks ? new Set(opts.selectedHooks) : null;
   const installedHooks: string[] = [];
   for (const [name, def] of Object.entries(CODEX_HOOK_DEFS)) {
-    if (!hookIncludedInLevel(def.level, level)) continue;
+    if (customSet ? !customSet.has(name) : !hookIncludedInLevel(def.level, level)) continue;
 
     const eventKey = def.event;
     if (!hooksFile.hooks[eventKey]) hooksFile.hooks[eventKey] = [] as never;
@@ -707,9 +709,9 @@ function isFlatEvent(event: AgyEvent): boolean {
  */
 export function installAgyHooksByLevel(
   level: HookLevel,
-  opts: { project?: boolean; projectPath?: string; hooksPath?: string } = {},
+  opts: { project?: boolean; projectPath?: string; hooksPath?: string; selectedHooks?: string[] } = {},
 ): InstallHooksResult {
-  if (level === 'none') {
+  if (level === 'none' && !opts.selectedHooks?.length) {
     return { settingsPath: '', installedHooks: [], level };
   }
 
@@ -717,9 +719,10 @@ export function installAgyHooksByLevel(
   const hooksFile = loadAgyHooks(hooksPath);
   removeAgyMaestroHooks(hooksFile);
 
+  const customSet = opts.selectedHooks ? new Set(opts.selectedHooks) : null;
   const installedHooks: string[] = [];
   for (const [name, def] of Object.entries(AGY_HOOK_DEFS)) {
-    if (!hookIncludedInLevel(def.level, level)) continue;
+    if (customSet ? !customSet.has(name) : !hookIncludedInLevel(def.level, level)) continue;
 
     const hookName = `${AGY_HOOK_NAME_PREFIX}${name}`;
     const handler: AgyHookHandler = { type: 'command', command: `maestro hooks run ${name}` };

@@ -166,35 +166,54 @@ async function reinstallWorkflows(version: string): Promise<void> {
 
   // Deduplicate by scope + targetPath (latest manifest wins)
   const seen = new Set<string>();
-  const deduped: { scope: string; targetPath: string; hookLevel: string; selectedComponentIds?: string[] }[] = [];
+  const deduped: typeof manifests = [];
   for (const m of manifests) {
     const key = `${m.scope}:${m.targetPath}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    deduped.push({ scope: m.scope, targetPath: m.targetPath, hookLevel: m.hookLevel ?? 'none', selectedComponentIds: m.selectedComponentIds });
+    deduped.push(m);
   }
 
-  for (const { scope, targetPath, hookLevel, selectedComponentIds } of deduped) {
-    const hooksArg = hookLevel !== 'none' ? ` --hooks ${hookLevel}` : '';
-    const componentsArg = selectedComponentIds?.length ? ` --components ${selectedComponentIds.join(',')}` : '';
-    if (scope === 'global') {
-      try {
-        await execAsync(`maestro install --force --global${hooksArg}${componentsArg}`);
-        console.error(`  [+] Global components reinstalled (v${version})`);
-      } catch (err) {
-        console.error(`  [x] Global reinstall failed: ${err instanceof Error ? err.message : err}`);
-      }
+  for (const m of deduped) {
+    const args: string[] = ['--force'];
+    if (m.scope === 'global') {
+      args.push('--global');
     } else {
-      if (!existsSync(targetPath)) {
-        console.error(`  [-] Skipped ${targetPath} (directory not found)`);
+      if (!existsSync(m.targetPath)) {
+        console.error(`  [-] Skipped ${m.targetPath} (directory not found)`);
         continue;
       }
-      try {
-        await execAsync(`maestro install --force --path "${targetPath}"${hooksArg}${componentsArg}`);
-        console.error(`  [+] Project reinstalled: ${targetPath}`);
-      } catch (err) {
-        console.error(`  [x] Project reinstall failed (${targetPath}): ${err instanceof Error ? err.message : err}`);
-      }
+      args.push('--path', `"${m.targetPath}"`);
+    }
+
+    const hookLevel = m.hooks?.claude?.level ?? m.hookLevel ?? 'none';
+    if (hookLevel !== 'none') args.push('--hooks', hookLevel);
+
+    const codexLevel = m.hooks?.codex?.level ?? 'none';
+    if (codexLevel !== 'none') args.push('--codex-hooks', codexLevel);
+
+    const agyLevel = m.hooks?.agy?.level ?? 'none';
+    if (agyLevel !== 'none') args.push('--agy-hooks', agyLevel);
+
+    if (m.mcp?.codex) args.push('--codex-mcp');
+
+    if (m.mcp?.claude) args.push('--mcp');
+
+    const extraMcpTargets = m.mcp?.extras?.map(e => e.targetId).filter(Boolean);
+    if (extraMcpTargets?.length) args.push('--extra-mcp', extraMcpTargets.join(','));
+
+    if (m.statusline) args.push('--statusline', m.statusline.theme || 'notion');
+
+    if (m.selectedComponentIds?.length) {
+      args.push('--components', m.selectedComponentIds.join(','));
+    }
+
+    const label = m.scope === 'global' ? 'Global' : m.targetPath;
+    try {
+      await execAsync(`maestro install ${args.join(' ')}`);
+      console.error(`  [+] ${label} reinstalled (v${version})`);
+    } catch (err) {
+      console.error(`  [x] ${label} reinstall failed: ${err instanceof Error ? err.message : err}`);
     }
   }
 }
