@@ -72,16 +72,12 @@ export async function syncKnowledgeGraph(
 
     if (shouldSync('codegraph')) {
       const startMs = Date.now();
-      const hasExplicitSrcDirs = Boolean(options?.codegraph?.srcDirs?.length);
       const candidateDirs = options?.codegraph?.srcDirs?.length
         ? options.codegraph.srcDirs
-        : ['src', 'lib', 'app', 'packages', 'apps', 'dashboard/src'];
+        : [projectPath];
       const srcDirs = candidateDirs
         .map(d => resolve(projectPath, d))
         .filter(d => existsSync(d));
-      if (srcDirs.length === 0 && !hasExplicitSrcDirs) {
-        srcDirs.push(projectPath);
-      }
 
       let totalNodes = 0;
       let totalEdges = 0;
@@ -93,7 +89,7 @@ export async function syncKnowledgeGraph(
           projectRoot: projectPath,
           srcDir,
           includeTests: options?.codegraph?.includeTests ?? false,
-          maxFileSize: options?.codegraph?.maxFileSize ?? 500 * 1024,
+          maxFileSize: options?.codegraph?.maxFileSize ?? 1024 * 1024,
           excludeDirs: options?.codegraph?.excludeDirs,
           excludeFiles: options?.codegraph?.excludeFiles,
           createMaestroIgnore: options?.codegraph?.createMaestroIgnore,

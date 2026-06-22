@@ -33,6 +33,7 @@ export default defineConfig({
       'src/graph/kg/__tests__/scan-scope.test.ts',
       'src/graph/kg/__tests__/wasm-runtime-flags.test.ts',
       'src/graph/kg/__tests__/code-extractor-streaming.test.ts',
+      'src/graph/kg/__tests__/orchestrator.test.ts',
       'src/graph/kg/__tests__/search-benchmark.test.ts',
       'src/hooks/__tests__/spec-bridge.test.ts',
       'src/hooks/__tests__/keyword-spec-injector.test.ts',

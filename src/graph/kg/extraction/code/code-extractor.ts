@@ -53,7 +53,7 @@ const BINARY_EXTENSIONS = new Set([
   '.zip', '.tar', '.gz', '.exe', '.dll', '.so', '.dylib',
 ]);
 
-const DEFAULT_MAX_FILE_SIZE = 500 * 1024; // 500KB
+const DEFAULT_MAX_FILE_SIZE = 1024 * 1024; // 1MB, aligned with CodeGraph
 
 // ---------------------------------------------------------------------------
 // 文件扫描
