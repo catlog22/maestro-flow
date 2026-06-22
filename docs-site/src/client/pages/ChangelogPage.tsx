@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.35',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'Search engine embedding upgrade — bilingual E5 + content hash incremental rebuild + hybrid fusion', text_zh: '搜索引擎嵌入模型升级——双语 E5 + content hash 增量重建 + hybrid 融合' },
+      { type: 'feat', text_en: 'Enhanced query — IDF adaptive weighting + camelCase splitting', text_zh: '增强查询功能——IDF 自适应加权与 camelCase 拆分' },
+      { type: 'feat', text_en: 'Embedding search performance — batch inference + smart device detection + incremental indexing', text_zh: '嵌入搜索性能优化——批量推理 + 智能设备检测 + 增量索引' },
+      { type: 'feat', text_en: 'Search semantic enhancement — synonym/stemming query expansion + embedding hybrid retrieval', text_zh: '搜索语义增强——同义词/词干查询扩展 + 嵌入模型混合检索' },
+      { type: 'fix', text_en: 'Codex command chain context passing — 4 Critical + 7 High fixes', text_zh: 'codex 命令链上下文传递——4 Critical + 7 High 修复' },
+      { type: 'fix', text_en: 'Install pipeline custom hook selection loss + update reinstall option completion', text_zh: '安装流水线自定义 hook 选择丢失 + update 重装选项补全' },
+    ],
+  },
+  {
     version: '0.5.34',
     date: '2026-06',
     changes: [
