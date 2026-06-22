@@ -1,8 +1,14 @@
 /**
- * Search Command — Unified knowledge search across specs, knowhow, issues, and more.
+ * Search Command — Unified knowledge search across wiki + code.
  *
- * Uses WikiIndexer BM25F search with deduplication and type filtering.
- * Optional --code flag adds CodeGraph AST results in a separate section.
+ * Default: mixed results (wiki + code interleaved by normalized score).
+ * --code: separate section display (backward compat).
+ * --wiki-only: wiki results only (no code search).
+ *
+ * Scoring: multi-signal normalization inspired by codebase-memory-mcp.
+ *   Wiki:  BM25F score + type boost (spec > knowhow > note)
+ *   Code:  BM25 score + kind boost + name-match bonus
+ *   Merge: percentile-aware normalization + source weight
  */
 
 import type { Command } from 'commander';
@@ -175,112 +181,99 @@ async function runCodeSearch(q: string, limit: number): Promise<CodeSearchResult
 export function registerSearchCommand(program: Command): void {
   program
     .command('search <query...>')
-    .description('Unified knowledge search across specs, knowhow, issues, and more')
+    .description('Unified knowledge search across wiki + code (mixed by default)')
     .option('--type <type>', `Filter by type: ${VALID_TYPES.join(', ')}`)
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, test, review, learning)')
-    .option('--code', 'Include CodeGraph code results')
-    .option('--all', 'Search all sources (wiki + code) with normalized ranking')
+    .option('--code', 'Show wiki and code in separate sections (legacy display)')
+    .option('--all', 'Alias for default mixed mode (backward compat)')
+    .option('--wiki-only', 'Search wiki only, skip code results')
     .option('--workspace <name>', 'Filter results to a specific linked workspace')
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
     .action(async (queryParts: string[], opts) => {
       const q = queryParts.join(' ');
       const limit = parseInt(opts.limit, 10) || 20;
-      const includeCode = opts.code || opts.all;
+      const wikiOnly = opts.wikiOnly === true;
+      const separateSections = opts.code === true && !opts.all;
 
       if (opts.type && !VALID_TYPES.includes(opts.type)) {
         console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')} (got "${opts.type}")`);
         process.exit(1);
       }
 
-      let wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit });
-      const codeResults = includeCode ? await runCodeSearch(q, limit) : [];
+      const wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit });
+      const codeResults = wikiOnly ? [] : await runCodeSearch(q, limit);
 
-      // --all: normalize and merge scores for unified ranking
-      if (opts.all) {
-        const merged = mergeAndNormalize(wikiResults, codeResults, limit);
-
-        if (opts.json) {
-          console.log(JSON.stringify({ query: q, count: merged.length, results: merged }, null, 2));
-          return;
-        }
-
-        console.log(`Search: "${q}" (${merged.length} results, all sources)`);
-        if (merged.length === 0) {
-          console.log('  No matches found.');
-          return;
-        }
-        const isTTY = process.stdout.isTTY === true;
-        const qTerms = q.toLowerCase().split(/\s+/).filter(Boolean);
-        for (const r of merged) {
-          const name = isTTY ? highlightTerms(r.name, qTerms) : r.name;
-          const scoreTag = `  (${r.normalizedScore.toFixed(4)})`;
-          console.log(`  [${r.source}] [${r.kind}]  ${name}  ${r.detail}${scoreTag}`);
-        }
-        return;
-      }
-
-      if (opts.json) {
-        const output: Record<string, unknown> = { query: q };
-        if (includeCode) {
-          output.wikiResults = wikiResults;
-          output.codeResults = codeResults;
-          output.wikiCount = wikiResults.length;
-          output.codeCount = codeResults.length;
-        } else {
-          output.count = wikiResults.length;
-          output.results = wikiResults;
-        }
-        console.log(JSON.stringify(output, null, 2));
-        return;
-      }
-
+      const meta = getLastSearchMeta();
+      const embTag = meta.embeddingUsed ? `+emb(${meta.embeddingDocs})` : 'bm25';
       const isTTY = process.stdout.isTTY === true;
       const qTerms = q.toLowerCase().split(/\s+/).filter(Boolean);
 
-      const meta = getLastSearchMeta();
-      const embTag = meta.embeddingUsed ? `+emb(${meta.embeddingDocs})` : 'bm25-only';
-      if (includeCode && codeResults.length > 0) {
-        console.log(`Search: "${q}" (${wikiResults.length} wiki + ${codeResults.length} code results, ${embTag})`);
-      } else {
-        console.log(`Search: "${q}" (${wikiResults.length} results, ${embTag})`);
+      // --code (without --all): legacy separate-section display
+      if (separateSections) {
+        if (opts.json) {
+          console.log(JSON.stringify({ query: q, wikiCount: wikiResults.length, codeCount: codeResults.length, wikiResults, codeResults }, null, 2));
+          return;
+        }
+        console.log(`Search: "${q}" (${wikiResults.length} wiki + ${codeResults.length} code, ${embTag})`);
+        if (wikiResults.length === 0 && codeResults.length === 0) {
+          console.log('  No matches found.');
+          return;
+        }
+        if (wikiResults.length > 0) {
+          console.log('  [Wiki Results]');
+          for (const r of wikiResults) {
+            printWikiResult(r, '    ', isTTY, qTerms);
+          }
+        }
+        if (codeResults.length > 0) {
+          console.log('  [Code Results]');
+          for (const r of codeResults) {
+            printCodeResult(r, '    ', isTTY, qTerms);
+          }
+        }
+        return;
       }
+
+      // Default / --all / --wiki-only: mixed interleaved results
+      const merged = mergeAndNormalize(wikiResults, codeResults, limit);
+      const wikiCount = merged.filter(r => r.source === 'wiki').length;
+      const codeCount = merged.filter(r => r.source === 'code').length;
+
+      if (opts.json) {
+        console.log(JSON.stringify({ query: q, wikiCount, codeCount, count: merged.length, results: merged }, null, 2));
+        return;
+      }
+
+      const countParts: string[] = [];
+      if (wikiCount > 0) countParts.push(`wiki ${wikiCount}个`);
+      if (codeCount > 0) countParts.push(`代码 ${codeCount}个`);
+      const countSummary = countParts.length > 0
+        ? `${countParts.join(' + ')} = ${merged.length} results`
+        : '0 results';
+      console.log(`Search: "${q}" (${countSummary}, ${embTag})`);
 
       if (qTerms.length > 4) {
-        console.log(`  Hint: ${qTerms.length} terms detected — split into 1-3 keyword queries for better precision`);
+        console.log(`  Hint: ${qTerms.length} terms — split into 1-3 keyword queries for better precision`);
       }
 
-      if (wikiResults.length === 0 && codeResults.length === 0) {
+      if (merged.length === 0) {
         console.log('  No matches found.');
         return;
       }
 
-      if (wikiResults.length > 0) {
-        if (includeCode) console.log('  [Wiki Results]');
-        for (const r of wikiResults) {
-          const indent = includeCode ? '    ' : '  ';
-          const typeTag = `[${r.type}]`;
-          const catTag = r.category ? ` ${r.category}` : '';
-          const wsTag = r.workspace ? ` [ws:${r.workspace}]` : '';
-          const scoreTag = r.score !== null ? `  (${r.score.toFixed(4)})` : '';
-          const title = isTTY ? highlightTerms(r.title, qTerms) : r.title;
-          console.log(`${indent}${typeTag}${catTag}${wsTag}  ${r.id}  ${title}${scoreTag}`);
+      for (const r of merged) {
+        const name = isTTY ? highlightTerms(r.name, qTerms) : r.name;
+        const scoreTag = `  (${r.normalizedScore.toFixed(4)})`;
+        if (r.source === 'wiki') {
+          console.log(`  [wiki:${r.kind}]  ${name}  ${r.detail}${scoreTag}`);
           if (r.snippet) {
             const snippet = isTTY ? highlightTerms(r.snippet, qTerms) : r.snippet;
-            console.log(`${indent}  ${snippet}`);
-          } else if (r.summary) {
-            const summary = isTTY ? highlightTerms(truncate(r.summary, 80), qTerms) : truncate(r.summary, 80);
-            console.log(`${indent}  ${summary}`);
+            console.log(`    ${snippet}`);
           }
-        }
-      }
-
-      if (codeResults.length > 0) {
-        console.log('  [Code Results]');
-        for (const r of codeResults) {
-          const scoreTag = r.score !== null ? `  (${r.score.toFixed(4)})` : '';
-          const name = isTTY ? highlightTerms(r.name, qTerms) : r.name;
-          console.log(`    [${r.kind}] ${name}  ${r.filePath}${scoreTag}`);
+        } else {
+          const sigTag = r.signature ? `  ${truncate(r.signature, 60)}` : '';
+          console.log(`  [code:${r.kind}]  ${name}  ${r.detail}${sigTag}${scoreTag}`);
         }
       }
     });
@@ -353,56 +346,119 @@ export function registerSearchCommand(program: Command): void {
     });
 }
 
-// ── Score normalization for --all mode ────────────────────────────────
+// ── Display helpers ──────────────────────────────────────────────────
 
-interface MergedResult {
+function printWikiResult(r: SearchResult, indent: string, isTTY: boolean, qTerms: string[]): void {
+  const typeTag = `[${r.type}]`;
+  const catTag = r.category ? ` ${r.category}` : '';
+  const wsTag = r.workspace ? ` [ws:${r.workspace}]` : '';
+  const scoreTag = r.score !== null ? `  (${r.score.toFixed(4)})` : '';
+  const title = isTTY ? highlightTerms(r.title, qTerms) : r.title;
+  console.log(`${indent}${typeTag}${catTag}${wsTag}  ${r.id}  ${title}${scoreTag}`);
+  if (r.snippet) {
+    const snippet = isTTY ? highlightTerms(r.snippet, qTerms) : r.snippet;
+    console.log(`${indent}  ${snippet}`);
+  } else if (r.summary) {
+    const summary = isTTY ? highlightTerms(truncate(r.summary, 80), qTerms) : truncate(r.summary, 80);
+    console.log(`${indent}  ${summary}`);
+  }
+}
+
+function printCodeResult(r: CodeSearchResult, indent: string, isTTY: boolean, qTerms: string[]): void {
+  const scoreTag = r.score !== null ? `  (${r.score.toFixed(4)})` : '';
+  const name = isTTY ? highlightTerms(r.name, qTerms) : r.name;
+  const sigTag = r.signature ? `  ${truncate(r.signature, 60)}` : '';
+  console.log(`${indent}[${r.kind}] ${name}  ${r.filePath}${sigTag}${scoreTag}`);
+}
+
+// ── Multi-signal score normalization ────────────────────────────────
+// Inspired by codebase-memory-mcp: type/kind boost + percentile-aware
+// normalization + weighted source fusion.
+
+export interface MergedResult {
   source: 'wiki' | 'code';
   kind: string;
   name: string;
   detail: string;
   normalizedScore: number;
+  snippet?: string;
+  signature?: string;
 }
 
-function getMinMax(scores: number[]): { min: number; max: number } {
-  let min = Infinity;
-  let max = -Infinity;
-  for (const s of scores) {
-    if (s < min) min = s;
-    if (s > max) max = s;
+const WIKI_TYPE_BOOST: Record<string, number> = {
+  spec: 1.15,
+  knowhow: 1.10,
+  domain: 1.05,
+  issue: 1.00,
+  project: 0.95,
+  roadmap: 0.95,
+  note: 0.90,
+};
+
+const CODE_KIND_BOOST: Record<string, number> = {
+  function: 1.10,
+  method: 1.10,
+  class: 1.08,
+  interface: 1.08,
+  component: 1.05,
+  route: 1.12,
+  type_alias: 1.00,
+  enum: 1.00,
+  variable: 0.95,
+  constant: 0.95,
+  field: 0.90,
+  property: 0.90,
+};
+
+function percentileNormalize(scores: number[]): Map<number, number> {
+  if (scores.length === 0) return new Map();
+  const sorted = [...scores].sort((a, b) => a - b);
+  const result = new Map<number, number>();
+  for (let i = 0; i < sorted.length; i++) {
+    result.set(sorted[i], (i + 1) / sorted.length);
   }
-  return { min, max };
+  return result;
 }
 
 function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit: number): MergedResult[] {
   const WIKI_WEIGHT = 0.6;
   const CODE_WEIGHT = 0.4;
 
-  const wikiScores = wiki.map(r => r.score ?? 0);
-  const codeScores = code.map(r => r.score ?? 0);
-  const wikiMM = wikiScores.length > 0 ? getMinMax(wikiScores) : { min: 0, max: 0 };
-  const codeMM = codeScores.length > 0 ? getMinMax(codeScores) : { min: 0, max: 0 };
-  const wikiRange = wikiMM.max - wikiMM.min || 1;
-  const codeRange = codeMM.max - codeMM.min || 1;
+  const wikiBoosted = wiki.map(r => {
+    const raw = r.score ?? 0;
+    const typeBoost = WIKI_TYPE_BOOST[r.type] ?? 1.0;
+    return { ...r, boostedScore: raw * typeBoost };
+  });
+  const codeBoosted = code.map(r => {
+    const raw = r.score ?? 0;
+    const kindBoost = CODE_KIND_BOOST[r.kind] ?? 1.0;
+    return { ...r, boostedScore: raw * kindBoost };
+  });
+
+  const wikiPctMap = percentileNormalize(wikiBoosted.map(r => r.boostedScore));
+  const codePctMap = percentileNormalize(codeBoosted.map(r => r.boostedScore));
 
   const merged: MergedResult[] = [];
-  for (const r of wiki) {
-    const raw = r.score ?? 0;
+  for (const r of wikiBoosted) {
+    const pct = wikiPctMap.get(r.boostedScore) ?? 0;
     merged.push({
       source: 'wiki',
       kind: r.type,
       name: r.title,
       detail: r.category ? `${r.category}  ${r.id}` : r.id,
-      normalizedScore: ((raw - wikiMM.min) / wikiRange) * WIKI_WEIGHT,
+      normalizedScore: pct * WIKI_WEIGHT,
+      snippet: r.snippet ?? undefined,
     });
   }
-  for (const r of code) {
-    const raw = r.score ?? 0;
+  for (const r of codeBoosted) {
+    const pct = codePctMap.get(r.boostedScore) ?? 0;
     merged.push({
       source: 'code',
       kind: r.kind,
       name: r.name,
       detail: r.filePath,
-      normalizedScore: ((raw - codeMM.min) / codeRange) * CODE_WEIGHT,
+      normalizedScore: pct * CODE_WEIGHT,
+      signature: r.signature,
     });
   }
 
