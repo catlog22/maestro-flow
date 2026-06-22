@@ -75,4 +75,3 @@ Follow '~/.maestro/workflows/specs-load.md' completely.
 - [ ] Legacy entries filtered by text grep fallback
 - [ ] Results displayed with file:category references
 </success_criteria>
-</output>
