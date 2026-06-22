@@ -134,19 +134,44 @@ S_FALLBACK:
 | maestro-brainstorm | topic | `"{intent}"` |
 | maestro-roadmap | description | `"{intent}"` |
 | maestro-analyze | phase or topic | `{phase}` or `"{intent}"` |
-| maestro-plan | phase or --dir | `{phase}`, or `--dir {scratch_dir}` |
-| maestro-execute | phase or --dir | `{phase}`, or `--dir {scratch_dir}` |
+| maestro-plan | phase, --from, or --dir | see --from auto-injection below |
+| maestro-execute | phase or --dir | see --from auto-injection below |
 | quality-debug | gap context | Read previous step's error/gap |
 | quality-* | phase | `{phase}` |
 
-**Artifact dir resolution for --dir:**
+**--from auto-injection (phase-level artifact chaining):**
+
+Phase-level steps 在 build 阶段无法预知前序 artifact ID。A_RESOLVE_ARGS 运行时从 state.json 查找并注入显式引用，打通 analyze→plan→execute 数据管道：
+
 ```
-Read state.json → filter artifacts by milestone + phase
-plan commands: latest type=="analyze" → --dir .workflow/scratch/{path}
-execute commands: latest type=="plan" → --dir .workflow/scratch/{path}
+Read state.json.artifacts（含 milestone_history 内归档 artifacts）
+→ filter by milestone={session.milestone} + phase={session.phase} + status=="completed"
+
+plan step（含 {phase} 占位符，args 无 --from 且无 --dir）:
+  1. 查同 phase+milestone 最新 completed type=="analyze" artifact → id = ANL-xxx
+  2. 命中 → args 追加 --from analyze:{id}
+  3. 写 step.source_artifact_ref = "analyze:{id}"
+
+execute step（含 {phase} 占位符，args 无 --dir）:
+  1. 查同 phase+milestone 最新 completed type=="plan" artifact → id = PLN-xxx, path = scratch/...
+  2. 命中 → args 追加 --dir .workflow/scratch/{path}
+  3. 写 step.source_artifact_ref = "plan:{id}"
 ```
 
-Write enriched args back to status.json.
+兜底：查询无结果 → 不注入，由命令自身 discovery 逻辑处理。已有 `--from` 或 `--dir` 的 step 不覆盖。
+
+**Goal context injection:**
+
+当 step.goal_ref 非空且 session.task_decomposition 存在时：
+```
+goal = session.task_decomposition.find(g => g.id == step.goal_ref)
+if goal:
+  goal_snippet = { id: goal.id, goal: goal.goal, done_when: goal.done_when,
+                   boundary: goal.boundary, evidence: goal.evidence }
+  → 传递给 A_EXEC_STEP 用于 inline execution 前注入（见 step 2 goal context pre-injection）
+```
+
+Write enriched args + source_artifact_ref back to status.json.
 
 ### A_EXEC_DECISION
 
@@ -162,13 +187,24 @@ Write enriched args back to status.json.
    - 退出码 2 → 交给 S_LOCATE
    - 退出码 3 → active_step_index 已被占用
    - 退出码 1 → pause session
-2. **Inline execution** — 按 stdout 执行；deferred_reading 按需 Read
-3. **Complete**:
+2. **Goal context pre-injection** — 若 A_RESOLVE_ARGS 产出了 `goal_snippet`（step.goal_ref 非空），在 ralph next stdout prompt **顶部前置**以下 block，使执行命令感知当前子目标和执行约束：
+   ```
+   <goal_context>
+   Sub-goal: {goal.id} — {goal.goal}
+   Done when: {goal.done_when}
+   Boundary: {goal.boundary}
+   Evidence target: {goal.evidence}
+   Execution criteria: {session.execution_criteria joined by '; '}
+   </goal_context>
+   ```
+   无 goal_snippet 时跳过此步。goal_context block 不替换 ralph next 的 stdout 内容，仅在其前方拼接。
+3. **Inline execution** — 按 stdout（含 goal_context 前置）执行；deferred_reading 按需 Read
+4. **Complete**:
    - `Bash("maestro ralph complete N --status DONE [--evidence <path>]")`
    - `Bash("maestro ralph complete N --status DONE_WITH_CONCERNS --concerns \"...\"")`
    - `Bash("maestro ralph retry N")`
    - `Bash("maestro ralph complete N --status BLOCKED --reason \"...\"")`
-4. **Propagate context signals** — 关键信号 (`PHASE: N` / `scratch_dir: path` / `BLP-xxx`) 写入 `status.json.context`
+5. **Propagate context signals** — 关键信号 (`PHASE: N` / `scratch_dir: path` / `BLP-xxx`) 写入 `status.json.context`
 
 完成后 S_LOCATE 触发 `Skill({ skill: "maestro-ralph-execute" })` 自调用。
 
@@ -244,5 +280,10 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro
 - [ ] Context signals 由执行 step 显式写回 status.json.context（非 ralph-execute 内嵌扫描）
 - [ ] Auto mode: retry 一次后 pause；interactive 提供 retry/skip/abort
 - [ ] 自调用持续到全部 completion_confirmed 或 paused
+- [ ] --from auto-injection：phase-level plan step 运行时从 state.json 查找同 phase+milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `source_artifact_ref`
+- [ ] --from auto-injection：phase-level execute step 运行时查找同 phase+milestone 最新 completed plan artifact → 注入 `--dir`，写 `source_artifact_ref`
+- [ ] Goal context injection：step.goal_ref 非空时从 task_decomposition 提取 goal_snippet，A_EXEC_STEP 在 ralph next stdout 顶部前置 `<goal_context>` block
+- [ ] Goal context 包含 sub-goal description、done_when、boundary、evidence、execution_criteria
+- [ ] 已有 `--from` 或 `--dir` 的 step 不被 auto-injection 覆盖
 
 </appendix>
