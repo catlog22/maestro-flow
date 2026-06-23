@@ -13,44 +13,62 @@ export interface LlmResponse {
   usage: { inputTokens: number; outputTokens: number };
 }
 
-export function createClient(params: { model: string; baseUrl: string; apiKey: string }): {
-  client: OpenAI;
+export interface LlmConfig {
   model: string;
+  baseUrl: string;
+  apiKey: string;
+  /** Model-specific extra body params (e.g. Qwen enable_thinking) */
+  extraBody?: Record<string, unknown>;
+}
+
+export function createClient(params: LlmConfig): {
+  client: OpenAI;
+  config: LlmConfig;
 } {
   const client = new OpenAI({
     apiKey: params.apiKey,
     baseURL: params.baseUrl,
   });
-  return { client, model: params.model };
+  return { client, config: params };
 }
 
 export async function callLlm(
   client: OpenAI,
-  model: string,
+  config: LlmConfig,
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
 ): Promise<LlmResponse> {
-  const response = await client.chat.completions.create({
-    model,
+  // Build request body — only include tools/tool_choice when tools are present,
+  // merge extraBody for model-specific params (Qwen enable_thinking, etc.)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body: any = {
+    model: config.model,
     messages,
-    tools: tools.length > 0 ? tools : undefined,
-    tool_choice: tools.length > 0 ? 'auto' : undefined,
-    max_completion_tokens: 16_000,
+    max_completion_tokens: 4_000,
     temperature: 0.7,
-  });
+    ...config.extraBody,
+  };
+  if (tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = 'auto';
+  }
 
-  const choice = response.choices[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const response = await client.chat.completions.create(body) as any;
+
+  const choice = response.choices?.[0];
   if (!choice) {
     throw new Error('No choices returned from LLM API.');
   }
 
   const msg = choice.message;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toolCalls: LlmToolCall[] = (msg.tool_calls ?? [])
-    .filter(tc => tc.type === 'function')
-    .map(tc => ({
+    .filter((tc: any) => tc.type === 'function')
+    .map((tc: any) => ({
       id: tc.id,
-      name: (tc as { function: { name: string; arguments: string } }).function.name,
-      arguments: (tc as { function: { name: string; arguments: string } }).function.arguments,
+      name: tc.function.name,
+      arguments: tc.function.arguments,
     }));
 
   return {

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { homedir } from 'node:os';
-import { createClient } from './llm.js';
+import { createClient, type LlmConfig } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
@@ -11,6 +11,8 @@ interface ApiExploreConfig {
   apiKey?: string;
   model?: string;
   maxTurns?: number;
+  /** Model-specific extra body params (e.g. {"enable_thinking": true} for Qwen) */
+  extraBody?: Record<string, unknown>;
 }
 
 function loadConfigFile(): ApiExploreConfig {
@@ -23,7 +25,7 @@ function loadConfigFile(): ApiExploreConfig {
   }
 }
 
-function parseArgs(argv: string[]): { model: string; baseUrl: string; apiKey: string; cwd: string; maxTurns: number } {
+function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurns: number } {
   let model = '';
   let baseUrl = '';
   let apiKey = '';
@@ -57,6 +59,7 @@ function parseArgs(argv: string[]): { model: string; baseUrl: string; apiKey: st
   baseUrl = baseUrl || fileConfig.baseUrl || process.env.API_EXPLORE_BASE_URL || '';
   apiKey = apiKey || fileConfig.apiKey || process.env.API_EXPLORE_API_KEY || process.env.OPENAI_API_KEY || '';
   maxTurns = maxTurns || fileConfig.maxTurns || 6;
+  const extraBody = fileConfig.extraBody;
 
   if (!model || !baseUrl || !apiKey) {
     process.stderr.write(
@@ -69,7 +72,7 @@ function parseArgs(argv: string[]): { model: string; baseUrl: string; apiKey: st
     process.exit(1);
   }
 
-  return { model, baseUrl, apiKey, cwd: resolve(cwd), maxTurns };
+  return { llmConfig: { model, baseUrl, apiKey, extraBody }, cwd: resolve(cwd), maxTurns };
 }
 
 function readStdin(): Promise<string> {
@@ -93,7 +96,7 @@ function getDirListing(cwd: string): string {
 }
 
 async function main(): Promise<void> {
-  const config = parseArgs(process.argv);
+  const { llmConfig, cwd, maxTurns } = parseArgs(process.argv);
   const prompt = await readStdin();
 
   if (!prompt.trim()) {
@@ -101,18 +104,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const { client, model } = createClient(config);
-  const dirListing = getDirListing(config.cwd);
-  const systemPrompt = buildSystemPrompt(config.cwd, dirListing);
+  const { client, config } = createClient(llmConfig);
+  const dirListing = getDirListing(cwd);
+  const systemPrompt = buildSystemPrompt(cwd, dirListing);
 
   const result = await agentLoop({
     prompt: prompt.trim(),
     systemPrompt,
     client,
-    model,
+    llmConfig: config,
     toolSchemas: TOOL_SCHEMAS,
-    maxTurns: config.maxTurns,
-    cwd: config.cwd,
+    maxTurns,
+    cwd,
   });
 
   if (!result) {

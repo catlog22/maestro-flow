@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions.js';
-import { callLlm } from './llm.js';
+import { callLlm, type LlmConfig } from './llm.js';
 import { executeTool, type ToolSchema } from './tools.js';
 import {
   emitInit,
@@ -14,14 +14,14 @@ export interface AgentLoopParams {
   prompt: string;
   systemPrompt: string;
   client: OpenAI;
-  model: string;
+  llmConfig: LlmConfig;
   toolSchemas: ToolSchema[];
   maxTurns: number;
   cwd: string;
 }
 
 export async function agentLoop(params: AgentLoopParams): Promise<string> {
-  const { prompt, systemPrompt, client, model, toolSchemas, maxTurns, cwd } = params;
+  const { prompt, systemPrompt, client, llmConfig, toolSchemas, maxTurns, cwd } = params;
 
   emitInit();
 
@@ -54,7 +54,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<string> {
 
     let response;
     try {
-      response = await callLlm(client, model, messages, tools);
+      response = await callLlm(client, llmConfig, messages, tools);
     } catch (err) {
       const errMsg = `LLM API error: ${err instanceof Error ? err.message : String(err)}`;
       emitMessage(errMsg);
