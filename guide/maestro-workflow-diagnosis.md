@@ -193,7 +193,7 @@ plan.json → execute（只跟 plan 走，无回溯原文的路径）
 
 | 阶段 | 交互模式下靠什么对齐 | `-y` 下缺的"自动化替代"（≠ 应加回交互） | 证据 |
 |------|---------------------|------------------------------------------|------|
-| 意图澄清 / 边界 | broad/medium 向用户澄清 | medium/narrow 既不澄清、也不从代码自动派生边界写回 `boundary_contract` | `maestro-ralph.md:351-364` |
+| 意图澄清 / 边界 | broad/medium 向用户澄清 | **broad 仍强制澄清**（`-y` 也不跳，`:352`）；medium 自动派生但**不做深度 Search-first**（`:354`）；narrow 仅靠轻量 Glob/Grep 派生（`:364`） | `maestro-ralph.md:352,354,364` |
 | grill | 苏格拉底交互拷问 | grill 被整段跳过，其"代码代答"能力（R2.2）未被任何阶段继承 | `maestro.md:54`、`maestro-ralph.md:412` |
 | brainstorm 访谈 | 提问 + 用户选角色 | **连 Search-first 自动落地一起跳过**（`interview-mechanics.md:4` vs `:6`），退回臆测 | `interview-mechanics.md:4,6`、`brainstorm.md` |
 | roadmap 细化 | 最多 5 轮用户反馈 | 自动接受 roadmap，但**没有自动 scope/追溯校验**兜底（最小阶段原则是软指令） | `roadmap.md:60,83,87` |
@@ -201,6 +201,24 @@ plan.json → execute（只跟 plan 走，无回溯原文的路径）
 | scope/需求保真门 | 仅手动 `--review` | 现成的漂移检测器**未接进自动回路** | `roadmap.md:162-200` |
 
 > 这解释了为什么用户感觉 **"`maestro-ralph -y` 效果最差"**：`-y` 是合理的全自动推进，但**自动路径上没有铺设非交互的保真轨道**——于是 R1（架构未消歧）、R2（起手未落地）、R3（scope 未校验）的结构性缺陷在自动模式下无遮挡地全程放大。修复方向是**给自动路径补保真轨道**（代码代答 + 意图锚点自检 + 自动 scope 守卫），**绝非把人工提问塞回 `-y`**。
+
+### R4.1 关键澄清：`maestro` / `maestro-ralph` 命令**自身**在 `-y` 下会"拍脑袋"吗？
+
+会，但**范围比下游窄得多**，而且 **`ralph` 比 `maestro` 更不容易拍脑袋**。必须区分"编排层（路由+分解）"和"下游被分派的 skill"——重灾区在后者。
+
+**① 编排层有几个"即使 `-y` 也不拍脑袋"的硬护栏：**
+- **broad 意图强制澄清**：`重构/全面/重写/迁移/overhaul/migrate/rewrite` 这类，`maestro-ralph.md:352` 明确 **"MUST (ignores auto_confirm)"**；maestro 命令体同 guard（`.claude/commands/maestro.md:96`）。→ 大改类意图 `-y` 也会问，不拍脑袋。
+- **ralph 的 phase 歧义即使 `-y` 也问**：`maestro-ralph.md:126` **"auto_confirm does NOT skip phase ambiguity"**。
+- **ralph 的 position/scope 是产物锚定的**：`A_INFER_POSITION` 读 `state.json`（`.workflow/`、源码、artifact 存在性），`A_RESOLVE_SCOPE_VERDICT` 读 `analyze` 的 `conclusions.json.scope_verdict`（`maestro-ralph.md:276-289`）。浅启发式，但有锚、非凭空。
+
+**② 编排层仍会拍脑袋的两个点（窄）：**
+- **`/maestro -y` 的链路分类**：`A_CLASSIFY_INTENT` 是**一次性 LLM 语义猜**、无代码消歧，而 `workflows/maestro.md` Step 2c 澄清 **"skip if autoYes"** → `-y` 跳澄清；只要给出一个（哪怕错的）匹配就照走（只有"完全无匹配"才 fallback）。再叠加 R1 双架构矛盾，**这个猜本身就不稳**。这是 maestro 编排层真正的拍脑袋点。
+- **medium 意图的边界派生**：`maestro-ralph.md:354` medium → "clarify unless auto_confirm"，`-y` 下自动派生、不做深度 Search-first。
+
+**③ 真正的"重灾区"在下游 `-y` skill，不在 maestro/ralph 自身：**
+maestro/ralph 主要做路由+分解；把"薄主题串"捏造成 `locked` 约束的，发生在它们用 `-y` 调起的 `maestro-brainstorm` / `maestro-analyze` 里（R2.3）。编排层把一个可能没消歧的意图**原样 `-y` 灌给下游**，下游再无 grounding 地放大。
+
+> **结论**：`/maestro-ralph -y` 在编排层基本不拍脑袋（broad 强制问、phase 强制问、scope 读产物）；`/maestro -y` 的链路分类会拍脑袋（一次性 LLM 猜 + R1 不稳 + 跳澄清）；最重的拍脑袋在下游 `-y` skill。**因此"把问人换成问代码"的落地优先级 = ① 给 `/maestro` 分类加代码消歧 + 置信门 → ② 给下游 `-y` skill 铺 Search-first。**
 
 ---
 
