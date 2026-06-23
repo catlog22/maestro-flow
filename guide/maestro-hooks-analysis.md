@@ -82,3 +82,47 @@ Maestro 的 hook 系统**比 harness-cli 更完整**——有真实阻断(`proce
 4. **继续 `fix/global-spec-injection` 的合并 + 注入器收敛**(H6),并把"全局化"推广到 KG/skill-context。
 
 **一句话**：Maestro 不缺 hook 引擎,缺的是**把已有的阻断火力,从"危险命令"重新瞄准到"工作流/知识保真",并把保真 guard 从 advisory 拨到 block + fail-loud**。这是把 R7/R8 从"散文"变"运行时门"成本最低的一条路。
+
+---
+
+## 4. 上游"优化"分支评估：不是都能直接用(回答"新代码是否都有优化")
+
+拉取 `origin` 后,4 个非 master 分支**分两类,绝不能一视同仁**(master=0.5.3 @4be21744):
+
+| 分支 | version | merge-base | ahead/behind | 评估 |
+|---|---|---|---|---|
+| **`codex/switch-kg-maestrograph-cli`** | 0.5.3 | = master | 2 / **0** | ✅ **干净前向**。聚焦:KG→MaestroGraph CLI + 索引稳定(并行 worker-parser、scan-scope、wasm flags)。可直接 review 合并 |
+| **`codex/kg-index-stability`** | **0.5.34** | = master | 57 / **0** | ✅ **干净前向(最新)**。KG 索引稳定 + 搜索指南 + hooks.json 注册模式 + 主动搜索文档。真·新优化 |
+| **`fix/global-spec-injection`** | **0.4.24** | **无共同祖先** | 582 / **50** | ⚠️ **陈旧分叉**。基于更老的 0.4.24,与 master 无 merge-base,落后 50 提交。整体合并 = 倒退。仅 `fa2eaf20 fix(spec): global layer entries load across all categories` 值得 **cherry-pick** |
+| **`feat-增强自动执行…`** | **0.1.4** | **无共同祖先** | 107 / 50 | ⚠️ **严重陈旧分叉**(0.1.4 基线)。含好点子(review BLOCK 自动修复、code 执行适配器、auth/tenant 中间件)但作为分支是 stale fork,只能挑提交 |
+
+**结论(回答"是都有优化?"):不是。** 两条 `codex/*` 是基于 master 的干净前向优化(KG 索引稳定 + 搜索);另两条(`fix/global-spec-injection` @0.4.24、`feat-…` @0.1.4)**与 master 无共同祖先、落后 50 提交**,直接合并会**回退**,只能 cherry-pick 其中的好提交。
+
+**且关键:这些优化都没碰 hook 的强制力。** 最新的 `codex/kg-index-stability` 对 `src/hooks/` 只改了 injector/workspace(`keyword-spec-injector +7`、`workspace.ts +8`、`wiki-role-loader`),**没动任何 guard 的 advisory→block**。即:新优化提升的是 **KG 索引稳定性 + 搜索的散文强调**,H1–H6(guard 不阻断、注入≠调用、fail-open)**原样还在**。换句话说——新代码在"让知识更好"上有优化,但在"让 agent 必须用知识"(R8 触发率 / 确定性面)上**没动**。
+
+---
+
+## 5. Maestro hooks ⟷ harness-cli hooks 对比(回答"hooks 对比处理了吗")
+
+harness 的 hook 面其实**很薄**:全仓只有 1 个 `scripts/hooks/claude/aios-rewrite.sh`(PreToolUse → `aios interception rewrite`,`set +e` fail-open),背后是 interception runtime(`scripts/lib/interception/*`)+ 进程级 shim。**它没有 Maestro 那样的阻断 guard**。
+
+| 维度 | Maestro | harness-cli |
+|---|---|---|
+| **hook 数量/事件** | 多(6 injector + 4 guard),5 类事件 | **1** 个 PreToolUse rewrite + 拦截运行时 + shim |
+| **能否真阻断** | ✅ 有 `exit(2)` 阻断(AsyncSeriesBailHook) | ❌ rewrite fail-open,不阻断(只改写/压缩) |
+| **阻断瞄准** | 危险 shell 命令真拦;**工作流/知识保真 guard 全 advisory/关** | 不做内容阻断 |
+| **注入策略** | **重注入**(6 injector 软拼进 prompt) | **有意砍掉 auto-injection**(token+R5 漂移),改显式检索 |
+| **确定性面** | 软注入为主 + 危险命令阻断 | **"data plane is code"**:压缩/refs/metrics 经 proxy+shim 自动拦截,**触发=100%,不靠 agent** |
+| **失败模式** | 静默 fail-open(`catch{}`+500ms 超时),**不可观测** | rewrite fail-open,但 shim self-healing;**metrics 强制落盘** |
+| **触发可靠性** | hook 自动跑(workspace 门控)+ **靠 agent 自觉用注入内容** | 必做的进 code 面(不靠 agent);该判断的靠 **ambient 指令 + SkillOpt 训练 + TRIGGER 工程** |
+| **可观测** | 跳过/降级不落盘(R10) | 强制落 `.aios/interception/metrics/*.jsonl`(`saved_bytes`/`ratio`) |
+
+**对比结论(互补,不是谁全胜):**
+- **Maestro 的 hook 引擎更强**——它能 `exit(2)` 阻断,这是 harness 没有的硬资产;但**火力瞄准危险命令、保真 guard 拨到 warn**,且重软注入(=harness 抛弃的路线)。
+- **harness 的 hook 更薄但更有纪律**——必做的做成确定性数据面(不靠 agent 触发),砍掉注入,该 agent 判断的靠 ambient + 训练 + 可观测 metrics。
+
+**所以最优是"Maestro 引擎 + harness 纪律":**
+1. **留住** Maestro 的 exit-2 阻断机制(别学 harness 退回 fail-open rewrite)。
+2. **把火力从"危险命令"扩到"工作流/知识保真"**:PathGuard 默认开(=boundary 强制)、spec-validator 修死 block + Edit 旁路、新增"该查 KG/搜索却没查→挡"门。
+3. **抄 harness 纪律**:必做的进 code 面、**fail-loud + metrics 落盘**(治 R10)、别再加注入器(H6)。
+4. 上游分支:合 `codex/*`(干净前向),`fix/global-spec-injection` / `feat-…` 只 cherry-pick(陈旧分叉)。

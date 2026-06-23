@@ -26,6 +26,29 @@
 
 ---
 
+## 0.5 时效性校准（对照最新上游，2026-06-23 fetch）
+
+本报告 R1–R10 写于 master `0.5.3 @4be21744`。fetch 后上游有 4 个非 master 分支,**分两类**(详见 `maestro-hooks-analysis.md §4`):
+- ✅ **干净前向**(基于 master、behind 0):`codex/kg-index-stability`(0.5.34)、`codex/switch-kg-maestrograph-cli`——KG 索引稳定 + KG→MaestroGraph + 搜索散文强化 + hooks.json 注册模式。
+- ⚠️ **陈旧分叉**(无共同祖先、behind 50):`fix/global-spec-injection`(0.4.24)、`feat-增强自动执行…`(0.1.4)——整体合并会回退,只能 cherry-pick(如 spec-global 修复、review-BLOCK 自动修复)。
+
+**这些新代码改的是"知识质量"层,没碰"结构性根"。** 逐条对照:
+
+| 发现 | 新上游是否触及 | 判定 |
+|---|---|---|
+| R1/R6 路由碎片化 / 三引擎 | 否(无引擎合并) | **仍现行** |
+| R2/R3 交接失真 / roadmap 漂移 | 否 | **仍现行** |
+| R4 `-y` 缺非交互保真 | 否 | **仍现行** |
+| R5 长跑闭环复利漂移 | 否 | **仍现行** |
+| R7 不变量只写散文 | 否(hooks.json 是"注册",非"强制") | **仍现行** |
+| R8 知识 fail-open | **部分**:KG 索引更稳 + 搜索强调 + spec-global(stale 分支) | **质量层缓解,但根(fail-open 消费、注入≠调用、guard advisory)未动 → 强制/触发层仍现行** |
+| R10 监控盲 | 否 | **仍现行** |
+| Hooks H1–H6 | 否(最新干净分支只动 injector/workspace,未动 guard) | **仍现行** |
+
+> **结论**:新优化集中在"让知识更好"(KG 索引 / 搜索 / spec),**而非"让 agent 必须用知识 / 必须遵守不变量"(R8 触发率 + R7 强制)**。故 R1–R7、R9、R10 **仍现行**;R8 标注为"质量层部分缓解,强制/触发层未动"。本报告的结构性结论不因新上游而过时。
+
+---
+
 ## 1. 问题一：意图理解差（`/maestro` 与 `/maestro-ralph`）
 
 ### R1.1 ⚠️ 核心证据：三套并存、互相矛盾的意图→链路路由
