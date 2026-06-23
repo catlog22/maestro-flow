@@ -102,6 +102,7 @@ const TOOL_TO_AGENT_TYPE: Record<string, AgentType> = {
   claude: 'claude-code',
   opencode: 'opencode',
   agy: 'agy',
+  'api-explore': 'api-explore',
 };
 
 // ---------------------------------------------------------------------------
@@ -117,6 +118,7 @@ const AGENT_TYPE_TO_TERMINAL_CMD: Record<string, string> = {
   'claude-code': 'claude',
   'opencode': 'opencode',
   'agy': 'agy',
+  'api-explore': 'api-explore',
 };
 
 // ---------------------------------------------------------------------------
@@ -132,6 +134,7 @@ const TOOL_PREFIX: Record<string, string> = {
   claude: 'cld',
   opencode: 'opc',
   agy: 'agy',
+  'api-explore': 'axp',
 };
 
 export function generateCliExecId(tool: string): string {

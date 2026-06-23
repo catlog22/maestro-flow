@@ -55,6 +55,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.77",
     "@hono/node-server": "^1.14.0",
+    "@huggingface/transformers": "^3.8.1",
     "@inkjs/ui": "^2.0.0",
     "@inquirer/prompts": "^8.3.2",
     "@modelcontextprotocol/sdk": "^1.12.1",
@@ -71,14 +72,14 @@
     "ink-spinner": "^5.0.0",
     "marked": "^15.0.0",
     "node-cron": "^4.2.1",
+    "openai": "^6.44.0",
     "pg": "^8.20.0",
     "react": "^19.0.0",
     "tree-sitter-wasms": "^0.1.13",
     "undici": "^8.5.0",
     "web-tree-sitter": "^0.25.3",
     "ws": "^8.19.0",
-    "zod": "^4.0.0",
-    "@huggingface/transformers": "^3.8.1"
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

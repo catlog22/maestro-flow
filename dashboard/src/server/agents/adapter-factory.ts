@@ -46,6 +46,10 @@ export async function createAdapterForType(agentType: AgentType): Promise<AgentA
       const { AgyAdapter } = await import('./agy-adapter.js');
       return new AgyAdapter();
     }
+    case 'api-explore': {
+      const { ApiExploreAdapter } = await import('./api-explore-adapter.js');
+      return new ApiExploreAdapter();
+    }
     default:
       throw new Error(`Unknown agent type for adapter factory: ${agentType}`);
   }
