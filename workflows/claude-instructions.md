@@ -46,22 +46,27 @@ maestro search "DetailedTopologySVG" --code
 maestro load --type spec --category coding
 ```
 
-### Load (unified knowledge loading)
+### Load & Search reference
 
 ```bash
 maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--id <id>]
+maestro search "<query>" [--type <type>] [--category <cat>] [--code] [--kg] [--json]
 ```
 
-| 用法 | 命令 |
-|------|------|
-| 加载 spec | `maestro load --type spec --category coding` |
-| 列出 session | `maestro load --type session --list` |
-| 加载 knowhow | `maestro load --type knowhow --id <id>` |
-| 搜索 session | `maestro search "query" --type session` |
-| 代码图谱搜索 | `maestro search "symbol" --code` |
-| KG 全源搜索 | `maestro search "query" --kg` |
+**`--category` values** (for `--type spec`): `coding`, `arch`, `debug`, `test`, `review`, `learning`, `ui`
+**`--keyword`**: free-text filter on title/body/tags — use to narrow within a category
 
-Types: `spec`, `knowhow`, `domain`, `issue`, `session`, `scratch`, `note`, `project`, `roadmap`
+**`--type` values**: `spec`, `knowhow`, `domain`, `issue`, `session`, `scratch`, `note`, `project`, `roadmap`
+
+| Action | Command |
+|--------|---------|
+| Load coding specs | `maestro load --type spec --category coding` |
+| Load arch specs with keyword | `maestro load --type spec --category arch --keyword auth` |
+| List sessions | `maestro load --type session --list` |
+| Load specific knowhow | `maestro load --type knowhow --id <id>` |
+| Search sessions | `maestro search "query" --type session` |
+| Code graph search | `maestro search "symbol" --code` |
+| KG full-source search | `maestro search "query" --kg` |
 
 ### Record
 
