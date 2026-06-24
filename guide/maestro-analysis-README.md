@@ -50,7 +50,7 @@
 > 把上文 R1–R10 / H1–H6 全部发现，放回**合并 upstream 后的 master `0.5.35`**（合并 commit `80f2f473`）逐条复核——4 路子代理并行 + R9 codex 交叉复核，按符号/语义重定位（旧行号已漂移），并以 **git 历史取证** 定 A/B 边界。校准日期：2026-06-24。
 > **完成情况**：✅ 已修复 · ⚠️ 部分改善（根因仍在）· ❌ 未修复/未改动 · 🔵 确认仍成立（原有机制/分叉）。
 > **归因三类**：**A 实现缺陷**（言行不一/死代码/疏漏·该修）· **B 有意设计**（改它=改产品方向·非 bug）· **C 意图对·执行漏一环**（补执行即兑现）。
-> **统计**：A 类 16（仅 R9-3 ✅ 已修，余 ❌）· B 类 8（多为「❌ 未改·本属设计」+ 2 🔵 确认）· C 类 8（R1.3/R9-4/H4 ⚠️ 部分，余 ❌）。**真修复仍仅 1 条（R9-3）**；与 §0.5 预判一致——0.5.35 只动「知识质量层 + 团队消息/角色契约」，未触结构根。
+> **统计**：A 类 16 中 **4 条本批已修**（R6-1/R6-3/R7-2 + R10-2 部分，见下「修复执行记录」）· R9-3 早已修 · **R6-2 经细读为误判**（有意整合，移除）· 余 ❌ 未修。B 类 8（多为「❌ 未改·本属设计」+ 2 🔵 确认）· C 类 8（R1.3/R9-4/H4 ⚠️ 部分，余 ❌）。判定列已反映 `fix/maestro-a-class-cleanup` 分支。
 
 ### A 类 · 实现缺陷（无争议·该立刻修）
 
@@ -61,14 +61,14 @@
 | R1.1-c 命令体↔大脑架构矛盾（迁移未完成） | ❌ | `.claude/commands/maestro.md` ralph-protocol-v1 与大脑两套并存；运行时仍 Read 那份矛盾大脑 |
 | R3.1 roadmap Requirements 悬空（写了不读） | ❌ | 设计了 `Requirements` 追溯字段，但 `plan.md` 下游从不读（0.5.35 未触及） |
 | R6 三套编排运行时未合并 + PhaseOrchestrator 死代码 | ❌ | GraphWalker 自称 "unified bridge" 却未取代另两者；PhaseOrchestrator 从未有生产调用（仅测试引用） |
-| R6-1 verify.json 死路由 | ❌ | `chains/singles/verify.json` 缺失，`_intent-map.json:66-70` 仍引用（commit `9f270523` 删 verify 未清引用） |
-| R6-2 spec-map.json 错连 | ❌ | `chains/singles/spec-map.json:13` cmd 仍 `manage-codebase-rebuild` |
-| R6-3 spec-generate.json 孤儿 | ❌ | 存在但 chains/ 零引用；自身 id 还误写 `singles/roadmap-full` |
-| R7-2 E007 不暂停（inv 8·这组唯一真缺陷） | ❌ | 同 commit `c19cb04a` 的 BLOCKED 真 pause，E007 却只 `return 1`（`cmd-next.ts:49-59`）——能力在手边却漏接 |
+| R6-1 verify.json 死路由 | ✅ 已修 | **本批**：清 `_intent-map`/`_router` 中 3 处指向已删 verify/execute-verify 的死路由 → `singles/execute`；验证门 missing 2→0 |
+| ~~R6-2 spec-map.json 错连~~（误判） | ⚠️ 移除 | **细读纠错**：`spec-map.json:18` description 明示 `consolidated into manage-codebase-rebuild`（有意整合），cmd 指向正确，非错连 |
+| R6-3 spec-generate.json 孤儿 | ✅ 已修 | **本批**：删除（全仓 0 引用，含 id 误写的 `singles/roadmap-full`） |
+| R7-2 E007 不暂停（inv 8·这组唯一真缺陷） | ✅ 已修 | **本批**：`cmd-next` 照 BLOCKED 范本补 pause+持久化，打破无限重试；vitest 断言 `status==='paused'` |
 | R9-2 1184 行逐字节重复 | ❌ | team-swarm vs team-adversarial-swarm 下 aco/test_aco/pheromone/scoring 四文件 `diff` 全 IDENTICAL（473+475+144+92） |
 | R9-3 消息总线命名空间分裂 | ✅ | 主平台统一 `mcp__maestro__team_msg`（134 处）；`ccw-tools` 仅余 skill-converter.ts:506 死引用 |
 | R10-1 E-code 不落盘 | ❌ | RalphSession 无 findings 字段；E006/7/10 仅 stdout/stderr，dashboard 看不到 E007 陷阱 |
-| R10-2 dashboard 投影丢字段 | ❌ | `maestro-session-types.ts:16-26` RalphStep 仍缺 retry_count/max_retries/completion_status |
+| R10-2 dashboard 投影丢字段 | ✅ 部分 | **本批**：`RalphStep` 类型对齐补 `completion_status` 等（投影可达）；但 retry_count 是 B 类空字段、渲染增强后续 |
 | R10-3 fs-watcher 静默吞错 | ❌ | `fs-watcher.ts:180-182` 裸 `catch{}` 吞解析错（mid-write 容错合理，但真损坏也一并吞） |
 | H2 spec-validator block 死代码 + Edit 旁路 | ❌ | runner `hooks.ts:850` 引入即只传 2 参→block 死代码（commit `f0594770`）；`if(!content) return` Edit 仍旁路 |
 | H6 注入器冗余（6 个重叠） | ❌ | 旧注入器全在；新增 kg-unified-injector 是叠加且默认关（opt-in）；想删的 3 个一个没删 |
@@ -135,6 +135,41 @@
 ### 分析着眼点（方法）
 
 ① **言行一致性**（声称的契约 vs 实现，主轴）→ ② **强制力的物理位置**（退出码/schema/散文）→ ③ **契约归属**（CLI 代码 vs LLM 散文兑现，定「没代码=缺陷还是分层」，git 取证专为此）→ ④ **出生史**（出生即空 vs 曾实现后回退）→ ⑤ **系统性 + 意图信号**（孤例还是成片；有无 `Design:` 注释/commit message 佐证有意）。
+
+---
+
+## 修复执行记录（fix/maestro-a-class-cleanup · 2026-06-24）
+
+> A 类逐条修复，每条配**独立确定性验证门**（不依赖全套测试绿——见下「测试体系裂」）。已提交 2 commit（docs + fix）。
+
+### 已修复（4 条，均验证）
+
+| 条目 | 修复 | 验证门 |
+|---|---|---|
+| R6-1 verify 死路由（×3） | `_intent-map`/`_router` 指向已删 verify/execute-verify → `singles/execute` | 图引用完整性 missing 2→0 |
+| R6-3 spec-generate 孤儿 | 删除（全仓 0 引用） | 0 悬空引用 |
+| R7-2 E007 不 pause | `cmd-next` 照 BLOCKED 范本补 pause+持久化 | vitest 断言 `status==='paused'` |
+| R10-2 dashboard 投影 | `RalphStep` 类型对齐补 `completion_status` 等 | 改动文件 0 类型错 |
+
+### 诊断纠错
+
+- **R6-2「spec-map 错连」实为误判**：`spec-map.json:18` description 明示 `consolidated into manage-codebase-rebuild`（有意整合），cmd 指向正确。已从 A 类移除。**教训：agent 核验会漏读 description，动手前必须再读源**（否则按误判去「修」会引入真 bug）。
+
+### 执行中暴露的 6 个地基问题（比单条缺陷更重）
+
+1. R6-2 误判（见上）。
+2. **execute-verify 第三死路由** —— 验证门自动揪出（人工/agent 枚举都漏了），实证「**确定性验证门 > 人工枚举**」。
+3. **测试体系分裂** —— 37 `node:test` + 44 `vitest`，无统一 runner、零 CI 测试。
+4. **12+ 个 node:test 文件长期红** —— 无人跑，失败累积无人知。
+5. **src/ 编译产物污染** —— `graph-loader.js`/`.d.ts`/`.js.map` 混入源码树（coordinator 测试「能跑」竟靠它）。
+6. **dashboard tsc 本来就不绿** —— `install-utils`/`embedding` 模块解析错。
+
+### 重排 backlog（地基优先）
+
+- **P0 地基**（挡着所有确定性验证）：测试体系统一（两 runner + CI gate）· 清 src 编译产物 · dashboard tsc 转绿 · 甄别/修 12+ 红测试。
+- **P1 剩余 A**：R10-1 E-code 落盘 · R10-3 fs-watcher 区分 mid-write/损坏 · R9-2 python 去重 · PhaseOrchestrator 死代码（引擎，单独评估）。
+- **P2 C 类散文层**：R3.1 Requirements 回读 · R2/R3.3/R4/R5/R9-1 · 架构档「正确处理引擎大脑」（R1.1 三路由/三引擎，不退役、单独正确处理）。
+- **B 类（设计，需产品决策）**：R7-1/R7-3/R8/H1/H3/H5——是否把 Maestro 从「LLM 灵活」推向「确定性强制」。
 
 ---
 
