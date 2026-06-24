@@ -40,7 +40,7 @@ maestro delegate "<PROMPT>" [options]
 
 | 选项 | 说明 | 默认值 |
 |------|------|--------|
-| `--to <tool>` | Agent：gemini, qwen, codex, claude, opencode | 配置中第一个启用的 |
+| `--to <tool>` | Agent：gemini, agy, codex, claude, opencode | 配置中第一个启用的 |
 | `--role <role>` | 能力角色（analyze, explore, review, implement, plan, brainstorm, research） | — |
 | `--mode <mode>` | `analysis`（只读）或 `write`（创建/修改/删除） | `analysis` |
 | `--effort <level>` | 推理强度（low, medium, high, max） | 工具的 `reasoningEffort` 配置 |
@@ -107,7 +107,7 @@ queued → running → completed
 ```
 
 **执行 ID**：`{prefix}-{HHmmss}-{rand4}`（如 `gem-143022-a7f2`）
-前缀：gemini→`gem`，qwen→`qwn`，codex→`cdx`，claude→`cld`，opencode→`opc`
+前缀：gemini→`gem`，agy→`agy`，codex→`cdx`，claude→`cld`，opencode→`opc`
 
 <details>
 <summary>Delegate vs CLI 功能对比</summary>
@@ -216,13 +216,20 @@ CONSTRAINTS: [范围限制] | [特殊要求]
   "proxy": {
     "enabled": true,
     "httpProxy": "http://127.0.0.1:7890",
-    "httpsProxy": "http://127.0.0.1:7890",
     "noProxy": "127.0.0.1,localhost"
   },
   "tools": {
     "gemini": {
       "enabled": true,
-      "proxy": false
+      "primaryModel": "gemini-3.1-pro-preview"
+    },
+    "agy": {
+      "enabled": true,
+      "primaryModel": ""
+    },
+    "claude": {
+      "enabled": true,
+      "primaryModel": "claude-sonnet-4-6"
     }
   }
 }
@@ -232,9 +239,9 @@ CONSTRAINTS: [范围限制] | [特殊要求]
 |------|------|
 | `proxy.enabled` | 启用全局 proxy |
 | `proxy.httpProxy` | HTTP proxy URL |
-| `proxy.httpsProxy` | HTTPS proxy URL（默认同 `httpProxy`） |
 | `proxy.noProxy` | 逗号分隔的绕过列表 |
-| `tools.<name>.proxy` | per-tool 开关；`false` 跳过该工具的 proxy |
+| `tools.<name>.enabled` | 启用/禁用工具 |
+| `tools.<name>.primaryModel` | 默认模型 |
 
 Delegate 启动时会 TCP 探测 proxy 可达性，不可达则跳过并警告。
 

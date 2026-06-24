@@ -267,15 +267,55 @@ maestro install --force
 ## 更新
 
 ```bash
-# 检查更新
+# 检查更新（仅检查，不安装）
+maestro update --check
+
+# 更新到最新版本
 maestro update
 
-# 预览变更（不实际应用）
-maestro update --dry-run
+# 预览更新通知（配合 --notices 使用）
+maestro update --notices --dry-run
 
-# 强制覆盖
-maestro update --force
+# 非交互式更新（CI/自动化场景）
+maestro update --non-interactive
 ```
+
+### 更新流程
+
+执行 `maestro update` 时会自动执行三步流程：
+
+1. **重装工作流** — 使用 profile-based 机制（`manifestToProfile + spawn --import --upgrade`）
+2. **应用版本通知** — 显示新版本的功能/工具/技能变更
+3. **运行迁移** — 执行必要的数据迁移
+
+### Profile-Based 重装机制
+
+v0.5.37 引入了基于 Profile 的重装机制，解决了 Windows 命令行长度限制（~8192 字符）和 shell 转义问题：
+
+- `manifestToProfile()` 将当前安装状态导出为临时 Profile JSON
+- `spawn --import --upgrade` 使用新版本重新导入
+- `mergeNewDefaults()` 自动将新默认组件合并到已有选择中
+
+### --upgrade 标志
+
+```bash
+# 导入 Profile 并合并新默认组件
+maestro install --import profile.json --upgrade
+```
+
+`--upgrade` 标志告诉安装命令在导入时调用 `mergeNewDefaults()`，自动添加新版本中 `defaultSelected !== false` 的组件。
+
+### 更新选项
+
+| 选项 | 说明 |
+|------|------|
+| `--check` | 仅检查更新，不安装 |
+| `--notices` | 显示版本通知 |
+| `--dry-run` | 预览变更（需配合 `--notices`） |
+| `--from <ver>` | 指定起始版本（通知过滤） |
+| `--to <ver>` | 指定目标版本（通知过滤） |
+| `--non-interactive` | 非交互式模式（CI/自动化） |
+| `--migrate <path>` | 运行指定迁移脚本（内部使用） |
 
 ---
 
@@ -344,10 +384,11 @@ npm install -g maestro-flow
 
 ```bash
 # 安装管理
-maestro install [--mode global|project] [--force]
-maestro install [--export [path]] [--import <path>]
+maestro install [--global] [--path <dir>] [--force]
+maestro install [--export [path]] [--import <path>] [--upgrade]
+maestro install [--load <path>]  # 加载 Profile 到交互式 TUI
 maestro uninstall [--yes]
-maestro update [--dry-run] [--force]
+maestro update [--check] [--notices] [--dry-run] [--from <ver>] [--to <ver>] [--non-interactive]
 
 # 子命令
 maestro install components [--global | --path <dir>]
