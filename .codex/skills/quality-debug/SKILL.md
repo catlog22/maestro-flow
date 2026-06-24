@@ -208,7 +208,7 @@ mkdir -p {sessionFolder}
 2b. **Load codebase + wiki context** (optional, informs hypothesis generation):
    - If `.workflow/codebase/ARCHITECTURE.md` exists: read module boundaries to scope impact analysis
    - Run `maestro search "<symptom keywords>" --json 2>/dev/null`; if results: check for prior investigations on similar issues
-   - Run `maestro spec load --category debug --keyword "<symptom keywords>"`; if tools found: extract known issues, workarounds, and root-cause notes to inform hypotheses
+   - Run `maestro load --type spec --category debug --keyword "<symptom keywords>"`; if tools found: extract known issues, workarounds, and root-cause notes to inform hypotheses
    - All are optional — proceed without if unavailable
 
 3. **Symptom collection**:

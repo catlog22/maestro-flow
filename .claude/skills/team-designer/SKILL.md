@@ -39,7 +39,7 @@ Generate complete team skills following the team-lifecycle-v4 architecture: SKIL
 ## Pre-load (before execution)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for module boundaries
-2. **Specs (coding)**: `maestro spec load --category coding` — load coding constraints as shared context
+2. **Specs (coding)**: `maestro load --type spec --category coding` — load coding constraints as shared context
 3. **Wiki knowledge**: `maestro search "skill design team architecture" --json` — top 5 entries as prior context
 4. All optional — proceed without if unavailable
 

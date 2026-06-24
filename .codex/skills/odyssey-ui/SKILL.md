@@ -114,9 +114,9 @@ Lifecycle: `pending -> done | skipped | failed` (all set `completion_confirmed`)
 |-------|---------|---------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | Module boundaries |
 | Wiki search | `maestro search "<target keywords>" --json` | Prior UI decisions (top 5) |
-| UI specs | `maestro spec load --category ui` | Design tokens, standards |
-| Coding specs | `maestro spec load --category coding` | Coding conventions |
-| Role knowledge | `maestro search --category ui` -> select -> `maestro wiki load <id>` | Domain knowledge |
+| UI specs | `maestro load --type spec --category ui` | Design tokens, standards |
+| Coding specs | `maestro load --type spec --category coding` | Coding conventions |
+| Role knowledge | `maestro search --category ui` -> select -> `maestro load --type knowhow --id <id>` | Domain knowledge |
 | Prior sessions | `Glob(".workflow/scratch/*-ui-odyssey-*")` | Related sessions |
 
 ### Knowledge Persistence (two-step model)

@@ -33,13 +33,13 @@ Empty arguments enters interactive mode: list all tools for user selection.
 
 **By name**:
 ```bash
-maestro spec load --category coding --keyword <name>
+maestro load --type spec --category coding --keyword <name>
 ```
 Match tool entries whose title or keywords contain the name.
 
 **By category**:
 ```bash
-maestro spec load --category <category>
+maestro load --type spec --category <category>
 ```
 Extract tool entries from output, list available tools.
 
@@ -54,7 +54,7 @@ Show tool information:
 
 Expand ref entries:
 ```bash
-maestro wiki load <knowhow-id>
+maestro load --type knowhow --id <knowhow-id>
 ```
 
 ### Step 3: Confirm Execution

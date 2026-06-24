@@ -121,9 +121,9 @@ Lifecycle: `pending → done | skipped | failed` (all set `completion_confirmed`
 |------|------|------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界，组件结构 |
 | Wiki search | `maestro search "<target keywords>" --json` | 先前 UI 决策（取 top 5） |
-| UI specs | `maestro spec load --category ui` | 设计规范、token、组件约定 |
-| Coding specs | `maestro spec load --category coding` | 编码规范 |
-| Role knowledge | `maestro search --category ui` → 选相关 → `maestro wiki load <id>` | 累积设计知识 |
+| UI specs | `maestro load --type spec --category ui` | 设计规范、token、组件约定 |
+| Coding specs | `maestro load --type spec --category coding` | 编码规范 |
+| Role knowledge | `maestro search --category ui` → 选相关 → `maestro load --type knowhow --id <id>` | 累积设计知识 |
 | Prior sessions | `Glob(".workflow/scratch/*-ui-odyssey-*")` | 相关会话 |
 
 ### Knowledge Persistence（S_RECORD 中写入产出文件）

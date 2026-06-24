@@ -123,7 +123,7 @@ Create `.workflow/scratch/refactor-{slug}-{date}/` with `.task/` and `.summaries
 
 ### Step 3: Scope Analysis
 
-Load project specs if available (`maestro spec load --category coding` for conventions, `maestro spec load --category review` for quality standards). Browse wiki: `maestro search --category coding`, load relevant entries.
+Load project specs if available (`maestro load --type spec --category coding` for conventions, `maestro load --type spec --category review` for quality standards). Browse wiki: `maestro search --category coding`, load relevant entries.
 
 Analyze scope for tech debt categories:
 

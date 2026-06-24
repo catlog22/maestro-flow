@@ -88,7 +88,7 @@ Write resolved milestone into PLN artifact registration and `plan.json.milestone
 **Session**: `.workflow/.csv-wave/{YYYYMMDD}-plan-P{N}-{slug}/`
 **Scratch**: `.workflow/scratch/{YYYYMMDD}-plan-P{N}-{slug}/` (.task/ subdir)
 
-**Pre-load** (optional): context-package.json (via `--from`, takes precedence), context.md (prior analyze), conclusions.json, codebase ARCHITECTURE.md, `maestro search`, `maestro spec load --category arch`, team preflight `maestro collab preflight`.
+**Pre-load** (optional): context-package.json (via `--from`, takes precedence), context.md (prior analyze), conclusions.json, codebase ARCHITECTURE.md, `maestro search`, `maestro load --type spec --category arch`, team preflight `maestro collab preflight`.
 
 **D-008 Ad-hoc Milestone Auto-Creation**: When scope resolves to `standalone` via standard resolution (routes 6 or 7, NOT via `--from`), and `state.json.current_milestone == null`, auto-create an adhoc milestone:
 ```

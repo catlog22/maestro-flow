@@ -145,9 +145,9 @@ Lifecycle: `pending → done | skipped | failed` (all set `completion_confirmed`
 |------|------|------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界，作为分析上下文 |
 | Wiki search | `maestro search "<target keywords>" --json` | 先前优化、相关决策（取 top 5） |
-| Coding specs | `maestro spec load --category coding` | 编码规范 |
-| Debug specs | `maestro spec load --category debug` | 已知性能/安全模式 |
-| Role knowledge | `maestro search --category coding` → 选相关 → `maestro wiki load <id>` | 累积领域知识 |
+| Coding specs | `maestro load --type spec --category coding` | 编码规范 |
+| Debug specs | `maestro load --type spec --category debug` | 已知性能/安全模式 |
+| Role knowledge | `maestro search --category coding` → 选相关 → `maestro load --type knowhow --id <id>` | 累积领域知识 |
 | Prior sessions | `Glob(".workflow/scratch/*-improve-odyssey-*")` | 相关会话 |
 
 ### Knowledge Persistence（S_RECORD 中写入产出文件）

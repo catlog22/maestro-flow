@@ -43,7 +43,23 @@ Then add follow-up searches based on results:
 - Specific symbol/function → `maestro kg search <symbol>` or `maestro kg context <node>`
 - Architecture/testing → `maestro search --type spec --category arch|test`
 - Call chains → `maestro kg callers <fn>` / `maestro kg callees <fn>`
-- Domain rules → `maestro spec load --category <cat> [--keyword <kw>]`
+- Domain rules → `maestro load --type spec --category <cat> [--keyword <kw>]`
+
+### Load (unified knowledge loading)
+
+```bash
+maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--id <id>]
+```
+
+| 用法 | 示例 |
+|------|------|
+| 列出 session | `maestro load --type session --list` |
+| 加载 spec | `maestro load --type spec --category coding` |
+| 加载 knowhow | `maestro load --type knowhow --id <id>` |
+| 列出 knowhow | `maestro load --type knowhow --list` |
+| 代码图谱搜索 | `maestro search "symbol" --code` |
+
+Types: `spec`, `knowhow`, `domain`, `issue`, `session`, `scratch`, `note`, `project`, `roadmap`
 
 ### Record
 

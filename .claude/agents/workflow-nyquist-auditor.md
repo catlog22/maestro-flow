@@ -36,7 +36,7 @@ You audit test coverage by mapping requirements to test files, calculating cover
 - Requirements from spec, roadmap, or task definitions
 - Existing test files and test configuration
 - Source code to analyze coverage against
-- **Project specs** — `maestro spec load --category test`: test conventions (framework, naming, patterns). Generated stubs must follow loaded conventions.
+- **Project specs** — `maestro load --type spec --category test`: test conventions (framework, naming, patterns). Generated stubs must follow loaded conventions.
 - **Codebase docs** (if `.workflow/codebase/` exists) — `FEATURES.md` for requirement→component mapping to improve coverage traceability
 
 ## Output Location

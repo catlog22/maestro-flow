@@ -50,7 +50,7 @@ $ARGUMENTS — target path/module and optional flags.
 Parse flags from `$ARGUMENTS`: `-y`/`--yes`, `--patterns <list>`, `--save-spec`, `--save-wiki`, `--continue`, `-c N`.
 Extract remaining text as target path/module.
 
-Resolve target to file list. Load coding specs: `maestro spec load --category coding` for documented patterns and conventions. Load existing patterns from `coding-conventions.md` + `.workflow/specs/learnings.md` for dedup set. Browse wiki: `maestro search --category coding`, load relevant entries.
+Resolve target to file list. Load coding specs: `maestro load --type spec --category coding` for documented patterns and conventions. Load existing patterns from `coding-conventions.md` + `.workflow/specs/learnings.md` for dedup set. Browse wiki: `maestro search --category coding`, load relevant entries.
 
 ### Phase 2: Wave 1 — Parallel Dimension Scans
 

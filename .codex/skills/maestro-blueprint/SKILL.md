@@ -45,7 +45,7 @@ maestro-analyze → maestro-roadmap → maestro-plan
 **Output boundary**: ALL file writes MUST target `.workflow/blueprint/BLP-{slug}-{date}/` or `.workflow/state.json` only. NEVER modify source code or files outside these paths.
 
 ### Pre-load specs
-1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for architecture decisions (Phase 4).
+1. **Architecture specs**: Run `maestro load --type spec --category arch` to load architecture constraints. Use as context for architecture decisions (Phase 4).
 2. Optional — proceed without if unavailable.
 </context>
 
@@ -53,7 +53,7 @@ maestro-analyze → maestro-roadmap → maestro-plan
 Interview the user relentlessly about every aspect of the spec until shared understanding is reached. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one; if a question can be answered by exploring the codebase, explore the codebase instead. Active only in interactive mode; skip when `-y/--yes`, `-c/--continue`, or input is already specific (clear idea + scope).
 
 - Ask one question per turn via request_user_input and wait for the user's feedback before continuing; every question must carry a recommended answer marked `(Recommended)`, 2–4 options total. The user controls termination — keep interviewing until convergence; they can interrupt naturally at any time.
-- Search-first when uncertain: before asking, resolve via `state.json`, existing artifacts, `maestro spec load`, codebase exploration (`maestro explore` preferred, fallback Glob/Grep/Read). Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
+- Search-first when uncertain: before asking, resolve via `state.json`, existing artifacts, `maestro load --type spec`, codebase exploration (`maestro explore` preferred, fallback Glob/Grep/Read). Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
 - Writeback cadence: each settled decision is immediately persisted into `blueprint-config.json` before the next question. Do NOT batch writeback to the end — partial decisions must already be on disk.
 - Walk the decision dependency tree depth-first: scope → spec type → focus areas → requirement priorities. Do not open the next branch until the current one is settled.
 - Scope guard: only decide the shape of the specification. Do not pre-resolve roadmap phases or plan tasks — those belong to downstream commands.

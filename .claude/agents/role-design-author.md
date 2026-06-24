@@ -22,7 +22,7 @@ You produce a set of analysis files for one role in a brainstorm session, organi
 | `output_dir` | yes | **absolute** path to role folder — `{session_dir}/{role}/`. If you receive a relative path or a literal `{output_dir}` placeholder, fail fast with `TASK BLOCKED: output_dir is not absolute`. |
 | `feature_list` | optional | F-id + slug + title rows; if missing, fall back to non-feature organization |
 | `design_research` | optional | external research markdown to integrate as evidence |
-| `project_specs` | optional | pre-loaded `maestro spec load` output |
+| `project_specs` | optional | pre-loaded `maestro load --type spec` output |
 | `user_context` | optional | answers from prior interactive context gathering |
 | `style_skill` | optional | path to style-skill package (ui-designer only) |
 

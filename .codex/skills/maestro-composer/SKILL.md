@@ -52,8 +52,8 @@ $ARGUMENTS — natural language workflow description, or flags.
 **Template schema**: Read `~/.maestro/templates/workflows/specs/template-schema.md` at Phase 5 (deferred).
 
 ### Pre-load specs
-1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for node resolution — ensures workflow design respects documented patterns.
-2. **Coding specs**: Run `maestro spec load --category coding` to load coding conventions. Informs executor argument defaults and context injection.
+1. **Architecture specs**: Run `maestro load --type spec --category arch` to load architecture constraints. Use as context for node resolution — ensures workflow design respects documented patterns.
+2. **Coding specs**: Run `maestro load --type spec --category coding` to load coding conventions. Informs executor argument defaults and context injection.
 3. Optional — proceed without if unavailable.
 </context>
 

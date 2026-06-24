@@ -24,7 +24,7 @@ Execute tests, collect coverage, attempt auto-fix for failures. Acts as the Crit
 | .msg/meta.json | <session>/wisdom/.msg/meta.json | No |
 
 1. Extract session path and test directory from task description
-2. Load test specs: Run `maestro spec load --category test` for test framework conventions and coverage targets
+2. Load test specs: Run `maestro load --type spec --category test` for test framework conventions and coverage targets
 3. Extract coverage target (default: 80%)
 3. Read .msg/meta.json for framework info (from strategist namespace)
 4. Determine test framework:

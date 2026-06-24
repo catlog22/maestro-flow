@@ -61,7 +61,7 @@ $team-coordinate --continue "20260518-team-auth-system"
 
 ### Pre-load specs (optional)
 
-1. `maestro spec load --category arch` — architecture constraints
+1. `maestro load --type spec --category arch` — architecture constraints
 2. `maestro search "<topic>"` — relevant knowhow
 3. Proceed without if unavailable.
 

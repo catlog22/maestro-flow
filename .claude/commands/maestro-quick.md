@@ -31,11 +31,11 @@ Parse for:
 
 ### Pre-load context
 
-1. **Coding specs + tools**: Run `maestro spec load --category coding` to load coding conventions and discoverable tools. Apply to implementation.
-2. **UI specs (conditional)**: If the task involves frontend/UI work (description contains component, page, style, layout, CSS, HTML, frontend), also run `maestro spec load --category ui`.
+1. **Coding specs + tools**: Run `maestro load --type spec --category coding` to load coding conventions and discoverable tools. Apply to implementation.
+2. **UI specs (conditional)**: If the task involves frontend/UI work (description contains component, page, style, layout, CSS, HTML, frontend), also run `maestro load --type spec --category ui`.
 3. **Role Knowledge**:
    - Browse: `maestro search --category coding`
-   - Load task-relevant entries: `maestro wiki load <id1> [id2...]`
+   - Load task-relevant entries: `maestro load --type knowhow --id <id1> [id2...]`
 3. All are optional — proceed without if unavailable.
 </context>
 

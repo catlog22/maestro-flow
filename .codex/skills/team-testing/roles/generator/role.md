@@ -22,7 +22,7 @@ Generate test code by layer (L1 unit / L2 integration / L3 E2E). Acts as the Gen
 | .msg/meta.json | <session>/wisdom/.msg/meta.json | No |
 
 1. Extract session path and layer from task description
-2. Load test specs: Run `maestro spec load --category test` for test framework conventions and coverage targets
+2. Load test specs: Run `maestro load --type spec --category test` for test framework conventions and coverage targets
 3. Read test strategy:
 
 ```

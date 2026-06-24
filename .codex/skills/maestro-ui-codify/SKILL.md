@@ -106,7 +106,7 @@ id,wave,title,description,agent_type,deps
 </csv_schema>
 
 <invariants>
-0. **Load UI Specs**: Before extraction, load project UI conventions via `maestro spec load --category ui` (if available). Ensures extracted tokens align with existing conventions.
+0. **Load UI Specs**: Before extraction, load project UI conventions via `maestro load --type spec --category ui` (if available). Ensures extracted tokens align with existing conventions.
 1. **Start Immediately**: First action is argument parsing, then validation
 2. **Wave Order is Sacred**: Never execute wave N+1 before wave N completes and results are merged
 3. **CSV is Source of Truth**: Master tasks.csv holds all state
@@ -396,7 +396,7 @@ Open preview:
 
 Next steps:
   maestro search --category coding    # Browse by role
-  maestro spec load --keyword {package_name}    # Load related specs
+  maestro load --type spec --keyword {package_name}    # Load related specs
 ```
 
 </execution>

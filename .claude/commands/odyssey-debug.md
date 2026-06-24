@@ -136,8 +136,8 @@ When `flags[skip_when] == true` → auto set `status: "skipped"`, `completion_co
 |------|------|------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界，作为所有分析的上下文 |
 | Wiki search | `maestro search "<issue keywords>" --json` | 先前调查、相关决策（取 top 5） |
-| Specs + tools | `maestro spec load --category debug --keyword "<symptom>"` | 已知 issue/workaround + 可发现的 knowhow 工具 |
-| Role knowledge | `maestro search --category debug` → 选相关 → `maestro wiki load <id>` | 累积领域知识 |
+| Specs + tools | `maestro load --type spec --category debug --keyword "<symptom>"` | 已知 issue/workaround + 可发现的 knowhow 工具 |
+| Role knowledge | `maestro search --category debug` → 选相关 → `maestro load --type knowhow --id <id>` | 累积领域知识 |
 | Prior sessions | `Glob(".workflow/scratch/*-debug-odyssey-*")` | 相关 odyssey 会话 |
 
 ### Knowledge Persistence（S_RECORD 中写入产出文件）

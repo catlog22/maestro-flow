@@ -54,8 +54,8 @@ Skill(skill="team-frontend-debug", args="feature list or bug description")
 ## Pre-load (coordinator, before dispatch)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for module boundaries
-2. **Specs (debug)**: `maestro spec load --category debug` — load debug constraints as shared context
-3. **Specs (ui)**: `maestro spec load --category ui` — load ui constraints as shared context
+2. **Specs (debug)**: `maestro load --type spec --category debug` — load debug constraints as shared context
+3. **Specs (ui)**: `maestro load --type spec --category ui` — load ui constraints as shared context
 4. **Wiki knowledge**: `maestro search "frontend debug devtools" --json` — top 5 entries as prior context
 5. All optional — proceed without if unavailable
 ## Role Router

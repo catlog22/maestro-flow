@@ -70,16 +70,16 @@ Auto-detection: if `--type` not provided, infer from `--task` description keywor
 
 ### Step 1: Load Specs
 
-Run `maestro spec load` with appropriate flags:
-- With `--category`: `maestro spec load --category <cat>`
-- With `--task`: `maestro spec load --keyword <extracted_keyword>`
-- No flags: `maestro spec load --category coding`
+Run `maestro load --type spec` with appropriate flags:
+- With `--category`: `maestro load --type spec --category <cat>`
+- With `--task`: `maestro load --type spec --keyword <extracted_keyword>`
+- No flags: `maestro load --type spec --category coding`
 
 Display loaded rules summary (entry count + key rule names).
 
 ### Step 2: Browse Knowhow Index
 
-Run `maestro knowhow list --store workflow`. With `--task`, also run `maestro search "<task_keyword>" --type knowhow`. Display available entries (ID + title). Hint: `maestro wiki load <id>` for details.
+Run `maestro knowhow list --store workflow`. With `--task`, also run `maestro search "<task_keyword>" --type knowhow`. Display available entries (ID + title). Hint: `maestro load --type knowhow --id <id>` for details.
 
 ### Step 3: Check Codebase Index
 

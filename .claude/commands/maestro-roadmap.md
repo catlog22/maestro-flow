@@ -50,7 +50,7 @@ $ARGUMENTS -- requirement text, @file reference, or upstream context source.
 
 ### Pre-load
 
-1. **Specs**: `maestro spec load --category arch` — load architecture constraints for phase decomposition
+1. **Specs**: `maestro load --type spec --category arch` — load architecture constraints for phase decomposition
 2. **Wiki search**: `maestro search "{requirement keywords}" --json` → prior knowledge
 3. All optional — proceed without if unavailable
 </context>

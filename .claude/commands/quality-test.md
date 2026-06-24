@@ -74,11 +74,11 @@ Follow '~/.maestro/workflows/test.md' completely.
 
 **Knowledge context loading** (before test design):
 - Wiki search: `maestro search "<phase/feature keywords>" --json` → prior test strategies, recipes, decisions
-- Role knowledge: `maestro search --category test` → select relevant → `maestro wiki load <id>`
-- Specs + tools: `maestro spec load --category test` → test conventions + discoverable knowhow tools
+- Role knowledge: `maestro search --category test` → select relevant → `maestro load --type knowhow --id <id>`
+- Specs + tools: `maestro load --type spec --category test` → test conventions + discoverable knowhow tools
 
 **Test tool discovery** (knowhow tools as scenario source):
-- Load registered test tools: `maestro spec load --category test --keyword <feature>`
+- Load registered test tools: `maestro load --type spec --category test --keyword <feature>`
 - If tools found, extract their steps as additional test scenarios marked `source: "tool"`
 - Each numbered step in a tool becomes a UAT test with its assertion as `expected` behavior
 

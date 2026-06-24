@@ -54,7 +54,7 @@ Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), outpu
 **`--from analyze:*` / `blueprint:*`**: scope=standalone → skip adhoc milestone auto-creation.
 
 ### Role Knowledge
-`maestro search --category arch` → select relevant → `maestro wiki load`
+`maestro search --category arch` → select relevant → `maestro load --type knowhow --id`
 </context>
 
 <execution>

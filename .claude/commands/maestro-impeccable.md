@@ -161,7 +161,7 @@ Layer 1+2 both did not match, but intent is to build/create a specific thing:
 
 Before reading any command workflow:
 
-1. **Context**: `maestro spec load --category ui` → if empty → `maestro impeccable load-context`
+1. **Context**: `maestro load --type spec --category ui` → if empty → `maestro impeccable load-context`
 2. **PRODUCT.md**: missing/placeholder (<200 chars / `[TODO]`) → execute teach first, then resume original task
 3. **Register**: identify brand/product → Read `~/.maestro/workflows/impeccable/{brand|product}.md`
 

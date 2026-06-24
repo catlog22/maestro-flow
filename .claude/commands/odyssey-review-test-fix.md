@@ -119,8 +119,8 @@ Lifecycle: `pending → done | skipped | failed` (all set `completion_confirmed`
 |------|------|------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界，架构约束 |
 | Wiki search | `maestro search "<target keywords>" --json` | 先前 review、已知问题（取 top 5） |
-| Specs | `maestro spec load --category review` | review 标准、checklist、knowhow 工具 |
-| Role knowledge | `maestro search --category review` → 选相关 → `maestro wiki load <id>` | 累积 review 领域知识 |
+| Specs | `maestro load --type spec --category review` | review 标准、checklist、knowhow 工具 |
+| Role knowledge | `maestro search --category review` → 选相关 → `maestro load --type knowhow --id <id>` | 累积 review 领域知识 |
 | Prior sessions | `Glob(".workflow/scratch/*-review-odyssey-*")` | 相关 odyssey 会话 |
 
 ### Knowledge Persistence（S_RECORD 中写入产出文件）

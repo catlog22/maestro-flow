@@ -49,9 +49,9 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 ### Pre-load (optional, proceed without)
 - Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → component boundaries, layer rules
 - Wiki constraints: `maestro search "architecture constraint" --json` → documented decisions
-- Specs: `maestro spec load --category review` → review standards, checklists, knowhow tools
+- Specs: `maestro load --type spec --category review` → review standards, checklists, knowhow tools
 - Conflict state: `maestro spec conflict list` → 当前已标记冲突的 spec 条目（review 时优先关注）
-- Role knowledge: `maestro search --category review` → select relevant → `maestro wiki load`
+- Role knowledge: `maestro search --category review` → select relevant → `maestro load --type knowhow --id`
 
 **Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
 </context>

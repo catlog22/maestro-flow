@@ -74,7 +74,7 @@ Snapshot `roadmap.md` as `roadmap-snapshot.md` in the milestone archive.
 
 **Extraction**: Parse each source for patterns, pitfalls, strategy adjustments. Look for recurring themes across summaries and explicit lessons in reflection logs.
 
-**Dedup**: Run `maestro spec load --category coding` to load existing entries. Skip any extracted learning whose keywords fully overlap with an existing entry.
+**Dedup**: Run `maestro load --type spec --category coding` to load existing entries. Skip any extracted learning whose keywords fully overlap with an existing entry.
 
 **Write**: Append to `.workflow/specs/learnings.md` using `<spec-entry>` closed-tag format:
 ```

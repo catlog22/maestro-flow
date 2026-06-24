@@ -11,7 +11,7 @@ Meta-skill for creating new Claude Code skills with configurable execution modes
 ## Pre-load (before execution)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for project context
-2. **Specs**: `maestro spec load --category coding` — load coding conventions
+2. **Specs**: `maestro load --type spec --category coding` — load coding conventions
 3. **Wiki knowledge**: `maestro search "skill design optimization" --json` — top 5 entries as prior context
 4. All optional — proceed without if unavailable
 

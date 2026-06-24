@@ -53,7 +53,7 @@ $ARGUMENTS -- optional flags and keyword
 
 **Ref entries:**
 When loading entries with `ref` attribute, only the summary is shown with a load command:
-  → Detail: maestro wiki load <knowhow-id>
+  → Detail: maestro load --type knowhow --id <knowhow-id>
 Use the load command to read the full referenced document.
 </context>
 

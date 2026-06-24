@@ -24,7 +24,7 @@ STEP 1: Identify Task Pattern
 
 STEP 2: Load Context
 → Read input data specified in task prompt
-→ Load existing UI conventions: `maestro spec load --category ui` (if available, respect established design tokens and component patterns)
+→ Load existing UI conventions: `maestro load --type spec --category ui` (if available, respect established design tokens and component patterns)
 → Validate BASE_PATH and output directory structure
 
 STEP 3: Execute Pattern-Specific Generation

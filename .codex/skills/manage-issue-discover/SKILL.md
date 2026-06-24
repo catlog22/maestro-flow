@@ -227,7 +227,7 @@ Initialize `discovery-state.json`:
 4. Store dimensions in `{discoveryDir}/exploration-plan.json`
 5. Generate N dimension rows (wave 1) + 1 dedup row (wave 2)
 
-**Specs loading**: `specs_content = maestro spec load --category coding` -- pass to agents for severity calibration.
+**Specs loading**: `specs_content = maestro load --type spec --category coding` -- pass to agents for severity calibration.
 
 **User validation**: Display perspective/dimension breakdown (skip if AUTO_YES).
 

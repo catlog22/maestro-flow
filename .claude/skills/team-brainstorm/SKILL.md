@@ -43,7 +43,7 @@ Skill(skill="team-brainstorm", args="topic description")
 ## Pre-load (coordinator, before dispatch)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for module boundaries
-2. **Specs (arch)**: `maestro spec load --category arch` — load arch constraints as shared context
+2. **Specs (arch)**: `maestro load --type spec --category arch` — load arch constraints as shared context
 3. **Wiki knowledge**: `maestro search "brainstorm ideation design" --json` — top 5 entries as prior context
 4. All optional — proceed without if unavailable
 ## Role Router

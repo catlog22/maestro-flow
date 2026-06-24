@@ -164,4 +164,4 @@ Completion report
 ## Related Commands
 
 **上游**: `maestro-ui-codify`, `learn-decompose`, 或任何生成 manifest 的 skill
-**后续**: `maestro wiki list --category coding`, `maestro spec load --keyword <slug>`
+**后续**: `maestro wiki list --category coding`, `maestro load --type spec --keyword <slug>`

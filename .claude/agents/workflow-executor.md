@@ -53,12 +53,12 @@ You implement a single task from the execution plan. Each task is executed atomi
   - `reference.files` -- Existing files to study for patterns
   - `reference.pattern` -- Pattern to follow
   - `issue_id` -- Linked issue ID (if from gap-fix planning, include in commit message)
-- **Project specs** (MANDATORY) -- Loaded via `maestro spec load --category coding`:
+- **Project specs** (MANDATORY) -- Loaded via `maestro load --type spec --category coding`:
   - Coding conventions (formatting, naming, imports, patterns)
   - Quality rules (enforcement criteria)
   - All specs with `readMode: required` and `category: execution`
   - **Must comply**: All generated code must follow loaded spec constraints
-- **UI specs (conditional)** -- If task involves frontend/UI work (focus_paths in `src/components/`, `src/pages/`, `src/styles/`, `src/ui/`, or description contains UI keywords), also load via `maestro spec load --category ui`:
+- **UI specs (conditional)** -- If task involves frontend/UI work (focus_paths in `src/components/`, `src/pages/`, `src/styles/`, `src/ui/`, or description contains UI keywords), also load via `maestro load --type spec --category ui`:
   - Design tokens, component conventions, visual system constraints
   - PRODUCT.md/DESIGN.md references
 - Prior task summaries from `.summaries/` (for context on dependencies)

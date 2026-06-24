@@ -71,7 +71,7 @@ Follow '~/.maestro/workflows/specs-add.md' completely.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Verify entry added | `maestro spec load --scope <scope> --keyword {keyword}` |
+| Verify entry added | `maestro load --type spec --scope <scope> --keyword {keyword}` |
 | Add more entries | `/spec-add <category>` |
 | View all specs | `/spec-load --category <category>` |
 </completion>

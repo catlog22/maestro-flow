@@ -25,7 +25,7 @@ behavior should therefore be:
 ## Pre-load (before execution)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for project context
-2. **Specs**: `maestro spec load --category coding` — load coding conventions
+2. **Specs**: `maestro load --type spec --category coding` — load coding conventions
 3. **Wiki knowledge**: `maestro search "thesis academic writing docx formatting" --json` — top 5 entries as prior context
 4. All optional — proceed without if unavailable
 

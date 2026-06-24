@@ -48,7 +48,7 @@ $ARGUMENTS -- idea text, @file reference, or upstream context source.
 
 ### Pre-load
 
-1. **Specs**: `maestro spec load --category arch` — load architecture constraints for Phase 4 decisions
+1. **Specs**: `maestro load --type spec --category arch` — load architecture constraints for Phase 4 decisions
 2. **Wiki search**: `maestro search "{topic keywords}" --json` → prior knowledge context
 3. All optional — proceed without if unavailable
 </context>

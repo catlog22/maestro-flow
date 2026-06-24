@@ -30,7 +30,7 @@ You perform focused code review for a single dimension (e.g., security, performa
    - **Architecture**: Layer violations (UI calling DB directly), circular dependencies, god classes/functions, inconsistent patterns, tight coupling
    - **Maintainability**: Functions >50 lines, cyclomatic complexity >10, duplicated logic, unclear naming, dead code, missing error context
    - **Best Practices**: Deprecated API usage, framework anti-patterns, inconsistent style with codebase, missing TypeScript strict checks, raw `any` types
-4. **Cross-reference** — Check findings against project specs (`maestro spec load --category review`):
+4. **Cross-reference** — Check findings against project specs (`maestro load --type spec --category review`):
    - Do findings violate documented review standards?
    - Do findings contradict architecture constraints?
 5. **Classify severity** — For each finding:

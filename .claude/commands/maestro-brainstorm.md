@@ -53,12 +53,12 @@ $ARGUMENTS -- topic text for auto mode, or role name for single role mode.
 | `--style-skill PKG` | Style package for ui-designer role | — |
 
 ### Pre-load specs
-1. **Architecture specs**: Run `maestro spec load --category arch` to load architecture constraints. Use as context for multi-role analysis — ensures roles respect documented decisions.
+1. **Architecture specs**: Run `maestro load --type spec --category arch` to load architecture constraints. Use as context for multi-role analysis — ensures roles respect documented decisions.
 2. Optional — proceed without if unavailable.
 
 ### Role Knowledge
 1. `maestro search --category arch` → identify relevant entries
-2. `maestro wiki load <id1> [id2...]` → load selected documents
+2. `maestro load --type knowhow --id <id1> [id2...]` → load selected documents
 </context>
 
 <interview_protocol>

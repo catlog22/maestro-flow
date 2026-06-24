@@ -68,7 +68,7 @@ Parse $ARGUMENTS to determine mode:
 - If unclear, ask user with request_user_input
 
 **Optimize mode**:
-- Load existing tool: `maestro spec load --category coding --keyword <name>`
+- Load existing tool: `maestro load --type spec --category coding --keyword <name>`
 - Analyze improvement points (step splitting, prerequisites, error handling)
 
 **Promote mode** (existing knowhow → tool):
@@ -149,7 +149,7 @@ tool: true
 
 ### Step 6: Verify
 
-- `maestro spec load --category <category> --keyword <keyword>` to confirm loadable
+- `maestro load --type spec --category <category> --keyword <keyword>` to confirm loadable
 - Display result: title, category, keywords, storage location
 
 </execution>

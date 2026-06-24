@@ -44,8 +44,8 @@ Skill(skill="team-frontend", args="task description")
 ## Pre-load (coordinator, before dispatch)
 
 1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for module boundaries
-2. **Specs (coding)**: `maestro spec load --category coding` — load coding constraints as shared context
-3. **Specs (ui)**: `maestro spec load --category ui` — load ui constraints as shared context
+2. **Specs (coding)**: `maestro load --type spec --category coding` — load coding constraints as shared context
+3. **Specs (ui)**: `maestro load --type spec --category ui` — load ui constraints as shared context
 4. **Wiki knowledge**: `maestro search "frontend component UI" --json` — top 5 entries as prior context
 5. All optional — proceed without if unavailable
 ## Role Router

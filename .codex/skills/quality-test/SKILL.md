@@ -149,7 +149,7 @@ S_REPORT:
 
 1. Load verification context: verification.json, validation.json, index.json, plan.json, summaries
 2. Load quality artifacts: review findings (type=review) -> extra tests (source: review_finding); debug root causes (type=debug) -> regression tests (source: debug_root_cause)
-3. Load test tools: `maestro spec load --category test --keyword <feature>` -> additional scenarios (source: tool)
+3. Load test tools: `maestro load --type spec --category test --keyword <feature>` -> additional scenarios (source: tool)
 4. Design scenarios from user-observable outcomes: id (T-NNN), name, category (e2e/integration/unit), expected, requirement_ref, source
 5. Write test-plan.json
 

@@ -63,12 +63,12 @@ Output directory format, artifact registration schema, and output artifact listi
 ### Pre-load
 
 1. **Codebase docs**: IF `.workflow/codebase/doc-index.json` exists → Read ARCHITECTURE.md for module boundaries
-2. **Specs**: `maestro spec load --category arch` — load architecture constraints
+2. **Specs**: `maestro load --type spec --category arch` — load architecture constraints
 3. **Wiki search**: `maestro search "{topic keywords}" --json` → top 5-10 entries as prior knowledge
 4. All optional — proceed without if unavailable (log warning)
 
 ### Role Knowledge
-`maestro search --category debug` → select relevant → `maestro wiki load`
+`maestro search --category debug` → select relevant → `maestro load --type knowhow --id`
 </context>
 
 <interview_protocol>

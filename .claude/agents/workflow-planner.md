@@ -41,7 +41,7 @@ When invoked with `quick` flag:
 - Spec references and doc-index
 - **Codebase docs** (if `.workflow/codebase/` exists) — `doc-index.json` for component mapping; `ARCHITECTURE.md` for module boundaries when decomposing tasks
 - **Wiki prior knowledge** (if `maestro wiki` available) — `maestro wiki search "<phase keywords>"` for related decisions/constraints that inform task design
-- **Project specs** (MANDATORY) -- Loaded via `maestro spec load --category arch`:
+- **Project specs** (MANDATORY) -- Loaded via `maestro load --type spec --category arch`:
   - Architecture constraints (module structure, layer boundaries, dependency rules)
   - Coding conventions (naming, imports, patterns)
   - All specs with `readMode: required` and `category: planning`

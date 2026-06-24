@@ -86,13 +86,13 @@ Execute in order, skip unavailable steps:
 
 ```bash
 # With --category: load by category
-maestro spec load --category <cat>
+maestro load --type spec --category <cat>
 
 # With --task: load by keyword extracted from task description
-maestro spec load --keyword <extracted_keyword>
+maestro load --type spec --keyword <extracted_keyword>
 
 # No flags: load coding (most universal)
-maestro spec load --category coding
+maestro load --type spec --category coding
 ```
 
 Display loaded rules summary (entry count + key rule names).
@@ -107,7 +107,7 @@ maestro knowhow list --store workflow
 maestro search --type knowhow "<task_keyword>"
 ```
 
-Display available knowhow entries (ID + title). Hint: `maestro wiki load <id>` for details.
+Display available knowhow entries (ID + title). Hint: `maestro load --type knowhow --id <id>` for details.
 
 ### 3. Check codebase index
 

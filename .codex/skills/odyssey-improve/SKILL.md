@@ -130,9 +130,9 @@ Lifecycle: `pending -> done | skipped | failed` (all set `completion_confirmed`)
 |-------|---------|---------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | Module boundaries |
 | Wiki search | `maestro search "<target keywords>" --json` | Prior investigations (top 5) |
-| Specs | `maestro spec load --category coding --keyword "<target>"` | Coding conventions |
-| Debug specs | `maestro spec load --category debug` | Known issues, workarounds |
-| Role knowledge | `maestro search --category arch` -> select -> `maestro wiki load <id>` | Domain knowledge |
+| Specs | `maestro load --type spec --category coding --keyword "<target>"` | Coding conventions |
+| Debug specs | `maestro load --type spec --category debug` | Known issues, workarounds |
+| Role knowledge | `maestro search --category arch` -> select -> `maestro load --type knowhow --id <id>` | Domain knowledge |
 | Prior sessions | `Glob(".workflow/scratch/*-improve-odyssey-*")` | Related sessions |
 
 ### Knowledge Persistence (two-step model)

@@ -49,7 +49,7 @@ Extract optional `--category` and `--keyword` flags.
 
 ### Step 3: Load via CLI
 
-Run `maestro spec load [--category <category>] [--keyword <word>]`. If CLI unavailable, read files directly and apply keyword/category filter.
+Run `maestro load --type spec [--category <category>] [--keyword <word>]`. If CLI unavailable, read files directly and apply keyword/category filter.
 
 ### Step 4: Display Results
 

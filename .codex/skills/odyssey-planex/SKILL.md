@@ -115,9 +115,9 @@ SESSION_DIR/
 |------|------|------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` | 模块边界 |
 | Wiki search | `maestro search "<requirement keywords>" --json` | 先前实现（top 5） |
-| Coding specs | `maestro spec load --category coding` | 编码规范 + knowhow 工具 |
-| UI specs（条件） | 若涉及前端 → `maestro spec load --category ui` | UI 规范 |
-| Role knowledge | `maestro search --category coding` → 选相关 → `maestro wiki load <id>` | 领域知识 |
+| Coding specs | `maestro load --type spec --category coding` | 编码规范 + knowhow 工具 |
+| UI specs（条件） | 若涉及前端 → `maestro load --type spec --category ui` | UI 规范 |
+| Role knowledge | `maestro search --category coding` → 选相关 → `maestro load --type knowhow --id <id>` | 领域知识 |
 | Prior sessions | `Glob(".workflow/scratch/*-planex-odyssey-*")` | 相关会话 |
 
 ### Knowledge Persistence（S_RECORD 中写入产出文件）

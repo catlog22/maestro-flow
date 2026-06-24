@@ -36,8 +36,8 @@ When `--from` is absent, auto-discover from state.json: latest `type=grill` arti
 **9 valid roles**: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert
 
 ### Pre-load
-1. **Architecture specs**: `maestro spec load --category arch` — load architecture constraints as context for multi-role design (roles respect documented decisions).
-2. **Role Knowledge**: `maestro search --category arch` → identify relevant entries → `maestro wiki load <id1> [id2...]`
+1. **Architecture specs**: `maestro load --type spec --category arch` — load architecture constraints as context for multi-role design (roles respect documented decisions).
+2. **Role Knowledge**: `maestro search --category arch` → identify relevant entries → `maestro load --type knowhow --id <id1> [id2...]`
 3. **Project context**: Read `.workflow/project.md` (if exists) → Validated requirements (already shipped) as constraints, Active requirements as current scope. Read `state.json.accumulated_context` → deferred items as brainstorming seeds, key_decisions as locked constraints.
 4. All optional — proceed without if unavailable.
 
@@ -57,7 +57,7 @@ When `--from` is absent, auto-discover from state.json: latest `type=grill` arti
 Interview the user relentlessly until shared understanding is reached. Active only in interactive mode; skip when `-y/--yes`, `--skip-questions`, `--continue` (existing session), or input is already specific.
 
 - One decision per turn via request_user_input with 2–4 options + a (Recommended) default. The user controls termination — keep interviewing until convergence; they can interrupt naturally at any time.
-- Search-first when uncertain: before asking, resolve via `state.json`, the session directory, `maestro spec load`, `maestro search`, `maestro explore` (preferred, fallback Glob/Grep/Read). Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
+- Search-first when uncertain: before asking, resolve via `state.json`, the session directory, `maestro load --type spec`, `maestro search`, `maestro explore` (preferred, fallback Glob/Grep/Read). Never ask what code or memory can verify; never bounce your own ambiguity back to the user — search first, then ask only what truly needs human judgment.
 - Writeback cadence: each time a decision settles, immediately append/update its row in `guidance-specification.md` §11 (create the section if absent). Do NOT batch writeback to the end — partial decisions must already be on disk before the next question.
 - Branch jumps allowed: the user may switch freely between mode / role / upstream / sub-pipeline branches; sequence is not enforced, but every decision point must end with a definite answer.
 - Scope guard: only ask about decisions owned by `brainstorm`. Do not pre-resolve roadmap/plan choices.

@@ -46,7 +46,7 @@ Phase 4: Output Generation → agent report + file output
    - Read schema file and memorize requirements BEFORE any analysis
 
 3. **Project Context Loading** (from spec system):
-   - Load exploration specs: `maestro spec load --category arch`
+   - Load exploration specs: `maestro load --type spec --category arch`
 
 4. **Determine analysis depth from prompt keywords**:
    - Quick lookup, structure overview → quick-scan

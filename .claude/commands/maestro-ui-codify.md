@@ -40,7 +40,7 @@ Flags:
 Load project UI conventions before extracting design system:
 
 ```bash
-maestro spec load --category ui
+maestro load --type spec --category ui
 ```
 
 ## 2. Execute Workflow

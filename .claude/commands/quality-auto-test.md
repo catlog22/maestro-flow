@@ -44,11 +44,11 @@ Flags, artifact context resolution, and output formats defined in workflow auto-
 
 ### Pre-load context (before test generation)
 
-1. **Test specs + tools**: Run `maestro spec load --category test` to load test conventions (framework, patterns, naming). Apply to all generated tests.
-2. **Coding specs**: Run `maestro spec load --category coding` to understand coding patterns for accurate test targeting.
+1. **Test specs + tools**: Run `maestro load --type spec --category test` to load test conventions (framework, patterns, naming). Apply to all generated tests.
+2. **Coding specs**: Run `maestro load --type spec --category coding` to understand coding patterns for accurate test targeting.
 3. **Role Knowledge**:
    - Browse: `maestro search --category test`
-   - Load task-relevant entries: `maestro wiki load <id1> [id2...]`
+   - Load task-relevant entries: `maestro load --type knowhow --id <id1> [id2...]`
 4. All are optional — proceed without if unavailable.
 </context>
 

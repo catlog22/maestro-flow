@@ -42,7 +42,7 @@ $ARGUMENTS -- topic/plan text for interactive mode, or --from source for upstrea
 
 ### Role Knowledge
 `maestro search "{topic keywords}"` → load relevant entries before grilling.
-`maestro spec load --category arch` → load architecture constraints.
+`maestro load --type spec --category arch` → load architecture constraints.
 </context>
 
 <interview_protocol>

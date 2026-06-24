@@ -25,7 +25,7 @@ $ARGUMENTS — question text and optional flags.
 
 ### Stage 1: Frame the Question
 - Parse question, generate slug, create investigation directory
-- Load debug specs: `maestro spec load --category debug` for known issues and patterns
+- Load debug specs: `maestro load --type spec --category debug` for known issues and patterns
 - Search prior knowledge: `maestro search --category debug`, wiki search, grep .workflow/specs/learnings.md
 - Write initial `understanding.md`
 

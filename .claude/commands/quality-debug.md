@@ -44,8 +44,8 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 ### Pre-load (optional, proceed without)
 - Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → module boundaries
 - Wiki: `maestro search "<symptom keywords>" --json` → prior investigations
-- Specs: `maestro spec load --category debug --keyword "<symptom>"` → known issues/workarounds
-- Role knowledge: `maestro search --category debug` → select relevant → `maestro wiki load`
+- Specs: `maestro load --type spec --category debug --keyword "<symptom>"` → known issues/workarounds
+- Role knowledge: `maestro search --category debug` → select relevant → `maestro load --type knowhow --id`
 
 **Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
 </context>

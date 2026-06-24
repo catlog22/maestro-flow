@@ -17,7 +17,7 @@
 
 ```bash
 # 按 keyword 搜索
-maestro spec load --keyword "${manifest.slug}" --json 2>/dev/null | head -5
+maestro load --type spec --keyword "${manifest.slug}" --json 2>/dev/null | head -5
 ```
 
 ### Step 3.2: Iterate and Write
