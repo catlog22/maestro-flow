@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.36',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'Session Anchor — auto-inject intent/boundary/goal context grounding per step', text_zh: 'Session Anchor——每个 step 自动注入 intent/boundary/goal 上下文锚定' },
+      { type: 'feat', text_en: 'Re-grounding drift circuit breaker — periodic intent fidelity checks with safety halt', text_zh: 'Re-grounding 漂移熔断——周期性意图保真检查 + 漂移安全门' },
+      { type: 'feat', text_en: 'Search daemon with ONNX model hot cache for faster search responses', text_zh: 'Search Daemon 常驻进程——ONNX 模型热缓存，搜索响应提速' },
+      { type: 'feat', text_en: 'New api-explore lightweight code exploration subagent with standalone config', text_zh: '新增 api-explore 轻量代码探索 subagent + 独立配置文件' },
+      { type: 'feat', text_en: 'Boundary Grill protocol — analyze/collab/plan/brainstorm boundary conflict review', text_zh: 'Boundary Grill 协议——analyze/collab/plan/brainstorm 边界冲突审查' },
+      { type: 'fix', text_en: 'Search scoring optimization — dynamic weights, name-match fix, tie handling', text_zh: '搜索评分优化——动态权重 + name-match 修复 + tie 处理' },
+    ],
+  },
+  {
     version: '0.5.35',
     date: '2026-06',
     changes: [
