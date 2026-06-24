@@ -110,6 +110,16 @@ export class WikiIndexer {
       if (lw.shareTypes.has('domain')) dirs.push(join(lw.workflowRoot, 'domain'));
       if (lw.shareTypes.has('codebase')) dirs.push(join(lw.workflowRoot, 'codebase'));
     }
+
+    // Monitor CLI session directories for new session detection
+    const home = homedir();
+    const projectCwd = dirname(this.workflowRoot);
+    const projectSlug = cwdToClaudeProjectSlug(projectCwd);
+    const claudeProjectDir = join(home, '.claude', 'projects', projectSlug);
+    if (existsSync(claudeProjectDir)) dirs.push(claudeProjectDir);
+    const codexSessionsDir = join(home, '.codex', 'sessions');
+    if (existsSync(codexSessionsDir)) dirs.push(codexSessionsDir);
+
     const singletons = [
       join(this.workflowRoot, 'project.md'),
       join(this.workflowRoot, 'roadmap.md'),
@@ -212,9 +222,12 @@ export class WikiIndexer {
   async rebuild(): Promise<WikiIndex> {
     if (this.inflight) return this.inflight;
     this.inflight = (async () => {
-      const fileEntries = await this.scanFiles();
-      const virtualEntries = await this.scanVirtual();
-      const linkedEntries = await this.scanLinkedWorkspaces();
+      // Parallel: file scan + virtual entries + linked workspaces
+      const [fileEntries, virtualEntries, linkedEntries] = await Promise.all([
+        this.scanFiles(),
+        this.scanVirtual(),
+        this.scanLinkedWorkspaces(),
+      ]);
       const entries = [...fileEntries, ...virtualEntries, ...linkedEntries];
 
       // Stable collision suffix — use original id for counting so the
@@ -349,10 +362,14 @@ export class WikiIndexer {
     embeddingDocs: number;
   }> {
     const index = await this.get();
-    const bm25 = await this.getSearchIndex();
+
+    // Parallel: BM25 index build + embedding index load
+    const [bm25, embIdx] = await Promise.all([
+      this.getSearchIndex(),
+      options?.skipEmbedding ? null : this.getEmbeddingIndex(),
+    ]);
     const bm25Results = searchBM25Planned(bm25, query, limit * 2);
 
-    const embIdx = options?.skipEmbedding ? null : await this.getEmbeddingIndex();
     if (embIdx && embIdx.docIds.length > 0) {
       try {
         const { embedQuery, vectorSearch, mergeHybrid } = await import('./embedding.js');
@@ -835,34 +852,26 @@ export class WikiIndexer {
   }
 
   private async scanCliSessions(): Promise<WikiEntry[]> {
-    const out: WikiEntry[] = [];
     const projectCwd = dirname(this.workflowRoot);
     const home = homedir();
     const maxAgeDays = 90;
     const maxFiles = 100;
 
-    // Claude Code: ~/.claude/projects/{project-slug}/*.jsonl
+    // Parallel: Claude Code + Codex session loading
     const projectSlug = cwdToClaudeProjectSlug(projectCwd);
     const claudeProjectDir = join(home, '.claude', 'projects', projectSlug);
-    if (existsSync(claudeProjectDir)) {
-      try {
-        out.push(...(await loadClaudeCodeSessions(claudeProjectDir, projectSlug, maxAgeDays, maxFiles)));
-      } catch {
-        // Best-effort — don't break the index if session scan fails
-      }
-    }
-
-    // Codex: ~/.codex/sessions/**/*.jsonl (filtered by project cwd)
     const codexRoot = join(home, '.codex');
-    if (existsSync(join(codexRoot, 'sessions'))) {
-      try {
-        out.push(...(await loadCodexSessions(codexRoot, projectCwd, maxAgeDays, maxFiles)));
-      } catch {
-        // Best-effort
-      }
-    }
 
-    return out;
+    const [claudeEntries, codexEntries] = await Promise.all([
+      existsSync(claudeProjectDir)
+        ? loadClaudeCodeSessions(claudeProjectDir, projectSlug, maxAgeDays, maxFiles).catch(() => [] as WikiEntry[])
+        : [] as WikiEntry[],
+      existsSync(join(codexRoot, 'sessions'))
+        ? loadCodexSessions(codexRoot, projectCwd, maxAgeDays, maxFiles).catch(() => [] as WikiEntry[])
+        : [] as WikiEntry[],
+    ]);
+
+    return [...claudeEntries, ...codexEntries];
   }
 
   private async scanSessionArchives(root: string): Promise<WikiEntry[]> {

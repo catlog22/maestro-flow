@@ -126,6 +126,8 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
   'spec-validator':        { event: 'PreToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true, statusMessage: 'Validating against specs' },
   'kg-unified-injector':   { event: 'UserPromptSubmit', level: 'standard', requiresWorkspace: true },
   'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'Agent', level: 'standard', requiresWorkspace: true },
+  'search-daemon-start':   { event: 'SessionStart', matcher: 'startup', level: 'standard', requiresWorkspace: true, statusMessage: 'Starting search daemon' },
+  'search-cache-invalidator': { event: 'PostToolUse', matcher: 'Write|Edit', level: 'standard', requiresWorkspace: true },
   'workflow-guard':        { event: 'PreToolUse', matcher: 'Bash', level: 'full', requiresWorkspace: true, statusMessage: 'Checking command safety' },
   'prompt-guard':          { event: 'UserPromptSubmit', level: 'full', requiresWorkspace: false },
 };
@@ -133,7 +135,7 @@ export const CODEX_HOOK_DEFS: Record<string, CodexHookDef> = {
 export const CODEX_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'Session context (SessionStart)',
-  standard: '+ spec/keyword-injector + skill-context + kg-sync + kg-auto-init(SessionStart) + kg-context-injector + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards + kg-unified-injector (opt-in)',
+  standard: '+ spec/keyword-injector + skill-context + kg-sync + kg-auto-init(SessionStart) + kg-context-injector + delegate-monitor + coordinator/team/telemetry(Stop) + preflight/spec guards + kg-unified-injector (opt-in) + search-daemon-start(SessionStart) + search-cache-invalidator',
   full: '+ workflow-guard (PreToolUse, Bash only) + prompt-guard (UserPromptSubmit)',
 };
 
@@ -605,6 +607,8 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
 
   'kg-unified-injector':   { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
   'kg-unified-injector-agent': { event: 'PreToolUse', matcher: 'invoke_subagent', level: 'standard', requiresWorkspace: true },
+  'search-daemon-start':   { event: 'PreInvocation', level: 'standard', requiresWorkspace: true },
+  'search-cache-invalidator': { event: 'PostToolUse', matcher: 'write_to_file|replace_file_content|multi_replace_file_content', level: 'standard', requiresWorkspace: true },
 
   // Full — guards
   'preflight-guard':       { event: 'PreToolUse', matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content|invoke_subagent', level: 'standard', requiresWorkspace: true },
@@ -616,7 +620,7 @@ export const AGY_HOOK_DEFS: Record<string, AgyHookDef> = {
 export const AGY_HOOK_LEVEL_DESCRIPTIONS: Record<HookLevel, string> = {
   none: 'No hooks',
   minimal: 'spec-injector (PreToolUse on invoke_subagent)',
-  standard: '+ session/skill/keyword context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards + kg-unified-injector (opt-in)',
+  standard: '+ session/skill/keyword context (PreInvocation) + delegate-monitor (PostToolUse) + team/telemetry/coordinator (Stop) + preflight/spec guards + kg-unified-injector (opt-in) + search-daemon-start(PreInvocation) + search-cache-invalidator',
   full: '+ workflow-guard (PreToolUse on shell/file writes) + prompt-guard (PreInvocation)',
 };
 

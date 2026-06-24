@@ -766,6 +766,39 @@ const MAX_SESSION_PEEK_BYTES = 8 * 1024;
 const MAX_USER_QUERIES = 25;
 const MAX_QUERY_LENGTH = 200;
 
+// Knowledge file path patterns → wiki entry ID derivation
+const KNOWLEDGE_DIR_PATTERN = /[\\/]\.workflow[\\/](specs|knowhow|issues|domain)[\\/](.+)$/;
+
+function deriveRelatedFromPaths(filePaths: Set<string>, sessionCwd: string): string[] {
+  const related: string[] = [];
+  const seen = new Set<string>();
+
+  for (const fp of filePaths) {
+    const normalized = fp.replace(/\\/g, '/');
+    const m = KNOWLEDGE_DIR_PATTERN.exec(normalized);
+    if (!m) continue;
+
+    const [, dirType, relFile] = m;
+    const stem = relFile.replace(/\.[^.]+$/, '').replace(/[\\/]/g, '-');
+
+    let id: string;
+    switch (dirType) {
+      case 'specs': id = `spec-${stem}`; break;
+      case 'knowhow': id = `knowhow-${stem}`; break;
+      case 'issues': continue; // JSONL issues use different ID scheme
+      case 'domain': id = `domain-${stem}`; break;
+      default: continue;
+    }
+
+    if (!seen.has(id)) {
+      seen.add(id);
+      related.push(id);
+    }
+  }
+
+  return related.slice(0, 20);
+}
+
 async function readSessionHead(absPath: string, maxBytes = MAX_SESSION_READ_BYTES): Promise<string[]> {
   let handle;
   try {
@@ -901,6 +934,7 @@ export function adaptClaudeCodeSession(
   let turnCount = 0;
   const queries: string[] = [];
   const commandSet = new Set<string>();
+  const editedFilePaths = new Set<string>();
 
   for (const line of jsonlLines) {
     let row: Record<string, unknown>;
@@ -936,6 +970,19 @@ export function adaptClaudeCodeSession(
     if (type === 'assistant') {
       const ts = asString(row.timestamp);
       if (!lastTs || (ts && ts > lastTs)) lastTs = ts;
+
+      // Extract edited file paths from tool_use blocks
+      const msg = row.message as Record<string, unknown> | undefined;
+      const content = msg?.content as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
+            const input = block.input as Record<string, unknown> | undefined;
+            const fp = asString(input?.file_path);
+            if (fp && editedFilePaths.size < 50) editedFilePaths.add(fp);
+          }
+        }
+      }
     }
   }
 
@@ -943,6 +990,9 @@ export function adaptClaudeCodeSession(
 
   const displayTitle = title || `Claude session ${sessionId.slice(0, 8)}`;
   const slug = slugify2(sessionId);
+
+  // Derive related wiki IDs from edited .workflow/ files
+  const related = deriveRelatedFromPaths(editedFilePaths, cwd || '');
 
   const body = buildSessionBody({
     platform: 'Claude Code',
@@ -972,7 +1022,7 @@ export function adaptClaudeCodeSession(
     status: 'completed',
     created: firstTs || toIso(null),
     updated: lastTs || toIso(null),
-    related: [],
+    related,
     source: { kind: 'virtual', path: sourcePath },
     body,
     raw: { sessionId, turnCount, commands: [...commandSet] },
@@ -984,6 +1034,7 @@ export function adaptClaudeCodeSession(
       gitBranch: branch,
       turnCount,
       commandsUsed: [...commandSet],
+      editedFiles: [...editedFilePaths].slice(0, 30),
     },
     scope: null,
     category: 'session',
@@ -1043,6 +1094,7 @@ export function adaptCodexSession(
   let lastTs: string | null = null;
   let turnCount = 0;
   const queries: string[] = [];
+  const editedFilePaths = new Set<string>();
 
   for (const line of jsonlLines) {
     let row: Record<string, unknown>;
@@ -1085,6 +1137,12 @@ export function adaptCodexSession(
           if (clean.length > 10) queries.push(clean);
         }
       }
+
+      // Extract file paths from tool_use / file_write events
+      if (evType === 'tool_use' || evType === 'file_write' || evType === 'file_edit') {
+        const fp = asString(p.file_path) || asString(p.path);
+        if (fp && editedFilePaths.size < 50) editedFilePaths.add(fp);
+      }
     }
   }
 
@@ -1092,6 +1150,8 @@ export function adaptCodexSession(
 
   const displayTitle = threadName || `Codex session ${sessionId.slice(0, 8)}`;
   const slug = slugify2(sessionId);
+
+  const related = deriveRelatedFromPaths(editedFilePaths, cwd || '');
 
   const body = buildSessionBody({
     platform: 'Codex',
@@ -1118,7 +1178,7 @@ export function adaptCodexSession(
     status: 'completed',
     created: firstTs || toIso(null),
     updated: lastTs || toIso(null),
-    related: [],
+    related,
     source: { kind: 'virtual', path: sourcePath },
     body,
     raw: { sessionId, turnCount },
@@ -1130,6 +1190,7 @@ export function adaptCodexSession(
       cliVersion,
       model,
       turnCount,
+      editedFiles: [...editedFilePaths].slice(0, 30),
     },
     scope: null,
     category: 'session',

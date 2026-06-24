@@ -220,8 +220,11 @@ export function registerSearchCommand(program: Command): void {
       }
 
       const skipEmbedding = opts.emb === false;
-      const wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding });
-      const codeResults = wikiOnly ? [] : await runCodeSearch(q, limit);
+      // Parallel: wiki + code search
+      const [wikiResults, codeResults] = await Promise.all([
+        runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding }),
+        wikiOnly ? [] : runCodeSearch(q, limit),
+      ]);
 
       const meta = getLastSearchMeta();
       const embTag = meta.embeddingUsed ? `+emb(${meta.embeddingDocs})` : 'bm25';
