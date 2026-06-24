@@ -17,7 +17,7 @@ import {
   cwdToClaudeProjectSlug,
 } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type {
   WikiEntry,
   WikiFilters,
@@ -90,6 +90,9 @@ export class WikiIndexer {
       this.searchCache = null;
       this.embeddingCache = null;
     }
+    if (await this.tryLoadSearchCache()) {
+      return this.cache!;
+    }
     return this.rebuild();
   }
 
@@ -148,6 +151,62 @@ export class WikiIndexer {
       try { snap.set(dir, (await stat(dir)).mtimeMs); } catch { /* missing */ }
     }
     return snap;
+  }
+
+  private async tryLoadSearchCache(): Promise<boolean> {
+    const cachePath = join(this.workflowRoot, 'search-cache.json');
+    if (!existsSync(cachePath)) return false;
+
+    try {
+      const raw = readFileSync(cachePath, 'utf-8');
+      const cached = JSON.parse(raw);
+      if (cached.version !== 1 || !Array.isArray(cached.entries)) return false;
+
+      const snapshot = new Map<string, number>(cached.mtimeSnapshot);
+      this.mtimeSnapshot = snapshot;
+      if (await this.hasSourceChanges()) {
+        this.mtimeSnapshot = new Map();
+        return false;
+      }
+
+      const entries: WikiEntry[] = cached.entries;
+      const byId: Record<string, WikiEntry> = {};
+      const byType = {
+        project: [], roadmap: [], spec: [], issue: [],
+        knowhow: [], note: [], domain: [],
+      } as Record<WikiNodeType, WikiEntry[]>;
+
+      for (const d of entries) {
+        byId[d.id] = d;
+        byType[d.type].push(d);
+      }
+
+      const backlinks = this.buildBacklinks(entries, byId);
+      this.cache = { entries, byId, byType, backlinks, generatedAt: cached.generatedAt };
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private persistSearchCache(index: WikiIndex): void {
+    const entries = index.entries.map(e => ({
+      id: e.id, type: e.type, title: e.title, summary: e.summary,
+      tags: e.tags, status: e.status, created: e.created, updated: e.updated,
+      related: e.related, source: e.source, body: e.body, ext: e.ext,
+      scope: e.scope, category: e.category, specCategory: e.specCategory,
+      createdBy: e.createdBy, sourceRef: e.sourceRef, parent: e.parent,
+    }));
+    try {
+      const target = join(this.workflowRoot, 'search-cache.json');
+      const data = JSON.stringify({
+        version: 1,
+        generatedAt: index.generatedAt,
+        mtimeSnapshot: [...this.mtimeSnapshot.entries()],
+        entries,
+      });
+      writeFile(target, data, 'utf-8').catch(() => {});
+    } catch { /* best-effort */ }
   }
 
   async rebuild(): Promise<WikiIndex> {
@@ -216,6 +275,7 @@ export class WikiIndexer {
 
       // Persist lightweight index to disk (fire-and-forget).
       this.persistIndex(index).catch(() => {});
+      this.persistSearchCache(index);
 
       return index;
     })();
@@ -283,7 +343,7 @@ export class WikiIndexer {
     return (await this.searchWithMeta(query, limit)).results;
   }
 
-  async searchWithMeta(query: string, limit = 50): Promise<{
+  async searchWithMeta(query: string, limit = 50, options?: { skipEmbedding?: boolean }): Promise<{
     results: Array<{ entry: WikiEntry; score: number }>;
     embeddingUsed: boolean;
     embeddingDocs: number;
@@ -292,7 +352,7 @@ export class WikiIndexer {
     const bm25 = await this.getSearchIndex();
     const bm25Results = searchBM25Planned(bm25, query, limit * 2);
 
-    const embIdx = await this.getEmbeddingIndex();
+    const embIdx = options?.skipEmbedding ? null : await this.getEmbeddingIndex();
     if (embIdx && embIdx.docIds.length > 0) {
       try {
         const { embedQuery, vectorSearch, mergeHybrid } = await import('./embedding.js');

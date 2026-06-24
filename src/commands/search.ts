@@ -83,12 +83,12 @@ export interface SearchMeta {
 let _lastSearchMeta: SearchMeta = { embeddingUsed: false, embeddingDocs: 0 };
 export function getLastSearchMeta(): SearchMeta { return _lastSearchMeta; }
 
-export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions): Promise<SearchResult[]> {
+export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & { skipEmbedding?: boolean }): Promise<SearchResult[]> {
   const limit = opts.limit > 0 ? opts.limit : 20;
   const indexer = getIndexer();
 
   const candidateLimit = Math.max(limit * 3, 60);
-  const { results: scored, embeddingUsed, embeddingDocs } = await indexer.searchWithMeta(q, candidateLimit);
+  const { results: scored, embeddingUsed, embeddingDocs } = await indexer.searchWithMeta(q, candidateLimit, { skipEmbedding: opts.skipEmbedding });
   _lastSearchMeta = { embeddingUsed, embeddingDocs };
 
   let filtered = scored;
@@ -188,6 +188,7 @@ export function registerSearchCommand(program: Command): void {
     .option('--all', 'Alias for default mixed mode (backward compat)')
     .option('--wiki-only', 'Search wiki only, skip code results')
     .option('--workspace <name>', 'Filter results to a specific linked workspace')
+    .option('--hybrid', 'Enable hybrid BM25+embedding search (slower, higher quality)')
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
     .action(async (queryParts: string[], opts) => {
@@ -201,7 +202,8 @@ export function registerSearchCommand(program: Command): void {
         process.exit(1);
       }
 
-      const wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit });
+      const skipEmbedding = opts.hybrid !== true;
+      const wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding });
       const codeResults = wikiOnly ? [] : await runCodeSearch(q, limit);
 
       const meta = getLastSearchMeta();

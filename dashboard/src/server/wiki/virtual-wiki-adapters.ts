@@ -762,24 +762,39 @@ export async function loadSessionArchiveEntries(
 // compact WikiEntry notes for search and wiki-load.
 
 const MAX_SESSION_READ_BYTES = 512 * 1024;
+const MAX_SESSION_PEEK_BYTES = 8 * 1024;
 const MAX_USER_QUERIES = 25;
 const MAX_QUERY_LENGTH = 200;
 
-async function readSessionHead(absPath: string): Promise<string[]> {
+async function readSessionHead(absPath: string, maxBytes = MAX_SESSION_READ_BYTES): Promise<string[]> {
   let handle;
   try {
     handle = await open(absPath, 'r');
-    const buf = Buffer.alloc(MAX_SESSION_READ_BYTES);
+    const buf = Buffer.alloc(maxBytes);
     const { bytesRead } = await handle.read(buf, 0, buf.length, 0);
     const text = buf.subarray(0, bytesRead).toString('utf-8');
     const lines = text.split(/\r?\n/);
-    if (bytesRead === MAX_SESSION_READ_BYTES) lines.pop();
+    if (bytesRead === maxBytes) lines.pop();
     return lines.filter(l => l.trim());
   } catch {
     return [];
   } finally {
     await handle?.close();
   }
+}
+
+async function peekSessionCwd(absPath: string): Promise<string | null> {
+  const lines = await readSessionHead(absPath, MAX_SESSION_PEEK_BYTES);
+  for (const line of lines.slice(0, 10)) {
+    try {
+      const row = JSON.parse(line) as Record<string, unknown>;
+      if (row.type === 'session_meta') {
+        const p = row.payload as Record<string, unknown>;
+        return (p?.cwd as string) || null;
+      }
+    } catch { continue; }
+  }
+  return null;
 }
 
 function stripCommandTags(content: string): string {
@@ -1177,27 +1192,28 @@ export async function loadCodexSessions(
 
   for (const c of candidates.slice(0, maxFiles * 3)) {
     if (out.length >= maxFiles) break;
+
+    // Phase 1: peek first 8KB to check CWD match (avoids reading 512KB for non-matching sessions)
+    const sessionCwd = await peekSessionCwd(c.absPath);
+    if (!sessionCwd) continue;
+    const normalizedSessionCwd = sessionCwd.replace(/\\/g, '/').toLowerCase();
+    if (normalizedSessionCwd !== normalizedProjectCwd) continue;
+
+    // Phase 2: full read only for matching sessions
     const lines = await readSessionHead(c.absPath);
     if (lines.length === 0) continue;
 
-    // Check cwd match from session_meta (first line usually)
-    let sessionCwd: string | null = null;
     let sessionId: string | null = null;
     for (const line of lines.slice(0, 5)) {
       try {
         const row = JSON.parse(line) as Record<string, unknown>;
         if (row.type === 'session_meta') {
           const p = row.payload as Record<string, unknown>;
-          sessionCwd = asString(p?.cwd) || null;
           sessionId = asString(p?.id) || null;
           break;
         }
       } catch { continue; }
     }
-
-    if (!sessionCwd) continue;
-    const normalizedSessionCwd = sessionCwd.replace(/\\/g, '/').toLowerCase();
-    if (normalizedSessionCwd !== normalizedProjectCwd) continue;
 
     const threadName = sessionId ? (titleMap.get(sessionId) ?? null) : null;
     const entry = adaptCodexSession(lines, `~/.codex/${c.relPath}`, threadName);
