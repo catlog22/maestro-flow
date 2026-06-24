@@ -1,10 +1,11 @@
 /**
  * Load Command — Unified knowledge loading (specs, wiki, sessions).
  *
- *   maestro load --type session --list        — list recent sessions
- *   maestro load --type session               — load recent sessions
- *   maestro load --type spec --category coding — load coding specs
- *   maestro load <ids...>                      — load by ID
+ *   maestro load --type session --list             — list recent sessions
+ *   maestro load --type session --id <id>          — load specific session
+ *   maestro load --type spec --category coding     — load coding specs
+ *   maestro load --type knowhow --list             — browse knowhow entries
+ *   maestro load --type knowhow --id <id>          — load specific knowhow
  */
 
 import type { Command } from 'commander';
@@ -88,33 +89,28 @@ function entryToJson(e: WikiEntry, brief: boolean): Record<string, unknown> {
 
 export function registerLoadCommand(program: Command): void {
   program
-    .command('load [ids...]')
+    .command('load')
     .description('Unified knowledge loading — specs, wiki, sessions')
-    .option('--type <type>', `Filter by type: ${VALID_TYPES.join(', ')}`)
+    .requiredOption('--type <type>', `Entry type: ${VALID_TYPES.join(', ')}`)
+    .option('--id <ids>', 'Load specific entries by ID (comma-separated)')
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, recipe)')
     .option('--keyword <word>', 'Filter entries by keyword in title/body')
     .option('--list', 'List matching entries (compact, no body)')
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (default: project)')
     .option('--limit <n>', 'Max entries (default: 20 for --list, 10 for load)', '')
     .option('--json', 'Output as JSON')
-    .action(async (ids: string[], opts) => {
-      const hasIds = ids.length > 0;
-      const isList = opts.list === true;
-
-      if (!hasIds && !opts.type) {
-        console.error('Usage: maestro load --type <type> [--list] [--category <cat>]');
-        console.error('       maestro load <ids...>');
-        console.error(`Types: ${VALID_TYPES.join(', ')}`);
-        process.exit(1);
-      }
-
-      if (opts.type && !VALID_TYPES.includes(opts.type)) {
+    .action(async (opts) => {
+      const type = opts.type as LoadType;
+      if (!VALID_TYPES.includes(type)) {
         console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')}`);
         process.exit(1);
       }
 
-      // --type spec (non-list): delegate to spec-loader for formatted output
-      if (!hasIds && !isList && opts.type === 'spec') {
+      const isList = opts.list === true;
+      const ids: string[] = opts.id ? opts.id.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+
+      // --type spec (non-list, no specific IDs): delegate to spec-loader
+      if (type === 'spec' && !isList && ids.length === 0) {
         await loadBySpecCategory(opts);
         return;
       }
@@ -125,14 +121,13 @@ export function registerLoadCommand(program: Command): void {
       const limit = opts.limit ? parseInt(opts.limit, 10) : defaultLimit;
       let entries: WikiEntry[];
 
-      if (hasIds) {
+      if (ids.length > 0) {
         entries = ids
           .map(id => index.byId[id])
           .filter((e): e is WikiEntry => Boolean(e));
         const missing = ids.filter(id => !index.byId[id]);
         if (missing.length > 0) console.error(`Not found: ${missing.join(', ')}`);
       } else {
-        const type = opts.type as LoadType;
         let pool = index.entries.filter(e => matchesType(e, type));
 
         if (opts.category) {
@@ -161,7 +156,6 @@ export function registerLoadCommand(program: Command): void {
         return;
       }
 
-      // --json
       if (opts.json) {
         console.log(JSON.stringify({
           totalLoaded: entries.length,
@@ -170,15 +164,12 @@ export function registerLoadCommand(program: Command): void {
         return;
       }
 
-      // --list: compact one-line-per-entry
       if (isList) {
-        const type = opts.type ?? 'mixed';
         console.log(`${type}: ${entries.length} entries`);
         for (const e of entries) console.log(formatListLine(e));
         return;
       }
 
-      // Full load
       const sections = entries.map(formatEntry);
       console.log(`# Loaded ${entries.length} entries\n\n---\n\n${sections.join('\n\n---\n\n')}`);
     });
