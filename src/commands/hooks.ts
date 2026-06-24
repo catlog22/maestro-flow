@@ -1243,6 +1243,8 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
       .map((lw: { name: string; workflowRoot: string; share: Array<'spec' | 'knowhow' | 'domain' | 'codebase'> }) => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
     const indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
     await indexer.rebuild();
+    // Warm embedding index so next search skips cold ONNX load
+    indexer.getEmbeddingIndex().catch(() => {});
   },
 };
 

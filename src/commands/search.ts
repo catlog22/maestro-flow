@@ -188,7 +188,7 @@ export function registerSearchCommand(program: Command): void {
     .option('--all', 'Alias for default mixed mode (backward compat)')
     .option('--wiki-only', 'Search wiki only, skip code results')
     .option('--workspace <name>', 'Filter results to a specific linked workspace')
-    .option('--hybrid', 'Enable hybrid BM25+embedding search (slower, higher quality)')
+    .option('--no-emb', 'Skip embedding, use BM25 only')
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
     .action(async (queryParts: string[], opts) => {
@@ -202,7 +202,7 @@ export function registerSearchCommand(program: Command): void {
         process.exit(1);
       }
 
-      const skipEmbedding = opts.hybrid !== true;
+      const skipEmbedding = opts.emb === false;
       const wikiResults = await runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding });
       const codeResults = wikiOnly ? [] : await runCodeSearch(q, limit);
 
