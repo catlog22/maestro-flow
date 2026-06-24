@@ -4,7 +4,7 @@ LLM action template for integrating LLM call capabilities into a Skill.
 
 ## Purpose
 
-Generate LLM actions for a Skill, call Gemini/Qwen/Codex through maestro delegate unified interface for analysis or generation.
+Generate LLM actions for a Skill, call Agy/Qwen/Codex through maestro delegate unified interface for analysis or generation.
 
 ## Usage Context
 
@@ -12,7 +12,7 @@ Generate LLM actions for a Skill, call Gemini/Qwen/Codex through maestro delegat
 |-------|-------|
 | Optional | Use when Skill requires LLM capabilities |
 | Generation Trigger | User selects to add llm action type |
-| Tools | gemini, qwen, codex (supports fallback chain) |
+| Tools | agy, qwen, codex (supports fallback chain) |
 
 ---
 
@@ -26,8 +26,8 @@ interface LLMActionConfig {
 
   // LLM tool config
   tool: {
-    primary: 'gemini' | 'qwen' | 'codex';
-    fallback_chain: string[];    // ['gemini', 'qwen', 'codex']
+    primary: 'agy' | 'qwen' | 'codex';
+    fallback_chain: string[];    // ['agy', 'qwen', 'codex']
   };
 
   // Execution mode
@@ -163,7 +163,7 @@ id: llm-code-analysis
 name: LLM Code Analysis
 type: llm
 tool:
-  primary: gemini
+  primary: agy
   fallback_chain: [qwen]
 mode: analysis
 prompt:
@@ -193,7 +193,7 @@ id: llm-doc-generation
 name: LLM Documentation Generation
 type: llm
 tool:
-  primary: gemini
+  primary: agy
   fallback_chain: [qwen, codex]
 mode: write
 prompt:
@@ -224,7 +224,7 @@ name: LLM Refactoring Suggestions
 type: llm
 tool:
   primary: codex
-  fallback_chain: [gemini]
+  fallback_chain: [agy]
 mode: analysis
 prompt:
   template: |
@@ -260,7 +260,7 @@ const llmConfig = {
   name: 'Skill Pattern Analysis',
   type: 'llm',
   tool: {
-    primary: 'gemini',
+    primary: 'agy',
     fallback_chain: ['qwen']
   },
   mode: 'analysis',
@@ -348,9 +348,9 @@ async function executeLLMActionWithRetry(config, context, maxRetries = 3) {
 ## Best Practices
 
 1. **Select Appropriate Tool**
-   - Analysis tasks: Gemini (large context) > Qwen
-   - Generation tasks: Codex (autonomous execution) > Gemini > Qwen
-   - Code modification: Codex > Gemini
+   - Analysis tasks: Agy (large context) > Qwen
+   - Generation tasks: Codex (autonomous execution) > Agy > Qwen
+   - Code modification: Codex > Agy
 
 2. **Configure Fallback Chain**
    - Always configure at least one fallback

@@ -31,7 +31,7 @@
       "task_prefix": "PLAN",
       "description": "Research, context gathering, task JSON generation via CLI planning tool",
       "commands": ["research", "create-plans"],
-      "cli_tools": [{"tool": "gemini", "mode": "analysis"}],
+      "cli_tools": [{"tool": "agy", "mode": "analysis"}],
       "message_types": ["plan_ready", "plan_progress", "error"]
     },
     {
@@ -41,7 +41,7 @@
       "task_prefix": "EXEC",
       "description": "Code implementation from IMPL-*.json tasks, wave-based parallel execution",
       "commands": ["implement"],
-      "cli_tools": [{"tool": "gemini", "mode": "write"}],
+      "cli_tools": [{"tool": "agy", "mode": "write"}],
       "message_types": ["exec_complete", "exec_progress", "error"]
     },
     {
@@ -51,7 +51,7 @@
       "task_prefix": "VERIFY",
       "description": "Convergence criteria verification, gap detection, fix loop trigger",
       "commands": ["verify"],
-      "cli_tools": [{"tool": "gemini", "mode": "analysis"}],
+      "cli_tools": [{"tool": "agy", "mode": "analysis"}],
       "message_types": ["verify_passed", "gaps_found", "error"]
     }
   ],

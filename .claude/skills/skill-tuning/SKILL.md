@@ -1,6 +1,6 @@
 ---
 name: skill-tuning
-description: Universal skill diagnosis and optimization tool. Detect and fix skill execution issues including context explosion, long-tail forgetting, data flow disruption, and agent coordination failures. Supports Gemini CLI for deep analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis", "optimize skill", "skill debug".
+description: Universal skill diagnosis and optimization tool. Detect and fix skill execution issues including context explosion, long-tail forgetting, data flow disruption, and agent coordination failures. Supports Agy CLI for deep analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis", "optimize skill", "skill debug".
 allowed-tools: Agent, AskUserQuestion, Read, Write, Bash, Glob, Grep, 
 ---
 
@@ -29,7 +29,7 @@ Autonomous diagnosis and optimization for skill execution issues.
 └─────────────────────────────────────────────────────┘
         ↓                           ↓
 ┌──────────────────────┐   ┌──────────────────┐
-│  Diagnosis Phase     │   │ Gemini CLI       │
+│  Diagnosis Phase     │   │ Agy CLI       │
 │  • Context          │   │ Deep analysis    │
 │  • Memory           │   │ (on-demand)      │
 │  • DataFlow         │   │                  │
@@ -76,7 +76,7 @@ See [specs/tuning-strategies.md](specs/tuning-strategies.md) for:
 | 1 | `action-init` | status='pending' | Backup, session created |
 | 2 | `action-analyze-requirements` | After init | Required dimensions + coverage |
 | 3 | Diagnosis (6 types) | Focus areas | state.diagnosis.{type} |
-| 4 | `action-gemini-analysis` | Critical issues OR user request | Deep findings |
+| 4 | `action-agy-analysis` | Critical issues OR user request | Deep findings |
 | 5 | `action-generate-report` | All diagnosis complete | state.final_report |
 | 6 | `action-propose-fixes` | Issues found | state.proposed_fixes[] |
 | 7 | `action-apply-fix` | Pending fixes | Applied + verified |
@@ -87,9 +87,9 @@ See [specs/tuning-strategies.md](specs/tuning-strategies.md) for:
 | Category | Actions | Purpose |
 |----------|---------|---------|
 | **Setup** | action-init | Initialize backup, session state |
-| **Analysis** | action-analyze-requirements | Decompose user request via Gemini CLI |
+| **Analysis** | action-analyze-requirements | Decompose user request via Agy CLI |
 | **Diagnosis** | action-diagnose-{context,memory,dataflow,agent,docs,token_consumption} | Detect category-specific issues |
-| **Deep Analysis** | action-gemini-analysis | Gemini CLI: complex/critical issues |
+| **Deep Analysis** | action-agy-analysis | Agy CLI: complex/critical issues |
 | **Reporting** | action-generate-report | Consolidate findings → final_report |
 | **Fixing** | action-propose-fixes, action-apply-fix | Generate + apply fixes |
 | **Verify** | action-verify | Re-run diagnosis, check gates |
@@ -144,7 +144,7 @@ See [phases/orchestrator.md](phases/orchestrator.md) for:
 # Basic skill diagnosis
 /skill-tuning "Fix memory leaks in my skill"
 
-# Deep analysis with Gemini
+# Deep analysis with Agy
 /skill-tuning "Architecture issues in async workflow"
 
 # Focus on specific areas

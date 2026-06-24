@@ -167,7 +167,7 @@ AskUserQuestion({
 | Unknown --role value | Error with role registry list |
 | Role file not found | Error with expected path (roles/{name}/role.md) |
 | Discussion loop stuck >5 rounds | Force synthesis, offer continuation |
-| CLI tool unavailable | Fallback chain: gemini -> codex -> manual analysis |
+| CLI tool unavailable | Fallback chain: agy -> codex -> manual analysis |
 | Explorer agent fails | Continue with available context, note limitation |
 | Fast-advance conflict | Coordinator reconciles on next callback |
 | Completion action fails | Default to Keep Active |

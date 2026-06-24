@@ -1,12 +1,12 @@
 ---
 name: scholar-rebuttal-pro
-description: Enhanced academic paper review response workflow with Gemini/CLI collaborative analysis and multi-perspective discussion. Produces structured rebuttal documents with evidence-based strategies. Triggers on "rebuttal", "respond to reviewers", "review response", "审稿回复".
+description: Enhanced academic paper review response workflow with Agy/CLI collaborative analysis and multi-perspective discussion. Produces structured rebuttal documents with evidence-based strategies. Triggers on "rebuttal", "respond to reviewers", "review response", "审稿回复".
 allowed-tools: Task, AskUserQuestion, TodoWrite, Read, Write, Edit, Bash, Glob, Grep, Skill, mcp__ace-tool__search_context, mcp__ccw-tools__read_file, mcp__ccw-tools__edit_file
 ---
 
 # Scholar Rebuttal Pro
 
-Enhanced academic paper review response workflow combining Gemini/CLI collaborative analysis with multi-perspective discussion. Produces structured, evidence-based rebuttal documents optimized for conference-specific requirements.
+Enhanced academic paper review response workflow combining Agy/CLI collaborative analysis with multi-perspective discussion. Produces structured, evidence-based rebuttal documents optimized for conference-specific requirements.
 
 ## Pre-load (before execution)
 
@@ -35,7 +35,7 @@ Enhanced academic paper review response workflow combining Gemini/CLI collaborat
 
 ## Key Design Principles
 
-1. **CLI-Assisted Analysis**: Leverage Gemini CLI for semantic analysis, evidence gathering, and quality validation
+1. **CLI-Assisted Analysis**: Leverage Agy CLI for semantic analysis, evidence gathering, and quality validation
 2. **Multi-Perspective Discussion**: Simulate author/reviewer/expert viewpoints to develop robust strategies
 3. **Evidence-Based Responses**: Link every response to paper content or experimental evidence
 4. **Conference-Agnostic Templates**: Support extensible template system for different venues
@@ -113,7 +113,7 @@ Input Parsing:
 
 Phase 1: Review Parsing & Classification
    └─ Ref: phases/01-review-parsing.md
-      ├─ Tasks attached: Parse reviewer comments structure → Classify comments using Gemini CLI → Extract sentiment and key concerns → Generate review-analysis.json
+      ├─ Tasks attached: Parse reviewer comments structure → Classify comments using Agy CLI → Extract sentiment and key concerns → Generate review-analysis.json
       └─ Output: reviewAnalysis, commentCategories, ${output_base}/review-analysis.json, ${output_base}/comment-classification.md
 
 Phase 2: Multi-Perspective Discussion
@@ -149,11 +149,11 @@ Return:
 
 | Phase | Document | Purpose | Compact |
 |-------|----------|---------|---------|
-| 1 | [phases/01-review-parsing.md](phases/01-review-parsing.md) | Parse reviewer comments, classify by type (Major/Minor/Typo/Misunderstanding), extract key concerns using Gemini CLI semantic analysis | TodoWrite 驱动 |
+| 1 | [phases/01-review-parsing.md](phases/01-review-parsing.md) | Parse reviewer comments, classify by type (Major/Minor/Typo/Misunderstanding), extract key concerns using Agy CLI semantic analysis | TodoWrite 驱动 |
 | 2 | [phases/02-multi-perspective-discussion.md](phases/02-multi-perspective-discussion.md) | Simulate discussion from author, reviewer, and domain expert perspectives to develop consensus strategies | TodoWrite 驱动 + 🔄 sentinel |
 | 3 | [phases/03-strategy-formulation.md](phases/03-strategy-formulation.md) | Select response strategies (Accept/Defend/Clarify/Experiment) based on discussion, analyze paper content for supporting evidence using CLI | TodoWrite 驱动 + 🔄 sentinel |
 | 4 | [phases/04-rebuttal-writing.md](phases/04-rebuttal-writing.md) | Generate structured rebuttal document using rebuttal-writer agent, apply conference-specific templates, optimize tone | TodoWrite 驱动 + 🔄 sentinel |
-| 5 | [phases/05-quality-validation.md](phases/05-quality-validation.md) | Validate rebuttal quality using Gemini CLI: completeness, professionalism, persuasiveness, generate improvement suggestions | TodoWrite 驱动 |
+| 5 | [phases/05-quality-validation.md](phases/05-quality-validation.md) | Validate rebuttal quality using Agy CLI: completeness, professionalism, persuasiveness, generate improvement suggestions | TodoWrite 驱动 |
 
 **Compact Rules**:
 1. **TodoWrite `in_progress`** → 保留完整内容，禁止压缩
@@ -169,7 +169,7 @@ Return:
 5. **Track Progress**: Update TodoWrite dynamically with task attachment/collapse pattern
 6. **Progressive Phase Loading**: Read phase docs ONLY when that phase is about to execute
 7. **DO NOT STOP**: Continuous multi-phase workflow until all phases complete
-8. **CLI Integration**: Use `ccw cli --tool gemini --mode analysis` for semantic analysis tasks
+8. **CLI Integration**: Use `ccw cli --tool agy --mode analysis` for semantic analysis tasks
 9. **Evidence Linking**: Every response strategy must link to paper content or experimental evidence
 
 ## Input Processing
@@ -293,7 +293,7 @@ Return summary to user
 [
   {"content": "Phase 1: Review Parsing & Classification", "status": "in_progress"},
   {"content": "  → Parse reviewer comments structure", "status": "in_progress"},
-  {"content": "  → Classify comments using Gemini CLI", "status": "pending"},
+  {"content": "  → Classify comments using Agy CLI", "status": "pending"},
   {"content": "  → Extract sentiment and key concerns", "status": "pending"},
   {"content": "  → Generate review-analysis.json", "status": "pending"},
   {"content": "Phase 2: Multi-Perspective Discussion", "status": "pending"},
@@ -331,7 +331,7 @@ After each phase completes:
 - **Parsing Failure**: If output parsing fails, retry once, then report error
 - **Validation Failure**: Report which file/data is missing
 - **Command Failure**: Keep phase `in_progress`, report error, do not proceed
-- **CLI Failure**: If Gemini CLI fails, fall back to direct analysis or report error
+- **CLI Failure**: If Agy CLI fails, fall back to direct analysis or report error
 - **Paper Not Found**: If paper path invalid, proceed with review-only mode
 
 ## Coordinator Checklist
@@ -474,7 +474,7 @@ ccw cli -p "PURPOSE: Parse and classify reviewer comments by type (Major/Minor/T
 TASK: • Extract comment structure • Classify by severity • Identify sentiment
 MODE: analysis
 CONTEXT: @<review-file>
-EXPECTED: JSON with classification results" --tool gemini --mode analysis
+EXPECTED: JSON with classification results" --tool agy --mode analysis
 ```
 
 **Phase 2 - Multi-Perspective Discussion**:
@@ -486,7 +486,7 @@ ccw cli -p "PURPOSE: Search paper content for evidence supporting response strat
 TASK: • Locate relevant sections • Extract supporting data • Identify evidence gaps
 MODE: analysis
 CONTEXT: @<paper-file>
-EXPECTED: Evidence map with file:line references" --tool gemini --mode analysis
+EXPECTED: Evidence map with file:line references" --tool agy --mode analysis
 ```
 
 **Phase 5 - Quality Validation**:
@@ -495,7 +495,7 @@ ccw cli -p "PURPOSE: Validate rebuttal quality (completeness, professionalism, p
 TASK: • Check all comments addressed • Assess tone • Evaluate evidence strength
 MODE: analysis
 CONTEXT: @<rebuttal-file>
-EXPECTED: Quality report with improvement suggestions" --tool gemini --mode analysis
+EXPECTED: Quality report with improvement suggestions" --tool agy --mode analysis
 ```
 
 ## Conference Template System

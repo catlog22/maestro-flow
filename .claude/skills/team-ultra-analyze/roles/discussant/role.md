@@ -55,7 +55,7 @@ MODE: analysis
 CONTEXT: @**/* | Memory: Session <session-folder>, previous analyses
 EXPECTED: JSON output with investigation results | Write to <session>/discussions/deepen-<num>.json
 CONSTRAINTS: Evidence-based analysis only
-" --tool gemini --mode analysis --rule analysis-trace-code-execution`,
+" --tool agy --mode analysis --rule analysis-trace-code-execution`,
   run_in_background: false
 })
 ```
@@ -63,7 +63,7 @@ CONSTRAINTS: Evidence-based analysis only
 **direction-adjusted**: CLI re-analysis from adjusted focus:
 ```javascript
 Bash({
-  command: `maestro delegate "Re-analyze '<topic>' with adjusted focus on '<userFeedback>'" --to gemini --mode analysis`,
+  command: `maestro delegate "Re-analyze '<topic>' with adjusted focus on '<userFeedback>'" --to agy --mode analysis`,
   run_in_background: false
 })
 ```
@@ -77,7 +77,7 @@ MODE: analysis
 CONTEXT: @**/* | Memory: Session <session-folder>
 EXPECTED: JSON output with answers and evidence | Write to <session>/discussions/questions-<num>.json
 CONSTRAINTS: Direct answers with code references
-" --tool gemini --mode analysis`,
+" --tool agy --mode analysis`,
   run_in_background: false
 })
 ```

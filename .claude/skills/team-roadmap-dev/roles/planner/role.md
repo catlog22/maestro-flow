@@ -3,7 +3,7 @@ role: planner
 prefix: PLAN
 inner_loop: true
 cli_tools:
-  - gemini --mode analysis
+  - agy --mode analysis
 message_types:
   success: plan_ready
   progress: plan_progress
@@ -35,12 +35,12 @@ Research and plan creation per roadmap phase. Gathers codebase context via CLI e
    MODE: analysis
    CONTEXT: @**/* | Memory: Phase goal: ${phaseGoal}
    EXPECTED: Structured exploration results with file lists, patterns, risks
-   CONSTRAINTS: Read-only analysis" --tool gemini --mode analysis`,
+   CONSTRAINTS: Read-only analysis" --tool agy --mode analysis`,
      run_in_background: false
    })
    ```
    - Target: files needing modification, patterns, dependencies, test infrastructure, risks
-6. If depth=comprehensive: run Gemini CLI analysis (`--mode analysis --rule analysis-analyze-code-patterns`)
+6. If depth=comprehensive: run Agy CLI analysis (`--mode analysis --rule analysis-analyze-code-patterns`)
 7. Write `<session>/phase-{N}/context.md` combining roadmap requirements + exploration results
 
 ## Phase 3: Plan Creation
@@ -55,7 +55,7 @@ Research and plan creation per roadmap phase. Gathers codebase context via CLI e
    MODE: write
    CONTEXT: @${contextMd} | Memory: ${priorSummaries}
    EXPECTED: IMPL_PLAN.md + IMPL-*.json files + TODO_LIST.md
-   CONSTRAINTS: <= 10 tasks | Valid DAG | Measurable convergence criteria" --tool gemini --mode write`,
+   CONSTRAINTS: <= 10 tasks | Valid DAG | Measurable convergence criteria" --tool agy --mode write`,
      run_in_background: false
    })
    ```

@@ -87,7 +87,7 @@ TEXT-LEVEL ONLY. No source code reading.
 | Option | Trigger |
 |--------|---------|
 | codex | task_count > 3 or explicit `--exec=codex` |
-| gemini | task_count <= 3 or explicit `--exec=gemini` |
+| agy | task_count <= 3 or explicit `--exec=agy` |
 | qwen | explicit `--exec=qwen` |
 | Auto | Auto-select based on task_count |
 

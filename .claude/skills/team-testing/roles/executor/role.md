@@ -51,7 +51,7 @@ Glob("<session>/<test-dir>/**/*")
 | 2 | Parse results: pass rate + coverage |
 | 3 | pass_rate >= 0.95 AND coverage >= target -> success, exit |
 | 4 | Extract failing test details |
-| 5 | Delegate fix to CLI tool (gemini write mode) |
+| 5 | Delegate fix to CLI tool (agy write mode) |
 | 6 | Increment iteration; >= 3 -> exit with failures |
 
 ```
@@ -69,7 +69,7 @@ CONTEXT: @<session>/<test-dir>/**/* | Memory: Test framework: <framework>, itera
 EXPECTED: Fixed test files with: corrected assertions, proper async handling, fixed imports, maintained coverage
 CONSTRAINTS: Only modify test files | Preserve test structure | No source code changes
 Test failures:
-<test-output>" --tool gemini --mode write --cd <session>`,
+<test-output>" --tool agy --mode write --cd <session>`,
   run_in_background: false
 })
 ```

@@ -39,7 +39,7 @@ Research and codebase exploration for context gathering.
    • List constraints • Identify 3-5 exploration dimensions
    TOPIC: <topic-content>
    MODE: analysis
-   EXPECTED: JSON with: problem_statement, target_users[], domain, constraints[], exploration_dimensions[]" --tool gemini --mode analysis`, run_in_background: false })
+   EXPECTED: JSON with: problem_statement, target_users[], domain, constraints[], exploration_dimensions[]" --tool agy --mode analysis`, run_in_background: false })
    ```
 6. Parse result JSON
 
@@ -63,7 +63,7 @@ EXPECTED: patterns list with file:line evidence" \
   --max-turns 3 --json
 ```
 
-**Fallback**: `maestro delegate "PURPOSE: Explore codebase for context ..." --tool gemini --mode analysis`
+**Fallback**: `maestro delegate "PURPOSE: Explore codebase for context ..." --tool agy --mode analysis`
 
 ### Tech Profile Scan
 

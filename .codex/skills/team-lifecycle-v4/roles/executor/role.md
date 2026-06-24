@@ -43,7 +43,7 @@ Code implementation worker with dual execution modes.
 ## Phase 3: Execute Implementation
 
 Route by mode -> read commands/<command>.md:
-- agent / gemini / codex / qwen -> commands/implement.md
+- agent / agy / codex / qwen -> commands/implement.md
 - Revision task -> commands/fix.md
 
 ## Phase 4: Self-Validation + Report
@@ -61,7 +61,7 @@ Route by mode -> read commands/<command>.md:
      "role": "executor",
      "timestamp": "<ISO-8601>",
      "status": "completed|failed",
-     "mode_used": "<agent|gemini|codex|qwen>",
+     "mode_used": "<agent|agy|codex|qwen>",
      "files_modified": [],
      "convergence_results": { ... }
    }
@@ -85,5 +85,5 @@ Route by mode -> read commands/<command>.md:
 | Agent mode syntax errors | Retry with error context (max 3) |
 | CLI mode failure | Retry or resume with --resume |
 | pre_analysis failure | Follow on_error (fail/continue/skip) |
-| CLI tool unavailable | Fallback: gemini -> qwen -> codex |
+| CLI tool unavailable | Fallback: agy -> qwen -> codex |
 | Max retries exceeded | Report via report_agent_job_result with status "failed" |

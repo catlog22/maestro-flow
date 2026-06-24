@@ -1,11 +1,11 @@
 # Phase 1: Review Parsing & Classification
 
-Parse reviewer comments, classify by type (Major/Minor/Typo/Misunderstanding), extract key concerns using Gemini CLI semantic analysis.
+Parse reviewer comments, classify by type (Major/Minor/Typo/Misunderstanding), extract key concerns using Agy CLI semantic analysis.
 
 ## Objective
 
 - Parse reviewer comments structure from file or inline text
-- Classify comments using Gemini CLI semantic analysis
+- Classify comments using Agy CLI semantic analysis
 - Extract sentiment and key concerns for each comment
 - Generate structured review-analysis.json
 
@@ -88,7 +88,7 @@ try {
 }
 ```
 
-### Step 1.2: Parse and Classify with Gemini CLI
+### Step 1.2: Parse and Classify with Agy CLI
 
 ```bash
 ccw cli -p "PURPOSE: Parse and classify reviewer comments by type and severity
@@ -120,7 +120,7 @@ EXPECTED: JSON with {
     'typoCount': N,
     'misunderstandingCount': N
   }
-}" --tool gemini --mode analysis --rule analysis-analyze-technical-document
+}" --tool agy --mode analysis --rule analysis-analyze-technical-document
 ```
 
 ### Step 1.3: Generate Classification Report

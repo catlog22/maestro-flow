@@ -49,7 +49,7 @@ EXPECTED: Queue JSON with: ordered issue list, conflict analysis, parallel_group
 Write to: .workflow/issues/queue/execution-queue.json
 
 CONSTRAINTS: Resolve file conflicts | Optimize for parallelism | Maintain dependency order
-\" --tool gemini --mode analysis", { run_in_background: false })
+\" --tool agy --mode analysis", { run_in_background: false })
 ```
 
 **Parse queue result**:

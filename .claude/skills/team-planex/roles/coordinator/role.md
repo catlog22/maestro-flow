@@ -97,7 +97,7 @@ mcp__maestro__team_msg({
     roles: ["coordinator", "planner", "executor"],
     team_name: "planex",
     input_type: "<issues|text|plan>",
-    execution_method: "<codex|gemini>"
+    execution_method: "<codex|agy>"
   }
 })
 ```

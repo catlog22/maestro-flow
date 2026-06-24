@@ -2,7 +2,7 @@
 
 ## 概述
 
-**scholar-rebuttal-pro** 是一个增强版的学术论文审稿意见回复 skill，整合了 Gemini/CLI 协作分析和多视角讨论机制，用于生成结构化、证据支撑的 rebuttal 文档。
+**scholar-rebuttal-pro** 是一个增强版的学术论文审稿意见回复 skill，整合了 Agy/CLI 协作分析和多视角讨论机制，用于生成结构化、证据支撑的 rebuttal 文档。
 
 ## 核心特性
 
@@ -10,7 +10,7 @@
 
 ```
 Phase 1: 审稿意见解析与分类
-   ↓ (使用 Gemini CLI 语义分析)
+   ↓ (使用 Agy CLI 语义分析)
 Phase 2: 多视角讨论
    ↓ (作者/审稿人/专家三方视角)
 Phase 3: 策略制定
@@ -23,7 +23,7 @@ Phase 5: 质量验证
 
 ### 2. CLI 协作分析
 
-- **Phase 1**: Gemini CLI 语义分析，自动分类审稿意见
+- **Phase 1**: Agy CLI 语义分析，自动分类审稿意见
 - **Phase 2**: 多视角讨论（可选 team-ultra-analyze）
 - **Phase 3**: CLI 搜索论文内容，提取支撑证据
 - **Phase 5**: CLI 质量验证，生成改进建议
@@ -167,7 +167,7 @@ TASK: • Parse comment structure • Classify by severity • Extract key conce
 MODE: analysis
 CONTEXT: @reviews.txt
 EXPECTED: JSON with classification results" \
---tool gemini --mode analysis --rule analysis-analyze-technical-document
+--tool agy --mode analysis --rule analysis-analyze-technical-document
 ```
 
 ### Phase 3 - 证据搜索
@@ -178,7 +178,7 @@ TASK: • Locate relevant sections • Extract supporting data • Identify evid
 MODE: analysis
 CONTEXT: @paper.pdf
 EXPECTED: Evidence map with file:line references" \
---tool gemini --mode analysis
+--tool agy --mode analysis
 ```
 
 ### Phase 5 - 质量验证
@@ -189,7 +189,7 @@ TASK: • Check all comments addressed • Assess tone • Evaluate evidence str
 MODE: analysis
 CONTEXT: @rebuttal.md
 EXPECTED: Quality report with improvement suggestions" \
---tool gemini --mode analysis
+--tool agy --mode analysis
 ```
 
 ## 会议特定策略
@@ -244,7 +244,7 @@ EXPECTED: Quality report with improvement suggestions" \
 ## 故障排除
 
 ### 问题 1: CLI 执行失败
-**解决方案**: 检查 `~/.claude/cli-tools.json` 配置，确保 gemini 工具已启用
+**解决方案**: 检查 `~/.claude/cli-tools.json` 配置，确保 agy 工具已启用
 
 ### 问题 2: 论文路径无效
 **解决方案**: 使用"仅审稿意见"模式，手动提供证据
@@ -269,7 +269,7 @@ EXPECTED: Quality report with improvement suggestions" \
 
 ### 集成其他 CLI 工具
 
-修改 Phase 1/3/5 的 CLI 调用，替换 `--tool gemini` 为其他工具（qwen/codex）。
+修改 Phase 1/3/5 的 CLI 调用，替换 `--tool agy` 为其他工具（qwen/codex）。
 
 ## 相关 Skills
 

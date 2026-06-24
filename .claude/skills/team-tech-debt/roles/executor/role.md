@@ -44,7 +44,7 @@ CONTEXT: @<worktree-path>/**/* | Memory: Remediation plan context
 EXPECTED: Code changes that fix debt items, maintain backward compatibility, pass existing tests
 CONSTRAINTS: Minimal changes only | No new features | No suppressions | Read files before modifying
 Batch type: <refactor|update-deps|add-tests|add-docs|restructure>
-Items: <list-of-items-with-file-paths-and-descriptions>" --tool gemini --mode write --cd "<worktree-path>"
+Items: <list-of-items-with-file-paths-and-descriptions>" --tool agy --mode write --cd "<worktree-path>"
 ```
 
 Wait for CLI completion before proceeding to next batch.

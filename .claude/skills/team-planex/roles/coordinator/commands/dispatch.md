@@ -27,7 +27,7 @@ TaskCreate({
 Input type: <issues|text|plan>
 Input: <raw-input>
 Session: <session-folder>
-Execution method: <agent|codex|gemini>
+Execution method: <agent|codex|agy>
 
 ## Instructions
 1. Parse input to get issue list
@@ -52,7 +52,7 @@ TaskCreate({
 Issue ID: <issueId>
 Solution file: <session-folder>/artifacts/solutions/<issueId>.json
 Session: <session-folder>
-Execution method: <agent|codex|gemini>
+Execution method: <agent|codex|agy>
 
 InnerLoop: true`,
   activeForm: "Implementing <issue-title>"

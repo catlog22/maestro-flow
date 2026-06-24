@@ -31,7 +31,7 @@ Audit existing animations in the codebase, measure paint/composite costs via Chr
 | @react-spring/web | react-spring |
 | (default) | css-vanilla |
 
-3. Use CLI tools (e.g., `maestro delegate "..." --to gemini --mode analysis`) or direct tools (Glob, Grep) to scan for existing animations, transitions, keyframes
+3. Use CLI tools (e.g., `maestro delegate "..." --to agy --mode analysis`) or direct tools (Glob, Grep) to scan for existing animations, transitions, keyframes
 4. Read framework context from session config
 
 ## Phase 3: Research Execution

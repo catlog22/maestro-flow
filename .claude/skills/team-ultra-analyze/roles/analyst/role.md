@@ -34,11 +34,11 @@ Perform deep multi-perspective analysis on exploration results via CLI tools. Ge
 
 | Perspective | CLI Tool | Rule Template |
 |-------------|----------|---------------|
-| technical | gemini | analysis-analyze-code-patterns |
+| technical | agy | analysis-analyze-code-patterns |
 | architectural | claude | analysis-review-architecture |
 | business | codex | analysis-analyze-code-patterns |
-| domain_expert | gemini | analysis-analyze-code-patterns |
-| direction-fix (any) | gemini | analysis-diagnose-bug-root-cause |
+| domain_expert | agy | analysis-analyze-code-patterns |
+| direction-fix (any) | agy | analysis-diagnose-bug-root-cause |
 
 ## Phase 3: Deep Analysis via CLI
 

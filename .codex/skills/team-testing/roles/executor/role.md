@@ -51,7 +51,7 @@ Glob("<session>/<test-dir>/**/*")
 | 2 | Parse results: pass rate + coverage |
 | 3 | pass_rate >= 0.95 AND coverage >= target -> success, exit |
 | 4 | Extract failing test details |
-| 5 | Delegate fix to CLI tool (gemini write mode) |
+| 5 | Delegate fix to CLI tool (agy write mode) |
 | 6 | Increment iteration; >= 3 -> exit with failures |
 
 ```

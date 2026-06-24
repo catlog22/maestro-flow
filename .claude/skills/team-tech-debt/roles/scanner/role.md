@@ -45,7 +45,7 @@ Multi-dimension tech debt scanner. Scan codebase across 5 dimensions (code, arch
 
 | Score | Complexity | Strategy |
 |-------|------------|----------|
-| >= 4 | High | Triple Fan-out: CLI explore + CLI 5 dimensions + multi-perspective Gemini |
+| >= 4 | High | Triple Fan-out: CLI explore + CLI 5 dimensions + multi-perspective Agy |
 | 2-3 | Medium | Dual Fan-out: CLI explore + CLI 3 dimensions |
 | 0-1 | Low | Inline: ACE search + Grep |
 

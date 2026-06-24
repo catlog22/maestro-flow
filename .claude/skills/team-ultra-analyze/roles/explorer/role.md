@@ -65,7 +65,7 @@ maestro delegate "PURPOSE: Explore codebase for <topic> from <perspective> persp
 TASK: Search for topic-related patterns | Identify key files and relationships | Extract architectural insights
 EXPECTED: JSON with relevant_files, patterns, key_findings
 CONSTRAINTS: Focus on <perspective> angle
-" --tool gemini --mode analysis --rule analysis-analyze-code-patterns
+" --tool agy --mode analysis --rule analysis-analyze-code-patterns
 ```
 
 ## Phase 4: Result Validation

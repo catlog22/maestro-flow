@@ -179,7 +179,7 @@ Odyssey:  odyssey-debug / odyssey-improve / odyssey-planex / odyssey-ui → (自
 - **Analyze 双层**: 宏观(文本参数)探索影响面产出 scope_verdict；微观(数字参数)Phase 级深入分析
 - **scope_verdict**: analyze 宏观完成后的路由建议 — large→roadmap, medium/small→直达 plan
 - **Overlay**: 非侵入式命令补丁，扩展命令行为而不修改源文件
-- **Delegate**: 将子任务委派给外部 AI 工具（Gemini/Claude/Codex）
+- **Delegate**: 将子任务委派给外部 AI 工具（Agy/Claude/Codex）
 - **Spec**: 项目约束规则（coding/arch/debug/test），自动注入到工作流
 - **Wiki**: 知识图谱，存储详细技术文档
 - **Ralph**: 自适应决策引擎，动态调整执行链

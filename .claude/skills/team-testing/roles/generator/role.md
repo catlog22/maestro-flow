@@ -73,7 +73,7 @@ Effective patterns: <patterns-from-meta>>
 EXPECTED: Test files in <session>/tests/<layer>/ with: proper test structure, comprehensive coverage, correct imports, framework conventions
 CONSTRAINTS: Follow test strategy priorities | Use framework best practices | <layer>-appropriate assertions
 Source files to test:
-<file-list-with-content>" --tool gemini --mode write --cd <session>`,
+<file-list-with-content>" --tool agy --mode write --cd <session>`,
   run_in_background: false
 })
 ```

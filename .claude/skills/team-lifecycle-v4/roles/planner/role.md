@@ -37,7 +37,7 @@ Codebase-informed implementation planning with complexity assessment.
    TASK: • Search for relevant patterns • Identify files to modify • Document integration points
    MODE: analysis
    CONTEXT: @**/*
-   EXPECTED: JSON with: relevant_files[], patterns[], integration_points[], recommendations[]" --tool gemini --mode analysis`, run_in_background: false })
+   EXPECTED: JSON with: relevant_files[], patterns[], integration_points[], recommendations[]" --tool agy --mode analysis`, run_in_background: false })
    ```
 4. Store results in <session>/explorations/
 
@@ -59,7 +59,7 @@ TASK: • Create plan.json overview • Generate TASK-*.json files (2-7 tasks) �
 MODE: write
 CONTEXT: @<session>/explorations/*.json
 EXPECTED: Files: plan.json + .task/TASK-*.json
-CONSTRAINTS: 2-7 tasks, include id/title/files[]/convergence.criteria/depends_on" --tool gemini --mode write`, run_in_background: false })
+CONSTRAINTS: 2-7 tasks, include id/title/files[]/convergence.criteria/depends_on" --tool agy --mode write`, run_in_background: false })
 ```
 
 Output files:

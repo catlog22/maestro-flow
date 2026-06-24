@@ -64,7 +64,7 @@ TASK: • Load template • Apply spec config and discovery context • Integrat
 MODE: write
 CONTEXT: @<session>/spec/*.json @<template-path>
 EXPECTED: Document at <output-path> with YAML frontmatter, all sections, cross-references
-CONSTRAINTS: Follow document standards" --tool gemini --mode write --cd <session>`, run_in_background: false })
+CONSTRAINTS: Follow document standards" --tool agy --mode write --cd <session>`, run_in_background: false })
 ```
 
 ## Phase 4: Validation

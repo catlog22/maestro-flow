@@ -15,8 +15,8 @@ Handle all coordinator monitoring events for the roadmap-dev pipeline using the 
 
 | Prefix | Role | Role Spec | inner_loop |
 |--------|------|-----------|------------|
-| PLAN | planner | `~  or <project>/.claude/skills/team-roadmap-dev/roles/planner/role.md` | true (cli_tools: gemini --mode analysis) |
-| EXEC | executor | `~  or <project>/.claude/skills/team-roadmap-dev/roles/executor/role.md` | true (cli_tools: gemini --mode write) |
+| PLAN | planner | `~  or <project>/.claude/skills/team-roadmap-dev/roles/planner/role.md` | true (cli_tools: agy --mode analysis) |
+| EXEC | executor | `~  or <project>/.claude/skills/team-roadmap-dev/roles/executor/role.md` | true (cli_tools: agy --mode write) |
 | VERIFY | verifier | `~  or <project>/.claude/skills/team-roadmap-dev/roles/verifier/role.md` | true |
 
 ### Pipeline Structure

@@ -10,7 +10,7 @@ Select response strategies (Accept/Defend/Clarify/Experiment) based on discussio
 ## Objective
 
 - Map each comment to specific response strategy (Accept/Defend/Clarify/Experiment)
-- Use Gemini CLI to search paper content for supporting evidence
+- Use Agy CLI to search paper content for supporting evidence
 - Identify gaps requiring new experiments or additional data
 - Generate strategy matrix with evidence references
 - Prepare structured input for rebuttal writing phase
@@ -151,7 +151,7 @@ Strategy Type Distribution:
 
 ### Step 3.3: Search Paper Content for Evidence
 
-Use Gemini CLI to search paper content for supporting evidence:
+Use Agy CLI to search paper content for supporting evidence:
 
 ```javascript
 // Determine paper path
@@ -183,7 +183,7 @@ if (paperPath) {
   // For each strategy requiring evidence, search paper
   for (const strategy of strategyMatrix) {
     if (strategy.responseType === 'Defend' || strategy.responseType === 'Clarify') {
-      // Use Gemini CLI to search for relevant sections
+      // Use Agy CLI to search for relevant sections
       const cliCommand = `ccw cli -p "PURPOSE: Search paper content for evidence supporting response to reviewer comment
 
 REVIEWER COMMENT:
@@ -211,7 +211,7 @@ EXPECTED: JSON with {
   'equations': [{'equationId': '...', 'content': '...', 'relevance': '...'}],
   'evidenceStrength': 'strong|moderate|weak',
   'gaps': ['gap1', 'gap2']
-}" --tool gemini --mode analysis --rule analysis-trace-code-execution`
+}" --tool agy --mode analysis --rule analysis-trace-code-execution`
 
       // Execute CLI command
       Bash({

@@ -29,7 +29,7 @@ Remediation plan designer. Create phased remediation plan from priority matrix: 
 | Item Count (quick-win + strategic) | Strategy |
 |------------------------------------|----------|
 | <= 5 | Inline: generate steps from item data |
-| > 5 | CLI-assisted: gemini generates detailed remediation steps |
+| > 5 | CLI-assisted: agy generates detailed remediation steps |
 
 **3-Phase Plan Structure**:
 
@@ -59,7 +59,7 @@ Remediation plan designer. Create phased remediation plan from priority matrix: 
 | dependency | Configure automated dependency update bot (Renovate/Dependabot) |
 | documentation | Add JSDoc/docstring enforcement in linting rules |
 
-For CLI-assisted mode, prompt gemini with debt summary requesting specific fix steps per item, grouped into phases, with dependencies and estimated time.
+For CLI-assisted mode, prompt agy with debt summary requesting specific fix steps per item, grouped into phases, with dependencies and estimated time.
 
 ## Phase 4: Validate & Save
 

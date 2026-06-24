@@ -82,12 +82,12 @@ function matchCategory(keywords) {
 | memory_loss | MEM-001, MEM-002, MEM-003, MEM-004, MEM-005 | 约束传播、检查点机制 |
 | dataflow_break | DF-001, DF-002, DF-003, DF-004, DF-005 | 状态存储、Schema 验证 |
 | agent_failure | AGT-001, AGT-002, AGT-003, AGT-004, AGT-005, AGT-006 | 错误处理、结果验证 |
-| prompt_quality | - | (无内置检测，需 Gemini 分析) |
-| architecture | - | (无内置检测，需 Gemini 分析) |
+| prompt_quality | - | (无内置检测，需 Agy 分析) |
+| architecture | - | (无内置检测，需 Agy 分析) |
 | performance | CTX-001, CTX-003 | (复用 context 检测) |
 | error_handling | AGT-001, AGT-002 | (复用 agent 检测) |
-| output_quality | - | (无内置检测，需 Gemini 分析) |
-| user_experience | - | (无内置检测，需 Gemini 分析) |
+| output_quality | - | (无内置检测，需 Agy 分析) |
+| user_experience | - | (无内置检测，需 Agy 分析) |
 | doc_redundancy | DOC-RED-001, DOC-RED-002, DOC-RED-003 | 重复定义检测 |
 | doc_conflict | DOC-CON-001, DOC-CON-002 | 冲突定义检测 |
 
@@ -108,7 +108,7 @@ function matchCategory(keywords) {
 | doc_redundancy | consolidate_to_ssot, centralize_mapping_config | Low-Medium |
 | doc_conflict | reconcile_conflicting_definitions | Low |
 
-### Extended Categories (需 Gemini 生成策略)
+### Extended Categories (需 Agy 生成策略)
 
 | Category | Available Strategies | Risk Level |
 |----------|---------------------|------------|
@@ -139,7 +139,7 @@ function evaluateSatisfaction(specMatch) {
   return {
     satisfied: hasFix,
     detection_available: hasDetection,
-    needs_gemini: !hasDetection  // 无内置检测时需要 Gemini 分析
+    needs_agy: !hasDetection  // 无内置检测时需要 Agy 分析
   };
 }
 ```
@@ -168,7 +168,7 @@ function handleUnmatchedDimension(dimension) {
       risk_levels: ['medium']
     },
     has_fix: true,  // custom 策略视为"可满足"
-    needs_gemini_analysis: true,
+    needs_agy_analysis: true,
     fallback_reason: 'no_keyword_match'
   };
 }
@@ -181,7 +181,7 @@ function handleUnmatchedDimension(dimension) {
 ```javascript
 // 输入：用户描述 "skill 执行太慢，而且有时候会忘记最初的指令"
 
-// Step 1: Gemini 拆解为维度
+// Step 1: Agy 拆解为维度
 const dimensions = [
   { id: 'DIM-001', description: '执行太慢', keywords: ['慢', '执行'], confidence: 0.9 },
   { id: 'DIM-002', description: '忘记最初指令', keywords: ['忘记', '指令'], confidence: 0.85 }

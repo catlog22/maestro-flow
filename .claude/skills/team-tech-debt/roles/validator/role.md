@@ -48,7 +48,7 @@ Execute 4-layer validation (all commands in worktree):
 - Count error occurrences
 
 **4. Quality Analysis** (optional, when > 5 modified files):
-- Use gemini CLI to compare code quality before/after
+- Use agy CLI to compare code quality before/after
 - Assess complexity, duplication, naming quality improvements
 
 **Debt Score Calculation**:
@@ -64,7 +64,7 @@ Execute 4-layer validation (all commands in worktree):
   MODE: write
   CONTEXT: @${modifiedFiles.join(' @')}
   EXPECTED: Fixed regressions
-  CONSTRAINTS: Fix only regressions | Preserve debt cleanup changes | No suppressions" --tool gemini --mode write`,
+  CONSTRAINTS: Fix only regressions | Preserve debt cleanup changes | No suppressions" --tool agy --mode write`,
     run_in_background: false
   })
   ```

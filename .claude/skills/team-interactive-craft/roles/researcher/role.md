@@ -30,7 +30,7 @@ Analyze existing interactive components, audit browser API usage, and collect re
 | backdrop-filter in CSS | Glass/frosted effects |
 | clip-path in CSS | Reveal/mask animations |
 
-3. Use CLI tools (e.g., `maestro delegate "..." --to gemini --mode analysis`) or direct tools (Glob, Grep) to scan for existing interactive components, animation patterns, event handling approaches
+3. Use CLI tools (e.g., `maestro delegate "..." --to agy --mode analysis`) or direct tools (Glob, Grep) to scan for existing interactive components, animation patterns, event handling approaches
 4. Read interaction type context from session config
 
 ## Phase 3: Research Execution

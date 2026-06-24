@@ -256,7 +256,7 @@ Load available tools: `maestro delegate-config show --json` → extract enabled 
 AskUserQuestion({
   questions: [
     {
-      question: "任务如何执行？选择一种方式，或 Other 指定域路由规则（如 '前端gemini 后端codex 其余agent'）",
+      question: "任务如何执行？选择一种方式，或 Other 指定域路由规则（如 '前端agy 后端codex 其余agent'）",
       header: "Executor",
       options: [
         { label: "Auto (Recommended)", description: "域路由: frontend→{frontendTool}, backend→{backendTool}, general→agent" },
@@ -304,7 +304,7 @@ Resolution: `execution_config.domain_routing[domain]` → fallback `domain_routi
 
 Log routing per task:
 ```
-T1 [frontend] → gemini
+T1 [frontend] → agy
 T2 [backend]  → codex
 T3 [general]  → agent
 ```
@@ -354,7 +354,7 @@ Run CLI delegate with `run_in_background: true`, then wait for callback (do NOT 
 #### Step 4: Per-Task Evidence
 
 Per completed task:
-- Record evidence: `{"phase":"execution","type":"task-completed","task_id":"T1","executor":"agent|gemini|...","files_modified":[],"summary":"","attempt":1}`
+- Record evidence: `{"phase":"execution","type":"task-completed","task_id":"T1","executor":"agent|agy|...","files_modified":[],"summary":"","attempt":1}`
 - Update task status in session.json plan
 
 #### Step 5: Post-Execution Validation

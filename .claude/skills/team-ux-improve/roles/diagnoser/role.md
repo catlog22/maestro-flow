@@ -36,7 +36,7 @@ For complex multi-file state management issues:
 Bash(`maestro delegate "PURPOSE: Analyze state management patterns and identify root causes
 CONTEXT: @<issue-files>
 EXPECTED: Root cause analysis with fix recommendations
-CONSTRAINTS: Focus on reactive update patterns" --tool gemini --mode analysis`)
+CONSTRAINTS: Focus on reactive update patterns" --tool agy --mode analysis`)
 ```
 
 ## Phase 3: Root Cause Analysis

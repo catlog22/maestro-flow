@@ -54,7 +54,7 @@ Write to: <session>/solutions/solution-<issueId>.json
 Then bind: ccw issue bind <issueId> <solution_id>
 
 CONSTRAINTS: Follow existing patterns | Minimal changes | Address reviewer feedback if SOLVE-fix task
-\" --tool gemini --mode analysis", { run_in_background: false })
+\" --tool agy --mode analysis", { run_in_background: false })
 ```
 
 **Expected CLI output**: Solution file path and binding confirmation

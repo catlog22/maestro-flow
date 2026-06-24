@@ -367,11 +367,11 @@ Write(`${workDir}/state.json`, JSON.stringify(consolidated, null, 2));
 
 ---
 
-## General Optimization Areas (via Gemini CLI)
+## General Optimization Areas (via Agy CLI)
 
-For issues in these categories, use Gemini CLI for custom analysis:
+For issues in these categories, use Agy CLI for custom analysis:
 
-| Category | Issues | Gemini Analysis |
+| Category | Issues | Agy Analysis |
 |----------|--------|-----------------|
 | Prompt Engineering | Vague instructions, format drift | prompt optimization, structured output |
 | Architecture | Phase overlap, tight coupling | phase_decomposition, interface_contracts |
@@ -380,7 +380,7 @@ For issues in these categories, use Gemini CLI for custom analysis:
 | Output Quality | Inconsistent results | quality_gates, output_validation |
 | User Experience | No progress visibility | progress_tracking, interactive_checkpoints |
 
-**Gemini CLI Template**:
+**Agy CLI Template**:
 ```bash
 maestro delegate "
 PURPOSE: [optimization goal for skill at ${skillPath}]
@@ -388,5 +388,5 @@ TASK: • [specific analysis steps]
 MODE: analysis
 CONTEXT: @${skillPath}/**/*
 EXPECTED: [specific deliverable]
-" --tool gemini --mode analysis
+" --tool agy --mode analysis
 ```

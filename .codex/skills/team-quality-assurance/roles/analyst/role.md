@@ -34,7 +34,7 @@ Analyze defect patterns, coverage gaps, test effectiveness, and generate compreh
 | Data Points | Mode |
 |-------------|------|
 | <= 5 issues + results | Direct inline analysis |
-| > 5 | CLI-assisted deep analysis via gemini |
+| > 5 | CLI-assisted deep analysis via agy |
 
 ## Phase 3: Multi-Dimensional Analysis
 

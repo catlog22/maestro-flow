@@ -29,7 +29,7 @@ Suitable for long-running CLI commands.
 ```javascript
 // CLI call - asynchronous
 const task = Bash({
-  command: 'maestro delegate "..." --to gemini --mode analysis',
+  command: 'maestro delegate "..." --to agy --mode analysis',
   run_in_background: true  // Key: background execution
 });
 
@@ -44,7 +44,7 @@ const task = Bash({
 ### Basic Command Structure
 
 ```bash
-maestro delegate "<PROMPT>" --to <gemini|qwen|codex> --mode <analysis|write>
+maestro delegate "<PROMPT>" --to <agy|qwen|codex> --mode <analysis|write>
 ```
 
 ### Parameter Description
@@ -52,7 +52,7 @@ maestro delegate "<PROMPT>" --to <gemini|qwen|codex> --mode <analysis|write>
 | Parameter | Required | Description |
 |-----------|----------|-------------|
 | `-p "<prompt>"` | Yes | Prompt text (use double quotes) |
-| `--tool <tool>` | Yes | Tool selection: gemini, qwen, codex |
+| `--tool <tool>` | Yes | Tool selection: agy, qwen, codex |
 | `--mode <mode>` | Yes | Execution mode: analysis, write |
 | `--cd <path>` | - | Working directory |
 | `--includeDirs <dirs>` | - | Additional directories (comma-separated) |
@@ -149,13 +149,13 @@ Deep analysis of src/auth/ module:
 ```javascript
 // Save session ID
 const session = Bash({
-  command: 'maestro delegate "Initial analysis..." --to gemini --mode analysis',
+  command: 'maestro delegate "Initial analysis..." --to agy --mode analysis',
   run_in_background: true
 });
 
 // Resume later
 const continuation = Bash({
-  command: `maestro delegate "Continue analysis..." --to gemini --mode analysis --resume ${session.id}`,
+  command: `maestro delegate "Continue analysis..." --to agy --mode analysis --resume ${session.id}`,
   run_in_background: true
 });
 ```
@@ -165,7 +165,7 @@ const continuation = Bash({
 ```javascript
 // Merge context from multiple sessions
 const merged = Bash({
-  command: `maestro delegate "Aggregate analysis..." --to gemini --mode analysis --resume ${id1},${id2}`,
+  command: `maestro delegate "Aggregate analysis..." --to agy --mode analysis --resume ${id1},${id2}`,
   run_in_background: true
 });
 ```
@@ -188,7 +188,7 @@ TASK: Identify modules, dependencies, entry points
 MODE: analysis
 CONTEXT: @src/**/*
 EXPECTED: JSON format structure report
-" --tool gemini --mode analysis --cd ${context.projectRoot}`,
+" --tool agy --mode analysis --cd ${context.projectRoot}`,
     run_in_background: true,
     timeout: 600000
   });
@@ -224,7 +224,7 @@ async function runCLI(step, context, resumeFlag = '') {
   };
 
   const result = Bash({
-    command: `maestro delegate "${prompts[step]}" --to gemini --mode analysis ${resumeFlag}`,
+    command: `maestro delegate "${prompts[step]}" --to agy --mode analysis ${resumeFlag}`,
     run_in_background: true
   });
 
@@ -239,8 +239,8 @@ Independent tasks executed in parallel.
 ```javascript
 async function executeParallel(context) {
   const tasks = [
-    { type: 'structure', tool: 'gemini' },
-    { type: 'dependencies', tool: 'gemini' },
+    { type: 'structure', tool: 'agy' },
+    { type: 'dependencies', tool: 'agy' },
     { type: 'patterns', tool: 'qwen' }
   ];
 
@@ -267,7 +267,7 @@ Automatically switch tools on failure.
 
 ```javascript
 async function executeWithFallback(context) {
-  const tools = ['gemini', 'qwen', 'codex'];
+  const tools = ['agy', 'qwen', 'codex'];
   let result = null;
 
   for (const tool of tools) {
@@ -307,7 +307,7 @@ async function runWithTool(tool, context) {
 # Analysis mode - use --rule to auto-load protocol and template (appended to prompt)
 maestro delegate "
 CONSTRAINTS: ...
-..." --tool gemini --mode analysis --rule analysis-code-patterns
+..." --tool agy --mode analysis --rule analysis-code-patterns
 
 # Write mode - use --rule to auto-load protocol and template (appended to prompt)
 maestro delegate "
@@ -419,9 +419,9 @@ CLI calls (Bash + maestro delegate):
 ### 2. Tool Selection
 
 ```
-Analysis tasks: gemini > qwen
-Generation tasks: codex > gemini > qwen
-Code modification: codex > gemini
+Analysis tasks: agy > qwen
+Generation tasks: codex > agy > qwen
+Code modification: codex > agy
 ```
 
 ### 3. Session Management

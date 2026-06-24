@@ -53,7 +53,7 @@ Iterative test-fix cycle (max 5 iterations):
      Bash(`maestro delegate "PURPOSE: Fix test failures
      CONTEXT: @<test-file> @<source-file>
      EXPECTED: Fixed code that passes tests
-     CONSTRAINTS: Maintain existing functionality" --tool gemini --mode write`)
+     CONSTRAINTS: Maintain existing functionality" --tool agy --mode write`)
      ```
    - Increment iteration counter
    - Loop to step 1

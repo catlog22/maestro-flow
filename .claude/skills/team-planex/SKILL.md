@@ -79,7 +79,7 @@ session_id: <session-id>
 team_name: planex
 requirement: <task-description>
 inner_loop: <true|false>
-execution_method: <codex|gemini>
+execution_method: <codex|agy>
 
 ## Progress Milestones
 session_id: <session-id>

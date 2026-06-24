@@ -17,10 +17,10 @@ Parse plan-and-execute input -> detect input type -> determine execution method 
 | Condition | Execution Method |
 |-----------|-----------------|
 | `--exec=codex` specified | Codex |
-| `--exec=gemini` specified | Gemini |
-| `-y` or `--yes` flag present | Auto (default Gemini) |
+| `--exec=agy` specified | Agy |
+| `-y` or `--yes` flag present | Auto (default Agy) |
 | No flags (interactive) | AskUserQuestion -> user choice |
-| Auto + task_count <= 3 | Gemini |
+| Auto + task_count <= 3 | Agy |
 | Auto + task_count > 3 | Codex |
 
 ## Scope Assessment
@@ -40,7 +40,7 @@ Write <session>/task-analysis.json:
   "task_description": "<original>",
   "input_type": "<issues|text|plan>",
   "raw_input": "<original input>",
-  "execution_method": "<codex|gemini>",
+  "execution_method": "<codex|agy>",
   "issue_count_estimate": 0,
   "complexity": { "score": 0, "level": "Low|Medium|High" },
   "pipeline_type": "plan-execute",

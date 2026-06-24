@@ -23,7 +23,7 @@
       "message_types_sent": ["exploration_ready", "error"],
       "message_types_received": [],
       "commands": ["explore"],
-      "cli_tools": ["gemini"]    },
+      "cli_tools": ["agy"]    },
     "analyst": {
       "name": "analyst",
       "responsibility": "Read-only analysis (深度分析)",
@@ -32,7 +32,7 @@
       "message_types_sent": ["analysis_ready", "error"],
       "message_types_received": [],
       "commands": ["analyze"],
-      "cli_tools": ["gemini", "codex", "claude"]
+      "cli_tools": ["agy", "codex", "claude"]
     },
     "discussant": {
       "name": "discussant",
@@ -42,8 +42,8 @@
       "message_types_sent": ["discussion_processed", "error"],
       "message_types_received": [],
       "commands": ["deepen"],
-      "cli_tools": ["gemini"],
-      "cli_tools": ["gemini"]    },
+      "cli_tools": ["agy"],
+      "cli_tools": ["agy"]    },
     "synthesizer": {
       "name": "synthesizer",
       "responsibility": "Read-only analysis (综合结论)",
@@ -121,9 +121,9 @@
   },
 
   "analysis_perspectives": {
-    "technical": { "tool": "gemini", "focus": "Implementation, code patterns, technical feasibility" },
+    "technical": { "tool": "agy", "focus": "Implementation, code patterns, technical feasibility" },
     "architectural": { "tool": "claude", "focus": "System design, scalability, component interactions" },
     "business": { "tool": "codex", "focus": "Value, ROI, stakeholder impact, strategy" },
-    "domain_expert": { "tool": "gemini", "focus": "Domain-specific patterns, best practices, standards" }
+    "domain_expert": { "tool": "agy", "focus": "Domain-specific patterns, best practices, standards" }
   }
 }

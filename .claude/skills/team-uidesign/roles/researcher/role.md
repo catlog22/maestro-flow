@@ -29,7 +29,7 @@ Analyze existing design system, build component inventory, assess accessibility 
 | @shadcn/ui | shadcn |
 | (default) | html-tailwind |
 
-3. Use CLI tools (e.g., `maestro delegate "..." --to gemini --mode analysis`) or direct tools (Glob, Grep) to scan for existing design tokens, component files, styling patterns
+3. Use CLI tools (e.g., `maestro delegate "..." --to agy --mode analysis`) or direct tools (Glob, Grep) to scan for existing design tokens, component files, styling patterns
 4. Read industry context from session config (industry, strictness, must-have features)
 5. **Context-First Protocol**: Before any design work, ensure these are known (extract from task description, or ask coordinator to clarify):
    - **Target audience**: Who uses it, in what context? (e.g., developers, end users, admins)

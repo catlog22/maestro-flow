@@ -36,7 +36,7 @@ For complex multi-component solutions:
 Bash(`maestro delegate "PURPOSE: Design comprehensive feedback mechanism for multi-step form
 CONTEXT: @<component-files>
 EXPECTED: Complete design with state flow diagram and code patterns
-CONSTRAINTS: Must support React hooks" --tool gemini --mode analysis`)
+CONSTRAINTS: Must support React hooks" --tool agy --mode analysis`)
 ```
 
 ## Phase 3: Solution Design

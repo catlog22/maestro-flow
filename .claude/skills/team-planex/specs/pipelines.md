@@ -61,10 +61,10 @@ callback <-- executor impl_complete ---------------------+
 | Condition | Execution Method |
 |-----------|-----------------|
 | `--exec=codex` specified | codex |
-| `--exec=gemini` specified | gemini |
-| `-y` or `--yes` flag present | Auto (default gemini) |
+| `--exec=agy` specified | agy |
+| `-y` or `--yes` flag present | Auto (default agy) |
 | No flags (interactive) | AskUserQuestion -> user choice |
-| Auto + task_count <= 3 | gemini |
+| Auto + task_count <= 3 | agy |
 | Auto + task_count > 3 | codex |
 
 ## Input Type Detection

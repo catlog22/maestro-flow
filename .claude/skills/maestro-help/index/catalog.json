@@ -126,7 +126,7 @@
     {"name": "scholar-ideation", "category": "scholar", "description": "研究构思 — 文献搜索到研究规划", "source": "../scholar-ideation/SKILL.md"},
     {"name": "scholar-latex-organizer", "category": "scholar", "description": "LaTeX 模板整理 — 会议模板 .zip 清理为 Overleaf 就绪结构", "source": "../scholar-latex-organizer/SKILL.md"},
     {"name": "scholar-publish", "category": "scholar", "description": "会议发表准备 — 演示文稿、学术海报、推广内容", "source": "../scholar-publish/SKILL.md"},
-    {"name": "scholar-rebuttal-pro", "category": "scholar", "description": "审稿回复 — Gemini/CLI 协作分析 + 多视角讨论 + 证据策略", "source": "../scholar-rebuttal-pro/SKILL.md"},
+    {"name": "scholar-rebuttal-pro", "category": "scholar", "description": "审稿回复 — Agy/CLI 协作分析 + 多视角讨论 + 证据策略", "source": "../scholar-rebuttal-pro/SKILL.md"},
     {"name": "scholar-review", "category": "scholar", "description": "学术论文审查 — 投稿前自审 + 收到评审后的回复写作", "source": "../scholar-review/SKILL.md"},
     {"name": "scholar-thesis-docx", "category": "scholar", "description": "学位论文 Word 文档 — 生成、修订、格式化严格学术排版", "source": "../scholar-thesis-docx/SKILL.md"},
     {"name": "scholar-writing", "category": "scholar", "description": "端到端学术论文写作 — 从研究仓库到出版级 LaTeX 手稿", "source": "../scholar-writing/SKILL.md"}

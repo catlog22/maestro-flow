@@ -1,6 +1,6 @@
 # Evaluation Prompt Template
 
-Phase 03 使用此模板构造 maestro delegate 提示词，让 Gemini 按多维度评估 skill 质量。
+Phase 03 使用此模板构造 maestro delegate 提示词，让 Agy 按多维度评估 skill 质量。
 
 ## Template
 

@@ -242,6 +242,6 @@ AskUserQuestion({
 | Teammate unresponsive | Send follow-up, 2x -> respawn |
 | Explorer finds nothing | Continue with limited context, note limitation |
 | Discussion loop stuck >5 rounds | Force synthesis, offer continuation |
-| CLI unavailable | Fallback chain: gemini -> codex -> claude |
+| CLI unavailable | Fallback chain: agy -> codex -> claude |
 | User timeout in discussion | Save state, show resume command |
 | Session folder conflict | Append timestamp suffix |

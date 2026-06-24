@@ -18,9 +18,9 @@
 
 ## Execution
 
-### Phase 1: 维度拆解 (Gemini CLI)
+### Phase 1: 维度拆解 (Agy CLI)
 
-调用 Gemini 对用户描述进行语义分析，拆解为独立维度：
+调用 Agy 对用户描述进行语义分析，拆解为独立维度：
 
 ```javascript
 async function analyzeDimensions(state, workDir) {
@@ -69,9 +69,9 @@ RULES:
 - 如果用户描述非常模糊，至少提取一个 "general" 维度
 `;
 
-  const cliCommand = `maestro delegate "${escapeForShell(prompt)}" --to gemini --mode analysis --cd "${state.target_skill.path}"`;
+  const cliCommand = `maestro delegate "${escapeForShell(prompt)}" --to agy --mode analysis --cd "${state.target_skill.path}"`;
   
-  console.log('Phase 1: 执行 Gemini 维度拆解分析...');
+  console.log('Phase 1: 执行 Agy 维度拆解分析...');
   
   const result = Bash({
     command: cliCommand,
@@ -107,7 +107,7 @@ function matchSpecs(dimensions) {
       taxonomy_match: taxonomyMatch,
       strategy_match: strategyMatch,
       has_fix: hasFix,
-      needs_gemini_analysis: taxonomyMatch === null || mappings.categories[dim.inferred_category]?.needs_gemini_analysis
+      needs_agy_analysis: taxonomyMatch === null || mappings.categories[dim.inferred_category]?.needs_agy_analysis
     };
   });
 }
@@ -395,12 +395,12 @@ function generateSummary(dimensions, coverage, ambiguities) {
 
 | Error | Recovery |
 |-------|----------|
-| Gemini CLI 超时 | 重试一次，仍失败则使用简化分析 |
+| Agy CLI 超时 | 重试一次，仍失败则使用简化分析 |
 | JSON 解析失败 | 尝试修复 JSON 或使用默认维度 |
-| 无法匹配任何类别 | 全部归类为 custom，触发 Gemini 深度分析 |
+| 无法匹配任何类别 | 全部归类为 custom，触发 Agy 深度分析 |
 
 ## Next Actions
 
 - 如果 `requirement_analysis.status === 'completed'`: 继续到 `action-diagnose-*`
 - 如果 `requirement_analysis.status === 'needs_clarification'`: 等待用户澄清后重新执行
-- 如果 `coverage.status === 'unsatisfied'`: 自动触发 `action-gemini-analysis` 进行深度分析
+- 如果 `coverage.status === 'unsatisfied'`: 自动触发 `action-agy-analysis` 进行深度分析

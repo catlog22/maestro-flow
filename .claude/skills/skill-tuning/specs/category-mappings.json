@@ -48,7 +48,7 @@
       "strategies": ["structured_prompt", "output_schema", "grounding_context", "format_enforcement"],
       "risk_levels": ["low", "low", "medium", "low"],
       "detection_focus": null,
-      "needs_gemini_analysis": true,
+      "needs_agy_analysis": true,
       "priority_order": [1, 2, 3, 4]
     },
     "architecture": {
@@ -57,7 +57,7 @@
       "strategies": ["phase_decomposition", "interface_contracts", "plugin_architecture", "state_machine"],
       "risk_levels": ["medium", "medium", "high", "medium"],
       "detection_focus": null,
-      "needs_gemini_analysis": true,
+      "needs_agy_analysis": true,
       "priority_order": [1, 2, 3, 4]
     },
     "performance": {
@@ -82,7 +82,7 @@
       "strategies": ["quality_gates", "output_validation", "template_enforcement", "completeness_check"],
       "risk_levels": ["low", "low", "low", "low"],
       "detection_focus": null,
-      "needs_gemini_analysis": true,
+      "needs_agy_analysis": true,
       "priority_order": [1, 2, 3, 4]
     },
     "user_experience": {
@@ -91,7 +91,7 @@
       "strategies": ["progress_tracking", "status_communication", "interactive_checkpoints", "guided_workflow"],
       "risk_levels": ["low", "low", "low", "low"],
       "detection_focus": null,
-      "needs_gemini_analysis": true,
+      "needs_agy_analysis": true,
       "priority_order": [1, 2, 3, 4]
     },
     "token_consumption": {
@@ -279,6 +279,6 @@
     "strategies": ["custom"],
     "risk_levels": ["medium"],
     "has_fix": true,
-    "needs_gemini_analysis": true
+    "needs_agy_analysis": true
   }
 }

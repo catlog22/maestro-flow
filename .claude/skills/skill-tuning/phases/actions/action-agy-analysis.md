@@ -1,6 +1,6 @@
-# Action: Gemini Analysis
+# Action: Agy Analysis
 
-动态调用 Gemini CLI 进行深度分析，根据用户需求或诊断结果选择分析类型。
+动态调用 Agy CLI 进行深度分析，根据用户需求或诊断结果选择分析类型。
 
 ## Role
 
@@ -13,7 +13,7 @@
 
 - `state.status === 'running'`
 - 满足以下任一条件:
-  - `state.gemini_analysis_requested === true` (用户请求)
+  - `state.agy_analysis_requested === true` (用户请求)
   - `state.issues.some(i => i.severity === 'critical')` (发现严重问题)
   - `state.analysis_type !== null` (已指定分析类型)
 
@@ -146,7 +146,7 @@ RULES: ${state.custom_analysis_rules || 'Follow best practices'}
 ## Execution
 
 ```javascript
-async function executeGeminiAnalysis(state, workDir) {
+async function executeAgyAnalysis(state, workDir) {
   // 1. 确定分析类型
   const analysisType = state.analysis_type || determineAnalysisType(state);
 
@@ -154,9 +154,9 @@ async function executeGeminiAnalysis(state, workDir) {
   const prompt = buildAnalysisPrompt(analysisType, state);
 
   // 3. 构建 CLI 命令
-  const cliCommand = `maestro delegate "${escapeForShell(prompt)}" --to gemini --mode analysis --cd "${state.target_skill.path}"`;
+  const cliCommand = `maestro delegate "${escapeForShell(prompt)}" --to agy --mode analysis --cd "${state.target_skill.path}"`;
 
-  console.log(`Executing Gemini analysis: ${analysisType}`);
+  console.log(`Executing Agy analysis: ${analysisType}`);
   console.log(`Command: ${cliCommand}`);
 
   // 4. 执行 CLI (后台运行)
@@ -172,7 +172,7 @@ async function executeGeminiAnalysis(state, workDir) {
 
   return {
     stateUpdates: {
-      gemini_analysis: {
+      agy_analysis: {
         type: analysisType,
         status: 'running',
         started_at: new Date().toISOString(),
@@ -180,7 +180,7 @@ async function executeGeminiAnalysis(state, workDir) {
       }
     },
     outputFiles: [],
-    summary: `Gemini ${analysisType} analysis started in background`
+    summary: `Agy ${analysisType} analysis started in background`
   };
 }
 
@@ -263,7 +263,7 @@ function escapeForShell(str) {
 
 ```javascript
 {
-  gemini_analysis: {
+  agy_analysis: {
     type: 'root_cause' | 'architecture' | 'prompt_optimization' | 'performance' | 'custom',
     status: 'running' | 'completed' | 'failed',
     started_at: '2024-01-01T00:00:00Z',
@@ -282,8 +282,8 @@ function escapeForShell(str) {
 
 ### Output Files
 
-- `${workDir}/diagnosis/gemini-analysis-${type}.json` - 原始分析结果
-- `${workDir}/diagnosis/gemini-analysis-${type}.md` - 格式化报告
+- `${workDir}/diagnosis/agy-analysis-${type}.json` - 原始分析结果
+- `${workDir}/diagnosis/agy-analysis-${type}.md` - 格式化报告
 
 ## Post-Execution
 
@@ -297,7 +297,7 @@ function escapeForShell(str) {
 
 | Error | Recovery |
 |-------|----------|
-| CLI 超时 | 重试一次，仍失败则跳过 Gemini 分析 |
+| CLI 超时 | 重试一次，仍失败则跳过 Agy 分析 |
 | 解析失败 | 保存原始输出，手动处理 |
 | 无结果 | 标记为 skipped，继续流程 |
 
@@ -308,7 +308,7 @@ function escapeForShell(str) {
 ```javascript
 AskUserQuestion({
   questions: [{
-    question: '请选择 Gemini 分析类型',
+    question: '请选择 Agy 分析类型',
     header: '分析类型',
     options: [
       { label: '问题根因分析', description: '深度分析用户描述的问题' },

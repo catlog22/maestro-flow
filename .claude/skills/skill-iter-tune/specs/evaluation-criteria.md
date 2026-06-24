@@ -1,6 +1,6 @@
 # Evaluation Criteria
 
-Skill 质量评估标准，由 Phase 03 (Evaluate) 引用。Gemini 按此标准对 skill 产出物进行多维度评分。
+Skill 质量评估标准，由 Phase 03 (Evaluate) 引用。Agy 按此标准对 skill 产出物进行多维度评分。
 
 ## Dimensions
 

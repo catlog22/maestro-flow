@@ -3,7 +3,7 @@ role: executor
 prefix: EXEC
 inner_loop: true
 cli_tools:
-  - gemini --mode write
+  - agy --mode write
 message_types:
   success: exec_complete
   progress: exec_progress
@@ -53,7 +53,7 @@ Execute waves sequentially, tasks within each wave can be parallel.
    MODE: write
    CONTEXT: @${files.join(' @')} | Memory: ${priorSummaries}
    EXPECTED: Working code changes matching convergence criteria
-   CONSTRAINTS: ${convergenceCriteria}" --tool gemini --mode write`,
+   CONSTRAINTS: ${convergenceCriteria}" --tool agy --mode write`,
      run_in_background: false
    })
    ```

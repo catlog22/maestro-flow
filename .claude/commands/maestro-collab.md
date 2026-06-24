@@ -1,7 +1,7 @@
 ---
 name: maestro-collab
 description: Use when a question needs cross-verification from multiple CLI tools or diverse analytical perspectives
-argument-hint: "<requirement> [--tools gemini,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]"
+argument-hint: "<requirement> [--tools agy,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]"
 allowed-tools:
   - Read
   - Write

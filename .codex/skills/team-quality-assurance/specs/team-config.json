@@ -23,8 +23,8 @@
       "message_types_sent": ["scan_ready", "issues_found", "error"],
       "message_types_received": [],
       "commands": ["scan"],
-      "cli_tools": ["gemini"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"],
+      "cli_tools": ["agy"]
     },
     "strategist": {
       "name": "strategist",
@@ -34,8 +34,8 @@
       "message_types_sent": ["strategy_ready", "error"],
       "message_types_received": [],
       "commands": ["analyze-scope"],
-      "cli_tools": ["gemini"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"],
+      "cli_tools": ["agy"]
     },
     "generator": {
       "name": "generator",
@@ -45,8 +45,8 @@
       "message_types_sent": ["tests_generated", "tests_revised", "error"],
       "message_types_received": [],
       "commands": ["generate-tests"],
-      "cli_tools": ["gemini"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"],
+      "cli_tools": ["agy"]
     },
     "executor": {
       "name": "executor",
@@ -56,7 +56,7 @@
       "message_types_sent": ["tests_passed", "tests_failed", "coverage_report", "error"],
       "message_types_received": [],
       "commands": ["run-fix-cycle"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"]
     },
     "analyst": {
       "name": "analyst",
@@ -66,7 +66,7 @@
       "message_types_sent": ["analysis_ready", "quality_report", "error"],
       "message_types_received": [],
       "commands": ["quality-report"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"]
     }
   },
 

@@ -1,7 +1,7 @@
 ---
 name: maestro-collab
 description: Use when a question needs cross-verification from multiple CLI tools or diverse analytical perspectives
-argument-hint: "\"<requirement>\" [--tools gemini,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]"
+argument-hint: "\"<requirement>\" [--tools agy,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]"
 allowed-tools: Read, Write, Edit, Glob, Grep, request_user_input
 ---
 
@@ -146,7 +146,7 @@ multi_tool_use.parallel({
     {
       recipient_name: "functions.exec_command",
       parameters: {
-        cmd: "maestro delegate \"<shared_prompt>\" --to gemini --mode <mode> [--rule <rule>]",
+        cmd: "maestro delegate \"<shared_prompt>\" --to agy --mode <mode> [--rule <rule>]",
         yield_time_ms: 30000,
         max_output_tokens: 6000
       }

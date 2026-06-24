@@ -45,7 +45,7 @@ For large projects with many components:
 Bash(`maestro delegate "PURPOSE: Discover all UI components with user interactions
 CONTEXT: @<project-path>/**/*.tsx @<project-path>/**/*.vue
 EXPECTED: Component list with interaction types (click, submit, input, select)
-CONSTRAINTS: Focus on interactive components only" --tool gemini --mode analysis`)
+CONSTRAINTS: Focus on interactive components only" --tool agy --mode analysis`)
 ```
 
 ## Phase 3: Component Scanning

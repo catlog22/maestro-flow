@@ -51,7 +51,7 @@ Bash("ccw issue status <issueId> --json")
 | Complexity | Execution |
 |------------|-----------|
 | Low | Direct ACE search: `(project_root_path, query)` |
-| Medium/High | CLI exploration: `Bash("maestro delegate \\\"<exploration_prompt>\" --to gemini --mode analysis", { run_in_background: false })` |
+| Medium/High | CLI exploration: `Bash("maestro delegate \\\"<exploration_prompt>\" --to agy --mode analysis", { run_in_background: false })` |
 
 **CLI exploration prompt template**:
 

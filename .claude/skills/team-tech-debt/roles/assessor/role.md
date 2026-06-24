@@ -29,7 +29,7 @@ Quantitative evaluator for tech debt items. Score each debt item on business imp
 | Item Count | Strategy |
 |------------|----------|
 | <= 10 | Heuristic: severity-based impact + effort-based cost |
-| 11-50 | CLI batch: single gemini analysis call |
+| 11-50 | CLI batch: single agy analysis call |
 | > 50 | CLI chunked: batches of 25 items |
 
 **Impact Score Mapping** (heuristic):
@@ -59,7 +59,7 @@ Quantitative evaluator for tech debt items. Score each debt item on business imp
 | <= 3 | <= 2 | backlog |
 | <= 3 | >= 3 | defer |
 
-For CLI mode, prompt gemini with full debt summary requesting JSON array of `{id, impact_score, cost_score, risk_if_unfixed, priority_quadrant}`. Unevaluated items fall back to heuristic scoring.
+For CLI mode, prompt agy with full debt summary requesting JSON array of `{id, impact_score, cost_score, risk_if_unfixed, priority_quadrant}`. Unevaluated items fall back to heuristic scoring.
 
 ### Tech Profile Scan
 

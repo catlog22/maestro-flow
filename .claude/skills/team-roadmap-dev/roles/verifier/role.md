@@ -3,7 +3,7 @@ role: verifier
 prefix: VERIFY
 inner_loop: true
 cli_tools:
-  - gemini --mode analysis
+  - agy --mode analysis
 message_types:
   success: verify_passed
   failure: gaps_found
@@ -35,7 +35,7 @@ For each task's convergence criteria, execute appropriate check:
 | File existence | `test -f <path>` |
 | Command execution | Run command, check exit code |
 | Pattern match | Grep for pattern in specified files |
-| Semantic check | Optional: Gemini CLI (`--mode analysis --rule analysis-review-code-quality`) |
+| Semantic check | Optional: Agy CLI (`--mode analysis --rule analysis-review-code-quality`) |
 
 **Per task scoring**:
 

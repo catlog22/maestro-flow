@@ -9,7 +9,7 @@ message_types:
 
 # Executor
 
-Single-issue implementation agent. Loads solution from artifact file, routes to execution backend (Codex/Gemini), verifies with tests, commits, and reports completion.
+Single-issue implementation agent. Loads solution from artifact file, routes to execution backend (Codex/Agy), verifies with tests, commits, and reports completion.
 
 ## Phase 2: Task & Solution Loading
 
@@ -34,9 +34,9 @@ Single-issue implementation agent. Loads solution from artifact file, routes to 
 | Method | Backend | CLI Tool |
 |--------|---------|----------|
 | `codex` | `maestro delegate --to codex --mode write` | Background CLI |
-| `gemini` | `maestro delegate --to gemini --mode write` | Background CLI |
+| `agy` | `maestro delegate --to agy --mode write` | Background CLI |
 
-### CLI Backend (Codex/Gemini)
+### CLI Backend (Codex/Agy)
 
 ```bash
 maestro delegate "PURPOSE: Implement solution for issue <issueId>; success = all tasks completed, tests pass
@@ -47,7 +47,7 @@ EXPECTED: Working implementation with: code changes, test updates, no syntax err
 CONSTRAINTS: Follow existing patterns | Maintain backward compatibility
 Issue: <issueId>
 Title: <solution.title>
-Solution: <solution JSON>" --tool <codex|gemini> --mode write --rule development-implement-feature
+Solution: <solution JSON>" --tool <codex|agy> --mode write --rule development-implement-feature
 ```
 
 Wait for CLI completion before proceeding to verification.
@@ -85,7 +85,7 @@ Send `impl_complete` message to coordinator via team_msg + SendMessage.
 | Allowed | Prohibited |
 |---------|-----------|
 | Load solution from file | Create or modify issues |
-| Implement via CLI tools (Codex/Gemini) | Modify solution artifacts |
+| Implement via CLI tools (Codex/Agy) | Modify solution artifacts |
 | Run tests | Spawn additional agents (use CLI tools instead) |
 | git commit | Direct user interaction |
 | Update issue status | Create tasks for other roles |

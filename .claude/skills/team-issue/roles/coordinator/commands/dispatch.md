@@ -123,7 +123,7 @@ TaskCreate({
   description: "PURPOSE: Implement solution plan and verify with tests | Success: Code changes committed, tests pass
 TASK:
   - Load bound solution and explorer context
-  - Route to execution backend (Auto/Codex/Gemini)
+  - Route to execution backend (Auto/Codex/Agy)
   - Run tests and verify implementation
   - Commit changes
 CONTEXT:

@@ -1,12 +1,12 @@
 ---
 name: skill-iter-tune
-description: Iterative skill tuning via execute-evaluate-improve feedback loop. Uses maestro delegate Claude to execute skill, Gemini to evaluate quality, and Agent to apply improvements. Iterates until quality threshold or max iterations. Triggers on "skill iter tune", "iterative skill tuning", "tune skill".
+description: Iterative skill tuning via execute-evaluate-improve feedback loop. Uses maestro delegate Claude to execute skill, Agy to evaluate quality, and Agent to apply improvements. Iterates until quality threshold or max iterations. Triggers on "skill iter tune", "iterative skill tuning", "tune skill".
 allowed-tools: Skill, Agent, AskUserQuestion, TaskCreate, TaskUpdate, TaskList, Read, Write, Edit, Bash, Glob, Grep
 ---
 
 # Skill Iter Tune
 
-Iterative skill refinement through execute-evaluate-improve feedback loops. Each iteration runs the skill via Claude, evaluates output via Gemini, and applies improvements via Agent.
+Iterative skill refinement through execute-evaluate-improve feedback loops. Each iteration runs the skill via Claude, evaluates output via Agy, and applies improvements via Agent.
 
 ## Architecture Overview
 
@@ -50,7 +50,7 @@ Phase 4 improves weakest skill(s) in chain
 ## Key Design Principles
 
 1. **Iteration Loop**: Phases 2-3-4 repeat until quality threshold, max iterations, or convergence
-2. **Two-Tool Pipeline**: Claude (write/execute) + Gemini (analyze/evaluate) = complementary perspectives
+2. **Two-Tool Pipeline**: Claude (write/execute) + Agy (analyze/evaluate) = complementary perspectives
 3. **Pure Orchestrator**: SKILL.md coordinates only — execution detail lives in phase files
 4. **Progressive Phase Loading**: Phase docs read only when that phase executes
 5. **Skill Versioning**: Each iteration snapshots skill state before execution
@@ -171,7 +171,7 @@ while (true) {
 
   // === Phase 3: Evaluate ===
   // Read: phases/03-evaluate.md
-  // Construct eval prompt → maestro delegate --to gemini --mode analysis
+  // Construct eval prompt → maestro delegate --to agy --mode analysis
   // Parse score → write iteration-N-eval.md → check termination
 
   // Check termination
@@ -202,7 +202,7 @@ Read and execute: `Ref: phases/02-execute.md`
 Read and execute: `Ref: phases/03-evaluate.md`
 
 - Build evaluation prompt with skill + artifacts + criteria + history
-- Execute: `maestro delegate "..." --to gemini --mode analysis`
+- Execute: `maestro delegate "..." --to agy --mode analysis`
 - Parse 5-dimension score (Clarity, Completeness, Correctness, Effectiveness, Efficiency)
 - Write `iteration-{N}-eval.md`
 - Check termination: score >= threshold | iter >= max | convergence | error limit
@@ -230,7 +230,7 @@ Read and execute: `Ref: phases/05-report.md`
 |-------|----------|---------|---------|
 | 1 | [phases/01-setup.md](phases/01-setup.md) | Initialize workspace and state | TodoWrite 驱动 |
 | 2 | [phases/02-execute.md](phases/02-execute.md) | Execute skill via maestro delegate Claude | TodoWrite 驱动 + 🔄 sentinel |
-| 3 | [phases/03-evaluate.md](phases/03-evaluate.md) | Evaluate via maestro delegate Gemini | TodoWrite 驱动 + 🔄 sentinel |
+| 3 | [phases/03-evaluate.md](phases/03-evaluate.md) | Evaluate via maestro delegate Agy | TodoWrite 驱动 + 🔄 sentinel |
 | 4 | [phases/04-improve.md](phases/04-improve.md) | Apply improvements via Agent | TodoWrite 驱动 + 🔄 sentinel |
 | 5 | [phases/05-report.md](phases/05-report.md) | Generate final report | TodoWrite 驱动 |
 
@@ -261,7 +261,7 @@ Phase 1: Setup
 ┌─→ Phase 2: Execute (maestro delegate claude)
 │   ↓ artifacts/ (skill execution output)
 │   ↓
-│   Phase 3: Evaluate (maestro delegate gemini)
+│   Phase 3: Evaluate (maestro delegate agy)
 │   ↓ score, dimensions[], suggestions[], iteration-N-eval.md
 │   ↓
 │   [Terminate?]─── YES ──→ Phase 5: Report → final-report.md

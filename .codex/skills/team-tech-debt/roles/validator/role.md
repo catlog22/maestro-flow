@@ -48,7 +48,7 @@ Execute 4-layer validation (all commands in worktree):
 - Count error occurrences
 
 **4. Quality Analysis** (optional, when > 5 modified files):
-- Use gemini CLI to compare code quality before/after
+- Use agy CLI to compare code quality before/after
 - Assess complexity, duplication, naming quality improvements
 
 **Debt Score Calculation**:

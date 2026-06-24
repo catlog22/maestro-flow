@@ -45,7 +45,7 @@ MODE: analysis
 CONTEXT: @**/* | Memory: Session context from <session>/wisdom/
 EXPECTED: JSON solution with: title, description, tasks array (each with description, files_touched), estimated_complexity
 CONSTRAINTS: Follow project patterns | Reference existing implementations
-" --tool gemini --mode analysis --rule planning-breakdown-task-steps
+" --tool agy --mode analysis --rule planning-breakdown-task-steps
 ```
 
 Parse CLI output to extract solution JSON. If CLI fails, fallback to `ccw issue solution <issueId> --json`.

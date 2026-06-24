@@ -100,7 +100,7 @@ Review Analysis Summary:
 > 2. Full protocol (Step 2.X — 2.4) is in active memory, not just sentinel
 > If only sentinel remains → `Read("phases/02-multi-perspective-discussion.md")` now.
 
-Use Gemini CLI to simulate three perspectives discussing each major issue:
+Use Agy CLI to simulate three perspectives discussing each major issue:
 
 ```bash
 # For each major issue, run multi-perspective analysis
@@ -148,7 +148,7 @@ EXPECTED: JSON with {
     'priority': '...',
     'sourceStrategyId': 0
   }
-}" --tool gemini --mode analysis --rule analysis-review-architecture
+}" --tool agy --mode analysis --rule analysis-review-architecture
 ```
 
 **Alternative: Use team-ultra-analyze skill**

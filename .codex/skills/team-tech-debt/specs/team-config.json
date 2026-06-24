@@ -23,7 +23,7 @@
       "message_types_sent": ["scan_complete", "debt_items_found", "error"],
       "message_types_received": [],
       "commands": ["scan-debt"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"]
     },
     "assessor": {
       "name": "assessor",
@@ -33,7 +33,7 @@
       "message_types_sent": ["assessment_complete", "error"],
       "message_types_received": [],
       "commands": ["evaluate"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"]
     },
     "planner": {
       "name": "planner",
@@ -43,7 +43,7 @@
       "message_types_sent": ["plan_ready", "plan_revision", "error"],
       "message_types_received": [],
       "commands": ["create-plan"],
-      "cli_tools": ["gemini"]
+      "cli_tools": ["agy"]
     },
     "executor": {
       "name": "executor",
@@ -53,7 +53,7 @@
       "message_types_sent": ["fix_complete", "fix_progress", "error"],
       "message_types_received": [],
       "commands": ["remediate"],
-      "cli_tools": [{"tool": "gemini", "mode": "write"}]
+      "cli_tools": [{"tool": "agy", "mode": "write"}]
     },
     "validator": {
       "name": "validator",
@@ -63,7 +63,7 @@
       "message_types_sent": ["validation_complete", "regression_found", "error"],
       "message_types_received": [],
       "commands": ["verify"],
-      "cli_tools": [{"tool": "gemini", "mode": "write"}]
+      "cli_tools": [{"tool": "agy", "mode": "write"}]
     }
   },
 

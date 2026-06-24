@@ -25,9 +25,9 @@ Read state → Select action → Execute → Update → Repeat until termination
 | 1 | `status === 'pending'` | action-init |
 | 2 | Init done, req analysis missing | action-analyze-requirements |
 | 3 | Req needs clarification | null (wait) |
-| 4 | Req coverage unsatisfied | action-gemini-analysis |
-| 5 | Gemini requested/critical issues | action-gemini-analysis |
-| 6 | Gemini running | null (wait) |
+| 4 | Req coverage unsatisfied | action-agy-analysis |
+| 5 | Agy requested/critical issues | action-agy-analysis |
+| 6 | Agy running | null (wait) |
 | 7 | Diagnosis pending (in order) | action-diagnose-{type} |
 | 8 | All diagnosis done, no report | action-generate-report |
 | 9 | Report done, issues exist | action-propose-fixes |
@@ -38,8 +38,8 @@ Read state → Select action → Execute → Update → Repeat until termination
 
 **Diagnosis Order**: context → memory → dataflow → agent → docs → token_consumption
 
-**Gemini Triggers**:
-- `gemini_analysis_requested === true`
+**Agy Triggers**:
+- `agy_analysis_requested === true`
 - Critical issues detected
 - Focus areas include: architecture, prompt, performance, custom
 - Second iteration with unresolved issues
@@ -157,7 +157,7 @@ Return JSON: { stateUpdates: {}, outputFiles: [], summary: "..." }
 | action-init | status='pending' |
 | action-analyze-requirements | Init complete, not done |
 | action-diagnose-* | status='running', focus area includes type |
-| action-gemini-analysis | Requested OR critical issues OR high complexity |
+| action-agy-analysis | Requested OR critical issues OR high complexity |
 | action-generate-report | All diagnosis complete |
 | action-propose-fixes | Report generated, issues > 0 |
 | action-apply-fix | pending_fixes > 0 |

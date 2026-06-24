@@ -38,7 +38,7 @@ Implementation backend selection:
 
 | Backend | Condition | Method |
 |---------|-----------|--------|
-| CLI | Complex multi-file changes | `maestro delegate --to gemini --mode write` |
+| CLI | Complex multi-file changes | `maestro delegate --to agy --mode write` |
 | Direct | Simple single-file changes | Inline Edit/Write |
 
 ### CLI Implementation (Complex)
@@ -51,7 +51,7 @@ TASK:
   - Update UI bindings for button and error display
 CONTEXT: @src/components/Upload.tsx
 EXPECTED: Modified Upload.tsx with complete implementation
-CONSTRAINTS: Maintain existing code style" --tool gemini --mode write`)
+CONSTRAINTS: Maintain existing code style" --tool agy --mode write`)
 ```
 
 ### Direct Implementation (Simple)

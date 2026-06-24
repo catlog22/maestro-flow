@@ -130,7 +130,7 @@ if (!autoYes) {
 ### Step 6: Analyze Codebase and Generate Phased Roadmap
 
 ```javascript
-// Use Gemini CLI (or CLI exploration tool) to analyze the codebase
+// Use Agy CLI (or CLI exploration tool) to analyze the codebase
 // and generate a phased breakdown based on goal + project context
 Bash({
   command: `maestro delegate "PURPOSE: Analyze codebase and generate phased execution roadmap for: ${projectGoal}
@@ -143,7 +143,7 @@ MODE: analysis
 CONTEXT: @**/* | Memory: Tech stack: ${projectTech.tech_stack?.join(', ')}
 EXPECTED: Phased roadmap in markdown with REQ-IDs and testable success criteria
 CONSTRAINTS: Max 5 phases | Each phase independently verifiable | No implementation details" \
-  --tool gemini --mode analysis --rule planning-breakdown-task-steps`,
+  --tool agy --mode analysis --rule planning-breakdown-task-steps`,
   run_in_background: false,
   timeout: 300000
 })
