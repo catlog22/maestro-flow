@@ -256,7 +256,7 @@ function formatEntryClean(e: SpecEntryParsed): string {
     const refStem = e.ref.replace(/^knowhow\//, '').replace(/\.md$/, '');
     const refSlug = refStem.replace(/^(KNW|TIP|TPL|RCP|REF|DCS|AST|BLP|DOC)-/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     const refId = `knowhow-${refSlug}`;
-    refLine = `\n\u2192 Detail: maestro wiki load ${refId}`;
+    refLine = `\n\u2192 Detail: maestro load --type knowhow --id ${refId}`;
   }
 
   const idx = e.content.indexOf('\n');

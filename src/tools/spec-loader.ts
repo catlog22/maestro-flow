@@ -402,7 +402,7 @@ function formatRefEntry(e: SpecEntryParsed, workflowRoot?: string): string {
     summary = summary.slice(0, 200).replace(/\s+/g, ' ').trim();
   }
 
-  return `### ${e.title}\n\n${summary}\n\n\u2192 Detail: maestro wiki load ${refId}`;
+  return `### ${e.title}\n\n${summary}\n\n\u2192 Detail: maestro load --type knowhow --id ${refId}`;
 }
 
 /**
@@ -476,7 +476,7 @@ function discoverKnowhowTools(workflowRoot: string, category: SpecCategory): { c
   if (tools.length === 0) return null;
 
   const content = `## Available Tools (${category})\n\n` +
-    tools.map(t => `### ${t.title} (tool)\n\n${t.summary}\n\n→ Load: maestro wiki load ${t.id}`).join('\n\n---\n\n');
+    tools.map(t => `### ${t.title} (tool)\n\n${t.summary}\n\n→ Load: maestro load --type knowhow --id ${t.id}`).join('\n\n---\n\n');
 
   return { content, count: tools.length };
 }

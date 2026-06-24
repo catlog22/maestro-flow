@@ -2,13 +2,15 @@
  * Search Command — Unified knowledge search across wiki + code.
  *
  * Default: mixed results (wiki + code interleaved by normalized score).
- * --code: separate section display (backward compat).
+ * --code: code graph results only (no wiki).
  * --wiki-only: wiki results only (no code search).
  *
  * Scoring: multi-signal normalization inspired by codebase-memory-mcp.
  *   Wiki:  BM25F score + type boost (spec > knowhow > note)
  *   Code:  BM25 score + kind boost + name-match bonus
  *   Merge: percentile-aware normalization + source weight
+ *
+ * Per-source caps: session ≤3, scratch ≤3 to prevent low-value source spam.
  */
 
 import type { Command } from 'commander';
@@ -483,22 +485,6 @@ function pickSubtitle(r: MergedResult): string | null {
     if (!isDuplicate(cleaned, r.name)) return truncate(cleaned, 80);
   }
   return null;
-}
-
-function printWikiResult(r: SearchResult, indent: string, isTTY: boolean, qTerms: string[]): void {
-  const typeTag = `[${r.type}]`;
-  const catTag = r.category ? ` ${r.category}` : '';
-  const wsTag = r.workspace ? ` [ws:${r.workspace}]` : '';
-  const scoreTag = r.score !== null ? `  (${r.score.toFixed(4)})` : '';
-  const title = isTTY ? highlightTerms(r.title, qTerms) : r.title;
-  console.log(`${indent}${typeTag}${catTag}${wsTag}  ${r.id}  ${title}${scoreTag}`);
-  if (r.snippet) {
-    const snippet = isTTY ? highlightTerms(r.snippet, qTerms) : r.snippet;
-    console.log(`${indent}  ${snippet}`);
-  } else if (r.summary) {
-    const summary = isTTY ? highlightTerms(truncate(r.summary, 80), qTerms) : truncate(r.summary, 80);
-    console.log(`${indent}  ${summary}`);
-  }
 }
 
 function printCodeResult(r: CodeSearchResult, indent: string, isTTY: boolean, qTerms: string[]): void {

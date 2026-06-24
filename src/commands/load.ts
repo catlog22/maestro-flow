@@ -106,6 +106,10 @@ export function registerLoadCommand(program: Command): void {
         process.exit(1);
       }
 
+      import('../hooks/spec-analytics.js').then(({ logCliEndpoint }) => {
+        logCliEndpoint(process.cwd(), 'load', { type, category: opts.category, id: opts.id, list: opts.list });
+      }).catch(() => {});
+
       const isList = opts.list === true;
       const ids: string[] = opts.id ? opts.id.split(',').map((s: string) => s.trim()).filter(Boolean) : [];
 

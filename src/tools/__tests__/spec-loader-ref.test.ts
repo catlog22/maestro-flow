@@ -81,7 +81,7 @@ Complete OAuth PKCE flow design with authorization code exchange.
     const result = loadSpecs(testDir, 'learning', undefined, undefined, undefined, TEST_OPTS);
     expect(result.content).toContain('OAuth 2.0 PKCE Integration');
     // Should show the load command hint
-    expect(result.content).toContain('→ Detail: maestro wiki load');
+    expect(result.content).toContain('→ Detail: maestro load --type knowhow --id');
     // The ref ID should be derived from the ref path
     expect(result.content).toContain('knowhow-oauth-flow');
   });
@@ -165,7 +165,7 @@ Complete OAuth PKCE flow. See referenced document.
 
     // Ref entry — summary + load hint
     expect(result.content).toContain('OAuth 2.0 Integration');
-    expect(result.content).toContain('→ Detail: maestro wiki load');
+    expect(result.content).toContain('→ Detail: maestro load --type knowhow --id');
   });
 });
 
