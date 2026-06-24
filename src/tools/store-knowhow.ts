@@ -21,7 +21,7 @@ import type { ToolSchema, CcwToolResult } from '../types/tool-schema.js';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { getProjectRoot } from '../utils/path-validator.js';
-import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
 import {
   KNOWHOW_CATEGORIES as CATEGORIES,
@@ -146,10 +146,11 @@ function executeAdd(params: Params): CcwToolResult {
 let _searchIndexer: WikiIndexer | null = null;
 let _searchIndexerRoot: string | null = null;
 
-function getSearchIndexer(): WikiIndexer {
+async function getSearchIndexer(): Promise<WikiIndexer> {
   const workflowRoot = join(getProjectRoot(), '.workflow');
   if (_searchIndexer && _searchIndexerRoot === workflowRoot) return _searchIndexer;
-  _searchIndexer = new WikiIndexer({ workflowRoot });
+  const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+  _searchIndexer = new Cls({ workflowRoot });
   _searchIndexerRoot = workflowRoot;
   return _searchIndexer;
 }
@@ -179,7 +180,7 @@ async function executeSearch(params: Params): Promise<CcwToolResult> {
 
   let entries: WikiEntry[];
   try {
-    const indexer = getSearchIndexer();
+    const indexer = await getSearchIndexer();
     entries = await indexer.search(query, limit ?? 20);
   } catch (err) {
     return { success: false, error: `WikiIndexer search failed: ${(err as Error).message}` };

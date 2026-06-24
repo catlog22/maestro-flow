@@ -12,7 +12,7 @@ import type { Command } from 'commander';
 import { resolve, join } from 'node:path';
 
 import { truncate } from '../utils/cli-format.js';
-import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
 import type { WikiEntry } from '#maestro-dashboard/wiki/wiki-types.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 
@@ -21,8 +21,9 @@ type LoadType = (typeof VALID_TYPES)[number];
 
 let _indexer: WikiIndexer | null = null;
 
-function getIndexer(): WikiIndexer {
+async function getIndexer(): Promise<WikiIndexer> {
   if (!_indexer) {
+    const { WikiIndexer: Cls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
     const workflowRoot = resolve('.workflow');
     const projectPath = process.cwd();
     const wsConfig = loadWorkspaceConfig(projectPath);
@@ -30,7 +31,7 @@ function getIndexer(): WikiIndexer {
     const linkedWorkspaces = resolved
       .filter(lw => lw.valid)
       .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-    _indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
+    _indexer = new Cls({ workflowRoot, linkedWorkspaces });
   }
   return _indexer;
 }
@@ -119,7 +120,7 @@ export function registerLoadCommand(program: Command): void {
         return;
       }
 
-      const indexer = getIndexer();
+      const indexer = await getIndexer();
       const index = await indexer.get();
       const defaultLimit = isList ? 20 : 10;
       const limit = opts.limit ? parseInt(opts.limit, 10) : defaultLimit;

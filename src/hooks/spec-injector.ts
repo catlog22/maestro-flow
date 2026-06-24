@@ -19,7 +19,7 @@ import { logInjectionEvent } from './spec-analytics.js';
 import { wrapMaestroContext, type ContextSection } from './context-format.js';
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Content → compact lines helper
@@ -316,16 +316,15 @@ export function evaluateSpecInjection(
     inject: true,
   }, config?.analytics);
 
-  // Credibility: increment consumption for injected spec category nodes (best-effort)
-  {
+  // Credibility: increment consumption for injected spec category nodes (best-effort, async)
+  (async () => {
     let mg: import('../graph/kg/engine.js').MaestroGraph | null = null;
     try {
-      const { resolve: resolvePath } = require('node:path');
-      const { MaestroGraph } = require('../graph/kg/engine.js') as typeof import('../graph/kg/engine.js');
+      const { MaestroGraph } = await import('../graph/kg/engine.js');
       if (MaestroGraph.isInitialized(projectPath)) {
-        mg = MaestroGraph.openSync(resolvePath(projectPath));
+        mg = await MaestroGraph.open(resolve(projectPath));
         if (mg) {
-          const { CredibilityStore } = require('../graph/kg/credibility.js') as typeof import('../graph/kg/credibility.js');
+          const { CredibilityStore } = await import('../graph/kg/credibility.js');
           const store = new CredibilityStore(mg.rawDb);
           const nodes = mg.rawDb.prepare(
             `SELECT id FROM nodes WHERE source_type = 'spec' AND category IN (${allCategories.map(() => '?').join(',')})`,
@@ -338,7 +337,7 @@ export function evaluateSpecInjection(
     } catch { /* best-effort */ } finally {
       mg?.close();
     }
-  }
+  })().catch(() => {});
 
   return {
     inject: true,

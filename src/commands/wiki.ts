@@ -15,9 +15,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { truncate, extractSnippet } from '../utils/cli-format.js';
-import { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
-import { WikiWriter, WikiWriteError } from '#maestro-dashboard/wiki/writer.js';
-import { computeHealth, detectOrphans, detectHubs } from '#maestro-dashboard/wiki/graph-analysis.js';
+import type { WikiIndexer } from '#maestro-dashboard/wiki/wiki-indexer.js';
+import type { WikiWriter } from '#maestro-dashboard/wiki/writer.js';
 import type { WikiEntry, WikiFilters, WikiNodeType } from '#maestro-dashboard/wiki/wiki-types.js';
 import { loadWorkspaceConfig, resolveWorkspaceLinks } from '../config/index.js';
 
@@ -32,8 +31,10 @@ const DEFAULT_BASE = process.env.MAESTRO_DASHBOARD_URL ?? 'http://127.0.0.1:3001
 let _indexer: WikiIndexer | null = null;
 let _writer: WikiWriter | null = null;
 
-function getOfflineClients(): { indexer: WikiIndexer; writer: WikiWriter } {
+async function getOfflineClients(): Promise<{ indexer: WikiIndexer; writer: WikiWriter }> {
   if (!_indexer) {
+    const { WikiIndexer: IdxCls } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
+    const { WikiWriter: WrCls } = await import('#maestro-dashboard/wiki/writer.js');
     const workflowRoot = resolve('.workflow');
     const projectPath = process.cwd();
     const wsConfig = loadWorkspaceConfig(projectPath);
@@ -41,8 +42,8 @@ function getOfflineClients(): { indexer: WikiIndexer; writer: WikiWriter } {
     const linkedWorkspaces = resolved
       .filter(lw => lw.valid)
       .map(lw => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
-    _indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
-    _writer = new WikiWriter(workflowRoot, _indexer);
+    _indexer = new IdxCls({ workflowRoot, linkedWorkspaces });
+    _writer = new WrCls(workflowRoot, _indexer);
   }
   return { indexer: _indexer!, writer: _writer! };
 }
@@ -111,7 +112,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const filters: WikiFilters & { scope?: WikiScope } = {};
       if (opts.type) filters.type = opts.type as WikiNodeType;
       if (opts.scope) filters.scope = opts.scope as WikiScope;
@@ -186,7 +187,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const index = await indexer.get();
       const entry = index.byId[id];
       if (!entry) {
@@ -214,7 +215,7 @@ export function registerWikiCommand(program: Command): void {
     .description('Load specific wiki documents by ID array — use after "wiki list --category" to select relevant docs')
     .option('--json', 'Output as JSON')
     .action(async (ids: string[], opts) => {
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const index = await indexer.get();
 
       const entries = ids
@@ -279,7 +280,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const entries = await indexer.search(q);
       if (opts.json) {
         console.log(JSON.stringify({ entries }, null, 2));
@@ -326,9 +327,10 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const index = await indexer.get();
       const graph = await indexer.getGraph();
+      const { computeHealth } = await import('#maestro-dashboard/wiki/graph-analysis.js');
       const data = computeHealth(index, graph);
       if (opts.json) {
         console.log(JSON.stringify(data, null, 2));
@@ -362,7 +364,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const graph = await indexer.getGraph();
       console.log(JSON.stringify(graph, null, 2));
     });
@@ -389,9 +391,10 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const index = await indexer.get();
       const graph = await indexer.getGraph();
+      const { detectOrphans } = await import('#maestro-dashboard/wiki/graph-analysis.js');
       const orphanIds = detectOrphans(graph, index.entries);
       const orphans = orphanIds.map((id) => index.byId[id]).filter(Boolean);
       if (opts.json) {
@@ -425,8 +428,9 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const graph = await indexer.getGraph();
+      const { detectHubs } = await import('#maestro-dashboard/wiki/graph-analysis.js');
       const hubs = detectHubs(graph, Number(opts.limit) || 10);
       if (opts.json) {
         console.log(JSON.stringify({ hubs }, null, 2));
@@ -453,7 +457,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const graph = await indexer.getGraph();
       const index = await indexer.get();
       const blIds = graph.backlinks[id] ?? [];
@@ -479,7 +483,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { indexer } = getOfflineClients();
+      const { indexer } = await getOfflineClients();
       const graph = await indexer.getGraph();
       const index = await indexer.get();
       const fwdIds = graph.forwardLinks[id] ?? [];
@@ -536,7 +540,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { writer } = getOfflineClients();
+      const { writer } = await getOfflineClients();
       let frontmatter: Record<string, unknown> | undefined;
       if (opts.frontmatter) {
         try {
@@ -561,7 +565,7 @@ export function registerWikiCommand(program: Command): void {
         console.log(`Created: ${entry.id}`);
         if (entry.source?.path) console.log(`  Path: ${entry.source.path}`);
       } catch (err) {
-        if (err instanceof WikiWriteError) {
+        if (err instanceof (await import('#maestro-dashboard/wiki/writer.js')).WikiWriteError) {
           console.error(`${err.code}: ${err.message}`);
           process.exit(1);
         }
@@ -580,7 +584,7 @@ export function registerWikiCommand(program: Command): void {
     .option('--description <desc>', 'One-line description for search results')
     .action(async (containerId, opts, cmd) => {
       // Offline mode only — no live mode for append
-      const { writer } = getOfflineClients();
+      const { writer } = await getOfflineClients();
       try {
         const entry = await writer.appendEntry({
           containerId,
@@ -594,7 +598,7 @@ export function registerWikiCommand(program: Command): void {
         console.log(`  Container: ${containerId}`);
         console.log(`  Title: ${entry.title}`);
       } catch (err) {
-        if (err instanceof WikiWriteError) {
+        if (err instanceof (await import('#maestro-dashboard/wiki/writer.js')).WikiWriteError) {
           console.error(`${err.code}: ${err.message}`);
           process.exit(1);
         }
@@ -607,12 +611,12 @@ export function registerWikiCommand(program: Command): void {
     .command('remove-entry <entryId>')
     .description('Remove a spec sub-entry by ID (e.g. spec-learnings-003)')
     .action(async (entryId, _opts, cmd) => {
-      const { writer } = getOfflineClients();
+      const { writer } = await getOfflineClients();
       try {
         await writer.removeEntry(entryId);
         console.log(`Removed: ${entryId}`);
       } catch (err) {
-        if (err instanceof WikiWriteError) {
+        if (err instanceof (await import('#maestro-dashboard/wiki/writer.js')).WikiWriteError) {
           console.error(`${err.code}: ${err.message}`);
           process.exit(1);
         }
@@ -653,7 +657,7 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { writer } = getOfflineClients();
+      const { writer } = await getOfflineClients();
       let frontmatter: Record<string, unknown> | undefined;
       if (opts.frontmatter) {
         try {
@@ -672,7 +676,7 @@ export function registerWikiCommand(program: Command): void {
         });
         console.log(`Updated: ${entry.id}`);
       } catch (err) {
-        if (err instanceof WikiWriteError) {
+        if (err instanceof (await import('#maestro-dashboard/wiki/writer.js')).WikiWriteError) {
           console.error(`${err.code}: ${err.message}`);
           process.exit(1);
         }
@@ -696,12 +700,12 @@ export function registerWikiCommand(program: Command): void {
       }
 
       // Offline mode
-      const { writer } = getOfflineClients();
+      const { writer } = await getOfflineClients();
       try {
         await writer.remove(id);
         console.log(`Deleted: ${id}`);
       } catch (err) {
-        if (err instanceof WikiWriteError) {
+        if (err instanceof (await import('#maestro-dashboard/wiki/writer.js')).WikiWriteError) {
           console.error(`${err.code}: ${err.message}`);
           process.exit(1);
         }
