@@ -27,6 +27,7 @@ import { TelemetryPlugin } from '../hooks/plugins/telemetry-plugin.js';
 import { SpecInjectionPlugin } from '../hooks/plugins/spec-injection-plugin.js';
 import { DecisionLogPlugin } from '../hooks/plugins/decision-log-plugin.js';
 import { SpecAnalyticsPlugin } from '../hooks/plugins/spec-analytics-plugin.js';
+import { ExplorePlugin } from '../hooks/plugins/explore-plugin.js';
 import { randomBytes } from 'node:crypto';
 
 const execFileAsync = promisify(execFile);
@@ -172,6 +173,7 @@ async function createWalker(
   hookManager.applyPlugin(new SpecInjectionPlugin(workflowRoot));
   hookManager.applyPlugin(new DecisionLogPlugin(join(sessionDir, 'decisions.ndjson')));
   hookManager.applyPlugin(new SpecAnalyticsPlugin(workflowRoot));
+  hookManager.applyPlugin(new ExplorePlugin(workflowRoot));
 
   const walker = new GraphWalker(
     loader, assembler, executor,

@@ -261,11 +261,17 @@ export class GraphWalker {
 
     const prompt = await this.assembler.assemble(assembleReq);
 
+    // Embed explore pre-step marker if node declares explore queries
+    let assembledPrompt = prompt;
+    if (node.explore) {
+      assembledPrompt = `<!-- EXPLORE_QUERIES:${JSON.stringify(node.explore)}-->\n${prompt}`;
+    }
+
     // Hook: transformPrompt waterfall
-    let finalPrompt = prompt;
+    let finalPrompt = assembledPrompt;
     if (this.hooks) {
       try {
-        finalPrompt = await this.hooks.transformPrompt.call(prompt);
+        finalPrompt = await this.hooks.transformPrompt.call(assembledPrompt);
       } catch (e) { console.error(`[walker] hook error: ${e instanceof Error ? e.message : String(e)}`); }
     }
 
