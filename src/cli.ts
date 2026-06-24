@@ -63,6 +63,7 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   'command-help': async () => (await import('./commands/command-help.js')).registerCommandHelpCommand,
   ch: async () => (await import('./commands/command-help.js')).registerCommandHelpCommand,
   kg:         async () => (await import('./graph/kg/surface/cli.js')).registerKgCommands,
+  load:       async () => (await import('./commands/load.js')).registerLoadCommand,
   search:     async () => (await import('./commands/search.js')).registerSearchCommand,
   'search-daemon': async () => (await import('./commands/search.js')).registerSearchCommand,
   'search-start-daemon': async () => (await import('./commands/search.js')).registerSearchCommand,
