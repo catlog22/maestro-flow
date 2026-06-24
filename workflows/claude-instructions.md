@@ -21,20 +21,20 @@
 ### Required (every task, no exceptions)
 
 ```bash
-# 搜索相关知识（1-3 关键词，多次短查询优于一次长查询）
+# Search relevant knowledge (1-3 keywords, multiple short queries beat one long one)
 maestro search "<topic phrase>"
 
-# 加载对应 spec（按任务类型选 category）
-maestro load --type spec --category coding    # 编码任务
-maestro load --type spec --category arch      # 架构决策
-maestro load --type spec --category test      # 测试编写
-maestro load --type spec --category ui        # UI 工作
+# Load specs for the task type
+maestro load --type spec --category coding    # coding tasks
+maestro load --type spec --category arch      # architecture decisions
+maestro load --type spec --category test      # test writing
+maestro load --type spec --category ui        # UI work
 ```
 
-**查询规则：**
-- 每次 **1-3 个核心关键词** — 不要把所有上下文堆到一次搜索
-- 概念与符号分开查：`maestro search "topology layout"` + `maestro search "DetailedTopologySVG" --code`
-- 按需追加：`maestro search "query" --kg`（KG 全源）、`maestro kg callers <fn>`（调用链）、`maestro kg context <node>`（节点上下文）
+**Query rules:**
+- Use **1-3 core keywords** per query — never dump all context into one search
+- Separate concepts from symbols: `maestro search "topology layout"` + `maestro search "DetailedTopologySVG" --code`
+- Add as needed: `maestro search "query" --kg` (KG full-source), `maestro kg callers <fn>` (call chain), `maestro kg context <node>` (node context)
 
 ```bash
 # ❌ Bad: keyword dump
