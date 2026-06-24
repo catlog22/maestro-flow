@@ -5,7 +5,6 @@
 ## Delegate & CLI
 
 - **Delegate Usage**: @~/.maestro/workflows/delegate-usage.md
-- **Explore Usage**: @~/.maestro/workflows/explore-usage.md
 - **CLI Endpoints Config**: @~/.maestro/cli-tools.json
 
 **Strictly follow the cli-tools.json configuration**

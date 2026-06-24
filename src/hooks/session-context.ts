@@ -8,6 +8,7 @@
 
 import { readFileSync, existsSync, readdirSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -59,7 +60,11 @@ export function evaluateSessionContext(data: SessionContextInput): HookOutput | 
   const specsSection = workspaceRoot ? buildSpecsSection(workspaceRoot) : null;
   if (specsSection) sections.push(specsSection);
 
-  // 3. Git context (lightweight)
+  // 3. Explore availability
+  const exploreSection = buildExploreSection();
+  if (exploreSection) sections.push(exploreSection);
+
+  // 4. Git context (lightweight)
   const gitSection = buildGitSection(cwd);
   if (gitSection) sections.push(gitSection);
 
@@ -108,6 +113,53 @@ function buildSpecsSection(cwd: string): string | null {
 
     const items = files.map(f => `- ${f.replace('.md', '')}`);
     return `## Available Specs\n${items.join('\n')}\n(Auto-injected per agent type via spec-injector hook)`;
+  } catch {
+    return null;
+  }
+}
+
+function buildExploreSection(): string | null {
+  const configPath = join(homedir(), '.maestro', 'api-explore.json');
+  if (!existsSync(configPath)) return null;
+
+  try {
+    const raw = JSON.parse(readFileSync(configPath, 'utf8')) as {
+      baseUrl?: string; apiKey?: string; model?: string;
+      endpoints?: Record<string, { baseUrl?: string; apiKey?: string; model?: string }>;
+    };
+
+    const endpoints: string[] = [];
+
+    if (raw.baseUrl && raw.apiKey && raw.model) {
+      endpoints.push(`default(${raw.model})`);
+    }
+
+    if (raw.endpoints) {
+      for (const [name, ep] of Object.entries(raw.endpoints)) {
+        if (ep.baseUrl && ep.apiKey && ep.model) {
+          endpoints.push(`${name}(${ep.model})`);
+        }
+      }
+    }
+
+    if (endpoints.length === 0) return null;
+
+    // Load explore-usage.md if available for full injection
+    const usagePath = join(homedir(), '.maestro', 'workflows', 'explore-usage.md');
+    if (existsSync(usagePath)) {
+      try {
+        const usage = readFileSync(usagePath, 'utf8').trim();
+        return `## Explore [${endpoints.join(', ')}]\n\n${usage}`;
+      } catch {
+        // Fall through to compact format
+      }
+    }
+
+    return `## Explore\nEndpoints: ${endpoints.join(', ')}\n` +
+      `Prefer \`maestro explore\` for codebase search (read-only, parallel, structured).\n` +
+      `Prompt: \`maestro explore "FIND: <target> SCOPE: src/ EXCLUDE: tests EXPECTED: file:line list"\`\n` +
+      `Multi-prompt: \`maestro explore "p1" "p2" "p3" --json\`\n` +
+      `Serial within same endpoint, parallel across endpoints.`;
   } catch {
     return null;
   }
