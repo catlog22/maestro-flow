@@ -1,0 +1,49 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "blueprint-driven",
+  "name": "Blueprint-Driven",
+  "description": "Init -> Blueprint -> Plan -> Execute pipeline (formal spec package before build)",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "blueprint", "spec"],
+  "entry": "init",
+  "inputs": {
+    "phase": { "type": "string" },
+    "description": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "init": {
+      "type": "command",
+      "cmd": "maestro-init",
+      "description": "Initialize project structure and state files",
+      "next": "blueprint"
+    },
+    "blueprint": {
+      "type": "command",
+      "cmd": "maestro-blueprint",
+      "description": "Generate formal 7-phase spec package",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan with task decomposition",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution",
+      "args": "{phase}",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Blueprint-driven pipeline completed successfully"
+    }
+  }
+}

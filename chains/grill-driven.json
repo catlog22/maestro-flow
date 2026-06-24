@@ -1,0 +1,51 @@
+{
+  "$schema": "./chain-graph.schema.json",
+  "id": "grill-driven",
+  "name": "Grill-Driven",
+  "description": "Grill -> Brainstorm -> Plan -> Execute pipeline (stress-test codebase reality before elaboration)",
+  "version": "1.0.0",
+  "tags": ["lifecycle", "grill"],
+  "entry": "grill",
+  "inputs": {
+    "phase": { "type": "string" },
+    "description": { "type": "string", "required": true }
+  },
+  "nodes": {
+    "grill": {
+      "type": "command",
+      "cmd": "maestro-grill",
+      "description": "Socratic stress-test of plan/idea against codebase reality; -y runs Auto mode (code answers)",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "brainstorm"
+    },
+    "brainstorm": {
+      "type": "command",
+      "cmd": "maestro-brainstorm",
+      "description": "Multi-role brainstorming consuming grill artifacts",
+      "args": "\"{description}\"",
+      "auto_flag": "-y",
+      "next": "plan"
+    },
+    "plan": {
+      "type": "command",
+      "cmd": "maestro-plan",
+      "description": "Create execution plan with task decomposition",
+      "args": "{phase}",
+      "auto_flag": "--auto",
+      "next": "execute"
+    },
+    "execute": {
+      "type": "command",
+      "cmd": "maestro-execute",
+      "description": "Run wave-based parallel task execution",
+      "args": "{phase}",
+      "next": "done"
+    },
+    "done": {
+      "type": "terminal",
+      "status": "success",
+      "summary": "Grill-driven pipeline completed successfully"
+    }
+  }
+}

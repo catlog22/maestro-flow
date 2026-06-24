@@ -86,6 +86,7 @@ export interface RalphSession {
   platform?: SessionPlatform;       // 'claude' (.claude/) | 'codex' (.codex/); absent → claude
   passed_gates?: string[];
   context?: RalphSessionContext;
+  decomposition_owner?: 'maestro' | 'ralph' | string; // absent → infer from `source`
   steps: RalphStep[];
   waves?: unknown[];
   current_step?: number;

@@ -34,3 +34,5 @@ dashboard/node_modules/
 # Not committed; regenerate via `npm run build:mirrors` before publishing.
 .agy/
 .agents/
+
+search-cache.json

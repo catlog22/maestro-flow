@@ -19,7 +19,7 @@
 //   1 — generic error (E007 missing required_reading, etc.)
 // ---------------------------------------------------------------------------
 
-import type { RalphSession, RalphStep, RalphStepLoad } from './status-schema.js';
+import type { RalphSession, RalphStep, RalphStepLoad, RalphTaskDecompositionItem } from './status-schema.js';
 import { RALPH_PROTOCOL_VERSION } from './status-schema.js';
 import { resolveSession, writeStatus, workflowRoot } from './status-store.js';
 import { checkStatus } from './status-checker.js';
@@ -146,6 +146,9 @@ function emitPrompt(
   // `/<skill>` calls in Claude Code.
   const configSection = buildSkillConfigSection(step.skill, args);
 
+  const anchor = buildSessionAnchor(session, step);
+  const head = anchor ? anchor + '\n\n' : '';
+
   const argsLine = args ? ` args=${JSON.stringify(args)}` : '';
   const meta = [
     '',
@@ -158,7 +161,72 @@ function emitPrompt(
   ].join('\n');
 
   const tail = configSection ? '\n\n' + configSection + meta : meta;
-  process.stdout.write(body + tail + '\n');
+  process.stdout.write(head + body + tail + '\n');
+}
+
+// Read-only grounding — skill must NOT echo or write back anchor fields.
+function buildSessionAnchor(session: RalphSession, step: RalphStep): string | null {
+  const intent = (session.intent ?? '').trim();
+  if (!intent) return null;
+
+  const parts: string[] = [];
+  parts.push(`**Intent**: ${truncateAnchor(intent, 600)}`);
+  const phase = session.phase ?? '—';
+  const scope = session.scope_verdict ?? 'unknown';
+  parts.push(`**Scope**: ${scope} | Phase ${phase} | Milestone: ${session.milestone || '—'}`);
+
+  const bc = session.boundary_contract;
+  if (bc && (bc.in_scope?.length || bc.out_of_scope?.length || bc.constraints?.length || bc.definition_of_done)) {
+    const lines = ['**Boundary Contract**:'];
+    if (bc.in_scope?.length) lines.push(`- In scope: ${capAnchorList(bc.in_scope)}`);
+    if (bc.out_of_scope?.length) lines.push(`- Out of scope: ${capAnchorList(bc.out_of_scope)}`);
+    if (bc.constraints?.length) lines.push(`- Constraints: ${capAnchorList(bc.constraints)}`);
+    if (bc.definition_of_done) lines.push(`- Done when: ${truncateAnchor(bc.definition_of_done, 300)}`);
+    parts.push(lines.join('\n'));
+  }
+
+  const goal = resolveGoalContext(session, step);
+  if (goal) {
+    const lines = [`**Current Goal** (${step.goal_ref}):`];
+    lines.push(`- Goal: ${truncateAnchor(goal.goal, 300)}`);
+    if (goal.boundary) lines.push(`- Boundary: ${truncateAnchor(goal.boundary, 200)}`);
+    if (goal.done_when) lines.push(`- Done when: ${truncateAnchor(goal.done_when, 200)}`);
+    parts.push(lines.join('\n'));
+  }
+
+  if (session.execution_criteria?.length) {
+    parts.push(`**Execution Criteria**: ${capAnchorList(session.execution_criteria, 5)}`);
+  }
+
+  return [
+    '<session_anchor>',
+    `## Session Anchor — ${session.session_id}`,
+    '',
+    parts.join('\n\n'),
+    '',
+    '<!-- session_anchor: read-only grounding. Honor Intent + Boundary Contract before acting.',
+    '     If your work would fall outside in_scope (or hit out_of_scope), stop and report via',
+    '     `maestro ralph complete <N> --status BLOCKED --reason "out_of_scope: ..."` instead of proceeding. -->',
+    '</session_anchor>',
+  ].join('\n');
+}
+
+function resolveGoalContext(
+  session: RalphSession,
+  step: RalphStep,
+): RalphTaskDecompositionItem | null {
+  if (!step.goal_ref || !session.task_decomposition) return null;
+  return session.task_decomposition.find(t => t.id === step.goal_ref) ?? null;
+}
+
+function truncateAnchor(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max) + '…';
+}
+
+function capAnchorList(items: string[], n = 3): string {
+  const shown = items.slice(0, n).map(s => truncateAnchor(s, 200));
+  const extra = items.length > n ? ` (+${items.length - n} more)` : '';
+  return shown.join('; ') + extra;
 }
 
 /**

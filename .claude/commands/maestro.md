@@ -39,17 +39,18 @@ $ARGUMENTS — user intent text, or special keywords.
 1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
 2. **Session before execution** — status.json created before any step runs
 3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
-4. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)。Reference maestro-ralph `A_DECOMPOSE_TASKS`
+4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，下游 ralph 只消费不覆盖（ralph A_DECOMPOSE_TASKS step 0 ownership guard 跳过二次提问）。Reference maestro-ralph `A_DECOMPOSE_TASKS`
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
 6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `Skill("maestro-ralph")` handoff
 7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
-8. **Grill is interactive-only** — `-y` auto mode MUST skip grill stage and route directly to brainstorm; grill requires Socratic Q&A with the user
+8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
 9. **D-007 milestone 反查** — 数字 phase 的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查
 10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
 11. **schema** — `ralph_protocol_version: "1"` 标记 CLI-driven session；新增字段全部可选
 12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via ralph-execute）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
 14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
 13. **Classification evidence** — S_CLASSIFY 的 chain 选择决策 MUST 记录到 status.json 的 `classification_rationale` 字段：匹配了哪个 pattern、排除了哪些备选、confidence level。无记录的分类不可进入 S_CREATE。
+15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 session 生命周期 + step 排序 + cross-step decision 节点；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）只单次推荐，不得出现在 FSM step 内。
 </invariants>
 
 <state_machine>
@@ -128,7 +129,7 @@ S_FALLBACK:
 1. Read `~/.maestro/workflows/maestro.md` from deferred_reading
 2. Match intent to task_type via chain catalog (semantic)
 3. Select chain from chainMap，遵循拓扑约束：
-   - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式跳过 grill，直接走 brainstorm**）
+   - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式透传 `-y` 到 grill，grill 以 Auto mode 执行，不跳过**）
    - 头脑风暴/探索 → `brainstorm`
    - 学习/阅读代码/跟读/follow → `Skill("learn-follow")`；调查/为什么/investigate → `Skill("learn-investigate")`；分解/模式/decompose → `Skill("learn-decompose")`；评审/挑战/second-opinion → `Skill("learn-second-opinion")`；回顾/retro → `Skill("quality-retrospective")`
    - 正式规格/spec-generate/7-phase → `blueprint`
@@ -146,7 +147,7 @@ S_FALLBACK:
 
 ### A_DECOMPOSE_TASKS
 
-与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约。Condensed:
+设 `session.decomposition_owner = "maestro"`。下游 ralph 只消费不二次提问（invariant 4）。Condensed:
 
 1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
 2. broad/medium → `AskUserQuestion` ≤3 轮：Scope / Constraints / Definition of Done
@@ -175,7 +176,7 @@ S_FALLBACK:
      "ralph_protocol_version": "1", "active_step_index": null,
      "phase", "phase_is_new": false, "milestone": "",
      "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
-     "auto_mode": false, "cli_tool": "claude",
+     "auto_mode": false, "decomposition_owner": "maestro", "cli_tool": "claude",
      "context": { "scratch_dir": null, "plan_dir": null, "analysis_dir": null,
        "brainstorm_dir": null, "blueprint_dir": null, "issue_id": null },
      "steps": [{
@@ -220,7 +221,7 @@ S_FALLBACK:
 
 - [ ] Intent classified with task_type, complexity, clarity_score
 - [ ] Chain catalog 覆盖 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / quality pipeline
-- [ ] `-y` 模式不触发 grill（交互式压力测试不支持自动模式，跳过直接走 brainstorm）
+- [ ] `-y` 模式透传 `-y` 到 grill（grill 以 Auto mode 代码代答执行，stage 不跳过）
 - [ ] D-007: 数字 phase 步骤的 `milestone_id` 通过 `state.json.milestones[].phase_slugs` 反查
 - [ ] macro analyze 后跟 `decision:post-analyze-scope`（由 ralph 评估 scope_verdict 决定下游链路）
 - [ ] plan 支持 `{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step
