@@ -16,59 +16,34 @@
 
 ## Knowledge System
 
-**Gate rule: On any coding/modification/debugging task, run `maestro search` BEFORE reading code or editing files. Use targeted queries — multiple short searches beat one long one.**
+**Gate rule: On any coding/modification/debugging task, run `maestro search` + `maestro load` BEFORE reading code or editing files.**
 
-### Required search (every task, no exceptions)
+### Required (every task, no exceptions)
 
 ```bash
-maestro search "<1-3 word topic phrase>"
+# 搜索相关知识（1-3 关键词，多次短查询优于一次长查询）
+maestro search "<topic phrase>"
+
+# 加载对应 spec（按任务类型选 category）
+maestro load --type spec --category coding    # 编码任务
+maestro load --type spec --category arch      # 架构决策
+maestro load --type spec --category test      # 测试编写
+maestro load --type spec --category ui        # UI 工作
 ```
 
-**Query rules:**
-- Use **1-3 core keywords** per query — never dump all context into one search
-- Separate concepts from symbols: `maestro search "topology layout"` then `maestro search "DetailedTopologySVG" --code`
-- Run multiple targeted searches rather than one broad query
+**查询规则：**
+- 每次 **1-3 个核心关键词** — 不要把所有上下文堆到一次搜索
+- 概念与符号分开查：`maestro search "topology layout"` + `maestro search "DetailedTopologySVG" --code`
+- 按需追加：`maestro search "query" --kg`（KG 全源）、`maestro kg callers <fn>`（调用链）、`maestro kg context <node>`（节点上下文）
 
 ```bash
-# ❌ Bad: keyword dump (5+ unrelated terms → diluted BM25 scores)
+# ❌ Bad: keyword dump
 maestro search "topology display frontend DetailedTopologySVG elk"
 
-# ✅ Good: targeted multi-search
+# ✅ Good: targeted multi-search + spec load
 maestro search "topology layout"
 maestro search "DetailedTopologySVG" --code
-maestro search "elk layout" --type knowhow
-```
-
-### Required follow-up (after initial search, MUST execute before implementation)
-
-**Step 2 — Load specs**: After search, ALWAYS load relevant specs before writing code:
-
-```bash
-# Coding task → load coding specs
 maestro load --type spec --category coding
-
-# Architecture decision → load arch specs
-maestro load --type spec --category arch
-
-# Test writing → load test specs
-maestro load --type spec --category test
-
-# UI work → load ui specs
-maestro load --type spec --category ui
-```
-
-**Step 3 — Deep search** (when initial search shows relevant symbols/patterns):
-
-```bash
-# Code symbol deep dive → KG search
-maestro search "SymbolName" --kg
-
-# Call chain analysis
-maestro kg callers <fn>
-maestro kg callees <fn>
-
-# Node context (7-element: focal + ancestors + children + refs)
-maestro kg context <node>
 ```
 
 ### Load (unified knowledge loading)
