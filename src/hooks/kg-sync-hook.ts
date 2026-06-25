@@ -6,7 +6,9 @@
  */
 
 import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { kgSyncGuard } from '../utils/cooldown-guard.js';
+import { invalidateSearchIndex } from '../search/daemon-client.js';
 
 const SOURCE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java',
@@ -52,6 +54,9 @@ export async function evaluateKgSync(
       const results = await mg.sync();
       const filesChanged = results.reduce((sum, r) => sum + r.nodesAdded + r.nodesRemoved, 0);
       kgSyncGuard.markDone(sessionId);
+      if (filesChanged > 0) {
+        invalidateSearchIndex(resolve(projectPath, '.workflow')).catch(() => {});
+      }
       return { synced: true, filesChanged, durationMs: Date.now() - start };
     } finally {
       mg.close();

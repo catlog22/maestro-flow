@@ -421,6 +421,11 @@ export function registerSpecCommand(program: Command): void {
             }
           }
         }
+        if (results.some(r => r.ok && !r.duplicate)) {
+          const { resolve: pathResolve } = await import('node:path');
+          const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+          invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
+        }
         return;
       }
 
@@ -511,6 +516,11 @@ export function registerSpecCommand(program: Command): void {
           console.error(`Error: failed to add "${result.title}"`);
           process.exit(1);
         }
+        if (result.ok && !result.duplicate) {
+          const { resolve: pathResolve } = await import('node:path');
+          const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+          invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
+        }
         return;
       }
 
@@ -535,6 +545,11 @@ export function registerSpecCommand(program: Command): void {
       } else {
         console.error(`Error: failed to add "${result.title}"`);
         process.exit(1);
+      }
+      if (result.ok && !result.duplicate) {
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
       }
     });
 

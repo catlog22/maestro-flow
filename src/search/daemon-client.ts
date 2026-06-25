@@ -33,9 +33,9 @@ export function isDaemonAlive(info: DaemonInfo): boolean {
 }
 
 export interface DaemonSearchRequest {
-  action: 'search';
-  query: string;
-  limit: number;
+  action: 'search' | 'invalidate';
+  query?: string;
+  limit?: number;
   skipEmbedding?: boolean;
 }
 
@@ -119,4 +119,22 @@ export async function spawnDaemon(workflowRoot: string): Promise<void> {
     { cwd: resolvePath(workflowRoot, '..'), detached: true, stdio: 'ignore' },
   );
   child.unref();
+}
+
+/**
+ * Invalidate the search index: signal daemon to rebuild if alive,
+ * otherwise delete the search-cache.json so next search rebuilds.
+ */
+export async function invalidateSearchIndex(workflowRoot: string): Promise<void> {
+  const info = readDaemonInfo(workflowRoot);
+  if (info && isDaemonAlive(info)) {
+    try {
+      await queryDaemon(info.port, { action: 'invalidate' });
+      return;
+    } catch { /* daemon unresponsive, fall through */ }
+  }
+  try {
+    const cachePath = join(workflowRoot, 'search-cache.json');
+    if (existsSync(cachePath)) unlinkSync(cachePath);
+  } catch { /* best-effort */ }
 }

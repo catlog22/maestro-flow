@@ -71,8 +71,11 @@ export function registerDomainCommand(program: Command): void {
       console.log(`  Tier:        ${term.tier}`);
 
       try {
-        addTerm(getWorkflowRoot(), term);
+        const wfRoot = getWorkflowRoot();
+        addTerm(wfRoot, term);
         console.log(`\n✓ Registered: ${canonical}`);
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(wfRoot).catch(() => {});
       } catch (e) {
         console.error(`\n✗ Failed: ${(e as Error).message}`);
         process.exit(1);
@@ -226,8 +229,11 @@ export function registerDomainCommand(program: Command): void {
         return;
       }
 
-      updateTerm(getWorkflowRoot(), id, updates as any);
+      const wfRoot = getWorkflowRoot();
+      updateTerm(wfRoot, id, updates as any);
       console.log(`✓ Updated: ${term.canonical}`);
+      const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+      invalidateSearchIndex(wfRoot).catch(() => {});
     });
 
   // ── remove ────────────────────────────────────────────────────────────
@@ -237,12 +243,15 @@ export function registerDomainCommand(program: Command): void {
     .action(async (id: string) => {
       const { removeTerm } = await import('../tools/domain-loader.js');
       try {
-        const { warnings } = removeTerm(getWorkflowRoot(), id);
+        const wfRoot = getWorkflowRoot();
+        const { warnings } = removeTerm(wfRoot, id);
         if (warnings.length > 0) {
           console.warn('Warnings:');
           for (const w of warnings) console.warn(`  ${w}`);
         }
         console.log(`✓ Removed: ${id}`);
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(wfRoot).catch(() => {});
       } catch (e) {
         console.error(`✗ Failed: ${(e as Error).message}`);
         process.exit(1);

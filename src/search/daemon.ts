@@ -41,9 +41,9 @@ export function isDaemonAlive(info: DaemonInfo): boolean {
 // ── Client ──────────────────────────────────────────────────────────────
 
 export interface DaemonSearchRequest {
-  action: 'search';
-  query: string;
-  limit: number;
+  action: 'search' | 'invalidate';
+  query?: string;
+  limit?: number;
   skipEmbedding?: boolean;
 }
 
@@ -148,9 +148,12 @@ async function handleRequest(
     const req = JSON.parse(line) as DaemonSearchRequest;
     if (req.action === 'search') {
       const { results, embeddingUsed, embeddingDocs } = await indexer.searchWithMeta(
-        req.query, req.limit, { skipEmbedding: req.skipEmbedding },
+        req.query!, req.limit!, { skipEmbedding: req.skipEmbedding },
       );
       resp = { ok: true, results, embeddingUsed, embeddingDocs };
+    } else if (req.action === 'invalidate') {
+      await indexer.rebuild();
+      resp = { ok: true };
     } else {
       resp = { ok: false, error: `unknown action` };
     }
