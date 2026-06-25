@@ -97,9 +97,8 @@ export async function startDaemon(
 
   const indexer = new WikiIndexer(config);
 
-  // Pre-warm: build index + embedding
+  // Pre-warm: build wiki/BM25 index synchronously, then start TCP server immediately
   await indexer.rebuild();
-  const embeddingWarm = indexer.getEmbeddingIndex().catch(() => null);
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   const resetIdle = (server: Server) => {
@@ -121,7 +120,8 @@ export async function startDaemon(
     });
   });
 
-  await embeddingWarm;
+  // Warm embedding in background — don't block TCP server startup
+  indexer.getEmbeddingIndex().catch(() => null);
 
   return new Promise((res, reject) => {
     server.listen(0, '127.0.0.1', () => {
@@ -152,7 +152,9 @@ async function handleRequest(
       );
       resp = { ok: true, results, embeddingUsed, embeddingDocs };
     } else if (req.action === 'invalidate') {
+      indexer.invalidate();
       await indexer.rebuild();
+      indexer.getEmbeddingIndex().catch(() => null);
       resp = { ok: true };
     } else {
       resp = { ok: false, error: `unknown action` };

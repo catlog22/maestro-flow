@@ -300,6 +300,8 @@ export class WikiIndexer {
     this.cache = null;
     this.graphCache = null;
     this.searchCache = null;
+    this.embeddingCache = null;
+    this.embeddingInflight = null;
   }
 
   async query(filters: WikiFilters): Promise<WikiEntry[]> {
@@ -432,27 +434,37 @@ export class WikiIndexer {
         }));
 
       const { getModelId, hashDocContent } = await import('./embedding.js');
-      const modelMatch = cached && cached.modelId === getModelId();
-      const currentHashes = docs.map(hashDocContent);
-      const cachedHashMap = new Map<string, string>();
-      if (cached?.contentHashes) {
-        for (let i = 0; i < cached.docIds.length; i++) {
-          cachedHashMap.set(cached.docIds[i], cached.contentHashes[i] ?? '');
+      const activeModel = getModelId();
+      const modelMatch = cached && cached.modelId === activeModel;
+      const currentHashes = modelMatch ? docs.map(hashDocContent) : undefined;
+
+      if (currentHashes && cached) {
+        const cachedHashMap = new Map<string, string>();
+        if (cached.contentHashes) {
+          for (let i = 0; i < cached.docIds.length; i++) {
+            cachedHashMap.set(cached.docIds[i], cached.contentHashes[i] ?? '');
+          }
         }
+        const unchanged = cached.docIds.length === docs.length
+          && cachedHashMap.size > 0
+          && docs.every((d, i) => cachedHashMap.get(d.id) === currentHashes[i]);
+        if (unchanged) return cached;
       }
-      const unchanged = modelMatch
-        && cached!.docIds.length === docs.length
-        && cachedHashMap.size > 0
-        && docs.every((d, i) => cachedHashMap.get(d.id) === currentHashes[i]);
 
-      if (cached && unchanged) return cached;
-
-      const embIdx = await buildEmbeddingIndex(docs, cached);
-      saveEmbeddingIndex(embIdx, this.workflowRoot);
-      return embIdx;
+      try {
+        const embIdx = await buildEmbeddingIndex(docs, cached, currentHashes);
+        saveEmbeddingIndex(embIdx, this.workflowRoot);
+        return embIdx;
+      } catch (buildErr: unknown) {
+        if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+          console.error(`[embedding] build failed: ${buildErr instanceof Error ? buildErr.message : buildErr}`);
+        }
+        if (cached) return cached;
+        return null;
+      }
     } catch (e: unknown) {
       if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
-        console.error(`[embedding] build failed: ${e instanceof Error ? e.message : e}`);
+        console.error(`[embedding] unavailable: ${e instanceof Error ? e.message : e}`);
       }
       return null;
     }

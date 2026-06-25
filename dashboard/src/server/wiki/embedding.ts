@@ -11,7 +11,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, renameSync } from 'node:fs';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,87 +94,94 @@ function getApiProxy(): string | undefined {
   return undefined;
 }
 
-async function buildFetcher(): Promise<(url: string, init: RequestInit) => Promise<Response>> {
+type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
+let _cachedFetcher: FetchFn | null = null;
+
+async function getFetcher(): Promise<FetchFn> {
+  if (_cachedFetcher) return _cachedFetcher;
   const proxy = getApiProxy();
-  if (!proxy) return (u, init) => globalThis.fetch(u, init);
+  if (!proxy) {
+    _cachedFetcher = (u, init) => globalThis.fetch(u, init);
+    return _cachedFetcher;
+  }
   try {
     const undici = await import('undici');
     const dispatcher = new undici.ProxyAgent({ uri: proxy });
-    return (u, init) => undici.fetch(u, { ...init, dispatcher } as any) as unknown as Promise<Response>;
+    _cachedFetcher = (u, init) => undici.fetch(u, { ...init, dispatcher } as any) as unknown as Promise<Response>;
   } catch {
-    return (u, init) => globalThis.fetch(u, init);
+    _cachedFetcher = (u, init) => globalThis.fetch(u, init);
   }
+  return _cachedFetcher;
 }
 
 const MAX_RETRIES = 2;
 const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 
+async function fetchBatchWithRetry(
+  doFetch: FetchFn, url: string, batch: string[], batchOffset: number, config: EmbeddingApiConfig,
+): Promise<Float32Array[]> {
+  const body: Record<string, unknown> = { model: config.model, input: batch };
+  if (config.dimensions) body.dimensions = config.dimensions;
+  const reqInit: RequestInit = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+    body: JSON.stringify(body),
+  };
+
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, Math.min(1000 * 2 ** (attempt - 1), 4000)));
+    try {
+      const resp = await doFetch(url, reqInit);
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        if (RETRY_STATUS.has(resp.status) && attempt < MAX_RETRIES) { lastErr = new Error(`Embedding API error ${resp.status}: ${errText}`); continue; }
+        throw new Error(`Embedding API error ${resp.status}: ${errText}`);
+      }
+      const json = await resp.json() as { data?: unknown };
+      if (!Array.isArray(json.data)) throw new Error(`Embedding API returned invalid data: missing "data" array`);
+
+      const out = new Array<Float32Array>(batch.length);
+      for (const item of json.data as Array<{ embedding?: number[]; index?: number }>) {
+        if (!Array.isArray(item.embedding) || typeof item.index !== 'number') continue;
+        out[item.index] = new Float32Array(item.embedding);
+      }
+      for (let j = 0; j < batch.length; j++) {
+        if (!out[j]) throw new Error(`Embedding API returned no vector for input index ${j} in batch starting at ${batchOffset}`);
+      }
+      return out;
+    } catch (e: unknown) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+      const isNetwork = lastErr.message.includes('fetch failed') || lastErr.message.includes('ECONNREFUSED') || lastErr.message.includes('Timeout');
+      if (isNetwork && attempt < MAX_RETRIES) continue;
+      throw lastErr;
+    }
+  }
+  throw lastErr!;
+}
+
+const API_CONCURRENCY = 4;
+
 async function callEmbeddingApi(texts: string[], config: EmbeddingApiConfig): Promise<Float32Array[]> {
-  const doFetch = await buildFetcher();
+  const doFetch = await getFetcher();
   const url = config.baseUrl.replace(/\/+$/, '') + '/embeddings';
   const batchSize = config.batchSize ?? 100;
+
+  const chunks: { offset: number; batch: string[] }[] = [];
+  for (let i = 0; i < texts.length; i += batchSize) {
+    chunks.push({ offset: i, batch: texts.slice(i, i + batchSize) });
+  }
+
   const results: Float32Array[] = new Array(texts.length);
 
-  for (let i = 0; i < texts.length; i += batchSize) {
-    const batch = texts.slice(i, i + batchSize);
-    const body: Record<string, unknown> = {
-      model: config.model,
-      input: batch,
-    };
-    if (config.dimensions) body.dimensions = config.dimensions;
-
-    const reqInit: RequestInit = {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(body),
-    };
-
-    let lastErr: Error | null = null;
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        const delay = Math.min(1000 * 2 ** (attempt - 1), 4000);
-        await new Promise(r => setTimeout(r, delay));
-      }
-      try {
-        const resp = await doFetch(url, reqInit);
-
-        if (!resp.ok) {
-          const errText = await resp.text().catch(() => '');
-          if (RETRY_STATUS.has(resp.status) && attempt < MAX_RETRIES) {
-            lastErr = new Error(`Embedding API error ${resp.status}: ${errText}`);
-            continue;
-          }
-          throw new Error(`Embedding API error ${resp.status}: ${errText}`);
-        }
-
-        const json = await resp.json() as { data?: unknown };
-        if (!Array.isArray(json.data)) {
-          throw new Error(`Embedding API returned invalid data: missing "data" array`);
-        }
-
-        for (const item of json.data as Array<{ embedding?: number[]; index?: number }>) {
-          if (!Array.isArray(item.embedding) || typeof item.index !== 'number') continue;
-          results[i + item.index] = new Float32Array(item.embedding);
-        }
-        lastErr = null;
-        break;
-      } catch (e: unknown) {
-        lastErr = e instanceof Error ? e : new Error(String(e));
-        const isNetwork = lastErr.message.includes('fetch failed') || lastErr.message.includes('ECONNREFUSED') || lastErr.message.includes('Timeout');
-        if (isNetwork && attempt < MAX_RETRIES) continue;
-        throw lastErr;
-      }
-    }
-    if (lastErr) throw lastErr;
-
-    // Verify no holes in this batch
-    for (let j = i; j < Math.min(i + batchSize, texts.length); j++) {
-      if (!results[j]) {
-        throw new Error(`Embedding API returned no vector for input index ${j - i} in batch starting at ${i}`);
-      }
+  for (let w = 0; w < chunks.length; w += API_CONCURRENCY) {
+    const window = chunks.slice(w, w + API_CONCURRENCY);
+    const settled = await Promise.all(
+      window.map(c => fetchBatchWithRetry(doFetch, url, c.batch, c.offset, config)),
+    );
+    for (let ci = 0; ci < window.length; ci++) {
+      const vecs = settled[ci];
+      for (let j = 0; j < vecs.length; j++) results[window[ci].offset + j] = vecs[j];
     }
   }
 
@@ -227,20 +234,6 @@ export function mergeRRFSignals(
   for (const [docId, score] of scores) merged.push({ docId, score });
   merged.sort((a, b) => b.score - a.score);
   return merged.slice(0, limit);
-}
-
-export function mergeRRF(
-  bm25Results: RankedResult[],
-  vectorResults: RankedResult[],
-  limit: number,
-  k = 60,
-  bm25Weight = 0.6,
-  vectorWeight = 0.4,
-): RankedResult[] {
-  return mergeRRFSignals([
-    { name: 'bm25', weight: bm25Weight, results: bm25Results },
-    { name: 'vector', weight: vectorWeight, results: vectorResults },
-  ], limit, k);
 }
 
 /**
@@ -546,7 +539,9 @@ export function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
     offset += dim * 4;
   }
 
-  writeFileSync(join(dir, BINARY_FILE), buf);
+  const tmpPath = join(dir, BINARY_FILE + '.tmp');
+  writeFileSync(tmpPath, buf);
+  renameSync(tmpPath, join(dir, BINARY_FILE));
 
   // Remove legacy files
   for (const f of [CACHE_FILE, SQLITE_FILE, SQLITE_FILE + '-shm', SQLITE_FILE + '-wal', SQLITE_FILE + '-journal']) {
@@ -558,7 +553,14 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   // Primary: packed binary
   const binPath = join(dir, BINARY_FILE);
   if (existsSync(binPath)) {
-    try { return loadFromBinary(binPath); } catch { return null; }
+    try {
+      return loadFromBinary(binPath);
+    } catch (e: unknown) {
+      if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+        console.warn(`[embedding] binary index corrupted, will rebuild: ${e instanceof Error ? e.message : e}`);
+      }
+      return null;
+    }
   }
 
   // Legacy: SQLite → migrate to binary
@@ -598,11 +600,11 @@ function loadFromBinary(filePath: string): EmbeddingIndex {
 
   const dim = meta.dimension;
   const n = meta.count;
+  const vectorBuf = Buffer.from(raw.buffer, raw.byteOffset + offset, n * dim * 4);
+  const allFloats = new Float32Array(vectorBuf.buffer, vectorBuf.byteOffset, n * dim);
   const vectors: Float32Array[] = new Array(n);
   for (let i = 0; i < n; i++) {
-    const ab = raw.buffer.slice(raw.byteOffset + offset, raw.byteOffset + offset + dim * 4);
-    vectors[i] = new Float32Array(ab);
-    offset += dim * 4;
+    vectors[i] = allFloats.subarray(i * dim, (i + 1) * dim);
   }
 
   return {
@@ -689,12 +691,13 @@ function docToText(d: DocForEmbedding): string {
 export async function buildEmbeddingIndex(
   docs: DocForEmbedding[],
   existingIndex?: EmbeddingIndex | null,
+  precomputedHashes?: string[],
 ): Promise<EmbeddingIndex> {
   const apiMode = isApiMode();
   const config = apiMode ? null : await detectDevice();
   const t0 = Date.now();
 
-  const currentHashes = docs.map(hashDocContent);
+  const currentHashes = precomputedHashes ?? docs.map(hashDocContent);
   let vectors: Float32Array[];
 
   const activeModel = getModelId();

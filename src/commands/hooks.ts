@@ -1239,9 +1239,19 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
     const projectRoot = resolveWorkspace(data);
     if (!projectRoot) return;
 
+    const workflowRoot = join(projectRoot, '.workflow');
+
+    // Notify daemon to invalidate (rebuilds wiki + BM25 + embedding in the long-lived process)
+    const { readDaemonInfo, isDaemonAlive, queryDaemon } = await import('../search/daemon-client.js');
+    const daemonInfo = readDaemonInfo(workflowRoot);
+    if (daemonInfo && isDaemonAlive(daemonInfo)) {
+      await queryDaemon(daemonInfo.port, { action: 'invalidate' }).catch(() => {});
+      return;
+    }
+
+    // No daemon running — rebuild index directly so disk cache is fresh for next search
     const { WikiIndexer } = await import('#maestro-dashboard/wiki/wiki-indexer.js');
     const { loadWorkspaceConfig, resolveWorkspaceLinks } = await import('../config/index.js');
-    const workflowRoot = join(projectRoot, '.workflow');
     const wsConfig = loadWorkspaceConfig(projectRoot);
     const resolved = resolveWorkspaceLinks(projectRoot, wsConfig);
     const linkedWorkspaces = resolved
@@ -1249,8 +1259,6 @@ const HOOK_RUNNERS: Record<string, HookRunner> = {
       .map((lw: { name: string; workflowRoot: string; share: Array<'spec' | 'knowhow' | 'domain' | 'codebase'> }) => ({ name: lw.name, workflowRoot: lw.workflowRoot, shareTypes: lw.share }));
     const indexer = new WikiIndexer({ workflowRoot, linkedWorkspaces });
     await indexer.rebuild();
-    // Warm embedding index so next search skips cold ONNX load
-    indexer.getEmbeddingIndex().catch(() => {});
   },
 
   'search-daemon-start': async () => {
