@@ -416,3 +416,16 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.38',
+  title: 'Dashboard 入口恢复 + Install TUI 重构 + 反漂移防护',
+  highlights: [
+    '恢复 maestro view/stop 命令，前端 dashboard 入口重新启用',
+    'install TUI 重构：平台驱动安装 + update 迁移修复',
+    '新增 manage-drift-realign 命令 + maestro timeline CLI',
+    'ralph 反漂移 4 层防护 + 目标热修改 --amend',
+    'codex 完整移植 re-grounding 子系统',
+  ],
+  actions: [],
+});
