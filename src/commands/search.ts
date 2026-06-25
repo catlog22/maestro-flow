@@ -485,7 +485,7 @@ export function registerSearchCommand(program: Command): void {
     .argument('[action]', 'status (default), warmup, rebuild', 'status')
     .action(async (action: string) => {
       const workflowRoot = resolve('.workflow');
-      const { isAvailable, getUnavailableReason, loadEmbeddingIndex, embedTexts, getDeviceSummary, detectDevice } = await import('#maestro-dashboard/wiki/embedding.js');
+      const { isAvailable, getUnavailableReason, loadEmbeddingIndex, embedTexts, getDeviceSummary, detectDevice, setProgressCallback, DEFAULT_MODEL_ID } = await import('#maestro-dashboard/wiki/embedding.js');
 
       if (action === 'status') {
         const avail = await isAvailable();
@@ -494,6 +494,7 @@ export function registerSearchCommand(program: Command): void {
           await detectDevice();
           console.log(`Device: ${getDeviceSummary()}`);
         }
+        console.log(`Model: ${DEFAULT_MODEL_ID} (~465 MB)`);
         const idx = loadEmbeddingIndex(workflowRoot);
         if (idx) {
           console.log(`Index: ${idx.docIds.length} docs, dim=${idx.dimension}, model=${idx.modelId}`);
@@ -511,6 +512,33 @@ export function registerSearchCommand(program: Command): void {
           console.error(`Embedding unavailable: ${getUnavailableReason?.() ?? 'unknown'}`);
           process.exit(1);
         }
+        const isTTY = process.stderr.isTTY === true;
+        let downloadStarted = false;
+        let lastPct = -1;
+        setProgressCallback((info) => {
+          if (info.status === 'progress' && info.file === 'onnx/model.onnx' && !downloadStarted) {
+            downloadStarted = true;
+            console.error(`Downloading model ${DEFAULT_MODEL_ID} (~465 MB)...`);
+          }
+          if (info.status === 'progress' && info.file === 'onnx/model.onnx' && typeof info.progress === 'number') {
+            const pct = Math.round(info.progress);
+            if (pct === lastPct) return;
+            lastPct = pct;
+            const loaded = info.loaded ? `${(info.loaded / 1024 / 1024).toFixed(0)}` : '0';
+            const total = info.total ? `${(info.total / 1024 / 1024).toFixed(0)}` : '?';
+            if (isTTY) {
+              const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
+              process.stderr.write(`  [${bar}] ${pct}% ${loaded}/${total} MB\r`);
+            } else if (pct % 25 === 0) {
+              console.error(`  ${pct}% (${loaded}/${total} MB)`);
+            }
+          }
+          if (info.status === 'done' && info.file === 'onnx/model.onnx' && downloadStarted) {
+            if (isTTY) process.stderr.write('\x1b[2K\r');
+            console.error(`  ✓ model.onnx downloaded`);
+          }
+        });
+
         console.log('Warming up model...');
         const t0 = Date.now();
         await embedTexts(['warmup']);

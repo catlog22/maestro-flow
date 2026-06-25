@@ -260,16 +260,35 @@ maestro search "query" --no-emb # 显式跳过 embedding
 
 ## Embedding 管理
 
+Maestro 支持基于 Embedding 的语义搜索，通过向量相似度补充 BM25 全文检索。详细配置请参考 [Embedding 模型配置指南](embedding-guide.md)。
+
+> **注意**：`embedding` 是独立的顶级命令，不是 `search` 的子命令。`maestro search embedding status` 会被 `search <query...>` 的 variadic 参数贪婪捕获为搜索关键词 `"embedding status"`。
+
 ```bash
 # 查看 embedding 模型状态
-maestro search embedding status
+maestro embedding status
 
 # 预热 embedding 模型
-maestro search embedding warmup
+maestro embedding warmup
 
 # 重建 embedding 索引
-maestro search embedding rebuild
+maestro embedding rebuild
 ```
+
+**快速配置**：
+
+```bash
+# 安装依赖
+npm install @huggingface/transformers onnxruntime-node
+
+# 检查状态
+maestro embedding status
+
+# 预热模型（首次加载较慢）
+maestro embedding warmup
+```
+
+**自动降级**：当 embedding 不可用时，搜索自动降级为 BM25-only 模式，无需手动干预。
 
 ---
 
@@ -380,9 +399,9 @@ maestro search-daemon stop    # 停止常驻进程
 maestro search-daemon status  # 查看状态
 
 # Embedding 管理
-maestro search embedding status   # 查看 embedding 模型状态
-maestro search embedding warmup   # 预热 embedding 模型
-maestro search embedding rebuild  # 重建 embedding 索引
+maestro embedding status   # 查看 embedding 模型状态
+maestro embedding warmup   # 预热 embedding 模型
+maestro embedding rebuild  # 重建 embedding 索引
 
 # 索引健康检查
 maestro wiki health

@@ -381,6 +381,16 @@ export const guideRegistry: Array<{
     icon: 'search',
   },
   {
+    slug: 'embedding',
+    file: 'embedding-guide.md',
+    file_en: 'embedding-guide.en.md',
+    title: 'Embedding Model Guide',
+    description: 'Semantic search with embedding models — ONNX runtime, device detection, RRF fusion, incremental indexing',
+    title_zh: 'Embedding 模型配置指南',
+    description_zh: '基于 Embedding 的语义搜索 — ONNX 运行时、设备检测、RRF 融合、增量索引',
+    icon: 'cpu',
+  },
+  {
     slug: 'install',
     file: 'install-guide.md',
     title: 'Installation Guide',

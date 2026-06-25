@@ -242,6 +242,14 @@ async function loadTransformers(): Promise<{ pipeline: any }> {
   return await import('@huggingface/transformers');
 }
 
+export type ModelProgressCallback = (info: { status: string; file?: string; progress?: number; loaded?: number; total?: number }) => void;
+
+let _progressCallback: ModelProgressCallback | null = null;
+
+export function setProgressCallback(cb: ModelProgressCallback | null): void {
+  _progressCallback = cb;
+}
+
 async function getPipeline(): Promise<any> {
   if (_pipeline) return _pipeline;
 
@@ -251,7 +259,9 @@ async function getPipeline(): Promise<any> {
   _pipeline = await pipeline('feature-extraction', DEFAULT_MODEL, {
     dtype: config.dtype,
     device: config.device,
+    progress_callback: _progressCallback ?? undefined,
   });
+  _progressCallback = null;
   return _pipeline;
 }
 
