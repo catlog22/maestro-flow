@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.38',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'Restore maestro view/stop commands — re-enable frontend dashboard entry', text_zh: '恢复 maestro view/stop 命令，重新启用前端 dashboard 入口' },
+      { type: 'feat', text_en: 'Install TUI refactor — platform-driven installation + update migration fix', text_zh: 'install TUI 重构——平台驱动安装 + update 迁移修复' },
+      { type: 'feat', text_en: 'New manage-drift-realign command + maestro timeline CLI', text_zh: '新增 manage-drift-realign 命令 + maestro timeline CLI' },
+      { type: 'feat', text_en: 'Ralph anti-drift 4-layer protection + goal hot-amendment --amend', text_zh: 'ralph 反漂移 4 层防护 + 目标热修改 --amend' },
+      { type: 'feat', text_en: 'Codex full re-grounding subsystem migration + grill auto_mode alignment', text_zh: 'codex 完整移植 re-grounding 子系统 + grill auto_mode 对齐' },
+      { type: 'fix', text_en: 'Cross-file schema alignment + protocol version fix', text_zh: '跨文件 schema 对齐 + protocol version 遗漏修复' },
+    ],
+  },
+  {
     version: '0.5.37',
     date: '2026-06',
     changes: [

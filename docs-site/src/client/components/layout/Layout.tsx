@@ -27,7 +27,7 @@ export function Layout({ children }: { children?: ReactNode }) {
 function AnnouncementBanner() {
   return (
     <div className="fixed top-0 left-0 right-0 z-[101] bg-[#2E7D32] text-white text-[length:14px] text-center py-[8px] px-[var(--spacing-4)] leading-[1.4]">
-      Maestro v0.5.37 已发布 — Profile-based reinstall + search 冷启动 10x 提速 + 统一 load 命令。详见{' '}
+      Maestro v0.5.38 已发布 — Dashboard 入口恢复 + Install TUI 重构 + ralph 反漂移防护。详见{' '}
       <Link
         to="/changelog"
         className="text-white font-[var(--font-weight-semibold)] underline hover:no-underline"
