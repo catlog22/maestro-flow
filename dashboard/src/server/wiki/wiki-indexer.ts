@@ -426,17 +426,27 @@ export class WikiIndexer {
 
       const cached = loadEmbeddingIndex(this.workflowRoot);
       const index = await this.get();
-      // Only embed knowledge docs — KG code nodes are noise for semantic search
-      const KG_VIRTUAL_KINDS = new Set(['kg-node', 'kg-layer', 'kg-tour-step']);
+
+      // KG nodes: include high/medium semantic density types, skip low-density bulk
+      const KG_EMBED_NODE_TYPES = new Set(['module', 'class', 'kg-layer', 'kg-tour-step']);
+      const KG_SKIP_NODE_TYPES = new Set(['file', 'function', 'interface', 'type', 'const', 'enum']);
+
       const docs = index.entries
-        .filter(e => !KG_VIRTUAL_KINDS.has(e.ext?.virtualKind as string))
-        .map(e => ({
-          id: e.id,
-          title: e.title,
-          summary: e.summary,
-          tags: e.tags,
-          body: e.body,
-        }));
+        .filter(e => {
+          const vk = e.ext?.virtualKind as string | undefined;
+          if (vk !== 'kg-node' && vk !== 'kg-layer' && vk !== 'kg-tour-step') return true;
+          if (vk === 'kg-layer' || vk === 'kg-tour-step') return true;
+          const nt = e.ext?.nodeType as string | undefined;
+          if (nt && KG_SKIP_NODE_TYPES.has(nt)) return false;
+          return nt ? KG_EMBED_NODE_TYPES.has(nt) : false;
+        })
+        .map(e => {
+          const vk = e.ext?.virtualKind as string | undefined;
+          if (vk === 'kg-node' || vk === 'kg-layer' || vk === 'kg-tour-step') {
+            return this.enrichKgDocForEmbedding(e, index);
+          }
+          return { id: e.id, title: e.title, summary: e.summary, tags: e.tags, body: e.body };
+        });
 
       const { getModelId, hashDocContent } = await import('./embedding.js');
       const activeModel = getModelId();
@@ -473,6 +483,42 @@ export class WikiIndexer {
       }
       return null;
     }
+  }
+
+  private enrichKgDocForEmbedding(
+    e: WikiEntry,
+    index: WikiIndex,
+  ): { id: string; title: string; summary: string; tags: string[]; body: string } {
+    const parts: string[] = [];
+    const nt = (e.ext?.nodeType as string) || (e.ext?.virtualKind as string) || '';
+    const fp = e.ext?.filePath as string | undefined;
+
+    if (nt) parts.push(`[${nt}]`);
+    parts.push(e.title);
+    if (e.summary) parts.push(e.summary);
+    if (fp) parts.push(`file: ${fp}`);
+
+    const edges = (e.ext?.kgEdges as Array<{ target: string; type: string }>) ?? [];
+    if (edges.length > 0) {
+      const edgeDescs = edges.slice(0, 8).map(edge => {
+        const target = index.byId[edge.target];
+        return target ? `${edge.type} → ${target.title}` : null;
+      }).filter(Boolean);
+      if (edgeDescs.length > 0) parts.push('relations: ' + edgeDescs.join(', '));
+    }
+
+    if (e.tags.length > 0) {
+      const meaningful = e.tags.filter(t => !t.startsWith('kg:') && t !== 'kg');
+      if (meaningful.length > 0) parts.push('tags: ' + meaningful.join(', '));
+    }
+
+    return {
+      id: e.id,
+      title: e.title,
+      summary: e.summary,
+      tags: e.tags,
+      body: parts.join('. '),
+    };
   }
 
   async search(query: string, limit = 50): Promise<WikiEntry[]> {

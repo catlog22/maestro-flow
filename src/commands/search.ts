@@ -495,7 +495,10 @@ export function registerSearchCommand(program: Command): void {
           console.log(`Endpoint: ${apiConf.baseUrl}`);
           console.log(`Model: ${apiConf.model}`);
           if (apiConf.dimensions) console.log(`Dimensions: ${apiConf.dimensions}`);
-          console.log(`Batch size: ${apiConf.batchSize ?? 100}`);
+          const batchInfo = apiConf.batchSize
+            ? `fixed ${apiConf.batchSize}`
+            : `dynamic (ctx ${apiConf.contextLength ?? 8192} tokens)`;
+          console.log(`Batching: ${batchInfo}, concurrency: ${apiConf.concurrency ?? 4}`);
         } else {
           const avail = await isAvailable();
           console.log(`Transformers: ${avail ? 'available' : 'NOT available (' + (getUnavailableReason?.() ?? 'unknown') + ')'}`);

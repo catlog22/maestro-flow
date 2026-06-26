@@ -51,7 +51,11 @@ export interface EmbeddingApiConfig {
   apiKey: string;
   model: string;
   dimensions?: number;
+  /** Model context window in tokens. Used for dynamic batch sizing. Default: 8192. */
+  contextLength?: number;
+  /** Fixed batch size (number of texts). Overrides dynamic batching when set. */
   batchSize?: number;
+  concurrency?: number;
 }
 
 const API_CONFIG_PATH = join(homedir(), '.maestro', 'api-embedding.json');
@@ -160,23 +164,62 @@ async function fetchBatchWithRetry(
   throw lastErr!;
 }
 
-const API_CONCURRENCY = 4;
+const DEFAULT_API_CONCURRENCY = 4;
+const DEFAULT_CONTEXT_LENGTH = 8192;
+const MAX_TEXTS_PER_REQUEST = 256;
+
+function estimateTokens(text: string): number {
+  let ascii = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text.charCodeAt(i) < 128) ascii++;
+  }
+  return Math.ceil(ascii / 4 + (text.length - ascii) / 1.5);
+}
+
+function buildChunks(texts: string[], config: EmbeddingApiConfig): { offset: number; batch: string[] }[] {
+  if (config.batchSize) {
+    const chunks: { offset: number; batch: string[] }[] = [];
+    for (let i = 0; i < texts.length; i += config.batchSize) {
+      chunks.push({ offset: i, batch: texts.slice(i, i + config.batchSize) });
+    }
+    return chunks;
+  }
+
+  const ctxLen = config.contextLength ?? DEFAULT_CONTEXT_LENGTH;
+  const maxBatchTokens = ctxLen * 0.9;
+  const chunks: { offset: number; batch: string[] }[] = [];
+  let batchStart = 0;
+  let batchTokens = 0;
+  let batchCount = 0;
+  for (let i = 0; i < texts.length; i++) {
+    const t = estimateTokens(texts[i]);
+    if ((batchTokens + t > maxBatchTokens || batchCount >= MAX_TEXTS_PER_REQUEST) && i > batchStart) {
+      chunks.push({ offset: batchStart, batch: texts.slice(batchStart, i) });
+      batchStart = i;
+      batchTokens = 0;
+      batchCount = 0;
+    }
+    batchTokens += t;
+    batchCount++;
+  }
+  if (batchStart < texts.length) {
+    chunks.push({ offset: batchStart, batch: texts.slice(batchStart) });
+  }
+  return chunks;
+}
 
 async function callEmbeddingApi(texts: string[], config: EmbeddingApiConfig): Promise<Float32Array[]> {
   const doFetch = await getFetcher();
   const url = config.baseUrl.replace(/\/+$/, '') + '/embeddings';
-  const batchSize = config.batchSize ?? 100;
+  const concurrency = config.concurrency ?? DEFAULT_API_CONCURRENCY;
 
-  const chunks: { offset: number; batch: string[] }[] = [];
-  for (let i = 0; i < texts.length; i += batchSize) {
-    chunks.push({ offset: i, batch: texts.slice(i, i + batchSize) });
-  }
+  const chunks = buildChunks(texts, config);
 
   const results: Float32Array[] = new Array(texts.length);
 
   let firstErr: Error | null = null;
-  for (let w = 0; w < chunks.length; w += API_CONCURRENCY) {
-    const window = chunks.slice(w, w + API_CONCURRENCY);
+  for (let w = 0; w < chunks.length; w += concurrency) {
+    const window = chunks.slice(w, w + concurrency);
     const settled = await Promise.allSettled(
       window.map(c => fetchBatchWithRetry(doFetch, url, c.batch, c.offset, config)),
     );
@@ -611,11 +654,17 @@ function loadFromBinary(filePath: string): EmbeddingIndex {
 
   const dim = meta.dimension;
   const n = meta.count;
-  const vectorBuf = Buffer.from(raw.buffer, raw.byteOffset + offset, n * dim * 4);
-  const allFloats = new Float32Array(vectorBuf.buffer, vectorBuf.byteOffset, n * dim);
+  const vecBytes = n * dim * 4;
+  const vecStart = raw.byteOffset + offset;
   const vectors: Float32Array[] = new Array(n);
-  for (let i = 0; i < n; i++) {
-    vectors[i] = allFloats.subarray(i * dim, (i + 1) * dim);
+  if (vecStart % 4 === 0) {
+    const allFloats = new Float32Array(raw.buffer, vecStart, n * dim);
+    for (let i = 0; i < n; i++) vectors[i] = allFloats.subarray(i * dim, (i + 1) * dim);
+  } else {
+    const aligned = new ArrayBuffer(vecBytes);
+    new Uint8Array(aligned).set(raw.subarray(offset, offset + vecBytes));
+    const allFloats = new Float32Array(aligned);
+    for (let i = 0; i < n; i++) vectors[i] = allFloats.subarray(i * dim, (i + 1) * dim);
   }
 
   return {
