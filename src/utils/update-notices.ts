@@ -429,3 +429,15 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.40',
+  title: '原生插件安装 + 代码框复制按钮 + shell_exec 统一',
+  highlights: [
+    '新增 maestro plugin 命令：原生插件安装模式，第三方插件直接安装到工作区',
+    'docs-site 代码框增加复制按钮 + 亮色模式深色背景修复',
+    '修复 7 个核心 skill 的确认门控缺失和 wave 流程缺陷',
+    'CLI 裸 intent 拦截优化 + codex skill shell_exec 统一抽象',
+  ],
+  actions: [],
+});
