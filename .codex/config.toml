@@ -1,0 +1,13 @@
+[mcp_servers.claude_dms3-chrome-devtools]
+command = "npx"
+args = ["chrome-devtools-mcp@latest"]
+
+[mcp_servers.exa]
+url = "https://mcp.exa.ai/mcp"
+
+[mcp_servers.maestro]
+command = "node"
+args = ["bin/maestro-mcp.js"]
+
+[mcp_servers.maestro.env]
+MAESTRO_ENABLED_TOOLS = "write_file,edit_file,read_file,read_many_files,team_msg,store_knowhow"
