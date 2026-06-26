@@ -10,7 +10,7 @@ allowed-tools: Read, Write, Bash, Glob, Grep
 
 ```
 Parse Intent  →  Identify Targets  →  Draft JSON  →  Install + Report
-(or --list /      (read command        (apply_patch    (exec_command +
+(or --list /      (read command        (apply_patch    (shell_exec +
   --remove)         XML sections)       to overlays/)    banner)
 ```
 

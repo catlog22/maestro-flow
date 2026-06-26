@@ -25,15 +25,12 @@
 
 2. **Explore domain** (use CLI analysis tools):
    ```
-   exec_command({
-     cmd: `maestro delegate "PURPOSE: Research domain for {requirement}
+   shell_exec(`maestro delegate "PURPOSE: Research domain for {requirement}
    TASK: • Identify problem statement • Define target users • Extract constraints • Map integration points
    CONTEXT: @**/* | Memory: {requirement}
    EXPECTED: Structured research context with problem/users/domain/constraints
-   CONSTRAINTS: Read-only analysis" --role analyze --mode analysis --rule analysis-trace-code-execution`,
-     yield_time_ms: 30000, max_output_tokens: 6000
-   })
-   // ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+   CONSTRAINTS: Read-only analysis" --role analyze --mode analysis --rule analysis-trace-code-execution`, { timeout: 30000 })
+   // Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
    ```
 
 3. **Extract structured context**:
@@ -296,15 +293,12 @@
 
 2. **Explore codebase** (use CLI analysis tools):
    ```
-   exec_command({
-     cmd: `maestro delegate "PURPOSE: Explore codebase for {requirement}
+   shell_exec(`maestro delegate "PURPOSE: Explore codebase for {requirement}
    TASK: • Identify relevant files • Find existing patterns • Locate integration points
    CONTEXT: @**/* | Memory: {requirement}
    EXPECTED: Exploration findings with file paths and patterns
-   CONSTRAINTS: Read-only analysis" --role explore --mode analysis --rule analysis-trace-code-execution`,
-     yield_time_ms: 30000, max_output_tokens: 6000
-   })
-   // ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+   CONSTRAINTS: Read-only analysis" --role explore --mode analysis --rule analysis-trace-code-execution`, { timeout: 30000 })
+   // Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
    ```
 
 3. **Generate implementation plan**:

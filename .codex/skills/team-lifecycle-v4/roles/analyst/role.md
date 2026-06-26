@@ -36,17 +36,13 @@ Research and codebase exploration for context gathering.
 4. If topic references file (@path or .md/.txt) -> read it
 5. CLI seed analysis:
    ```
-   exec_command({
-     cmd: `maestro delegate "PURPOSE: Analyze topic, extract structured seed info.
+   shell_exec(`maestro delegate "PURPOSE: Analyze topic, extract structured seed info.
    TASK: * Extract problem statement * Identify target users * Determine domain
    * List constraints * Identify 3-5 exploration dimensions
    TOPIC: <topic-content>
    MODE: analysis
-   EXPECTED: JSON with: problem_statement, target_users[], domain, constraints[], exploration_dimensions[]" --role analyze --mode analysis`,
-     yield_time_ms: 30000,
-     max_output_tokens: 6000
-   })
-   // ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+   EXPECTED: JSON with: problem_statement, target_users[], domain, constraints[], exploration_dimensions[]" --role analyze --mode analysis`, { timeout: 30000 })
+   // Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
    // NEVER skip — seed analysis result is required for context packaging
    ```
 6. Parse result JSON
@@ -60,16 +56,12 @@ Research and codebase exploration for context gathering.
 
 When project detected:
 ```
-exec_command({
-  cmd: `maestro delegate "PURPOSE: Explore codebase for context
+shell_exec(`maestro delegate "PURPOSE: Explore codebase for context
 TASK: * Identify tech stack * Map architecture patterns * Document conventions * List integration points
 MODE: analysis
 CONTEXT: @**/*
-EXPECTED: JSON with: tech_stack[], architecture_patterns[], conventions[], integration_points[]" --role explore --mode analysis`,
-  yield_time_ms: 30000,
-  max_output_tokens: 6000
-})
-// ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+EXPECTED: JSON with: tech_stack[], architecture_patterns[], conventions[], integration_points[]" --role explore --mode analysis`, { timeout: 30000 })
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 // NEVER skip — codebase context is required for downstream roles
 ```
 

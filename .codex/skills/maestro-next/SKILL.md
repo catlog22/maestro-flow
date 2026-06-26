@@ -44,7 +44,7 @@ $ARGUMENTS — 意图文本 + 可选 flags。
 3. **Skill 发现限定 codex 平台** — 通过 `maestro ralph skills --platform codex --json --quiet` 解析 `command_scope` + `command_path`（project 覆盖 global，限定 `.codex/skills/`）；未命中即 E003
 4. **空 intent 或 "continue/next/go/继续/下一步/接下来"** → 直接采用 lifecycle_position 推断的自然下一步
 5. **字面命中路由表优先** — lifecycle 仅作加分；命中失败时 lifecycle 上升为决定性信号
-6. **In-context invocation** — top pick 以 `$skill-name {args}` 形式在协调器上下文直接调用，**禁止** spawn_agent / spawn_agents_on_csv / exec_command 包装
+6. **In-context invocation** — top pick 以 `$skill-name {args}` 形式在协调器上下文直接调用，**禁止** spawn_agent / spawn_agents_on_csv / shell_exec 包装
 7. **参数传递** — 默认 intent 原文作为第一个 arg；用户可在 S_CONFIRM 修改；`-y` 仅当用户传入时透传到 skill args
 8. **`--list` 模式跳过 lifecycle 推断与评分**，仅按 workflow 簇分组列出全部候选
 </invariants>
@@ -234,7 +234,7 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 
 ### A_INVOKE_SKILL
 
-在协调器上下文以 `$skill-name {args}` 直接调用（**NO spawn_agent, NO exec_command 包装**）：
+在协调器上下文以 `$skill-name {args}` 直接调用（**NO spawn_agent, NO shell_exec 包装**）：
 
 1. 解析最终 args：
    - 默认：`{intent}`（原文，去除已识别的关键词如 "continue"）
@@ -296,7 +296,7 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 - [ ] `--dry-run` 仅展示，不执行
 - [ ] `-y` 自动执行 top pick；用户传入时透传到 skill args
 - [ ] 非自动模式通过 `request_user_input` 确认或选备选
-- [ ] 选定 skill 在协调器上下文以 `$skill {args}` 直调（NO spawn_agent / NO exec_command 包装）
+- [ ] 选定 skill 在协调器上下文以 `$skill {args}` 直调（NO spawn_agent / NO shell_exec 包装）
 - [ ] 不创建 session / 不生成 status.json / 不调用 create_goal/update_plan / 不触发后续 chain
 - [ ] `--list` 模式按 workflow 簇分组展示，每项标 `[project|global]` scope
 

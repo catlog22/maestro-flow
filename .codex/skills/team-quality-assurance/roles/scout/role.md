@@ -51,11 +51,8 @@ EXPECTED: List of findings with severity (critical/high/medium/low), file:line r
 CONSTRAINTS: Focus on actionable findings only
 ```
 ```
-exec_command({
-  cmd: `maestro delegate "<prompt>" --role analyze --mode analysis`,
-  yield_time_ms: 30000, max_output_tokens: 6000
-})
-// ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+shell_exec(`maestro delegate "<prompt>" --role analyze --mode analysis`, { timeout: 30000 })
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 // NEVER skip — each perspective's findings are required for aggregation
 ```
 

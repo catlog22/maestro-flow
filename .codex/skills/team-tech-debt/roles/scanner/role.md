@@ -63,11 +63,8 @@ Multi-dimension tech debt scanner. Scan codebase across 5 dimensions (code, arch
 
 **Delegate execution protocol** (applies to ALL fan-out CLI calls):
 ```
-exec_command({
-  cmd: `maestro delegate "<prompt>" --role <role> --mode analysis`,
-  yield_time_ms: 30000, max_output_tokens: 6000
-})
-// ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+shell_exec(`maestro delegate "<prompt>" --role <role> --mode analysis`, { timeout: 30000 })
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 // NEVER skip — each fan-out result is required for fan-in merge
 ```
 

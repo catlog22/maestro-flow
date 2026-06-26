@@ -53,11 +53,8 @@ See agent-instruction.md "Progress Milestone Protocol" for format.
 - Use CLI tools (maestro delegate) or direct tools for exploration
 
 ## Maestro Delegate Execution (MANDATORY)
-When calling `maestro delegate` via exec_command:
-1. Set yield_time_ms: 30000 (initial 30s wait)
-2. If session_id returned (command still running) → poll with write_stdin(session_id, chars="", yield_time_ms=15000→60000) in a loop
-3. NEVER skip polling, NEVER abandon — delegate output is required
-4. Increase poll interval: 15s → 30s → 60s (cap)
-5. Parse result only after command completes
-Protocol: @~/.maestro/workflows/delegate-protocol.codex.md
+When calling `maestro delegate`, use shell_exec:
+  shell_exec(`maestro delegate "..." --role <role> --mode <mode>`, { timeout: 30000 })
+NEVER skip waiting. NEVER abandon — delegate output is required.
+Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 """

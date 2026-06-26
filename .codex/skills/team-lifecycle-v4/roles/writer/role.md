@@ -61,17 +61,13 @@ Template-driven document generation with progressive dependency loading.
 
 CLI generation:
 ```
-exec_command({
-  cmd: `maestro delegate "PURPOSE: Generate <doc-type> document following template
+shell_exec(`maestro delegate "PURPOSE: Generate <doc-type> document following template
 TASK: * Load template * Apply spec config and discovery context * Integrate prior feedback * Generate all sections
 MODE: write
 CONTEXT: @<session>/spec/*.json @<template-path>
 EXPECTED: Document at <output-path> with YAML frontmatter, all sections, cross-references
-CONSTRAINTS: Follow document standards" --role implement --mode write --cd <session>`,
-  yield_time_ms: 30000,
-  max_output_tokens: 6000
-})
-// ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+CONSTRAINTS: Follow document standards" --role implement --mode write --cd <session>`, { timeout: 30000 })
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 // NEVER skip — document must be fully written before validation
 ```
 

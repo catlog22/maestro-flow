@@ -37,19 +37,15 @@ For each batch, use CLI tool for implementation:
 **Per-batch delegation**:
 
 ```
-exec_command({
-  cmd: `maestro delegate "PURPOSE: Apply tech debt fixes in batch; success = all items fixed without breaking changes
+shell_exec(`maestro delegate "PURPOSE: Apply tech debt fixes in batch; success = all items fixed without breaking changes
 TASK: <batch-type-specific-tasks>
 MODE: write
 CONTEXT: @<worktree-path>/**/* | Memory: Remediation plan context
 EXPECTED: Code changes that fix debt items, maintain backward compatibility, pass existing tests
 CONSTRAINTS: Minimal changes only | No new features | No suppressions | Read files before modifying
 Batch type: <refactor|update-deps|add-tests|add-docs|restructure>
-Items: <list-of-items-with-file-paths-and-descriptions>" --role implement --mode write --cd "<worktree-path>"`,
-  yield_time_ms: 30000,
-  max_output_tokens: 6000
-})
-// ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+Items: <list-of-items-with-file-paths-and-descriptions>" --role implement --mode write --cd "<worktree-path>"`, { timeout: 30000 })
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 // NEVER skip — must wait for batch fix to complete before next batch or validation
 ```
 

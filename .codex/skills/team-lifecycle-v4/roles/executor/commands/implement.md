@@ -51,12 +51,8 @@ CONSTRAINTS: Only modify listed files | Follow existing patterns
 
 CLI call:
 ```
-exec_command({
-  cmd: `maestro delegate "<prompt>" --role implement --mode write --rule development-implement-feature`,
-  yield_time_ms: 30000,
-  max_output_tokens: 6000
-})
-// ⚠️ If session_id returned → poll write_stdin until completion (see @~/.maestro/workflows/delegate-protocol.codex.md)
+shell_exec(`maestro delegate "<prompt>" --role implement --mode write --rule development-implement-feature`, { timeout: 30000 })
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 // NEVER skip — implementation must complete before convergence check
 ```
 

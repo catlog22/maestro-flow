@@ -11,7 +11,7 @@ Socratic stress-testing of a plan, idea, or requirement against codebase reality
 Codex specifics:
 - **No agent spawning** — codebase exploration via `maestro explore` (preferred, fallback Glob/Grep/Read).
 - **request_user_input** replaces request_user_input for Socratic Q&A.
-- **CLI delegation** for auto mode: `exec_command("maestro delegate ... --role analyze --mode analysis")`.
+- **CLI delegation** for auto mode: `shell_exec("maestro delegate ... --role analyze --mode analysis")`.
 </purpose>
 
 <required_reading>

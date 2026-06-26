@@ -6,14 +6,14 @@ allowed-tools: Read, Write, Edit, Glob, Grep, request_user_input
 ---
 
 <purpose>
-Direct CLI fan-out collaboration via `exec_command`. Diamond topology:
-Fan-out (parallel `exec_command` → `maestro delegate --to <tool>`) → Cross-verify (coordinator) → Synthesize (coordinator).
+Direct CLI fan-out collaboration via `shell_exec`. Diamond topology:
+Fan-out (parallel `shell_exec` → `maestro delegate --to <tool>`) → Cross-verify (coordinator) → Synthesize (coordinator).
 
 Each CLI tool independently analyzes the requirement via `maestro delegate` shell call.
-Coordinator polls ALL CLI results to completion via delegate-protocol.codex.md,
+Coordinator waits for ALL CLI results to completion via shell-exec-protocol.md,
 then cross-verifies for consensus/conflicts and synthesizes into unified report.
 
-NO spawn_agents_on_csv. NO spawn_agent. ALL CLI calls directly by coordinator via exec_command.
+NO spawn_agents_on_csv. NO spawn_agent. ALL CLI calls directly by coordinator via shell_exec.
 </purpose>
 
 
@@ -62,12 +62,12 @@ $ARGUMENTS — requirement text and optional flags.
 </context>
 
 <invariants>
-1. **ALL analysis via exec_command → maestro delegate** — coordinator NEVER performs analysis internally, NEVER spawns agents for analysis
-2. **exec_command is the execution mechanism** — every delegate call: `exec_command({ cmd: "maestro delegate ..." })`
-3. **delegate-protocol.codex.md governs lifecycle** — MUST follow exec_command → poll write_stdin → parse for every delegate
-4. **NEVER fire-and-forget** — every exec_command MUST be polled to completion via write_stdin, result consumed before proceeding
+1. **ALL analysis via shell_exec → maestro delegate** — coordinator NEVER performs analysis internally, NEVER spawns agents for analysis
+2. **shell_exec is the execution mechanism** — every delegate call: `shell_exec("maestro delegate ...", { timeout: N })`
+3. **shell-exec-protocol.md governs lifecycle** — MUST follow shell_exec → wait for completion → parse for every delegate
+4. **NEVER fire-and-forget** — every shell_exec MUST complete before proceeding, result consumed before next step
 5. **NEVER substitute internal reasoning** — if CLI fails, report failure; do NOT generate analysis yourself as replacement
-6. **Indefinite wait** — polling has NO max timeout; continue polling until CLI returns regardless of elapsed time; NEVER abandon a running session
+6. **Indefinite wait** — shell_exec has NO max timeout; continue waiting until CLI returns regardless of elapsed time; NEVER abandon a running session
 6. **Same prompt, different --to** — fan-out delegates all use identical base prompt, only `--to <tool>` differs
 7. **Minimum 2 tools** — abort if fewer eligible
 8. **Partial degradation** — 1 tool fails → continue with remaining (minimum 2 results for cross-verify)
@@ -78,7 +78,7 @@ $ARGUMENTS — requirement text and optional flags.
 <states>
 S_PARSE          — 解析参数、发现工具                       PERSIST: —
 S_CONFIRM        — 展示计划、用户确认（-y 跳过）            PERSIST: —
-S_FAN_OUT        — 并行 exec_command fan-out + 轮询等待      PERSIST: per-tool outputs
+S_FAN_OUT        — 并行 shell_exec fan-out + 等待完成          PERSIST: per-tool outputs
 S_CROSS_VERIFY   — 交叉验证：共识/冲突/独特分类              PERSIST: cross-verify.md
 S_SYNTHESIZE     — 生成最终报告                              PERSIST: reports
 S_AGGREGATE      — 注册 artifact、输出摘要                   PERSIST: state.json
@@ -138,72 +138,27 @@ S_AGGREGATE:
 
 #### Phase 1: Parallel Launch
 
-Launch ALL delegate commands simultaneously via `multi_tool_use.parallel`:
+Launch ALL delegate commands simultaneously in parallel:
 
 ```
-multi_tool_use.parallel({
-  tool_uses: [
-    {
-      recipient_name: "functions.exec_command",
-      parameters: {
-        cmd: "maestro delegate \"<shared_prompt>\" --to agy --mode <mode> [--rule <rule>]",
-        yield_time_ms: 30000,
-        max_output_tokens: 6000
-      }
-    },
-    {
-      recipient_name: "functions.exec_command",
-      parameters: {
-        cmd: "maestro delegate \"<shared_prompt>\" --to claude --mode <mode> [--rule <rule>]",
-        yield_time_ms: 30000,
-        max_output_tokens: 6000
-      }
-    }
-    // ... one entry per selected tool
-  ]
-})
+// Parallel fan-out — one shell_exec per selected tool:
+shell_exec(`maestro delegate "<shared_prompt>" --to agy --mode <mode> [--rule <rule>]`, { timeout: 30000 })
+shell_exec(`maestro delegate "<shared_prompt>" --to claude --mode <mode> [--rule <rule>]`, { timeout: 30000 })
+// ... one call per selected tool
+// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
 ```
 
 #### Phase 2: Block Until ALL Complete
 
-For each result from Phase 1, check completion status:
+Each `shell_exec` call blocks until its delegate completes. Save each result:
 
-- **Completed** (no session_id) → save output directly to `{scratchDir}/per-tool/{tool}-output.md`
-- **Running** (session_id returned) → add to `pending_sessions[]`
+- **Completed** → save output to `{scratchDir}/per-tool/{tool}-output.md`
+- **Failed** → log error for that tool
 
-**Blocking poll loop — runs until pending_sessions is empty:**
-
-```
-pending_sessions = [{ tool, session_id }, ...]
-
-WHILE pending_sessions.length > 0:
-  FOR EACH session IN pending_sessions:
-    result = write_stdin({
-      session_id: session.session_id,
-      chars: "",
-      yield_time_ms: 60000,          // 60s per poll — no rush, wait for real output
-      max_output_tokens: 6000
-    })
-
-    IF result indicates completed:
-      save output → {scratchDir}/per-tool/{session.tool}-output.md
-      REMOVE session FROM pending_sessions
-      completed_count += 1
-
-    IF result indicates failed/error:
-      log error for session.tool
-      REMOVE session FROM pending_sessions
-      failed_count += 1
-
-    // still running → stays in pending_sessions, poll again next round
-```
-
-**Blocking guarantees:**
-- `yield_time_ms: 60000` — each poll waits up to 60s for output, no short-circuit
-- NO max retry count — loop continues indefinitely until CLI returns
-- NO timeout escalation — delegate can run as long as needed (30s to 10min+)
-- NO early exit — even if tool 1 and 2 are done, keep polling tool 3 until it completes
-- Round-robin ensures fair polling across all pending sessions
+**Blocking guarantees (per shell-exec-protocol.md):**
+- Each `shell_exec` waits until CLI returns — no short-circuit
+- NO max timeout — delegate can run as long as needed
+- NO early exit — all tools must complete before proceeding
 
 #### Phase 3: Validate
 
@@ -212,9 +167,9 @@ WHILE pending_sessions.length > 0:
 - 1 tool failed but 2+ succeeded → W001, log failure, continue
 
 **Iron rules**:
-- NEVER skip polling — every session_id MUST be polled to completion
-- NEVER proceed to S_CROSS_VERIFY while pending_sessions is non-empty
-- NEVER set a max timeout or max retry count on the poll loop
+- NEVER skip waiting — every shell_exec MUST complete before proceeding
+- NEVER proceed to S_CROSS_VERIFY while any delegate is still running
+- NEVER set a max timeout on shell_exec calls
 - NEVER generate analysis internally as substitute for CLI output
 - NEVER summarize or paraphrase — save raw CLI output verbatim
 
@@ -318,10 +273,10 @@ Generate 3 output files from cross-verify results:
 </error_codes>
 
 <success_criteria>
-- [ ] ALL analysis performed via exec_command → maestro delegate — zero internal analysis
-- [ ] multi_tool_use.parallel used for fan-out launch
-- [ ] Every exec_command polled to completion via write_stdin — no timeout cap, no max retries
-- [ ] Blocking poll loop ran until pending_sessions empty — no early exit
+- [ ] ALL analysis performed via shell_exec → maestro delegate — zero internal analysis
+- [ ] Parallel shell_exec calls used for fan-out launch
+- [ ] Every shell_exec waited to completion — no timeout cap, no early exit
+- [ ] All shell_exec calls waited to completion — no early exit
 - [ ] Per-tool raw outputs saved to {scratchDir}/per-tool/
 - [ ] Cross-verify: CONSENSUS/CONFLICT/UNIQUE classified, consensus_level computed
 - [ ] Boundary grill executed on CONFLICT items (skip if no boundary conflicts detected)
