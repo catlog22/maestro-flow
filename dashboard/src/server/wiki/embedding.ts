@@ -120,7 +120,7 @@ const RETRY_STATUS = new Set([429, 500, 502, 503, 504]);
 async function fetchBatchWithRetry(
   doFetch: FetchFn, url: string, batch: string[], batchOffset: number, config: EmbeddingApiConfig,
 ): Promise<Float32Array[]> {
-  const body: Record<string, unknown> = { model: config.model, input: batch };
+  const body: Record<string, unknown> = { model: config.model, input: batch, encoding_format: 'float' };
   if (config.dimensions) body.dimensions = config.dimensions;
   const reqInit: RequestInit = {
     method: 'POST',
