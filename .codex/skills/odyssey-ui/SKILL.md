@@ -83,6 +83,39 @@ ARCHITECTURE.md | `maestro search "<target>" --json` (top 5) | `maestro load --t
 | 可复用泛化 pattern | pattern 签名 + 应用范围 | `/spec-add coding "..."` |
 </context>
 
+<csv_schema>
+
+### Shared Output Schema (all waves)
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "result_status": { "type": "string", "enum": ["completed", "failed"] },
+    "findings": { "type": "string", "maxLength": 500 },
+    "evidence": { "type": "string" },
+    "error": { "type": "string" }
+  },
+  "required": ["id", "result_status", "findings"]
+}
+```
+
+**Termination contract:** Call `report_agent_job_result` EXACTLY ONCE. Read-only. Do NOT modify source files, tasks.csv, wave-*.csv, results.csv, or call spawn_agents_on_csv.
+
+### tasks.csv
+```csv
+id,title,description,task_type,dimension,deps,wave,status,findings,evidence,error
+```
+
+**Waves:**
+| Wave | Tasks | Parallelism |
+|------|-------|-------------|
+| 1 | Survey (design-tokens-audit, pattern-inventory) | 2 agents |
+| 2 | Audit (visual-hierarchy, interaction-states, accessibility, responsiveness, micro-interactions, edge-cases) | 6 agents |
+| 3 | Diverge (polish-agent, delight-agent) | 2 agents |
+| 4 | Generalization (syntax-grep, semantic-scan, structural-match, historical-grep) | 4 agents |
+</csv_schema>
+
 <self_iteration>
 适用阶段: S_SURVEY, S_AUDIT, S_DIVERGE, S_GENERALIZE
 </self_iteration>
@@ -147,41 +180,58 @@ S_RECORD   → END      DO A_RECORD
 Find latest session via Glob → read `session.json` → display summary → jump to `current_state`.
 
 ### A_SURVEY
-1. **Design system inventory**: Scan for design tokens, CSS variables, theme imports
-2. **Current state analysis**: Styling patterns, layout strategy, component hierarchy
-3. **spawn_agents_on_csv (Wave 1)** — 2 agents: design-tokens-audit, pattern-inventory
-4. Append evidence (phase: "survey"). Update §2. Mark G1 done.
+**spawn_agents_on_csv (Wave 1):**
+
+Write `tasks.csv` with Wave 1 rows:
+```csv
+"survey-tokens","Design Token Audit","Scan {target_files} for CSS variables, design tokens, theme values. Return [{token,usage_count,consistency,file,line}].","survey","","","1","pending","","",""
+"survey-patterns","Pattern Inventory","Catalog component patterns, layout, spacing, typography in {target_files}. Return [{pattern,files,consistency}].","survey","","","1","pending","","",""
+```
+`spawn_agents_on_csv({ csv_path:"tasks.csv", max_concurrency:2, max_runtime_seconds:300, output_csv_path:"wave-1-results.csv", output_schema:SHARED_OUTPUT_SCHEMA })`
+
+Merge → evidence.ndjson (phase: "survey"). Update §2. Mark G1 done.
 📌 `git commit -m "odyssey-ui({slug}): SURVEY — 视觉调查"`
 
 ### A_AUDIT
-**spawn_agents_on_csv (Wave 2)** — 6 parallel agents (one per dimension, or `--dimensions` subset):
+**spawn_agents_on_csv (Wave 2)** — 6 agents (one per dimension, or `--dimensions` subset):
 
-| Dimension | Focus |
-|-----------|-------|
-| visual_hierarchy | Spacing, typography scale, color contrast, alignment, whitespace, visual weight |
-| interaction_states | Hover, focus, active, disabled, loading, error, empty, selected states |
-| accessibility | WCAG AA contrast, focus management, aria labels, keyboard nav, screen reader |
-| responsiveness | Breakpoints, overflow, touch targets, fluid typography, container queries |
-| micro_interactions | Transitions, animations, feedback indicators, loading states, progress |
-| edge_cases | Long text truncation, empty data, error states, extreme values, i18n, RTL |
+Append Wave 2 rows to `tasks.csv`:
+```csv
+"audit-hierarchy","Visual Hierarchy","Spacing, typography scale, contrast, alignment, whitespace, visual weight","audit","visual-hierarchy","","2","pending","","",""
+"audit-interaction","Interaction States","hover/focus/active/disabled/loading/error/empty/selected states","audit","interaction-states","","2","pending","","",""
+"audit-a11y","Accessibility","WCAG AA contrast, focus mgmt, aria, keyboard nav, screen reader","audit","accessibility","","2","pending","","",""
+"audit-responsive","Responsiveness","Breakpoints, overflow, touch targets >=44px, fluid typography","audit","responsiveness","","2","pending","","",""
+"audit-motion","Micro-interactions","Transitions, animations, feedback, loading states, scroll behavior","audit","micro-interactions","","2","pending","","",""
+"audit-edge","Edge Cases","Long text, empty data, error states, extreme values, i18n, RTL","audit","edge-cases","","2","pending","","",""
+```
+`spawn_agents_on_csv({ csv_path:"tasks.csv", max_concurrency:6, max_runtime_seconds:600, output_csv_path:"wave-2-results.csv", output_schema:SHARED_OUTPUT_SCHEMA })`
 
 Each returns `[{title, severity, file, line, description, suggestion, dimension}]`.
-Merge → evidence (phase: "audit"). Write `audit_result`. Update §3 (severity matrix). Mark G2 done.
+Merge → evidence (phase: "audit"). Write `audit_result` with dimensions, finding count, severity distribution. Update §3 (severity matrix). Mark G2 done.
 📌 `git commit -m "odyssey-ui({slug}): AUDIT — 多维审查"`
 
 ### A_DIVERGE
-Goes beyond defect fixing — "what would make this delightful?"
+**spawn_agents_on_csv (Wave 3)** — 2 agents:
 
-**Step 1 — spawn_agents_on_csv (Wave 3)** — 2 parallel agents:
-- **Polish Agent**: Shadows, borders, transitions, hover states, feedback, empty states, skeleton loading, scroll behavior
-- **Delight Agent**: Motion design, progressive disclosure, smart defaults, contextual hints, celebratory feedback, personality in copy
+Append Wave 3 rows to `tasks.csv`:
+```csv
+"diverge-polish","Polish Agent","Missing subtle details: shadows, borders, transitions, hover feedback, empty states, skeleton loading, scroll behavior. Return [{idea,category:'polish',impact,effort,description}].","diverge","","","3","pending","","",""
+"diverge-delight","Delight Agent","What makes this memorable: motion design, progressive disclosure, smart defaults, celebratory feedback, personality. Return [{idea,category:'delight',impact,effort,description}].","diverge","","","3","pending","","",""
+```
+`spawn_agents_on_csv({ csv_path:"tasks.csv", max_concurrency:2, max_runtime_seconds:300, output_csv_path:"wave-3-results.csv", output_schema:SHARED_OUTPUT_SCHEMA })`
 
-Each returns `[{idea, category (polish|delight), impact, effort, description, inspiration}]`
+**Optional CLI delegate** for creative review:
+```bash
+maestro delegate "PURPOSE: Creative UI review for: {target}
+TASK: Identify polish opportunities | Suggest delight moments | Evaluate visual rhythm
+MODE: analysis  CONTEXT: @{target_files} | Survey: {token_summary} | Audit: {top_findings}
+EXPECTED: JSON [{idea, category, impact, effort, description}]
+CONSTRAINTS: User-perceptible improvements only
+" --role analyze --mode analysis
+```
+Execute with `run_in_background: true`, then wait for callback.
 
-**Step 2 — CLI-assisted** (optional): `maestro delegate` with `--role analyze` — polish opportunities, micro-interactions, visual rhythm, delight moments
-
-**Step 3 — Consolidate**: Merge audit findings + divergent ideas → prioritized list (severity x impact x effort).
-Append evidence (phase: "diverge"). Update §4. Mark G3 done.
+Consolidate: audit findings + divergent ideas → prioritized improvement list (impact/effort matrix). Write `diverge_result`. Append evidence (phase: "diverge"). Update §4. Mark G3 done.
 📌 `git commit -m "odyssey-ui({slug}): DIVERGE — 发散探索"`
 
 ### A_FIX
@@ -198,9 +248,36 @@ Skip if `--skip-fix`.
 📌 `git commit -m "odyssey-ui({slug}): VERIFY — 验证"`
 
 ### A_GENERALIZE
-按 base A_GENERALIZE 执行。Pattern 来源: audit findings + diverge ideas (severity >= medium OR impact = high)。
-**spawn_agents_on_csv (Wave 4)** — 4 agents: syntax-grep, semantic-scan, structural-match, historical-grep.
-Mark G5 done.
+Skip if `--skip-generalize`. Pattern 来源: audit findings + diverge ideas (severity >= medium OR impact = high)。
+
+**Step 1 — Multi-layer pattern extraction:**
+
+| Layer | Method | Example |
+|-------|--------|---------|
+| Syntax | Regex patterns (direct Grep) | Missing `focus-visible`, hardcoded colors, `!important` |
+| Semantic | Agent anti-pattern scan | Missing hover state on interactive element, no empty state |
+| Structural | File/module similarity | Same component structure missing accessibility attrs |
+
+Write `session.json.patterns[]`: `[{id, source_finding, layer, signature, description, risk, fix_template}]`
+
+**Step 2 — 4-agent scan (spawn_agents_on_csv, Wave 4):**
+
+Append Wave 4 rows to `tasks.csv`:
+```csv
+"gen-syntax","Syntax Grep","Grep CSS/style patterns matching '${signatures}' across project","generalization","syntax","","4","pending","","",""
+"gen-semantic","Semantic Scan","Find components with same interaction pattern but missing states","generalization","semantic","","4","pending","","",""
+"gen-structural","Structural Match","Find structurally similar components, check for same issues","generalization","structural","","4","pending","","",""
+"gen-historical","Historical Grep","git log -S '${signature}' for UI pattern history","generalization","historical","","4","pending","","",""
+```
+`spawn_agents_on_csv({ csv_path:"tasks.csv", max_concurrency:4, max_runtime_seconds:600, output_csv_path:"wave-4-results.csv", output_schema:SHARED_OUTPUT_SCHEMA })`
+
+**Step 3 — Cross-layer dedup**: Multi-layer hit → boost confidence. Single → `needs_review`. Historical fix → `regression_risk`.
+
+**Step 4 — Iterative deepening**: module ≥3 hits → targeted deep scan. Max 1 round.
+
+**Step 5 — Quality Gate** (self-iteration).
+
+**Step 6:** Write `generalization_stats`. Update §6. Mark G5 done.
 📌 `git commit -m "odyssey-ui({slug}): GENERALIZE — 泛化扫描"`
 
 ### A_DISCOVER

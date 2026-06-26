@@ -98,6 +98,36 @@ $ARGUMENTS — issue description and optional flags.
 | 可复用泛化 pattern | `/spec-add coding "..."` |
 </context>
 
+<csv_schema>
+### Shared Output Schema (all waves)
+```json
+{
+  "type": "object",
+  "properties": {
+    "id": {"type":"string"}, "result_status": {"type":"string","enum":["completed","failed"]},
+    "findings": {"type":"string","maxLength":500}, "evidence": {"type":"string"}, "error": {"type":"string"}
+  },
+  "required": ["id","result_status","findings"]
+}
+```
+
+**Termination Contract** (embed in every instruction):
+```
+You MUST call report_agent_job_result EXACTLY ONCE before exiting.
+Success → result_status=completed | Failure → result_status=failed with error | Timeout → completed with partial.
+NEVER continue indefinitely. NEVER exit silently. Read-only — do NOT modify source files.
+Do NOT write to tasks.csv, wave-*.csv, results.csv. Do NOT call spawn_agents_on_csv.
+```
+
+### tasks.csv
+```csv
+id,title,description,task_type,deps,wave,status,findings,evidence,error
+```
+- Wave 1: Archaeology (git-timeline, git-blame) — parallel
+- Wave 2: Generalization (syntax-grep, semantic-scan, structural-match, historical-grep) — parallel, depends on root cause
+- Single-agent stages (explore, diagnose, fix, confirm) remain inline
+</csv_schema>
+
 <self_iteration>
 适用阶段: S_ARCHAEOLOGY, S_EXPLORE, S_DIAGNOSE, S_GENERALIZE
 </self_iteration>
@@ -152,9 +182,25 @@ S_RECORD   → END            : A_RECORD complete
 Find latest session via Glob → read `session.json` → display summary → jump to `current_state`.
 
 ### A_ARCHAEOLOGY
-**2 parallel agents (spawn_agents_on_csv):** Timeline (`git log --oneline -20 -- {files}`) + Blame (top 3 suspicious files `git blame -L {region}`). Append evidence (phase: "archaeology").
+**Step 1 — Git archaeology (spawn_agents_on_csv, Wave 1):**
 
-**CLI change review** via `maestro delegate --role analyze --mode analysis` (`run_in_background: true`):
+Write `tasks.csv` with Wave 1 rows:
+```csv
+id,title,description,task_type,deps,wave,status,findings,evidence,error
+"arch-timeline","Git Timeline","Run git log --oneline -20 -- {files}. Return [{sha,date,author,message,files_changed}] as JSON.","archaeology","","1","pending","","",""
+"arch-blame","Git Blame","Top 3 suspicious files: git blame -L {region}. Return [{file,line_range,sha,author,date,content}] as JSON.","archaeology","","1","pending","","",""
+```
+
+```javascript
+spawn_agents_on_csv({ csv_path:"tasks.csv", id_column:"id",
+  instruction: ARCHAEOLOGY_INSTRUCTION + TERMINATION_CONTRACT,
+  max_concurrency:2, max_runtime_seconds:300,
+  output_csv_path:"wave-1-results.csv", output_schema: SHARED_OUTPUT_SCHEMA })
+```
+
+Merge results → evidence.ndjson (phase: "archaeology").
+
+**Step 2 — CLI change review** via `maestro delegate --role analyze --mode analysis` (`run_in_background: true`):
 - PURPOSE: Review recent modifications related to {issue}
 - EXPECTED: JSON [{commit_sha, risk_level, analysis, could_cause_issue, explanation}]
 
@@ -200,7 +246,42 @@ Increment `diagnosis_retries`. < 3: broaden via `maestro delegate --role analyze
 📌 **Auto-commit**: `git add understanding.md && git commit -m "odyssey-debug({slug}): CONFIRM — 修复验证"`
 
 ### A_GENERALIZE
-按 base A_GENERALIZE 执行。Pattern 来源: root cause + fix。统计写入 `session.json.generalization_stats`。Mark G4 done.
+Skip if `--skip-generalize`. Pattern 来源: root cause + fix。
+
+**Step 1 — Multi-layer pattern extraction:**
+
+| Layer | Method | Example |
+|-------|--------|---------|
+| Syntax | Regex patterns (direct Grep) | `eval(`, missing `await`, unclosed resource |
+| Semantic | Anti-pattern description (Agent scan) | Unhandled async errors, unvalidated input |
+| Structural | Architecture-level similarity | Same import structure, missing override |
+
+Write `session.json.patterns[]`: `[{id, source, layer, signature, description, risk, fix_template}]`
+
+**Step 2 — 4-agent scan (spawn_agents_on_csv, Wave 2):**
+
+Append Wave 2 rows to `tasks.csv`:
+```csv
+"gen-syntax","Syntax Grep","Grep syntax-layer signatures '${signature}' across project. Return [{file,line,context,risk_level,layer:'syntax',confidence}].","generalization","","2","pending","","",""
+"gen-semantic","Semantic Scan","Check related modules for anti-pattern: ${description}. Return [{file,line,context,risk_level,layer:'semantic',confidence}].","generalization","","2","pending","","",""
+"gen-structural","Structural Match","Find structurally similar files to ${buggy_files}, check for anti-pattern. Return [{file,line,description,risk,layer:'structural',confidence}].","generalization","","2","pending","","",""
+"gen-historical","Historical Grep","Run git log -S '${signature}' --oneline. Return [{sha,file,date,type:'introduced|fixed',context}].","generalization","","2","pending","","",""
+```
+
+```javascript
+spawn_agents_on_csv({ csv_path:"tasks.csv", id_column:"id",
+  instruction: GENERALIZATION_INSTRUCTION + TERMINATION_CONTRACT,
+  max_concurrency:4, max_runtime_seconds:300,
+  output_csv_path:"wave-2-results.csv", output_schema: SHARED_OUTPUT_SCHEMA })
+```
+
+**Step 3 — Cross-layer dedup**: same file:line multi-layer → boost confidence | single-layer → `needs_review` | historical fixed → `regression_risk`
+
+**Step 4 — Iterative deepening**: module ≥3 hits → targeted deep scan (max 1 round).
+
+**Step 5 — Quality Gate** (self-iteration).
+
+**Step 6:** Write `session.json.generalization_stats`: `{patterns_extracted, total_hits, cross_layer_confirmed, regression_risks, by_layer, deepening_triggered}`. Update §7. Mark G4 done.
 
 📌 **Auto-commit**: `git add understanding.md && git commit -m "odyssey-debug({slug}): GENERALIZE — 泛化扫描完成"`
 
