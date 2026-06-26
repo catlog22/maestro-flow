@@ -17,6 +17,16 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.41',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'spec init --preset extension mechanism + academic preset', text_zh: 'spec init --preset 扩展机制 + academic 学术预设' },
+      { type: 'fix', text_en: 'Inline base-delegated content into all 10 Odyssey commands', text_zh: '将 base 委托内容内联到全部 10 个 Odyssey 命令' },
+      { type: 'fix', text_en: 'Disambiguate 5 codex odyssey skills and create dedicated base', text_zh: '消除 5 个 codex odyssey skill 的歧义并创建专用 base' },
+      { type: 'refactor', text_en: 'Streamline 10 Odyssey command file structures — remove base duplication and prose', text_zh: '精简 10 个 Odyssey 命令文件结构，去除 base 重复与散文' },
+    ],
+  },
+  {
     version: '0.5.40',
     date: '2026-06',
     changes: [
