@@ -1,32 +1,31 @@
-# Odyssey 共享基座
+# Odyssey Shared Base
 
-所有 Odyssey 命令（debug, improve, planex, review-test-fix, ui）共享此基座。
+Shared by all Odyssey commands (debug, improve, planex, review-test-fix, ui).
 
 <execution_discipline>
-**四条铁律：**
 
-1. **Phase auto-commit** — 每个阶段完成后自动 `git commit`，无需用户确认
-   - 代码变更 + understanding.md → `git add` → `git commit -m "{command}({slug}): {phase} — {摘要}"`
-   - session.json / evidence.ndjson 为运行时状态，不纳入 commit
+1. **Phase auto-commit** — auto `git commit` after each phase
+   - Code changes + understanding.md → `git add` → `git commit -m "{command}({slug}): {phase} — {summary}"`
+   - session.json / evidence.ndjson are runtime state, excluded from commits
 
-2. **Confident edits only, but must attempt** — 有把握才改代码；仅在真正需要人类判断时记录 decision
+2. **Confident edits only, but must attempt** — edit when confident; record decision only when human judgment truly needed
    - Confident → edit + commit
-   - Needs decision → `evidence.ndjson {"phase":"decision","status":"pending"}`，不动代码
-   - ⚠️ **Decision gate** — 仅以下情形算 decision：跨模块架构权衡需人类方向 | 业务语义歧义修复可能改变意图 | 需引入新依赖或 breaking API
-   - ❌ "不确定怎么修"、"范围太大"、"历史遗留" 不是合法 decision 理由
+   - Needs decision → `evidence.ndjson {"phase":"decision","status":"pending"}`, no code change
+   - **Decision gate** — only these qualify: cross-module architecture tradeoffs needing human direction | business semantics ambiguity where fix may change intent | new dependency or breaking API required
+   - "Unsure how to fix", "Too large scope", "Pre-existing issue" are NOT valid decision reasons
 
-3. **多 CLI 辅助** — `maestro delegate` 多角度交叉验证
-   - 不同阶段用不同 `--role`（analyze / review / explore）
-   - 所有 delegate 调用 `run_in_background: true`，等回调继续
+3. **Multi-CLI assist** — `maestro delegate` for cross-angle verification
+   - Different `--role` per phase (analyze / review / explore)
+   - All delegate calls `run_in_background: true`, wait for callback
 
-4. **禁止以上下文消耗为由中断** — harness 自动 context compression；以"上下文不足"或"已执行 N 阶段"为由中断属纪律违反，必须完整走到 S_RECORD → END
+4. **Never abort for context exhaustion** — harness auto-compresses context; aborting due to "insufficient context" or "already ran N phases" is a discipline violation. Must complete through S_RECORD → END.
 
-**Zero-residual:** 每个发现必须有 action（fix / issue / decision）。"仅报告"和"历史遗留跳过"均禁止。
+**Zero-residual:** Every finding must have an action (fix / issue / decision). "Report only" and "pre-existing skip" are forbidden.
 </execution_discipline>
 
 <shared_schemas>
 
-### session.json 标准字段（所有命令共有）
+### session.json standard fields
 
 ```json
 {
@@ -40,15 +39,15 @@
 }
 ```
 
-各命令在此基础上添加特有字段（如 `issue`, `target`, `requirement` 等）。
+Each command adds its own fields (e.g. `issue`, `target`, `requirement`).
 
-### evidence.ndjson 基础 schema（每行共有字段）
+### evidence.ndjson base schema
 
 ```json
 {"ts":"","phase":"","type":"","source":"","content":"","note":""}
 ```
 
-各命令定义 phase-specific 扩展字段（如 `hypothesis`, `severity`, `dimension` 等）。
+Each command defines phase-specific extension fields (e.g. `hypothesis`, `severity`, `dimension`).
 
 ### generalization_stats schema
 
@@ -64,9 +63,8 @@
 </shared_schemas>
 
 <anti_stall>
-**防停滞机制**
 
-### session.json 新增字段
+### progress_metrics fields
 
 ```json
 {
@@ -82,12 +80,12 @@
 
 ### Progress Tracking
 
-每个分析阶段结束时：
-1. 统计 `new_findings`（去重后新发现）和 `repeated`（与已有 evidence 重复）
-2. 写入 `progress_metrics.phase_stats[state_name]`
-3. `new == 0` → `stale_count++`，`convergence_trend = "stalling"`
-4. `new > 0` → `stale_count = 0`，更新 `last_productive_phase`
-5. 连续 2 阶段 new 递减 → `convergence_trend = "diminishing"`
+After each analytical phase:
+1. Count `new_findings` (deduplicated) and `repeated` (matching existing evidence)
+2. Write to `progress_metrics.phase_stats[state_name]`
+3. `new == 0` → `stale_count++`, `convergence_trend = "stalling"`
+4. `new > 0` → `stale_count = 0`, update `last_productive_phase`
+5. 2 consecutive phases with declining new → `convergence_trend = "diminishing"`
 
 ### Direction Diversity
 
@@ -95,45 +93,46 @@
 {
   "phase": "S_DIAGNOSE", "round": 1,
   "strategy_type": "scope_widen|perspective_shift|tool_switch|structural_pivot",
-  "strategy_desc": "扩展搜索到 utils/", "result": "2 new findings"
+  "strategy_desc": "expand search to utils/", "result": "2 new findings"
 }
 ```
 
-**去重规则:** 自迭代前检查同 phase 历史 → 新策略必须在 `strategy_type` 或 `strategy_desc` 上不同 → 4 种 type 均已尝试 → 强制升级 stale_count
+**Dedup rule:** Check same-phase history before self-iteration → new strategy must differ in `strategy_type` or `strategy_desc` → all 4 types tried → force stale_count upgrade
 
 ### Stall Escalation Ladder
 
-| stale_count | 策略 |
-|-------------|------|
-| 0 | 正常推进 |
-| 1 | **换视角** — 不同 CLI 工具、反向追踪、手动阅读。方向必须与 directions_tried 不同 |
-| 2 | **结构性转向** — 重定义搜索维度、换分析框架、拆解子问题。不是参数调优 |
-| 3 | **人工升级** — AskUserQuestion / `-y` 自动 INCONCLUSIVE 并推进 |
+| stale_count | Strategy |
+|-------------|----------|
+| 0 | Normal advance |
+| 1 | **Shift perspective** — different CLI tool, reverse trace, manual read. Must differ from directions_tried |
+| 2 | **Structural pivot** — redefine search dimensions, switch analysis framework, decompose sub-problems. Not parameter tuning |
+| 3 | **Human escalation** — AskUserQuestion / `-y` auto INCONCLUSIVE and advance |
 
-### /loop Heartbeat（可选，`--heartbeat` 启用）
+### /loop Heartbeat (optional, `--heartbeat`)
 
-建议用户 `/loop 270s`。每阶段更新 `session.json.updated_at`。超 15 分钟未更新 → 告警 + stale_count。连续 2 次无更新 → 建议 `-c` resume。
+Suggest `/loop 270s`. Each phase updates `session.json.updated_at`. >15 min without update → alert + stale_count. 2 consecutive no-update → suggest `-c` resume.
 </anti_stall>
 
 <self_iteration>
-**Quality Gate（进度感知版）**
 
-| 维度 | sufficient | insufficient |
-|------|-----------|-------------|
-| Coverage | 已知相关文件/模块均已分析 | 遗漏 grep/git log 可发现的目标 |
-| Depth | ≥80% 发现有 file:line 级证据 | 多数仅泛泛描述 |
-| Actionability | 每条结论有具体后续动作 | 仅"建议关注"类无操作结论 |
+### Quality Gate
 
-**进度感知迭代（替代固定 3 轮）:**
-- phase complete → evaluate 3 dims + check `progress_metrics`
-- any insufficient AND `stale_count < 3` → re-enter，expansion strategy 必须经 directions_tried 去重
-- 按 Stall Escalation Ladder 选择策略类型
+| Dimension | Sufficient | Insufficient |
+|-----------|-----------|-------------|
+| Coverage | All known related files/modules analyzed | Missed targets discoverable via grep/git log |
+| Depth | ≥80% findings have file:line evidence | Most findings lack specifics |
+| Actionability | Each conclusion has concrete next action | "Consider reviewing" without action |
+
+**Progress-aware iteration:**
+- Phase complete → evaluate 3 dimensions + check `progress_metrics`
+- Any insufficient AND `stale_count < 3` → re-enter with expansion strategy (must pass directions_tried dedup)
+- Follow Stall Escalation Ladder for strategy selection
 
 **Expansion strategies:**
-- `scope_widen`: 更多目录、git log 深度 ×2、额外 delegate 角度
-- `perspective_shift`: 不同 CLI 工具、反向追踪、手动阅读
-- `tool_switch`: 切换到未使用的分析工具
-- `structural_pivot`: 重定义问题框架、拆解子问题
+- `scope_widen`: more directories, git log depth ×2, additional delegate angles
+- `perspective_shift`: different CLI tool, reverse trace, manual reading
+- `tool_switch`: switch to unused analysis tool
+- `structural_pivot`: redefine problem framework, decompose sub-problems
 
 **Exit:** all sufficient → advance | `stale_count >= 3` → log gaps, advance
 
@@ -144,104 +143,103 @@
 
 ### A_GENERALIZE
 
-3 层 pattern extraction → 4-agent 并发 scan → cross-layer dedup → iterative deepening。
+3-layer pattern extraction → 4-agent concurrent scan → cross-layer dedup → iterative deepening.
 
-**Pattern 来源:** 由各命令指定（root cause / audit findings / implementation patterns 等）。
+**Pattern source:** specified by each command (root cause / audit findings / implementation patterns).
 
-**3 层提取:**
+**3-layer extraction:**
 
 | Layer | Method | Example |
 |-------|--------|---------|
 | Syntax | Regex → Grep | `eval(`, missing `await`, inline styles |
-| Semantic | Agent 理解反模式 → scan | 未处理异步错误、缺少校验 |
-| Structural | 文件/模块结构相似性 | 同类导入结构、缺少 override |
+| Semantic | Agent understands anti-pattern → scan | Unhandled async errors, missing validation |
+| Structural | File/module structure similarity | Same import structure, missing override |
 
 Write `session.json.patterns[]`: `[{id, source, layer, signature, description, risk, fix_template, confidence}]`
 
-**4-agent 并发 scan（单条消息）:**
+**4-agent concurrent scan (single message):**
 
 | Agent | Strategy | Scope |
 |-------|----------|-------|
 | Syntax grep | Grep regex | Full project |
-| Semantic scan | 反模式检查 | Related modules |
-| Structural match | 结构相似文件 | Full project |
+| Semantic scan | Anti-pattern check | Related modules |
+| Structural match | Structurally similar files | Full project |
 | Historical grep | `git log -S` | Git history |
 
-**Cross-layer dedup:** 多层命中 → boost | 单层 → `needs_review` | 历史已修 → `regression_risk`
+**Cross-layer dedup:** multi-layer hit → boost | single-layer → `needs_review` | historically fixed → `regression_risk`
 
-**Iterative deepening:** module ≥3 hits → 定向深扫（max 1 round）
+**Iterative deepening:** module ≥3 hits → targeted deep scan (max 1 round)
 
-**Persist:** understanding.md 泛化 section + `session.json.generalization_stats`（schema 见 shared_schemas）
+**Persist:** understanding.md generalization section + `session.json.generalization_stats`
 
-📌 Auto-commit: `"...({slug}): GENERALIZE — 泛化扫描完成"`
+Commit: `"...({slug}): GENERALIZE — generalization scan complete"`
 
 ### A_DISCOVER
 
-1. **Triage** 每个 hit ±10 行上下文 → 分类 `bug` / `risk` / `safe`
+1. **Triage** each hit ±10 lines context → classify `bug` / `risk` / `safe`
 2. **Route:**
-   - bug + 可直接修 → **立即修复** → back to S_FIX
-   - bug + 需跨模块决策 → 创建 issue（含 fix 建议 + 影响分析）
-   - risk → 评估能否直接加 guard；能 → 修
+   - bug + fix_template applicable → immediate fix → back to S_FIX
+   - bug + needs cross-module decision or no fix_template → create issue (with fix suggestion + impact analysis)
+   - risk → assess if guard can be added directly; yes → fix; no → create issue
    - safe → skip
-   Normal: AskUserQuestion | `-y`: auto-fix 可修的，其余 create issue
-3. **Cross-phase loops:** `cross_phase_loops++`。`loops >= max_loops` → 必须逐项记录原因（禁止笼统"历史遗留"）
+   Normal: AskUserQuestion | `-y`: auto-fix bugs with fix_template, create issue for rest
+3. **Cross-phase loops:** `cross_phase_loops++`. `loops >= max_loops` → must log per-item reasons (blanket "pre-existing" forbidden)
 4. Append evidence + update understanding.md
 
-📌 Auto-commit: `"...({slug}): DISCOVER — 发现分类完成"`
+Commit: `"...({slug}): DISCOVER — discovery triage complete"`
 
 ### A_RECORD
 
-1. Finalize understanding.md 最后一节 — learnings 按各命令指定的分类表结构化
-   - **两步模式:** 执行中写产出文件（临时）→ 完成后用户通过 next_step_routing 沉淀永久知识
-2. Mark record goal done。Pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count)
-3. **Goal audit:** all `completion_confirmed` → `phase_goals_all_done = true`。未完成: Normal → AskUserQuestion | `-y` → auto accept
-4. `current_state = "COMPLETED"`，emit completion summary（格式由各命令定义）
+1. Finalize understanding.md final section — learnings structured by each command's category table
+2. Mark record goal done. Pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count)
+3. **Goal audit:** all `completion_confirmed` → `phase_goals_all_done = true`. Incomplete: Normal → AskUserQuestion | `-y` → auto accept
+4. `current_state = "COMPLETED"`, emit completion summary (format defined by each command)
 
-📌 Auto-commit: `"...({slug}): RECORD — 会话总结与知识沉淀"`
+Commit: `"...({slug}): RECORD — summary and knowledge persistence"`
 
 </shared_actions>
 
 <shared_appendix>
 
-### Goal Prompt 机制
+### Goal Prompt
 
-**⚠️ 时机守卫：仅 INTAKE 完成后显示一次。RECORD 完成时禁止重显。**
+**Timing guard: display ONCE after INTAKE completes. Never re-display at RECORD.**
 
 ```
-📋 {Command} Odyssey 会话已创建。可随时复制以下 /goal 设定终止条件：
+{Command} Odyssey session created. Copy the /goal below to set termination criteria:
 
-/goal 完成以下目标：
+/goal Complete these goals:
 {for each G in phase_goals where status != "skipped":}
-- {G.id}: {G.goal} — 完成条件: {G.done_when}
+- {G.id}: {G.goal} — done when: {G.done_when}
 {end for}
 {command-specific convergence rules}
-遇到 phase=decision 的 pending 必须 AskUserQuestion，不得自行 resolve。
+Pending phase=decision items must use AskUserQuestion, never self-resolve.
 ```
 
-输出后继续执行不阻塞。
+Continue execution after output, do not block.
 
-### `-y` 通用规则
+### `-y` generic rules
 
 - Decision pending → best-effort continue, record `deferred`
 - 3-strike escalation → auto INCONCLUSIVE
-- Discovery routing → auto create issue
+- Discovery routing → auto-fix bugs with fix_template, create issue for rest
 - Record pending → skip, show deferred count
 - Record goal audit → auto accept
 
-`deferred` items 在 completion summary 显示为"待决策"；可通过 `-c` 恢复。各命令在自身文件中列出特有 decision points。
+`deferred` items shown in completion summary; recoverable via `-c`. Each command lists its own specific decision points.
 
 ### Phase Goal Lifecycle
 
 `pending → done (confirmed=true)` | `pending → skipped (confirmed=true)` | `pending → failed (confirmed=false)`
 
-`phase_goals_all_done = true` 仅当 ALL goals 有 `completion_confirmed == true`。
+`phase_goals_all_done = true` only when ALL goals have `completion_confirmed == true`.
 
-### Pre-load（可选，缺失不阻塞）
+### Pre-load (optional, missing does not block)
 
-| 层级 | 命令 |
-|------|------|
+| Layer | Command |
+|-------|---------|
 | Codebase docs | Read `.workflow/codebase/ARCHITECTURE.md` |
-| Wiki search | `maestro search "<keywords>" --json`（top 5） |
+| Wiki search | `maestro search "<keywords>" --json` (top 5) |
 | Specs | `maestro load --type spec --category <cat>` |
 | Role knowledge | `maestro search --category <cat>` → `maestro load --type knowhow --id <id>` |
 | Prior sessions | `Glob(".workflow/scratch/*-{type}-odyssey-*")` |
