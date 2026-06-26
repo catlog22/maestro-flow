@@ -83,8 +83,24 @@ if (requestedCommand && requestedCommand in commandLoaders) {
   // Load only the requested command module
   const register = await commandLoaders[requestedCommand]();
   register(program);
+} else if (requestedCommand && !(requestedCommand in commandLoaders)) {
+  // Bare intent or unknown command — guide to correct skill invocation
+  console.error(`[maestro] Unknown command: "${requestedCommand}"`);
+  console.error();
+  console.error('  The maestro CLI does not accept bare intent text.');
+  console.error('  Use the platform-specific skill invocation instead:');
+  console.error();
+  console.error('    Claude Code:  /maestro "your intent"');
+  console.error('    Codex:        $maestro "your intent"');
+  console.error();
+  console.error('  Or use a CLI subcommand directly:');
+  console.error('    maestro ralph next|complete|skills|check|session');
+  console.error('    maestro delegate "prompt" --to <tool>');
+  console.error('    maestro explore "prompt"');
+  console.error();
+  process.exit(1);
 } else {
-  // No command or unknown command (e.g., --help, --version) — register all.
+  // No command (e.g., --help, --version) — register all.
   // Multiple keys may point to the same register function (e.g. a command and
   // its alias share one module); deduplicate so we register each module once.
   const seen = new Set<(p: Command) => void>();

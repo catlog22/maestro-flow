@@ -49,6 +49,7 @@ $ARGUMENTS — user intent text, or special flags.
 8. **schema 向后兼容** — decomposition 字段可选；`steps[]` 由 post-goal-audit 动态生长（goal_ref tagged）；既有字段不删不改；`waves` 保留空数组
 9. **Sequential execution** — one step at a time in index order; each step's result read before the next starts
 10. **Abort on failure** — failed step → mark remaining skipped → report (goal stays bound for `--continue`)
+11. **CLI ≠ Skill** — 本 skill 通过 `$maestro "intent"` 调用。`maestro` CLI 二进制不接受裸 intent（`Bash("maestro \"intent\"")` 会报错退出）。CLI 层只有结构化子命令：`ralph`、`delegate`、`explore`、`search` 等。
 </invariants>
 
 <state_machine>

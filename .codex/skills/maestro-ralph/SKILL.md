@@ -20,6 +20,8 @@ Reads project state → infers position → builds adaptive chain → delegates 
 
 > 推进规则：**step 推进由 `$maestro-ralph-execute` 负责**；ralph 仅在 build / decision 评估时介入。decision 节点由 ralph-execute 自动 `$maestro-ralph` 直调 handoff，无需用户手动切换。
 
+> **CLI vs Skill 边界**：`maestro` 作为 CLI 二进制只有结构化子命令（`ralph`、`delegate`、`explore` 等），不接受裸 intent。`Bash("maestro \"some intent\"")` 会报错退出。创建 session 和路由 intent 必须通过 `$maestro-ralph` 或 `$maestro` skill 调用。CLI 层仅用于 step 加载（`ralph next`）和完成标记（`ralph complete`）。
+
 Initial decomposition (S_DECOMPOSE): boundary-clarified via ≤3 questions for broad intents (重构/全面/迁移/重写). 写入 status.json 的 `boundary_contract` / `execution_criteria` / `task_decomposition`，附 `/goal` prompt。
 
 Step kinds:
@@ -85,6 +87,7 @@ Remaining                        → intent (amend_mode 时为 change_request)
 12. **Platform** — `session.platform = "codex"`；CLI 调用一律带 `--platform codex`
 13. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Do NOT bypass for "efficiency" or "clear intent" reasons. Especially invariants about ralph never executing steps and completion_confirmed by CLI.
 14. **Delegate fallback must be marked** — when A_DELEGATE_EVALUATE verdict parse fails and falls back to "fix", MUST record `parse_failed: true, confidence_score: 0` in decisions.ndjson. Subsequent steps inherit LOW CONFIDENCE flag.
+15. **CLI ≠ Skill** — `maestro` CLI binary 只提供结构化子命令（`ralph next|complete|skills|check|session`、`delegate`、`explore`、`search` 等），**不接受裸 intent**。Session 创建、intent 路由、decision 评估均为 skill 层操作：`$maestro-ralph "intent"` 或 `$maestro "intent"`。**严禁** `Bash("maestro \"intent text\"")` — CLI 会报错退出。
 </invariants>
 
 <state_machine>

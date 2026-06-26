@@ -48,6 +48,7 @@ HARD RULES:
 7. **status.json 每步骤后由 CLI 原子写盘** — resume-safe
 8. **STATUS 枚举受限** — 仅 `DONE | DONE_WITH_CONCERNS | NEEDS_RETRY | BLOCKED`
 9. **Platform binding** — 仅处理 `session.platform == "codex"` 的会话；platform 缺失视为 codex（向前兼容）
+10. **CLI ≠ Skill** — `maestro ralph next|complete|retry` 是 CLI 子命令（Bash 调用）；`$maestro-ralph` / `$maestro-ralph-execute` 是 skill 直调。**严禁** `Bash("maestro \"intent\"")` 裸 intent 调用，CLI 不接受。
 </invariants>
 
 <state_machine>
