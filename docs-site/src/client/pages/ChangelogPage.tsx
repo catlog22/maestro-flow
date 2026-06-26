@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.40',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'Native plugin install mode (maestro plugin) — install third-party plugins directly into workspace', text_zh: '新增原生插件安装模式 (maestro plugin)——第三方插件直接安装到工作区' },
+      { type: 'feat', text_en: 'Code block copy button + light mode dark background fix for docs-site', text_zh: 'docs-site 代码框增加复制按钮 + 亮色模式深色背景修复' },
+      { type: 'fix', text_en: 'Fix 7 core skill confirmation gate missing and wave flow defects', text_zh: '修复 7 个核心 skill 的确认门控缺失和 wave 流程缺陷' },
+      { type: 'fix', text_en: 'CLI bare intent interception + Codex skill disambiguation enhancement', text_zh: 'CLI 裸 intent 拦截优化 + Codex skill 防混淆增强' },
+      { type: 'fix', text_en: 'Fix docs-site guide loading path mismatch and missing completion icons', text_zh: '修复 docs-site guide 加载路径不匹配及补全缺失图标' },
+      { type: 'refactor', text_en: 'Unify codex skill shell execution interface to shell_exec abstraction', text_zh: '统一 codex skill 的 shell 执行接口为 shell_exec 抽象' },
+    ],
+  },
+  {
     version: '0.5.39',
     date: '2026-06',
     changes: [
