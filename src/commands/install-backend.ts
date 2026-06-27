@@ -945,6 +945,41 @@ function legacyCleanup(manifest: Manifest, result: UninstallResult): void {
 // Codex skill deduplication — disable .agents/ skills in codex config
 // ---------------------------------------------------------------------------
 
+const DEDUPE_START = '# maestro:dedupe-agents-start';
+const DEDUPE_END = '# maestro:dedupe-agents-end';
+
+/**
+ * Strip ALL maestro-managed dedupe blocks, orphaned markers, and orphaned
+ * .agents/skills entries from codex config content.  Handles corruption left
+ * by older versions where indexOf(END) found an orphan before START.
+ */
+function stripDedupeBlocks(content: string): string {
+  let cleaned = content;
+
+  // 1. Remove properly-formed START...END blocks (search END only AFTER START)
+  for (;;) {
+    const si = cleaned.indexOf(DEDUPE_START);
+    if (si === -1) break;
+    const ei = cleaned.indexOf(DEDUPE_END, si);
+    if (ei === -1) {
+      cleaned = cleaned.slice(0, si) + cleaned.slice(si + DEDUPE_START.length);
+      break;
+    }
+    cleaned = cleaned.slice(0, si) + cleaned.slice(ei + DEDUPE_END.length);
+  }
+
+  // 2. Remove orphaned markers (from prior corruption)
+  cleaned = cleaned.split(DEDUPE_START).join('').split(DEDUPE_END).join('');
+
+  // 3. Remove orphaned [[skills.config]] entries for .agents/skills paths
+  cleaned = cleaned.replace(
+    /\[\[skills\.config\]\]\r?\npath = "[^"]*\.agents[/\\]skills[/\\][^"]*"\r?\nenabled = false\r?\n?/g,
+    '',
+  );
+
+  return cleaned.replace(/\n{3,}/g, '\n\n').trim();
+}
+
 /**
  * Write `[[skills.config]]` entries to `~/.codex/config.toml` to disable
  * .agents/ skills that duplicate the native codex skills.
@@ -972,15 +1007,7 @@ export function writeCodexSkillDedupeConfig(
     content = readFileSync(fp, 'utf-8');
   }
 
-  // Remove existing maestro-managed dedupe block
-  const DEDUPE_START = '# maestro:dedupe-agents-start';
-  const DEDUPE_END = '# maestro:dedupe-agents-end';
-  const startIdx = content.indexOf(DEDUPE_START);
-  const endIdx = content.indexOf(DEDUPE_END);
-  if (startIdx !== -1 && endIdx !== -1) {
-    content = (content.slice(0, startIdx) + content.slice(endIdx + DEDUPE_END.length))
-      .replace(/\n{3,}/g, '\n\n').trim();
-  }
+  content = stripDedupeBlocks(content);
 
   const entries = skillDirs.map(name => {
     const skillPath = join(agentsSkillsDir, name, 'SKILL.md').replace(/\\/g, '/');
@@ -1014,14 +1041,10 @@ export function removeCodexSkillDedupeConfig(
   if (!existsSync(fp)) return false;
 
   const content = readFileSync(fp, 'utf-8');
-  const DEDUPE_START = '# maestro:dedupe-agents-start';
-  const DEDUPE_END = '# maestro:dedupe-agents-end';
-  const startIdx = content.indexOf(DEDUPE_START);
-  const endIdx = content.indexOf(DEDUPE_END);
-  if (startIdx === -1 || endIdx === -1) return false;
+  if (!content.includes(DEDUPE_START) && !content.includes(DEDUPE_END)
+    && !/\.agents[/\\]skills[/\\]/.test(content)) return false;
 
-  const cleaned = (content.slice(0, startIdx) + content.slice(endIdx + DEDUPE_END.length))
-    .replace(/\n{3,}/g, '\n\n').trim();
+  const cleaned = stripDedupeBlocks(content);
   writeFileSync(fp, cleaned + '\n', 'utf-8');
   return true;
 }
