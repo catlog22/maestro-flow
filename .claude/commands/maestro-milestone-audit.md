@@ -69,21 +69,6 @@ Audit checklist steps (phase coverage, ad-hoc completeness, execution completene
 - REQUIRED: Clear PASS/FAIL verdict determined with evidence for each check.
 - BLOCKED if missing: integration check not completed — do not write report without cross-artifact verification.
 
-### Artifact Verification (before completion)
-
-```
-REQUIRED_ARTIFACTS = [
-  ".workflow/milestones/{milestone}/audit-report.md"  // Clear PASS/FAIL verdict
-]
-```
-If missing: DO NOT report completion. Write the audit report first.
-
-### Evidence Requirement
-
-Every audit check result MUST cite what was examined and what was found:
-- PASS: "Phase 1 chain complete: ANL-001 → PLN-001 → EXC-001, all tasks completed"
-- FAIL: "Phase 2 missing EXC artifact — PLN-002 exists but no execution found"
-- Do NOT mark checks as PASS without verifying the actual artifact exists and contains expected content.
 </execution>
 
 <completion>

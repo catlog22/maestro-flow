@@ -428,6 +428,17 @@ Write `{output_dir}/context-package.json`:
 
 ---
 
+## Step 6.5: Artifact Verification (before completion)
+
+Verify all required artifacts exist before proceeding to artifact registration:
+- `grill-report.md` — Branch Log + Q&A entries + synthesis
+- `terminology.md` — ≥5 terms with code refs
+- `context-package.json` — schema "context-package/1.0"
+
+If any missing: produce the missing artifact before Step 7. Do NOT register completion without all artifacts present.
+
+---
+
 ## Step 7: Register Artifact
 
 ### 7.1: Register in state.json

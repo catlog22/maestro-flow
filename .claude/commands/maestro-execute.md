@@ -37,7 +37,7 @@ $ARGUMENTS — phase number, or no args for milestone-wide execution, with optio
 | `--method agent\|cli\|auto` | Execution method: Agent tool, CLI delegate, or auto-select | `auto` |
 | `--executor <tool>` | Explicit executor tool for CLI delegate mode | First enabled in config |
 | `--dir <path>` | Execute a specific plan directory instead of auto-discovery | — |
-| `-y` / `--yes` | Auto mode — skip interactive questions | false |
+| `-y` / `--yes` | Auto mode — skip ALL interactive questions (executor selection, wave progression, blocked prompts) | false |
 
 ### Scope routing
 

@@ -91,22 +91,6 @@ Follow '~/.maestro/workflows/grill.md' completely.
 - REQUIRED: `context-package.json` generated.
 - BLOCKED if any artifact missing: produce it before reporting completion.
 
-### Evidence Requirement
-
-Grill questions MUST reference specific code (`file:line`) when challenging the user's proposal. Generic questions without code grounding are INVALID.
-
-If codebase scan failed (W001): flag ALL subsequent locked decisions as LOW CONFIDENCE.
-
-### Artifact Verification (before completion)
-
-```
-REQUIRED_ARTIFACTS = [
-  "grill-report.md",        // Branch Log + Q&A + synthesis
-  "terminology.md",         // ≥5 terms with code refs
-  "context-package.json"    // Schema "context-package/1.0"
-]
-```
-If any missing: DO NOT report completion. Go back and produce the missing artifact.
 </execution>
 
 <completion>

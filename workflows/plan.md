@@ -145,6 +145,12 @@ When `--tdd` is active:
 4. **Load codebase context**
    - Read `.workflow/codebase/doc-index.json` if exists → extract relevant features, components, requirements
 
+4a. **Wiki knowledge search** (optional, proceed without if unavailable)
+   - Extract 2-5 key terms from phase goal/title
+   - Run `maestro search "<phase_keywords>" --json 2>/dev/null`
+   - If results: take top 10 entries as prior knowledge context for planner agent
+   - If unavailable: log W003, continue
+
 4b. **Load design reference** (if available)
    - If `${PHASE_DIR}/design-ref/MASTER.md` exists: load MASTER.md, design-tokens.json, animation-tokens.json (optional), layout-templates/layout-*.json
      - Every UI task must include in `read_first[]`: design-tokens.json, animation-tokens.json, relevant layout-*.json, MASTER.md

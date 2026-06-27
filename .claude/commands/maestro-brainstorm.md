@@ -90,35 +90,15 @@ These gates apply to Auto mode (full pipeline). Do NOT advance past a gate until
 - BLOCKED if missing: complete all role analyses before spawning cross-role-reviewer.
 
 **GATE 2.5: Cross-Role Review → Boundary Grill** (Step 4.5 → Step 4.6)
-Run boundary grill per `~/.maestro/workflows/boundary-grill.md` after cross-role-reviewer output.
-Input: reviewer findings + role Decision Digests. Scope guard: "only brainstorm decisions; do not pre-resolve roadmap/plan choices".
-IF conflicts → results to `guidance-specification.md` §12.5 + feed into GATE 3. NON-BLOCKING.
+- REQUIRED: Boundary grill executed per workflow boundary-grill.md after cross-role review.
+- NON-BLOCKING: conflicts logged as warnings.
 
 **GATE 3: Cross-Role Review → Completion** (Step 4.5/4.6 → Report)
 - REQUIRED: Cross-role-reviewer output received with `patch_targets[]`.
-- REQUIRED: Boundary grill completed (if conflicts detected, results logged).
-- REQUIRED: If findings > 0, resolutions applied via Edit AND logged in `guidance-specification.md` §12.
-- REQUIRED: If findings == 0, final report explicitly states "No cross-role issues detected".
+- REQUIRED: Boundary grill completed.
+- REQUIRED: Resolutions applied and logged (details in workflow).
 - BLOCKED if missing: complete review synthesis before reporting.
 
-### Artifact Verification (before completion report)
-
-```
-AUTO_MODE_REQUIRED = [
-  "guidance-specification.md",            // Step 1
-  "{role}/analysis.md" (per selected role), // Step 3
-  "{role}/analysis-F-*.md" (per feature),   // Step 3
-]
-```
-If any artifact is missing: DO NOT report completion. Go back and produce the missing artifact.
-
-### Evidence Requirement
-
-Role analysis findings in `{role}/analysis.md` §2 Decision Digest MUST cite concrete evidence:
-- Code references (file:line), API endpoints, data models from the codebase
-- User-provided constraints from interview
-- Cross-role references to other role analyses
-Decisions without evidence are flagged LOW CONFIDENCE.
 </execution>
 
 <completion>

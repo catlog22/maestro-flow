@@ -86,78 +86,21 @@ Follow '~/.maestro/workflows/plan.md' completely.
 - BLOCKED if missing: plan.json or TASK files not produced by planner agent — do not proceed to checking.
 
 **GATE P3.5 → P4: Boundary Grill → Plan Check**
-Run boundary grill per `~/.maestro/workflows/boundary-grill.md`.
-Input: plan.json tasks + convergence criteria + upstream context. Scope guard: "only plan scope; do not re-analyze or re-scope".
-IF conflicts → results to plan.json `boundary_grill` section + affected TASK files. DEC conflicts add `boundary_warning` to confidence.
-NON-BLOCKING: warnings, not hard stops.
+- REQUIRED: Boundary grill executed per workflow boundary-grill.md.
+- NON-BLOCKING: conflicts logged as warnings, not hard stops.
 
 **GATE P4 → P5: Plan Check → User Confirmation**
 - REQUIRED: Plan-checker passed (or minor issues acknowledged).
-- REQUIRED: Boundary grill completed (conflicts resolved or accepted as risks).
+- REQUIRED: Boundary grill completed.
 - REQUIRED: Confidence scored with 5-dimension factor model.
 - REQUIRED: Pressure pass completed on highest-complexity task.
-- REQUIRED: If plan touches UI (检出 `dashboard/` 或 UI 关键词 `landing|page|dashboard|frontend|UI|component|界面`), each delivery wave has ≥1 `[UI-observable]` convergence criterion (vertical-slice delivery, not backend-only).
-- BLOCKED if: plan-checker found critical issues, OR UI plan missing `[UI-observable]` coverage — fix plan before presenting to user.
+- REQUIRED: UI plans have `[UI-observable]` convergence criteria per wave (details in workflow).
+- BLOCKED if: plan-checker found critical issues, OR UI plan missing `[UI-observable]` coverage.
 
 **GATE P5 → Completion: User Confirmation → Done**
 - REQUIRED: User confirmation captured (execute/modify/cancel).
 - REQUIRED: PLN artifact registered in state.json.
 - BLOCKED if missing: no user confirmation — do not register artifact or report completion.
-
-### Artifact Verification (before completion)
-
-```
-REQUIRED_ARTIFACTS = [
-  "plan.json",                    // Task definitions, waves, summary
-  ".task/TASK-*.json" (per task)   // Individual task files with convergence criteria
-]
-```
-Every task MUST have `convergence.criteria[]` with grep-verifiable conditions. If any task lacks verifiable criteria: DO NOT report completion — fix the criteria first.
-
-### P3 Agent Constraint (MANDATORY)
-
-Main flow **MUST** spawn a planner agent (Agent tool) for P3 planning — inline planning by main flow is FORBIDDEN. The agent produces both `plan.json` and `.task/TASK-*.json` files. Main flow only passes context and validates output.
-
-### Codebase Docs Loading (P1 addition)
-
-During P1 Context Collection, after loading context files, load codebase documentation if available:
-
-```
-IF exists(.workflow/codebase/doc-index.json):
-  codebase_ctx = Read(.workflow/codebase/ARCHITECTURE.md) + Read(.workflow/codebase/FEATURES.md)
-  Pass codebase_ctx to planner agent as structural context
-ELSE:
-  display "W004: Codebase docs unavailable, continuing with code exploration only"
-```
-
-### Wiki Knowledge Search (P1 addition)
-
-During P1 Context Collection, after loading context files and before parallel exploration (step 5), search the wiki for prior knowledge related to the phase:
-
-```
-phase_keywords = extract key terms from goal/title (2-5 terms)
-wiki_result = Bash("maestro search ${phase_keywords} --json 2>/dev/null")
-
-IF wiki_result exit code != 0 OR empty:
-  display "W003: Wiki search unavailable, continuing without prior knowledge"
-ELSE:
-  entries = JSON.parse(wiki_result).entries (limit to first 10)
-  wiki_context = structured block for downstream stages
-```
-
-### Issue Linkback (--gaps mode)
-
-After plan generation and checking, if `--gaps` mode was used, link TASK files back to issues bidirectionally:
-
-```
-For each created TASK-{NNN}.json that has issue_id:
-  Update corresponding issue in .workflow/issues/issues.jsonl:
-    task_refs: append TASK-{NNN} to array
-    task_plan_dir: relative path to .task/ directory
-    status: "planned"
-    updated_at: now()
-  Append history entry: { action: "planned", at: <ISO>, by: "maestro-plan", summary: "Linked to TASK-{NNN}" }
-```
 
 ### Mode: Revise / Check
 

@@ -88,28 +88,6 @@ Each phase produces artifacts that are prerequisites for the next. Do NOT advanc
 **GATE P5 → P6**: `epics/` directory with `_index.md` + individual `EPIC-*.md` files. Cross-Epic dependency map present.
 **GATE P6**: Readiness score computed. Pass (≥80%) or Review (≥60%) required for handoff.
 
-### Artifact Verification (before completion)
-
-```
-REQUIRED_ARTIFACTS = [
-  "blueprint-config.json",        // P0
-  "product-brief.md",             // P2
-  "glossary.json",                // P2 (≥5 terms)
-  "requirements/_index.md",       // P3
-  "architecture/_index.md",       // P4
-  "epics/_index.md",              // P5
-  "readiness-report.md",          // P6
-  "blueprint-summary.md",         // P6
-  "context-package.json"          // P6
-]
-```
-If any artifact is missing: DO NOT report completion. Go back and produce it.
-
-### Evidence Requirement
-
-Architecture Decision Records (ADR-*.md) MUST cite evidence for each decision:
-- Valid: code analysis, requirement traceability (REQ-xxx), upstream context, CLI analysis output
-- INVALID: generic rationale without reference to project-specific constraints
 </execution>
 
 <completion>

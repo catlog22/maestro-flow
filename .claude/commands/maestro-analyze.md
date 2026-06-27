@@ -86,51 +86,9 @@ Follows @~/.maestro/workflows/interview-mechanics.md standard.
 <execution>
 Follow '~/.maestro/workflows/analyze.md' completely.
 
-### Evidence-Backed Decisions
-
-Every decision MUST trace to independently gathered evidence. Manual Read/Grep is preparation — NOT evidence. Valid evidence sources:
-- cli-explore-agent output (code anchors, call chains, data flows)
-- maestro delegate CLI analysis output (multi-perspective findings)
-- User-provided input (domain knowledge, constraints, corrections)
-
-Decisions without CLI/agent-sourced evidence MUST be flagged as LOW CONFIDENCE.
-
-### Boundary Grill (Step 5 → Step 6)
-
-After discussion rounds, BEFORE synthesis: run boundary grill per `~/.maestro/workflows/boundary-grill.md`.
-Input: discussion.md decisions + exploration-codebase.json. Scope guard: "only analyze decisions; do not prejudge plan/execute concerns".
-IF conflicts → results to `analysis.md` § Boundary Grill Results + update `context.md` Locked/Free/Deferred.
-
-### Standard Mode Gates
-
-Gates 1-4 are defined in `analyze.md`. NEVER skip gates. NEVER substitute manual Read/Grep for agent/CLI exploration.
-
-### Artifact Verification
-
-Before writing the completion report (Step 9), verify ALL expected artifacts exist in OUTPUT_DIR:
-```
-FULL_MODE_REQUIRED = [
-  "discussion.md",             // Step 3+5
-  "exploration-codebase.json", // Step 4.1
-  "explorations.json" OR "perspectives.json", // Step 4.3
-  "analysis.md",               // Step 6
-  "conclusions.json",          // Step 7
-  "context.md",                // Step 8
-  "context-package.json"       // Step 8.6
-]
-```
-If any artifact is missing: DO NOT report completion. Produce the missing artifact first.
-
 ### --gaps Mode
 
 When `--gaps` is present, follow `~/.maestro/workflows/issue-gaps-analyze.md` instead of the standard pipeline.
-
-**Handoff:** context.md is consumed by maestro-plan. In --gaps mode, context.md contains issue root causes for `plan --gaps`.
-
-**scope_verdict** (added to context.md in Step 6 Synthesis for macro/adhoc/standalone scopes):
-- `large` (3+ independent subsystems or hard serial dependencies) → suggest `/maestro-roadmap --from analyze:ANL-xxx`
-- `medium` (1-2 subsystems, parallelizable) → suggest `/maestro-plan --from analyze:ANL-xxx`
-- `small` (single-file or few-file change) → suggest `/maestro-plan --from analyze:ANL-xxx`
 </execution>
 
 <completion>

@@ -43,7 +43,7 @@ For each PLAN_DIR in PLAN_DIRS (sequential):
 | `--executor <tool>` | Default CLI tool: gemini\|codex\|qwen\|opencode\|claude (default: first enabled in cli-tools.json) |
 | `--dir <path>` | Use arbitrary directory instead of phase resolution (skip roadmap validation) |
 | `--skip-verify` | Skip E2.7 verification gate (trust execution output) |
-| `-y` | Auto-approve execution options (skip confirmation prompt) |
+| `-y` | Auto mode — skip ALL interactive questions (E0.5 options, inter-wave confirmations, blocked-task prompts) |
 
 ---
 
@@ -51,7 +51,7 @@ For each PLAN_DIR in PLAN_DIRS (sequential):
 
 ### Skip conditions
 
-- `-y` flag → use resolved defaults, skip prompt
+- `-y` flag → use resolved defaults, skip prompt (applies to ALL interactive questions throughout execution, not just E0.5)
 - `executionContext.executionMethod` already set → skip (confirmed in /maestro-plan)
 
 ### Pre-step: Load tool config
@@ -301,7 +301,8 @@ For each wave in execution_queue (sequential):
     Clear state.json.current_task_id
 
   Wait for all wave tasks; update index.json (tasks_completed, commits)
-  If any blocked: prompt user to continue or stop
+  If any blocked AND NOT -y flag: prompt user to continue or stop
+  Else: continue to next wave automatically (NEVER ask for confirmation between waves)
 ```
 
 ### Parallel Dispatch Rules

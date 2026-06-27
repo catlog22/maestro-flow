@@ -96,14 +96,6 @@ Sub-modes:
 - REQUIRED: Artifact registered in state.json with milestone entries.
 - BLOCKED if missing: do not report completion without written roadmap.
 
-### Artifact Verification (before completion)
-
-```
-REQUIRED_ARTIFACTS = [
-  ".workflow/roadmap.md"    // Milestone > Phase hierarchy with progress table
-]
-```
-If missing: DO NOT report completion.
 
 </execution>
 
