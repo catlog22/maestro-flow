@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.42',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'AGENTS.md instruction injection component for .agents/ platform', text_zh: '新增 .agents/ 平台 AGENTS.md 指令注入组件' },
+      { type: 'feat', text_en: 'Enhanced install-guide skill pages + per-skill detail pages on docs-site', text_zh: '完善附加安装包 skill 介绍 + 每技能单独详情页' },
+      { type: 'feat', text_en: 'Unified workflow documentation format with explore enhancements', text_zh: '统一工作流文档指令格式 + explore Cross-Search 增强' },
+      { type: 'fix', text_en: 'Relax spec-loader category matching — support filename stem inference', text_zh: 'spec-loader 放宽 category 匹配——支持文件名 stem 推断' },
+      { type: 'fix', text_en: 'Fix codex config.toml skill dedupe marker misalignment causing infinite file growth', text_zh: '修复 codex config.toml skill dedupe 标记错位导致文件无限膨胀' },
+      { type: 'refactor', text_en: 'Command content separation — move procedural logic to workflow layer', text_zh: '命令文件内容分离——过程性逻辑下沉到 workflow 层' },
+    ],
+  },
+  {
     version: '0.5.41',
     date: '2026-06',
     changes: [
