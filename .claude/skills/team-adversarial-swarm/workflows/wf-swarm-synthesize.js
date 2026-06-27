@@ -228,7 +228,7 @@ SYNTHESIZE:
 8. Write executive_summary (3-4 sentences): what was found, how confident, what to watch out for
 9. Title: concise result title
 
-Max 150 lines in the generated content. Be sharp, not verbose.`,
+Be sharp, not verbose — no prose padding; every section earns its place.`,
   { label: 'arbitrate', phase: 'Arbitrate', schema: SYNTHESIS_SCHEMA }
 )
 

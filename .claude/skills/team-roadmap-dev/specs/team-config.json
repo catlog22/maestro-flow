@@ -64,7 +64,7 @@
       },
       "state.md": {
         "created_by": "coordinator",
-        "purpose": "Living memory (<100 lines)",
+        "purpose": "Living memory",
         "lifecycle": "Updated every significant action"
       },
       "config.json": {

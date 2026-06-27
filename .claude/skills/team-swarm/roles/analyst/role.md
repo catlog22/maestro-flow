@@ -26,7 +26,7 @@ Responsibility: After swarm converges, synthesize the best solution + top trails
 - Re-score solutions (that is scorer's job — analyst takes verified_score as given)
 - Modify best.json, trails, or pheromone state
 - Generate solutions of its own — analyst synthesizes existing ant outputs
-- Exceed ~150 lines in best-solution.md (be sharp, not verbose)
+- Pad best-solution.md with prose — every section must earn its place
 
 ## Phase 2: Context Loading
 
@@ -125,7 +125,6 @@ Interpretation: <2-3 sentences on whether the swarm converged on a genuine optim
 
 ### 3.3 Constraints
 
-- Target ≤ 150 lines
 - No prose padding — every section earns its place
 - Quote evidence verbatim where possible (file:line refs)
 - Don't editorialize beyond what evidence supports
@@ -143,13 +142,12 @@ Interpretation: <2-3 sentences on whether the swarm converged on a genuine optim
 | Field | Required | Content |
 |-------|----------|---------|
 | artifacts_written | Always | `<session>/artifacts/best-solution.md` |
-| line_count | Always | int (target ≤ 150) |
+| line_count | Always | int (informational) |
 | verification_method | Always | "cross_ref_with_best.json + evidence_verified" |
 
 #### Quality Gate
 - Final report file exists and parses as markdown
 - All sections present (Best Solution / Why Won / Runner-Ups / Convergence / Caveats / Reproducibility)
-- Line count ≤ 200 (hard cap — fail if exceeded, retry with sharper edit)
 
 ### Verification Steps
 
@@ -157,7 +155,6 @@ Interpretation: <2-3 sentences on whether the swarm converged on a genuine optim
 2. Cross-check best.score against best.json
 3. Confirm runner-up scores against trails
 4. If file_ref evidence in best.candidate_solution -> Read to confirm file exists
-5. Count lines — if > 200, condense and rewrite
 
 ### State Update
 
@@ -182,4 +179,3 @@ Interpretation: <2-3 sentences on whether the swarm converged on a genuine optim
 | Trails empty | Same as above — no exploration data to analyze |
 | Best ant artifact missing | Use only best.json fields; note as caveat |
 | Cross-ref mismatch (score discrepancy) | Trust best.json; note discrepancy in caveats |
-| Line count > 200 after rewrite | Hard-fail report; coordinator decides retry vs accept |

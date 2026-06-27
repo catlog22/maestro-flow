@@ -112,7 +112,7 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 ```
 .workflow/.team/RD-<slug>-<date>/
 +-- roadmap.md                 # Phase plan with requirements and success criteria
-+-- state.md                   # Living memory (<100 lines)
++-- state.md                   # Living memory (concise)
 +-- config.json                # Session settings (mode, depth, gates)
 +-- wisdom/                    # Cross-task knowledge accumulation
 |   +-- learnings.md

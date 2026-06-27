@@ -59,7 +59,7 @@ message_types:
 | No message bus code | No team_msg calls — team-worker handles logging |
 | No consensus handling | No consensus_reached/blocked logic — team-worker handles routing |
 | No inner loop logic | No Phase 5-L/5-F — team-worker handles looping |
-| ~80 lines target | Lightweight, domain-focused |
+| Lightweight, domain-focused | No hard line cap; stay within Phase 2-4 domain logic |
 | No pseudocode | Decision tables + text + tool calls only |
 | `<placeholder>` notation | Use angle brackets for variable substitution |
 | Reference CLI tools by name | team-worker resolves invocation from its delegation templates |
@@ -194,5 +194,4 @@ Coordinator verifies before writing each role-spec:
 | Phase 3 | Execution goal clear, not prescriptive about tools |
 | Phase 4 | Behavioral Traits copied verbatim |
 | Error Handling | Table with 3+ scenarios |
-| Line count | Target ~80 lines (max 120) |
 | No built-in overlap | No Phase 1/5, no message bus code, no consensus handling |

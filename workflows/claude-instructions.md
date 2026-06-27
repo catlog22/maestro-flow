@@ -28,28 +28,69 @@ Lightweight read-only codebase search. 1 prompt = 1 agent. Not for write-mode/lo
 | `--cd <dir>` | Working directory |
 | `--json` | Output results as JSON |
 
-**FIND + SCOPE is minimum standard.** Bare FIND produces unfocused results.
+### Context Injection
 
-| Field | Required | Purpose |
-|-------|----------|---------|
-| `FIND` | **Yes** | Precise target — what exactly + condition |
-| `SCOPE` | **Yes** | File patterns or directories |
-| `EXCLUDE` | No | What to skip |
-| `ATTENTION` | No | Edge cases to watch |
-| `EXPECTED` | Recommended | Output format (`file:line` list, summary, JSON) |
+Explore agent 无项目认知，调用前注入上下文：
+
+| 注入项 | 写入字段 | 内容 |
+|--------|----------|------|
+| 结构 | SCOPE | 相关目录的具体路径（非通配泛扫） |
+| 领域 | SCOPE | `maestro search` 已返回的关键文件路径 |
+| 约束 | ATTENTION | 框架、语言、命名惯例 |
 
 ```
-# ❌ Vague
-FIND: database patterns
+FIND: authentication middleware that validates JWT tokens
+SCOPE: src/middleware/, src/auth/, src/api/routes/
+ATTENTION: Express.js, middleware files named *.middleware.ts
+```
 
-# ✅ Specific target + condition + scope
-FIND: Functions that execute SQL queries without parameterized inputs
+### Prompt Structure
+
+**FIND + SCOPE 为最低标准。** 每个字段一句陈述句，禁止嵌套条件。
+
+| Field | Required | Rule |
+|-------|----------|------|
+| `FIND` | **Yes** | 可判定的具体目标（什么 + 判定条件） |
+| `SCOPE` | **Yes** | 明确路径或 glob，禁止 `**/*` 泛扫 |
+| `EXCLUDE` | No | 要跳过的文件类型或目录 |
+| `ATTENTION` | No | 框架、命名惯例、已知陷阱 |
+| `EXPECTED` | Recommended | 输出格式：`file:line` 列表 / 摘要 / JSON |
+
+```
+FIND: Functions that call db.query() with string concatenation instead of $1/$2
 SCOPE: src/db/**/*.ts, src/api/**/*.ts
+EXCLUDE: **/*.test.ts
+EXPECTED: file:line list with the SQL string
 ```
 
-**Multi-prompt: decompose by angle, not keyword.** Each prompt gets one focused question + scope.
+### Cross-Search
 
-Multi-prompt — background; single lookup — foreground:
+对重要搜索，用 2-3 个不同角度的 prompt 并发，结果由 Claude 交叉验证。
+
+**按角度拆分，不按关键词拆分：**
+
+| 角度 | Prompt A | Prompt B |
+|------|----------|----------|
+| 定义 vs 调用 | 找函数定义 | 找调用点 |
+| 正例 vs 反例 | 找正确用法 | 找遗漏用法 |
+| 入口 vs 实现 | 找 export/路由 | 找内部逻辑 |
+| 按文件类型 | .ts 中的用法 | .vue 中的用法 |
+
+```bash
+maestro explore \
+  "FIND: All functions exported from auth module\nSCOPE: src/auth/\nEXPECTED: function name + file:line" \
+  "FIND: All imports from auth module\nSCOPE: src/**/*.ts\nEXCLUDE: src/auth/\nEXPECTED: import path + file:line" \
+  --json
+```
+
+**结果置信度：**
+- 双命中 → 高置信，直接使用
+- 单命中 → 用 Grep/Read 二次确认
+- 零命中 → 换角度重搜或目标不存在
+
+### Execution
+
+Multi-prompt — background；single lookup — foreground：
 
 ```
 Bash({ command: "maestro explore \"p1\" \"p2\" --json", run_in_background: true })
