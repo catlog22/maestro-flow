@@ -278,7 +278,7 @@ function loadFromDir(
 // Internal
 // ============================================================================
 
-/** Resolve category for a file: static CATEGORY_MAP first, frontmatter fallback. */
+/** Resolve category for a file: static CATEGORY_MAP → frontmatter → filename stem. */
 function resolveFileCategory(filename: string, filePath: string): SpecCategory | undefined {
   const mapped = CATEGORY_MAP[filename];
   if (mapped) return mapped;
@@ -293,6 +293,13 @@ function resolveFileCategory(filename: string, filePath: string): SpecCategory |
   } catch {
     // fall through
   }
+
+  // Filename stem inference: arch.md → 'arch', coding.md → 'coding', etc.
+  const stem = filename.replace(/\.md$/, '');
+  if ((VALID_CATEGORIES as readonly string[]).includes(stem as SpecCategory)) {
+    return stem as SpecCategory;
+  }
+
   return undefined;
 }
 
@@ -301,8 +308,7 @@ function shouldInclude(filename: string, category?: SpecCategory, resolvedCat?: 
 
   if (extraSpecFiles?.includes(filename)) return true;
 
-  if (!resolvedCat) return false;
-
+  // No resolved category → still include as cross-category (general)
   return true;
 }
 
