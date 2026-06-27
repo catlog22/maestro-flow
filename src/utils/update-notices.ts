@@ -441,3 +441,15 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.42',
+  title: '.agents/ 指令注入 + explore 增强 + 命令内容分离',
+  highlights: [
+    '新增 AGENTS.md 指令注入组件：.agents/ 平台自动注入项目指令',
+    'explore 指令增强：Context Injection + Cross-Search 交叉验证',
+    '8 个命令文件内容分离：过程性逻辑下沉到 workflow 层',
+    'spec-loader category 匹配放宽 + codex skill dedupe 修复',
+  ],
+  actions: [],
+});
