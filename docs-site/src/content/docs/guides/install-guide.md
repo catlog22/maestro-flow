@@ -51,7 +51,7 @@ maestro install
 
 ### 可选技能包
 
-以下 3 个技能包默认不选中（`defaultSelected: false`），按需勾选安装。安装后可经 `maestro install toggle` 逐个启用/禁用（见下文[逐个启用/禁用技能](#逐个启用禁用技能install-toggle)）。
+以下 3 个技能包默认不选中（`defaultSelected: false`），按需勾选安装。安装后可经 `maestro install toggle` 逐个启用/禁用（见下文「逐个启用/禁用技能」章节）。
 
 #### skills-extra-team（16 个额外团队技能）
 
