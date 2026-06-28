@@ -196,38 +196,37 @@ export class MaestroGraph {
     }
   }
 
-  /**
-   * Hybrid search: runs FTS5 and vector search, merges results using RRF fusion.
-   * Falls back to FTS5-only when no embedding index is available.
-   */
   async searchHybrid(query: string, options?: { limit?: number; sourceTypes?: SourceType[] }): Promise<UnifiedSearchResult[]> {
     if (!this.queries) throw new Error('MaestroGraph not open');
 
     const limit = options?.limit ?? 20;
 
-    // FTS5 search (always runs)
+    const vecPromise = this._getVectorResults(query, limit * 2);
+
     const ftsOutput = searchUnifiedImpl(this.queries, query, {
       limit: limit * 2,
       sourceTypes: options?.sourceTypes,
     });
 
-    // Try vector search
-    const embIdx = await this.getCodeEmbeddingIndex();
-    if (!embIdx || embIdx.nodeIds.length === 0) {
+    const vecResults = await vecPromise;
+
+    if (!vecResults || vecResults.length === 0) {
       return ftsOutput.directMatches.slice(0, limit);
     }
 
-    // Embed the query
+    return mergeCodeSearchResults(ftsOutput.directMatches, vecResults, this.queries, limit);
+  }
+
+  private async _getVectorResults(query: string, limit: number) {
+    const embIdx = await this.getCodeEmbeddingIndex();
+    if (!embIdx || embIdx.nodeIds.length === 0) return null;
+
     const { embedQuery } = await import('#maestro-dashboard/wiki/embedding.js');
     const queryVec = await embedQuery(query);
-    if (!queryVec) return ftsOutput.directMatches.slice(0, limit);
+    if (!queryVec) return null;
 
-    // Vector search
     const { searchCodeVectors } = await import('./embedding/index.js');
-    const vecResults = searchCodeVectors(queryVec, embIdx, limit * 2);
-
-    // Merge using RRF fusion
-    return mergeCodeSearchResults(ftsOutput.directMatches, vecResults, this.queries, limit);
+    return searchCodeVectors(queryVec, embIdx, limit);
   }
 
   getNode(id: string): UnifiedNode | null {

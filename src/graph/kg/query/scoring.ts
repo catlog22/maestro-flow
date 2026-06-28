@@ -82,8 +82,9 @@ const CODE_SYNONYMS: ReadonlyMap<string, readonly string[]> = new Map([
   ['authorization', ['auth']],
   ['db', ['database']],
   ['database', ['db']],
-  ['config', ['configuration']],
+  ['config', ['configuration', 'settings']],
   ['configuration', ['config']],
+  ['settings', ['config', 'options']],
   ['btn', ['button']],
   ['button', ['btn']],
   ['msg', ['message']],
@@ -92,8 +93,9 @@ const CODE_SYNONYMS: ReadonlyMap<string, readonly string[]> = new Map([
   ['request', ['req']],
   ['res', ['response']],
   ['response', ['res']],
-  ['err', ['error']],
-  ['error', ['err']],
+  ['err', ['error', 'exception']],
+  ['error', ['err', 'exception']],
+  ['exception', ['err', 'error']],
   ['fn', ['function']],
   ['cb', ['callback']],
   ['callback', ['cb']],
@@ -101,15 +103,42 @@ const CODE_SYNONYMS: ReadonlyMap<string, readonly string[]> = new Map([
   ['context', ['ctx']],
   ['env', ['environment']],
   ['environment', ['env']],
-  ['param', ['parameter']],
+  ['param', ['parameter', 'arg', 'argument']],
   ['parameter', ['param']],
-  ['init', ['initialize', 'initialization']],
+  ['arg', ['argument', 'param']],
+  ['argument', ['arg', 'param']],
+  ['init', ['initialize', 'initialization', 'setup']],
   ['initialize', ['init']],
+  ['setup', ['init', 'configure']],
+  ['util', ['utility', 'helper']],
+  ['utility', ['util', 'helper']],
+  ['helper', ['util', 'utility']],
+  ['repo', ['repository']],
+  ['repository', ['repo']],
+  ['info', ['information']],
+  ['information', ['info']],
+  ['mgr', ['manager']],
+  ['manager', ['mgr']],
+  ['svc', ['service']],
+  ['service', ['svc']],
+  ['cmd', ['command']],
+  ['command', ['cmd']],
+  ['nav', ['navigation']],
+  ['navigation', ['nav']],
+  ['idx', ['index']],
+  ['val', ['validate', 'validation']],
+  ['validate', ['val', 'validation']],
+  ['validation', ['val', 'validate']],
+  ['sync', ['synchronize']],
+  ['synchronize', ['sync']],
+  ['async', ['asynchronous']],
+  ['middleware', ['mw']],
+  ['mw', ['middleware']],
 ]);
 
 /**
- * 代码查询扩展 — 基于 extractSearchTerms 分词 + 缩写同义词映射
- * 返回包含原始 term 和同义词的扩展查询字符串
+ * 代码查询扩展 — 基于 extractSearchTerms 分词 + 缩写同义词 + 词干变体
+ * 返回包含原始 term、同义词和词干变体的扩展查询字符串
  */
 export function expandCodeQuery(query: string): string {
   const terms = extractSearchTerms(query);
@@ -120,6 +149,10 @@ export function expandCodeQuery(query: string): string {
     const synonyms = CODE_SYNONYMS.get(lower);
     if (synonyms) {
       for (const syn of synonyms) expanded.add(syn);
+    }
+    const stems = getStemVariants(lower);
+    for (const stem of stems) {
+      if (stem.length >= 3) expanded.add(stem);
     }
   }
 

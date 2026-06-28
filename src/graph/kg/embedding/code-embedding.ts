@@ -19,6 +19,8 @@ export interface CodeEmbeddingIndex {
   contentHashes?: string[]; // for incremental rebuild
   builtAt: number;
   buildTimeMs?: number;
+  normalized?: boolean;            // true when vectors are L2-normalized
+  flatMatrixBuffer?: Float32Array; // contiguous buffer: n * dim floats
 }
 
 export interface VectorSearchResult {
@@ -55,16 +57,20 @@ async function getEmbedding() {
 export function nodeToEmbeddingText(node: UnifiedNode, apiMode?: boolean): string {
   const parts = [
     `path: ${node.filePath}`,
+    `kind: ${node.kind}`,
+    `language: ${node.language}`,
     `symbol: ${node.qualifiedName || node.name}`,
+    `exported: ${node.isExported}`,
+  ];
+  if (node.decorators.length > 0) parts.push(`decorators: ${node.decorators.join(', ')}`);
+  if (node.keywords.length > 0) parts.push(`keywords: ${node.keywords.join(', ')}`);
+  parts.push(
     `docstring: ${node.docstring || ''}`,
     `signature: ${node.signature || ''}`,
-    `code: ${node.definition.slice(0, 300)}`,
-  ];
+    `code: ${node.definition.slice(0, 500)}`,
+  );
   const text = parts.join('\n');
-  // When apiMode is not explicitly provided, check dynamically
   if (apiMode === undefined) {
-    // Avoid importing synchronously — default to no prefix; callers should
-    // pre-resolve apiMode via isApiMode() and pass it in.
     return text;
   }
   return apiMode ? text : 'passage: ' + text;
@@ -90,8 +96,69 @@ function hashNodeContent(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Vector math helpers
+// ---------------------------------------------------------------------------
+
+function normalizeVector(v: Float32Array): Float32Array {
+  let norm = 0;
+  for (let i = 0; i < v.length; i++) norm += v[i] * v[i];
+  norm = Math.sqrt(norm);
+  if (norm === 0) return v;
+  const out = new Float32Array(v.length);
+  for (let i = 0; i < v.length; i++) out[i] = v[i] / norm;
+  return out;
+}
+
+function dotProduct(a: Float32Array, b: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
+  return sum;
+}
+
+function buildFlatMatrix(vectors: Float32Array[], dim: number): Float32Array {
+  const flat = new Float32Array(vectors.length * dim);
+  for (let i = 0; i < vectors.length; i++) flat.set(vectors[i], i * dim);
+  return flat;
+}
+
+// ---------------------------------------------------------------------------
+// Parallel embedding constants
+// ---------------------------------------------------------------------------
+
+const PARALLEL_CHUNK_SIZE = 200;
+const MAX_CONCURRENCY = 4;
+
+// ---------------------------------------------------------------------------
 // Build embedding index
 // ---------------------------------------------------------------------------
+
+/**
+ * Embed texts in parallel chunks with bounded concurrency.
+ */
+async function embedTextsParallel(
+  texts: string[],
+  embedFn: (texts: string[]) => Promise<Float32Array[]>,
+): Promise<Float32Array[]> {
+  if (texts.length <= PARALLEL_CHUNK_SIZE) return embedFn(texts);
+
+  const chunks: string[][] = [];
+  for (let i = 0; i < texts.length; i += PARALLEL_CHUNK_SIZE) {
+    chunks.push(texts.slice(i, i + PARALLEL_CHUNK_SIZE));
+  }
+
+  const results: Float32Array[][] = new Array(chunks.length);
+  for (let start = 0; start < chunks.length; start += MAX_CONCURRENCY) {
+    const batch = chunks.slice(start, start + MAX_CONCURRENCY);
+    const batchResults = await Promise.all(batch.map(c => embedFn(c)));
+    for (let j = 0; j < batchResults.length; j++) {
+      results[start + j] = batchResults[j];
+    }
+  }
+
+  const flat: Float32Array[] = [];
+  for (const r of results) flat.push(...r);
+  return flat;
+}
 
 /**
  * Build a code embedding index from UnifiedNode[].
@@ -107,10 +174,8 @@ export async function buildCodeEmbeddingIndex(
   const apiMode = isApiMode();
   const activeModel = getModelId();
 
-  // Filter to embeddable nodes
   const embeddable = nodes.filter(isEmbeddable);
 
-  // Build texts and hashes
   const texts = embeddable.map(n => nodeToEmbeddingText(n, apiMode));
   const hashes = texts.map(hashNodeContent);
   const nodeIds = embeddable.map(n => n.id);
@@ -122,7 +187,6 @@ export async function buildCodeEmbeddingIndex(
   if (canIncremental) {
     const ex = existing!;
     const exHashes = ex.contentHashes!;
-    // Incremental: compare content hashes, only re-embed changed/new nodes
     const existingHashMap = new Map<string, { hash: string; vector: Float32Array }>();
     for (let i = 0; i < ex.nodeIds.length; i++) {
       if (exHashes[i]) {
@@ -146,24 +210,32 @@ export async function buildCodeEmbeddingIndex(
     }
 
     if (toEmbed.length > 0) {
-      const newVectors = await embedTexts(toEmbed.map(e => e.text));
+      const newVectors = await embedTextsParallel(
+        toEmbed.map(e => e.text),
+        embedTexts,
+      );
       for (let j = 0; j < toEmbed.length; j++) {
         vectors[toEmbed[j].slot] = newVectors[j];
       }
     }
   } else {
-    // Full rebuild
-    vectors = texts.length > 0 ? await embedTexts(texts) : [];
+    vectors = texts.length > 0 ? await embedTextsParallel(texts, embedTexts) : [];
   }
 
+  // Pre-normalize all vectors for fast dot-product search
+  for (let i = 0; i < vectors.length; i++) vectors[i] = normalizeVector(vectors[i]);
+
+  const dim = vectors[0]?.length ?? 384;
   return {
     modelId: activeModel,
-    dimension: vectors[0]?.length ?? 384,
+    dimension: dim,
     nodeIds,
     vectors,
     contentHashes: hashes,
     builtAt: Date.now(),
     buildTimeMs: Date.now() - t0,
+    normalized: true,
+    flatMatrixBuffer: vectors.length > 0 ? buildFlatMatrix(vectors, dim) : undefined,
   };
 }
 
@@ -187,19 +259,40 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Flat cosine scan over the code embedding index.
- * Returns top `limit` results sorted by descending similarity.
+ * Vector search over the code embedding index.
+ * Uses dot product on pre-normalized vectors when available, falls back to cosine.
  */
 export function searchCodeVectors(
   queryVec: Float32Array,
   index: CodeEmbeddingIndex,
   limit: number,
 ): VectorSearchResult[] {
+  const n = index.nodeIds.length;
   const scored: VectorSearchResult[] = [];
-  for (let i = 0; i < index.nodeIds.length; i++) {
-    const sim = cosineSimilarity(queryVec, index.vectors[i]);
-    if (sim > 0) scored.push({ nodeId: index.nodeIds[i], score: sim });
+
+  if (index.normalized && index.flatMatrixBuffer) {
+    const q = normalizeVector(queryVec);
+    const dim = index.dimension;
+    const flat = index.flatMatrixBuffer;
+    for (let i = 0; i < n; i++) {
+      const off = i * dim;
+      let dot = 0;
+      for (let j = 0; j < dim; j++) dot += q[j] * flat[off + j];
+      if (dot > 0) scored.push({ nodeId: index.nodeIds[i], score: dot });
+    }
+  } else if (index.normalized) {
+    const q = normalizeVector(queryVec);
+    for (let i = 0; i < n; i++) {
+      const sim = dotProduct(q, index.vectors[i]);
+      if (sim > 0) scored.push({ nodeId: index.nodeIds[i], score: sim });
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const sim = cosineSimilarity(queryVec, index.vectors[i]);
+      if (sim > 0) scored.push({ nodeId: index.nodeIds[i], score: sim });
+    }
   }
+
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, limit);
 }
@@ -228,6 +321,7 @@ export function saveCodeEmbeddingIndex(index: CodeEmbeddingIndex, dir: string): 
     contentHashes: index.contentHashes,
     builtAt: index.builtAt,
     buildTimeMs: index.buildTimeMs,
+    normalized: index.normalized ?? false,
   });
   const metaBytes = Buffer.from(metaJson, 'utf-8');
 
@@ -271,6 +365,7 @@ export function loadCodeEmbeddingIndex(dir: string): CodeEmbeddingIndex | null {
       contentHashes?: string[];
       builtAt: number;
       buildTimeMs?: number;
+      normalized?: boolean;
     };
     offset += metaLen;
 
@@ -290,6 +385,7 @@ export function loadCodeEmbeddingIndex(dir: string): CodeEmbeddingIndex | null {
       for (let i = 0; i < n; i++) vectors[i] = allFloats.subarray(i * dim, (i + 1) * dim);
     }
 
+    const isNormalized = meta.normalized ?? false;
     return {
       modelId: meta.modelId,
       dimension: dim,
@@ -298,6 +394,8 @@ export function loadCodeEmbeddingIndex(dir: string): CodeEmbeddingIndex | null {
       contentHashes: meta.contentHashes,
       builtAt: meta.builtAt,
       buildTimeMs: meta.buildTimeMs,
+      normalized: isNormalized,
+      flatMatrixBuffer: isNormalized && n > 0 ? buildFlatMatrix(vectors, dim) : undefined,
     };
   } catch {
     return null;

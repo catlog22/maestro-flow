@@ -5,7 +5,7 @@ import type { KgQueryBuilder } from '../db/queries.js';
 import type { UnifiedNode, UnifiedSearchResult, SourceType } from '../db/types.js';
 import type { VectorSearchResult } from '../embedding/code-embedding.js';
 import { sanitizeFtsQuery } from '../db/queries.js';
-import { computeScore, extractSearchTerms, removeStopWords, expandCodeQuery } from './scoring.js';
+import { computeScore, extractSearchTerms, removeStopWords, expandCodeQuery, getStemVariants } from './scoring.js';
 
 // ---------------------------------------------------------------------------
 // 搜索选项
@@ -105,7 +105,7 @@ export function searchUnified(
       }
     }
 
-    // 策略 3: 代码同义词扩展查询（auth→authentication 等缩写映射）
+    // 策略 3: 代码同义词扩展查询（auth→authentication 等缩写映射 + 词干变体）
     const expandedQuery = expandCodeQuery(effectiveQuery);
     if (expandedQuery !== effectiveQuery && expandedQuery !== query) {
       const expandedResults = queries.searchCodeFTS(expandedQuery, {
@@ -121,6 +121,33 @@ export function searchUnified(
           score: computeScore(node, query),
           matchReason: { kind: 'direct', field: 'name' },
         });
+      }
+    }
+
+    // 策略 4: 词干变体独立搜索 — 覆盖 morphological variants (e.g. "validate" → "valid")
+    if (allResults.length < limit) {
+      const stemTerms = new Set<string>();
+      for (const term of meaningfulTerms) {
+        for (const stem of getStemVariants(term)) {
+          if (stem.length >= 3 && !meaningfulTerms.includes(stem)) stemTerms.add(stem);
+        }
+      }
+      if (stemTerms.size > 0) {
+        const stemQuery = [...stemTerms].join(' ');
+        const stemResults = queries.searchCodeFTS(stemQuery, {
+          limit: limit,
+          kinds: codeKinds,
+          languages: options?.languages,
+        });
+        for (const node of stemResults) {
+          if (seenIds.has(node.id)) continue;
+          seenIds.add(node.id);
+          allResults.push({
+            node,
+            score: computeScore(node, query) * 0.8,
+            matchReason: { kind: 'direct', field: 'name' },
+          });
+        }
       }
     }
   }

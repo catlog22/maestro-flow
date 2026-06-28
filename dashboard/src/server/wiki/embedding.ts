@@ -375,19 +375,19 @@ export async function detectDevice(): Promise<DeviceConfig> {
 
   const backends = await listBackends();
   const hasGpu = backends.some(b => b.name === 'dml' || b.name === 'cuda');
+  const envDevice = process.env.MAESTRO_EMBEDDING_DEVICE as DeviceType | undefined;
+  const envBatch = process.env.MAESTRO_EMBEDDING_BATCH_SIZE;
+  const useGpu = envDevice === 'cpu' ? false : hasGpu;
 
-  // For small models (all-MiniLM-L6-v2, 22M params), CPU is consistently faster
-  // due to CPU↔GPU data transfer overhead exceeding compute savings.
-  // GPU only wins for models >100M params or batch sizes >500.
   _detectedConfig = {
-    device: 'cpu',
-    dtype: 'fp32',
-    batchSize: 32,
+    device: useGpu ? 'gpu' : 'cpu',
+    dtype: useGpu ? 'fp16' : 'fp32',
+    batchSize: useGpu ? 128 : (hasGpu ? 64 : 32),
   };
 
-  if (hasGpu) {
-    // Store GPU availability for future large-model support
-    _detectedConfig.batchSize = 64;
+  if (envBatch) {
+    const parsed = parseInt(envBatch, 10);
+    if (parsed > 0) _detectedConfig.batchSize = parsed;
   }
 
   return _detectedConfig;
@@ -415,13 +415,20 @@ export async function getHardwareInfo(): Promise<HardwareInfo> {
   const hasGpu = backends.some(b => b.name === 'dml' || b.name === 'cuda');
   const config = await detectDevice();
 
+  let reason: string;
+  if (!hasGpu) {
+    reason = 'CPU only — no GPU backend detected';
+  } else if (config.device === 'gpu') {
+    reason = 'GPU auto-selected (DML/CUDA detected) — set MAESTRO_EMBEDDING_DEVICE=cpu to force CPU';
+  } else {
+    reason = 'GPU available but CPU forced via MAESTRO_EMBEDDING_DEVICE=cpu';
+  }
+
   return {
     backends,
     gpuAvailable: hasGpu,
     selectedDevice: config,
-    reason: hasGpu
-      ? 'GPU available (DML/CUDA) but CPU selected — small model (22M params) runs faster on CPU due to transfer overhead'
-      : 'CPU only — no GPU backend detected',
+    reason,
   };
 }
 
