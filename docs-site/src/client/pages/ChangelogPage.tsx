@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.43',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'KG code embedding engine — structured text extraction + vector index + hybrid search (BM25F + vector)', text_zh: 'KG 代码嵌入引擎——结构化文本提取 + 向量索引 + 混合搜索' },
+      { type: 'feat', text_en: 'New MCP tools: maestro_wiki_search + maestro_code_semantic_search', text_zh: '新增 MCP 工具 maestro_wiki_search / maestro_code_semantic_search' },
+      { type: 'feat', text_en: 'Integrate zvec vector storage backend with multi-chunk embedding + parallel indexing + GPU acceleration', text_zh: '集成 zvec 向量存储后端：多分块嵌入 + 并行索引 + GPU 加速' },
+      { type: 'feat', text_en: 'Ralph S_POST_ANALYZE artifact deviation auto-correction', text_zh: 'ralph S_POST_ANALYZE 产物偏离自动修正环节' },
+      { type: 'fix', text_en: 'Fix 238 skill/command execution ambiguity issues', text_zh: '修复 skill/command 238 个执行歧义问题' },
+      { type: 'refactor', text_en: 'Refactor ralph CLI delegation architecture + dynamic context loading', text_zh: '重构 ralph CLI 委托架构 + 增加动态上下文加载' },
+    ],
+  },
+  {
     version: '0.5.42',
     date: '2026-06',
     changes: [
