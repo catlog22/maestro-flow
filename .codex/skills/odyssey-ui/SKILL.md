@@ -153,7 +153,7 @@ S_RECORD   -> END           : complete
 2. Generate slug, create SESSION_DIR
 3. `maestro search` + Glob prior sessions + ARCHITECTURE.md + spec load ui/coding
 4. Derive `phase_goals[]` from flags (apply `skip_when`)
-5. Write `session.json` + `understanding.md` section 1, emit Goal Prompt
+5. Write `session.json` + `understanding.md` section 1, call `create_goal` with phase_goals as success_criteria
 
 Commit: `"odyssey-ui({slug}): INTAKE -- target parsed"`
 
@@ -278,7 +278,7 @@ Goals:      {done}/{total} ({skipped} skipped)
 |----------------|--------|------|
 | A_FIX improvement confirmation | request_user_input | auto-proceed, `deferred` |
 
-### Goal Prompt convergence rules
+### Goal convergence rules
 
 ```
 Exhaustive iteration: process all audit + diverge findings (fix/issue/decision)

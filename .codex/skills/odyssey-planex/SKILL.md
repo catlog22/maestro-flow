@@ -173,7 +173,7 @@ S_RECORD -> END
    - **Normal**: request_user_input to confirm/edit
    - **`-y`**: auto-derive, record `{"phase":"decision","type":"criteria-confirmation","status":"deferred"}`
 3. Search prior knowledge: `maestro search`, related sessions
-4. Write session.json + understanding.md S1. Mark G1 done. Display Goal Prompt
+4. Write session.json + understanding.md S1. Mark G1 done. call `create_goal` with phase_goals as success_criteria
 
 Commit: `"odyssey-planex({slug}): INTAKE -- requirement parsed"`
 
@@ -439,7 +439,7 @@ Commit: `"odyssey-planex({slug}): RECORD -- session summary"`
 | S_VERIFY manual criterion | request_user_input | `deferred` |
 | S_VERIFY max iteration reached | request_user_input | auto accept, `deferred` |
 
-### Goal Prompt convergence rules
+### Goal convergence rules
 
 ```
 Stop when acceptance_criteria[*] all status==passed
@@ -485,7 +485,7 @@ Max iterations (default 3) prevents infinite loops. Each iteration records crite
 - [ ] understanding.md S1-S8 updated per phase; phase_goals G1-G7 audited
 - [ ] Generalization + discovery completed (unless --skip-generalize)
 - [ ] Quality Gate self-iteration triggered when insufficient
-- [ ] Goal Prompt displayed once after intake; `-y` mode: no blocking prompts
+- [ ] `create_goal` called once after intake; `-y` mode: no blocking prompts
 - [ ] Session resumable via -c; completion summary output
 </success_criteria>
 

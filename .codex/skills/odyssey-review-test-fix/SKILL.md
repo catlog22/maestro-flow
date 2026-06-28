@@ -142,7 +142,7 @@ S_DISCOVER → S_RECORD      : done or max_loops
 <actions>
 
 ### A_INTAKE
-Parse target + flags → file list. Create SESSION_DIR, derive phase_goals[]. Search prior knowledge. Write session.json + section 1. Display Goal Prompt.
+Parse target + flags → file list. Create SESSION_DIR, derive phase_goals[]. Search prior knowledge. Write session.json + section 1. Call `create_goal` with phase_goals as success_criteria.
 
 ### A_ARCHAEOLOGY
 **spawn_agents_on_csv (Wave 1):**
@@ -248,7 +248,7 @@ Goals:  {done}/{total} ({skipped} skipped)
 | S_FIX re-review new findings | request_user_input | auto-append |
 | S_CONFIRM needs_rework | Display → S_FIX | auto proceed |
 
-### Goal Prompt convergence rules
+### Goal convergence rules
 
 ```
 Stop when review_result.remaining_actionable == 0, confirmation == confirmed,
@@ -274,7 +274,7 @@ Decision pending must request_user_input.
 - [ ] All dimensions reviewed, ALL findings fixed (remaining_actionable == 0), zero-residual confirmed
 - [ ] Per-tier re-review gate; every unfixed finding individually classified
 - [ ] Generalized with multi-layer scan (unless --skip-generalize); self-iteration on insufficient
-- [ ] understanding.md sections 1-8, phase_goals G1-G6 audited, Goal Prompt once, `-y` no blocking, -c resumable
+- [ ] understanding.md sections 1-8, phase_goals G1-G6 audited, `create_goal` called once, `-y` no blocking, -c resumable
 </success_criteria>
 
 <next_step_routing>

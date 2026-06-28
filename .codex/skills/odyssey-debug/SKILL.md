@@ -158,7 +158,7 @@ S_RECORD   → END            : complete
 1. Parse arguments, generate slug, create SESSION_DIR
 2. `maestro search "<keywords>"` + Glob prior sessions + ARCHITECTURE.md + Grep keywords
 3. Derive `phase_goals[]` from flags
-4. Write `session.json` + `understanding.md` §1, emit Goal Prompt
+4. Write `session.json` + `understanding.md` §1, call `create_goal` with phase_goals as success_criteria
 
 Commit: `"odyssey-debug({slug}): INTAKE — parse target and load context"`
 
@@ -281,7 +281,7 @@ Goals:      {done}/{total} ({skipped} skipped)
 | A_ESCALATE 3-strike | request_user_input | INCONCLUSIVE |
 | A_FIX direction | request_user_input | auto proceed |
 
-### Goal Prompt convergence rules
+### Goal convergence rules
 
 ```
 Stop when root cause confirmed (or INCONCLUSIVE), fix verified,
