@@ -596,7 +596,7 @@ export async function vectorSearchZvec(
       });
       return docs.map(d => ({
         docId: (d.fields.docId as string) ?? d.id,
-        score: d.score,
+        score: 1 - d.score,
       }));
     } finally {
       collection.closeSync();
@@ -703,9 +703,8 @@ async function saveZvecIndex(index: EmbeddingIndex, dir: string): Promise<void> 
     } catch {
       // If we can't open it, try to remove the directory manually
       try {
-        for (const f of readdirSync(collectionPath)) {
-          try { unlinkSync(join(collectionPath, f)); } catch { /* ignore */ }
-        }
+        const { rmSync } = await import('node:fs');
+        rmSync(collectionPath, { recursive: true, force: true });
       } catch { /* ignore */ }
     }
   }
@@ -828,13 +827,15 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
     docIds: string[];
   };
 
-  // Reconstruct vectors from the zvec collection
-  // We lazy-import zvec synchronously via require since this is a sync function
-  let zvec: ZvecModule | null = null;
-  try {
-    zvec = _require('@zvec/zvec') as ZvecModule;
-  } catch {
-    throw new Error('zvec not available for loading collection');
+  // Use cached zvec module if available, otherwise try sync require
+  let zvec: ZvecModule | null = _zvecModule ?? null;
+  if (!zvec) {
+    try {
+      zvec = _require('@zvec/zvec') as ZvecModule;
+      _zvecModule = zvec;
+    } catch {
+      throw new Error('zvec not available for loading collection');
+    }
   }
 
   const collection = zvec.ZVecOpen(_collectionPath, { readOnly: true });
@@ -845,13 +846,15 @@ function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingI
     for (let i = 0; i < meta.docIds.length; i += BATCH_SIZE) {
       const batchIds = meta.docIds.slice(i, Math.min(i + BATCH_SIZE, meta.docIds.length));
       const fetched = collection.fetchSync({ ids: batchIds, includeVector: true, outputFields: [] });
+      const fetchedMap = Array.isArray(fetched)
+        ? Object.fromEntries(fetched.map((d: any) => [d.id, d]))
+        : fetched;
       for (let j = 0; j < batchIds.length; j++) {
-        const doc = fetched[batchIds[j]];
+        const doc = fetchedMap[batchIds[j]];
         if (doc?.vectors?.embedding) {
           const v = doc.vectors.embedding;
           vectors[i + j] = v instanceof Float32Array ? v : new Float32Array(v as number[]);
         } else {
-          // Vector not found — create zero vector as placeholder
           vectors[i + j] = new Float32Array(meta.dimension);
         }
       }
@@ -1191,10 +1194,13 @@ export async function buildEmbeddingIndex(
   }
 
   // Build per-chunk contentHashes (each chunk gets its parent doc's hash)
-  const chunkContentHashes = allChunkDocIds.map((parentId, i) => {
-    const range = docChunkRanges.find(r => docs[r.docIndex].id === parentId);
-    return range ? currentHashes[range.docIndex] : currentHashes[0];
-  });
+  const parentToHash = new Map<string, string>();
+  for (const range of docChunkRanges) {
+    parentToHash.set(docs[range.docIndex].id, currentHashes[range.docIndex]);
+  }
+  const chunkContentHashes = allChunkDocIds.map(parentId =>
+    parentToHash.get(parentId) ?? '',
+  );
 
   return {
     modelId: activeModel,

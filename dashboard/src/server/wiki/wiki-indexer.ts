@@ -372,9 +372,12 @@ export class WikiIndexer {
 
     if (embIdx && embIdx.docIds.length > 0) {
       try {
-        const { embedQuery, vectorSearch, mergeHybrid } = await import('./embedding.js');
+        const { embedQuery, vectorSearch, vectorSearchZvec, mergeHybrid } = await import('./embedding.js');
         const qVec = await embedQuery(query);
-        const rawVecResults = vectorSearch(qVec, embIdx, limit * 2);
+        let rawVecResults = await vectorSearchZvec(qVec, this.workflowRoot, limit * 2);
+        if (rawVecResults.length === 0) {
+          rawVecResults = vectorSearch(qVec, embIdx, limit * 2);
+        }
 
         // Deduplicate chunk results back to parent docId (keep highest score per doc)
         let vecResults = rawVecResults;
