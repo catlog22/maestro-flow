@@ -12,6 +12,7 @@ import * as teamMailboxTool from './team-mailbox.js';
 import * as storeKnowhowTool from './store-knowhow.js';
 import * as teamTasksMcpTool from './team-tasks-mcp.js';
 import * as teamAgentsTool from './team-agents.js';
+import * as wikiSearchTool from './wiki-search.js';
 
 /**
  * Register a CCW-style tool (with schema + handler exports) into the maestro registry.
@@ -42,4 +43,5 @@ export function registerBuiltinTools(registry: ToolRegistry): void {
   registerCcwTool(registry, storeKnowhowTool);
   registerCcwTool(registry, teamTasksMcpTool);
   registerCcwTool(registry, teamAgentsTool);
+  registerCcwTool(registry, wikiSearchTool);
 }
