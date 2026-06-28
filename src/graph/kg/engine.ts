@@ -4,7 +4,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { KgDatabaseConnection, KgQueryBuilder, getKgDatabasePath, applyMigrations } from './db/index.js';
-import type { UnifiedNode, UnifiedEdge, UnifiedGraphStats, SyncResult, ResolutionResult, ExtractionResult, SourceType } from './db/types.js';
+import type { UnifiedNode, UnifiedEdge, UnifiedGraphStats, UnifiedSearchResult, SyncResult, ResolutionResult, ExtractionResult, SourceType } from './db/types.js';
 import { resolveKnowledgeEdges as resolveKnowledgeEdgesImpl } from './resolution/knowledge-resolver.js';
 import type { KnowledgeResolutionResult } from './resolution/knowledge-resolver.js';
 import {
@@ -21,8 +21,9 @@ import {
   findShortestPath as findShortestPathImpl,
 } from './query/traversal.js';
 import type { TraversalResult, NodeContext, NodeMetrics, PathStep } from './query/traversal.js';
-import { searchUnified as searchUnifiedImpl } from './query/search.js';
+import { searchUnified as searchUnifiedImpl, mergeCodeSearchResults } from './query/search.js';
 import type { UnifiedSearchOutput } from './query/search.js';
+import type { CodeEmbeddingIndex } from './embedding/code-embedding.js';
 import { buildContext as buildContextImpl } from './query/context-builder.js';
 import type { BuiltContext } from './query/context-builder.js';
 
@@ -30,6 +31,7 @@ export class MaestroGraph {
   private conn: KgDatabaseConnection | null = null;
   private queries: KgQueryBuilder | null = null;
   private projectRoot: string;
+  private _codeEmbeddingCache: CodeEmbeddingIndex | null = null;
 
   constructor(projectRoot: string) {
     this.projectRoot = resolve(projectRoot);
@@ -87,6 +89,7 @@ export class MaestroGraph {
     this.conn?.close();
     this.conn = null;
     this.queries = null;
+    this._codeEmbeddingCache = null;
   }
 
   // ── Indexing ──────────────────────────────────────────────────────
@@ -144,6 +147,87 @@ export class MaestroGraph {
       sourceTypes: options?.sourceTypes,
       limit: options?.limit ?? 20,
     });
+  }
+
+  // ── Code Embedding ────────────────────────────────────────────────
+
+  private _getCodeEmbeddingDir(): string {
+    return resolve(this.projectRoot, '.workflow', 'kg');
+  }
+
+  /**
+   * Build (or incrementally rebuild) the code embedding index from all codegraph nodes.
+   * Persists the index to .workflow/kg/code-embedding-index.bin and caches in memory.
+   */
+  async buildCodeEmbeddings(): Promise<CodeEmbeddingIndex> {
+    if (!this.queries) throw new Error('MaestroGraph not open');
+
+    const { buildCodeEmbeddingIndex, saveCodeEmbeddingIndex } = await import('./embedding/index.js');
+
+    // Get all code nodes from the DB (only codegraph nodes are embeddable)
+    const allCodeNodes = this.queries.getNodesBySourceType('codegraph');
+
+    // Build index (incremental if cache exists)
+    const index = await buildCodeEmbeddingIndex(allCodeNodes, this._codeEmbeddingCache);
+
+    // Persist to disk
+    const dir = this._getCodeEmbeddingDir();
+    saveCodeEmbeddingIndex(index, dir);
+
+    // Cache in memory
+    this._codeEmbeddingCache = index;
+    return index;
+  }
+
+  /**
+   * Load the code embedding index from disk or return the in-memory cache.
+   * Returns null if no persisted index exists.
+   */
+  async getCodeEmbeddingIndex(): Promise<CodeEmbeddingIndex | null> {
+    if (this._codeEmbeddingCache) return this._codeEmbeddingCache;
+    try {
+      const { loadCodeEmbeddingIndex } = await import('./embedding/index.js');
+      const dir = this._getCodeEmbeddingDir();
+      const index = loadCodeEmbeddingIndex(dir);
+      if (index) this._codeEmbeddingCache = index;
+      return index;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Hybrid search: runs FTS5 and vector search, merges results using RRF fusion.
+   * Falls back to FTS5-only when no embedding index is available.
+   */
+  async searchHybrid(query: string, options?: { limit?: number; sourceTypes?: SourceType[] }): Promise<UnifiedSearchResult[]> {
+    if (!this.queries) throw new Error('MaestroGraph not open');
+
+    const limit = options?.limit ?? 20;
+
+    // FTS5 search (always runs)
+    const ftsOutput = searchUnifiedImpl(this.queries, query, {
+      limit: limit * 2,
+      sourceTypes: options?.sourceTypes,
+    });
+
+    // Try vector search
+    const embIdx = await this.getCodeEmbeddingIndex();
+    if (!embIdx || embIdx.nodeIds.length === 0) {
+      return ftsOutput.directMatches.slice(0, limit);
+    }
+
+    // Embed the query
+    const { embedQuery } = await import('#maestro-dashboard/wiki/embedding.js');
+    const queryVec = await embedQuery(query);
+    if (!queryVec) return ftsOutput.directMatches.slice(0, limit);
+
+    // Vector search
+    const { searchCodeVectors } = await import('./embedding/index.js');
+    const vecResults = searchCodeVectors(queryVec, embIdx, limit * 2);
+
+    // Merge using RRF fusion
+    return mergeCodeSearchResults(ftsOutput.directMatches, vecResults, this.queries, limit);
   }
 
   getNode(id: string): UnifiedNode | null {

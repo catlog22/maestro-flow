@@ -260,7 +260,8 @@ export interface UnifiedSearchResult {
   matchReason:
     | { kind: 'direct'; field: 'name' | 'definition' | 'aliases' | 'keywords' }
     | { kind: 'edge'; fromNodeId: string; fromNodeName: string; edgeKind: string }
-    | { kind: 'hop'; path: Array<{ nodeName: string; edgeKind: string }> };
+    | { kind: 'hop'; path: Array<{ nodeName: string; edgeKind: string }> }
+    | { kind: 'vector'; field: 'embedding' };
 }
 
 // ---------------------------------------------------------------------------
