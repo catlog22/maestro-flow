@@ -11,7 +11,25 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, renameSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, renameSync, readdirSync } from 'node:fs';
+
+// ---------------------------------------------------------------------------
+// Lazy zvec import — avoids hard failure when @zvec/zvec is not installed
+// ---------------------------------------------------------------------------
+
+type ZvecModule = typeof import('@zvec/zvec');
+let _zvecModule: ZvecModule | null | undefined;
+
+async function getZvec(): Promise<ZvecModule | null> {
+  if (_zvecModule !== undefined) return _zvecModule;
+  try {
+    _zvecModule = await import('@zvec/zvec');
+    return _zvecModule;
+  } catch {
+    _zvecModule = null;
+    return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -530,10 +548,65 @@ export async function embedQuery(query: string): Promise<Float32Array> {
 }
 
 // ---------------------------------------------------------------------------
-// Vector search (flat cosine — no index structure needed for <10K docs)
+// Vector search — zvec backend (default) with flat cosine fallback
 // ---------------------------------------------------------------------------
 
+const ZVEC_DIR = 'embedding.zvec';
+
 export function vectorSearch(
+  queryVector: Float32Array,
+  index: EmbeddingIndex,
+  limit: number,
+): VectorSearchResult[] {
+  // Feature flag: force flat cosine scan (bypass zvec)
+  if (process.env.MAESTRO_EMBEDDING_FLAT_SCAN) {
+    return flatCosineSearch(queryVector, index, limit);
+  }
+  // Sync path — zvec requires async setup, so use flat scan here.
+  // For zvec-accelerated search, callers should use vectorSearchZvec.
+  return flatCosineSearch(queryVector, index, limit);
+}
+
+/**
+ * Async vector search using zvec collection.
+ * Falls back to flat cosine scan when zvec is unavailable or feature flag is set.
+ */
+export async function vectorSearchZvec(
+  queryVector: Float32Array,
+  dir: string,
+  limit: number,
+): Promise<VectorSearchResult[]> {
+  if (process.env.MAESTRO_EMBEDDING_FLAT_SCAN) {
+    return []; // caller handles fallback via sync vectorSearch
+  }
+  const zvec = await getZvec();
+  if (!zvec) return []; // zvec not installed, caller handles fallback
+
+  const collectionPath = join(dir, ZVEC_DIR);
+  if (!existsSync(collectionPath)) return []; // no zvec collection yet
+
+  try {
+    const collection = zvec.ZVecOpen(collectionPath, { readOnly: true });
+    try {
+      const docs = collection.querySync({
+        fieldName: 'embedding',
+        vector: queryVector,
+        topk: limit,
+        outputFields: ['docId'],
+      });
+      return docs.map(d => ({
+        docId: (d.fields.docId as string) ?? d.id,
+        score: d.score,
+      }));
+    } finally {
+      collection.closeSync();
+    }
+  } catch {
+    return []; // zvec query failed, caller handles fallback
+  }
+}
+
+function flatCosineSearch(
   queryVector: Float32Array,
   index: EmbeddingIndex,
   limit: number,
@@ -548,7 +621,7 @@ export function vectorSearch(
 }
 
 // ---------------------------------------------------------------------------
-// Persistence — SQLite binary BLOB (primary) with JSON fallback for migration
+// Persistence — zvec collection (primary) + binary fallback + legacy migration
 // ---------------------------------------------------------------------------
 
 const SQLITE_FILE = 'embedding-index.db';
@@ -561,6 +634,7 @@ const BINARY_FILE = 'embedding-index.bin';
 export function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
   mkdirSync(dir, { recursive: true });
 
+  // --- Binary format (kept for backward compat and feature flag fallback) ---
   const dim = index.dimension;
   const n = index.docIds.length;
   const docIdsJson = JSON.stringify(index.docIds);
@@ -599,14 +673,109 @@ export function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
   writeFileSync(tmpPath, buf);
   renameSync(tmpPath, join(dir, BINARY_FILE));
 
+  // --- zvec collection save (async, best-effort) ---
+  saveZvecIndex(index, dir).catch(() => {
+    // zvec save failed — binary format still available as fallback
+  });
+
   // Remove legacy files
   for (const f of [CACHE_FILE, SQLITE_FILE, SQLITE_FILE + '-shm', SQLITE_FILE + '-wal', SQLITE_FILE + '-journal']) {
     try { if (existsSync(join(dir, f))) unlinkSync(join(dir, f)); } catch { /* ignore */ }
   }
 }
 
+/**
+ * Save embedding index to zvec collection format.
+ * Creates/replaces a zvec collection at `dir/embedding.zvec`.
+ */
+async function saveZvecIndex(index: EmbeddingIndex, dir: string): Promise<void> {
+  const zvec = await getZvec();
+  if (!zvec) return;
+
+  const collectionPath = join(dir, ZVEC_DIR);
+  const dim = index.dimension;
+
+  // Remove existing collection directory if present
+  if (existsSync(collectionPath)) {
+    try {
+      const existing = zvec.ZVecOpen(collectionPath);
+      existing.destroySync();
+    } catch {
+      // If we can't open it, try to remove the directory manually
+      try {
+        for (const f of readdirSync(collectionPath)) {
+          try { unlinkSync(join(collectionPath, f)); } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  const schema = new zvec.ZVecCollectionSchema({
+    name: 'embedding',
+    vectors: {
+      name: 'embedding',
+      dataType: zvec.ZVecDataType.VECTOR_FP32,
+      dimension: dim,
+      indexParams: {
+        indexType: zvec.ZVecIndexType.FLAT,
+        metricType: zvec.ZVecMetricType.COSINE,
+      },
+    },
+    fields: [
+      { name: 'docId', dataType: zvec.ZVecDataType.STRING },
+    ],
+  });
+
+  const collection = zvec.ZVecCreateAndOpen(collectionPath, schema);
+  try {
+    // Batch upsert all vectors
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < index.docIds.length; i += BATCH_SIZE) {
+      const batch = [];
+      const end = Math.min(i + BATCH_SIZE, index.docIds.length);
+      for (let j = i; j < end; j++) {
+        batch.push({
+          id: index.docIds[j],
+          vectors: { embedding: index.vectors[j] },
+          fields: { docId: index.docIds[j] },
+        });
+      }
+      collection.upsertSync(batch);
+    }
+
+    // Save metadata as JSON sidecar (zvec doesn't store arbitrary metadata)
+    const metaSidecar = {
+      modelId: index.modelId,
+      dimension: dim,
+      builtAt: index.builtAt,
+      deviceUsed: index.deviceUsed,
+      buildTimeMs: index.buildTimeMs,
+      contentHashes: index.contentHashes,
+      chunkDocIds: index.chunkDocIds,
+      docIds: index.docIds,
+    };
+    writeFileSync(join(dir, ZVEC_DIR + '.meta.json'), JSON.stringify(metaSidecar));
+  } finally {
+    collection.closeSync();
+  }
+}
+
 export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
-  // Primary: packed binary
+  // Primary: zvec collection + metadata sidecar
+  const zvecMetaPath = join(dir, ZVEC_DIR + '.meta.json');
+  const zvecCollPath = join(dir, ZVEC_DIR);
+  if (existsSync(zvecMetaPath) && existsSync(zvecCollPath)) {
+    try {
+      return loadFromZvecMeta(zvecMetaPath, zvecCollPath);
+    } catch (e: unknown) {
+      if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+        console.warn(`[embedding] zvec index load failed, falling back: ${e instanceof Error ? e.message : e}`);
+      }
+      // Fall through to binary
+    }
+  }
+
+  // Fallback: packed binary
   const binPath = join(dir, BINARY_FILE);
   if (existsSync(binPath)) {
     try {
@@ -640,6 +809,68 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   }
 
   return null;
+}
+
+/**
+ * Load EmbeddingIndex from zvec metadata sidecar.
+ * The sidecar stores everything needed to reconstruct the in-memory index;
+ * the actual zvec collection is used for vectorSearchZvec queries.
+ */
+function loadFromZvecMeta(metaPath: string, _collectionPath: string): EmbeddingIndex {
+  const meta = JSON.parse(readFileSync(metaPath, 'utf-8')) as {
+    modelId: string;
+    dimension: number;
+    builtAt: number;
+    deviceUsed?: string;
+    buildTimeMs?: number;
+    contentHashes?: string[];
+    chunkDocIds?: string[];
+    docIds: string[];
+  };
+
+  // Reconstruct vectors from the zvec collection
+  // We lazy-import zvec synchronously via require since this is a sync function
+  let zvec: ZvecModule | null = null;
+  try {
+    zvec = _require('@zvec/zvec') as ZvecModule;
+  } catch {
+    throw new Error('zvec not available for loading collection');
+  }
+
+  const collection = zvec.ZVecOpen(_collectionPath, { readOnly: true });
+  try {
+    const vectors: Float32Array[] = new Array(meta.docIds.length);
+    // Fetch vectors in batches by ID
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < meta.docIds.length; i += BATCH_SIZE) {
+      const batchIds = meta.docIds.slice(i, Math.min(i + BATCH_SIZE, meta.docIds.length));
+      const fetched = collection.fetchSync({ ids: batchIds, includeVector: true, outputFields: [] });
+      for (let j = 0; j < batchIds.length; j++) {
+        const doc = fetched[batchIds[j]];
+        if (doc?.vectors?.embedding) {
+          const v = doc.vectors.embedding;
+          vectors[i + j] = v instanceof Float32Array ? v : new Float32Array(v as number[]);
+        } else {
+          // Vector not found — create zero vector as placeholder
+          vectors[i + j] = new Float32Array(meta.dimension);
+        }
+      }
+    }
+
+    return {
+      modelId: meta.modelId,
+      dimension: meta.dimension,
+      docIds: meta.docIds,
+      vectors,
+      contentHashes: meta.contentHashes,
+      chunkDocIds: meta.chunkDocIds,
+      builtAt: meta.builtAt,
+      deviceUsed: meta.deviceUsed,
+      buildTimeMs: meta.buildTimeMs,
+    };
+  } finally {
+    collection.closeSync();
+  }
 }
 
 function loadFromBinary(filePath: string): EmbeddingIndex {

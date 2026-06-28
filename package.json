@@ -59,6 +59,7 @@
     "@inkjs/ui": "^2.0.0",
     "@inquirer/prompts": "^8.3.2",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@zvec/zvec": "^0.5.0",
     "argon2": "^0.44.0",
     "better-sqlite3": "^12.10.0",
     "chokidar": "^4.0.0",
