@@ -16,13 +16,13 @@ async function main() {
 
   console.log('[2] ask("respond with just pong")...');
   const r1 = await agent.ask('respond with just pong', { timeout: 120_000 });
-  console.log('   →', JSON.stringify(r1.slice(0, 200)));
+  console.log('   →', JSON.stringify(r1.output.slice(0, 200)));
 
   console.log('[3] isIdle:', await agent.isIdle());
 
   console.log('[4] ask("what did you just say?")...');
   const r2 = await agent.ask('what word did you just say?', { timeout: 120_000 });
-  console.log('   →', JSON.stringify(r2.slice(0, 200)));
+  console.log('   →', JSON.stringify(r2.output.slice(0, 200)));
 
   console.log('[done] ✓');
 }

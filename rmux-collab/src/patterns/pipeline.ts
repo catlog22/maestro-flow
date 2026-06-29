@@ -12,7 +12,8 @@ export async function pipeline(
       ? stage.transform(currentInput)
       : currentInput;
 
-    currentInput = await stage.agent.ask(prompt, opts);
+    const result = await stage.agent.ask(prompt, opts);
+    currentInput = result.output;
   }
 
   return currentInput;

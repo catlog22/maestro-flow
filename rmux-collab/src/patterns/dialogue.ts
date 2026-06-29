@@ -7,11 +7,11 @@ export async function dialogue(
   const messages: DialogueMessage[] = [];
 
   for (const agent of config.agents) {
-    const response = await agent.ask(
+    const result = await agent.ask(
       `Topic for discussion: ${config.topic}\nPlease share your perspective.`,
       opts,
     );
-    messages.push({ from: agent.name, content: response, round: 0 });
+    messages.push({ from: agent.name, content: result.output, round: 0 });
   }
 
   for (let round = 1; round <= config.maxRounds; round++) {
@@ -25,8 +25,8 @@ export async function dialogue(
         ? `Other perspectives:\n${context}\n\nYour response:`
         : `Continue the discussion on: ${config.topic}`;
 
-      const response = await agent.ask(prompt, opts);
-      messages.push({ from: agent.name, content: response, round });
+      const result = await agent.ask(prompt, opts);
+      messages.push({ from: agent.name, content: result.output, round });
     }
 
     if (config.shouldContinue && !config.shouldContinue(round, messages)) {

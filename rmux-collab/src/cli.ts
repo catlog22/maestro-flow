@@ -69,7 +69,7 @@ async function main() {
       const coord = await Coordinator.create();
       await coord.addChannel({ name: channel, agents: [{ name: agent, tool: 'shell', completionMarker: '>' }] });
       const result = await coord.ask(channel, agent, prompt);
-      console.log(result);
+      console.log(result.output);
       await coord.shutdown();
       break;
     }

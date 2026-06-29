@@ -12,16 +12,15 @@ export async function broadcastCollect(
     agents.map(async (agent): Promise<AgentResult> => {
       const agentStart = Date.now();
       try {
-        const output = await agent.ask(prompt, opts);
-        return {
-          agent: agent.name,
-          output,
-          duration_ms: Date.now() - agentStart,
-        };
+        return await agent.ask(prompt, opts);
       } catch (err) {
         return {
           agent: agent.name,
+          status: 'error' as const,
+          confidence: 'degraded' as const,
           output: '',
+          raw: '',
+          segments: [],
           error: err instanceof Error ? err.message : String(err),
           duration_ms: Date.now() - agentStart,
         };
@@ -29,10 +28,14 @@ export async function broadcastCollect(
     }),
   );
 
-  return results.map(r => (r.status === 'fulfilled' ? r.value : {
+  return results.map(r => r.status === 'fulfilled' ? r.value : {
     agent: 'unknown',
+    status: 'error' as const,
+    confidence: 'degraded' as const,
     output: '',
+    raw: '',
+    segments: [],
     error: r.reason instanceof Error ? r.reason.message : String(r.reason),
     duration_ms: Date.now() - start,
-  }));
+  });
 }

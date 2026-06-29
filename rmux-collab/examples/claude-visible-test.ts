@@ -18,7 +18,7 @@ async function main() {
   console.log('Agent ready! Asking...');
 
   const result = await channel.get('claude').ask('respond with just "hello world"', { timeout: 120_000 });
-  console.log('Response:', result);
+  console.log('Response:', result.output);
 
   console.log('\nClaude window is visible in your terminal.');
   console.log('Cleanup in 15s...');

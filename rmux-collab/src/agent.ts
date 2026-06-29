@@ -1,11 +1,15 @@
 import type { Pane } from '@rmux/sdk';
-import type { AgentConfig, AgentTool, AskOptions } from './types.js';
+import type { AgentConfig, AgentResult, AgentTool, AskOptions, OutputSegment } from './types.js';
 import { stripAnsi } from './utils/output-cleaner.js';
 import { execSync } from 'node:child_process';
 
-function rmuxExec(args: string): string {
+function rmuxExec(args: string, opts?: { input?: string }): string {
   try {
-    return execSync(`rmux ${args}`, { encoding: 'utf-8', timeout: 10_000 }).trim();
+    return execSync(`rmux ${args}`, {
+      encoding: 'utf-8',
+      timeout: 10_000,
+      input: opts?.input,
+    }).trim();
   } catch (e: any) {
     return e.stdout?.trim() ?? '';
   }
@@ -63,13 +67,23 @@ export function isCliAgent(tool: AgentTool): boolean {
   return tool !== 'shell';
 }
 
-const SEND_ENTER_DELAY = 150;
+const SEND_ENTER_DELAY = 300;
 
 function matchesMarker(text: string, marker: string | RegExp): boolean {
   if (typeof marker === 'string') {
     return text.includes(marker);
   }
   return marker.test(text);
+}
+
+function markerToString(marker: string | RegExp): string {
+  if (typeof marker === 'string') return marker;
+  // Extract a simple literal from the regex for CLI usage
+  const src = marker.source;
+  if (src.includes('❯')) return '❯';
+  if (src.includes('$')) return '$';
+  if (src.includes('>')) return '>';
+  return '>';
 }
 
 let sentinelCounter = 0;
@@ -96,8 +110,20 @@ export class Agent {
 
   get alive(): boolean { return this._alive; }
 
-  private sendKeysLiteral(text: string): void {
-    rmuxExec(`send-keys -t ${this.target} -l "${text.replace(/"/g, '\\"')}"`);
+  private sendViaBuffer(text: string): void {
+    const bufName = `collab-${Date.now()}`;
+    rmuxExec(`load-buffer -b ${bufName} -`, { input: text });
+    rmuxExec(`paste-buffer -p -t ${this.target} -b ${bufName}`);
+    rmuxExec(`delete-buffer -b ${bufName}`);
+  }
+
+  private sendKeysLiteral(text: string, pasteThreshold?: number): void {
+    const threshold = pasteThreshold ?? 1024;
+    if (text.length > threshold) {
+      this.sendViaBuffer(text);
+    } else {
+      rmuxExec(`send-keys -t ${this.target} -l "${text.replace(/"/g, '\\"')}"`);
+    }
   }
 
   private sendKeysRaw(key: string): void {
@@ -117,16 +143,17 @@ export class Agent {
     await this.pane.close();
   }
 
-  async ask(prompt: string, opts?: AskOptions): Promise<string> {
+  async ask(prompt: string, opts?: AskOptions): Promise<AgentResult> {
     const timeout = opts?.timeout ?? 120_000;
 
     if (this.config.tool === 'shell') {
       return this.askShell(prompt, timeout);
     }
-    return this.askCli(prompt, timeout);
+    return this.askCli(prompt, timeout, opts?.pasteThreshold);
   }
 
-  private async askShell(prompt: string, timeout: number): Promise<string> {
+  private async askShell(prompt: string, timeout: number): Promise<AgentResult> {
+    const startTime = Date.now();
     const sentinel = nextSentinel();
     const fullCmd = `${prompt} && echo ${sentinel}`;
 
@@ -141,29 +168,56 @@ export class Agent {
     const cmdIdx = lines.findLastIndex(l => l.includes(prompt.trim().slice(0, 30)));
     const sentinelIdx = lines.findIndex((l, i) => i > cmdIdx && l.trim() === sentinel);
 
+    let raw: string;
     if (sentinelIdx === -1 || cmdIdx === -1) {
-      return lines
+      raw = lines
         .filter(l => !l.includes(sentinel) && !l.includes('__RD'))
+        .join('\n');
+    } else {
+      raw = lines
+        .slice(cmdIdx + 1, sentinelIdx)
+        .filter(l => !l.includes('__RD'))
         .join('\n');
     }
 
-    const outputLines = lines
-      .slice(cmdIdx + 1, sentinelIdx)
-      .filter(l => !l.includes('__RD'));
-    return outputLines.join('\n');
+    return this.buildResult(raw, startTime, 'completed', 'exact');
   }
 
-  private async askCli(prompt: string, timeout: number): Promise<string> {
+  private async askCli(prompt: string, timeout: number, pasteThreshold?: number): Promise<AgentResult> {
+    const startTime = Date.now();
     const beforeText = this.capturePane();
 
-    this.sendKeysLiteral(prompt);
+    this.sendKeysLiteral(prompt, pasteThreshold);
     await sleep(SEND_ENTER_DELAY);
     this.sendKeysRaw('C-m');
 
+    const markerStr = markerToString(this.completionMarker);
+
+    // Strategy 1: rmux --wait-next-text (atomic wait)
+    try {
+      rmuxExec(`send-keys -t ${this.target} --wait-next-text "${markerStr}" --timeout ${timeout}`);
+      const current = this.capturePane();
+      const raw = this.extractCliResponse(current, beforeText, prompt);
+      return this.buildResult(raw, startTime, 'completed', 'exact');
+    } catch {
+      // --wait-next-text may not be available, try SDK fallback
+    }
+
+    // Strategy 2: SDK expectVisibleText().toContain().timeout()
+    try {
+      await this.pane.expectVisibleText().toContain(markerStr).timeout(timeout);
+      const current = this.capturePane();
+      const raw = this.extractCliResponse(current, beforeText, prompt);
+      return this.buildResult(raw, startTime, 'completed', 'observed');
+    } catch {
+      // SDK method may fail, fall through to polling
+    }
+
+    // Strategy 3: Polling fallback (degraded)
+    const deadline = Date.now() + timeout;
     let stableCount = 0;
     let lastSnap = '';
 
-    const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
       await sleep(2000);
       const current = this.capturePane();
@@ -178,7 +232,8 @@ export class Agent {
         if (current === lastSnap) {
           stableCount++;
           if (stableCount >= 1) {
-            return this.extractCliResponse(current, beforeText, prompt);
+            const raw = this.extractCliResponse(current, beforeText, prompt);
+            return this.buildResult(raw, startTime, 'completed', 'observed');
           }
         } else {
           stableCount = 0;
@@ -189,7 +244,11 @@ export class Agent {
         lastSnap = current;
       }
     }
-    throw new Error(`Agent "${this.name}" ask() timed out after ${timeout}ms`);
+
+    // Timeout: capture whatever is there and return degraded
+    const current = this.capturePane();
+    const raw = this.extractCliResponse(current, beforeText, prompt);
+    return this.buildResult(raw, startTime, 'degraded', 'degraded');
   }
 
   private extractCliResponse(current: string, beforeText: string, prompt: string): string {
@@ -210,6 +269,60 @@ export class Agent {
       return true;
     });
     return resultLines.join('\n');
+  }
+
+  private classifyOutput(raw: string): OutputSegment[] {
+    const lines = raw.split('\n');
+    const segments: OutputSegment[] = [];
+    let currentKind: OutputSegment['kind'] = 'intermediate';
+    let currentLines: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      let kind: OutputSegment['kind'] = 'intermediate';
+
+      if (/^[✻◉⏵].*(?:Thinking|Pondering|Reasoning)/i.test(trimmed)) {
+        kind = 'thinking';
+      } else if (/^[⏵▶].*(?:Tool|Read|Write|Edit|Bash|Grep|Glob)/i.test(trimmed)) {
+        kind = 'tool_call';
+      } else if (/^[✓].*(?:Tool|Read|Write|completed)/i.test(trimmed)) {
+        kind = 'tool_result';
+      } else if (trimmed && !matchesMarker(trimmed, this.completionMarker)) {
+        const continuationKinds: OutputSegment['kind'][] = ['thinking', 'tool_call', 'tool_result'];
+        kind = continuationKinds.includes(currentKind) ? currentKind : 'final';
+      }
+
+      if (kind !== currentKind && currentLines.length > 0) {
+        segments.push({ kind: currentKind, content: currentLines.join('\n') });
+        currentLines = [];
+      }
+      currentKind = kind;
+      if (trimmed) currentLines.push(line);
+    }
+    if (currentLines.length > 0) {
+      segments.push({ kind: currentKind, content: currentLines.join('\n') });
+    }
+    return segments;
+  }
+
+  private buildResult(
+    raw: string,
+    startTime: number,
+    status: AgentResult['status'],
+    confidence: AgentResult['confidence'],
+  ): AgentResult {
+    const segments = this.classifyOutput(raw);
+    const finalSegments = segments.filter(s => s.kind === 'final');
+    const output = finalSegments.map(s => s.content).join('\n');
+    return {
+      agent: this.name,
+      status,
+      confidence,
+      output: output || raw,
+      raw,
+      segments,
+      duration_ms: Date.now() - startTime,
+    };
   }
 
   async send(prompt: string): Promise<void> {

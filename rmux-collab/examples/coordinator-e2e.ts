@@ -14,7 +14,7 @@ async function main() {
 
   console.log('[e2e] 1. Single ask...');
   const info = await coord.ask('team', 'analyst', 'echo system-info-ok', { timeout: 10_000 });
-  console.log('   result:', JSON.stringify(info));
+  console.log('   result:', JSON.stringify(info.output));
 
   console.log('[e2e] 2. Broadcast...');
   const results = await coord.broadcast('team', 'echo STATUS_OK', { timeout: 10_000 });
@@ -39,7 +39,7 @@ async function main() {
     agents: [{ name: 'inspector', tool: 'shell', completionMarker: '>' }],
   });
   const diag = await debug.get('inspector').ask('echo diagnostics-complete', { timeout: 10_000 });
-  console.log('   result:', JSON.stringify(diag));
+  console.log('   result:', JSON.stringify(diag.output));
 
   console.log('[e2e] 5. Shutdown...');
   await coord.shutdown();

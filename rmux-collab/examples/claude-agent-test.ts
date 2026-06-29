@@ -60,7 +60,7 @@ async function main() {
   // 5. First ask
   console.log('[4] ask("pong")...');
   const r1 = await agent.ask('respond with just "pong"', { timeout: 120_000 });
-  console.log('   →', JSON.stringify(r1.slice(0, 200)));
+  console.log('   →', JSON.stringify(r1.output.slice(0, 200)));
 
   // 6. idle check
   console.log('[5] isIdle:', await agent.isIdle());
@@ -68,7 +68,7 @@ async function main() {
   // 7. Multi-turn
   console.log('[6] ask("what did you say?")...');
   const r2 = await agent.ask('what was the word you just said?', { timeout: 120_000 });
-  console.log('   →', JSON.stringify(r2.slice(0, 200)));
+  console.log('   →', JSON.stringify(r2.output.slice(0, 200)));
 
   // 8. Cleanup
   rmux(`kill-session -t ${SESSION}`);

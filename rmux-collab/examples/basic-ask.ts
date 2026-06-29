@@ -25,11 +25,11 @@ async function main() {
 
   // Now test ask()
   const result = await agent.ask('echo hello-world', { timeout: 10_000 });
-  console.log('[ask result]:', JSON.stringify(result));
+  console.log('[ask result]:', JSON.stringify(result.output));
 
   // Second ask
   const result2 = await agent.ask('dir /b package.json', { timeout: 10_000 });
-  console.log('[ask2 result]:', JSON.stringify(result2));
+  console.log('[ask2 result]:', JSON.stringify(result2.output));
 
   await session.kill();
   console.log('[done]');
