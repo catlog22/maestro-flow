@@ -6,6 +6,7 @@ export { pipeline } from './patterns/pipeline.js';
 export { dialogue } from './patterns/dialogue.js';
 export { cleanOutput, stripAnsi } from './utils/output-cleaner.js';
 export { Logger } from './utils/logger.js';
+export { openTerminalWindow } from './utils/terminal.js';
 
 export type {
   AgentConfig,

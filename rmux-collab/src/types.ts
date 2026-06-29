@@ -8,6 +8,7 @@ export interface AgentConfig {
   name: string;
   tool: AgentTool;
   model?: string;
+  settings?: string;
   completionMarker?: string | RegExp;
   launchCommand?: string;
   cwd?: string;
@@ -26,6 +27,7 @@ export interface ChannelConfig {
   name: string;
   agents: AgentConfig[];
   cwd?: string;
+  visible?: boolean;
 }
 
 // ===== Coordinator =====

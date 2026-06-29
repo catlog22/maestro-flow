@@ -26,19 +26,36 @@ export function getDefaultMarker(tool: AgentTool): string | RegExp {
   }
 }
 
+function resolveExePath(name: string): string {
+  if (process.platform !== 'win32') return name;
+  const npmDir = process.env.APPDATA
+    ? `${process.env.APPDATA}\\npm\\node_modules`
+    : '';
+  const paths: Record<string, string> = {
+    claude: `${npmDir}\\@anthropic-ai\\claude-code\\bin\\claude.exe`,
+    codex: `${npmDir}\\@openai\\codex\\bin\\codex.exe`,
+  };
+  return paths[name] ?? name;
+}
+
 export function getLaunchCommand(config: AgentConfig): string {
-  const claudeExe = process.env.CLAUDE_BIN ?? 'claude';
   switch (config.tool) {
-    case 'claude':
-      return `${claudeExe} --dangerously-skip-permissions --permission-mode bypassPermissions${config.model ? ` --model ${config.model}` : ''}`;
-    case 'codex':
-      return `codex --dangerously-bypass-approvals-and-sandbox${config.model ? ` --model ${config.model}` : ''}`;
+    case 'claude': {
+      const exe = config.launchCommand ?? resolveExePath('claude');
+      const prefix = process.platform === 'win32' ? `& '${exe}'` : exe;
+      const settingsFlag = config.settings ? ` --settings '${config.settings}'` : '';
+      return `${prefix} --dangerously-skip-permissions --permission-mode bypassPermissions${settingsFlag}${config.model ? ` --model ${config.model}` : ''}`;
+    }
+    case 'codex': {
+      const exe = config.launchCommand ?? 'codex';
+      return `${exe} --dangerously-bypass-approvals-and-sandbox${config.model ? ` --model ${config.model}` : ''}`;
+    }
     case 'gemini':
       return 'gemini --skip-trust --approval-mode yolo';
     case 'opencode':
       return 'opencode';
     case 'shell':
-      return config.launchCommand ?? 'cmd.exe';
+      return config.launchCommand ?? (process.platform === 'win32' ? 'cmd.exe' : 'bash');
   }
 }
 
