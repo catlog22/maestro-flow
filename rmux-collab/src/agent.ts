@@ -195,30 +195,37 @@ export class Agent {
 
     const markerStr = markerToString(this.completionMarker);
 
-    // Strategy 1: rmux wait-pane --text (daemon-backed wait, checks history + future)
+    const promptSnippet = prompt.trim().slice(0, 20);
+
+    // Strategy 1: rmux wait-pane --quiet (daemon-backed wait for output to stabilize after change)
     try {
+      // First wait for content to change (agent starts processing)
+      const changeDeadline = Date.now() + Math.min(timeout, 30_000);
+      let changed = false;
+      while (Date.now() < changeDeadline) {
+        await sleep(500);
+        const check = this.capturePane();
+        if (check.length > beforeText.length + 20 && check !== beforeText) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) throw new Error('no new content');
+
+      // Then wait for output to stabilize
+      const remaining = Math.max(5, Math.floor((timeout - (Date.now() - startTime)) / 1000));
       rmuxExec(
-        `wait-pane -t ${this.target} --text "${markerStr}" --timeout ${Math.floor(timeout / 1000)}s`,
-        { timeout: timeout + 5000, throwOnError: true },
+        `wait-pane -t ${this.target} --quiet --stable-for 2s --timeout ${remaining}s`,
+        { timeout: (remaining + 5) * 1000, throwOnError: true },
       );
       const current = this.capturePane();
       const raw = this.extractCliResponse(current, beforeText, prompt);
       return this.buildResult(raw, startTime, 'completed', 'exact');
     } catch {
-      // wait-pane may not be available or timed out, try SDK fallback
+      // wait-pane may not be available or timed out, try polling
     }
 
-    // Strategy 2: SDK expectVisibleText().toContain().timeout()
-    try {
-      await this.pane.expectVisibleText().toContain(markerStr).timeout(timeout);
-      const current = this.capturePane();
-      const raw = this.extractCliResponse(current, beforeText, prompt);
-      return this.buildResult(raw, startTime, 'completed', 'observed');
-    } catch {
-      // SDK method may fail, fall through to polling
-    }
-
-    // Strategy 3: Polling fallback (degraded)
+    // Strategy 2: Polling with marker + stability (proven reliable)
     const deadline = Date.now() + timeout;
     let stableCount = 0;
     let lastSnap = '';
@@ -271,6 +278,8 @@ export class Agent {
       if (/^[─━═┄┅┈┉─]{4,}$/.test(t)) return false;
       if (t.startsWith('⏵') || t.startsWith('←')) return false;
       if (/^[✻✓◉⏵▶].*(?:for \d+s|Crunched|Worked|Cogitated|Unravelling|Pondering)/.test(t)) return false;
+      if (/Opus|Sonnet|Haiku.*\d+[kKmM]\s*[|│]/.test(t)) return false;
+      if (/[░▒▓█]{3,}/.test(t)) return false;
       return true;
     });
     return resultLines.join('\n');
