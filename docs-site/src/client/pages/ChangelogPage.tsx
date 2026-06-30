@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.44',
+    date: '2026-06',
+    changes: [
+      { type: 'feat', text_en: 'Claude Agent-specific ralph orchestrator + executor commands', text_zh: '新增 Claude Agent 专属 ralph 编排器 + 执行器命令' },
+      { type: 'feat', text_en: 'rmux-collab multi-agent channel collaboration system — atomic send+wait + structured AgentResult', text_zh: 'rmux-collab 多 Agent 频道协作系统——atomic send+wait + 结构化 AgentResult' },
+      { type: 'feat', text_en: 'Enhanced explore search tools — multi-mode Search, PCRE2 fallback, SRAG loop', text_zh: 'explore 增强——Search 多模式、PCRE2 回退、SRAG 循环' },
+      { type: 'fix', text_en: 'Search daemon type dedup + over-fetch cascade fix + MCP fallback alignment', text_zh: 'search daemon 类型去重 + 过度获取级联修复 + MCP fallback 对齐' },
+      { type: 'refactor', text_en: 'Migrate graph module to node:sqlite, remove better-sqlite3 deprecated dependency', text_zh: 'graph 模块迁移至 node:sqlite，消除 better-sqlite3 deprecated 依赖' },
+      { type: 'refactor', text_en: 'Explore: remove maxTurns limit, parallel tool calls, async ripgrep', text_zh: 'explore 去除 maxTurns 限制、并行 tool calls、async ripgrep' },
+    ],
+  },
+  {
     version: '0.5.43',
     date: '2026-06',
     changes: [
