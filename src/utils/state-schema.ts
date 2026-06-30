@@ -225,6 +225,60 @@ export function nextArtifactId(artifacts: ArtifactEntry[], type: ArtifactType): 
 }
 
 // ---------------------------------------------------------------------------
+// Router signals — fields chains/_router.json reads but no code ever computed
+// (the router collapsed to `to_analyze`). Lives here with the other derivers;
+// consumed by graph-walker.buildInitialContext (coordinator) and by src/brain.
+// ---------------------------------------------------------------------------
+
+export interface RouterSignals {
+  milestones_total: number;
+  latest_artifact_type: ArtifactType | null;
+  has_pending_plans: boolean;
+  all_phases_executed: boolean;
+}
+
+/** The most recently created artifact's type (by created_at, ties -> later array index). */
+export function latestArtifactType(state: StateJsonV2): ArtifactType | null {
+  const arts = state.artifacts ?? [];
+  if (arts.length === 0) return null;
+  let latest = arts[0];
+  for (const a of arts) {
+    if ((a.created_at ?? '') >= (latest.created_at ?? '')) latest = a;
+  }
+  return latest.type;
+}
+
+/** A plan artifact exists whose phase has no completed `execute` (work still pending). */
+export function hasPendingPlans(state: StateJsonV2): boolean {
+  const arts = state.artifacts ?? [];
+  return arts.some(plan => {
+    if (plan.type !== 'plan') return false;
+    return !arts.some(e =>
+      e.type === 'execute' && e.status === 'completed' &&
+      e.phase === plan.phase && e.milestone === plan.milestone,
+    );
+  });
+}
+
+/** Every phase of the current milestone has a completed `execute` artifact. */
+export function allPhasesExecuted(state: StateJsonV2): boolean {
+  const milestone = state.milestones?.find(m =>
+    m.name === state.current_milestone || m.id === state.current_milestone,
+  );
+  if (!milestone?.phases?.length) return false;
+  return deriveCurrentPhase(state) === null;
+}
+
+export function deriveRouterSignals(state: StateJsonV2): RouterSignals {
+  return {
+    milestones_total: state.milestones?.length ?? 0,
+    latest_artifact_type: latestArtifactType(state),
+    has_pending_plans: hasPendingPlans(state),
+    all_phases_executed: allPhasesExecuted(state),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Migration: v1 → v2
 // ---------------------------------------------------------------------------
 

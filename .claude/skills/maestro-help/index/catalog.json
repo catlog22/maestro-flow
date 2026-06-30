@@ -19,6 +19,7 @@
     {"name": "maestro-update", "command": "/maestro-update", "category": "core", "description": "版本更新 — 检查并安装最新版本", "source": "../../commands/maestro-update.md"},
     {"name": "maestro-grill", "command": "/maestro-grill", "category": "core", "description": "压力测试 — 对计划、想法或需求进行代码库现实性压力测试", "source": "../../commands/maestro-grill.md"},
     {"name": "maestro-next", "command": "/maestro-next", "category": "core", "description": "智能导航 — 检测工作流当前状态并推荐下一步最优命令", "source": "../../commands/maestro-next.md"},
+    {"name": "maestro-brain", "command": "/maestro-brain", "category": "core", "description": "自治调度大脑 — 站在 roadmap 之上每轮自决(推进/插入修复/修正roadmap)、委派外部CLI实现、防假绿验收、自治推进至完成", "source": "../../commands/maestro-brain.md"},
     {"name": "maestro-swarm-workflow", "command": "/maestro-swarm-workflow", "category": "core", "description": "Swarm 并行加速器 — 将意图路由到固定 Workflow 脚本进行多 agent 并发执行", "source": "../../commands/maestro-swarm-workflow.md"},
     {"name": "maestro-universal-workflow", "command": "/maestro-universal-workflow", "category": "core", "description": "动态对抗工作流生成器 — 扫描库匹配或动态生成任务特定 Workflow 脚本", "source": "../../commands/maestro-universal-workflow.md"},
     {"name": "maestro-companion", "command": "/maestro-companion", "category": "core", "description": "知识伴侣 — 加载上下文、记录伴侣文档、捕获洞察、路由到技能", "source": "../../commands/maestro-companion.md"},

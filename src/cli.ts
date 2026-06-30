@@ -44,6 +44,7 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   hooks:      async () => (await import('./commands/hooks.js')).registerHooksCommand,
   coordinate: async () => (await import('./commands/coordinate.js')).registerCoordinateCommand,
   ralph:      async () => (await import('./commands/ralph.js')).registerRalphCommand,
+  brain:      async () => (await import('./commands/brain.js')).registerBrainCommand,
   launcher:   async () => (await import('./commands/launcher.js')).registerLauncherCommand,
   delegate:   async () => (await import('./commands/delegate.js')).registerDelegateCommand,
   'agent-msg': async () => (await import('./commands/msg.js')).registerMsgCommand,
@@ -96,6 +97,7 @@ if (requestedCommand && requestedCommand in commandLoaders) {
   console.error();
   console.error('  Or use a CLI subcommand directly:');
   console.error('    maestro ralph next|complete|skills|check|session');
+  console.error('    maestro brain init|derive|decide|status');
   console.error('    maestro delegate "prompt" --to <tool>');
   console.error('    maestro explore "prompt"');
   console.error();
