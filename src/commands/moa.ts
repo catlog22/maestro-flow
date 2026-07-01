@@ -70,6 +70,7 @@ export function registerMoaCommand(program: Command): void {
     .option('--cd <dir>', 'Working directory for exploration')
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
     .option('--no-save', 'Do not save session')
+    .option('--no-cache', 'Bypass MOA reference cache')
     .option('--json', 'Output results as JSON')
     .action(async (
       promptArgs: string[],
@@ -79,6 +80,7 @@ export function registerMoaCommand(program: Command): void {
         cd?: string;
         outputDir?: string;
         save?: boolean;
+        cache?: boolean;
         json?: boolean;
       },
     ) => {
@@ -127,6 +129,7 @@ export function registerMoaCommand(program: Command): void {
           preset,
           cwd,
           maxTurns,
+          cache: opts.cache,
           onProgress: msg => process.stderr.write(msg + '\n'),
         });
         results.push(result);

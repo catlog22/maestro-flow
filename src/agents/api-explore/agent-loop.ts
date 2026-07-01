@@ -21,6 +21,7 @@ export interface AgentLoopParams {
   maxTurns?: number;
   llmOptions?: LlmCallOptions;
   cwd: string;
+  beforeTurn?: (ctx: { turn: number; messages: ChatCompletionMessageParam[] }) => Promise<void> | void;
 }
 
 export interface AgentLoopResult {
@@ -47,6 +48,8 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
 
   while (true) {
     turn++;
+
+    await params.beforeTurn?.({ turn, messages });
 
     if (turn > maxTurns) {
       messages.push({

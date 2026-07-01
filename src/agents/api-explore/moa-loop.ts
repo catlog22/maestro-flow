@@ -8,12 +8,16 @@
  */
 
 import { readdirSync } from 'node:fs';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions.js';
 import { agentLoop } from './agent-loop.js';
 import { createClient } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { buildExplorePrompt } from './prompt-parser.js';
+import { computeCacheKey, readCache, writeCache } from './moa-cache.js';
 import type { ResolvedMoaPreset } from './config.js';
+
+const REFERENCE_MARKER = '--- Reference Analyses ---';
 
 export interface ReferenceOutput {
   endpointName: string;
@@ -40,6 +44,8 @@ export interface MoaLoopParams {
   cwd: string;
   maxTurns?: number;
   onProgress?: (msg: string) => void;
+  cache?: boolean;
+  cacheTtlMs?: number;
 }
 
 export async function runReferences(
@@ -51,6 +57,14 @@ export async function runReferences(
   const settled = await Promise.allSettled(
     referenceEndpoints.map(async (ep): Promise<ReferenceOutput> => {
       const start = Date.now();
+      if (params.cache !== false) {
+        const cacheKey = computeCacheKey(params.prompt, params.cwd, ep.name, ep.llmConfig.model);
+        const cached = readCache(params.cwd, cacheKey, params.cacheTtlMs);
+        if (cached) {
+          params.onProgress?.(`reference ${ep.name}:${ep.llmConfig.model} — cache hit`);
+          return cached;
+        }
+      }
       params.onProgress?.(`reference ${ep.name}:${ep.llmConfig.model} — starting`);
       try {
         const { client, config } = createClient(ep.llmConfig);
@@ -66,13 +80,25 @@ export async function runReferences(
           // temperature/maxTokens come from endpoint's own extraBody config
         });
         params.onProgress?.(`reference ${ep.name}:${ep.llmConfig.model} — done`);
-        return {
+        const refOutput: ReferenceOutput = {
           endpointName: ep.name,
           model: ep.llmConfig.model,
           content: result.content,
           durationMs: Date.now() - start,
           usage: result.usage,
         };
+        if (params.cache !== false && refOutput.content) {
+          writeCache(
+            params.cwd,
+            computeCacheKey(params.prompt, params.cwd, ep.name, ep.llmConfig.model),
+            refOutput,
+            params.prompt,
+            ep.name,
+            ep.llmConfig.model,
+            params.cacheTtlMs,
+          );
+        }
+        return refOutput;
       } catch (err) {
         params.onProgress?.(`reference ${ep.name}:${ep.llmConfig.model} — error`);
         return {
@@ -130,6 +156,10 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
 
   const systemPrompt = buildSystemPrompt(params.cwd, dirListing);
 
+  if (params.preset.mode === 'per-turn') {
+    return moaPerTurnLoop(params, systemPrompt);
+  }
+
   const referenceOutputs = await runReferences(params, systemPrompt);
   const degraded = referenceOutputs.every(r => r.error || !r.content);
 
@@ -159,4 +189,67 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
   };
 
   return { content: result.content, referenceOutputs, degraded, usage };
+}
+
+async function moaPerTurnLoop(params: MoaLoopParams, systemPrompt: string): Promise<MoaResult> {
+  let latestRefs: ReferenceOutput[] = [];
+
+  const beforeTurn = async (ctx: { turn: number; messages: ChatCompletionMessageParam[] }) => {
+    const toolDigest = extractToolDigest(ctx.messages);
+    const refQuery = toolDigest
+      ? `${params.prompt}\n\nPrior search results:\n${toolDigest}`
+      : params.prompt;
+
+    latestRefs = await runReferences({ ...params, prompt: refQuery }, systemPrompt);
+
+    const refSection = buildMoaPrompt('', latestRefs);
+    const markerOffset = refSection.indexOf(REFERENCE_MARKER) - 2;
+
+    const userMsgIdx = ctx.messages.findIndex(m => m.role === 'user');
+    if (userMsgIdx >= 0) {
+      const userContent = String(ctx.messages[userMsgIdx].content ?? '');
+      const markerIdx = userContent.indexOf(REFERENCE_MARKER);
+      const base = markerIdx >= 0 ? userContent.substring(0, markerIdx - 2) : userContent;
+      ctx.messages[userMsgIdx] = {
+        ...ctx.messages[userMsgIdx],
+        content: base + refSection.substring(markerOffset),
+      } as ChatCompletionMessageParam;
+    }
+
+    params.onProgress?.(`per-turn: references refreshed (turn ${ctx.turn})`);
+  };
+
+  const enhancedPrompt = buildExplorePrompt(params.prompt);
+  const { client, config: aggConfig } = createClient(params.preset.aggregatorEndpoint.llmConfig);
+
+  const result = await agentLoop({
+    prompt: enhancedPrompt,
+    systemPrompt,
+    client,
+    llmConfig: aggConfig,
+    toolSchemas: TOOL_SCHEMAS,
+    maxTurns: params.maxTurns,
+    cwd: params.cwd,
+    beforeTurn,
+  });
+
+  const usage = {
+    references: latestRefs.map(ref => ({
+      endpointName: ref.endpointName,
+      model: ref.model,
+      inputTokens: ref.usage.inputTokens,
+      outputTokens: ref.usage.outputTokens,
+    })),
+    aggregator: result.usage,
+  };
+
+  return { content: result.content, referenceOutputs: latestRefs, degraded: false, usage };
+}
+
+function extractToolDigest(messages: ChatCompletionMessageParam[]): string {
+  const toolResults = messages
+    .filter(m => m.role === 'tool')
+    .map(m => String((m as { content?: string }).content ?? '').slice(0, 200))
+    .slice(-5);
+  return toolResults.length > 0 ? toolResults.join('\n---\n') : '';
 }

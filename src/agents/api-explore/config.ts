@@ -79,7 +79,7 @@ export interface NamedEndpoint {
 export interface MoaPresetConfig {
   referenceEndpoints: string[];
   aggregatorEndpoint: string;
-  mode?: 'initial-only';
+  mode?: 'initial-only' | 'per-turn';
   enabled?: boolean;
 }
 
@@ -91,7 +91,7 @@ export interface MoaConfig {
 export interface ResolvedMoaPreset {
   referenceEndpoints: NamedEndpoint[];
   aggregatorEndpoint: NamedEndpoint;
-  mode: 'initial-only';
+  mode: 'initial-only' | 'per-turn';
 }
 
 export function getAllEndpoints(config: ExploreConfig): NamedEndpoint[] {
