@@ -21,12 +21,17 @@ export interface ReferenceOutput {
   content: string | null;
   error?: string;
   durationMs: number;
+  usage: { inputTokens: number; outputTokens: number };
 }
 
 export interface MoaResult {
   content: string;
   referenceOutputs: ReferenceOutput[];
   degraded: boolean;
+  usage: {
+    references: Array<{ endpointName: string; model: string; inputTokens: number; outputTokens: number }>;
+    aggregator: { inputTokens: number; outputTokens: number };
+  };
 }
 
 export interface MoaLoopParams {
@@ -50,7 +55,7 @@ export async function runReferences(
       try {
         const { client, config } = createClient(ep.llmConfig);
         const prompt = buildExplorePrompt(params.prompt);
-        const content = await agentLoop({
+        const result = await agentLoop({
           prompt,
           systemPrompt,
           client,
@@ -64,8 +69,9 @@ export async function runReferences(
         return {
           endpointName: ep.name,
           model: ep.llmConfig.model,
-          content,
+          content: result.content,
           durationMs: Date.now() - start,
+          usage: result.usage,
         };
       } catch (err) {
         params.onProgress?.(`reference ${ep.name}:${ep.llmConfig.model} — error`);
@@ -75,6 +81,7 @@ export async function runReferences(
           content: null,
           error: err instanceof Error ? err.message : String(err),
           durationMs: Date.now() - start,
+          usage: { inputTokens: 0, outputTokens: 0 },
         };
       }
     }),
@@ -89,6 +96,7 @@ export async function runReferences(
       content: null,
       error: s.reason instanceof Error ? s.reason.message : String(s.reason),
       durationMs: 0,
+      usage: { inputTokens: 0, outputTokens: 0 },
     };
   });
 }
@@ -129,7 +137,7 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
   const finalPrompt = buildExplorePrompt(enhancedPrompt);
 
   const { client, config: aggConfig } = createClient(params.preset.aggregatorEndpoint.llmConfig);
-  const content = await agentLoop({
+  const result = await agentLoop({
     prompt: finalPrompt,
     systemPrompt,
     client,
@@ -140,5 +148,15 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
     // temperature/maxTokens come from aggregator endpoint's own extraBody config
   });
 
-  return { content, referenceOutputs, degraded };
+  const usage = {
+    references: referenceOutputs.map(ref => ({
+      endpointName: ref.endpointName,
+      model: ref.model,
+      inputTokens: ref.usage.inputTokens,
+      outputTokens: ref.usage.outputTokens,
+    })),
+    aggregator: result.usage,
+  };
+
+  return { content: result.content, referenceOutputs, degraded, usage };
 }

@@ -23,7 +23,12 @@ export interface AgentLoopParams {
   cwd: string;
 }
 
-export async function agentLoop(params: AgentLoopParams): Promise<string> {
+export interface AgentLoopResult {
+  content: string;
+  usage: { inputTokens: number; outputTokens: number };
+}
+
+export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
   const { prompt, systemPrompt, client, llmConfig, toolSchemas, cwd } = params;
   const maxTurns = params.maxTurns ?? SAFETY_MAX_TURNS;
 
@@ -54,7 +59,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<string> {
       const fallback = `Reached safety limit (${maxTurns} turns). Partial results above.`;
       emitMessage(fallback);
       emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
-      return fallback;
+      return { content: fallback, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
     }
 
     let response;
@@ -64,7 +69,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<string> {
       const errMsg = `LLM API error: ${err instanceof Error ? err.message : String(err)}`;
       emitMessage(errMsg);
       emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
-      return errMsg;
+      return { content: errMsg, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
     }
 
     totalInput += response.usage.inputTokens;
@@ -118,7 +123,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<string> {
       const content = response.content ?? '';
       emitMessage(content);
       emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
-      return content;
+      return { content, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
     }
   }
 }

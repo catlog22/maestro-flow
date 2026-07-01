@@ -15,6 +15,8 @@ import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
 import { buildExplorePrompt } from './prompt-parser.js';
+import { moaAgentLoop } from './moa-loop.js';
+import type { ResolvedMoaPreset } from './config.js';
 
 export interface ExploreJob {
   id: string;
@@ -43,6 +45,8 @@ export interface RunnerOptions {
   concurrency: number;
   /** Max concurrent jobs within the same endpoint (default: 1 = serial) */
   endpointConcurrency?: number;
+  /** When set, route each job through MOA instead of a single-endpoint agentLoop */
+  moaPreset?: ResolvedMoaPreset;
   onProgress?: (msg: string) => void;
   onJobStart?: (job: ExploreJob) => void;
   onJobDone?: (result: ExploreResult) => void;
@@ -64,14 +68,32 @@ async function runSingleJob(
   cwd: string,
   globalMaxTurns: number,
   dirListing: string,
+  moaPreset?: ResolvedMoaPreset,
 ): Promise<ExploreResult> {
   const start = Date.now();
   try {
+    if (moaPreset) {
+      const moaResult = await moaAgentLoop({
+        prompt: job.prompt,
+        preset: moaPreset,
+        cwd,
+        maxTurns: globalMaxTurns,
+      });
+      return {
+        id: job.id,
+        prompt: job.prompt,
+        endpointName: 'moa',
+        model: `MOA(${moaPreset.aggregatorEndpoint.name})`,
+        content: moaResult.content,
+        durationMs: Date.now() - start,
+      };
+    }
+
     const { client, config } = createClient(job.llmConfig);
     const systemPrompt = buildSystemPrompt(cwd, dirListing);
     const prompt = buildExplorePrompt(job.prompt);
 
-    const content = await agentLoop({
+    const result = await agentLoop({
       prompt,
       systemPrompt,
       client,
@@ -85,7 +107,7 @@ async function runSingleJob(
       prompt: job.prompt,
       endpointName: job.endpointName,
       model: job.llmConfig.model,
-      content,
+      content: result.content,
       durationMs: Date.now() - start,
     };
   } catch (err) {
@@ -114,6 +136,7 @@ async function drainQueue(
   totalJobs: number,
   jobIndexMap: Map<string, number>,
   callbacks: Pick<RunnerOptions, 'onProgress' | 'onJobStart' | 'onJobDone'>,
+  moaPreset?: ResolvedMoaPreset,
 ): Promise<ExploreResult[]> {
   const results: ExploreResult[] = [];
   let nextIdx = 0;
@@ -129,7 +152,7 @@ async function drainQueue(
         `[${globalIdx + 1}/${totalJobs}] ${job.endpointName}:${job.llmConfig.model} — starting`,
       );
 
-      const result = await runSingleJob(job, cwd, maxTurns, dirListing);
+      const result = await runSingleJob(job, cwd, maxTurns, dirListing, moaPreset);
       results.push(result);
 
       callbacks.onJobDone?.(result);
@@ -154,6 +177,7 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
   const {
     jobs, cwd, maxTurns, concurrency,
     endpointConcurrency = 1,
+    moaPreset,
     onProgress, onJobStart, onJobDone,
   } = opts;
 
@@ -194,6 +218,7 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
         queue, endpointConcurrency, cwd, maxTurns, dirListing,
         jobs.length, jobIndexMap,
         { onProgress, onJobStart, onJobDone },
+        moaPreset,
       );
       allResults.push(...results);
     }

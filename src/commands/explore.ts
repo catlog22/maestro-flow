@@ -10,6 +10,8 @@ import {
   resolveEndpoints,
   getAllEndpoints,
   applyProxyEnv,
+  resolveMoaPreset,
+  type ResolvedMoaPreset,
 } from '../agents/api-explore/config.js';
 import { buildJobs, buildJobsFromEntries, runExploreJobs, type ExploreResult } from '../agents/api-explore/runner.js';
 import {
@@ -92,6 +94,7 @@ export function registerExploreCommand(program: Command): void {
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
     .option('--no-save', 'Do not save session')
     .option('--json', 'Output results as JSON')
+    .option('--moa [preset]', 'Route through MOA (optional preset name)')
     .action(async (
       promptArgs: string[],
       opts: {
@@ -105,6 +108,7 @@ export function registerExploreCommand(program: Command): void {
         outputDir?: string;
         save?: boolean;
         json?: boolean;
+        moa?: string | boolean;
       },
     ) => {
       const entries: PromptEntry[] = promptArgs.map(p => ({ prompt: p }));
@@ -133,6 +137,20 @@ export function registerExploreCommand(program: Command): void {
       const cwd = resolve(opts.cd ?? process.cwd());
       const maxTurns = opts.maxTurns ?? config.maxTurns ?? 6;
       const concurrency = opts.parallel ?? config.concurrency ?? 4;
+
+      let resolvedPreset: ResolvedMoaPreset | undefined;
+      if (opts.moa) {
+        resolvedPreset = resolveMoaPreset(
+          config,
+          typeof opts.moa === 'string' ? opts.moa : undefined,
+        ) ?? undefined;
+        if (!resolvedPreset) {
+          console.error(
+            'No MOA preset configured. Add "moa" section to ~/.maestro/api-explore.json',
+          );
+          process.exit(1);
+        }
+      }
 
       const globalEndpoints = resolveEndpoints(config, opts.endpoint, opts.all);
 
@@ -170,6 +188,7 @@ export function registerExploreCommand(program: Command): void {
         maxTurns,
         concurrency,
         endpointConcurrency: epConcurrency,
+        moaPreset: resolvedPreset,
         onProgress: (msg) => process.stderr.write(`${msg}\n`),
       });
       const totalDuration = Date.now() - startTime;
@@ -187,6 +206,11 @@ export function registerExploreCommand(program: Command): void {
           maxTurns,
           durationMs: totalDuration,
           results,
+          moa: resolvedPreset ? {
+            preset: typeof opts.moa === 'string' ? opts.moa : 'default',
+            referenceEndpoints: resolvedPreset.referenceEndpoints.map(ep => ep.name),
+            results: [],
+          } : undefined,
         }, opts.outputDir);
         process.stderr.write(`\nSession saved: ${savedPath}\n`);
       }

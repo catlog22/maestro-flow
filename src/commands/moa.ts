@@ -133,6 +133,12 @@ export function registerMoaCommand(program: Command): void {
       }
       const totalDuration = Date.now() - startTime;
 
+      const totalRefIn = results.reduce((sum, r) => sum + r.referenceOutputs.reduce((s, ref) => s + ref.usage.inputTokens, 0), 0);
+      const totalRefOut = results.reduce((sum, r) => sum + r.referenceOutputs.reduce((s, ref) => s + ref.usage.outputTokens, 0), 0);
+      const totalAggIn = results.reduce((sum, r) => sum + r.usage.aggregator.inputTokens, 0);
+      const totalAggOut = results.reduce((sum, r) => sum + r.usage.aggregator.outputTokens, 0);
+      process.stderr.write(`\nusage: refs=${totalRefIn}/${totalRefOut} agg=${totalAggIn}/${totalAggOut} total=${totalRefIn + totalAggIn}/${totalRefOut + totalAggOut}\n`);
+
       if (opts.save !== false) {
         const savedPath = saveSession({
           id: sessionId,
@@ -223,7 +229,9 @@ export function registerMoaCommand(program: Command): void {
             content: ref.ok ? '' : null,
             error: ref.error,
             durationMs: 0,
+            usage: { inputTokens: 0, outputTokens: 0 },
           })),
+          usage: { references: [], aggregator: { inputTokens: 0, outputTokens: 0 } },
         }));
         process.stdout.write(formatResults(session.prompts, results, session.moa.preset) + '\n');
       } else {
