@@ -45,7 +45,7 @@ Remaining      → intent (amend_mode 时为 change_request)
 1. **Ralph-v2 owns the full loop** — locate step → resolve args → load context → dispatch agent → extract signals → drift → complete，全部在本命令内完成
 2. **One agent per step** — 每个执行 step 派发一个 executor agent，agent 执行完返回，主流程解析结果后决定下一步
 3. **Agent is a thin wrapper** — executor agent 调 `ralph next` 获取 skill prompt 并执行，返回输出；arg resolution、context loading、signal extraction、drift analysis、ralph complete 均由主流程完成
-4. **Synchronous dispatch** — Agent() 调用是同步的（等待返回），不需要 STOP/callback 模式
+4. **Synchronous dispatch** — Agent() 同步等待返回，无 STOP/callback。**所有 Agent() 禁传 `name`**——传 `name` → 异步 mailbox teammate → agent 空转 idle、不同步返回。`agent_exec_name` 仅供 display/日志
 5. **主流程调 `ralph complete`** — 每个 step 完成后由主流程调 `maestro ralph complete`，非 agent 上报
 6. **Decision evaluation inline** — decision 节点不 handoff，通过 `Agent()` 启动分析 Agent 在本循环内评估
 7. **No CLI delegation** — 本命令不使用 `maestro delegate`；执行和评估均通过 Agent() 完成
@@ -321,14 +321,20 @@ Execution criteria: {session.execution_criteria joined by '; '}
    | debug | `dbg` |
    | Other | `run` |
 
-**4. Dispatch:**
+**4. Dispatch（同步 subagent，严禁传 `name`）:**
+
+> **禁传 `name`**：传 `name` → executor 变异步 mailbox teammate（立即返回、agent 发 `idle_notification` 空转、不同步返回），破坏 Invariant 4。不传 → 同步阻塞，最终消息即 `agent_output`。`resolved_agent_name` 仅供 display。
 
 ```
 Agent({
   subagent_type: "ralph-executor",
-  name: "{resolved_agent_name}",
   description: "执行 step {index}: {step.skill}",
   prompt: `Session: {session_id}
+
+立即执行（禁止等待 mailbox 指令，禁止 idle）：
+1. 运行 `maestro ralph next --session {session_id}` 获取 skill prompt
+2. 按 prompt 中的 execution 指令实际执行该 step 的 skill
+3. 执行完成后返回执行产物路径 + 摘要
 
 {goal_context 块，仅 protocol < 2 时}
 
@@ -337,11 +343,9 @@ Agent({
 })
 ```
 
-Agent 内部调 `maestro ralph next --session {session_id}` 获取 skill prompt 并执行。
-
-5. Write `step.agent_exec_name` to status.json
-6. Display: `[{index}/{total}] ⟶ {step.skill} → Agent:{name}`
-7. Agent 同步返回 → `agent_output` = 返回文本；返回 null → STATUS=BLOCKED
+5. Write `step.agent_exec_name`（display 标签，非 Agent 参数）to status.json
+6. Display: `[{index}/{total}] ⟶ {step.skill} → {resolved_agent_name}`
+7. Agent 同步返回 → `agent_output` = 返回文本；返回 null 或 `"Spawned successfully...mailbox"`（说明误传 name 转异步）→ STATUS=BLOCKED
 
 ### A_STEP_EXTRACT
 
@@ -487,8 +491,7 @@ Agent 内部调 `maestro ralph next --session {session_id}` 获取 skill prompt 
 4. Dispatch evaluation Agent:
    ```
    Agent({
-     name: "eval-{decision}-{timestamp}",
-     description: "评估 {decision} 质量门",
+     description: "评估 {decision} 质量门（严禁传 name）",
      prompt: "PURPOSE: 评估 {decision} 质量门结果
    TASK: 读取以下结果文件 | 分析状态 | 评估严重性 | 给出建议
    FILES: {result_file_paths}
@@ -524,8 +527,7 @@ Agent 内部调 `maestro ralph next --session {session_id}` 获取 skill prompt 
 2. Dispatch audit Agent:
    ```
    Agent({
-     name: "goal-audit-{timestamp}",
-     description: "审计子目标完成情况",
+     description: "审计子目标完成情况（同步 subagent，严禁传 name）",
      prompt: "PURPOSE: 审计未完成子目标，判定 met / unmet
    TASK:
      1. 读取 {session_dir}/status.json 中 task_decomposition 的 status!=done 子目标
@@ -561,8 +563,7 @@ Agent 内部调 `maestro ralph next --session {session_id}` 获取 skill prompt 
 2. Dispatch reground Agent:
    ```
    Agent({
-     name: "reground-{timestamp}",
-     description: "意图保真检查",
+     description: "意图保真检查（同步 subagent，严禁传 name）",
      prompt: "PURPOSE: 意图保真检查 — 对照 intent 验证累积执行是否漂移
    TASK:
      1. 读取 intent + boundary_contract.definition_of_done
@@ -661,8 +662,7 @@ Agent 内部调 `maestro ralph next --session {session_id}` 获取 skill prompt 
 **Phase 3 Agent prompt:**
 ```
 Agent({
-  name: "amend-grill-{timestamp}",
-  description: "Amend impact analysis",
+  description: "Amend impact analysis（同步 subagent，严禁传 name）",
   prompt: "PURPOSE: 评估目标修改对 running session 的影响
 TASK:
   1. 读取 {session_dir}/status.json 的 task_decomposition + boundary_contract + 已完成 steps
@@ -831,14 +831,14 @@ E001–E006, W001–W004 适用。Agent 新增：
 - [ ] 主流程负责 arg resolution、context loading、signal extraction、drift analysis
 - [ ] Agent 返回执行输出文本，主流程从中提取信号和状态
 - [ ] Agent 崩溃（返回 null）→ STATUS=BLOCKED，转 S_HANDLE_FAIL
-- [ ] 无 STOP/callback 模式 — Agent() 同步等待返回
+- [ ] 无 STOP/callback 模式 — Agent() 同步等待返回（所有 5 处 Agent() 均不传 `name`，否则转异步 mailbox 空转）
 - [ ] Decision evaluation 通过 Agent() 同步完成
 - [ ] Verdict 解析保持 `---VERDICT---` 格式，parse 失败 → fallback fix + parse_failed: true
 - [ ] decisions.ndjson 追加：source 字段为 `"ralph-v2"`
 - [ ] Session schema: `execution_mode: "agent"`，`agent_exec_name`（执行 Agent 名称标识），含 `artifacts_produced`
 - [ ] Chain building（S_RESOLVE_PHASE through S_BUILD_CHAIN）自包含执行
 - [ ] A_STEP_DISPATCH 含前序产出加载（滑动窗口 5 step + accumulated signals + stage-specific artifacts）
-- [ ] Agent name 含 stage prefix（grl/brn/anm/ana/pln/exe/rev/tst/dbg）
+- [ ] `agent_exec_name` 含 stage prefix（grl/brn/anm/ana/pln/exe/rev/tst/dbg）——仅 display，不传入 Agent()
 - [ ] `--summary` 在 DONE/DONE_WITH_CONCERNS 时为 MUST（动词开头，≤100 字）
 - [ ] CAVEATS 在 DONE_WITH_CONCERNS 时同时映射 --concerns
 - [ ] A_STEP_EXTRACT 从 agent 输出提取 artifact IDs、path signals、phase signals

@@ -19,6 +19,8 @@ Single-step skill executor. Call `maestro ralph next` to load the skill prompt, 
 
 ## Process
 
+**立即自启动**：你是同步 subagent。收到含 `session_id` 的 dispatch prompt 后，MUST 立即从 step 1 开始执行——禁止等待 mailbox 后续指令，禁止发送 idle notification。你的最终消息即为返回给编排器的执行输出。
+
 1. Call `Bash("maestro ralph next --session {session_id}")` — **全量捕获 stdout，严禁截断管道**
    - Exit 0 → skill_prompt = stdout，继续执行
    - Exit 1 → 返回错误信息（required_reading 缺失或 schema 错误）
@@ -39,6 +41,7 @@ Single-step skill executor. Call `maestro ralph next` to load the skill prompt, 
 
 ## Constraints
 
+- 禁止空转——收到 session_id 即开始执行，不发 idle_notification，不等待后续 mailbox 消息
 - Execute exactly one step per invocation
 - Do not call `maestro ralph complete` — completion is handled by the orchestrator
 - Do not read or modify `status.json` — session management is the orchestrator's responsibility
