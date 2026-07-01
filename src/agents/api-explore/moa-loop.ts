@@ -41,7 +41,7 @@ export async function runReferences(
   params: MoaLoopParams,
   systemPrompt: string,
 ): Promise<ReferenceOutput[]> {
-  const { referenceEndpoints, referenceTemperature, referenceMaxTokens } = params.preset;
+  const { referenceEndpoints } = params.preset;
 
   const settled = await Promise.allSettled(
     referenceEndpoints.map(async (ep): Promise<ReferenceOutput> => {
@@ -58,7 +58,7 @@ export async function runReferences(
           toolSchemas: TOOL_SCHEMAS,
           maxTurns: params.maxTurns,
           cwd: params.cwd,
-          llmOptions: { temperature: referenceTemperature, maxTokens: referenceMaxTokens },
+          // temperature/maxTokens come from endpoint's own extraBody config
         });
         params.onProgress?.(`reference ${ep.name}:${ep.llmConfig.model} — done`);
         return {
@@ -137,7 +137,7 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
     toolSchemas: TOOL_SCHEMAS,
     maxTurns: params.maxTurns,
     cwd: params.cwd,
-    llmOptions: { temperature: params.preset.aggregatorTemperature },
+    // temperature/maxTokens come from aggregator endpoint's own extraBody config
   });
 
   return { content, referenceOutputs, degraded };

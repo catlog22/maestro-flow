@@ -79,9 +79,6 @@ export interface NamedEndpoint {
 export interface MoaPresetConfig {
   referenceEndpoints: string[];
   aggregatorEndpoint: string;
-  referenceTemperature?: number;
-  aggregatorTemperature?: number;
-  referenceMaxTokens?: number;
   mode?: 'initial-only';
   enabled?: boolean;
 }
@@ -94,9 +91,6 @@ export interface MoaConfig {
 export interface ResolvedMoaPreset {
   referenceEndpoints: NamedEndpoint[];
   aggregatorEndpoint: NamedEndpoint;
-  referenceTemperature: number;
-  aggregatorTemperature: number;
-  referenceMaxTokens: number;
   mode: 'initial-only';
 }
 
@@ -208,9 +202,6 @@ export function resolveMoaPreset(config: ExploreConfig, presetName?: string): Re
   return {
     referenceEndpoints: refEndpoints,
     aggregatorEndpoint: aggEndpoint,
-    referenceTemperature: preset.referenceTemperature ?? 0.6,
-    aggregatorTemperature: preset.aggregatorTemperature ?? 0.4,
-    referenceMaxTokens: preset.referenceMaxTokens ?? 2000,
     mode: preset.mode ?? 'initial-only',
   };
 }
