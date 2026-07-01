@@ -17,6 +17,14 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.45',
+    date: '2026-07',
+    changes: [
+      { type: 'fix', text_en: 'Fix maestro-next SKILL.md frontmatter YAML parsing error in codex', text_zh: '修复 maestro-next SKILL.md frontmatter YAML 解析错误' },
+      { type: 'refactor', text_en: 'Refactor ralph-agent into ralph-v2 + ralph-executor dual agent architecture', text_zh: '重构 ralph-agent 为 ralph-v2 + ralph-executor 双 agent 架构' },
+    ],
+  },
+  {
     version: '0.5.44',
     date: '2026-06',
     changes: [
