@@ -13,11 +13,9 @@ allowed-tools:
   - AskUserQuestion
 ---
 <purpose>
-CLI-delegated variant of maestro-ralph. Same chain-building logic — but this command owns the full orchestration loop: compose prompt → delegate to CLI (via ralph-cli-execute wrapper) → STOP → callback → analyze structured result → mark complete → decide next → loop.
+CLI-delegated lifecycle orchestrator: compose prompt → delegate to CLI (via ralph-cli-execute wrapper) → STOP → callback → analyze structured result → mark complete → decide next → loop.
 
 Session: `.workflow/.maestro/ralph-cli-{YYYYMMDD-HHmmss}/status.json`
-
-Chain building（A_RESOLVE_PHASE → A_INFER_POSITION → A_BUILD_STEPS）、session schema、decomposition（A_DECOMPOSE_TASKS）与 ralph 共用。
 </purpose>
 
 <context>
@@ -46,17 +44,26 @@ Remaining      → intent (amend_mode 时为 change_request)
 </context>
 
 <invariants>
-All ralph invariants (1-16) apply, with the following overrides:
-- **Invariant 1 CLI 语义**: ralph-cli 不直接调用 `Skill()` 执行 step 内容；执行由 delegate 端 cli-execute 完成
-- **Invariant 2 覆盖**: ralph-cli 不调用 `Skill("maestro-ralph-execute")`；invariant 17-21 替代 handoff 机制，ralph-cli 持有完整循环
-
-Additionally:
-
-17. **ralph-cli owns the loop** — compose → delegate → analyze → decide 全部在本命令内完成；ralph-cli-execute 只是被委托端的执行包装器
-18. **Delegate via cli-execute** — delegate prompt 首行为 cli-execute 调用，格式由目标工具决定（见 Invocation Notation）
-19. **Parse ---RESULT--- block** — delegate 返回后从输出中解析结构化结果块
-20. **Decision evaluation inline** — decision 节点不 handoff，直接在本循环内评估（仍用 `maestro delegate --to {session.cli_tool} --mode analysis` 做只读分析）
-21. **No inline skill execution** — 本命令不执行 skill 逻辑；执行由委托端 cli-execute 完成
+1. **Ralph-cli never executes steps** — only creates sessions, composes delegation prompts, and evaluates decisions；执行由 delegate 端 cli-execute 完成
+2. **ralph-cli owns the loop** — compose → delegate → analyze → decide 全部在本命令内完成；ralph-cli-execute 只是被委托端的执行包装器
+3. **Delegate via cli-execute** — delegate prompt 首行为 cli-execute 调用，格式由目标工具决定（见 Invocation Notation）
+4. **Parse ---RESULT--- block** — delegate 返回后从输出中解析结构化结果块
+5. **Decision evaluation inline** — decision 节点不 handoff，直接在本循环内评估（用 `maestro delegate --to {session.cli_tool} --mode analysis` 做只读分析）
+6. **Decision delegates read-only** — `maestro delegate --to <tool> --mode analysis`
+7. **No inline skill execution** — 本命令不执行 skill 逻辑；执行由委托端 cli-execute 完成
+8. **执行 step 通过 `maestro ralph next` CLI 加载并内联执行**（由 cli-execute 端完成）
+9. **status.json 是唯一真源** — 不生成 markdown 清单或侧文件
+10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE`（或 DONE_WITH_CONCERNS）写入；CLI 是唯一合法写入路径
+11. **command_path 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform claude --json --quiet` 预校验
+12. **执行 step 加载契约** — 由 `maestro ralph next` CLI 在执行期完成
+13. **Decomposition is outcome-oriented** — sub-goals 为可观测交付，禁止 lifecycle 复刻
+14. **planning_mode governs arg granularity** — `unified` → skill args 无 `{phase}`；`independent` → 含 `{phase}`
+15. **task_decomposition 驱动 steps[] 动态生长** — `post-goal-audit` 按 unmet 子目标插入 scoped mini-loop
+16. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作
+17. **Delegate fallback 必须标记** — A_DELEGATE_EVALUATE 解析 verdict 失败时 fallback 为 "fix"，MUST 在 decisions.ndjson 记录 `"parse_failed": true, "confidence_score": 0`
+18. **auto_confirm 单一来源** — `auto_confirm` 仅由用户 `-y` 标志设定
+19. **分解契约单一所有者** — `boundary_contract` / `task_decomposition` 由 session 创建者拥有
+20. **控制权优先级（范式治理）** — FSM 独占 session 生命周期 + step 排序 + retry/fix/escalate + cross-step decision 节点
 </invariants>
 
 <state_machine>
@@ -620,8 +627,6 @@ E001–E006, W001–W004 适用。CLI 新增：
 | E013 | error | ---RESULT--- block not found in output | Fallback parse, mark LOW CONFIDENCE |
 
 ### Success Criteria
-
-Ralph success criteria 适用。CLI 新增：
 
 - [ ] ralph-cli owns full loop: compose → delegate → STOP → callback → parse → complete → next
 - [ ] Delegation prompt 首行为 cli-execute 调用（`--session {session_id}`，格式由 cli_tool 决定），后接 `<execution_context>`
