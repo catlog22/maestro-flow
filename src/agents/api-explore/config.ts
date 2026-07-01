@@ -39,6 +39,8 @@ export interface ExploreConfig {
   endpoints?: Record<string, EndpointConfig>;
   /** Proxy config — also falls back to cli-tools.json proxy */
   proxy?: ProxyConfig;
+  /** Mixture-of-Agents presets */
+  moa?: MoaConfig;
 }
 
 const CONFIG_PATH = join(homedir(), '.maestro', 'api-explore.json');
@@ -72,6 +74,30 @@ export interface NamedEndpoint {
   name: string;
   llmConfig: LlmConfig;
   maxTurns?: number;
+}
+
+export interface MoaPresetConfig {
+  referenceEndpoints: string[];
+  aggregatorEndpoint: string;
+  referenceTemperature?: number;
+  aggregatorTemperature?: number;
+  referenceMaxTokens?: number;
+  mode?: 'initial-only';
+  enabled?: boolean;
+}
+
+export interface MoaConfig {
+  defaultPreset?: string;
+  presets: Record<string, MoaPresetConfig>;
+}
+
+export interface ResolvedMoaPreset {
+  referenceEndpoints: NamedEndpoint[];
+  aggregatorEndpoint: NamedEndpoint;
+  referenceTemperature: number;
+  aggregatorTemperature: number;
+  referenceMaxTokens: number;
+  mode: 'initial-only';
 }
 
 export function getAllEndpoints(config: ExploreConfig): NamedEndpoint[] {
@@ -150,4 +176,41 @@ export function applyProxyEnv(config: ExploreConfig): void {
     process.env.NO_PROXY = proxy.noProxy;
     process.env.no_proxy = proxy.noProxy;
   }
+}
+
+export const MOA_MAX_REFERENCES = 4;
+
+export function resolveMoaPreset(config: ExploreConfig, presetName?: string): ResolvedMoaPreset | null {
+  if (!config.moa) return null;
+
+  const name = presetName ?? config.moa.defaultPreset ?? 'default';
+  const preset = config.moa.presets[name];
+  if (!preset || preset.enabled === false) return null;
+
+  if (preset.referenceEndpoints.length > MOA_MAX_REFERENCES) {
+    throw new Error(`MOA preset referenceEndpoints exceeds max of ${MOA_MAX_REFERENCES}`);
+  }
+
+  const resolveEp = (epName: string): NamedEndpoint | null => {
+    const llmConfig = epName === 'default' ? getDefaultEndpoint(config) : getNamedEndpoint(epName, config);
+    if (!llmConfig) return null;
+    const epConfig = config.endpoints?.[epName];
+    return { name: epName, llmConfig, maxTurns: epConfig?.maxTurns };
+  };
+
+  const refEndpoints = preset.referenceEndpoints
+    .map(resolveEp)
+    .filter((ep): ep is NamedEndpoint => ep !== null);
+
+  const aggEndpoint = resolveEp(preset.aggregatorEndpoint);
+  if (!aggEndpoint) return null;
+
+  return {
+    referenceEndpoints: refEndpoints,
+    aggregatorEndpoint: aggEndpoint,
+    referenceTemperature: preset.referenceTemperature ?? 0.6,
+    aggregatorTemperature: preset.aggregatorTemperature ?? 0.4,
+    referenceMaxTokens: preset.referenceMaxTokens ?? 2000,
+    mode: preset.mode ?? 'initial-only',
+  };
 }

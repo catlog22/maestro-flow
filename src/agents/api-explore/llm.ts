@@ -24,6 +24,11 @@ export interface LlmConfig {
   extraBody?: Record<string, unknown>;
 }
 
+export interface LlmCallOptions {
+  temperature?: number;
+  maxTokens?: number;
+}
+
 export function createClient(params: LlmConfig): {
   client: OpenAI;
   config: LlmConfig;
@@ -44,11 +49,12 @@ export async function callLlm(
   config: LlmConfig,
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
+  options?: LlmCallOptions,
 ): Promise<LlmResponse> {
   if (config.format === 'anthropic') {
-    return callAnthropic(config, messages, tools);
+    return callAnthropic(config, messages, tools, options);
   }
-  return callOpenAi(client, config, messages, tools);
+  return callOpenAi(client, config, messages, tools, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -60,13 +66,14 @@ async function callOpenAi(
   config: LlmConfig,
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
+  options?: LlmCallOptions,
 ): Promise<LlmResponse> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const body: any = {
     model: config.model,
     messages,
-    max_completion_tokens: 2_000,
-    temperature: 0.2,
+    max_completion_tokens: options?.maxTokens ?? 2_000,
+    temperature: options?.temperature ?? 0.2,
     ...config.extraBody,
   };
   if (tools.length > 0) {
@@ -197,6 +204,7 @@ async function callAnthropic(
   config: LlmConfig,
   messages: ChatCompletionMessageParam[],
   tools: ChatCompletionTool[],
+  options?: LlmCallOptions,
 ): Promise<LlmResponse> {
   const { system, messages: anthropicMessages } = openaiMessagesToAnthropic(messages);
   const anthropicTools = openaiToolsToAnthropic(tools);
@@ -207,11 +215,12 @@ async function callAnthropic(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const body: any = {
     model: config.model,
-    max_tokens: 2000,
+    max_tokens: options?.maxTokens ?? 2000,
     messages: anthropicMessages,
     ...config.extraBody,
   };
   if (system) body.system = system;
+  if (options?.temperature !== undefined) body.temperature = options.temperature;
   if (anthropicTools.length > 0) {
     body.tools = anthropicTools;
     body.tool_choice = { type: 'auto' };
