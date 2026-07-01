@@ -288,6 +288,15 @@ export const guideRegistry: Array<{
     icon: 'search',
   },
   {
+    slug: 'moa',
+    file: 'moa-guide.md',
+    title: 'MOA — Mixture of Agents Guide',
+    description: 'Multi-model aggregation: reference models search in parallel, aggregator synthesizes the final answer',
+    title_zh: 'MOA 多模型聚合指南',
+    description_zh: '多个 reference 模型并行搜索，aggregator 综合生成最终答案',
+    icon: 'layers',
+  },
+  {
     slug: 'team-lite',
     file: 'team-lite-guide.md',
     title: 'Team Lite Collaboration Guide',
