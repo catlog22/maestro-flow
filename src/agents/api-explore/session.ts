@@ -13,6 +13,21 @@ export interface ExploreSession {
   maxTurns: number;
   durationMs: number;
   results: ExploreResult[];
+  moa?: {
+    preset: string;
+    referenceEndpoints: string[];
+    results: Array<{
+      prompt: string;
+      degraded: boolean;
+      content: string;
+      referenceSummaries: Array<{
+        endpointName: string;
+        model: string;
+        ok: boolean;
+        error?: string;
+      }>;
+    }>;
+  };
 }
 
 function exploreDir(cwd: string): string {

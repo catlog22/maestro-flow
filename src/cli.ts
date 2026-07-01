@@ -73,6 +73,7 @@ const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   workspace:  async () => (await import('./commands/workspace.js')).registerWorkspaceCommand,
   ws:         async () => (await import('./commands/workspace.js')).registerWorkspaceCommand,
   explore:    async () => (await import('./commands/explore.js')).registerExploreCommand,
+  moa:        async () => (await import('./commands/moa.js')).registerMoaCommand,
   timeline:   async () => (await import('./commands/timeline.js')).registerTimelineCommand,
 };
 
