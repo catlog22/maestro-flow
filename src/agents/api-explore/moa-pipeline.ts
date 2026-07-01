@@ -10,7 +10,7 @@ import { createClient } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildExplorePrompt } from './prompt-parser.js';
 import { computeCacheKey, readCache, writeCache } from './moa-cache.js';
-import type { PipelineStep, LoopStep, ResolvedMoaPreset, NamedEndpoint } from './config.js';
+import type { PipelineStep, LoopStep, SupervisorStep, ResolvedMoaPreset, NamedEndpoint } from './config.js';
 import type { ReferenceOutput } from './moa-loop.js';
 
 // ---------------------------------------------------------------------------
@@ -24,6 +24,8 @@ export interface PipelineContext {
   iteration: number;
   namedOutputs: Record<string, string>;
   referenceOutputs: ReferenceOutput[];
+  supervisorPass: boolean;
+  supervisorFeedback: string;
   totalUsage: {
     references: Array<{ endpointName: string; model: string; inputTokens: number; outputTokens: number }>;
     aggregator: { inputTokens: number; outputTokens: number };
@@ -54,6 +56,8 @@ export function interpolate(template: string, ctx: PipelineContext): string {
     if (key === 'references') return ctx.references;
     if (key === 'lastOutput') return ctx.lastOutput;
     if (key === 'iteration') return String(ctx.iteration);
+    if (key === 'supervisorFeedback') return ctx.supervisorFeedback;
+    if (key === 'supervisorPass') return String(ctx.supervisorPass);
     return ctx.namedOutputs[key] ?? '';
   });
 }
@@ -199,6 +203,43 @@ async function executeValidate(
   storeOutput(ctx, step.as, result.content);
 }
 
+const SUPERVISOR_PROMPT_SUFFIX = `\n\nRespond with your verdict on the FIRST line: exactly "PASS" or "FAIL".\nIf FAIL, explain what's wrong or missing on subsequent lines.`;
+
+async function executeSupervisor(
+  step: SupervisorStep,
+  ctx: PipelineContext,
+  params: PipelineParams,
+  stepIndex: number,
+): Promise<void> {
+  const ep = step.endpoint
+    ? params.preset.referenceEndpoints.find(e => e.name === step.endpoint) ?? params.preset.aggregatorEndpoint
+    : params.preset.aggregatorEndpoint;
+
+  const basePrompt = step.prompt
+    ? interpolate(step.prompt, ctx)
+    : `Review the following output for completeness and accuracy:\n\n${ctx.lastOutput}`;
+  const prompt = basePrompt + SUPERVISOR_PROMPT_SUFFIX;
+  const useTools = step.tools !== false;
+
+  params.onProgress?.(`[${stepIndex}] supervisor ${ep.name} — evaluating`);
+  const result = await runSingleAgent(ep, prompt, useTools, params);
+
+  ctx.totalUsage.aggregator = {
+    inputTokens: ctx.totalUsage.aggregator.inputTokens + result.usage.inputTokens,
+    outputTokens: ctx.totalUsage.aggregator.outputTokens + result.usage.outputTokens,
+  };
+
+  const firstLine = result.content.split('\n')[0].trim().toUpperCase();
+  const pass = firstLine.startsWith('PASS');
+  const feedback = pass ? '' : result.content.split('\n').slice(1).join('\n').trim() || result.content;
+
+  ctx.supervisorPass = pass;
+  ctx.supervisorFeedback = feedback;
+
+  params.onProgress?.(`[${stepIndex}] supervisor — ${pass ? 'PASS' : 'FAIL'}`);
+  storeOutput(ctx, step.as, result.content);
+}
+
 async function executeLoop(
   step: LoopStep,
   ctx: PipelineContext,
@@ -211,6 +252,11 @@ async function executeLoop(
 
     const prevOutput = ctx.lastOutput;
     await executeSteps(step.steps, ctx, params, baseStepIndex * 100 + i * 10);
+
+    if (step.until === 'supervisorPass' && ctx.supervisorPass) {
+      params.onProgress?.(`[${baseStepIndex}] loop — supervisor approved`);
+      break;
+    }
 
     if (step.until === 'noNewFindings' && prevOutput && ctx.lastOutput) {
       const similarity = computeSimilarity(prevOutput, ctx.lastOutput);
@@ -250,6 +296,9 @@ export async function executeSteps(
       case 'validate':
         await executeValidate(step, ctx, params, stepIndex);
         break;
+      case 'supervisor':
+        await executeSupervisor(step, ctx, params, stepIndex);
+        break;
       case 'loop':
         await executeLoop(step, ctx, params, stepIndex);
         break;
@@ -263,6 +312,8 @@ export function createPipelineContext(query: string): PipelineContext {
     references: '',
     lastOutput: '',
     iteration: 0,
+    supervisorPass: false,
+    supervisorFeedback: '',
     namedOutputs: {},
     referenceOutputs: [],
     totalUsage: {

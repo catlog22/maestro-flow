@@ -108,6 +108,12 @@ export interface ValidateStep extends StepBase {
   tools?: boolean;
 }
 
+export interface SupervisorStep extends StepBase {
+  type: 'supervisor';
+  endpoint?: string;
+  tools?: boolean;
+}
+
 export interface LoopStep {
   type: 'loop';
   steps: PipelineStep[];
@@ -115,7 +121,7 @@ export interface LoopStep {
   until?: string;
 }
 
-export type PipelineStep = ReferenceStep | AggregateStep | TransformStep | ValidateStep | LoopStep;
+export type PipelineStep = ReferenceStep | AggregateStep | TransformStep | ValidateStep | SupervisorStep | LoopStep;
 
 export const DEFAULT_PIPELINE: PipelineStep[] = [
   { type: 'reference', prompt: '{{query}}' },
