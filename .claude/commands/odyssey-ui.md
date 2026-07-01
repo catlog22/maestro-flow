@@ -80,6 +80,7 @@ $ARGUMENTS
 1-5 in base. UI-specific:
 6. **Browser is truth** — verify in real rendering, not just code review
 7. **Diverge before converge** — explore creatively first, then implement methodically
+8. **Generalize is mandatory** — S_GENERALIZE and S_DISCOVER execute unless `skip_generalize == true`. "All verified" or context pressure are NOT valid reasons to skip. The phase itself determines whether patterns exist.
 </invariants>
 
 <self_iteration>
@@ -110,7 +111,7 @@ S_VERIFY  → S_RECORD      : verified, skip_generalize
 S_VERIFY  → S_FIX         : needs_rework
 
 S_GENERALIZE → S_DISCOVER : similar code found
-S_GENERALIZE → S_RECORD   : no similar code
+S_GENERALIZE → S_RECORD   : all 3 layers scanned with evidence, total_hits == 0
 
 S_DISCOVER → S_AUDIT      : new component to audit → cross_phase_loops++
 S_DISCOVER → S_FIX        : fixable sibling, !skip_fix → cross_phase_loops++
@@ -189,10 +190,90 @@ Commit: `"odyssey-ui({slug}): FIX — implement improvements"`
 
 Commit: `"odyssey-ui({slug}): VERIFY — visual verification"`
 
-### A_GENERALIZE, A_DISCOVER, A_RECORD
-Base shared_actions. UI overrides:
-- **A_GENERALIZE** pattern source: audit findings + diverge ideas (severity >= medium OR impact = high)
-- **A_RECORD** learnings per Knowledge Persistence table
+### A_GENERALIZE
+
+**MANDATORY — executes unless `skip_generalize == true`. Prior-phase convergence, "all verified," or context pressure are NOT valid skip reasons.**
+
+Pattern source: audit findings + diverge ideas (severity >= medium OR impact = high).
+
+**Step 1 — 3-layer pattern extraction** from UI findings and creative improvements:
+
+| Layer | Method | Targets |
+|-------|--------|---------|
+| Syntax | Build regex from fix diffs → Grep | Hardcoded px values, missing aria attributes, inline color values, raw z-index |
+| Semantic | Understand UI anti-pattern → Agent scan | Inconsistent spacing scale, missing hover/focus states, keyboard nav gaps, contrast violations |
+| Structural | Find components with same layout/state shape | Sibling components with same template, parallel page layouts, shared form patterns |
+
+Write `session.json.patterns[]`: `[{id, source, layer, signature, description, risk, fix_template, confidence}]`
+
+**Thoroughness floor:** ALL 3 layers must be attempted and logged. Each layer records search method, scope, hit count in evidence phase=generalization. "No hits" requires all 3 layers to return 0 with logged evidence.
+
+**Step 2 — 4-agent concurrent scan** (single message, 4 Agents):
+
+| Agent | Strategy | Scope |
+|-------|----------|-------|
+| Syntax grep | Grep regex from pattern signatures | Full project |
+| Semantic scan | UI anti-pattern check (states, a11y, spacing) | Related components |
+| Structural match | Find structurally similar components/pages | Full project |
+| Historical grep | `git log -S` for pattern signatures | Git history |
+
+**Step 3 — Cross-layer dedup:** multi-layer hit → boost | single-layer → `needs_review` | historically fixed → `regression_risk`
+
+**Step 4 — Iterative deepening:** Component with ≥3 hits → targeted deep scan (max 1 round).
+
+**Step 5 — Persist:** Update understanding.md section 6 + write `session.json.generalization_stats`:
+```json
+{"patterns_extracted": 0, "total_hits": 0, "cross_layer_confirmed": 0, "regression_risks": 0, "by_layer": {"syntax": 0, "semantic": 0, "structural": 0}, "deepening_triggered": false}
+```
+
+**Transition guard:** `S_GENERALIZE → S_RECORD` requires `by_layer` has entries for all 3 layers with search evidence logged. Mark G5 done.
+
+Commit: `"odyssey-ui({slug}): GENERALIZE — pattern scan complete"`
+
+### A_DISCOVER
+
+**Executes whenever `total_hits > 0`. Cannot be skipped without `skip_generalize == true`.**
+
+1. **Triage** each hit with ±10 lines context → classify:
+   - `bug` — confirmed UI defect in sibling component (missing state, broken a11y, inconsistent token)
+   - `risk` — potential visual/UX degradation
+   - `safe` — false positive (must log individual reason — blanket "pre-existing" forbidden)
+
+2. **Route:**
+
+   | Classification | Action |
+   |---------------|--------|
+   | new component needing audit | Route to S_AUDIT, `cross_phase_loops++` |
+   | fixable sibling (same pattern) | Immediate fix → back to S_FIX, `cross_phase_loops++` |
+   | risk + guard addable | Fix directly |
+   | risk + design decision needed | Create issue |
+   | safe | Skip with logged per-item reason |
+
+   Normal: AskUserQuestion per hit | `-y`: auto-fix with template, create issue for rest
+
+3. **Cross-phase loops:** `loops >= max_loops` → must log per-item reasons, advance to S_RECORD.
+
+4. Append evidence phase=discovery. Update understanding.md section 7. Mark G6 done.
+
+Commit: `"odyssey-ui({slug}): DISCOVER — sibling triage complete"`
+
+### A_RECORD
+
+1. Finalize understanding.md section 8 — learnings by Knowledge Persistence categories:
+   - Design pattern: component pattern + applicable scenarios + token references → `/spec-add ui`
+   - Interaction spec: state definitions + transition rules + feedback patterns → `/spec-add ui`
+   - Accessibility rule: WCAG requirement + implementation approach → `/spec-add ui`
+   - Reusable generalization pattern: signature + application scope → `/spec-add coding`
+
+2. Mark G7 done. Pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count).
+
+3. **Goal audit (hardened):**
+   - `done` → confirmed
+   - `skipped` → confirmed ONLY if corresponding `skip_when` flag is true
+   - **Hard rule:** G5 and G6 CANNOT be `skipped` unless `skip_generalize == true`. Pending without flag → `failed` (Normal: AskUserQuestion | `-y`: record `failed`)
+   - `phase_goals_all_done = true` only when all goals pass this audit
+
+4. `current_state = "COMPLETED"`, emit completion summary.
 
 **Completion summary:**
 ```
@@ -210,6 +291,8 @@ Goals:      {done}/{total} ({skipped} skipped)
 ---
 ```
 
+Commit: `"odyssey-ui({slug}): RECORD — summary and knowledge persistence"`
+
 </actions>
 
 <appendix>
@@ -219,6 +302,7 @@ Goals:      {done}/{total} ({skipped} skipped)
 | Decision Point | Normal | `-y` |
 |---------------|--------|------|
 | A_FIX improvement confirmation | AskUserQuestion | auto-proceed, deferred |
+| A_DISCOVER hit routing | AskUserQuestion | auto-fix with template, create issue for rest |
 
 ### Goal Prompt convergence rules
 
@@ -240,6 +324,7 @@ Pending decisions must AskUserQuestion — no self-resolve.
 | E002 | error | Target path not found | Check path |
 | W001 | warning | No design system detected | Proceed with defaults |
 | W002 | warning | Some dimension agents failed | Partial coverage |
+| W003 | warning | Generalization 0 hits after full 3-layer scan | Advance to S_RECORD (requires all 3 layers attempted with evidence) |
 </error_codes>
 
 <success_criteria>

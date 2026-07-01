@@ -96,6 +96,7 @@ $ARGUMENTS
 
 <invariants>
 All invariants (evidence append-only, session-as-state, phase goal tracking, auto-commit, zero-residual) defined in base.
+6. **Generalize is mandatory** — S_GENERALIZE and S_DISCOVER execute unless `skip_generalize == true`. "All verified" or context pressure are NOT valid reasons to skip. The phase itself determines whether patterns exist.
 </invariants>
 
 <self_iteration>
@@ -132,7 +133,7 @@ S_VERIFY → S_RECORD       : verified, skip_generalize
 S_VERIFY → S_FIX          : needs_rework
 
 S_GENERALIZE → S_DISCOVER   : hits found
-S_GENERALIZE → S_RECORD     : no hits
+S_GENERALIZE → S_RECORD     : all 3 layers scanned with evidence, total_hits == 0
 
 S_DISCOVER → S_DIAGNOSE     : new critical issue → cross_phase_loops++
 S_DISCOVER → S_FIX          : same-pattern fix, !skip_fix → cross_phase_loops++
@@ -204,10 +205,92 @@ Commit: `"odyssey-improve({slug}): FIX — improvements applied"`
 
 Commit: `"odyssey-improve({slug}): VERIFY — improvements verified"`
 
-### A_GENERALIZE, A_DISCOVER, A_RECORD
-Base shared_actions. Improve overrides:
-- **A_GENERALIZE** pattern source: diagnoses + fixes
-- **A_RECORD** §8: improvement metrics (before/after comparison from baseline_metrics vs current). §9: learnings per Knowledge Persistence table. Completion summary lists suggested `/spec-add` commands.
+### A_GENERALIZE
+
+**MANDATORY — executes unless `skip_generalize == true`. Prior-phase convergence, "all verified," or context pressure are NOT valid skip reasons.**
+
+Pattern source: diagnosed root causes + applied fixes across all dimensions.
+
+**Step 1 — 3-layer pattern extraction** from diagnoses and fixes:
+
+| Layer | Method | Targets |
+|-------|--------|---------|
+| Syntax | Build regex from fix diffs → Grep | N+1 query patterns, missing error type check, unescaped interpolation, inline eval |
+| Semantic | Understand anti-pattern per dimension → Agent scan | Cache bypass in hot path, auth check gap, circular import chain, missing timeout |
+| Structural | Find modules with same shape / dependency graph | Controllers sharing validation shape, middleware with same hook pattern, parallel services |
+
+Write `session.json.patterns[]`: `[{id, source, layer, signature, description, risk, fix_template, confidence}]`
+
+**Thoroughness floor:** ALL 3 layers must be attempted and logged. Each layer records search method, scope, hit count in evidence phase=generalization. "No hits" requires all 3 layers to return 0 with logged evidence.
+
+**Step 2 — 4-agent concurrent scan** (single message, 4 Agents):
+
+| Agent | Strategy | Scope |
+|-------|----------|-------|
+| Syntax grep | Grep regex from pattern signatures | Full project |
+| Semantic scan | Per-dimension anti-pattern check | Related modules |
+| Structural match | Find structurally similar files | Full project |
+| Historical grep | `git log -S` for pattern signatures | Git history |
+
+**Step 3 — Cross-layer dedup:** multi-layer hit → boost | single-layer → `needs_review` | historically fixed → `regression_risk`
+
+**Step 4 — Iterative deepening:** Module with ≥3 hits → targeted deep scan (max 1 round).
+
+**Step 5 — Persist:** Update understanding.md §6 + write `session.json.generalization_stats`:
+```json
+{"patterns_extracted": 0, "total_hits": 0, "cross_layer_confirmed": 0, "regression_risks": 0, "by_layer": {"syntax": 0, "semantic": 0, "structural": 0}, "deepening_triggered": false}
+```
+
+**Transition guard:** `S_GENERALIZE → S_RECORD` requires `by_layer` has entries for all 3 layers with search evidence logged. Mark G5 done.
+
+Commit: `"odyssey-improve({slug}): GENERALIZE — generalization scan complete"`
+
+### A_DISCOVER
+
+**Executes whenever `total_hits > 0`. Cannot be skipped without `skip_generalize == true`.**
+
+1. **Triage** each hit with ±10 lines context → classify:
+   - `bug` — confirmed improvement defect (same dimension)
+   - `risk` — potential degradation or violation
+   - `safe` — false positive (must log individual reason — blanket "pre-existing" forbidden)
+
+2. **Route:**
+
+   | Classification | Action |
+   |---------------|--------|
+   | bug + fix_template applicable | Immediate fix → back to S_FIX |
+   | bug + cross-module decision or no template | Create issue (fix suggestion + impact + dimension) |
+   | risk + guard addable directly | Fix directly |
+   | risk + complex | Create issue |
+   | safe | Skip with logged per-item reason |
+
+   Normal: AskUserQuestion per hit | `-y`: auto-fix bugs with fix_template, create issue for rest
+
+3. **Cross-phase loops:** `cross_phase_loops++` on fix/diagnose return. `loops >= max_loops` → must log per-item reasons.
+
+4. Append evidence phase=discovery. Update understanding.md §7. Mark G6 done.
+
+Commit: `"odyssey-improve({slug}): DISCOVER — discovery triage complete"`
+
+### A_RECORD
+
+1. understanding.md §8: improvement metrics — before/after comparison from `baseline_metrics` vs current. Re-capture metrics, build comparison table.
+2. understanding.md §9: learnings by Knowledge Persistence categories:
+   - Performance pattern → `/spec-add coding`
+   - Security rule → `/spec-add debug`
+   - Architecture constraint → `/spec-add arch`
+   - Reliability pattern → `/spec-add coding`
+   Completion summary lists suggested `/spec-add` commands.
+
+3. Mark G7 done. Pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count).
+
+4. **Goal audit (hardened):**
+   - `done` → confirmed
+   - `skipped` → confirmed ONLY if corresponding `skip_when` flag is true
+   - **Hard rule:** G5 and G6 CANNOT be `skipped` unless `skip_generalize == true`. Pending without flag → `failed` (Normal: AskUserQuestion | `-y`: record `failed`)
+   - `phase_goals_all_done = true` only when all goals pass this audit
+
+5. `current_state = "COMPLETED"`, emit completion summary.
 
 **Completion summary:**
 ```
@@ -228,6 +311,8 @@ Cross-loops: {N}
 Goals:       {done}/{total} ({skipped} skipped)
 ---
 ```
+
+Commit: `"odyssey-improve({slug}): RECORD — summary and knowledge persistence"`
 
 </actions>
 
@@ -266,6 +351,7 @@ Pending decisions must AskUserQuestion — no silent resolve.
 | E002 | error | Target path not found | Check path |
 | W001 | warning | No dependency manifest found | Proceed without dep audit |
 | W002 | warning | Some dimension agents failed | Partial audit coverage |
+| W003 | warning | Generalization 0 hits after full 3-layer scan | Advance to S_RECORD (requires all 3 layers attempted with evidence) |
 </error_codes>
 
 <success_criteria>
