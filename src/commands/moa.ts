@@ -8,6 +8,7 @@ import {
   loadExploreConfig,
   applyProxyEnv,
   resolveMoaPreset,
+  type PipelineStep,
 } from '../agents/api-explore/config.js';
 import { moaAgentLoop, type MoaResult } from '../agents/api-explore/moa-loop.js';
 import {
@@ -71,6 +72,7 @@ export function registerMoaCommand(program: Command): void {
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
     .option('--no-save', 'Do not save session')
     .option('--no-cache', 'Bypass MOA reference cache')
+    .option('--steps <json>', 'Dynamic pipeline steps (JSON array)')
     .option('--json', 'Output results as JSON')
     .action(async (
       promptArgs: string[],
@@ -81,6 +83,7 @@ export function registerMoaCommand(program: Command): void {
         outputDir?: string;
         save?: boolean;
         cache?: boolean;
+        steps?: string;
         json?: boolean;
       },
     ) => {
@@ -112,6 +115,17 @@ export function registerMoaCommand(program: Command): void {
       const presetName = opts.preset ?? config.moa?.defaultPreset ?? 'default';
       const referenceEndpoints = preset.referenceEndpoints.map(ep => ep.name);
 
+      let dynamicPipeline: PipelineStep[] | undefined;
+      if (opts.steps) {
+        try {
+          dynamicPipeline = JSON.parse(opts.steps) as PipelineStep[];
+          if (!Array.isArray(dynamicPipeline)) throw new Error('steps must be a JSON array');
+        } catch (err) {
+          process.stderr.write(`Invalid --steps JSON: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.exit(1);
+        }
+      }
+
       const sessionId = generateSessionId();
       process.stderr.write(
         `[${sessionId}] MOA (${presetName}) — ${prompts.length} prompt(s), maxTurns=${maxTurns}\n`,
@@ -130,6 +144,7 @@ export function registerMoaCommand(program: Command): void {
           cwd,
           maxTurns,
           cache: opts.cache,
+          pipeline: dynamicPipeline,
           onProgress: msg => process.stderr.write(msg + '\n'),
         });
         results.push(result);

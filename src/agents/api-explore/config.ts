@@ -76,10 +76,60 @@ export interface NamedEndpoint {
   maxTurns?: number;
 }
 
+// ---------------------------------------------------------------------------
+// MOA Pipeline Step types
+// ---------------------------------------------------------------------------
+
+interface StepBase {
+  prompt?: string;
+  as?: string;
+  cache?: boolean;
+}
+
+export interface ReferenceStep extends StepBase {
+  type: 'reference';
+  endpoints?: string[];
+  tools?: boolean;
+}
+
+export interface AggregateStep extends StepBase {
+  type: 'aggregate';
+  endpoint?: string;
+  tools?: boolean;
+}
+
+export interface TransformStep extends StepBase {
+  type: 'transform';
+}
+
+export interface ValidateStep extends StepBase {
+  type: 'validate';
+  endpoint?: string;
+  tools?: boolean;
+}
+
+export interface LoopStep {
+  type: 'loop';
+  steps: PipelineStep[];
+  maxIterations: number;
+  until?: string;
+}
+
+export type PipelineStep = ReferenceStep | AggregateStep | TransformStep | ValidateStep | LoopStep;
+
+export const DEFAULT_PIPELINE: PipelineStep[] = [
+  { type: 'reference', prompt: '{{query}}' },
+  { type: 'aggregate', prompt: '{{query}}\n\n{{references}}' },
+];
+
+// ---------------------------------------------------------------------------
+// MOA Preset Config
+// ---------------------------------------------------------------------------
+
 export interface MoaPresetConfig {
   referenceEndpoints: string[];
   aggregatorEndpoint: string;
-  mode?: 'initial-only' | 'per-turn';
+  steps?: PipelineStep[];
   enabled?: boolean;
 }
 
@@ -91,7 +141,7 @@ export interface MoaConfig {
 export interface ResolvedMoaPreset {
   referenceEndpoints: NamedEndpoint[];
   aggregatorEndpoint: NamedEndpoint;
-  mode: 'initial-only' | 'per-turn';
+  steps: PipelineStep[];
 }
 
 export function getAllEndpoints(config: ExploreConfig): NamedEndpoint[] {
@@ -202,6 +252,6 @@ export function resolveMoaPreset(config: ExploreConfig, presetName?: string): Re
   return {
     referenceEndpoints: refEndpoints,
     aggregatorEndpoint: aggEndpoint,
-    mode: preset.mode ?? 'initial-only',
+    steps: preset.steps ?? DEFAULT_PIPELINE,
   };
 }

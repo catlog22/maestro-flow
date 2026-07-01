@@ -17,9 +17,10 @@ function cacheDir(cwd: string): string {
   return join(cwd, '.workflow', 'explore', '.moa-cache');
 }
 
-export function computeCacheKey(prompt: string, cwd: string, endpointName: string, model: string): string {
+export function computeCacheKey(prompt: string, cwd: string, endpointName: string, model: string, stepIndex?: number): string {
+  const parts = `${prompt}\0${cwd}\0${endpointName}\0${model}`;
   return createHash('sha256')
-    .update(`${prompt}\0${cwd}\0${endpointName}\0${model}`)
+    .update(stepIndex != null ? `${parts}\0step${stepIndex}` : parts)
     .digest('hex');
 }
 
