@@ -99,6 +99,7 @@ $ARGUMENTS
 <invariants>
 Base execution_discipline #1-5.
 6. **Acceptance criteria are sacred** — no "close enough", no manual override without explicit escalation
+7. **Generalize is mandatory** — S_GENERALIZE and S_DISCOVER execute unless `skip_generalize == true`. "All criteria passed" or context pressure are NOT valid reasons to skip. The phase itself determines whether patterns exist.
 </invariants>
 
 <self_iteration>
@@ -128,7 +129,7 @@ S_VERIFY → S_RECORD       : some failed AND iteration >= max (escalate)
 S_FIX → S_VERIFY (loop)
 
 S_GENERALIZE → S_DISCOVER : hits found
-S_GENERALIZE → S_RECORD   : no hits
+S_GENERALIZE → S_RECORD   : all 3 layers scanned with evidence, total_hits == 0
 
 S_DISCOVER → S_EXECUTE    : discovery finds area needing same implementation → cross_phase_loops++
 S_DISCOVER → S_RECORD     : triage complete AND remaining_actionable == 0
@@ -326,21 +327,88 @@ Commit: `"odyssey-planex({slug}): FIX — targeted fix for failing criteria"`
 
 ### A_GENERALIZE
 
-Base shared_actions. Pattern source: implementation patterns.
+**MANDATORY — executes unless `skip_generalize == true`. "All criteria passed" or context pressure are NOT valid skip reasons.**
+
+Pattern source: implementation patterns from executed tasks.
+
+**Step 1 — 3-layer pattern extraction** from implementation:
+
+| Layer | Method | Targets |
+|-------|--------|---------|
+| Syntax | Build regex from implementation diffs → Grep | API contract patterns, validation shapes, error response format, config structure |
+| Semantic | Understand implementation pattern → Agent scan | Similar feature needs elsewhere, analogous data flows, parallel business logic |
+| Structural | Find modules with same structure / dependency shape | Parallel module structures, sibling endpoints, same-shape services |
+
+Write `session.json.patterns[]`: `[{id, source, layer, signature, description, risk, fix_template, confidence}]`
+
+**Thoroughness floor:** ALL 3 layers must be attempted and logged. Each layer records search method, scope, hit count in evidence phase=generalization. "No hits" requires all 3 layers to return 0 with logged evidence.
+
+**Step 2 — 4-agent concurrent scan** (single message, 4 Agents):
+
+| Agent | Strategy | Scope |
+|-------|----------|-------|
+| Syntax grep | Grep regex from pattern signatures | Full project |
+| Semantic scan | Implementation pattern check | Related modules |
+| Structural match | Find structurally similar modules | Full project |
+| Historical grep | `git log -S` for pattern signatures | Git history |
+
+**Step 3 — Cross-layer dedup:** multi-layer hit → boost | single-layer → `needs_review` | historically fixed → `regression_risk`
+
+**Step 4 — Iterative deepening:** Module with ≥3 hits → targeted deep scan (max 1 round).
+
+**Step 5 — Persist:** Update understanding.md section 6 + write `session.json.generalization_stats`:
+```json
+{"patterns_extracted": 0, "total_hits": 0, "cross_layer_confirmed": 0, "regression_risks": 0, "by_layer": {"syntax": 0, "semantic": 0, "structural": 0}, "deepening_triggered": false}
+```
+
+**Transition guard:** `S_GENERALIZE → S_RECORD` requires `by_layer` has entries for all 3 layers with search evidence logged. Mark G5 done.
 
 Commit: `"odyssey-planex({slug}): GENERALIZE — pattern scan complete"`
 
 ### A_DISCOVER
 
-Base shared_actions. Planex override: discovery finding needing same implementation → route back to S_EXECUTE (not S_FIX).
+**Executes whenever `total_hits > 0`. Cannot be skipped without `skip_generalize == true`.**
+
+1. **Triage** each hit with ±10 lines context → classify:
+   - `bug` — area needing same implementation (missing feature parity)
+   - `risk` — potential inconsistency or missing pattern application
+   - `safe` — false positive (must log individual reason — blanket "pre-existing" forbidden)
+
+2. **Route (planex-specific — routes to S_EXECUTE, not S_FIX):**
+
+   | Classification | Action |
+   |---------------|--------|
+   | needs same implementation | Route to S_EXECUTE with new task, `cross_phase_loops++` |
+   | risk + guard addable | Fix directly |
+   | risk + complex | Create issue |
+   | safe | Skip with logged per-item reason |
+
+   Normal: AskUserQuestion per hit | `-y`: auto-route to execute, create issue for rest
+
+3. **Cross-phase loops:** `loops >= max_loops` → must log per-item reasons, advance to S_RECORD.
+
+4. Append evidence phase=discovery. Update understanding.md section 7. Mark G6 done.
 
 Commit: `"odyssey-planex({slug}): DISCOVER — findings classified"`
 
 ### A_RECORD
 
-Base shared_actions. Planex additions:
 1. Iteration summary: what worked, what needed rework, fix cycle patterns
-2. Learnings structured per Knowledge Persistence table: problem scenario + fix iteration process + final approach + applicable scope
+2. understanding.md section 8 — learnings by Knowledge Persistence categories:
+   - Multi-round fix cycle pattern → `/spec-add debug`
+   - Reusable implementation pattern → `/spec-add coding`
+   - Acceptance criteria template → `/spec-add review`
+   - Generalization pattern → `/spec-add coding`
+
+3. Mark G7 done. Pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count).
+
+4. **Goal audit (hardened):**
+   - `done` → confirmed
+   - `skipped` → confirmed ONLY if corresponding `skip_when` flag is true
+   - **Hard rule:** G5 and G6 CANNOT be `skipped` unless `skip_generalize == true`. Pending without flag → `failed` (Normal: AskUserQuestion | `-y`: record `failed`)
+   - `phase_goals_all_done = true` only when all goals pass this audit
+
+5. `current_state = "COMPLETED"`, emit completion summary.
 
 **Completion summary:**
 ```
@@ -373,6 +441,7 @@ Commit: `"odyssey-planex({slug}): RECORD — session summary"`
 | S_EXECUTE task blocked (3 retries) | AskUserQuestion: continue or stop | auto continue, log blocked |
 | S_VERIFY manual criterion | AskUserQuestion | `deferred` |
 | S_VERIFY max iteration reached | AskUserQuestion | auto accept, `deferred` |
+| A_DISCOVER hit routing | AskUserQuestion | auto-route to execute, create issue for rest |
 
 ### Goal Prompt convergence rules
 
@@ -388,7 +457,7 @@ No "close enough" — all criteria must ALL pass.
 ```
 S_EXECUTE → S_VERIFY ──all pass──→ S_GENERALIZE → S_DISCOVER → S_RECORD
                 │                       │
-           some fail + iter < max       no hits ─→ S_RECORD
+           some fail + iter < max       3-layer scan, 0 hits ─→ S_RECORD
                 ▼
              S_FIX ──→ S_VERIFY (loop)
 ```
@@ -406,6 +475,7 @@ Max iterations (default 3) prevents infinite loops. Each iteration records crite
 | W001 | warning | No acceptance criteria derived | Manual definition needed |
 | W002 | warning | Max iterations reached, criteria still failing | Escalate to user |
 | W003 | warning | CLI review regression concern | Review before next iteration |
+| W004 | warning | Generalization 0 hits after full 3-layer scan | Advance to S_RECORD (requires all 3 layers attempted with evidence) |
 </error_codes>
 
 <success_criteria>
