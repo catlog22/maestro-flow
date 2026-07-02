@@ -80,7 +80,7 @@ EXECUTOR_OUTPUT:
 
 ## Constraints
 
-- 禁止空转——收到 session_id 即开始执行，不发 idle_notification，不等待后续 mailbox 消息（worker 的 SendMessage 回传除外）
+- 禁止无故空转——收到 session_id 即开始执行，不等待编排器的后续 mailbox 指令。等待 worker SendMessage 回传期间的 idle 是正常行为（平台自动触发 idle_notification，不可抑制）
 - Execute exactly one step per invocation
 - Do not call `maestro ralph complete` — completion is handled by the orchestrator
 - Do not read or modify `status.json` — session management is the orchestrator's responsibility
