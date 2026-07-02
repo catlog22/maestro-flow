@@ -749,7 +749,10 @@ GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
 
 - **A_RETRY**: `Bash("maestro ralph retry {index}")` — CLI 设 `step.retried = true`, `step.status = "pending"`, 清 `active_step_index`
 - **A_PAUSE_SESSION**: `ralph complete N --status BLOCKED --reason "..."` — CLI 写 `session.status = "paused"`
-- **A_COMPLETE_SESSION**: 校验所有 step `completion_confirmed == true` + `task_decomposition_all_done == true`（若存在），通过后写 `session.status = "completed"`
+- **A_COMPLETE_SESSION**: 校验所有 step `completion_confirmed == true` + `task_decomposition_all_done == true`（若存在），通过后写 `session.status = "completed"`。完成后向所有 idle executor 发送 shutdown_request 清理：
+  ```
+  遍历 steps[].agent_exec_name → SendMessage({to: name, message: {type: "shutdown_request"}})
+  ```
 
 </actions>
 
