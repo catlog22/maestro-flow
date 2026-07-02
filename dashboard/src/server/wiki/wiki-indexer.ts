@@ -407,7 +407,7 @@ export class WikiIndexer {
         out = rerankByPhraseProximity(out, query);
         return { results: out.slice(0, limit), embeddingUsed: true, embeddingDocs: embIdx.docIds.length };
       } catch (e: unknown) {
-        if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+        if (process.env.MAESTRO_DEBUG === '1') {
           console.error(`[embedding] query failed: ${e instanceof Error ? e.message : e}`);
         }
       }
@@ -441,7 +441,7 @@ export class WikiIndexer {
       const { isAvailable, getUnavailableReason, loadEmbeddingIndex, buildEmbeddingIndex, saveEmbeddingIndex } = await import('./embedding.js');
       if (!await isAvailable()) {
         const reason = getUnavailableReason?.() ?? 'unknown';
-        if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+        if (process.env.MAESTRO_DEBUG === '1') {
           console.error(`[embedding] unavailable: ${reason}`);
         }
         return null;
@@ -511,14 +511,14 @@ export class WikiIndexer {
         saveEmbeddingIndex(embIdx, this.workflowRoot);
         return embIdx;
       } catch (buildErr: unknown) {
-        if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+        if (process.env.MAESTRO_DEBUG === '1') {
           console.error(`[embedding] build failed: ${buildErr instanceof Error ? buildErr.message : buildErr}`);
         }
         if (cached) return cached;
         return null;
       }
     } catch (e: unknown) {
-      if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+      if (process.env.MAESTRO_DEBUG === '1') {
         console.error(`[embedding] unavailable: ${e instanceof Error ? e.message : e}`);
       }
       return null;

@@ -448,7 +448,7 @@ let _pipeline: any = null;
 let _available: boolean | null = null;
 
 async function configureProxy(): Promise<void> {
-  const proxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || process.env.ALL_PROXY;
+  const proxy = getApiProxy();
   if (!proxy) return;
   try {
     const { ProxyAgent, setGlobalDispatcher } = await import('undici');
@@ -774,7 +774,7 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
     try {
       return loadFromZvecMeta(zvecMetaPath, zvecCollPath);
     } catch (e: unknown) {
-      if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+      if (process.env.MAESTRO_DEBUG === '1') {
         console.warn(`[embedding] zvec index load failed, falling back: ${e instanceof Error ? e.message : e}`);
       }
       // Fall through to binary
@@ -787,7 +787,7 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
     try {
       return loadFromBinary(binPath);
     } catch (e: unknown) {
-      if (process.env.DEBUG || process.env.MAESTRO_DEBUG) {
+      if (process.env.MAESTRO_DEBUG === '1') {
         console.warn(`[embedding] binary index corrupted, will rebuild: ${e instanceof Error ? e.message : e}`);
       }
       return null;
