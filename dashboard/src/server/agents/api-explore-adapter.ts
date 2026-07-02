@@ -7,9 +7,12 @@
 // and environment mapping.
 // ---------------------------------------------------------------------------
 
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { AgentType, AgentConfig } from '../../shared/agent-types.js';
 import { StreamJsonAdapter } from './stream-json-adapter.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function resolveAgentScript(): string {
   const distRoot = join(__dirname, '..', '..', '..', '..', 'dist', 'src', 'agents', 'api-explore', 'index.js');

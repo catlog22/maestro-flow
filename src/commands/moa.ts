@@ -6,10 +6,12 @@ import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import {
   loadExploreConfig,
-  applyProxyEnv,
+  resolveExploreProxyUrl,
+  injectProxy,
   resolveMoaPreset,
   type PipelineStep,
 } from '../agents/api-explore/config.js';
+import { checkProxyReachable } from '../config/cli-tools-config.js';
 import { moaAgentLoop, type MoaResult } from '../agents/api-explore/moa-loop.js';
 import {
   generateSessionId,
@@ -99,7 +101,14 @@ export function registerMoaCommand(program: Command): void {
       }
 
       const config = loadExploreConfig();
-      applyProxyEnv(config);
+      let proxyUrl = resolveExploreProxyUrl(config);
+      if (proxyUrl) {
+        const reachable = await checkProxyReachable(proxyUrl);
+        if (!reachable) {
+          process.stderr.write(`Warning: proxy ${proxyUrl} is unreachable, proceeding without proxy.\n`);
+          proxyUrl = undefined;
+        }
+      }
 
       const preset = resolveMoaPreset(config, opts.preset);
       if (!preset) {
@@ -108,6 +117,13 @@ export function registerMoaCommand(program: Command): void {
           'See: maestro moa --help\n',
         );
         process.exit(1);
+      }
+      if (proxyUrl) {
+        injectProxy(preset.referenceEndpoints, proxyUrl);
+        preset.aggregatorEndpoint = {
+          ...preset.aggregatorEndpoint,
+          llmConfig: { ...preset.aggregatorEndpoint.llmConfig, proxyUrl },
+        };
       }
 
       const cwd = resolve(opts.cd ?? process.cwd());

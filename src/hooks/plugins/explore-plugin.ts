@@ -3,7 +3,8 @@ import type { WorkflowHookRegistry } from '../workflow-hooks.js';
 import {
   loadExploreConfig,
   resolveEndpoints,
-  applyProxyEnv,
+  resolveExploreProxyUrl,
+  injectProxy,
 } from '../../agents/api-explore/config.js';
 import {
   buildJobsFromEntries,
@@ -58,8 +59,9 @@ export class ExplorePlugin implements MaestroPlugin {
   private async runQueries(marker: ExploreMarker): Promise<ExploreResult[]> {
     try {
       const config = loadExploreConfig();
-      applyProxyEnv(config);
+      const proxyUrl = resolveExploreProxyUrl(config);
       const endpoints = resolveEndpoints(config, marker.endpoint);
+      injectProxy(endpoints, proxyUrl);
       if (endpoints.length === 0) return [];
 
       const entries = marker.queries.map(q => ({ prompt: q, endpoint: marker.endpoint }));

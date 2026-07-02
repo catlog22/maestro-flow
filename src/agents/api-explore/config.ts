@@ -206,25 +206,25 @@ function loadCliToolsProxy(): ProxyConfig | undefined {
   }
 }
 
-export function applyProxyEnv(config: ExploreConfig): void {
-  if (process.env.HTTP_PROXY || process.env.HTTPS_PROXY) return;
-
+/**
+ * Resolve the proxy URL for explore HTTP requests.
+ * Returns the proxy URL string when proxy is enabled, undefined otherwise.
+ * Does NOT mutate process.env — callers inject into HTTP clients directly.
+ */
+export function resolveExploreProxyUrl(config: ExploreConfig): string | undefined {
   const proxy = config.proxy ?? loadCliToolsProxy();
-  if (!proxy?.enabled) return;
+  if (!proxy?.enabled) return undefined;
+  return proxy.httpsProxy ?? proxy.httpProxy;
+}
 
-  const httpUrl = proxy.httpProxy;
-  const httpsUrl = proxy.httpsProxy ?? httpUrl;
-  if (httpUrl) {
-    process.env.HTTP_PROXY = httpUrl;
-    process.env.http_proxy = httpUrl;
-  }
-  if (httpsUrl) {
-    process.env.HTTPS_PROXY = httpsUrl;
-    process.env.https_proxy = httpsUrl;
-  }
-  if (proxy.noProxy) {
-    process.env.NO_PROXY = proxy.noProxy;
-    process.env.no_proxy = proxy.noProxy;
+/**
+ * Inject proxyUrl into an array of NamedEndpoints' LlmConfig.
+ * Mutates in place for convenience; no-op when proxyUrl is undefined.
+ */
+export function injectProxy(endpoints: NamedEndpoint[], proxyUrl: string | undefined): void {
+  if (!proxyUrl) return;
+  for (const ep of endpoints) {
+    ep.llmConfig = { ...ep.llmConfig, proxyUrl };
   }
 }
 

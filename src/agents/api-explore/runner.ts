@@ -205,29 +205,31 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
   const origStdoutWrite = process.stdout.write.bind(process.stdout);
   process.stdout.write = (() => true) as typeof process.stdout.write;
 
-  // Run endpoint queues in parallel, capped by concurrency
   const allResults: ExploreResult[] = [];
-  const queueEntries = [...queues.entries()];
-  let nextQueue = 0;
+  try {
+    // Run endpoint queues in parallel, capped by concurrency
+    const queueEntries = [...queues.entries()];
+    let nextQueue = 0;
 
-  async function runEndpointSlot(): Promise<void> {
-    while (nextQueue < queueEntries.length) {
-      const idx = nextQueue++;
-      const [, queue] = queueEntries[idx];
-      const results = await drainQueue(
-        queue, endpointConcurrency, cwd, maxTurns, dirListing,
-        jobs.length, jobIndexMap,
-        { onProgress, onJobStart, onJobDone },
-        moaPreset,
-      );
-      allResults.push(...results);
+    async function runEndpointSlot(): Promise<void> {
+      while (nextQueue < queueEntries.length) {
+        const idx = nextQueue++;
+        const [, queue] = queueEntries[idx];
+        const results = await drainQueue(
+          queue, endpointConcurrency, cwd, maxTurns, dirListing,
+          jobs.length, jobIndexMap,
+          { onProgress, onJobStart, onJobDone },
+          moaPreset,
+        );
+        allResults.push(...results);
+      }
     }
+
+    const endpointSlots = Math.min(concurrency, queueEntries.length);
+    await Promise.allSettled(Array.from({ length: endpointSlots }, () => runEndpointSlot()));
+  } finally {
+    process.stdout.write = origStdoutWrite;
   }
-
-  const endpointSlots = Math.min(concurrency, queueEntries.length);
-  await Promise.allSettled(Array.from({ length: endpointSlots }, () => runEndpointSlot()));
-
-  process.stdout.write = origStdoutWrite;
 
   // Return in original job order
   const resultMap = new Map(allResults.map(r => [r.id, r]));

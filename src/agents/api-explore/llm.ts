@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions.js';
+import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
 export type LlmFormat = 'openai' | 'anthropic';
 
@@ -22,6 +23,8 @@ export interface LlmConfig {
   format?: LlmFormat;
   /** Model-specific extra body params (e.g. Qwen enable_thinking) */
   extraBody?: Record<string, unknown>;
+  /** Proxy URL — when set, HTTP requests use undici ProxyAgent instead of direct connection */
+  proxyUrl?: string;
 }
 
 export interface LlmCallOptions {
@@ -33,10 +36,16 @@ export function createClient(params: LlmConfig): {
   client: OpenAI;
   config: LlmConfig;
 } {
-  const client = new OpenAI({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const opts: Record<string, any> = {
     apiKey: params.apiKey,
     baseURL: params.baseUrl,
-  });
+  };
+  if (params.proxyUrl) {
+    opts.fetch = undiciFetch;
+    opts.fetchOptions = { dispatcher: new ProxyAgent(params.proxyUrl) };
+  }
+  const client = new OpenAI(opts);
   return { client, config: params };
 }
 
@@ -226,7 +235,8 @@ async function callAnthropic(
     body.tool_choice = { type: 'auto' };
   }
 
-  const response = await fetch(url, {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fetchOpts: any = {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -234,7 +244,11 @@ async function callAnthropic(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify(body),
-  });
+  };
+  const fetchFn = config.proxyUrl
+    ? (fetchOpts.dispatcher = new ProxyAgent(config.proxyUrl), undiciFetch)
+    : fetch;
+  const response = await fetchFn(url, fetchOpts);
 
   if (!response.ok) {
     const text = await response.text();

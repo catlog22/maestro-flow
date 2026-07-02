@@ -4,7 +4,7 @@ import { createClient, type LlmConfig, type LlmFormat } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
-import { loadExploreConfig, getDefaultEndpoint, applyProxyEnv } from './config.js';
+import { loadExploreConfig, getDefaultEndpoint, resolveExploreProxyUrl } from './config.js';
 
 function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurns: number } {
   let model = '';
@@ -38,7 +38,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
   }
 
   const fileConfig = loadExploreConfig();
-  applyProxyEnv(fileConfig);
+  const proxyUrl = resolveExploreProxyUrl(fileConfig);
 
   model = model || fileConfig.model || process.env.API_EXPLORE_MODEL || '';
   baseUrl = baseUrl || fileConfig.baseUrl || process.env.API_EXPLORE_BASE_URL || '';
@@ -51,7 +51,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
     // Try named endpoints as fallback
     const defaultEp = getDefaultEndpoint(fileConfig);
     if (defaultEp) {
-      return { llmConfig: defaultEp, cwd: resolve(cwd), maxTurns };
+      return { llmConfig: { ...defaultEp, proxyUrl }, cwd: resolve(cwd), maxTurns };
     }
 
     process.stderr.write(
@@ -64,7 +64,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
     process.exit(1);
   }
 
-  return { llmConfig: { model, baseUrl, apiKey, format: resolvedFormat, extraBody }, cwd: resolve(cwd), maxTurns };
+  return { llmConfig: { model, baseUrl, apiKey, format: resolvedFormat, extraBody, proxyUrl }, cwd: resolve(cwd), maxTurns };
 }
 
 function readStdin(): Promise<string> {

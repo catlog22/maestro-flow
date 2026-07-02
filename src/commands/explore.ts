@@ -9,10 +9,12 @@ import {
   loadExploreConfig,
   resolveEndpoints,
   getAllEndpoints,
-  applyProxyEnv,
+  resolveExploreProxyUrl,
+  injectProxy,
   resolveMoaPreset,
   type ResolvedMoaPreset,
 } from '../agents/api-explore/config.js';
+import { checkProxyReachable } from '../config/cli-tools-config.js';
 import { buildJobs, buildJobsFromEntries, runExploreJobs, type ExploreResult } from '../agents/api-explore/runner.js';
 import {
   generateSessionId,
@@ -133,7 +135,14 @@ export function registerExploreCommand(program: Command): void {
       }
 
       const config = loadExploreConfig();
-      applyProxyEnv(config);
+      let proxyUrl = resolveExploreProxyUrl(config);
+      if (proxyUrl) {
+        const reachable = await checkProxyReachable(proxyUrl);
+        if (!reachable) {
+          process.stderr.write(`Warning: proxy ${proxyUrl} is unreachable, proceeding without proxy.\n`);
+          proxyUrl = undefined;
+        }
+      }
       const cwd = resolve(opts.cd ?? process.cwd());
       const maxTurns = opts.maxTurns ?? config.maxTurns ?? 6;
       const concurrency = opts.parallel ?? config.concurrency ?? 4;
@@ -150,9 +159,17 @@ export function registerExploreCommand(program: Command): void {
           );
           process.exit(1);
         }
+        if (resolvedPreset && proxyUrl) {
+          injectProxy(resolvedPreset.referenceEndpoints, proxyUrl);
+          resolvedPreset.aggregatorEndpoint = {
+            ...resolvedPreset.aggregatorEndpoint,
+            llmConfig: { ...resolvedPreset.aggregatorEndpoint.llmConfig, proxyUrl },
+          };
+        }
       }
 
       const globalEndpoints = resolveEndpoints(config, opts.endpoint, opts.all);
+      injectProxy(globalEndpoints, proxyUrl);
 
       if (globalEndpoints.length === 0) {
         console.error(
@@ -164,6 +181,7 @@ export function registerExploreCommand(program: Command): void {
       }
 
       const allEps = getAllEndpoints(config);
+      injectProxy(allEps, proxyUrl);
       const jobs = opts.all
         ? buildJobs(entries.map(e => e.prompt), globalEndpoints)
         : buildJobsFromEntries(entries, globalEndpoints, allEps);
