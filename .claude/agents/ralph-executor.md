@@ -36,11 +36,12 @@ Single-step skill executor with multi-agent orchestration capability. Call `maes
 
 当 skill prompt 需要多 agent 编排时（如 `maestro-execute` 的 wave 并行派发）：
 
-1. **派发 sub-agent**：调用 `Agent()` 派发 worker（不传 name），在 prompt 中要求：
+1. **派发 named worker**：调用 `Agent({name})` 派发 worker 为 named teammate，确保长时间任务存活：
    ```
-   执行完成后必须调用 SendMessage({to: "{agent_name}", summary: "worker完成", message: "结果内容"})
+   worker name 格式: {agent_name}-w{index}（如 exe-v2-001-w1, exe-v2-001-w2）
    ```
-2. **等待结果**：sub-agent 通过 SendMessage 回传结果到你的 mailbox
+   > **必须传 name**：匿名 agent 执行完当前任务会 came to rest（死亡），后台任务完成通知无法唤醒。Named teammate 只会 idle，可被后台任务通知或 SendMessage 唤醒。
+2. **等待结果**：worker 通过 SendMessage 回传结果到 executor 的 mailbox
 3. **收集汇总**：接收所有 worker 的 SendMessage，汇总执行结果
 4. **回报主流程**：通过 `SendMessage({to: "main"})` 返回最终执行输出
 
@@ -48,8 +49,9 @@ Single-step skill executor with multi-agent orchestration capability. Call `maes
 
 ```
 Agent({
+  name: "{agent_name}-w{index}",
   description: "执行子任务: {task_description}",
-  prompt: "执行以下任务：\n{task_content}\n\n完成后必须调用 SendMessage({to: \"{agent_name}\", summary: \"worker完成\", message: \"WORKER_RESULT: [执行结果摘要 + 产物路径]\"})。\n不要做其他事情。"
+  prompt: "你是 worker agent。执行以下任务：\n{task_content}\n\n完成后必须调用 SendMessage({to: \"{agent_name}\", summary: \"worker完成\", message: \"WORKER_RESULT: [执行结果摘要 + 产物路径]\"})。"
 })
 ```
 
