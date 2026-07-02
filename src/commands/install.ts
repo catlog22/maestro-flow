@@ -420,39 +420,21 @@ async function forceInstall(
 
 async function warmupEmbedding(): Promise<void> {
   try {
-    const { isAvailable, getUnavailableReason, embedTexts, getDeviceSummary, setProgressCallback } = await import('#maestro-dashboard/wiki/embedding.js');
+    const { isAvailable, getUnavailableReason, isModelCached, embedTexts, getDeviceSummary, setProgressCallback } = await import('#maestro-dashboard/wiki/embedding.js');
     if (!await isAvailable()) {
       const reason = getUnavailableReason?.() ?? 'unknown';
       console.error(`  Embedding: unavailable (${reason})`);
       return;
     }
 
-    const isTTY = process.stderr.isTTY === true;
-    let downloadStarted = false;
-    let lastPct = -1;
-    setProgressCallback((info) => {
-      if (info.status === 'progress' && info.file === 'onnx/model.onnx' && !downloadStarted) {
-        downloadStarted = true;
-        console.error(`  Embedding: downloading model (~465 MB, first time only)...`);
-      }
-      if (info.status === 'progress' && info.file === 'onnx/model.onnx' && typeof info.progress === 'number') {
-        const pct = Math.round(info.progress);
-        if (pct === lastPct) return;
-        lastPct = pct;
-        const loaded = info.loaded ? `${(info.loaded / 1024 / 1024).toFixed(0)}` : '0';
-        const total = info.total ? `${(info.total / 1024 / 1024).toFixed(0)}` : '?';
-        if (isTTY) {
-          const bar = '█'.repeat(Math.floor(pct / 5)) + '░'.repeat(20 - Math.floor(pct / 5));
-          process.stderr.write(`  Embedding: [${bar}] ${pct}% ${loaded}/${total} MB\r`);
-        } else if (pct % 25 === 0) {
-          console.error(`  Embedding: ${pct}% (${loaded}/${total} MB)`);
-        }
-      }
-      if (info.status === 'done' && info.file === 'onnx/model.onnx' && downloadStarted) {
-        if (isTTY) process.stderr.write('\x1b[2K\r');
-      }
-    });
+    if (!isModelCached()) {
+      console.error(`  Embedding: model not cached locally, skipping warmup`);
+      console.error(`    To download (~465 MB):  maestro search embedding warmup`);
+      console.error(`    Or configure API mode:  ~/.maestro/api-embedding.json`);
+      return;
+    }
 
+    const isTTY = process.stderr.isTTY === true;
     const t0 = Date.now();
     process.stderr.write('  Embedding: warming up model...\r');
     await embedTexts(['warmup']);

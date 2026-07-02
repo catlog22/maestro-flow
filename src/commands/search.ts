@@ -548,6 +548,8 @@ export function registerSearchCommand(program: Command): void {
           if (info.status === 'progress' && info.file === 'onnx/model.onnx' && !downloadStarted) {
             downloadStarted = true;
             console.error(`Downloading model ${DEFAULT_MODEL_ID} (~465 MB)...`);
+            console.error(`  Cache dir: ~/.cache/huggingface/`);
+            console.error(`  If download is slow, set HTTPS_PROXY or configure API mode: ~/.maestro/api-embedding.json`);
           }
           if (info.status === 'progress' && info.file === 'onnx/model.onnx' && typeof info.progress === 'number') {
             const pct = Math.round(info.progress);

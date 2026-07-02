@@ -442,6 +442,30 @@ export function getModelId(): string {
   return apiConf ? apiConf.model : DEFAULT_LOCAL_MODEL;
 }
 export const DEFAULT_MODEL_ID = DEFAULT_LOCAL_MODEL;
+
+/**
+ * Check if the local ONNX model is already downloaded in the HuggingFace cache.
+ * Returns true for API mode (no local model needed).
+ */
+export function isModelCached(): boolean {
+  if (isApiMode()) return true;
+
+  const cacheKey = DEFAULT_LOCAL_MODEL.replace('/', '--');
+  const hfHome = process.env.HF_HOME || join(homedir(), '.cache', 'huggingface');
+
+  for (const base of [hfHome, join(hfHome, 'hub')]) {
+    const snapshotsDir = join(base, `models--${cacheKey}`, 'snapshots');
+    if (!existsSync(snapshotsDir)) continue;
+    try {
+      const snapshots = readdirSync(snapshotsDir);
+      for (const snap of snapshots) {
+        if (existsSync(join(snapshotsDir, snap, 'onnx', 'model.onnx'))) return true;
+      }
+    } catch { /* ignore */ }
+  }
+  return false;
+}
+
 const CACHE_FILE = 'embedding-index.json';
 
 let _pipeline: any = null;
