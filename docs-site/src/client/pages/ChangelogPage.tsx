@@ -17,6 +17,16 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.47',
+    date: '2026-07',
+    changes: [
+      { type: 'fix', text_en: 'Eliminate applyProxyEnv global process.env pollution in explore agent', text_zh: '消除 explore 代理 applyProxyEnv 的 process.env 全局污染' },
+      { type: 'fix', text_en: 'Skip uncached embedding model download during update', text_zh: 'update 时跳过未缓存的 embedding 模型下载' },
+      { type: 'fix', text_en: 'Fix orchestrator nested transactions and cross-file foreign key constraint causing index failure', text_zh: '修复 orchestrator 嵌套事务和跨文件外键约束导致索引失败' },
+      { type: 'chore', text_en: 'Raise all command file gate constraints to 95%+', text_zh: '提升全部命令文件门禁约束至 95%+' },
+    ],
+  },
+  {
     version: '0.5.46',
     date: '2026-07',
     changes: [
