@@ -479,3 +479,16 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.46',
+  title: 'MOA 多模型聚合引擎 + Ralph dual-dispatch 编排',
+  highlights: [
+    '新增 MOA (Mixture of Agents) 核心循环：per-turn 模式 + reference 磁盘缓存 + 成本跟踪',
+    'Ralph-v2 dual dispatch：executor 支持多 agent 编排 + CLI delegate 三模式',
+    '集成 WikiIndexer BM25 搜索到 keyword-spec-injector',
+    '修复知识图谱代码搜索多词查询 + 泛化搜索 OR 降级',
+    '修复 odyssey 举一反三阶段被跳过 + ralph agent 异步 mailbox 空转',
+  ],
+  actions: [],
+});
