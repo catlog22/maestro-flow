@@ -86,7 +86,7 @@ export async function extractSvelte(
             }
           }
         } catch (err) {
-          if (process.env.DEBUG) console.warn('[MaestroGraph] Svelte script parse error:', err);
+          if (process.env.MAESTRO_DEBUG === '1') console.warn('[MaestroGraph] Svelte script parse error:', err);
         }
       }
     }

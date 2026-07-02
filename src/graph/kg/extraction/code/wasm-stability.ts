@@ -30,7 +30,7 @@ export function applyWasmRuntimeFlags(): void {
   if (nodeVersion >= 22) {
     // 在已运行的进程中, V8 flag 无法动态设置
     // 记录警告, 建议用 node 启动参数设置 --liftoff-only
-    if (process.env.DEBUG && !process.execArgv.includes('--liftoff-only')) {
+    if (process.env.MAESTRO_DEBUG === '1' && !process.execArgv.includes('--liftoff-only')) {
       console.warn(
         '[MaestroGraph] Node ' + nodeVersion + '+ detected. ' +
         'For WASM stability, run: node --liftoff-only bin/maestro.js kg index'

@@ -107,7 +107,7 @@ export async function evaluateUnifiedInjection(
 
     return { inject: true, content: formatMaestroContext(context) };
   } catch (err) {
-    if (process.env.DEBUG) {
+    if (process.env.MAESTRO_DEBUG === '1') {
       console.warn('[MaestroGraph] Unified injection error:', err);
     }
     return { inject: false, reason: `error: ${err instanceof Error ? err.message : String(err)}` };

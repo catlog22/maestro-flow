@@ -113,7 +113,7 @@ export async function syncKnowledgeGraph(
             try {
               mg.getQueryBuilder().insertNodes(result.nodes);
               mg.getQueryBuilder().upsertFile(result.fileRecord);
-              if (process.env.DEBUG) {
+              if (process.env.MAESTRO_DEBUG === '1') {
                 process.stderr.write(`[MaestroGraph] Partial write for ${result.fileRecord.path}: edges skipped (${err instanceof Error ? err.message : String(err)})\n`);
               }
             } catch (innerErr) {
@@ -164,7 +164,7 @@ export async function syncKnowledgeGraph(
         }
       });
     } catch (err) {
-      if (process.env.DEBUG) {
+      if (process.env.MAESTRO_DEBUG === '1') {
         process.stderr.write(`[MaestroGraph] Credibility sync skipped: ${err instanceof Error ? err.message : String(err)}\n`);
       }
     }

@@ -605,20 +605,34 @@ export class KgQueryBuilder {
   }
 
   searchKnowledgeFTS(query: string, opts: { limit?: number; sourceTypes?: SourceType[] }): Array<UnifiedNode & { _bm25Score?: number }> {
-    // CJK 短查询降级 (D7.1: trigram 最小单元 3 字符)
     const isCjkShort = /^[㐀-䶿一-鿿぀-ヿ가-힯]{1,2}$/.test(query.trim());
     if (isCjkShort) {
       return this.searchKnowledgeLike(query, opts);
     }
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return [];
+
+    const results = this.runKnowledgeFtsQuery(sanitized, opts);
+    if (results.length > 0) return results;
+
+    const tokens = sanitized.match(/"[^"]+"/g);
+    if (tokens && tokens.length > 1) {
+      const orQuery = tokens.join(' OR ');
+      const orResults = this.runKnowledgeFtsQuery(orQuery, opts);
+      if (orResults.length > 0) return orResults;
+    }
+
+    return this.searchKnowledgeLike(query, opts);
+  }
+
+  private runKnowledgeFtsQuery(matchExpr: string, opts: { limit?: number; sourceTypes?: SourceType[] }): Array<UnifiedNode & { _bm25Score?: number }> {
     try {
       let sql = `
         SELECT n.*, bm25(knowledge_fts, 0, 20, 10, 1, 15, 10) AS score
         FROM knowledge_fts JOIN nodes n ON knowledge_fts.id = n.id
         WHERE knowledge_fts MATCH ? AND n.source_type != 'codegraph'
       `;
-      const params: (string | number | null)[] = [sanitized];
+      const params: (string | number | null)[] = [matchExpr];
       if (opts.sourceTypes && opts.sourceTypes.length > 0) {
         sql += ` AND n.source_type IN (${opts.sourceTypes.map(() => '?').join(',')})`;
         params.push(...opts.sourceTypes);
@@ -633,8 +647,37 @@ export class KgQueryBuilder {
         return node;
       });
     } catch (err) {
+      if (this.tryRebuildKnowledgeFts()) {
+        try {
+          return this.runKnowledgeFtsQuery(matchExpr, opts);
+        } catch { /* rebuild didn't help */ }
+      }
       if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge FTS5 failed, LIKE fallback:', err);
-      return this.searchKnowledgeLike(query, opts);
+      return [];
+    }
+  }
+
+  private knowledgeFtsRebuilt = false;
+  private tryRebuildKnowledgeFts(): boolean {
+    if (this.knowledgeFtsRebuilt) return false;
+    this.knowledgeFtsRebuilt = true;
+    try {
+      this.db.exec(`
+        DROP TABLE IF EXISTS knowledge_fts;
+        CREATE VIRTUAL TABLE knowledge_fts USING fts5(
+          id, name, definition, body, aliases, keywords,
+          tokenize = 'trigram',
+          content = 'nodes', content_rowid = 'rowid'
+        );
+        INSERT INTO knowledge_fts(rowid, id, name, definition, body, aliases, keywords)
+        SELECT rowid, id, name, definition, body, aliases, keywords
+        FROM nodes WHERE source_type != 'codegraph';
+      `);
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge_fts recreated from nodes table');
+      return true;
+    } catch (err) {
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge_fts rebuild failed:', err);
+      return false;
     }
   }
 
@@ -683,9 +726,28 @@ export class KgQueryBuilder {
   }
 
   private searchKnowledgeLike(query: string, opts: { limit?: number; sourceTypes?: SourceType[] }): UnifiedNode[] {
-    const escaped = escapeLikePattern(query);
-    let sql = `SELECT * FROM nodes WHERE source_type != 'codegraph' AND (name LIKE ? ESCAPE '\\' OR definition LIKE ? ESCAPE '\\' OR aliases LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\' OR body LIKE ? ESCAPE '\\')`;
-    const params: (string | number | null)[] = [`%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`];
+    const words = query.split(/\s+/).filter(w => w.length > 0);
+    const FIELDS = ['name', 'definition', 'aliases', 'keywords', 'body'] as const;
+
+    let whereClause: string;
+    const params: (string | number | null)[] = [];
+
+    if (words.length <= 1) {
+      const escaped = escapeLikePattern(query);
+      const fieldConds = FIELDS.map(f => `${f} LIKE ? ESCAPE '\\'`).join(' OR ');
+      whereClause = `(${fieldConds})`;
+      params.push(...FIELDS.map(() => `%${escaped}%`));
+    } else {
+      const wordClauses = words.map(w => {
+        const escaped = escapeLikePattern(w);
+        const fieldConds = FIELDS.map(f => `${f} LIKE ? ESCAPE '\\'`).join(' OR ');
+        params.push(...FIELDS.map(() => `%${escaped}%`));
+        return `(${fieldConds})`;
+      });
+      whereClause = wordClauses.join(' AND ');
+    }
+
+    let sql = `SELECT * FROM nodes WHERE source_type != 'codegraph' AND ${whereClause}`;
     if (opts.sourceTypes && opts.sourceTypes.length > 0) {
       sql += ` AND source_type IN (${opts.sourceTypes.map(() => '?').join(',')})`;
       params.push(...opts.sourceTypes);

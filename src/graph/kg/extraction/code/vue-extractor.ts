@@ -102,7 +102,7 @@ export async function extractVueSFC(
             }
           }
         } catch (err) {
-          if (process.env.DEBUG) console.warn('[MaestroGraph] Vue script parse error:', err);
+          if (process.env.MAESTRO_DEBUG === '1') console.warn('[MaestroGraph] Vue script parse error:', err);
         }
       }
     } else if (block.type === 'template') {

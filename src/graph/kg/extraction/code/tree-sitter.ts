@@ -206,7 +206,7 @@ export class TreeSitterEngine {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       this._unavailableGrammars.set(wasmFile, msg);
-      if (process.env.DEBUG) {
+      if (process.env.MAESTRO_DEBUG === '1') {
         console.warn(`[MaestroGraph] Failed to load grammar ${wasmFile}: ${msg}`);
       }
       return null;
@@ -242,7 +242,7 @@ export class TreeSitterEngine {
       return tree;
     } catch (err) {
       parser.delete();
-      if (process.env.DEBUG) {
+      if (process.env.MAESTRO_DEBUG === '1') {
         console.warn(`[MaestroGraph] Parse error (${language}):`, err);
       }
       return null;
