@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.46',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'MOA (Mixture of Agents) engine — core loop, per-turn mode, reference disk cache, cost tracking', text_zh: 'MOA 多模型聚合引擎——核心循环、per-turn 模式、reference 磁盘缓存、成本跟踪' },
+      { type: 'feat', text_en: 'Ralph-v2 dual dispatch — executor supports multi-agent orchestration + CLI delegate 3 modes', text_zh: 'Ralph-v2 dual dispatch——executor 支持多 agent 编排 + CLI delegate 三模式' },
+      { type: 'feat', text_en: 'Integrate WikiIndexer BM25 search into keyword-spec-injector', text_zh: '集成 WikiIndexer BM25 搜索到 keyword-spec-injector' },
+      { type: 'fix', text_en: 'Fix KG code search multi-word query returning 0 results + generalized search OR fallback', text_zh: '修复知识图谱代码搜索多词查询返回 0 结果 + 泛化搜索 OR 降级' },
+      { type: 'fix', text_en: 'Fix odyssey A_GENERALIZE/A_DISCOVER/A_RECORD phases being skipped', text_zh: '修复 odyssey 举一反三阶段被跳过的问题' },
+      { type: 'refactor', text_en: 'Refactor MOA into pipeline engine with dynamic step orchestration', text_zh: '重构 MOA 为 pipeline 引擎，支持动态 step 编排' },
+    ],
+  },
+  {
     version: '0.5.45',
     date: '2026-07',
     changes: [
