@@ -524,19 +524,34 @@ export class KgQueryBuilder {
   // ── Search — FTS5 统一搜索 (D1.5: 输入消毒) ───────────────────────
 
   searchCodeFTS(query: string, opts: { limit?: number; kinds?: string[]; languages?: string[]; pathFilters?: string[] }): Array<UnifiedNode & { _bm25Score?: number }> {
-    // CJK 查询降级到 LIKE — unicode61 tokenizer 不支持 CJK 分词
     if (hasCjkChars(query)) {
       return this.searchNodesLike(query, opts);
     }
     const sanitized = sanitizeFtsQuery(query);
     if (!sanitized) return [];
+
+    const results = this.runCodeFtsQuery(sanitized, opts);
+    if (results.length > 0) return results;
+
+    // Multi-word AND returned 0 — retry with OR semantics
+    const tokens = sanitized.match(/"[^"]+"/g);
+    if (tokens && tokens.length > 1) {
+      const orQuery = tokens.join(' OR ');
+      const orResults = this.runCodeFtsQuery(orQuery, opts);
+      if (orResults.length > 0) return orResults;
+    }
+
+    return this.searchNodesLike(query, opts);
+  }
+
+  private runCodeFtsQuery(matchExpr: string, opts: { limit?: number; kinds?: string[]; languages?: string[] }): Array<UnifiedNode & { _bm25Score?: number }> {
     try {
       let sql = `
         SELECT n.*, bm25(code_fts, 0, 20, 5, 1, 2, 10) AS score
         FROM code_fts JOIN nodes n ON code_fts.id = n.id
         WHERE code_fts MATCH ? AND n.source_type = 'codegraph'
       `;
-      const params: (string | number | null)[] = [sanitized];
+      const params: (string | number | null)[] = [matchExpr];
       if (opts.kinds && opts.kinds.length > 0) {
         sql += ` AND n.kind IN (${opts.kinds.map(() => '?').join(',')})`;
         params.push(...opts.kinds);
@@ -549,16 +564,43 @@ export class KgQueryBuilder {
       params.push(opts.limit ?? 20);
 
       const rows = this.db.prepare(sql).all(...params) as unknown as Array<NodeRow & { score?: number }>;
-      const results = rows.map(r => {
+      return rows.map(r => {
         const node = rowToNode(r) as UnifiedNode & { _bm25Score?: number };
         if (typeof r.score === 'number') node._bm25Score = -r.score;
         return node;
       });
-      if (results.length > 0) return results;
-      return this.searchNodesLike(query, opts);
     } catch (err) {
-      if (process.env.DEBUG) console.warn('[KG] code FTS5 failed, LIKE fallback:', err);
-      return this.searchNodesLike(query, opts);
+      if (this.tryRebuildCodeFts()) {
+        try {
+          return this.runCodeFtsQuery(matchExpr, opts);
+        } catch { /* rebuild didn't help — fall through */ }
+      }
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] code FTS5 failed, LIKE fallback:', err);
+      return [];
+    }
+  }
+
+  private codeFtsRebuilt = false;
+  private tryRebuildCodeFts(): boolean {
+    if (this.codeFtsRebuilt) return false;
+    this.codeFtsRebuilt = true;
+    try {
+      this.db.exec(`
+        DROP TABLE IF EXISTS code_fts;
+        CREATE VIRTUAL TABLE code_fts USING fts5(
+          id, name, qualified_name, docstring, signature, keywords,
+          tokenize = 'unicode61 remove_diacritics 2',
+          content = 'nodes', content_rowid = 'rowid'
+        );
+        INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
+        SELECT rowid, id, name, qualified_name, docstring, signature, keywords
+        FROM nodes WHERE source_type = 'codegraph';
+      `);
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] code_fts recreated from nodes table');
+      return true;
+    } catch (err) {
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] code_fts rebuild failed:', err);
+      return false;
     }
   }
 
@@ -591,7 +633,7 @@ export class KgQueryBuilder {
         return node;
       });
     } catch (err) {
-      if (process.env.DEBUG) console.warn('[KG] knowledge FTS5 failed, LIKE fallback:', err);
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge FTS5 failed, LIKE fallback:', err);
       return this.searchKnowledgeLike(query, opts);
     }
   }
@@ -602,11 +644,30 @@ export class KgQueryBuilder {
     return [...codeResults, ...knowledgeResults];
   }
 
-  // LIKE fallback — 当 FTS5 无结果时
   private searchNodesLike(query: string, opts: { limit?: number; kinds?: string[]; languages?: string[] }): UnifiedNode[] {
-    const escaped = escapeLikePattern(query);
-    let sql = `SELECT * FROM nodes WHERE source_type = 'codegraph' AND (name LIKE ? ESCAPE '\\' OR qualified_name LIKE ? ESCAPE '\\' OR docstring LIKE ? ESCAPE '\\' OR signature LIKE ? ESCAPE '\\')`;
-    const params: (string | number | null)[] = [`%${escaped}%`, `%${escaped}%`, `%${escaped}%`, `%${escaped}%`];
+    const words = query.split(/\s+/).filter(w => w.length > 0);
+    const FIELDS = ['name', 'qualified_name', 'docstring', 'signature'] as const;
+
+    let whereClause: string;
+    const params: (string | number | null)[] = [];
+
+    if (words.length <= 1) {
+      const escaped = escapeLikePattern(query);
+      const fieldConds = FIELDS.map(f => `${f} LIKE ? ESCAPE '\\'`).join(' OR ');
+      whereClause = `(${fieldConds})`;
+      params.push(...FIELDS.map(() => `%${escaped}%`));
+    } else {
+      // Each word must match at least one field (AND across words, OR across fields)
+      const wordClauses = words.map(w => {
+        const escaped = escapeLikePattern(w);
+        const fieldConds = FIELDS.map(f => `${f} LIKE ? ESCAPE '\\'`).join(' OR ');
+        params.push(...FIELDS.map(() => `%${escaped}%`));
+        return `(${fieldConds})`;
+      });
+      whereClause = wordClauses.join(' AND ');
+    }
+
+    let sql = `SELECT * FROM nodes WHERE source_type = 'codegraph' AND ${whereClause}`;
     if (opts.kinds && opts.kinds.length > 0) {
       sql += ` AND kind IN (${opts.kinds.map(() => '?').join(',')})`;
       params.push(...opts.kinds);
