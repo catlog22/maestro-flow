@@ -33,6 +33,8 @@ $ARGUMENTS — target path/module and optional flags.
 - `--save-wiki`: Create wiki note entries per dimension group
 
 **Output**: `.workflow/.csv-wave/{session-id}/` + `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/`, `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`, and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
 
 <invariants>

@@ -44,6 +44,8 @@ $manage-learn "\"Zod v4 breaks z.object().strict() API\" --category gotcha --tag
 **Storage**:
 - `.workflow/specs/learnings.md` — append-only store (shared with `quality-retrospective`)
 - Index auto-maintained by WikiIndexer (no manual index file needed)
+
+**Output boundary**: ALL file writes MUST target `.workflow/specs/learnings.md` only. NEVER modify source code or files outside this path. Bootstrap (creating `.workflow/specs/` directory and `learnings.md`) is the only exception.
 </context>
 
 <invariants>

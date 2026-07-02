@@ -48,11 +48,22 @@ $ARGUMENTS — mode + optional flags.
 
 Auto-detection: if `--type` not provided, infer from `--task` description keywords.
 
+**Output boundary**: ALL file writes MUST target `.workflow/.scratchpad/` (companion docs + `.companion-active` pointer) only. Promotion writes (spec/knowhow) are delegated to `spec-add` / `manage-knowhow-capture` skills. NEVER modify source code, `.workflow/state.json`, or files outside `.workflow/.scratchpad/`.
+
 **Companion document:**
 - Path: `.workflow/.scratchpad/companion-{YYYYMMDD-HHmmss}.md`
 - Active doc tracking: `.workflow/.scratchpad/.companion-active` (stores path of current companion doc)
 - Format: YAML frontmatter (rich metadata) + typed sections + timestamped entries
 </context>
+
+<invariants>
+1. **No session creation** — companion NEVER creates workflow sessions, NEVER writes to state.json
+2. **Side-car only** — companion MUST NOT modify source code or execute implementation tasks; it is strictly a knowledge loading + recording utility
+3. **One active doc** — only one `.companion-active` pointer SHALL exist at a time; creating a new companion doc MUST clear any stale pointer
+4. **Append-only entries** — note mode MUST append entries; NEVER overwrite or reorder existing entries
+5. **Promotion via delegation** — spec/knowhow promotion MUST route through `spec-add` / `manage-knowhow-capture` skills; companion NEVER writes directly to `.workflow/specs/` or `.workflow/knowhow/`
+6. **Type-template integrity** — context template sections MUST match the resolved `task_type`; NEVER mix templates from different types
+</invariants>
 
 <state_machine>
 

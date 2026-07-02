@@ -36,6 +36,8 @@ $ARGUMENTS 匹配关键词 → 路由到对应模式：
 | "cli", "终端", "terminal" | 7 | CLI Reference |
 | 其他自由文本 | 1 | Fuzzy Search |
 
+**Output boundary**: This skill is read-only — it MUST NOT write any files. All output is displayed directly to the user via text response.
+
 ## Data Source
 
 读取同目录下的 `catalog.json` 作为唯一数据源：

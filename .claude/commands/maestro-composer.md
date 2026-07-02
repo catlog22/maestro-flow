@@ -39,7 +39,18 @@ $ARGUMENTS — natural language description, or flags.
 1. **Architecture specs**: Run `maestro load --type spec --category arch` to load architecture constraints. Use as context for node resolution — ensures workflow design respects documented patterns.
 2. **Coding specs**: Run `maestro load --type spec --category coding` to load coding conventions. Informs executor argument defaults and context injection.
 3. Optional — proceed without if unavailable.
+
+**Output boundary**: ALL file writes MUST target `~/.maestro/templates/workflows/` (template JSON + index.json) and `.workflow/templates/design-drafts/` (intermediate drafts) only. NEVER modify source code or `.claude/commands/` files.
 </context>
+
+<invariants>
+1. **Max 20 nodes** — workflow templates MUST NOT exceed 20 nodes; larger workflows MUST be split into sub-workflows
+2. **Acyclic DAG** — generated template MUST be a directed acyclic graph; cycles MUST be detected and rejected before persistence
+3. **No orphan nodes** — every node MUST be reachable from at least one edge; unreachable nodes MUST be flagged
+4. **Confirmation before write** — template JSON MUST be shown to user via AskUserQuestion before writing to `~/.maestro/templates/workflows/`; cancellation saves draft only
+5. **Draft preservation** — abandoning at any confirmation gate MUST save current progress to design-drafts directory; NEVER discard user's partial work
+6. **Deferred reading only** — node-catalog and template-schema MUST be read at their designated phases (P2, P5), NEVER loaded eagerly at startup
+</invariants>
 
 <state_machine>
 

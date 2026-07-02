@@ -44,8 +44,35 @@ Scope-to-directory mapping, category-to-file mapping, and entry format defined i
 ```
 </context>
 
+<invariants>
+1. **Idempotent append** — duplicate entry ID MUST be rejected (E003-level check on title + category match before write)
+2. **Category validation** — category MUST be one of: coding, arch, quality, debug, test, review, learning, ui. Invalid category → E003
+3. **Scope isolation** — writes target ONLY the scope-resolved directory; project scope NEVER writes to global (~/.maestro/specs/), global scope NEVER writes to project (.workflow/specs/)
+4. **Confirmation gate** — MUST AskUserQuestion before appending entry (unless -y flag); NEVER write without user confirmation in interactive mode
+5. **Entry format invariance** — all entries MUST use `<spec-entry>` closed-tag format with id, keywords, and category attributes
+6. **Output boundary** — ALL file writes MUST target the scope-resolved specs directory (.workflow/specs/, ~/.maestro/specs/, .workflow/collab/specs/, or .workflow/collab/{uid}/specs/) and optionally .workflow/knowhow/ for --ref mode. NEVER modify source code or files outside these paths
+</invariants>
+
 <execution>
 Follow '~/.maestro/workflows/specs-add.md' completely.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Validate**
+- REQUIRED: Category and content both parsed from arguments.
+- REQUIRED: Category is a valid value (coding, arch, quality, debug, test, review, learning, ui).
+- REQUIRED: Scope resolved to a valid directory path.
+- BLOCKED if: E001 (missing args), E003 (invalid category), E004 (invalid scope), E005 (personal scope without uid).
+
+**GATE 2: Validate → Format**
+- REQUIRED: Specs directory exists for the resolved scope.
+- REQUIRED: No duplicate entry with identical title + category already present in target file.
+- BLOCKED if: E002 (specs not initialized).
+
+**GATE 3: Format → Write**
+- REQUIRED: `<spec-entry>` block formatted with id, keywords, category attributes.
+- REQUIRED: User confirmation via AskUserQuestion (unless -y flag).
+- BLOCKED if: user declines confirmation — abort without writing.
 
 **Confirmation gate**: Unless -y flag is passed, after formatting the `<spec-entry>` block but before appending to the target file, AskUserQuestion showing the formatted entry, target file path, and scope. Proceed only on user confirm.
 </execution>

@@ -61,6 +61,8 @@ $maestro-ui-codify "src/styles" --output-dir .workflow/packages --overwrite -y
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final)
 **Package Output**: `{output-dir}/{package-name}/` with design-tokens.json, layout-templates.json, animation-tokens.json, preview.html, preview.css, knowhow-manifest.json
+
+**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/` (wave state), `{output-dir}/{package-name}/` (reference package), `.workflow/knowhow/` (knowledge assets), and `.workflow/specs/` (spec entries). NEVER modify source code files in the scanned directory.
 </context>
 
 <csv_schema>

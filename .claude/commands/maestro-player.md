@@ -67,7 +67,18 @@ $ARGUMENTS — template slug/path, or flags.
   "last_checkpoint": null
 }
 ```
+
+**Output boundary**: ALL file writes MUST target `.workflow/.maestro/player-*/` (session status.json + step outputs) only. Template files (`~/.maestro/templates/workflows/`) are read-only. NEVER modify source code or `.claude/commands/` files.
 </context>
+
+<invariants>
+1. **Resume-safe** — status.json MUST be updated after every step change; an interrupted session MUST be resumable from the last checkpoint via `-c`
+2. **One step at a time** — execution loop MUST process steps sequentially in topological order; parallel steps share a batch index but NEVER run concurrently within the player
+3. **CLI nodes async** — cli-type nodes MUST use `Bash(run_in_background: true)` + STOP pattern; NEVER block the main thread on delegate execution
+4. **Templates read-only** — player MUST NOT modify template JSON files; runtime state belongs in status.json only
+5. **Failure requires user decision** — on step failure without explicit `on_fail`, player MUST prompt via AskUserQuestion (Retry/Skip/Abort); NEVER silently skip or auto-abort
+6. **Reference resolution at runtime** — `{N-xxx.field}` and `{prev_*}` references MUST be resolved at execution time from status.json step results, NEVER pre-resolved during init
+</invariants>
 
 <state_machine>
 

@@ -28,7 +28,18 @@ $ARGUMENTS — target path/module and optional flags.
 
 **Storage read**: target files + `coding-conventions.md` + `.workflow/specs/learnings.md` (dedup)
 **Storage write**: `.workflow/knowhow/KNW-decompose-{slug}-{date}.md` + append `.workflow/specs/learnings.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-decompose-{slug}-{date}.md` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Read-only analysis** — NEVER modify source code files under analysis; all writes go to `.workflow/` only
+2. **Evidence-anchored findings** — every pattern MUST include at least one `file:line` anchor from source; unanchored patterns SHALL NOT be persisted
+3. **Dedup before persist** — MUST cross-reference against existing `learnings.md` and `coding-conventions.md` before writing; duplicate entries SHALL NOT be appended
+4. **Parallel agent isolation** — each dimension agent operates independently; NEVER share state between agents during analysis
+5. **Confirmation gate** — unless `-y` is set, MUST present all findings and target files via AskUserQuestion before any writes
+6. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
+</invariants>
 
 <state_machine>
 
@@ -100,6 +111,7 @@ Flag contradictions (finding conflicts with documented convention). Merge duplic
 <error_codes>
 | Code | Condition | Recovery |
 |------|-----------|----------|
+| E001 | No target path/module provided | Prompt user for target |
 | E002 | No source files in target | Check target has .ts/.js files |
 | W001 | One+ dimension agent failed | Proceed with available dimensions |
 | W002 | .workflow/specs/learnings.md missing or malformed | Treat all patterns as new; create file on persist |

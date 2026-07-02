@@ -34,7 +34,18 @@ $ARGUMENTS — target and optional mode flag.
 **Pre-load** (optional): `Skill("spec-load")` for conventions + `maestro search "<target topic>"` for related entries.
 
 **Output**: `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Read-only analysis** — NEVER modify source code, wiki entries, or plan files under review; all writes go to `.workflow/` only
+2. **Agent independence** — in review mode, each of the 3 agents (Pragmatist/Purist/Strategist) MUST operate independently without shared state; NEVER pass one agent's findings to another
+3. **Evidence-backed verdicts** — every finding MUST include a `location` reference (file:line or section); ungrounded opinions SHALL NOT appear in the report
+4. **Mode contract** — MUST execute exactly the mode specified (review/challenge/consult); NEVER mix mode behaviors within a single execution
+5. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
+6. **Confirmation gate** — unless `-y` is set, MUST present findings and target files via AskUserQuestion before any writes
+</invariants>
 
 <state_machine>
 
@@ -104,8 +115,11 @@ Interactive loop:
 <error_codes>
 | Code | Condition | Recovery |
 |------|-----------|----------|
+| E001 | No target provided | Prompt user for target (path, wiki ID, HEAD, staged, or phase) |
 | E002 | Unknown --mode value | Use: review, challenge, or consult |
+| E003 | Target resolution failed — path not found, wiki ID invalid, or no staged changes | Check target exists |
 | W001 | One review agent failed | Proceed with available perspectives |
+| W002 | Specs/wiki pre-load unavailable | Proceed without convention context; note reduced coverage |
 </error_codes>
 
 <success_criteria>

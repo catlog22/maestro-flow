@@ -28,6 +28,7 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 
 **Output**: `.workflow/scratch/{slug}/` with plan.json, execution results, optional verification
 
+**Output boundary**: ALL metadata writes MUST target `.workflow/scratch/{slug}/`. Source code modifications are scoped to files identified in the plan. NEVER modify unrelated source files or `.workflow/state.json` structure beyond scratch task entries.
 </context>
 
 <invariants>
@@ -39,6 +40,22 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 </invariants>
 
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Context**
+- REQUIRED: Task description provided (non-empty).
+- BLOCKED if: empty description (E001).
+
+**GATE 2: Analysis → Plan**
+- REQUIRED: Quick analysis completed with related files identified.
+- REQUIRED: Existing patterns found (≥1 similar implementation).
+- BLOCKED if: scratch directory creation failed (E002).
+
+**GATE 3: Execute → Report**
+- REQUIRED: All plan tasks attempted and statuses recorded.
+- REQUIRED: `plan.json` updated with task outcomes.
+- BLOCKED if: plan.json missing or no task statuses.
 
 ### Step 1: Parse Arguments
 

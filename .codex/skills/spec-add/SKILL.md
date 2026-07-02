@@ -45,9 +45,37 @@ $ARGUMENTS — `<category> <title> <content>` where category selects the target 
 Extended types (`bug`, `pattern`, `decision`, `rule`, `validation`) are stored in the file of their closest core category but retain their specific category in the `<spec-entry>` tag.
 
 Category is determined by the first positional argument.
+
+**Output boundary**: ALL file writes MUST target `.workflow/specs/` only. NEVER modify source code or files outside this path.
 </context>
 
+<invariants>
+1. **Idempotent append** — duplicate entry ID MUST be rejected (E003-level check on title + category match before write)
+2. **Category validation** — category MUST be one of: coding, arch, quality, debug, test, review, learning, tools, bug, pattern, decision, rule, validation. Invalid category → E003
+3. **Confirmation gate** — MUST request_user_input before appending entry; NEVER write without user confirmation in interactive mode
+4. **Entry format invariance** — all entries MUST use `<spec-entry>` closed-tag format with id, keywords, and category attributes
+5. **Append-only** — MUST append to target file; NEVER overwrite or truncate existing spec content
+6. **Output boundary** — ALL file writes MUST target `.workflow/specs/` only. NEVER modify source code or files outside this path
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Validate**
+- REQUIRED: Category and content both parsed from arguments.
+- REQUIRED: Category is a valid value.
+- BLOCKED if: E001 (missing args), E003 (invalid category).
+
+**GATE 2: Validate → Format**
+- REQUIRED: `.workflow/specs/` directory exists.
+- REQUIRED: No duplicate entry with identical title + category already present in target file.
+- BLOCKED if: E002 (specs not initialized).
+
+**GATE 3: Format → Write**
+- REQUIRED: `<spec-entry>` block formatted with id, keywords, category attributes.
+- REQUIRED: User confirmation via request_user_input.
+- BLOCKED if: user declines confirmation — abort without writing.
 
 ### Step 1: Parse Input
 

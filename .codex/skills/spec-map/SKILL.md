@@ -53,6 +53,7 @@ $spec-map --continue "20260318-map-auth"
 
 **Output**: `.workflow/codebase/` (tech-stack.md, architecture.md, features.md, concerns.md)
 
+**Output boundary**: ALL file writes MUST target `.workflow/codebase/` (output docs) and `.workflow/.csv-wave/{sessionId}/` (session state). NEVER modify source code or files outside these paths.
 </context>
 
 <csv_schema>

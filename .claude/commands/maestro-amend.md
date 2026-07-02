@@ -40,7 +40,18 @@ Multiple combinable. No flags + no description → interactive (scan + AskUserQu
 **CLI targeting**: `"cli": "claude"` (default, patches .claude/commands/), `"codex"` (patches .codex/skills/), `"both"` (both paths)
 
 **Output**: `~/.maestro/overlays/amend-{slug}.json` + optional `~/.maestro/overlays/docs/amend-{slug}.md`
+
+**Output boundary**: ALL file writes MUST target `~/.maestro/overlays/` (overlay JSON + docs) only. NEVER modify `.claude/commands/*.md` directly — overlay installation is handled by `maestro overlay add`.
 </context>
+
+<invariants>
+1. **Non-invasive only** — amendments MUST use the overlay system (`~/.maestro/overlays/*.json`); direct edits to `.claude/commands/*.md` are NEVER permitted
+2. **Idempotent patches** — re-running the same amendment MUST produce identical overlay JSON; overlay markers prevent duplicate injection
+3. **Pristine source reads** — signal diagnosis MUST read from `$PKG_ROOT/.claude/commands/` (untouched originals), not installed copies
+4. **Code bugs excluded** — signals classified as code bugs MUST be routed to `/maestro-quick` or `/maestro-plan --gaps`, NEVER patched via overlay
+5. **User confirmation before install** — overlay JSON MUST be previewed and confirmed by the user before `maestro overlay add` runs (unless `-y`)
+6. **Section existence verified** — target section MUST be confirmed to exist in the pristine source before drafting a patch; missing sections trigger `new-section` mode
+</invariants>
 
 <state_machine>
 

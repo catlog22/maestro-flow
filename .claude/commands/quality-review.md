@@ -54,7 +54,18 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 - Role knowledge: `maestro search --category review` → select relevant → `maestro load --type knowhow --id`
 
 **Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
+
+**Output boundary**: ALL file writes MUST target `REVIEW_DIR` or `.workflow/state.json` only. NEVER modify source code, execution artifacts, or files outside these paths.
 </context>
+
+<invariants>
+1. **Review is read-only on source** — NEVER modify source code, test files, or execution artifacts. Review produces reports only.
+2. **Findings require evidence** — every finding MUST reference file:line and include a code snippet or concrete description. No vague or unanchored findings.
+3. **Verdict is data-driven** — NEVER change verdict severity to accommodate user preference without new evidence. Verdicts flow from findings, not negotiation.
+4. **Dimension independence** — each review dimension produces findings independently. One dimension's results MUST NOT suppress or override another's.
+5. **Prior review delta** — when a prior review.json exists for the same phase, findings MUST be compared. Do NOT re-report already-resolved findings as new.
+6. **Spec conflict integrity** — if code contradicts a spec entry, flag via `maestro spec conflict mark`. NEVER silently accept the contradiction or edit the spec inline.
+</invariants>
 
 <execution>
 Follow '~/.maestro/workflows/review.md' completely.

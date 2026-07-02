@@ -43,13 +43,41 @@ $ARGUMENTS — subcommand and optional flags.
 - `--format brief|full` — (digest) Output format
 - `--recent N` — (digest) Scope to N most recent entries
 - `--create-issues` — (digest) Create issues for identified knowledge gaps
+
+**Output boundary**: File writes MUST target `.workflow/wiki/`, `.workflow/knowhow/`, or `.workflow/issues/issues.jsonl` (when `--create-issues`) only. NEVER modify source code or files outside these paths. `--dry-run` overrides `--fix` — no writes when both are set.
 </context>
+
+<invariants>
+1. **Dry-run precedence** — `--dry-run` MUST override `--fix` when both are passed; preview only, no writes
+2. **Read-only by default** — without `--fix` or `--create-issues`, all subcommands MUST be read-only
+3. **Confirmation on fixes** — `--fix` MUST show preview of changes before applying; auto-apply only when explicitly set
+4. **Graph integrity** — `connect` MUST NOT create circular link chains; validate graph acyclicity for parent-child relationships
+5. **Threshold enforcement** — `--min-similarity` MUST be respected; NEVER suggest connections below the threshold
+6. **Subcommand isolation** — each subcommand routes to its own workflow file; NEVER cross-execute subcommand logic
+</invariants>
 
 <execution>
 **Subcommand routing:**
 - `health|search|cleanup|stats` → Follow `~/.maestro/workflows/wiki-manage.md` completely.
 - `connect` → Follow `~/.maestro/workflows/wiki-connect.md` completely (Stages 1-6).
 - `digest` → Follow `~/.maestro/workflows/wiki-digest.md` completely (Stages 1-8).
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Load** (Subcommand routing → Wiki data loading)
+- REQUIRED: Subcommand parsed and validated (health/search/cleanup/stats/connect/digest).
+- REQUIRED: `.workflow/` initialized (E001 if missing).
+- BLOCKED if E003 (invalid subcommand) or E001.
+
+**GATE 2: Load → Execute** (Wiki data → Subcommand execution)
+- REQUIRED: Wiki data loaded via `maestro wiki` CLI.
+- REQUIRED: At least one wiki entry exists (E002 if none).
+- BLOCKED if wiki data loading fails entirely.
+
+**GATE 3: Execute → Write** (For mutating operations: cleanup --fix, connect --fix, digest --create-issues)
+- REQUIRED: Preview of changes shown to user.
+- REQUIRED: `--dry-run` NOT set (overrides `--fix`).
+- BLOCKED if preview generation fails or user declines.
 </execution>
 
 <error_codes>

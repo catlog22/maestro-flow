@@ -31,7 +31,19 @@ $ARGUMENTS — question text and optional flags.
 - `.workflow/specs/learnings.md` — appended `<spec-entry>` blocks
 
 **Storage read**: source files in scope + `maestro search` + `.workflow/specs/learnings.md` + `debug-notes.md` + `codebase/architecture.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-investigate-{slug}/` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Read-only investigation** — NEVER modify source code files; all writes go to `.workflow/` only
+2. **Evidence append-only** — `evidence.ndjson` MUST be appended line-by-line; NEVER overwrite or truncate existing evidence entries
+3. **Scope lock** — once `--scope` is resolved in S_FRAME, NEVER expand search scope without explicit user confirmation via S_ESCALATE
+4. **Hypothesis cap** — MUST NOT generate more than `--max-hypotheses` (default 3) before triggering escalation; NEVER silently exceed the cap
+5. **Structured evidence format** — every evidence entry MUST include `{ts, type, source, relevance, content, note}`; incomplete entries SHALL NOT be appended
+6. **3-strike escalation** — after all hypotheses fail, MUST escalate to user via AskUserQuestion; NEVER silently conclude as INCONCLUSIVE without user interaction
+7. **Confirmation gate** — unless `-y` is set, MUST present report.md path and spec-entries via AskUserQuestion before final writes
+</invariants>
 
 <state_machine>
 
@@ -134,7 +146,9 @@ Append to .workflow/specs/learnings.md: confirmed → roles="implement", disprov
 <error_codes>
 | Code | Condition | Recovery |
 |------|-----------|----------|
+| E001 | No question text provided | Prompt user for investigation question |
 | E002 | --scope path not found | Check path |
+| W001 | Prior knowledge search returned no results | Proceed without prior context; note cold-start |
 | W002 | Very few evidence matches (<3) | Broaden search terms or expand scope |
 | W003 | All hypotheses inconclusive | Investigation marked INCONCLUSIVE |
 </error_codes>

@@ -39,6 +39,8 @@ $ARGUMENTS
 **Session**: `.workflow/scratch/{YYYYMMDD}-review-odyssey-{slug}/`
 **Output**: `session.json` | `evidence.ndjson` | `explore.json` | `understanding.md` (sections 1-8)
 
+**Output boundary**: ALL session artifacts MUST target the session directory (`.workflow/scratch/{YYYYMMDD}-review-odyssey-{slug}/`) or `.workflow/state.json` only. Source code modifications during S_FIX are in-scope but MUST be committed per action. NEVER write session artifacts outside these paths.
+
 **session.json — review-specific fields:**
 ```json
 { "target": "", "dimensions": [], "review_result": { "remaining_actionable": 0 },
@@ -110,6 +112,52 @@ id,title,description,task_type,dimension,deps,wave,status,findings,evidence,erro
 | 2 | Review (correctness, security, performance, architecture) | 4 agents |
 | 3 | Generalization (syntax-grep, semantic-scan, structural-match, historical-grep) | 4 agents |
 </csv_schema>
+
+<execution>
+Follow base execution discipline completely. Actions defined in state_machine below.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: INTAKE → ARCHAEOLOGY**
+- REQUIRED: Target resolved to file list, SESSION_DIR created, session.json initialized.
+- REQUIRED: phase_goals[] derived from flags, understanding.md §1 written.
+- BLOCKED if: no target specified (E001) or target path not found (E002).
+
+**GATE 2: ARCHAEOLOGY → EXPLORE**
+- REQUIRED: Git history analysis completed (timeline + blame agents), evidence phase=archaeology logged.
+- REQUIRED: understanding.md §2 updated.
+- BLOCKED if: both archaeology agents failed AND delegate failed.
+
+**GATE 3: EXPLORE → REVIEW**
+- REQUIRED: explore.json written, evidence phase=explore logged, G2 marked done.
+- BLOCKED if: exploration started but not completed.
+
+**GATE 4: REVIEW → FIX**
+- REQUIRED: All dimension agents completed, findings merged with severity classification.
+- REQUIRED: review_result written to session.json, understanding.md §4 with severity matrix, G1 marked done.
+- BLOCKED if: zero dimensions reviewed (W002 partial is allowed, zero is not).
+
+**GATE 5: FIX → CONFIRM**
+- REQUIRED: Current severity tier fully addressed — all findings in tier fixed or individually classified.
+- REQUIRED: Per-fix evidence phase=fix logged, auto-commit per tier.
+- BLOCKED if: tier incomplete — no partial tier advancement.
+
+**GATE 6: CONFIRM → GENERALIZE**
+- REQUIRED: Tests pass, remaining_actionable == 0, new findings == 0.
+- REQUIRED: confirmation written, understanding.md §5 updated, G3 marked done.
+- BLOCKED if: needs_rework → route back to S_FIX.
+
+**GATE 7: GENERALIZE → DISCOVER**
+- REQUIRED: ALL 3 layers (syntax/semantic/structural) attempted with evidence logged.
+- REQUIRED: generalization_stats written with by_layer entries for all 3 layers, G4 marked done.
+- BLOCKED if: any layer not attempted (thoroughness floor violation).
+
+**GATE 8: DISCOVER → RECORD**
+- REQUIRED: All hits triaged with per-item classification and reason.
+- REQUIRED: remaining_actionable == 0 OR loops >= max_loops with per-item reasons logged, G5 marked done.
+- BLOCKED if: unclassified hits remain.
+
+</execution>
 
 <state_machine>
 

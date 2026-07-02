@@ -16,9 +16,37 @@ $spec-setup
 
 <context>
 No arguments. Scans the codebase and generates spec files in `.workflow/specs/`.
+
+**Output boundary**: ALL file writes MUST target `.workflow/specs/` (spec files) and `.workflow/knowhow/` (recipe knowhow) only. NEVER modify source code, `.workflow/state.json`, or files outside these paths.
 </context>
 
+<invariants>
+1. **Non-destructive** — NEVER overwrite existing spec files; if a file already exists, skip it and report as already-initialized
+2. **Idempotent** — safe to re-run on an initialized project; re-running MUST NOT duplicate entries or corrupt existing content
+3. **Core files mandatory** — coding-conventions.md, architecture-constraints.md, and learnings.md MUST always be created (unless they already exist)
+4. **Signal-driven optionals** — optional spec files (quality-rules.md, test-conventions.md) MUST only be created when corresponding framework/tool signals are detected in the codebase; NEVER create optional files without evidence
+5. **Output boundary** — ALL file writes MUST target `.workflow/specs/` and `.workflow/knowhow/` only. NEVER modify source code or files outside these paths
+6. **Confirmation gate** — MUST present all files to be created before writing; NEVER write without user awareness
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Precondition → Scan**
+- REQUIRED: `.workflow/` directory exists.
+- REQUIRED: Project contains source files to scan.
+- BLOCKED if: E001 (`.workflow/` not initialized), E002 (no source files).
+
+**GATE 2: Scan → Generate**
+- REQUIRED: Codebase scan completed — framework, language, and tooling signals collected.
+- REQUIRED: Core spec file list determined (always 3: coding-conventions, architecture-constraints, learnings).
+- REQUIRED: Optional spec files determined by detected signals only.
+
+**GATE 3: Generate → Report**
+- REQUIRED: All planned files written to `.workflow/specs/`.
+- REQUIRED: Existing files skipped (not overwritten).
+- BLOCKED if: filesystem write errors.
 
 ### Step 1: Validate Preconditions
 

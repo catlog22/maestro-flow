@@ -72,6 +72,8 @@ When `--yes` or `-y`: Auto-confirm perspective selection, skip interactive valid
 
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + issues appended to `.workflow/issues/issues.jsonl`
+
+**Output boundary**: ALL file writes MUST target `.workflow/issues/issues.jsonl` or `.workflow/issues/discoveries/{SESSION_ID}/` only. NEVER modify source code or files outside these paths.
 </context>
 
 <csv_schema>

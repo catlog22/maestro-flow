@@ -21,7 +21,18 @@ $ARGUMENTS — optional flags.
 - `--max N` — Max suggestions (default: 20)
 
 **Output**: `.workflow/knowhow/KNW-wiki-connections-{date}.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/` (connection report) and `.workflow/specs/learnings.md` (graph insights). Wiki entry `related` field updates via `maestro wiki update` only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Read-only analysis** — wiki entries are analyzed but NEVER modified during Stages 1-4; only Stage 5 (--fix) updates entries via CLI
+2. **Fix requires confirmation** — MUST request_user_input before applying link changes; NEVER auto-apply without user consent (unless both --fix and -y)
+3. **Bidirectional links** — when adding A→B, MUST also add B→A; unidirectional links are the problem this command solves
+4. **Scoring threshold** — candidates below --min-similarity MUST be filtered out; NEVER present sub-threshold suggestions
+5. **Append-only insights** — graph insights appended to specs/learnings.md; NEVER overwrite existing entries
+6. **Output boundary** — file writes limited to `.workflow/knowhow/` and `.workflow/specs/learnings.md`. Wiki updates via `maestro wiki update` CLI only
+</invariants>
 
 <execution>
 

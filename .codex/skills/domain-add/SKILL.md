@@ -22,9 +22,35 @@ $ARGUMENTS — `<canonical> <definition>` where canonical is a kebab-case term n
 **Prerequisites**: `.workflow/domain/` must exist (run `maestro domain init` if missing).
 
 **Domain term lifecycle**: discover/manual → register → active → (optional) deprecated → removed
+
+**Output boundary**: ALL file writes MUST target `.workflow/domain/glossary.yaml` only. NEVER modify source code or files outside this path.
 </context>
 
+<invariants>
+1. **Single-term atomic operation** — each invocation registers exactly ONE term; NEVER batch-write multiple terms in a single execution
+2. **Glossary append-only** — existing terms in `glossary.yaml` SHALL NOT be modified or removed; only new entries are appended
+3. **Duplicate guard** — MUST check for exact canonical name match AND near-matches before writing; NEVER create duplicate entries
+4. **Confirmation mandatory** — MUST present term details (canonical, definition, aliases, tier, path) via `request_user_input` before any glossary write; NEVER write without user confirmation (unless `--yes`)
+5. **Schema compliance** — every term entry MUST include canonical name, definition, tier, and at least one alias/keyword; incomplete entries SHALL NOT be persisted
+6. **Domain directory prerequisite** — `.workflow/domain/` MUST exist before writing; NEVER auto-create the directory without user confirmation (E002 if missing)
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Validate**
+- REQUIRED: Canonical name and definition both parsed and non-empty.
+- BLOCKED if: either missing (E001).
+
+**GATE 2: Validate → Dedup Check**
+- REQUIRED: `.workflow/domain/glossary.yaml` exists and is readable.
+- BLOCKED if: domain directory not initialized (E002).
+
+**GATE 3: Dedup → Register**
+- REQUIRED: No exact duplicate found (E003). Near-matches resolved via user confirmation.
+- REQUIRED: User confirmed term details (canonical, definition, aliases, tier) via `request_user_input` (unless `--yes`).
+- BLOCKED if: user declines confirmation.
 
 ### Step 1: Parse Input
 

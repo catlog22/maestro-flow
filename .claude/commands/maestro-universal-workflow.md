@@ -33,6 +33,8 @@ Remaining         → intent
 **Library locations:**
 - Fixed scripts: `~/.maestro/workflows/swarm/wf-*.js`
 - Dynamic scripts: `~/.maestro/workflows/dynamic/uwf-*.js`
+
+**Output boundary**: ALL file writes MUST target `~/.maestro/workflows/dynamic/` (generated scripts) and `.workflow/scratch/{YYYYMMDD}-uwf-*/` (execution results). Fixed scripts at `~/.maestro/workflows/swarm/` are read-only. NEVER modify source code or `.claude/commands/` files.
 </context>
 
 <state_machine>
@@ -509,6 +511,36 @@ Findings: ${digest}
 12. **无反斜杠路径** — 字符串中路径用正斜杠（`\u`、`\a` 等会被解析为转义序列）
 </invariants>
 
+<execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Scan**
+- REQUIRED: Intent text or `--from`/`--resume` flag parsed.
+- BLOCKED if: no intent and no flags (E001).
+
+**GATE 2: Scan → Design/Execute**
+- REQUIRED: Library scan completed (both `swarm/` and `dynamic/` directories).
+- REQUIRED: User decision if matches found (reuse existing vs generate new).
+- BLOCKED if: scan fails to read script directories.
+
+**GATE 3: Design → Generate**
+- REQUIRED: Task decomposition completed with work_items, decision_points, data_flow.
+- REQUIRED: Phase orchestration and adversarial pattern selection determined by depth.
+- BLOCKED if: task cannot be decomposed (E002).
+
+**GATE 4: Generate → Execute**
+- REQUIRED: Script written to `~/.maestro/workflows/dynamic/uwf-{slug}.js`.
+- REQUIRED: `node --check` syntax validation passed.
+- REQUIRED: User confirmation via AskUserQuestion (unless resuming).
+- BLOCKED if: syntax validation fails after 2 retries (E003).
+
+**GATE 5: Execute → Persist**
+- REQUIRED: Workflow execution completed via `scriptPath` invocation.
+- BLOCKED if: Workflow execution failed (E004) — offer `--resume`.
+
+</execution>
+
 <appendix>
 
 ### 使用示例
@@ -569,3 +601,30 @@ universal-workflow 扫描时会同时检查 swarm/ 和 dynamic/ 目录，
 | E005 | 持久化失败 | 展示脚本内容，让用户手动保存 |
 
 </appendix>
+
+<error_codes>
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | No intent and no --from/--resume flag | Prompt user for intent text |
+| E002 | error | Task decomposition failed — cannot identify work_items | Require more specific intent description |
+| E003 | error | Generated script syntax error after 2 retries | Show script content + error for manual fix |
+| E004 | error | Workflow execution failed | Show error, offer --resume with runId |
+| E005 | error | Script persistence failed (filesystem write error) | Show script content for manual save |
+| W001 | warning | No matching scripts found in library scan | Proceed directly to S_DESIGN |
+| W002 | warning | Adversarial gate confidence < 50% | Flag low-confidence decision, suggest --depth deep |
+</error_codes>
+
+<success_criteria>
+- [ ] Intent parsed and flags extracted (--name, --depth, --dry-run, --from, --resume)
+- [ ] Library scan completed across both swarm/ and dynamic/ directories
+- [ ] User decision captured if matching scripts found (reuse vs generate)
+- [ ] Task decomposition produced: work_items, decision_points, data_flow
+- [ ] Adversarial pattern selected per decision_point according to depth level
+- [ ] Blueprint presented to user with estimated agent count
+- [ ] Script generated as pure JavaScript with all 12 generation rules enforced
+- [ ] `node --check` syntax validation passed
+- [ ] User confirmation obtained before execution (unless --resume)
+- [ ] Workflow executed via scriptPath (not inline script string)
+- [ ] Script persisted to `~/.maestro/workflows/dynamic/uwf-{slug}.js`
+- [ ] Completion summary displayed with reuse/resume commands
+</success_criteria>

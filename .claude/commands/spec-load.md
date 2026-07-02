@@ -57,8 +57,33 @@ When loading entries with `ref` attribute, only the summary is shown with a load
 Use the load command to read the full referenced document.
 </context>
 
+<invariants>
+1. **Read-only** — NEVER modify, create, or delete any spec files during load. This command is purely a read operation
+2. **Output to context only** — loaded specs are injected into the conversation context; NEVER write loaded content to new files or modify existing files
+3. **Scope layering** — global scope MUST merge both ~/.maestro/specs/ and .workflow/specs/; project scope loads .workflow/specs/ only; team adds .workflow/collab/specs/; personal adds .workflow/collab/{uid}/specs/
+4. **Category primary doc** — when --category is specified, the primary category doc MUST be loaded in full before cross-file matching
+5. **Entry-level filtering** — --keyword filtering operates at `<spec-entry>` level via keywords attribute, NOT at file level; unmatched entries in a matching file are excluded
+6. **Output boundary** — this command produces NO file writes. All output is conversation-context injection only
+</invariants>
+
 <execution>
 Follow '~/.maestro/workflows/specs-load.md' completely.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Discover**
+- REQUIRED: Arguments parsed — at least one of --category or --keyword is provided, or empty args triggers full load.
+- REQUIRED: Scope resolved (default: global+project merged).
+- BLOCKED if: invalid scope value or invalid category value.
+
+**GATE 2: Discover → Load**
+- REQUIRED: At least one spec directory exists in the resolved scope chain.
+- BLOCKED if: E001 — .workflow/specs/ not initialized AND no global specs available. Warn and abort.
+
+**GATE 3: Load → Display**
+- REQUIRED: Spec files read and entries parsed.
+- REQUIRED: Keyword filtering applied if --keyword was provided.
+- BLOCKED if: no readable spec files found in any scope layer.
 </execution>
 
 <error_codes>

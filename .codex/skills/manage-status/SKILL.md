@@ -22,9 +22,31 @@ Reads from:
 - `.workflow/scratch/*/index.json` — per-phase metadata and progress (resolved via state.json artifact registry)
 - `.workflow/scratch/*/.task/TASK-*.json` — individual task statuses (resolved via state.json artifact registry)
 - `.workflow/wiki-index.json` — unified wiki graph index (entry counts, health)
+
+**Output boundary**: Read-only command. MUST NOT write any files. All output is displayed to the user via text.
 </context>
 
+<invariants>
+1. **Read-only** — MUST NOT write or modify any files; this is a pure display command
+2. **Graceful degradation** — missing roadmap.md, plan.json, or task files MUST NOT cause failure; display available data and note missing sections
+3. **State accuracy** — progress percentages MUST be calculated from actual task statuses, NEVER estimated or inferred
+4. **Wiki health optional** — wiki health score display MUST degrade gracefully if wiki is unavailable
+5. **Complete dashboard** — MUST include: milestone progress, phase status, task counts, active work, and next-step suggestions
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Load → Render** (State loading → Dashboard display)
+- REQUIRED: `.workflow/` exists and `state.json` is readable (E001/E002 if not).
+- REQUIRED: Project state loaded with milestone and artifact registry.
+- BLOCKED if state.json missing or corrupt (E002).
+
+**GATE 2: Render → Route** (Dashboard → Next-step suggestions)
+- REQUIRED: Dashboard sections rendered with available data.
+- REQUIRED: Next-step suggestion computed from state decision table.
+- BLOCKED: never — graceful degradation for missing sections.
 
 ### Step 1: Validate Project
 

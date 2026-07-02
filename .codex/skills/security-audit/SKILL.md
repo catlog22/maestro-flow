@@ -25,9 +25,39 @@ $ARGUMENTS -- Parse tier and scope:
 | quick | Y | Y | -- | -- | -- | -- |
 | standard | Y | Y | Y | Y | -- | -- |
 | deep | Y | Y | Y | Y | Y | Y |
+
+**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-security-audit-{tier}-{slug}/` or `.workflow/state.json` only. NEVER modify source code, configuration files, or dependencies. Audit is read-only analysis.
 </context>
 
+<invariants>
+1. **Audit is read-only** — NEVER modify source code, configuration, dependencies, or CI/CD files during audit. Security audit produces reports only.
+2. **Findings require file:line evidence** — every finding MUST reference a specific file:line location and include the vulnerable code pattern. No vague or category-only findings.
+3. **Severity NEVER downgraded without justification** — if a finding matches a known OWASP category, its severity follows OWASP guidance. Downgrading requires documented rationale (e.g., compensating control exists).
+4. **Tier coverage is mandatory** — all scan phases required by the selected tier MUST complete. NEVER skip a tier-required phase silently; failures are logged as W00x warnings.
+5. **False positive marking requires evidence** — marking a finding as false positive MUST include the compensating control or code path that prevents exploitation. NEVER dismiss findings without counter-evidence.
+6. **Secrets are never logged** — if secrets are discovered, report their location (file:line) and type but NEVER include the actual secret value in the report output.
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Recon → Scan**
+- REQUIRED: Tech stack detected and entry points identified.
+- REQUIRED: Auth/authz modules listed and data flow mapped.
+- BLOCKED if missing: cannot scan without entry points and data flow baseline.
+
+**GATE 2: Scan → Report** (tier-gated)
+- REQUIRED: OWASP Top 10 scan completed (all tiers).
+- REQUIRED: Dependency audit completed (all tiers).
+- REQUIRED: Secrets + CI/CD scan completed (standard/deep only).
+- REQUIRED: STRIDE + git history completed (deep only).
+- BLOCKED if tier-required scans incomplete: finish all tier-applicable phases before reporting.
+
+**GATE 3: Report → Completion**
+- REQUIRED: Severity matrix produced with file:line references and remediation.
+- REQUIRED: Artifact registered in state.json.
+- BLOCKED if missing: do not emit completion status without severity matrix.
 
 **Phase 1: Reconnaissance**
 

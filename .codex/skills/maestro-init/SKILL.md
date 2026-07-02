@@ -25,6 +25,7 @@ $maestro-init "--from brainstorm:20260318-brainstorm-auth"
 
 **Output**: `.workflow/` directory with project.md, state.json, config.json, specs/
 
+**Output boundary**: ALL file writes MUST target `.workflow/` (project files, state, config, specs). NEVER modify existing source code or files outside `.workflow/`.
 </context>
 
 <invariants>
@@ -36,6 +37,21 @@ $maestro-init "--from brainstorm:20260318-brainstorm-auth"
 </invariants>
 
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Detect**
+- REQUIRED: Arguments parsed; flags extracted.
+- BLOCKED if: `-y` set but no document reference provided (E001).
+
+**GATE 2: Detect → Gather**
+- REQUIRED: Project state classified (empty/code/existing).
+- BLOCKED if: existing `.workflow/` detected (E002).
+
+**GATE 3: Gather → Write**
+- REQUIRED: All project information gathered (interactive or extracted).
+- REQUIRED: Templates read from `~/.maestro/templates/`.
+- BLOCKED if: templates unreadable.
 
 ### Step 1: Parse Arguments
 

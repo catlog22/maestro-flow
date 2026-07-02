@@ -37,17 +37,41 @@ Arguments: $ARGUMENTS
 - `-y` / `--yes` — Skip confirmation prompts for all write operations (artifact selection, routing decisions, store writes). Useful for CI or batch harvesting.
 
 Additional flags, source registry (scan paths), and storage locations defined in workflow harvest.md.
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/`, `.workflow/specs/`, `.workflow/issues/`, `.workflow/wiki/`, `.workflow/harvest/`, or `.workflow/state.json` only. NEVER modify source code, source artifacts, or files outside these paths.
 </context>
+
+<invariants>
+1. **Read-only until routing** — extraction and classification happen in-memory; no files written until Stage 6
+2. **Never modify source artifacts** — harvest is purely extractive; source files remain untouched
+3. **Dedup before write** — MUST check harvest-log.jsonl and existing stores before each write to prevent duplicates
+4. **Source tagging** — MUST set `source: "harvest"` on every issues.jsonl row so concurrent writers can be distinguished
+5. **Conflict pre-check on spec routing** — when routing to spec, MUST compare against existing specs with same keywords/category; set `confidence="low"` and log conflict note if semantic conflict detected
+6. **Provenance tracking** — every routed item MUST be logged in harvest-log.jsonl with fragment ID, target store, and timestamp
+7. **Dry-run safety** — `--dry-run` MUST NOT write any files; preview only
+</invariants>
 
 <execution>
 Follow '~/.maestro/workflows/harvest.md' Stages 1-8 in order.
 
-**Key invariants:**
-1. **Read-only until Stage 6** — extraction and classification happen in-memory.
-2. **Dedup before write** — check harvest-log.jsonl and existing stores before each write.
-3. **Never modify source artifacts** — harvest is purely extractive.
-4. **Dedup contract with parallel writers** — when appending to `issues.jsonl`, set `source: "harvest"` on each row so concurrent writers (e.g. `manage-issue-discover` with `source: "discover"`) can be distinguished and deduplicated.
-5. **Conflict pre-check on spec routing** — when routing to spec (Stage 6b), compare new entry against existing specs with same keywords/category. If semantic conflict detected, set `confidence="low"` on the new entry and log conflict note. Use `maestro spec conflict mark` if contradiction is clear.
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Discovery → Extraction** (Stages 1-3 → Stage 4)
+- REQUIRED: Source artifacts discovered and mode resolved (scan/session/path).
+- REQUIRED: User selected artifact(s) to harvest (or auto-selected via session/path mode, or `-y`).
+- BLOCKED if no harvestable artifacts found (W001) or invalid source (E004/E005).
+
+**GATE 2: Extraction → Routing** (Stage 4 → Stage 5-6)
+- REQUIRED: All files in selected artifacts loaded and parsed.
+- REQUIRED: Knowledge fragments extracted with category, confidence, and tags.
+- REQUIRED: Fragments filtered by `--min-confidence`.
+- BLOCKED if extraction produces zero fragments.
+
+**GATE 3: Routing → Write** (Stage 6 → Stage 7-8)
+- REQUIRED: Routing classification applied (auto or forced by `--to`).
+- REQUIRED: Dedup check passed against harvest-log.jsonl and existing stores.
+- REQUIRED: If `--dry-run`: preview displayed, no files written — GATE blocks further writes.
+- BLOCKED if dedup check fails or store paths unresolvable.
 
 Extraction patterns, classification rules, routing infrastructure, and fragment ID scheme defined in workflow harvest.md.
 

@@ -70,6 +70,8 @@ $ARGUMENTS
 4. Hypotheses ← S_DIAGNOSE | 5. Root Cause ← S_DIAGNOSE | 6. Fix & Confirmation ← S_FIX+S_CONFIRM
 7. Generalization ← S_GENERALIZE | 8. Discoveries ← S_DISCOVER | 9. Learnings ← S_RECORD
 
+**Output boundary**: ALL session artifacts MUST target the session directory (`.workflow/scratch/{YYYYMMDD}-debug-odyssey-{slug}/`) or `.workflow/state.json` only. Source code modifications during S_FIX are in-scope but MUST be committed per action. NEVER write session artifacts outside these paths.
+
 **Knowledge Persistence categories (§9):**
 
 | Category | Content | Follow-up |
@@ -119,6 +121,48 @@ Base execution_discipline applies. Debug additions:
 <self_iteration>
 Applies to: **S_ARCHAEOLOGY, S_EXPLORE, S_DIAGNOSE, S_GENERALIZE**. Logic in base.
 </self_iteration>
+
+<execution>
+Follow base execution discipline completely. Actions defined in state_machine below.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: INTAKE → ARCHAEOLOGY**
+- REQUIRED: Issue parsed, SESSION_DIR created, session.json initialized with phase_goals[].
+- BLOCKED if: no issue and no session (E001).
+
+**GATE 2: ARCHAEOLOGY → EXPLORE**
+- REQUIRED: Git history analysis completed (timeline + blame agents), evidence phase=archaeology logged.
+- REQUIRED: understanding.md §2 updated.
+- BLOCKED if: both archaeology agents AND delegate failed (partial results via W003 are acceptable).
+
+**GATE 3: EXPLORE → DIAGNOSE**
+- REQUIRED: explore.json written (or W006 skip logged), evidence phase=explore logged, G2 marked done.
+- BLOCKED if: exploration started but not completed.
+
+**GATE 4: DIAGNOSE → FIX**
+- REQUIRED: Root cause confirmed with evidence refs, session.json.root_cause written, G1 marked done.
+- BLOCKED if: hypotheses failed 3 times without escalation decision.
+
+**GATE 5: FIX → CONFIRM**
+- REQUIRED: Fix implemented with evidence phase=fix logged.
+- BLOCKED if: no fix attempted.
+
+**GATE 6: CONFIRM → GENERALIZE**
+- REQUIRED: Tests pass, CLI review completed, confirmation overall == confirmed, G3 marked done.
+- BLOCKED if: needs_rework → route back to S_FIX.
+
+**GATE 7: GENERALIZE → DISCOVER**
+- REQUIRED: ALL 3 layers (syntax/semantic/structural) attempted with evidence logged.
+- REQUIRED: generalization_stats written with by_layer entries for all 3 layers, G4 marked done.
+- BLOCKED if: any layer not attempted (thoroughness floor violation).
+
+**GATE 8: DISCOVER → RECORD**
+- REQUIRED: All hits triaged with per-item classification and reason.
+- REQUIRED: remaining_actionable == 0 OR loops >= max_loops with per-item reasons logged, G5 marked done.
+- BLOCKED if: unclassified hits remain.
+
+</execution>
 
 <state_machine>
 

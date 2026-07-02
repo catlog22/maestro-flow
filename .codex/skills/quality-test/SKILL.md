@@ -27,6 +27,8 @@ $ARGUMENTS -- phase number and optional flags.
 - `{target_dir}/.tests/test-results.json` -- pass/fail results
 - `{target_dir}/.tests/coverage-report.json` -- requirement coverage
 - `.tests/.csv-session/diagnosis.csv` + `diagnosis-results.csv`
+
+**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-test-P{N}-{slug}/`, `.workflow/state.json`, or `.workflow/issues.jsonl` only. NEVER modify source code or execution artifacts outside these paths.
 </context>
 
 <csv_schema>

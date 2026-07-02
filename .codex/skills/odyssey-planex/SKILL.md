@@ -51,6 +51,8 @@ $ARGUMENTS
 **Session**: `.workflow/scratch/{YYYYMMDD}-planex-odyssey-{slug}/`
 **Output**: `session.json` | `evidence.ndjson` | `understanding.md`
 
+**Output boundary**: ALL session artifacts MUST target the session directory (`.workflow/scratch/{YYYYMMDD}-planex-odyssey-{slug}/`) or `.workflow/state.json` only. Source code modifications during S_EXECUTE and S_FIX are in-scope but MUST be committed per action. NEVER write session artifacts outside these paths.
+
 **session.json -- planex-specific fields:**
 ```json
 { "requirement": "",
@@ -130,6 +132,48 @@ id,title,description,task_type,criterion_refs,deps,wave,status,findings,evidence
 - Wave 1: Verification agents (one per `cli-review` criterion) -- parallel
 - Wave 2: Generalization agents (syntax-grep, semantic-scan, structural-match, historical-grep) -- parallel
 </csv_schema>
+
+<execution>
+Follow base execution discipline completely. Actions defined in state_machine below.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: INTAKE → PLAN**
+- REQUIRED: Requirement parsed, >=1 acceptance criterion defined with verify_method assigned.
+- REQUIRED: session.json initialized, understanding.md §1 written, G1 marked done.
+- BLOCKED if: no requirement provided (E001) or zero criteria derived (W001).
+
+**GATE 2: PLAN → EXECUTE**
+- REQUIRED: Plan tasks decomposed with criteria_refs mapping each task to acceptance criteria.
+- REQUIRED: session.json.plan populated, understanding.md §2 updated, G2 marked done.
+- BLOCKED if: plan has zero tasks or unmapped criteria.
+
+**GATE 3: EXECUTE → VERIFY**
+- REQUIRED: All plan tasks executed (or marked blocked after 3 retries per deviation rule).
+- REQUIRED: execution_config confirmed, per-task evidence logged, understanding.md §3 updated, G3 marked done.
+- BLOCKED if: tasks still pending execution.
+
+**GATE 4: VERIFY → FIX / GENERALIZE**
+- REQUIRED: Every acceptance criterion verified by its assigned method (test/grep/cli-review/manual).
+- REQUIRED: Per-criterion evidence logged with pass/fail status and iteration count.
+- BLOCKED if: verification incomplete — all criteria must be checked before routing decision.
+
+**GATE 5: FIX → VERIFY**
+- REQUIRED: current_iteration incremented, targeted fixes applied for each failed criterion.
+- REQUIRED: Fix evidence logged, understanding.md §5 updated.
+- BLOCKED if: no fix attempted for failing criteria.
+
+**GATE 6: GENERALIZE → DISCOVER**
+- REQUIRED: ALL 3 layers (syntax/semantic/structural) attempted with evidence logged.
+- REQUIRED: generalization_stats written with by_layer entries for all 3 layers, G5 marked done.
+- BLOCKED if: any layer not attempted (thoroughness floor violation).
+
+**GATE 7: DISCOVER → RECORD**
+- REQUIRED: All hits triaged with per-item classification and reason.
+- REQUIRED: remaining_actionable == 0 OR loops >= max_loops with per-item reasons logged, G6 marked done.
+- BLOCKED if: unclassified hits remain.
+
+</execution>
 
 <state_machine>
 

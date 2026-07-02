@@ -44,10 +44,34 @@ $ARGUMENTS — type token + description + optional flags.
 | No args | — | — | AskUserQuestion (10 options) |
 
 **Output**: `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{slug}.md` with YAML frontmatter (title, description, type, category, created, tags, source, lang, status)
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/` only. NEVER modify source code or files outside this path.
 </context>
+
+<invariants>
+1. **Description required** — every entry MUST have a `description` field in frontmatter (under 120 chars) for search indexing
+2. **Tags language match** — tags MUST match content language (Chinese content → Chinese tags, English → English)
+3. **ID uniqueness** — generated file names ({PREFIX}-{YYYYMMDD}-{slug}.md) MUST be unique; NEVER overwrite existing entries
+4. **Frontmatter completeness** — YAML frontmatter MUST include: title, description, type, category, created, tags, status
+5. **Type-specific validation** — each type MUST populate all its required fields before writing (template needs code block, recipe needs steps, etc.)
+6. **Idempotent naming** — same content captured twice MUST produce same slug, enabling dedup detection
+</invariants>
 
 <execution>
 Follow '~/.maestro/workflows/knowhow.md' completely.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Type Detection → Content Collection** (Type routing → Content extraction)
+- REQUIRED: Type detected from first token or selected via AskUserQuestion.
+- REQUIRED: Type maps to a valid prefix (KNW-/TPL-/RCP-/REF-/DCS-/TIP-/AST-/BLP-/DOC-/INS-).
+- BLOCKED if type unresolvable after interactive prompt.
+
+**GATE 2: Content Collection → Write** (Content extraction → File write)
+- REQUIRED: All type-specific required fields populated (e.g., template needs code block, recipe needs steps).
+- REQUIRED: `description` field generated or provided (under 120 chars).
+- REQUIRED: Tags generated in correct language matching content.
+- BLOCKED if required fields missing after user prompt (E002/E003).
 
 **Description rule**: Every entry MUST have a `description` field in frontmatter — a one-line summary (under 120 chars) for search results. WikiIndexer uses priority chain: `description > content[:240]`. Use `--description` flag value if provided; otherwise auto-generate from content.
 

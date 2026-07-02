@@ -22,7 +22,18 @@ $manage-codebase-refresh "--since 3d --deep"
 **Flags**:
 - `--since <date>` -- Override change detection window (ISO date or relative like `3d`)
 - `--deep` -- Force deeper re-scan even for minor changes
+
+**Output boundary**: ALL file writes MUST target `.workflow/codebase/` (doc files, doc-index.json) and `.workflow/state.json` (codebase_last_refreshed timestamp) only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Incremental only** — MUST NOT clear or rebuild .workflow/codebase/; for full rebuild use `$manage-codebase-rebuild`
+2. **Change-driven** — MUST only update doc entries affected by detected git changes; NEVER refresh unchanged docs
+3. **Baseline resolution** — MUST resolve change baseline via --since flag > state.json timestamp > 7-day fallback; NEVER scan entire history
+4. **Doc-index alignment** — doc-index.json timestamps MUST be updated for every refreshed entry
+5. **KG impact awareness** — if knowledge-graph.json exists, MUST run kg diff-wiki and log affected wiki entries as warnings
+6. **No-op safety** — if no changes detected (W001), MUST exit cleanly without modifying any files
+</invariants>
 
 <execution>
 

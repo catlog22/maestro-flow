@@ -32,7 +32,18 @@ $ARGUMENTS — Parse tier and scope:
 | quick | ✓ | ✓ | — | — | — | — |
 | standard | ✓ | ✓ | ✓ | ✓ | — | — |
 | deep | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-security-audit-{tier}-{slug}/` or `.workflow/state.json` only. NEVER modify source code, configuration files, or dependencies. Audit is read-only analysis.
 </context>
+
+<invariants>
+1. **Audit is read-only** — NEVER modify source code, configuration, dependencies, or CI/CD files during audit. Security audit produces reports only.
+2. **Findings require file:line evidence** — every finding MUST reference a specific file:line location and include the vulnerable code pattern. No vague or category-only findings.
+3. **Severity NEVER downgraded without justification** — if a finding matches a known OWASP category, its severity follows OWASP guidance. Downgrading requires documented rationale (e.g., compensating control exists).
+4. **Tier coverage is mandatory** — all scan phases required by the selected tier MUST complete. NEVER skip a tier-required phase silently; failures are logged as W00x warnings.
+5. **False positive marking requires evidence** — marking a finding as false positive MUST include the compensating control or code path that prevents exploitation. NEVER dismiss findings without counter-evidence.
+6. **Secrets are never logged** — if secrets are discovered, report their location (file:line) and type but NEVER include the actual secret value in the report output.
+</invariants>
 
 <execution>
 

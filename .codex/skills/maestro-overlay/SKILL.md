@@ -38,6 +38,7 @@ $maestro-overlay "--remove cli-verify-after-execute"
 - Shared docs: `~/.maestro/overlays/docs/*.md`
 - Shipped examples: `~/.maestro/overlays/_shipped/` (read-only)
 
+**Output boundary**: ALL file writes MUST target `~/.maestro/overlays/` (overlay JSON + docs). NEVER modify `.claude/commands/*.md` or `.codex/skills/` directly — overlay application is handled by `maestro overlay add`.
 </context>
 
 <invariants>

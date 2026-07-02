@@ -46,9 +46,38 @@ tool: true
 ---
 Step content...
 ```
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/` (tool documents) and `.workflow/specs/` (ref entries) only. NEVER modify source code or files outside these paths.
 </context>
 
+<invariants>
+1. **Schema validation** — tool knowhow document MUST include `tool: true`, `category`, `keywords/tags`, and `summary` in YAML frontmatter; missing fields → reject write
+2. **No duplicate names** — tool title MUST be unique within its category; duplicate detection → E002 warning with overwrite/optimize confirmation
+3. **Category required** — every tool MUST declare exactly one category from: coding, test, review, arch, debug; empty category → E003
+4. **Confirmation gate** — MUST request_user_input before writing knowhow document and spec ref entry; NEVER persist without user confirmation
+5. **Promote is in-place** — promote mode MUST update existing knowhow frontmatter; NEVER recreate the document
+6. **Output boundary** — ALL file writes MUST target `.workflow/knowhow/` (tool documents) and `.workflow/specs/` (ref entries) only. NEVER modify source code or files outside these paths
+7. **Description format** — first line after `### Title` MUST state "Use when ..." (usage timing); this is critical for ref entry summary visibility
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Gather**
+- REQUIRED: Mode determined (extract/generate/optimize/promote) from argument parsing.
+- REQUIRED: For optimize/promote modes, target tool/document exists and is loadable.
+- BLOCKED if: empty args without user response to request_user_input.
+
+**GATE 2: Gather → Write**
+- REQUIRED: Tool name, category, and usage timing confirmed.
+- REQUIRED: Steps extracted or generated (extract: ≥1 step, generate: user-confirmed scope).
+- REQUIRED: User confirmed via request_user_input (title, category, keywords, summary, step count).
+- BLOCKED if: E001 (`.workflow/specs/` not initialized), E003 (no category), user cancels.
+
+**GATE 3: Write → Verify**
+- REQUIRED: Knowhow document written with `tool: true` frontmatter (or updated in-place for promote).
+- BLOCKED if: write failed or spec add returned error.
 
 ### Step 1: Intent Detection
 

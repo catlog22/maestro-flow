@@ -37,6 +37,15 @@ Domain term lifecycle: discover/manual → register → active → (optional) de
 - `maestro domain deprecate <canonical> --successor <new>` — deprecate a term
 </context>
 
+<invariants>
+1. **Single-term atomic operation** — each invocation registers exactly ONE term; NEVER batch-write multiple terms in a single execution
+2. **Glossary append-only** — existing terms in `glossary.yaml` SHALL NOT be modified or removed; only new entries are appended
+3. **Duplicate guard** — MUST check for exact canonical name match AND near-matches before writing; NEVER create duplicate entries
+4. **Confirmation mandatory** — MUST present term details (canonical, definition, aliases, tier, path) via AskUserQuestion before any glossary write; NEVER write without user confirmation
+5. **Schema compliance** — every term entry MUST include canonical name, definition, tier, and at least one alias/keyword; incomplete entries SHALL NOT be persisted
+6. **Domain directory prerequisite** — `.workflow/domain/` MUST exist before writing; NEVER auto-create the directory (E002 if missing)
+</invariants>
+
 <execution>
 Follow '~/.maestro/workflows/domain-add.md' completely.
 

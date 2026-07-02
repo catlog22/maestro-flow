@@ -43,6 +43,8 @@ Remaining        → intent
 | `wf-plan` | `{ context_dir?, from?, phase?, scope?, specs?, gaps?, quick? }` |
 | `wf-execute` | `{ plan_dir, specs?, codebase_context?, wiki_context?, auto_commit? }` |
 | `wf-milestone-audit` | `{ milestone?, is_adhoc? }` |
+
+**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-swarm-{script}-{slug}/` (results, ralph-compatible artifacts). When inside a ralph session, writes target the corresponding step's scratch directory. NEVER modify source code, workflow scripts (`~/.maestro/workflows/swarm/`), or `.claude/commands/` files.
 </context>
 
 <state_machine>
@@ -195,6 +197,29 @@ Workflow 返回 JSON 后：
 5. **脚本只读** — 路由命令不修改 `~/.maestro/workflows/swarm/wf-*.js` 脚本文件
 6. **结果必须展示** — Workflow 返回后必须向用户展示格式化摘要，不得静默完成
 </invariants>
+
+<execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Route**
+- REQUIRED: Intent text or `--script` flag parsed successfully.
+- BLOCKED if: no intent and no `--script` (E001).
+
+**GATE 2: Route → Context Assembly**
+- REQUIRED: Target script resolved unambiguously (single match or user-selected from candidates).
+- BLOCKED if: ambiguous routing without user resolution (E002).
+
+**GATE 3: Context → Dispatch**
+- REQUIRED: Args payload assembled with all required fields for target script.
+- REQUIRED: Script file exists at `~/.maestro/workflows/swarm/{script}.js`.
+- BLOCKED if: script file not found (E003) or required args missing.
+
+**GATE 4: Dispatch → Ingest**
+- REQUIRED: Workflow execution completed (success or partial results available).
+- BLOCKED if: Workflow execution failed entirely (E004) — offer `--resume`.
+
+</execution>
 
 <appendix>
 

@@ -27,7 +27,18 @@ $ARGUMENTS — scope and optional flags.
 - `--create-issues` — Auto-create knowledge-gap issues in issues.jsonl
 
 **Output**: `.workflow/knowhow/digest-{slug}-{date}.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/` (digest document) and `.workflow/specs/learnings.md` (meta-insights). Issue creation targets `.workflow/issues/issues.jsonl` only when --create-issues is set. NEVER modify source code or wiki entries.
 </context>
+
+<invariants>
+1. **Read-only analysis** — wiki entries and source code are read but NEVER modified; this is a synthesis command
+2. **Issue dedup** — when --create-issues is set, MUST dedup against existing issues.jsonl before creating; NEVER create duplicate knowledge-gap issues
+3. **Confirmation for issues** — MUST request_user_input before creating issues; NEVER auto-create issues without user consent (unless both --create-issues and -y)
+4. **Theme minimum** — MUST cluster into 3-5 themes; fewer than 3 entries triggers W001 warning, not an error
+5. **Append-only insights** — meta-insights appended to specs/learnings.md; NEVER overwrite existing entries
+6. **Output boundary** — file writes limited to `.workflow/knowhow/` (digest), `.workflow/specs/learnings.md` (insights), and `.workflow/issues/issues.jsonl` (gap issues). NEVER modify source code or wiki entries
+</invariants>
 
 <execution>
 

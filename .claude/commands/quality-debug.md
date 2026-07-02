@@ -48,7 +48,18 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 - Role knowledge: `maestro search --category debug` → select relevant → `maestro load --type knowhow --id`
 
 **Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
+
+**Output boundary**: ALL file writes MUST target `DEBUG_DIR` or `.workflow/state.json` only. NEVER modify source code, test files, or other artifacts outside these paths during investigation.
 </context>
+
+<invariants>
+1. **Investigation is read-only on source** — debug MUST NOT modify source code, test files, or execution artifacts. Diagnosis produces understanding.md, evidence.ndjson, and reports only.
+2. **Root cause requires reproduction** — NEVER declare a root cause confirmed without evidence (code trace, log entry, or reproduction steps). Hypothesis without evidence stays "suspected".
+3. **Evidence is append-only** — evidence.ndjson entries MUST only be appended, NEVER modified or deleted. Each entry is an immutable observation.
+4. **Confidence is multi-factor** — root cause confidence MUST use the multi-factor scoring model (Step 7.0). NEVER use bare high/medium/low without dimensional breakdown.
+5. **Prior investigations are consulted** — when related debug artifacts exist, check understanding.md for prior root causes. NEVER re-investigate an already-confirmed root cause without new symptoms.
+6. **Fix direction is not fix execution** — debug produces `fix_direction` and `affected_files` but NEVER applies fixes. Fix execution belongs to plan→execute cycle.
+</invariants>
 
 <execution>
 Follow '~/.maestro/workflows/debug.md' completely.

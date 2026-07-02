@@ -24,7 +24,19 @@ UAT-style conversational testing for a completed phase. Interactive scenario wal
 Phase or task: $ARGUMENTS (optional)
 
 Flags, artifact context resolution, and output directory format defined in workflow test.md.
+
+**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-test-P{N}-{slug}/`, `.workflow/state.json`, or `.workflow/issues.jsonl` only. NEVER modify source code or execution artifacts outside these paths. `--frontend-verify` additionally writes `e2e-results.json` to the same scratch directory.
 </context>
+
+<invariants>
+1. **UAT is observational** — test execution observes behavior and records results. NEVER modify source code during testing. Source fixes belong to debug→plan→execute cycle.
+2. **Severity is inferred, not asked** — severity MUST be inferred from user's natural language description of issues. NEVER explicitly ask the user to assign severity levels.
+3. **One scenario at a time** — tests MUST be presented individually for user verification. NEVER batch-present multiple scenarios or assume outcomes.
+4. **Evidence before verdict** — UAT confidence MUST be scored with the 4-dimension factor model from actual test results. NEVER emit a verdict without running the readiness gate.
+5. **Existing UAT is resumable** — when uat.md exists for the target phase, offer resume. NEVER silently overwrite prior test progress.
+6. **Frontend-verify is deterministic** — `--frontend-verify` mode uses browser assertions with concrete pass/fail per criterion. NEVER treat "no response" or timeout as pass.
+7. **Auto-fix has bounds** — `--auto-fix` gap-fix loop MUST NOT exceed 2 iterations. Persistent failures escalate to debug, not infinite retry.
+</invariants>
 
 <execution>
 **Mode select:** `--frontend-verify` → 走下方 **Frontend Verify Mode**（确定性浏览器 smoke，**不是**对话式 UAT）；否则 Follow '~/.maestro/workflows/test.md' completely.

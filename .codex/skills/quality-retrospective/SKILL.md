@@ -95,6 +95,8 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 - **test** → uat.md, .tests/ (UAT results, gaps, coverage)
 - Also reads: `.workflow/issues/issues.jsonl`, `.workflow/state.json`
 
+**Output boundary**: ALL file writes MUST target the phase's retrospective directory (`.workflow/scratch/{YYYYMMDD}-retrospective-P{N}/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). NEVER modify source code, verification.json, review.json, plan.json, or other existing artifacts.
+
 ### Agent Registry
 
 | Agent | task_name | fork_turns | Responsibility |

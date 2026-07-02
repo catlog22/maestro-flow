@@ -74,6 +74,8 @@ When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive validat
 
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `review.json` (structured review output)
+
+**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/`, `.workflow/state.json`, or `.workflow/issues/issues.jsonl` only. NEVER modify source code or files outside these paths. Review produces reports only — no source modifications.
 </context>
 
 <csv_schema>

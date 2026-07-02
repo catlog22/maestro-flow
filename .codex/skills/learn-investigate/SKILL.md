@@ -20,9 +20,42 @@ $ARGUMENTS — question text and optional flags.
 - `--no-persist` — Skip writing to learnings.md (report.md still written locally)
 
 **Output**: `.workflow/knowhow/KNW-investigate-{slug}/` (evidence.ndjson, understanding.md, report.md)
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-investigate-{slug}/` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
 
+<invariants>
+1. **Read-only investigation** — NEVER modify source code files; all writes go to `.workflow/` only
+2. **Evidence append-only** — `evidence.ndjson` MUST be appended line-by-line; NEVER overwrite or truncate existing evidence entries
+3. **Scope lock** — once `--scope` is resolved, NEVER expand search scope without explicit user confirmation via escalation
+4. **Hypothesis cap** — MUST NOT generate more than `--max-hypotheses` (default 3) before triggering escalation; NEVER silently exceed the cap
+5. **Structured evidence format** — every evidence entry MUST include `{ts, type, source, relevance, content, note}`; incomplete entries SHALL NOT be appended
+6. **3-strike escalation** — after all hypotheses fail, MUST escalate to user via `request_user_input`; NEVER silently conclude as INCONCLUSIVE without user interaction
+7. **Confirmation gate** — unless `--no-persist` is set, MUST present report.md path and spec-entries via `request_user_input` before final writes
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Frame → Evidence Collection**
+- REQUIRED: Question parsed, slug generated, investigation directory created.
+- REQUIRED: Prior knowledge search completed (maestro search + learnings.md + debug-notes).
+- BLOCKED if: no question provided (E001) or scope path not found (E002).
+
+**GATE 2: Evidence → Hypothesis Formation**
+- REQUIRED: At least 3 evidence items collected in evidence.ndjson.
+- BLOCKED if: fewer than 3 evidence matches (W002 — broaden search before proceeding).
+
+**GATE 3: Hypothesis Testing → Report**
+- REQUIRED: All hypotheses tested (up to max-hypotheses) with results recorded.
+- REQUIRED: If all failed, 3-strike escalation triggered via `request_user_input`.
+- BLOCKED if: hypotheses remain untested.
+
+**GATE 4: Report → Completion**
+- REQUIRED: report.md written with answer, evidence trail, hypothesis results.
+- REQUIRED: Unless `--no-persist`, user confirmation obtained before learnings append.
+- BLOCKED if: user declines — offer to adjust findings before retry.
 
 ### Stage 1: Frame the Question
 - Parse question, generate slug, create investigation directory

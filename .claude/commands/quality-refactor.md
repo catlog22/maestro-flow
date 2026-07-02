@@ -36,7 +36,18 @@ If not provided, prompt user for scope.
    - Browse: `maestro search --category coding`
    - Identify task-relevant entries, then load: `maestro load --type knowhow --id <id1> [id2...]`
 4. All are optional — proceed without if unavailable.
+
+**Output boundary**: Refactoring modifies source files within the declared scope only. Ancillary outputs (reflection-log.md) MUST target `.workflow/scratch/{YYYYMMDD}-refactor-{slug}/`. NEVER modify files outside the confirmed scope without re-confirmation.
 </context>
+
+<invariants>
+1. **Plan before change** — NEVER apply refactoring changes without a confirmed plan. Every modification traces to a plan item.
+2. **Behavioral equivalence** — refactoring MUST preserve existing behavior. All tests MUST pass after each individual change, not just at the end.
+3. **Scope is locked after confirmation** — once the user confirms the refactoring plan, do NOT expand scope to include additional files or changes without re-confirmation.
+4. **Incremental verification** — each discrete refactoring step MUST be verified (tests run) before proceeding to the next. NEVER batch multiple unrelated changes into a single verification.
+5. **No feature creep** — refactoring MUST NOT add new functionality, change APIs, or alter public interfaces. If a beneficial API change is discovered, log it as a recommendation, do NOT apply it.
+6. **Rollback safety** — if any test fails after a refactoring step, revert that specific change before attempting alternatives. NEVER proceed with failing tests.
+</invariants>
 
 <execution>
 Follow '~/.maestro/workflows/refactor.md' completely.

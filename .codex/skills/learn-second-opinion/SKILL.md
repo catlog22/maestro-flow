@@ -29,9 +29,39 @@ $ARGUMENTS — target and optional flags.
 - `--mode consult` — Interactive Q&A session
 
 **Output**: `.workflow/knowhow/KNW-opinion-{slug}-{date}.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-opinion-{slug}-{date}.md` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
 
+<invariants>
+1. **Read-only analysis** — NEVER modify source code, wiki entries, or plan files under review; all writes go to `.workflow/` only
+2. **Agent independence** — in review mode, each persona agent (Pragmatist/Purist/Strategist) MUST operate independently without shared state; NEVER pass one agent's findings to another during wave 1
+3. **Evidence-backed verdicts** — every finding MUST include a `location` reference (file:line or section); ungrounded opinions SHALL NOT appear in the report
+4. **Mode contract** — MUST execute exactly the mode specified (review/challenge/consult); NEVER mix mode behaviors within a single execution
+5. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
+6. **Confirmation gate** — MUST present findings and target files via `request_user_input` before any writes
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Resolve → Execute**
+- REQUIRED: Target resolved to concrete content (file, wiki entry, git diff, or phase plan).
+- BLOCKED if: target unresolvable (E001) or unknown mode (E002).
+
+**GATE 2: Execute → Synthesize**
+- REQUIRED: Mode-specific analysis completed (review: ≥2 of 3 personas completed; challenge: adversarial agent completed; consult: Q&A session ended).
+- BLOCKED if: all persona agents failed in review mode — skip to degraded synthesis with LOW CONFIDENCE flag.
+
+**GATE 3: Synthesize → Persist**
+- REQUIRED: Synthesis produced with agreements, disagreements, verdict, and top 3 recommendations.
+- BLOCKED if: synthesis agent failed — use raw persona outputs as fallback.
+
+**GATE 4: Persist → Completion**
+- REQUIRED: `request_user_input` confirmation before writing learnings.
+- REQUIRED: KNW-opinion-{slug}-{date}.md written.
+- BLOCKED if: user declines — offer to adjust findings before retry.
 
 ### Phase 1: Resolve Target + Load Context
 Resolve target to content. Load specs, `maestro search`, prior lessons for context brief.

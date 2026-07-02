@@ -33,7 +33,45 @@ $ARGUMENTS — target and optional flags.
 
 **Storage read**: target file + wiki forward/backlinks + `coding-conventions.md` + `.workflow/specs/learnings.md` (dedup)
 **Storage write**: `.workflow/knowhow/KNW-follow-{slug}-{date}.md` + append `.workflow/specs/learnings.md`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-follow-{slug}-{date}.md` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Read-only traversal** — NEVER modify source code or wiki entries under analysis; all writes go to `.workflow/` only
+2. **Forcing questions mandatory** — each section MUST have all 4 forcing questions applied; NEVER skip questions even for trivial sections
+3. **Anchor requirement** — every extracted pattern MUST include a `file:line` anchor; unanchored patterns SHALL NOT be persisted to learnings.md
+4. **Convention cross-ref** — MUST check every finding against `coding-conventions.md` and mark status (documented/candidate); NEVER persist without status tag
+5. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
+6. **Confirmation gate** — unless `-y` is set, MUST present findings and target files via AskUserQuestion before any writes
+7. **Depth contract** — `--depth shallow` MUST NOT descend into function bodies; `--depth deep` MUST cover every branch and sub-expression
+</invariants>
+
+<execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Resolve → Context Building** (S_RESOLVE → S_CONTEXT)
+- REQUIRED: Target resolved to a readable source (file path, wiki entry, or search result).
+- BLOCKED if: target unresolvable after user prompt (E001/E002).
+
+**GATE 2: Reading → Extraction** (S_READ → S_EXTRACT)
+- REQUIRED: All sections traversed with 4 forcing questions applied per section.
+- REQUIRED: Depth contract honored — shallow stays at top-level, deep covers every branch.
+- BLOCKED if: any section skipped without forcing questions.
+
+**GATE 3: Extraction → Persistence** (S_EXTRACT → S_PERSIST)
+- REQUIRED: All extracted patterns have file:line anchors.
+- REQUIRED: Convention cross-ref completed against coding-conventions.md (or marked "unknown status" if W002).
+- BLOCKED if: unanchored patterns remain in extraction results.
+
+**GATE 4: Persistence → Completion** (S_PERSIST → END)
+- REQUIRED: Unless `-y`, AskUserQuestion showing files to write and spec-entries to append — user must confirm.
+- REQUIRED: KNW-follow-{slug}-{date}.md written with understanding map.
+- REQUIRED: learnings.md appended (not overwritten) with new spec-entry blocks.
+- BLOCKED if: user declines confirmation — offer to adjust findings before retry.
+
+</execution>
 
 <state_machine>
 
@@ -112,6 +150,9 @@ Write understanding map: Key Concepts, Patterns (table: name/location/convention
 <error_codes>
 | Code | Condition | Recovery |
 |------|-----------|----------|
+| E001 | No target path/wiki-id/topic provided | Prompt user for target |
+| E002 | Target path not found and wiki/grep search returned no results | Check path or broaden search terms |
+| W001 | Wiki forward/backlinks unavailable | Proceed without context web; note reduced coverage |
 | W002 | coding-conventions.md not found | All patterns marked "unknown status" |
 | W003 | Target > 1000 lines | Auto-switch to shallow; use --depth deep to override |
 </error_codes>

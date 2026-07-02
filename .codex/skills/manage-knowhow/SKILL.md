@@ -32,9 +32,35 @@ $manage-knowhow "prune --before 2026-01-01 --type tip --dry-run"
 - `--before <date>` / `--after <date>` — Date filters for prune
 - `--dry-run` — Preview prune without deleting (default for prune — use `--execute` to actually delete)
 - `--execute` — Required to actually perform prune deletions (prune defaults to dry-run)
+
+**Output boundary**: Workflow store writes MUST target `.workflow/knowhow/` only. System store writes MUST target `~/.claude/projects/*/memory/` only. NEVER modify source code or files outside these paths.
 </context>
 
+<invariants>
+1. **MEMORY.md protected** — NEVER delete MEMORY.md; only editable via `edit` subcommand
+2. **MEMORY.md line limit** — MUST warn (W003) when MEMORY.md exceeds 200 lines; content beyond 200 lines will be truncated at load
+3. **Confirmation on destructive ops** — `delete` and `prune` MUST require user confirmation unless `--confirm` flag is set
+4. **Store isolation** — `prune` operates on workflow store only; NEVER prune system memory files
+5. **Reference integrity** — `delete` MUST check for references from other entries before removing; warn if orphaned references would result
+6. **Dry-run safety** — `--dry-run` MUST NOT write any files; preview destructive operations only
+7. **Index consistency** — after delete/prune, workflow index MUST be updated to reflect removals
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Execute** (Subcommand routing)
+- REQUIRED: Subcommand parsed from first token (list/search/view/edit/delete/prune).
+- REQUIRED: Both store paths resolved (workflow + system).
+- BLOCKED if E001 (no memory stores found) or invalid subcommand.
+
+**GATE 2: Execute → Mutate** (For destructive subcommands: delete/prune/edit)
+- REQUIRED: Target entry/file resolved and exists (E002 if not found).
+- REQUIRED: MEMORY.md protected from deletion (E004 — use `edit` instead).
+- REQUIRED: For `prune`: at least one filter provided (E003).
+- REQUIRED: User confirmation before delete/prune unless `--confirm` flag set.
+- BLOCKED if target unresolvable or confirmation denied.
 
 ### Step 1: Resolve Store Paths
 

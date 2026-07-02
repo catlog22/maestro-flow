@@ -32,6 +32,8 @@ $quality-refactor "--dir .workflow/scratch/refactor-auth-2026-03-18"  # resume e
 **Output**: `.workflow/scratch/refactor-{slug}-{date}/` with index.json, plan.json, reflection-log.md, .task/, .summaries/
 
 **Session**: `.workflow/.csv-wave/{YYYYMMDD}-refactor-{slug}/`
+
+**Output boundary**: Refactoring modifies source files within the declared scope only. Ancillary outputs (reflection-log.md) MUST target `.workflow/scratch/{YYYYMMDD}-refactor-{slug}/`. NEVER modify files outside the confirmed scope without re-confirmation.
 </context>
 
 <csv_schema>

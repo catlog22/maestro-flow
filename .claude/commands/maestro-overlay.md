@@ -34,7 +34,18 @@ Turn natural-language instructions into command overlays — JSON patch files th
 **Management** — listing and removing overlays is handled by `maestro overlay list` (ink TUI with interactive delete). This skill focuses solely on creation.
 
 **Available sections** (for `section:` in patches): `purpose`, `required_reading`, `deferred_reading`, `context`, `execution`, `error_codes`, `success_criteria`.
+
+**Output boundary**: ALL file writes MUST target `~/.maestro/overlays/` (overlay JSON + docs) only. Command file patching is handled by `maestro overlay add` — this skill NEVER modifies `.claude/commands/*.md` directly.
 </context>
+
+<invariants>
+1. **Non-invasive** — overlays MUST use hashed HTML-comment markers for injection; NEVER edit command file content directly outside the overlay system
+2. **Idempotent** — re-running `maestro overlay apply` with the same overlay JSON MUST produce no file changes
+3. **Creation only** — this skill MUST only create overlays; listing and removal are handled by `maestro overlay list` (ink TUI)
+4. **Pristine source preferred** — injection point analysis MUST read from `$PKG_ROOT/.claude/commands/` (untouched originals) first, fall back to `~/.claude/commands/` only if pristine unavailable
+5. **User approval before write** — overlay JSON MUST be shown and approved via AskUserQuestion before writing to disk; NEVER auto-install without confirmation
+6. **Chain skip option mandatory** — if a skill chain is configured, the injected content MUST include a "Skip" option in AskUserQuestion; NEVER force the user into a chain
+</invariants>
 
 <execution>
 ### 1. Parse user intent

@@ -58,7 +58,19 @@ Arguments: $ARGUMENTS
 - `.workflow/project.md`
 
 使用 `maestro timeline` CLI 构建统一的 git+session 时间线。
+
+**Output boundary**: ALL file writes MUST target `.workflow/` metadata files (specs, codebase docs, roadmap.md, state.json, issues.jsonl) or `.workflow/.trash/drift-realign-{timestamp}/` (backups) or `.workflow/.drift-realign/` (session details). NEVER modify source code files.
 </context>
+
+<invariants>
+1. **Code-as-Truth** — 代码是唯一真理源；当文档说 X 但代码做 Y 时，文档漂移，NEVER 反向修改代码来匹配文档
+2. **Backup before mutate** — MUST create backup tarball in `.workflow/.trash/` before any file modification (E005 if backup fails)
+3. **Never modify source code** — drift-realign only updates `.workflow/` metadata; source code files are read-only
+4. **Mutual exclusion** — `--report` 与 `--auto-archive` 互斥；同时传入 MUST trigger E006
+5. **Auto-depth escalation** — `drift_window` > 180 天 MUST auto-upgrade to `--depth deep` with W002 warning
+6. **Audit trail** — every triage decision MUST be logged in `drift-log.jsonl` with finding ID, action, and timestamp
+7. **Rebuild trigger** — codebase scope 的 3+ P0 finding MUST auto-trigger `/quality-sync --full` after triage
+</invariants>
 
 <execution>
 Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.

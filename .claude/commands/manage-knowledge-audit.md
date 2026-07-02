@@ -35,7 +35,20 @@ Arguments: $ARGUMENTS
 **互斥规则：** `--interactive`、`--mark`、`--delete`、`--purge` 四选一，同时传入多个 → E006。
 
 Flag 全集、scope 对应的扫描路径、Stage 步骤、检测算法定义在 workflow knowledge-audit.md。
+
+**Output boundary**: ALL file writes MUST target `.workflow/specs/`, `.workflow/knowhow/`, `.workflow/.trash/knowledge-audit-{timestamp}/`, `.workflow/issues/`, or audit report files (`audit-report-*.md`, `audit-log.jsonl`). NEVER modify source code files.
 </context>
+
+<invariants>
+1. **Code-as-Truth** — 代码是唯一真理源；spec/knowhow 声明 MUST 与代码实际行为一致；每个 finding 的 evidence MUST 包含代码引用（文件:行号）
+2. **Backup before mutate** — MUST create backup tarball in `.workflow/.trash/` before any file modification (E005 if backup fails)
+3. **Deprecate over delete** — 文本存储首选 `status="deprecated"` 保留历史；NEVER 物理删除 spec/knowhow 文件
+4. **Purge 仅 artifact** — `--purge` MUST NOT 作用于 spec/knowhow scope (E004)
+5. **Rescue before delete** — 未 harvest 的 artifact 删除前 MUST 强制提示先跑 `/manage-harvest` (W002)
+6. **Conflict marker sync** — deprecate/delete 执行时如果目标条目有 conflict-marker，MUST 同步调用 `maestro spec conflict clear` 清除标记
+7. **Mutual exclusion** — `--interactive`/`--mark`/`--delete`/`--purge` 四选一；同时传入多个 MUST trigger E006
+8. **Dry-run safety** — `--dry-run` MUST NOT write any files; `--purge` 与 `--dry-run` 互斥 (E003)
+</invariants>
 
 <execution>
 Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.

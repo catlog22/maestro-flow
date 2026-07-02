@@ -9,6 +9,8 @@ allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request
 Wave-based template executor via `spawn_agents_on_csv`. Load template → bind variables → topological sort → group into barrier/non-barrier waves → spawn wave-by-wave → read results → report.
 
 Session: `.workflow/.maestro/MCP-{YYYYMMDD-HHmmss}/state.json`
+
+**Output boundary**: ALL file writes MUST target `.workflow/.maestro/MCP-*/` (session state) and `.workflow/.csv-wave/` (wave CSVs). Template files at `~/.maestro/templates/workflows/` are read-only during playback.
 </purpose>
 
 <invariants>

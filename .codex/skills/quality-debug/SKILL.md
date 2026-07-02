@@ -84,6 +84,8 @@ When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive sympto
 
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `understanding.md` (human-readable report)
+
+**Output boundary**: ALL file writes MUST target `DEBUG_DIR` or `.workflow/state.json` only. NEVER modify source code, test files, or other artifacts outside these paths during investigation.
 </context>
 
 <csv_schema>

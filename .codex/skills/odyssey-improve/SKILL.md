@@ -45,6 +45,8 @@ $ARGUMENTS
 **Session**: `.workflow/scratch/{YYYYMMDD}-improve-odyssey-{slug}/`
 **Output**: `session.json` | `evidence.ndjson` | `understanding.md`
 
+**Output boundary**: ALL session artifacts MUST target the session directory (`.workflow/scratch/{YYYYMMDD}-improve-odyssey-{slug}/`) or `.workflow/state.json` only. Source code modifications during S_FIX are in-scope but MUST be committed per action. NEVER write session artifacts outside these paths.
+
 **session.json — improve-specific fields:**
 ```json
 { "target": "", "dimensions": [], "baseline_metrics": {},
@@ -127,6 +129,53 @@ Base invariants apply. Additional: baseline metrics captured before any fix; eve
 <self_iteration>
 Applies to: **S_SURVEY, S_AUDIT, S_DIAGNOSE, S_GENERALIZE**. Logic in base.
 </self_iteration>
+
+<execution>
+Follow base execution discipline completely. Actions defined in state_machine below.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: INTAKE → SURVEY**
+- REQUIRED: Target resolved, SESSION_DIR created, session.json initialized with baseline_metrics.
+- REQUIRED: phase_goals[] derived from flags.
+- BLOCKED if: no target specified (E001) or target path not found (E002).
+
+**GATE 2: SURVEY → AUDIT**
+- REQUIRED: Current state survey completed — dependency audit, complexity scan.
+- REQUIRED: Evidence phase=survey logged, understanding.md §2 updated, G1 marked done.
+- BLOCKED if: survey incomplete — both scan types must be attempted.
+
+**GATE 3: AUDIT → DIAGNOSE**
+- REQUIRED: All dimension agents completed (or --dimensions subset), findings merged with severity classification.
+- REQUIRED: audit_result written to session.json, understanding.md §3 with severity matrix, G2 marked done.
+- BLOCKED if: zero dimensions reviewed (W002 partial is allowed, zero is not).
+
+**GATE 4: DIAGNOSE → FIX**
+- REQUIRED: Root causes identified for all critical/high findings with evidence.
+- REQUIRED: diagnoses[] written, understanding.md §4 updated, G3 marked done.
+- BLOCKED if: hypotheses failed 3 times without escalation decision.
+
+**GATE 5: FIX → VERIFY**
+- REQUIRED: ALL findings within fix_threshold fixed by severity tier (critical → high → medium → low).
+- REQUIRED: Per-fix evidence phase=fix logged.
+- BLOCKED if: tier incomplete — each tier must be fully addressed before advancing.
+
+**GATE 6: VERIFY → GENERALIZE**
+- REQUIRED: Tests pass, metrics re-captured, before/after comparison logged.
+- REQUIRED: confirmation written, understanding.md §5 updated, G4 marked done.
+- BLOCKED if: needs_rework → route back to S_FIX.
+
+**GATE 7: GENERALIZE → DISCOVER**
+- REQUIRED: ALL 3 layers (syntax/semantic/structural) attempted with evidence logged.
+- REQUIRED: generalization_stats written with by_layer entries for all 3 layers, G5 marked done.
+- BLOCKED if: any layer not attempted (thoroughness floor violation).
+
+**GATE 8: DISCOVER → RECORD**
+- REQUIRED: All hits triaged with per-item classification and reason.
+- REQUIRED: remaining_actionable == 0 OR loops >= max_loops with per-item reasons logged, G6 marked done.
+- BLOCKED if: unclassified hits remain.
+
+</execution>
 
 <state_machine>
 

@@ -37,12 +37,35 @@ $ARGUMENTS -- subcommand + options. Parse first token as subcommand.
 **State files:**
 - `.workflow/issues/issues.jsonl` -- active issues (one JSON per line)
 - `.workflow/issues/issue-history.jsonl` -- archived/closed issues
+
+**Output boundary**: ALL file writes MUST target `.workflow/issues/issues.jsonl`, `.workflow/issues/issue-history.jsonl`, or `.workflow/issues/` directory only. NEVER modify source code or files outside these paths.
 </context>
+
+<invariants>
+1. **Schema compliance** — every issue record MUST conform to the canonical issue.json template schema
+2. **ID uniqueness** — issue IDs (ISS-XXXXXXXX-NNN) MUST be unique across issues.jsonl and issue-history.jsonl
+3. **Close moves to history** — `close` subcommand MUST move the record from issues.jsonl to issue-history.jsonl, NEVER delete without archiving
+4. **Bidirectional links** — `link` subcommand MUST create references in both the issue and the linked task
+5. **Confirmation on destructive ops** — `close` and bulk `update` MUST require user confirmation unless `-y` flag is set
+6. **Append-only audit** — NEVER overwrite existing issue records; updates MUST preserve all prior fields and add `updated_at` timestamp
+</invariants>
 
 <execution>
 Parse subcommand from first token of $ARGUMENTS.
 Follow '~/.maestro/workflows/issue.md' completely.
 
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Execute** (Subcommand routing)
+- REQUIRED: Subcommand parsed and validated against valid set (create/list/status/update/close/link).
+- REQUIRED: `.workflow/issues/` directory exists (auto-create with empty issues.jsonl if missing).
+- BLOCKED if E_NO_SUBCOMMAND or E_INVALID_SUBCOMMAND.
+
+**GATE 2: Execute → Write** (For mutating subcommands: create/update/close/link)
+- REQUIRED: Issue data validated against issue.json template schema.
+- REQUIRED: For `close`: resolution text provided.
+- REQUIRED: For `link`: target task ID resolved and exists.
+- BLOCKED if schema validation fails or target references unresolvable.
 </execution>
 
 <completion>

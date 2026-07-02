@@ -38,7 +38,18 @@ Arguments: $ARGUMENTS
 - `--lens <name>` — Restrict to specific lens (technical|process|quality|decision); default: all four
 
 Modes (scan/single/range/all) and storage paths defined in workflow retrospective.md Argument Shape and Stages 1-7.
+
+**Output boundary**: ALL file writes MUST target the phase's retrospective directory (`.workflow/scratch/{YYYYMMDD}-retrospective-P{N}/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). NEVER modify source code, verification.json, review.json, plan.json, or other existing artifacts.
 </context>
+
+<invariants>
+1. **Source artifacts are read-only** — NEVER modify verification.json, review.json, plan.json, or any execution artifact. Retrospective reads these for analysis only.
+2. **Stable insight IDs** — `INS-{8hex}` MUST be deterministic from `hash(phase_num + lens + title)`. Re-runs MUST NOT create duplicate insights.
+3. **Routing requires confirmation** — unless `-y` flag is set, every external write (issues.jsonl, spec entry, knowhow capture) MUST be confirmed by user before execution.
+4. **Lens independence** — each lens agent (technical/process/quality/decision) operates independently. One lens's findings MUST NOT suppress or override another's.
+5. **Append-only for specs** — learnings.md entries are appended as `<spec-entry>` blocks. NEVER overwrite or restructure existing entries.
+6. **Archive before overwrite** — if retrospective.json already exists for a phase, the existing file MUST be archived before writing a new version.
+</invariants>
 
 <execution>
 Follow `~/.maestro/workflows/retrospective.md` Stages 1–8 in order.

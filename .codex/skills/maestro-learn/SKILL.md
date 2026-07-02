@@ -34,6 +34,8 @@ $ARGUMENTS — learning intent text, or flags.
 | `pattern-catalog` | decompose --save-spec --save-wiki → second-opinion --mode review | Full pattern extraction + review |
 
 **Session state:** `.workflow/knowhow/.maestro-learn/{session_id}/status.json`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/.maestro-learn/{session_id}/` (session state) and delegate to learn-* commands for knowledge writes. NEVER modify source code or files outside `.workflow/`.
 </context>
 
 <execution>

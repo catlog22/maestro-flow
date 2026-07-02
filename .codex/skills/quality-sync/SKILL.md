@@ -24,9 +24,33 @@ $quality-sync "--since abc123 --dry-run"
 - `--since <commit|HEAD~N>` -- Diff since specific commit (default: last sync timestamp)
 - `--dry-run` -- Show what would be updated without writing
 
+**Output boundary**: ALL file writes MUST target `.workflow/codebase/`, `.workflow/state.json`, or `doc-index.json` only. NEVER modify source code or files outside `.workflow/`. `--dry-run` MUST suppress all writes.
 </context>
 
+<invariants>
+1. **Source code is read-only** — sync reads source files to generate documentation. NEVER modify source code, test files, or any non-documentation files.
+2. **Dry-run is side-effect-free** — when `--dry-run` is set, NO file writes occur. Report only what would change.
+3. **Impact trace before refresh** — NEVER regenerate a doc file without first tracing which source changes affect it via doc-index.json. Untargeted full-refresh requires explicit `--full` flag.
+4. **Idempotent sync** — running sync twice with the same diff MUST produce identical results. State.json timestamp prevents redundant re-runs.
+5. **Incremental by default** — without `--full`, only changed components are refreshed. NEVER silently expand to a full rebuild.
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Diff → Impact Trace**
+- REQUIRED: Git diff computed (or --full flag set for all files).
+- BLOCKED if no diff and no --full: nothing to sync (W001).
+
+**GATE 2: Impact Trace → Refresh**
+- REQUIRED: Affected components traced via doc-index.json.
+- BLOCKED if trace fails: cannot refresh docs without impact mapping.
+
+**GATE 3: Refresh → Completion**
+- REQUIRED: `.workflow/codebase/` docs refreshed for affected components.
+- REQUIRED: If `--dry-run` is set, skip state.json write and report what would change. Otherwise, update state.json with sync timestamp.
+- BLOCKED if missing: do not report completion without updated docs.
 
 ### Step 1: Validate
 

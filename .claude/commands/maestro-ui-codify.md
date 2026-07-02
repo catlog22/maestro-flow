@@ -33,7 +33,18 @@ Flags:
 - `--package-name <name>`: Package name for reference output (default: auto-generated from source directory)
 - `--output-dir <path>`: Output directory for reference package (default: `.workflow/reference_style`)
 - `--overwrite`: Allow overwriting existing package directory
+
+**Output boundary**: ALL file writes MUST target the `--output-dir` path (default: `.workflow/reference_style/`) for reference packages, and `.workflow/knowhow/` for knowledge assets (via `codify-to-knowhow`). NEVER modify the source directory being analyzed.
 </context>
+
+<invariants>
+1. **Source read-only** — the source path being analyzed MUST NOT be modified; extraction is purely read-only
+2. **Phase-sequential loading** — workflow files (ui-codify-extract, ui-codify-package, ui-codify-knowhow) MUST be read only when their phase starts; NEVER load all phases eagerly
+3. **User confirmation before knowhow** — Phase 3→4 gate MUST present AskUserQuestion before generating knowledge assets; NEVER auto-proceed to knowhow generation
+4. **Overwrite protection** — existing package directory MUST NOT be overwritten without `--overwrite` flag (E003)
+5. **Artifact completeness** — all 5 required artifacts MUST exist before reporting completion; NEVER skip artifact verification
+6. **Token-first extraction** — design-tokens.json MUST be generated before layout-templates.json; layout extraction depends on token foundation
+</invariants>
 
 <execution>
 ## 1. Load UI Specs

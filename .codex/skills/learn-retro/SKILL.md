@@ -21,9 +21,42 @@ $ARGUMENTS — lens selection and scope flags.
 **Decision flags:** `--phase N`, `--tag <tag>`, `--id <id>`
 
 **Output**: `.workflow/knowhow/KNW-retro-{date}.md` + `KNW-retro-{date}.json`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-retro-{date}.md`, `.workflow/knowhow/KNW-retro-{date}.json`, and `.workflow/specs/learnings.md` only. NEVER modify source code, git history, or files outside these paths.
 </context>
 
+<invariants>
+1. **Read-only analysis** — NEVER modify source code, git history, or wiki entries; all writes go to `.workflow/` only
+2. **Git data integrity** — git commands MUST be read-only (`git log`, `git diff --stat`); NEVER run `git commit`, `git reset`, or any write-mode git operation
+3. **Confirmation before agents** — MUST prompt user via `request_user_input` before spawning decision evaluation agents; NEVER auto-spawn without confirmation
+4. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
+5. **Confirmation before persist** — MUST prompt user via `request_user_input` before appending insights to learnings.md
+6. **Lens contract** — MUST execute exactly the selected lens(es); `--lens git` SHALL NOT trigger decision evaluation and vice versa
+7. **Prior retro preservation** — existing `KNW-retro-*.json` files MUST NOT be modified; only new files created for current retro
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Lens Execution**
+- REQUIRED: Lens selection parsed (git/decision/all).
+- REQUIRED: Git repo validated if git lens selected (E001).
+- BLOCKED if: not inside git repo for git lens, or no commits in window (E002).
+
+**GATE 2: Git Lens → Decision Lens**
+- REQUIRED: Git metrics computed (commits, LOC, sessions, hotspots).
+- BLOCKED if: git data gathering failed entirely — skip git lens, continue with decision lens only.
+
+**GATE 3: Decision Collection → Decision Evaluation**
+- REQUIRED: Decisions collected from wiki/specs/git/phase.
+- REQUIRED: User confirmation obtained via `request_user_input` before spawning evaluation agents.
+- BLOCKED if: no decisions found (E003) or user declines agent spawn.
+
+**GATE 4: Report → Persist**
+- REQUIRED: Unified report written to KNW-retro-{date}.md + KNW-retro-{date}.json.
+- REQUIRED: User confirmation obtained via `request_user_input` before learnings append.
+- BLOCKED if: user declines — display summary only, skip persistence.
 
 ### Phase 1: Parse + Select Lenses
 

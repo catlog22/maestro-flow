@@ -74,6 +74,8 @@ When `--yes` or `-y`: Auto-confirm rebuild (implies --force), skip all prompts.
 **Output Directory**: `.workflow/.csv-wave/{session-id}/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
 **Target**: `.workflow/codebase/` (doc-index.json, tech-registry/, feature-maps/)
+
+**Output boundary**: ALL file writes MUST target `.workflow/codebase/`, `.workflow/state.json`, or `.workflow/project.md` (Tech Stack section only). NEVER modify source code or files outside these paths.
 </context>
 
 <csv_schema>

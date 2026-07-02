@@ -38,6 +38,8 @@ $ARGUMENTS -- optional flags.
 
 **Output:** `.workflow/kg/extractors.yaml` — declarative rules for PluginEngine.
 
+**Output boundary**: ALL file writes MUST target `.workflow/kg/extractors.yaml` only. NEVER modify source code or files outside this path. `--scan-only` MUST NOT write any files.
+
 **Rule format:**
 ```yaml
 version: 1
@@ -66,6 +68,16 @@ plugins:
 
 <execution>
 
+<invariants>
+1. **Read-only source code** — agents MUST only read source files for pattern discovery; NEVER modify source code
+2. **Scan-only safety** — `--scan-only` MUST stop after Phase 2 summary; NEVER write extractors.yaml
+3. **Append preservation** — `--append` MUST preserve existing rules in extractors.yaml; default (overwrite) MUST warn (W003) if file exists
+4. **Min-count threshold** — patterns with fewer occurrences than `--min-count` MUST be excluded unless explicitly overridden
+5. **User confirmation** — each pattern group MUST be confirmed/edited/skipped by user before writing (Phase 3, Step 2)
+6. **Schema compliance** — generated extractors.yaml MUST conform to version 1 PluginEngine schema with required fields (id, languages, mode, rules)
+7. **Validation mandatory** — MUST run `maestro kg index` after writing to verify new symbols are extractable
+</invariants>
+
 ### Phase 1: Discover patterns
 
 Spawn **3 parallel agents** to scan the codebase:
@@ -78,7 +90,21 @@ Spawn **3 parallel agents** to scan the codebase:
 
 Each agent returns: `[{pattern_type, regex_evidence, file_count, sample_matches: [{file, line, code}]}]`
 
-**Gate:** If all 3 agents return empty results → E002 (abort). If at least 1 agent succeeds, proceed with partial results (log W001 for failed agents).
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Discovery → Generation** (Phase 1 → Phase 2)
+- REQUIRED: At least 1 of 3 agents returned valid pattern results.
+- BLOCKED if all 3 agents return empty results (E002).
+
+**GATE 2: Generation → Write** (Phase 2 → Phase 3)
+- REQUIRED: At least 1 pattern meets `--min-count` threshold.
+- REQUIRED: User confirmed pattern groups via AskUserQuestion.
+- BLOCKED if `--scan-only` is set — stop after summary.
+
+**GATE 3: Write → Validation** (Phase 3 → KG Index)
+- REQUIRED: extractors.yaml written with valid schema.
+- REQUIRED: `maestro kg index` executed to verify extraction.
+- BLOCKED if schema validation fails on generated YAML.
 
 ### Phase 2: Generate rules
 

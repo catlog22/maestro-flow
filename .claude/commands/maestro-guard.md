@@ -30,9 +30,34 @@ $ARGUMENTS — Parse subcommand and optional path argument.
 
 **Enforcement:** The `workflow-guard` hook (PreToolUse on Write/Edit) reads this config
 and blocks operations targeting files outside boundaries. Requires hooks level >= `full`.
+
+**Output boundary**: ALL file writes MUST target `.workflow/config.json` (guard section) only. NEVER modify hook files, `.claude/settings.json`, or source code.
 </context>
 
+<invariants>
+1. **Config-only mutation** — guard MUST only modify the `guard` section of `.workflow/config.json`; NEVER touch other config sections or files
+2. **Non-destructive** — `off` MUST preserve existing paths and mode; NEVER clear the path list when disabling
+3. **Mode switch confirmation** — switching between allow/deny mode MUST require AskUserQuestion confirmation when existing paths will be cleared
+4. **Hook dependency** — guard MUST warn when enabled but `workflow-guard` hook is not active (hooks level < full)
+5. **Path normalization** — all paths MUST use forward slashes with trailing slash for directories; NEVER store raw backslash paths
+</invariants>
+
 <execution>
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Parse → Config Read**
+- REQUIRED: Subcommand parsed (on/off/status/allow/deny) or defaulted to `status`.
+- BLOCKED if: invalid subcommand provided.
+
+**GATE 2: Config Read → Execute**
+- REQUIRED: `.workflow/config.json` read successfully or initialized with empty guard section.
+- BLOCKED if: file unreadable and cannot be created (E001).
+
+**GATE 3: Execute → Confirm**
+- REQUIRED: Config mutation applied (for on/off/allow/deny) or status displayed (for status).
+- REQUIRED: Mode-switch AskUserQuestion answered (for allow↔deny transitions with existing paths).
+- BLOCKED if: user declines mode switch.
 
 **Step 1: Parse subcommand**
 

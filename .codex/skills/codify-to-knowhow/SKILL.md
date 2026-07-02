@@ -57,6 +57,8 @@ $codify-to-knowhow ".workflow/reference_style/my-style-v1"
 
 **Upstream**: `maestro-ui-codify`, `learn-decompose`, or any skill that generates a manifest
 **Downstream**: `maestro search --category coding`, `maestro load --type spec --keyword <slug>`
+
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/` (knowhow assets) and `.workflow/specs/` (spec entries) only. NEVER modify source code, manifest files, or files outside these paths.
 </context>
 
 <manifest_schema>

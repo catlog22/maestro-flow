@@ -81,6 +81,8 @@ $manage-drift-realign --continue "20260624-drift-realign"
 **Core Output**: `tasks.csv` + `results.csv` + `discoveries.ndjson` + `context.md`
 **Report Output**: `.workflow/.drift-realign/drift-report-{date}.md` + `drift-log.jsonl`
 
+**Output boundary**: ALL file writes MUST target `.workflow/` metadata files (specs, codebase docs, roadmap.md, state.json, issues.jsonl) or `.workflow/.trash/drift-realign-{timestamp}/` (backups) or `.workflow/.drift-realign/` (session details). NEVER modify source code files.
+
 **State files read**:
 - `.workflow/state.json` — project state + artifact registry
 - `.workflow/roadmap.md` — milestone/phase roadmap
