@@ -41,6 +41,7 @@ export interface SpecInjectionLogEntry {
   matchedEntries?: number;
   totalPromptKeywords?: number;
   dedupFilteredCount?: number;
+  searchSource?: 'daemon' | 'indexer' | 'keyword' | 'none';
   // Domain-specific
   domainTermsMatched?: number;
   // Plugin-specific

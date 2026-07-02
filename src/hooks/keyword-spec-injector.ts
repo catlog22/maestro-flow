@@ -6,12 +6,14 @@
  * Also injects domain term context (compact always + expanded on keyword match).
  */
 
+import { join } from 'node:path';
 import { buildKeywordIndex, lookupKeywords, type IndexedEntry } from '../tools/spec-keyword-index.js';
 import { readSpecBridge, markInjected, filterUnjected } from './spec-bridge.js';
 import { logInjectionEvent } from './spec-analytics.js';
 import { wrapMaestroContext, type ContextSection } from './context-format.js';
 import { loadGlossary, type DomainTerm } from '../tools/domain-loader.js';
 import { matchDomainTerms, collectRewriteHints } from '../tools/domain-matcher.js';
+import { searchWiki, prewarmWikiIndexer, type WikiSearchHit } from './wiki-search-bridge.js';
 
 // ============================================================================
 // Types
@@ -79,6 +81,9 @@ export async function evaluateKeywordInjection(
 ): Promise<KeywordInjectionResult> {
   const sections: ContextSection[] = [];
 
+  const workflowRoot = join(projectPath, '.workflow');
+  prewarmWikiIndexer(workflowRoot);
+
   // ── Domain context (always evaluated) ──────────────────────────────
   const domainSections = buildDomainSections(prompt, projectPath);
   sections.push(...domainSections);
@@ -102,6 +107,23 @@ export async function evaluateKeywordInjection(
       }
     }
   }
+
+  // ── Wiki BM25 search (best-effort) ──────────────────────────────
+  let wikiSource: 'daemon' | 'indexer' | 'keyword' | 'none' = 'none';
+  if (toInject.length > 0) wikiSource = 'keyword';
+  try {
+    const { hits, source } = await searchWiki(workflowRoot, prompt, { limit: 3 });
+    if (source !== 'none') wikiSource = source;
+    if (hits.length > 0) {
+      const wikiEntries = hits.map(h => ({ id: h.id, keywords: [] as string[] }));
+      const unjected = filterUnjected(sessionId, wikiEntries);
+      const unjectedHits = hits.filter(h => unjected.some(u => u.id === h.id)).slice(0, 3);
+      if (unjectedHits.length > 0) {
+        sections.push(buildWikiSection(unjectedHits));
+        markInjected(sessionId, [], unjectedHits.map(h => h.id));
+      }
+    }
+  } catch { /* best-effort */ }
 
   // ── KG symbol lookup (best-effort) ─────────────────────────────────
   try {
@@ -148,6 +170,7 @@ export async function evaluateKeywordInjection(
     matchedEntries: toInject.length,
     totalPromptKeywords: promptKeywords.length,
     domainTermsMatched: domainSections.length > 0 ? domainSections.reduce((n, s) => n + s.lines.length, 0) : 0,
+    searchSource: wikiSource !== 'none' ? wikiSource : (matchedKws.length > 0 ? 'keyword' : undefined),
   });
 
   return {
@@ -231,6 +254,18 @@ function buildKeywordSection(entries: IndexedEntry[]): ContextSection {
   });
 
   return { label, lines };
+}
+
+/**
+ * Build a wiki BM25 search-match section for the unified <maestro-context> block.
+ * Each line is compact: `<type> · <title>: <oneline summary>`.
+ */
+function buildWikiSection(hits: WikiSearchHit[]): ContextSection {
+  const lines = hits.map(h => {
+    const summary = h.summary.replace(/\s+/g, ' ').trim();
+    return `${h.type} · ${h.title}: ${summary}`;
+  });
+  return { label: 'wiki[matched]', lines };
 }
 
 // ============================================================================
