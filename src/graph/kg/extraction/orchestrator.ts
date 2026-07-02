@@ -53,7 +53,9 @@ export async function syncKnowledgeGraph(
       const removed = mg.getConnection().transaction(() => {
         const n = queries.deleteNodesBySourceType(entry.sourceType);
         if (extractionResult.nodes.length > 0) {
-          mg.insertExtractionResults(extractionResult);
+          queries.insertNodesBare(extractionResult.nodes);
+          queries.insertEdgesBare(extractionResult.edges);
+          queries.upsertFile(extractionResult.fileRecord);
         }
         return n;
       });
@@ -106,18 +108,23 @@ export async function syncKnowledgeGraph(
 
       const removedCode = mg.getConnection().transaction(() => {
         const removed = queries.deleteNodesBySourceType('codegraph');
+        // Phase 1: insert all nodes + file records (no edges yet)
         for (const result of allResults) {
           try {
-            mg.insertExtractionResults(result);
+            queries.insertNodesBare(result.nodes);
+            queries.upsertFile(result.fileRecord);
           } catch (err) {
-            try {
-              mg.getQueryBuilder().insertNodes(result.nodes);
-              mg.getQueryBuilder().upsertFile(result.fileRecord);
-              if (process.env.MAESTRO_DEBUG === '1') {
-                process.stderr.write(`[MaestroGraph] Partial write for ${result.fileRecord.path}: edges skipped (${err instanceof Error ? err.message : String(err)})\n`);
-              }
-            } catch (innerErr) {
-              process.stderr.write(`[MaestroGraph] Failed to index ${result.fileRecord.path}: ${innerErr instanceof Error ? innerErr.message : String(innerErr)}\n`);
+            process.stderr.write(`[MaestroGraph] Failed to index ${result.fileRecord.path}: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        }
+        // Phase 2: insert edges — all nodes exist, FK constraints satisfied
+        for (const result of allResults) {
+          if (result.edges.length === 0) continue;
+          try {
+            queries.insertEdgesBare(result.edges);
+          } catch (err) {
+            if (process.env.MAESTRO_DEBUG === '1') {
+              process.stderr.write(`[MaestroGraph] Edges skipped for ${result.fileRecord.path}: ${err instanceof Error ? err.message : String(err)}\n`);
             }
           }
         }
