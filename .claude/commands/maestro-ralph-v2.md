@@ -51,8 +51,8 @@ Remaining      → intent (amend_mode 时为 change_request)
    - **评估 Agent**（A_AGENT_EVALUATE / A_AGENT_GOAL_AUDIT / A_AGENT_REGROUND）：`Agent()` 不传 `name` — 同步阻塞，直接返回结果（评估 agent 只读不需要多 agent）
    - `agent_exec_name` 既用于 display/日志，也作为执行 Agent 的 `name` 参数
 5. **主流程调 `ralph complete`** — 每个 step 完成后由主流程调 `maestro ralph complete`，非 agent 上报
-6. **Decision evaluation inline** — decision 节点不 handoff，通过 `Agent()` 启动分析 Agent 在本循环内评估
-7. **No CLI delegation** — 本命令不使用 `maestro delegate`；执行和评估均通过 Agent() 完成
+6. **Decision evaluation inline** — decision 节点不 handoff，通过 Agent 或 CLI delegate 在本循环内评估
+7. **CLI delegation for evaluation only** — CLI delegate（`maestro delegate --mode analysis`）仅限评估环节；执行仍通过 executor Agent 完成
 8. **Decision delegates read-only** — 评估 Agent 通过 prompt 中的 CONSTRAINTS 约束为只读
 9. **执行 step 通过 `maestro ralph next` CLI 加载并内联执行**（由 execute Agent 完成）
 10. **status.json 是唯一真源** — 不生成 markdown 清单或侧文件
@@ -495,10 +495,12 @@ Agent name: {resolved_agent_name}
 
 ### A_AGENT_EVALUATE
 
-通过 Agent 在本循环内评估质量门。
+通过 Agent 和/或 CLI delegate 评估质量门。评估模式由 `step.evaluate_via` 决定。
+
+**1. Common setup:**
 
 1. Resolve artifact dir: `.workflow/scratch/{artifact.path}/` with fallback glob
-2. Parse decision metadata: `{ decision, retry_count, max_retries }`
+2. Parse decision metadata: `{ decision, retry_count, max_retries, evaluate_via }`
 3. Map result files:
 
    | Decision | Files |
@@ -509,32 +511,65 @@ Agent name: {resolved_agent_name}
    | post-test | uat.md, .tests/test-results.json |
    | post-frontend-verify | e2e-results.json |
 
-4. Dispatch evaluation Agent:
-   ```
-   Agent({
-     description: "评估 {decision} 质量门（同步评估 Agent，不传 name）",
-     prompt: "PURPOSE: 评估 {decision} 质量门结果
-   TASK: 读取以下结果文件 | 分析状态 | 评估严重性 | 给出建议
-   FILES: {result_file_paths}
-   SESSION: {session_dir}/status.json
-   EXPECTED: 输出以下格式：
-   ---VERDICT---
-   STATUS: PASS|FAIL|PARTIAL|BLOCKED
-   REASON: <一句话原因>
-   GAP_SUMMARY: <差距摘要>
-   CONFIDENCE: high|medium|low
-   CONFIDENCE_SCORE: 0-100
-   WEAKEST_DIMENSION: <最弱维度>
-   ---END---
-   CONSTRAINTS: 只评估不修改文件 | 置信度<60%倾向 fix | retry {n}/{max} 达上限必须 escalate"
-   })
-   ```
-5. On return: parse `---VERDICT---` block — STATUS must match strict enum `PASS|FAIL|PARTIAL|BLOCKED`; parse failure → fallback STATUS="fix", `parse_failed: true`, `confidence_score: 0` (invariant 18)
+4. `evaluate_via` 默认值：`"agent"`（未设置时）
+
+**2. Dispatch by mode:**
+
+**Mode: `agent`（默认）** — 同步 Agent 评估：
+
+```
+Agent({
+  description: "评估 {decision} 质量门（同步评估 Agent，不传 name）",
+  prompt: "PURPOSE: 评估 {decision} 质量门结果
+TASK: 读取以下结果文件 | 分析状态 | 评估严重性 | 给出建议
+FILES: {result_file_paths}
+SESSION: {session_dir}/status.json
+EXPECTED: 输出以下格式：
+---VERDICT---
+STATUS: PASS|FAIL|PARTIAL|BLOCKED
+REASON: <一句话原因>
+GAP_SUMMARY: <差距摘要>
+CONFIDENCE: high|medium|low
+CONFIDENCE_SCORE: 0-100
+WEAKEST_DIMENSION: <最弱维度>
+---END---
+CONSTRAINTS: 只评估不修改文件 | 置信度<60%倾向 fix | retry {n}/{max} 达上限必须 escalate"
+})
+```
+
+**Mode: `cli`** — CLI delegate 评估（异步后台）：
+
+```
+Bash({
+  command: `maestro delegate "PURPOSE: 评估 ${decision} 质量门结果\nTASK: 读取 ${result_file_paths} | 分析状态 | 评估严重性\nEXPECTED: ---VERDICT--- 格式（STATUS/REASON/GAP_SUMMARY/CONFIDENCE_SCORE）\nCONSTRAINTS: 只评估不修改文件" --mode analysis --rule analysis-review-code-quality`,
+  run_in_background: true
+})
+```
+等待 delegate 完成 → `maestro delegate output {exec_id}` 获取结果 → 解析 `---VERDICT---`
+
+**Mode: `dual`** — Agent + CLI 并行评估，交叉验证：
+
+1. 先派发 CLI delegate（`run_in_background: true`）
+2. 同时派发同步 Agent（阻塞等待）
+3. Agent 返回后，检查 CLI delegate 状态（`maestro delegate status {exec_id}`）
+4. 合并裁决：
+
+   | Agent 结果 | CLI 结果 | 合并策略 |
+   |-----------|---------|---------|
+   | 两者一致 | — | 采用共识，confidence_score 取较高值 |
+   | Agent=PASS, CLI=FAIL | — | 降级为 PARTIAL，confidence_score 取平均值 |
+   | Agent=FAIL, CLI=PASS | — | 维持 FAIL（保守策略） |
+   | CLI 未返回 | — | 使用 Agent 结果，标 `"cli_pending": true` |
+
+**3. Verdict parse + adjustment（所有模式通用）:**
+
+5. Parse `---VERDICT---` block — STATUS must match strict enum `PASS|FAIL|PARTIAL|BLOCKED`; parse failure → fallback STATUS="fix", `parse_failed: true`, `confidence_score: 0` (invariant 18)
 6. Confidence adjustment: <60 + proceed → fix; >95 + fix + retry>0 → suggest proceed
 7. **Decision log**: Append to `{session_dir}/decisions.ndjson`:
    ```json
    { "id": "DEC-{timestamp}", "timestamp": "{ISO}", "source": "ralph-v2",
      "node_id": "{step.decision}", "type": "quality-gate",
+     "evaluate_via": "{mode}", "cli_exec_id": "{exec_id|null}",
      "verdict": "{adjusted_verdict}", "confidence_score": {N},
      "parse_failed": false,
      "close_call": {N>=50 && N<=70}, "summary": "{REASON}" }
@@ -542,10 +577,10 @@ Agent name: {resolved_agent_name}
 
 ### A_AGENT_GOAL_AUDIT
 
-通过 Agent 审计子目标完成情况。
+通过 Agent 和/或 CLI delegate 审计子目标完成情况。支持 `evaluate_via` 三种模式（同 A_AGENT_EVALUATE）。
 
 1. Read `session.task_decomposition` from status.json
-2. Dispatch audit Agent:
+2. Dispatch audit（按 `evaluate_via` 模式，默认 `agent`）:
    ```
    Agent({
      description: "审计子目标完成情况（同步评估 Agent，不传 name）",
@@ -572,16 +607,16 @@ Agent name: {resolved_agent_name}
    })
    ```
 3. On return: parse verdict, update task_decomposition status
-4. Append `{session_dir}/decisions.ndjson`：`{ "type": "goal-gate", "unmet_count": N, "unmet_ids": [...] }`
+4. Append `{session_dir}/decisions.ndjson`：`{ "type": "goal-gate", "evaluate_via": "{mode}", "unmet_count": N, "unmet_ids": [...] }`
 5. Verdict routing: `all_met` + `INTENT_ALIGNED=true` → A_APPLY_GOAL_DONE；`all_met` + `INTENT_ALIGNED=false` → A_REGROUND_HALT；`has_unmet` → A_APPLY_GOAL_FIX
    GUARD: retry_count >= max_retries AND still unmet → A_APPLY_ESCALATE
 
 ### A_AGENT_REGROUND
 
-通过 Agent 执行意图保真检查。
+通过 Agent 和/或 CLI delegate 执行意图保真检查。支持 `evaluate_via` 三种模式（同 A_AGENT_EVALUATE）。
 
 1. Read status.json：intent, boundary_contract, completed steps, done goals
-2. Dispatch reground Agent:
+2. Dispatch reground（按 `evaluate_via` 模式，默认 `agent`）:
    ```
    Agent({
      description: "意图保真检查（同步评估 Agent，不传 name）",
@@ -781,6 +816,7 @@ Build rules 0-14 全部适用，包括 spec-setup 预检（rule 0.5）、grill a
     "stage": "",
     "scope": null,
     "decision": null,
+    "evaluate_via": "agent|cli|dual",
     "retry_count": 0,
     "max_retries": 2,
     "command_scope": "global|project|missing|null",
@@ -853,8 +889,10 @@ E001–E006, W001–W004 适用。Agent 新增：
 - [ ] 主流程负责 arg resolution、context loading、signal extraction、drift analysis
 - [ ] A_STEP_RECEIVE 从 executor 的 agent-message 中提取执行输出
 - [ ] Executor 崩溃（idle 无 SendMessage）→ 询问 2 次后 STATUS=BLOCKED，转 S_HANDLE_FAIL
-- [ ] Dual dispatch: 执行 Agent 传 `name`（async + SendMessage），评估 Agent 不传 `name`（sync）
-- [ ] Decision evaluation 通过 Agent() 同步完成（不传 name）
+- [ ] Dual dispatch: 执行 Agent 传 `name`（async + SendMessage），评估 Agent 不传 `name`（sync）或 CLI delegate
+- [ ] Decision evaluation 支持三种模式：agent（同步）、cli（CLI delegate）、dual（并行交叉验证）
+- [ ] `evaluate_via` 字段控制评估模式，默认 `"agent"`
+- [ ] dual 模式合并策略：一致取共识、分歧保守降级、CLI 未返回用 Agent 结果
 - [ ] Verdict 解析保持 `---VERDICT---` 格式，parse 失败 → fallback fix + parse_failed: true
 - [ ] decisions.ndjson 追加：source 字段为 `"ralph-v2"`
 - [ ] Session schema: `execution_mode: "agent"`，`agent_exec_name`（执行 Agent name + display），含 `artifacts_produced`
