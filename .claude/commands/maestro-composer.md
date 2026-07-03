@@ -152,7 +152,7 @@ Write `nodes.json`. Display resolved node list.
 |------|-----------|
 | Artifact boundary | Source outputs plan/spec/analysis/review |
 | Execution gate | Target contains `execute` |
-| Long-running | Target is maestro-plan, maestro-roadmap --mode full |
+| Long-running | Target is maestro-plan, maestro-blueprint |
 | Post-testing | Source contains `test` or `auto-test` |
 | User-defined | type_hint == checkpoint |
 

@@ -206,20 +206,20 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 | 审计 | `/maestro-milestone-audit` | audit-report.md | — |
 | 完成 | `/maestro-milestone-complete` | 归档到 milestones/ | — |
 
-**Scope 路由**：无参数 = milestone 全量；数字 = 指定 phase（micro 模式）；文本 = 宏观探索（macro 模式）。`--dir` 直接指定上游产物路径。
+**Scope 路由**：无参数 = milestone 全量；数字 = 指定 milestone（micro 模式）；文本 = 宏观探索（macro 模式）。`--dir` 直接指定上游产物路径。
 
 ### 双层 Analyze
 
 | 层级 | 参数 | 作用 | 下游路由 |
 |------|------|------|----------|
 | **Macro（宏观）** | 文本，如 `"用户认证系统"` | 需求影响面探索，产出 scope_verdict | large→roadmap, medium/small→plan |
-| **Micro（微观）** | 数字，如 `1` | Phase 级 6 维度深度分析 | 直接进入 plan |
+| **Micro（微观）** | 数字，如 `1` | Milestone 级 6 维度深度分析 | 直接进入 plan |
 
 ```bash
 # Macro：在 roadmap 之前探索需求影响面
 /maestro-analyze "实现多租户架构"           # → scope_verdict: large → 建议 roadmap
 
-# Micro：Phase 级深度分析
+# Micro：Milestone 级深度分析
 /maestro-analyze 1                          # → 6 维度评分 → 直接进入 plan
 
 # 传递上游上下文
@@ -230,7 +230,7 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 
 **A. 全量模式**：`analyze → plan → execute → verify`（一步覆盖所有 phase）
 
-**B. 逐 Phase**：`analyze 1 → plan 1 → execute 1`（每个 phase 独立，micro 层）
+**B. 逐 Milestone**：`analyze 1 → plan 1 → execute 1`（每个 milestone 独立，micro 层）
 
 **C. 混合模式**：全量分析 + 逐 phase 执行 + 中途 adhoc
 

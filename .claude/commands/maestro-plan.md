@@ -165,13 +165,13 @@ Status verdicts:
 |-----------|-----------|
 | Plan confirmed for execution | `/maestro-execute` |
 | Plan confirmed, specific directory | `/maestro-execute --dir {dir}` |
-| Re-plan with modifications | `/maestro-plan {phase}` |
+| Re-plan with modifications | `/maestro-plan {milestone}` |
 </completion>
 
 <error_codes>
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | No args and no roadmap (cannot determine scope) | Provide phase number or topic, or create roadmap |
+| E001 | error | No args and no roadmap (cannot determine scope) | Provide milestone number or topic, or create roadmap |
 | E003 | error | --gaps requires prior verification/issues to exist | Run maestro-execute first (verification is built-in) |
 | E004 | error | No plan found to revise (--revise without target) | Use --dir to specify plan, or create plan first |
 | E005 | error | Plan directory not found (--check) | Check path, use --dir |

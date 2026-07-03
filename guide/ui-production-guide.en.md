@@ -51,7 +51,7 @@ Generate design prototypes with multiple style variants. After user selection, c
 
 | Next Step | Command |
 |-----------|---------|
-| Plan based on design | `/maestro-plan {phase}` |
+| Plan based on design | `/maestro-plan {milestone}` |
 | Refine design | `/maestro-impeccable "{phase}" --chain improve` |
 
 ---

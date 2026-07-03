@@ -87,8 +87,8 @@ Maestro uses an `action x object` matrix for semantic routing:
 
 | Chain Name | Command |
 |------------|---------|
-| `analyze` | `maestro-analyze {phase}` |
-| `plan` | `maestro-plan {phase}` |
+| `analyze` | `maestro-analyze {milestone}` |
+| `plan` | `maestro-plan {milestone}` |
 | `execute` | `maestro-execute {phase}` |
 | `review` | `quality-review {phase}` |
 | `test` | `quality-test {phase}` |

@@ -31,11 +31,11 @@ title: "Maestro Commands Quick Reference"
 
 ### `maestro-plan` — 规划阶段
 
-**Usage:** `/maestro-plan [phase] [--collab] [--spec SPEC-xxx] [--auto] [--gaps] [--dir <path>] [--revise [instructions]] [--check <plan-dir>]`
+**Usage:** `/maestro-plan [milestone] [--collab] [--spec SPEC-xxx] [--auto] [--gaps] [--dir <path>] [--revise [instructions]] [--check <plan-dir>]`
 
 5 阶段规划流水线：探索 → 澄清需求 → 规划 → 检查 → 确认。生成包含波次和任务定义的 plan.json
 
-**Flags:** [phase] (阶段编号或名称) · --collab (协作模式) · --spec SPEC-xxx (引用规格) · --auto (自动模式) · --gaps (填补缺口) · --dir <path> (草稿目录模式) · --revise [instructions] (修订计划) · --check <plan-dir> (检查计划)
+**Flags:** [milestone] (里程碑编号或名称) · --collab (协作模式) · --spec SPEC-xxx (引用规格) · --auto (自动模式) · --gaps (填补缺口) · --dir <path> (草稿目录模式) · --revise [instructions] (修订计划) · --check <plan-dir> (检查计划)
 
 ---
 
@@ -72,11 +72,11 @@ title: "Maestro Commands Quick Reference"
 
 ### `maestro-analyze` — 分析讨论
 
-**Usage:** `/maestro-analyze [phase|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]`
+**Usage:** `/maestro-analyze [milestone|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]`
 
 多维分析：CLI 探索 + 6 维度评分 + 决策记录协议 + 意图覆盖检查。生成 analysis.md 和 context.md，用于后续规划
 
-**Flags:** [phase|topic] (阶段或主题) · -y (自动模式) · -c (恢复会话) · -q (快速模式，仅提取决策) · --gaps [ISS-ID] (缺口分析)
+**Flags:** [milestone|topic] (里程碑或主题) · -y (自动模式) · -c (恢复会话) · -q (快速模式，仅提取决策) · --gaps [ISS-ID] (缺口分析)
 
 ---
 

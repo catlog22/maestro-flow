@@ -193,20 +193,20 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 | Audit | `/maestro-milestone-audit` | audit-report.md | — |
 | Complete | `/maestro-milestone-complete` | archived to milestones/ | — |
 
-**Scope routing**: No args = entire milestone; number = specific phase (micro mode); text = macro exploration (macro mode). `--dir` specifies upstream output path directly.
+**Scope routing**: No args = entire milestone; number = specific milestone (micro mode); text = macro exploration (macro mode). `--dir` specifies upstream output path directly.
 
 ### Dual-Layer Analyze
 
 | Layer | Argument | Purpose | Downstream Routing |
 |-------|----------|---------|-------------------|
 | **Macro** | text, e.g. `"user auth system"` | Requirement impact exploration, produces scope_verdict | large→roadmap, medium/small→plan |
-| **Micro** | number, e.g. `1` | Phase-level 6-dimension deep analysis | Directly to plan |
+| **Micro** | number, e.g. `1` | Milestone-level 6-dimension deep analysis | Directly to plan |
 
 ```bash
 # Macro: explore requirement impact before roadmap
 /maestro-analyze "Implement multi-tenancy"     # → scope_verdict: large → suggests roadmap
 
-# Micro: Phase-level deep analysis
+# Micro: Milestone-level deep analysis
 /maestro-analyze 1                              # → 6-dimension scoring → directly to plan
 
 # Pass upstream context
@@ -217,7 +217,7 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 
 **A. Full milestone**: `analyze → plan → execute → verify` (one shot, all phases)
 
-**B. Per-phase**: `analyze 1 → plan 1 → execute 1` (each phase independently, micro layer)
+**B. Per-milestone**: `analyze 1 → plan 1 → execute 1` (each milestone independently, micro layer)
 
 **C. Mixed**: Full analysis + per-phase execution + adhoc mid-stream
 

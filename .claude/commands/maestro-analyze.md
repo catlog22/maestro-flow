@@ -79,7 +79,7 @@ Follows @~/.maestro/workflows/interview-mechanics.md standard.
 **Scope guard**: only analyze decisions; do not prejudge plan/execute concerns
 **Writeback target**: discussion.md (top table) + context.md "Interview Decisions"
 **Additional search sources**: issues.jsonl (--gaps mode), roadmap.md
-**Additional skip conditions**: input is already specific (explicit phase number or unambiguous topic)
+**Additional skip conditions**: input is already specific (explicit milestone number or unambiguous topic)
 **Exit condition**: all decision points settled → finalize session metadata
 </interview_protocol>
 

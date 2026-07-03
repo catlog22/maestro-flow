@@ -51,7 +51,7 @@ impeccable --chain build  →  impeccable (auto pipeline)  →  ui-codify
 
 | 下一步 | 命令 |
 |--------|------|
-| 基于设计规划 | `/maestro-plan {phase}` |
+| 基于设计规划 | `/maestro-plan {milestone}` |
 | 精调设计 | `/maestro-impeccable "{phase}" --chain improve` |
 
 ---

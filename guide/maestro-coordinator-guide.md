@@ -87,8 +87,8 @@ Maestro 使用 `action x object` 矩阵进行语义路由：
 
 | 链名 | 命令 |
 |------|------|
-| `analyze` | `maestro-analyze {phase}` |
-| `plan` | `maestro-plan {phase}` |
+| `analyze` | `maestro-analyze {milestone}` |
+| `plan` | `maestro-plan {milestone}` |
 | `execute` | `maestro-execute {phase}` |
 | `review` | `quality-review {phase}` |
 | `test` | `quality-test {phase}` |
