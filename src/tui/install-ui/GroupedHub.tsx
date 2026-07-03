@@ -184,8 +184,8 @@ export function GroupedHub({
           <Box flexDirection="column" marginTop={1}>
             <Text color={C.primary}>{'─'.repeat(40)}</Text>
             <Text
-              color={cursor === flat.length ? C.successBright : C.success}
-              bold
+              color={cursor === flat.length ? C.successBright : undefined}
+              bold={cursor === flat.length}
             >
               {cursor === flat.length ? SYM.cursor : ' '} {'▶'} {t.install.hubExecuteInstall}
             </Text>
