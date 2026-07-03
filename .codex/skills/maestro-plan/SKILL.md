@@ -1,7 +1,7 @@
 ---
 name: maestro-plan
-description: Use when creating, revising, or verifying an execution plan for a phase or task
-argument-hint: "[-y|--yes] [--concurrency N] [-c|--continue] \"<phase> [--dir <path>] [--from <source>] [--gaps] [--spec SPEC-xxx] [--collab]\""
+description: Use when creating, revising, or verifying an execution plan for a milestone or task
+argument-hint: "[-y|--yes] [--concurrency N] [-c|--continue] \"<milestone> [--dir <path>] [--from <source>] [--gaps] [--spec SPEC-xxx]\""
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -63,27 +63,24 @@ All mean: **follow the cycle anyway**.
 </tdd_mode>
 
 <context>
-$ARGUMENTS — phase number/text and optional flags.
+$ARGUMENTS — milestone number/text and optional flags.
 
-**Flags**: `-y` (auto), `--concurrency N` (default 4), `-c`/`--continue` (resume), `--dir <path>`, `--from <source>` (load upstream context directly: analyze:ANL-xxx, blueprint:BLP-xxx, brainstorm:ID, @file, path), `--gaps` (issue-linked), `--spec SPEC-xxx`, `--collab`, `--revise`, `--check`, `--tdd` (RED-GREEN-REFACTOR task chains)
+**Flags**: `-y` (auto), `--concurrency N` (default 4), `-c`/`--continue` (resume), `--dir <path>`, `--from <source>` (load upstream context directly: analyze:ANL-xxx, blueprint:BLP-xxx, brainstorm:ID, @file, path), `--gaps` (issue-linked), `--spec SPEC-xxx`, `--revise`, `--check`, `--tdd` (RED-GREEN-REFACTOR task chains)
+
+> **`--collab` removed**: multi-agent collaborative planning is now automatic — milestones spanning >3 modules auto-trigger a 2+1 agent model (2 parallel planners scoped to 2-3 modules each + 1 synthesis agent that merges, runs DAG/cycle/conflict analysis, and produces a unified plan.json).
 
 **Scope routing** (priority, per redesign §5.2):
 1. `--from analyze:ANL-xxx` → CONTEXT_DIR = ANL artifact path; scope=`standalone`
 2. `--from blueprint:BLP-xxx` → CONTEXT_DIR = BLP path; scope=`standalone`
 3. `--dir <path>` → CONTEXT_DIR = path; scope=`standalone`
-4. Numeric arg + roadmap → scope=`phase`; D-007 reverse-lookup milestone via `state.json.milestones[].phase_slugs`
+4. Numeric arg + roadmap → scope=`milestone`; resolve milestone from roadmap
 5. No args + roadmap → scope=`milestone` (plans all pending phases in current milestone)
 6. No args + no roadmap → search `state.json.artifacts[]` for latest `type=="analyze"` (DESC by created_at). Found → scope=`standalone`, CONTEXT_DIR = artifact.path. None → ERROR E001.
 7. Text arg + no upstream → scope=`adhoc/standalone`
 
-**D-007 milestone reverse lookup** (numeric scope only):
-```
-resolve_milestone(phase_number):
-  for ms in state.json.milestones[]:
-    if str(phase_number) in ms.phase_slugs: return ms.id
-  return state.json.current_milestone   # fallback
-```
-Write resolved milestone into PLN artifact registration and `plan.json.milestone`; NEVER read `current_milestone` directly for phase-scoped runs.
+**Milestone resolution** (numeric scope only):
+  target_milestone = specified milestone number
+  IF not found in state.json.milestones[]: ERROR
 
 **Session**: `.workflow/.csv-wave/{YYYYMMDD}-plan-P{N}-{slug}/`
 **Scratch**: `.workflow/scratch/{YYYYMMDD}-plan-P{N}-{slug}/` (.task/ subdir)
@@ -139,7 +136,7 @@ S_REGISTER    — 注册 PLN artifact、更新 index.json           PERSIST: sta
 
 <transitions>
 S_PARSE → S_RESUME     WHEN: --continue
-S_PARSE → S_CONTEXT    WHEN: phase/dir/--from resolved (D-007 reverse lookup for numeric)
+S_PARSE → S_CONTEXT    WHEN: milestone/dir/--from resolved
 S_PARSE → S_CONTEXT    WHEN: no args + no roadmap AND latest analyze artifact found in state.json (scope=standalone). Interactive mode: confirm the auto-discovered artifact with user ("Using analyze artifact ANL-xxx from {date}. Proceed?"). -y mode: auto-proceed with log.
 S_PARSE → ERROR        WHEN: no args + no roadmap + no analyze artifact
 
@@ -253,7 +250,7 @@ Collision detection against same-milestone plans.
 1. Register PLN artifact in state.json (scope, milestone, phase, depends_on)
 2. Update index.json with plan metadata
 3. If --gaps: link TASK files back to issues bidirectionally (task_refs[], task_plan_dir in issues.jsonl)
-4. Display: phase, task count, wave count, check status, confidence
+4. Display: milestone, task count, wave count, check status, confidence
 5. **Next-step suggestion** (suggest only, NEVER auto-execute): display recommended next command (e.g., `maestro-execute {phase}`). The user decides whether to proceed.
 
 </actions>
@@ -292,7 +289,7 @@ Collision detection against same-milestone plans.
 - [ ] Pressure pass completed on highest-complexity task
 - [ ] Collision detection against same-milestone plans (non-blocking)
 - [ ] Plan-checker passed (or minor issues acknowledged, max 3 iterations)
-- [ ] PLN artifact registered in state.json (numeric scope: milestone resolved via D-007 `phase_slugs` reverse lookup, NOT direct `current_milestone` read)
+- [ ] PLN artifact registered in state.json (numeric scope: milestone resolved directly from arg)
 - [ ] No-args fallback honored: latest analyze artifact auto-discovered when roadmap absent (§5.2 priority 6)
 - [ ] If --gaps: issues linked bidirectionally (task_refs[], task_plan_dir in issues.jsonl)
 </success_criteria>

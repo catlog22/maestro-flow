@@ -132,7 +132,7 @@ Status verdicts:
 | Condition | Suggestion |
 |-----------|-----------|
 | Roadmap needed (default light) | `/maestro-roadmap <requirement>` |
-| Full spec package + roadmap | `/maestro-roadmap --mode full <idea>` |
+| Full spec package | `/maestro-blueprint <idea>` |
 | Explore ideas first | `/maestro-brainstorm <topic>` |
 | View project dashboard | `/manage-status` |
 | Quick ad-hoc task | `/maestro-quick <task>` |

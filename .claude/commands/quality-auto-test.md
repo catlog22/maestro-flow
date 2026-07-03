@@ -148,7 +148,7 @@ Append to state.json.artifacts[]:
 | E003 | error | No test framework detected | Install test framework or configure test runner |
 | W001 | warning | One or more test scenarios failed | Auto-iterate or suggest fix options |
 | W002 | warning | Max iterations reached without convergence | Review reflection-log.md, suggest debug |
-| W003 | warning | Degraded spec mode (no full spec package) | Consider running maestro-roadmap --mode full |
+| W003 | warning | Degraded spec mode (no full spec package) | Consider running /maestro-blueprint |
 </error_codes>
 
 <success_criteria>

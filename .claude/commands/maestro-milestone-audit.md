@@ -56,7 +56,7 @@ Audit checklist steps (phase coverage, ad-hoc completeness, execution completene
 
 **GATE 1: Load → Phase Coverage Check**
 - REQUIRED: state.json loaded with artifacts[] filtered by target milestone.
-- REQUIRED: Milestone phases identified from roadmap (standard) or milestone_obj.phases (adhoc).
+- REQUIRED: Milestone phases identified from the PLN artifact's plan.json (standard) or milestone_obj.phases (adhoc). Phase coverage is verified from the PLN artifact's plan.json, not from roadmap.
 - BLOCKED if no execute artifacts found: error E003.
 
 **GATE 2: Phase Coverage → Integration Check**
@@ -116,7 +116,7 @@ Status verdicts:
 </error_codes>
 
 <success_criteria>
-- [ ] All phases in milestone identified from roadmap (standard) or milestone_obj.phases (adhoc)
+- [ ] All phases in milestone identified from the PLN artifact's plan.json (standard) or milestone_obj.phases (adhoc)
 - [ ] Artifact chains verified: ANL→PLN→EXC per phase (standard) or PLN→EXC exists (adhoc)
 - [ ] Ad-hoc artifacts checked for completion
 - [ ] Integration check completed (shared interfaces, data contracts)

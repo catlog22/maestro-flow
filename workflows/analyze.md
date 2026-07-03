@@ -41,10 +41,10 @@ Quick mode (-q):
 ## Arguments
 
 ```
-$ARGUMENTS: "[phase|topic] [-y] [-c] [-q] [--from <source>]"
+$ARGUMENTS: "[milestone|topic] [-y] [-c] [-q] [--from <source>]"
 
 (no args)   -- Milestone-wide analysis (requires init + roadmap)
-<phase>     -- Phase number (phase-scoped, requires init + roadmap)
+<milestone>  -- Milestone number (milestone-scoped, requires init + roadmap)
 <topic>     -- Topic text (adhoc if milestone exists, standalone if not)
 -y / --yes  -- Auto mode, skip interactive scoping, auto-deepen
 -c / --continue -- Resume from existing session
@@ -55,14 +55,14 @@ $ARGUMENTS: "[phase|topic] [-y] [-c] [-q] [--from <source>]"
 ## Scope Routing
 
 ```
-Worktree guard: If .workflow/worktree-scope.json exists, reject phase args not in owned_phases.
+Worktree guard: If .workflow/worktree-scope.json exists, reject milestone args not in owned scope.
 
 Auto-bootstrap: Create minimal .workflow/state.json if missing.
 
 Scope determination → OUTPUT_DIR:
   (no args) + milestone + roadmap → scope="milestone", mode="micro", OUTPUT_DIR=.workflow/scratch/{YYYYMMDD}-analyze-M{N}-{milestone_slug}/
   (no args) without milestone/roadmap → ERROR E001
-  (number) + milestone + roadmap   → scope="phase", mode="micro", OUTPUT_DIR=.workflow/scratch/{YYYYMMDD}-analyze-P{N}-{phase_slug}/
+  (number) + milestone + roadmap   → scope="milestone", mode="micro", OUTPUT_DIR=.workflow/scratch/{YYYYMMDD}-analyze-M{N}-{milestone_slug}/
   (number) without milestone/roadmap → ERROR
   (text) + milestone               → scope="adhoc", mode="macro", OUTPUT_DIR=.workflow/scratch/{YYYYMMDD}-analyze-{topic_slug}/
   (text) without milestone         → scope="standalone", mode="macro", OUTPUT_DIR=.workflow/scratch/{YYYYMMDD}-analyze-{topic_slug}/
@@ -75,14 +75,12 @@ Macro mode additions (scope="adhoc" or "standalone"):
   - Write scope_verdict to context.md conclusions section
   - Include scope_verdict in context-package.json for downstream consumption
 
-Phase-to-Milestone resolution (when scope="phase"):
-  FOR each ms in state.json.milestones[]:
-    IF phase_number in ms.phases[]:
-      target_milestone = ms.id
-      BREAK
-  IF no match: target_milestone = current_milestone (fallback)
+Milestone resolution (when scope="milestone"):
+  IF numeric arg specified: target_milestone = that milestone number
+  ELSE: target_milestone = current_milestone (fallback)
+  IF target_milestone not found in state.json.milestones[]: ERROR
 
-  Use target_milestone (not current_milestone) for:
+  Use target_milestone for:
     - artifact registration (milestone field in Step 8.9)
     - loading prior artifacts (Step 1 context loading)
 
@@ -137,7 +135,7 @@ Parse $ARGUMENTS to determine mode and flags:
 - `-c` present: locate existing session folder (discussion.md exists), resume from last round
 - `-y` present: set AUTO_MODE=true
 - `-q` present: set QUICK_MODE=true (skip Steps 2-7, jump to Step 8: Decision Extraction)
-- Number (e.g., "3") = phase scope: resolve phase slug from roadmap, output to scratch/{YYYYMMDD}-analyze-P{N}-{phase-slug}/
+- Number (e.g., "3") = milestone scope: resolve milestone slug from roadmap, output to scratch/{YYYYMMDD}-analyze-M{N}-{milestone-slug}/
 - Text (e.g., "microservices vs monolith") = adhoc/standalone scope: output to scratch/{YYYYMMDD}-analyze-{slug}/
 - Missing/empty = milestone scope (if roadmap exists) or error E001
 
@@ -610,7 +608,7 @@ For each Deferred decision, create an issue in .workflow/issues/issues.jsonl:
   id: "ISS-{YYYYMMDD}-{NNN}"
   title: "Deferred: {item.title}"
   status: "deferred", priority: 5, severity: "low"
-  source: "analyze", phase_ref: PHASE_NUM
+  source: "analyze", milestone_ref: target_milestone
   description: "{item.context} -- Chosen to defer: {item.reason}"
   tags: ["deferred", "analyze"]
 ```
@@ -621,8 +619,8 @@ For each Deferred decision, create an issue in .workflow/issues/issues.jsonl:
 Register artifact in .workflow/state.json:
   id: "ANL-{next sequential 3-digit id}"
   type: "analyze", scope: scope, status: "completed"
-  milestone: current_milestone (null if standalone)
-  phase: phase_num (null if milestone/adhoc/standalone)
+  milestone: target_milestone (null if standalone/adhoc)
+  phase: null (analyze operates at milestone level)
   path: OUTPUT_DIR relative to .workflow/
   context_package: "{OUTPUT_DIR}/context-package.json"   // relative to .workflow/
   harvested: false, created_at: session_start_time, completed_at: now()

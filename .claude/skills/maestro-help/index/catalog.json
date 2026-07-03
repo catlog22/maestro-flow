@@ -9,8 +9,8 @@
     {"name": "maestro-init", "command": "/maestro-init", "category": "core", "description": "项目初始化 — 创建 .workflow/ 目录结构和状态文件", "source": "../../commands/maestro-init.md"},
     {"name": "maestro-brainstorm", "command": "/maestro-brainstorm", "category": "core", "description": "头脑风暴 — 发散探索，多角色创意，上游起源命令", "source": "../../commands/maestro-brainstorm.md"},
     {"name": "maestro-blueprint", "command": "/maestro-blueprint", "category": "core", "description": "正式规格文档化 — 7-phase 收敛规格链，上游起源命令，产出 .workflow/blueprint/", "source": "../../commands/maestro-blueprint.md"},
-    {"name": "maestro-roadmap", "command": "/maestro-roadmap", "category": "core", "description": "路线图编排 — 消费上游 context，纯 Milestone > Phase 分解（不做技术探索）", "source": "../../commands/maestro-roadmap.md"},
-    {"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过 Phase 管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
+    {"name": "maestro-roadmap", "command": "/maestro-roadmap", "category": "core", "description": "路线图编排 — Milestone > Phase 分解，下游以 milestone 为入口", "source": "../../commands/maestro-roadmap.md"},
+    {"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
     {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 创建、查看、删除命令补丁", "source": "../../commands/maestro-overlay.md"},
     {"name": "maestro-amend", "command": "/maestro-amend", "category": "core", "description": "修正补丁 — 从工作流信号自动生成 overlay", "source": "../../commands/maestro-amend.md"},
     {"name": "maestro-composer", "command": "/maestro-composer", "category": "core", "description": "编排器 — compose + play 工作流组合执行", "source": "../../commands/maestro-composer.md"},
@@ -27,7 +27,7 @@
     {"name": "maestro-plan", "command": "/maestro-plan", "category": "pipeline", "description": "任务规划 — 支持 --from analyze:ANL-xxx 直达、碰撞检测、gap 修复计划", "source": "../../commands/maestro-plan.md"},
     {"name": "maestro-execute", "command": "/maestro-execute", "category": "pipeline", "description": "任务执行 — wave 并行执行、delegate 编排、自动提交", "source": "../../commands/maestro-execute.md"},
 
-    {"name": "maestro-milestone-audit", "command": "/maestro-milestone-audit", "category": "milestone", "description": "里程碑审计 — 检查 Phase 完成度和质量", "source": "../../commands/maestro-milestone-audit.md"},
+    {"name": "maestro-milestone-audit", "command": "/maestro-milestone-audit", "category": "milestone", "description": "里程碑审计 — 检查里程碑完成度和质量", "source": "../../commands/maestro-milestone-audit.md"},
     {"name": "maestro-milestone-complete", "command": "/maestro-milestone-complete", "category": "milestone", "description": "里程碑完成 — 归档里程碑并推进下一个", "source": "../../commands/maestro-milestone-complete.md"},
     {"name": "maestro-milestone-release", "command": "/maestro-milestone-release", "category": "milestone", "description": "里程碑发布 — 生成发布说明和变更日志", "source": "../../commands/maestro-milestone-release.md"},
 
@@ -218,17 +218,17 @@
   ],
   "workflows": {
     "topology": {
-      "hierarchy": "Roadmap > Milestone > Phase > Task",
+      "hierarchy": "Roadmap > Milestone > Phase | Plan > Task > Wave",
       "layers": {
         "upstream_origin": ["brainstorm (发散/轻量)", "blueprint (收敛/重型)"],
-        "understanding": "analyze 双层: 宏观(文本参数) + 微观(数字参数)",
+        "understanding": "analyze 双层: 宏观(文本参数) + 微观(milestone 数字参数)",
         "orchestration": "roadmap (可选，消费上游 context)",
         "execution": ["plan", "execute"]
       }
     },
     "paths": {
-      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze 微观 → plan → execute",
-      "B_large_feature": "analyze 宏观 → roadmap → analyze 微观 → plan → execute",
+      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze {milestone} → plan {milestone} → execute",
+      "B_large_feature": "analyze 宏观 → roadmap → analyze {milestone} → plan {milestone} → execute",
       "C_medium_feature": "analyze 宏观 → plan --from analyze:ANL-xxx → execute",
       "D_small_fix": "plan → execute",
       "E_spec_only": "blueprint → (供人阅读)",

@@ -1,7 +1,7 @@
 ---
 name: maestro-analyze
 description: Use when a topic needs structured multi-dimensional investigation before planning or decision-making
-argument-hint: "[-y|--yes] [--concurrency N] [-c|--continue] [--from <source>] \"<phase|topic> [-q|--quick] [--gaps [ISS-ID]]\""
+argument-hint: "[-y|--yes] [--concurrency N] [-c|--continue] [--from <source>] \"<milestone|topic> [-q|--quick] [--gaps [ISS-ID]]\""
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -13,11 +13,11 @@ Wave 1 (CLI exploration, parallel) -> Wave 2 (6-dimension scoring, parallel) -> 
 
 **Dual-layer scope (D-003)**:
 - **Macro layer** (text argument, e.g. `analyze "auth refactor"`): broad impact exploration. Produces `scope_verdict ∈ {small, medium, large}` to drive downstream routing (roadmap vs plan).
-- **Phase layer** (numeric argument, e.g. `analyze 1`): phase-scoped deep analysis under `current_milestone`. Milestone resolved via D-007 `phase_slugs` reverse lookup, NEVER direct `current_milestone` read.
+- **Milestone layer** (numeric argument, e.g. `analyze 1`): milestone-level deep analysis covering all phases under the milestone. `analyze 1` = Milestone 1.
 </purpose>
 
 <context>
-$ARGUMENTS -- phase number, topic text, and optional flags.
+$ARGUMENTS -- milestone number, topic text, and optional flags.
 
 **Flags**:
 - `-y, --yes`: Skip all confirmations (auto mode)
@@ -94,7 +94,7 @@ Available exploration dimensions: architecture, implementation, performance, sec
 6. **Gaps mode pipeline**: --gaps follows: Load issues from issues.jsonl -> Classify & group by location/component -> CSV gen (W1: 1 explore row per issue, W2: 1 synthesis per group) -> Execute waves -> Write issue.analysis record per issue -> Append history `{ action: "analyzed", at: <ISO>, by: "maestro-analyze --gaps" }` -> Output context.md for plan --gaps
 7. **Graceful degradation**: Missing exploration reduces scoring quality; missing scoring reduces synthesis quality
 8. **Tri-output**: context.md + context-package.json always. analysis.md (full only) + conclusions.json (full + quick — quick writes minimal with `scope_verdict` + `implementation_scope[]`). Gaps mode writes to issues.jsonl + context.md + context-package.json
-9. **D-007 milestone resolution**: numeric scope MUST reverse-lookup `state.json.milestones[].phase_slugs`. NEVER read `current_milestone` directly for phase-scoped artifact registration.
+9. **Milestone resolution**: numeric scope directly specifies the milestone number. Resolve from `state.json.milestones[]` by ID.
 10. **scope_verdict mandatory** (D-003): macro/adhoc/standalone scopes MUST produce `scope_verdict ∈ {small, medium, large}` in conclusions.json. Drives downstream chain (roadmap vs plan).
 11. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Do NOT bypass for "efficiency" or "clear intent" reasons.
 12. **Evidence required on decisions** — every decision in context.md MUST cite evidence from Wave 1 exploration findings or Wave 2 scores. Decisions citing only orchestrator's manual file reading are flagged LOW CONFIDENCE. **Degradation exception**: when invariant 7 activates and evidence is incomplete, decisions MAY proceed but MUST inherit LOW CONFIDENCE flag per invariant 13 — this is not a violation of the MUST, it is the defined degraded behavior.
@@ -129,14 +129,9 @@ S_PARSE:
   | Text subject + milestone | macro | macro | subject slugified (max 40) |
   | Text subject, no milestone | macro | macro | subject slugified (max 40) |
 
-  **D-007 milestone reverse lookup** (numeric scope only):
-  ```
-  resolve_milestone(phase_number):
-    for ms in state.json.milestones[]:
-      if str(phase_number) in ms.phase_slugs: return ms.id
-    return state.json.current_milestone   # fallback (standalone)
-  ```
-  Write resolved milestone into `session.milestone` and artifact registration; NEVER use `current_milestone` directly for phase-scoped runs.
+  **Milestone resolution** (numeric scope only):
+  target_milestone = specified milestone number
+  IF not found in state.json.milestones[]: ERROR
 
 S_CONTEXT:
   -> S_CSV_GEN    DO: load project.md, roadmap.md, state.json, prior artifacts, specs, upstream context-package (if --from)
@@ -286,7 +281,7 @@ Non-blocking: conflicts produce warnings, pipeline continues.
    | Scope | Condition | Suggested |
    |-------|-----------|-----------|
    | Phase/Milestone | Go + UI work needed | `$maestro-impeccable build {target}` |
-   | Phase/Milestone | Go + ready to plan | `$maestro-plan` or `$maestro-plan {phase}` |
+   | Phase/Milestone | Go + ready to plan | `$maestro-plan` or `$maestro-plan {milestone}` |
    | Phase/Milestone | No-Go | `$maestro-brainstorm {topic}` |
    | Macro/Adhoc/Standalone | `scope_verdict == "large"` | `$maestro-roadmap --from analyze:{ANL_ID}` |
    | Macro/Adhoc/Standalone | `scope_verdict == "medium"` | `$maestro-plan --from analyze:{ANL_ID}` |
@@ -341,7 +336,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] context.md produced (all modes); analysis.md (full mode); conclusions.json (full mode AND quick mode with at minimum `scope_verdict` + `implementation_scope[]`)
 - [ ] context-package.json produced (all modes) with constraints, requirements, insights, open_questions
 - [ ] `scope_verdict ∈ {small, medium, large}` written into conclusions.json + context.md (macro/adhoc/standalone scopes)
-- [ ] D-007 milestone reverse lookup applied for numeric scope; `session.milestone` populated via `phase_slugs`, never via direct `current_milestone` read
+- [ ] Milestone resolved directly from numeric arg; `session.milestone` populated from state.json.milestones[]
 - [ ] context.md contains all decisions classified as Locked/Free/Deferred
 - [ ] Decision Recording Protocol applied to all decisions
 - [ ] Confidence scored per dimension with factor-based model (full mode)

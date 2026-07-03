@@ -147,8 +147,8 @@ S_FALLBACK:
 |-------|-----------------|--------|
 | maestro-brainstorm | topic | `"{intent}"` |
 | maestro-roadmap | description | `"{intent}"` |
-| maestro-analyze | phase or topic | `{phase}` or `"{intent}"` |
-| maestro-plan | phase, --from, or --dir | see --from auto-injection below |
+| maestro-analyze | milestone or topic | `{milestone}` or `"{intent}"` |
+| maestro-plan | milestone, --from, or --dir | see --from auto-injection below |
 | maestro-execute | phase or --dir | see --from auto-injection below |
 | quality-debug | gap context | Read previous step's error/gap |
 | quality-* | phase | `{phase}` |

@@ -15,7 +15,7 @@ allowed-tools:
 <purpose>
 Generate milestone/phase roadmap from requirements or upstream context. Three modes: create (default), revise (`--revise`), review (`--review`). For formal spec documents, use `/maestro-blueprint`.
 
-Pipeline: brainstorm/blueprint/analyze → **roadmap** → analyze {phase} → plan → execute.
+Pipeline: brainstorm/blueprint/analyze → **roadmap** → analyze {milestone} → plan {milestone} → execute.
 </purpose>
 
 <required_reading>
@@ -60,7 +60,7 @@ Follows @~/.maestro/workflows/interview-mechanics.md standard.
 
 **Interaction mode**: convergent menu-driven
 **Decision tree** (strict order): mode (create / revise / review) → requirement scope (MVP / complete / phased) → decomposition strategy (progressive / direct / auto) → milestone boundaries → phase dependencies and order
-**Scope guard**: only roadmap shape; do not pre-resolve intra-phase task breakdown (belongs to plan)
+**Scope guard**: only roadmap shape; do not pre-resolve task breakdown or phase decomposition (belongs to plan)
 **Writeback target**: .workflow/roadmap.md "Roadmap Decisions" section (create if absent)
 **Additional skip conditions**: --revise, --review (skip to respective mode)
 **Exit condition**: on consensus or explicit user signal → finalize Roadmap Decisions section

@@ -1,7 +1,7 @@
 ---
 name: maestro-plan
-description: Use when creating, revising, or verifying an execution plan for a phase or task
-argument-hint: "[phase] [--collab] [--spec SPEC-xxx] [-y] [--gaps] [--tdd] [--dir <path>] [--from <source>] [--revise [instructions]] [--check <plan-dir>]"
+description: Use when creating, revising, or verifying an execution plan for a milestone or task
+argument-hint: "[milestone] [--spec SPEC-xxx] [-y] [--gaps] [--tdd] [--dir <path>] [--from <source>] [--revise [instructions]] [--check <plan-dir>]"
 allowed-tools:
   - Read
   - Write
@@ -29,9 +29,9 @@ Produces plan.json + TASK files; registers PLN artifact in state.json.
 </deferred_reading>
 
 <context>
-$ARGUMENTS — phase number, or no args for milestone-wide planning, with optional flags.
+$ARGUMENTS — milestone number, or no args for current milestone, with optional flags.
 
-Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), output directory format, and artifact registration are defined in workflow plan.md.
+Scope routing, base flags (`--spec`, `-y`, `--gaps`, `--dir`), output directory format, and artifact registration are defined in workflow plan.md.
 
 **Command-level flags** (extensions beyond workflow base):
 - `--from <source>`: Load upstream context directly (bypasses roadmap requirement):
@@ -46,8 +46,8 @@ Scope routing, base flags (`--collab`, `--spec`, `-y`, `--gaps`, `--dir`), outpu
 1. `--from analyze:ANL-xxx` → uses analyze conclusions.implementation_scope directly
 2. `--from blueprint:BLP-xxx` → uses blueprint requirements + architecture
 3. `--dir <path>` → explicit context directory (unchanged)
-4. Numeric arg → scope = "phase", resolve from roadmap (unchanged)
-5. No args + roadmap → scope = "milestone" (unchanged)
+4. Numeric arg → scope = "milestone", resolve from roadmap
+5. No args + roadmap → scope = "current_milestone"
 6. No args + no roadmap → search state.json for latest analyze artifact, fallback standalone
 
 **Ad-hoc milestone (D-008):** When scope resolves to "standalone" via the standard standalone resolution (no `--from` source), and `current_milestone == null`, plan auto-creates an adhoc milestone (`type: "adhoc"`) in state.json before proceeding. This ensures downstream milestone-audit/complete have a valid milestone context. See workflow plan.md § "Ad-hoc Milestone Auto-Creation".
@@ -68,6 +68,28 @@ Bash("maestro collab preflight --phase <phase-number>")
 If exit code is 1, present warnings and ask whether to proceed.
 
 Follow '~/.maestro/workflows/plan.md' completely.
+
+### Plan Agent Model
+
+Plan automatically selects agent mode based on milestone scope:
+
+**Single agent mode** (default):
+- Milestone involves ≤3 modules
+- 1 workflow-planner agent, max 8 TASK JSON output
+- Directly produces plan.json
+
+**2+1 agent mode** (auto-triggered):
+- Milestone involves >3 modules
+- 2 parallel workflow-planner agents, each scoped to 2-3 modules
+- Each agent produces max 8 TASK JSON (total max 16)
+- +1 synthesis agent:
+  - Merges TASK JSON from both agents
+  - DAG analysis: dependency correctness, cycle detection, cross-module conflicts
+  - Terminology consistency check
+  - Wave ordering optimization
+  - Produces unified plan.json
+
+Module count is derived from milestone phase definitions and analyze upstream context.
 
 ### Phase Gates (MANDATORY, BLOCKING — Create mode only)
 
@@ -113,7 +135,7 @@ Follow workflow plan.md § "Revise Mode" and § "Check Mode" respectively. These
 
 ```
 === PLAN READY ===
-Phase: {phase_name}
+Milestone: {milestone_name}
 Tasks: {task_count} tasks in {wave_count} waves
 Check: {checker_status} (iteration {check_count}/{max_checks})
 Collision: {collision_status}

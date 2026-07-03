@@ -123,8 +123,8 @@ ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 | 无 `.workflow/` + 有源码 | init | `maestro-init` |
 | 有 state.json，无 roadmap，无 milestones | analyze-macro | `maestro-analyze` (宏观调研) |
 | 有 macro analyze artifact，无 roadmap | roadmap | `maestro-roadmap` |
-| 有 roadmap，未启动 phase | analyze | `maestro-analyze {phase}` |
-| 最新 artifact = analyze | plan | `maestro-plan {phase}` |
+| 有 roadmap，未启动 phase | analyze | `maestro-analyze {milestone}` |
+| 最新 artifact = analyze | plan | `maestro-plan {milestone}` |
 | 最新 artifact = plan | execute | `maestro-execute {phase}` |
 | 最新 artifact = execute | review | `quality-review {phase}` |
 | review verdict=PASS | test-gen | `quality-auto-test {phase}` |

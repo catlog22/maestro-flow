@@ -349,6 +349,7 @@ Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechani
    | Placeholder | Source |
    |-------------|--------|
    | `{phase}` | session.phase |
+   | `{milestone}` | session.milestone |
    | `{plan_dir}` | session.context.plan_dir |
    | `{analysis_dir}` | session.context.analysis_dir |
    | `{brainstorm_dir}` | session.context.brainstorm_dir |
@@ -424,9 +425,9 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `init` | `maestro-init` |
 | `blueprint` | `maestro-blueprint "{intent}"` |
 | `analyze_macro` | `maestro-analyze "{intent}"` |
-| `analyze` | `maestro-analyze {phase}` |
+| `analyze` | `maestro-analyze {milestone}` |
 | `ui_design` | `maestro-impeccable build "{phase}"` |
-| `plan` | `maestro-plan {phase}` |
+| `plan` | `maestro-plan {milestone}` |
 | `plan_from_analyze` | `maestro-plan --from analyze:{analyze_macro_id}` |
 | `plan_from_blueprint` | `maestro-plan --from blueprint:{blueprint_id}` |
 | `execute` | `maestro-execute {phase}` |
@@ -482,7 +483,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `quality-fix` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
 | `deploy` | quality-review → maestro-milestone-release |
 | `blueprint-driven` | maestro-init → [B] maestro-blueprint → [B] maestro-plan --from blueprint:{BLP} → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `analyze-macro-driven` | [B] maestro-analyze "{intent}" → ◆ post-analyze-scope → (large: [B] maestro-roadmap --from analyze:{ANL} → [B] maestro-analyze {phase} → [B] maestro-plan {phase}) / (medium\|small: [B] maestro-plan --from analyze:{ANL}) → [B] maestro-execute → quality-review → manage-harvest --auto |
+| `analyze-macro-driven` | [B] maestro-analyze "{intent}" → ◆ post-analyze-scope → (large: [B] maestro-roadmap --from analyze:{ANL} → [B] maestro-analyze {milestone} → [B] maestro-plan {milestone}) / (medium\|small: [B] maestro-plan --from analyze:{ANL}) → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `grill-brainstorm` | [B] maestro-grill → [B] maestro-brainstorm --from grill:{GRL} → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto (**auto_mode: grill 透传 `-y`，Auto mode 代码代答**) |
 | `brainstorm-driven` | [B] maestro-brainstorm → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `ui-craft-build` | maestro-impeccable build → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |

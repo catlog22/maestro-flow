@@ -111,7 +111,7 @@ Status verdicts:
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Release successful, starting next milestone | `/maestro-plan {next_phase}` |
+| Release successful, starting next milestone | `/maestro-plan {next_milestone}` |
 | Want to view project dashboard | `/manage-status` |
 </completion>
 

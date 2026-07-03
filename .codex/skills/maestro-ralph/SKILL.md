@@ -426,8 +426,8 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
 | init | `maestro-init` | *(same)* | — | all |
 | analyze-macro | `maestro-analyze "{intent}"` | *(same)* | `post-analyze-scope` | all |
 | roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | *(same)* | — | all |
-| analyze | `maestro-analyze {phase}` | `maestro-analyze` | — | all |
-| plan | `maestro-plan {phase}` *(scope=phase)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | `maestro-plan` | — | all |
+| analyze | `maestro-analyze {milestone}` | `maestro-analyze` | — | all |
+| plan | `maestro-plan {milestone}` *(scope=phase)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | `maestro-plan` | — | all |
 | execute | `maestro-execute {phase}` | `maestro-execute` | `post-execute` | all |
 | business-test | `quality-auto-test {phase}` | `quality-auto-test` | `post-business-test` | full only |
 | review | `quality-review {phase}` | `quality-review` | `post-review` | all (quick: append `--tier quick`) |

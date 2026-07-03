@@ -11,16 +11,16 @@ All output goes to `.workflow/scratch/{YYYYMMDD}-plan-[P{N}-|M{N}-]{slug}/`. Dat
 ## Prerequisites
 
 - None for standalone operation (state.json auto-bootstraps)
-- For milestone/phase scope: init + roadmap required
+- For milestone scope: init + roadmap required
 
 ---
 
 ## Scope Resolution
 
 ```
-Input: [phase] argument OR --dir <path> OR --from <source>
+Input: [milestone] argument OR --dir <path> OR --from <source>
 
-Worktree guard: reject if phase not in .workflow/worktree-scope.json owned_phases
+Worktree guard: reject if milestone not in .workflow/worktree-scope.json owned scope
 Auto-bootstrap: create minimal state.json if missing
 
 Resolution priority (highest to lowest):
@@ -32,16 +32,16 @@ Resolution priority (highest to lowest):
   4. --dir <path>   → CONTEXT_DIR = path, scope from state.json artifact or "standalone"
   5. no arguments + roadmap → scope = "milestone", CONTEXT_DIR = latest analyze artifact for current_milestone
      (ERROR E001 if no roadmap)
-  6. numeric arg    → scope = "phase", resolve PHASE_SLUG from roadmap.md,
-     CONTEXT_DIR = latest analyze artifact for phase
+  6. numeric arg    → scope = "milestone", resolve MILESTONE_SLUG from roadmap.md,
+     CONTEXT_DIR = latest analyze artifact for milestone
      (ERROR if no init + roadmap)
   7. no arguments + no roadmap → search state.json for latest analyze artifact
      Found → scope = "standalone", CONTEXT_DIR = artifact path
      Not found → ERROR E001
 
-Phase-to-Milestone resolution (when scope="phase"):
+Milestone resolution (when scope="milestone"):
   FOR each ms in state.json.milestones[]:
-    IF phase_number in ms.phases[]:
+    IF ms matches milestone_number:
       target_milestone = ms.id
       BREAK
   IF no match: target_milestone = current_milestone (fallback)
@@ -84,11 +84,10 @@ When plan resolves to `scope == "standalone"` AND `state.json.current_milestone 
 
 | Flag | Effect |
 |------|--------|
-| `--collab` | Use collaborative multi-planner mode in P3 |
 | `--spec SPEC-xxx` | Load task-spec as requirements source |
 | `--auto` | Skip P2 (clarification), proceed directly to P3 |
 | `--gaps` | Load verification.json gaps, skip P1 exploration, plan only gap fixes |
-| `--dir <path>` | Use arbitrary directory instead of phase resolution (skip roadmap validation) |
+| `--dir <path>` | Use arbitrary directory instead of milestone resolution (skip roadmap validation) |
 | `--revise [instructions]` | Revise existing plan (skip P1-P3, load → modify → P4). Auto-discovers latest plan or use `--dir` |
 | `--check <plan-dir>` | Standalone plan verification (P4 only, read-only) |
 | `--tdd` | Generate TDD task chains (RED-GREEN-REFACTOR triplets). Load `@~/.maestro/workflows/tdd.md` for discipline and task structure |
@@ -246,9 +245,9 @@ When `--tdd` is active:
 MUST spawn `workflow-planner` agent with: context.md, spec-ref, doc-index.json, explorationContext (incl. implementationScope from P1 Step 5), clarificationContext, phase goal + success_criteria, templates (plan.json, task.json).
 
 **Task count guard**: Before spawning, assess scope complexity:
-- Single feature / simple change → expect **1-2 tasks** max
-- Medium feature (multiple files, one module) → expect **2-4 tasks** max
-- Large feature (cross-module) → expect **4-8 tasks** max
+- Single feature / simple change → expect **1-4 tasks** max
+- Medium feature (multiple files, cross-module) → expect **4-8 tasks** max
+- Large milestone (>3 modules, 2+1 agent mode) → expect **8-16 tasks** max
 - If planner outputs more tasks than these thresholds, re-prompt with explicit instruction to merge.
 
 Agent responsibilities:
@@ -298,12 +297,26 @@ Every TASK-*.json MUST include these fields — they are NOT optional:
 
 **Why this matters:** Executor agents work from the task JSON. Vague instructions produce shallow one-line changes. Concrete instructions produce complete work.
 
-### Collaborative Mode (`--collab`)
+### Plan Agent Model
 
-- Pre-allocate TASK ID ranges per planner (2-5 planners based on scope): TASK-001..010, TASK-011..020, etc.
-- Create `plan-note.md` for coordination (shared context, ID ranges, no-overlap rules)
-- MUST spawn N `workflow-collab-planner` agents in parallel, each writing `.task/TASK-{NNN}.json` within assigned range
-- Merge: collect all task files, build unified plan.json with merged waves, resolve cross-planner dependencies
+Plan automatically selects agent mode based on milestone scope:
+
+**Single agent mode** (default):
+- Milestone involves ≤3 modules
+- 1 workflow-planner agent, max 8 TASK JSON output
+- Directly produces plan.json
+
+**2+1 agent mode** (auto-triggered when milestone involves >3 modules):
+- 2 parallel workflow-planner agents, each scoped to 2-3 modules
+- Each agent produces max 8 TASK JSON (total max 16)
+- +1 synthesis agent:
+  - Merges TASK JSON from both agents
+  - DAG analysis: dependency correctness, cycle detection, cross-module conflicts
+  - Terminology consistency check
+  - Wave ordering optimization
+  - Produces unified plan.json
+
+Module count is derived from milestone phase definitions and analyze upstream context.
 
 ### Gap Mode (`--gaps`)
 
@@ -316,7 +329,6 @@ Bidirectional linking (main flow, post-planner): update matching issues in `.wor
 ### Output
 - `plan.json` in PHASE_DIR
 - `.task/TASK-{NNN}.json` files in PHASE_DIR/.task/
-- `plan-note.md` (collab mode only)
 
 ---
 
@@ -414,10 +426,10 @@ Bidirectional linking (main flow, post-planner): update matching issues in `.wor
 
 | Error | Action |
 |-------|--------|
-| E001: No args and no roadmap | Provide phase number or topic, or create roadmap |
+| E001: No args and no roadmap | Provide milestone number or topic, or create roadmap |
 | E004: No plan found to revise | Use --dir to specify plan, or create plan first |
 | E005: Plan directory not found (--check) | Check path, use --dir |
-| Phase directory not found | Abort with message: "Phase {phase} not found. Run /workflow:init first." |
+| Milestone not found | Abort with message: "Milestone {milestone} not found. Run /maestro-roadmap first." |
 | No context.md | Warn, proceed with exploration only |
 | Exploration agent fails | Log error, continue with available explorations; flag plan as [LOW CONFIDENCE] (partial explorations) |
 | Planner produces invalid JSON | Retry once, then abort with error details |
@@ -444,7 +456,7 @@ Incrementally modify an existing plan without rebuilding from scratch.
 ### Plan Discovery
 
 - `--dir` specified → use directly
-- Else → latest completed plan artifact for current phase from state.json
+- Else → latest completed plan artifact for current milestone from state.json
 - Not found → ERROR E004
 
 ### Execution Flow

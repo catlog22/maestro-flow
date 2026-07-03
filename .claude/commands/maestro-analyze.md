@@ -1,7 +1,7 @@
 ---
 name: maestro-analyze
 description: Use when a topic needs structured multi-dimensional investigation before planning or decision-making
-argument-hint: "[phase|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]"
+argument-hint: "[milestone|topic] [-y] [-c] [-q] [--gaps [ISS-ID]]"
 allowed-tools:
   - Read
   - Write
@@ -27,17 +27,17 @@ Multi-dimensional analysis of a proposal, decision, or architecture choice via C
 </deferred_reading>
 
 <context>
-$ARGUMENTS -- phase number for micro mode, topic text for macro/adhoc mode, no args for milestone-wide.
+$ARGUMENTS -- milestone number for micro mode, topic text for macro/adhoc mode, no args for current milestone.
 
 **Dual-layer mode:**
 - **Macro mode** (text argument): Explore impact surface of a topic/requirement. Produces coarse-grained context with `scope_verdict` to route next step. Use before roadmap or for standalone analysis.
-- **Micro mode** (numeric argument): Phase-level deep analysis within an existing roadmap. Produces fine-grained context for plan consumption. `analyze 1` = Phase 1 of current milestone.
+- **Micro mode** (numeric argument): Milestone-level deep analysis within an existing roadmap. Covers all phases under the milestone. Same analysis depth, broader scope. `analyze 1` = Milestone 1.
 
 **Disambiguation rule (mode selection):**
-- First positional arg matches `^\d+$` (pure digits, e.g. `1`, `42`) → **micro mode** (treat as phase number)
+- First positional arg matches `^\d+$` (pure digits, e.g. `1`, `42`) → **micro mode** (treat as milestone number)
 - First positional arg is non-numeric text (e.g. `auth-refactor`, `improve search`) → **macro mode** (treat as topic)
-- No positional arg → milestone-wide micro mode (when roadmap present) else macro fallback
-- Mixed input like `"1 phase"` is treated as text → macro mode (only bare numerics trigger micro)
+- No positional arg → current milestone micro mode (when roadmap present) else macro fallback
+- Mixed input like `"1 milestone"` is treated as text → macro mode (only bare numerics trigger micro)
 
 **Flags:**
 
@@ -52,9 +52,9 @@ $ARGUMENTS -- phase number for micro mode, topic text for macro/adhoc mode, no a
 **Scope routing:**
 | Input | Mode | Scope |
 |-------|------|-------|
-| Pure digits (e.g. `1`, `42`) | micro | Phase-level deep analysis |
+| Pure digits (e.g. `1`, `42`) | micro | Milestone-level deep analysis |
 | Non-numeric text (e.g. `auth-refactor`) | macro | Topic impact surface |
-| No positional arg + roadmap | micro | Milestone-wide |
+| No positional arg + roadmap | micro | Current milestone |
 | No positional arg + no roadmap | macro | Fallback |
 | `--gaps [ISS-ID]` | gaps | Issue root cause analysis |
 
@@ -122,9 +122,9 @@ Status verdicts:
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Phase/Milestone scope, Go, UI work needed | `/maestro-impeccable build {target}` |
-| Phase/Milestone scope, Go, ready to plan | `/maestro-plan` or `/maestro-plan {phase}` |
-| Phase/Milestone scope, No-Go | Revisit requirements or `/maestro-brainstorm {topic}` |
+| Milestone scope, Go, UI work needed | `/maestro-impeccable build {target}` |
+| Milestone scope, Go, ready to plan | `/maestro-plan` or `/maestro-plan {milestone}` |
+| Milestone scope, No-Go | Revisit requirements or `/maestro-brainstorm {topic}` |
 | Macro/Adhoc, scope_verdict = large | `/maestro-roadmap --from analyze:ANL-xxx` |
 | Macro/Adhoc, scope_verdict = medium/small | `/maestro-plan --from analyze:ANL-xxx` |
 | Need more exploration | `/maestro-analyze {topic} -c` |
@@ -175,7 +175,7 @@ Both modes (full + quick):
 - [ ] Decision Recording Protocol applied to all decisions
 - [ ] Scope creep redirected to Deferred section
 - [ ] Deferred items auto-created as issues (if any)
-- [ ] Artifact registered in state.json with correct scope/milestone/phase
+- [ ] Artifact registered in state.json with correct scope/milestone
 - [ ] Next step routed (impeccable/plan for Go, brainstorm for No-Go)
 - [ ] Session sealed via finish-work (archive.json written, optional spec/knowhow extraction)
 </success_criteria>

@@ -292,6 +292,8 @@ Odyssey 长周期循环（独立路径）
 | 长周期改进 | Odyssey 深度循环 | `/odyssey-improve "改进目标"` |
 | 需求迭代 | Odyssey 深度循环 | `/odyssey-planex "需求描述"` |
 
+> 注：Path A/B 中 `analyze 1` / `plan 1` 的数字 `1` 指 **milestone 编号**（第 1 个里程碑），下游以 milestone 为入口。
+
 ## Core Rules
 
 1. **Catalog First**: 先查 catalog.json，再按需读 source 文件
