@@ -119,13 +119,13 @@ S_PARSE:
   -> S_CONTEXT    WHEN: scope resolved (milestone/phase/macro/adhoc/standalone/gaps)
   -> ERROR(E001)  WHEN: no args and no roadmap
 
-  **Scope routing** (text → macro layer, numeric → phase layer per D-003):
+  **Scope routing** (text → macro layer, numeric → milestone layer per D-003):
   | Condition | Scope | Layer | Slug |
   |-----------|-------|-------|------|
   | --gaps flag | gaps | — | ISS-ID slugified or "issue-gaps" |
-  | Empty subject + milestone + roadmap | milestone | phase | milestone name slugified |
+  | Empty subject + milestone + roadmap | milestone | milestone | milestone name slugified |
   | Empty subject, no roadmap | ERROR E001 | — | -- |
-  | Numeric + milestone + roadmap | phase | phase | phase slug from roadmap |
+  | Numeric + roadmap | milestone | milestone | milestone name slugified |
   | Text subject + milestone | macro | macro | subject slugified (max 40) |
   | Text subject, no milestone | macro | macro | subject slugified (max 40) |
 
@@ -247,7 +247,7 @@ Filter `wave==3 AND status=="pending"` -> build prev_context from wave 2 scores 
 | `medium` | 1-2 subsystems, parallel-safe |
 | `small` | Single file or few files, directly executable |
 
-Write to `conclusions.json.scope_verdict` (all modes that produce conclusions); mirror into `context.md` and `context-package.json.source.scope_verdict`. Phase-scoped runs may omit (default null).
+Write to `conclusions.json.scope_verdict` (all modes that produce conclusions); mirror into `context.md` and `context-package.json.source.scope_verdict`. Milestone-scoped runs may omit (default null).
 
 Gray area detection: domain-aware (things users SEE/CALL/RUN/READ), phase-specific (skip prior decided areas).
 

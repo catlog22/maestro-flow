@@ -90,7 +90,7 @@ Remaining                        → intent (amend_mode 时为 change_request)
 7. **command_path 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global，限定 `.codex/skills/`），命中即写绝对路径到 status.json；未命中标 `command_scope = "missing"`
 8. **执行 step 加载契约** — 由 `maestro ralph next` CLI 在执行期完成：解析 frontmatter + `<required_reading>` + `<deferred_reading>`，自动读取 required 文件全文并拼入 prompt；缺失 required → 退出码 1（E007），pause session。ralph build 阶段只通过 `maestro ralph skills --platform codex` 校验路径存在性，不读 SKILL.md 内容
 9. **Decomposition is outcome-oriented** — sub-goals 为可观测交付，禁止 lifecycle 复刻；通过 `create_goal` 绑定目标，`update_goal` 在收敛时释放
-10. **planning_mode governs arg granularity** — `unified` → skill args 无 `{phase}`；`independent` → 含 `{phase}`
+10. **planning_mode governs arg granularity** — `unified` → skill args 无 phase/milestone 占位符；`independent` → analyze/plan 用 `{milestone}`，execute/quality 用 `{phase}`
 11. **task_decomposition 驱动 steps[] 动态生长** — `post-goal-audit` 按 unmet 子目标插入 scoped mini-loop；字段可选/累加，既有字段不删不改
 12. **Platform** — `session.platform = "codex"`；CLI 调用一律带 `--platform codex`
 13. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Do NOT bypass for "efficiency" or "clear intent" reasons. Especially invariants about ralph never executing steps and completion_confirmed by CLI.
@@ -471,9 +471,9 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
     - `analyze_macro_id` 存在且当前 step 是 `roadmap` → args 改为 `--from analyze:{analyze_macro_id}`
     - `analyze_macro_id` 存在且 `scope_verdict ∈ {medium, small}` 且当前 step 是 `plan` → args 改为 `--from analyze:{analyze_macro_id}`
     - `blueprint_id` 存在 → 当前 step 是 `plan` → args 改为 `--from blueprint:{blueprint_id}`（优先级低于 phase 数字参数）
-    - **phase-level deferred chaining**（独立模式，step 含 `{phase}` 占位符）：build 阶段前序 artifact 尚未产出，由 A_RESOLVE_ARGS（ralph-execute）运行时从 state.json 查找同 phase+milestone 最新 completed artifact 注入：
-      - `plan` step → `--from analyze:{phase_analyze_id}`，写 `source_artifact_ref`
-      - `execute` step → `--dir {plan_path}`（现有逻辑），写 `source_artifact_ref = "plan:{id}"`
+    - **deferred chaining**（独立模式）：build 阶段前序 artifact 尚未产出，由 A_RESOLVE_ARGS（ralph-execute）运行时从 state.json 查找并注入：
+      - `plan` step（含 `{milestone}` 占位符）→ 查同 milestone 最新 completed analyze artifact，`--from analyze:{milestone_analyze_id}`，写 `source_artifact_ref`
+      - `execute` step（含 `{phase}` 占位符）→ 查同 phase+milestone 最新 completed plan artifact，`--dir {plan_path}`（现有逻辑），写 `source_artifact_ref = "plan:{id}"`
     - 写入 `step.source_artifact_ref` 以便审计
 13. **D-007 Milestone-ref 标注**：每个含 `{phase}` 占位符的 step → `step.milestone_id = session.milestone`（由 A_RESOLVE_PHASE 反查得出），禁止读 `current_milestone`
 14. **动态插入步骤**（A_APPLY_*）同样应用规则 7-13
@@ -875,9 +875,9 @@ Decomposition 产出后通过 Codex 内置工具管理目标（由 A_DECOMPOSE_T
 - [ ] Intent overrides 识别 grill / brainstorm / blueprint / analyze-macro
 - [ ] auto_confirm=true 时 grill step args 追加 `-y`（Auto mode 代码代答，stage 不跳过）
 - [ ] A_RESOLVE_SCOPE_VERDICT 读 macro analyze conclusions.scope_verdict，写入 session.scope_verdict + analyze_macro_id
-- [ ] 链路起点 = analyze-macro 时：large→roadmap+analyze+plan(phase)；medium/small→直跳 plan --from analyze:{ANL_ID}（跳过 roadmap+analyze）
+- [ ] 链路起点 = analyze-macro 时：large→roadmap+analyze+plan(milestone)；medium/small→直跳 plan --from analyze:{ANL_ID}（跳过 roadmap+analyze）
 - [ ] post-analyze-scope decision 节点在 macro analyze 之后插入；A_SCOPE_EVALUATE/A_APPLY_SCOPE_VERDICT 重塑链路
-- [ ] plan step args 支持三路径：`{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}`，写入 step.source_artifact_ref
+- [ ] plan step args 支持三路径：`{milestone}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}`，写入 step.source_artifact_ref
 - [ ] roadmap step args 自动注入 `--from analyze:{analyze_macro_id}`（若存在）
 - [ ] artifact 过滤按 session.phase；unified 按 milestone
 - [ ] quality_mode 由 A_DETERMINE_QUALITY_MODE 决定，过滤 build steps
@@ -889,13 +889,13 @@ Decomposition 产出后通过 Codex 内置工具管理目标（由 A_DECOMPOSE_T
 - [ ] 每个 sub-goal 含 `completion_confirmed`（初始 false）
 - [ ] post-goal-audit decision 仅在 decomposed 时插入，位于 milestone-complete 之前
 - [ ] Unmet sub-goals 动态 grow steps[]（goal_ref tagged）；max retries → escalate
-- [ ] planning_mode 显式决定；unified=无 `{phase}`, independent=带 `{phase}`
+- [ ] planning_mode 显式决定；unified=无占位符, independent=analyze/plan 带 `{milestone}`、execute/quality 带 `{phase}`
 - [ ] Chain 必须以 `milestone-complete` 结尾
 - [ ] Decision nodes 由 maestro delegate --role analyze 评估
 - [ ] Ralph 不执行 step，只 evaluate；`Skill(maestro-ralph-execute)` 直调 handoff
 - [ ] session.platform = "codex"；所有 CLI 调用携带 `--platform codex`
-- [ ] Phase-level deferred chaining：plan/execute step 的 `--from`/`--dir` 注入由 A_RESOLVE_ARGS（ralph-execute）运行时完成；build 阶段标记意图，不预知 artifact ID
-- [ ] Phase-level plan step 运行时获得 `--from analyze:{phase_analyze_id}`（由 ralph-execute 从 state.json 查找注入）
+- [ ] Deferred chaining：plan/execute step 的 `--from`/`--dir` 注入由 A_RESOLVE_ARGS（ralph-execute）运行时完成；build 阶段标记意图，不预知 artifact ID
+- [ ] Milestone-level plan step 运行时获得 `--from analyze:{milestone_analyze_id}`（由 ralph-execute 从 state.json 查找注入）
 - [ ] Phase-level execute step 运行时获得 `source_artifact_ref = "plan:{id}"`
 - [ ] 每个 step 含 `completion_summary` + `completion_decisions` + `completion_caveats` + `completion_deferred`（初始 null）
 - [ ] `completion_summary` 在 DONE/DONE_WITH_CONCERNS 时为 MUST（由 CLI `--summary` 参数传入）

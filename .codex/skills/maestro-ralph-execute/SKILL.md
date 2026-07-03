@@ -153,16 +153,16 @@ S_FALLBACK:
 | quality-debug | gap context | Read previous step's error/gap |
 | quality-* | phase | `{phase}` |
 
-**--from auto-injection (phase-level artifact chaining):**
+**--from auto-injection (artifact chaining):**
 
-Phase-level steps 在 build 阶段无法预知前序 artifact ID。A_RESOLVE_ARGS 运行时从 state.json 查找并注入显式引用，打通 analyze→plan→execute 数据管道：
+Steps 在 build 阶段无法预知前序 artifact ID。A_RESOLVE_ARGS 运行时从 state.json 查找并注入显式引用，打通 analyze→plan→execute 数据管道：
 
 ```
 Read state.json.artifacts（含 milestone_history 内归档 artifacts）
-→ filter by milestone={session.milestone} + phase={session.phase} + status=="completed"
+→ filter by milestone={session.milestone} (+ phase={session.phase} for execute-step lookups) + status=="completed"
 
-plan step（含 {phase} 占位符，args 无 --from 且无 --dir）:
-  1. 查同 phase+milestone 最新 completed type=="analyze" artifact → id = ANL-xxx
+plan step（含 {milestone} 占位符，args 无 --from 且无 --dir）:
+  1. 查同 milestone 最新 completed type=="analyze" artifact → id = ANL-xxx
   2. 命中 → args 追加 --from analyze:{id}
   3. 写 step.source_artifact_ref = "analyze:{id}"
 
@@ -366,7 +366,7 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。Skill(ma
 - [ ] Auto mode: retry 一次后 pause；interactive 提供 retry/skip/abort
 - [ ] 自调用持续到全部 completion_confirmed 或 paused
 - [ ] 只处理 session.platform == "codex" 的会话
-- [ ] --from auto-injection：phase-level plan step 运行时从 state.json 查找同 phase+milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `source_artifact_ref`
+- [ ] --from auto-injection：milestone-level plan step 运行时从 state.json 查找同 milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `source_artifact_ref`
 - [ ] --from auto-injection：phase-level execute step 运行时查找同 phase+milestone 最新 completed plan artifact → 注入 `--dir`，写 `source_artifact_ref`
 - [ ] Goal context injection：`ralph_protocol_version < "2"` → 前置 `<goal_context>` block；`>= "2"` → skip（session_anchor 覆盖）
 - [ ] Goal context 包含 sub-goal description、done_when、boundary、evidence、execution_criteria

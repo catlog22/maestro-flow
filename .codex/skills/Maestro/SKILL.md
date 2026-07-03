@@ -359,7 +359,7 @@ Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechani
    | `{BLP}` | session.blueprint_id |
    | `{intent}` | session.intent |
 
-   **--from auto-injection**: 当 step 是 `maestro-plan`，args 含 `{phase}` 但无 `--from` 且无 `--dir`，且 `session.context.analysis_dir` 已填充 → 查 state.json 同 phase+milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `step.source_artifact_ref`
+   **--from auto-injection**: 当 step 是 `maestro-plan`，args 含 `{milestone}` 但无 `--from` 且无 `--dir`，且 `session.context.analysis_dir` 已填充 → 查 state.json 同 milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `step.source_artifact_ref`
 2. Mark step `status="running"`, persist status.json + `update_plan` (this step → in_progress)
 3. **Invoke the skill directly**: execute `Skill(skill_name, resolved_args)` in coordinator context (NO spawn). Read its produced artifacts directly
 4. On success: mark step `status="done"`. **Structured completion**: `Bash("maestro ralph complete {idx} --status DONE --summary \"...\" [--decisions \"...\"] [--caveats \"...\"] [--deferred \"...\"]")`（`--summary` MUST，动词开头 ≤100 字）。**Barrier-context update** (when step is a context-producing skill):
@@ -543,7 +543,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 - [ ] Intent classified and chain resolved
 - [ ] Chain catalog 覆盖 blueprint / analyze_macro / plan_from_analyze / plan_from_blueprint / blueprint-driven / analyze-macro-driven 等新拓扑路径
 - [ ] D-007: 数字 phase 步骤的 `milestone_id` 通过 `state.json.milestones[].phase_slugs` 反查；写入 step
-- [ ] plan step args 支持 `{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径，`source_artifact_ref` 写入
+- [ ] plan step args 支持 `{milestone}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径，`source_artifact_ref` 写入
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
 - [ ] Goal registered via built-in `create_goal`; status.json decomposition fields additive-only
 - [ ] status.json 唯一真源；无 markdown 清单
