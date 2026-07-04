@@ -940,6 +940,9 @@ export function registerSpecCommand(program: Command): void {
 
       if (result.success) {
         console.log(`Marked ${file}:${line} as conflicted.`);
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
       } else {
         console.error(`Error: ${result.error}`);
         process.exit(1);
@@ -963,6 +966,9 @@ export function registerSpecCommand(program: Command): void {
 
       if (result.success) {
         console.log(`Cleared conflict markers from ${file}:${line}.`);
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
       } else {
         console.error(`Error: ${result.error}`);
         process.exit(1);
@@ -986,6 +992,9 @@ export function registerSpecCommand(program: Command): void {
 
       if (result.success) {
         console.log(`Set confidence=${level} on ${file}:${line}.`);
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
       } else {
         console.error(`Error: ${result.error}`);
         process.exit(1);
@@ -1008,6 +1017,11 @@ export function registerSpecCommand(program: Command): void {
       console.log(`Cleared ${result.cleared} conflict markers from ${file}.`);
       if (result.errors.length > 0) {
         for (const err of result.errors) console.error(`  Error: ${err}`);
+      }
+      if (result.cleared > 0) {
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
       }
     });
 

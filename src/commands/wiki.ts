@@ -60,7 +60,7 @@ export function registerWikiCommand(program: Command): void {
     .command('list')
     .alias('ls')
     .description('List wiki entries with optional filters')
-    .option('--type <type>', 'Filter by type: project|roadmap|spec|issue|lesson|memory|note')
+    .option('--type <type>', 'Filter by type: project|roadmap|spec|issue|knowhow|note|domain')
     .option('--scope <scope>', 'Filter by spec scope: project|global|team|personal')
     .option('--status <status>', 'Filter by status')
     .option('--category <cat>', 'Filter by category: coding|arch|debug|test|review|learning')
@@ -496,7 +496,7 @@ export function registerWikiCommand(program: Command): void {
   wiki
     .command('create')
     .description('Create a new markdown wiki entry')
-    .requiredOption('--type <type>', 'spec|memory|note')
+    .requiredOption('--type <type>', 'spec|knowhow')
     .requiredOption('--slug <slug>', 'kebab-case slug')
     .requiredOption('--title <title>', 'Entry title')
     .option('--body <text>', 'Inline body text')
