@@ -492,3 +492,15 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.48',
+  title: 'Embedding 模型管理 + Ralph 嵌套套娃编排',
+  highlights: [
+    '新增 embedding 模型管理命令：download / status / index rebuild',
+    'Ralph-v2 executor 重构为 unnamed 嵌套套娃模型',
+    'commands 入口参数统一从 phase 改为 milestone',
+    '安装界面 EmbeddingPanel 配置 + circuit breaker 保护',
+  ],
+  actions: [],
+});
