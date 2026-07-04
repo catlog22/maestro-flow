@@ -84,6 +84,52 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 
 ---
 
+## 知识生命周期
+
+### 稳定标识（sid）
+
+每个 `<spec-entry>` 在创建时自动分配一个稳定 ID（格式 `S-YYYYMMDD-xxxx`），用于跨文件引用和演化链追踪。存量条目可通过 `maestro spec backfill-sid` 回填。
+
+### 演化链（Supersession）
+
+当新知识替代旧知识时，使用 supersede 建立演化链：
+
+```bash
+# 1. 添加新条目（自动生成 sid）
+maestro spec add coding "新规则" "内容" --keywords kw1,kw2 --json
+# 输出中包含 sid，如 S-20260704-a1b2
+
+# 2. 将旧条目标记为 deprecated
+maestro spec supersede <old-sid> --by <new-sid>
+
+# 3. 查看演化链
+maestro spec history <sid>
+# ○ deprecated  S-20260101-x1y2  "旧规则"
+#     ↓
+# ● CURRENT     S-20260704-a1b2  "新规则"
+```
+
+被替代的条目自动 `status="deprecated"`，从搜索和 agent 注入中排除，但仍可通过 `--include-deprecated` 查看。
+
+### 冲突双轨
+
+新知识与旧条目的关系分两种，语义不同、操作不同：
+
+| 关系 | 场景 | 操作 | 旧条目状态 |
+|------|------|------|-----------|
+| **supersede** | 新规则替代旧规则（演化） | `maestro spec supersede` | `deprecated`（排除） |
+| **conflict** | 两条规则均有道理（争议） | `maestro spec conflict mark` | `contested`（降权但保留） |
+
+### 健康检查
+
+```bash
+maestro spec health
+```
+
+输出：生命周期统计（active/deprecated/contested）、演化链数量、悬空/循环 supersedes 检测、整体新鲜度均值。
+
+---
+
 ## 相关命令
 
 ### 写入类
@@ -111,7 +157,7 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 |------|------|
 | `/wiki-digest` | 语义主题聚类 + 知识覆盖热力图 + gap 分析 |
 | `/wiki-connect` | 发现孤立节点和缺失连接，修复图联通性 |
-| `/manage-knowledge-audit` | 审计 spec/knowhow/artifact 三存储 — 矛盾检测、过期淘汰、孤立清理（keep/deprecate/delete 三态决策） |
+| `/manage-knowledge-audit` | 审计 spec/knowhow/artifact 三存储 — 矛盾检测、过期淘汰、孤立清理（keep/supersede/contest/deprecate/delete 五态决策） |
 | `/learn-decompose` | 从代码中提取设计模式，写入 spec 和 wiki |
 | `/learn-follow` | 引导式阅读代码/wiki，提取 pattern 并构建理解 |
 

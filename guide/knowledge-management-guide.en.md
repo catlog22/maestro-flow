@@ -84,6 +84,52 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 
 ---
 
+## Knowledge Lifecycle
+
+### Stable Identity (sid)
+
+Every `<spec-entry>` is automatically assigned a stable ID (format `S-YYYYMMDD-xxxx`) at creation, used for cross-file references and evolution chain tracking. Legacy entries can be backfilled with `maestro spec backfill-sid`.
+
+### Supersession (Evolution Chain)
+
+When new knowledge replaces old, use supersede to build an evolution chain:
+
+```bash
+# 1. Add new entry (sid auto-generated)
+maestro spec add coding "New rule" "content" --keywords kw1,kw2 --json
+# Output includes sid, e.g. S-20260704-a1b2
+
+# 2. Mark old entry as deprecated
+maestro spec supersede <old-sid> --by <new-sid>
+
+# 3. View evolution chain
+maestro spec history <sid>
+# ○ deprecated  S-20260101-x1y2  "Old rule"
+#     ↓
+# ● CURRENT     S-20260704-a1b2  "New rule"
+```
+
+Superseded entries are automatically set to `status="deprecated"`, excluded from search and agent injection, but still accessible via `--include-deprecated`.
+
+### Dual-Track: Supersede vs Conflict
+
+New knowledge relates to existing entries in two ways — with distinct semantics and operations:
+
+| Relationship | Scenario | Operation | Old entry status |
+|-------------|----------|-----------|-----------------|
+| **supersede** | New rule replaces old (evolution) | `maestro spec supersede` | `deprecated` (excluded) |
+| **conflict** | Both rules plausible (dispute) | `maestro spec conflict mark` | `contested` (de-ranked but retained) |
+
+### Health Check
+
+```bash
+maestro spec health
+```
+
+Reports: lifecycle statistics (active/deprecated/contested), evolution chain count, dangling/cyclic supersedes detection, overall freshness average.
+
+---
+
 ## Related Commands
 
 ### Write Commands
@@ -111,7 +157,7 @@ summary: "Use when implementing OAuth 2.0 login for public clients."
 |------|------|
 | `/wiki-digest` | Semantic topic clustering + knowledge coverage heatmap + gap analysis |
 | `/wiki-connect` | Discovers isolated nodes and missing links, fixes graph connectivity |
-| `/manage-knowledge-audit` | Audits spec/knowhow/artifact stores — contradiction detection, expiration cleanup, orphan pruning (keep/deprecate/delete tri-state decisions) |
+| `/manage-knowledge-audit` | Audits spec/knowhow/artifact stores — contradiction detection, expiration cleanup, orphan pruning (keep/supersede/contest/deprecate/delete five-state decisions) |
 | `/learn-decompose` | Extracts design patterns from code, writes to spec and wiki |
 | `/learn-follow` | Guided reading of code/wiki, extracts pattern and builds understanding |
 

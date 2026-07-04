@@ -393,7 +393,11 @@ maestro spec init                              # 初始化
 maestro spec load --category coding --keyword auth
 maestro spec list                              # 列出文件
 maestro spec status                            # 状态
-maestro spec add <category> "<title>" "<content>"
+maestro spec add <category> "<title>" "<content>" --json  # --json 返回 sid
+maestro spec supersede <old-sid> --by <new-sid>          # 演化替代
+maestro spec history <sid> [--json]                      # 查看演化链
+maestro spec health [--json]                             # 知识健康报告
+maestro spec backfill-sid                                # 回填存量无 sid 条目
 ```
 
 </details>
@@ -410,7 +414,7 @@ maestro wiki list -q "authentication"                # BM25 内联搜索
 maestro wiki search "auth token"                     # 全文搜索
 maestro wiki get <id>                                # 获取单条
 
-# 创建（spec / memory / note）
+# 创建（spec / knowhow）
 maestro wiki create --type spec --slug auth --title "Auth" --body "# Auth\n..."
   # 可选: --created-by, --source-ref, --parent, --frontmatter
 

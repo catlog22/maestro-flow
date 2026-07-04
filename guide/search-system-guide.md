@@ -121,6 +121,37 @@ tf~ = Σ(boost_f × tf_f / (1 - b + b × dl_f / avgdl_f))
 
 当某字段的 `avgFieldLength = 0` 时，该字段自动跳过计算，避免除零错误。
 
+### 时间衰减
+
+搜索结果在 BM25F + Proximity 重排后，会应用基于 Ebbinghaus 遗忘曲线的时间衰减权重：
+
+```
+factor = floor + (1 - floor) × e^(-λ × age_days)
+λ = ln2 / half_life
+```
+
+各类型半衰期：
+
+| 类型 | 半衰期（天） |
+|------|-------------|
+| `domain` | 180 |
+| `spec` | 60 |
+| `knowhow` | 30 |
+| `issue` | 14 |
+| `project` / `roadmap` / `note` | 90 |
+
+衰减下限 `floor = 0.3`，即最老的条目仍保留 30% 的原始评分。
+
+可通过 `maestro spec health` 查看知识库整体新鲜度统计。
+
+### Deprecated 条目过滤
+
+状态为 `deprecated` 的条目（通过 `maestro spec supersede` 标记）默认从搜索结果中排除。使用 `--include-deprecated` 标志可将其纳入结果：
+
+```bash
+maestro search "error handling" --include-deprecated
+```
+
 ---
 
 ## 中文支持
@@ -405,4 +436,7 @@ maestro embedding rebuild  # 重建 embedding 索引
 
 # 索引健康检查
 maestro wiki health
+
+# 知识健康检查（新鲜度、演化链完整性）
+maestro spec health
 ```

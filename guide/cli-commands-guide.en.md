@@ -240,7 +240,11 @@ maestro spec init                              # Initialize
 maestro spec load --category coding --keyword auth
 maestro spec list                              # List files
 maestro spec status                            # Status
-maestro spec add <category> "<title>" "<content>"
+maestro spec add <category> "<title>" "<content>" --json  # --json returns sid
+maestro spec supersede <old-sid> --by <new-sid>          # Supersede (old → deprecated)
+maestro spec history <sid> [--json]                      # View evolution chain
+maestro spec health [--json]                             # Knowledge health report
+maestro spec backfill-sid                                # Backfill legacy entries without sid
 ```
 
 </details>
@@ -257,7 +261,7 @@ maestro wiki list -q "authentication"                # Inline BM25 search
 maestro wiki search "auth token"                     # Full-text search
 maestro wiki get <id>                                # Get single entry
 
-# Create (spec / memory / note)
+# Create (spec / knowhow)
 maestro wiki create --type spec --slug auth --title "Auth" --body "# Auth\n..."
   # Optional: --created-by, --source-ref, --parent, --frontmatter
 

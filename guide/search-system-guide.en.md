@@ -122,6 +122,37 @@ tf~ = Σ(boost_f × tf_f / (1 - b + b × dl_f / avgdl_f))
 
 When a field's `avgFieldLength = 0`, that field's calculation is automatically skipped to avoid division-by-zero errors.
 
+### Time Decay
+
+After BM25F + proximity reranking, search results are weighted by freshness using Ebbinghaus-style exponential decay:
+
+```
+factor = floor + (1 - floor) × e^(-λ × age_days)
+λ = ln2 / half_life
+```
+
+Half-lives by type:
+
+| Type | Half-life (days) |
+|------|-----------------|
+| `domain` | 180 |
+| `spec` | 60 |
+| `knowhow` | 30 |
+| `issue` | 14 |
+| `project` / `roadmap` / `note` | 90 |
+
+Decay floor is `0.3` — even the oldest entries retain 30% of their original score.
+
+Use `maestro spec health` to check overall knowledge freshness statistics.
+
+### Deprecated Entry Filtering
+
+Entries with `status="deprecated"` (marked via `maestro spec supersede`) are excluded from search results by default. Use `--include-deprecated` to include them:
+
+```bash
+maestro search "error handling" --include-deprecated
+```
+
 ---
 
 ## Chinese Support
@@ -404,4 +435,7 @@ maestro embedding rebuild  # Rebuild embedding index
 
 # Index health check
 maestro wiki health
+
+# Knowledge health check (freshness, evolution chain integrity)
+maestro spec health
 ```
