@@ -254,7 +254,6 @@ async function callEmbeddingApi(texts: string[], config: EmbeddingApiConfig): Pr
 
   if (firstErr) {
     const filled = results.filter(Boolean).length;
-    if (filled === 0) throw firstErr;
     if (filled < texts.length) throw firstErr;
   }
 
@@ -605,12 +604,6 @@ export function vectorSearch(
   limit: number,
 ): VectorSearchResult[] {
   if (index.dimension && queryVector.length !== index.dimension) return [];
-  // Feature flag: force flat cosine scan (bypass zvec)
-  if (process.env.MAESTRO_EMBEDDING_FLAT_SCAN) {
-    return flatCosineSearch(queryVector, index, limit);
-  }
-  // Sync path — zvec requires async setup, so use flat scan here.
-  // For zvec-accelerated search, callers should use vectorSearchZvec.
   return flatCosineSearch(queryVector, index, limit);
 }
 
@@ -678,7 +671,7 @@ const _require = createRequire(import.meta.url);
 
 const BINARY_FILE = 'embedding-index.bin';
 
-export function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
+export async function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true });
 
   // --- Binary format (kept for backward compat and feature flag fallback) ---
@@ -720,10 +713,8 @@ export function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
   writeFileSync(tmpPath, buf);
   renameSync(tmpPath, join(dir, BINARY_FILE));
 
-  // --- zvec collection save (async, best-effort) ---
-  saveZvecIndex(index, dir).catch(() => {
-    // zvec save failed — binary format still available as fallback
-  });
+  // --- zvec collection save ---
+  await saveZvecIndex(index, dir);
 
   // Remove legacy files
   for (const f of [CACHE_FILE, SQLITE_FILE, SQLITE_FILE + '-shm', SQLITE_FILE + '-wal', SQLITE_FILE + '-journal']) {
@@ -731,13 +722,25 @@ export function saveEmbeddingIndex(index: EmbeddingIndex, dir: string): void {
   }
 }
 
+let _zvecSaving = false;
+
 /**
  * Save embedding index to zvec collection format.
  * Creates/replaces a zvec collection at `dir/embedding.zvec`.
  */
 async function saveZvecIndex(index: EmbeddingIndex, dir: string): Promise<void> {
+  if (_zvecSaving) return;
   const zvec = await getZvec();
   if (!zvec) return;
+  _zvecSaving = true;
+  try {
+    await _saveZvecIndexInner(zvec, index, dir);
+  } finally {
+    _zvecSaving = false;
+  }
+}
+
+async function _saveZvecIndexInner(zvec: ZvecModule, index: EmbeddingIndex, dir: string): Promise<void> {
 
   const collectionPath = join(dir, ZVEC_DIR);
   const dim = index.dimension;
@@ -839,7 +842,7 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   if (existsSync(dbPath)) {
     try {
       const idx = loadFromSqlite(dir);
-      saveEmbeddingIndex(idx, dir);
+      void saveEmbeddingIndex(idx, dir);
       return idx;
     } catch { /* fall through */ }
   }
@@ -849,7 +852,7 @@ export function loadEmbeddingIndex(dir: string): EmbeddingIndex | null {
   if (existsSync(jsonPath)) {
     try {
       const idx = loadFromLegacyJson(jsonPath);
-      saveEmbeddingIndex(idx, dir);
+      void saveEmbeddingIndex(idx, dir);
       return idx;
     } catch { return null; }
   }
@@ -1018,9 +1021,10 @@ export interface DocForEmbedding {
   body?: string;
 }
 
-export function hashDocContent(d: DocForEmbedding): string {
-  const text = [d.title, d.summary, d.tags.join(','), d.body ?? ''].join('|');
-  return createHash('md5').update(text).digest('hex');
+export function hashDocContent(d: DocForEmbedding, enrichedText?: string): string {
+  const parts = [d.title, d.summary, d.tags.join(','), d.body ?? ''];
+  if (enrichedText) parts.push(enrichedText);
+  return createHash('md5').update(parts.join('|')).digest('hex');
 }
 
 /**
@@ -1118,7 +1122,7 @@ export async function buildEmbeddingIndex(
   const config = apiMode ? null : await detectDevice();
   const t0 = Date.now();
 
-  const currentHashes = precomputedHashes ?? docs.map(hashDocContent);
+  const currentHashes = precomputedHashes ?? docs.map(d => hashDocContent(d));
 
   // Split all docs into chunks (1:N doc-to-chunk mapping)
   const allChunkIds: string[] = [];
@@ -1141,33 +1145,20 @@ export async function buildEmbeddingIndex(
   let vectors: Float32Array[];
 
   const activeModel = getModelId();
-  // Model changed → discard all cached vectors, force full rebuild
-  const modelMatch = existingIndex && existingIndex.modelId === activeModel;
+  const activeDim = apiMode ? (loadEmbeddingApiConfig()?.dimensions ?? 0) : 384;
+  // Model, dimensions, or mode changed → discard all cached vectors, force full rebuild
+  const modelMatch = existingIndex
+    && existingIndex.modelId === activeModel
+    && (activeDim === 0 || existingIndex.dimension === activeDim);
   if (modelMatch && existingIndex!.docIds.length > 0) {
-    // Build existing chunk cache: chunkId → { vector, parentDocId }
     const existingChunkMap = new Map<string, Float32Array>();
-    const existingDocHashes = new Map<string, string>();
-    // Reconstruct per-doc hashes from existing index
     if (existingIndex!.chunkDocIds && existingIndex!.contentHashes) {
       for (let i = 0; i < existingIndex!.docIds.length; i++) {
         existingChunkMap.set(existingIndex!.docIds[i], existingIndex!.vectors[i]);
       }
-      // contentHashes are per-doc; find unique doc→hash mapping
-      const seen = new Set<string>();
-      for (let i = 0; i < existingIndex!.chunkDocIds.length; i++) {
-        const parentId = existingIndex!.chunkDocIds[i];
-        if (!seen.has(parentId) && existingIndex!.contentHashes[i] !== undefined) {
-          // contentHashes in chunk-based index: stored per-doc in the order of docChunkRanges
-          seen.add(parentId);
-        }
-      }
     } else {
-      // Legacy index without chunkDocIds — docIds are direct doc IDs
       for (let i = 0; i < existingIndex!.docIds.length; i++) {
         existingChunkMap.set(existingIndex!.docIds[i], existingIndex!.vectors[i]);
-        if (existingIndex!.contentHashes?.[i]) {
-          existingDocHashes.set(existingIndex!.docIds[i], existingIndex!.contentHashes[i]);
-        }
       }
     }
 

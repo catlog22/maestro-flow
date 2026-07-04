@@ -87,11 +87,11 @@ describe('WikiIndexer ref links keep knowhow type prefix', () => {
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const index = await indexer.get();
 
-    const rcpSub = index.entries.find((e) => e.title === 'Stripe min amount guard');
+    const rcpSub = index.entries.find((e) => e.type === 'spec' && e.title === 'Stripe min amount guard');
     expect(rcpSub?.related).toContain('knowhow-rcp-stripe-min-amount-stripe-minimum-guard');
     expect(index.byId['knowhow-rcp-stripe-min-amount-stripe-minimum-guard']).toBeDefined();
 
-    const qrfSub = index.entries.find((e) => e.title === 'Linked listings fast path');
+    const qrfSub = index.entries.find((e) => e.type === 'spec' && e.title === 'Linked listings fast path');
     expect(qrfSub?.related).toContain('knowhow-qrf-linked-listings-fast-path');
     expect(index.byId['knowhow-qrf-linked-listings-fast-path']).toBeDefined();
 

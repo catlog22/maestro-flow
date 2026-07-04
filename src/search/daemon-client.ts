@@ -100,7 +100,9 @@ export async function invalidateSearchIndex(workflowRoot: string): Promise<void>
     } catch { /* daemon unresponsive, fall through */ }
   }
   try {
-    const cachePath = join(workflowRoot, 'search-cache.json');
-    if (existsSync(cachePath)) unlinkSync(cachePath);
+    for (const name of ['search-cache.json', 'wiki-index.json']) {
+      const p = join(workflowRoot, name);
+      if (existsSync(p)) unlinkSync(p);
+    }
   } catch { /* best-effort */ }
 }

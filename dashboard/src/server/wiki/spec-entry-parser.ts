@@ -139,7 +139,7 @@ function parseEntryBlocks(
     const title = attrs.title || (titleMatch ? titleMatch[1].trim() : innerContent.split('\n')[0].trim());
     const type = attrs.type ?? detectEntryType(title, fileName);
     const id = `${stem}-${String(++entryIndex).padStart(3, '0')}`;
-    const kws = attrs.keywords ? attrs.keywords.split(',').map((k) => k.trim()) : [];
+    const kws = attrs.keywords ? attrs.keywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean) : [];
     const ref = attrs.ref || undefined;
     const description = attrs.description || undefined;
     const entryCategory = attrs.category
@@ -147,12 +147,16 @@ function parseEntryBlocks(
       || FILE_CATEGORY_MAP[stem]
       || 'general';
 
-    const confidence = attrs.confidence || undefined;
+    const VALID_CONFIDENCE = ['high', 'medium', 'low', 'contested'];
+    const VALID_STATUS = ['active', 'deprecated'];
+    const rawConfidence = attrs.confidence || undefined;
+    const confidence = rawConfidence && VALID_CONFIDENCE.includes(rawConfidence) ? rawConfidence : undefined;
     const conflictNote = attrs['conflict-note'] || undefined;
     const sid = attrs.sid || undefined;
     const supersedes = attrs.supersedes || undefined;
     const supersededBy = attrs['superseded-by'] || undefined;
-    const status = attrs.status || undefined;
+    const rawStatus = attrs.status || undefined;
+    const status = rawStatus && VALID_STATUS.includes(rawStatus) ? rawStatus : undefined;
 
     entries.push({
       id,

@@ -17,7 +17,7 @@ import {
   cwdToClaudeProjectSlug,
 } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import type {
   WikiEntry,
   WikiFilters,
@@ -122,6 +122,9 @@ export class WikiIndexer {
     const codexSessionsDir = join(home, '.codex', 'sessions');
     if (existsSync(codexSessionsDir)) dirs.push(codexSessionsDir);
 
+    const milestonesDir = join(this.workflowRoot, 'milestones');
+    if (existsSync(milestonesDir)) dirs.push(milestonesDir);
+
     const singletons = [
       join(this.workflowRoot, 'project.md'),
       join(this.workflowRoot, 'roadmap.md'),
@@ -144,6 +147,23 @@ export class WikiIndexer {
         if (this.mtimeSnapshot.has(p)) return true;
       }
     }
+    // Dir mtime only bumps on add/remove, not in-place edits. For spec/knowhow
+    // dirs, also check max file mtime to detect content edits.
+    const contentDirs = [
+      join(this.workflowRoot, 'specs'),
+      join(this.workflowRoot, 'knowhow'),
+    ];
+    for (const dir of contentDirs) {
+      try {
+        const files = readdirSync(dir).filter(f => f.endsWith('.md'));
+        for (const f of files) {
+          const fp = join(dir, f);
+          const st = statSync(fp);
+          const prev = this.mtimeSnapshot.get(fp);
+          if (prev === undefined || st.mtimeMs !== prev) return true;
+        }
+      } catch { /* dir missing is fine */ }
+    }
     return false;
   }
 
@@ -157,6 +177,16 @@ export class WikiIndexer {
         const st = (results[i] as PromiseFulfilledResult<Awaited<ReturnType<typeof stat>>>).value;
         snap.set(allPaths[i], Number(st.mtimeMs));
       }
+    }
+    // Capture file-level mtime for spec/knowhow to detect in-place edits
+    for (const sub of ['specs', 'knowhow']) {
+      const dir = join(this.workflowRoot, sub);
+      try {
+        for (const f of readdirSync(dir).filter(n => n.endsWith('.md'))) {
+          const fp = join(dir, f);
+          snap.set(fp, Number(statSync(fp).mtimeMs));
+        }
+      } catch { /* dir missing */ }
     }
     return snap;
   }
@@ -213,8 +243,12 @@ export class WikiIndexer {
         mtimeSnapshot: [...this.mtimeSnapshot.entries()],
         entries,
       });
-      writeFile(target, data, 'utf-8').catch(() => {});
-    } catch { /* best-effort */ }
+      writeFile(target, data, 'utf-8').catch((e) => {
+        if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] search-cache write failed:', e?.message);
+      });
+    } catch (e) {
+      if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] persistSearchCache error:', (e as Error)?.message);
+    }
   }
 
   async rebuild(): Promise<WikiIndex> {
@@ -228,10 +262,13 @@ export class WikiIndexer {
       ]);
       const entries = [...fileEntries, ...virtualEntries, ...linkedEntries];
 
-      // Stable collision suffix — use original id for counting so the
-      // third duplicate becomes -3 (not another -2).
-      // Collisions are expected across multi-source JSONL files; warn only
-      // when MAESTRO_DEBUG is set to avoid polluting CLI search output.
+      // Sort entries by id first, then by source priority (file > virtual >
+      // linked) for deterministic collision suffixing — the same logical entry
+      // always gets the same suffixed id regardless of scan order.
+      const sourcePriority = (e: WikiEntry): number =>
+        e.source.workspace ? 2 : e.source.kind === 'virtual' ? 1 : 0;
+      entries.sort((a, b) => a.id.localeCompare(b.id) || sourcePriority(a) - sourcePriority(b));
+
       const seen = new Map<string, number>();
       const debugCollisions = process.env.MAESTRO_DEBUG === '1';
       let collisionCount = 0;
@@ -285,7 +322,9 @@ export class WikiIndexer {
       this.mtimeSnapshot = await this.captureMtimeSnapshot();
 
       // Persist lightweight index to disk (fire-and-forget).
-      this.persistIndex(index).catch(() => {});
+      this.persistIndex(index).catch((e) => {
+        if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] persistIndex failed:', e?.message);
+      });
       this.persistSearchCache(index);
 
       return index;
@@ -315,13 +354,15 @@ export class WikiIndexer {
     const bm25 = await this.getSearchIndex();
     const ranked = searchBM25(bm25, filters.q);
     const allowed = new Set(base.map((d) => d.id));
-    const out: WikiEntry[] = [];
+    let out: Array<{ entry: WikiEntry; score: number }> = [];
     for (const r of ranked) {
       if (allowed.has(r.docId) && index.byId[r.docId]) {
-        out.push(index.byId[r.docId]);
+        out.push({ entry: index.byId[r.docId], score: r.score });
       }
     }
-    return out;
+    out = rerankByPhraseProximity(out, filters.q);
+    out = applyTimeDecay(out, Date.now());
+    return out.map(o => o.entry);
   }
 
   async groups(filters?: WikiFilters): Promise<Record<WikiNodeType, WikiEntry[]>> {
@@ -477,7 +518,7 @@ export class WikiIndexer {
       const { getModelId, hashDocContent } = await import('./embedding.js');
       const activeModel = getModelId();
       const modelMatch = cached && cached.modelId === activeModel;
-      const currentHashes = modelMatch ? docs.map(hashDocContent) : undefined;
+      const currentHashes = modelMatch ? docs.map(d => hashDocContent(d)) : undefined;
 
       if (currentHashes && cached) {
         // Build per-doc hash map from cached index (handles both chunk-based and legacy formats)
@@ -511,7 +552,7 @@ export class WikiIndexer {
 
       try {
         const embIdx = await buildEmbeddingIndex(docs, cached, currentHashes);
-        saveEmbeddingIndex(embIdx, this.workflowRoot);
+        await saveEmbeddingIndex(embIdx, this.workflowRoot);
         return embIdx;
       } catch (buildErr: unknown) {
         if (process.env.MAESTRO_DEBUG === '1') {

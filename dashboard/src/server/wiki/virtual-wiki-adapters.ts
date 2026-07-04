@@ -16,6 +16,7 @@ function slugify(s: string): string {
 const warnOnce = new Set<string>();
 function warn(key: string, message: string): void {
   if (warnOnce.has(key)) return;
+  if (warnOnce.size > 500) warnOnce.clear();
   warnOnce.add(key);
   // eslint-disable-next-line no-console
   console.warn(`[wiki-indexer] ${message}`);
@@ -106,6 +107,7 @@ export async function loadVirtualEntries(
   try {
     raw = await readFile(absPath, 'utf-8');
   } catch {
+    warn(`unreadable:${absPath}`, `cannot read ${absPath}`);
     return [];
   }
   const out: WikiEntry[] = [];
@@ -135,6 +137,7 @@ export async function loadVirtualJsonEntries(
   try {
     raw = await readFile(absPath, 'utf-8');
   } catch {
+    warn(`unreadable:${absPath}`, `cannot read ${absPath}`);
     return [];
   }
   let parsed: unknown;
@@ -728,6 +731,7 @@ export async function loadSessionArchiveEntries(
   try {
     archiveRaw = await readFile(archiveAbsPath, 'utf-8');
   } catch {
+    warn(`unreadable:${archiveAbsPath}`, `cannot read ${archiveAbsPath}`);
     return [];
   }
   let parsedArchive: unknown;
@@ -783,7 +787,7 @@ function deriveRelatedFromPaths(filePaths: Set<string>, sessionCwd: string): str
 
     let id: string;
     switch (dirType) {
-      case 'specs': id = `spec-${stem}`; break;
+      case 'specs': id = `spec:project:${stem}`; break;
       case 'knowhow': id = `knowhow-${stem}`; break;
       case 'issues': continue; // JSONL issues use different ID scheme
       case 'domain': id = `domain-${stem}`; break;
