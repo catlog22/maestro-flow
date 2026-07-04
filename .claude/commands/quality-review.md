@@ -64,7 +64,7 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 3. **Verdict is data-driven** — NEVER change verdict severity to accommodate user preference without new evidence. Verdicts flow from findings, not negotiation.
 4. **Dimension independence** — each review dimension produces findings independently. One dimension's results MUST NOT suppress or override another's.
 5. **Prior review delta** — when a prior review.json exists for the same phase, findings MUST be compared. Do NOT re-report already-resolved findings as new.
-6. **Spec conflict integrity** — if code contradicts a spec entry, flag via `maestro spec conflict mark`. NEVER silently accept the contradiction or edit the spec inline.
+6. **Spec conflict integrity** — if code contradicts a spec entry: if the code is the evolved practice (spec outdated), suggest `maestro spec supersede`; if genuinely disputed, flag via `maestro spec conflict mark`. NEVER silently accept the contradiction or edit the spec inline.
 </invariants>
 
 <execution>
@@ -85,7 +85,7 @@ Follow '~/.maestro/workflows/review.md' completely.
 - REQUIRED: review.json written with findings, severity distribution, and verdict.
 - REQUIRED: Issues auto-created based on level thresholds.
 - REQUIRED: index.json updated with review status.
-- REQUIRED: Spec conflict check — if any finding directly contradicts a loaded spec entry (code behavior ≠ spec rule), suggest `maestro spec conflict mark` on the spec entry. Code is the single source of truth.
+- REQUIRED: Spec conflict check — if any finding directly contradicts a loaded spec entry (code behavior ≠ spec rule): if spec is outdated (code evolved), suggest `maestro spec supersede`; if genuinely disputed, suggest `maestro spec conflict mark`. Code is the single source of truth.
 
 **Output writes to REVIEW_DIR** (not EXEC_DIR):
 - `REVIEW_DIR/review.json` — findings, severity distribution, verdict

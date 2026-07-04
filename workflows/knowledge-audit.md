@@ -258,7 +258,8 @@ for finding in actionable_findings:
 | Action | 实施 |
 |---|---|
 | `keep` | 写 `audit-log.jsonl` 一条 ignore 记录（防止下次重复 flag）|
-| `deprecate` (spec) | Edit 目标文件，把 `<spec-entry ...>` 改为 `<spec-entry ... status="deprecated">` |
+| `supersede` (spec) | `maestro spec supersede <old-sid> --by <new-sid>`（双向链接 + deprecated，保留演化链） |
+| `deprecate` (spec) | Edit 目标文件，把 `<spec-entry ...>` 改为 `<spec-entry ... status="deprecated">`（无替代条目时） |
 | `deprecate` (knowhow) | `maestro wiki edit <slug>` 注入 `status: deprecated` frontmatter |
 | `deprecate` (artifact) | 更新 state.json.artifacts[].status = "deprecated" |
 | `delete` (spec) | Edit 移除整个 `<spec-entry>` 块 |

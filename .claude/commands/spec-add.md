@@ -23,6 +23,7 @@ $ARGUMENTS -- expects `[--scope <scope>] [--uid <uid>] <category> <content>`
 
 **Options:**
 - `--description <desc>` — One-line description for search results (falls back to content[:240])
+- `--json` — Output JSON with generated `sid` (needed for supersession: `maestro spec supersede <old-sid> --by <new-sid>`)
 - `--ref <path>` — Create as index entry referencing a knowhow document. If the path exists, only creates the spec index entry. If path doesn't exist, also creates the knowhow file.
 - `--knowhow-type <type>` — Knowhow document type when creating with --ref (asset, blueprint, document, template, recipe, reference, decision)
 
@@ -102,6 +103,9 @@ Follow '~/.maestro/workflows/specs-add.md' completely.
 | Condition | Suggestion |
 |-----------|-----------|
 | Verify entry added | `maestro load --type spec --scope <scope> --keyword {keyword}` |
+| New entry replaces old one | `maestro spec supersede <old-sid> --by <new-sid>` |
+| View evolution chain | `maestro spec history <sid>` |
 | Add more entries | `/spec-add <category>` |
 | View all specs | `/spec-load --category <category>` |
+| Check knowledge health | `maestro spec health` |
 </completion>

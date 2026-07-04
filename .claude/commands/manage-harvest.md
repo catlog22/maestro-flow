@@ -46,7 +46,7 @@ Additional flags, source registry (scan paths), and storage locations defined in
 2. **Never modify source artifacts** — harvest is purely extractive; source files remain untouched
 3. **Dedup before write** — MUST check harvest-log.jsonl and existing stores before each write to prevent duplicates
 4. **Source tagging** — MUST set `source: "harvest"` on every issues.jsonl row so concurrent writers can be distinguished
-5. **Conflict pre-check on spec routing** — when routing to spec, MUST compare against existing specs with same keywords/category; set `confidence="low"` and log conflict note if semantic conflict detected
+5. **Relationship pre-check on spec routing** — when routing to spec, MUST compare against existing specs with same keywords/category. Classify the relationship: **supersede** (new replaces old) → attach `supersedes = <old-sid>`, after add run `maestro spec supersede`; **conflict** (genuine dispute) → set `confidence="low"` and log conflict note; **independent** → no metadata
 6. **Provenance tracking** — every routed item MUST be logged in harvest-log.jsonl with fragment ID, target store, and timestamp
 7. **Dry-run safety** — `--dry-run` MUST NOT write any files; preview only
 </invariants>
@@ -86,8 +86,10 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 | Wiki graph needs linking | `/manage-wiki connect --fix` |
 | Issues created | `/manage-issue list --source harvest` |
 | Specs extracted | `/spec-load --role implement` |
-| Specs extracted (冲突审查) | `/manage-knowledge-audit --scope spec` — 新写入的 spec 可能与现有条目矛盾 |
+| Specs extracted (审查) | `/manage-knowledge-audit --scope spec` — 新写入的 spec 可能与现有条目矛盾或替代 |
+| 查看演化链 | `maestro spec history <sid>` — 确认 supersede 链完整 |
 | Spec 冲突标记已存在 | `maestro spec conflict list` — 查看当前冲突状态 |
+| 知识健康检查 | `maestro spec health` — 悬空/循环 supersedes 校验 |
 | Full phase retrospective | `/quality-retrospective` |
 </completion>
 

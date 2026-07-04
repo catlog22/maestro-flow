@@ -137,11 +137,20 @@ maestro load --type spec --category coding
 
 Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`learning`, rules→`review`, tests→`test`.
 
-### Conflict Marking
+### Supersession & Conflict (dual-track)
+
+| 关系 | 场景 | 命令 | 效果 |
+|------|------|------|------|
+| **supersede** | 新规则替代旧规则 | `maestro spec supersede <old-sid> --by <new-sid>` | 旧条目 `deprecated`，演化链保留 |
+| **conflict** | 两条规则均有道理 | `maestro spec conflict mark <file> <line> --note "<reason>"` | 旧条目 `contested`（search ×0.5），人裁决 |
+
+Confidence levels: `high` → `medium` (default) → `low` (`[LOW CONFIDENCE]`) → `contested` (`[CONTESTED]`).
+Resolution: `/manage-knowledge-audit`
+
+### Health & Maintenance
 
 ```bash
-maestro spec conflict mark <file> <line> --note "<reason>"
+maestro spec health                  # 生命周期统计 + 演化链完整性
+maestro spec backfill-sid            # 存量无 sid 条目回填
+maestro spec history <sid>           # 演化链查看
 ```
-
-Levels: `high` → `medium` (default) → `low` (`[LOW CONFIDENCE]`) → `contested` (`[CONTESTED]`).
-Resolution: `/manage-knowledge-audit`

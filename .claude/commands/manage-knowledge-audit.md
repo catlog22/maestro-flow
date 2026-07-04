@@ -81,15 +81,17 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 
 ### Conflict Resolution Integration
 
-四态决策（扩展自三态 keep/deprecate/delete）：
+五态决策（扩展自三态 keep/deprecate/delete）：
 
 | 动作 | 适用场景 | 执行 |
 |------|---------|------|
 | `keep` | 内容正确，无需变更 | 写 audit-log ignore 记录 |
 | `contest` | 矛盾真实存在，需进一步审查 | `maestro spec conflict mark <file> <line> --note "<evidence>"` |
-| `deprecate` | 内容过时或被取代 | 注入 `status="deprecated"` + `maestro spec conflict clear <file> <line>` |
+| `supersede` | 内容过时，已有更新版本替代 | `maestro spec supersede <old-sid> --by <new-sid>`（保留演化链） |
+| `deprecate` | 内容过时，无替代版本 | 注入 `status="deprecated"` + `maestro spec conflict clear <file> <line>` |
 | `delete` | 内容明确错误 | 移除 entry + `maestro spec conflict clear <file> <line>` |
 
+**supersede vs deprecate**: supersede 用于有明确替代条目的场景（建立演化链），deprecate 用于无替代条目的场景。
 **关键**: deprecate/delete 执行时，如果目标条目有 conflict-marker，必须同步调用 `maestro spec conflict clear` 清除标记，避免悬空冲突。
 
 ### Code-as-Truth 校验（审查核心原则）
@@ -115,6 +117,9 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 | 验证 spec 现状 | `/spec-load --role implement` |
 | 查看冲突标记 | `maestro spec conflict list` |
 | 清除已解决冲突 | `maestro spec conflict clear-all <file>` |
+| 查看演化链 | `maestro spec history <sid>` |
+| 知识健康检查 | `maestro spec health` |
+| 回填存量 sid | `maestro spec backfill-sid` |
 | 周期巡检 | `--scope all --report` |
 </completion>
 

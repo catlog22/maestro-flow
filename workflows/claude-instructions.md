@@ -135,11 +135,33 @@ maestro load --type spec --category coding
 
 Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`learning`, rules→`review`, tests→`test`.
 
-### Conflict Marking
+### Supersession & Conflict (dual-track)
+
+新知识与旧条目的关系分两种,语义不同、操作不同:
+
+| 关系 | 场景 | 命令 | 效果 |
+|------|------|------|------|
+| **supersede** | 新规则替代旧规则（演化） | `maestro spec supersede <old-sid> --by <new-sid>` | 旧条目 `deprecated`（search/load 排除），演化链保留 |
+| **conflict** | 两条规则均有道理（争议） | `maestro spec conflict mark <file> <line> --note "<reason>"` | 旧条目 `contested`（search ×0.5，`[CONTESTED]` 标注，仍注入），人裁决 |
 
 ```bash
+# supersede 流程: add → capture sid → supersede
+maestro spec add coding "新规则" "内容" --keywords kw1,kw2 --json   # → 获取 new-sid
+maestro spec supersede <old-sid> --by <new-sid>                     # → 旧条目 deprecated
+maestro spec history <sid>                                          # → 查看演化链
+
+# conflict 流程: 不确定谁对 → 标记争议 → 审计解决
 maestro spec conflict mark <file> <line> --note "<reason>"
+# Resolution: /manage-knowledge-audit
 ```
 
-Levels: `high` → `medium` (default) → `low` (`[LOW CONFIDENCE]`) → `contested` (`[CONTESTED]`).
-Resolution: `/manage-knowledge-audit`
+**三正交轴**: `confidence`（人/审计裁定）⊥ `status`（active/deprecated 生命周期）⊥ time-decay（自动新鲜度）。不要混用。
+
+### Health & Maintenance
+
+```bash
+maestro spec health                  # 生命周期统计 + 悬空/循环 supersedes 校验 + 新鲜度
+maestro spec backfill-sid            # 存量无 sid 条目回填（幂等），启用演化链
+maestro spec history <sid>           # 某条目的演化链（oldest → newest）
+maestro search "<q>" --include-deprecated   # 搜索含 deprecated 条目
+```
