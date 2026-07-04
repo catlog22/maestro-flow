@@ -184,10 +184,10 @@ export function GroupedHub({
           <Box flexDirection="column" marginTop={1}>
             <Text color={C.primary}>{'─'.repeat(40)}</Text>
             <Text
-              color={cursor === flat.length ? C.successBright : undefined}
+              color={cursor === flat.length ? C.primary : C.neutral}
               bold={cursor === flat.length}
             >
-              {cursor === flat.length ? SYM.cursor : ' '} {'▶'} {t.install.hubExecuteInstall}
+              {cursor === flat.length ? SYM.cursor : ' '} {t.install.hubExecuteInstall}
             </Text>
             <Text
               color={cursor === flat.length + 1 ? C.primary : C.neutral}
@@ -249,6 +249,8 @@ export function buildGroupedHubItems(
     selectedAddons: string[];
     chineseEnabled: boolean;
     addonDefs: Array<{ id: string; label: string; description: string; platform: string }>;
+    embeddingMode?: 'local' | 'api';
+    embeddingCached?: boolean;
   },
 ): HubGroup[] {
   const hookSummary = (level: HookLevel, selCount?: number, totalCount?: number, isCustom?: boolean) => {
@@ -365,6 +367,13 @@ export function buildGroupedHubItems(
     enabled: enabled.extraMcp,
     summary: summaries.extraMcpTargetCount > 0 ? `${summaries.extraMcpTargetCount} targets` : '0 targets',
     detail: t.install.hubDetailExtraMcp,
+  });
+  otherItems.push({
+    id: 'embedding',
+    label: 'Embedding Model',
+    enabled: true,
+    summary: summaries.embeddingMode === 'api' ? 'API mode' : (summaries.embeddingCached ? 'Local (ready)' : 'Local (no model)'),
+    detail: 'Manage local ONNX model for semantic search. Download, configure, rebuild index.',
   });
   if (otherItems.length > 0) {
     groups.push({ id: 'other', title: t.install.groupOther, items: otherItems });

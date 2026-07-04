@@ -56,11 +56,13 @@ export async function evaluateKgSync(
       kgSyncGuard.markDone(sessionId);
       if (filesChanged > 0) {
         invalidateSearchIndex(resolve(projectPath, '.workflow')).catch(() => {});
-        // Best-effort code embedding rebuild — fire-and-forget with own MaestroGraph instance
-        // to avoid blocking the sync hook (embedding can take 5-30s on first load)
         import('../graph/kg/engine.js').then(({ MaestroGraph: MG }) =>
           MG.open(projectPath).then(mg2 =>
-            mg2.buildCodeEmbeddings().catch(() => {}).finally(() => mg2.close())
+            mg2.buildCodeEmbeddings().catch((e: unknown) => {
+              if (process.env.MAESTRO_DEBUG === '1') {
+                console.warn(`[kg-sync] code embedding build failed: ${e instanceof Error ? e.message : e}`);
+              }
+            }).finally(() => mg2.close())
           )
         ).catch(() => {});
       }

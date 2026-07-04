@@ -274,6 +274,57 @@ export function registerInstallCommand(program: Command): void {
   registerToggleSubcommand(install);
   registerFontsSubcommand(install);
 
+  // Embedding model management
+  install
+    .command('embedding')
+    .description('Manage embedding model (download, configure, rebuild index)')
+    .option('--download', 'Download local ONNX model (~465MB)')
+    .option('--status', 'Show embedding status')
+    .option('--local', 'Switch to local model mode')
+    .option('--rebuild', 'Rebuild embedding index')
+    .action(async (opts: { download?: boolean; status?: boolean; local?: boolean; rebuild?: boolean }) => {
+      const { getEmbeddingStatus, downloadLocalModel, switchToLocalMode } = await import('../tui/install-ui/embedding-status.js');
+      const projectRoot = process.cwd();
+
+      if (opts.local) {
+        switchToLocalMode();
+        console.error('  ✓ Switched to local model mode');
+      }
+
+      if (opts.download) {
+        console.error('  Downloading local model (Xenova/multilingual-e5-small)...');
+        const isTTY = process.stderr.isTTY === true;
+        await downloadLocalModel((pct) => {
+          if (isTTY) process.stderr.write(`\x1b[2K\r  Downloading... ${pct}%`);
+        });
+        if (isTTY) process.stderr.write('\x1b[2K\r');
+        console.error('  ✓ Model downloaded and ready');
+      }
+
+      if (opts.rebuild) {
+        console.error('  Rebuilding embedding index...');
+        const { MaestroGraph } = await import('../graph/kg/engine.js');
+        if (MaestroGraph.isInitialized(projectRoot)) {
+          const mg = await MaestroGraph.open(projectRoot);
+          try {
+            const idx = await mg.buildCodeEmbeddings();
+            console.error(`  ✓ Code index: ${idx.nodeIds.length} nodes, ${idx.dimension}d`);
+          } finally { mg.close(); }
+        }
+      }
+
+      if (opts.status || (!opts.download && !opts.local && !opts.rebuild)) {
+        const status = await getEmbeddingStatus(projectRoot);
+        console.error(`  Mode:     ${status.mode === 'local' ? 'Local (ONNX)' : 'API (External)'}`);
+        console.error(`  Model:    ${status.modelId}`);
+        console.error(`  Cached:   ${status.modelCached ? 'Yes' : 'No'}`);
+        console.error(`  Device:   ${status.device}/${status.dtype} batch=${status.batchSize}`);
+        console.error(`  GPU:      ${status.gpuAvailable ? 'Available' : 'Not available'}`);
+        console.error(`  Wiki idx: ${status.wikiIndexDocs} docs`);
+        console.error(`  Code idx: ${status.codeIndexNodes} nodes`);
+      }
+    });
+
   // Legacy TUI wizard
   install
     .command('wizard')
@@ -420,28 +471,34 @@ async function forceInstall(
 
 async function warmupEmbedding(): Promise<void> {
   try {
-    const { isAvailable, getUnavailableReason, isModelCached, embedTexts, getDeviceSummary, setProgressCallback } = await import('#maestro-dashboard/wiki/embedding.js');
+    const { isAvailable, getUnavailableReason, isModelCached, isApiMode, embedTexts, getDeviceSummary, setProgressCallback } = await import('#maestro-dashboard/wiki/embedding.js');
     if (!await isAvailable()) {
       const reason = getUnavailableReason?.() ?? 'unknown';
       console.error(`  Embedding: unavailable (${reason})`);
       return;
     }
 
+    if (isApiMode()) {
+      console.error(`  Embedding: API mode (${getDeviceSummary()})`);
+      return;
+    }
+
     if (!isModelCached()) {
-      console.error(`  Embedding: model not cached locally, skipping warmup`);
-      console.error(`    To download (~465 MB):  maestro search embedding warmup`);
-      console.error(`    Or configure API mode:  ~/.maestro/api-embedding.json`);
+      console.error('  Embedding: model not cached, skipping warmup');
+      console.error('    Run "maestro install embedding --download" to download (~465MB)');
       return;
     }
 
     const isTTY = process.stderr.isTTY === true;
     const t0 = Date.now();
     process.stderr.write('  Embedding: warming up model...\r');
+
     await embedTexts(['warmup']);
     if (isTTY) process.stderr.write('\x1b[2K\r');
     console.error(`  ✓ Embedding: model ready (${getDeviceSummary()}, ${Date.now() - t0}ms)`);
   } catch (e: unknown) {
     process.stderr.write('\x1b[2K\r');
     console.error(`  Embedding: warmup failed (${e instanceof Error ? e.message : e})`);
+    console.error(`    Run "maestro install embedding --download" to retry`);
   }
 }

@@ -56,8 +56,8 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
 
     process.stderr.write(
       'Error: model, baseUrl, and apiKey are required.\n' +
-      'Configure via ~/.maestro/api-explore.json:\n' +
-      '  { "baseUrl": "https://...", "apiKey": "sk-...", "model": "..." }\n' +
+      'Configure via ~/.maestro/api.json:\n' +
+      '  { "endpoints": { "default": { "baseUrl": "https://...", "apiKey": "sk-...", "model": "..." } } }\n' +
       'Or via CLI args: --model --base-url --api-key\n' +
       'Or via env: API_EXPLORE_MODEL, API_EXPLORE_BASE_URL, API_EXPLORE_API_KEY\n',
     );

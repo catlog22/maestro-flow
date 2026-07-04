@@ -189,7 +189,11 @@ export class MaestroGraph {
       const { loadCodeEmbeddingIndex } = await import('./embedding/index.js');
       const dir = this._getCodeEmbeddingDir();
       const index = loadCodeEmbeddingIndex(dir);
-      if (index) this._codeEmbeddingCache = index;
+      if (index) {
+        const { getModelId } = await import('#maestro-dashboard/wiki/embedding.js');
+        if (index.modelId !== getModelId()) return null;
+        this._codeEmbeddingCache = index;
+      }
       return index;
     } catch {
       return null;

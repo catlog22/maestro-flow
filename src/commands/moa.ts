@@ -113,7 +113,7 @@ export function registerMoaCommand(program: Command): void {
       const preset = resolveMoaPreset(config, opts.preset);
       if (!preset) {
         process.stderr.write(
-          'No MOA preset configured. Add "moa" section to ~/.maestro/api-explore.json\n' +
+          'No MOA preset configured. Add presets to ~/.maestro/moa.json\n' +
           'See: maestro moa --help\n',
         );
         process.exit(1);

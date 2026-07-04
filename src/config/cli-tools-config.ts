@@ -299,15 +299,33 @@ export function rankToolsByDomain(
 // Proxy env resolution
 // ---------------------------------------------------------------------------
 
+function loadApiJsonProxy(): ProxyConfig | undefined {
+  const apiJsonPath = join(homedir(), '.maestro', 'api.json');
+  const apiExplorePath = join(homedir(), '.maestro', 'api-explore.json');
+  for (const p of [apiJsonPath, apiExplorePath]) {
+    if (!existsSync(p)) continue;
+    try {
+      const raw = JSON.parse(readFileSync(p, 'utf-8')) as { proxy?: ProxyConfig };
+      if (raw.proxy) return raw.proxy;
+    } catch { /* skip malformed */ }
+  }
+  return undefined;
+}
+
 /**
  * Build proxy environment variable overrides for a specific tool.
  * Returns an empty object when proxy is disabled globally or for the tool.
+ * Proxy priority: api.json → api-explore.json → cli-tools.json config.proxy.
  */
 export function resolveProxyEnv(
   config: CliToolsConfig,
   toolName: string,
 ): Record<string, string> {
-  const proxy = config.proxy;
+  let proxy = config.proxy;
+  if (!proxy?.enabled) {
+    const apiProxy = loadApiJsonProxy();
+    if (apiProxy?.enabled) proxy = apiProxy;
+  }
   if (!proxy?.enabled) return {};
 
   const toolEntry = config.tools?.[toolName];

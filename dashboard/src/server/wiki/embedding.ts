@@ -453,6 +453,7 @@ export function isModelCached(): boolean {
   const cacheKey = DEFAULT_LOCAL_MODEL.replace('/', '--');
   const hfHome = process.env.HF_HOME || join(homedir(), '.cache', 'huggingface');
 
+  // Check standard HuggingFace Hub cache
   for (const base of [hfHome, join(hfHome, 'hub')]) {
     const snapshotsDir = join(base, `models--${cacheKey}`, 'snapshots');
     if (!existsSync(snapshotsDir)) continue;
@@ -463,6 +464,20 @@ export function isModelCached(): boolean {
       }
     } catch { /* ignore */ }
   }
+
+  // Check transformers.js cache (node_modules/@huggingface/transformers/.cache/)
+  try {
+    const localRequire = createRequire(import.meta.url);
+    const tjsMainPath = localRequire.resolve('@huggingface/transformers');
+    const normalized = tjsMainPath.replace(/\\/g, '/');
+    const marker = '@huggingface/transformers';
+    const idx = normalized.indexOf(marker);
+    if (idx >= 0) {
+      const tjsRoot = tjsMainPath.slice(0, idx + marker.length);
+      if (existsSync(join(tjsRoot, '.cache', DEFAULT_LOCAL_MODEL, 'onnx', 'model.onnx'))) return true;
+    }
+  } catch { /* transformers not resolvable */ }
+
   return false;
 }
 
@@ -589,6 +604,7 @@ export function vectorSearch(
   index: EmbeddingIndex,
   limit: number,
 ): VectorSearchResult[] {
+  if (index.dimension && queryVector.length !== index.dimension) return [];
   // Feature flag: force flat cosine scan (bypass zvec)
   if (process.env.MAESTRO_EMBEDDING_FLAT_SCAN) {
     return flatCosineSearch(queryVector, index, limit);

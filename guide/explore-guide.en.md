@@ -26,7 +26,10 @@ EXPECTED: file:line evidence list"
 
 ## Endpoint Configuration
 
-Config file: `~/.maestro/api-explore.json`
+API endpoint config: `~/.maestro/api.json`
+MOA preset config: `~/.maestro/moa.json`
+
+> **Deprecation**: `~/.maestro/api-explore.json` is still read as a fallback for one version cycle. Migrate to `api.json` + `moa.json`.
 
 ### Multi-Endpoint (Recommended)
 
@@ -48,7 +51,7 @@ Config file: `~/.maestro/api-explore.json`
     "sonnet": {
       "baseUrl": "https://api.anthropic.com",
       "apiKey": "sk-ant-xxx",
-      "model": "claude-sonnet-4-20250514",
+      "model": "claude-sonnet-4-6",
       "format": "anthropic",
       "maxTurns": 4
     },
@@ -60,8 +63,10 @@ Config file: `~/.maestro/api-explore.json`
       "extraBody": { "temperature": 0.2 }
     }
   },
-  "maxTurns": 3,
-  "concurrency": 4
+  "defaults": {
+    "maxTurns": 3,
+    "concurrency": 4
+  }
 }
 ```
 
@@ -90,7 +95,9 @@ The `"anthropic"` format handles: `x-api-key` auth header, `tool_use`/`tool_resu
 
 Legacy single-endpoint configs also support the top-level `"format"` field. The CLI entry supports `--format` to override.
 
-### Global Fields
+### Global Defaults
+
+Configure in the `defaults` field of `api.json`:
 
 | Field | Description | Default |
 |-------|-------------|---------|
@@ -99,7 +106,7 @@ Legacy single-endpoint configs also support the top-level `"format"` field. The 
 
 ### Proxy
 
-Auto-inherits from `~/.maestro/cli-tools.json`. Can also configure in `api-explore.json`:
+Unified proxy config in `api.json` (`cli-tools.json` proxy serves as fallback):
 
 ```json
 {
@@ -111,7 +118,25 @@ Auto-inherits from `~/.maestro/cli-tools.json`. Can also configure in `api-explo
 }
 ```
 
-Priority: existing `HTTP_PROXY` env > api-explore.json proxy > cli-tools.json proxy.
+Priority: `api.json` proxy > `cli-tools.json` proxy.
+
+### MOA Presets
+
+MOA (Mixture-of-Agents) presets are configured separately in `~/.maestro/moa.json`:
+
+```json
+{
+  "defaultPreset": "default",
+  "presets": {
+    "default": {
+      "referenceEndpoints": ["gpt-mini"],
+      "aggregatorEndpoint": "gpt-codex"
+    }
+  }
+}
+```
+
+Endpoint names reference named endpoints from `api.json`.
 
 ### Legacy Single-Endpoint
 
@@ -249,3 +274,65 @@ maestro explore output exp-20260624-... # View results
 ```
 
 `--no-save` to skip. `-o /custom/path` for custom location.
+
+---
+
+## Circuit Breaker
+
+In multi-endpoint scenarios, when an endpoint accumulates consecutive failures reaching the threshold, subsequent jobs are automatically routed to healthy endpoints, preventing a single point of failure from failing the entire batch.
+
+### Behavior
+
+1. Each endpoint tracks its own consecutive failure count
+2. When the threshold is reached (default 3) → the endpoint is tripped
+3. Subsequent jobs are automatically routed to fallback endpoints
+4. If no fallback is available, the job is marked as failed and skipped
+5. A successful response resets the failure count
+6. Only active when 2 or more endpoints are configured
+
+### Configuration
+
+Add a `circuitBreaker` field in `~/.maestro/api.json`:
+
+```json
+{
+  "endpoints": {
+    "qwen": { "baseUrl": "...", "apiKey": "...", "model": "Qwen/Qwen3-8B" },
+    "deepseek": { "baseUrl": "...", "apiKey": "...", "model": "deepseek-chat" },
+    "gpt-mini": { "baseUrl": "...", "apiKey": "...", "model": "gpt-5.4-mini" }
+  },
+  "circuitBreaker": {
+    "threshold": 3,
+    "fallbackOrder": ["gpt-mini", "deepseek", "qwen"]
+  }
+}
+```
+
+### Fields
+
+| Field | Description | Default |
+|-------|-------------|---------|
+| `threshold` | Consecutive failures before tripping | `3` |
+| `fallbackOrder` | Preferred fallback endpoint names | Config order |
+
+### Runtime Output
+
+When a circuit breaker trips, stderr shows:
+
+```
+⚡ Circuit breaker: qwen tripped after 3 consecutive failures
+[4/10] qwen tripped, fallback → gpt-mini:gpt-5.4-mini
+```
+
+End-of-run summary:
+
+```
+Circuit breaker summary: qwen tripped during this run
+```
+
+### Notes
+
+- Circuit breaker state is per-run only, not persisted across runs
+- Works with `--all` mode: tripped endpoints' remaining jobs switch to fallback
+- Without `circuitBreaker` config, original behavior is preserved (no failover)
+- Endpoints in `fallbackOrder` can also trip, in which case the next healthy endpoint is used

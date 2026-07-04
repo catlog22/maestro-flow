@@ -32,7 +32,7 @@ export const SYM = {
   radioOn: '●',
   radioOff: '○',
   // Navigation cursor
-  cursor: '▸',
+  cursor: '▶',
   cursorBlank: ' ',
   // Step progress
   stepDone: '✓',

@@ -10,6 +10,7 @@ import { McpConfig } from './McpConfig.js';
 import { ExtraMcpConfig } from './ExtraMcpConfig.js';
 import { StatuslineConfig } from './StatuslineConfig.js';
 import { BackupConfig } from './BackupConfig.js';
+import { EmbeddingPanel } from './EmbeddingPanel.js';
 import { InstallConfirm } from './InstallConfirm.js';
 import { InstallExecution, type InstallFlowResult } from './InstallExecution.js';
 import { InstallResult } from './InstallResult.js';
@@ -32,7 +33,7 @@ const CONFIG_STEPS = [
   'components_config', 'hooks_config', 'mcp_config',
   'codex_hooks_config', 'codex_mcp_config',
   'agy_hooks_config', 'extra_mcp_config',
-  'statusline_config', 'backup_config',
+  'statusline_config', 'backup_config', 'embedding_config',
 ];
 
 export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initialStepIds }: InstallFlowProps) {
@@ -68,6 +69,7 @@ export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initia
       case 'agy_hooks_config': return [hub, t.install.groupOther, t.install.hubLabelAgyHooks];
       case 'extra_mcp_config': return [hub, t.install.groupOther, t.install.hubLabelExtraMcp];
       case 'backup_config': return [hub, t.install.groupCore, t.install.hubLabelBackup];
+      case 'embedding_config': return [hub, t.install.groupOther, 'Embedding Model'];
       default: return null;
     }
   }, [s.step]);
@@ -230,6 +232,10 @@ export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initia
             backupClaudeMd={s.backupClaudeMd} backupAll={s.backupAll} existingFileCount={s.existingFileCount}
             onClaudeMdChange={s.setBackupClaudeMd} onAllChange={s.setBackupAll}
           />
+        )}
+
+        {s.step === 'embedding_config' && (
+          <EmbeddingPanel onDone={s.returnFromConfig} />
         )}
 
         {s.step === 'confirm' && (

@@ -46,7 +46,7 @@ The system prompt is identical across reference and aggregator calls, keeping th
 
 ## Configuration
 
-Edit `~/.maestro/api-explore.json` and add the `moa` section:
+Edit `~/.maestro/moa.json` to configure MOA presets (endpoints are defined in `~/.maestro/api.json`):
 
 ```json
 {
@@ -148,7 +148,7 @@ maestro moa output <session-id>
 | Cost | 1x | (N+1)x |
 | Best for | Quick lookups | Complex analysis, cross-verification |
 
-Both share endpoint config (`~/.maestro/api-explore.json`) and session storage (`.workflow/explore/`).
+Both share endpoint config (`~/.maestro/api.json`) and session storage (`.workflow/explore/`). MOA presets are configured separately in `~/.maestro/moa.json`.
 
 ---
 

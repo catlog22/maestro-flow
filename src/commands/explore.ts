@@ -155,7 +155,7 @@ export function registerExploreCommand(program: Command): void {
         ) ?? undefined;
         if (!resolvedPreset) {
           console.error(
-            'No MOA preset configured. Add "moa" section to ~/.maestro/api-explore.json',
+            'No MOA preset configured. Add presets to ~/.maestro/moa.json',
           );
           process.exit(1);
         }
@@ -174,7 +174,7 @@ export function registerExploreCommand(program: Command): void {
       if (globalEndpoints.length === 0) {
         console.error(
           'No endpoints configured.\n' +
-          'Configure ~/.maestro/api-explore.json with "endpoints" or legacy fields.\n' +
+          'Configure ~/.maestro/api.json with "endpoints" or legacy fields.\n' +
           'Run `maestro explore --help` for details.',
         );
         process.exit(1);
@@ -207,6 +207,8 @@ export function registerExploreCommand(program: Command): void {
         concurrency,
         endpointConcurrency: epConcurrency,
         moaPreset: resolvedPreset,
+        circuitBreaker: config.circuitBreaker,
+        allEndpoints: allEps,
         onProgress: (msg) => process.stderr.write(`${msg}\n`),
       });
       const totalDuration = Date.now() - startTime;

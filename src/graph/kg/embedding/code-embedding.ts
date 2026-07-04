@@ -267,6 +267,7 @@ export function searchCodeVectors(
   index: CodeEmbeddingIndex,
   limit: number,
 ): VectorSearchResult[] {
+  if (queryVec.length !== index.dimension) return [];
   const n = index.nodeIds.length;
   const scored: VectorSearchResult[] = [];
 

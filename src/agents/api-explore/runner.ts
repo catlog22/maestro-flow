@@ -17,6 +17,7 @@ import { agentLoop } from './agent-loop.js';
 import { buildExplorePrompt } from './prompt-parser.js';
 import { moaAgentLoop } from './moa-loop.js';
 import type { ResolvedMoaPreset } from './config.js';
+import { EndpointCircuitBreaker, type CircuitBreakerConfig, type NamedEndpointRef } from './circuit-breaker.js';
 
 export interface ExploreJob {
   id: string;
@@ -47,6 +48,10 @@ export interface RunnerOptions {
   endpointConcurrency?: number;
   /** When set, route each job through MOA instead of a single-endpoint agentLoop */
   moaPreset?: ResolvedMoaPreset;
+  /** Circuit breaker config for endpoint failover */
+  circuitBreaker?: CircuitBreakerConfig;
+  /** All available endpoints for fallback routing */
+  allEndpoints?: NamedEndpointRef[];
   onProgress?: (msg: string) => void;
   onJobStart?: (job: ExploreJob) => void;
   onJobDone?: (result: ExploreResult) => void;
@@ -137,6 +142,8 @@ async function drainQueue(
   jobIndexMap: Map<string, number>,
   callbacks: Pick<RunnerOptions, 'onProgress' | 'onJobStart' | 'onJobDone'>,
   moaPreset?: ResolvedMoaPreset,
+  breaker?: EndpointCircuitBreaker,
+  allEndpoints?: NamedEndpointRef[],
 ): Promise<ExploreResult[]> {
   const results: ExploreResult[] = [];
   let nextIdx = 0;
@@ -144,8 +151,33 @@ async function drainQueue(
   async function runSlot(): Promise<void> {
     while (nextIdx < queue.length) {
       const localIdx = nextIdx++;
-      const job = queue[localIdx];
+      let job = queue[localIdx];
       const globalIdx = jobIndexMap.get(job.id) ?? localIdx;
+
+      // Circuit breaker: if current endpoint is tripped, try fallback
+      if (breaker?.isOpen(job.endpointName) && allEndpoints) {
+        const fallback = breaker.selectFallback(job.endpointName, allEndpoints);
+        if (fallback) {
+          callbacks.onProgress?.(
+            `[${globalIdx + 1}/${totalJobs}] ${job.endpointName} tripped, fallback → ${fallback.name}:${fallback.llmConfig.model}`,
+          );
+          job = { ...job, endpointName: fallback.name, llmConfig: fallback.llmConfig };
+        } else {
+          callbacks.onProgress?.(
+            `[${globalIdx + 1}/${totalJobs}] ${job.endpointName} tripped, no fallback available — skipping`,
+          );
+          results.push({
+            id: job.id,
+            prompt: job.prompt,
+            endpointName: job.endpointName,
+            model: job.llmConfig.model,
+            content: null,
+            error: `Circuit breaker open for ${job.endpointName}, no fallback available`,
+            durationMs: 0,
+          });
+          continue;
+        }
+      }
 
       callbacks.onJobStart?.(job);
       callbacks.onProgress?.(
@@ -154,6 +186,20 @@ async function drainQueue(
 
       const result = await runSingleJob(job, cwd, maxTurns, dirListing, moaPreset);
       results.push(result);
+
+      // Record success/failure for circuit breaker
+      if (breaker) {
+        if (result.error) {
+          const tripped = breaker.recordFailure(job.endpointName);
+          if (tripped) {
+            callbacks.onProgress?.(
+              `⚡ Circuit breaker tripped for ${job.endpointName} — subsequent jobs will use fallback`,
+            );
+          }
+        } else {
+          breaker.recordSuccess(job.endpointName);
+        }
+      }
 
       callbacks.onJobDone?.(result);
       const status = result.error
@@ -178,12 +224,22 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
     jobs, cwd, maxTurns, concurrency,
     endpointConcurrency = 1,
     moaPreset,
+    circuitBreaker: cbConfig,
+    allEndpoints,
     onProgress, onJobStart, onJobDone,
   } = opts;
 
   if (jobs.length === 0) return [];
 
   const dirListing = getDirListing(cwd);
+
+  // Circuit breaker: shared across all endpoint queues
+  const breaker = allEndpoints && allEndpoints.length > 1
+    ? new EndpointCircuitBreaker(cbConfig, {
+        onTrip: (name, failures) =>
+          onProgress?.(`⚡ Circuit breaker: ${name} tripped after ${failures} consecutive failures`),
+      })
+    : undefined;
 
   // Group jobs by endpoint
   const queues = new Map<string, ExploreJob[]>();
@@ -220,6 +276,8 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
           jobs.length, jobIndexMap,
           { onProgress, onJobStart, onJobDone },
           moaPreset,
+          breaker,
+          allEndpoints,
         );
         allResults.push(...results);
       }
@@ -229,6 +287,14 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
     await Promise.allSettled(Array.from({ length: endpointSlots }, () => runEndpointSlot()));
   } finally {
     process.stdout.write = origStdoutWrite;
+  }
+
+  // Log circuit breaker summary
+  if (breaker) {
+    const tripped = breaker.getTrippedEndpoints();
+    if (tripped.length > 0) {
+      onProgress?.(`Circuit breaker summary: ${tripped.join(', ')} tripped during this run`);
+    }
   }
 
   // Return in original job order

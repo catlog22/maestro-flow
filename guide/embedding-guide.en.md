@@ -38,35 +38,40 @@ Model cache location: `<maestro-package>/node_modules/@huggingface/transformers/
 npm install @huggingface/transformers onnxruntime-node
 ```
 
-### 2. Check Status
+### 2. Manage Embedding (CLI)
 
 ```bash
-# View embedding model status
-maestro embedding status
+# View status (mode, model, cache, device, index)
+maestro install embedding --status
 
 # Output example:
-# Transformers: available
-# Device: cpu/fp32 batch=32
-# Model: Xenova/multilingual-e5-small (~465 MB)
-# Index: 277 docs, dim=384, model=Xenova/multilingual-e5-small
+#   Mode:     Local (ONNX)
+#   Model:    Xenova/multilingual-e5-small
+#   Cached:   Yes
+#   Device:   gpu/fp16 batch=128
+#   GPU:      Available
+#   Wiki idx: 804 docs
+#   Code idx: 7720 nodes
+
+# Download local model (~465 MB)
+maestro install embedding --download
+
+# Switch to local mode (from API mode)
+maestro install embedding --local
+
+# Rebuild code embedding index
+maestro install embedding --rebuild
 ```
 
 ### 3. Warm Up Model
 
-First run will auto-download the model (~465 MB) with a progress bar:
+First run auto-downloads the model (~465 MB) with progress display.
+`maestro install` also warms up the model after installation.
 
 ```bash
-# Warm up embedding model
-maestro embedding warmup
-
-# First-time output example:
-# Warming up model...
-# Downloading model Xenova/multilingual-e5-small (~465 MB)...
-# [████████████████░░░░] 80% 360 MB model.onnx
-# Model ready (cpu/fp32 batch=32, 12345ms)
+# Manual download/warmup
+maestro install embedding --download
 ```
-
-`maestro install` also warms up the model after installation, showing download progress.
 
 ### 4. Manual Download (Optional)
 

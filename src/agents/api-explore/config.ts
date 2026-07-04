@@ -1,29 +1,15 @@
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import type { LlmConfig, LlmFormat } from './llm.js';
+import type { CircuitBreakerConfig } from './circuit-breaker.js';
+import {
+  loadApiConfig,
+  loadMoaConfig,
+  resolveProxyConfig,
+  type ApiConfig,
+} from '../../config/api-config.js';
 
-const CLI_TOOLS_PATH = join(homedir(), '.maestro', 'cli-tools.json');
-
-export interface EndpointConfig {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  /** API format: 'openai' (default) or 'anthropic' */
-  format?: LlmFormat;
-  extraBody?: Record<string, unknown>;
-  /** Max concurrent jobs on this endpoint (default: 1 = serial) */
-  concurrency?: number;
-  /** Max agent turns for jobs on this endpoint (overrides global maxTurns) */
-  maxTurns?: number;
-}
-
-export interface ProxyConfig {
-  enabled: boolean;
-  httpProxy?: string;
-  httpsProxy?: string;
-  noProxy?: string;
-}
+// Re-export types that were originally defined here
+export type { EndpointConfig, ProxyConfig, MoaPresetConfig, MoaConfig } from '../../config/api-config.js';
+export type { CircuitBreakerConfig } from './circuit-breaker.js';
 
 export interface ExploreConfig {
   /** Legacy single-endpoint fields (backward compat) */
@@ -36,22 +22,19 @@ export interface ExploreConfig {
   maxTurns?: number;
   concurrency?: number;
   /** Named endpoints for parallel multi-endpoint usage */
-  endpoints?: Record<string, EndpointConfig>;
-  /** Proxy config — also falls back to cli-tools.json proxy */
-  proxy?: ProxyConfig;
+  endpoints?: Record<string, import('../../config/api-config.js').EndpointConfig>;
+  /** Proxy config */
+  proxy?: import('../../config/api-config.js').ProxyConfig;
+  /** Circuit breaker for multi-endpoint failover */
+  circuitBreaker?: CircuitBreakerConfig;
   /** Mixture-of-Agents presets */
-  moa?: MoaConfig;
+  moa?: import('../../config/api-config.js').MoaConfig;
 }
 
-const CONFIG_PATH = join(homedir(), '.maestro', 'api-explore.json');
-
 export function loadExploreConfig(): ExploreConfig {
-  if (!existsSync(CONFIG_PATH)) return {};
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')) as ExploreConfig;
-  } catch {
-    return {};
-  }
+  const api = loadApiConfig();
+  const moa = loadMoaConfig();
+  return { ...api, moa } as ExploreConfig;
 }
 
 export function getDefaultEndpoint(config: ExploreConfig): LlmConfig | null {
@@ -129,20 +112,8 @@ export const DEFAULT_PIPELINE: PipelineStep[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// MOA Preset Config
+// MOA Preset Resolution
 // ---------------------------------------------------------------------------
-
-export interface MoaPresetConfig {
-  referenceEndpoints: string[];
-  aggregatorEndpoint: string;
-  steps?: PipelineStep[];
-  enabled?: boolean;
-}
-
-export interface MoaConfig {
-  defaultPreset?: string;
-  presets: Record<string, MoaPresetConfig>;
-}
 
 export interface ResolvedMoaPreset {
   referenceEndpoints: NamedEndpoint[];
@@ -191,36 +162,20 @@ export function resolveEndpoints(
 
   if (all) return getAllEndpoints(config);
 
-  // Single: first named endpoint, or default
   const allEps = getAllEndpoints(config);
   return allEps.length > 0 ? [allEps[0]] : [];
 }
 
-function loadCliToolsProxy(): ProxyConfig | undefined {
-  if (!existsSync(CLI_TOOLS_PATH)) return undefined;
-  try {
-    const raw = JSON.parse(readFileSync(CLI_TOOLS_PATH, 'utf-8')) as { proxy?: ProxyConfig };
-    return raw.proxy;
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * Resolve the proxy URL for explore HTTP requests.
- * Returns the proxy URL string when proxy is enabled, undefined otherwise.
- * Does NOT mutate process.env — callers inject into HTTP clients directly.
+ * Priority: config.proxy → api.json proxy → api-explore.json proxy → cli-tools.json proxy.
  */
 export function resolveExploreProxyUrl(config: ExploreConfig): string | undefined {
-  const proxy = config.proxy ?? loadCliToolsProxy();
+  const proxy = config.proxy ?? resolveProxyConfig();
   if (!proxy?.enabled) return undefined;
   return proxy.httpsProxy ?? proxy.httpProxy;
 }
 
-/**
- * Inject proxyUrl into an array of NamedEndpoints' LlmConfig.
- * Mutates in place for convenience; no-op when proxyUrl is undefined.
- */
 export function injectProxy(endpoints: NamedEndpoint[], proxyUrl: string | undefined): void {
   if (!proxyUrl) return;
   for (const ep of endpoints) {
@@ -258,6 +213,6 @@ export function resolveMoaPreset(config: ExploreConfig, presetName?: string): Re
   return {
     referenceEndpoints: refEndpoints,
     aggregatorEndpoint: aggEndpoint,
-    steps: preset.steps ?? DEFAULT_PIPELINE,
+    steps: (preset.steps ?? DEFAULT_PIPELINE) as PipelineStep[],
   };
 }

@@ -8,6 +8,9 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { HooksSelection } from './HooksConfig.js';
 import type { InstallFlowConfig } from './types.js';
 import type { InstallFlowResult } from './InstallExecution.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { scanComponents, countExistingTargetFiles, MCP_TOOLS, COMPONENT_DEFS, migrateComponentIds, type ExtraMcpTargetId, type ComponentDef } from '../../commands/install-backend.js';
 import { detectStatusline, getHooksForLevel, getAllHookNames, type HookLevel } from '../../commands/hooks.js';
 import { findManifest, type Manifest } from '../../core/manifest.js';
@@ -20,10 +23,26 @@ export type FlowStep =
   | 'components_config' | 'hooks_config' | 'mcp_config'
   | 'codex_hooks_config' | 'codex_mcp_config'
   | 'agy_hooks_config' | 'extra_mcp_config'
-  | 'statusline_config' | 'backup_config'
+  | 'statusline_config' | 'backup_config' | 'embedding_config'
   | 'confirm' | 'executing' | 'complete';
 
 export type FlowStepCompat = FlowStep | 'mode';
+
+function isEmbeddingReady(): boolean {
+  if (existsSync(join(homedir(), '.maestro', 'api-embedding.json'))) return true;
+  try {
+    const { createRequire } = require('node:module');
+    const localRequire = createRequire(import.meta.url);
+    const tjsMain = localRequire.resolve('@huggingface/transformers');
+    const normalized = tjsMain.replace(/\\/g, '/');
+    const idx = normalized.indexOf('@huggingface/transformers');
+    if (idx >= 0) {
+      const root = tjsMain.slice(0, idx + '@huggingface/transformers'.length);
+      return existsSync(join(root, '.cache', 'Xenova', 'multilingual-e5-small', 'onnx', 'model.onnx'));
+    }
+  } catch { /* ignore */ }
+  return false;
+}
 
 function makeHooksSelection(level: HookLevel, tool: 'claude' | 'codex' | 'agy'): HooksSelection {
   return {
@@ -86,6 +105,24 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   type Platform = 'claude' | 'codex' | 'agy' | 'agents-standard';
   const ALL_PLATFORMS: Platform[] = ['claude', 'codex', 'agy', 'agents-standard'];
 
+  // Fallback: infer previously installed platforms from on-disk artifacts
+  // when manifest is missing. Only activates if ~/.maestro/version.json exists
+  // (proof that Maestro was installed before), so non-Maestro files won't
+  // cause false positives.
+  const inferPlatformsFromDisk = useCallback((scope: 'global' | 'project', projPath: string): Set<Platform> => {
+    if (!existsSync(join(paths.home, 'version.json'))) return new Set<Platform>(['claude']);
+    const base = scope === 'global' ? homedir() : projPath;
+    const plats = new Set<Platform>();
+    if (existsSync(join(base, '.claude'))) plats.add('claude');
+    if (existsSync(join(base, '.codex', 'agents')) || existsSync(join(base, '.codex', 'skills'))) plats.add('codex');
+    if (scope === 'global'
+      ? existsSync(join(base, '.gemini', 'antigravity-cli'))
+      : existsSync(join(base, '.agents', 'skills'))) plats.add('agy');
+    if (existsSync(join(base, '.agents', 'agents')) || existsSync(join(base, '.agents', 'skills'))) plats.add('agents-standard');
+    if (plats.size === 0) plats.add('claude');
+    return plats;
+  }, []);
+
   const inferPlatformsFromManifest = useCallback((m: Manifest | null): Set<Platform> => {
     if (!m?.selectedComponentIds?.length) return new Set<Platform>(['claude']);
     const ids = new Set(m.selectedComponentIds);
@@ -100,7 +137,9 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   }, []);
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<Platform>>(
-    () => inferPlatformsFromManifest(lastManifest),
+    () => lastManifest
+      ? inferPlatformsFromManifest(lastManifest)
+      : inferPlatformsFromDisk(mode, projectPath),
   );
 
   const togglePlatform = useCallback((plat: string) => {
@@ -259,7 +298,9 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     if (isSubcommand) return;
-    setSelectedPlatforms(inferPlatformsFromManifest(lastManifest));
+    setSelectedPlatforms(lastManifest
+      ? inferPlatformsFromManifest(lastManifest)
+      : inferPlatformsFromDisk(mode, projectPath));
     setSelectedAddons(lastManifest?.selectedComponentIds?.length
       ? new Set(lastManifest.selectedComponentIds.filter(id => ADDON_IDS.has(id)))
       : new Set<string>());
@@ -367,6 +408,8 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       selectedAddons: Array.from(selectedAddons),
       chineseEnabled,
       addonDefs,
+      embeddingMode: existsSync(join(homedir(), '.maestro', 'api-embedding.json')) ? 'api' as const : 'local' as const,
+      embeddingCached: isEmbeddingReady(),
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,
     mcpEnabled, codexHookLevel, codexMcpTools.length, codexMcpEnabled,
@@ -406,6 +449,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       codexHooks: 'codex_hooks_config', codexMcp: 'codex_mcp_config',
       agyHooks: 'agy_hooks_config', extraMcp: 'extra_mcp_config',
       statusline: 'statusline_config', backup: 'backup_config',
+      embedding: 'embedding_config',
     };
     if (map[id]) setStep(map[id]);
   }, []);

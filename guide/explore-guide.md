@@ -26,7 +26,10 @@ EXPECTED: file:line evidence list"
 
 ## 端点配置
 
-配置文件：`~/.maestro/api-explore.json`
+API 端点配置：`~/.maestro/api.json`
+MOA 模板配置：`~/.maestro/moa.json`
+
+> **弃用说明**: `~/.maestro/api-explore.json` 仍作为 fallback 读取（1 个版本周期），建议迁移到 `api.json` + `moa.json`。
 
 ### 多端点配置（推荐）
 
@@ -48,7 +51,7 @@ EXPECTED: file:line evidence list"
     "sonnet": {
       "baseUrl": "https://api.anthropic.com",
       "apiKey": "sk-ant-xxx",
-      "model": "claude-sonnet-4-20250514",
+      "model": "claude-sonnet-4-6",
       "format": "anthropic",
       "maxTurns": 4
     },
@@ -60,8 +63,10 @@ EXPECTED: file:line evidence list"
       "extraBody": { "temperature": 0.2 }
     }
   },
-  "maxTurns": 3,
-  "concurrency": 4
+  "defaults": {
+    "maxTurns": 3,
+    "concurrency": 4
+  }
 }
 ```
 
@@ -90,7 +95,9 @@ EXPECTED: file:line evidence list"
 
 遗留单端点配置同样支持顶层 `"format"` 字段。CLI 入口支持 `--format` 参数覆盖。
 
-### 全局字段
+### 全局默认值
+
+在 `api.json` 的 `defaults` 字段中配置：
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
@@ -99,7 +106,7 @@ EXPECTED: file:line evidence list"
 
 ### 代理配置
 
-自动从 `~/.maestro/cli-tools.json` 继承 proxy 配置。也可在 `api-explore.json` 中单独配置：
+在 `api.json` 中统一管理 proxy（CLI 工具的 `cli-tools.json` proxy 作为 fallback）：
 
 ```json
 {
@@ -112,7 +119,29 @@ EXPECTED: file:line evidence list"
 }
 ```
 
-优先级：已有环境变量 `HTTP_PROXY` > api-explore.json proxy > cli-tools.json proxy。
+优先级：`api.json` proxy > `cli-tools.json` proxy。
+
+### MOA 模板配置
+
+MOA（Mixture-of-Agents）模板在 `~/.maestro/moa.json` 中独立配置：
+
+```json
+{
+  "defaultPreset": "default",
+  "presets": {
+    "default": {
+      "referenceEndpoints": ["gpt-mini"],
+      "aggregatorEndpoint": "gpt-codex"
+    },
+    "deep": {
+      "referenceEndpoints": ["gpt-codex", "deepseek"],
+      "aggregatorEndpoint": "sonnet"
+    }
+  }
+}
+```
+
+端点名引用 `api.json` 中的命名端点。
 
 ### 遗留单端点配置
 
@@ -255,6 +284,68 @@ maestro explore output exp-20260624-... --json
 ```
 
 `--no-save` 跳过保存。`-o /custom/path` 指定保存位置。
+
+---
+
+## 熔断切换（Circuit Breaker）
+
+多端点场景下，当某个端点连续失败达到阈值，自动将后续 job 切换到健康端点，避免整批任务因单点故障全部失败。
+
+### 行为规则
+
+1. 每个端点独立计数连续失败次数
+2. 达到阈值（默认 3 次）→ 熔断该端点
+3. 后续 job 自动切换到备选端点执行
+4. 无可用备选端点时，job 直接标记失败并跳过
+5. 端点成功响应会重置失败计数
+6. 仅在配置了 2 个以上端点时生效
+
+### 配置
+
+在 `~/.maestro/api.json` 中添加 `circuitBreaker` 字段：
+
+```json
+{
+  "endpoints": {
+    "qwen": { "baseUrl": "...", "apiKey": "...", "model": "Qwen/Qwen3-8B" },
+    "deepseek": { "baseUrl": "...", "apiKey": "...", "model": "deepseek-chat" },
+    "gpt-mini": { "baseUrl": "...", "apiKey": "...", "model": "gpt-5.4-mini" }
+  },
+  "circuitBreaker": {
+    "threshold": 3,
+    "fallbackOrder": ["gpt-mini", "deepseek", "qwen"]
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 说明 | 默认值 |
+|------|------|--------|
+| `threshold` | 连续失败几次后熔断 | `3` |
+| `fallbackOrder` | 备选端点优先级列表 | 按配置顺序 |
+
+### 运行时输出
+
+熔断触发时会在 stderr 输出提示：
+
+```
+⚡ Circuit breaker: qwen tripped after 3 consecutive failures
+[4/10] qwen tripped, fallback → gpt-mini:gpt-5.4-mini
+```
+
+运行结束后汇总：
+
+```
+Circuit breaker summary: qwen tripped during this run
+```
+
+### 注意事项
+
+- 熔断状态仅在单次 `maestro explore` 运行期间有效，不跨运行持久化
+- `--all` 模式下同样生效：某端点熔断后，其剩余 job 切换到备选端点
+- 不配置 `circuitBreaker` 时保持原有行为（不熔断，失败即失败）
+- `fallbackOrder` 中的端点也可能被熔断，此时继续查找下一个健康端点
 
 ---
 

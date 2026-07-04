@@ -46,7 +46,7 @@ System prompt 在 reference 和 aggregator 之间保持一致，确保 provider 
 
 ## 配置
 
-编辑 `~/.maestro/api-explore.json`，添加 `moa` 配置节：
+编辑 `~/.maestro/moa.json` 配置 MOA 预设（端点定义在 `~/.maestro/api.json`）：
 
 ```json
 {
@@ -148,7 +148,7 @@ maestro moa output <session-id>
 | 成本 | 1x | (N+1)x（N 个 reference + 1 aggregator）|
 | 适用场景 | 快速查找、简单搜索 | 复杂分析、需要交叉验证 |
 
-两者共享端点配置（`~/.maestro/api-explore.json`）和 session 存储（`.workflow/explore/`）。
+两者共享端点配置（`~/.maestro/api.json`）和 session 存储（`.workflow/explore/`）。MOA 预设在 `~/.maestro/moa.json` 中独立配置。
 
 ---
 

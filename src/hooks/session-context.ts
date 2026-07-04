@@ -397,7 +397,9 @@ function buildSpecsSection(cwd: string): string | null {
 }
 
 function buildExploreSection(): string | null {
-  const configPath = join(homedir(), '.maestro', 'api-explore.json');
+  const apiJsonPath = join(homedir(), '.maestro', 'api.json');
+  const legacyPath = join(homedir(), '.maestro', 'api-explore.json');
+  const configPath = existsSync(apiJsonPath) ? apiJsonPath : legacyPath;
   if (!existsSync(configPath)) return null;
 
   try {

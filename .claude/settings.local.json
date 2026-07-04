@@ -6,5 +6,10 @@
       "Bash(python workflows/impeccable/ui-search/search.py \"modern SaaS\" --design-system -f markdown)",
       "Bash(python workflows/impeccable/ui-search/search.py \"accessibility animation\" -d ux)"
     ]
-  }
+  },
+  "disabledMcpjsonServers": [
+    "maestro",
+    "claude_dms3-chrome-devtools",
+    "exa"
+  ]
 }
