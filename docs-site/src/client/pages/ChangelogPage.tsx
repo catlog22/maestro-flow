@@ -17,6 +17,17 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.48',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Add embedding model management commands — download, status, index rebuild', text_zh: '新增 embedding 模型管理命令——下载、状态、索引重建' },
+      { type: 'refactor', text_en: 'Ralph-v2 executor refactored from named teammate to unnamed nested nesting model', text_zh: 'Ralph-v2 executor 从 named teammate 重构为 unnamed 嵌套套娃模型' },
+      { type: 'refactor', text_en: 'Unify analyze/plan entry params from phase to milestone', text_zh: 'analyze/plan 入口参数统一从 phase 改为 milestone' },
+      { type: 'fix', text_en: 'Remove default emphasis color from install execute button', text_zh: '移除「执行安装」按钮的默认强调色' },
+      { type: 'docs', text_en: 'Sync guide/docs-site milestone param semantics + fix MOA page loading', text_zh: '同步 guide/docs-site 的 milestone 参数语义 + 修复 MOA 页面加载' },
+    ],
+  },
+  {
     version: '0.5.47',
     date: '2026-07',
     changes: [
