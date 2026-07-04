@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join } from 'node:path';
-import { formatNewEntry, parseSpecEntries } from './spec-entry-parser.js';
+import { formatNewEntry, parseSpecEntries, generateSid } from './spec-entry-parser.js';
 import { resolveSpecDir, CATEGORY_MAP, type SpecCategory, type SpecScope } from './spec-loader.js';
 import { ensureSpecFile } from './spec-init.js';
 import { slugify } from '../utils/frontmatter.js';
@@ -36,6 +36,8 @@ export interface SpecAddResult {
   knowhowRef?: string;
   /** Auto-captured git evidence (commit hash) */
   evidence?: string;
+  /** Stable identity assigned to the new entry (undefined for duplicates). */
+  sid?: string;
 }
 
 // ============================================================================
@@ -184,12 +186,13 @@ export function appendSpecEntry(
     return { ok: true, file: filePath, category, title, duplicate: true };
   }
 
-  // Generate and append entry
+  // Generate and append entry with a stable identity
   const date = new Date().toISOString().slice(0, 10);
-  const entry = formatNewEntry(category, keywords, date, title, content, evidence, undefined, description);
+  const sid = generateSid();
+  const entry = formatNewEntry(category, keywords, date, title, content, evidence, undefined, description, undefined, undefined, undefined, { sid });
   writeFileSync(filePath, existing + '\n\n' + entry, 'utf-8');
 
-  return { ok: true, file: filePath, category, title, duplicate: false, evidence };
+  return { ok: true, file: filePath, category, title, duplicate: false, evidence, sid };
 }
 
 /**
@@ -238,8 +241,9 @@ export function appendSpecEntryWithRef(
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  const entry = formatNewEntry(category, keywords, date, title, summary, source, ref);
+  const sid = generateSid();
+  const entry = formatNewEntry(category, keywords, date, title, summary, source, ref, undefined, undefined, undefined, undefined, { sid });
   writeFileSync(filePath, existing + '\n\n' + entry, 'utf-8');
 
-  return { ok: true, file: filePath, category, title, duplicate: false };
+  return { ok: true, file: filePath, category, title, duplicate: false, sid };
 }

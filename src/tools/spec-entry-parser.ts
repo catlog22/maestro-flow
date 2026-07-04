@@ -13,6 +13,20 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'contested';
 
 export const VALID_CONFIDENCE_LEVELS: readonly ConfidenceLevel[] = ['high', 'medium', 'low', 'contested'] as const;
 
+/**
+ * Lifecycle status of a spec entry.
+ * - `active` (default): live knowledge, injected and searchable normally.
+ * - `deprecated`: superseded by a newer entry; excluded from search/load by
+ *   default but preserved for the evolution chain (see `superseded-by`).
+ *
+ * Orthogonal to `confidence`: status = "is this the current version",
+ * confidence = "is this content trusted/contested". A deprecated entry can
+ * still have had high confidence; a contested entry is still active.
+ */
+export type SpecStatus = 'active' | 'deprecated';
+
+export const VALID_STATUS: readonly SpecStatus[] = ['active', 'deprecated'] as const;
+
 export interface SpecEntryParsed {
   category: string;
   keywords: string[];
@@ -24,6 +38,14 @@ export interface SpecEntryParsed {
   confidence?: ConfidenceLevel;
   conflictMarker?: string;
   conflictNote?: string;
+  /** Stable identity (S-YYYYMMDD-xxxx), survives line-number drift. Anchors the evolution chain. */
+  sid?: string;
+  /** sid of the entry this one replaces (this is the newer version). */
+  supersedes?: string;
+  /** sid of the entry that replaced this one (this is the older version). */
+  supersededBy?: string;
+  /** Lifecycle status; absent = active. */
+  status?: SpecStatus;
   title: string;
   content: string;
   lineStart: number;
@@ -116,6 +138,7 @@ export function parseSpecEntries(content: string): ParseResult {
     const confidence = attrs.confidence as ConfidenceLevel | undefined;
     const conflictMarker = attrs['conflict-marker'] || undefined;
     const conflictNote = attrs['conflict-note'] || undefined;
+    const status = attrs.status as SpecStatus | undefined;
 
     const entry: SpecEntryParsed = {
       category: attrs.category ?? '',
@@ -128,6 +151,10 @@ export function parseSpecEntries(content: string): ParseResult {
       confidence: confidence && VALID_CONFIDENCE_LEVELS.includes(confidence) ? confidence : undefined,
       conflictMarker,
       conflictNote,
+      sid: attrs.sid || undefined,
+      supersedes: attrs.supersedes || undefined,
+      supersededBy: attrs['superseded-by'] || undefined,
+      status: status && VALID_STATUS.includes(status) ? status : undefined,
       title,
       content: body.trim(),
       lineStart,
@@ -268,6 +295,33 @@ function formatEntryClean(e: SpecEntryParsed): string {
 }
 
 /**
+ * Lifecycle metadata for a spec entry. Passed as an options bag to
+ * `formatNewEntry` so the evolution chain can be written without exploding the
+ * positional parameter list.
+ */
+export interface SpecEntryLifecycle {
+  /** Stable identity; if omitted, none is written (legacy behavior). */
+  sid?: string;
+  /** sid of the entry this one replaces. */
+  supersedes?: string;
+  /** sid of the entry that replaced this one. */
+  supersededBy?: string;
+  /** Lifecycle status; `active` (or omitted) writes no attribute. */
+  status?: SpecStatus;
+}
+
+/**
+ * Generate a stable spec-entry identity: `S-YYYYMMDD-xxxx`.
+ * Mirrors the conflict-marker ID scheme. Assigned at `spec add` time so
+ * supersedes/superseded-by references survive line-number drift.
+ */
+export function generateSid(now: Date = new Date()): string {
+  const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.random().toString(36).slice(2, 6);
+  return `S-${date}-${rand}`;
+}
+
+/**
  * Format a single entry for writing to a spec file.
  * Writes `category=` attribute as the primary classifier.
  */
@@ -283,6 +337,7 @@ export function formatNewEntry(
   confidence?: ConfidenceLevel,
   conflictMarker?: string,
   conflictNote?: string,
+  lifecycle?: SpecEntryLifecycle,
 ): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const kwStr = keywords.map(k => k.toLowerCase().trim()).filter(Boolean).join(',');
@@ -293,8 +348,12 @@ export function formatNewEntry(
   const confidenceAttr = confidence ? ` confidence="${confidence}"` : '';
   const conflictMarkerAttr = conflictMarker ? ` conflict-marker="${conflictMarker}"` : '';
   const conflictNoteAttr = conflictNote ? ` conflict-note="${conflictNote}"` : '';
+  const sidAttr = lifecycle?.sid ? ` sid="${esc(lifecycle.sid)}"` : '';
+  const supersedesAttr = lifecycle?.supersedes ? ` supersedes="${esc(lifecycle.supersedes)}"` : '';
+  const supersededByAttr = lifecycle?.supersededBy ? ` superseded-by="${esc(lifecycle.supersededBy)}"` : '';
+  const statusAttr = lifecycle?.status && lifecycle.status !== 'active' ? ` status="${lifecycle.status}"` : '';
 
-  return `<spec-entry category="${category}" keywords="${kwStr}" date="${date}"${titleAttr}${descAttr}${sourceAttr}${refAttr}${confidenceAttr}${conflictMarkerAttr}${conflictNoteAttr}>\n\n### ${title}\n\n${content}\n\n</spec-entry>`;
+  return `<spec-entry category="${category}" keywords="${kwStr}" date="${date}"${sidAttr}${titleAttr}${descAttr}${sourceAttr}${refAttr}${confidenceAttr}${conflictMarkerAttr}${conflictNoteAttr}${supersedesAttr}${supersededByAttr}${statusAttr}>\n\n### ${title}\n\n${content}\n\n</spec-entry>`;
 }
 
 // ============================================================================

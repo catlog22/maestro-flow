@@ -24,6 +24,10 @@ export interface SpecEntry {
   ref?: string;
   confidence?: string;
   conflictNote?: string;
+  sid?: string;
+  supersedes?: string;
+  supersededBy?: string;
+  status?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -145,6 +149,10 @@ function parseEntryBlocks(
 
     const confidence = attrs.confidence || undefined;
     const conflictNote = attrs['conflict-note'] || undefined;
+    const sid = attrs.sid || undefined;
+    const supersedes = attrs.supersedes || undefined;
+    const supersededBy = attrs['superseded-by'] || undefined;
+    const status = attrs.status || undefined;
 
     entries.push({
       id,
@@ -159,6 +167,10 @@ function parseEntryBlocks(
       ...(ref ? { ref } : {}),
       ...(confidence ? { confidence } : {}),
       ...(conflictNote ? { conflictNote } : {}),
+      ...(sid ? { sid } : {}),
+      ...(supersedes ? { supersedes } : {}),
+      ...(supersededBy ? { supersededBy } : {}),
+      ...(status ? { status } : {}),
     });
   }
 

@@ -30,6 +30,7 @@ import type {
 } from './wiki-types.js';
 import { buildGraph, type WikiGraph } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, searchBM25Planned, rerankByPhraseProximity, type InvertedIndex } from './search.js';
+import { applyTimeDecay } from './time-decay.js';
 import type { EmbeddingIndex } from './embedding.js';
 
 export interface LinkedWorkspaceConfig {
@@ -405,6 +406,7 @@ export class WikiIndexer {
           if (entry) out.push({ entry, score: r.score });
         }
         out = rerankByPhraseProximity(out, query);
+        out = applyTimeDecay(out, Date.now());
         return { results: out.slice(0, limit), embeddingUsed: true, embeddingDocs: embIdx.docIds.length };
       } catch (e: unknown) {
         if (process.env.MAESTRO_DEBUG === '1') {
@@ -419,6 +421,7 @@ export class WikiIndexer {
       if (entry) out.push({ entry, score: r.score });
     }
     out = rerankByPhraseProximity(out, query);
+    out = applyTimeDecay(out, Date.now());
     return { results: out.slice(0, limit), embeddingUsed: false, embeddingDocs: 0 };
   }
 
@@ -624,7 +627,7 @@ export class WikiIndexer {
             related,
             source: container.source,
             body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}) },
+            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.ref ? { ref: se.ref } : {}), ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.status ? { status: se.status } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}) },
             scope,
             category: se.category || container.category,
             specCategory: container.specCategory,
@@ -1043,7 +1046,7 @@ export class WikiIndexer {
             related: [],
             source: { kind: 'file', path: `specs/${name}`, workspace: lw.name },
             body: se.content,
-            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}) },
+            ext: { entryType: se.type, timestamp: se.timestamp, ...(se.confidence ? { confidence: se.confidence } : {}), ...(se.conflictNote ? { conflictNote: se.conflictNote } : {}), ...(se.status ? { status: se.status } : {}), ...(se.supersededBy ? { supersededBy: se.supersededBy } : {}) },
             scope: 'linked',
             category: se.category || entry.category,
             specCategory: entry.specCategory,

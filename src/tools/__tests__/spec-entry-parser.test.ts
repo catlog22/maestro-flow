@@ -6,6 +6,7 @@ import {
   validateCategoryMatch,
   formatSpecEntries,
   formatNewEntry,
+  generateSid,
   VALID_CATEGORIES,
 } from '../spec-entry-parser.js';
 
@@ -299,5 +300,62 @@ describe('formatNewEntry', () => {
   it('omits source attribute when not provided', () => {
     const result = formatNewEntry('coding', ['test'], '2026-04-21', 'Title', 'Body');
     assert.ok(!result.includes('source='));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Supersession lifecycle (sid / supersedes / superseded-by / status)
+// ---------------------------------------------------------------------------
+
+describe('generateSid', () => {
+  it('produces a stable S-YYYYMMDD-xxxx identity', () => {
+    const sid = generateSid(new Date('2026-07-04T12:00:00Z'));
+    assert.match(sid, /^S-20260704-[a-z0-9]{4}$/);
+  });
+
+  it('produces distinct ids across calls', () => {
+    const a = generateSid();
+    const b = generateSid();
+    assert.notStrictEqual(a, b);
+  });
+});
+
+describe('lifecycle round-trip', () => {
+  it('writes and parses sid/supersedes/status attributes', () => {
+    const entry = formatNewEntry(
+      'coding', ['auth'], '2026-07-04', 'New rule', 'Body',
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      { sid: 'S-20260704-aaaa', supersedes: 'S-20260101-bbbb' },
+    );
+    assert.ok(entry.includes('sid="S-20260704-aaaa"'));
+    assert.ok(entry.includes('supersedes="S-20260101-bbbb"'));
+
+    const { entries } = parseSpecEntries(entry);
+    assert.strictEqual(entries.length, 1);
+    assert.strictEqual(entries[0].sid, 'S-20260704-aaaa');
+    assert.strictEqual(entries[0].supersedes, 'S-20260101-bbbb');
+    assert.strictEqual(entries[0].status, undefined, 'active status writes no attribute');
+  });
+
+  it('writes status only when deprecated, and parses superseded-by', () => {
+    const active = formatNewEntry('coding', ['x'], '2026-07-04', 'T', 'B',
+      undefined, undefined, undefined, undefined, undefined, undefined, { status: 'active' });
+    assert.ok(!active.includes('status='), 'active status is implicit');
+
+    const deprecated = formatNewEntry('coding', ['x'], '2026-07-04', 'T', 'B',
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      { status: 'deprecated', supersededBy: 'S-20260704-cccc' });
+    assert.ok(deprecated.includes('status="deprecated"'));
+    assert.ok(deprecated.includes('superseded-by="S-20260704-cccc"'));
+
+    const { entries } = parseSpecEntries(deprecated);
+    assert.strictEqual(entries[0].status, 'deprecated');
+    assert.strictEqual(entries[0].supersededBy, 'S-20260704-cccc');
+  });
+
+  it('ignores an invalid status value', () => {
+    const raw = '<spec-entry category="coding" keywords="x" date="2026-07-04" title="T" status="bogus">\n\n### T\n\nB\n\n</spec-entry>';
+    const { entries } = parseSpecEntries(raw);
+    assert.strictEqual(entries[0].status, undefined);
   });
 });

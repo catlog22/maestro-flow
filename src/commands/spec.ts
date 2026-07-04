@@ -1011,6 +1011,113 @@ export function registerSpecCommand(program: Command): void {
       }
     });
 
+  // ── supersede ────────────────────────────────────────────────────────
+  spec
+    .command('supersede')
+    .description('Mark an entry as replaced by a newer one, preserving the evolution chain')
+    .argument('<old-sid>', 'sid of the entry being replaced')
+    .requiredOption('--by <new-sid>', 'sid of the replacement entry')
+    .action(async (oldSid: string, opts: { by: string }) => {
+      const { supersedeEntry, getEvolutionChain } = await import('../tools/spec-conflict-marker.js');
+
+      if (getEvolutionChain(process.cwd(), opts.by).length === 0) {
+        console.error(`Error: replacement sid not found: ${opts.by}`);
+        process.exit(1);
+      }
+
+      const result = supersedeEntry(process.cwd(), oldSid, opts.by);
+      if (result.success) {
+        console.log(`Superseded ${oldSid} → ${opts.by}. Old entry marked deprecated (excluded from search/load).`);
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
+      } else {
+        console.error(`Error: ${result.error}`);
+        process.exit(1);
+      }
+    });
+
+  // ── history ──────────────────────────────────────────────────────────
+  spec
+    .command('history')
+    .description('Show the evolution chain for a spec entry (oldest → newest)')
+    .argument('<sid>', 'Any sid belonging to the chain')
+    .option('--json', 'Output as JSON')
+    .action(async (sid: string, opts: { json?: boolean }) => {
+      const { getEvolutionChain } = await import('../tools/spec-conflict-marker.js');
+      const chain = getEvolutionChain(process.cwd(), sid);
+
+      if (opts.json) {
+        console.log(JSON.stringify(chain, null, 2));
+        return;
+      }
+      if (chain.length === 0) {
+        console.log(`No entry found with sid ${sid}.`);
+        return;
+      }
+
+      console.log(`Evolution chain (${chain.length} version${chain.length > 1 ? 's' : ''}, oldest → newest):\n`);
+      for (let i = 0; i < chain.length; i++) {
+        const link = chain[i];
+        if (i > 0) console.log('    ↓');
+        const marker = link.current ? '● CURRENT   ' : '○ deprecated';
+        console.log(`  ${marker}  ${link.sid}  "${link.title}"  [${link.file} · ${link.date}]`);
+      }
+    });
+
+  // ── health ───────────────────────────────────────────────────────────
+  spec
+    .command('health')
+    .description('Knowledge-health report: lifecycle stats, evolution chains, integrity checks')
+    .option('--json', 'Output as JSON')
+    .action(async (opts: { json?: boolean }) => {
+      const { analyzeSpecHealth } = await import('../tools/spec-conflict-marker.js');
+      const h = analyzeSpecHealth(process.cwd());
+
+      if (opts.json) {
+        console.log(JSON.stringify(h, null, 2));
+        return;
+      }
+
+      console.log('Spec knowledge health\n');
+      console.log(`  Entries:     ${h.total} total · ${h.active} active · ${h.deprecated} deprecated`);
+      console.log(`  Confidence:  ${h.contested} contested · ${h.lowConfidence} low`);
+      console.log(`  Identity:    ${h.withSid} with sid · ${h.withoutSid} missing sid`);
+      console.log(`  Evolution:   ${h.chains} chain${h.chains === 1 ? '' : 's'}`);
+      console.log(`  Freshness:   avg ${h.avgFreshness.toFixed(2)} · ${h.staleActive} active entries stale (<0.5)`);
+
+      if (h.danglingSupersedes.length > 0) {
+        console.log(`\n  ! ${h.danglingSupersedes.length} dangling supersedes reference(s):`);
+        for (const d of h.danglingSupersedes) console.log(`    ${d.sid} -> ${d.target} (missing) in ${d.file}`);
+      }
+      if (h.cyclicSids.length > 0) {
+        console.log(`\n  ! supersedes cycle involving: ${h.cyclicSids.join(', ')}`);
+      }
+      if (h.danglingSupersedes.length === 0 && h.cyclicSids.length === 0) {
+        console.log('\n  Evolution chain integrity OK');
+      }
+      if (h.withoutSid > 0) {
+        console.log(`\n  Hint: ${h.withoutSid} legacy entries lack a sid — run 'maestro spec backfill-sid' to enable supersession.`);
+      }
+    });
+
+  // ── backfill-sid ─────────────────────────────────────────────────────
+  spec
+    .command('backfill-sid')
+    .description('Assign a stable sid to every spec entry that lacks one (idempotent)')
+    .action(async () => {
+      const { backfillSids } = await import('../tools/spec-conflict-marker.js');
+      const { updated } = backfillSids(process.cwd());
+      console.log(updated > 0
+        ? `Assigned sid to ${updated} entr${updated === 1 ? 'y' : 'ies'}.`
+        : 'All entries already have a sid.');
+      if (updated > 0) {
+        const { resolve: pathResolve } = await import('node:path');
+        const { invalidateSearchIndex } = await import('../search/daemon-client.js');
+        invalidateSearchIndex(pathResolve(process.cwd(), '.workflow')).catch(() => {});
+      }
+    });
+
   // ── analytics ────────────────────────────────────────────────────────
   spec
     .command('analytics')

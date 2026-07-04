@@ -61,6 +61,8 @@ export interface UnifiedSearchOptions {
   category?: string;
   workspace?: string;
   limit: number;
+  /** Include entries with status="deprecated" (superseded). Default: excluded. */
+  includeDeprecated?: boolean;
 }
 
 // ── Lazy offline client ────────────────────────────────────────────────
@@ -137,6 +139,10 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   }
   if (opts.workspace) {
     filtered = filtered.filter(r => r.entry.source.workspace === opts.workspace);
+  }
+  // Superseded entries are hidden by default — preserved in the chain, out of the way.
+  if (!opts.includeDeprecated) {
+    filtered = filtered.filter(r => (r.entry.ext?.status as string | undefined) !== 'deprecated');
   }
 
   // CATEGORY_CAPS only when user didn't explicitly filter by type/category
@@ -281,6 +287,7 @@ export function registerSearchCommand(program: Command): void {
     .option('--all', 'Alias for default mixed mode (backward compat)')
     .option('--wiki-only', 'Search wiki only, skip code results')
     .option('--workspace <name>', 'Filter results to a specific linked workspace')
+    .option('--include-deprecated', 'Include superseded/deprecated spec entries (hidden by default)')
     .option('--no-emb', 'Skip embedding, use BM25 only')
     .option('--limit <n>', 'Max results', '20')
     .option('--json', 'Output as JSON')
@@ -329,7 +336,7 @@ export function registerSearchCommand(program: Command): void {
 
       // Parallel: wiki + code search (skip irrelevant source based on flags)
       const [wikiResults, codeResults] = await Promise.all([
-        codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding }),
+        codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
         wikiOnly ? [] : runCodeSearch(q, limit),
       ]);
 

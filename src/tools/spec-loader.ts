@@ -320,10 +320,14 @@ function shouldInclude(filename: string, category?: SpecCategory, resolvedCat?: 
  * Falls back to raw body for files with no structured entries.
  */
 function formatFileContent(body: string, keyword?: string, crossCategory?: SpecCategory, workflowRoot?: string, options?: LoadSpecsOptions): string | null {
-  const { entries, legacy } = parseSpecEntries(body);
+  const { entries: allEntries, legacy } = parseSpecEntries(body);
+  // Deprecated (superseded) entries are never injected into agent context —
+  // the current version lives elsewhere in the chain. `maestro spec history`
+  // still surfaces them for audit.
+  const entries = allEntries.filter(e => e.status !== 'deprecated');
 
-  // No structured entries → pass through raw body (or keyword-grep it)
-  if (entries.length === 0 && legacy.length === 0) {
+  // No structured entries at all → pass through raw body (or keyword-grep it)
+  if (allEntries.length === 0 && legacy.length === 0) {
     // Cross-category mode: non-primary docs with no structured entries are skipped
     if (crossCategory) return null;
 
@@ -336,6 +340,9 @@ function formatFileContent(body: string, keyword?: string, crossCategory?: SpecC
     }
     return body;
   }
+
+  // Had structured entries but all were deprecated → nothing active to inject.
+  if (entries.length === 0 && legacy.length === 0) return null;
 
   // In cross-category mode: only show entries that have keyword overlap
   let filteredEntries = entries;

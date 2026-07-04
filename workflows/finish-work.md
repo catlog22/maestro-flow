@@ -43,7 +43,12 @@ Build `fragments[]` from detected files. Each: `{ kind, category, title, content
 
 **Dedup**: hash `(kind, content[:100])` — skip if existing entry matches. MANDATORY via `maestro spec list --json` + `maestro knowhow list --json`.
 
-**Conflict detection**: for `kind == "rule"` fragments, search existing spec in same category (`maestro search "<keywords>" --type spec`). If an existing entry contradicts the fragment, attach `conflicting_entry = { file, line }` and `conflict_note`. Do NOT drop — proceed with metadata.
+**Relationship to existing knowledge**: for `kind == "rule"` fragments, search existing spec in the same category (`maestro search "<keywords>" --type spec --json`, note each hit's `sid`). Classify against the closest existing entry — the two outcomes are distinct, do NOT conflate:
+- **supersedes** (evolution): the new rule replaces the old on the same topic — the old is now outdated, not merely disputed. Attach `supersedes = <old-sid>`.
+- **conflicts** (contradiction): both rules are plausible and a human must adjudicate which wins. Attach `conflicting_entry = { file, line }` + `conflict_note`.
+- **independent**: no strong overlap → no metadata.
+
+Never drop — proceed with whatever metadata attached.
 
 ### 3. Route fragments
 
@@ -54,8 +59,9 @@ Found {N} fragments — {S_spec} spec / {S_knowhow} knowhow. Apply? (auto | spec
 
 Routing — all CLI calls MANDATORY, NOT SUBSTITUTABLE:
 
-- **spec**: `maestro spec add <category> "<title>" "<content>" --keywords {csv} --description "<summary>" --source finish-work` → capture id into `spec_ids[]`
-- **spec + conflict**: after adding, mark the old entry: `maestro spec conflict mark <file> <line> --note "<note>"`. Sets `confidence="contested"` → search scores ×0.5 + `[CONTESTED]` badge. Resolution deferred to `/manage-knowledge-audit`.
+- **spec**: `maestro spec add <category> "<title>" "<content>" --keywords {csv} --description "<summary>" --source finish-work --json` → capture returned `sid` + id into `spec_ids[]` (the `--json` output carries the new entry's `sid`, needed for supersession).
+- **spec that supersedes** (evolution): after adding the new entry, retire the old one: `maestro spec supersede <old-sid> --by <new-sid>`. Old entry → `status="deprecated"` (excluded from search + agent injection), chain preserved and inspectable via `maestro spec history <sid>`. Record into `supersede_marks[]`.
+- **spec that conflicts** (contradiction): after adding, mark the old entry for human review: `maestro spec conflict mark <file> <line> --note "<note>"` → `confidence="contested"` (search ×0.5, `[CONTESTED]` badge, still injected). Resolution deferred to `/manage-knowledge-audit`. Record into `conflict_marks[]`.
 - **knowhow**: `maestro knowhow add --type {DCS|RCP|REF|KNW} --title "<title>" --body "<content>" --keywords {csv}` → capture id into `knowhow_ids[]`
 - **below threshold**: increment `skipped_count`
 - **CLI failure**: log W002, continue; flag [LOW CONFIDENCE]
@@ -81,7 +87,8 @@ Idempotent overwrite. Schema `session-archive/1.0`:
   "extraction": {
     "harvested": true, "harvested_at": "",
     "spec_ids": [], "knowhow_ids": [], "domain_ids": [],
-    "conflict_marks": [/* { file, line, note } */],
+    "supersede_marks": [/* { old_sid, new_sid } — old entry deprecated, chain preserved */],
+    "conflict_marks": [/* { file, line, note } — old entry contested, pending audit */],
     "skipped_count": 0
   },
   "pruned": null
@@ -95,6 +102,7 @@ Idempotent overwrite. Schema `session-archive/1.0`:
 === SESSION SEALED ===
 Session:    {SESSION_ID} ({SESSION_TYPE})
 Knowledge:  {spec} spec / {knowhow} knowhow extracted, {skipped} skipped
+Superseded: {supersede_count} old entries deprecated (chain preserved — maestro spec history <sid>)
 Conflicts:  {conflict_count} entries marked [CONTESTED] — resolve via /manage-knowledge-audit
 Next:       /maestro-milestone-complete → archive + prune
 ```

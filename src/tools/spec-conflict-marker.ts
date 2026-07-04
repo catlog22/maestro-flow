@@ -12,8 +12,9 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { parseSpecEntries, type SpecEntryParsed, type ConfidenceLevel, VALID_CONFIDENCE_LEVELS } from './spec-entry-parser.js';
+import { parseSpecEntries, generateSid, type SpecEntryParsed, type ConfidenceLevel, VALID_CONFIDENCE_LEVELS } from './spec-entry-parser.js';
 import { stripFrontmatter } from '../utils/frontmatter.js';
+import { computeDecayFactor } from '../graph/kg/credibility.js';
 
 // ============================================================================
 // Types
@@ -290,6 +291,312 @@ export function clearAllConflicts(
   }
 
   return { cleared, errors };
+}
+
+// ============================================================================
+// Supersession — evolution chain over stable sids
+// ============================================================================
+
+export interface EvolutionLink {
+  sid: string;
+  file: string;
+  title: string;
+  status: ConfidenceLevel | 'active' | 'deprecated' | string;
+  date: string;
+  current: boolean;
+}
+
+/**
+ * Mark the entry identified by `oldSid` as superseded by `newSid`:
+ * sets `status="deprecated"` + `superseded-by="<newSid>"` on its tag line.
+ *
+ * Locates the entry by matching the `sid="..."` attribute directly on the
+ * `<spec-entry>` opening line, so it is immune to frontmatter/line-number
+ * drift (unlike the line-based conflict marker).
+ */
+export function supersedeEntry(
+  projectPath: string,
+  oldSid: string,
+  newSid: string,
+): MarkResult {
+  const root = join(projectPath, '.workflow', 'specs');
+  if (!existsSync(root)) return { success: false, error: 'No specs directory' };
+
+  let files: string[];
+  try {
+    files = readdirSync(root).filter(f => f.endsWith('.md'));
+  } catch {
+    return { success: false, error: 'Cannot read specs directory' };
+  }
+
+  // Establish the link bidirectionally in one pass: mark the old entry
+  // deprecated + superseded-by, and stamp `supersedes` onto the new entry so
+  // the evolution chain (which walks `supersedes`) reconstructs correctly.
+  let oldFound = false;
+  for (const file of files) {
+    const filePath = join(root, file);
+    let content: string;
+    try {
+      content = readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    const lines = content.split('\n');
+    let changed = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.includes('<spec-entry')) continue;
+      if (line.includes(`sid="${oldSid}"`)) {
+        let updated = upsertAttribute(line, 'status', 'deprecated');
+        updated = upsertAttribute(updated, 'superseded-by', newSid);
+        lines[i] = updated;
+        oldFound = true;
+        changed = true;
+      } else if (line.includes(`sid="${newSid}"`)) {
+        lines[i] = upsertAttribute(line, 'supersedes', oldSid);
+        changed = true;
+      }
+    }
+    if (changed) writeFileSync(filePath, lines.join('\n'), 'utf-8');
+  }
+
+  if (!oldFound) return { success: false, error: `sid not found: ${oldSid}` };
+  return { success: true };
+}
+
+/**
+ * Reconstruct the full evolution chain (oldest → newest) that `sid` belongs to.
+ * Walks `supersedes` backward to the root and `superseded-by` forward to the
+ * head. Returns an ordered list; empty when `sid` is unknown.
+ */
+export function getEvolutionChain(projectPath: string, sid: string): EvolutionLink[] {
+  const root = join(projectPath, '.workflow', 'specs');
+  if (!existsSync(root)) return [];
+
+  let files: string[];
+  try {
+    files = readdirSync(root).filter(f => f.endsWith('.md'));
+  } catch {
+    return [];
+  }
+
+  type SidNode = { entry: SpecEntryParsed; file: string };
+  const bySid = new Map<string, SidNode>();
+  for (const file of files) {
+    let raw: string;
+    try {
+      raw = readFileSync(join(root, file), 'utf-8');
+    } catch {
+      continue;
+    }
+    const { entries } = parseSpecEntries(stripFrontmatter(raw));
+    for (const e of entries) {
+      if (e.sid) bySid.set(e.sid, { entry: e, file });
+    }
+  }
+
+  if (!bySid.has(sid)) return [];
+
+  // Walk backward to the oldest ancestor via `supersedes`.
+  let rootSid = sid;
+  const guardBack = new Set<string>();
+  while (true) {
+    if (guardBack.has(rootSid)) break; // cycle guard
+    guardBack.add(rootSid);
+    const node = bySid.get(rootSid);
+    const prev = node?.entry.supersedes;
+    if (prev && bySid.has(prev)) rootSid = prev;
+    else break;
+  }
+
+  // Forward adjacency comes from `supersedes` (declared when the newer entry is
+  // created — the authoritative pointer) rather than `superseded-by` (a
+  // post-hoc marker that may lag): if entry E supersedes X, X's successor is E.
+  const successorOf = new Map<string, string>();
+  for (const [sidKey, node] of bySid) {
+    const prev = node.entry.supersedes;
+    if (prev) successorOf.set(prev, sidKey);
+  }
+
+  const chain: EvolutionLink[] = [];
+  const guardFwd = new Set<string>();
+  let cur: string | undefined = rootSid;
+  while (cur && bySid.has(cur) && !guardFwd.has(cur)) {
+    guardFwd.add(cur);
+    const node: SidNode = bySid.get(cur)!;
+    chain.push({
+      sid: cur,
+      file: node.file,
+      title: node.entry.title,
+      status: node.entry.status ?? node.entry.confidence ?? 'active',
+      date: node.entry.date,
+      current: false,
+    });
+    cur = successorOf.get(cur);
+  }
+  // The chain head (newest version) is current, regardless of whether the
+  // deprecated markers have been synced onto the older entries yet.
+  if (chain.length > 0) chain[chain.length - 1].current = true;
+
+  return chain;
+}
+
+// ============================================================================
+// Health report — knowledge gardener observability
+// ============================================================================
+
+export interface SpecHealthReport {
+  total: number;
+  active: number;
+  deprecated: number;
+  contested: number;
+  lowConfidence: number;
+  withSid: number;
+  withoutSid: number;
+  /** Number of evolution chains with more than one version. */
+  chains: number;
+  /** Entries whose `supersedes` points at a sid that no longer exists. */
+  danglingSupersedes: Array<{ sid: string; target: string; file: string }>;
+  /** sids participating in a supersedes cycle. */
+  cyclicSids: string[];
+  /** Mean time-decay factor across active entries (1 = all fresh, →floor = stale). */
+  avgFreshness: number;
+  /** Active entries whose freshness has decayed below the 0.5 warning threshold. */
+  staleActive: number;
+}
+
+/**
+ * Compute a knowledge-health report over all spec entries.
+ *
+ * Read-only observability for the gardener: it never mutates files — low
+ * freshness is *reported*, not auto-downgraded (that stays a human/audit call,
+ * keeping confidence and time-decay as separate concerns).
+ */
+export function analyzeSpecHealth(projectPath: string, nowMs: number = Date.now()): SpecHealthReport {
+  const root = join(projectPath, '.workflow', 'specs');
+  const report: SpecHealthReport = {
+    total: 0, active: 0, deprecated: 0, contested: 0, lowConfidence: 0,
+    withSid: 0, withoutSid: 0, chains: 0,
+    danglingSupersedes: [], cyclicSids: [], avgFreshness: 1, staleActive: 0,
+  };
+  if (!existsSync(root)) return report;
+
+  let files: string[];
+  try {
+    files = readdirSync(root).filter(f => f.endsWith('.md'));
+  } catch {
+    return report;
+  }
+
+  const all: Array<{ entry: SpecEntryParsed; file: string }> = [];
+  for (const file of files) {
+    let raw: string;
+    try {
+      raw = readFileSync(join(root, file), 'utf-8');
+    } catch {
+      continue;
+    }
+    const { entries } = parseSpecEntries(stripFrontmatter(raw));
+    for (const e of entries) all.push({ entry: e, file });
+  }
+
+  const bySid = new Map<string, SpecEntryParsed>();
+  for (const { entry } of all) if (entry.sid) bySid.set(entry.sid, entry);
+
+  let freshnessSum = 0;
+  for (const { entry, file } of all) {
+    report.total++;
+    if (entry.sid) report.withSid++; else report.withoutSid++;
+    if (entry.confidence === 'contested') report.contested++;
+    if (entry.confidence === 'low') report.lowConfidence++;
+
+    if (entry.status === 'deprecated') {
+      report.deprecated++;
+    } else {
+      report.active++;
+      const parsed = entry.date ? Date.parse(entry.date) : NaN;
+      const freshness = Number.isNaN(parsed)
+        ? 1
+        : computeDecayFactor(Math.max(0, (nowMs - parsed) / 86_400_000), 'spec');
+      freshnessSum += freshness;
+      if (freshness < 0.5) report.staleActive++;
+    }
+
+    if (entry.supersedes && !bySid.has(entry.supersedes) && entry.sid) {
+      report.danglingSupersedes.push({ sid: entry.sid, target: entry.supersedes, file });
+    }
+  }
+
+  report.avgFreshness = report.active > 0 ? freshnessSum / report.active : 1;
+
+  // Count chains: a chain is anchored by its oldest root — an entry that has
+  // been superseded (someone points `supersedes` at it) but itself supersedes
+  // nothing. Each multi-version chain has exactly one such root.
+  const isSuperseded = new Set<string>();
+  for (const { entry } of all) if (entry.supersedes) isSuperseded.add(entry.supersedes);
+  for (const sid of bySid.keys()) {
+    if (isSuperseded.has(sid) && !declaresSupersedes(bySid, sid)) report.chains++;
+  }
+
+  // Detect supersedes cycles by walking each sid's chain until it repeats.
+  const cyclic = new Set<string>();
+  for (const startSid of bySid.keys()) {
+    const seen = new Set<string>();
+    let cur: string | undefined = startSid;
+    while (cur && bySid.has(cur)) {
+      if (seen.has(cur)) { for (const s of seen) cyclic.add(s); break; }
+      seen.add(cur);
+      cur = bySid.get(cur)!.supersedes;
+    }
+  }
+  report.cyclicSids = [...cyclic];
+
+  return report;
+}
+
+/** True when `sid` itself declares a `supersedes` (i.e. it is not a chain root). */
+function declaresSupersedes(bySid: Map<string, SpecEntryParsed>, sid: string): boolean {
+  return !!bySid.get(sid)?.supersedes;
+}
+
+/**
+ * Assign a stable `sid` to every `<spec-entry>` that lacks one. Legacy entries
+ * predate the identity scheme; backfilling lets them join supersession chains.
+ * Idempotent — entries that already carry a sid are skipped.
+ */
+export function backfillSids(projectPath: string, now: Date = new Date()): { updated: number } {
+  const root = join(projectPath, '.workflow', 'specs');
+  if (!existsSync(root)) return { updated: 0 };
+
+  let files: string[];
+  try {
+    files = readdirSync(root).filter(f => f.endsWith('.md'));
+  } catch {
+    return { updated: 0 };
+  }
+
+  let updated = 0;
+  for (const file of files) {
+    const filePath = join(root, file);
+    let content: string;
+    try {
+      content = readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    const lines = content.split('\n');
+    let changed = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.includes('<spec-entry') && !/\bsid="/.test(line)) {
+        lines[i] = upsertAttribute(line, 'sid', generateSid(now));
+        changed = true;
+        updated++;
+      }
+    }
+    if (changed) writeFileSync(filePath, lines.join('\n'), 'utf-8');
+  }
+  return { updated };
 }
 
 // ============================================================================
