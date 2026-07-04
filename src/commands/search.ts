@@ -42,6 +42,7 @@ export interface SearchResult {
   snippet: string | null;
   source: WikiEntry['source'];
   workspace?: string;
+  confidence?: string;
 }
 
 /** A code search result from CodeGraph. */
@@ -170,6 +171,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     snippet: extractSnippet(entry.body, q),
     source: entry.source,
     workspace: entry.source.workspace,
+    confidence: (entry.ext?.confidence as string) || undefined,
   }));
 
   // Async credibility search_hits increment (best-effort, never blocks)
@@ -408,7 +410,10 @@ export function registerSearchCommand(program: Command): void {
         const name = isTTY ? highlightTerms(displayName, qTerms) : displayName;
         const scoreTag = `  (${r.normalizedScore.toFixed(4)})`;
         if (r.source === 'wiki') {
-          console.log(`  [wiki:${r.kind}]  ${name}  ${r.detail}${scoreTag}`);
+          const confBadge = r.confidence === 'contested' ? ' [CONTESTED]'
+            : r.confidence === 'low' ? ' [LOW CONFIDENCE]'
+            : '';
+          console.log(`  [wiki:${r.kind}]  ${name}  ${r.detail}${confBadge}${scoreTag}`);
           const subtitle = pickSubtitle(r);
           if (subtitle) {
             const text = isTTY ? highlightTerms(subtitle, qTerms) : subtitle;
@@ -653,6 +658,7 @@ export interface MergedResult {
   summary?: string;
   signature?: string;
   category?: string;
+  confidence?: string;
 }
 
 const WIKI_TYPE_BOOST: Record<string, number> = {
@@ -747,13 +753,19 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
 
   const codeNames = new Set(code.map(r => r.name.toLowerCase()));
 
+  const CONFIDENCE_PENALTY: Record<string, number> = {
+    contested: 0.5,
+    low: 0.7,
+  };
+
   const wikiScored = wiki.map((r, i) => {
     const raw = r.score ?? 0;
     let typeBoost = WIKI_TYPE_BOOST[r.type] ?? 1.0;
     if (r.id.startsWith('kg-') && codeNames.has(r.title.toLowerCase())) {
       typeBoost *= 0.7;
     }
-    return { ...r, finalScore: raw * typeBoost, index: i };
+    const confPenalty = r.confidence ? (CONFIDENCE_PENALTY[r.confidence] ?? 1.0) : 1.0;
+    return { ...r, finalScore: raw * typeBoost * confPenalty, index: i };
   });
 
   const codeScored = code.map((r, i) => {
@@ -778,6 +790,7 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
       snippet: r.snippet ?? undefined,
       summary: r.summary || undefined,
       category: r.category ?? undefined,
+      confidence: r.confidence,
     });
   }
   for (let i = 0; i < codeScored.length; i++) {

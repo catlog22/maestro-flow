@@ -22,6 +22,8 @@ export interface SpecEntry {
   category: string;
   keywords: string[];
   ref?: string;
+  confidence?: string;
+  conflictNote?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +143,9 @@ function parseEntryBlocks(
       || FILE_CATEGORY_MAP[stem]
       || 'general';
 
+    const confidence = attrs.confidence || undefined;
+    const conflictNote = attrs['conflict-note'] || undefined;
+
     entries.push({
       id,
       type,
@@ -152,6 +157,8 @@ function parseEntryBlocks(
       category: entryCategory,
       keywords: kws,
       ...(ref ? { ref } : {}),
+      ...(confidence ? { confidence } : {}),
+      ...(conflictNote ? { conflictNote } : {}),
     });
   }
 

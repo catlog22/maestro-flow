@@ -2,138 +2,109 @@
 
 ## Inputs
 
-Caller passes: `SESSION_DIR`, `SESSION_TYPE` (grill | brainstorm | analyze | blueprint | plan | execute | verify), `SESSION_ID`, `LINKED_MILESTONE` (optional).
+`SESSION_DIR`, `SESSION_TYPE` (grill | brainstorm | analyze | blueprint | plan | execute | verify), `SESSION_ID`, `LINKED_MILESTONE` (optional).
 
 ## Steps
 
 ### 1. Detect outputs
 
-Scan `SESSION_DIR` for any of these files; if absent: log W0xx "<file> missing" and continue; flag harvest as [LOW CONFIDENCE] (partial fragments):
+Scan `SESSION_DIR` for known files. Missing file → log W0xx, flag [LOW CONFIDENCE]. None found → skip to Step 4 with `extraction.harvested = false`.
 
-| File | Source | Used for |
-|------|--------|----------|
+| File | Session types | Yields |
+|------|---------------|--------|
 | `context-package.json` | grill/brainstorm/analyze/blueprint | constraints + insights |
-| `terminology.md` | grill | domain terms with code references |
-| `grill-report.md` | grill | stress-test decisions + risk register |
-| `conclusions.json` | analyze | decisions |
+| `terminology.md` | grill | domain terms |
+| `grill-report.md` | grill | decisions + risk register |
+| `conclusions.json` | analyze | decisions + recommendations |
 | `reflection-log.md` | execute | lessons + pitfalls |
 | `{role}/analysis.md` | brainstorm | role decisions |
 
-If none present → skip Steps 2-3, continue with empty `content_refs` and `extraction.harvested = false`.
+### 2. Extract fragments
 
-### 2. Extract fragments (inline)
+Build `fragments[]` from detected files. Each: `{ kind, category, title, content, keywords[], confidence, ref }`.
 
-Iterate detected files; build a `fragments[]` array. Each fragment: `{ kind, category, title, content, keywords[], confidence, ref }`.
+**Routing table** — `locked` status or `priority ≥ medium` required unless noted:
 
-| Source field | kind | Target store | Default category |
-|--------------|------|--------------|------------------|
-| `context-package.json#constraints[status=locked]` | rule | spec | `arch` if area matches arch keywords (module/layer/boundary), else `coding` |
-| `context-package.json#insights[]` | knowhow | knowhow (type: `DCS` for decisions, `RCP` for patterns) | `arch` for decisions, `coding` for patterns |
-| `conclusions.json#decisions[status=locked]` | rule | spec | `arch` |
-| `conclusions.json#recommendations[]` (priority ≥ medium) | knowhow | knowhow (`REF`) | derived from area |
-| `reflection-log.md` "## Lessons" / "## Pitfalls" sections | learning | spec (category `learning`) or knowhow (`KNW`) by length: < 200 chars → spec, else knowhow | `learning` |
-| `{role}/analysis.md` §2 Decisions[status=locked] | rule | spec | role-derived (`arch` for system-architect, `coding` for code-quality, etc.) |
-| `grill-report.md` "## Synthesis" locked decisions | rule | spec | `arch` if scope/integration/security branch, else `coding` |
-| `grill-report.md` "## Risk Register" items (severity ≥ medium) | knowhow | knowhow (`REF`) | `debug` |
-| `terminology.md` locked terms | knowhow | knowhow (`REF`) | `coding` |
+| Source | → Store | Category |
+|--------|---------|----------|
+| `context-package.json#constraints[locked]` | spec (rule) | `arch` if module/layer/boundary, else `coding` |
+| `context-package.json#insights[]` | knowhow (`DCS`/`RCP`) | `arch` for decisions, `coding` for patterns |
+| `conclusions.json#decisions[locked]` | spec (rule) | `arch` |
+| `conclusions.json#recommendations[≥medium]` | knowhow (`REF`) | area-derived |
+| `reflection-log.md` §Lessons/§Pitfalls | < 200 chars → spec (`learning`), else knowhow (`KNW`) | `learning` |
+| `{role}/analysis.md` §Decisions[locked] | spec (rule) | role-derived |
+| `grill-report.md` §Synthesis[locked] | spec (rule) | `arch` if scope/integration/security, else `coding` |
+| `grill-report.md` §Risk Register[≥medium] | knowhow (`REF`) | `debug` |
+| `terminology.md` locked terms | knowhow (`REF`) | `coding` |
 
-**Confidence scoring** (drop if < 0.5):
-- +0.3 if `status == "locked"` or section is explicit "## Decisions"
-- +0.2 if has ≥ 3 keywords (extracted from content)
-- +0.2 if has explicit `rationale` field
-- +0.2 if content length 50-2000 chars (not too thin, not too verbose)
-- +0.1 if explicit `ref` to source file
+**Confidence** (drop if < 0.5): locked/decisions heading +0.3 · ≥3 keywords +0.2 · has rationale +0.2 · length 50-2000 +0.2 · has ref +0.1
 
-**Keyword extraction**: take 3-5 lowercased domain terms (filter stop words, take frequency-ranked nouns/identifiers from content).
+**Keywords**: 3-5 lowercased domain terms, frequency-ranked nouns/identifiers, stop words filtered.
 
-**Deduplication**: hash `(kind, content[:100])` — skip if any existing spec/knowhow entry has matching hash (MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: check via `maestro spec list --json` + `maestro knowhow list --json`).
+**Dedup**: hash `(kind, content[:100])` — skip if existing entry matches. MANDATORY via `maestro spec list --json` + `maestro knowhow list --json`.
+
+**Conflict detection**: for `kind == "rule"` fragments, search existing spec in same category (`maestro search "<keywords>" --type spec`). If an existing entry contradicts the fragment, attach `conflicting_entry = { file, line }` and `conflict_note`. Do NOT drop — proceed with metadata.
 
 ### 3. Route fragments
 
-Auto mode (`-y`): apply all. Otherwise prompt once with batch summary:
+Prompt once (unless `-y` auto mode):
 ```
-Found {N} fragments — {S_spec} spec / {S_knowhow} knowhow.
-Apply? (auto | spec-only | knowhow-only | skip)
+Found {N} fragments — {S_spec} spec / {S_knowhow} knowhow. Apply? (auto | spec-only | knowhow-only | skip)
 ```
 
-Then for each fragment in approved buckets:
+Routing — all CLI calls MANDATORY, NOT SUBSTITUTABLE:
 
-- **spec**: MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: `maestro spec add <category> "<title>" "<content>" --keywords {csv} --description "<one-line summary>" --source finish-work` (capture returned id into `extracted_spec_ids[]`)
-- **knowhow**: MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: `maestro knowhow add --type {DCS|RCP|REF|KNW} --title "{title}" --body "{content}" --keywords {csv}` (capture id into `extracted_knowhow_ids[]`)
-- Below confidence threshold: increment `skipped_count`, do nothing
-- CLI failure: log W002, continue with remaining fragments; flag harvest as [LOW CONFIDENCE] (CLI failure)
+- **spec**: `maestro spec add <category> "<title>" "<content>" --keywords {csv} --description "<summary>" --source finish-work` → capture id into `spec_ids[]`
+- **spec + conflict**: after adding, mark the old entry: `maestro spec conflict mark <file> <line> --note "<note>"`. Sets `confidence="contested"` → search scores ×0.5 + `[CONTESTED]` badge. Resolution deferred to `/manage-knowledge-audit`.
+- **knowhow**: `maestro knowhow add --type {DCS|RCP|REF|KNW} --title "<title>" --body "<content>" --keywords {csv}` → capture id into `knowhow_ids[]`
+- **below threshold**: increment `skipped_count`
+- **CLI failure**: log W002, continue; flag [LOW CONFIDENCE]
 
-### 3.5 Domain Term Extraction (interactive, conditional)
+### 3.5 Domain term extraction
 
-Prerequisites:
-  - `.workflow/domain/` 目录存在（不存在则跳过整个步骤）
-  - Session 包含术语源文件
+Skip if `.workflow/domain/` absent or no term sources or all candidates already registered.
 
-Source priority:
-  1. `terminology.md` (grill session) — locked terms with code references
-  2. `context-package.json#domain.terminology[]` — brainstorm/grill/import 产出
-  3. `conclusions.json#recommendations` with domain-like keywords
+Sources (priority order): `terminology.md` → `context-package.json#domain.terminology[]` → `conclusions.json#recommendations` with domain keywords.
 
-Process:
-  1. 从 session 产物中收集术语候选
-  2. 过滤已注册的 `glossary.yaml` terms
-  3. 0 个新候选 → 跳过（静默）
-  4. ≥ 1 个新候选 → 交互确认（domain 注册始终需要用户确认，`-y` 对 domain 无效）
-  5. MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: 确认的术语写入 `glossary.yaml` via `maestro domain add`
-  6. 记录到 `archive.json` 的 `extraction.domain_ids[]`
+Process: collect candidates → filter registered terms → interactive confirm (always, `-y` does NOT bypass) → MANDATORY `maestro domain add` → record in `extraction.domain_ids[]`.
 
-Skip conditions:
-  - `.workflow/domain/` 不存在
-  - Session 无术语源文件
-  - 所有候选术语已注册
+### 4. Write archive.json
 
-### 4. Write `archive.json`
-
-Overwrites; idempotent. Schema `session-archive/1.0`:
+Idempotent overwrite. Schema `session-archive/1.0`:
 
 ```jsonc
 {
   "$schema": "session-archive/1.0",
-  "session_id": "{SESSION_ID}",
-  "session_type": "{SESSION_TYPE}",
-  "session_path": "{SESSION_DIR relative to .workflow/}",
-  "lifecycle": { "status": "sealed", "sealed_at": "{ISO now}", "archived_at": null, "linked_milestone": "{LINKED_MILESTONE or null}" },
-  "content_refs": [ /* one entry per file detected in Step 1, schema { type, path } */ ],
+  "session_id": "", "session_type": "", "session_path": "",
+  "lifecycle": { "status": "sealed", "sealed_at": "", "archived_at": null, "linked_milestone": null },
+  "content_refs": [/* { type, path } per detected file */],
   "extraction": {
-    "harvested": true,
-    "harvested_at": "{ISO now}",
-    "spec_ids": [/* from Step 3 */],
-    "knowhow_ids": [/* from Step 3 */],
-    "domain_ids": [/* from Step 3.5 */],
+    "harvested": true, "harvested_at": "",
+    "spec_ids": [], "knowhow_ids": [], "domain_ids": [],
+    "conflict_marks": [/* { file, line, note } */],
     "skipped_count": 0
   },
   "pruned": null
 }
-```
-
-If Step 2 produced zero fragments or user chose skip:
-```jsonc
-"extraction": { "harvested": false, "reason": "no-signal | user-skip | harvest-failed" }
+// No fragments or user skip: "extraction": { "harvested": false, "reason": "no-signal | user-skip | harvest-failed" }
 ```
 
 ### 5. Report
 
 ```
 === SESSION SEALED ===
-Session: {SESSION_ID} ({SESSION_TYPE})
-Wiki:    searchable via `maestro wiki search` (category {arch|coding|review})
-Knowledge: {len(spec_ids)} spec / {len(knowhow_ids)} knowhow extracted, {skipped_count} skipped
-Next: /maestro-milestone-complete will flip lifecycle.status → archived and prune context-package.json
+Session:    {SESSION_ID} ({SESSION_TYPE})
+Knowledge:  {spec} spec / {knowhow} knowhow extracted, {skipped} skipped
+Conflicts:  {conflict_count} entries marked [CONTESTED] — resolve via /manage-knowledge-audit
+Next:       /maestro-milestone-complete → archive + prune
 ```
-
-## Idempotency
 
 ## Boundary
 
-- Does NOT flip `archived_at` or move files — that is milestone-complete Step 2.3.
-- Does NOT prune `context-package.json` — pruning is milestone-complete only.
-- Does NOT touch `state.json` — caller handles artifact registration.
-- Does NOT create issues — issue creation is out of single-session sealing scope (use `/manage-harvest` or `/manage-issue-discover` for that).
+- Does NOT flip `archived_at` or move files (milestone-complete Step 2.3)
+- Does NOT prune `context-package.json` (milestone-complete only)
+- Does NOT touch `state.json` (caller handles)
+- Does NOT create issues (use `/manage-harvest` or `/manage-issue-discover`)
 
 ## Errors
 
@@ -141,5 +112,5 @@ Next: /maestro-milestone-complete will flip lifecycle.status → archived and pr
 |------|-----------|
 | E001 | SESSION_DIR missing |
 | E002 | SESSION_TYPE unknown |
-| W001 | No substantive outputs (still seals with empty content_refs) |
-| W002 | A `spec add` / `knowhow add` CLI invocation failed (continue with remaining fragments) |
+| W001 | No substantive outputs (seals with empty content_refs) |
+| W002 | CLI invocation failed (continue with remaining) |
