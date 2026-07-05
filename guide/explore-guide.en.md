@@ -277,18 +277,43 @@ maestro explore output exp-20260624-... # View results
 
 ---
 
-## Circuit Breaker
+## Circuit Breaker & Auto-Fallback
 
-In multi-endpoint scenarios, when an endpoint accumulates consecutive failures reaching the threshold, subsequent jobs are automatically routed to healthy endpoints, preventing a single point of failure from failing the entire batch.
+In multi-endpoint scenarios (2+ endpoints), explore provides three layers of fault tolerance: pre-flight probing, runtime fallback, and persistent cross-run circuit breaking. When any layer detects a failed endpoint, jobs are automatically routed to healthy endpoints.
 
-### Behavior
+### Three Layers
 
-1. Each endpoint tracks its own consecutive failure count
-2. When the threshold is reached (default 3) → the endpoint is tripped
-3. Subsequent jobs are automatically routed to fallback endpoints
-4. If no fallback is available, the job is marked as failed and skipped
-5. A successful response resets the failure count
-6. Only active when 2 or more endpoints are configured
+#### 1. Pre-flight Probe
+
+Before dispatching jobs, a parallel `GET /models` probe (3-second timeout) is sent to all endpoints. Unreachable endpoints are immediately tripped, so jobs are routed to healthy endpoints at dispatch time with zero delay.
+
+```
+Pre-flight: broken unreachable — pre-tripped
+[1/3] broken tripped, fallback → gpt-mini:gpt-5.4-mini
+```
+
+#### 2. Runtime Fallback
+
+Even if probing passes, an endpoint may return errors (e.g. 503) during the actual call. Explore iterates through all available endpoints until one succeeds or all fail:
+
+```
+[1/1] gpt-codex:gpt-5.3-codex-spark — starting
+[1/1] gpt-codex failed, retrying → gpt-mini:gpt-5.4-mini
+[1/1] gpt-mini:gpt-5.4-mini — done (9.2s)
+```
+
+After a successful fallback, the original endpoint is immediately tripped for subsequent jobs.
+
+#### 3. Cross-Run Persistence
+
+Circuit breaker state is saved to `~/.maestro/.explore-circuit-state.json`. Subsequent runs load this state and skip endpoints that are still within their cooldown period — even the probe is skipped:
+
+```
+Pre-flight: gpt-codex still tripped (from previous run) — skipping probe
+[1/1] gpt-codex tripped, fallback → gpt-mini:gpt-5.4-mini
+```
+
+Once the reset period expires (default 1 hour), the endpoint rejoins the probe cycle. The reset duration is configurable via `resetAfterMs`.
 
 ### Configuration
 
@@ -303,7 +328,8 @@ Add a `circuitBreaker` field in `~/.maestro/api.json`:
   },
   "circuitBreaker": {
     "threshold": 3,
-    "fallbackOrder": ["gpt-mini", "deepseek", "qwen"]
+    "fallbackOrder": ["gpt-mini", "deepseek", "qwen"],
+    "resetAfterMs": 3600000
   }
 }
 ```
@@ -312,27 +338,28 @@ Add a `circuitBreaker` field in `~/.maestro/api.json`:
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `threshold` | Consecutive failures before tripping | `3` |
+| `threshold` | Consecutive failures before tripping (for batch job scenarios) | `3` |
 | `fallbackOrder` | Preferred fallback endpoint names | Config order |
+| `resetAfterMs` | Cooldown period in ms before a tripped endpoint is retried | `3600000` (1 hour) |
 
-### Runtime Output
+**Common `resetAfterMs` values**:
 
-When a circuit breaker trips, stderr shows:
+| Value | Meaning |
+|-------|---------|
+| `1800000` | 30 minutes |
+| `3600000` | 1 hour (default) |
+| `7200000` | 2 hours |
+| `0` | Never auto-reset; manually delete the state file |
 
-```
-⚡ Circuit breaker: qwen tripped after 3 consecutive failures
-[4/10] qwen tripped, fallback → gpt-mini:gpt-5.4-mini
-```
+To manually clear circuit breaker state:
 
-End-of-run summary:
-
-```
-Circuit breaker summary: qwen tripped during this run
+```bash
+rm ~/.maestro/.explore-circuit-state.json
 ```
 
 ### Notes
 
-- Circuit breaker state is per-run only, not persisted across runs
+- Only active when 2 or more endpoints are configured
 - Works with `--all` mode: tripped endpoints' remaining jobs switch to fallback
-- Without `circuitBreaker` config, original behavior is preserved (no failover)
 - Endpoints in `fallbackOrder` can also trip, in which case the next healthy endpoint is used
+- Pre-flight probing checks network reachability (TCP connection), not model availability (e.g. 503) — runtime fallback handles the latter

@@ -287,18 +287,43 @@ maestro explore output exp-20260624-... --json
 
 ---
 
-## 熔断切换（Circuit Breaker）
+## 熔断与自动 Fallback
 
-多端点场景下，当某个端点连续失败达到阈值，自动将后续 job 切换到健康端点，避免整批任务因单点故障全部失败。
+多端点场景下（2 个及以上端点），explore 具备三层容错：预检探活、运行时 fallback、跨运行持久化熔断。任何一层拦截到故障端点后，job 自动路由到健康端点执行。
 
-### 行为规则
+### 三层容错
 
-1. 每个端点独立计数连续失败次数
-2. 达到阈值（默认 3 次）→ 熔断该端点
-3. 后续 job 自动切换到备选端点执行
-4. 无可用备选端点时，job 直接标记失败并跳过
-5. 端点成功响应会重置失败计数
-6. 仅在配置了 2 个以上端点时生效
+#### 1. 预检探活（Pre-flight Probe）
+
+Job 分发前，并行向所有端点发送 `GET /models` 探测请求（3 秒超时）。不可达的端点立即熔断，job 在分发阶段就被路由到健康端点，零延迟。
+
+```
+Pre-flight: broken unreachable — pre-tripped
+[1/3] broken tripped, fallback → gpt-mini:gpt-5.4-mini
+```
+
+#### 2. 运行时 Fallback
+
+即使预检通过，端点在实际调用时仍可能返回 503 等错误。此时 explore 自动遍历所有可用端点逐个重试，直到有一个成功或全部失败：
+
+```
+[1/1] gpt-codex:gpt-5.3-codex-spark — starting
+[1/1] gpt-codex failed, retrying → gpt-mini:gpt-5.4-mini
+[1/1] gpt-mini:gpt-5.4-mini — done (9.2s)
+```
+
+成功 fallback 后，失败的原端点立即被熔断，后续 job 不再尝试。
+
+#### 3. 跨运行持久化
+
+熔断状态保存到 `~/.maestro/.explore-circuit-state.json`。后续运行自动加载，跳过仍在熔断期内的端点（连探测都省了）：
+
+```
+Pre-flight: gpt-codex still tripped (from previous run) — skipping probe
+[1/1] gpt-codex tripped, fallback → gpt-mini:gpt-5.4-mini
+```
+
+熔断到期后（默认 1 小时），端点重新参与探测。恢复时间可通过 `resetAfterMs` 配置。
 
 ### 配置
 
@@ -313,7 +338,8 @@ maestro explore output exp-20260624-... --json
   },
   "circuitBreaker": {
     "threshold": 3,
-    "fallbackOrder": ["gpt-mini", "deepseek", "qwen"]
+    "fallbackOrder": ["gpt-mini", "deepseek", "qwen"],
+    "resetAfterMs": 3600000
   }
 }
 ```
@@ -322,30 +348,31 @@ maestro explore output exp-20260624-... --json
 
 | 字段 | 说明 | 默认值 |
 |------|------|--------|
-| `threshold` | 连续失败几次后熔断 | `3` |
+| `threshold` | 连续失败几次后熔断（批量 job 场景） | `3` |
 | `fallbackOrder` | 备选端点优先级列表 | 按配置顺序 |
+| `resetAfterMs` | 熔断恢复时间（毫秒），到期后重新探测 | `3600000`（1 小时） |
 
-### 运行时输出
+**`resetAfterMs` 常用值**：
 
-熔断触发时会在 stderr 输出提示：
+| 值 | 含义 |
+|------|------|
+| `1800000` | 30 分钟 |
+| `3600000` | 1 小时（默认） |
+| `7200000` | 2 小时 |
+| `0` | 不自动恢复，需手动删除状态文件 |
 
-```
-⚡ Circuit breaker: qwen tripped after 3 consecutive failures
-[4/10] qwen tripped, fallback → gpt-mini:gpt-5.4-mini
-```
+手动清除熔断状态：
 
-运行结束后汇总：
-
-```
-Circuit breaker summary: qwen tripped during this run
+```bash
+rm ~/.maestro/.explore-circuit-state.json
 ```
 
 ### 注意事项
 
-- 熔断状态仅在单次 `maestro explore` 运行期间有效，不跨运行持久化
+- 仅在配置了 2 个及以上端点时生效
 - `--all` 模式下同样生效：某端点熔断后，其剩余 job 切换到备选端点
-- 不配置 `circuitBreaker` 时保持原有行为（不熔断，失败即失败）
 - `fallbackOrder` 中的端点也可能被熔断，此时继续查找下一个健康端点
+- 预检探活检测的是网络可达性（TCP 连接），不检测模型可用性（如 503）——后者由运行时 fallback 处理
 
 ---
 
