@@ -27,6 +27,8 @@ export interface AgentLoopParams {
 export interface AgentLoopResult {
   content: string;
   usage: { inputTokens: number; outputTokens: number };
+  /** Set when the result content is an LLM API error, not a real answer */
+  apiError?: boolean;
 }
 
 export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
@@ -72,7 +74,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       const errMsg = `LLM API error: ${err instanceof Error ? err.message : String(err)}`;
       emitMessage(errMsg);
       emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
-      return { content: errMsg, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
+      return { content: errMsg, usage: { inputTokens: totalInput, outputTokens: totalOutput }, apiError: true };
     }
 
     totalInput += response.usage.inputTokens;

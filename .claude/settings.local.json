@@ -4,7 +4,15 @@
       "Bash(sed:*)",
       "Bash(grep -rl \"reference/\" *.md)",
       "Bash(python workflows/impeccable/ui-search/search.py \"modern SaaS\" --design-system -f markdown)",
-      "Bash(python workflows/impeccable/ui-search/search.py \"accessibility animation\" -d ux)"
+      "Bash(python workflows/impeccable/ui-search/search.py \"accessibility animation\" -d ux)",
+      "Bash(rm -rf D:/maestro-sim)",
+      "Bash(mkdir -p D:/maestro-sim/.workflow/specs)",
+      "Read(//d//**)",
+      "Bash(node D:/maestro2/bin/maestro.js spec add coding \"错误处理规则\" \"所有异步函数必须用 try/catch 包裹,并向上抛出带上下文的错误。\" --keywords error,async,handling --description \"异步错误处理\" --source sim)",
+      "Bash(node D:/maestro2/bin/maestro.js spec add coding \"错误处理规则 v2\" \"所有异步函数用 Result 类型返回,不再抛异常;调用方显式处理 Err 分支。\" --keywords error,async,result --description \"Result 错误处理\" --source sim)",
+      "Bash(cd D:/maestro-sim)",
+      "Bash(node D:/maestro2/bin/maestro.js spec add coding \"错误处理规则\" \"所有异步函数必须用 try/catch 包裹并抛出带上下文的错误。\" --keywords error,async --description \"异步错误处理\" --source sim)",
+      "Bash(node D:/maestro2/bin/maestro.js spec add coding \"错误处理规则 v2\" \"所有异步函数改用 Result 类型返回,不再抛异常。\" --keywords error,result --description \"Result 错误处理\" --source sim)"
     ]
   },
   "disabledMcpjsonServers": [

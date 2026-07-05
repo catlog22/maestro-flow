@@ -17,7 +17,7 @@ import {
   cwdToClaudeProjectSlug,
 } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, createWriteStream, renameSync as renameSyncFs } from 'node:fs';
 import type {
   WikiEntry,
   WikiFilters,
@@ -68,6 +68,7 @@ export class WikiIndexer {
   private embeddingCache: EmbeddingIndex | null = null;
   private embeddingInflight: Promise<EmbeddingIndex | null> | null = null;
   private embeddingGeneration = 0;
+  private embeddingAbort: AbortController | null = null;
   private inflight: Promise<WikiIndex> | null = null;
   private mtimeSnapshot: Map<string, number> = new Map();
 
@@ -228,22 +229,29 @@ export class WikiIndexer {
   }
 
   private persistSearchCache(index: WikiIndex): void {
-    const entries = index.entries.map(e => ({
-      id: e.id, type: e.type, title: e.title, summary: e.summary,
-      tags: e.tags, status: e.status, created: e.created, updated: e.updated,
-      related: e.related, source: e.source, body: e.body, ext: e.ext,
-      scope: e.scope, category: e.category, specCategory: e.specCategory,
-      createdBy: e.createdBy, sourceRef: e.sourceRef, parent: e.parent,
-    }));
     try {
       const target = join(this.workflowRoot, 'search-cache.json');
-      const data = JSON.stringify({
-        version: 1,
-        generatedAt: index.generatedAt,
-        mtimeSnapshot: [...this.mtimeSnapshot.entries()],
-        entries,
+      const stream = createWriteStream(target + '.tmp', { encoding: 'utf-8' });
+      stream.write('{"version":1,"generatedAt":');
+      stream.write(String(index.generatedAt));
+      stream.write(',"mtimeSnapshot":');
+      stream.write(JSON.stringify([...this.mtimeSnapshot.entries()]));
+      stream.write(',"entries":[');
+      for (let i = 0; i < index.entries.length; i++) {
+        if (i > 0) stream.write(',');
+        const e = index.entries[i];
+        stream.write(JSON.stringify({
+          id: e.id, type: e.type, title: e.title, summary: e.summary,
+          tags: e.tags, status: e.status, created: e.created, updated: e.updated,
+          related: e.related, source: e.source, body: e.body, ext: e.ext,
+          scope: e.scope, category: e.category, specCategory: e.specCategory,
+          createdBy: e.createdBy, sourceRef: e.sourceRef, parent: e.parent,
+        }));
+      }
+      stream.end(']}', () => {
+        try { renameSyncFs(target + '.tmp', target); } catch { /* best effort */ }
       });
-      writeFile(target, data, 'utf-8').catch((e) => {
+      stream.on('error', (e) => {
         if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] search-cache write failed:', e?.message);
       });
     } catch (e) {
@@ -342,6 +350,10 @@ export class WikiIndexer {
     this.graphCache = null;
     this.searchCache = null;
     this.embeddingCache = null;
+    if (this.embeddingAbort) {
+      this.embeddingAbort.abort();
+      this.embeddingAbort = null;
+    }
     this.embeddingInflight = null;
     this.embeddingGeneration++;
   }
@@ -471,18 +483,22 @@ export class WikiIndexer {
     if (this.embeddingInflight) return this.embeddingInflight;
 
     const gen = this.embeddingGeneration;
-    this.embeddingInflight = this.loadOrBuildEmbeddings();
+    const abort = new AbortController();
+    this.embeddingAbort = abort;
+    this.embeddingInflight = this.loadOrBuildEmbeddings(abort.signal);
     const result = await this.embeddingInflight;
     if (this.embeddingGeneration === gen) {
       this.embeddingInflight = null;
+      this.embeddingAbort = null;
       this.embeddingCache = result;
     }
     return result;
   }
 
-  private async loadOrBuildEmbeddings(): Promise<EmbeddingIndex | null> {
+  private async loadOrBuildEmbeddings(signal?: AbortSignal): Promise<EmbeddingIndex | null> {
     try {
       const { isAvailable, getUnavailableReason, loadEmbeddingIndex, buildEmbeddingIndex, saveEmbeddingIndex } = await import('./embedding.js');
+      if (signal?.aborted) return null;
       if (!await isAvailable()) {
         const reason = getUnavailableReason?.() ?? 'unknown';
         if (process.env.MAESTRO_DEBUG === '1') {
@@ -492,6 +508,7 @@ export class WikiIndexer {
       }
 
       const cached = loadEmbeddingIndex(this.workflowRoot);
+      if (signal?.aborted) return null;
       const index = await this.get();
 
       // KG nodes: include high/medium semantic density types, skip low-density bulk
@@ -551,7 +568,9 @@ export class WikiIndexer {
       }
 
       try {
+        if (signal?.aborted) return cached ?? null;
         const embIdx = await buildEmbeddingIndex(docs, cached, currentHashes);
+        if (signal?.aborted) return null;
         await saveEmbeddingIndex(embIdx, this.workflowRoot);
         return embIdx;
       } catch (buildErr: unknown) {

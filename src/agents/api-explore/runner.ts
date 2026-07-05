@@ -10,7 +10,7 @@
  */
 
 import { readdirSync } from 'node:fs';
-import { createClient, type LlmConfig } from './llm.js';
+import { createClient, probeEndpoint, type LlmConfig } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
@@ -112,7 +112,8 @@ async function runSingleJob(
       prompt: job.prompt,
       endpointName: job.endpointName,
       model: job.llmConfig.model,
-      content: result.content,
+      content: result.apiError ? null : result.content,
+      error: result.apiError ? result.content : undefined,
       durationMs: Date.now() - start,
     };
   } catch (err) {
@@ -184,8 +185,7 @@ async function drainQueue(
         `[${globalIdx + 1}/${totalJobs}] ${job.endpointName}:${job.llmConfig.model} — starting`,
       );
 
-      const result = await runSingleJob(job, cwd, maxTurns, dirListing, moaPreset);
-      results.push(result);
+      let result = await runSingleJob(job, cwd, maxTurns, dirListing, moaPreset);
 
       // Record success/failure for circuit breaker
       if (breaker) {
@@ -201,12 +201,40 @@ async function drainQueue(
         }
       }
 
+      // Immediate fallback retry: try all available endpoints until one succeeds
+      if (result.error && allEndpoints && allEndpoints.length > 1) {
+        const tried = new Set<string>([job.endpointName]);
+        for (const candidate of allEndpoints) {
+          if (tried.has(candidate.name)) continue;
+          if (breaker?.isOpen(candidate.name)) continue;
+          tried.add(candidate.name);
+
+          callbacks.onProgress?.(
+            `[${globalIdx + 1}/${totalJobs}] ${job.endpointName} failed, retrying → ${candidate.name}:${candidate.llmConfig.model}`,
+          );
+          const retryJob: ExploreJob = {
+            ...job,
+            endpointName: candidate.name,
+            llmConfig: candidate.llmConfig,
+          };
+          const retryResult = await runSingleJob(retryJob, cwd, maxTurns, dirListing, moaPreset);
+          if (!retryResult.error) {
+            result = retryResult;
+            breaker?.recordSuccess(candidate.name);
+            breaker?.trip(job.endpointName);
+            break;
+          }
+          breaker?.recordFailure(candidate.name);
+        }
+      }
+
+      results.push(result);
       callbacks.onJobDone?.(result);
       const status = result.error
         ? `ERROR: ${result.error}`
         : `done (${(result.durationMs / 1000).toFixed(1)}s)`;
       callbacks.onProgress?.(
-        `[${globalIdx + 1}/${totalJobs}] ${job.endpointName}:${job.llmConfig.model} — ${status}`,
+        `[${globalIdx + 1}/${totalJobs}] ${result.endpointName}:${result.model} — ${status}`,
       );
     }
   }
@@ -240,6 +268,30 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
           onProgress?.(`⚡ Circuit breaker: ${name} tripped after ${failures} consecutive failures`),
       })
     : undefined;
+
+  // Pre-flight: probe endpoints not already tripped by persistent state
+  if (breaker && allEndpoints && allEndpoints.length > 1) {
+    const alreadyTripped = breaker.getTrippedEndpoints();
+    for (const name of alreadyTripped) {
+      onProgress?.(`Pre-flight: ${name} still tripped (from previous run) — skipping probe`);
+    }
+    const toProbe = allEndpoints.filter(ep => !alreadyTripped.includes(ep.name));
+    if (toProbe.length > 0) {
+      const probeResults = await Promise.all(
+        toProbe.map(async (ep) => ({ name: ep.name, alive: await probeEndpoint(ep.llmConfig) })),
+      );
+      for (const { name, alive } of probeResults) {
+        if (!alive) {
+          breaker.trip(name);
+          onProgress?.(`Pre-flight: ${name} unreachable — pre-tripped`);
+        }
+      }
+    }
+    const totalHealthy = allEndpoints.filter(ep => !breaker.isOpen(ep.name)).length;
+    if (totalHealthy === 0) {
+      onProgress?.('Pre-flight: all endpoints unreachable');
+    }
+  }
 
   // Group jobs by endpoint
   const queues = new Map<string, ExploreJob[]>();
@@ -289,8 +341,9 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
     process.stdout.write = origStdoutWrite;
   }
 
-  // Log circuit breaker summary
+  // Persist and log circuit breaker summary
   if (breaker) {
+    breaker.persistState();
     const tripped = breaker.getTrippedEndpoints();
     if (tripped.length > 0) {
       onProgress?.(`Circuit breaker summary: ${tripped.join(', ')} tripped during this run`);

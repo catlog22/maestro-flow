@@ -4,20 +4,32 @@
  * Tracks consecutive failures per endpoint name. When failures reach
  * the configured threshold, the endpoint is marked "open" (tripped)
  * and remaining jobs are re-routed to a fallback endpoint.
+ *
+ * Supports time-based auto-recovery: tripped endpoints become eligible
+ * for retry after `resetAfterMs` (default 1 hour). Persistent state
+ * across runs via JSON file.
  */
 
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import type { LlmConfig } from './llm.js';
+
+const STATE_PATH = join(homedir(), '.maestro', '.explore-circuit-state.json');
 
 export interface CircuitBreakerConfig {
   /** Consecutive failures before tripping (default 3) */
   threshold?: number;
   /** Preferred fallback endpoint names, tried in order */
   fallbackOrder?: string[];
+  /** Ms before a tripped endpoint is retried (default 3600000 = 1h). 0 = no auto-reset. */
+  resetAfterMs?: number;
 }
 
 interface EndpointState {
   consecutiveFailures: number;
   open: boolean;
+  trippedAt?: number;
 }
 
 export interface NamedEndpointRef {
@@ -26,9 +38,14 @@ export interface NamedEndpointRef {
   maxTurns?: number;
 }
 
+interface PersistedState {
+  endpoints: Record<string, { trippedAt: number }>;
+}
+
 export class EndpointCircuitBreaker {
   private readonly threshold: number;
   private readonly fallbackOrder: string[];
+  private readonly resetAfterMs: number;
   private readonly states = new Map<string, EndpointState>();
   private readonly onTrip?: (endpointName: string, failures: number) => void;
 
@@ -38,7 +55,9 @@ export class EndpointCircuitBreaker {
   ) {
     this.threshold = config?.threshold ?? 3;
     this.fallbackOrder = config?.fallbackOrder ?? [];
+    this.resetAfterMs = config?.resetAfterMs ?? 3_600_000;
     this.onTrip = opts?.onTrip;
+    this.loadPersistedState();
   }
 
   private getState(name: string): EndpointState {
@@ -50,9 +69,46 @@ export class EndpointCircuitBreaker {
     return s;
   }
 
+  private loadPersistedState(): void {
+    try {
+      const raw = readFileSync(STATE_PATH, 'utf-8');
+      const data = JSON.parse(raw) as PersistedState;
+      const now = Date.now();
+      for (const [name, info] of Object.entries(data.endpoints ?? {})) {
+        if (this.resetAfterMs > 0 && now - info.trippedAt >= this.resetAfterMs) continue;
+        this.states.set(name, {
+          consecutiveFailures: this.threshold,
+          open: true,
+          trippedAt: info.trippedAt,
+        });
+      }
+    } catch {
+      // No state file or invalid — start fresh
+    }
+  }
+
+  persistState(): void {
+    const endpoints: Record<string, { trippedAt: number }> = {};
+    for (const [name, state] of this.states) {
+      if (state.open && state.trippedAt) {
+        endpoints[name] = { trippedAt: state.trippedAt };
+      }
+    }
+    try {
+      mkdirSync(dirname(STATE_PATH), { recursive: true });
+      writeFileSync(STATE_PATH, JSON.stringify({ endpoints }, null, 2));
+    } catch {
+      // Best-effort persistence
+    }
+  }
+
   recordSuccess(endpointName: string): void {
     const s = this.getState(endpointName);
     s.consecutiveFailures = 0;
+    if (s.open) {
+      s.open = false;
+      s.trippedAt = undefined;
+    }
   }
 
   /** Record a failure. Returns true if the endpoint just tripped. */
@@ -61,14 +117,33 @@ export class EndpointCircuitBreaker {
     s.consecutiveFailures++;
     if (!s.open && s.consecutiveFailures >= this.threshold) {
       s.open = true;
+      s.trippedAt = Date.now();
       this.onTrip?.(endpointName, s.consecutiveFailures);
       return true;
     }
     return false;
   }
 
+  /** Force-trip an endpoint (e.g. after pre-flight probe failure). */
+  trip(endpointName: string): void {
+    const s = this.getState(endpointName);
+    if (s.open) return;
+    s.open = true;
+    s.trippedAt = Date.now();
+    s.consecutiveFailures = this.threshold;
+    this.onTrip?.(endpointName, 0);
+  }
+
   isOpen(endpointName: string): boolean {
-    return this.getState(endpointName).open;
+    const s = this.getState(endpointName);
+    if (!s.open) return false;
+    if (this.resetAfterMs > 0 && s.trippedAt && Date.now() - s.trippedAt >= this.resetAfterMs) {
+      s.open = false;
+      s.consecutiveFailures = 0;
+      s.trippedAt = undefined;
+      return false;
+    }
+    return true;
   }
 
   /**

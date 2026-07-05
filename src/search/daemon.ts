@@ -19,6 +19,9 @@ import { getDaemonPath, readDaemonInfo, isDaemonAlive } from './daemon-types.js'
 import type { DaemonInfo, DaemonSearchRequest, DaemonSearchResponse } from './daemon-types.js';
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const SOCKET_TIMEOUT_MS = 10_000;
+const MAX_BUF_BYTES = 64 * 1024;
+const MAX_CONNECTIONS = 32;
 
 // ── Server ──────────────────────────────────────────────────────────────
 
@@ -41,10 +44,23 @@ export async function startDaemon(
     idleTimer = setTimeout(() => { shutdown(server, workflowRoot); }, IDLE_TIMEOUT_MS);
   };
 
+  let activeConnections = 0;
+
   const server = createServer((socket) => {
+    if (activeConnections >= MAX_CONNECTIONS) {
+      socket.end(JSON.stringify({ ok: false, error: 'too many connections' }) + '\n');
+      return;
+    }
+    activeConnections++;
+    socket.setTimeout(SOCKET_TIMEOUT_MS);
+
     let buf = '';
     socket.on('data', (chunk) => {
       buf += chunk.toString();
+      if (buf.length > MAX_BUF_BYTES) {
+        socket.end(JSON.stringify({ ok: false, error: 'request too large' }) + '\n');
+        return;
+      }
       const nlIdx = buf.indexOf('\n');
       if (nlIdx === -1) return;
       const line = buf.slice(0, nlIdx);
@@ -53,6 +69,9 @@ export async function startDaemon(
         resetIdle(server);
       });
     });
+    socket.on('timeout', () => { socket.destroy(); });
+    socket.on('error', () => { socket.destroy(); });
+    socket.on('close', () => { activeConnections--; });
   });
 
   indexer.getEmbeddingIndex().catch(() => null);

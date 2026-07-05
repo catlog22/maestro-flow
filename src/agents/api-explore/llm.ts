@@ -32,6 +32,35 @@ export interface LlmCallOptions {
   maxTokens?: number;
 }
 
+/**
+ * Fast connectivity probe — GET /models with a short timeout.
+ * Returns true if the endpoint responds (any HTTP status), false on timeout/connection error.
+ */
+export async function probeEndpoint(config: LlmConfig, timeoutMs = 3000): Promise<boolean> {
+  const url = config.baseUrl.replace(/\/$/, '') + '/models';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const opts: any = {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${config.apiKey}` },
+    };
+    if (config.proxyUrl) {
+      opts.dispatcher = new ProxyAgent(config.proxyUrl);
+      await undiciFetch(url, opts);
+    } else {
+      await fetch(url, opts);
+    }
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function createClient(params: LlmConfig): {
   client: OpenAI;
   config: LlmConfig;
