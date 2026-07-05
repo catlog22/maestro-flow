@@ -119,7 +119,7 @@ S_FALLBACK:
 ### A_LOCATE_SESSION
 
 1. If session_id provided → load `.workflow/.maestro/{session_id}/status.json`
-2. Else: scan `.workflow/.maestro/*/status.json`, filter `status == "running"`, sort DESC, take first
+2. Else: scan `.workflow/.maestro/*/status.json`, filter `status == "running"` AND (`execution_mode` is absent OR `execution_mode == "inline"`), sort DESC, take first. Skip sessions with `execution_mode == "agent"` or `"cli-delegate"` — those belong to ralph-v2 / ralph-cli respectively.
 3. Extract: session_id, source, steps[], phase, milestone, intent, auto_mode, context, cli_tool, active_step_index
 4. **不在此处选 pending step**——pending 选择由 `maestro ralph next` CLI 内部完成；A_LOCATE_SESSION 只确认 session 存在且 running，由 A_EXEC_STEP 调 CLI 推进
 

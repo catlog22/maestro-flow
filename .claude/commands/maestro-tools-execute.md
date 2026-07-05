@@ -70,9 +70,9 @@ Empty arguments enters interactive mode: list all tools for user selection.
 
 **By name**:
 ```bash
-maestro load --type spec --category coding --keyword <name>
+maestro search "<name>" --type knowhow
 ```
-Match knowhow documents with `tool: true` whose title or keywords contain the name.
+Match knowhow documents with `tool: true` whose title or keywords contain the name. Load the matched entry with `maestro load --type knowhow --id <id>`.
 
 **By category**:
 ```bash

@@ -29,7 +29,7 @@ If $ARGUMENTS is empty AND current_milestone is null → raise E001 with message
 
 **Data source:**
 - `.workflow/state.json` — artifacts[], current_milestone, milestones[]
-- `.workflow/roadmap.md` — milestone-to-phase mapping (standard milestones only)
+- `.workflow/roadmap.md` — milestone-to-phase mapping reference (standard milestones only; phase coverage primarily from PLN artifact's plan.json per GATE 1)
 - Plan scratch dirs — for task status verification
 
 **Adhoc milestone support (D-008):** When the target milestone has `type == "adhoc"` (or `type` field is missing, defaulting to `"standard"`), the audit skips roadmap.md parsing and phase coverage checks. It only validates artifact chain completeness (PLN→EXC exists) and runs integration checks.

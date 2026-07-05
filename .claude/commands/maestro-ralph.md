@@ -1,6 +1,6 @@
 ---
 name: maestro-ralph
-description: Use when the optimal command sequence is unclear and needs automated state-based determination
+description: "[LEGACY — prefer maestro-ralph-v2] Inline lifecycle orchestrator — state-based determination with main-session execution"
 argument-hint: "<intent> [-y] | status | continue | --amend [change]"
 allowed-tools:
   - Read

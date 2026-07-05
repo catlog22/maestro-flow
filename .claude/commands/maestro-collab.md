@@ -99,7 +99,7 @@ S_REPORT:
 ### A_DISCOVER_TOOLS
 
 ```
-Bash("maestro tools list --json 2>$null || cat ~/.maestro/cli-tools.json")
+Bash("maestro tools list --json 2>/dev/null || cat ~/.maestro/cli-tools.json")
 ```
 **Note:** Shell commands MUST use the Bash tool (not PowerShell). Use POSIX syntax within Bash calls.
 Filter: enabled == true. If --mode write: exclude type == "api-endpoint".

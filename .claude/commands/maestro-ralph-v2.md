@@ -1,6 +1,6 @@
 ---
 name: maestro-ralph-v2
-description: Adaptive lifecycle orchestrator — compose, dispatch ralph-executor agent, evaluate decision, loop
+description: "[RECOMMENDED] Adaptive lifecycle orchestrator — compose, dispatch ralph-executor agent, evaluate decision, loop"
 argument-hint: "<intent> [-y] [--amend [change]] [--roadmap] | status | continue"
 allowed-tools:
   - Read
@@ -207,11 +207,262 @@ S_SESSION_DONE:
 
 <actions>
 
+### A_RESOLVE_PHASE
+
+前置于 A_INFER_POSITION。产出 `phase` + `phase_is_new` + `milestone`（D-007 反查）三元组。
+
+**Priority:**
+
+| Step | 行为 | phase_is_new |
+|------|------|--------------|
+| 1 | intent 匹配 `phase\s*(\d+)` → 取 state.json 对应 phase | false |
+| 2 | intent 派生短语 → 在 `state.json.milestones[*].phase_slugs` / `artifacts[*].path` 查找 | false (匹配) / true (无匹配) |
+| 3 | 未派生 → 取最新 in-progress artifact 的 phase | false |
+| 4 | 仍无 → state.json 首个 incomplete phase | false |
+| 5 | position 将是 brainstorm/blueprint/init/roadmap/analyze-macro → phase = null | n/a |
+| 6 | 仍模糊 → `AskUserQuestion` | 由用户回答确定 |
+
+**D-007 Phase→Milestone 反查**（数字 phase 已解析时）：
+```
+resolve_milestone(phase_number):
+  for ms in state.json.milestones:
+    if str(phase_number) in ms.phase_slugs: return ms.id
+  return state.json.current_milestone   # fallback
+```
+写入 `session.milestone`；禁止直接使用 `current_milestone` 当做 phase 所属 milestone。
+
+**写入 session**: `phase`, `phase_is_new`, `milestone`。
+
+**新派生 phase 时 milestone 处理**：
+- state.json 当前 milestone 仍 active → 沿用，新增 phase
+- intent 派生新 milestone 名 → 写入 session 仅作标签；`state.json.milestones` 由 `maestro-roadmap` / `maestro-milestone-release` 创建
+
+### A_INFER_POSITION
+
+**Intent-based overrides** (按顺序匹配，先命中先用):
+
+| Pattern | Position |
+|---------|----------|
+| 压力测试 / 拷问 / 验证假设 / grill / stress-test | `grill`（**auto_confirm=true 时透传 `-y`，grill 以 Auto mode 代码代答，不跳过**） |
+| brainstorm / 头脑风暴 / 探索 / ideate / 设计思路 | `brainstorm` |
+| blueprint / 规格 / 正式文档 / spec-generate / 7-phase | `blueprint` |
+| broad/medium intent 无数字 phase (重构/全面/重写/迁移/新功能 X) | `analyze-macro` |
+
+**Roadmap opt-in detection** (设 `session.wants_roadmap`，缺省 `false`):
+```
+wants_roadmap = (--roadmap flag)
+             OR (intent 含多发布信号: 多发布|多版本|分阶段交付|按里程碑发布|v1.*v2|multi-release|roadmap)
+             OR (.workflow/roadmap.md 已存在)   ← 向后兼容：既有 roadmap 项目行为不变
+```
+默认 `false` → large 项目走单一多波次 `plan --from analyze`，不引入 roadmap 横切层；roadmap 仅多发布场景 opt-in。
+
+**Bootstrap detection:**
+
+| Condition | Position |
+|-----------|----------|
+| No `.workflow/` + no source files | `brainstorm` |
+| No `.workflow/` + has source files | `init` |
+| Has `.workflow/` but no state.json | `init` |
+| Has state.json | → phase-aware artifact inference |
+
+**Phase-aware artifact inference** (使用 A_RESOLVE_PHASE 已写入的 `session.phase` + `session.phase_is_new`)：
+
+| Condition | Position |
+|-----------|----------|
+| `phase_is_new == true` (新 phase) | `analyze` |
+| no milestones AND no roadmap.md AND has analyze macro artifact | `roadmap` if `wants_roadmap` else `plan` (--from analyze) |
+| no milestones AND no roadmap.md AND no analyze artifact | `analyze-macro` |
+| `phase == null` (grill/brainstorm/blueprint/init/roadmap/analyze-macro override 已定) | n/a |
+| phase 已存在 + 无任何 artifact | `analyze` |
+| phase 已存在 + 最新 artifact = analyze | `plan` |
+| phase 已存在 + 最新 artifact = plan | `execute` |
+| phase 已存在 + 最新 artifact = execute | → refine from post-execute results |
+
+**关键不变量**：artifact 过滤按 `session.phase`，不读 `state.json.current_phase`。`phase_is_new` → 直接 `analyze`。
+
+### A_RESOLVE_SCOPE_VERDICT
+
+仅当 `lifecycle_position ∈ {analyze-macro, roadmap, plan}` 且存在最新 analyze artifact 时执行。
+
+1. 定位最新 macro analyze artifact（`type=="analyze"` 且 `scope=="macro"`，按 created_at DESC）→ 记 `session.analyze_macro_id = ANL-xxx`
+2. 读 `{artifact_path}/conclusions.json` 的 `scope_verdict` 字段（`large | medium | small`）
+3. 写入 `session.scope_verdict`；缺失时设 `unknown`
+4. 路由建议（A_BUILD_STEPS 据此决定是否插入 roadmap、plan 是否走 `--from`）：
+
+| scope_verdict | 链路 |
+|---------------|------|
+| `large` + `wants_roadmap` | analyze-macro → roadmap → analyze → plan → execute → ...（多发布 opt-in） |
+| `large`（默认）/ `medium` / `small` | analyze-macro → plan --from analyze:{ANL_ID} → execute → ...（跳过 roadmap + analyze-phase；单一多波次计划） |
+| `unknown` | 默认走 standalone（plan --from analyze）路径，post-analyze-scope 决策节点再纠正 |
+
+**Refine from post-execute results:**
+
+在 execute artifact 的 scratch dir 中检查结果文件（verification.json 由 execute 内置 gate 产出）：
+
+| Condition | Position |
+|-----------|----------|
+| 无 verification.json 或 passed==false 或 gaps[] | `execute` (触发 post-execute fix loop) |
+| passed==true, no review.json | `business-test` |
+| review.json: verdict=="BLOCK" | `review-failed` |
+| review.json: verdict!="BLOCK" | `test` |
+| uat.md: all passed + `session.milestone` 存在 | `milestone-audit` |
+| uat.md: all passed + `session.milestone=null` (standalone) | 标记 session completed（无 milestone 可审计） |
+| uat.md: has failures | `test-failed` |
+
+### A_DETERMINE_QUALITY_MODE
+
+决定下游质量管线长度。读 `session.quality_mode_override`（CLI 标志 `--quality`），无则按规则推断：
+
+| Condition | Mode | Pipeline (execute 之后) |
+|-----------|------|-------------------------|
+| Has `specs/REQ-*.md` + 当前 phase 业务范围明确 | `full` | business-test → review → test-gen → test |
+| Default | `standard` | review → test-gen (当 coverage<80%) → test |
+| `--quality quick` | `quick` | review --tier quick |
+
+写入 `session.quality_mode`。A_BUILD_STEPS 据此过滤 stage（见下）。
+
+### A_DETERMINE_PLANNING_MODE
+
+决定里程碑的规划粒度：一次性规划整个里程碑（统一）还是逐 phase 走完整生命周期（独立）。
+
+**Auto-resolve rules (按优先级):**
+
+| Condition | Mode | Reason |
+|-----------|------|--------|
+| lifecycle_position ∈ {grill, brainstorm, init, roadmap} | `independent` | 前期阶段不涉及多 phase 规划 |
+| `phase_is_new == true` | `independent` | 新 phase 尚无里程碑上下文 |
+| intent 显式指定 phase 编号（如 "phase 2"、"P3"） | `independent` | 用户明确针对单个 phase |
+| milestone 仅含 1 个 phase（读 state.json） | `independent` | 统一无意义 |
+| milestone 含多个 phase + `auto_confirm` | `unified` | 自动模式倾向高效 |
+| milestone 含多个 phase + 非 `auto_confirm` | → AskUserQuestion | 征询用户选择 |
+
+**AskUserQuestion** (仅当 milestone 含 ≥2 phase 且非 auto_confirm):
+
+```
+question: "当前里程碑含 {N} 个 phase，选择规划模式？"
+options:
+  - label: "统一规划 (Recommended)"
+    description: "一次性分析+规划整个里程碑所有 phase，analyze/plan 走里程碑级，适合 phase 间关联紧密"
+  - label: "独立规划"
+    description: "逐个 phase 走完整生命周期（analyze→plan→execute→...），适合 phase 间独立性高"
+```
+
+写入 `session.planning_mode`（`"unified"` 或 `"independent"`）。`A_BUILD_STEPS` 据此决定 skill args 是否携带 `{phase}` 占位符。
+
+### A_DECOMPOSE_TASKS
+
+Runs once before chain build; additive to status.json. 设 `session.decomposition_owner = "ralph"`。
+
+**0. Ownership guard** (invariant 20): 若 `session.boundary_contract` 或 `session.task_decomposition` 已非空（上游 maestro 已写入，`decomposition_owner == "maestro"`）→ MUST 跳过下述提问，仅做 shape 校验 + 缺省字段补齐，直接进入步骤 6。
+
+**1. Classify intent breadth:**
+
+| Pattern | Breadth | Clarify? |
+|---------|---------|----------|
+| 重构/全面/重写/重做/整体/迁移 · overhaul/migrate/rewrite/revamp | broad | MUST (ignores auto_confirm) |
+| named single file/function/bug, "fix X", "add Y to Z" | narrow | skip — auto-derive |
+| otherwise | medium | clarify unless auto_confirm |
+
+**2. Clarify boundary** (broad/medium) — `AskUserQuestion`, ≤3 rounds, options pre-filled from intent + a quick Glob/Grep scan of the target module:
+
+| Round | Question | Drives |
+|-------|----------|--------|
+| Scope | 哪些目录/文件/层在范围内?明确排除什么? | boundary_contract.in_scope / out_of_scope |
+| Constraints | 必须向后兼容?公共 API 冻结?行为/性能预算?测试门槛? | boundary_contract.constraints + execution_criteria |
+| Done | 什么可观测结果算"完成"?(如:测试全绿 + 行为零变更 + X 指标) | boundary_contract.definition_of_done |
+
+narrow → derive defaults from intent + codebase, skip questions.
+
+**3. Derive `execution_criteria`**: backward-compat、scope-freeze、test/coverage bar、fix-don't-hide、incremental commit。
+
+**4. Derive `task_decomposition`** (子目标清单 — outcome-oriented, NOT lifecycle stages). Each entry:
+```json
+{ "id": "G1", "goal": "<deliverable>", "boundary": "<in/out note>",
+  "done_when": "<objectively checkable condition>",
+  "evidence": "verification.json|review.json|uat.md|e2e-results.json|<test path>",
+  "lifecycle": ["analyze","execute"], "status": "pending" }
+```
+`done_when` 必须客观可验证，且引用 ralph 已产出的 artifact；`lifecycle` 字段映射到产出 evidence 的生命周期 stage。涉及前端可用性的子目标，`done_when` 应引用 `e2e-results.json`（frontend-verify 门产出），不得仅以后端 API/build 证据判定可用。
+
+**5. Persist** (additive): `boundary_contract`, `execution_criteria`, `task_decomposition`。每个 sub-goal 含 `status: "pending"` + `completion_confirmed: false`。
+
+**6. Stage** the Goal Prompt (Appendix) for A_CREATE_SESSION to emit.
+
+### A_BUILD_STEPS
+
+Generate steps from `session.lifecycle_position` to `milestone-complete`（`session.milestone` 存在时）或最后一个质量门（standalone 时）。
+
+> **v2 执行模型**：每个 step 由 Agent(ralph-executor) 派发执行，非主会话内联。Agent 内部调 `maestro ralph next` 获取 skill prompt 并执行，结果通过 task-notification 回传主流程。
+
+| Stage | Skill (independent) | Skill (unified) | Decision after | quality_mode |
+|-------|---------------------|-----------------|----------------|--------------|
+| grill | `maestro-grill "{intent}"` | *(same)* | — | all (**auto_confirm → 透传 `-y` 到 grill args，不删除 stage**) |
+| brainstorm | `maestro-brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `maestro-brainstorm "{intent}"` *(otherwise)* | *(same)* | — | all |
+| blueprint | `maestro-blueprint "{intent}"` | *(same)* | — | all |
+| init | `maestro-init` | *(same)* | — | all |
+| spec-setup | `spec-setup` | *(same)* | — | all (**仅当 `.workflow/specs/` 不存在时插入**) |
+| analyze-macro | `maestro-analyze "{intent}"` | *(same)* | `post-analyze-scope` | all |
+| roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | *(same)* | — | all |
+| analyze | `maestro-analyze {phase}` | `maestro-analyze` | — | all |
+| plan | `maestro-plan {phase}` *(scope=phase)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | `maestro-plan` | — | all |
+| execute | `maestro-execute {phase}` | `maestro-execute` | `post-execute` | all |
+| business-test | `quality-auto-test {phase}` | `quality-auto-test` | `post-business-test` | full only |
+| review | `quality-review {phase}` | `quality-review` | `post-review` | all (quick: append `--tier quick`) |
+| test-gen | `quality-auto-test {phase}` | `quality-auto-test` | — | full / standard if coverage<80% |
+| test | `quality-test {phase}` | `quality-test` | `post-test` | full, standard |
+| frontend-verify | `quality-test {phase} --frontend-verify` | `quality-test --frontend-verify` | `post-frontend-verify` | all（**仅当 phase 交付 UI 时插入**：检出 `dashboard/` 或 UI 关键词 `landing\|page\|dashboard\|frontend\|UI\|component\|界面`） |
+| milestone-audit | `maestro-milestone-audit` | *(same)* | — | all |
+| goal-audit | *(decision-only)* | *(same)* | `post-goal-audit` | all (only if decomposed) |
+| milestone-complete | `maestro-milestone-complete` | *(same)* | `post-milestone` | all |
+
+**Build rules (按顺序应用):**
+
+0. **planning_mode 选列**：`unified` → Skill (unified) 列；`independent` → Skill (independent) 列
+0.5. **specs 预检**：当 `lifecycle_position ∉ {grill, brainstorm, blueprint, init}` 且 `.workflow/specs/` 目录不存在时，在链路最前面插入 `spec-setup` 步骤（stage=`spec-setup`，无 decision）。确保下游 analyze/plan/execute 可获得项目约束规则注入
+1. **起点**：从 `session.lifecycle_position` 开始
+2. **跳过已完成**：跳过当前 milestone+phase 下已有 completed artifact 的 stage（按 `session.phase` 过滤）；unified 按 milestone 过滤
+3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
+3.5. **grill auto_confirm 透传**：`auto_confirm == true` 时为 `grill` step args 追加 `-y`（grill 自身 Auto mode 用代码代答，见 maestro-grill `<context>` Mode selection）；保留 `grill` stage 与 brainstorm 的 `--from grill:*`（grill 仍产出 grill-report/terminology/context-package）
+3.6. **frontend-verify UI 门控**：仅当当前 phase 交付前端（检出 `dashboard/` 目录，或 phase 目标/计划含 UI 关键词 `landing|page|dashboard|frontend|UI|component|界面`）时保留 `frontend-verify` stage + `post-frontend-verify` decision；纯后端 phase 删除该 stage
+4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
+5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后、`milestone-complete` 之前插入 `decision:post-goal-audit`
+5.5. **re-grounding 插入**：WHEN `task_decomposition` 存在 AND 执行 step（不含 decision）≥3
+   - 从第 3 个执行 step 起每隔 3 个插入 `{ decision: "post-reground", retry_count: 0, max_retries: 0, command_scope: null, command_path: null }`
+   - 不在最后一个执行 step 后插入（由 goal-audit 覆盖）
+   - 不与已有 quality-gate decision 节点相邻（顺延到下一个 3-step 边界）
+   - fix-loop 动态插入的 step **纳入**计数（从插入点起重新计算 3-step 间隔）
+6. **终点硬约束**：`session.milestone` 存在时 chain 以 `milestone-complete` 结尾；`session.milestone=null`（standalone）时跳过 `milestone-audit` + `milestone-complete` stage，chain 以最后一个质量门 stage 结尾
+7. **goal_ref 传播**：`task_decomposition` 存在时，每个 step 按 `step.stage ∈ g.lifecycle` 匹配 `step.goal_ref = g.id`（多匹配取字典序最小）；decision 节点不打 goal_ref
+8. **占位符**：independent 保留 `{phase}` `{intent}`；unified 不带 `{phase}`
+9. **command_path 解析**（每个执行 step，decision 节点跳过）：
+   - 取 skill 名（args 前的第一个 token）
+   - **预校验通过 `Bash("maestro ralph skills --platform claude --json --quiet")`** 一次性拉取 claude 平台可用 commands + skills（global + project，project 覆盖 global），匹配 skill 名得到：
+     - 命中 commands → `command_scope = "global" | "project"`，`command_path = <绝对路径>`
+     - 命中 skills → 同上（type=skill）
+     - 未命中 → `command_scope = "missing"`, `command_path = null`，A_CREATE_SESSION 报错 E006
+   - **不在 build 阶段读取 .md 内容**；`<required_reading>` / `<deferred_reading>` 解析与加载由 `maestro ralph next` CLI 在执行期完成
+10. **每个 step 初始化** `completion_confirmed: false`, `completion_status: null`, `completion_evidence: null`, `completion_summary: null`, `completion_decisions: null`, `completion_caveats: null`, `completion_deferred: null`, `deferred_reads: []`, `load: null`（由 `ralph next` 写入）
+11. **scope_verdict gating**（仅当 chain 起点 = `analyze-macro`）：
+    - `scope_verdict == large` **且** `wants_roadmap` → 保留 `roadmap` + `analyze`；`plan` 选 phase 列（`{phase}`）
+    - 其余（`medium` / `small`，或 `large` 但非 `wants_roadmap`）→ 跳过 `roadmap` + `analyze` 两 stage；`plan` 选 standalone 列（`--from analyze:{analyze_macro_id}`），不带 `{phase}`
+    - `scope_verdict == unknown` → 默认 standalone（非 roadmap）路径；由 `post-analyze-scope` 决策节点在 macro analyze 完成后纠正（A_APPLY_SCOPE_VERDICT）
+12. **--from 自动注入**：
+    - `analyze_macro_id` 存在且当前 step 是 `roadmap` → args 改为 `--from analyze:{analyze_macro_id}`
+    - `analyze_macro_id` 存在且当前 `plan` step 处于 standalone 列（即非 wants_roadmap 路径：`medium`/`small`，或 `large` 但非 `wants_roadmap`）→ args 改为 `--from analyze:{analyze_macro_id}`
+    - `blueprint_id` 存在 → 当前 step 是 `plan` → args 改为 `--from blueprint:{blueprint_id}`（优先级低于 phase 数字参数）
+    - **phase-level deferred chaining**（独立模式，step 含 `{phase}` 占位符）：build 阶段前序 artifact 尚未产出，由 A_STEP_RESOLVE_ARGS 运行时从 state.json 查找同 phase+milestone 最新 completed artifact 注入：
+      - `plan` step → `--from analyze:{phase_analyze_id}`，写 `source_artifact_ref`
+      - `execute` step → `--dir {plan_path}`（现有逻辑），写 `source_artifact_ref = "plan:{id}"`
+    - 写入 `step.source_artifact_ref` 以便审计
+13. **D-007 Milestone-ref 标注**：每个含 `{phase}` 占位符的 step → `step.milestone_id = session.milestone`（由 A_RESOLVE_PHASE 反查得出），禁止读 `current_milestone`
+14. **动态插入步骤**（A_APPLY_*）同样应用规则 7-13
+
 ### A_CREATE_SESSION
 1. `session_id` format: `ralph-v2-{YYYYMMDD-HHmmss}`
-2. Additional fields: `execution_mode: "agent"`，无 `cli_tool` 字段
-3. Each step: `agent_exec_name: null`（执行 Agent 名称标识）
-4. Step mode/role/rule assigned per stage (see Stage Mapping table)
+2. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E006 + 列出缺失 skill
+3. Additional fields: `execution_mode: "agent"`，无 `cli_tool` 字段
+4. Each step: `agent_exec_name: null`（执行 Agent 名称标识）
+5. Step mode/role/rule assigned per stage (see Stage Mapping table)
 
 ### A_STEP_RESOLVE_ARGS
 
@@ -848,7 +1099,67 @@ Build rules 0-14 全部适用，包括 spec-setup 预检（rule 0.5）、grill a
 
 ### Fix-Loop Templates
 
-6 套 fix-loop templates（post-execute / post-business-test / post-review / post-test / post-frontend-verify / post-goal-audit）。插入的 step 通过 A_STEP_DISPATCH 派发 executor agent 逐步执行，由主流程调 `ralph complete` 上报。
+所有插入的执行 step 按 A_BUILD_STEPS 规则 9 解析 `command_path` + `command_scope`；`decision:*` 条目为 decision 节点（`step.decision` 字段）。插入的 step 通过 A_STEP_DISPATCH 派发 executor agent 逐步执行，由主流程调 `ralph complete` 上报。
+
+**post-execute:**
+```
+quality-debug "{gap_summary}"
+maestro-plan --gaps {phase}
+maestro-execute {phase}
+decision:post-execute {retry+1}
+```
+
+**post-business-test:**
+```
+quality-debug --from-business-test "{gap_summary}"
+maestro-plan --gaps {phase}
+maestro-execute {phase}
+decision:post-execute {retry: 0}
+quality-auto-test {phase}
+decision:post-business-test {retry+1}
+```
+
+**post-review:**
+```
+quality-debug "{gap_summary}"
+maestro-plan --gaps {phase}
+maestro-execute {phase}
+quality-review {phase}
+decision:post-review {retry+1}
+```
+
+**post-test:**
+```
+quality-debug --from-uat "{gap_summary}"
+maestro-plan --gaps {phase}
+maestro-execute {phase}
+decision:post-execute {retry: 0}
+quality-auto-test {phase}
+decision:post-business-test {retry: 0}
+quality-review {phase}
+decision:post-review {retry: 0}
+quality-auto-test {phase}
+quality-test {phase}
+decision:post-test {retry+1}
+```
+
+**post-frontend-verify:** (UI 写端点未接线/不可用时)
+```
+quality-debug --from-frontend-verify "{gap_summary}"
+maestro-plan --gaps {phase}
+maestro-execute {phase}
+quality-test {phase} --frontend-verify
+decision:post-frontend-verify {retry+1}
+```
+
+**post-goal-audit:** (per unmet sub-goal group)
+```
+# for each unmet sub-goal G{n}, scoped to target_phase:
+maestro-plan --gaps {target_phase} "G{n}: {gap}"     [goal_ref: G{n}]
+maestro-execute {target_phase}                       [goal_ref: G{n}]
+# after all unmet groups inserted:
+decision:post-goal-audit {retry+1}
+```
 
 ### Error Codes
 

@@ -13,7 +13,7 @@ allowed-tools:
 ---
 <purpose>
 Detect current version, run schema migration to latest, then follow the version-specific upgrade workflow.
-Schema (`src/migrations/`) handles transforms; workflow docs (`~/.maestro/workflows/updates/`) handle setup.
+Schema migrations are handled by `maestro update --migrate`; workflow docs (`~/.maestro/workflows/updates/`) handle setup.
 </purpose>
 
 <context>
@@ -29,7 +29,7 @@ $ARGUMENTS — optional flags.
 **Workflow docs:** `~/.maestro/workflows/updates/`
 - `update-v{TO}-setup.md` — post-migration setup for version {TO}
 
-**Schema registry:** `src/migrations/` — handles all intermediate version bumps automatically
+**Schema registry:** `maestro update --migrate` — handles all intermediate version bumps automatically
 
 **Output boundary**: ALL file writes MUST target `.workflow/state.json` (version bump), `.workflow/state.json.backup-*` (backup), and `.workflow/` config files touched by version-specific setup. NEVER modify source code or `src/migrations/` files.
 </context>
@@ -79,7 +79,7 @@ IF `--setup-only`:
 ### Step 2: Check for Updates
 
 ```
-1. Run: npx tsx src/migrations/run.ts "$(pwd)" --dry-run --json
+1. Run: maestro update --migrate "$(pwd)" --dry-run --json
 2. Parse JSON output
 3. IF status = "up-to-date":
      Display "Already up to date (v{version})"
@@ -108,7 +108,7 @@ IF `--dry-run` → display info and EXIT.
    Bash: cp .workflow/state.json .workflow/state.json.backup-v{current}-{timestamp}
 
 4. Run schema migration (handles all intermediate steps automatically):
-   Bash: npx tsx src/migrations/run.ts "$(pwd)" --json
+   Bash: maestro update --migrate "$(pwd)" --json
    Parse result, display changes.
 
 5. IF failed → display backup restore command → EXIT

@@ -35,7 +35,7 @@ $ARGUMENTS — template slug/path, or flags.
 | skill | `Skill(skill, args)` | sync |
 | command | `Skill(skill, args)` | sync |
 | cli | `maestro delegate --to tool --mode mode` via `Bash(run_in_background: true)` | async, STOP + wait |
-| agent | `Agent(subagent_type, prompt)` — valid subagent_type: `"task"` (default), `"research"`, `"code"`. Unknown type falls back to `"task"`. | configurable |
+| agent | `Agent(subagent_type, prompt)` — any registered subagent_type (see `.claude/agents/`); defaults to `"general-purpose"` if omitted or unrecognized. | configurable |
 | checkpoint | State save + optional user pause | — |
 
 **Runtime reference resolution** in args_template:
@@ -48,7 +48,7 @@ $ARGUMENTS — template slug/path, or flags.
 | `{prev_session_id}` | previous non-checkpoint node's session_id |
 | `{prev_output_path}` | previous non-checkpoint node's output_path |
 
-**Session schema** (status.json — must align with maestro.md tracking):
+**Session schema** (status.json):
 ```json
 {
   "session_id": "player-<YYYYMMDD>-<HHmmss>",

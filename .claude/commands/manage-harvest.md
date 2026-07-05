@@ -85,7 +85,7 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 | Wiki entries created | `maestro wiki list --type note` |
 | Wiki graph needs linking | `/manage-wiki connect --fix` |
 | Issues created | `/manage-issue list --source harvest` |
-| Specs extracted | `/spec-load --role implement` |
+| Specs extracted | `maestro load --type spec` |
 | Specs extracted (审查) | `/manage-knowledge-audit --scope spec` — 新写入的 spec 可能与现有条目矛盾或替代 |
 | 查看演化链 | `maestro spec history <sid>` — 确认 supersede 链完整 |
 | Spec 冲突标记已存在 | `maestro spec conflict list` — 查看当前冲突状态 |

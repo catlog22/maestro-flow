@@ -114,7 +114,7 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 |-----------|-----------|
 | 复审淘汰记录 | 查看 `audit-report-{date}.md` |
 | 抢救未抽取 artifact | `/manage-harvest <artifact-id>` |
-| 验证 spec 现状 | `/spec-load --role implement` |
+| 验证 spec 现状 | `maestro load --type spec` |
 | 查看冲突标记 | `maestro spec conflict list` |
 | 清除已解决冲突 | `maestro spec conflict clear-all <file>` |
 | 查看演化链 | `maestro spec history <sid>` |

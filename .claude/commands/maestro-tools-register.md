@@ -86,7 +86,7 @@ Parse $ARGUMENTS to determine mode:
 - If unclear, ask user with AskUserQuestion
 
 **Optimize mode**:
-- Load existing tool: `maestro load --type spec --category coding --keyword <name>`
+- Load existing tool: `maestro search "<name>" --type knowhow` → `maestro load --type knowhow --id <id>`
 - Analyze improvement points (step splitting, prerequisites, error handling)
 
 **Promote mode** (existing knowhow → tool):

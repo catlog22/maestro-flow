@@ -195,7 +195,7 @@ Display: path, ID, node count, variables, execute/edit commands. Clean up draft 
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Template saved | Execute template with `maestro run <template-id>` |
+| Template saved | `/maestro-player <template-id>` |
 | Template needs edits | `maestro composer --edit <template-path>` |
 | Design abandoned mid-flow | `maestro composer --resume` to continue from last draft |
 </completion>

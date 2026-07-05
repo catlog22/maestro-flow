@@ -240,6 +240,16 @@ Ralph 可以在 A_BUILD_STEPS 中将某些 step 的执行方式标记为 `swarm-
 
 ralph-execute 正常通过 `maestro ralph next` 加载并执行，swarm-workflow 内部再调 Workflow 工具。
 
+**何时选 swarm vs 顺序命令：**
+
+| 条件 | 推荐 | 原因 |
+|------|------|------|
+| 需要多维度并行 + 对抗交叉验证 | swarm | 多 agent 并发产出 + adversarial gate |
+| 需要对话式交互（interview_protocol）| 顺序命令 | swarm agent 无法交互 |
+| 需要写入 state.json / 推进 ralph step | 顺序命令 | swarm 承诺不触碰 ralph 状态 |
+| 时间预算充裕、准确性优先 | swarm | 多角度提高覆盖率 |
+| 上下文受限、快速单视角足够 | 顺序命令 | 轻量 |
+
 ### 输出示例
 
 ```

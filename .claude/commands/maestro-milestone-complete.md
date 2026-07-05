@@ -116,7 +116,7 @@ Status verdicts:
 | Condition | Suggestion |
 |-----------|-----------|
 | Cut a release | `/maestro-milestone-release` |
-| Next milestone (standard) | `/maestro-analyze` or `/maestro-plan 1` |
+| Next milestone (standard) | `/maestro-analyze {next_milestone}` or `/maestro-plan {next_milestone}` |
 | View state | `/manage-status` |
 </completion>
 
@@ -127,7 +127,7 @@ Status verdicts:
 | E002 | error | Audit not passed | Run maestro-milestone-audit first |
 | E003 | error | Incomplete artifacts remain | Complete remaining work first |
 | W001 | warning | Knowhow extraction produced 0 entries | Review milestone work for missed learnings |
-| W002 | warning | Wiki-connect found unlinked knowledge islands | Run `/manage-wiki --fix` manually |
+| W002 | warning | Wiki-connect found unlinked knowledge islands | Run `manage-wiki connect --fix` manually |
 </error_codes>
 
 <success_criteria>

@@ -1,7 +1,7 @@
 ---
 name: maestro-execute
 description: Use when a confirmed plan is ready for implementation
-argument-hint: "[phase] [--auto-commit] [--method agent|cli|auto] [--executor <tool>] [--dir <path>] [-y]"
+argument-hint: "[milestone] [--auto-commit] [--method agent|cli|auto] [--executor <tool>] [--dir <path>] [-y]"
 allowed-tools:
   - Read
   - Write
@@ -27,7 +27,7 @@ Consumes plan from maestro-plan; registers EXC artifact in state.json.
 </deferred_reading>
 
 <context>
-$ARGUMENTS — phase number, or no args for milestone-wide execution, with optional flags.
+$ARGUMENTS — milestone number, or no args for current milestone, with optional flags.
 
 ### Flags
 
@@ -43,7 +43,7 @@ $ARGUMENTS — phase number, or no args for milestone-wide execution, with optio
 
 | Input | Scope | Resolution |
 |-------|-------|------------|
-| numeric arg | phase | Resolve plan from roadmap phase |
+| numeric arg | milestone | Resolve plans for the given milestone |
 | `--dir <path>` | explicit | Use specified plan directory |
 | no args + milestone | milestone | Find all pending plans, execute sequentially |
 | no args + no milestone | error E001 | No plan found |

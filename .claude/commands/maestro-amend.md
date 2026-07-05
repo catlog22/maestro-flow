@@ -124,6 +124,8 @@ Per signal, determine:
 | Incomplete success criteria | success_criteria | append |
 | Missing error handling | error_codes | append |
 | Scope/context gap | context | append |
+| Wrong/missing next-step routing | completion | replace / append |
+| Missing/wrong invariant | invariants | append |
 | Entirely new concern | _(new section)_ | new-section |
 
 Read pristine source from `$PKG_ROOT/.claude/commands/<name>.md` to confirm section.

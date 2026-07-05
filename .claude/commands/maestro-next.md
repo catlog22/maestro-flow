@@ -107,9 +107,9 @@ ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 | 有 macro analyze artifact，无 roadmap | roadmap | `maestro-roadmap` |
 | 有 roadmap，未启动 phase | analyze | `maestro-analyze {milestone}` |
 | 最新 artifact = analyze | plan | `maestro-plan {milestone}` |
-| 最新 artifact = plan | execute | `maestro-execute {phase}` |
-| 最新 artifact = execute | review | `quality-review {phase}` |
-| review verdict=PASS | test-gen | `quality-auto-test {phase}` |
+| 最新 artifact = plan | execute | `maestro-execute {milestone}` |
+| 最新 artifact = execute | review | `quality-review {milestone}` |
+| review verdict=PASS | test-gen | `quality-auto-test {milestone}` |
 | 测试全绿 + current_milestone 存在 | milestone-audit | `maestro-milestone-audit` |
 | 测试全绿 + current_milestone=null (standalone) | review-done | 回退到 `quality-review` 或 `manage-status`（无 milestone 上下文时不推荐 milestone 命令） |
 | 当前 milestone 全 phase 完成 | milestone-complete | `maestro-milestone-complete` |
@@ -117,11 +117,23 @@ ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 
 **Maestro Lifecycle 主线：**
 ```
-brainstorm → blueprint → init → analyze-macro → roadmap
-   → [per phase] analyze → plan → execute (includes verification)
+init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
+   → [per milestone] analyze → plan → execute (includes verification)
    → [quality gate] review → auto-test → test
    → milestone-audit → milestone-complete → milestone-release
 ```
+
+**quality vs odyssey 选型：**
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| Phase 工件链内的 bug/review/test | `quality-*` | 只读诊断，修复回流 plan→execute 主循环，保持 artifact 链完整 |
+| 独立探索性 bug、跨 phase 问题、非当前 milestone 问题 | `odyssey-debug` | 自带修复+泛化，scratch session 独立于 artifact 链 |
+| Phase 级代码审查（只读报告） | `quality-review` | 输出 verdict + issues，不改代码 |
+| 审查后要求零残留修复 | `odyssey-review-test-fix` | 自带 fix 循环直到零 finding |
+| Phase 级安全专项审计 | `security-audit` | OWASP Top 10 + STRIDE 全覆盖 |
+| 多维运行时质量改进 | `odyssey-improve` | 6 维并行审计 + 泛化 |
+| UI 视觉优化 | `odyssey-ui` | 含发散探索（Polish/Delight） |
 
 ### A_SCORE_CANDIDATES
 

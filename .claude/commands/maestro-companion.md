@@ -499,7 +499,7 @@ Extract intent text from $ARGUMENTS after removing the `route` keyword.
 Skill("maestro-next", "<intent_text>")
 ```
 
-Reuses maestro-next routing table and scoring logic to recommend the best single command.
+Delegates intent routing to maestro-next, which recommends the best single command.
 
 </execution>
 

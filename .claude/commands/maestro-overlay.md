@@ -33,7 +33,7 @@ Turn natural-language instructions into command overlays — JSON patch files th
 
 **Management** — listing and removing overlays is handled by `maestro overlay list` (ink TUI with interactive delete). This skill focuses solely on creation.
 
-**Available sections** (for `section:` in patches): `purpose`, `required_reading`, `deferred_reading`, `context`, `execution`, `error_codes`, `success_criteria`.
+**Available sections** (for `section:` in patches): `purpose`, `required_reading`, `deferred_reading`, `context`, `execution`, `completion`, `invariants`, `error_codes`, `success_criteria`.
 
 **Output boundary**: ALL file writes MUST target `~/.maestro/overlays/` (overlay JSON + docs) only. Command file patching is handled by `maestro overlay add` — this skill NEVER modifies `.claude/commands/*.md` directly.
 </context>
@@ -84,7 +84,7 @@ Use AskUserQuestion to confirm:
 
 ### 2.5. Skill chain configuration
 
-After confirming the injection point, ask whether this overlay should chain to another skill upon completion. This enables the overlay's injected content to hand off to a skill via AskUserQuestion at runtime — similar to how `/maestro` chains commands via `Skill({ skill: "...", args: "..." })`.
+After confirming the injection point, ask whether this overlay should chain to another skill upon completion. This enables the overlay's injected content to hand off to a skill via AskUserQuestion at runtime, using `Skill({ skill: "...", args: "..." })` syntax.
 
 Use AskUserQuestion:
 - **"No chain"** — standard overlay, no skill handoff
@@ -140,7 +140,7 @@ On user selection:
 
 Handoff rules:
 - Always include a **"Skip"** option — the user can always decline the chain
-- Use `Skill({ skill: "<name>", args: "..." })` syntax consistent with maestro.md chainMap
+- Use `Skill({ skill: "<name>", args: "..." })` syntax for handoff calls
 - Mark handoff heading with `(overlay)` tag
 - Support runtime variable placeholders: `{phase}`, `{description}`, `{session_id}`
 - Keep handoff block under 10 lines of markdown

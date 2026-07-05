@@ -37,7 +37,7 @@ $ARGUMENTS -- optional explicit version string and flags.
 | `--no-push` | Skip `git push --follow-tags` after tagging | `false` |
 
 **State files:**
-- `.workflow/state.json` -- current_milestone, previous release version
+- `.workflow/state.json` -- milestone_history (last completed milestone), previous release version
 - `.workflow/milestones/{milestone}/summary.md` -- milestone summary (from `maestro-milestone-complete`)
 - `.workflow/milestones/{milestone}/audit-report.md` -- audit verdict (must be PASS)
 - `CHANGELOG.md` -- release notes file (created if missing)
@@ -61,7 +61,7 @@ Follow '~/.maestro/workflows/milestone-release.md' completely.
 ### Phase Gates (MANDATORY, BLOCKING)
 
 **GATE 1: Validation → Version Bump**
-- REQUIRED: Current milestone completed (audit PASS + milestone-complete run). E001 if not.
+- REQUIRED: Target milestone identified from `state.json.milestone_history` (last entry with `status == "completed"`) or explicit `[milestone]` argument. E001 if no completed milestone found.
 - REQUIRED: Working tree clean (no uncommitted changes). E003 if dirty.
 
 **GATE 2: Version Bump → Changelog**

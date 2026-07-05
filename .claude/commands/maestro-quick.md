@@ -88,13 +88,24 @@ Task summaries MUST include concrete evidence of completion (files changed, test
 </execution>
 
 <completion>
+### Ralph-invoked completion
+
+When invoked as a ralph chain step (session context exists):
+```
+maestro ralph complete <idx> --status {DONE|DONE_WITH_CONCERNS|NEEDS_RETRY|BLOCKED} [--evidence <scratch-dir>]
+```
+- **DONE** — Task completed, verification passed
+- **DONE_WITH_CONCERNS** — Task completed with caveats; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
 ### Next-step routing
 | Condition | Suggestion |
 |-----------|-----------|
 | Task done, --full verification passed | `/manage-status` |
 | Task done, verification found gaps | `/quality-debug {issue}` |
 | Task done, want to sync docs | `/quality-sync` |
-| Need a full phase workflow instead | `/maestro-plan {phase}` |
+| Need a full phase workflow instead | `/maestro-plan {milestone}` |
 </completion>
 
 <error_codes>
