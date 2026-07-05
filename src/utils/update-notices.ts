@@ -504,3 +504,16 @@ registerNotice({
   ],
   actions: [],
 });
+
+registerNotice({
+  version: '0.5.49',
+  title: '知识演化链 + Explore 三层容错',
+  highlights: [
+    'Explore circuit-breaker 持久化 + pre-flight 探测 + 即时 fallback',
+    '知识系统演化链替代机制 + 遗忘曲线搜索权重',
+    'Spec 冲突标记条目搜索降级评分',
+    'Wiki indexer streaming 写入 + embedding 构建 abort 支持',
+    'Search daemon 连接数上限 + socket 超时保护',
+  ],
+  actions: [],
+});
