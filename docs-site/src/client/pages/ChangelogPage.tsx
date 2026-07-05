@@ -17,6 +17,18 @@ interface ChangelogEntry {
 
 const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.49',
+    date: '2026-07',
+    changes: [
+      { type: 'feat', text_en: 'Explore circuit-breaker persistence + pre-flight probing + immediate fallback retry', text_zh: 'Explore circuit-breaker 持久化 + pre-flight 探测 + 即时 fallback' },
+      { type: 'feat', text_en: 'Knowledge evolution chain supersession + time-decay search weighting', text_zh: '知识演化链替代机制 + 遗忘曲线搜索权重' },
+      { type: 'feat', text_en: 'Spec conflict-marked entries downgraded in search scoring', text_zh: 'Spec 冲突标记条目搜索降级评分' },
+      { type: 'fix', text_en: 'Wiki P1/P2 review fixes — staleness detection, embedding identity, link integrity', text_zh: 'Wiki P1/P2 审查修复——陈旧检测、嵌入身份、链路完整性' },
+      { type: 'refactor', text_en: 'Wiki indexer streaming cache write + embedding build abort support', text_zh: 'Wiki indexer streaming 写入 + embedding 构建 abort 支持' },
+      { type: 'fix', text_en: 'Search daemon connection limit, socket timeout, request size guard', text_zh: 'Search daemon 连接数上限 + socket 超时 + 请求大小保护' },
+    ],
+  },
+  {
     version: '0.5.48',
     date: '2026-07',
     changes: [
