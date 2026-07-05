@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions.js';
 import { ProxyAgent, fetch as undiciFetch } from 'undici';
 
-export type LlmFormat = 'openai' | 'anthropic';
+export type LlmFormat = 'openai' | 'anthropic' | 'openai-responses';
 
 export interface LlmToolCall {
   id: string;
@@ -69,9 +69,11 @@ export function createClient(params: LlmConfig): {
   const opts: Record<string, any> = {
     apiKey: params.apiKey,
     baseURL: params.baseUrl,
+    // Always use undici fetch — global fetch may mishandle response headers
+    // and cause the SDK to fall back to response.text(), breaking JSON parsing.
+    fetch: undiciFetch,
   };
   if (params.proxyUrl) {
-    opts.fetch = undiciFetch;
     opts.fetchOptions = { dispatcher: new ProxyAgent(params.proxyUrl) };
   }
   const client = new OpenAI(opts);
@@ -91,6 +93,9 @@ export async function callLlm(
 ): Promise<LlmResponse> {
   if (config.format === 'anthropic') {
     return callAnthropic(config, messages, tools, options);
+  }
+  if (config.format === 'openai-responses') {
+    return callOpenAiResponses(config, messages, tools, options);
   }
   return callOpenAi(client, config, messages, tools, options);
 }
@@ -134,8 +139,12 @@ async function callOpenAi(
     .map((tc: any) => ({
       id: tc.id,
       name: tc.function.name,
-      arguments: tc.function.arguments,
-    }));
+      arguments: tc.function.arguments || '{}',
+    }))
+    .filter((tc: LlmToolCall) => {
+      const parsed = safeParseJson(tc.arguments);
+      return Object.keys(parsed).length > 0;
+    });
 
   return {
     content: msg.content,
@@ -299,6 +308,171 @@ async function callAnthropic(
         name: block.name,
         arguments: JSON.stringify(block.input),
       });
+    }
+  }
+
+  return {
+    content,
+    toolCalls,
+    usage: {
+      inputTokens: data.usage?.input_tokens ?? 0,
+      outputTokens: data.usage?.output_tokens ?? 0,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// OpenAI Responses API provider (/v1/responses)
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function openaiMessagesToResponsesInput(messages: ChatCompletionMessageParam[]): {
+  instructions: string;
+  input: any[];
+} {
+  let instructions = '';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const input: any[] = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      instructions += (typeof msg.content === 'string' ? msg.content : '') + '\n';
+      continue;
+    }
+
+    if (msg.role === 'user') {
+      input.push({
+        type: 'message',
+        role: 'user',
+        content: typeof msg.content === 'string'
+          ? [{ type: 'input_text', text: msg.content }]
+          : msg.content,
+      });
+      continue;
+    }
+
+    if (msg.role === 'assistant') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const m = msg as any;
+      if (m.content) {
+        input.push({
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: m.content }],
+        });
+      }
+      if (m.tool_calls) {
+        for (const tc of m.tool_calls) {
+          input.push({
+            type: 'function_call',
+            name: tc.function.name,
+            arguments: tc.function.arguments,
+            call_id: tc.id,
+            id: `fc_${tc.id}`,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (msg.role === 'tool') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const m = msg as any;
+      input.push({
+        type: 'function_call_output',
+        call_id: m.tool_call_id,
+        output: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      });
+      continue;
+    }
+  }
+
+  return { instructions: instructions.trim(), input };
+}
+
+function openaiToolsToResponsesTools(tools: ChatCompletionTool[]): unknown[] {
+  return tools
+    .filter(t => t.type === 'function')
+    .map(t => ({
+      type: 'function',
+      name: t.function.name,
+      description: t.function.description ?? '',
+      parameters: t.function.parameters ?? { type: 'object', properties: {} },
+    }));
+}
+
+async function callOpenAiResponses(
+  config: LlmConfig,
+  messages: ChatCompletionMessageParam[],
+  tools: ChatCompletionTool[],
+  options?: LlmCallOptions,
+): Promise<LlmResponse> {
+  const { instructions, input } = openaiMessagesToResponsesInput(messages);
+  const responsesTools = openaiToolsToResponsesTools(tools);
+
+  const baseUrl = config.baseUrl.replace(/\/$/, '');
+  const url = `${baseUrl}/responses`;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const body: any = {
+    model: config.model,
+    input,
+    ...config.extraBody,
+  };
+  if (instructions) body.instructions = instructions;
+  if (options?.temperature !== undefined) body.temperature = options.temperature;
+  if (options?.maxTokens) body.max_output_tokens = options.maxTokens;
+  if (responsesTools.length > 0) {
+    body.tools = responsesTools;
+    body.tool_choice = 'auto';
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fetchOpts: any = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(body),
+  };
+  const fetchFn = config.proxyUrl
+    ? (fetchOpts.dispatcher = new ProxyAgent(config.proxyUrl), undiciFetch)
+    : undiciFetch;
+  const response = await fetchFn(url, fetchOpts);
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenAI Responses API ${response.status}: ${text}`);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = await response.json() as any;
+
+  let content: string | null = null;
+  const toolCalls: LlmToolCall[] = [];
+
+  for (const item of data.output ?? []) {
+    if (item.type === 'message' && item.role === 'assistant') {
+      for (const block of item.content ?? []) {
+        if (block.type === 'output_text') {
+          content = (content ?? '') + block.text;
+        }
+      }
+    } else if (item.type === 'function_call') {
+      const args = typeof item.arguments === 'string'
+        ? item.arguments
+        : JSON.stringify(item.arguments ?? {});
+      if (args && args !== '{}') {
+        const parsed = safeParseJson(args);
+        if (Object.keys(parsed).length > 0) {
+          toolCalls.push({
+            id: item.call_id ?? item.id ?? `fc_${Date.now()}`,
+            name: item.name,
+            arguments: args,
+          });
+        }
+      }
     }
   }
 

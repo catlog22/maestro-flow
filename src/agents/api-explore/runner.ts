@@ -105,6 +105,7 @@ async function runSingleJob(
       llmConfig: config,
       toolSchemas: TOOL_SCHEMAS,
       cwd,
+      maxTurns: job.maxTurns ?? globalMaxTurns,
     });
 
     return {
