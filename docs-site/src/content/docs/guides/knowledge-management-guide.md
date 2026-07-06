@@ -324,3 +324,114 @@ harvest 自动路由：
 | `/quality-auto-test` | 测试代码 | 消费 tool |
 
 </details>
+
+---
+
+## Spec 配置参考
+
+### 作用域
+
+| 作用域 | 目录 | 自动初始化 |
+|-------|------|-----------|
+| `project`（默认） | `.workflow/specs/` | 是 |
+| `global` | `~/.maestro/specs/` | 是 |
+| `team` | `.workflow/collab/specs/` | 否 |
+| `personal` | `.workflow/collab/specs/{uid}/` | 否 |
+
+**加载优先级**（由低到高）：global → project → team → personal。后层追加，不覆盖。
+
+### 文件与 Category 映射
+
+| 文件 | Category | 隐式角色 | 用途 |
+|------|----------|---------|------|
+| `coding-conventions.md` | coding | implement | 命名、导入、格式、模式 |
+| `architecture-constraints.md` | arch | plan | 模块结构、层边界 |
+| `review-standards.md` | review | review | 质量规则、检查清单 |
+| `debug-notes.md` | debug | analyze | 调试技巧、根因记录 |
+| `test-conventions.md` | test | test | 测试框架、覆盖率要求 |
+| `learnings.md` | learning | implement | Bug、陷阱、经验教训 |
+| `ui-conventions.md` | ui | implement | UI/UX 约定、设计令牌 |
+
+### 条目属性
+
+| 属性 | 必需 | 说明 |
+|------|------|------|
+| `category` | 是 | 单值：coding, arch, review, debug, test, learning, ui |
+| `keywords` | 是 | 逗号分隔，小写，跨 category 发现 |
+| `date` | 是 | `YYYY-MM-DD` |
+| `source` | 否 | 来源（manual / agent / phase） |
+| `ref` | 否 | 指向 knowhow 详情文档的路径 |
+
+### Tool 发现
+
+Tool 是标记了 `tool: true` YAML 头的 knowhow 文档。`spec load --category` 自动扫描 `knowhow/` 中匹配 category + tool 的条目，追加摘要。
+
+### Spec 注入配置
+
+```
+Session Start / Agent Spawn
+        │
+        ▼
+loadSpecInjectionConfig()   ← .workflow/config.json
+        │
+        ▼
+按 Agent 类型加载对应 Category
+        │
+        ▼
+keyword 过滤 + 额外文档关联
+        │
+        ▼
+注入到 additionalContext
+```
+
+#### 配置 Schema
+
+配置存储在 `.workflow/config.json` 的 `specInjection` 键中：
+
+```json
+{
+  "specInjection": {
+    "enabled": true,
+    "globalKeywords": ["auth", "security"],
+    "excludeKeywords": ["deprecated"],
+    "agentCategoryMap": {
+      "code-developer": ["coding", "learning", "ui"],
+      "workflow-planner": ["arch"]
+    },
+    "extraDocs": {
+      "coding": ["specs/coding-extra.md"],
+      "arch": ["specs/arch-patterns.md"]
+    },
+    "alwaysInject": ["specs/critical-rules.md"]
+  }
+}
+```
+
+#### CLI 配置
+
+```bash
+maestro config get specInjection                          # 查看当前配置
+maestro config set specInjection.globalKeywords "auth,security"  # 设置全局关键词
+maestro config set specInjection.excludeKeywords "deprecated"    # 排除关键词
+```
+
+### Spec 分析
+
+Spec 分析系统记录每次 spec 注入调用、关键词匹配、hook 执行和 CLI 端点使用，提供命中率统计和关键词热力分布。
+
+```bash
+maestro spec analytics              # 查看分析统计
+maestro spec analytics --keywords   # 关键词热力分布
+maestro spec analytics --hit-rate   # 命中率
+maestro spec analytics --clear      # 清除分析数据
+```
+
+### Spec CLI 参考
+
+```bash
+maestro spec init [--scope <scope>] [--uid <uid>]
+maestro spec load [--category <cat>] [--keyword <kw>] [--scope <scope>] [--json]
+maestro spec add <category> "<title>" "<content>" [--keywords kw1,kw2] [--ref <path>]
+maestro spec list [--scope <scope>] [--uid <uid>]
+maestro spec status [--scope <scope>] [--uid <uid>]
+```

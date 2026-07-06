@@ -2,9 +2,9 @@
 
 # Maestro-Flow
 
-### Intent-Driven Workflow Orchestration for the Multi-Agent Era
+### 意图驱动的多智能体工作流编排框架
 
-**Describe what you want. Maestro figures out how to get there.**
+**说出你要做什么，Maestro 自动规划、调度、执行、验证。**
 
 <br/>
 
@@ -14,435 +14,218 @@
 [![MCP](https://img.shields.io/badge/MCP-Protocol-8B5CF6)](https://modelcontextprotocol.io/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[English](README.md)&nbsp;&nbsp;|&nbsp;&nbsp;[简体中文](README.zh-CN.md)
+[简体中文](README.md)&nbsp;&nbsp;|&nbsp;&nbsp;[English](README.en.md)
 
 </div>
 
 <br/>
 
-> Most AI coding tools let you run one agent on one task.
-> Maestro-Flow orchestrates **multiple agents across an entire development lifecycle** — from brainstorming to deployment — with an adaptive decision engine, a self-reinforcing knowledge graph, and a real-time visual dashboard.
+> 大多数 AI 编程工具只能让一个 Agent 做一件事。
+> Maestro-Flow 让**多个 Agent 协同完成从头脑风暴到部署上线的全流程** — 自适应决策引擎根据实际结果动态调整策略，知识图谱将每次执行的经验自动积累到下一次。
 
 <br/>
 
-## Comparison with Other Tools
+## 核心能力
 
-The AI coding workflow space is growing fast. Here's how Maestro-Flow relates to three prominent open-source tools — each takes a different approach to a shared goal.
+**自适应编排** — Ralph v2 引擎读取项目状态，将自然语言意图分类到 40+ 种命令链，在关键节点根据实际执行结果动态决策：继续、回退、还是插入修复循环。不写 YAML，不配置管线。
 
-### Overview
+**跨后端调度** — 同一工作流中混用 Claude、Codex、Gemini、Qwen、OpenCode，四种编排模式按需组合：Delegate（异步委派）、Team（角色协作）、Wave（依赖并行）、Swarm（蚁群探索）。
 
-| | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Trellis](https://github.com/mindfold-ai/trellis) | **Maestro-Flow** |
-|---|---|---|---|---|
-| **Tagline** | Agentic skills framework & methodology | Spec-driven development (SDD) | Multi-platform agent harness | Intent-driven workflow orchestration |
-| **Architecture** | Pure `.md` skill files, no runtime | CLI + spec scaffolding, git-based | CLI + runtime, file-based `.trellis/` | CLI + MCP + runtime, SQLite-backed |
-| **License** | MIT | MIT | AGPL-3.0 | MIT |
+**知识自增强** — Agent 执行中发现的模式、陷阱、决策，自动持久化为 Spec 和 Knowhow。Hook 系统将相关知识注入后续 Agent 的提示词 — 项目越用越聪明。
 
-### Workflow Model
-
-Each tool answers a different question about the development lifecycle:
-
-- **Superpowers** answers *"how should agents think?"* — 14 composable `.md` skills shape agent behavior through a 7-phase methodology (brainstorm → worktree → plan → subagent dispatch → task review → code review → branch finish). The user follows the methodology; the agent follows the skills. No runtime routes or decides for you.
-- **OpenSpec** answers *"what should we build?"* — 11 slash commands manage a spec-centric planning layer (`/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:verify` → `/opsx:archive`). Each change gets a folder with proposal, specs, design, and task artifacts. The workflow is fluid and iterative, but manually driven.
-- **Trellis** answers *"how do we work across platforms?"* — specs, tasks, and workspace journals live in `.trellis/`, with platform-specific configurators for 16 AI tools. A channel-based message bus enables supervisor-worker multi-agent patterns. Hooks inject specs into prompts automatically.
-- **Maestro-Flow** answers *"how do we orchestrate the entire lifecycle?"* — the Ralph engine reads project state, classifies intent into 40+ chain types, and builds adaptive command chains with decision nodes. Odyssey commands run self-correcting loops. A SQLite knowledge graph persists discoveries and auto-injects them into future sessions.
-
-### Multi-Agent Orchestration
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Dispatch model | Fresh subagent per task, coordinator never executes | Single agent | Channel-based supervisor-worker | 4 patterns: Delegate, Team, Wave, Swarm |
-| Concurrent agents | Yes (parallel dispatch) | No | Yes (channel spawn) | Yes (wave parallelism, team fan-out) |
-| Cross-backend | No (single host) | No (single host) | No (same backend per session) | Yes (Claude, Codex, Gemini, Qwen, OpenCode in one workflow) |
-| Agent communication | None (fresh context each) | N/A | Message channels with locks | SQLite broker + message bus + injection |
-
-Superpowers pioneered the subagent-driven development pattern — a coordinator dispatches fresh implementer agents per task, keeping context clean. Trellis built a genuine message-passing layer with channels, supervisors, and idle detection. Maestro-Flow dispatches across different LLM backends in the same workflow, coordinating through a shared broker.
-
-### Decision & Routing
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Intent routing | Manual skill selection | Manual command sequence | Fixed phases (plan → implement → verify) | AI-classified into 40+ chain types based on project state |
-| Adaptive decisions | No | No | No | Decision nodes (◆) evaluate results, insert debug/fix/retry |
-| Quality modes | Per-task + per-branch review | 3-dimension verify | Spec compliance + lint/type/test | 3 modes: full / standard / quick pipeline |
-| Self-correction | Review → fix subagent loop | Manual re-verify | Manual continue | Automatic retry loops at decision nodes |
-
-### Long-Running Work
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Session boundary | Context window | Context window | Journal-based resume | Stateful engine with checkpoints |
-| Multi-step continuity | Coordinator dispatches until plan complete | Manual `/opsx:continue` sequencing | `trellis-continue` skill | Odyssey self-correcting cycles |
-| Adaptive strategy | No | No | No | Ralph adjusts chain based on intermediate results |
-| Time scale | "A couple hours" per session | Per-conversation | Journal extends sessions | Hours-long Odyssey loops with knowledge persistence |
-
-Superpowers can sustain multi-hour sessions through coordinator-subagent dispatch. OpenSpec and Trellis rely on manual continuation. Maestro-Flow's Odyssey commands run autonomous loops — archaeology, diagnosis, fix, verification, and knowledge capture — until acceptance criteria are met, with the engine adapting strategy at each checkpoint.
-
-### Knowledge & Persistence
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Storage | None (git only) | Git-based spec archives | File-based `.trellis/` | SQLite knowledge graph + file-based workflows |
-| Cross-session learning | No | Archives as reference | Workspace journals | Self-reinforcing: discover → persist → index → auto-inject |
-| Search | No | No | No | BM25F full-text across specs, knowhow, wiki, KG nodes |
-| Spec injection | Via skill prompts | Manual loading | Python hooks at session start | Keyword-matched hook injection per agent prompt |
-| Domain knowledge | No | No | No | Semantic glossary with concept relationships |
-
-### Each Tool's Strength
-
-**Superpowers** has set the standard for AI development methodology. Its 14 skills encode battle-tested patterns — subagent-driven development, systematic debugging, TDD, verification-before-completion — that make agents dramatically more effective. With 247k stars, it has the largest community and the most proven prompt engineering patterns. If you want better agent behavior without new tooling, Superpowers is the reference.
-
-**OpenSpec** brings formal rigor to the planning layer. By enforcing a spec lifecycle (explore → propose → apply → verify → archive), it ensures AI and developer agree on *what* to build before any code is written. Its 3-dimension verification (completeness, correctness, coherence) catches misalignment early. If your bottleneck is requirements clarity, OpenSpec addresses it directly.
-
-**Trellis** solves the multi-platform problem. With configurators for 16 AI tools, you can start a feature in Claude Code and continue in Cursor with shared specs, tasks, and journals. Its channel-based multi-agent system provides real supervisor-worker orchestration. If your team uses multiple AI tools, Trellis unifies the experience.
-
-### Where Maestro-Flow Focuses
-
-- **Long-running work** — Odyssey commands run extended, self-correcting cycles that combine archaeology, diagnosis, fix, verification, and knowledge persistence until acceptance criteria are met. Sessions can span hours with the engine maintaining state, adapting strategy at decision nodes, and persisting discoveries for future sessions.
-- **Flexible command chaining** — Rather than a fixed pipeline or manual sequencing, the Ralph engine reads project state and dynamically builds command chains with quality gates. The same intent produces different chains depending on context — a new project gets brainstorm → blueprint → analyze → plan → execute → verify; a quick fix gets plan → execute → verify. Decision nodes evaluate actual results and insert debug → fix → retry loops when needed.
-- **Completeness as a platform** — A unified system covering the full lifecycle (brainstorm through milestone), with a knowledge graph that feeds learnings back automatically, a visual dashboard for project oversight, issue closed-loop for self-healing quality, and multi-backend dispatch for leveraging different LLMs' strengths in the same workflow.
+**长周期自校正** — Odyssey 系列命令运行数小时级的自主循环，每个检查点自适应调整策略，直到满足验收标准。
 
 ---
 
-## Two Pillars
-
-Maestro-Flow is built on two interconnected systems that reinforce each other:
-
-```
-                         ┌─────────────────────────────────────┐
-                         │         Maestro-Flow                │
-                         │                                     │
-          ┌──────────────┴──────────────┐  ┌──────────────────┴───────────────┐
-          │   Workflow Orchestration     │  │      Knowledge System            │
-          │                             │  │                                  │
-          │  Intent Router              │  │  MaestroGraph (SQLite)            │
-          │    └─ 40+ chain types       │  │    └─ Code + Knowledge unified   │
-          │  Ralph Decision Engine      │  │  Spec Injection (Hooks)          │
-          │    └─ 11-state FSM          │  │    └─ Auto-inject into prompts   │
-          │  Quality Pipeline           │  │  Wiki + BM25 Search              │
-          │    └─ verify → review → test│  │    └─ Backlinks + health score   │
-          │  Multi-Agent Dispatch       │  │  Learning Loop                   │
-          │    └─ Claude, Gemini, Codex │  │    └─ retro → persist → inject   │
-          │                             │  │                                  │
-          └─────────────┬───────────────┘  └──────────────────┬───────────────┘
-                        │          ▲              │            ▲
-                        │          │  knowledge   │            │
-                        │          │  injection   │            │
-                        │          └──────────────┘            │
-                        │     execution results                │
-                        └──────────────────────────────────────┘
-```
-
-**Workflows generate knowledge. Knowledge improves future workflows.** Agents learn from each session, persist discoveries as specs and knowhow, and future agents automatically receive that context through hook injection — creating a self-reinforcing cycle.
-
----
-
-## Install
+## 安装
 
 ```bash
 npm install -g maestro-flow
-maestro install
+maestro install          # 交互式选择安装组件
 ```
 
-**Prerequisites**: Node.js ≥ 18, Claude Code CLI. Optional: Codex CLI, agy (Antigravity) CLI for multi-agent workflows.
-
-`maestro install` provides an interactive component selector — choose which assets (commands, hooks, MCP, agents) to install. Use `maestro workspace link` to share knowledge (specs, knowhow, domain) across multiple projects.
+需要 Node.js ≥ 18 和 [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)。多 Agent 工作流可选装 Codex CLI、agy CLI。
 
 ---
 
-## Quick Start
+## 快速上手
 
-### The Ralph Engine
+### Ralph v2 — 自适应生命周期引擎
 
-**`/maestro-ralph`** is the primary entry point — a closed-loop lifecycle engine that reads project state, infers your position in the development lifecycle, and builds an adaptive command chain:
-
-```bash
-/maestro-ralph "implement OAuth2 authentication with refresh tokens"
-```
-
-Ralph automatically determines where you are (brainstorm → plan → execute → verify → review → test → milestone) and builds the appropriate chain. Decision nodes at key checkpoints evaluate results and dynamically insert debug → fix → retry loops when needed.
+主入口。说出目标，Ralph 自动判断开发阶段、构建命令链、在 decision 节点动态调整：
 
 ```bash
-/maestro-ralph status              # View session progress
-/maestro-ralph continue            # Resume after decision pause
-/maestro-ralph -y "build a REST API"  # Full auto — no pauses
+/maestro-ralph-v2 "实现 OAuth2 认证，支持 refresh token"
+
+# Ralph 自动构建链：analyze → plan → execute → verify → review → test
+# 遇到失败 → 自动插入 debug → fix → retry 循环
+# 遇到新项目 → 自动前置 brainstorm → blueprint
 ```
-
-### Other Entry Points
-
-| Command | When to Use |
-|---------|-------------|
-| `/maestro "..."` | Describe intent, let AI route to the optimal command chain |
-| `/maestro-quick` | Quick fixes, small features (analyze → plan → execute) |
-| `/maestro-*` | Step-by-step: brainstorm, blueprint, analyze, plan, execute, verify |
-
-### Knowledge Management
 
 ```bash
-# Search across wiki + code (BM25F ranking)
-maestro search "user authentication"
-
-# Load specific knowledge types
-maestro load --type spec --category coding
-maestro load --type knowhow --list
-
-# Explore codebase via API endpoints
-maestro explore "Find all database query patterns"
-
-# Manage domain terminology
-maestro domain add "API Gateway" "Unified entry point for all API requests"
+/maestro-ralph-v2 status      # 查看当前会话进度
+/maestro-ralph-v2 continue    # 从 decision 暂停点恢复
+/maestro-ralph-v2 -y "..."    # 全自动，无需确认
 ```
 
-### Odyssey — Long-Running Iterative Cycles
+### 核心管线
 
-Odyssey commands run extended, self-correcting loops that combine archaeology, diagnosis, fix, verification, and knowledge persistence until acceptance criteria are met:
+```
+意图输入 → Ralph 分类（40+ 链类型）
+              │
+              ▼
+brainstorm → blueprint(opt) → analyze → plan → execute → verify
+                                                           ◆ decision
+                                    review ── ◆ ── test ── ◆ ── milestone
+                                                           ◆ → 下一里程碑
+```
 
-| Command | Focus |
-|---------|-------|
-| `odyssey-debug` | Debug cycle — archaeology, diagnosis, fix, confirmation, generalization |
-| `odyssey-planex` | Requirement-driven cycle — plan, execute, strict verify, fix loop |
-| `odyssey-improve` | Codebase improvement — multi-dimensional audit, targeted fix, verify |
-| `odyssey-review-test-fix` | Deep review + fix — multi-dimensional review, targeted fix, generalization |
-| `odyssey-ui` | UI optimization — visual survey, audit, divergent exploration, fix |
+三种质量模式控制管线深度：
+
+| 模式 | 管线 | 适用场景 |
+|------|------|---------|
+| `full` | verify → business-test → review → test-gen → test | 生产环境、安全关键 |
+| `standard` | verify → review → test | 默认平衡 |
+| `quick` | verify → CLI-review | 原型、热修 |
+
+### 其他入口
+
+```bash
+/maestro "添加用户资料页"           # 意图路由，自动选链
+/maestro-quick "修复重定向 bug"     # 最短链路：plan → execute → verify
+```
+
+### Odyssey — 长周期自主循环
+
+适合大型调试、深度重构、UI 优化等需要持续迭代的场景：
+
+| 命令 | 循环模式 |
+|------|---------|
+| `/odyssey-debug` | 考古分析 → 诊断 → 修复 → 确认 → 泛化 → 知识沉淀 |
+| `/odyssey-planex` | 需求解析 → 计划 → 执行 → 严格验证 → 修复循环 |
+| `/odyssey-improve` | 多维审计 → 深度诊断 → 定向修复 → 验证 → 泛化 |
+| `/odyssey-review-test-fix` | 多维审查 → 定向修复 → 测试 → 泛化 → 知识沉淀 |
+| `/odyssey-ui` | 视觉巡检 → 多维审计 → 发散探索 → 修复 → 验证 |
+
+每个 Odyssey 命令持续运行直到验收标准达成，中间自适应调整策略，发现的知识自动持久化。
 
 ---
 
-## Workflow Orchestration
+## 文档
 
-### Adaptive Lifecycle Engine
+### 入门
 
-Ralph is an 11-state finite state machine that **decides** but never executes. It reads project state, infers lifecycle position, builds a command chain with quality gates, and hands off execution to `maestro-ralph-execute`. At each decision node (`◆`), Ralph evaluates actual results and decides: proceed, or insert a debug → fix → retry loop.
+| | 指南 | 说明 |
+|---|------|------|
+| **01** | [快速开始](guide/quick-start-guide.md) | 安装、第一个工作流、核心概念 |
+| **02** | [安装指南](guide/install-guide.md) | 组件选择、工作空间配置 |
+| **03** | [Ralph 引擎](guide/maestro-ralph-guide.md) | 自适应决策、quality 模式、session 管理 |
+| **04** | [命令大全](guide/command-usage-guide.md) | 64 个命令的用法、流程图、管线衔接 |
 
-```
-brainstorm → blueprint(opt) → init → analyze(macro) → roadmap(opt) → analyze(micro) → plan → execute → verify
-                                                                                                 ◆ decision
-                                              review ─── ◆ ─── test ─── ◆ ─── milestone-audit → milestone-complete
-                                                                                                 ◆ → next milestone
-```
+### 日常使用
 
-**Three quality modes** control thoroughness:
+| 指南 | 说明 |
+|------|------|
+| [CLI 命令参考](guide/cli-commands-guide.md) | 35+ 终端命令速查 |
+| [知识管理](guide/knowledge-management-guide.md) | 知识图谱、Spec、Knowhow、Wiki 全景 |
+| [Spec 系统](guide/spec-system-guide.md) | 项目规则的编写、加载与自动注入 |
+| [质量管线](guide/quality-pipeline-guide.md) | verify → review → test 三级管线 |
+| [Hook 机制](guide/hooks-guide.md) | 17 个 Hook 的触发时机与上下文预算控制 |
 
-| Mode | Pipeline | Use Case |
-|------|----------|----------|
-| `full` | verify → business-test → review → test-gen → test | Production, security-critical |
-| `standard` | verify → review → test | Default, balanced |
-| `quick` | verify → CLI-review | Prototyping, quick fixes |
+<details>
+<summary><b>进阶 &amp; 设计文档</b>（点击展开）</summary>
+<br/>
 
-### Intent-Driven Routing
+| 指南 | 说明 |
+|------|------|
+| [工作流结构](guide/workflow-structure-guide.md) | 四层命令拓扑、六条规范路径 |
+| [多 Agent 协调](guide/maestro-coordinator-guide.md) | Delegate / Team / Wave / Swarm 详解 |
+| [Delegate 异步执行](guide/delegate-async-guide.md) | 跨 CLI 委派、消息注入、链式调用 |
+| [Overlay 扩展](guide/overlay-guide.md) | 不改源码给命令加行为 |
+| [Worktree 并行开发](guide/worktree-guide.md) | 里程碑级分支隔离 |
+| [跨项目共享](guide/workspace-guide.md) | 多项目 link/unlink 知识库 |
+| [MCP 工具](guide/mcp-tools-guide.md) | 9 个 MCP 端点工具参考 |
+| [团队协作](guide/team-lite-guide.md) | 2–8 人 Collab 模式 |
+| [搜索系统](guide/search-system-guide.md) | BM25F 全文搜索与 KG 集成 |
+| [学习工具](guide/learn-tools-guide.md) | 复盘、跟读、拆解、探究四件套 |
+| [MaestroGraph 设计](guide/plan-maestrograph.md) | 统一知识图谱引擎架构 |
+| [领域知识设计](guide/plan-domain-knowledge.md) | 语义词汇表与概念关系网络 |
 
-You don't write pipeline YAML. You describe intent in natural language, and Maestro classifies it into one of **40+ chain types**, each a pre-composed sequence of commands. The same intent produces different chains depending on project state:
-
-```bash
-/maestro "add user profile page"
-# → New project:     brainstorm → blueprint → analyze → plan → execute → verify
-# → Existing project: analyze → plan → execute → verify
-# → Quick fix:       plan → execute → verify
-```
-
-### Layered Command Topology
-
-Commands are organized in four layers:
-
-| Layer | Purpose | Commands |
-|-------|---------|----------|
-| **Origin** | Diverge ideas, converge direction | brainstorm, blueprint |
-| **Understanding** | Explore scope (macro) + deep-dive (micro) | analyze (dual-mode) |
-| **Orchestration** | Structure into milestones and phases | roadmap |
-| **Execution** | Plan, implement, verify | plan, execute, verify, review, test |
-
-Six canonical paths (A–F) cover everything from full greenfield projects to single-line fixes.
-
-### Multi-Agent Dispatch
-
-Maestro coordinates **Claude Code, Codex, Gemini, Qwen, and OpenCode** through four composable orchestration patterns:
-
-| Pattern | How It Works |
-|---------|-------------|
-| **Delegate** | Dispatch to any CLI tool via `maestro delegate` with SQLite-backed job broker, async execution, and message injection for follow-up chaining |
-| **Team** | Coordinator-worker architecture — coordinators generate role-specs, spawn `team-worker` agents in parallel, supervised by a resident quality observer |
-| **Wave** | Topological sort of tasks into dependency waves; independent tasks run concurrently within each wave |
-| **Swarm** | ACO-driven multi-agent exploration for complex problem spaces with pheromone-guided convergence |
-
-These patterns compose: a team coordinator can delegate subtasks to different LLM backends, wave execution parallelizes independent work, and the dashboard provides a real-time supervisory control loop — all sharing the broker and message bus as coordination primitives.
+</details>
 
 ---
 
-## Knowledge System
+## 项目规模
 
-### Knowledge Graph (MaestroGraph)
+333 个 TypeScript 源文件 / ~80k 行代码 / 64 斜杠命令 / 45 技能包 / 23 Agent 定义 / 35+ CLI 命令 / 92 模板
 
-**MaestroGraph** is the unified code index engine that replaces the former CodeGraph dependency. Built on `web-tree-sitter` for AST-level extraction, it stores both **code structure** (functions, classes, call chains) and **project knowledge** (specs, knowhow, domain terms, issues) in a single SQLite-backed graph with dual FTS5 indexes.
+**技术栈**&nbsp;&nbsp;Commander.js · MCP SDK · better-sqlite3 · web-tree-sitter · React 19 · Zustand · Tailwind CSS 4 · Hono · Vite 6
 
-```bash
-maestro kg search <symbol>        # Find nodes
-maestro kg context <node>         # Get surrounding context
-maestro kg callers <function>     # Trace call chains
-maestro kg callees <function>     # Trace dependencies
-```
-
-### Spec Injection
-
-Project rules (coding standards, architecture constraints, quality criteria) are stored as `<spec-entry>` blocks with keyword tags. **Hooks automatically inject relevant specs into every agent prompt** based on keyword matching — agents receive project-specific rules without explicit loading.
-
-### Self-Reinforcing Learning Loop
-
-```
-Agent executes task
-    → Discovers pattern/pitfall/decision
-    → Persists as spec entry or knowhow doc
-    → Hook system indexes new knowledge
-    → Future agents auto-receive via prompt injection
-    → Better execution → more discoveries → ...
-```
-
-Four learning tools feed this cycle: `learn-retro` (retrospective), `learn-follow` (pattern study), `learn-decompose` (architecture breakdown), `learn-investigate` (deep dive).
-
-### Domain Knowledge
-
-A semantic glossary layer that defines **what things mean** in your project. Domain terms (`maestro domain`) standardize terminology, map concept relationships, and serve as a MaestroGraph knowledge source — bridging the gap between code-level symbols and business-level concepts.
-
-### Wiki & Search
-
-WikiIndexer walks the `.workflow/` directory, parses frontmatter, builds backlink graphs, and creates a **BM25 inverted index** for full-text search across all project knowledge — specs, knowhow, issues, and KG nodes as virtual entries.
-
----
-
-## Issue Closed-Loop
-
-Issues aren't just tickets. They're a self-healing pipeline:
-
-```
-discover → analyze → plan → execute → close
-    ▲                                    │
-    └────── quality commands auto-create ─┘
-```
-
-Quality commands (review, test, verify) automatically create issues for problems they find. Issue fixes flow back into the phase pipeline.
-
----
-
-## Visual Dashboard
-
-Real-time dashboard at `http://127.0.0.1:3001` — Kanban board, Gantt timeline, sortable table, and command center. Pick an agent on any issue card and dispatch.
-
-```bash
-maestro serve                  # Launch web dashboard
-maestro view                   # Terminal TUI alternative
-maestro command-help           # Interactive command reference (alias: ch)
-```
-
-Built with React 19, Zustand, Tailwind CSS 4, Framer Motion, Hono, WebSocket.
-
----
-
-## At a Glance
-
-| Metric | Count |
-|--------|-------|
-| Source files (TypeScript) | 333 |
-| Lines of code | ~80,700 |
-| Slash commands | 64 |
-| Workflow definitions | 115 |
-| Skill packages | 45 |
-| Agent definitions | 23 |
-| CLI commands | 35+ |
-| Templates | 92 |
-| Guides (bilingual) | 76 |
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| CLI | Commander.js, TypeScript, ESM |
-| MCP | @modelcontextprotocol/sdk (stdio) |
-| Knowledge Graph | better-sqlite3, Drizzle ORM, web-tree-sitter |
-| Frontend | React 19, Zustand, Tailwind CSS 4, Framer Motion, Radix UI |
-| Backend | Hono, WebSocket, SSE |
-| Agents | Claude Agent SDK, Codex CLI, agy (Antigravity) CLI, OpenCode |
-| Build | Vite 6, TypeScript 5.7, Vitest |
-
-### Architecture
+<details>
+<summary><b>目录结构</b></summary>
 
 ```
 maestro/
-├── bin/                     # CLI entry points
-├── src/                     # Core CLI (Commander.js + MCP SDK)
-│   ├── commands/            # 35+ CLI commands
-│   ├── mcp/                 # MCP server (stdio transport)
-│   ├── graph/               # Knowledge Graph (SQLite + tree-sitter)
-│   └── core/                # Tool registry, extension loader
-├── dashboard/               # Real-time web dashboard
-│   └── src/
-│       ├── client/          # React 19 + Zustand + Tailwind CSS 4
-│       ├── server/          # Hono API + WebSocket + SSE
-│       └── shared/          # Shared types
+├── src/                     # 核心 CLI（Commander.js + MCP SDK）
+│   ├── commands/            # 35+ CLI 命令
+│   ├── mcp/                 # MCP 服务器（stdio）
+│   ├── graph/               # 知识图谱（SQLite + tree-sitter）
+│   └── core/                # 工具注册、扩展加载
+├── dashboard/               # Web 仪表盘（React 19）
 ├── .claude/
-│   ├── commands/            # 64 slash commands (.md)
-│   ├── agents/              # 23 agent definitions (.md)
-│   └── skills/              # 45 skill packages
-├── workflows/               # 115 workflow definitions (.md)
-├── templates/               # 92 JSON templates
-└── extensions/              # Plugin system
+│   ├── commands/            # 64 斜杠命令
+│   ├── agents/              # 23 Agent 定义
+│   └── skills/              # 45 技能包
+├── workflows/               # 115 工作流定义
+└── templates/               # 92 JSON 模板
 ```
 
----
-
-## Documentation
-
-**Getting Started**
-- **[Quick Start Guide](guide/quick-start-guide.en.md)** — Install, first workflow, key concepts
-- **[Install Guide](guide/install-guide.md)** — Step-by-step installation, component selection, workspace setup
-- **[Maestro Ralph Guide](guide/maestro-ralph-guide.en.md)** — Adaptive lifecycle engine, decision nodes, quality modes
-
-**Workflow**
-- **[Command Usage Guide](guide/command-usage-guide.en.md)** — All 64 commands with workflow diagrams and pipeline chaining
-- **[CLI Commands Reference](guide/cli-commands-guide.en.md)** — All 35+ terminal commands
-- **[Workflow Structure Guide](guide/workflow-structure-guide.en.md)** — Command topology, chain composition
-- **[Quality Pipeline Guide](guide/quality-pipeline-guide.en.md)** — Verify, review, test pipeline
-- **[Maestro Coordinator Guide](guide/maestro-coordinator-guide.en.md)** — Multi-agent coordination patterns
-
-**Knowledge**
-- **[Knowledge Management Guide](guide/knowledge-management-guide.en.md)** — KG, specs, knowhow, wiki
-- **[Search System Guide](guide/search-system-guide.md)** — Unified BM25F search, MaestroGraph integration, type filtering
-- **[MaestroGraph Plan](guide/plan-maestrograph.md)** — Unified KG engine design, CodeGraph replacement, tree-sitter integration
-- **[Domain Knowledge Plan](guide/plan-domain-knowledge.md)** — Semantic glossary, term relationships, concept layer
-- **[Spec System Guide](guide/spec-system-guide.en.md)** — Spec entries, keyword loading, validation hooks
-- **[Hooks Guide](guide/hooks-guide.en.md)** — 17 hooks, spec injection, context budget
-- **[Learning Tools Guide](guide/learn-tools-guide.en.md)** — Retro, follow, decompose, investigate
-
-**Advanced**
-- **[Delegate Async Guide](guide/delegate-async-guide.en.md)** — Multi-CLI delegation, message injection, chaining
-- **[Overlay Guide](guide/overlay-guide.en.md)** — Non-invasive command extensions
-- **[Worktree Guide](guide/worktree-guide.en.md)** — Milestone-level parallel development
-- **[Workspace Guide](guide/workspace-guide.md)** — Cross-workspace knowledge sharing, link/unlink
-- **[MCP Tools Reference](guide/mcp-tools-guide.en.md)** — All 9 MCP endpoint tools
-- **[Collab Guide](guide/team-lite-guide.en.md)** — 2-8 person team collaboration
+</details>
 
 ---
 
-## Acknowledgments
+<details>
+<summary><b>与同类工具对比</b></summary>
+<br/>
 
-- **[GET SHIT DONE](https://github.com/gsd-build/get-shit-done)** by TACHES — The spec-driven development model and context engineering philosophy.
-- **[Claude-Code-Workflow](https://github.com/catlog22/Claude-Code-Workflow)** — The predecessor that pioneered multi-CLI orchestration and skill-based workflow routing.
-- **[Impeccable](https://github.com/pbakaus/impeccable)** by [@pbakaus](https://github.com/pbakaus) — UI design skill integrated as `maestro-impeccable`. Licensed under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+| | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Trellis](https://github.com/mindfold-ai/trellis) | **Maestro-Flow** |
+|---|---|---|---|---|
+| **定位** | Agent 技能框架 | 规格驱动开发 | 多平台 Agent 治具 | 意图驱动编排 |
+| **架构** | 纯 `.md`，无运行时 | CLI + Git | CLI + `.trellis/` | CLI + MCP + SQLite |
+| **路由** | 手动选技能 | 手动命令序列 | 固定阶段 | AI 分类 40+ 链 |
+| **多 Agent** | 子 Agent 调度 | 单 Agent | Channel 模式 | 4 模式 × 5 后端 |
+| **知识** | 仅 Git | Git 归档 | 文件日志 | SQLite KG + 自动注入 |
+| **长时工作** | 上下文窗口 | 手动 continue | 日志恢复 | 有状态 Odyssey 循环 |
+| **自校正** | review-fix 循环 | 手动重验 | 手动 | Decision 节点自动重试 |
 
-## Contributors
+**各有所长**：Superpowers 的 prompt 工程方法论最成熟；OpenSpec 的需求规格化最严谨；Trellis 的多平台统一做得最好；Maestro-Flow 聚焦全生命周期编排、跨后端调度和知识自增强。
 
-<a href="https://github.com/catlog22">
-  <img src="https://github.com/catlog22.png" width="60px" alt="catlog22" style="border-radius:50%"/>
-</a>
+</details>
 
-**[@catlog22](https://github.com/catlog22)** — Creator & Maintainer
+---
 
-## Community
+## 致谢
 
-Join the WeChat group for discussion and feedback:
+- **[GET SHIT DONE](https://github.com/gsd-build/get-shit-done)** — Spec 驱动开发与上下文工程理念
+- **[Claude-Code-Workflow](https://github.com/catlog22/Claude-Code-Workflow)** — 前身项目，开创多 CLI 编排
+- **[Impeccable](https://github.com/pbakaus/impeccable)** — UI 设计技能（[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)）
 
-<img src="assets/wechat-group-qr.png" width="200" alt="WeChat Group: Claude Code Workflow交流群 2" />
+---
 
-## Links
+<div align="center">
 
-- [Linux DO：学AI，上L站！](https://linux.do/)
+**[@catlog22](https://github.com/catlog22)** — 创建者 & 维护者
 
-## License
+加入微信群交流：
 
-MIT
+<img src="assets/wechat-group-qr.png" width="180" alt="微信群" />
+
+<br/><br/>
+
+[Linux DO：学AI，上L站！](https://linux.do/)
+
+<br/>
+
+MIT License
+
+</div>

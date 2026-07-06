@@ -371,3 +371,80 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 | Delegate 异步委托 | [Delegate Async Guide](./delegate-async-guide.md) |
 | Overlay 命令扩展 | [Overlay Guide](./overlay-guide.md) |
 | Hooks 自动化 | [Hooks Guide](./hooks-guide.md) |
+
+---
+
+## 附录：辅助命令
+
+工作流中用于维护、发布和规范管理的辅助命令。
+
+### maestro-amend — 增量修改
+
+信号驱动的 Overlay 生成器。从多种来源收集工作流缺陷信号，诊断哪些命令需要补充修改，批量生成针对性的 Overlay 补丁。所有修改通过 Overlay 系统（`~/.maestro/overlays/*.json`）完成——不侵入原始命令文件，幂等且重装后保留。
+
+与 `/maestro-overlay`（单次显式创建）不同，`/maestro-amend` 通过分析工作流产物自动**发现**需要修复的内容。
+
+#### 信号来源
+
+| 标志 | 来源 | 采集内容 |
+|------|------|---------|
+| `--from-verify <dir>` | verification.json | 验证失败暴露的工作流缺口 |
+| `--from-review <dir>` | review.json | 代码审查发现的流程缺陷 |
+| `--from-session <id>` | 会话产物 | 执行期间遇到的问题 |
+| `--from-issues ISS-xxx,...` | issues.jsonl | 追溯到命令缺陷的 Issue |
+| `--scan` | 自动扫描 .workflow/ | 发现所有工作流相关信号 |
+| _(位置参数文本)_ | 用户描述 | 直接观察和说明 |
+
+```bash
+/maestro-amend --from-verify .workflow/phases/1    # 从验证结果中发现命令缺口
+/maestro-amend --scan                               # 自动扫描所有信号
+/maestro-amend "maestro-execute 缺少 CLI 编译验证步骤"  # 直接描述问题
+```
+
+### maestro-update — 更新检查
+
+检测当前 `.workflow/` 的 schema 版本，展示可用迁移计划，交互式执行版本升级。支持增量链式升级（如 1.0 → 2.0 → 3.0）。
+
+```bash
+/maestro-update --dry-run   # 检查是否有待执行的迁移
+/maestro-update             # 交互式逐步升级
+/maestro-update --force     # 一键全量升级
+```
+
+### spec-remove — 规范移除
+
+从 specs 文件中移除指定的 `<spec-entry>` 条目。Entry ID 格式：`spec-{file-stem}-{NNN}`。
+
+```bash
+maestro wiki list --type spec --json    # 列出所有 spec 条目
+/spec-remove spec-learnings-003          # 移除指定条目
+```
+
+### manage-knowledge-audit — 知识审计
+
+审计 spec / knowhow / artifact 三存储，识别矛盾、过期、孤立和元数据质量问题。
+
+| 标志 | 说明 |
+|------|------|
+| `--scope <spec\|knowhow\|artifact\|all>` | 审计范围（必需） |
+| `--level P0\|P1\|P2` | 严重级别过滤 |
+| `--dry-run` | 预览不修改 |
+| `--report` | 仅生成审计报告 |
+
+```bash
+/manage-knowledge-audit --scope all              # 全量审计
+/manage-knowledge-audit --scope spec --level P0  # 仅 P0 级 spec 问题
+```
+
+### maestro-milestone-release — 里程碑发布
+
+将已完成里程碑打包发布。执行 semver 版本提升、生成 Changelog、创建 git tag。
+
+```bash
+/maestro-milestone-release                  # 标准发布（minor 递增）
+/maestro-milestone-release --bump patch     # 补丁版本
+/maestro-milestone-release 2.0.0            # 显式版本号
+/maestro-milestone-release --dry-run        # 仅预览
+```
+
+里程碑生命周期：`/maestro-milestone-complete → /maestro-milestone-audit → /maestro-milestone-release`
