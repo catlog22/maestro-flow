@@ -341,6 +341,30 @@ maestro/
 
 ---
 
+## Comparison with Other Tools
+
+The AI coding workflow space is growing fast. Here's how Maestro-Flow relates to other open-source tools — each takes a different approach to a shared goal:
+
+| | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Trellis](https://github.com/mindfold-ai/trellis) | **Maestro-Flow** |
+|---|---|---|---|---|
+| **Focus** | Agent methodology & composable skills | Spec-driven development lifecycle | Cross-platform project layer | Full lifecycle orchestration + knowledge system |
+| **Architecture** | Pure `.md` skill files, no runtime | Lightweight CLI + spec scaffolding | Project-layer scaffolding (`.trellis/`) | Runtime engine with SQLite-backed knowledge graph |
+| **Multi-agent** | Single agent with skill selection | Single agent with spec guidance | Platform-portable context sharing | Multi-backend dispatch (Claude, Codex, Gemini, Qwen, OpenCode) with 4 orchestration patterns |
+| **Decision engine** | Manual skill composition | Fluid spec phases | Workflow gates with auto-verification | Ralph — 11-state FSM with adaptive decision nodes and auto-retry loops |
+| **Long-running sessions** | Per-conversation | Per-conversation | Journal-based continuity | Odyssey iterative cycles — self-correcting loops until acceptance criteria met |
+| **Knowledge persistence** | — | Spec archive | Workspace journals | Self-reinforcing knowledge graph — specs, knowhow, wiki, domain terms with BM25 search and hook-based auto-injection |
+| **Command chaining** | — | Explore → Propose → Apply | Scoped task gates | 40+ intent-classified chain types with dynamic routing based on project state |
+
+**Each tool has clear strengths.** Superpowers excels at shaping *how* agents think — its methodology-first approach and massive community have set the standard for prompt engineering. OpenSpec brings rigor to the spec layer, ensuring AI and developer agree on *what* to build before any code is written. Trellis solves the multi-platform puzzle — start a feature in one AI tool, continue in another with shared context.
+
+**Maestro-Flow focuses on three areas:**
+
+- **Long-running work** — Odyssey commands run extended, self-correcting cycles that combine archaeology, diagnosis, fix, verification, and knowledge persistence until acceptance criteria are met. Sessions can span hours with the engine maintaining state, adapting strategy, and persisting discoveries.
+- **Flexible command chaining** — Rather than a fixed pipeline, the Ralph engine reads project state and dynamically builds command chains with quality gates. Decision nodes evaluate actual results and insert debug → fix → retry loops when needed. 40+ chain types cover everything from full greenfield projects to single-line fixes.
+- **Completeness** — A unified platform covering brainstorm → blueprint → analyze → plan → execute → verify → review → test → milestone, with a knowledge system that feeds learnings back into future workflows automatically.
+
+---
+
 ## Acknowledgments
 
 - **[GET SHIT DONE](https://github.com/gsd-build/get-shit-done)** by TACHES — The spec-driven development model and context engineering philosophy.
@@ -360,12 +384,6 @@ maestro/
 Join the WeChat group for discussion and feedback:
 
 <img src="assets/wechat-group-qr.png" width="200" alt="WeChat Group: Claude Code Workflow交流群 2" />
-
-## Buy Me a Coffee
-
-If this project helps you, consider buying me a coffee:
-
-<img src="assets/wechat-reward-qr.png" width="200" alt="WeChat Reward QR" />
 
 ## Links
 

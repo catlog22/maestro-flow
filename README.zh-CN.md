@@ -323,6 +323,30 @@ maestro/
 
 ---
 
+## 与其他工具的对比
+
+AI 编程工作流领域正在快速发展。以下是 Maestro-Flow 与其他开源工具的定位对比 — 每个工具对同一目标采取了不同的路径：
+
+| | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Trellis](https://github.com/mindfold-ai/trellis) | **Maestro-Flow** |
+|---|---|---|---|---|
+| **聚焦方向** | Agent 方法论与可组合技能 | 规格驱动开发生命周期 | 跨平台项目层 | 全生命周期编排 + 知识系统 |
+| **架构** | 纯 `.md` 技能文件，无运行时 | 轻量 CLI + 规格脚手架 | 项目层脚手架 (`.trellis/`) | 运行时引擎，SQLite 知识图谱 |
+| **多智能体** | 单 Agent 技能选择 | 单 Agent 规格引导 | 跨平台上下文共享 | 多后端调度（Claude、Codex、Gemini、Qwen、OpenCode），4 种编排模式 |
+| **决策引擎** | 手动技能组合 | 流动式规格阶段 | 带自动验证的工作流门 | Ralph — 11 状态 FSM，自适应 decision 节点，自动重试循环 |
+| **长时会话** | 单次对话 | 单次对话 | 基于日志的连续性 | Odyssey 迭代循环 — 自校正循环直到验收标准达成 |
+| **知识持久化** | — | 规格归档 | 工作空间日志 | 自增强知识图谱 — spec、knowhow、wiki、领域术语，BM25 搜索 + Hook 自动注入 |
+| **命令衔接** | — | Explore → Propose → Apply | 限定范围的任务门 | 40+ 意图分类链类型，根据项目状态动态路由 |
+
+**每个工具都有鲜明的优势。** Superpowers 擅长塑造 Agent *如何思考* — 其方法论优先的理念和庞大社区已为 prompt 工程树立了标杆。OpenSpec 为规格层带来了严谨性，确保 AI 与开发者在写代码前就 *做什么* 达成一致。Trellis 解决了多平台难题 — 在一个 AI 工具中开始功能开发，在另一个中无缝继续。
+
+**Maestro-Flow 聚焦三个方向：**
+
+- **长时工作** — Odyssey 命令运行扩展的自校正循环，组合考古式分析、诊断、修复、验证和知识持久化，直到验收标准达成。会话可以持续数小时，引擎持续维护状态、调整策略、持久化发现。
+- **命令灵活衔接** — 不是固定管线，Ralph 引擎读取项目状态，动态构建带质量门的命令链。Decision 节点评估实际结果，在需要时插入 debug → fix → retry 循环。40+ 种链类型覆盖从全新项目到单行修复的所有场景。
+- **完善度** — 统一平台覆盖 brainstorm → blueprint → analyze → plan → execute → verify → review → test → milestone，知识系统将学习成果自动反馈给未来的工作流。
+
+---
+
 ## 致谢
 
 - **[GET SHIT DONE](https://github.com/gsd-build/get-shit-done)** by TACHES — 规格驱动开发模型和上下文工程理念。
@@ -342,12 +366,6 @@ maestro/
 欢迎加入微信群交流反馈：
 
 <img src="assets/wechat-group-qr.png" width="200" alt="微信群: Claude Code Workflow交流群 2" />
-
-## 打赏
-
-如果这个项目对你有帮助，欢迎请作者喝杯咖啡：
-
-<img src="assets/wechat-reward-qr.png" width="200" alt="微信赞赏码" />
 
 ## 友情链接
 
