@@ -16,6 +16,8 @@ import {
   readFileSync,
   writeFileSync,
   renameSync,
+  unlinkSync,
+  rmSync,
 } from 'node:fs';
 import { paths } from '../config/paths.js';
 import {
@@ -26,7 +28,7 @@ import {
   type Manifest,
 } from '../core/manifest.js';
 import { applyOverlays, ensureOverlayDir, deleteOverlayManifest } from '../core/overlay/applier.js';
-import { injectDocFile, type MigrateResult } from '../core/tag-injector.js';
+import { injectDocFile, hasAnyMarkers, removeAllSections, type MigrateResult } from '../core/tag-injector.js';
 import { COMPONENT_DEFS, type ComponentDef } from '../core/component-defs.js';
 import {
   HOOK_LEVELS,
@@ -939,6 +941,226 @@ function legacyCleanup(manifest: Manifest, result: UninstallResult): void {
   if (removeMcpServer(manifest.scope, manifest.targetPath)) {
     result.mcpRemoved.claude = true;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Fallback scan & cleanup — when no manifests exist but files remain
+// ---------------------------------------------------------------------------
+
+/** Files to preserve during fallback cleanup. */
+const FALLBACK_PRESERVE = new Set(['settings.json', 'settings.local.json']);
+
+/** Content-managed doc files: remove maestro sections, don't delete entirely. */
+const FALLBACK_CONTENT_MANAGED = new Set(['CLAUDE.md', 'AGENTS.md', 'GEMINI.md']);
+
+export interface FallbackScanResult {
+  /** Unique target directories that contain files. */
+  directories: { path: string; fileCount: number }[];
+  hooksFound: boolean;
+  statuslineFound: boolean;
+  claudeMcpFound: boolean;
+  codexMcpFound: boolean;
+  totalFiles: number;
+}
+
+/**
+ * Scan known maestro target directories for orphaned files when no manifests
+ * exist. Uses COMPONENT_DEFS to derive the exact set of directories that
+ * maestro install would populate.
+ */
+export function scanFallbackTargets(
+  scope: 'global' | 'project',
+  projectPath: string,
+): FallbackScanResult {
+  const result: FallbackScanResult = {
+    directories: [],
+    hooksFound: false,
+    statuslineFound: false,
+    claudeMcpFound: false,
+    codexMcpFound: false,
+    totalFiles: 0,
+  };
+
+  // Collect unique target directories from COMPONENT_DEFS
+  const seen = new Set<string>();
+  for (const def of COMPONENT_DEFS) {
+    const dir = def.target(scope, projectPath);
+    const norm = dir.toLowerCase();
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    if (!existsSync(dir)) continue;
+    const st = statSync(dir);
+    if (st.isFile()) {
+      // inject targets point to a file (e.g. CLAUDE.md)
+      result.directories.push({ path: dir, fileCount: 1 });
+      result.totalFiles += 1;
+    } else {
+      const count = countFiles(dir);
+      if (count > 0) {
+        result.directories.push({ path: dir, fileCount: count });
+        result.totalFiles += count;
+      }
+    }
+  }
+
+  // Check Claude hooks + statusline
+  const settingsPath = scope === 'global'
+    ? getClaudeSettingsPath()
+    : join(projectPath, '.claude', 'settings.json');
+  if (existsSync(settingsPath)) {
+    try {
+      const content = readFileSync(settingsPath, 'utf-8');
+      result.hooksFound = content.includes('maestro') && content.includes('hooks');
+      result.statuslineFound = content.includes('statusLine') && content.includes('maestro');
+    } catch { /* skip */ }
+  }
+
+  // Check Claude MCP (parse JSON for exact key match)
+  const mcpPath = getClaudeMcpConfigPath(scope, projectPath);
+  if (existsSync(mcpPath)) {
+    try {
+      const data = JSON.parse(readFileSync(mcpPath, 'utf-8')) as Record<string, unknown>;
+      const servers = data.mcpServers as Record<string, unknown> | undefined;
+      result.claudeMcpFound = !!servers && MAESTRO_MCP_SERVER_NAME in servers;
+    } catch { /* skip */ }
+  }
+
+  // Check Codex MCP (match TOML section header exactly, not substring)
+  const codexConfigPath = scope === 'project'
+    ? join(projectPath, '.codex', 'config.toml')
+    : join(homedir(), '.codex', 'config.toml');
+  if (existsSync(codexConfigPath)) {
+    try {
+      const content = readFileSync(codexConfigPath, 'utf-8');
+      result.codexMcpFound = content.includes(`[mcp_servers.${MAESTRO_MCP_SERVER_NAME}]`);
+    } catch { /* skip */ }
+  }
+
+  return result;
+}
+
+/**
+ * Recursively remove all files in a directory, respecting PRESERVE and
+ * CONTENT_MANAGED rules. Returns count of files removed.
+ */
+function cleanDirectory(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  const st = statSync(dir);
+
+  // Single file (e.g. inject target like CLAUDE.md)
+  if (st.isFile()) {
+    const name = basename(dir);
+    if (FALLBACK_PRESERVE.has(name)) return 0;
+    if (FALLBACK_CONTENT_MANAGED.has(name)) {
+      return cleanContentManagedFile(dir) ? 1 : 0;
+    }
+    try { unlinkSync(dir); return 1; } catch { return 0; }
+  }
+
+  let removed = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (FALLBACK_PRESERVE.has(entry.name)) continue;
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      removed += cleanDirectory(fullPath);
+      // Remove empty directory after cleaning
+      try {
+        if (existsSync(fullPath) && readdirSync(fullPath).length === 0) {
+          rmSync(fullPath, { recursive: true });
+        }
+      } catch { /* skip */ }
+    } else {
+      if (FALLBACK_CONTENT_MANAGED.has(entry.name)) {
+        if (cleanContentManagedFile(fullPath)) removed++;
+      } else {
+        try { unlinkSync(fullPath); removed++; } catch { /* skip */ }
+      }
+    }
+  }
+  return removed;
+}
+
+function cleanContentManagedFile(filePath: string): boolean {
+  if (!existsSync(filePath)) return false;
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    if (!hasAnyMarkers(content)) {
+      unlinkSync(filePath);
+      return true;
+    }
+    const cleaned = removeAllSections(content);
+    if (!cleaned || cleaned.trim() === '') {
+      unlinkSync(filePath);
+      return true;
+    }
+    writeFileSync(filePath, cleaned, 'utf-8');
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * Perform a manifest-less cleanup of all known maestro target directories,
+ * hooks, MCP, and statusline. Used as fallback when manifests are lost.
+ */
+export function performFallbackCleanup(
+  scope: 'global' | 'project',
+  projectPath: string,
+): UninstallResult {
+  const result: UninstallResult = {
+    filesRemoved: 0,
+    filesSkipped: 0,
+    claudeHooksRemoved: 0,
+    codexHooksRemoved: 0,
+    agyHooksRemoved: 0,
+    statuslineRemoved: false,
+    mcpRemoved: { claude: false, codex: false, extras: [] },
+  };
+
+  // --- Files: clean all component target directories ---
+  const seen = new Set<string>();
+  for (const def of COMPONENT_DEFS) {
+    const dir = def.target(scope, projectPath);
+    const norm = dir.toLowerCase();
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    result.filesRemoved += cleanDirectory(dir);
+  }
+
+  // --- Overlays ---
+  const targetBase = scope === 'global' ? homedir() : projectPath;
+  try { deleteOverlayManifest(scope, targetBase); } catch { /* skip */ }
+
+  // --- Hooks: broad sweep (no whitelist — strip everything with "maestro") ---
+  const settingsPath = scope === 'global'
+    ? getClaudeSettingsPath()
+    : join(projectPath, '.claude', 'settings.json');
+  if (existsSync(settingsPath)) {
+    if (removeClaudeStatusline(settingsPath)) result.statuslineRemoved = true;
+    try {
+      const settings = loadClaudeSettings(settingsPath);
+      const before = JSON.stringify(settings.hooks ?? {});
+      removeMaestroHooks(settings);
+      const after = JSON.stringify(settings.hooks ?? {});
+      if (before !== after) result.claudeHooksRemoved = 1;
+      writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    } catch { /* skip */ }
+  }
+
+  // --- MCP ---
+  if (removeMcpServer(scope, projectPath)) result.mcpRemoved.claude = true;
+  if (removeCodexMcpServer(scope, projectPath)) result.mcpRemoved.codex = true;
+
+  // --- Extra MCP (scan all known targets) ---
+  for (const spec of EXTRA_MCP_TARGETS) {
+    if (removeExtraMcpServer(spec.id, scope, projectPath)) {
+      result.mcpRemoved.extras.push(spec.id);
+    }
+  }
+
+  // --- Codex skill dedupe config ---
+  removeCodexSkillDedupeConfig(scope, projectPath);
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

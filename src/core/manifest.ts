@@ -290,9 +290,10 @@ function cleanInjectedDoc(filePath: string): boolean {
 export function cleanManifestFiles(
   manifest: Manifest,
   opts?: { skipContentManaged?: boolean },
-): { removed: number; skipped: number } {
+): { removed: number; skipped: number; errors: number } {
   let removed = 0;
   let skipped = 0;
+  let errors = 0;
 
   // Remove files first (deepest paths first)
   const files = manifest.entries
@@ -308,7 +309,10 @@ export function cleanManifestFiles(
       if (opts?.skipContentManaged) { skipped++; continue; }
       try {
         if (cleanInjectedDoc(entry.path)) removed++;
-      } catch { /* skip */ }
+      } catch (err) {
+        errors++;
+        console.error(`  [warn] Failed to clean ${entry.path}: ${err instanceof Error ? err.message : err}`);
+      }
       continue;
     }
 
@@ -317,7 +321,10 @@ export function cleanManifestFiles(
         unlinkSync(entry.path);
         removed++;
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      errors++;
+      console.error(`  [warn] Failed to remove ${entry.path}: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   // Remove empty directories (deepest first)
@@ -334,8 +341,11 @@ export function cleanManifestFiles(
           removed++;
         }
       }
-    } catch { /* skip */ }
+    } catch (err) {
+      errors++;
+      console.error(`  [warn] Failed to remove dir ${entry.path}: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
-  return { removed, skipped };
+  return { removed, skipped, errors };
 }

@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { paths } from '../../config/paths.js';
 import { C } from '../shared/index.js';
 import {
@@ -22,10 +22,12 @@ import {
 import {
   createManifest,
   addFile,
+  addDir,
   saveManifest,
   findManifest,
   recordClaudeHooks,
   recordClaudeMcp,
+  type Manifest,
 } from '../../core/manifest.js';
 import { installHooksByLevel, type HookLevel } from '../../commands/hooks.js';
 import { type InstallConfig, type InstallResult } from './types.js';
@@ -98,13 +100,14 @@ export function ExecutionView({
         // 4. Ensure home directory exists
         paths.ensure(paths.home);
 
-        // 5. Create manifest
+        // 5. Create manifest (save early so interrupted installs are trackable)
         if (cancelled) return;
         setStatus('Creating manifest...');
         const manifest = createManifest(config.mode, targetPath, {
           hookLevel: config.hookLevel,
           selectedComponentIds: config.selectedIds,
         });
+        saveManifest(manifest);
         const totalStats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
         const migrationWarnings: string[] = [];
 
@@ -121,6 +124,7 @@ export function ExecutionView({
           if (comp.def.build) {
             const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
             totalStats.files += result.files;
+            trackBuildOutput(comp.targetDir, manifest);
           } else if (comp.def.inject) {
             const result = injectDocFile(comp.sourceFull, comp.targetDir, totalStats, manifest, comp.def.section);
             if (result.warning) migrationWarnings.push(result.warning);
@@ -258,4 +262,19 @@ export function ExecutionView({
       </Box>
     </Box>
   );
+}
+
+function trackBuildOutput(dir: string, manifest: Manifest): void {
+  if (!existsSync(dir)) return;
+  const st = statSync(dir);
+  if (st.isFile()) { addFile(manifest, dir); return; }
+  addDir(manifest, dir);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      trackBuildOutput(fullPath, manifest);
+    } else {
+      addFile(manifest, fullPath);
+    }
+  }
 }

@@ -7,7 +7,7 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { paths } from '../config/paths.js';
 import {
   scanComponents,
@@ -28,6 +28,7 @@ import {
 import {
   createManifest,
   addFile,
+  addDir,
   saveManifest,
   findManifest,
   recordClaudeHooks,
@@ -158,6 +159,7 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
       if (comp.def.build) {
         const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
         stats.files += result.files;
+        trackBuildOutput(comp.targetDir, manifest);
       } else if (comp.def.inject) {
         const result = injectDocFile(comp.sourceFull, comp.targetDir, stats, manifest, comp.def.section);
         if (result.warning) warnings.push(result.warning);
@@ -342,6 +344,27 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     manifestPath,
     statuslineInstalled, backupPath, migrationWarnings: warnings,
   };
+}
+
+/**
+ * Recursively scan a build-output directory and add all files/dirs to the
+ * manifest so uninstall can track them. Build callbacks write directly to
+ * the target without going through copyRecursive, so the manifest would
+ * otherwise miss these files entirely.
+ */
+function trackBuildOutput(dir: string, manifest: import('./manifest.js').Manifest): void {
+  if (!existsSync(dir)) return;
+  const st = statSync(dir);
+  if (st.isFile()) { addFile(manifest, dir); return; }
+  addDir(manifest, dir);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      trackBuildOutput(fullPath, manifest);
+    } else {
+      addFile(manifest, fullPath);
+    }
+  }
 }
 
 export class CancelledError extends Error {
