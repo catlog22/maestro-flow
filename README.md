@@ -25,6 +25,84 @@
 
 <br/>
 
+## Comparison with Other Tools
+
+The AI coding workflow space is growing fast. Here's how Maestro-Flow relates to three prominent open-source tools — each takes a different approach to a shared goal.
+
+### Overview
+
+| | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Trellis](https://github.com/mindfold-ai/trellis) | **Maestro-Flow** |
+|---|---|---|---|---|
+| **Tagline** | Agentic skills framework & methodology | Spec-driven development (SDD) | Multi-platform agent harness | Intent-driven workflow orchestration |
+| **Architecture** | Pure `.md` skill files, no runtime | CLI + spec scaffolding, git-based | CLI + runtime, file-based `.trellis/` | CLI + MCP + runtime, SQLite-backed |
+| **License** | MIT | MIT | AGPL-3.0 | MIT |
+
+### Workflow Model
+
+Each tool answers a different question about the development lifecycle:
+
+- **Superpowers** answers *"how should agents think?"* — 14 composable `.md` skills shape agent behavior through a 7-phase methodology (brainstorm → worktree → plan → subagent dispatch → task review → code review → branch finish). The user follows the methodology; the agent follows the skills. No runtime routes or decides for you.
+- **OpenSpec** answers *"what should we build?"* — 11 slash commands manage a spec-centric planning layer (`/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:verify` → `/opsx:archive`). Each change gets a folder with proposal, specs, design, and task artifacts. The workflow is fluid and iterative, but manually driven.
+- **Trellis** answers *"how do we work across platforms?"* — specs, tasks, and workspace journals live in `.trellis/`, with platform-specific configurators for 16 AI tools. A channel-based message bus enables supervisor-worker multi-agent patterns. Hooks inject specs into prompts automatically.
+- **Maestro-Flow** answers *"how do we orchestrate the entire lifecycle?"* — the Ralph engine reads project state, classifies intent into 40+ chain types, and builds adaptive command chains with decision nodes. Odyssey commands run self-correcting loops. A SQLite knowledge graph persists discoveries and auto-injects them into future sessions.
+
+### Multi-Agent Orchestration
+
+| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
+|---|---|---|---|---|
+| Dispatch model | Fresh subagent per task, coordinator never executes | Single agent | Channel-based supervisor-worker | 4 patterns: Delegate, Team, Wave, Swarm |
+| Concurrent agents | Yes (parallel dispatch) | No | Yes (channel spawn) | Yes (wave parallelism, team fan-out) |
+| Cross-backend | No (single host) | No (single host) | No (same backend per session) | Yes (Claude, Codex, Gemini, Qwen, OpenCode in one workflow) |
+| Agent communication | None (fresh context each) | N/A | Message channels with locks | SQLite broker + message bus + injection |
+
+Superpowers pioneered the subagent-driven development pattern — a coordinator dispatches fresh implementer agents per task, keeping context clean. Trellis built a genuine message-passing layer with channels, supervisors, and idle detection. Maestro-Flow dispatches across different LLM backends in the same workflow, coordinating through a shared broker.
+
+### Decision & Routing
+
+| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
+|---|---|---|---|---|
+| Intent routing | Manual skill selection | Manual command sequence | Fixed phases (plan → implement → verify) | AI-classified into 40+ chain types based on project state |
+| Adaptive decisions | No | No | No | Decision nodes (◆) evaluate results, insert debug/fix/retry |
+| Quality modes | Per-task + per-branch review | 3-dimension verify | Spec compliance + lint/type/test | 3 modes: full / standard / quick pipeline |
+| Self-correction | Review → fix subagent loop | Manual re-verify | Manual continue | Automatic retry loops at decision nodes |
+
+### Long-Running Work
+
+| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
+|---|---|---|---|---|
+| Session boundary | Context window | Context window | Journal-based resume | Stateful engine with checkpoints |
+| Multi-step continuity | Coordinator dispatches until plan complete | Manual `/opsx:continue` sequencing | `trellis-continue` skill | Odyssey self-correcting cycles |
+| Adaptive strategy | No | No | No | Ralph adjusts chain based on intermediate results |
+| Time scale | "A couple hours" per session | Per-conversation | Journal extends sessions | Hours-long Odyssey loops with knowledge persistence |
+
+Superpowers can sustain multi-hour sessions through coordinator-subagent dispatch. OpenSpec and Trellis rely on manual continuation. Maestro-Flow's Odyssey commands run autonomous loops — archaeology, diagnosis, fix, verification, and knowledge capture — until acceptance criteria are met, with the engine adapting strategy at each checkpoint.
+
+### Knowledge & Persistence
+
+| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
+|---|---|---|---|---|
+| Storage | None (git only) | Git-based spec archives | File-based `.trellis/` | SQLite knowledge graph + file-based workflows |
+| Cross-session learning | No | Archives as reference | Workspace journals | Self-reinforcing: discover → persist → index → auto-inject |
+| Search | No | No | No | BM25F full-text across specs, knowhow, wiki, KG nodes |
+| Spec injection | Via skill prompts | Manual loading | Python hooks at session start | Keyword-matched hook injection per agent prompt |
+| Domain knowledge | No | No | No | Semantic glossary with concept relationships |
+
+### Each Tool's Strength
+
+**Superpowers** has set the standard for AI development methodology. Its 14 skills encode battle-tested patterns — subagent-driven development, systematic debugging, TDD, verification-before-completion — that make agents dramatically more effective. With 247k stars, it has the largest community and the most proven prompt engineering patterns. If you want better agent behavior without new tooling, Superpowers is the reference.
+
+**OpenSpec** brings formal rigor to the planning layer. By enforcing a spec lifecycle (explore → propose → apply → verify → archive), it ensures AI and developer agree on *what* to build before any code is written. Its 3-dimension verification (completeness, correctness, coherence) catches misalignment early. If your bottleneck is requirements clarity, OpenSpec addresses it directly.
+
+**Trellis** solves the multi-platform problem. With configurators for 16 AI tools, you can start a feature in Claude Code and continue in Cursor with shared specs, tasks, and journals. Its channel-based multi-agent system provides real supervisor-worker orchestration. If your team uses multiple AI tools, Trellis unifies the experience.
+
+### Where Maestro-Flow Focuses
+
+- **Long-running work** — Odyssey commands run extended, self-correcting cycles that combine archaeology, diagnosis, fix, verification, and knowledge persistence until acceptance criteria are met. Sessions can span hours with the engine maintaining state, adapting strategy at decision nodes, and persisting discoveries for future sessions.
+- **Flexible command chaining** — Rather than a fixed pipeline or manual sequencing, the Ralph engine reads project state and dynamically builds command chains with quality gates. The same intent produces different chains depending on context — a new project gets brainstorm → blueprint → analyze → plan → execute → verify; a quick fix gets plan → execute → verify. Decision nodes evaluate actual results and insert debug → fix → retry loops when needed.
+- **Completeness as a platform** — A unified system covering the full lifecycle (brainstorm through milestone), with a knowledge graph that feeds learnings back automatically, a visual dashboard for project oversight, issue closed-loop for self-healing quality, and multi-backend dispatch for leveraging different LLMs' strengths in the same workflow.
+
+---
+
 ## Two Pillars
 
 Maestro-Flow is built on two interconnected systems that reinforce each other:
@@ -338,84 +416,6 @@ maestro/
 - **[Workspace Guide](guide/workspace-guide.md)** — Cross-workspace knowledge sharing, link/unlink
 - **[MCP Tools Reference](guide/mcp-tools-guide.en.md)** — All 9 MCP endpoint tools
 - **[Collab Guide](guide/team-lite-guide.en.md)** — 2-8 person team collaboration
-
----
-
-## Comparison with Other Tools
-
-The AI coding workflow space is growing fast. Here's how Maestro-Flow relates to three prominent open-source tools — each takes a different approach to a shared goal.
-
-### Overview
-
-| | [Superpowers](https://github.com/obra/superpowers) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Trellis](https://github.com/mindfold-ai/trellis) | **Maestro-Flow** |
-|---|---|---|---|---|
-| **Tagline** | Agentic skills framework & methodology | Spec-driven development (SDD) | Multi-platform agent harness | Intent-driven workflow orchestration |
-| **Architecture** | Pure `.md` skill files, no runtime | CLI + spec scaffolding, git-based | CLI + runtime, file-based `.trellis/` | CLI + MCP + runtime, SQLite-backed |
-| **License** | MIT | MIT | AGPL-3.0 | MIT |
-
-### Workflow Model
-
-Each tool answers a different question about the development lifecycle:
-
-- **Superpowers** answers *"how should agents think?"* — 14 composable `.md` skills shape agent behavior through a 7-phase methodology (brainstorm → worktree → plan → subagent dispatch → task review → code review → branch finish). The user follows the methodology; the agent follows the skills. No runtime routes or decides for you.
-- **OpenSpec** answers *"what should we build?"* — 11 slash commands manage a spec-centric planning layer (`/opsx:explore` → `/opsx:propose` → `/opsx:apply` → `/opsx:verify` → `/opsx:archive`). Each change gets a folder with proposal, specs, design, and task artifacts. The workflow is fluid and iterative, but manually driven.
-- **Trellis** answers *"how do we work across platforms?"* — specs, tasks, and workspace journals live in `.trellis/`, with platform-specific configurators for 16 AI tools. A channel-based message bus enables supervisor-worker multi-agent patterns. Hooks inject specs into prompts automatically.
-- **Maestro-Flow** answers *"how do we orchestrate the entire lifecycle?"* — the Ralph engine reads project state, classifies intent into 40+ chain types, and builds adaptive command chains with decision nodes. Odyssey commands run self-correcting loops. A SQLite knowledge graph persists discoveries and auto-injects them into future sessions.
-
-### Multi-Agent Orchestration
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Dispatch model | Fresh subagent per task, coordinator never executes | Single agent | Channel-based supervisor-worker | 4 patterns: Delegate, Team, Wave, Swarm |
-| Concurrent agents | Yes (parallel dispatch) | No | Yes (channel spawn) | Yes (wave parallelism, team fan-out) |
-| Cross-backend | No (single host) | No (single host) | No (same backend per session) | Yes (Claude, Codex, Gemini, Qwen, OpenCode in one workflow) |
-| Agent communication | None (fresh context each) | N/A | Message channels with locks | SQLite broker + message bus + injection |
-
-Superpowers pioneered the subagent-driven development pattern — a coordinator dispatches fresh implementer agents per task, keeping context clean. Trellis built a genuine message-passing layer with channels, supervisors, and idle detection. Maestro-Flow dispatches across different LLM backends in the same workflow, coordinating through a shared broker.
-
-### Decision & Routing
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Intent routing | Manual skill selection | Manual command sequence | Fixed phases (plan → implement → verify) | AI-classified into 40+ chain types based on project state |
-| Adaptive decisions | No | No | No | Decision nodes (◆) evaluate results, insert debug/fix/retry |
-| Quality modes | Per-task + per-branch review | 3-dimension verify | Spec compliance + lint/type/test | 3 modes: full / standard / quick pipeline |
-| Self-correction | Review → fix subagent loop | Manual re-verify | Manual continue | Automatic retry loops at decision nodes |
-
-### Long-Running Work
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Session boundary | Context window | Context window | Journal-based resume | Stateful engine with checkpoints |
-| Multi-step continuity | Coordinator dispatches until plan complete | Manual `/opsx:continue` sequencing | `trellis-continue` skill | Odyssey self-correcting cycles |
-| Adaptive strategy | No | No | No | Ralph adjusts chain based on intermediate results |
-| Time scale | "A couple hours" per session | Per-conversation | Journal extends sessions | Hours-long Odyssey loops with knowledge persistence |
-
-Superpowers can sustain multi-hour sessions through coordinator-subagent dispatch. OpenSpec and Trellis rely on manual continuation. Maestro-Flow's Odyssey commands run autonomous loops — archaeology, diagnosis, fix, verification, and knowledge capture — until acceptance criteria are met, with the engine adapting strategy at each checkpoint.
-
-### Knowledge & Persistence
-
-| Capability | Superpowers | OpenSpec | Trellis | Maestro-Flow |
-|---|---|---|---|---|
-| Storage | None (git only) | Git-based spec archives | File-based `.trellis/` | SQLite knowledge graph + file-based workflows |
-| Cross-session learning | No | Archives as reference | Workspace journals | Self-reinforcing: discover → persist → index → auto-inject |
-| Search | No | No | No | BM25F full-text across specs, knowhow, wiki, KG nodes |
-| Spec injection | Via skill prompts | Manual loading | Python hooks at session start | Keyword-matched hook injection per agent prompt |
-| Domain knowledge | No | No | No | Semantic glossary with concept relationships |
-
-### Each Tool's Strength
-
-**Superpowers** has set the standard for AI development methodology. Its 14 skills encode battle-tested patterns — subagent-driven development, systematic debugging, TDD, verification-before-completion — that make agents dramatically more effective. With 247k stars, it has the largest community and the most proven prompt engineering patterns. If you want better agent behavior without new tooling, Superpowers is the reference.
-
-**OpenSpec** brings formal rigor to the planning layer. By enforcing a spec lifecycle (explore → propose → apply → verify → archive), it ensures AI and developer agree on *what* to build before any code is written. Its 3-dimension verification (completeness, correctness, coherence) catches misalignment early. If your bottleneck is requirements clarity, OpenSpec addresses it directly.
-
-**Trellis** solves the multi-platform problem. With configurators for 16 AI tools, you can start a feature in Claude Code and continue in Cursor with shared specs, tasks, and journals. Its channel-based multi-agent system provides real supervisor-worker orchestration. If your team uses multiple AI tools, Trellis unifies the experience.
-
-### Where Maestro-Flow Focuses
-
-- **Long-running work** — Odyssey commands run extended, self-correcting cycles that combine archaeology, diagnosis, fix, verification, and knowledge persistence until acceptance criteria are met. Sessions can span hours with the engine maintaining state, adapting strategy at decision nodes, and persisting discoveries for future sessions.
-- **Flexible command chaining** — Rather than a fixed pipeline or manual sequencing, the Ralph engine reads project state and dynamically builds command chains with quality gates. The same intent produces different chains depending on context — a new project gets brainstorm → blueprint → analyze → plan → execute → verify; a quick fix gets plan → execute → verify. Decision nodes evaluate actual results and insert debug → fix → retry loops when needed.
-- **Completeness as a platform** — A unified system covering the full lifecycle (brainstorm through milestone), with a knowledge graph that feeds learnings back automatically, a visual dashboard for project oversight, issue closed-loop for self-healing quality, and multi-backend dispatch for leveraging different LLMs' strengths in the same workflow.
 
 ---
 
