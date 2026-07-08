@@ -61,15 +61,15 @@ export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initia
     const hub = t.install.stepMenu;
     switch (s.step) {
       case 'components_config': return [hub, t.install.groupCore, t.install.hubLabelComponents];
-      case 'hooks_config': return [hub, t.install.groupClaude, t.install.hubLabelHooks];
-      case 'mcp_config': return [hub, t.install.groupClaude, t.install.hubLabelMcpServer];
-      case 'statusline_config': return [hub, t.install.groupClaude, t.install.hubLabelStatusline];
-      case 'codex_hooks_config': return [hub, t.install.groupCodex, t.install.hubLabelCodexHooks];
-      case 'codex_mcp_config': return [hub, t.install.groupCodex, t.install.hubLabelCodexMcp];
-      case 'agy_hooks_config': return [hub, t.install.groupOther, t.install.hubLabelAgyHooks];
-      case 'extra_mcp_config': return [hub, t.install.groupOther, t.install.hubLabelExtraMcp];
+      case 'hooks_config': return [hub, t.install.groupHooks, t.install.hubLabelHooks];
+      case 'mcp_config': return [hub, t.install.groupMcp, t.install.hubLabelMcpServer];
+      case 'statusline_config': return [hub, t.install.groupAppearance, t.install.hubLabelStatusline];
+      case 'codex_hooks_config': return [hub, t.install.groupHooks, t.install.hubLabelCodexHooks];
+      case 'codex_mcp_config': return [hub, t.install.groupMcp, t.install.hubLabelCodexMcp];
+      case 'agy_hooks_config': return [hub, t.install.groupHooks, t.install.hubLabelAgyHooks];
+      case 'extra_mcp_config': return [hub, t.install.groupMcp, t.install.hubLabelExtraMcp];
       case 'backup_config': return [hub, t.install.groupCore, t.install.hubLabelBackup];
-      case 'embedding_config': return [hub, t.install.groupOther, 'Embedding Model'];
+      case 'embedding_config': return [hub, t.install.groupEmbedding, 'Embedding Model'];
       default: return null;
     }
   }, [s.step]);
@@ -266,10 +266,20 @@ export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initia
 // ---------------------------------------------------------------------------
 
 const PLATFORM_DEFS = [
-  { id: 'claude', label: 'Claude Code', desc: 'Commands, skills, agents, hooks, MCP' },
-  { id: 'codex', label: 'Codex', desc: 'Agents, skills, hooks, MCP' },
-  { id: 'agy', label: 'Agy (Antigravity)', desc: 'Skills, agents, hooks (Gemini CLI)' },
-  { id: 'agents-standard', label: 'Open Standard', desc: '.agents/ format (portable)' },
+  { id: 'claude',           label: 'Claude Code',     desc: 'Commands, skills, agents, hooks, MCP' },
+  { id: 'codex',            label: 'Codex',            desc: 'Agents, skills, hooks, MCP' },
+  { id: 'cursor',           label: 'Cursor',           desc: 'Skills, agents → .cursor/' },
+  { id: 'agy',              label: 'Agy (Gemini CLI)', desc: 'Skills, agents, hooks → .gemini/' },
+  { id: 'copilot',          label: 'GitHub Copilot',   desc: 'Skills, agents → .github/' },
+  { id: 'kiro',             label: 'Kiro',             desc: 'Skills, agents → .kiro/' },
+  { id: 'opencode',         label: 'OpenCode',         desc: 'Skills, agents → .opencode/' },
+  { id: 'kilo',             label: 'Kilo Code',        desc: 'Skills, agents → .kilocode/' },
+  { id: 'devin',            label: 'Devin',            desc: 'Skills, agents → .devin/' },
+  { id: 'qoder',            label: 'Qoder',            desc: 'Skills, agents → .qoder/' },
+  { id: 'codebuddy',        label: 'CodeBuddy',        desc: 'Skills, agents → .codebuddy/' },
+  { id: 'droid',            label: 'Droid',            desc: 'Skills, agents → .factory/' },
+  { id: 'pi',               label: 'Pi Agent',         desc: 'Skills, agents → .pi/' },
+  { id: 'agents-standard',  label: 'Open Standard',    desc: '.agents/ format (portable)' },
 ] as const;
 
 interface FlatRow {
@@ -331,7 +341,7 @@ function PlatformSelector({
     else if (input === 'p' || input === 'P') onModeChange('project');
     else {
       const n = parseInt(input, 10);
-      if (n >= 1 && n <= PLATFORM_DEFS.length) onToggle(PLATFORM_DEFS[n - 1].id);
+      if (n >= 1 && n <= Math.min(9, PLATFORM_DEFS.length)) onToggle(PLATFORM_DEFS[n - 1].id);
     }
   });
 
@@ -359,7 +369,7 @@ function PlatformSelector({
             const sel = selectedPlatforms.has(plat.id);
             return (
               <Box key={row.id}>
-                <Text color={hl ? C.primary : C.neutral}>[{row.platIdx! + 1}] </Text>
+                <Text color={hl ? C.primary : C.neutral}>{row.platIdx! < 9 ? `[${row.platIdx! + 1}] ` : '    '}</Text>
                 <Text color={sel ? (hl ? C.successBright : C.success) : C.neutral}>{sel ? SYM.checkOn : SYM.checkOff} </Text>
                 <Text color={hl ? C.primary : undefined} bold={hl}>{plat.label.padEnd(22)}</Text>
                 <Text color={C.neutral}>{plat.desc}</Text>
@@ -393,7 +403,7 @@ function PlatformSelector({
           );
         })}
       </Box>
-      <KeyHints hints={`[Space/1-${PLATFORM_DEFS.length}] Toggle  [g/p] Scope  [Enter] Next  [Esc] Exit`} />
+      <KeyHints hints={`[Space/1-9] Toggle  [Up/Down] Navigate  [g/p] Scope  [Enter] Next  [Esc] Exit`} />
     </Box>
   );
 }

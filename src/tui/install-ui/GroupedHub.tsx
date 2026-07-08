@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { type HookLevel } from '../../commands/hooks.js';
+import { EXTRA_MCP_TARGETS } from '../../commands/install-backend.js';
 import { t } from '../../i18n/index.js';
 import { C, SYM, SP, wrapCursor, parseNumberKey, KeyHints } from '../shared/index.js';
 
@@ -242,6 +243,7 @@ export function buildGroupedHubItems(
     agyHookLevel: HookLevel;
     agyHookSelectedCount?: number; agyHookTotalCount?: number; agyHookIsCustom?: boolean;
     extraMcpTargetCount: number;
+    extraMcpTargetIds: string[];
     statuslineDetected: string | null;
     statuslineTheme?: string;
     backupClaudeMd: boolean; backupAll: boolean;
@@ -293,67 +295,28 @@ export function buildGroupedHubItems(
     { id: 'addons', title: t.install.groupAddons ?? 'Options', items: addonItems },
   ];
 
-  // --- Claude Code (conditional) ---
+  // --- Hooks (by type, conditional per platform) ---
+  const hookItems: HubItem[] = [];
   if (platforms.has('claude')) {
-    groups.push({
-      id: 'claude-settings',
-      title: t.install.groupClaude,
-      items: [
-        {
-          id: 'hooks',
-          label: t.install.hubLabelHooks,
-          enabled: enabled.hooks,
-          summary: hookSummary(summaries.hookLevel, summaries.hookSelectedCount, summaries.hookTotalCount, summaries.hookIsCustom),
-          detail: t.install.hubDetailHooks.replace('{level}', summaries.hookLevel),
-        },
-        {
-          id: 'mcp',
-          label: t.install.hubLabelMcpServer,
-          enabled: enabled.mcp,
-          summary: summaries.mcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.mcpToolCount)) : '—',
-          detail: t.install.hubDetailMcp,
-        },
-        {
-          id: 'statusline',
-          label: t.install.hubLabelStatusline,
-          enabled: enabled.statusline,
-          summary: summaries.statuslineDetected
-            ? t.install.statuslineDetected.replace('{cmd}', summaries.statuslineDetected)
-            : (summaries.statuslineTheme || 'notion'),
-          detail: t.install.hubDetailStatusline.replace('{theme}', summaries.statuslineTheme || 'notion'),
-        },
-      ],
+    hookItems.push({
+      id: 'hooks',
+      label: t.install.hubLabelHooks,
+      enabled: enabled.hooks,
+      summary: hookSummary(summaries.hookLevel, summaries.hookSelectedCount, summaries.hookTotalCount, summaries.hookIsCustom),
+      detail: t.install.hubDetailHooks.replace('{level}', summaries.hookLevel),
     });
   }
-
-  // --- Codex (conditional) ---
   if (platforms.has('codex')) {
-    groups.push({
-      id: 'codex-settings',
-      title: t.install.groupCodex,
-      items: [
-        {
-          id: 'codexHooks',
-          label: t.install.hubLabelCodexHooks,
-          enabled: enabled.codexHooks,
-          summary: hookSummary(summaries.codexHookLevel, summaries.codexHookSelectedCount, summaries.codexHookTotalCount, summaries.codexHookIsCustom),
-          detail: t.install.hubDetailCodexHooks,
-        },
-        {
-          id: 'codexMcp',
-          label: t.install.hubLabelCodexMcp,
-          enabled: enabled.codexMcp,
-          summary: summaries.codexMcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.codexMcpToolCount)) : '—',
-          detail: t.install.hubDetailCodexMcp,
-        },
-      ],
+    hookItems.push({
+      id: 'codexHooks',
+      label: t.install.hubLabelCodexHooks,
+      enabled: enabled.codexHooks,
+      summary: hookSummary(summaries.codexHookLevel, summaries.codexHookSelectedCount, summaries.codexHookTotalCount, summaries.codexHookIsCustom),
+      detail: t.install.hubDetailCodexHooks,
     });
   }
-
-  // --- Agy / Extra MCP (conditional) ---
-  const otherItems: HubItem[] = [];
   if (platforms.has('agy')) {
-    otherItems.push({
+    hookItems.push({
       id: 'agyHooks',
       label: t.install.hubLabelAgyHooks,
       enabled: enabled.agyHooks,
@@ -361,23 +324,96 @@ export function buildGroupedHubItems(
       detail: t.install.hubDetailAgyHooks,
     });
   }
-  otherItems.push({
-    id: 'extraMcp',
-    label: t.install.hubLabelExtraMcp,
-    enabled: enabled.extraMcp,
-    summary: summaries.extraMcpTargetCount > 0 ? `${summaries.extraMcpTargetCount} targets` : '0 targets',
-    detail: t.install.hubDetailExtraMcp,
-  });
-  otherItems.push({
-    id: 'embedding',
-    label: 'Embedding Model',
-    enabled: true,
-    summary: summaries.embeddingMode === 'api' ? 'API mode' : (summaries.embeddingCached ? 'Local (ready)' : 'Local (no model)'),
-    detail: 'Manage local ONNX model for semantic search. Download, configure, rebuild index.',
-  });
-  if (otherItems.length > 0) {
-    groups.push({ id: 'other', title: t.install.groupOther, items: otherItems });
+  if (hookItems.length > 0) {
+    groups.push({ id: 'hooks', title: t.install.groupHooks, items: hookItems });
   }
+
+  // --- MCP Server (by type, conditional per platform) ---
+  const mcpItems: HubItem[] = [];
+  if (platforms.has('claude')) {
+    mcpItems.push({
+      id: 'mcp',
+      label: t.install.hubLabelMcpServer,
+      enabled: enabled.mcp,
+      summary: summaries.mcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.mcpToolCount)) : '—',
+      detail: t.install.hubDetailMcp,
+    });
+  }
+  if (platforms.has('codex')) {
+    mcpItems.push({
+      id: 'codexMcp',
+      label: t.install.hubLabelCodexMcp,
+      enabled: enabled.codexMcp,
+      summary: summaries.codexMcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.codexMcpToolCount)) : '—',
+      detail: t.install.hubDetailCodexMcp,
+    });
+  }
+  // Per-platform MCP targets (replaces "Extra MCP" catch-all)
+  const extraTargetIds = new Set(summaries.extraMcpTargetIds);
+  const platformToMcpTarget = new Map<string, string>([
+    ['cursor', 'cursor'], ['qoder', 'qoder'], ['kiro', 'kiro'],
+    ['agy', 'gemini-cli'], ['copilot', 'vscode-copilot'],
+  ]);
+  for (const target of EXTRA_MCP_TARGETS) {
+    let matchedPlatform: string | undefined;
+    for (const [platId, targetId] of platformToMcpTarget) {
+      if (targetId === target.id && platforms.has(platId)) {
+        matchedPlatform = platId;
+        break;
+      }
+    }
+    if (!matchedPlatform) continue;
+    mcpItems.push({
+      id: `mcp-${target.id}`,
+      label: `${target.label.split('(')[0].trim()} MCP`,
+      enabled: extraTargetIds.has(target.id),
+      summary: extraTargetIds.has(target.id) ? 'enabled' : '—',
+    });
+  }
+  // Trae and Roo are IDE-level, not tied to a specific platform
+  for (const target of EXTRA_MCP_TARGETS) {
+    if (target.id === 'trae' || target.id === 'roo') {
+      mcpItems.push({
+        id: `mcp-${target.id}`,
+        label: `${target.label.split('(')[0].trim()} MCP`,
+        enabled: extraTargetIds.has(target.id),
+        summary: extraTargetIds.has(target.id) ? 'enabled' : '—',
+      });
+    }
+  }
+  if (mcpItems.length > 0) {
+    groups.push({ id: 'mcp', title: t.install.groupMcp, items: mcpItems });
+  }
+
+  // --- Appearance (conditional) ---
+  if (platforms.has('claude')) {
+    groups.push({
+      id: 'appearance',
+      title: t.install.groupAppearance,
+      items: [{
+        id: 'statusline',
+        label: t.install.hubLabelStatusline,
+        enabled: enabled.statusline,
+        summary: summaries.statuslineDetected
+          ? t.install.statuslineDetected.replace('{cmd}', summaries.statuslineDetected)
+          : (summaries.statuslineTheme || 'notion'),
+        detail: t.install.hubDetailStatusline.replace('{theme}', summaries.statuslineTheme || 'notion'),
+      }],
+    });
+  }
+
+  // --- Embedding (always visible) ---
+  groups.push({
+    id: 'embedding',
+    title: t.install.groupEmbedding,
+    items: [{
+      id: 'embedding',
+      label: 'Embedding Model',
+      enabled: true,
+      summary: summaries.embeddingMode === 'api' ? 'API mode' : (summaries.embeddingCached ? 'Local (ready)' : 'Local (no model)'),
+      detail: 'Manage local ONNX model for semantic search. Download, configure, rebuild index.',
+    }],
+  });
 
   return groups;
 }

@@ -48,6 +48,10 @@ export interface LocaleStrings {
     groupClaude: string;
     groupCodex: string;
     groupOther: string;
+    groupHooks: string;
+    groupMcp: string;
+    groupAppearance: string;
+    groupEmbedding: string;
     hubScope: string;
     hubGlobal: string;
     hubProject: string;

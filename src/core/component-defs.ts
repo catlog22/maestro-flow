@@ -66,7 +66,7 @@ export interface ComponentDef {
    * 'shared' = always visible regardless of platform selection.
    * undefined = treated as 'shared' for backward compat.
    */
-  platform?: 'claude' | 'codex' | 'agy' | 'agents-standard' | 'shared';
+  platform?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -534,6 +534,112 @@ export const COMPONENT_DEFS: ComponentDef[] = [
     fileFilter: (name) => META_SKILL_NAMES.has(name),
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Additional platform definitions — .agents/-standard compatible platforms
+//
+// Each entry generates context + chinese + skills + agents components that
+// install to the platform's own config directory using the same converters
+// as agents-standard.
+// ---------------------------------------------------------------------------
+
+export interface PlatformRegistryEntry {
+  id: string;
+  label: string;
+  description: string;
+  /** Config directory name relative to home or project (e.g. '.cursor') */
+  configDir: string;
+  /** Context file name (default: 'AGENTS.md') */
+  contextFile?: string;
+  /** Global config directory name when different from configDir (e.g. agy uses .gemini) */
+  globalConfigDir?: string;
+}
+
+export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
+  { id: 'cursor',    label: 'Cursor',         description: 'Cursor AI IDE',            configDir: '.cursor' },
+  { id: 'opencode',  label: 'OpenCode',       description: 'OpenCode CLI',             configDir: '.opencode' },
+  { id: 'kiro',      label: 'Kiro',           description: 'AWS Kiro IDE',             configDir: '.kiro' },
+  { id: 'kilo',      label: 'Kilo Code',      description: 'Kilo Code IDE',            configDir: '.kilocode' },
+  { id: 'copilot',   label: 'GitHub Copilot', description: 'GitHub Copilot agent',     configDir: '.github', contextFile: 'copilot-instructions.md' },
+  { id: 'devin',     label: 'Devin',          description: 'Cognition Devin',          configDir: '.devin' },
+  { id: 'qoder',     label: 'Qoder',          description: 'Qoder CLI',               configDir: '.qoder' },
+  { id: 'codebuddy', label: 'CodeBuddy',      description: 'CodeBuddy IDE',            configDir: '.codebuddy' },
+  { id: 'droid',     label: 'Droid',          description: 'Factory Droid',            configDir: '.factory' },
+  { id: 'pi',        label: 'Pi Agent',       description: 'Pi Agent CLI',             configDir: '.pi' },
+];
+
+function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
+  const { id, configDir, contextFile = 'AGENTS.md' } = entry;
+  const globalDir = entry.globalConfigDir ?? configDir;
+
+  return [
+    {
+      id: `${id}-context`,
+      label: `${entry.label} Context`,
+      description: `${entry.label} project instructions (${contextFile})`,
+      sourcePath: join('workflows', 'codex-instructions.md'),
+      target: (mode, projectPath) =>
+        mode === 'global'
+          ? join(homedir(), globalDir, contextFile)
+          : join(projectPath, configDir, contextFile),
+      alwaysGlobal: false,
+      inject: true,
+      platform: id,
+    },
+    {
+      id: `${id}-md-chinese`,
+      label: `Chinese Response (${entry.label})`,
+      description: `Chinese response guidelines → ${contextFile}`,
+      sourcePath: join('workflows', 'chinese-response.md'),
+      target: (mode, projectPath) =>
+        mode === 'global'
+          ? join(homedir(), globalDir, contextFile)
+          : join(projectPath, configDir, contextFile),
+      alwaysGlobal: false,
+      inject: true,
+      section: 'chinese',
+      platform: id,
+    },
+    {
+      id: `${id}-skills`,
+      label: `${entry.label} Skills`,
+      description: `${entry.label} skill definitions`,
+      sourcePath: join('.claude', 'commands'),
+      sourceCountDir: join('.claude', 'commands'),
+      target: (mode, projectPath) =>
+        mode === 'global'
+          ? join(homedir(), globalDir, 'skills')
+          : join(projectPath, configDir, 'skills'),
+      alwaysGlobal: false,
+      platform: id,
+      build: (claudeDir, targetDir) => {
+        const { buildAgentsStandardSkills } = require('./skill-converter.js');
+        return buildAgentsStandardSkills(claudeDir, targetDir);
+      },
+    },
+    {
+      id: `${id}-agents`,
+      label: `${entry.label} Agents`,
+      description: `${entry.label} agent definitions`,
+      sourcePath: join('.claude', 'agents'),
+      sourceCountDir: join('.claude', 'agents'),
+      target: (mode, projectPath) =>
+        mode === 'global'
+          ? join(homedir(), globalDir, 'agents')
+          : join(projectPath, configDir, 'agents'),
+      alwaysGlobal: false,
+      platform: id,
+      build: (claudeDir, targetDir) => {
+        const { buildAgentsStandardAgents } = require('./skill-converter.js');
+        return buildAgentsStandardAgents(claudeDir, targetDir);
+      },
+    },
+  ];
+}
+
+for (const entry of EXTRA_PLATFORMS) {
+  COMPONENT_DEFS.push(...makeExtraPlatformDefs(entry));
+}
 
 // ---------------------------------------------------------------------------
 // Manifest migration — map old individual skill IDs to new group bundles

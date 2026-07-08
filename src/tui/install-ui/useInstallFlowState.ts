@@ -102,8 +102,12 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   });
 
   // --- Platform selection ---
-  type Platform = 'claude' | 'codex' | 'agy' | 'agents-standard';
-  const ALL_PLATFORMS: Platform[] = ['claude', 'codex', 'agy', 'agents-standard'];
+  type Platform = string;
+  const ALL_PLATFORMS: Platform[] = [
+    'claude', 'codex', 'agy', 'agents-standard',
+    'cursor', 'opencode', 'kiro', 'kilo', 'copilot',
+    'devin', 'qoder', 'codebuddy', 'droid', 'pi',
+  ];
 
   // Fallback: infer previously installed platforms from on-disk artifacts
   // when manifest is missing. Only activates if ~/.maestro/version.json exists
@@ -119,6 +123,14 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ? existsSync(join(base, '.gemini', 'antigravity-cli'))
       : existsSync(join(base, '.agents', 'skills'))) plats.add('agy');
     if (existsSync(join(base, '.agents', 'agents')) || existsSync(join(base, '.agents', 'skills'))) plats.add('agents-standard');
+    const extraPlatDirs: [string, string][] = [
+      ['cursor', '.cursor'], ['opencode', '.opencode'], ['kiro', '.kiro'],
+      ['kilo', '.kilocode'], ['copilot', '.github'], ['devin', '.devin'],
+      ['qoder', '.qoder'], ['codebuddy', '.codebuddy'], ['droid', '.factory'], ['pi', '.pi'],
+    ];
+    for (const [id, dir] of extraPlatDirs) {
+      if (existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'))) plats.add(id);
+    }
     if (plats.size === 0) plats.add('claude');
     return plats;
   }, []);
@@ -360,7 +372,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     backupClaudeMd: enabledSteps.backup && backupClaudeMd,
     backupAll: enabledSteps.backup && backupAll,
     claudeHooksSelection, codexHooksSelection, agyHooksSelection,
-    codexDedupeAgents: selectedPlatforms.has('codex' as any) && selectedPlatforms.has('agents-standard' as any) && codexDedupeAgents,
+    codexDedupeAgents: selectedPlatforms.has('codex') && selectedPlatforms.has('agents-standard') && codexDedupeAgents,
     installPluginClaude: enabledSteps.pluginClaude,
     installPluginCodex: enabledSteps.pluginCodex,
   }), [mode, projectPath, enabledSteps, hookLevel, selectedComponents.length,
@@ -402,6 +414,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       agyHookTotalCount: agyAllHooks.length,
       agyHookIsCustom: agyHooksSelection.isCustom,
       extraMcpTargetCount: extraMcpTargetIds.length,
+      extraMcpTargetIds: extraMcpTargetIds as string[],
       statuslineDetected, statuslineTheme,
       backupClaudeMd, backupAll,
       selectedPlatforms: Array.from(selectedPlatforms),
@@ -413,7 +426,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,
     mcpEnabled, codexHookLevel, codexMcpTools.length, codexMcpEnabled,
-    agyHookLevel, extraMcpTargetIds.length,
+    agyHookLevel, extraMcpTargetIds,
     statuslineDetected, statuslineTheme, backupClaudeMd, backupAll,
     claudeHooksSelection, codexHooksSelection, agyHooksSelection,
     claudeAllHooks, codexAllHooks, agyAllHooks,
@@ -427,6 +440,13 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     }
     if (ADDON_IDS.has(id)) {
       toggleAddon(id);
+      return;
+    }
+    if (id.startsWith('mcp-')) {
+      const targetId = id.slice(4) as ExtraMcpTargetId;
+      setExtraMcpTargetIds((prev) =>
+        prev.includes(targetId) ? prev.filter((x) => x !== targetId) : [...prev, targetId],
+      );
       return;
     }
     setEnabledSteps((prev) => {
@@ -444,6 +464,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   }, [togglePlatform, toggleAddon, ADDON_IDS]);
 
   const enterConfig = useCallback((id: string) => {
+    if (id.startsWith('mcp-')) return;
     const map: Record<string, FlowStep> = {
       components: 'components_config', hooks: 'hooks_config', mcp: 'mcp_config',
       codexHooks: 'codex_hooks_config', codexMcp: 'codex_mcp_config',
