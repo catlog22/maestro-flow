@@ -43,6 +43,7 @@ import {
   installHooksByLevel,
   installCodexHooksByLevel,
   installAgyHooksByLevel,
+  installGenericHooksByLevel,
   installStatusline as installStatuslineFn,
 } from '../commands/hooks.js';
 import type { InstallFlowConfig } from '../tui/install-ui/types.js';
@@ -60,6 +61,7 @@ export interface InstallResult {
   codexHooksInstalled: number;
   codexMcpRegistered: boolean;
   agyHooksInstalled: number;
+  genericHooksInstalled: Record<string, number>;
   extraMcpRegistered: string[];
   extraMcpFailed: string[];
   manifestPath: string;
@@ -70,7 +72,8 @@ export interface InstallResult {
 
 export type StepName =
   | 'backup' | 'cleanup' | 'components' | 'hooks' | 'statusline'
-  | 'mcp' | 'codexHooks' | 'codexMcp' | 'agyHooks' | 'extraMcp' | 'plugin' | 'manifest';
+  | 'mcp' | 'codexHooks' | 'codexMcp' | 'agyHooks' | 'extraMcp' | 'plugin' | 'manifest'
+  | `ghooks-${string}`;
 
 export type ProgressCallback = (step: StepName, status: 'active' | 'done' | 'error', detail: string) => void;
 
@@ -102,6 +105,7 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   let codexHooksInstalled = 0;
   let codexMcpRegistered = false;
   let agyHooksInstalled = 0;
+  const genericHooksInstalled: Record<string, number> = {};
   const extraMcpRegistered: string[] = [];
   const extraMcpFailed: string[] = [];
   let statuslineInstalled = false;
@@ -273,6 +277,21 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     progress('agyHooks', 'done', `${agyHooksInstalled} hooks`);
   }
 
+  // --- Generic platform hooks ---
+  if (config.genericHookLevels) {
+    for (const [platId, level] of Object.entries(config.genericHookLevels)) {
+      if (level === 'none') continue;
+      if (cancelled()) throw new CancelledError();
+      const stepId = `ghooks-${platId}` as StepName;
+      progress(stepId, 'active', `${level}...`);
+      const result = installGenericHooksByLevel(platId, level, {
+        project: config.mode === 'project',
+      });
+      genericHooksInstalled[platId] = result.installedHooks.length;
+      progress(stepId, 'done', `${result.installedHooks.length} hooks`);
+    }
+  }
+
   // --- Extra MCP ---
   if (config.installExtraMcp && config.extraMcpTargetIds.length > 0) {
     progress('extraMcp', 'active', 'Registering targets...');
@@ -339,7 +358,7 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     filesInstalled, dirsCreated, filesSkipped,
     hooksInstalled, mcpRegistered,
     codexHooksInstalled, codexMcpRegistered,
-    agyHooksInstalled,
+    agyHooksInstalled, genericHooksInstalled,
     extraMcpRegistered, extraMcpFailed,
     manifestPath,
     statuslineInstalled, backupPath, migrationWarnings: warnings,

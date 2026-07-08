@@ -548,6 +548,103 @@ export function installCodexHooksByLevel(
 }
 
 // ---------------------------------------------------------------------------
+// Generic platform hooks — platforms using the same hooks.json format as Codex
+//
+// Each entry defines: config path and supported events.
+// Installation reuses installCodexHooksByLevel with a custom hooksPath and
+// an event filter to skip unsupported events.
+// ---------------------------------------------------------------------------
+
+type CodexEvent = 'SessionStart' | 'PreToolUse' | 'PostToolUse' | 'UserPromptSubmit' | 'Stop';
+
+export interface GenericHooksPlatform {
+  id: string;
+  label: string;
+  supportedEvents: Set<CodexEvent>;
+  hooksPath: (opts: { project?: boolean }) => string;
+}
+
+export const GENERIC_HOOKS_PLATFORMS: GenericHooksPlatform[] = [
+  {
+    id: 'cursor', label: 'Cursor',
+    supportedEvents: new Set(['SessionStart', 'PreToolUse', 'UserPromptSubmit']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.cursor', 'hooks.json') : join(homedir(), '.cursor', 'hooks.json'),
+  },
+  {
+    id: 'opencode', label: 'OpenCode',
+    supportedEvents: new Set(['SessionStart', 'PreToolUse', 'UserPromptSubmit']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.opencode', 'hooks.json') : join(homedir(), '.opencode', 'hooks.json'),
+  },
+  {
+    id: 'kiro', label: 'Kiro',
+    supportedEvents: new Set(['SessionStart', 'UserPromptSubmit']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.kiro', 'hooks.json') : join(homedir(), '.kiro', 'hooks.json'),
+  },
+  {
+    id: 'copilot', label: 'GitHub Copilot',
+    supportedEvents: new Set(['SessionStart']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.github', 'copilot', 'hooks.json') : join(homedir(), '.github', 'copilot', 'hooks.json'),
+  },
+  {
+    id: 'qoder', label: 'Qoder',
+    supportedEvents: new Set(['SessionStart']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.qoder', 'hooks.json') : join(homedir(), '.qoder', 'hooks.json'),
+  },
+  {
+    id: 'codebuddy', label: 'CodeBuddy',
+    supportedEvents: new Set(['SessionStart', 'PreToolUse']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.codebuddy', 'hooks.json') : join(homedir(), '.codebuddy', 'hooks.json'),
+  },
+  {
+    id: 'droid', label: 'Droid',
+    supportedEvents: new Set(['SessionStart']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.factory', 'hooks.json') : join(homedir(), '.factory', 'hooks.json'),
+  },
+];
+
+export function getGenericHooksPlatform(platformId: string): GenericHooksPlatform | undefined {
+  return GENERIC_HOOKS_PLATFORMS.find((p) => p.id === platformId);
+}
+
+export function installGenericHooksByLevel(
+  platformId: string,
+  level: HookLevel,
+  opts: { project?: boolean; selectedHooks?: string[] } = {},
+): InstallHooksResult {
+  const platform = getGenericHooksPlatform(platformId);
+  if (!platform) return { settingsPath: '', installedHooks: [], level };
+
+  const hooksPath = platform.hooksPath({ project: opts.project });
+
+  const filteredHooks = opts.selectedHooks
+    ? opts.selectedHooks.filter((name) => {
+        const def = CODEX_HOOK_DEFS[name];
+        return def && platform.supportedEvents.has(def.event);
+      })
+    : Object.entries(CODEX_HOOK_DEFS)
+        .filter(([, def]) => hookIncludedInLevel(def.level, level) && platform.supportedEvents.has(def.event))
+        .map(([name]) => name);
+
+  if (filteredHooks.length === 0 && level !== 'none') {
+    return { settingsPath: hooksPath, installedHooks: [], level };
+  }
+
+  return installCodexHooksByLevel(level, {
+    project: opts.project,
+    hooksPath,
+    selectedHooks: filteredHooks.length > 0 ? filteredHooks : undefined,
+  });
+}
+
+export function getGenericHooksForLevel(platformId: string, level: HookLevel): string[] {
+  const platform = getGenericHooksPlatform(platformId);
+  if (!platform) return [];
+  return Object.entries(CODEX_HOOK_DEFS)
+    .filter(([, def]) => hookIncludedInLevel(def.level, level) && platform.supportedEvents.has(def.event))
+    .map(([name]) => name);
+}
+
+// ---------------------------------------------------------------------------
 // Antigravity (agy) hooks
 //
 // File schema (per https://antigravity.google/docs/hooks):

@@ -81,6 +81,7 @@ export interface Manifest {
     claude?: HookRecord;
     codex?: HookRecord;
     agy?: HookRecord;
+    generic?: Record<string, HookRecord>;
   };
   statusline?: StatuslineRecord;
   mcp?: {

@@ -277,6 +277,17 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     () => makeHooksSelection((lastManifest?.hooks?.agy?.level as HookLevel) || 'standard', 'agy'),
   );
 
+  // --- Generic platform hooks ---
+  const [genericHookLevels, setGenericHookLevels] = useState<Record<string, HookLevel>>(() => {
+    const levels: Record<string, HookLevel> = {};
+    if (lastManifest?.hooks?.generic) {
+      for (const [id, cfg] of Object.entries(lastManifest.hooks.generic as Record<string, { level?: string }>)) {
+        levels[id] = (cfg.level as HookLevel) || 'none';
+      }
+    }
+    return levels;
+  });
+
   // --- Extra MCP ---
   const [extraMcpTargetIds, setExtraMcpTargetIds] = useState<ExtraMcpTargetId[]>(
     () => (lastManifest?.mcp?.extras?.map((e) => e.targetId as ExtraMcpTargetId)) ?? [],
@@ -362,6 +373,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     agyHookLevel,
     installExtraMcp: enabledSteps.extraMcp && extraMcpTargetIds.length > 0,
     extraMcpTargetIds,
+    genericHookLevels,
     installStatusline: enabledSteps.statusline && installStatusline,
     statuslineTheme,
     hookLevel,
@@ -378,7 +390,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   }), [mode, projectPath, enabledSteps, hookLevel, selectedComponents.length,
     fileCount, mcpTools, mcpEnabled, selectedComponentIds, mcpProjectRoot,
     codexHookLevel, codexMcpEnabled, codexMcpTools, codexMcpProjectRoot,
-    agyHookLevel, extraMcpTargetIds,
+    agyHookLevel, extraMcpTargetIds, genericHookLevels,
     installStatusline, statuslineTheme, backupClaudeMd, backupAll,
     claudeHooksSelection, codexHooksSelection, agyHooksSelection,
     selectedPlatforms, codexDedupeAgents]);
@@ -415,6 +427,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       agyHookIsCustom: agyHooksSelection.isCustom,
       extraMcpTargetCount: extraMcpTargetIds.length,
       extraMcpTargetIds: extraMcpTargetIds as string[],
+      genericHookLevels,
       statuslineDetected, statuslineTheme,
       backupClaudeMd, backupAll,
       selectedPlatforms: Array.from(selectedPlatforms),
@@ -426,7 +439,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     },
   ), [enabledSteps, selectedComponents.length, fileCount, hookLevel, mcpTools.length,
     mcpEnabled, codexHookLevel, codexMcpTools.length, codexMcpEnabled,
-    agyHookLevel, extraMcpTargetIds,
+    agyHookLevel, extraMcpTargetIds, genericHookLevels,
     statuslineDetected, statuslineTheme, backupClaudeMd, backupAll,
     claudeHooksSelection, codexHooksSelection, agyHooksSelection,
     claudeAllHooks, codexAllHooks, agyAllHooks,
@@ -449,6 +462,14 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       );
       return;
     }
+    if (id.startsWith('ghooks-')) {
+      const platId = id.slice(7);
+      setGenericHookLevels((prev) => ({
+        ...prev,
+        [platId]: prev[platId] === 'standard' || prev[platId] === 'minimal' ? 'none' : 'standard',
+      }));
+      return;
+    }
     setEnabledSteps((prev) => {
       const next = !prev[id];
       if (next) {
@@ -464,7 +485,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   }, [togglePlatform, toggleAddon, ADDON_IDS]);
 
   const enterConfig = useCallback((id: string) => {
-    if (id.startsWith('mcp-')) return;
+    if (id.startsWith('mcp-') || id.startsWith('ghooks-')) return;
     const map: Record<string, FlowStep> = {
       components: 'components_config', hooks: 'hooks_config', mcp: 'mcp_config',
       codexHooks: 'codex_hooks_config', codexMcp: 'codex_mcp_config',

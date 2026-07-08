@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { type HookLevel } from '../../commands/hooks.js';
+import { type HookLevel, GENERIC_HOOKS_PLATFORMS } from '../../commands/hooks.js';
 import { EXTRA_MCP_TARGETS } from '../../commands/install-backend.js';
 import { t } from '../../i18n/index.js';
 import { C, SYM, SP, wrapCursor, parseNumberKey, KeyHints } from '../shared/index.js';
@@ -244,6 +244,7 @@ export function buildGroupedHubItems(
     agyHookSelectedCount?: number; agyHookTotalCount?: number; agyHookIsCustom?: boolean;
     extraMcpTargetCount: number;
     extraMcpTargetIds: string[];
+    genericHookLevels: Record<string, HookLevel>;
     statuslineDetected: string | null;
     statuslineTheme?: string;
     backupClaudeMd: boolean; backupAll: boolean;
@@ -322,6 +323,16 @@ export function buildGroupedHubItems(
       enabled: enabled.agyHooks,
       summary: hookSummary(summaries.agyHookLevel, summaries.agyHookSelectedCount, summaries.agyHookTotalCount, summaries.agyHookIsCustom),
       detail: t.install.hubDetailAgyHooks,
+    });
+  }
+  for (const gp of GENERIC_HOOKS_PLATFORMS) {
+    if (!platforms.has(gp.id)) continue;
+    const level = summaries.genericHookLevels[gp.id] ?? 'none';
+    hookItems.push({
+      id: `ghooks-${gp.id}`,
+      label: `${gp.label} Hooks`,
+      enabled: level !== 'none',
+      summary: level,
     });
   }
   if (hookItems.length > 0) {

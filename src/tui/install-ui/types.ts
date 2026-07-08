@@ -25,6 +25,7 @@ export interface InstallFlowConfig {
   agyHookLevel: HookLevel;
   installExtraMcp: boolean;
   extraMcpTargetIds: ExtraMcpTargetId[];
+  genericHookLevels: Record<string, HookLevel>;
   installStatusline: boolean;
   statuslineTheme: string;
   hookLevel: HookLevel;

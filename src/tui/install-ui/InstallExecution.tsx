@@ -3,6 +3,7 @@ import { Box, Text } from 'ink';
 import Spinner from 'ink-spinner';
 import { C, SYM } from '../shared/index.js';
 import { executeInstallPipeline, CancelledError, type InstallResult, type StepName } from '../../core/install-executor.js';
+import { GENERIC_HOOKS_PLATFORMS } from '../../commands/hooks.js';
 import type { InstallFlowConfig } from './types.js';
 import { t } from '../../i18n/index.js';
 
@@ -80,12 +81,21 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
     if (config.installCodexHooks) keys.push('codexHooks');
     if (config.installCodexMcp) keys.push('codexMcp');
     if (config.installAgyHooks) keys.push('agyHooks');
+    for (const [platId, level] of Object.entries(config.genericHookLevels)) {
+      if (level !== 'none') keys.push(`ghooks-${platId}`);
+    }
     if (config.installExtraMcp) keys.push('extraMcp');
     keys.push('manifest');
     return keys;
   }, [config]);
 
-  const stepLabels = useMemo(() => getStepLabels(), []);
+  const stepLabels = useMemo(() => {
+    const labels = getStepLabels();
+    for (const gp of GENERIC_HOOKS_PLATFORMS) {
+      labels[`ghooks-${gp.id}`] = `${gp.label} Hooks`;
+    }
+    return labels;
+  }, []);
 
   const [steps, setSteps] = useState<ExecutionStep[]>(() =>
     stepKeys.map((key) => ({
