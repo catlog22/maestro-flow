@@ -503,7 +503,7 @@ export function registerSearchCommand(program: Command): void {
     .argument('[action]', 'status (default), warmup, rebuild', 'status')
     .action(async (action: string) => {
       const workflowRoot = resolve('.workflow');
-      const { isAvailable, getUnavailableReason, loadEmbeddingIndex, embedTexts, getDeviceSummary, detectDevice, setProgressCallback, DEFAULT_MODEL_ID, isApiMode, getModelId, loadEmbeddingApiConfig } = await import('#maestro-dashboard/wiki/embedding.js');
+      const { isAvailable, getUnavailableReason, loadEmbeddingIndex, embedTexts, getDeviceSummary, detectDevice, setProgressCallback, DEFAULT_MODEL_ID, isApiMode, getModelId, loadEmbeddingApiConfig, isLocalModelPath, getLocalModelPath } = await import('#maestro-dashboard/wiki/embedding.js');
 
       if (action === 'status') {
         const apiMode = isApiMode();
@@ -524,7 +524,11 @@ export function registerSearchCommand(program: Command): void {
             await detectDevice();
             console.log(`Device: ${getDeviceSummary()}`);
           }
-          console.log(`Model: ${DEFAULT_MODEL_ID} (~465 MB)`);
+          if (isLocalModelPath()) {
+            console.log(`Model: local → ${getLocalModelPath()}`);
+          } else {
+            console.log(`Model: ${DEFAULT_MODEL_ID} (~465 MB)`);
+          }
         }
         console.log(`Active model: ${getModelId()}`);
         const idx = loadEmbeddingIndex(workflowRoot);
@@ -562,6 +566,7 @@ export function registerSearchCommand(program: Command): void {
             console.error(`Downloading model ${DEFAULT_MODEL_ID} (~465 MB)...`);
             console.error(`  Cache dir: ~/.cache/huggingface/`);
             console.error(`  If download is slow, set HTTPS_PROXY or configure API mode: ~/.maestro/api-embedding.json`);
+            console.error(`  Or use local model folder: ~/.maestro/local-embedding.json or MAESTRO_EMBEDDING_MODEL_PATH`);
           }
           if (info.status === 'progress' && info.file === 'onnx/model.onnx' && typeof info.progress === 'number') {
             const pct = Math.round(info.progress);

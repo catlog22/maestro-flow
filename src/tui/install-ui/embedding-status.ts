@@ -22,7 +22,11 @@ export async function getEmbeddingStatus(projectRoot: string): Promise<Embedding
     } catch { /* use defaults */ }
   }
 
-  const { detectDevice, isModelCached, getHardwareInfo } = await import('#maestro-dashboard/wiki/embedding.js');
+  const { detectDevice, isModelCached, getHardwareInfo, getLocalModelPath } = await import('#maestro-dashboard/wiki/embedding.js');
+  const localPath = getLocalModelPath();
+  if (!apiMode && localPath) {
+    modelId = localPath;
+  }
   const hw = await getHardwareInfo();
   const cached = isModelCached();
 

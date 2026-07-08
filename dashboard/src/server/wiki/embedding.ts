@@ -79,6 +79,55 @@ export interface EmbeddingApiConfig {
 
 const API_CONFIG_PATH = join(homedir(), '.maestro', 'api-embedding.json');
 
+// ---------------------------------------------------------------------------
+// Local model path configuration (~/.maestro/local-embedding.json or env)
+// ---------------------------------------------------------------------------
+
+export interface LocalEmbeddingConfig {
+  /** Absolute path to local ONNX model folder (must contain onnx/model.onnx) */
+  modelPath: string;
+}
+
+const LOCAL_CONFIG_PATH = join(homedir(), '.maestro', 'local-embedding.json');
+
+let _localConfig: LocalEmbeddingConfig | null | undefined;
+
+export function loadLocalEmbeddingConfig(): LocalEmbeddingConfig | null {
+  if (_localConfig !== undefined) return _localConfig;
+
+  const envPath = process.env.MAESTRO_EMBEDDING_MODEL_PATH;
+  if (envPath) {
+    _localConfig = { modelPath: envPath };
+    return _localConfig;
+  }
+
+  if (!existsSync(LOCAL_CONFIG_PATH)) {
+    _localConfig = null;
+    return null;
+  }
+  try {
+    const raw = JSON.parse(readFileSync(LOCAL_CONFIG_PATH, 'utf-8')) as LocalEmbeddingConfig;
+    if (raw.modelPath) {
+      _localConfig = raw;
+      return raw;
+    }
+    _localConfig = null;
+    return null;
+  } catch {
+    _localConfig = null;
+    return null;
+  }
+}
+
+export function isLocalModelPath(): boolean {
+  return loadLocalEmbeddingConfig() !== null;
+}
+
+export function getLocalModelPath(): string | null {
+  const cfg = loadLocalEmbeddingConfig();
+  return cfg?.modelPath ?? null;
+}
+
 let _apiConfig: EmbeddingApiConfig | null | undefined;
 
 export function loadEmbeddingApiConfig(): EmbeddingApiConfig | null {
@@ -395,7 +444,8 @@ export async function detectDevice(): Promise<DeviceConfig> {
 export function getDeviceSummary(): string {
   if (isApiMode()) return 'api (external)';
   if (!_detectedConfig) return 'not initialized';
-  return `${_detectedConfig.device}/${_detectedConfig.dtype} batch=${_detectedConfig.batchSize}`;
+  const suffix = isLocalModelPath() ? ' (local)' : '';
+  return `${_detectedConfig.device}/${_detectedConfig.dtype} batch=${_detectedConfig.batchSize}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -438,9 +488,17 @@ export async function getHardwareInfo(): Promise<HardwareInfo> {
 const DEFAULT_LOCAL_MODEL = 'Xenova/multilingual-e5-small';
 export function getModelId(): string {
   const apiConf = loadEmbeddingApiConfig();
-  return apiConf ? apiConf.model : DEFAULT_LOCAL_MODEL;
+  if (apiConf) return apiConf.model;
+  const localConf = loadLocalEmbeddingConfig();
+  if (localConf) return localConf.modelPath;
+  return DEFAULT_LOCAL_MODEL;
 }
 export const DEFAULT_MODEL_ID = DEFAULT_LOCAL_MODEL;
+
+function resolveLocalModel(): string {
+  const localConf = loadLocalEmbeddingConfig();
+  return localConf ? localConf.modelPath : DEFAULT_LOCAL_MODEL;
+}
 
 /**
  * Check if the local ONNX model is already downloaded in the HuggingFace cache.
@@ -448,6 +506,13 @@ export const DEFAULT_MODEL_ID = DEFAULT_LOCAL_MODEL;
  */
 export function isModelCached(): boolean {
   if (isApiMode()) return true;
+
+  const localConf = loadLocalEmbeddingConfig();
+  if (localConf) {
+    const p = localConf.modelPath;
+    return existsSync(join(p, 'onnx', 'model.onnx'))
+      || existsSync(join(p, 'model.onnx'));
+  }
 
   const cacheKey = DEFAULT_LOCAL_MODEL.replace('/', '--');
   const hfHome = process.env.HF_HOME || join(homedir(), '.cache', 'huggingface');
@@ -511,12 +576,17 @@ async function getPipeline(): Promise<any> {
 
   await configureProxy();
   const config = await detectDevice();
+  const modelId = resolveLocalModel();
   const { pipeline } = await loadTransformers();
-  _pipeline = await pipeline('feature-extraction', DEFAULT_LOCAL_MODEL, {
+  const pipelineOpts: Record<string, unknown> = {
     dtype: config.dtype,
     device: config.device,
     progress_callback: _progressCallback ?? undefined,
-  });
+  };
+  if (isLocalModelPath()) {
+    pipelineOpts.local_files_only = true;
+  }
+  _pipeline = await pipeline('feature-extraction', modelId, pipelineOpts);
   _progressCallback = null;
   return _pipeline;
 }

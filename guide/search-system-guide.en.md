@@ -318,6 +318,18 @@ maestro embedding status
 maestro embedding warmup
 ```
 
+**Using a Local Model Folder** (offline or custom model):
+
+```bash
+# Option 1: Config file ~/.maestro/local-embedding.json
+echo '{"modelPath": "D:/models/multilingual-e5-small"}' > ~/.maestro/local-embedding.json
+
+# Option 2: Environment variable (takes priority over config file)
+export MAESTRO_EMBEDDING_MODEL_PATH="D:/models/multilingual-e5-small"
+```
+
+The model folder must contain `onnx/model.onnx` (or `model.onnx` at root) + `tokenizer.json` + `config.json`.
+
 **Automatic Fallback**: When embedding is unavailable, search automatically falls back to BM25-only mode, no manual intervention needed.
 
 ---

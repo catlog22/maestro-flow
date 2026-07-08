@@ -319,6 +319,18 @@ maestro embedding status
 maestro embedding warmup
 ```
 
+**使用本地模型文件夹**（离线环境或自定义模型）：
+
+```bash
+# 方式一：配置文件 ~/.maestro/local-embedding.json
+echo '{"modelPath": "D:/models/multilingual-e5-small"}' > ~/.maestro/local-embedding.json
+
+# 方式二：环境变量（优先于配置文件）
+export MAESTRO_EMBEDDING_MODEL_PATH="D:/models/multilingual-e5-small"
+```
+
+模型文件夹需包含 `onnx/model.onnx`（或根目录下 `model.onnx`）+ `tokenizer.json` + `config.json`。
+
 **自动降级**：当 embedding 不可用时，搜索自动降级为 BM25-only 模式，无需手动干预。
 
 ---

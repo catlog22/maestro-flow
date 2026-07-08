@@ -88,6 +88,9 @@ export function EmbeddingConfig({
         <Box>
           <Text>Model: </Text>
           <Text color={C.primary}>{status.modelId}</Text>
+          {status.mode === 'local' && status.modelId.includes('/') && status.modelId.length > 30 && (
+            <Text dimColor> (local folder)</Text>
+          )}
         </Box>
         <Box>
           <Text>Dimension: </Text>

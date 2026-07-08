@@ -188,6 +188,85 @@ API 模式自动读取代理设置，优先级：
 
 ---
 
+## 本地模型文件夹
+
+当自动下载不可用（离线环境、网络限制）或需要使用自定义 ONNX 模型时，可以指定本地模型文件夹路径，跳过 HuggingFace Hub 下载。
+
+### 配置方式
+
+**方式一：配置文件**（推荐）
+
+创建 `~/.maestro/local-embedding.json`：
+
+```json
+{
+  "modelPath": "D:/models/multilingual-e5-small"
+}
+```
+
+**方式二：环境变量**
+
+```bash
+export MAESTRO_EMBEDDING_MODEL_PATH="D:/models/multilingual-e5-small"
+```
+
+> 环境变量优先于配置文件。
+
+### 模型文件夹结构
+
+本地模型文件夹必须包含 ONNX 模型文件，支持两种目录结构：
+
+```
+# 标准结构（推荐）
+models/multilingual-e5-small/
+├── onnx/
+│   └── model.onnx          # ONNX 推理模型
+├── tokenizer.json           # 分词器
+├── tokenizer_config.json    # 分词器配置
+└── config.json              # 模型配置
+
+# 扁平结构
+models/multilingual-e5-small/
+├── model.onnx               # ONNX 推理模型
+├── tokenizer.json
+└── config.json
+```
+
+### 准备本地模型
+
+```bash
+# 从 HuggingFace 下载到本地文件夹
+mkdir -p D:/models/multilingual-e5-small/onnx
+HF=https://huggingface.co/Xenova/multilingual-e5-small/resolve/main
+
+curl -L -o D:/models/multilingual-e5-small/onnx/model.onnx  $HF/onnx/model.onnx
+curl -L -o D:/models/multilingual-e5-small/tokenizer.json   $HF/tokenizer.json
+curl -L -o D:/models/multilingual-e5-small/config.json      $HF/config.json
+curl -L -o D:/models/multilingual-e5-small/tokenizer_config.json $HF/tokenizer_config.json
+```
+
+### 验证配置
+
+```bash
+maestro embedding status
+
+# 本地模型文件夹模式输出示例：
+# Transformers: available
+# Device: gpu/fp16 batch=128 (local)
+# Model: local → D:/models/multilingual-e5-small
+# Active model: D:/models/multilingual-e5-small
+```
+
+### 优先级
+
+模型加载按以下优先级选择：
+
+1. **API 模式** — `~/.maestro/api-embedding.json` 存在时使用外部 API
+2. **本地文件夹** — `MAESTRO_EMBEDDING_MODEL_PATH` 环境变量 > `~/.maestro/local-embedding.json`
+3. **HuggingFace Hub** — 默认从 Hub 下载 `Xenova/multilingual-e5-small`
+
+---
+
 ## 本地模型配置
 
 ### 设备配置
@@ -315,7 +394,10 @@ daemon 空闲 30 分钟后自动关闭。
 
 | 变量 | 说明 |
 |------|------|
-| `HTTPS_PROXY` | HTTPS 代理（用于模型下载） |
+| `MAESTRO_EMBEDDING_MODEL_PATH` | 本地 ONNX 模型文件夹路径（优先于配置文件） |
+| `MAESTRO_EMBEDDING_DEVICE` | 强制设备选择：`cpu`（跳过 GPU） |
+| `MAESTRO_EMBEDDING_BATCH_SIZE` | 覆盖默认 batch size |
+| `HTTPS_PROXY` | HTTPS 代理（用于模型下载和 API 调用） |
 | `HTTP_PROXY` | HTTP 代理 |
 | `ALL_PROXY` | 通用代理 |
 
