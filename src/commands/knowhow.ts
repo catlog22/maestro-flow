@@ -41,6 +41,7 @@ export function registerKnowhowCommand(program: Command): void {
     .option('--code-paths <paths>', '[asset/blueprint] Comma-separated code paths')
     .option('--category <category>', 'Spec category for agent discovery (coding, arch, test, debug, review, learning)')
     .option('--spec-category <cat>', 'Spec category for agent injection (coding|arch|debug|test|review|learning|ui)')
+    .option('--tool', 'Mark this knowhow entry as a tool')
     .action(async (opts) => {
       const type = opts.type as string;
       if (!CATEGORIES.includes(type as any)) {
@@ -106,6 +107,9 @@ export function registerKnowhowCommand(program: Command): void {
         const paths = opts.codePaths.split(',').map((s: string) => s.trim()).filter(Boolean);
         fmLines.push('codePaths:');
         for (const p of paths) fmLines.push(`  - ${p}`);
+      }
+      if (opts.tool) {
+        fmLines.push('tool: true');
       }
       fmLines.push('---', '', body);
 
