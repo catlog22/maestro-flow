@@ -116,10 +116,10 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     'forgecode', 'goose', 'hermes-agent', 'inference-sh', 'jazz',
     'junie', 'iflow-cli', 'kimi-code-cli', 'kode', 'lingma',
     'loaf', 'mcpjam', 'mistral-vibe', 'moxby', 'mux',
-    'openhands', 'ona', 'qoder-cn', 'qwen-code', 'replit',
+    'openhands', 'ona', 'qwen-code', 'replit',
     'reasonix', 'rovodev', 'tabnine-cli', 'terramind', 'tinycloud',
-    'trae-cn', 'warp', 'windsurf', 'zed', 'zencoder',
-    'zenflow', 'neovate', 'pochi', 'promptscript', 'adal',
+    'warp', 'windsurf', 'zed', 'zencoder',
+    'neovate', 'pochi', 'promptscript', 'adal',
   ];
 
   // Fallback: infer previously installed platforms from on-disk artifacts
@@ -153,35 +153,27 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ['kimi-code-cli', '.kimi-code-cli'], ['kode', '.kode'], ['lingma', '.lingma'],
       ['loaf', '.loaf'], ['mcpjam', '.mcpjam'], ['mistral-vibe', '.vibe'],
       ['moxby', '.moxby'], ['mux', '.mux'], ['openhands', '.openhands'],
-      ['ona', '.ona'], ['qoder-cn', '.qoder'], ['qwen-code', '.qwen'],
+      ['ona', '.ona'], ['qwen-code', '.qwen'],
       ['replit', '.replit'], ['reasonix', '.reasonix'], ['rovodev', '.rovodev'],
       ['tabnine-cli', '.tabnine'], ['terramind', '.terramind'], ['tinycloud', '.tinycloud'],
-      ['trae-cn', '.trae'], ['warp', '.warp'], ['windsurf', '.windsurf'],
-      ['zed', '.zed'], ['zencoder', '.zencoder'], ['zenflow', '.zencoder'],
+      ['warp', '.warp'], ['windsurf', '.windsurf'],
+      ['zed', '.zed'], ['zencoder', '.zencoder'],
       ['neovate', '.neovate'], ['pochi', '.pochi'], ['promptscript', '.promptscript'],
       ['adal', '.adal'],
     ];
-    const isTraeCnInstalledGlobally = existsSync(join(homedir(), '.trae-cn'));
-    const isQoderCnInstalledGlobally = existsSync(join(homedir(), '.qoder-cn'));
 
     for (const [id, dir] of extraPlatDirs) {
-      let checkDir = dir;
-      if (scope === 'global') {
-        if (id === 'trae-cn') checkDir = '.trae-cn';
-        else if (id === 'qoder-cn') checkDir = '.qoder-cn';
+      if (id === 'trae') {
+        const hasLocal = existsSync(join(base, '.trae', 'skills')) || existsSync(join(base, '.trae', 'agents'));
+        const hasGlobalCN = scope === 'global' && (existsSync(join(base, '.trae-cn', 'skills')) || existsSync(join(base, '.trae-cn', 'agents')));
+        if (hasLocal || hasGlobalCN) plats.add(id);
+      } else if (id === 'qoder') {
+        const hasLocal = existsSync(join(base, '.qoder', 'skills')) || existsSync(join(base, '.qoder', 'agents'));
+        const hasGlobalCN = scope === 'global' && (existsSync(join(base, '.qoder-cn', 'skills')) || existsSync(join(base, '.qoder-cn', 'agents')));
+        if (hasLocal || hasGlobalCN) plats.add(id);
+      } else {
+        if (existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'))) plats.add(id);
       }
-
-      if (scope === 'project') {
-        if (id === 'trae-cn' && !isTraeCnInstalledGlobally) continue;
-        if (id === 'trae' && isTraeCnInstalledGlobally) continue;
-        if (id === 'qoder-cn' && !isQoderCnInstalledGlobally) continue;
-        if (id === 'qoder' && isQoderCnInstalledGlobally) continue;
-        if (id === 'zenflow') continue;
-      }
-
-      if (scope === 'global' && id === 'zenflow') continue;
-
-      if (existsSync(join(base, checkDir, 'skills')) || existsSync(join(base, checkDir, 'agents'))) plats.add(id);
     }
     if (plats.size === 0) plats.add('claude');
     return plats;

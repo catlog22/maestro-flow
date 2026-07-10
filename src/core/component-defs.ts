@@ -562,11 +562,11 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'kilo',            label: 'Kilo Code',          description: 'Kilo Code IDE',            configDir: '.kilocode' },
   { id: 'copilot',         label: 'GitHub Copilot',     description: 'GitHub Copilot agent',     configDir: '.github', contextFile: 'copilot-instructions.md' },
   { id: 'devin',           label: 'Devin',              description: 'Cognition Devin',          configDir: '.devin' },
-  { id: 'qoder',           label: 'Qoder',              description: 'Qoder CLI',                configDir: '.qoder' },
+  { id: 'qoder',           label: 'Qoder / Qoder CN',   description: 'Qoder CLI / Agent',        configDir: '.qoder' },
   { id: 'codebuddy',       label: 'CodeBuddy',          description: 'CodeBuddy IDE',            configDir: '.codebuddy' },
   { id: 'droid',           label: 'Droid',              description: 'Factory Droid',            configDir: '.factory' },
   { id: 'pi',              label: 'Pi Agent',           description: 'Pi Agent CLI',             configDir: '.pi' },
-  { id: 'trae',            label: 'Trae',               description: 'Trae AI IDE',              configDir: '.trae' },
+  { id: 'trae',            label: 'Trae / Trae CN',     description: 'Trae AI IDE',              configDir: '.trae' },
   { id: 'roo',             label: 'Roo Code',           description: 'Roo Code IDE',             configDir: '.roo' },
   { id: 'aider-desk',      label: 'AiderDesk',          description: 'AiderDesk Agent',          configDir: '.aider-desk' },
   { id: 'amp',             label: 'Amp',                description: 'Amp Agent',                configDir: '.amp' },
@@ -605,7 +605,6 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'mux',             label: 'Mux',                description: 'Mux Agent',                configDir: '.mux' },
   { id: 'openhands',       label: 'OpenHands',          description: 'OpenHands Agent',          configDir: '.openhands' },
   { id: 'ona',             label: 'Ona',                description: 'Ona Agent',                configDir: '.ona' },
-  { id: 'qoder-cn',        label: 'Qoder CN',           description: 'Qoder CN Agent',           configDir: '.qoder', globalConfigDir: '.qoder-cn' },
   { id: 'qwen-code',       label: 'Qwen Code',          description: 'Qwen Code Agent',          configDir: '.qwen' },
   { id: 'replit',          label: 'Replit',             description: 'Replit Agent',             configDir: '.replit' },
   { id: 'reasonix',        label: 'Reasonix',           description: 'Reasonix Agent',           configDir: '.reasonix' },
@@ -613,12 +612,10 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'tabnine-cli',     label: 'Tabnine CLI',        description: 'Tabnine CLI Agent',        configDir: '.tabnine' },
   { id: 'terramind',       label: 'Terramind',          description: 'Terramind Agent',          configDir: '.terramind' },
   { id: 'tinycloud',       label: 'Tinycloud',          description: 'Tinycloud Agent',          configDir: '.tinycloud' },
-  { id: 'trae-cn',         label: 'Trae CN',            description: 'Trae CN Agent',            configDir: '.trae', globalConfigDir: '.trae-cn' },
   { id: 'warp',            label: 'Warp',               description: 'Warp Agent',               configDir: '.warp' },
   { id: 'windsurf',        label: 'Windsurf',           description: 'Windsurf Agent',           configDir: '.windsurf' },
   { id: 'zed',             label: 'Zed',                description: 'Zed Agent',                configDir: '.zed' },
-  { id: 'zencoder',        label: 'Zencoder',           description: 'Zencoder Agent',           configDir: '.zencoder' },
-  { id: 'zenflow',         label: 'Zenflow',            description: 'Zenflow Agent',            configDir: '.zencoder' },
+  { id: 'zencoder',        label: 'Zencoder / Zenflow', description: 'Zencoder / Zenflow Agent', configDir: '.zencoder' },
   { id: 'neovate',         label: 'Neovate',            description: 'Neovate Agent',            configDir: '.neovate' },
   { id: 'pochi',           label: 'Pochi',              description: 'Pochi Agent',              configDir: '.pochi' },
   { id: 'promptscript',    label: 'PromptScript',       description: 'PromptScript Agent',       configDir: '.promptscript' },
@@ -627,7 +624,16 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
 
 function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
   const { id, configDir, contextFile = 'AGENTS.md' } = entry;
-  const globalDir = entry.globalConfigDir ?? configDir;
+  const rawGlobalDir = entry.globalConfigDir ?? configDir;
+
+  const getGlobalDir = () => {
+    const fs = require('node:fs');
+    if (id === 'trae' && fs.existsSync(join(homedir(), '.trae-cn'))) return '.trae-cn';
+    if (id === 'qoder' && fs.existsSync(join(homedir(), '.qoder-cn'))) return '.qoder-cn';
+    return rawGlobalDir;
+  };
+
+  const globalDir = getGlobalDir();
 
   return [
     {
