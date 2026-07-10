@@ -670,6 +670,10 @@ function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
       alwaysGlobal: false,
       platform: id,
       build: (claudeDir, targetDir) => {
+        if (id === 'eve') {
+          const { buildEveSkills } = require('./skill-converter.js');
+          return buildEveSkills(claudeDir, targetDir);
+        }
         const { buildAgentsStandardSkills } = require('./skill-converter.js');
         return buildAgentsStandardSkills(claudeDir, targetDir);
       },
@@ -687,6 +691,10 @@ function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {
       alwaysGlobal: false,
       platform: id,
       build: (claudeDir, targetDir) => {
+        if (id === 'eve') {
+          const { buildEveAgents } = require('./skill-converter.js');
+          return buildEveAgents(claudeDir, targetDir);
+        }
         const { buildAgentsStandardAgents } = require('./skill-converter.js');
         return buildAgentsStandardAgents(claudeDir, targetDir);
       },

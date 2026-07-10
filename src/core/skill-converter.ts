@@ -746,3 +746,123 @@ export function buildAgentsStandardAgents(
   const stats = buildAgentsOnly(claudeDir, targetDir, AGENTS_STANDARD_PROFILE, convertTextStandard);
   return { files: stats.files };
 }
+
+// ---------------------------------------------------------------------------
+// Eve-specific conversion and building logic
+// ---------------------------------------------------------------------------
+
+function convertTextEve(content: string): string {
+  const { frontmatter, body } = splitFrontmatter(content);
+  if (!frontmatter) {
+    return body.replace(/^\r?\n/u, '');
+  }
+  const eveData: Record<string, any> = {};
+  if (typeof frontmatter.description === 'string') {
+    eveData.description = frontmatter.description;
+  }
+  if (typeof frontmatter.license === 'string') {
+    eveData.license = frontmatter.license;
+  }
+  if (frontmatter.metadata && typeof frontmatter.metadata === 'object' && !Array.isArray(frontmatter.metadata)) {
+    const metadata: Record<string, string> = {};
+    for (const [k, v] of Object.entries(frontmatter.metadata)) {
+      if (typeof v === 'string') {
+        metadata[k] = v;
+      }
+    }
+    if (Object.keys(metadata).length > 0) {
+      eveData.metadata = metadata;
+    }
+  }
+
+  const keys = Object.keys(eveData);
+  if (keys.length === 0) {
+    return body.replace(/^\r?\n/u, '');
+  }
+
+  const lines: string[] = ['---'];
+  for (const key of keys) {
+    const val = eveData[key];
+    if (typeof val === 'object') {
+      lines.push(`${key}:`);
+      for (const [k, v] of Object.entries(val)) {
+        lines.push(`  ${k}: ${JSON.stringify(v)}`);
+      }
+    } else {
+      lines.push(`${key}: ${JSON.stringify(val)}`);
+    }
+  }
+  lines.push('---', '');
+  return lines.join('\n') + body.replace(/^\r?\n/u, '');
+}
+
+function buildEveSkillsOnly(
+  claudeDir: string,
+  targetSkillsDir: string,
+): BuildStats {
+  const commandsDir = join(claudeDir, 'commands');
+  const skillsDir = join(claudeDir, 'skills');
+  const stats: BuildStats = { commands: 0, skills: 0, agents: 0, files: 0 };
+
+  // 1. commands/*.md → targetSkillsDir/<name>/<name>.md
+  if (existsSync(commandsDir)) {
+    for (const entry of readdirSync(commandsDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      const name = entry.name.replace(/\.md$/, '');
+      const src = join(commandsDir, entry.name);
+      const destDir = join(targetSkillsDir, name);
+      const dest = join(destDir, `${name}.md`);
+      ensureDir(destDir);
+      const out = convertTextEve(readFileSync(src, 'utf8'));
+      writeFileSync(dest, out, 'utf8');
+      stats.commands++;
+      stats.files++;
+    }
+  }
+
+  // 2. skills/<name>/ → targetSkillsDir/<name>/ (recursive)
+  if (existsSync(skillsDir)) {
+    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const srcRoot = join(skillsDir, entry.name);
+      const destRoot = join(targetSkillsDir, entry.name);
+      for (const fp of walkFiles(srcRoot)) {
+        const rel = relative(srcRoot, fp);
+        const fileBase = basename(fp).toLowerCase();
+        let dest = join(destRoot, rel);
+        if (fileBase === 'skill.md') {
+          dest = join(dirname(dest), `${entry.name}.md`);
+        }
+        ensureDir(dirname(dest));
+        if (fp.endsWith('.md')) {
+          const out = convertTextEve(readFileSync(fp, 'utf8'));
+          writeFileSync(dest, out, 'utf8');
+        } else {
+          writeFileSync(dest, readFileSync(fp));
+        }
+        stats.files++;
+      }
+      stats.skills++;
+    }
+  }
+
+  return stats;
+}
+
+/** Build Eve skills (commands + skills) with frontmatter stripping & flat file naming. */
+export function buildEveSkills(
+  claudeDir: string,
+  targetDir: string,
+): { files: number } {
+  const stats = buildEveSkillsOnly(claudeDir, targetDir);
+  return { files: stats.files };
+}
+
+/** Build Eve agents using standard/neutral converter. */
+export function buildEveAgents(
+  claudeDir: string,
+  targetDir: string,
+): { files: number } {
+  const stats = buildAgentsOnly(claudeDir, targetDir, AGENTS_STANDARD_PROFILE, convertTextStandard);
+  return { files: stats.files };
+}
