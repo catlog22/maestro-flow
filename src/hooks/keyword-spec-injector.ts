@@ -91,6 +91,7 @@ export async function evaluateKeywordInjection(
   // ── Spec keyword matching ──────────────────────────────────────────
   const promptKeywords = tokenizePrompt(prompt);
   let toInject: IndexedEntry[] = [];
+  let overflowEntries: IndexedEntry[] = [];
   let matchedKws: string[] = [];
 
   if (promptKeywords.length > 0) {
@@ -102,6 +103,13 @@ export async function evaluateKeywordInjection(
         if (unjected.length > 0) {
           toInject = unjected.slice(0, MAX_ENTRIES_PER_INJECTION);
           sections.push(buildKeywordSection(toInject));
+          
+          const overflow = unjected.slice(MAX_ENTRIES_PER_INJECTION, MAX_ENTRIES_PER_INJECTION + 15);
+          if (overflow.length > 0) {
+            sections.push(buildCompactKeywordSection(overflow));
+            overflowEntries = overflow;
+          }
+          
           matchedKws = promptKeywords.filter(kw => index.has(kw));
         }
       }
@@ -153,9 +161,10 @@ export async function evaluateKeywordInjection(
   );
   const content = wrapMaestroContext(liveSections, { used: usedChars, max: usedChars });
 
-  if (toInject.length > 0) {
-    const injectedKeywords = [...new Set(toInject.flatMap(e => e.keywords))];
-    const injectedIds = toInject.map(e => e.id);
+  let allInjectedEntries = [...toInject, ...overflowEntries];
+  if (allInjectedEntries.length > 0) {
+    const injectedKeywords = [...new Set(allInjectedEntries.flatMap(e => e.keywords))];
+    const injectedIds = allInjectedEntries.map(e => e.id);
     markInjected(sessionId, injectedKeywords, injectedIds);
   }
 
@@ -163,7 +172,7 @@ export async function evaluateKeywordInjection(
     source: 'keyword-spec-injector',
     promptSnippet: prompt.slice(0, 300),
     categories: [],
-    specCount: toInject.length,
+    specCount: toInject.length, // Only count full entries for telemetry
     contentLength: content.length,
     inject: true,
     matchedKeywords: matchedKws,
@@ -251,6 +260,23 @@ function buildKeywordSection(entries: IndexedEntry[]): ContextSection {
       : e.confidence === 'low' ? '[LOW CONFIDENCE] '
       : '';
     return `${badge}${e.category} · ${kws} · ${titlePrefix}${body}`;
+  });
+
+  return { label, lines };
+}
+
+/**
+ * Build a concise keyword-match overflow section for the unified <maestro-context> block.
+ * Each line only includes the category, keywords and title.
+ */
+function buildCompactKeywordSection(entries: IndexedEntry[]): ContextSection {
+  const allKeywords = [...new Set(entries.flatMap(e => e.keywords))];
+  const label = `keyword-overflow[${allKeywords.join(',')}]`;
+
+  const lines = entries.map(e => {
+    const kws = e.keywords.join(',');
+    const title = e.title ? e.title : e.id;
+    return `↳ ${e.category} · ${kws} · ${title}`;
   });
 
   return { label, lines };

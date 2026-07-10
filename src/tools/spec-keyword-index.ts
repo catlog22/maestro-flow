@@ -116,20 +116,58 @@ export function lookupKeyword(index: Map<string, IndexedEntry[]>, keyword: strin
  * Returns deduplicated entries (by id).
  */
 export function lookupKeywords(index: Map<string, IndexedEntry[]>, keywords: string[]): IndexedEntry[] {
-  const seen = new Set<string>();
-  const results: IndexedEntry[] = [];
+  const scored = new Map<string, { entry: IndexedEntry; score: number; matched: Set<string> }>();
 
   for (const kw of keywords) {
-    const entries = index.get(kw.toLowerCase()) ?? [];
+    const k = kw.toLowerCase();
+    const entries = index.get(k) ?? [];
+
     for (const entry of entries) {
-      if (!seen.has(entry.id)) {
-        seen.add(entry.id);
-        results.push(entry);
+      if (!scored.has(entry.id)) {
+        scored.set(entry.id, { entry, score: 0, matched: new Set<string>() });
+      }
+
+      const state = scored.get(entry.id)!;
+      if (!state.matched.has(k)) {
+        state.matched.add(k);
+
+        let kwWeight = 10;
+
+        // Exact match in defined keywords gets higher weight
+        if (entry.keywords.some(ek => ek.toLowerCase() === k)) {
+          kwWeight += 10;
+        } else {
+          // It's a CJK sub-token match, base it on length
+          kwWeight += k.length * 2;
+        }
+
+        // Title match gets extra weight
+        if (entry.title && entry.title.toLowerCase().includes(k)) {
+          kwWeight += 15;
+        }
+
+        // Content match gets some weight
+        if (entry.content && entry.content.toLowerCase().includes(k)) {
+          kwWeight += 5;
+        }
+
+        state.score += kwWeight;
       }
     }
   }
 
-  return results;
+  // Adjust by confidence
+  for (const state of scored.values()) {
+    const conf = state.entry.confidence;
+    if (conf === 'high') state.score *= 1.5;
+    else if (conf === 'low') state.score *= 0.8;
+    else if (conf === 'contested') state.score *= 0.5;
+  }
+
+  // Sort by score descending
+  return Array.from(scored.values())
+    .sort((a, b) => b.score - a.score)
+    .map(s => s.entry);
 }
 
 // ============================================================================
