@@ -122,6 +122,7 @@ export function registerSpecCommand(program: Command): void {
     .description('List spec files (all scopes by default)')
     .option('--scope <scope>', 'Spec scope: project|global|team|personal (omit for all)')
     .option('--uid <uid>', 'User id for personal scope')
+    .option('--json', 'Output as JSON')
     .action(async (opts) => {
       const { logCliEndpoint } = await import('../hooks/spec-analytics.js');
       logCliEndpoint(process.cwd(), 'spec list', { scope: opts.scope });
@@ -131,6 +132,51 @@ export function registerSpecCommand(program: Command): void {
       const { parseSpecEntries: parseEntries } = await import('../tools/spec-entry-parser.js');
 
       const uid = await resolveUid(opts);
+
+      const getFileEntries = (specsDir: string, file: string, scope: string) => {
+        try {
+          const raw = readFs(pathJoin(specsDir, file), 'utf-8');
+          const { entries } = parseEntries(raw);
+          return entries.map(e => ({
+            ...e,
+            file,
+            scope,
+          }));
+        } catch {
+          return [];
+        }
+      };
+
+      if (opts.json) {
+        const allEntries: any[] = [];
+        if (opts.scope) {
+          const scope = validateScope(opts.scope);
+          if (scope === 'personal' && !uid) {
+            console.error('Error: personal scope requires --uid or team membership.');
+            process.exit(1);
+          }
+          const specsDir = resolveSpecDir(process.cwd(), scope, uid);
+          if (existsSync(specsDir)) {
+            const files = readdirSync(specsDir).filter(f => f.endsWith('.md'));
+            for (const file of files) {
+              allEntries.push(...getFileEntries(specsDir, file, scope));
+            }
+          }
+        } else {
+          const scopesToShow: Array<typeof VALID_SCOPES[number]> = ['global', 'project', 'team'];
+          for (const scope of scopesToShow) {
+            const specsDir = resolveSpecDir(process.cwd(), scope);
+            if (existsSync(specsDir)) {
+              const files = readdirSync(specsDir).filter(f => f.endsWith('.md'));
+              for (const file of files) {
+                allEntries.push(...getFileEntries(specsDir, file, scope));
+              }
+            }
+          }
+        }
+        console.log(JSON.stringify({ entries: allEntries }, null, 2));
+        return;
+      }
 
       const printFileEntries = (specsDir: string, file: string) => {
         try {

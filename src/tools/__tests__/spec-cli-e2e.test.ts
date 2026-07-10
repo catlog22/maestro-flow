@@ -243,6 +243,20 @@ describe('maestro spec list', () => {
     expect(output).toContain('8 files');
   });
 
+  it('lists spec files as JSON', () => {
+    runMaestro('spec init');
+    runMaestro('spec add coding "JSON Test Rule" "This is a JSON test spec." --keywords json-test');
+    const output = runMaestro('spec list --json');
+    const parsed = JSON.parse(output);
+    expect(parsed.entries).toBeDefined();
+    expect(Array.isArray(parsed.entries)).toBe(true);
+    expect(parsed.entries.length).toBeGreaterThan(0);
+    const entry = parsed.entries.find((e: any) => e.title === 'JSON Test Rule');
+    expect(entry).toBeDefined();
+    expect(entry.category).toBe('coding');
+    expect(entry.content).toContain('This is a JSON test spec.');
+  });
+
   it('shows message when no specs directory exists', () => {
     // Remove .workflow to test missing case
     rmSync(join(testDir, '.workflow'), { recursive: true, force: true });
