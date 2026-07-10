@@ -57,17 +57,18 @@ export interface UseInstallFlowStateOptions {
   initialStep?: FlowStepCompat;
   initialMode?: 'global' | 'project';
   initialStepIds?: string[];
+  initialProjectPath?: string;
 }
 
 export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
-  const { pkgRoot, initialStep, initialMode, initialStepIds } = opts;
+  const { pkgRoot, initialStep, initialMode, initialStepIds, initialProjectPath } = opts;
   const isSubcommand = !!initialStep;
   const resolvedInitialStep: FlowStep = (initialStep === 'mode' || !initialStep) ? 'platforms' : initialStep as FlowStep;
 
   // --- Core navigation ---
   const [step, setStep] = useState<FlowStep>(resolvedInitialStep);
-  const [mode, setMode] = useState<'global' | 'project'>(initialMode ?? 'global');
-  const [projectPath] = useState(process.cwd());
+  const [mode, setMode] = useState<'global' | 'project'>(initialMode ?? (initialProjectPath ? 'project' : 'global'));
+  const [projectPath] = useState(initialProjectPath ?? process.cwd());
 
   // --- Manifest ---
   const lastManifest = useMemo<Manifest | null>(() => {

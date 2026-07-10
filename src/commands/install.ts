@@ -58,10 +58,11 @@ function registerComponentsSubcommand(install: Command): void {
     .action(async (opts: { global?: boolean; path?: string }) => {
       const pkgRoot = getPackageRoot();
       const version = getVersion(pkgRoot);
-      const { mode } = resolveMode(opts);
+      const { mode, projectPath } = resolveMode(opts);
       await runInstallFlow(pkgRoot, version, {
         initialStep: 'components_config',
         initialMode: mode,
+        initialProjectPath: projectPath,
         initialStepIds: ['components'],
       });
     });
@@ -80,6 +81,7 @@ function registerHooksSubcommand(install: Command): void {
       await runInstallFlow(pkgRoot, version, {
         initialStep: 'hooks_config',
         initialMode: mode,
+        initialProjectPath: process.cwd(),
         initialStepIds: ['hooks'],
       });
     });
@@ -94,10 +96,11 @@ function registerMcpSubcommand(install: Command): void {
     .action(async (opts: { global?: boolean; path?: string }) => {
       const pkgRoot = getPackageRoot();
       const version = getVersion(pkgRoot);
-      const { mode } = resolveMode(opts);
+      const { mode, projectPath } = resolveMode(opts);
       await runInstallFlow(pkgRoot, version, {
         initialStep: 'mcp_config',
         initialMode: mode,
+        initialProjectPath: projectPath,
         initialStepIds: ['mcp'],
       });
     });
@@ -263,7 +266,11 @@ export function registerInstallCommand(program: Command): void {
       if (opts.force) {
         await forceInstall(pkgRoot, version, opts);
       } else {
-        await runInstallFlow(pkgRoot, version);
+        const { mode, projectPath } = resolveMode(opts);
+        await runInstallFlow(pkgRoot, version, {
+          initialMode: mode,
+          initialProjectPath: projectPath || undefined,
+        });
       }
     });
 

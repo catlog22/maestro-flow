@@ -27,6 +27,7 @@ export interface InstallFlowProps {
   initialStep?: FlowStepCompat;
   initialMode?: 'global' | 'project';
   initialStepIds?: string[];
+  initialProjectPath?: string;
 }
 
 const CONFIG_STEPS = [
@@ -36,9 +37,9 @@ const CONFIG_STEPS = [
   'statusline_config', 'backup_config', 'embedding_config',
 ];
 
-export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initialStepIds }: InstallFlowProps) {
+export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initialStepIds, initialProjectPath }: InstallFlowProps) {
   const { exit } = useApp();
-  const s = useInstallFlowState({ pkgRoot, initialStep, initialMode, initialStepIds });
+  const s = useInstallFlowState({ pkgRoot, initialStep, initialMode, initialStepIds, initialProjectPath });
 
   // Global input for config steps
   useInput((_input, key) => {

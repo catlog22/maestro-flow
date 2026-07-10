@@ -22,6 +22,7 @@ export interface InstallFlowOptions {
     | 'confirm';
   initialMode?: 'global' | 'project';
   initialStepIds?: string[];
+  initialProjectPath?: string;
 }
 
 export async function runInstallFlow(
