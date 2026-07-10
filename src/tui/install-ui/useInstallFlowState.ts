@@ -108,6 +108,17 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     'cursor', 'opencode', 'kiro', 'kilo', 'copilot',
     'devin', 'qoder', 'codebuddy', 'droid', 'pi',
     'trae', 'roo',
+    'aider-desk', 'amp', 'antigravity', 'antigravity-cli', 'astrbot',
+    'autohand-code', 'augment', 'bob', 'cline', 'codearts-agent',
+    'codemaker', 'codestudio', 'command-code', 'continue', 'cortex',
+    'crush', 'deepagents', 'dexto', 'eve', 'firebender',
+    'forgecode', 'goose', 'hermes-agent', 'inference-sh', 'jazz',
+    'junie', 'iflow-cli', 'kimi-code-cli', 'kode', 'lingma',
+    'loaf', 'mcpjam', 'mistral-vibe', 'moxby', 'mux',
+    'openhands', 'ona', 'qoder-cn', 'qwen-code', 'replit',
+    'reasonix', 'rovodev', 'tabnine-cli', 'terramind', 'tinycloud',
+    'trae-cn', 'warp', 'windsurf', 'zed', 'zencoder',
+    'zenflow', 'neovate', 'pochi', 'promptscript', 'adal',
   ];
 
   // Fallback: infer previously installed platforms from on-disk artifacts
@@ -129,6 +140,25 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ['kilo', '.kilocode'], ['copilot', '.github'], ['devin', '.devin'],
       ['qoder', '.qoder'], ['codebuddy', '.codebuddy'], ['droid', '.factory'], ['pi', '.pi'],
       ['trae', '.trae'], ['roo', '.roo'],
+      ['aider-desk', '.aider-desk'], ['amp', '.amp'], ['antigravity', '.antigravity'],
+      ['antigravity-cli', '.antigravity-cli'], ['astrbot', '.astrbot'], ['autohand-code', '.autohand'],
+      ['augment', '.augment'], ['bob', '.bob'], ['cline', '.cline'],
+      ['codearts-agent', '.codeartsdoer'], ['codemaker', '.codemaker'], ['codestudio', '.codestudio'],
+      ['command-code', '.commandcode'], ['continue', '.continue'], ['cortex', '.cortex'],
+      ['crush', '.crush'], ['deepagents', '.deepagents'], ['dexto', '.dexto'],
+      ['eve', 'agent'], ['firebender', '.firebender'], ['forgecode', '.forge'],
+      ['goose', '.goose'], ['hermes-agent', '.hermes'], ['inference-sh', '.inferencesh'],
+      ['jazz', '.jazz'], ['junie', '.junie'], ['iflow-cli', '.iflow'],
+      ['kimi-code-cli', '.kimi-code-cli'], ['kode', '.kode'], ['lingma', '.lingma'],
+      ['loaf', '.loaf'], ['mcpjam', '.mcpjam'], ['mistral-vibe', '.vibe'],
+      ['moxby', '.moxby'], ['mux', '.mux'], ['openhands', '.openhands'],
+      ['ona', '.ona'], ['qoder-cn', '.qoder'], ['qwen-code', '.qwen'],
+      ['replit', '.replit'], ['reasonix', '.reasonix'], ['rovodev', '.rovodev'],
+      ['tabnine-cli', '.tabnine'], ['terramind', '.terramind'], ['tinycloud', '.tinycloud'],
+      ['trae-cn', '.trae'], ['warp', '.warp'], ['windsurf', '.windsurf'],
+      ['zed', '.zed'], ['zencoder', '.zencoder'], ['zenflow', '.zencoder'],
+      ['neovate', '.neovate'], ['pochi', '.pochi'], ['promptscript', '.promptscript'],
+      ['adal', '.adal'],
     ];
     for (const [id, dir] of extraPlatDirs) {
       if (existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'))) plats.add(id);
