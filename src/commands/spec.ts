@@ -1324,15 +1324,27 @@ export function registerSpecCommand(program: Command): void {
 
 async function readStdin(): Promise<string> {
   return new Promise((resolve) => {
+    if (process.stdin.isTTY) {
+      resolve('');
+      return;
+    }
     let data = '';
     process.stdin.setEncoding('utf8');
-    process.stdin.on('readable', () => {
+    
+    const onReadable = () => {
       let chunk;
       while ((chunk = process.stdin.read()) !== null) {
         data += chunk as string;
       }
-    });
-    process.stdin.on('end', () => resolve(data));
-    if (process.stdin.isTTY) resolve('');
+    };
+    
+    const onEnd = () => {
+      process.stdin.off('readable', onReadable);
+      process.stdin.off('end', onEnd);
+      resolve(data);
+    };
+
+    process.stdin.on('readable', onReadable);
+    process.stdin.on('end', onEnd);
   });
 }

@@ -24,6 +24,7 @@ import type { TraversalResult, NodeContext, NodeMetrics, PathStep } from './quer
 import { searchUnified as searchUnifiedImpl, mergeCodeSearchResults } from './query/search.js';
 import type { UnifiedSearchOutput } from './query/search.js';
 import type { CodeEmbeddingIndex } from './embedding/code-embedding.js';
+import { buildCodeEmbeddingIndex, saveCodeEmbeddingIndex } from './embedding/index.js';
 import { buildContext as buildContextImpl } from './query/context-builder.js';
 import type { BuiltContext } from './query/context-builder.js';
 
@@ -161,8 +162,6 @@ export class MaestroGraph {
    */
   async buildCodeEmbeddings(): Promise<CodeEmbeddingIndex> {
     if (!this.queries) throw new Error('MaestroGraph not open');
-
-    const { buildCodeEmbeddingIndex, saveCodeEmbeddingIndex } = await import('./embedding/index.js');
 
     // Get all code nodes from the DB (only codegraph nodes are embeddable)
     const allCodeNodes = this.queries.getNodesBySourceType('codegraph');

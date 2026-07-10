@@ -61,12 +61,27 @@ export async function startDaemon(
         socket.end(JSON.stringify({ ok: false, error: 'request too large' }) + '\n');
         return;
       }
-      const nlIdx = buf.indexOf('\n');
-      if (nlIdx === -1) return;
-      const line = buf.slice(0, nlIdx);
-      buf = buf.slice(nlIdx + 1);
-      handleRequest(line, indexer, socket).then(() => {
-        resetIdle(server);
+      
+      const processBuffered = async () => {
+        let nlIdx;
+        const lines: string[] = [];
+        while ((nlIdx = buf.indexOf('\n')) !== -1) {
+          lines.push(buf.slice(0, nlIdx));
+          buf = buf.slice(nlIdx + 1);
+        }
+        
+        if (lines.length === 0) return;
+        
+        for (let i = 0; i < lines.length; i++) {
+          const isLast = (i === lines.length - 1) && (buf.length === 0);
+          await handleRequest(lines[i], indexer, socket, isLast);
+          resetIdle(server);
+        }
+      };
+      
+      processBuffered().catch((err) => {
+        if (process.env.MAESTRO_DEBUG === '1') console.warn('[daemon] error processing request:', err);
+        socket.destroy();
       });
     });
     socket.on('timeout', () => { socket.destroy(); });
@@ -95,6 +110,7 @@ async function handleRequest(
   line: string,
   indexer: WikiIndexer,
   socket: import('node:net').Socket,
+  isLast = true,
 ): Promise<void> {
   let resp: DaemonSearchResponse;
   try {
@@ -115,7 +131,12 @@ async function handleRequest(
   } catch (e: unknown) {
     resp = { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
-  socket.end(JSON.stringify(resp) + '\n');
+  const payload = JSON.stringify(resp) + '\n';
+  if (isLast) {
+    socket.end(payload);
+  } else {
+    socket.write(payload);
+  }
 }
 
 function shutdown(server: Server, workflowRoot: string): void {

@@ -179,21 +179,45 @@ function parseSpecFile(content: string, filePath: string): ParsedSpecEntry[] {
 }
 
 function parseFrontmatter(fmContent: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+  const data: Record<string, unknown> = {};
+  let currentKey = '';
+  let arrayItems: string[] | null = null;
+
   for (const line of fmContent.split('\n')) {
-    const match = line.match(/^(\w+):\s*(.+)$/);
-    if (match) {
-      const key = match[1];
-      let value: unknown = match[2].trim();
-      // 尝试解析 JSON 数组/对象
-      const strValue = value as string;
-      if (strValue.startsWith('[') || strValue.startsWith('{')) {
-        try { value = JSON.parse(strValue); } catch { /* keep as string */ }
+    const trimLine = line.trim();
+    if (trimLine.startsWith('- ') && arrayItems !== null) {
+      arrayItems.push(trimLine.substring(2).trim());
+      continue;
+    }
+    if (arrayItems !== null && currentKey) {
+      data[currentKey] = arrayItems;
+      arrayItems = null;
+    }
+    const colonIdx = trimLine.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = trimLine.substring(0, colonIdx).trim();
+    const value = trimLine.substring(colonIdx + 1).trim();
+    currentKey = key;
+    if (value === '' || value === '[]') {
+      arrayItems = [];
+    } else if (value.startsWith('[') && value.endsWith(']')) {
+      data[key] = value
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+        .filter((s) => s.length > 0);
+    } else {
+      let parsedValue: any = value.replace(/^["']|["']$/g, '');
+      if (parsedValue.startsWith('[') || parsedValue.startsWith('{')) {
+        try { parsedValue = JSON.parse(parsedValue); } catch { /* ignore */ }
       }
-      result[key] = value;
+      data[key] = parsedValue;
     }
   }
-  return result;
+  if (arrayItems !== null && currentKey) {
+    data[currentKey] = arrayItems;
+  }
+  return data;
 }
 
 function createEmptyFileRecord(path: string): FileRecord {

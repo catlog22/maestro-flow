@@ -732,8 +732,15 @@ export function searchBM25Planned(
     }
   }
 
-  const maxRrf = Math.max(...rrfScores.values(), 1e-9);
-  const maxBm25 = Math.max(...bm25Scores.values(), 1e-9);
+  let maxRrf = 1e-9;
+  for (const val of rrfScores.values()) {
+    if (val > maxRrf) maxRrf = val;
+  }
+
+  let maxBm25 = 1e-9;
+  for (const val of bm25Scores.values()) {
+    if (val > maxBm25) maxBm25 = val;
+  }
 
   let ranked: SearchResult[] = [];
   for (const [docId] of rrfScores) {

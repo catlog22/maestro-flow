@@ -287,7 +287,7 @@ export function evaluateSpecInjection(
 
   // Apply maxContentLength before context budget
   if (config?.maxContentLength && rawContent.length > config.maxContentLength) {
-    rawContent = rawContent.slice(0, config.maxContentLength);
+    rawContent = rawContent.slice(0, config.maxContentLength - 20) + '...\n</maestro-context>';
   }
 
   const budget = evaluateContextBudget(rawContent, sessionId);

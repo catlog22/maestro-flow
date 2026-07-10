@@ -52,6 +52,9 @@ export class KgDatabaseConnection {
   close(): void {
     if (this.db) {
       try {
+        this.db.exec('ROLLBACK');
+      } catch { /* ignore if no active transaction */ }
+      try {
         this.db.exec('PRAGMA mmap_size = 0');
         this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
       } catch (err) {

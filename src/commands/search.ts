@@ -189,19 +189,19 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
 }
 
 function incrementSearchHitsAsync(entryIds: string[]): void {
-  import('../graph/kg/engine.js').then(({ MaestroGraph }) => {
-    const projectRoot = resolve('.');
+  const projectRoot = resolve('.');
+  Promise.all([
+    import('../graph/kg/engine.js'),
+    import('../graph/kg/credibility.js')
+  ]).then(([{ MaestroGraph }, { CredibilityStore, wikiIdToNodeId }]) => {
     if (!MaestroGraph.isInitialized(projectRoot)) return;
     const mg = MaestroGraph.openSync(projectRoot);
     if (!mg) return;
     try {
-      import('../graph/kg/credibility.js').then(({ CredibilityStore, wikiIdToNodeId }) => {
-        const store = new CredibilityStore(mg.rawDb);
-        const nodeIds = entryIds.map(wikiIdToNodeId).filter(Boolean) as string[];
-        store.incrementSearchHits(nodeIds);
-        mg.close();
-      }).catch(() => { mg.close(); });
-    } catch {
+      const store = new CredibilityStore(mg.rawDb);
+      const nodeIds = entryIds.map(wikiIdToNodeId).filter(Boolean) as string[];
+      store.incrementSearchHits(nodeIds);
+    } finally {
       mg.close();
     }
   }).catch(() => {});

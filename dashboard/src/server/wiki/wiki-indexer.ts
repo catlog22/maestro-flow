@@ -229,9 +229,19 @@ export class WikiIndexer {
   }
 
   private persistSearchCache(index: WikiIndex): void {
+    let stream: ReturnType<typeof createWriteStream> | null = null;
+    const target = join(this.workflowRoot, 'search-cache.json');
+    const tmpTarget = target + '.tmp';
     try {
-      const target = join(this.workflowRoot, 'search-cache.json');
-      const stream = createWriteStream(target + '.tmp', { encoding: 'utf-8' });
+      stream = createWriteStream(tmpTarget, { encoding: 'utf-8' });
+      
+      stream.on('error', (e) => {
+        if (process.env.MAESTRO_DEBUG === '1') {
+          console.warn('[wiki-indexer] search-cache write failed:', e?.message);
+        }
+        try { stream?.destroy(); } catch { /* ignore */ }
+      });
+
       stream.write('{"version":1,"generatedAt":');
       stream.write(String(index.generatedAt));
       stream.write(',"mtimeSnapshot":');
@@ -249,13 +259,15 @@ export class WikiIndexer {
         }));
       }
       stream.end(']}', () => {
-        try { renameSyncFs(target + '.tmp', target); } catch { /* best effort */ }
-      });
-      stream.on('error', (e) => {
-        if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] search-cache write failed:', e?.message);
+        try { renameSyncFs(tmpTarget, target); } catch { /* best effort */ }
       });
     } catch (e) {
-      if (process.env.MAESTRO_DEBUG === '1') console.warn('[wiki-indexer] persistSearchCache error:', (e as Error)?.message);
+      if (process.env.MAESTRO_DEBUG === '1') {
+        console.warn('[wiki-indexer] persistSearchCache error:', (e as Error)?.message);
+      }
+      if (stream) {
+        try { stream.destroy(); } catch { /* ignore */ }
+      }
     }
   }
 

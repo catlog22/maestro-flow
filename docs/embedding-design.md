@@ -248,3 +248,24 @@ title: {title}    ← 尾部重复 title 增强匹配
 2. ~~**外部 API 支持**~~：✅ 已实现 — `~/.maestro/api-embedding.json` 配置外部 embedding API
 3. ~~**向量数据库**~~：✅ zvec 向量数据库集成 — 已完成（`@zvec/zvec` FLAT/COSINE 索引，feature flag `MAESTRO_EMBEDDING_FLAT_SCAN` 回退到平坦余弦扫描）
 4. **分布式索引**：支持多节点索引
+
+## 上下文预算降级机制
+
+Maestro 在运行中会通过 `context-budget` 钩子动态调整注入的上下文大小，避免因为 context 耗尽导致模型回复失败。
+
+### 降级策略阈值
+
+降级机制根据剩余 context 的百分比，划分为四个层级（Tiers）：
+
+| 剩余 Context 比例 | 降级层级 | 行为说明 |
+|---|---|---|
+| > 50% | `full` | 完整注入，不做任何截断或压缩。 |
+| 35% - 50% | `reduced` | 降级注入。使用 Markdown 感知的截断算法（保留 Heading 和每个 Section 的第一段，其余行折叠为 `[... N lines omitted]` 占位符），最大字符数限制为 4096。 |
+| 25% - 35% | `minimal` | 最小化注入。仅保留 Markdown 标题级别（Headings），并在前面增加提示语，过滤掉所有具体内容。 |
+| < 25% | `skip` | 完全跳过注入。此时 Context 已经极度紧张，优先保障对话基础内容。 |
+
+### 实现说明
+
+- **指标源**：通过 Statusline 钩子定时将剩余百分比及时间戳写入临时文件：`tmpdir()/maestro-bridge-{sessionId}.json`。
+- **失效机制**：当临时文件不存在或更新时间超过 `STALE_SECONDS`（默认 5 秒）时，视为指标失效，此时降级为 `full` 行为（默认策略，最宽松）。
+- **XML 闭合防护**：对截断后的文本进行处理，必须补全对应的标签（如 `</maestro-context>`），防止造成 XML 结构损坏导致 LLM 幻觉。

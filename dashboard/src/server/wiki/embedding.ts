@@ -698,7 +698,7 @@ export async function vectorSearchZvec(
   try {
     const collection = zvec.ZVecOpen(collectionPath, { readOnly: true });
     try {
-      const docs = collection.querySync({
+      const docs = await collection.query({
         fieldName: 'embedding',
         vector: queryVector,
         topk: limit,
@@ -860,6 +860,8 @@ async function _saveZvecIndexInner(zvec: ZvecModule, index: EmbeddingIndex, dir:
         });
       }
       collection.upsertSync(batch);
+      // Yield to event loop to prevent event loop starvation/blocking
+      await new Promise(resolve => setImmediate(resolve));
     }
 
     // Save metadata as JSON sidecar (zvec doesn't store arbitrary metadata)

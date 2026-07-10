@@ -4,22 +4,57 @@ import { resolve, join } from 'node:path';
 // Frontmatter parsing & formatting
 // ============================================================================
 
-export function parseFrontmatter(raw: string): { data: Record<string, string>; body: string } {
-  const match = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
-  if (!match) return { data: {}, body: raw };
-  const data: Record<string, string> = {};
-  for (const line of match[1].split('\n')) {
-    const kv = line.match(/^(\w[\w\s]*?):\s*(.*)$/);
-    if (kv) {
-      let value = kv[2].trim();
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        try { value = JSON.parse(value); } catch { value = value.slice(1, -1); }
+export function parseFrontmatter(raw: string): { data: Record<string, any>; body: string } {
+  const trimmed = raw.trimStart();
+  if (!trimmed.startsWith('---')) {
+    return { data: {}, body: raw };
+  }
+  const endIdx = trimmed.indexOf('\n---', 3);
+  if (endIdx === -1) {
+    return { data: {}, body: raw };
+  }
+  const yamlBlock = trimmed.substring(3, endIdx).trim();
+  const body = trimmed.substring(endIdx + 4);
+  const data: Record<string, any> = {};
+
+  let currentKey = '';
+  let arrayItems: string[] | null = null;
+
+  for (const line of yamlBlock.split('\n')) {
+    const trimLine = line.trim();
+    if (trimLine.startsWith('- ') && arrayItems !== null) {
+      arrayItems.push(trimLine.substring(2).trim());
+      continue;
+    }
+    if (arrayItems !== null && currentKey) {
+      data[currentKey] = arrayItems;
+      arrayItems = null;
+    }
+    const colonIdx = trimLine.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = trimLine.substring(0, colonIdx).trim();
+    const value = trimLine.substring(colonIdx + 1).trim();
+    currentKey = key;
+    if (value === '' || value === '[]') {
+      arrayItems = [];
+    } else if (value.startsWith('[') && value.endsWith(']')) {
+      data[key] = value
+        .slice(1, -1)
+        .split(',')
+        .map((s) => s.trim().replace(/^["']|["']$/g, ''))
+        .filter((s) => s.length > 0);
+    } else {
+      let parsedValue: any = value.replace(/^["']|["']$/g, '');
+      if (parsedValue.startsWith('[') || parsedValue.startsWith('{')) {
+        try { parsedValue = JSON.parse(parsedValue); } catch { /* ignore */ }
       }
-      data[kv[1].trim()] = value;
+      data[key] = parsedValue;
     }
   }
-  return { data, body: raw.slice(match[0].length) };
+  if (arrayItems !== null && currentKey) {
+    data[currentKey] = arrayItems;
+  }
+  return { data, body };
 }
 
 export function stripFrontmatter(raw: string): string {
