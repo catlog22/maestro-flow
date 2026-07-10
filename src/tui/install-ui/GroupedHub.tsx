@@ -301,7 +301,7 @@ export function buildGroupedHubItems(
   if (platforms.has('claude')) {
     hookItems.push({
       id: 'hooks',
-      label: t.install.hubLabelHooks,
+      label: 'Claude Hooks',
       enabled: enabled.hooks,
       summary: hookSummary(summaries.hookLevel, summaries.hookSelectedCount, summaries.hookTotalCount, summaries.hookIsCustom),
       detail: t.install.hubDetailHooks.replace('{level}', summaries.hookLevel),
@@ -344,7 +344,7 @@ export function buildGroupedHubItems(
   if (platforms.has('claude')) {
     mcpItems.push({
       id: 'mcp',
-      label: t.install.hubLabelMcpServer,
+      label: 'Claude MCP',
       enabled: enabled.mcp,
       summary: summaries.mcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.mcpToolCount)) : '—',
       detail: t.install.hubDetailMcp,
@@ -353,17 +353,18 @@ export function buildGroupedHubItems(
   if (platforms.has('codex')) {
     mcpItems.push({
       id: 'codexMcp',
-      label: t.install.hubLabelCodexMcp,
+      label: 'Codex MCP',
       enabled: enabled.codexMcp,
       summary: summaries.codexMcpEnabled ? t.install.hubTools.replace('{count}', String(summaries.codexMcpToolCount)) : '—',
       detail: t.install.hubDetailCodexMcp,
     });
   }
-  // Per-platform MCP targets (replaces "Extra MCP" catch-all)
+  // Per-platform MCP targets — only show for selected platforms
   const extraTargetIds = new Set(summaries.extraMcpTargetIds);
   const platformToMcpTarget = new Map<string, string>([
     ['cursor', 'cursor'], ['qoder', 'qoder'], ['kiro', 'kiro'],
     ['agy', 'gemini-cli'], ['copilot', 'vscode-copilot'],
+    ['trae', 'trae'], ['roo', 'roo'],
   ]);
   for (const target of EXTRA_MCP_TARGETS) {
     let matchedPlatform: string | undefined;
@@ -374,23 +375,13 @@ export function buildGroupedHubItems(
       }
     }
     if (!matchedPlatform) continue;
+    const platLabel = target.label.split('(')[0].trim();
     mcpItems.push({
       id: `mcp-${target.id}`,
-      label: `${target.label.split('(')[0].trim()} MCP`,
+      label: `${platLabel} MCP`,
       enabled: extraTargetIds.has(target.id),
       summary: extraTargetIds.has(target.id) ? 'enabled' : '—',
     });
-  }
-  // Trae and Roo are IDE-level, not tied to a specific platform
-  for (const target of EXTRA_MCP_TARGETS) {
-    if (target.id === 'trae' || target.id === 'roo') {
-      mcpItems.push({
-        id: `mcp-${target.id}`,
-        label: `${target.label.split('(')[0].trim()} MCP`,
-        enabled: extraTargetIds.has(target.id),
-        summary: extraTargetIds.has(target.id) ? 'enabled' : '—',
-      });
-    }
   }
   if (mcpItems.length > 0) {
     groups.push({ id: 'mcp', title: t.install.groupMcp, items: mcpItems });

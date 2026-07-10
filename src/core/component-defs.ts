@@ -566,6 +566,8 @@ export const EXTRA_PLATFORMS: PlatformRegistryEntry[] = [
   { id: 'codebuddy', label: 'CodeBuddy',      description: 'CodeBuddy IDE',            configDir: '.codebuddy' },
   { id: 'droid',     label: 'Droid',          description: 'Factory Droid',            configDir: '.factory' },
   { id: 'pi',        label: 'Pi Agent',       description: 'Pi Agent CLI',             configDir: '.pi' },
+  { id: 'trae',      label: 'Trae',           description: 'Trae AI IDE',              configDir: '.trae' },
+  { id: 'roo',       label: 'Roo Code',       description: 'Roo Code IDE',             configDir: '.roo' },
 ];
 
 function makeExtraPlatformDefs(entry: PlatformRegistryEntry): ComponentDef[] {

@@ -107,6 +107,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     'claude', 'codex', 'agy', 'agents-standard',
     'cursor', 'opencode', 'kiro', 'kilo', 'copilot',
     'devin', 'qoder', 'codebuddy', 'droid', 'pi',
+    'trae', 'roo',
   ];
 
   // Fallback: infer previously installed platforms from on-disk artifacts
@@ -127,6 +128,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ['cursor', '.cursor'], ['opencode', '.opencode'], ['kiro', '.kiro'],
       ['kilo', '.kilocode'], ['copilot', '.github'], ['devin', '.devin'],
       ['qoder', '.qoder'], ['codebuddy', '.codebuddy'], ['droid', '.factory'], ['pi', '.pi'],
+      ['trae', '.trae'], ['roo', '.roo'],
     ];
     for (const [id, dir] of extraPlatDirs) {
       if (existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'))) plats.add(id);

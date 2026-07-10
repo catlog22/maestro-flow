@@ -61,8 +61,8 @@ export function InstallFlow({ pkgRoot, version, initialStep, initialMode, initia
     const hub = t.install.stepMenu;
     switch (s.step) {
       case 'components_config': return [hub, t.install.groupCore, t.install.hubLabelComponents];
-      case 'hooks_config': return [hub, t.install.groupHooks, t.install.hubLabelHooks];
-      case 'mcp_config': return [hub, t.install.groupMcp, t.install.hubLabelMcpServer];
+      case 'hooks_config': return [hub, t.install.groupHooks, 'Claude Hooks'];
+      case 'mcp_config': return [hub, t.install.groupMcp, 'Claude MCP'];
       case 'statusline_config': return [hub, t.install.groupAppearance, t.install.hubLabelStatusline];
       case 'codex_hooks_config': return [hub, t.install.groupHooks, t.install.hubLabelCodexHooks];
       case 'codex_mcp_config': return [hub, t.install.groupMcp, t.install.hubLabelCodexMcp];
@@ -279,6 +279,8 @@ const PLATFORM_DEFS = [
   { id: 'codebuddy',        label: 'CodeBuddy',        desc: 'Skills, agents → .codebuddy/' },
   { id: 'droid',            label: 'Droid',            desc: 'Skills, agents → .factory/' },
   { id: 'pi',               label: 'Pi Agent',         desc: 'Skills, agents → .pi/' },
+  { id: 'trae',             label: 'Trae',             desc: 'Skills, agents → .trae/' },
+  { id: 'roo',              label: 'Roo Code',         desc: 'Skills, agents → .roo/' },
   { id: 'agents-standard',  label: 'Open Standard',    desc: '.agents/ format (portable)' },
 ] as const;
 

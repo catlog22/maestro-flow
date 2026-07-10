@@ -600,6 +600,16 @@ export const GENERIC_HOOKS_PLATFORMS: GenericHooksPlatform[] = [
     supportedEvents: new Set(['SessionStart']),
     hooksPath: (opts) => opts.project ? join(process.cwd(), '.factory', 'hooks.json') : join(homedir(), '.factory', 'hooks.json'),
   },
+  {
+    id: 'trae', label: 'Trae',
+    supportedEvents: new Set(['SessionStart', 'PreToolUse', 'UserPromptSubmit']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.trae', 'hooks.json') : join(homedir(), '.trae', 'hooks.json'),
+  },
+  {
+    id: 'roo', label: 'Roo Code',
+    supportedEvents: new Set(['SessionStart', 'PreToolUse', 'UserPromptSubmit']),
+    hooksPath: (opts) => opts.project ? join(process.cwd(), '.roo', 'hooks.json') : join(homedir(), '.roo', 'hooks.json'),
+  },
 ];
 
 export function getGenericHooksPlatform(platformId: string): GenericHooksPlatform | undefined {
