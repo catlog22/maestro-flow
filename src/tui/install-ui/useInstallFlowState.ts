@@ -161,8 +161,27 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ['neovate', '.neovate'], ['pochi', '.pochi'], ['promptscript', '.promptscript'],
       ['adal', '.adal'],
     ];
+    const isTraeCnInstalledGlobally = existsSync(join(homedir(), '.trae-cn'));
+    const isQoderCnInstalledGlobally = existsSync(join(homedir(), '.qoder-cn'));
+
     for (const [id, dir] of extraPlatDirs) {
-      if (existsSync(join(base, dir, 'skills')) || existsSync(join(base, dir, 'agents'))) plats.add(id);
+      let checkDir = dir;
+      if (scope === 'global') {
+        if (id === 'trae-cn') checkDir = '.trae-cn';
+        else if (id === 'qoder-cn') checkDir = '.qoder-cn';
+      }
+
+      if (scope === 'project') {
+        if (id === 'trae-cn' && !isTraeCnInstalledGlobally) continue;
+        if (id === 'trae' && isTraeCnInstalledGlobally) continue;
+        if (id === 'qoder-cn' && !isQoderCnInstalledGlobally) continue;
+        if (id === 'qoder' && isQoderCnInstalledGlobally) continue;
+        if (id === 'zenflow') continue;
+      }
+
+      if (scope === 'global' && id === 'zenflow') continue;
+
+      if (existsSync(join(base, checkDir, 'skills')) || existsSync(join(base, checkDir, 'agents'))) plats.add(id);
     }
     if (plats.size === 0) plats.add('claude');
     return plats;
