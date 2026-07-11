@@ -341,6 +341,7 @@ interface FlatRow {
   type: 'platform' | 'plugin' | 'dedupe';
   id: string;
   platIdx?: number;
+  localPlatIdx?: number;
 }
 
 function PlatformSelector({
@@ -362,11 +363,19 @@ function PlatformSelector({
 }) {
   const showDedupe = selectedPlatforms.has('codex') && selectedPlatforms.has('agents-standard');
 
+  const PAGE_SIZE = 10;
+  const [page, setPage] = React.useState(0);
+  const pageCount = Math.ceil(PLATFORM_DEFS.length / PAGE_SIZE);
+
   const rows = React.useMemo(() => {
     const r: FlatRow[] = [];
-    for (let i = 0; i < PLATFORM_DEFS.length; i++) {
+    const startIdx = page * PAGE_SIZE;
+    const endIdx = Math.min(startIdx + PAGE_SIZE, PLATFORM_DEFS.length);
+    let localPlatIdx = 0;
+    for (let i = startIdx; i < endIdx; i++) {
       const plat = PLATFORM_DEFS[i];
-      r.push({ type: 'platform', id: plat.id, platIdx: i });
+      r.push({ type: 'platform', id: plat.id, platIdx: i, localPlatIdx });
+      localPlatIdx++;
       if (plat.id === 'claude' && selectedPlatforms.has('claude')) {
         r.push({ type: 'plugin', id: 'pluginClaude' });
       }
@@ -374,17 +383,28 @@ function PlatformSelector({
         r.push({ type: 'plugin', id: 'pluginCodex' });
       }
     }
-    if (showDedupe) r.push({ type: 'dedupe', id: 'dedupe' });
+    if (showDedupe && endIdx === PLATFORM_DEFS.length) {
+      r.push({ type: 'dedupe', id: 'dedupe' });
+    }
     return r;
-  }, [selectedPlatforms, showDedupe]);
+  }, [selectedPlatforms, showDedupe, page]);
 
   const [cursor, setCursor] = React.useState(0);
   const safeCursor = Math.min(cursor, rows.length - 1);
 
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+    setCursor(0);
+  };
+
   useInput((input, key) => {
     if (key.upArrow) setCursor(i => wrapCursor(Math.min(i, rows.length - 1), -1, rows.length));
     else if (key.downArrow) setCursor(i => wrapCursor(Math.min(i, rows.length - 1), 1, rows.length));
-    else if (input === ' ') {
+    else if (key.leftArrow || input === 'h' || input === 'H' || input === '[') {
+      handlePageChange((page - 1 + pageCount) % pageCount);
+    } else if (key.rightArrow || input === 'l' || input === 'L' || input === ']') {
+      handlePageChange((page + 1) % pageCount);
+    } else if (input === ' ') {
       const row = rows[safeCursor];
       if (!row) return;
       if (row.type === 'platform') onToggle(row.id);
@@ -396,7 +416,12 @@ function PlatformSelector({
     else if (input === 'p' || input === 'P') onModeChange('project');
     else {
       const n = parseInt(input, 10);
-      if (n >= 1 && n <= Math.min(9, PLATFORM_DEFS.length)) onToggle(PLATFORM_DEFS[n - 1].id);
+      if (n >= 1 && n <= 9) {
+        const targetRow = rows.find(r => r.type === 'platform' && r.localPlatIdx === n - 1);
+        if (targetRow) {
+          onToggle(targetRow.id);
+        }
+      }
     }
   });
 
@@ -424,7 +449,7 @@ function PlatformSelector({
             const sel = selectedPlatforms.has(plat.id);
             return (
               <Box key={row.id}>
-                <Text color={hl ? C.primary : C.neutral}>{row.platIdx! < 9 ? `[${row.platIdx! + 1}] ` : '    '}</Text>
+                <Text color={hl ? C.primary : C.neutral}>{row.localPlatIdx! < 9 ? `[${row.localPlatIdx! + 1}] ` : '    '}</Text>
                 <Text color={sel ? (hl ? C.successBright : C.success) : C.neutral}>{sel ? SYM.checkOn : SYM.checkOff} </Text>
                 <Text color={hl ? C.primary : undefined} bold={hl}>{plat.label.padEnd(22)}</Text>
                 <Text color={C.neutral}>{plat.desc}</Text>
@@ -458,7 +483,25 @@ function PlatformSelector({
           );
         })}
       </Box>
-      <KeyHints hints={`[Space/1-9] Toggle  [Up/Down] Navigate  [g/p] Scope  [Enter] Next  [Esc] Exit`} />
+
+      {/* 分页指示器 */}
+      <Box marginTop={1} gap={2}>
+        <Box>
+          <Text dimColor>Page </Text>
+          <Text bold color={C.primary}>{page + 1}</Text>
+          <Text dimColor> / {pageCount} </Text>
+          <Text dimColor>[</Text>
+          {Array.from({ length: pageCount }).map((_, i) => (
+            <Text key={i} color={i === page ? C.successBright : C.neutral} bold={i === page}>
+              {i === page ? '●' : '○'}
+            </Text>
+          ))}
+          <Text dimColor>]</Text>
+        </Box>
+        <Text dimColor>(Use Left/Right or h/l to page)</Text>
+      </Box>
+
+      <KeyHints hints={`[Space/1-9] Toggle  [Up/Down] Navigate  [Left/Right] Page  [g/p] Scope  [Enter] Next  [Esc] Exit`} />
     </Box>
   );
 }

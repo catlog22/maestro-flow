@@ -35,6 +35,90 @@ maestro install
 
 ---
 
+## 支持的平台 (Platforms)
+
+在 `maestro install` 的第一步，你可以勾选当前项目或开发环境所需的目标 AI 辅助编程平台。
+
+由于支持的平台多达 60+ 个，交互式 TUI 平台选择界面已进行**分页管理**（每页展示 10 项）。
+* **分页切换**：支持使用键盘的 **左/右箭头 (`Left/Right`)**、**`h`/`l` 键** 以及 **`[`/`]` 键** 进行翻页。
+* **快捷按键**：每页的前 9 项会被局部标记为 `[1]` 至 `[9]`，按下键盘对应的数字键可快捷勾选。
+* **极客指示器**：底部显示分页指示器，如 `Page 1 / 7 [● ○ ○ ○ ○ ○ ○]`。
+
+目前完整支持的平台列表如下（涵盖大部分主流 AI 编程客户端及 Agent 治具）：
+
+| 平台 ID | 平台名称 (Label) | 安装目标路径 / 描述 |
+|---------|------------------|-------------------|
+| `claude` | Claude Code | 核心 Slash 命令、技能、Agent、Hooks、MCP |
+| `codex` | Codex | Agent、技能、Hooks、MCP |
+| `cursor` | Cursor | 技能、Agent → 复制到 `.cursor/` |
+| `agy` | Agy (Gemini CLI) | 技能、Agent、Hooks → 复制到 `.gemini/` |
+| `copilot` | GitHub Copilot | 技能、Agent → 复制到 `.github/` |
+| `kiro` | Kiro | 技能、Agent → 复制到 `.kiro/` |
+| `opencode` | OpenCode | 技能、Agent → 复制到 `.opencode/` |
+| `kilo` | Kilo Code | 技能、Agent → 复制到 `.kilocode/` |
+| `devin` | Devin | 技能、Agent → 复制到 `.devin/` |
+| `qoder` | Qoder / Qoder CN | 技能、Agent → 复制到 `.qoder/` |
+| `codebuddy` | CodeBuddy | 技能、Agent → 复制到 `.codebuddy/` |
+| `droid` | Droid | 技能、Agent → 复制到 `.factory/` |
+| `pi` | Pi Agent | 技能、Agent → 复制到 `.pi/` |
+| `trae` | Trae / Trae CN | 技能、Agent → 复制到 `.trae/` |
+| `roo` | Roo Code | 技能、Agent → 复制到 `.roo/` |
+| `aider-desk` | AiderDesk | 技能、Agent → 复制到 `.aider-desk/` |
+| `amp` | Amp | 技能、Agent → 复制到 `.amp/` |
+| `antigravity` | Antigravity | 技能、Agent → 复制到 `.antigravity/` |
+| `antigravity-cli` | Antigravity CLI | 技能、Agent → 复制到 `.antigravity-cli/` |
+| `astrbot` | AstrBot | 技能、Agent → 复制到 `.astrbot/` |
+| `autohand-code` | Autohand Code CLI | 技能、Agent → 复制到 `.autohand/` |
+| `augment` | Augment | 技能、Agent → 复制到 `.augment/` |
+| `bob` | IBM Bob | 技能、Agent → 复制到 `.bob/` |
+| `cline` | Cline | 技能、Agent → 复制到 `.cline/` |
+| `codearts-agent` | CodeArts Agent | 技能、Agent → 复制到 `.codeartsdoer/` |
+| `codemaker` | Codemaker | 技能、Agent → 复制到 `.codemaker/` |
+| `codestudio` | Code Studio | 技能、Agent → 复制到 `.codestudio/` |
+| `command-code` | Command Code | 技能、Agent → 复制到 `.commandcode/` |
+| `continue` | Continue | 技能、Agent → 复制到 `.continue/` |
+| `cortex` | Cortex Code | 技能、Agent → 复制到 `.cortex/` |
+| `crush` | Crush | 技能、Agent → 复制到 `.crush/` |
+| `deepagents` | Deep Agents | 技能、Agent → 复制到 `.deepagents/` |
+| `dexto` | Dexto | 技能、Agent → 复制到 `.dexto/` |
+| `eve` | Eve | 技能、Agent → 复制到 `agent/` |
+| `firebender` | Firebender | 技能、Agent → 复制到 `.firebender/` |
+| `forgecode` | ForgeCode | 技能、Agent → 复制到 `.forge/` |
+| `goose` | Goose | 技能、Agent → 复制到 `.goose/` |
+| `hermes-agent` | Hermes Agent | 技能、Agent → 复制到 `.hermes/` |
+| `inference-sh` | inference.sh | 技能、Agent → 复制到 `.inferencesh/` |
+| `jazz` | Jazz | 技能、Agent → 复制到 `.jazz/` |
+| `junie` | Junie | 技能、Agent → 复制到 `.junie/` |
+| `iflow-cli` | iFlow CLI | 技能、Agent → 复制到 `.iflow/` |
+| `kimi-code-cli` | Kimi Code CLI | 技能、Agent → 复制到 `.kimi-code-cli/` |
+| `kode` | Kode | 技能、Agent → 复制到 `.kode/` |
+| `lingma` | Lingma | 技能、Agent → 复制到 `.lingma/` |
+| `loaf` | Loaf | 技能、Agent → 复制到 `.loaf/` |
+| `mcpjam` | MCPJam | 技能、Agent → 复制到 `.mcpjam/` |
+| `mistral-vibe` | Mistral Vibe | 技能、Agent → 复制到 `.vibe/` |
+| `moxby` | Moxby | 技能、Agent → 复制到 `.moxby/` |
+| `mux` | Mux | 技能、Agent → 复制到 `.mux/` |
+| `openhands` | OpenHands | 技能、Agent → 复制到 `.openhands/` |
+| `ona` | Ona | 技能、Agent → 复制到 `.ona/` |
+| `qwen-code` | Qwen Code | 技能、Agent → 复制到 `.qwen/` |
+| `replit` | Replit | 技能、Agent → 复制到 `.replit/` |
+| `reasonix` | Reasonix | 技能、Agent → 复制到 `.reasonix/` |
+| `rovodev` | Rovo Dev | 技能、Agent → 复制到 `.rovodev/` |
+| `tabnine-cli` | Tabnine CLI | 技能、Agent → 复制到 `.tabnine/` |
+| `terramind` | Terramind | 技能、Agent → 复制到 `.terramind/` |
+| `tinycloud` | Tinycloud | 技能、Agent → 复制到 `.tinycloud/` |
+| `warp` | Warp | 技能、Agent → 复制到 `.warp/` |
+| `windsurf` | Windsurf | 技能、Agent → 复制到 `.windsurf/` |
+| `zed` | Zed | 技能、Agent → 复制到 `.zed/` |
+| `zencoder` | Zencoder / Zenflow | 技能、Agent → 复制到 `.zencoder/` |
+| `neovate` | Neovate | 技能、Agent → 复制到 `.neovate/` |
+| `pochi` | Pochi | 技能、Agent → 复制到 `.pochi/` |
+| `promptscript` | PromptScript | 技能、Agent → 复制到 `.promptscript/` |
+| `adal` | AdaL | 技能、Agent → 复制到 `.adal/` |
+| `agents-standard` | Open Standard | `.agents/` 开放规范格式（多平台通用） |
+
+---
+
 ## 组件分组
 
 从 v0.5.32 起，安装组件从 53 个独立条目整合为 25 个分组，提供更简洁的选择体验。

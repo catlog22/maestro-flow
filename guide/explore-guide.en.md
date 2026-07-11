@@ -313,7 +313,7 @@ Pre-flight: gpt-codex still tripped (from previous run) — skipping probe
 [1/1] gpt-codex tripped, fallback → gpt-mini:gpt-5.4-mini
 ```
 
-Once the reset period expires (default 1 hour), the endpoint rejoins the probe cycle. The reset duration is configurable via `resetAfterMs`.
+Once the reset period expires (default 1 hour), the endpoint rejoins the normal probe cycle. If every endpoint is persisted as tripped, explore immediately runs one parallel half-open recovery sweep. Reachable endpoints receive one model-level trial; success closes the circuit and failure reopens it immediately, so stale state cannot fail the command immediately.
 
 ### Configuration
 
@@ -329,7 +329,8 @@ Add a `circuitBreaker` field in `~/.maestro/api.json`:
   "circuitBreaker": {
     "threshold": 3,
     "fallbackOrder": ["gpt-mini", "deepseek", "qwen"],
-    "resetAfterMs": 3600000
+    "resetAfterMs": 3600000,
+    "probeTimeoutMs": 3000
   }
 }
 ```
@@ -341,6 +342,7 @@ Add a `circuitBreaker` field in `~/.maestro/api.json`:
 | `threshold` | Consecutive failures before tripping (for batch job scenarios) | `3` |
 | `fallbackOrder` | Preferred fallback endpoint names | Config order |
 | `resetAfterMs` | Cooldown period in ms before a tripped endpoint is retried | `3600000` (1 hour) |
+| `probeTimeoutMs` | Timeout per pre-flight / half-open probe in ms | `3000` |
 
 **Common `resetAfterMs` values**:
 
@@ -362,4 +364,6 @@ rm ~/.maestro/.explore-circuit-state.json
 - Only active when 2 or more endpoints are configured
 - Works with `--all` mode: tripped endpoints' remaining jobs switch to fallback
 - Endpoints in `fallbackOrder` can also trip, in which case the next healthy endpoint is used
+- Runtime fallback follows `fallbackOrder` before trying other healthy endpoints
+- Endpoints still cooling down are probed only when no healthy endpoint remains, so the normal path gains no extra delay
 - Pre-flight probing checks network reachability (TCP connection), not model availability (e.g. 503) — runtime fallback handles the latter

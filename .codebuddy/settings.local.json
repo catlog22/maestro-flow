@@ -1,0 +1,8 @@
+{
+  "enabledMcpjsonServers": [
+    "maestro",
+    "claude_dms3-chrome-devtools",
+    "exa"
+  ],
+  "disabledMcpjsonServers": []
+}

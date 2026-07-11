@@ -323,7 +323,7 @@ Pre-flight: gpt-codex still tripped (from previous run) — skipping probe
 [1/1] gpt-codex tripped, fallback → gpt-mini:gpt-5.4-mini
 ```
 
-熔断到期后（默认 1 小时），端点重新参与探测。恢复时间可通过 `resetAfterMs` 配置。
+熔断到期后（默认 1 小时），端点重新参与常规探测。若所有端点都处于持久化熔断状态，explore 会立即执行一次并行 half-open 恢复探测；可达端点获得一次模型试调用，成功才关闭熔断，失败则立即重新熔断，避免旧状态让整个命令直接失败。
 
 ### 配置
 
@@ -339,7 +339,8 @@ Pre-flight: gpt-codex still tripped (from previous run) — skipping probe
   "circuitBreaker": {
     "threshold": 3,
     "fallbackOrder": ["gpt-mini", "deepseek", "qwen"],
-    "resetAfterMs": 3600000
+    "resetAfterMs": 3600000,
+    "probeTimeoutMs": 3000
   }
 }
 ```
@@ -351,6 +352,7 @@ Pre-flight: gpt-codex still tripped (from previous run) — skipping probe
 | `threshold` | 连续失败几次后熔断（批量 job 场景） | `3` |
 | `fallbackOrder` | 备选端点优先级列表 | 按配置顺序 |
 | `resetAfterMs` | 熔断恢复时间（毫秒），到期后重新探测 | `3600000`（1 小时） |
+| `probeTimeoutMs` | 单个 pre-flight / half-open 探测超时（毫秒） | `3000` |
 
 **`resetAfterMs` 常用值**：
 
@@ -372,6 +374,8 @@ rm ~/.maestro/.explore-circuit-state.json
 - 仅在配置了 2 个及以上端点时生效
 - `--all` 模式下同样生效：某端点熔断后，其剩余 job 切换到备选端点
 - `fallbackOrder` 中的端点也可能被熔断，此时继续查找下一个健康端点
+- 运行时 fallback 严格优先使用 `fallbackOrder`，再尝试其他健康端点
+- 仅当没有任何健康端点时才探测仍在冷却期内的端点，不增加正常路径耗时
 - 预检探活检测的是网络可达性（TCP 连接），不检测模型可用性（如 503）——后者由运行时 fallback 处理
 
 ---

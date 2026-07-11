@@ -57,6 +57,39 @@ export interface RunnerOptions {
   onJobDone?: (result: ExploreResult) => void;
 }
 
+type EndpointProbe = (config: LlmConfig, timeoutMs?: number) => Promise<boolean>;
+
+/**
+ * Half-open recovery sweep used only when no healthy endpoint remains.
+ * Persisted trips keep the fast path cheap, but cannot strand explore forever.
+ */
+export async function recoverTrippedEndpoints(
+  breaker: EndpointCircuitBreaker,
+  endpoints: NamedEndpointRef[],
+  probe: EndpointProbe = probeEndpoint,
+  timeoutMs = 3_000,
+): Promise<string[]> {
+  const tripped = new Set(breaker.getTrippedEndpoints());
+  const candidates = endpoints.filter(ep => tripped.has(ep.name));
+  const results = await Promise.all(
+    candidates.map(async (ep) => {
+      try {
+        return { name: ep.name, alive: await probe(ep.llmConfig, timeoutMs) };
+      } catch {
+        return { name: ep.name, alive: false };
+      }
+    }),
+  );
+
+  const recovered: string[] = [];
+  for (const { name, alive } of results) {
+    if (!alive) continue;
+    breaker.allowHalfOpenTrial(name);
+    recovered.push(name);
+  }
+  return recovered;
+}
+
 function getDirListing(cwd: string): string {
   try {
     return readdirSync(cwd)
@@ -205,9 +238,11 @@ async function drainQueue(
       // Immediate fallback retry: try all available endpoints until one succeeds
       if (result.error && allEndpoints && allEndpoints.length > 1) {
         const tried = new Set<string>([job.endpointName]);
-        for (const candidate of allEndpoints) {
-          if (tried.has(candidate.name)) continue;
-          if (breaker?.isOpen(candidate.name)) continue;
+        const failures = [`${job.endpointName}: ${result.error}`];
+        const candidates = breaker
+          ? breaker.getFallbackCandidates(job.endpointName, allEndpoints, tried)
+          : allEndpoints.filter(candidate => !tried.has(candidate.name));
+        for (const candidate of candidates) {
           tried.add(candidate.name);
 
           callbacks.onProgress?.(
@@ -219,13 +254,20 @@ async function drainQueue(
             llmConfig: candidate.llmConfig,
           };
           const retryResult = await runSingleJob(retryJob, cwd, maxTurns, dirListing, moaPreset);
+          result = retryResult;
           if (!retryResult.error) {
-            result = retryResult;
             breaker?.recordSuccess(candidate.name);
             breaker?.trip(job.endpointName);
             break;
           }
+          failures.push(`${candidate.name}: ${retryResult.error}`);
           breaker?.recordFailure(candidate.name);
+        }
+        if (result.error && failures.length > 1) {
+          result = {
+            ...result,
+            error: `All fallback endpoints failed (${failures.join(' | ')})`,
+          };
         }
       }
 
@@ -272,6 +314,7 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
 
   // Pre-flight: probe endpoints not already tripped by persistent state
   if (breaker && allEndpoints && allEndpoints.length > 1) {
+    const probeTimeoutMs = Math.max(250, cbConfig?.probeTimeoutMs ?? 3_000);
     const alreadyTripped = breaker.getTrippedEndpoints();
     for (const name of alreadyTripped) {
       onProgress?.(`Pre-flight: ${name} still tripped (from previous run) — skipping probe`);
@@ -279,7 +322,10 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
     const toProbe = allEndpoints.filter(ep => !alreadyTripped.includes(ep.name));
     if (toProbe.length > 0) {
       const probeResults = await Promise.all(
-        toProbe.map(async (ep) => ({ name: ep.name, alive: await probeEndpoint(ep.llmConfig) })),
+        toProbe.map(async (ep) => ({
+          name: ep.name,
+          alive: await probeEndpoint(ep.llmConfig, probeTimeoutMs),
+        })),
       );
       for (const { name, alive } of probeResults) {
         if (!alive) {
@@ -288,7 +334,22 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
         }
       }
     }
-    const totalHealthy = allEndpoints.filter(ep => !breaker.isOpen(ep.name)).length;
+    let totalHealthy = allEndpoints.filter(ep => !breaker.isOpen(ep.name)).length;
+    if (totalHealthy === 0 && alreadyTripped.length > 0) {
+      onProgress?.(
+        `Pre-flight: no healthy endpoints; recovery probing ${alreadyTripped.length} tripped endpoint(s)`,
+      );
+      const recovered = await recoverTrippedEndpoints(
+        breaker,
+        allEndpoints.filter(ep => alreadyTripped.includes(ep.name)),
+        probeEndpoint,
+        probeTimeoutMs,
+      );
+      for (const name of recovered) {
+        onProgress?.(`Pre-flight: ${name} reachable — half-open trial enabled`);
+      }
+      totalHealthy = allEndpoints.filter(ep => !breaker.isOpen(ep.name)).length;
+    }
     if (totalHealthy === 0) {
       onProgress?.('Pre-flight: all endpoints unreachable');
     }
@@ -347,7 +408,7 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
     breaker.persistState();
     const tripped = breaker.getTrippedEndpoints();
     if (tripped.length > 0) {
-      onProgress?.(`Circuit breaker summary: ${tripped.join(', ')} tripped during this run`);
+      onProgress?.(`Circuit breaker summary: ${tripped.join(', ')} currently tripped`);
     }
   }
 
