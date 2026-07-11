@@ -1,7 +1,7 @@
 ---
 name: maestro-quick
 description: Quick task execution, skip optional agents
-argument-hint: "\"task description\" [--discuss] [--full]"
+argument-hint: "\"task description\" [--discuss] [--full] [--commit] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -25,6 +25,8 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 **Flags**:
 - `--discuss`: Decision extraction before planning (Locked/Free/Deferred classification)
 - `--full`: Enable plan-checking (max 2 iterations) and post-execution verification
+- `--commit`: Commit the changes at the end of the task
+- `-y`: Auto mode: skip confirmation and commit automatically when --commit is used
 
 **Output**: `.workflow/scratch/{slug}/` with plan.json, execution results, optional verification
 
@@ -34,7 +36,7 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 <invariants>
 1. **Speed over ceremony** — minimal overhead, get to implementation fast
 2. **Follow existing patterns** — grep for 3+ similar implementations before writing new code
-3. **Atomic commits** — one commit per quick task, descriptive message
+3. **Optional commits** — commits are only created if the --commit flag is explicitly passed; otherwise, the task completes without staging or committing files
 4. **Scratch isolation** — all metadata stays in .workflow/scratch/{slug}/
 5. **Works without init** — quick tasks function even without full .workflow/ setup
 </invariants>
@@ -141,6 +143,6 @@ Before reporting completion, verify: `{scratchDir}/plan.json` exists AND `{scrat
 - [ ] Analysis completed and context.md written
 - [ ] Plan generated with subtasks
 - [ ] All tasks executed and statuses updated
-- [ ] Changes committed with descriptive message
+- [ ] Changes committed (only if --commit is set): confirm with ask_user showing staged files and proposed commit message — unless -y is active, in which case auto-commit
 - [ ] Completion report displayed
 </success_criteria>

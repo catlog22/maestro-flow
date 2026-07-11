@@ -1,6 +1,7 @@
 ---
 name: team-lifecycle-v4
 description: Full lifecycle team -- plan, develop, test, review
+orchestration_kind: terminal_pipeline
 argument-hint: "[task description] [-y|--yes] [-c|--concurrency N] [--continue] [--pipeline spec-only|impl-only|full-lifecycle]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
@@ -9,6 +10,8 @@ allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request
 Wave-based lifecycle orchestration via `spawn_agents_on_csv`. Fixed roles with pre-defined pipelines: specification → planning → implementation → testing → review.
 
 **Core workflow**: Select Pipeline → Build CSV from Pipeline Definition → Wave-by-Wave Execution → Aggregate Results
+
+**Nested Execution**: When nested inside maestro-player, this skill behaves as a solo terminal barrier, claiming lifecycle_owner and checkpoint_owner ownership, and outer orchestrators must not run redundant stages (plan/execute/test/review) on the same scope.
 
 ```
 +-------------------------------------------------------------------+

@@ -94,6 +94,19 @@ export interface RalphSessionContext {
   blueprint_dir?: string | null;
 }
 
+export interface VerificationLedgerEntry {
+  authority: string;
+  dimension: string;
+  subject_ids: string[];
+  evidence_hashes: Record<string, string>;
+  scope_hash: string;
+  verdict: 'pass' | 'fail' | string;
+  confidence: 'high' | 'medium' | 'low';
+  concerns?: string | null;
+  risk_ceiling: 'low' | 'medium' | 'high';
+  created_at: string;
+}
+
 export interface RalphSession {
   session_id: string;
   source: 'ralph' | 'maestro' | string;
@@ -120,6 +133,11 @@ export interface RalphSession {
   // CLI protocol fields (additive; absent → legacy behavior)
   ralph_protocol_version?: string;
   active_step_index?: number | null;
+  // Lease and Ownership
+  execution_owner?: 'ralph-execute' | 'maestro-inline' | string;
+  owner_epoch?: number;
+  lease_id?: string;
+  verification_ledger?: VerificationLedgerEntry[];
   // Optional decomposition block
   boundary_contract?: {
     in_scope?: string[];

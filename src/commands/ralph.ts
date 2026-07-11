@@ -31,6 +31,9 @@ async function loadNextCmd() {
 async function loadCompleteCmd() {
   return (await import('../ralph/cmd-complete.js')).runComplete;
 }
+async function loadLedgerCmd() {
+  return (await import('../ralph/cmd-ledger.js')).runLedger;
+}
 
 const VALID_STATUSES = ['DONE', 'DONE_WITH_CONCERNS', 'NEEDS_RETRY', 'BLOCKED'] as const;
 export type RalphCompletionStatus = typeof VALID_STATUSES[number];
@@ -82,9 +85,17 @@ export function registerRalphCommand(program: Command): void {
     .command('next')
     .description('Load next pending step + required_reading, write status.json, print prompt')
     .option('--session <id>', 'Session id (default: latest running ralph-*)')
-    .action(async (opts: { session?: string }) => {
+    .option('--execution-owner <owner>', 'Claim execution ownership')
+    .option('--owner-epoch <epoch>', 'Epoch for lease ownership', Number.parseInt)
+    .option('--lease-id <id>', 'Lease identifier for concurrency safety')
+    .action(async (opts: { session?: string; executionOwner?: string; ownerEpoch?: number; leaseId?: string }) => {
       const run = await loadNextCmd();
-      const code = await run({ sessionId: opts.session });
+      const code = await run({
+        sessionId: opts.session,
+        executionOwner: opts.executionOwner,
+        ownerEpoch: opts.ownerEpoch,
+        leaseId: opts.leaseId,
+      });
       process.exit(code);
     });
 
@@ -101,6 +112,11 @@ export function registerRalphCommand(program: Command): void {
     .option('--caveats <text>', 'Warnings/notes for downstream steps')
     .option('--deferred <text>', 'Deferred work item (repeatable)', collect, [] as string[])
     .option('--session <id>', 'Session id (default: latest running ralph-*)')
+    .option('--execution-owner <owner>', 'Execution owner of the lease')
+    .option('--owner-epoch <epoch>', 'Epoch of the lease owner', Number.parseInt)
+    .option('--lease-id <id>', 'Lease ID for concurrency check')
+    .option('--expected-skill <name>', 'Verify the active step runs this skill name')
+    .option('--expected-step-index <idx>', 'Verify the active step index', Number.parseInt)
     .action(async (indexArg: string, opts: {
       status: string;
       evidence: string[];
@@ -111,6 +127,11 @@ export function registerRalphCommand(program: Command): void {
       caveats?: string;
       deferred?: string[];
       session?: string;
+      executionOwner?: string;
+      ownerEpoch?: number;
+      leaseId?: string;
+      expectedSkill?: string;
+      expectedStepIndex?: number;
     }) => {
       const status = opts.status.toUpperCase() as RalphCompletionStatus;
       if (!(VALID_STATUSES as readonly string[]).includes(status)) {
@@ -134,6 +155,11 @@ export function registerRalphCommand(program: Command): void {
         decisions: opts.decisions,
         caveats: opts.caveats,
         deferred: opts.deferred,
+        executionOwner: opts.executionOwner,
+        ownerEpoch: opts.ownerEpoch,
+        leaseId: opts.leaseId,
+        expectedSkill: opts.expectedSkill,
+        expectedStepIndex: opts.expectedStepIndex,
       });
       process.exit(code);
     });
@@ -143,7 +169,15 @@ export function registerRalphCommand(program: Command): void {
     .command('retry <index>')
     .description('Sugar: mark step at <index> as NEEDS_RETRY')
     .option('--session <id>', 'Session id (default: latest running ralph-*)')
-    .action(async (indexArg: string, opts: { session?: string }) => {
+    .option('--execution-owner <owner>', 'Execution owner of the lease')
+    .option('--owner-epoch <epoch>', 'Epoch of the lease owner', Number.parseInt)
+    .option('--lease-id <id>', 'Lease ID for concurrency check')
+    .action(async (indexArg: string, opts: {
+      session?: string;
+      executionOwner?: string;
+      ownerEpoch?: number;
+      leaseId?: string;
+    }) => {
       const index = Number.parseInt(indexArg, 10);
       if (!Number.isFinite(index) || index < 0) {
         console.error(`[ralph retry] <index> must be a non-negative integer (got "${indexArg}")`);
@@ -155,6 +189,60 @@ export function registerRalphCommand(program: Command): void {
         index,
         status: 'NEEDS_RETRY',
         evidence: [],
+        executionOwner: opts.executionOwner,
+        ownerEpoch: opts.ownerEpoch,
+        leaseId: opts.leaseId,
+      });
+      process.exit(code);
+    });
+
+  // ── ledger ──────────────────────────────────────────────────────────────
+  ralph
+    .command('ledger')
+    .description('Verification ledger interface for re-use and caching of verification findings')
+    .option('--session <id>', 'Session id (required)')
+    .option('--action <action>', 'Action: query | add')
+    .option('--authority <auth>', 'Authority (e.g. "execute-gate", "drift-check")')
+    .option('--dimension <dim>', 'Verification dimension (e.g. "quality", "structure")')
+    .option('--subject <path>', 'Subject file paths or IDs (repeatable)', collect, [] as string[])
+    .option('--verdict <ver>', 'Verdict (pass | fail | other)')
+    .option('--confidence <conf>', 'Confidence (high | medium | low)', 'medium')
+    .option('--concerns <txt>', 'Concerns text')
+    .option('--risk-ceiling <risk>', 'Risk ceiling (low | medium | high)', 'low')
+    .action(async (opts: {
+      session?: string;
+      action?: string;
+      authority?: string;
+      dimension?: string;
+      subject?: string[];
+      verdict?: string;
+      confidence?: string;
+      concerns?: string;
+      riskCeiling?: string;
+    }) => {
+      if (!opts.session) {
+        console.error('[ralph ledger] error: --session <id> is required');
+        process.exit(2);
+      }
+      if (opts.action !== 'query' && opts.action !== 'add') {
+        console.error('[ralph ledger] error: --action must be "query" or "add"');
+        process.exit(2);
+      }
+      if (!opts.authority || !opts.dimension) {
+        console.error('[ralph ledger] error: --authority and --dimension are required');
+        process.exit(2);
+      }
+      const run = await loadLedgerCmd();
+      const code = await run({
+        sessionId: opts.session,
+        action: opts.action as 'query' | 'add',
+        authority: opts.authority,
+        dimension: opts.dimension,
+        subjects: opts.subject ?? [],
+        verdict: opts.verdict,
+        confidence: opts.confidence as 'high' | 'medium' | 'low',
+        concerns: opts.concerns,
+        riskCeiling: opts.riskCeiling as 'low' | 'medium' | 'high',
       });
       process.exit(code);
     });

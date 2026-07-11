@@ -30,15 +30,37 @@ import { workflowRoot as wfRoot } from './status-store.js';
 
 export interface NextCmdOptions {
   sessionId?: string;
+  executionOwner?: string;
+  ownerEpoch?: number;
+  leaseId?: string;
 }
 
 export async function runNext(opts: NextCmdOptions): Promise<number> {
+  if (!opts.sessionId) {
+    console.error('[ralph next] error: --session <id> is required for all state-writing operations.');
+    return 1;
+  }
+
   const resolved = resolveSession(workflowRoot(), opts.sessionId);
   if (!resolved) {
-    console.error('[ralph next] no maestro-* / ralph-* session found in .workflow/.maestro/');
+    console.error(`[ralph next] no session found with id "${opts.sessionId}" in .workflow/.maestro/`);
     return 1;
   }
   const { sessionId, statusPath, data } = resolved;
+
+  // Lease verification
+  if (data.execution_owner && data.execution_owner !== opts.executionOwner) {
+    console.error(`[ralph next] lease conflict: session owned by "${data.execution_owner}", got "${opts.executionOwner}"`);
+    return 1;
+  }
+  if (data.lease_id && data.lease_id !== opts.leaseId) {
+    console.error(`[ralph next] lease conflict: session lease_id is "${data.lease_id}", got "${opts.leaseId}"`);
+    return 1;
+  }
+  if (data.owner_epoch !== undefined && opts.ownerEpoch !== undefined && data.owner_epoch > opts.ownerEpoch) {
+    console.error(`[ralph next] lease conflict: session owner_epoch is ${data.owner_epoch}, got older epoch ${opts.ownerEpoch}`);
+    return 1;
+  }
 
   if (data.status !== 'running') {
     console.error(`[ralph next] session is "${data.status}", not running — edit status.json to resume`);
@@ -129,6 +151,9 @@ export async function runNext(opts: NextCmdOptions): Promise<number> {
   next.status = 'running';
   data.active_step_index = next.index;
   data.ralph_protocol_version = data.ralph_protocol_version ?? RALPH_PROTOCOL_VERSION;
+  if (opts.executionOwner) data.execution_owner = opts.executionOwner;
+  if (opts.leaseId) data.lease_id = opts.leaseId;
+  if (opts.ownerEpoch !== undefined) data.owner_epoch = opts.ownerEpoch;
   writeStatus(statusPath, data);
 
   // stdout: framed prompt
@@ -163,10 +188,10 @@ function emitPrompt(
     '',
     `<!-- maestro ralph: step [${idx}/${total}] skill=${step.skill}${argsLine} session=${sessionId} -->`,
     '<!-- On finish, run exactly one of:',
-    `       maestro ralph complete ${idx} --status DONE --summary "..." [--evidence <path>] [--decisions "..."] [--caveats "..."] [--deferred "..."]`,
-    `       maestro ralph complete ${idx} --status DONE_WITH_CONCERNS --summary "..." --concerns "..."`,
-    `       maestro ralph retry ${idx}`,
-    `       maestro ralph complete ${idx} --status BLOCKED --reason "<external blocker>"`,
+    `       maestro ralph complete ${idx} --session ${sessionId} --status DONE --summary "..." [--evidence <path>] [--decisions "..."] [--caveats "..."] [--deferred "..."]`,
+    `       maestro ralph complete ${idx} --session ${sessionId} --status DONE_WITH_CONCERNS --summary "..." --concerns "..."`,
+    `       maestro ralph retry ${idx} --session ${sessionId}`,
+    `       maestro ralph complete ${idx} --session ${sessionId} --status BLOCKED --reason "<external blocker>"`,
     '     --summary is REQUIRED for DONE/DONE_WITH_CONCERNS (verb-led, ≤100 chars, core outcome). -->',
   ].join('\n');
 
@@ -265,9 +290,9 @@ function buildSessionAnchor(session: RalphSession, step: RalphStep): string | nu
     '',
     '<!-- session_anchor: read-only grounding. Honor Intent + Boundary Contract before acting.',
     '     If your work would fall outside in_scope (or hit out_of_scope), stop and report via',
-    '     `maestro ralph complete <N> --status BLOCKED --reason "out_of_scope: ..."` instead of proceeding.',
+    `     \`maestro ralph complete <N> --session ${session.session_id} --status BLOCKED --reason "out_of_scope: ..."\` instead of proceeding.`,
     '     If Accumulated Signals suggest prior work conflicts with your task, report via',
-    '     `maestro ralph complete <N> --status BLOCKED --reason "drift_conflict: ..."` instead of proceeding. -->',
+    `     \`maestro ralph complete <N> --session ${session.session_id} --status BLOCKED --reason "drift_conflict: ..."\` instead of proceeding. -->`,
     '</session_anchor>',
   ].join('\n');
 }

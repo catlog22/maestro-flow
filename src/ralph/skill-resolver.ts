@@ -19,6 +19,8 @@ export interface SkillFrontmatter {
   description?: string;
   'argument-hint'?: string;
   'allowed-tools'?: string[];
+  orchestration_kind?: 'atomic' | 'terminal_pipeline';
+  nested_spawn?: boolean;
   [key: string]: unknown;
 }
 

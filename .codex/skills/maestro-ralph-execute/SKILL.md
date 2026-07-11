@@ -184,6 +184,8 @@ if goal:
   → 传递给 A_EXEC_STEP 用于 inline execution 前注入（见 step 2 goal context pre-injection）
 ```
 
+Auto mode propagation: If auto == true or session.auto_mode == true, append -y (or appropriate yes-flag) to step.args (if not already present) before persisting, ensuring child skills run in non-interactive auto mode.
+
 Write enriched args + source_artifact_ref back to status.json.
 
 ### A_LOAD_STEP_CONTEXT
@@ -258,27 +260,24 @@ Write enriched args + source_artifact_ref back to status.json.
 
 | 基准来源 | 取值 |
 |---------|------|
-| `step.goal_ref` → goal.done_when | 子目标的完成条件 |
-| `session.boundary_contract.definition_of_done` | 全局验收标准 |
-| `session.execution_criteria` | 执行准则 |
-| `session.intent` | 原始意图 |
+| `step.goal_ref` | 子目标的 goal_ref 关联 |
+| `session.boundary_contract` | 边界协议（如 in_scope, out_of_scope 范围） |
 
 **2. 读产物摘要:**
 
 从 A_EXTRACT_STEP_SIGNALS (step 4a) 已提取的 summary + decisions + artifacts 构建产物画像。
 
-**3. 对比评分:**
+**3. 对比评分 (仅结构与 Scope/Contract 校验，语义质量留给 post-*):**
 
 | 维度 | 检查 |
 |------|------|
-| 覆盖度 | 产物是否覆盖了 goal.done_when 的每个条件 |
-| 方向性 | decisions 是否与 intent 和 boundary 一致 |
-| 完整性 | 预期产物类型是否齐全（如 plan 阶段应有 TASK-*.json） |
+| 完整性 | 预期产物类型是否齐全（例如 plan 阶段应有 plan.json，execute 阶段应有对应的 summaries）、结构校验、schema 一致性 |
+| 边界吻合 | 产出物及改动文件是否在 boundary_contract.in_scope 范围内，且没有触及 out_of_scope |
 
 **drift_score:**
-- `ALIGNED` — 全部维度通过
-- `MINOR_DRIFT` — 覆盖度/完整性有小缺口，不影响后续
-- `MAJOR_DRIFT` — 方向性偏离或关键产物缺失
+- `ALIGNED` — 结构与范围校验全部通过
+- `MINOR_DRIFT` — 出现非核心的结构或 scope 偏离（可在 caveats 中标注）
+- `MAJOR_DRIFT` — 核心产出缺失或严重超出 boundary 范围（触发一次重试）
 
 **4. 修正动作:**
 
