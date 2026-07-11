@@ -230,6 +230,7 @@ CONSTRAINTS:
 8. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Do NOT bypass for "efficiency" or "clear intent" reasons. Defined degradation paths (invariant 4) are not violations.
 9. **Evidence required** — role analysis findings in {role}/analysis.md §2 Decision Digest MUST cite concrete evidence: code references (file:line), API endpoints, data models from codebase exploration. Decisions without evidence are flagged LOW CONFIDENCE. **Degradation exception**: when invariant 4 activates and evidence is unavailable due to upstream failure, decisions MAY proceed but MUST inherit LOW CONFIDENCE flag.
 10. **Artifact verification before completion** — before reporting completion, verify ALL expected artifacts exist: guidance-specification.md, {role}/analysis.md (per selected role), {role}/analysis-F-*.md (per feature). If any missing: DO NOT report completion.
+14. **Brainstorm DoD and convergence**: Every brainstorm session MUST converge within 3 turns in interactive mode, and MUST produce a structured 'Decision Digest' containing locked technical designs. Once all critical role decisions in §2 are locked, the session MUST terminate and exit.
 </invariants>
 
 <spawn_contract>

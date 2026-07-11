@@ -77,6 +77,7 @@ Wave 1: 3 analysis rows (parallel). Wave 2: 1 assembly row.
 6. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Defined degradation paths (invariant 5) are not violations.
 7. **Requirement mapping completeness** — every Active requirement from project.md MUST be mapped to exactly one phase. No circular dependencies in phase ordering.
 8. **Artifact verification before completion** — .workflow/roadmap.md MUST exist with Milestone > Phase hierarchy and progress table. Artifact MUST be registered in state.json. If missing: DO NOT report completion.
+9. **Milestone Locking**: If a milestone is marked as 'completed' or 'locked' in state.json, the roadmap generator MUST NOT modify its details or timeline in roadmap.md. Milestone generation/regeneration is restricted only to active or future milestones.
 </invariants>
 
 <state_machine>

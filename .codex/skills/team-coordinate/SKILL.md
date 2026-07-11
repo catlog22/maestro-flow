@@ -166,6 +166,7 @@ Each wave generates `wave-{N}.csv` with Input columns + `prev_context` (populate
 10. **DO NOT STOP**: Continuous execution until all waves complete or user stops
 11. **Max 5 Roles**: Dynamic role count capped at 5; merge overlapping if exceeded
 12. **Dynamic Roles in CSV**: Role instructions encoded in `description` column, not in separate files
+13. **Standalone Fallback for Low Complexity**: If the task complexity is standalone or medium/small and does not span multiple isolated modules, team-coordinate MUST downgrade and execute in single-agent standalone mode rather than spawning teammate agents, avoiding mailbox deadlocks and message-confirmation loops.
 </invariants>
 
 <state_machine>

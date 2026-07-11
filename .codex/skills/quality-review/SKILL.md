@@ -155,6 +155,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 6. **Skip on Failure**: If all dimension agents failed, skip aggregation and flag all downstream outputs as LOW CONFIDENCE. Record `degradation_event` in discoveries.ndjson. **Note**: timed-out workers that report `completed` with empty findings are treated as effectively failed for degradation purposes if `severity_counts` is all-zero AND `findings` is empty. This is a defined degradation path, not a violation of invariant 2.
 7. **Cleanup Temp Files**: Remove wave-{N}.csv and wave-{N}-results.csv after results are merged
 8. **Pipeline continuity**: Continuous execution until all waves complete. When invariant 6 (skip on failure) activates, the pipeline continues in degraded mode.
+9. **BLOCK Severity Separation**: Only critical safety issues, syntax errors, or logical bugs may trigger a BLOCK verdict. Code style warnings, formatting changes, and documentation warnings MUST NOT block the pipeline and should be downgraded to WARN.
 </invariants>
 
 <execution>

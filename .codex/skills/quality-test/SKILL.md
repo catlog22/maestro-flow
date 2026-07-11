@@ -53,6 +53,7 @@ Output (via output_schema): root_cause, fix_direction, affected_files, evidence,
 6. **CSV parallel diagnosis** -- spawn_agents_on_csv for gap clusters, not sequential
 7. **Confirmed issue creation** -- every failed test -> issues.jsonl entry, but only after user confirmation (skip confirmation if `-y`); present batch summary (count + severity + titles) before writing
 8. **Issue lifecycle sync** -- registered -> planning -> executing -> completed/failed
+9. **UAT Bypass for Non-Functional Failures**: If UAT failures are strictly non-functional (e.g., formatting discrepancies, path separator issues, minor execution latency warnings), the agent MUST output the exact mismatch diff and allow the user to manually proceed/bypass the test without blocking completion.
 </invariants>
 
 <state_machine>

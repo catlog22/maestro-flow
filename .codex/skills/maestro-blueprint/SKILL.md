@@ -89,6 +89,7 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 2. **Phase gate enforcement** — each phase produces artifacts that are prerequisites for the next. Do NOT advance to phase N+1 without verifying phase N's output exists: P2→product-brief.md, P3→requirements/_index.md, P4→architecture/_index.md, P5→epics/_index.md, P6→readiness-report.md.
 3. **Evidence required on ADRs** — Architecture Decision Records (ADR-*.md) MUST cite evidence (code analysis, requirement traceability REQ-xxx, upstream context). Generic rationale without project-specific references is INVALID.
 4. **Artifact verification before completion** — verify blueprint-config.json, product-brief.md, glossary.json (≥5 terms), requirements/_index.md, architecture/_index.md, epics/_index.md, readiness-report.md, blueprint-summary.md, context-package.json all exist. If any missing: DO NOT report completion.
+5. **Lightweight Mode for Small Scope**: If the scope is determined as medium or small, the 6-phase cascading spec document generation is downgraded: the agent is permitted to merge all specifications into a single `design-doc.md` and bypass individual product-brief/PRD/architecture files.
 </invariants>
 
 <error_codes>

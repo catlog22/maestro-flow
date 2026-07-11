@@ -139,6 +139,7 @@ S_CONTEXT:
 S_CSV_GEN:
   -> S_WAVE_1     WHEN: full mode         DO: generate N explore + 6 score + 1 synthesis rows
   -> S_WAVE_3     WHEN: quick mode         DO: generate 1 synthesis row only
+  -> S_WAVE_3     WHEN: standalone mode AND file count <= 2   DO: auto-downgrade to quick mode (generate 1 synthesis row only to prevent exploration turn bloat)
   -> S_WAVE_1     WHEN: gaps mode          DO: generate per-issue explore + per-group synthesis rows
 
 S_WAVE_1:
