@@ -2,7 +2,7 @@
 name: codify-to-knowhow
 description: "Manifest-driven knowledge asset generator — converts structured packages into knowhow + spec entries"
 argument-hint: "<package-path>"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
 <purpose>
@@ -277,12 +277,19 @@ For each `manifest.specs[]` item, write spec entry with `<spec-entry>` closed ta
 ```javascript
 const categoryFileMap = {
   coding: 'coding-conventions.md',
+  pattern: 'coding-conventions.md',
   arch: 'architecture-constraints.md',
+  decision: 'architecture-constraints.md',
   quality: 'quality-rules.md',
+  rule: 'quality-rules.md',
+  validation: 'quality-rules.md',
   debug: 'debug-notes.md',
   test: 'test-conventions.md',
   review: 'review-standards.md',
-  learning: 'learnings.md'
+  learning: 'learnings.md',
+  bug: 'learnings.md',
+  tools: 'tools.md',
+  ui: 'ui-conventions.md'
 };
 
 const today = new Date().toISOString().split('T')[0];

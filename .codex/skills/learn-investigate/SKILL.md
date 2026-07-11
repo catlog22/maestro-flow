@@ -1,7 +1,7 @@
 ---
 name: learn-investigate
 description: Investigate questions with hypothesis testing and evidence logging
-argument-hint: "<question> [--scope <path>] [--max-hypotheses N]"
+argument-hint: "<question> [--scope <path>] [--max-hypotheses N] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -18,6 +18,7 @@ $ARGUMENTS — question text and optional flags.
 - `--scope <path>` — Restrict to files under this directory (default: entire project)
 - `--max-hypotheses N` — Max hypotheses before escalating (default: 3)
 - `--no-persist` — Skip writing to learnings.md (report.md still written locally)
+- `-y` — Skip user confirmation prompts (headless mode)
 
 **Output**: `.workflow/knowhow/KNW-investigate-{slug}/` (evidence.ndjson, understanding.md, report.md)
 
@@ -31,7 +32,7 @@ $ARGUMENTS — question text and optional flags.
 4. **Hypothesis cap** — MUST NOT generate more than `--max-hypotheses` (default 3) before triggering escalation; NEVER silently exceed the cap
 5. **Structured evidence format** — every evidence entry MUST include `{ts, type, source, relevance, content, note}`; incomplete entries SHALL NOT be appended
 6. **3-strike escalation** — after all hypotheses fail, MUST escalate to user via `request_user_input`; NEVER silently conclude as INCONCLUSIVE without user interaction
-7. **Confirmation gate** — unless `--no-persist` is set, MUST present report.md path and spec-entries via `request_user_input` before final writes
+7. **Confirmation gate** — unless `--no-persist` or `-y` is set, MUST present report.md path and spec-entries via `request_user_input` before final writes
 </invariants>
 
 <execution>
@@ -87,8 +88,8 @@ If all hypotheses fail: broaden scope, search wiki with alt keywords, or mark IN
 ### Stage 5: Synthesize + Persist (confirmation-gated)
 1. Write `report.md` with answer, evidence trail, hypothesis results
 2. If `--no-persist`: skip learnings append, display summary only
-3. Otherwise: **Confirmation gate** — prompt user via `request_user_input`: "Persist findings to learnings.md? (y/n)"
-   - `y` → append to `.workflow/specs/learnings.md`:
+3. Otherwise: **Confirmation gate** — unless `-y` is set, prompt user via `request_user_input`: "Persist findings to learnings.md? (y/n)". (If `-y`, auto-confirm.)
+   - `y` (or auto-confirm) → append to `.workflow/specs/learnings.md`:
      - Confirmed → category: "technique" / "pattern"
      - Disproved → category: "gotcha"
    - `n` → skip learnings append
@@ -113,7 +114,7 @@ If all hypotheses fail: broaden scope, search wiki with alt keywords, or mark IN
 - [ ] At least 1 hypothesis formed and tested
 - [ ] understanding.md tracks evolving understanding
 - [ ] report.md written with answer and evidence trail
-- [ ] User confirmation obtained before learnings append (unless --no-persist)
+- [ ] User confirmation obtained before learnings append (unless --no-persist or -y)
 - [ ] Findings appended to .workflow/specs/learnings.md with stable INS-ids (if confirmed)
 - [ ] 3-strike escalation triggered if all hypotheses fail
 </success_criteria>

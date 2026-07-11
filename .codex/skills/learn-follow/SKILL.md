@@ -1,7 +1,7 @@
 ---
 name: learn-follow
 description: Guided reading of code or wiki to extract patterns
-argument-hint: "<path|wiki-id|topic> [--depth shallow|deep] [--save-wiki]"
+argument-hint: "<path|wiki-id|topic> [--depth shallow|deep] [--save-wiki] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -24,9 +24,9 @@ $ARGUMENTS — target and optional flags.
 - `--depth deep` — Every function, branch, assumption
 - `--save-wiki` — Create wiki note with reading notes
 
-**Output**: `.workflow/knowhow/KNW-follow-{slug}-{date}.md`
+**Output**: `.workflow/knowhow/REF-{slug}-{date}.md`
 
-**Output boundary**: ALL file writes MUST target `.workflow/knowhow/KNW-follow-{slug}-{date}.md` and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
+**Output boundary**: ALL file writes MUST target `.workflow/knowhow/REF-{slug}-{date}.md` and `.workflow/specs/learnings.md` only (if `--save-wiki` is active, writes to `.workflow/wiki/` are also allowed). NEVER modify source code or files outside these paths.
 </context>
 
 <invariants>
@@ -59,7 +59,7 @@ $ARGUMENTS — target and optional flags.
 
 **GATE 4: Persistence → Completion**
 - REQUIRED: Unless `-y`, `request_user_input` showing files to write and spec-entries to append — user must confirm.
-- REQUIRED: KNW-follow-{slug}-{date}.md written with understanding map.
+- REQUIRED: REF-{slug}-{date}.md written with understanding map.
 - REQUIRED: learnings.md appended (not overwritten) with new spec-entry blocks.
 - BLOCKED if: user declines confirmation — offer to adjust findings before retry.
 
@@ -92,7 +92,7 @@ Cross-reference against `coding-conventions.md`: documented vs undocumented patt
    - `y` → proceed to write
    - `n` → skip persistence, display summary only
    - `edit` → let user modify findings before writing
-3. On confirmation: write `KNW-follow-{slug}-{date}.md` with understanding map
+3. On confirmation: write `REF-{slug}-{date}.md` with understanding map
 4. On confirmation: append new patterns to `.workflow/specs/learnings.md` (source: "follow", stable INS-ids)
 5. If `--save-wiki`: create wiki note entry (also gated by step 2 confirmation)
 
@@ -115,6 +115,6 @@ Cross-reference against `coding-conventions.md`: documented vs undocumented patt
 - [ ] Patterns extracted with file:line anchors
 - [ ] Understanding map produced with concepts, patterns, assumptions, questions
 - [ ] User confirmation obtained before persistence
-- [ ] `KNW-follow-{slug}-{date}.md` written (if confirmed)
+- [ ] `REF-{slug}-{date}.md` written (if confirmed)
 - [ ] `.workflow/specs/learnings.md` appended with stable INS-ids (if confirmed)
 </success_criteria>

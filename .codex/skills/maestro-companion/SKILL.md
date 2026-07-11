@@ -1,7 +1,7 @@
 ---
 name: maestro-companion
 description: "Knowledge companion — load context, record companion doc, capture insights, route to skills"
-argument-hint: "[before|note|after|route] [--task <description>] [--type <task_type>] [--category <cat>]"
+argument-hint: "[before|note|after|route] [--task <description>] [--type <task_type>] [--category <cat>] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -415,7 +415,7 @@ Promotable entries:
 
 ### Step 3: Promote Entries
 
-If promotable entries exist, ask user:
+If promotable entries exist, unless `-y` is set, ask user: (If `-y` is set, skip promotion and proceed to Step 4)
 
 - Option 1: "Promote to spec" — short coding/arch/test constraint
 - Option 2: "Promote to knowhow" — detailed recipe/template/decision/tip

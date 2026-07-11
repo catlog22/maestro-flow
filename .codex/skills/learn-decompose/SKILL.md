@@ -32,9 +32,9 @@ $ARGUMENTS — target path/module and optional flags.
 - `--save-spec`: Invoke `spec-add` for each new pattern
 - `--save-wiki`: Create wiki note entries per dimension group
 
-**Output**: `.workflow/.csv-wave/{session-id}/` + `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`
+**Output**: `.workflow/.csv-wave/{session-id}/` + `.workflow/knowhow/DCS-{slug}-{date}.md`
 
-**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/`, `.workflow/knowhow/KNW-decompose-{slug}-{date}.md`, and `.workflow/specs/learnings.md` only. NEVER modify source code or files outside these paths.
+**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/`, `.workflow/knowhow/DCS-{slug}-{date}.md`, and `.workflow/specs/learnings.md` only (if `--save-spec` is active, writes to `.workflow/specs/` are allowed; if `--save-wiki` is active, writes to `.workflow/wiki/` are allowed). NEVER modify source code or files outside these paths.
 </context>
 
 <invariants>
@@ -137,7 +137,7 @@ Tasks:
 4. If `-y`/`--yes` flag is set, skip the preview gate and write all items automatically.
 
 **Writes:**
-1. Write `KNW-decompose-{slug}-{date}.md` with full catalog
+1. Write `DCS-{slug}-{date}.md` with full catalog
 2. Append each **new** pattern to `.workflow/specs/learnings.md` (source: "decompose", category: "pattern")
 3. If `--save-spec`: invoke `spec-add` per new pattern
 4. If `--save-wiki`: create wiki note per dimension group
@@ -158,7 +158,7 @@ Tasks:
 - [ ] Each finding has: name, dimension, confidence, anchors, description
 - [ ] Cross-reference performed (documented / known / new)
 - [ ] Preview summary shown and user confirmed (or `-y` flag bypassed)
-- [ ] Pattern catalog written to `KNW-decompose-{slug}-{date}.md`
+- [ ] Pattern catalog written to `DCS-{slug}-{date}.md`
 - [ ] New patterns appended to `.workflow/specs/learnings.md` with stable INS-ids
 - [ ] If --save-spec / --save-wiki: entries created
 </success_criteria>

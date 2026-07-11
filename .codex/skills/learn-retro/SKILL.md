@@ -1,7 +1,7 @@
 ---
 name: learn-retro
 description: Retrospective of git activity and decision quality
-argument-hint: "[--lens git|decision|all] [--days N] [--author <name>] [--area <path>] [--phase N] [--compare]"
+argument-hint: "[--lens git|decision|all] [--days N] [--author <name>] [--area <path>] [--phase N] [--compare] [-y]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 ---
 
@@ -28,9 +28,9 @@ $ARGUMENTS — lens selection and scope flags.
 <invariants>
 1. **Read-only analysis** — NEVER modify source code, git history, or wiki entries; all writes go to `.workflow/` only
 2. **Git data integrity** — git commands MUST be read-only (`git log`, `git diff --stat`); NEVER run `git commit`, `git reset`, or any write-mode git operation
-3. **Confirmation before agents** — MUST prompt user via `request_user_input` before spawning decision evaluation agents; NEVER auto-spawn without confirmation
+3. **Confirmation before agents** — unless `-y` is set, MUST prompt user via `request_user_input` before spawning decision evaluation agents; NEVER auto-spawn without confirmation
 4. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
-5. **Confirmation before persist** — MUST prompt user via `request_user_input` before appending insights to learnings.md
+5. **Confirmation before persist** — unless `-y` is set, MUST prompt user via `request_user_input` before appending insights to learnings.md
 6. **Lens contract** — MUST execute exactly the selected lens(es); `--lens git` SHALL NOT trigger decision evaluation and vice versa
 7. **Prior retro preservation** — existing `KNW-retro-*.json` files MUST NOT be modified; only new files created for current retro
 </invariants>
@@ -50,12 +50,12 @@ $ARGUMENTS — lens selection and scope flags.
 
 **GATE 3: Decision Collection → Decision Evaluation**
 - REQUIRED: Decisions collected from wiki/specs/git/phase.
-- REQUIRED: User confirmation obtained via `request_user_input` before spawning evaluation agents.
+- REQUIRED: User confirmation obtained via `request_user_input` before spawning evaluation agents (unless `-y`).
 - BLOCKED if: no decisions found (E003) or user declines agent spawn.
 
 **GATE 4: Report → Persist**
 - REQUIRED: Unified report written to KNW-retro-{date}.md + KNW-retro-{date}.json.
-- REQUIRED: User confirmation obtained via `request_user_input` before learnings append.
+- REQUIRED: User confirmation obtained via `request_user_input` before learnings append (unless `-y`).
 - BLOCKED if: user declines — display summary only, skip persistence.
 
 ### Phase 1: Parse + Select Lenses
@@ -75,7 +75,7 @@ $ARGUMENTS — lens selection and scope flags.
 **3a: Collect decisions** from wiki, specs, git log, phase context, .workflow/specs/learnings.md.
 **3b: Build decision registry** per decision (id, title, source, rationale, alternatives, evidence).
 
-**3c: Multi-perspective evaluation** — **Confirmation gate**: prompt user via `request_user_input` before spawning wave: "Spawn 3 perspective agents for decision evaluation? (y/n)". On `n`, skip to Phase 4 with decisions listed but unevaluated.
+**3c: Multi-perspective evaluation** — **Confirmation gate**: unless `-y` is set, prompt user via `request_user_input` before spawning wave: "Spawn 3 perspective agents for decision evaluation? (y/n)". On `n`, skip to Phase 4 with decisions listed but unevaluated.
 
 Via spawn_agents_on_csv (3 parallel agents; filter `wave==1 AND status=="pending"`):
 
@@ -121,7 +121,7 @@ Do NOT write to tasks.csv, wave-*.csv, results.csv. Do NOT call spawn_agents_on_
 Write `KNW-retro-{date}.md` + `KNW-retro-{date}.json` with metrics, sessions, hotspots, decision health, combined insights, recommended actions.
 
 ### Phase 5: Persist (confirmation-gated)
-**Confirmation gate**: prompt user via `request_user_input` — "Append retro insights to learnings.md? (y/n)"
+**Confirmation gate**: unless `-y` is set, prompt user via `request_user_input` — "Append retro insights to learnings.md? (y/n)"
 - `y` → append insights to `.workflow/specs/learnings.md` (source: "retro-git" or "retro-decision")
 - `n` → skip append, display summary only
 Display summary.
@@ -145,6 +145,6 @@ Display summary.
 - [ ] Git lens: metrics computed, sessions detected, hotspots identified
 - [ ] Decision lens: decisions collected, user confirmed before wave spawn, 3 agents spawned in parallel (if confirmed), lifecycle classified
 - [ ] Unified report written to KNW-retro-{date}.md + KNW-retro-{date}.json
-- [ ] User confirmation obtained before learnings append
+- [ ] User confirmation obtained before learnings append (unless `-y`)
 - [ ] .workflow/specs/learnings.md appended with insights (stable INS-ids, if confirmed)
 </success_criteria>
