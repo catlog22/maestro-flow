@@ -104,11 +104,7 @@ Remaining                        → intent (amend_mode 时为 change_request)
 S_PARSE_ROUTE     — 解析参数、路由入口                  PERSIST: —
 S_STATUS          — 显示 session 进度                   PERSIST: —
 S_CONTINUE        — 恢复执行                            PERSIST: —
-S_RESOLVE_PHASE   — 解析 phase + phase_is_new + D-007 milestone PERSIST: session.phase, session.phase_is_new, session.milestone
-S_INFER           — 基于已解析 phase 推断 lifecycle_position PERSIST: session.lifecycle_position
-S_RESOLVE_SCOPE   — 读 macro analyze conclusions.scope_verdict PERSIST: session.scope_verdict, session.analyze_macro_id
-S_QUALITY_MODE    — 决定质量管线模式                     PERSIST: session.quality_mode
-S_PLANNING_MODE   — 决定统一/独立规划模式               PERSIST: session.planning_mode
+S_PREPARE_SESSION — 一次性解析 phase、position、scope、质量模式和规划模式 PERSIST: session.phase, session.phase_is_new, session.milestone, session.lifecycle_position, session.scope_verdict, session.analyze_macro_id, session.quality_mode, session.planning_mode
 S_DECOMPOSE       — 边界澄清、写执行准则+子目标清单       PERSIST: session.boundary_contract, .execution_criteria, .task_decomposition
 S_BUILD_CHAIN     — 构建步骤链                           PERSIST: session.steps[]
 S_CREATE_SESSION  — 写 status.json                      PERSIST: session (全量)
@@ -128,7 +124,7 @@ S_PARSE_ROUTE:
   → S_AMEND_GOAL    WHEN: amend_mode == true AND running session exists
   → S_FALLBACK      WHEN: amend_mode == true AND no running session  DO: Display: "无 running session，--amend 需要活跃 session"
   → S_DECISION_EVAL WHEN: running session with decision step in "running" status
-  → S_RESOLVE_PHASE WHEN: intent is non-empty                  ← phase 必须先于 position
+  → S_PREPARE_SESSION WHEN: intent is non-empty                  ← 一次性推导 phase/position 等所有 facts
   → S_FALLBACK      WHEN: no intent AND no running session
 
 S_STATUS:
@@ -139,31 +135,16 @@ S_CONTINUE:
   → S_DISPATCH      WHEN: running session found (no target_session_id → latest running)
   → S_FALLBACK      WHEN: no running session               DO: display "无运行中的 ralph 会话"
 
-S_RESOLVE_PHASE:
-  → S_INFER         WHEN: phase resolved or null            DO: A_RESOLVE_PHASE
+S_PREPARE_SESSION:
+  → S_DECOMPOSE     WHEN: preparation succeeded            DO: A_PREPARE_SESSION
   → S_FALLBACK      WHEN: ambiguous
                      GUARD: auto_confirm does NOT skip phase ambiguity
 
-S_INFER:
-  → S_RESOLVE_SCOPE WHEN: position resolved                 DO: A_INFER_POSITION
-  → S_FALLBACK      WHEN: cannot infer
-
-S_RESOLVE_SCOPE:
-  → S_QUALITY_MODE  DO: A_RESOLVE_SCOPE_VERDICT
-                     GUARD: position ∈ {grill, brainstorm, blueprint, init} → skip (scope_verdict = null)
-
-S_QUALITY_MODE:
-  → S_PLANNING_MODE DO: A_DETERMINE_QUALITY_MODE
-
-S_PLANNING_MODE:
-  → S_DECOMPOSE     DO: A_DETERMINE_PLANNING_MODE
-                     GUARD: lifecycle_position ∈ {grill, brainstorm, blueprint, init, analyze-macro, roadmap} → skip (force independent)
-
 S_DECOMPOSE:
   → S_BUILD_CHAIN   DO: A_DECOMPOSE_TASKS
-                     GUARD: broad intent → MUST clarify boundary even if auto_confirm
-                     GUARD: narrow intent → auto-derive, skip questions
-                     GUARD: position ∈ {grill, brainstorm, blueprint, init} → skip decomposition
+                      GUARD: broad intent → MUST clarify boundary even if auto_confirm
+                      GUARD: narrow intent → auto-derive, skip questions
+                      GUARD: lifecycle_position ∈ {grill, brainstorm, blueprint, init} → skip decomposition
 
 S_BUILD_CHAIN:
   → S_CREATE_SESSION DO: A_BUILD_STEPS
@@ -238,135 +219,42 @@ S_FALLBACK:
    [ ] G2 done_when={done_when}   evidence={evidence}   confirmed=false ◀ unmet
    ```
 
-### A_RESOLVE_PHASE
+### A_PREPARE_SESSION
 
-前置于 A_INFER_POSITION。产出 `phase` + `phase_is_new` + `milestone`（D-007 反查）三元组。
+一次性解析 phase、推断 lifecycle_position、读取 scope_verdict、决定 quality_mode、决定 planning_mode。
 
-**Priority:**
-
-| Step | 行为 | phase_is_new |
-|------|------|--------------|
-| 1 | intent 匹配 `phase\s*(\d+)` → 取 state.json 对应 phase | false |
-| 2 | intent 派生短语 → 在 `state.json.milestones[*].phase_slugs` / `artifacts[*].path` 查找 | false (匹配) / true (无匹配) |
-| 3 | 未派生 → 取最新 in-progress artifact 的 phase | false |
-| 4 | 仍无 → state.json 首个 incomplete phase | false |
-| 5 | position 将是 brainstorm/blueprint/init/roadmap/analyze-macro → phase = null | n/a |
-| 6 | 仍模糊 → `request_user_input` | 由用户回答确定 |
-
-**D-007 Phase→Milestone 反查**（数字 phase 已解析时）：
-```
-resolve_milestone(phase_number):
+**1. Phase & Milestone 推导**:
+- 匹配 `phase\s*(\d+)` -> 取 state.json 对应 phase 编号。
+- intent 派生短语 -> 查找 `state.json.milestones[*].phase_slugs` 或 `artifacts[*].path`。
+- 新派生 phase -> phase_is_new = true。
+- 数字 phase 解析时，反查 milestone：
+  ```python
   for ms in state.json.milestones:
-    if str(phase_number) in ms.phase_slugs: return ms.id
-  return state.json.current_milestone   # fallback
-```
-写入 `session.milestone`；禁止直接使用 `current_milestone` 当做 phase 所属 milestone。
+      if str(phase_number) in ms.phase_slugs: return ms.id
+  return state.json.current_milestone
+  ```
 
-**写入 session**: `phase`, `phase_is_new`, `milestone`。
+**2. Lifecycle Position 推导**:
+- 显式覆写：`grill`（拷问）、`brainstorm`（风暴）、`blueprint`（规格书）、`analyze-macro`（宽泛意图）。
+- 启动检测：无 `.workflow/` -> `brainstorm` (无源码) / `init` (有源码)；无 `state.json` -> `init`。
+- Phase 敏感件推理：
+  - `phase_is_new == true` -> `analyze`
+  - 最新 artifact 为 `analyze` -> `plan`
+  - 最新 artifact 为 `plan` -> `execute`
+  - 最新 artifact 为 `execute` -> `review`
 
-**新派生 phase 时 milestone 处理**：
-- state.json 当前 milestone 仍 active → 沿用，新增 phase
-- intent 派生新 milestone 名 → 写入 session 仅作标签；`state.json.milestones` 由 `maestro-roadmap` / `maestro-milestone-release` 创建
+**3. Scope Verdict 读取**:
+- 定位最新 `type=="analyze"` 且 `scope=="macro"` 的 artifact，读取 `conclusions.json` 的 `scope_verdict` (`large | medium | small`)。
 
-### A_INFER_POSITION
+**4. Quality Mode 决定**:
+- 显式覆盖 `--quality`；无则默认：存在 `specs/REQ-*.md` 且业务明确 -> `full` (含 business-test/test)；否则 -> `standard`；`--quality quick` -> `quick`。
 
-**Intent-based overrides** (按顺序匹配，先命中先用):
+**5. Planning Mode 决定**:
+- `lifecycle_position ∈ {grill, brainstorm, init, roadmap}` -> `independent`。
+- 否则，若 milestone 包含多个 phase，auto_confirm 时设 `unified`，非 auto_confirm则通过交互征询用户。
 
-| Pattern | Position |
-|---------|----------|
-| 压力测试 / 拷问 / 验证假设 / grill / stress-test | `grill`（**auto_confirm=true 时透传 `-y`，grill Auto mode 代码代答，不跳过**） |
-| brainstorm / 头脑风暴 / 探索 / ideate / 设计思路 | `brainstorm` |
-| blueprint / 规格 / 正式文档 / spec-generate / 7-phase | `blueprint` |
-| broad/medium intent 无数字 phase (重构/全面/重写/迁移/新功能 X) | `analyze-macro` |
-
-**Bootstrap detection:**
-
-| Condition | Position |
-|-----------|----------|
-| No `.workflow/` + no source files | `brainstorm` |
-| No `.workflow/` + has source files | `init` |
-| Has `.workflow/` but no state.json | `init` |
-| Has state.json | → phase-aware artifact inference |
-
-**Phase-aware artifact inference** (使用 A_RESOLVE_PHASE 已写入的 `session.phase` + `session.phase_is_new`)：
-
-| Condition | Position |
-|-----------|----------|
-| `phase_is_new == true` (新 phase) | `analyze` |
-| no milestones AND no roadmap.md AND has analyze macro artifact | `roadmap` |
-| no milestones AND no roadmap.md AND no analyze artifact | `analyze-macro` |
-| `phase == null` (grill/brainstorm/blueprint/init/roadmap/analyze-macro override 已定) | n/a |
-| phase 已存在 + 无任何 artifact | `analyze` |
-| phase 已存在 + 最新 artifact = analyze | `plan` |
-| phase 已存在 + 最新 artifact = plan | `execute` |
-| phase 已存在 + 最新 artifact = execute | `review` |
-
-**关键不变量**：artifact 过滤按 `session.phase`，不读 `state.json.current_phase`。`phase_is_new` → 直接 `analyze`。
-
-### A_RESOLVE_SCOPE_VERDICT
-
-仅当 `lifecycle_position ∈ {analyze-macro, roadmap, plan}` 且存在最新 analyze artifact 时执行。
-
-1. 定位最新 macro analyze artifact（`type=="analyze"` 且 `scope=="macro"`，按 created_at DESC）→ 记 `session.analyze_macro_id = ANL-xxx`
-2. 读 `{artifact_path}/conclusions.json` 的 `scope_verdict` 字段（`large | medium | small`）
-3. 写入 `session.scope_verdict`；缺失时设 `unknown`
-4. 路由建议（A_BUILD_STEPS 据此决定是否插入 roadmap、plan 是否走 `--from`）：
-
-| scope_verdict | 链路 |
-|---------------|------|
-| `large` | analyze-macro → roadmap → analyze → plan → execute → ... |
-| `medium` / `small` | analyze-macro → plan --from analyze:{ANL_ID} → execute → ...（跳过 roadmap + analyze-phase） |
-| `unknown` | 默认走 large 路径，post-analyze-scope 决策节点再纠正 |
-
-**Refine from review results:**
-
-| Condition | Position |
-|-----------|----------|
-| review.json: verdict=="BLOCK" | `review-failed` |
-| review.json: verdict!="BLOCK" | `test` |
-| uat.md: all passed + `session.milestone` 存在 | `milestone-audit` |
-| uat.md: all passed + `session.milestone=null` (standalone) | 标记 session completed（无 milestone 可审计） |
-| uat.md: has failures | `test-failed` |
-
-### A_DETERMINE_QUALITY_MODE
-
-决定下游质量管线长度。读 `session.quality_mode_override`（CLI 标志 `--quality`），无则按规则推断：
-
-| Condition | Mode | Pipeline (execute 之后) |
-|-----------|------|-------------------------|
-| Has `specs/REQ-*.md` + 当前 phase 业务范围明确 | `full` | business-test → review → test-gen → test |
-| Default | `standard` | review → test-gen (当 coverage<80%) → test |
-| `--quality quick` | `quick` | review --tier quick |
-
-写入 `session.quality_mode`。A_BUILD_STEPS 据此过滤 stage（见下）。
-
-### A_DETERMINE_PLANNING_MODE
-
-决定里程碑的规划粒度：一次性规划整个里程碑（统一）还是逐 phase 走完整生命周期（独立）。
-
-**Auto-resolve rules (按优先级):**
-
-| Condition | Mode | Reason |
-|-----------|------|--------|
-| lifecycle_position ∈ {grill, brainstorm, init, roadmap} | `independent` | 前期阶段不涉及多 phase 规划 |
-| `phase_is_new == true` | `independent` | 新 phase 尚无里程碑上下文 |
-| intent 显式指定 phase 编号（如 "phase 2"、"P3"） | `independent` | 用户明确针对单个 phase |
-| milestone 仅含 1 个 phase（读 state.json） | `independent` | 统一无意义 |
-| milestone 含多个 phase + `auto_confirm` | `unified` | 自动模式倾向高效 |
-| milestone 含多个 phase + 非 `auto_confirm` | → request_user_input | 征询用户选择 |
-
-**request_user_input** (仅当 milestone 含 ≥2 phase 且非 auto_confirm):
-
-```
-question: "当前里程碑含 {N} 个 phase，选择规划模式？"
-options:
-  - label: "统一规划 (Recommended)"
-    description: "一次性分析+规划整个里程碑所有 phase，analyze/plan 走里程碑级，适合 phase 间关联紧密"
-  - label: "独立规划"
-    description: "逐个 phase 走完整生命周期（analyze→plan→execute→verify→...），适合 phase 间独立性高"
-```
-
-写入 `session.planning_mode`（`"unified"` 或 `"independent"`）。`A_BUILD_STEPS` 据此决定 skill args 是否携带 `{phase}` 占位符。
+**6. 持久化写入**:
+- 一次性将 `phase`, `phase_is_new`, `milestone`, `lifecycle_position`, `scope_verdict`, `quality_mode`, `planning_mode` 写入 `status.json`。
 
 ### A_DECOMPOSE_TASKS
 

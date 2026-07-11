@@ -94,12 +94,11 @@ S_EXECUTE:
 
 S_POST_ANALYZE:
   → S_POST_EXEC     WHEN: drift_score == ALIGNED|MINOR_DRIFT   DO: A_POST_ANALYZE_DRIFT
-  → S_EXECUTE       WHEN: drift_score == MAJOR_DRIFT + not retried  DO: A_POST_ANALYZE_DRIFT (re-execute with correction)
-  → S_POST_EXEC     WHEN: drift_score == MAJOR_DRIFT + retried     DO: A_POST_ANALYZE_DRIFT (proceed with caveats)
+  → S_POST_EXEC     WHEN: drift_score == MAJOR_DRIFT            DO: A_POST_ANALYZE_DRIFT (Record drift caveat as DONE_WITH_CONCERNS, proceed without loop to prevent agent stall)
 
 S_POST_EXEC:
   → S_LOCATE        DO: Bash("maestro ralph complete ...") + Skill(maestro-ralph-execute)
-                     NOTE: CLI 已写完 completion_*, status, active_step_index；无需额外写盘
+                     NOTE: recursion loop; can be externalized to runner to avoid nesting stack issues.
 
 S_HANDLE_FAIL:
   → S_LOCATE        WHEN: auto + not retried               DO: A_RETRY

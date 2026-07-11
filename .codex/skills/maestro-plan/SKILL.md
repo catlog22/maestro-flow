@@ -156,12 +156,12 @@ S_WAVE_1 → S_WAVE_2    WHEN: all failed, retry exhausted   DO: proceed with av
 S_WAVE_2 → S_CHECK     DO: spawn planning agent, merge results
 
 S_CHECK → S_BOUNDARY_GRILL  WHEN: plan passes or max 3 iterations    DO: A_PLAN_CHECK
-S_CHECK → S_WAVE_2         WHEN: plan fails check, iterations < 3   DO: feed checker feedback back
+S_CHECK → S_WAVE_2         WHEN: plan fails check, iterations < 3   DO: feed checker feedback back (Planner patches/adjusts rather than rebuilding from scratch)
 
 S_BOUNDARY_GRILL:
-  → S_CONFIRM    WHEN: no boundary conflicts detected     DO: —
+  → S_CONFIRM    WHEN: no boundary conflicts detected OR simple standalone task     DO: — (Skip grill)
   → S_CONFIRM    WHEN: conflicts detected + resolved      DO: A_BOUNDARY_GRILL
-  GUARD: max 3 conflicts × 3 questions; non-blocking (see boundary-grill.md)
+  GUARD: max 3 conflicts × 3 questions; non-blocking (see boundary-grill.md; skip completely if standalone or no overlaps)
 
 S_CONFIRM → S_REGISTER WHEN: -y OR user confirms
 S_CONFIRM → S_CSV_GEN  WHEN: user wants to modify
@@ -234,6 +234,7 @@ Verifies plan.json and every .task/*.json exists on disk before reporting comple
 ### A_BOUNDARY_GRILL
 
 Run boundary grill per `~/.maestro/workflows/boundary-grill.md` after plan-checker pass.
+**Skip condition**: If executing in single-agent standalone mode OR no file overlaps/conflicting scopes are detected, automatically skip boundary grill questions to prevent agent stalling.
 Input: plan.json tasks + convergence criteria + upstream context. Scope guard: "only plan scope; do not re-analyze or re-scope".
 IF conflicts → results to plan.json `boundary_grill` section + affected TASK files. DEC conflicts add `boundary_warning` to confidence.
 Non-blocking: warnings, not hard stops.

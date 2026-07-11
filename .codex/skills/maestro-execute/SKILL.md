@@ -162,7 +162,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 5. **Discovery Board is Append-Only**: Never clear, modify, or recreate discoveries.ndjson
 6. **Cascading Skip on Failure**: If a task fails/blocks, all dependent tasks are marked `skipped` with error referencing the failed dependency. Skipped tasks have no summaries — this is expected, not a violation of invariant 12/13.
 7. **Cleanup Temp Files**: Remove `wave-{N}.csv` AND `wave-{N}-results.csv` after results are merged
-8. **Max 3 Fix Attempts**: Per task, auto-fix convergence failures up to 3 times, then mark blocked
+8. **Max 3 Fix Attempts**: Per task, auto-fix convergence failures up to 3 times, then mark blocked. On the first failure, the agent should output the concrete diff and allow bypassing verification if the logic is correct.
 9. **Breakpoint Resume**: Always detect completed tasks and skip them on re-run
 10. **Pipeline continuity**: Continuous execution until all waves complete or user explicitly stops. When all tasks in a wave are blocked/failed, stop execution and report the blocked wave — this is a defined termination, not an invariant violation.
 11. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Defined termination (invariant 10) and cascading skips (invariant 6) are not violations.
@@ -194,7 +194,8 @@ mkdir -p {sessionFolder}
 
 ### Pre-flight: Team Conflict Check
 
-Before any task execution, run:
+**Skip condition**: If the workspace session is single-agent/standalone (i.e. no --collab flag or concurrent workspace users), skip this check.
+Otherwise, before any task execution, run:
 ```
 Bash("maestro collab preflight --phase <phase-number>")
 ```
