@@ -17,7 +17,18 @@
 
 ## 2. Plan
 
-待 S_PLAN 填写。
+计划按依赖顺序执行：
+
+1. T1：实现 Session/Run 核心 runtime。
+2. T2：实现 legacy shim、contract parser 与迁移 lint。
+3. T3：迁移 analyze → plan → execute → verify 与质量核心。
+4. T4：迁移其余 command 及其引用 workflow。
+5. T5：迁移有状态 skill 与 authoring 模板。
+6. T6：优化 Maestro Search 的 Session/Artifact 增量索引。
+7. T7：同步 mirrors、help 与迁移文档。
+8. T8：运行 lint、strict typecheck、测试、build 与端到端 pilot，并修复所有缺口。
+
+执行配置：`backend → codex`，`frontend → claude`，其余使用本地 Agent；code review 跳过；执行后验证门使用 `codex`。`-y` 已启用。
 
 ## 3. Execution
 
