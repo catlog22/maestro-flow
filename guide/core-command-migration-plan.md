@@ -18,9 +18,9 @@ title: "核心命令迁移行动规划 — Session/Run 模型"
 7. **交接经 frontmatter**：取代 `context.md` / `context-package.json` / 自然语言 Next Step。LLM 只写 `report.md` frontmatter；`run complete` 从中派生 `handoff` + `evidence`。
 8. **门禁不可见**：Entry 门在 `create` 内部求值，Exit 门在 `check` 时求值（幂等，LLM 可反复调用看差距），最终在 `complete` 时硬拦截。**LLM 不读 gate 清单、不判断是否继续**——只有 blocking 失败才吐一行"缺 X，先跑 Y"。
 9. **收尾回读**：结束后从磁盘重读，输出统一摘要。
-10. **L0 Shim 垫片过渡**：对于尚未完全迁移的命令，CLI 提供一层垫片适配，将 `state.json.artifacts` 包装为伪 `upstream` 别名映射并打印迁移警告，以保证新旧命令混跑时流程不崩塌。
+10. **L0 Shim 双向垫片过渡**：对于尚未完全迁移的命令，CLI 必须提供一层**双向垫片**：除了将旧版 `state.json.artifacts[]` 包装为伪 `upstream` 供新命令消费外，还必须在 `run complete` 封单时，将新命令的 outputs 同步回写一份至 `state.json.artifacts[]`，确保落后于迁移进度的下游命令不会发生崩溃断链。
 11. **标准 report.md Frontmatter 模板与 Lint**：在 `guide/` 中定义标准的 `report.md` Frontmatter JSON-Schema，每个命令的交付物 Markdown header 格式应由 Lint 门硬性拦截。
-12. **PreToolUse 路径守卫**：在 Run 处于 active 时，通过路径守卫确保大模型只能写入当前 `run_dir` 的 `outputs/` 目录以及本 Run 对应的 `report.md`，严禁越界写入非计划中声明的源码文件，以保障操作安全性。
+12. **PreToolUse 路径守卫**：在 Run 处于 active 时，通过路径守卫确保大模型只能写入当前 `run_dir` 的 `outputs/` 目录以及本 Run 对应的 `report.md`，严禁越界写入源码文件。**特例：** `quality-debug` 时常常需要跨文件插入临时探测点（如 `console.log`），守卫需提供 `escalate_privileges` 越权修补机制挂钩供 Debug 阶段使用。
 
 ---
 
@@ -109,15 +109,13 @@ interface RunStartResult {
 
 每节：现状（grounded）→ contract（**CLI 内部解析**，LLM 不经手）→ 产物迁移 → 关键改造点。
 
-> `contract:` 块保留在命令 `.md`（人读 + CLI 交叉校验，保持 Self-Containment），运行时 LLM 不经手。**contract 的 `produces` 不再是扫描器必需的映射表**——check/complete 时 CLI 扫描 `outputs/`，从每个文件的 `_meta`（JSON）或 frontmatter `kind`（MD）自发现 kind/role（结构指南 §7.1b）。contract 降级为可选 lint：warn on 预期文件缺失，info on 非预期文件出现。**新命令不加 contract 也能跑。**
-
 ### 5.1 `maestro-analyze`
 
 - **现状**：写 `scratch/*-analyze-*/`；产 `discussion.md` + `analysis.md` + `conclusions.json` + `context.md`(×7 引用)；手工注册 ANL artifact。
 
 ```yaml
 contract:
-  consumes: [{ kind: context-package, required: false }]   # brainstorm/blueprint/import 可选
+  consumes: [{ kind: context-package, alias: initial-context, required: false }]
   produces:
     - { kind: findings,   primary: true, path: outputs/findings.json, alias: current-analysis }
     - { kind: risk-matrix,               path: outputs/risk-matrix.json }
@@ -161,7 +159,7 @@ contract:
 
 ```yaml
 contract:
-  consumes: [{ kind: plan, alias: current-plan, require_status: sealed, required: true }]
+  consumes: [{ kind: execution-plan, alias: current-plan, require_status: sealed, required: true }]
   produces:
     - { kind: execution,       primary: true, path: outputs/execution.json, alias: latest-execution }
     - { kind: task-results,                   path: outputs/task-results.json }
@@ -246,7 +244,7 @@ contract:
 
 ```yaml
 contract:
-  consumes: [{ kind: verification|test-results, required: true }]   # 失败信号来源
+  consumes: [{ kind: verification, alias: latest-verification, required: true }]   # 失败信号来源
   produces:
     - { kind: diagnosis,      primary: true, path: outputs/diagnosis.json, alias: latest-debug }
     - { kind: hypotheses,                    path: outputs/hypotheses.json }
@@ -260,7 +258,7 @@ contract:
 - **产物迁移**：`understanding.md` → `report.md §理解`；`evidence.ndjson` → `evidence/` + 结论入 `evidence.json`；`diagnosis.json` 分 `confirmed/suspected/rejected`。
 - **改造点**：**retry 强制前传**——插环时上轮 `diagnosis.json`(rejected 假设) + 失败 gate evidence_refs 写入本 Run `consumes`；Entry 门 `prior-attempt-loaded`(blocking)：无前次上下文的重试不许启动（结构指南 §33.4）。
 - **Swarm 优化建议**：
-  * **前传门禁硬化**：若任务为 retry，Entry Gate 必须通过 `consumes` 别名检测上一次调试的 `diagnosis.json` 物理文件，如果不具备上轮调试上下文，CLI 必须抛错并拒绝创建该 Run，确保排除假设是连续渐进的。
+  * **前传门禁硬化与死锁阻断**：若任务为 retry，Entry Gate 必须检测上一次调试上下文。为防止前次 Run 崩溃（如大模型 Token 耗尽未能生成 `diagnosis.json`）导致死锁，`prior-attempt-loaded` 需支持优雅降级——若 `diagnosis.json` 不存在，允许回退拉取原始错误栈启动本轮 Run。
 
 ---
 
@@ -278,7 +276,7 @@ contract:
   produces:
     - { kind: grill-report,    primary: true, path: outputs/grill-report.md }
     - { kind: terminology,                    path: outputs/terminology.json, alias: current-terminology }
-    - { kind: context-package,                path: outputs/context-package.json }
+    - { kind: context-package,                path: outputs/context-package.json, alias: initial-context }
   gates:
     entry: [topic-resolved]
     exit:  [branches-fully-walked, decisions-evidenced, terminology-structured]
@@ -297,7 +295,7 @@ contract:
   consumes: [{ kind: terminology, alias: current-terminology, required: false }]
   produces:
     - { kind: brainstorm-report, primary: true, path: outputs/brainstorm-report.md }
-    - { kind: decisions,                         path: outputs/decisions.json }
+    - { kind: decisions,                         path: outputs/decisions.json, alias: brainstorm-decisions }
     - { kind: brainstorm-roles,                  path: outputs/roles/ }
   gates:
     entry: [grill-context-resolved]
@@ -314,9 +312,11 @@ contract:
 
 ```yaml
 contract:
-  consumes: [{ kind: decisions, alias: brainstorm-decisions, required: false }]
+  consumes: 
+    - { kind: decisions, alias: brainstorm-decisions, required: false }
+    - { kind: terminology, alias: current-terminology, required: true }
   produces:
-    - { kind: product-brief,     primary: true, path: outputs/product-brief.md }
+    - { kind: product-brief,     primary: true, path: outputs/product-brief.md, alias: current-blueprint }
     - { kind: requirements-pack,                path: outputs/requirements/ }
     - { kind: architecture-pack,                path: outputs/architecture/ }
     - { kind: epics-pack,                       path: outputs/epics/ }
@@ -347,7 +347,7 @@ contract:
 
 - **产物迁移**：不直接修改全局 `state.json`；直写 `outputs/roadmap.md` 及包含全部阶段定义的 `outputs/milestones.json`。
 - **Swarm 建议**：
-  * **原子封锁防写冲突**：Roadmap 绝不能在领域工作期直接改写 `state.json` 或 `session.json`。它的 complete 门禁会读取 `outputs/milestones.json`，通过 CLI 以事务性原子写操作同步进 session 整体里程碑中，消除双权威冲突。
+  * **原子封锁防写冲突**：Roadmap 绝不能在领域工作期直接改写 `state.json` 或 `session.json`。它的 complete 门禁会读取 `outputs/milestones.json`，通过 CLI 以事务性原子写操作同步进 session 整体里程碑中，消除双权威冲突。（*必须在 SessionStore 中加入事务回滚机制，若里程碑合入发生多点并发冲突，终止合入并回滚 session 状态以保护 DAG。*）
 
 ---
 
@@ -355,7 +355,7 @@ contract:
 
 - **Phase 1 验收（硬指标）**：同一 intent 分别经 `/maestro-ralph` 与手工逐命令执行 → `session.json` / `gates.json` / `artifacts.json` / `evidence.json` 逐字段一致（`orchestration.engine` 除外）。不一致即 schema 未收敛，不得进 Phase 2。
 - **产物验收（每命令）**：primary artifact sealed；`run.json.handoff` 生成；`report.md` 无裸拷贝 json 数值（aref 校验）；下游经 alias 拿到 typed json 零目录扫描。
-- **cutover 原则**：新旧**不并存**——一个命令切到 run-model 后即停止写 `scratch/` 与 `state.json.artifacts[]`；未切的命令保持原样（L0 垫片，警告一次）。禁止半数 L2、半数 L0 却无垫片。
+- **cutover 原则**：新旧**不并存**——一个命令切到 run-model 后即停止写 `scratch/` 与 `state.json.artifacts[]`；未切的命令保持原样。*注意：L0 垫片必须是双向的 (Dual-write)，确保新迁移的命令产生的 outputs 能够经 CLI 同步回写一份至旧有 `state.json.artifacts[]` 供未迁移的落后命令消费。*
 - **回滚**：Run 目录与 Session JSON 是新增路径，回滚 = 命令 `.md` 恢复旧 I/O 段；`sessions/` 数据保留不影响旧 `scratch/` 流程。
 
 ---
@@ -364,8 +364,8 @@ contract:
 
 | # | 任务 | Phase | 依赖 |
 |---|------|-------|------|
-| T0 | `run create` + `run check` + `run complete` CLI（含 Session 解析、contract 解析、Gate 注册/求值、`_meta` 自发现、frontmatter→handoff、aref 渲染） | 0 | — |
-| T1 | SessionStore 批量事务 + PreToolUse 路径守卫 | 0 | — |
+| T0 | `run create` + `run check` + `run complete` CLI（含双向垫片、SessionStore 批量事务与回滚、`_meta` 自发现、frontmatter→handoff、aref 渲染） | 0 | — |
+| T1 | PreToolUse 路径守卫 (含提权降级 `escalate_privileges` 越权修补机制) | 0 | — |
 | T2 | 改 `maestro-analyze`（§5.1） | 1 | T0–T1 |
 | T3 | 改 `maestro-plan`（§5.2） | 1 | T2 |
 | T4 | 改 `maestro-execute`（§5.3，拆 verify） | 1 | T3 |
