@@ -27,6 +27,7 @@ import {
 } from './install-backend.js';
 import { t } from '../i18n/index.js';
 import { registerFontsSubcommand } from './font-guide.js';
+import { installWorkflowsOnly } from '../core/workflows-installer.js';
 
 function resolveMode(opts: { global?: boolean; path?: string }): { mode: 'global' | 'project'; projectPath: string } {
   if (opts.path) {
@@ -103,6 +104,17 @@ function registerMcpSubcommand(install: Command): void {
         initialProjectPath: projectPath,
         initialStepIds: ['mcp'],
       });
+    });
+}
+
+function registerWorkflowsSubcommand(install: Command): void {
+  install
+    .command('workflows')
+    .description('Install only workflow documents to ~/.maestro/workflows (non-interactive)')
+    .action(() => {
+      const pkgRoot = getPackageRoot();
+      const result = installWorkflowsOnly(pkgRoot);
+      console.error(`  ✓ workflows: ${result.filesInstalled} files → ${result.targetDir}`);
     });
 }
 
@@ -276,6 +288,7 @@ export function registerInstallCommand(program: Command): void {
 
   // Direct subcommands for scripting / CI
   registerComponentsSubcommand(install);
+  registerWorkflowsSubcommand(install);
   registerHooksSubcommand(install);
   registerMcpSubcommand(install);
   registerToggleSubcommand(install);

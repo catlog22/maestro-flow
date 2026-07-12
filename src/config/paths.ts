@@ -13,6 +13,7 @@ export const paths = {
   logs: join(MAESTRO_HOME, 'logs'),
   cliHistory: join(MAESTRO_HOME, 'cli-history'),
   skillConfig: join(MAESTRO_HOME, 'skill-config.json'),
+  workflows: join(MAESTRO_HOME, 'workflows'),
 
   project(root: string) {
     return {

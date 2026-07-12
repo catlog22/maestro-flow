@@ -25,6 +25,8 @@ export {
 export type { MigrateResult, MigrateAction, CopyStats } from './core/tag-injector.js';
 export { COMPONENT_DEFS } from './core/component-defs.js';
 export type { ComponentDef } from './core/component-defs.js';
+export { installWorkflowsOnly } from './core/workflows-installer.js';
+export type { WorkflowsInstallResult } from './core/workflows-installer.js';
 export {
   scanDisabledItems,
   restoreDisabledState,
