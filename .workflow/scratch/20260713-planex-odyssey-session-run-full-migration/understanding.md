@@ -45,7 +45,17 @@
 
 ## 4. Verification
 
-待 S_VERIFY 填写。
+| AC | 方法 | 结果 | 证据 |
+|---|---|---|---|
+| AC1 | test | passed | Runtime tests 10/10；CLI create/check/complete/seal-session pilot |
+| AC2 | grep | passed | 69 commands 分类完整；43 个 Run contract 可解析；新增 `maestro-verify` |
+| AC3 | grep | passed | 122 workflows 分类完整；legacy/bootstrap/deprecated 边界 lint 通过 |
+| AC4 | grep | passed | 45 skills 分类完整；28 个 stateful skill 的全部 role 边界通过 |
+| AC5 | test | passed | legacy 双向 shim、sealed artifact/Session 不可变测试通过 |
+| AC6 | test | passed | Search tests 38/38；sealed pilot 可搜索 |
+| AC7 | test | passed | prompt lint、strict typecheck、build、mirrors、pilot 全通过 |
+
+Iteration 1：7/7 passed，无需进入 S_FIX。
 
 ## 5. Fix Log
 
