@@ -2,6 +2,7 @@
 name: scholar-rebuttal-pro
 description: Enhanced academic paper review response workflow with Agy/CLI collaborative analysis and multi-perspective discussion. Produces structured rebuttal documents with evidence-based strategies. Triggers on "rebuttal", "respond to reviewers", "review response", "审稿回复".
 allowed-tools: Task, AskUserQuestion, TodoWrite, Read, Write, Edit, Bash, Glob, Grep, Skill, mcp__ace-tool__search_context, mcp__ccw-tools__read_file, mcp__ccw-tools__edit_file
+session-mode: none
 ---
 
 # Scholar Rebuttal Pro

@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # UI Codify: Phase 3 — Reference Package Generation
 
 ## Prerequisites

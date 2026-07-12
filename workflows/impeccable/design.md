@@ -1,6 +1,13 @@
+<!-- session-mode: inherited -->
 # Design Stage + Bridge
 
-Design system generation via ui-search (BM25 search engine + CSV knowledge base), **visual prototype comparison**, and bridge conversion to Google Stitch DESIGN.md format. Loaded as deferred reading by maestro-impeccable when build chain enters S_DESIGN_EXPLORE or S_BRIDGE states.
+## Run Mode Contract
+
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
+
+### Legacy Compatibility Mapping
+
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Architecture
 

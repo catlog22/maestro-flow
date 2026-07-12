@@ -7,6 +7,7 @@ allowed-tools:
   - Write
   - Bash
   - Glob
+session-mode: none
 ---
 <purpose>
 Configure directory-level write boundaries enforced by the workflow-guard PreToolUse hook.

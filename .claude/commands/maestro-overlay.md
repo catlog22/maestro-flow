@@ -9,6 +9,7 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Turn natural-language instructions into command overlays — JSON patch files that augment

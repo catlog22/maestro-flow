@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Responsive Design
 
 ## Mobile-First: Write It Right

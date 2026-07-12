@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Interview Interaction Mechanics
 
 - **One decision per turn** via AskUserQuestion, 2-4 options, first marked `(Recommended)`. User can redirect via `Other`.

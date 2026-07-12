@@ -1,14 +1,13 @@
+<!-- session-mode: inherited -->
 # Quick Task Workflow
 
-Execute small, ad-hoc tasks with workflow guarantees (atomic commits, state tracking). Quick mode spawns workflow-planner (quick mode) + workflow-executor(s), tracks tasks in `.workflow/scratch/`, and updates state.json.
+## Run Mode Contract
 
-With `--discuss`: lightweight decision extraction before planning. Identifies gray areas, conducts interactive discussion, classifies decisions as Locked/Free/Deferred in context.md so the planner treats Locked decisions as constraints and Free decisions as implementer discretion.
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
 
-With `--full`: enables plan-checking (max 2 iterations) and post-execution verification.
+### Legacy Compatibility Mapping
 
-Flags are composable: `--discuss --full` gives discussion + plan-checking + verification.
-
----
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Prerequisites
 

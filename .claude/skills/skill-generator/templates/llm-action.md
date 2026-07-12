@@ -283,8 +283,8 @@ EXPECTED: Structured design pattern analysis
 
 // Execute
 const result = await executeLLMAction(llmConfig, {
-  workDir: '.workflow/.scratchpad/skill-gen-xxx',
-  skill_source: Read('.workflow/.scratchpad/skill-gen-xxx/collected-skills.md')
+  workDir: runStart.run_dir,
+  skill_source: Read(`${runStart.run_dir}/outputs/collected-skills.md`)
 });
 \`\`\`
 

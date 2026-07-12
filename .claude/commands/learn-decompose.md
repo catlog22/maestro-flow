@@ -10,6 +10,7 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Systematic pattern extraction: analyze module across 4 dimensions using parallel agents, catalog findings with code anchors, persist to specs/wiki. Produces reusable pattern catalog.

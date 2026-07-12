@@ -1,3 +1,4 @@
+<!-- session-mode: none -->
 # Shell Execution Protocol
 
 ## Execution Mapping

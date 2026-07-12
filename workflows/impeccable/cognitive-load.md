@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Cognitive Load Assessment
 
 Cognitive load is the total mental effort required to use an interface. Overloaded users make mistakes, get frustrated, and leave. This reference helps identify and fix cognitive overload.

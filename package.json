@@ -45,6 +45,8 @@
     "start": "node bin/maestro.js",
     "mcp": "node bin/maestro-mcp.js",
     "lint": "tsc --noEmit",
+    "lint:session-run": "node scripts/lint-session-run-prompts.mjs",
+    "migrate:session-run-prompts": "node scripts/migrate-session-run-prompts.mjs --write",
     "clean": "rm -rf dist",
     "build:mirrors": "node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs",
     "prepublishOnly": "npm run build && npm run build:mirrors"

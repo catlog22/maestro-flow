@@ -1,202 +1,67 @@
 ---
 name: maestro-plan
-description: Use when creating, revising, or verifying an execution plan for a milestone or task
-argument-hint: "[milestone] [--spec SPEC-xxx] [-y] [--gaps] [--tdd] [--dir <path>] [--from <source>] [--revise [instructions]] [--check <plan-dir>]"
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - Agent
-  - AskUserQuestion
+description: 将已确认分析或需求拆解为可执行 DAG、waves 与无冲突任务
+argument-hint: "[scope] [--gaps] [-y]"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+contract:
+  consumes:
+    - { kind: findings, alias: current-analysis, required: false }
+    - { kind: diagnosis, alias: latest-debug, required: false }
+    - { kind: blueprint, alias: current-blueprint, required: false }
+  produces:
+    - { path: outputs/plan.json, kind: plan, alias: current-plan, role: primary }
+    - { path: outputs/waves.json, kind: execution-waves, role: attachment }
+    - { path: outputs/dependency-graph.json, kind: dependency-graph, role: evidence }
+    - { path: outputs/collision-report.json, kind: collision-report, role: evidence }
+session-mode: run
 ---
+
+<run_mode>
+**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+
+1. Before domain work, call `maestro run create maestro-plan -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
+3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
+4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
+</run_mode>
+
 <purpose>
-Create, revise, or verify execution plans (5-stage pipeline).
-Produces plan.json + TASK files; registers PLN artifact in state.json.
+把 `$ARGUMENTS` 与上游 typed artifacts 转为任务 DAG。保留需求映射、依赖分析、wave 调度、文件碰撞检测、计划确认和 `--gaps` 修复规划语义。
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/plan.md
-</required_reading>
-
-<deferred_reading>
-- [plan.json](~/.maestro/templates/plan.json) — read when generating plan output
-- [task.json](~/.maestro/templates/task.json) — read when generating task files
-- [state.json](~/.maestro/templates/state.json) — read when registering artifact
-- [boundary-grill.md](~/.maestro/workflows/boundary-grill.md) — read when boundary conflicts detected (in P4)
-</deferred_reading>
-
-<context>
-$ARGUMENTS — milestone number, or no args for current milestone, with optional flags.
-
-Scope routing, base flags (`--spec`, `-y`, `--gaps`, `--dir`), output directory format, and artifact registration are defined in workflow plan.md.
-
-**Command-level flags** (extensions beyond workflow base):
-- `--from <source>`: Load upstream context directly (bypasses roadmap requirement):
-  - `analyze:ANL-xxx` → CONTEXT_DIR = artifact path, scope = "standalone"
-  - `blueprint:BLP-xxx` → CONTEXT_DIR = blueprint path, scope = "standalone"
-  - `@file` or `path/` → load context-package.json from path
-- `--tdd` — Enable TDD mode: generate test-first task structure (Red-Green-Refactor). See workflow `plan.md` § TDD Mode for task generation rules.
-- `--revise [instructions]` -- See workflow plan.md § Revise Mode
-- `--check <plan-dir>` -- See workflow plan.md § Check Mode
-
-**Upstream context (resolution priority):**
-1. `--from analyze:ANL-xxx` → uses analyze conclusions.implementation_scope directly
-2. `--from blueprint:BLP-xxx` → uses blueprint requirements + architecture
-3. `--dir <path>` → explicit context directory (unchanged)
-4. Numeric arg → scope = "milestone", resolve from roadmap
-5. No args + roadmap → scope = "current_milestone"
-6. No args + no roadmap → search state.json for latest analyze artifact, fallback standalone
-
-**Ad-hoc milestone (D-008):** When scope resolves to "standalone" via the standard standalone resolution (no `--from` source), and `current_milestone == null`, plan auto-creates an adhoc milestone (`type: "adhoc"`) in state.json before proceeding. This ensures downstream milestone-audit/complete have a valid milestone context. See workflow plan.md § "Ad-hoc Milestone Auto-Creation".
-
-**`--from analyze:*` / `blueprint:*`**: scope=standalone → skip adhoc milestone auto-creation.
-
-### Role Knowledge
-`maestro search --category arch` → select relevant → `maestro load --type knowhow --id`
-</context>
+<invariants>
+1. 命令自包含；不得依赖其他 prompt 的隐式步骤。
+2. 正式状态只由 Run CLI 管理；领域步骤不得直接维护协议状态。
+3. 每个任务必须映射 acceptance/requirement refs，声明依赖、预期文件、验证方式与 convergence criteria。
+4. JSON typed artifacts 必须含 `_meta`；任务文件位于 `{run_dir}/outputs/tasks/TASK-*.json`。
+</invariants>
 
 <execution>
-### Pre-flight: team conflict check
-
-Before starting the plan pipeline, run:
-```
-Bash("maestro collab preflight --phase <phase-number>")
-```
-If exit code is 1, present warnings and ask whether to proceed.
-
-Follow '~/.maestro/workflows/plan.md' completely.
-
-### Plan Agent Model
-
-Plan automatically selects agent mode based on milestone scope:
-
-**Single agent mode** (default):
-- Milestone involves ≤3 modules
-- 1 workflow-planner agent, max 8 TASK JSON output
-- Directly produces plan.json
-
-**2+1 agent mode** (auto-triggered):
-- Milestone involves >3 modules
-- 2 parallel workflow-planner agents, each scoped to 2-3 modules
-- Each agent produces max 8 TASK JSON (total max 16)
-- +1 synthesis agent:
-  - Merges TASK JSON from both agents
-  - DAG analysis: dependency correctness, cycle detection, cross-module conflicts
-  - Terminology consistency check
-  - Wave ordering optimization
-  - Produces unified plan.json
-
-Module count is derived from milestone phase definitions and analyze upstream context.
-
-### Phase Gates (MANDATORY, BLOCKING — Create mode only)
-
-**GATE P1 → P2: Context Collection → Clarification**
-- REQUIRED: Context files loaded (roadmap, analyze artifact, or --from source).
-- REQUIRED: Codebase docs read if available (ARCHITECTURE.md, FEATURES.md).
-- REQUIRED: Wiki searched for prior knowledge related to phase keywords.
-- BLOCKED if missing: no context source found — cannot plan without upstream input (E001).
-
-**GATE P2 → P3: Clarification → Plan Generation**
-- REQUIRED: Ambiguous requirements resolved via AskUserQuestion (<=3 rounds).
-- BLOCKED if: unresolved ambiguities remain after 3 clarification rounds — escalate to user before proceeding.
-
-**GATE P3 → P4: Plan Generation → Plan Check**
-- REQUIRED: Plan generated by planner agent — `plan.json` + `.task/TASK-*.json` files written.
-- REQUIRED: Main flow inline planning is FORBIDDEN (see P3 Agent Constraint below).
-- BLOCKED if missing: plan.json or TASK files not produced by planner agent — do not proceed to checking.
-
-**GATE P3.5 → P4: Boundary Grill → Plan Check**
-- REQUIRED: Boundary grill executed per workflow boundary-grill.md.
-- NON-BLOCKING: conflicts logged as warnings, not hard stops.
-
-**GATE P4 → P5: Plan Check → User Confirmation**
-- REQUIRED: Plan-checker passed (or minor issues acknowledged).
-- REQUIRED: Boundary grill completed.
-- REQUIRED: Confidence scored with 5-dimension factor model.
-- REQUIRED: Pressure pass completed on highest-complexity task.
-- REQUIRED: UI plans have `[UI-observable]` convergence criteria per wave (details in workflow).
-- BLOCKED if: plan-checker found critical issues, OR UI plan missing `[UI-observable]` coverage.
-
-**GATE P5 → Completion: User Confirmation → Done**
-- REQUIRED: User confirmation captured (execute/modify/cancel).
-- REQUIRED: PLN artifact registered in state.json.
-- BLOCKED if missing: no user confirmation — do not register artifact or report completion.
-
-### Mode: Revise / Check
-
-Follow workflow plan.md § "Revise Mode" and § "Check Mode" respectively. These modes bypass the standard P1-P5 create pipeline.
+1. **Create**：`maestro run create maestro-plan -- $ARGUMENTS`，再执行 `maestro run check <run_id> --stage entry`。读取返回的 upstream paths；优先消费 `current-analysis`，`--gaps` 时消费 `latest-debug`。
+2. **领域工作**：提取范围、locked/deferred constraints、requirements、风险和 fix directions；拆任务；构建依赖 DAG；按无依赖并行生成 waves；检测同 wave 文件写冲突并重排；执行 plan pressure check。
+3. 写 `outputs/plan.json`：
+   ```json
+   {"_meta":{"kind":"plan","schema":"execution-plan/1.0","role":"primary","alias":"current-plan"},"objective":"","requirement_refs":[],"task_ids":[],"wave_ids":[],"confidence":0,"constraints":[],"acceptance_criteria":[]}
+   ```
+4. 每个任务写 `outputs/tasks/TASK-NNN.json`：
+   ```json
+   {"_meta":{"kind":"plan-task","schema":"plan-task/1.0","role":"attachment"},"id":"TASK-001","title":"","description":"","requirement_refs":[],"deps":[],"files":[],"convergence_criteria":[],"verify":[],"status":"pending"}
+   ```
+5. 写 `outputs/waves.json`、`outputs/dependency-graph.json`、`outputs/collision-report.json`，分别使用 schema `execution-waves/1.0`、`dependency-graph/1.0`、`collision-report/1.0`；若执行计划检查，写 `outputs/evidence/plan-check.json`，role 为 `evidence`。
+6. 写 `report.md`，frontmatter 至少包含 `verdict`、`summary`、`constraints`、`decisions`、`caveats`、`open_questions` 和：
+   ```yaml
+   next:
+     - { command: maestro-execute, reason: plan ready, required: [current-plan] }
+   ```
+   正文固定为 `摘要`、`结论/Verdict`、`讨论/复盘`、`产物`、`交接/Next`，使用 aref 引用 `current-plan`。
+7. **Check**：`maestro run check <run_id> --stage exit`。必须确认 DAG 无环、全部 criteria 被任务覆盖、collision 无 unresolved blocker、所有 task typed metadata 完整。
+8. **Complete**：`maestro run complete <run_id>`；让 CLI 注册 `current-plan` 并 seal。
 </execution>
 
-<completion>
-### Standalone report
-
-```
-=== PLAN READY ===
-Milestone: {milestone_name}
-Tasks: {task_count} tasks in {wave_count} waves
-Check: {checker_status} (iteration {check_count}/{max_checks})
-Collision: {collision_status}
-
-Plan: scratch/{YYYYMMDD}-plan-P{N}-{slug}/plan.json
-Tasks: scratch/{YYYYMMDD}-plan-P{N}-{slug}/.task/TASK-*.json
-```
-
-### Ralph-invoked completion
-
-End the step by calling the CLI (no text block output):
-```
-maestro ralph complete <idx> --status {STATUS} [--evidence scratch/{YYYYMMDD}-plan-P{N}-{slug}/plan.json]
-```
-
-Status verdicts:
-- **DONE** — Plan created/revised and confirmed → next step picks up automatically
-- **DONE_WITH_CONCERNS** — Plan produced but with explicit caveats; pass `--concerns "..."`
-- **NEEDS_RETRY** — Plan failed (tooling error, transient issue); ralph will retry
-- **BLOCKED** — External hard blocker (e.g., upstream artifact missing, dependency unavailable); pass `--reason "..."`
-
-> Ambiguous requirements are NOT a completion status — resolve them in-place via `AskUserQuestion` during planning (≤3 rounds), then proceed to DONE. `NEEDS_CONTEXT` has been removed; context shortage is handled by the harness's automatic compaction.
-
-### Next-step routing
-
-| Condition | Suggestion |
-|-----------|-----------|
-| Plan confirmed for execution | `/maestro-execute` |
-| Plan confirmed, specific directory | `/maestro-execute --dir {dir}` |
-| Re-plan with modifications | `/maestro-plan {milestone}` |
-</completion>
-
-<error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No args and no roadmap (cannot determine scope) | Provide milestone number or topic, or create roadmap |
-| E003 | error | --gaps requires prior verification/issues to exist | Run maestro-execute first (verification is built-in) |
-| E004 | error | No plan found to revise (--revise without target) | Use --dir to specify plan, or create plan first |
-| E005 | error | Plan directory not found (--check) | Check path, use --dir |
-| W001 | warning | Exploration agent returned incomplete results | Retry exploration or proceed with available context |
-| W002 | warning | Plan-checker found minor issues, continuing | Review plan-checker feedback, adjust plan if needed |
-| W003 | warning | Wiki search unavailable or returned no results | Continue without prior knowledge context |
-| W004 | warning | Collision detected with existing plan | Review colliding files, confirm or adjust scope |
-</error_codes>
-
 <success_criteria>
-- [ ] plan.json written to scratch directory with summary, approach, task_ids, waves (with phase labels)
-- [ ] .task/TASK-*.json files created for each task
-- [ ] Every task has `read_first[]` with at least the file being modified + source of truth files
-- [ ] Every task has `convergence.criteria[]` with grep-verifiable conditions (no subjective language)
-- [ ] UI plans: each delivery wave has ≥1 `[UI-observable]` convergence criterion (vertical slice; verified at runtime by ralph frontend-verify gate)
-- [ ] Every task `action` and `implementation` contain concrete values (no "align X with Y")
-- [ ] Boundary grill executed in P3.5 (skip if no conflicts detected)
-- [ ] Boundary grill results written to plan.json `boundary_grill` section (if conflicts found)
-- [ ] DEC conflicts reflected in confidence `boundary_warning` factor
-- [ ] Plan confidence scored in P4 with 5-dimension factor model
-- [ ] Plan readiness gate checked before P4.5 collision detection
-- [ ] Pressure pass completed on highest-complexity task
-- [ ] plan.json includes confidence section (overall, dimensions, pressure_pass)
-- [ ] Collision detection executed against same-milestone plans (non-blocking)
-- [ ] Plan-checker passed (or minor issues acknowledged)
-- [ ] User confirmation captured (execute/modify/cancel) with confidence displayed
-- [ ] Artifact registered in state.json with correct scope/milestone/phase/depends_on
+- plan、tasks、waves、dependency graph、collision report 均为 typed artifacts。
+- 内部 Plan FSM（理解→拆解→依赖→碰撞→确认）完整，所有 criteria 有 task refs。
+- exit check 与 complete 通过，handoff 指向 `maestro-execute`。
 </success_criteria>

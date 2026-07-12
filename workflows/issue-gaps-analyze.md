@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: Issue Gaps Analysis
 
 > **CLI variants**: see `issue-gaps-analyze.codex.md` for codex-specific notes (CSV-wave variant using `spawn_agents_on_csv`).

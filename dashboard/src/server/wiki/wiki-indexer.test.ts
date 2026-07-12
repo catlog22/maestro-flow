@@ -582,3 +582,89 @@ describe('virtual adapters: session archive', () => {
     expect(index.byId['session-analyze-anl-005']).toBeDefined();
   });
 });
+
+describe('virtual adapters: run-mode sessions', () => {
+  async function writeRunModeFixture(sessionStatus: 'running' | 'sealed' | 'archived' = 'sealed'): Promise<void> {
+    await write('sessions/20260713-search/session.json', JSON.stringify({
+      schema_version: 'session/1.0',
+      session_id: '20260713-search',
+      intent: 'Optimize Maestro Search indexing',
+      status: sessionStatus,
+      latest_completed_run_id: 'RUN-002',
+      lifecycle: { sealed_at: '2026-07-13T01:00:00.000Z', archived_at: sessionStatus === 'archived' ? '2026-07-13T02:00:00.000Z' : null },
+    }));
+    await write('sessions/20260713-search/artifacts.json', JSON.stringify({
+      schema_version: 'artifacts/1.0',
+      artifacts: {
+        'ART-findings': {
+          kind: 'findings', role: 'primary', producer_run_id: 'RUN-002',
+          relative_path: 'runs/20260713-002-analyze/outputs/findings.json', status: 'sealed',
+        },
+        'ART-draft': {
+          kind: 'notes', role: 'attachment', producer_run_id: 'RUN-002',
+          relative_path: 'runs/20260713-002-analyze/work/draft.json', status: 'draft',
+        },
+      },
+      aliases: { 'current-analysis': 'ART-findings' },
+    }));
+    await write('sessions/20260713-search/runs/20260713-001-plan/run.json', JSON.stringify({
+      schema_version: 'command-run/1.0', run_id: 'RUN-001', session_id: '20260713-search',
+      command: { name: 'plan' }, status: 'running', output: { produces: [] }, started_at: '2026-07-13T00:00:00.000Z',
+    }));
+    await write('sessions/20260713-search/runs/20260713-002-analyze/run.json', JSON.stringify({
+      schema_version: 'command-run/1.0', run_id: 'RUN-002', session_id: '20260713-search',
+      command: { name: 'analyze' }, status: 'sealed',
+      output: { produces: ['ART-findings', 'ART-draft'], primary_artifact_id: 'ART-findings', verdict: 'ready' },
+      handoff: { summary: 'Handoff fallback summary', artifact_refs: ['ART-findings'] },
+      started_at: '2026-07-13T00:30:00.000Z', sealed_at: '2026-07-13T01:00:00.000Z',
+    }));
+    await write('sessions/20260713-search/runs/20260713-002-analyze/outputs/findings.json', JSON.stringify({
+      summary: 'Typed artifact is the preferred searchable summary',
+      findings: [{ summary: 'Nested evidence' }],
+    }));
+    await write('sessions/20260713-search/runs/20260713-002-analyze/report.md', '---\nsummary: Report projection fallback\n---\n## 摘要\nReport body');
+    await write('sessions/20260713-search/runs/20260713-002-analyze/work/draft.json', JSON.stringify({ summary: 'MUST NOT INDEX DRAFT' }));
+  }
+
+  it('indexes only sealed sessions/runs and prefers sealed typed artifacts over projections', async () => {
+    await writeRunModeFixture();
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+
+    const session = index.byId['session-20260713-search'];
+    const run = index.byId['session-run-20260713-search-run-002'];
+    expect(session).toBeDefined();
+    expect(run).toBeDefined();
+    expect(index.byId['session-run-20260713-search-run-001']).toBeUndefined();
+    expect(run.summary).toBe('Typed artifact is the preferred searchable summary');
+    expect(run.body).toContain('Nested evidence');
+    expect(run.body).not.toContain('MUST NOT INDEX DRAFT');
+    expect(session.summary).toBe(run.summary);
+    expect(run.source.path).toBe('sessions/20260713-search/runs/20260713-002-analyze/run.json');
+  });
+
+  it('skips an unsealed session even when a child run claims sealed', async () => {
+    await writeRunModeFixture('running');
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.entries.filter(e => e.source.path.startsWith('sessions/'))).toEqual([]);
+  });
+
+  it('preserves archived lifecycle status', async () => {
+    await writeRunModeFixture('archived');
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.byId['session-20260713-search'].status).toBe('archived');
+  });
+
+  it('invalidates the cached index when a nested session artifact changes in place', async () => {
+    await writeRunModeFixture();
+    const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
+    const first = await indexer.get();
+    expect(first.byId['session-run-20260713-search-run-002'].summary).toContain('preferred');
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await write('sessions/20260713-search/runs/20260713-002-analyze/outputs/findings.json', JSON.stringify({
+      summary: 'Updated nested artifact summary',
+    }));
+    const refreshed = await indexer.get();
+    expect(refreshed.byId['session-run-20260713-search-run-002'].summary).toBe('Updated nested artifact summary');
+  });
+});

@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: Issue Analysis
 
 > **DEPRECATED**: Superseded by `issue-gaps-analyze.md` which adds batch support and context.md output.

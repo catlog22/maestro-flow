@@ -10,6 +10,7 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+session-mode: bootstrap
 ---
 <purpose>
 Initialize project: detect state, create `.workflow/` with project.md, state.json, config.json.

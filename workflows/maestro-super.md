@@ -1,8 +1,13 @@
+<!-- session-mode: inherited -->
 # Super Mode (`--super`)
 
-Goal: deliver a production-ready, complete software system from user requirements. No user decisions needed — maestro autonomously expands, refines, and implements until the system meets mainstream quality standards.
+## Run Mode Contract
 
-Super mode implies `-y` (all auto flags propagated) plus these additional behaviors:
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
+
+### Legacy Compatibility Mapping
+
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## 1. Requirement Expansion
 

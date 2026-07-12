@@ -1,8 +1,9 @@
+<!-- session-mode: deprecated -->
 # Workflow: milestone-audit
 
-Cross-phase integration audit for milestone completion. Based on artifact registry.
+## Deprecated Workflow Boundary
 
----
+This workflow is retained only for migration documentation. Entry commands MUST route to the Session/Run replacement and stop; do not execute the legacy writes below.
 
 ## Step 1: Load Milestone Context
 

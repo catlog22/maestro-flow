@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Spec Remove Workflow
 
 Remove a `<spec-entry>` block from a specs container file. Symmetric with `specs-add.md`.

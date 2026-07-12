@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Color & Contrast
 
 ## Color Spaces: Use OKLCH

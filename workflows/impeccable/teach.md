@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Teach Flow
 
 Gathers design context for a project and writes two complementary files under `.workflow/impeccable/`:

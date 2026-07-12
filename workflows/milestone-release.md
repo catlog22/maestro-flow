@@ -1,11 +1,9 @@
+<!-- session-mode: deprecated -->
 # Workflow: milestone-release
 
-Bump version, generate changelog, and tag the current milestone for release.
+## Deprecated Workflow Boundary
 
-> **STATUS: PLACEHOLDER** — minimal skeleton referenced by `maestro-milestone-release.md`.
-> Full release pipeline is TODO. Do not invoke until contents below are fleshed out.
-
----
+This workflow is retained only for migration documentation. Entry commands MUST route to the Session/Run replacement and stop; do not execute the legacy writes below.
 
 ## Arguments
 

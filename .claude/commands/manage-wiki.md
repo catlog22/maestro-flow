@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Wiki graph management: health, search, cleanup, stats, connect, digest.

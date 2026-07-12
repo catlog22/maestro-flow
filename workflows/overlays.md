@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Command Overlays — Format & Contract
 
 ## File format

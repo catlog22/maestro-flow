@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Wiki Connect Workflow
 
 Knowledge graph link discovery and health improvement. Analyzes the unified wiki index to find orphaned entries, missing connections, and transitive link gaps, then suggests or auto-applies new `related` links.

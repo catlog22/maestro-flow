@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 ---
 name: spec-setup
 alias: spec-setup

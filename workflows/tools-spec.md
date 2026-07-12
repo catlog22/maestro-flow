@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Tool Spec Reference
 
 ## Storage

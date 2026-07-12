@@ -10,6 +10,7 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Structured second-opinion on code, decisions, or plans via three modes: review (3 parallel agents),

@@ -1,5 +1,11 @@
 # Coordinator Role
 
+## Run Artifact Boundary
+
+This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
+
+**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
+
 Interactive Craft Team coordinator. Orchestrate pipeline: analyze -> dispatch -> spawn -> monitor -> report. Manages task chains for interactive component creation, GC loops between builder and a11y-tester, parallel fan-out for page mode.
 
 ## Identity

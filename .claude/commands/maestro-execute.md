@@ -1,201 +1,62 @@
 ---
 name: maestro-execute
-description: Use when a confirmed plan is ready for implementation
-argument-hint: "[milestone] [--auto-commit] [--method agent|cli|auto] [--executor <tool>] [--dir <path>] [-y]"
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - Agent
-  - AskUserQuestion
+description: 按 current-plan 的 DAG 与 waves 执行任务，并产出实现结果与本地自检
+argument-hint: "[scope] [-y] [--task TASK-ID]"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+contract:
+  consumes:
+    - { kind: plan, alias: current-plan, required: true, require_status: sealed }
+  produces:
+    - { path: outputs/execution.json, kind: execution, alias: current-execution, role: primary }
+    - { path: outputs/task-results.json, kind: task-results, role: attachment }
+    - { path: outputs/self-check.json, kind: self-check, role: evidence }
+    - { path: outputs/change-manifest.json, kind: change-manifest, role: evidence }
+session-mode: run
 ---
+
+<run_mode>
+**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+
+1. Before domain work, call `maestro run create maestro-execute -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
+3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
+4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
+</run_mode>
+
 <purpose>
-Execute confirmed plan tasks via wave-based parallel dispatch.
-Consumes plan from maestro-plan; registers EXC artifact in state.json.
+消费 `current-plan`，按 DAG/waves 实施代码修改、收集每任务证据并完成 build/test smoke。正式 acceptance verification 已拆到独立 `maestro-verify` Run。
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/execute.md
-</required_reading>
-
-<deferred_reading>
-- [task.json](~/.maestro/templates/task.json) — read when reading task definitions
-- [state.json](~/.maestro/templates/state.json) — read when registering artifact
-</deferred_reading>
-
-<context>
-$ARGUMENTS — milestone number, or no args for current milestone, with optional flags.
-
-### Flags
-
-| Flag | Effect | Default |
-|------|--------|---------|
-| `--auto-commit` | Auto-commit after each completed task | false |
-| `--method agent\|cli\|auto` | Execution method: Agent tool, CLI delegate, or auto-select | `auto` |
-| `--executor <tool>` | Explicit executor tool for CLI delegate mode | First enabled in config |
-| `--dir <path>` | Execute a specific plan directory instead of auto-discovery | — |
-| `-y` / `--yes` | Auto mode — skip ALL interactive questions (executor selection, wave progression, blocked prompts) | false |
-
-### Scope routing
-
-| Input | Scope | Resolution |
-|-------|-------|------------|
-| numeric arg | milestone | Resolve plans for the given milestone |
-| `--dir <path>` | explicit | Use specified plan directory |
-| no args + milestone | milestone | Find all pending plans, execute sequentially |
-| no args + no milestone | error E001 | No plan found |
-
-Full resolution logic, output directory format, artifact registration schema, and incremental knowhow extraction are defined in workflow `execute.md`.
-
-### Pre-load context (before task execution)
-
-1. **Codebase docs**: If `.workflow/codebase/doc-index.json` exists, read `ARCHITECTURE.md` for module boundaries. Pass as shared context to executor agents.
-2. **Wiki knowledge**: Run `maestro search "<phase keywords>" --json 2>/dev/null`. If results found, extract top 5 entries as prior knowledge context for agents.
-3. **Coding specs + tools**: Run `maestro load --type spec --category coding` to load coding conventions AND discoverable knowhow tools (tool: true entries). Pass as specs context to all executor agents.
-4. **UI specs (conditional)**: If any task involves frontend/UI work (task scope/description contains keywords like component, page, style, layout, CSS, HTML, frontend; or focus_paths in `src/components/`, `src/pages/`, `src/styles/`, `src/ui/`), also run `maestro load --type spec --category ui` and include in agent context.
-5. All are optional — proceed without if unavailable (log warning).
-
-### Role Knowledge
-`maestro search --category coding` → select relevant → `maestro load --type knowhow --id`
-</context>
+<invariants>
+1. 命令自包含；只按 create 返回的 `current-plan` path 工作。
+2. 遵守 task deps 与 collision report；同 wave 仅并行无写冲突任务。
+3. 每任务最多 3 次：正常执行、聚焦重试、降级执行；仍失败则记录 blocked，禁止伪造完成。
+4. Execute 只做实现与 self-check，不产出正式 verification verdict。
+5. 只写源码变更与本次 Run 的领域产物，协议状态交由 CLI。
+</invariants>
 
 <execution>
-### Pre-flight: team conflict check
-
-Before any task execution, run:
-```
-Bash("maestro collab preflight --phase <phase-number>")
-```
-If exit code is 1, present warnings and ask whether to proceed.
-
-Follow '~/.maestro/workflows/execute.md' completely.
-
-### Phase Gates (MANDATORY, BLOCKING)
-
-**GATE 1: Plan Load → Task Execution**
-- REQUIRED: plan.json found and parsed with valid task definitions.
-- REQUIRED: `.task/TASK-*.json` files exist for all tasks in plan.
-- BLOCKED if no pending tasks: error E004.
-
-**GATE 2: Per-Task Execution → Summary**
-- REQUIRED: Each completed task has `.summaries/TASK-{NNN}-summary.md` written with concrete evidence (files changed, tests run, verification results).
-- REQUIRED: `.task/TASK-{NNN}.json` status updated to completed|blocked.
-- BLOCKED if missing: summary file absent or task status not updated — halt wave progression until evidence is recorded.
-- Do NOT silently skip failed tasks — mark as blocked with reason.
-
-**GATE 2.5: Wave Failure Handling**
-- IF all tasks in a wave failed: halt wave progression, report E005 with per-task failure reasons. Do NOT proceed to next wave — downstream waves depend on current wave outputs.
-- IF cascading failure (wave N fails → wave N+1 has unmet dependencies): mark all dependent tasks in subsequent waves as `blocked` with reason `"upstream_wave_failed"`. Skip blocked waves and proceed to completion with partial results.
-- `-y` mode: auto-skip blocked waves without prompting, log warning W002.
-- Non `-y` mode: `AskUserQuestion` with options [retry wave / skip and continue / abort execution].
-
-**GATE 3: All Tasks → Completion**
-- REQUIRED: All waves executed in dependency order (or explicitly skipped via Gate 2.5).
-- REQUIRED: EXC artifact registered in state.json.
-- BLOCKED if missing: waves incomplete or EXC artifact not registered — do not report execution complete.
-
-### Evidence Requirement
-
-Task summaries MUST include:
-- Files actually modified (not just planned targets)
-- Convergence criteria verification results (pass/fail with evidence)
-- Any deviations from the plan with rationale
-
-### Post-task Knowledge Inquiry
-
-After each task completion, extract structured fields from the task summary, then check triggers:
-
-**Structured extraction** (from `.summaries/TASK-{NNN}-summary.md`):
-- `deviations[]` — explicit plan deviations (look for "deviated", "changed approach", "instead of", "unlike plan")
-- `design_rationale[]` — explicit design decisions (look for "chose X because", "decided to", "trade-off")
-- `retry_count` — from `.task/TASK-{NNN}.json` status history
-
-| Condition | Ask | Route |
-|-----------|-----|-------|
-| `deviations[]` is non-empty | "Record as arch constraint?" | spec-add arch |
-| `retry_count >= 2` | "Document fix pattern?" | spec-add debug |
-| `design_rationale[]` is non-empty | "Record as knowhow?" | spec-add learning |
-
-On confirm → `Skill("spec-add", "<category> <content> --description \"<summary>\"")`.
-Include `--description` with a one-line summary for search result display.
-
-### Issue Status Sync
-
-On each task completion, if `task.issue_id` exists, sync status back to the issue in `.workflow/issues/issues.jsonl`.
-
-**Confirmation gate**: Before writing to issues.jsonl, show the proposed status change and ask for confirmation — unless `-y` is active, in which case auto-approve.
-
-```
-For each completed/failed TASK with issue_id:
-  Read issue from issues.jsonl by issue_id
-  Collect all task_refs[] statuses for that issue:
-    all task_refs completed → proposed issue.status = "resolved"
-    any task_ref failed    → proposed issue.status = "in_progress"
-  IF NOT auto_mode (-y):
-    AskUserQuestion: "Update issue {issue_id} status to {proposed_status}?" [Yes / Skip]
-    IF Skip → continue to next task without writing
-  Append history entry: { action: "executed", at: <ISO>, by: "maestro-execute", summary: "TASK-{NNN} {status}" }
-  Write updated issue back to issues.jsonl
-```
-
+1. **Create**：`maestro run create maestro-execute -- $ARGUMENTS`，随后 `maestro run check <run_id> --stage entry`；entry 必须解析到 sealed `current-plan`。
+2. **领域工作**：读取 plan、task artifacts、waves、dependency graph 和 collision report；按 wave 执行。每个 task 记录 executor、attempt、files changed、commands/tests、criterion evidence 和 status。阻塞任务向下游传播 blocked refs。
+3. 对完成任务执行 scoped test/build/lint；全局只做 smoke self-check。严禁把 self-check 当独立 verify 的 acceptance 结论。
+4. 写 `outputs/execution.json`：
+   ```json
+   {"_meta":{"kind":"execution","schema":"execution/1.0","role":"primary","alias":"current-execution"},"plan_ref":"current-plan","status":"completed|partial|blocked","waves":[],"completed_tasks":[],"blocked_tasks":[]}
+   ```
+5. 写 `outputs/task-results.json`、`outputs/self-check.json`、`outputs/change-manifest.json`，schemas 分别为 `task-results/1.0`、`self-check/1.0`、`change-manifest/1.0`。`self-check` 只记录 smoke；manifest 记录 repo-relative files、change type 与 task refs。
+6. 写 `report.md` 固定骨架；frontmatter verdict 映射：全部任务成功为 `ready`，有非关键阻塞为 `ready_with_concerns`，关键依赖失败为 `blocked`。next 必须为：
+   ```yaml
+   next:
+     - { command: maestro-verify, reason: implementation complete, required: [current-plan, current-execution] }
+   ```
+7. **Check**：`maestro run check <run_id> --stage exit`；核对计划任务与 task-results 一致、变更文件真实存在、无 TODO-only/stub、self-check 已运行、blocked 未被标 completed。
+8. **Complete**：`maestro run complete <run_id>`；CLI 注册 `current-execution` 并 seal。不得内嵌正式 verify。
 </execution>
 
-<completion>
-### Standalone report
-
-```
-=== EXECUTION COMPLETE ===
-Plans executed: {plans_count}
-Completed: {completed_count}/{total_count} tasks
-Failed:    {failed_count} tasks
-
-Summaries: {plan_dir}/.summaries/
-Tasks:     {plan_dir}/.task/
-```
-
-### Ralph-invoked completion
-
-End the step by calling the CLI (no text block output):
-```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
-```
-
-Status verdicts:
-- **DONE** — Normal completion
-- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
-- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
-- **BLOCKED** — External hard blocker; pass `--reason`
-
-### Next-step routing
-
-| Condition | Suggestion |
-|-----------|-----------|
-| All tasks completed successfully | `/quality-review` |
-| Failed tasks exist | `/quality-debug` |
-| View project dashboard | `/manage-status` |
-</completion>
-
-<error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | No pending plans found | Verify plans exist, run maestro-plan first |
-| E002 | error | Plan directory not found | Check --dir path |
-| E003 | error | plan.json not found in directory | Verify plan.json exists, run maestro-plan first |
-| E004 | error | No pending tasks, all tasks already completed | Check task statuses, reset if needed |
-| E005 | error | All tasks in wave failed — wave progression halted | Review per-task failure reasons; retry wave or abort |
-| W001 | warning | Executor completed with partial failures | Check task dependencies, retry failed wave |
-| W002 | warning | Cascading wave failure — downstream waves auto-blocked | Review blocked tasks; re-run after fixing upstream failures |
-</error_codes>
-
 <success_criteria>
-- [ ] All pending plans identified and executed sequentially
-- [ ] Within each plan: waves executed in parallel, waves串行
-- [ ] `.summaries/TASK-{NNN}-summary.md` written for each completed task
-- [ ] `.task/TASK-{NNN}.json` statuses updated (completed|blocked)
-- [ ] EXC artifact registered in state.json for each plan executed
-- [ ] Incremental knowhow extracted to specs/learnings.md
-- [ ] state.json updated with execution progress
+- 计划执行状态与真实 diff 一致；task evidence 可追溯到 criteria。
+- `execution.json`、`task-results.json`、`self-check.json`、`change-manifest.json` typed metadata 完整。
+- handoff 明确路由独立 `maestro-verify`；exit check 与 complete 成功。
 </success_criteria>

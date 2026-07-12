@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: Issue Execution
 
 > **DEPRECATED**: This workflow was used by the deleted `manage-issue-execute` command.

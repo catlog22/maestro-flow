@@ -7,6 +7,12 @@ message_types: [verify_passed, verify_failed, fix_required, error]
 
 # Verification & Regression Check
 
+## Run Artifact Boundary
+
+This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
+
+**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
+
 Before/after comparison verification. Re-scan fixed code against same 8 dimensions, calculate improvement, detect regressions. Acts as Critic in the optimizer<->verifier Generator-Critic loop.
 
 ## Phase 2: Context & Artifact Loading

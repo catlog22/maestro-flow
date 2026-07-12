@@ -11,7 +11,12 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+session-mode: deprecated
 ---
+
+<deprecated_command>
+Milestone-scoped release grouping no longer exists. This command MUST NOT read or mutate milestone state. A project is delivery-ready when its required Session DAG is sealed; use the repository's ordinary version/changelog/tag release procedure after that condition is met. Report the replacement and stop.
+</deprecated_command>
 
 <purpose>
 Package a completed milestone into a releasable version: version bump → changelog → tag → push.

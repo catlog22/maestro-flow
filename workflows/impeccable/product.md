@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Product register
 
 When design SERVES the product: app UIs, admin dashboards, settings panels, data tables, tools, authenticated surfaces, anything where the user is in a task.

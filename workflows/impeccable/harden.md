@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 Designs that only work with perfect data aren't production-ready. Harden the interface against the inputs, errors, languages, and network conditions that real users will throw at it.
 
 ## Assess Hardening Needs

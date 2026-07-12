@@ -11,6 +11,7 @@ allowed-tools:
   - Grep
   - AskUserQuestion
   - Agent
+session-mode: none
 ---
 <purpose>
 Codify reusable business processes as knowhow documents with `tool: true` in `.workflow/knowhow/`.

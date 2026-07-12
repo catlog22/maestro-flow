@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 > **Additional context needed**: audience technical level and users' mental state in context.
 
 Find the unclear, confusing, or poorly written interface text and rewrite it. Vague copy creates support tickets and abandonment; specific copy gets users through the task.

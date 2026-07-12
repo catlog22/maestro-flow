@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 ---
 name: spec-load
 alias: spec-load

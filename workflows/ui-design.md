@@ -1,16 +1,13 @@
+<!-- session-mode: inherited -->
 # UI Design Workflow
 
-4-layer extraction pipeline (style → animation → layout → assembly) producing design prototypes.
-Powered by ui-ux-pro-max (design system recommendations) and ui-design-agent (token generation + assembly).
-User reviews via compare.html, selects winner(s), design solidified as code reference for plan/execute.
+## Run Mode Contract
 
-Pipeline position: analyze -> **ui-design** -> plan -> execute -> verify
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
 
-> **Note:** This is the primary implementation. When the `ui-ux-pro-max` skill is available,
-> the command may delegate to `ui-style.md` for a lightweight path. This workflow is the
-> fallback when the skill is unavailable, and is also used when `--full` is explicitly requested.
+### Legacy Compatibility Mapping
 
----
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Prerequisites
 

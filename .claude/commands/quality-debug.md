@@ -1,184 +1,59 @@
 ---
 name: quality-debug
-description: Use when bugs, test failures, or unexpected behavior need systematic root cause investigation
-argument-hint: "[issue description] [-c] [--from-uat <phase>] [--parallel]"
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - Agent
-  - AskUserQuestion
+description: 用科学方法复现、假设检验和反向追踪定位根因
+argument-hint: "[issue] [--from-test] [--parallel] [-c]"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+contract:
+  consumes:
+    - { kind: test-results, alias: latest-test, required: false }
+    - { kind: review-findings, alias: latest-review, required: false }
+    - { kind: execution, alias: current-execution, required: false }
+  produces:
+    - { path: outputs/diagnosis.json, kind: diagnosis, alias: latest-debug, role: primary }
+    - { path: outputs/hypotheses.json, kind: hypotheses, role: evidence }
+    - { path: outputs/reproduction.json, kind: reproduction, role: evidence }
+    - { path: outputs/fix-directions.json, kind: fix-directions, role: attachment }
+session-mode: run
 ---
+
+<run_mode>
+**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+
+1. Before domain work, call `maestro run create quality-debug -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
+3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
+4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
+</run_mode>
+
 <purpose>
-Debug issues using scientific method with subagent isolation and persistent debug state. Three entry modes (standalone, from-UAT, parallel) and structured root cause collection with UAT feedback loop. Full algorithm defined in workflow debug.md.
+保留 standalone/from-test/parallel、三击升级、backward tracing、多因子 confidence、pressure pass 与 continuation FSM。Debug 只产诊断和 fix directions，不执行修复。
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/debug.md
-</required_reading>
-
-<context>
-User's issue: $ARGUMENTS
-
-**Flags:**
-- `--from-uat <phase>` -- Read gaps from phase's uat.md as pre-filled symptoms
-- `--parallel` -- Spawn parallel debug agents (one per gap cluster)
-
-**All context via state.json.artifacts[]:**
-
-```
-related = artifacts.filter(a =>
-  a.phase === target_phase && a.milestone === current_milestone
-).sort_by(completed_at asc)
-```
-
-Each artifact's type determines its outputs at `.workflow/{a.path}/`:
-- **execute** → .summaries/, .task/ (source of code changes)
-- **review** → review.json (findings guide hypothesis formation)
-- **debug** → understanding.md, evidence.ndjson (prior investigations, avoid re-investigation)
-- **test** → uat.md (--from-uat gap source), .tests/
-
-### Pre-load (optional, proceed without)
-- Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → module boundaries
-- Wiki: `maestro search "<symptom keywords>" --json` → prior investigations
-- Specs: `maestro load --type spec --category debug --keyword "<symptom>"` → known issues/workarounds
-- Role knowledge: `maestro search --category debug` → select relevant → `maestro load --type knowhow --id`
-
-**Output**: `DEBUG_DIR = .workflow/scratch/{YYYYMMDD}-debug-P{N}-{slug}/` (P{N} = phase number when phase-scoped; omit for standalone). Output directory rules defined in workflow debug.md Step 4.
-
-**Output boundary**: ALL file writes MUST target `DEBUG_DIR` or `.workflow/state.json` only. NEVER modify source code, test files, or other artifacts outside these paths during investigation.
-</context>
-
 <invariants>
-1. **Investigation is read-only on source** — debug MUST NOT modify source code, test files, or execution artifacts. Diagnosis produces understanding.md, evidence.ndjson, and reports only.
-2. **Root cause requires reproduction** — NEVER declare a root cause confirmed without evidence (code trace, log entry, or reproduction steps). Hypothesis without evidence stays "suspected".
-3. **Evidence is append-only** — evidence.ndjson entries MUST only be appended, NEVER modified or deleted. Each entry is an immutable observation.
-4. **Confidence is multi-factor** — root cause confidence MUST use the multi-factor scoring model (Step 7.0). NEVER use bare high/medium/low without dimensional breakdown.
-5. **Prior investigations are consulted** — when related debug artifacts exist, check understanding.md for prior root causes. NEVER re-investigate an already-confirmed root cause without new symptoms.
-6. **Fix direction is not fix execution** — debug produces `fix_direction` and `affected_files` but NEVER applies fixes. Fix execution belongs to plan→execute cycle.
+1. 命令自包含；无复现或代码/日志证据不得确认 root cause。
+2. 调查只读源码；禁止 quick fix、试改源码或同时修改多个变量。
+3. 每个 hypothesis 必须记录 tested action、evidence、status；3 个假设失败后停止并升级架构检查。
+4. 结构化证据写 typed JSON，叙述写唯一 `report.md`，协议状态交由 CLI。
 </invariants>
 
 <execution>
-Follow '~/.maestro/workflows/debug.md' completely.
-
-### Phase Gates (MANDATORY, BLOCKING)
-
-**GATE 1: Input → Investigation**
-- REQUIRED: Symptoms gathered (interactive) or loaded from UAT (--from-uat).
-- REQUIRED: Debug output directory created.
-- BLOCKED if missing: cannot investigate without symptom baseline.
-
-**GATE 2: Investigation → Diagnosis**
-- REQUIRED: Debug agent(s) spawned with full symptom context.
-- REQUIRED: evidence.ndjson written with structured entries.
-- REQUIRED: understanding.md tracks evolving understanding.
-- BLOCKED if incomplete: continue investigation before declaring root cause.
-
-**GATE 3: Diagnosis → Completion**
-- REQUIRED: Root causes collected with fix_direction and affected_files.
-- REQUIRED: Multi-factor confidence scored per gap.
-- REQUIRED: Readiness gate checked and pressure pass completed.
-- BLOCKED if inconclusive: resume session or escalate.
-
-**Register artifact on completion (phase-scoped only):**
-
-Confirm before writing:
-```
-AskUserQuestion("Register debug artifact DBG-{NNN} in state.json? (yes/no)")
-→ yes: proceed with write
-→ no: skip registration, continue to knowledge inquiry
-```
-
-```
-Append to state.json.artifacts[]:
-{
-  id: nextArtifactId(artifacts, "debug"),  // DBG-001
-  type: "debug",
-  milestone: current_milestone,
-  phase: target_phase,
-  scope: "phase",
-  path: "scratch/{YYYYMMDD}-debug-P{N}-{slug}",
-  status: all_diagnosed ? "completed" : "failed",
-  depends_on: triggering_review_id || exec_art.id,
-  harvested: false,
-  created_at: start_time,
-  completed_at: now()
-}
-```
-
-### Post-debug Knowledge Inquiry
-
-For each matching condition, ask the user explicitly:
-
-| Condition | Ask | Route |
-|-----------|-----|-------|
-| Recurring root cause pattern (seen in prior debug) | "Document in debug-notes.md?" | spec-add debug |
-| Non-obvious fix / workaround | "Record as learning?" | spec-add learning |
-| Root cause = architectural boundary violation | "Update architecture-constraints.md?" | spec-add arch |
-
-```
-AskUserQuestion("<ask text> (yes/no)")
-→ yes: Skill("spec-add", "<category> <content> --description \"<summary>\"")
-→ no: skip this entry, proceed to next condition or completion
-```
-
+1. **Create**：`maestro run create quality-debug -- $ARGUMENTS`，再运行 `maestro run check <run_id> --stage entry`。`--from-test` 读取 `latest-test` gaps；standalone 从 args 收集 expected、actual、errors、timeline、reproduction。
+2. **领域工作 FSM**：症状基线→稳定复现→按 cluster 形成 2-3 hypotheses→逐个证伪/证实→从错误首次出现点 backward trace→隔离根因→pressure pass。`--parallel` 可按无交叉 cluster 并行；`-c` 由 Run parent/retry 关联恢复，不扫描旧目录。
+3. 写 `outputs/reproduction.json`（schema `reproduction/1.0`）与 `outputs/hypotheses.json`（`hypotheses/1.0`）；每项含命令/步骤、观察、file:line、状态和矛盾证据。
+4. 写 primary `outputs/diagnosis.json`：
+   ```json
+   {"_meta":{"kind":"diagnosis","schema":"diagnosis/1.0","role":"primary","alias":"latest-debug"},"status":"confirmed|partial|inconclusive","clusters":[],"root_causes":[],"confidence":{"overall":0,"dimensions":{}},"pressure_pass":{}}
+   ```
+5. 写 `outputs/fix-directions.json`（schema `fix-directions/1.0`），只含根因级修改方向、affected files、regression tests 与 risks，不含实际 patch。
+6. 写标准 frontmatter/固定五小节 `report.md`。confirmed 路由 `maestro-plan` 且 required `[latest-debug]`；inconclusive 的 next 为新的 `quality-debug` Run，并在 caveats/open_questions 记录缺失证据。
+7. **Check**：`maestro run check <run_id> --stage exit`；确认 confirmed root causes 均有 reproduction、file:line、反证压力测试和具体 fix direction；inconclusive 不得伪装 ready。
+8. **Complete**：`maestro run complete <run_id>`；CLI 注册 `latest-debug` 并 seal。
 </execution>
 
-<completion>
-### Standalone report
-
-```
---- COMPLETION STATUS ---
-STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_RETRY
-CONCERNS: {description if applicable}
---- END STATUS ---
-```
-
-### Ralph-invoked completion
-
-End the step by calling the CLI (no text block output):
-```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
-```
-
-### Next-step routing
-
-| Condition | Suggestion |
-|-----------|-----------|
-| Root cause found, fix needed | `/maestro-plan {phase} --gaps` |
-| Root cause found (from UAT), auto-fix | `/quality-test {phase} --auto-fix` |
-| Inconclusive, need more info | `/quality-debug {issue} -c` (resume) |
-| Standalone fix already applied | `/maestro-execute {phase}` |
-</completion>
-
-<error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Issue description required (no arguments, no active sessions) | Check arguments format, re-run with correct input |
-| E002 | error | UAT file not found for --from-uat phase | Verify UAT file exists for specified phase |
-| W001 | warning | Existing debug session found, offer resume | Review existing sessions, choose resume or new |
-| W002 | warning | Checkpoint reached, user input needed | Provide requested input to continue |
-| W003 | warning | Some gaps inconclusive, partial diagnosis | Review partial results, retry inconclusive gaps |
-</error_codes>
-
 <success_criteria>
-- [ ] Input parsed: standalone, --from-uat, or --parallel mode determined
-- [ ] Active sessions checked and resume offered if applicable
-- [ ] Symptoms gathered (interactive) or loaded from UAT (pre-filled)
-- [ ] Debug output directory created (phase .debug/ or scratch/)
-- [ ] Debug agent(s) spawned with full symptom context
-- [ ] If --parallel: one agent per gap cluster, all concurrent
-- [ ] evidence.ndjson written with structured NDJSON entries
-- [ ] understanding.md tracks evolving understanding per cluster
-- [ ] Root causes collected with fix_direction and affected_files
-- [ ] Multi-factor confidence scored per gap (Step 7.0) replacing simple high/medium/low
-- [ ] Readiness gate checked before ROOT CAUSE declaration
-- [ ] Pressure pass completed on confirmed hypothesis
-- [ ] Confidence table appended to understanding.md
-- [ ] If --from-uat: uat.md gaps updated with diagnosis artifacts
-- [ ] Results unified into diagnosis summary with confidence section
-- [ ] Next step routed (plan --gaps + execute if fix needed, verify if fix applied, resume if inconclusive)
+- scientific debug FSM、3-strike、parallel cluster、confidence/readiness 语义保留。
+- 四个 typed artifacts `_meta` 完整；root cause 证据可复核。
+- report verdict/next 与 diagnosis status 一致，exit check 与 complete 成功。
 </success_criteria>

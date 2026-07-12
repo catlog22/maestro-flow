@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: codebase-rebuild
 
 Full rebuild of the `.workflow/codebase/` documentation system.

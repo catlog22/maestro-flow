@@ -34,11 +34,16 @@ The following is a complete SKILL.md template. When generating, **directly copy 
 name: {{skill_name}}
 description: {{description}}. Triggers on {{triggers}}.
 allowed-tools: {{allowed_tools}}
+session-mode: {{session_mode}}
 ---
 
 # {{display_name}}
 
 {{description}}
+
+<run_mode>
+When `session-mode: run`, call `maestro run create {{skill_name}} -- $ARGUMENTS` before domain work. Write formal artifacts to `{run_dir}/outputs/`, evidence to `{run_dir}/evidence/`, and the final handoff to `{run_dir}/report.md`. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`. When `session-mode: none`, do not create a private `.workflow` session directory.
+</run_mode>
 
 ## Architecture Overview
 
@@ -67,10 +72,7 @@ allowed-tools: {{allowed_tools}}
 ## Directory Setup
 
 \`\`\`javascript
-const timestamp = new Date().toISOString().slice(0,19).replace(/[-:T]/g, '');
-const workDir = \`{{output_location}}\`;
-
-Bash(\`mkdir -p "\${workDir}"\`);
+const workDir = runStart.run_dir;
 {{additional_dirs}}
 \`\`\`
 

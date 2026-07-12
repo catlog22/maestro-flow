@@ -10,7 +10,12 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+session-mode: deprecated
 ---
+
+<deprecated_command>
+This compatibility command MUST NOT execute the legacy milestone workflow or write `milestones/`, `phases/`, or milestone state. Resolve the target Session, then run `/maestro-verify --session <session_id>` so verification becomes an independent Run. Report the replacement command and stop.
+</deprecated_command>
 
 <purpose>
 Audit milestone for phase coverage, execution completeness, and integration gaps.

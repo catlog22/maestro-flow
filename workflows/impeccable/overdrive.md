@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 Start your response with:
 
 ```

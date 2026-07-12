@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Motion Design
 
 ## Duration: The 100/300/500 Rule

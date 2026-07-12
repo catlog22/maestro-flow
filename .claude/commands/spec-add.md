@@ -9,6 +9,7 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Add `<spec-entry>` to specs by category. 4 scopes: project (default), global, team, personal.

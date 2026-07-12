@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Typography
 
 ## Classic Typography Principles

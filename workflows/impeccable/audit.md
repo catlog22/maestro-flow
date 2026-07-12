@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 Run systematic **technical** quality checks and generate a comprehensive report. Don't fix issues; document them for other commands to address.
 
 ## Diagnostic Scan

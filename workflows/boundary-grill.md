@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Boundary Grill — Embedded Mini-Review Protocol
 
 

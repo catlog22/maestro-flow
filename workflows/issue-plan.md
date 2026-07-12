@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: Issue Planning
 
 > **DEPRECATED**: This workflow was used by the deleted `manage-issue-plan` command.

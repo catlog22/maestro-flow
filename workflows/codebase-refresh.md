@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: codebase-refresh
 
 Incremental refresh of `.workflow/codebase/` documentation based on changes since the last rebuild or refresh.

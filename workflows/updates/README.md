@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Update Scripts
 
 Version-specific smart upgrade workflows for `maestro-update`.

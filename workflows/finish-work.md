@@ -1,4 +1,9 @@
+<!-- session-mode: deprecated -->
 # Workflow: finish-work
+
+## Deprecated Workflow Boundary
+
+This workflow is retained only for migration documentation. Entry commands MUST route to the Session/Run replacement and stop; do not execute the legacy writes below.
 
 ## Inputs
 

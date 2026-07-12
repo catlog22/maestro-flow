@@ -2,7 +2,17 @@
 name: skill-tuning
 description: Universal skill diagnosis and optimization tool. Detect and fix skill execution issues including context explosion, long-tail forgetting, data flow disruption, and agent coordination failures. Supports Agy CLI for deep analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis", "optimize skill", "skill debug".
 allowed-tools: Agent, AskUserQuestion, Read, Write, Bash, Glob, Grep, 
+session-mode: run
 ---
+
+<run_mode>
+**Session mode:** `run`. The coordinator MUST call `maestro run create skill-tuning -- $ARGUMENTS` before creating workers and retain the returned `run_id`/`run_dir`.
+
+- Formal team deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; the final synthesis and handoff go to `{run_dir}/report.md`.
+- `.workflow/.team/` may remain only as the transient Agent message bus. Its `.msg/`, lease, and coordination metadata are not formal artifacts and MUST NOT be indexed as Session knowledge.
+- **Legacy Compatibility Mapping:** Any legacy `artifacts/`, `wisdom/`, `understanding.md`, `evidence.ndjson`, or private session directory mentioned by role files is staging-only; copy the accepted result into the active Run before completion.
+- Before reporting success, run `maestro run check {run_id}`, fix blocking gaps, then `maestro run complete {run_id}`.
+</run_mode>
 
 # Skill Tuning
 

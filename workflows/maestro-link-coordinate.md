@@ -1,91 +1,13 @@
+<!-- session-mode: inherited -->
 # Workflow: maestro-link-coordinate
 
-Chain-graph coordinator via `maestro coordinate` CLI endpoint. Loads a chain graph, walks node by node via step-mode subcommands. Each command node executed through `maestro delegate` internally.
+## Run Mode Contract
 
----
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
 
-### Step 1: Parse Arguments
+### Legacy Compatibility Mapping
 
-Extract from `$ARGUMENTS`:
-- Flags: `--list`, `-y`/`--yes`, `-c`/`--continue [id]`, `--chain <name>`, `--tool <name>` (default: claude)
-- `intent` = remaining text after flag removal
-
----
-
-### Step 2: Handle --list
-
-```bash
-maestro coordinate list
-```
-
-Exit after display.
-
----
-
-### Step 3: Start or Resume Session
-
-#### 3a: New session (step mode)
-
-```bash
-maestro coordinate start "{intent}" --tool {cliTool} [--chain {forcedChain}] [-y]
-```
-
-Include `--chain` and `-y` only when set. Returns JSON with `session_id`, `status`, `graph_id`, `current_node`, `last_step`, `history`.
-
-#### 3b: Resume existing session
-
-```bash
-maestro coordinate next {resumeId}
-```
-
-If bare `-c` (no ID), omit session ID to resume latest step_paused session. Same JSON output format.
-
----
-
-### Step 4: Step Loop
-
-Loop `maestro coordinate next {session_id}` while `status === "step_paused"`. Log each step: `[Step N] /{cmd} — {outcome} — {summary}`. Exit loop on `completed` or `failed` → **Step 5**.
-
-The walker handles internally:
-- Prompt assembly (command nodes via `coordinate-step` template, decision nodes inline)
-- CLI execution via `maestro delegate --to {tool} --mode {write|analysis}`
-- Decision auto-resolution: `expr` (static, instant) or `llm` (CLI spawn, expects `DECISION: <target>\nREASONING: <text>`). Expr fallback to LLM when no matching/default edge.
-- max_visits loop prevention, state persistence to `.workflow/.maestro/coordinate-{session_id}/`
-- Channel telemetry published to `~/.maestro/data/async/` broker, observable via `maestro coordinate watch`
-
-> **Step-mode latency note**: LLM-driven decisions fire synchronous CLI spawns (several seconds). Do not impose tight per-step deadlines. Static `expr` decisions remain instant.
-
----
-
-### Step 5: Completion
-
-```bash
-maestro coordinate status {session_id}
-```
-
-Display final summary:
-
-```
-============================================================
-  COORDINATE COMPLETE
-============================================================
-  Session: {session_id}
-  Graph:   {graph_id}
-  Status:  {completed|failed}
-
-  Steps:
-    [✓] plan — success — Plan generated
-    [✓] execute — success — Implementation done
-    [✗] verify — failure — 2 issues found
-    [→] check_result → retry_plan (decision)
-    [✓] retry_plan — success — Gaps fixed
-    [✓] retry_execute — success — All passing
-
-  Completed: {N} | Failed: {N}
-============================================================
-```
-
----
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## CLI Endpoint Reference
 

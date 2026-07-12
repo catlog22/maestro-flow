@@ -1,12 +1,5 @@
+<!-- session-mode: none -->
 # Pipeline Command Authoring Standard
-
-<purpose>
-Authoring standard for pipeline commands (.claude/commands/*.md). Complements skill-authoring.md (FSM style) — Pipeline suits linear staged pipelines; FSM suits orchestrators and decision engines.
-
-Selection criteria: control flow complexity. Use FSM when ≥3 conditions are met (non-linear branching, runtime chain reshaping, precise re-entry, multi-component handoff, 20+ persisted fields); otherwise use Pipeline. See knowhow DCS-20260531-1048.
-</purpose>
-
----
 
 ## 1. Architecture: Staged Pipeline
 
@@ -22,9 +15,10 @@ Core characteristics:
 
 ```
 ---
-frontmatter (name, description, argument-hint, allowed-tools)
+frontmatter (name, description, argument-hint, allowed-tools, session-mode)
 ---
 
+<run_mode>             <!-- Required when session-mode: run -->
 <purpose>              <!-- Required -->
 <required_reading>     <!-- Conditionally required: when command delegates to a workflow file -->
 <deferred_reading>     <!-- Conditionally required: when command has lazily loaded templates -->
@@ -45,6 +39,13 @@ frontmatter (name, description, argument-hint, allowed-tools)
 |-------|----------|------|
 | **Required** | purpose, context, execution, completion, error_codes, success_criteria | Every pipeline command must have these |
 | **Conditionally Required** | required_reading, deferred_reading, interview_protocol | Include when the trigger condition is met; omit when not applicable |
+
+Every command MUST classify `session-mode` as one of:
+
+- `run`: creates formal Session/Run artifacts and must use `maestro run create/check/complete`;
+- `none`: stateless/project-level operation with no formal run artifacts;
+- `bootstrap`: pre-Session bootstrap such as `maestro-init`;
+- `deprecated`: retained only as an explicit migration route.
 
 **Trigger conditions for conditionally required sections:**
 
@@ -83,14 +84,14 @@ Supports three modes:
 - **Revise** (`--revise`): Incrementally modify existing plan
 - **Check** (`--check`): Standalone plan verification
 
-All output goes to `.workflow/scratch/{YYYYMMDD}-plan-[P{N}-|M{N}-]{slug}/`.
+Formal output goes to the active Run returned by `maestro run create`: typed artifacts under `{run_dir}/outputs/`, evidence under `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`.
 </purpose>
 ```
 
 **Rules**:
 - First paragraph: one-sentence summary + pipeline phase names
 - Mode list: one line per mode, include trigger flag
-- Output path: describe directory pattern
+- Output boundary: describe artifact kinds and their location inside the active Run; never invent a command-private Session directory
 - Pipeline position: what is upstream, what is downstream (ASCII diagram or one sentence)
 - No more than 15 lines
 
@@ -599,7 +600,7 @@ Workflow files (`workflows/*.md`) are the **implementation** behind pipeline com
 # Workflow: {Name}
 
 5-phase pipeline: Context Collection → Clarification → Planning → Plan Checking → Confirmation.
-Produces plan.json + .task/TASK-{NNN}.json in .workflow/scratch/{YYYYMMDD}-plan-{slug}/.
+Produces `outputs/plan.json` + `outputs/tasks/TASK-{NNN}.json` in the active Run.
 ```
 
 - H1 format: `# Workflow: {Name}` (standardized across all workflow files)
@@ -673,14 +674,15 @@ When the workflow produces 3+ output files, document the directory structure:
 ## Output Artifacts
 
 ```
-.workflow/scratch/{YYYYMMDD}-plan-P{N}-{slug}/
-  plan.json                    ← Plan overview with task_ids[], waves[]
-  .task/
-    TASK-001.json              ← Individual task definition
-    TASK-002.json
-  .process/
+{run_dir}/
+  report.md                    ← Human narrative + handoff frontmatter
+  outputs/
+    plan.json                  ← Plan overview with _meta + task_ids[], waves[]
+    tasks/
+      TASK-001.json            ← Individual task definition
+      TASK-002.json
+  evidence/
     exploration-arch.json      ← Agent exploration results
-    context-package.json       ← Aggregated context
 ```
 ```
 

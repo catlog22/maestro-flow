@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # UX Writing
 
 ## The Button Label Problem

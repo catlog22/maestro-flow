@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 > **Additional context needed**: what the interface is trying to accomplish.
 
 ### Setup: Resolve Target and Load Ignore List

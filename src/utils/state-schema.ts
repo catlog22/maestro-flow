@@ -107,6 +107,15 @@ export interface MilestoneHistoryEntry {
   archived_artifacts?: ArtifactEntry[];
 }
 
+export interface ProjectSessionEntry {
+  session_id: string;
+  intent: string;
+  status: 'planned' | 'running' | 'paused' | 'sealed' | 'archived' | 'failed';
+  depends_on: string[];
+  roadmap_artifact_id: string | null;
+  seed_ref: string | null;
+}
+
 export interface StateJsonV2 {
   version: '2.0';
   project_name: string | null;
@@ -123,6 +132,26 @@ export interface StateJsonV2 {
   transition_history: TransitionEntry[];
   milestone_history: MilestoneHistoryEntry[];
   last_updated: string;
+  /** Session/Run migration projection. Optional while legacy commands remain active. */
+  active_session_id?: string | null;
+  /** Session DAG projection. Legacy milestone fields remain until cutover completes. */
+  sessions?: ProjectSessionEntry[];
+}
+
+export interface LegacyUpstreamProjection {
+  artifact_id: string;
+  path: string;
+  kind: string;
+  status: 'sealed' | 'draft';
+}
+
+export interface RunArtifactProjection {
+  artifact_id: string;
+  kind: string;
+  producer_command: string;
+  relative_path: string;
+  status: 'draft' | 'sealed' | 'invalid' | 'superseded';
+  created_at: string;
 }
 
 export interface PhasesSummary {
@@ -472,4 +501,101 @@ export function migrateStateFile(workflowRoot: string): StateJsonV2 | null {
   const v2 = migrateV1toV2(raw, join(workflowRoot, '.workflow'));
   writeStateJson(workflowRoot, v2);
   return v2;
+}
+
+// ---------------------------------------------------------------------------
+// Session/Run migration compatibility shim
+// ---------------------------------------------------------------------------
+
+const LEGACY_ALIAS_BY_TYPE: Record<ArtifactType, string> = {
+  analyze: 'current-analysis',
+  plan: 'current-plan',
+  execute: 'latest-execution',
+  verify: 'latest-verification',
+  brainstorm: 'latest-brainstorm',
+  spec: 'latest-spec',
+  review: 'latest-review',
+  debug: 'latest-debug',
+  test: 'latest-test',
+};
+
+function legacyTypeFor(kind: string, producerCommand: string): ArtifactType {
+  const value = `${kind} ${producerCommand}`.toLowerCase();
+  if (value.includes('analy') || value.includes('finding')) return 'analyze';
+  if (value.includes('plan') || value.includes('task')) return 'plan';
+  if (value.includes('execut') || value.includes('change-manifest')) return 'execute';
+  if (value.includes('verif')) return 'verify';
+  if (value.includes('brainstorm')) return 'brainstorm';
+  if (value.includes('review')) return 'review';
+  if (value.includes('debug') || value.includes('diagnos')) return 'debug';
+  if (value.includes('test') || value.includes('acceptance') || value.includes('coverage')) return 'test';
+  return 'spec';
+}
+
+/** Ensure the legacy v2 state can also carry the new Session DAG projection. */
+export function ensureSessionProjection(
+  state: StateJsonV2,
+  session: ProjectSessionEntry,
+  makeActive = true,
+): StateJsonV2 {
+  const sessions = [...(state.sessions ?? [])];
+  const index = sessions.findIndex(entry => entry.session_id === session.session_id);
+  if (index >= 0) sessions[index] = session;
+  else sessions.push(session);
+  return {
+    ...state,
+    sessions,
+    active_session_id: makeActive ? session.session_id : (state.active_session_id ?? null),
+    last_updated: localISO(),
+  };
+}
+
+/** Convert legacy state.json artifacts into alias-addressable upstream records. */
+export function legacyArtifactsToUpstream(
+  state: StateJsonV2 | null,
+): Record<string, LegacyUpstreamProjection> {
+  const upstream: Record<string, LegacyUpstreamProjection> = {};
+  if (!state) return upstream;
+  for (const artifact of state.artifacts ?? []) {
+    if (artifact.status !== 'completed' && artifact.status !== 'in_progress') continue;
+    const alias = LEGACY_ALIAS_BY_TYPE[artifact.type];
+    upstream[alias] = {
+      artifact_id: artifact.id,
+      path: artifact.path.replaceAll('\\', '/'),
+      kind: artifact.type,
+      status: artifact.status === 'completed' ? 'sealed' : 'draft',
+    };
+  }
+  return upstream;
+}
+
+/** Dual-write sealed Run artifacts back into the legacy state registry. */
+export function projectRunArtifactsToLegacy(
+  state: StateJsonV2,
+  sessionId: string,
+  artifacts: RunArtifactProjection[],
+): StateJsonV2 {
+  const next = [...state.artifacts];
+  for (const artifact of artifacts) {
+    if (artifact.status !== 'sealed') continue;
+    const path = `sessions/${sessionId}/${artifact.relative_path}`.replaceAll('\\', '/');
+    const existing = next.findIndex(entry => entry.id === artifact.artifact_id || entry.path === path);
+    const type = legacyTypeFor(artifact.kind, artifact.producer_command);
+    const projected: ArtifactEntry = {
+      id: artifact.artifact_id,
+      type,
+      milestone: null,
+      phase: null,
+      scope: 'standalone',
+      path,
+      status: 'completed',
+      depends_on: null,
+      harvested: true,
+      created_at: artifact.created_at,
+      completed_at: artifact.created_at,
+    };
+    if (existing >= 0) next[existing] = projected;
+    else next.push(projected);
+  }
+  return { ...state, artifacts: next, last_updated: localISO() };
 }

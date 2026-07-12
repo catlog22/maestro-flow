@@ -1,3 +1,4 @@
+<!-- session-mode: none -->
 # Coding Philosophy
 
 ## Core Beliefs

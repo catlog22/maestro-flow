@@ -1,8 +1,9 @@
+<!-- session-mode: bootstrap -->
 # Workflow: init
 
-Project initialization with automatic state detection. Creates project infrastructure only — roadmap creation is handled by maestro-roadmap (light or full mode).
+## Bootstrap Boundary
 
----
+This workflow runs before any Session exists. It MUST NOT call `maestro run create`; project bootstrap files are written through their protected stores.
 
 ## Worktree Guard
 

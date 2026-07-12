@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Explore Flow
 
 Generate multiple design system variants, render HTML prototypes for visual comparison, and let the user select, mix, or redo until the visual direction is locked.

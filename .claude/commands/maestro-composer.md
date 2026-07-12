@@ -12,6 +12,7 @@ allowed-tools:
   - Agent
   - AskUserQuestion
   - Skill
+session-mode: none
 ---
 <purpose>
 Interactive workflow template composer: natural language to DAG template.

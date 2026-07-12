@@ -1,3 +1,4 @@
+<!-- session-mode: none -->
 # Explore Usage
 
 ```bash

@@ -10,6 +10,7 @@ import {
   adaptKnowledgeGraph,
   crossReferenceKgWithDocIndex,
   loadSessionArchiveEntries,
+  loadRunModeSessionEntries,
   loadVirtualEntries,
   loadVirtualJsonEntries,
   loadClaudeCodeSessions,
@@ -106,6 +107,7 @@ export class WikiIndexer {
       join(this.workflowRoot, 'issues'),
       join(this.workflowRoot, 'domain'),
       join(this.workflowRoot, 'scratch'),
+      join(this.workflowRoot, 'sessions'),
     ];
     for (const lw of this.linkedWorkspaces) {
       if (lw.shareTypes.has('spec')) dirs.push(join(lw.workflowRoot, 'specs'));
@@ -165,6 +167,13 @@ export class WikiIndexer {
         }
       } catch { /* dir missing is fine */ }
     }
+    const sessionFiles = this.collectRunModeSourceMtimes();
+    const sessionsRoot = `${join(this.workflowRoot, 'sessions')}${sep}`;
+    const previousSessionFiles = [...this.mtimeSnapshot.keys()].filter(p => p.startsWith(sessionsRoot));
+    if (sessionFiles.size !== previousSessionFiles.length) return true;
+    for (const [path, mtime] of sessionFiles) {
+      if (this.mtimeSnapshot.get(path) !== mtime) return true;
+    }
     return false;
   }
 
@@ -189,7 +198,29 @@ export class WikiIndexer {
         }
       } catch { /* dir missing */ }
     }
+    for (const [path, mtime] of this.collectRunModeSourceMtimes()) snap.set(path, mtime);
     return snap;
+  }
+
+  private collectRunModeSourceMtimes(): Map<string, number> {
+    const out = new Map<string, number>();
+    const root = join(this.workflowRoot, 'sessions');
+    const visit = (dir: string): void => {
+      let names: string[];
+      try { names = readdirSync(dir); } catch { return; }
+      for (const name of names) {
+        if (name === 'work' || name === 'tmp' || name === 'diagnostics.ndjson' || name === 'events.ndjson') continue;
+        const path = join(dir, name);
+        let st;
+        try { st = statSync(path); } catch { continue; }
+        if (st.isDirectory()) { visit(path); continue; }
+        if (name === 'session.json' || name === 'artifacts.json' || name === 'run.json' || name === 'report.md' || dir.includes(`${sep}outputs`)) {
+          out.set(path, Number(st.mtimeMs));
+        }
+      }
+    };
+    visit(root);
+    return out;
   }
 
   private async tryLoadSearchCache(): Promise<boolean> {
@@ -1009,6 +1040,7 @@ export class WikiIndexer {
     // archive.json carries lifecycle + content_refs; context-package.json
     // is a lazy peek for summary enrichment.
     out.push(...(await this.scanSessionArchives(join(this.workflowRoot, 'scratch'))));
+    out.push(...(await this.scanRunModeSessions()));
     const milestonesRoot = join(this.workflowRoot, 'milestones');
     if (existsSync(milestonesRoot)) {
       for (const m of await safeReaddir(milestonesRoot)) {
@@ -1056,6 +1088,20 @@ export class WikiIndexer {
       if (!existsSync(arch) || !this.isInsideRoot(arch)) continue;
       const rel = toForwardSlash(relative(this.workflowRoot, arch));
       out.push(...(await loadSessionArchiveEntries(arch, rel)));
+    }
+    return out;
+  }
+
+  private async scanRunModeSessions(): Promise<WikiEntry[]> {
+    const root = join(this.workflowRoot, 'sessions');
+    if (!existsSync(root)) return [];
+    const out: WikiEntry[] = [];
+    for (const name of await safeReaddir(root)) {
+      if (name === 'index.json') continue;
+      const sessionPath = join(root, name, 'session.json');
+      if (!existsSync(sessionPath) || !this.isInsideRoot(sessionPath)) continue;
+      const rel = toForwardSlash(relative(this.workflowRoot, sessionPath));
+      out.push(...(await loadRunModeSessionEntries(sessionPath, rel)));
     }
     return out;
   }

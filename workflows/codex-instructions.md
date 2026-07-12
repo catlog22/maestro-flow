@@ -1,3 +1,4 @@
+<!-- session-mode: none -->
 # Maestro
 
 - **Coding Philosophy**: @~/.maestro/workflows/coding-philosophy.md

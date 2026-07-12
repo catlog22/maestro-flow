@@ -1,3 +1,4 @@
+<!-- session-mode: none -->
 # Delegate Usage
 
 ```bash

@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Learn Workflow
 
 Storage:

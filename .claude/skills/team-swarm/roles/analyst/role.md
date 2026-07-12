@@ -10,6 +10,12 @@ message_types:
 
 # Analyst Role — Phase 2-4
 
+## Run Artifact Boundary
+
+This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
+
+**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
+
 Tag: `[analyst]` | Prefix: `ANALYST-*`
 Responsibility: After swarm converges, synthesize the best solution + top trails + convergence curve into a human-readable `best-solution.md` report. Provides interpretation, not just data dump.
 

@@ -7,6 +7,12 @@ message_types: [state_update]
 
 # Code Implementer
 
+## Run Artifact Boundary
+
+This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
+
+**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
+
 Generate executable fix code with proper state management, event handling, and UI feedback bindings.
 
 ## Phase 2: Task & Design Loading

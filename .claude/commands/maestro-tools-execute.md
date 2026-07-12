@@ -11,6 +11,7 @@ allowed-tools:
   - Grep
   - AskUserQuestion
   - Agent
+session-mode: none
 ---
 <purpose>
 Load registered tool documents and execute them step-by-step.

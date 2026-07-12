@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: sync
 
 Change detection, impact chain traversal, and codebase doc synchronization. Auto-triggered after execute, or manual via `/workflow:sync`.

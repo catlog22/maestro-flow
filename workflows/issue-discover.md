@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Workflow: Issue Discovery
 
 Automated issue discovery via multi-perspective analysis or prompt-driven exploration.

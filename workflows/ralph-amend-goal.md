@@ -1,11 +1,13 @@
+<!-- session-mode: inherited -->
 # Ralph Goal Amendment Flow
 
-`A_AMEND_GOAL` 详细流程。加载方式：`maestro-ralph.md` S_AMEND_GOAL via `<deferred_reading>`。
+## Run Mode Contract
 
-触发：`/maestro-ralph --amend [change_request]`
-GUARD: running ralph session 存在
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
 
----
+### Legacy Compatibility Mapping
+
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Phase 1 — 快照
 

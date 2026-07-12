@@ -1,10 +1,5 @@
+<!-- session-mode: none -->
 # SKILL.md Authoring Standard
-
-<purpose>
-SKILL.md 的编写规范。核心原则：SKILL.md 是给 LLM agent 执行的状态机定义，不是给人读的操作手册。
-</purpose>
-
----
 
 ## 1. Architecture: Hybrid State Machine
 
@@ -14,9 +9,10 @@ SKILL.md 的编写规范。核心原则：SKILL.md 是给 LLM agent 执行的状
 
 ```
 ---
-frontmatter (name, description, argument-hint, allowed-tools)
+frontmatter (name, description, argument-hint, allowed-tools, session-mode)
 ---
 
+<run_mode>          <!-- Required when session-mode: run -->
 <purpose>           <!-- 1-5 行：目标 + 拓扑图 + 入口点 -->
 <context>           <!-- 用法示例、flag 说明 -->
 <invariants>        <!-- 全局底线规则，独立于状态转移 -->
@@ -35,6 +31,15 @@ frontmatter (name, description, argument-hint, allowed-tools)
 - **纯状态机**（6.5/10）：过度缩写导致 LLM 卡死或幻觉操作，丢失执行语境
 - **纯散文**（5/10）：LLM 需"阅读理解"提取转移条件，注意力分散，上下文寻址迷失
 - **混合**（8.5/10）：状态机路由 + 散文动作，兼顾确定性和可理解性
+
+### Session/Run 分类
+
+每个 `SKILL.md` 必须在 frontmatter 声明 `session-mode: run|none`：
+
+- `run`：技能产生正式交付物或需要恢复。入口必须调用 `maestro run create <skill>`，正式产物写入 `outputs/`，证据写入 `evidence/`，最终报告写入 `report.md`，并以 `maestro run check/complete` 收口。
+- `none`：纯路由、只读查询或无正式持久化的技能。禁止创建私有 `.workflow` 会话目录。
+
+Team skill 可以继续使用 `.workflow/.team/` 作为瞬态消息总线，但正式 artifact/wisdom 必须进入 active Run；消息总线不得作为知识索引源。
 
 ---
 

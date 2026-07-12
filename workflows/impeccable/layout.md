@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 Space is the most underused design tool. Find the layout's actual problem (monotone spacing, weak hierarchy, identical card grids, the centered-stack default) and fix the structure, not the surface.
 
 ---

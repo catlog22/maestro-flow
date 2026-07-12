@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Remove a `<spec-entry>` from a specs file. Symmetric with `/spec-add`.

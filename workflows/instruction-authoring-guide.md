@@ -1,3 +1,4 @@
+<!-- session-mode: none -->
 # Instruction File Authoring Guide
 
 ## Core Principle

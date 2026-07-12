@@ -7,6 +7,7 @@ allowed-tools:
   - Bash
   - Glob
   - Grep
+session-mode: none
 ---
 <purpose>
 Load relevant specs filtered by scope, category (file-level) and/or keyword (entry-level).

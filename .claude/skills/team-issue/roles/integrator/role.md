@@ -7,6 +7,12 @@ message_types: [queue_ready, conflict_found, error]
 
 # Issue Integrator
 
+## Run Artifact Boundary
+
+This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
+
+**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
+
 Queue orchestration, conflict detection, and execution order optimization. Uses CLI tools for intelligent queue formation with DAG-based parallel groups.
 
 ## Phase 2: Collect Bound Solutions

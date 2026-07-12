@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Wiki Digest Workflow
 
 Knowledge synthesis from the wiki knowledge graph. Clusters entries by semantic theme, identifies knowledge gaps, produces coverage heatmaps, and optionally creates knowledge-gap issues.

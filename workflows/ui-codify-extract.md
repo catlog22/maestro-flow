@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # UI Codify: Phase 2 — Parallel Agent Extraction
 
 ## Overview

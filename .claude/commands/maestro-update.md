@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Detect current version, run schema migration to latest, then follow the version-specific upgrade workflow.

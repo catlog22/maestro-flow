@@ -1,8 +1,13 @@
+<!-- session-mode: inherited -->
 # Workflow: maestro-chain-execute [DEPRECATED]
 
-> **DEPRECATED**: This workflow has been replaced by the unified executor `maestro-ralph-execute`.
-> Both maestro and ralph sessions now use `maestro-ralph-execute` for step execution.
-> This file is kept for reference only and will be removed in a future version.
+## Run Mode Contract
+
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
+
+### Legacy Compatibility Mapping
+
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Migration
 

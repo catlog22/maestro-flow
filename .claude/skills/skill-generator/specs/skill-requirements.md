@@ -122,7 +122,7 @@ interface SkillConfig {
   // Output configuration
   output: {
     format: 'markdown' | 'html' | 'json';
-    location: string;           // ".workflow/.scratchpad/{skill}-{timestamp}"
+    location: string;           // "{run_dir}/outputs" for formal deliverables
     filename_pattern: string;   // "{name}-output.{ext}"
   };
 
@@ -256,7 +256,7 @@ AskUserQuestion({
       options: [
         {
           label: "File Strategy (file)",
-          description: "Persist to .scratchpad, supports debugging and recovery (recommended)"
+          description: "Persist through the active Session/Run, supports debugging and recovery (recommended)"
         },
         {
           label: "Memory Strategy (memory)",
@@ -426,7 +426,7 @@ function validateSkillConfig(config) {
   "allowed_tools": ["Task", "Read", "Write", "Glob", "Grep", "Bash"],
   "output": {
     "format": "markdown",
-    "location": ".workflow/.scratchpad/api-docs-{timestamp}",
+    "location": "{run_dir}/outputs/api-docs",
     "filename_pattern": "{name}-api-docs.md"
   }
 }
@@ -459,7 +459,7 @@ function validateSkillConfig(config) {
   "allowed_tools": ["Task", "AskUserQuestion", "Read", "Write"],
   "output": {
     "format": "json",
-    "location": ".workflow/.scratchpad/tasks",
+    "location": "{run_dir}/outputs/tasks",
     "filename_pattern": "tasks.json"
   }
 }

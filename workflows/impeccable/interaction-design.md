@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Interaction Design
 
 ## The Eight Interactive States

@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Integration Test Workflow
 
 Self-iterating integration test cycle that combines exploration, test design, execution, reflection, and adaptive strategy adjustment. Runs automated tests in a closed loop that self-corrects until convergence.

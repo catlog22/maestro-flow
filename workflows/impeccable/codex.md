@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Codex: Visual Direction & Asset Production
 
 ### Four stop points before code

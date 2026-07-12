@@ -1,11 +1,13 @@
+<!-- session-mode: inherited -->
 # UI Style Workflow (ui-ux-pro-max powered)
 
-Lightweight design workflow delegating to ui-ux-pro-max for design system generation.
-Command owns: requirements gathering, variant presentation, user selection, solidification.
+## Run Mode Contract
 
-Pipeline position: analyze -> **ui-design** -> plan -> execute -> verify
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
 
----
+### Legacy Compatibility Mapping
+
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Prerequisites
 

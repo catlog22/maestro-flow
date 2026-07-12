@@ -1,6 +1,7 @@
 ---
 name: thesis-docx
 description: Create, revise, and format thesis or dissertation Word documents with strict academic formatting control. Use when an AI agent needs to generate or revise thesis content, normalize Word styles, follow a school template, fix captions or page numbers or section levels, or produce evidence-based Mermaid figures and LaTeX-formatted code listings for a thesis document.
+session-mode: none
 ---
 
 # Thesis DOCX

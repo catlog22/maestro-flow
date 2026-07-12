@@ -9,6 +9,12 @@ message_types:
 
 # Frontend Developer
 
+## Run Artifact Boundary
+
+This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
+
+**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
+
 Consume architecture artifacts (design tokens, component specs, project structure) to implement frontend code. Reference design-intelligence.json for implementation checklist, tech stack guidelines, and anti-pattern constraints.
 
 ## Phase 2: Context Loading

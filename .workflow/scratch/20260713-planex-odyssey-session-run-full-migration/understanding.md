@@ -32,7 +32,16 @@
 
 ## 3. Execution
 
-待 S_EXECUTE 填写。
+已完成 T1–T8：
+
+- Runtime：新增 `src/run/`，实现严格 Zod schema、跨进程锁、备份、mtime cache、事务批写/回滚、`create/check/complete/seal-session`、Gate、typed Artifact、report frontmatter、sealed 不可变。
+- 兼容：legacy `state.json.artifacts[]` 可投影为新 upstream；sealed Run artifacts 双写给旧消费者。
+- 核心链：analyze → plan → execute → `maestro-verify`，以及 review/test/debug，全部深度迁移为 typed outputs + report/handoff。
+- 全量定义：69 commands、45 skills、122 workflows 均有显式 Session/Run 分类；43 个 Run command contract 可解析；28 个 stateful skill 的全部 role 文件具备 Run Artifact Boundary。
+- Search：仅索引 sealed/archived Session/Run，typed artifact 优先，排除 running/draft/work/tmp/diagnostics/events，保留 legacy archive，并用深层 mtime 做增量失效。
+- 验证：runtime 10/10、Search 38/38、prompt lint、strict typecheck、build、mirrors 全过；真实 CLI pilot 完成 create/check/complete/seal-session/search。
+
+外部验证首次指出非核心 contract 意图、child-role 覆盖与验收记录证据不足，均已针对性修复；“缺少 verify command”为路径识别误报，实际新增文件是 `.claude/commands/maestro-verify.md`。
 
 ## 4. Verification
 

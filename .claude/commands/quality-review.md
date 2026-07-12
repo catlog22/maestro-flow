@@ -1,177 +1,56 @@
 ---
 name: quality-review
-description: Use after execution to evaluate code quality across correctness, security, performance, and architecture
-argument-hint: "<phase> [--level quick|standard|deep] [--dimensions security,architecture,...] [--skip-specs]"
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - Agent
-  - AskUserQuestion
+description: 对已验证实现进行多维代码审查并形成可追踪 findings
+argument-hint: "[scope] [--quick|--deep] [--skip-specs]"
+allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
+contract:
+  consumes:
+    - { kind: execution, alias: current-execution, required: true, require_status: sealed }
+    - { kind: verification, alias: latest-verification, required: false }
+  produces:
+    - { path: outputs/findings.json, kind: review-findings, alias: latest-review, role: primary }
+    - { path: outputs/spec-conflicts.json, kind: spec-conflicts, role: evidence }
+    - { path: outputs/issue-candidates.json, kind: issue-candidates, role: attachment }
+session-mode: run
 ---
+
+<run_mode>
+**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+
+1. Before domain work, call `maestro run create quality-review -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
+3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
+4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
+</run_mode>
+
 <purpose>
-Multi-dimensional code review on a phase's changed files. Three levels (quick/standard/deep), auto-detected from file count. Level and dimension details in workflow review.md.
+保留 quick/standard/deep、多维并行审查、严重度聚合、deep-dive 与 spec conflict 检查语义；结果以 typed artifacts 交给 test 或 plan。
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/review.md
-</required_reading>
-
-<deferred_reading>
-- [index.json](~/.maestro/templates/index.json) — read when updating phase index after review
-</deferred_reading>
-
-<context>
-Phase: $ARGUMENTS (required — phase number or slug)
-
-**Flags:**
-- `--level quick|standard|deep` — Explicit review level (default: auto-detect from file count)
-- `--dimensions <list>` — Comma-separated subset of dimensions to review (overrides level defaults)
-- `--skip-specs` — Skip loading project specs as review context
-
-**All context via state.json.artifacts[]:**
-
-```
-related = artifacts.filter(a =>
-  a.phase === target_phase && a.milestone === current_milestone
-).sort_by(completed_at asc)
-```
-
-Each artifact's type determines its outputs at `.workflow/{a.path}/`:
-- **execute** → .summaries/, .task/, verification.json, plan.json (source of files to review)
-- **review** → review.json (prior verdict, findings — for delta comparison)
-- **debug** → understanding.md, evidence.ndjson (confirmed root causes)
-- **test** → uat.md, .tests/ (user-observable gaps)
-
-### Pre-load (optional, proceed without)
-- Codebase docs: `.workflow/codebase/ARCHITECTURE.md` → component boundaries, layer rules
-- Wiki constraints: `maestro search "architecture constraint" --json` → documented decisions
-- Specs: `maestro load --type spec --category review` → review standards, checklists, knowhow tools
-- Conflict state: `maestro spec conflict list` → 当前已标记冲突的 spec 条目（review 时优先关注）
-- Role knowledge: `maestro search --category review` → select relevant → `maestro load --type knowhow --id`
-
-**Output**: `REVIEW_DIR = .workflow/scratch/{YYYYMMDD}-review-P{N}-{slug}/` (P{N} = phase number, enables directory-level identification as state.json fallback)
-
-**Output boundary**: ALL file writes MUST target `REVIEW_DIR` or `.workflow/state.json` only. NEVER modify source code, execution artifacts, or files outside these paths.
-</context>
-
 <invariants>
-1. **Review is read-only on source** — NEVER modify source code, test files, or execution artifacts. Review produces reports only.
-2. **Findings require evidence** — every finding MUST reference file:line and include a code snippet or concrete description. No vague or unanchored findings.
-3. **Verdict is data-driven** — NEVER change verdict severity to accommodate user preference without new evidence. Verdicts flow from findings, not negotiation.
-4. **Dimension independence** — each review dimension produces findings independently. One dimension's results MUST NOT suppress or override another's.
-5. **Prior review delta** — when a prior review.json exists for the same phase, findings MUST be compared. Do NOT re-report already-resolved findings as new.
-6. **Spec conflict integrity** — if code contradicts a spec entry: if the code is the evolved practice (spec outdated), suggest `maestro spec supersede`; if genuinely disputed, flag via `maestro spec conflict mark`. NEVER silently accept the contradiction or edit the spec inline.
+1. 命令自包含；不读取其他 prompt。
+2. 只从 create 返回的 aliases 读取变更清单和 verification。
+3. Review 默认只读源码；发现问题不在本 Run 修复。
+4. findings 必须包含 file:line、severity、evidence、impact 与 recommendation。
 </invariants>
 
 <execution>
-Follow '~/.maestro/workflows/review.md' completely.
-
-### Phase Gates (MANDATORY, BLOCKING)
-
-**GATE 1: Setup → Review**
-- REQUIRED: Phase resolved and changed files collected from task summaries. E001/E002 if missing.
-- REQUIRED: Review level determined (explicit flag or auto-detected from file count).
-- BLOCKED if no changed files: E004.
-
-**GATE 2: Review → Aggregation**
-- REQUIRED: All dimension reviews executed (inline for quick, parallel agents for standard/deep).
-- REQUIRED: Deep-dive completed if triggered (standard: auto, deep: forced).
-
-**GATE 3: Aggregation → Completion**
-- REQUIRED: review.json written with findings, severity distribution, and verdict.
-- REQUIRED: Issues auto-created based on level thresholds.
-- REQUIRED: index.json updated with review status.
-- REQUIRED: Spec conflict check — if any finding directly contradicts a loaded spec entry (code behavior ≠ spec rule): if spec is outdated (code evolved), suggest `maestro spec supersede`; if genuinely disputed, suggest `maestro spec conflict mark`. Code is the single source of truth.
-
-**Output writes to REVIEW_DIR** (not EXEC_DIR):
-- `REVIEW_DIR/review.json` — findings, severity distribution, verdict
-
-**Register artifact on completion:**
-
-Confirm before writing state.json and issues.jsonl:
-```
-AskUserQuestion("Register review artifact REV-{NNN} in state.json and create {N} issues in issues.jsonl? (yes/no)")
-→ yes: proceed with both writes
-→ no: skip registration and issue creation, continue to completion
-```
-
-```
-Append to state.json.artifacts[]:
-{
-  id: nextArtifactId(artifacts, "review"),  // REV-001
-  type: "review",
-  milestone: current_milestone,
-  phase: target_phase,
-  scope: "phase",
-  path: "scratch/{YYYYMMDD}-review-P{N}-{slug}",    // relative to .workflow/
-  status: "completed",
-  depends_on: exec_art.id,                 // or prior debug/review if re-review
-  harvested: false,
-  created_at: start_time,
-  completed_at: now()
-}
-```
-
-Report format defined in workflow review.md Report Format section.
+1. **Create**：`maestro run create quality-review -- $ARGUMENTS`，再执行 `maestro run check <run_id> --stage entry`。
+2. **领域工作**：从 `current-execution`/change manifest 解析文件；加载 review specs（除非 `--skip-specs`）；按 correctness、security、performance、maintainability、tests、architecture/spec consistency 审查。quick inline；standard 并行视角；deep 强制 deep-dive。聚合并去重 findings。
+3. 写 `outputs/findings.json`：
+   ```json
+   {"_meta":{"kind":"review-findings","schema":"review-findings/1.0","role":"primary","alias":"latest-review"},"level":"quick|standard|deep","verdict":"pass|warn|block","findings":[],"severity_counts":{}}
+   ```
+4. 写 `outputs/spec-conflicts.json` 和 `outputs/issue-candidates.json`，schemas 为 `spec-conflicts/1.0` 与 `issue-candidates/1.0`。候选只描述问题，不手工写 issue registry。
+5. 写带标准 frontmatter/固定五小节的 `report.md`。pass/warn 路由 `quality-test`，block 路由 `maestro-plan`；required aliases 分别包含 `latest-review` 与必要的 `latest-verification`。
+6. **Check**：`maestro run check <run_id> --stage exit`；核对所有 changed files 被审查、critical/high 有证据、verdict 与严重度一致、spec conflicts 明确分类。
+7. **Complete**：`maestro run complete <run_id>`，由 CLI 注册 `latest-review`。
 </execution>
 
-<completion>
-### Standalone report
-
-```
---- COMPLETION STATUS ---
-STATUS: DONE|DONE_WITH_CONCERNS|NEEDS_RETRY
-CONCERNS: {description if applicable}
---- END STATUS ---
-```
-
-Status mapping:
-- **DONE** — PASS verdict, no critical findings
-- **DONE_WITH_CONCERNS** — WARN verdict, issues found but non-blocking
-- **NEEDS_RETRY** — BLOCK verdict, critical findings require fix first
-
-### Ralph-invoked completion
-
-End the step by calling the CLI (no text block output):
-```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
-```
-
-### Next-step routing
-
-| Condition | Suggestion |
-|-----------|-----------|
-| PASS verdict | `/quality-test {phase}` |
-| WARN verdict (non-blocking issues) | `/quality-test {phase}` (proceed with caveats) |
-| BLOCK verdict (critical findings) | `/maestro-plan {phase} --gaps` (fix first) |
-| Spec contradictions found | `maestro spec conflict list` → `/manage-knowledge-audit --scope spec` |
-| Want code cleanup | `/quality-refactor {phase}` |
-</completion>
-
-<error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Phase argument required | Check arguments format, re-run with correct input |
-| E002 | error | Phase directory not found | Check arguments format, re-run with correct input |
-| E003 | error | No execution results found (no task summaries) | Verify execution completed with task summaries |
-| E004 | error | No changed files detected in phase | Verify execution completed with task summaries |
-| W001 | warning | Some dimension agents failed, partial results | Retry failed dimensions or accept partial results |
-| W002 | warning | Deep-dive iteration limit reached with unresolved criticals | Accept current findings or escalate manually |
-</error_codes>
-
 <success_criteria>
-- [ ] Phase resolved and changed files collected from task summaries
-- [ ] Review level determined (explicit flag or auto-detected)
-- [ ] Project specs loaded as review context (unless --skip-specs)
-- [ ] Dimension reviews executed (inline for quick, parallel agents for standard/deep)
-- [ ] All dimension results aggregated with severity classification
-- [ ] Deep-dive completed if triggered (standard: auto, deep: forced)
-- [ ] review.json written with complete findings, severity distribution, verdict
-- [ ] Issues auto-created based on level thresholds
-- [ ] index.json updated with review status
-- [ ] Next step routed by verdict (PASS→test, WARN→test with caveats, BLOCK→plan --gaps)
+- 多维 review pipeline 与 quick/deep 分支保留。
+- 三个 typed artifacts 元数据完整，所有 findings 有 file:line evidence。
+- report handoff 路由正确，exit check 与 complete 成功。
 </success_criteria>

@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Wiki Manage Workflow
 
 Unified wiki knowledge graph management — health monitoring, interactive search, orphan cleanup, and graph statistics.

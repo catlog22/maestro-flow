@@ -1,4 +1,5 @@
-import { readFile, open } from 'node:fs/promises';
+import { readFile, open, readdir } from 'node:fs/promises';
+import { basename, dirname, join, resolve, sep } from 'node:path';
 
 import type { GraphNode, GraphEdge, Layer, TourStep, KnowledgeGraph } from '../../../../src/graph/types.js';
 import type { WikiEntry, WikiStatus } from './wiki-types.js';
@@ -759,6 +760,185 @@ export async function loadSessionArchiveEntries(
     warn(`adapter-fail:${archiveAbsPath}`, `adapter failed at ${archiveAbsPath}: ${(err as Error).message}`);
     return [];
   }
+}
+
+// ── Session / Run adapters (run-mode lifecycle) ─────────────────────────
+
+interface RunModeSession {
+  session_id?: string;
+  intent?: string;
+  status?: string;
+  latest_completed_run_id?: string | null;
+  lifecycle?: { sealed_at?: string | null; archived_at?: string | null; seal_summary?: string | null };
+}
+
+interface RunModeArtifact {
+  kind?: string;
+  role?: string;
+  producer_run_id?: string;
+  relative_path?: string;
+  status?: string;
+}
+
+interface RunModeRegistry {
+  artifacts?: Record<string, RunModeArtifact>;
+}
+
+interface RunModeRun {
+  run_id?: string;
+  session_id?: string;
+  command?: { name?: string };
+  status?: string;
+  output?: { produces?: string[]; primary_artifact_id?: string | null; verdict?: string | null };
+  handoff?: { summary?: string; artifact_refs?: string[] } | null;
+  started_at?: string;
+  completed_at?: string | null;
+  sealed_at?: string | null;
+}
+
+function isIndexedLifecycle(status: string | undefined): boolean {
+  return status === 'sealed' || status === 'archived';
+}
+
+function runModeStatus(status: string | undefined): WikiStatus {
+  return status === 'archived' ? 'archived' : 'completed';
+}
+
+function extractArtifactSummary(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const obj = value as Record<string, unknown>;
+  for (const key of ['summary', 'verdict', 'conclusion', 'title', 'description']) {
+    const candidate = obj[key];
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim().slice(0, 500);
+  }
+  return '';
+}
+
+function extractReportSummary(raw: string): string {
+  const frontmatter = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  const summary = frontmatter?.[1].match(/^summary:\s*(.+)$/m)?.[1]?.trim();
+  if (summary) return summary.replace(/^['"]|['"]$/g, '').slice(0, 500);
+  const section = raw.match(/^##\s+(?:摘要|Summary)\s*\r?\n+([^#][\s\S]*?)(?=\r?\n##\s|$)/mi)?.[1];
+  return section?.replace(/\s+/g, ' ').trim().slice(0, 500) ?? '';
+}
+
+async function readRunKnowledge(
+  sessionDir: string,
+  runDir: string,
+  run: RunModeRun,
+  registry: RunModeRegistry,
+): Promise<{ summary: string; body: string; artifactIds: string[] }> {
+  const artifactIds = [
+    run.output?.primary_artifact_id,
+    ...(run.output?.produces ?? []),
+    ...(run.handoff?.artifact_refs ?? []),
+  ].filter((id): id is string => typeof id === 'string' && id.length > 0);
+  const uniqueIds = [...new Set(artifactIds)];
+  const bodies: string[] = [];
+  let summary = '';
+
+  for (const id of uniqueIds) {
+    const artifact = registry.artifacts?.[id];
+    if (!artifact || artifact.producer_run_id !== run.run_id || artifact.status !== 'sealed') continue;
+    if (!artifact.relative_path || artifact.role === 'report') continue;
+    const absPath = resolve(sessionDir, artifact.relative_path);
+    if (!absPath.startsWith(`${resolve(sessionDir)}${sep}`)) continue;
+    try {
+      const raw = await readFile(absPath, 'utf-8');
+      bodies.push(raw.slice(0, 50_000));
+      if (!summary && artifact.relative_path.toLowerCase().endsWith('.json')) {
+        try { summary = extractArtifactSummary(JSON.parse(raw)); } catch { /* malformed artifact is ignored */ }
+      }
+    } catch { /* registry may contain a stale optional attachment */ }
+  }
+
+  if (!summary) {
+    try { summary = extractReportSummary(await readFile(join(runDir, 'report.md'), 'utf-8')); } catch { /* projection is optional */ }
+  }
+  if (!summary) summary = run.handoff?.summary?.trim().slice(0, 500) ?? '';
+  return { summary, body: bodies.join('\n\n'), artifactIds: uniqueIds };
+}
+
+/** Load a run-mode session and its sealed runs without indexing draft projections. */
+export async function loadRunModeSessionEntries(
+  sessionAbsPath: string,
+  sessionRelPath: string,
+): Promise<WikiEntry[]> {
+  let session: RunModeSession;
+  try { session = JSON.parse(await readFile(sessionAbsPath, 'utf-8')) as RunModeSession; } catch { return []; }
+  if (!isIndexedLifecycle(session.status)) return [];
+
+  const sessionDir = dirname(sessionAbsPath);
+  const sessionId = session.session_id ?? basename(sessionDir);
+  const sessionSlug = slugify(sessionId);
+  if (!sessionSlug) return [];
+
+  let registry: RunModeRegistry = {};
+  try { registry = JSON.parse(await readFile(join(sessionDir, 'artifacts.json'), 'utf-8')) as RunModeRegistry; } catch { /* optional */ }
+
+  const runEntries: WikiEntry[] = [];
+  const runsRoot = join(sessionDir, 'runs');
+  for (const runName of await safeReadDirNames(runsRoot)) {
+    const runDir = join(runsRoot, runName);
+    let run: RunModeRun;
+    try { run = JSON.parse(await readFile(join(runDir, 'run.json'), 'utf-8')) as RunModeRun; } catch { continue; }
+    if (!isIndexedLifecycle(run.status)) continue;
+    const runId = run.run_id ?? runName;
+    const command = run.command?.name ?? 'run';
+    const knowledge = await readRunKnowledge(sessionDir, runDir, run, registry);
+    const runRel = `${sessionRelPath.replace(/\/session\.json$/, '')}/runs/${runName}/run.json`;
+    runEntries.push({
+      id: `session-run-${sessionSlug}-${slugify(runId)}`,
+      type: 'knowhow',
+      title: `${command} ${runId}`,
+      summary: knowledge.summary,
+      tags: ['session', 'run', run.status!, command],
+      status: runModeStatus(run.status),
+      created: toIso(run.started_at),
+      updated: toIso(run.sealed_at ?? run.completed_at ?? run.started_at),
+      related: [`session-${sessionSlug}`],
+      source: { kind: 'virtual', path: runRel },
+      body: knowledge.body,
+      raw: run,
+      ext: { virtualKind: 'session-run', sessionId, runId, command, artifactIds: knowledge.artifactIds },
+      scope: null,
+      category: SESSION_TYPE_CATEGORY[command] ?? null,
+      specCategory: null,
+      createdBy: command,
+      sourceRef: runId,
+      parent: `session-${sessionSlug}`,
+    });
+  }
+
+  const latest = runEntries.find(e => (e.ext?.runId as string | undefined) === session.latest_completed_run_id)
+    ?? runEntries.at(-1);
+  const summary = latest?.summary || session.lifecycle?.seal_summary || session.intent || '';
+  const sessionEntry: WikiEntry = {
+    id: `session-${sessionSlug}`,
+    type: 'knowhow',
+    title: session.intent || `Session ${sessionId}`,
+    summary,
+    tags: ['session', session.status!],
+    status: runModeStatus(session.status),
+    created: toIso(session.lifecycle?.sealed_at),
+    updated: toIso(session.lifecycle?.archived_at ?? session.lifecycle?.sealed_at),
+    related: runEntries.map(e => e.id),
+    source: { kind: 'virtual', path: sessionRelPath },
+    body: latest?.body ?? '',
+    raw: session,
+    ext: { virtualKind: 'session', sessionId, lifecycleStatus: session.status, runCount: runEntries.length },
+    scope: null,
+    category: null,
+    specCategory: null,
+    createdBy: 'session-runtime',
+    sourceRef: sessionId,
+    parent: null,
+  };
+  return [sessionEntry, ...runEntries];
+}
+
+async function safeReadDirNames(dir: string): Promise<string[]> {
+  try { return await readdir(dir); } catch { return []; }
 }
 
 // ── Claude Code / Codex session adapters ─────────────────────────────────

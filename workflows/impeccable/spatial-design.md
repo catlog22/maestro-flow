@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 # Spatial Design
 
 ## Spacing Systems

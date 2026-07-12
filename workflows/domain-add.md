@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 ---
 name: domain-add
 alias: domain-add

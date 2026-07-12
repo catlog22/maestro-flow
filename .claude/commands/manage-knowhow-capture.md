@@ -11,6 +11,7 @@ allowed-tools:
   - Grep
   - WebFetch
   - AskUserQuestion
+session-mode: none
 ---
 <purpose>
 Capture reusable knowledge into `.workflow/knowhow/` with type-specific structured fields.

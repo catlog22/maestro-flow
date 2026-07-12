@@ -1,3 +1,4 @@
+<!-- session-mode: inherited -->
 Strip a design to its essence. Remove anything that doesn't earn its place: redundant elements, repeated information, decorative noise, cosmetic complexity.
 
 

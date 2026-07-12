@@ -1,12 +1,13 @@
+<!-- session-mode: inherited -->
 # Workflow: maestro
 
-Intelligent coordinator that routes user intent to optimal command chain based on project state.
-Builds a `ralph_protocol_version: "2"` session: every executable step carries `skill,args,stage,scope,command_scope,command_path`; every cross-step gate is a `step.decision` node. All execution dispatched to unified executor (`maestro-ralph-execute`); the command body (`.claude/commands/maestro.md`) owns session build + dispatch. `--exec` is legacy input only — recorded to `legacy_options.exec_mode`, never changes execution. This brain is consumed for **classification only** (intent → task_type → chain); it does NOT prescribe execution semantics.
+## Run Mode Contract
 
-**Prerequisites:**
-- None for initial invocation (can bootstrap)
-- `continue`/`next`: `.workflow/state.json` must exist
-- `-c` (resume): handled by command file before this workflow loads — not applicable here
+This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
+
+### Legacy Compatibility Mapping
+
+Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Step 1: Parse & Initialize
 

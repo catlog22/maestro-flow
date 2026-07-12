@@ -10,7 +10,12 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
+session-mode: deprecated
 ---
+
+<deprecated_command>
+This compatibility command MUST NOT archive/move milestone directories or advance milestone state. Resolve the target Session and route to `maestro run seal-session <session_id>` after all active Runs pass their exit gates. Knowledge promotion occurs during Session seal. Report the replacement lifecycle and stop.
+</deprecated_command>
 
 <purpose>
 Archive passed milestone: validate, archive artifacts, extract knowhow, advance state.
