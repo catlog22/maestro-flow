@@ -3,7 +3,12 @@ name: maestro-milestone-release
 description: Bump version, generate changelog, tag milestone
 argument-hint: "[<version>] [--bump patch|minor|major] [--dry-run] [--no-tag] [--no-push]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: deprecated
 ---
+
+<deprecated_command>
+This Codex skill is retained for compatibility only. Route to the Session/Run replacement named by the canonical Claude command and stop; do not execute legacy milestone/session writes below.
+</deprecated_command>
 
 <purpose>
 Package a completed milestone into a releasable version. Bumps project version in manifest,

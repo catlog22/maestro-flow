@@ -1,8 +1,9 @@
 ---
 name: spec-remove
 description: Remove spec entry by ID
-argument-hint: "<entry-id> [--cascade] [-y]"
+argument-hint: <entry-id> [--cascade] [-y]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

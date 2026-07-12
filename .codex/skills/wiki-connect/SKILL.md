@@ -3,6 +3,7 @@ name: wiki-connect
 description: Find and link hidden connections in wiki graph
 argument-hint: "[--scope <type>] [--min-similarity N] [--fix] [--max N]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

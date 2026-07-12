@@ -1,9 +1,32 @@
 ---
 name: maestro-blueprint
-description: Generate formal specification package (Product Brief, PRD, Architecture, Epics) through 7-phase document chain (P0 Spec Study → P1 Discovery → P1.5 Req Expansion → P2 Product Brief → P3 PRD → P4 Architecture → P5 Epics → P6 Readiness Check)
-argument-hint: "<idea or @file> [-y] [-c] [--from <source>]"
+description: Generate formal specification package (Product Brief, PRD,
+  Architecture, Epics) through 7-phase document chain (P0 Spec Study → P1
+  Discovery → P1.5 Req Expansion → P2 Product Brief → P3 PRD → P4 Architecture →
+  P5 Epics → P6 Readiness Check)
+argument-hint: <idea or @file> [-y] [-c] [--from <source>]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, spawn_agents_on_csv, request_user_input
+session-mode: run
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
+
+<run_mode>
+**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
+
+1. Before domain work, call `maestro run create maestro-blueprint -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
+3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
+4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
+</run_mode>
+
 <purpose>
 Formal specification document chain producing a complete specification package through 7 sequential phases (P0–P6, plus P1.5 requirement expansion) with multi-CLI analysis and interactive refinement. Pure documentation — no code generation, no roadmap generation.
 

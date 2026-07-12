@@ -1,9 +1,29 @@
 ---
 name: quality-test
-description: Use when implementation needs user acceptance testing with interactive verification and gap closure
-argument-hint: "<phase> [-y] [--smoke] [--auto-fix] [--session ID]"
+description: Use when implementation needs user acceptance testing with
+  interactive verification and gap closure
+argument-hint: <phase> [-y] [--smoke] [--auto-fix] [--session ID]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: run
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
+
+<run_mode>
+**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
+
+1. Before domain work, call `maestro run create quality-test -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
+3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
+4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
+</run_mode>
 
 <purpose>
 Conversational UAT: present expected behavior one test at a time, user confirms or describes issues. Severity inferred from natural language (never asked). Session persists in `uat.md` across context resets. Failed tests trigger CSV-parallel diagnosis via `spawn_agents_on_csv` and optional gap-fix closure (max 2 iterations).

@@ -2,8 +2,17 @@
 name: scholar-rebuttal-pro
 description: Enhanced academic paper review response workflow with Agy/CLI collaborative analysis and multi-perspective discussion. Produces structured rebuttal documents with evidence-based strategies. Triggers on "rebuttal", "respond to reviewers", "review response", "审稿回复".
 allowed-tools: Task, AskUserQuestion, TodoWrite, Read, Write, Edit, Bash, Glob, Grep, Skill, mcp__ace-tool__search_context, mcp__ccw-tools__read_file, mcp__ccw-tools__edit_file
-session-mode: none
+session-mode: run
 ---
+
+<run_mode>
+**Session mode:** `run`. The coordinator MUST call `maestro run create scholar-rebuttal-pro -- $ARGUMENTS` before creating workers and retain the returned `run_id`/`run_dir`.
+
+- Formal team deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; the final synthesis and handoff go to `{run_dir}/report.md`.
+- `.workflow/.team/` may remain only as the transient Agent message bus. Its `.msg/`, lease, and coordination metadata are not formal artifacts and MUST NOT be indexed as Session knowledge.
+- **Legacy Compatibility Mapping:** Any legacy `artifacts/`, `wisdom/`, `understanding.md`, `evidence.ndjson`, or private session directory mentioned by role files is staging-only; copy the accepted result into the active Run before completion.
+- Before reporting success, run `maestro run check {run_id}`, fix blocking gaps, then `maestro run complete {run_id}`.
+</run_mode>
 
 # Scholar Rebuttal Pro
 

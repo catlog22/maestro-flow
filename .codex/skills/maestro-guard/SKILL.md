@@ -1,9 +1,11 @@
 ---
 name: maestro-guard
 description: Manage editing boundary restrictions
-argument-hint: "<on|off|status|allow <path>|deny <path>>"
+argument-hint: <on|off|status|allow <path>|deny <path>>
 allowed-tools: Read, Write, Bash, Glob
+session-mode: none
 ---
+
 <purpose>
 Configure directory-level write boundaries enforced by the workflow-guard PreToolUse hook.
 When enabled, Write and Edit tool calls targeting files outside allowed paths are blocked.

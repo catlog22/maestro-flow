@@ -1,8 +1,10 @@
 ---
 name: maestro-tools-register
-description: Register tool specs - extract, generate, or optimize reusable process definitions
+description: Register tool specs - extract, generate, or optimize reusable
+  process definitions
 argument-hint: "[description or intent]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

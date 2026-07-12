@@ -3,6 +3,7 @@ name: domain-list
 description: List registered domain terms from glossary
 argument-hint: "[--tier core|extended|peripheral]"
 allowed-tools: Read, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

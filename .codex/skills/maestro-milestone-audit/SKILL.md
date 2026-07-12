@@ -3,7 +3,12 @@ name: maestro-milestone-audit
 description: Audit current milestone for cross-phase integration gaps
 argument-hint: "[milestone, e.g., 'M1'] [-y]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Bash, Glob, Grep, request_user_input
+session-mode: deprecated
 ---
+
+<deprecated_command>
+This Codex skill is retained for compatibility only. Route to the Session/Run replacement named by the canonical Claude command and stop; do not execute legacy milestone/session writes below.
+</deprecated_command>
 
 <purpose>
 Sequential audit based on artifact registry in state.json. Checks phase coverage (ANL->PLN->EXC chains), ad-hoc completeness, execution completeness, and cross-artifact integration via `spawn_agents_on_csv`. Produces PASS/FAIL verdict report.

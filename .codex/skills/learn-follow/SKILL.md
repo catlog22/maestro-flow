@@ -1,8 +1,9 @@
 ---
 name: learn-follow
 description: Guided reading of code or wiki to extract patterns
-argument-hint: "<path|wiki-id|topic> [--depth shallow|deep] [--save-wiki] [-y]"
+argument-hint: <path|wiki-id|topic> [--depth shallow|deep] [--save-wiki] [-y]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

@@ -1,8 +1,10 @@
 ---
 name: manage-knowhow
 description: Manage knowhow entries (workflow and system)
-argument-hint: "[list|search|view|edit|delete|prune] [query|id|file] [--store workflow|system|all] [--tag tag] [--type type]"
+argument-hint: "[list|search|view|edit|delete|prune] [query|id|file] [--store
+  workflow|system|all] [--tag tag] [--type type]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

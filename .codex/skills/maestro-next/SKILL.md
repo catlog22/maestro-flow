@@ -1,10 +1,31 @@
 ---
 name: maestro-next
-description: "Single-command recommendation — pick the best next skill from the pool and execute it in-context"
-argument-hint: "\"<intent>\" [-y] [--dry-run] [--top N] [--list]"
+description: Single-command recommendation — pick the best next skill from the
+  pool and execute it in-context
+argument-hint: '"<intent>" [-y] [--dry-run] [--top N] [--list]'
 allowed-tools: Read, Bash, Glob, Grep, request_user_input
-invocation-note: '"$skill {args}" in output is a suggest-only display format — the user or parent orchestrator decides whether to execute'
+invocation-note: '"$skill {args}" in output is a suggest-only display format —
+  the user or parent orchestrator decides whether to execute'
+session-mode: run
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
+
+<run_mode>
+**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
+
+1. Before domain work, call `maestro run create maestro-next -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
+3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
+4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
+</run_mode>
 
 <purpose>
 单链推荐：解析 intent + project state → 路由表评分 → 推荐**单个原子 skill** → 确认后**在协调器上下文直接调用** `$skill {args}`。

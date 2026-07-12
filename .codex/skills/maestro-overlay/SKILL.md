@@ -1,8 +1,9 @@
 ---
 name: maestro-overlay
 description: Create or edit command overlays from natural language
-argument-hint: "<intent> | --list | --remove <name>"
+argument-hint: <intent> | --list | --remove <name>
 allowed-tools: Read, Write, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

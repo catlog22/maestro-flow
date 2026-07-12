@@ -28,14 +28,14 @@ const deprecatedCommands = new Set([
 ]);
 
 const runSkills = new Set([
-  'scholar-writing', 'skill-generator', 'skill-iter-tune', 'skill-tuning',
+  'scholar-rebuttal-pro', 'scholar-writing', 'skill-generator', 'skill-iter-tune', 'skill-tuning',
   'team-adversarial-swarm', 'team-arch-opt', 'team-brainstorm',
   'team-coordinate', 'team-frontend-debug', 'team-frontend',
   'team-interactive-craft', 'team-issue', 'team-lifecycle-v4',
   'team-motion-design', 'team-perf-opt', 'team-planex',
   'team-quality-assurance', 'team-review', 'team-roadmap-dev', 'team-swarm',
   'team-tech-debt', 'team-testing', 'team-ui-polish', 'team-uidesign',
-  'team-ultra-analyze', 'team-ux-improve', 'team-visual-a11y',
+  'team-designer', 'team-ultra-analyze', 'team-ux-improve', 'team-visual-a11y',
   'workflow-skill-designer',
 ]);
 

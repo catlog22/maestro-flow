@@ -3,6 +3,7 @@ name: spec-load
 description: Load specs and lessons for current context
 argument-hint: "[--category <category>] [--keyword <word>]"
 allowed-tools: Read, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

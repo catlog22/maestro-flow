@@ -3,6 +3,7 @@ name: domain-discover
 description: Discover domain term candidates from codebase
 argument-hint: "[--auto]"
 allowed-tools: Read, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

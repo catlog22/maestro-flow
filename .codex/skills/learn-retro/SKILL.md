@@ -1,8 +1,10 @@
 ---
 name: learn-retro
 description: Retrospective of git activity and decision quality
-argument-hint: "[--lens git|decision|all] [--days N] [--author <name>] [--area <path>] [--phase N] [--compare] [-y]"
+argument-hint: "[--lens git|decision|all] [--days N] [--author <name>] [--area
+  <path>] [--phase N] [--compare] [-y]"
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

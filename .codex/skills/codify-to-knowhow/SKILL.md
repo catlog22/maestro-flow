@@ -1,8 +1,10 @@
 ---
 name: codify-to-knowhow
-description: "Manifest-driven knowledge asset generator — converts structured packages into knowhow + spec entries"
-argument-hint: "<package-path>"
+description: Manifest-driven knowledge asset generator — converts structured
+  packages into knowhow + spec entries
+argument-hint: <package-path>
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

@@ -1,8 +1,9 @@
 ---
 name: domain-add
 description: Register a domain term into project glossary
-argument-hint: "<canonical> <definition>"
+argument-hint: <canonical> <definition>
 allowed-tools: Read, Write, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

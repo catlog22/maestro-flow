@@ -3,7 +3,12 @@ name: maestro-init
 description: Initialize project with auto state detection
 argument-hint: "[-y] [--from <source>]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: bootstrap
 ---
+
+<bootstrap_mode>
+This skill initializes protected project state before a Session exists. It MUST NOT call `maestro run create`; bootstrap files remain owned by their protected stores.
+</bootstrap_mode>
 
 <purpose>
 Sequential project setup skill. Detects project state (empty/code/existing), gathers project information through deep questioning or document extraction, then creates the `.workflow/` directory structure. No parallel agents — single sequential flow.

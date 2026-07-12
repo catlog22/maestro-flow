@@ -1,8 +1,9 @@
 ---
 name: spec-add
 description: Add spec entry by category with role tagging
-argument-hint: "<category> <title> <content>"
+argument-hint: <category> <title> <content>
 allowed-tools: Read, Write, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

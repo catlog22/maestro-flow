@@ -25,6 +25,7 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join, dirname, basename, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import YAML from 'yaml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -123,8 +124,8 @@ function walkFiles(dir, accumulator = []) {
 }
 
 // ---------------------------------------------------------------------------
-// Frontmatter parser — minimal, only what we need.
-// Returns { frontmatter: { ...parsed }, raw: string, body: string }
+// Frontmatter parser. Use the project YAML dependency so nested Run contracts,
+// flow-style arrays, quoted scalars, and future schema additions round-trip.
 // ---------------------------------------------------------------------------
 
 function splitFrontmatter(content) {
@@ -136,69 +137,11 @@ function splitFrontmatter(content) {
   const raw = content.slice(4, end).replace(/\r\n/g, '\n');
   const afterMarker = content.indexOf('\n', end + 4);
   const body = afterMarker >= 0 ? content.slice(afterMarker + 1) : '';
-  return { frontmatter: parseSimpleYaml(raw), raw, body };
-}
-
-// Keys that MUST stay scalar even when their value contains commas.
-const SCALAR_KEYS = new Set(['name', 'description', 'argument-hint', 'model', 'section']);
-// Keys that should always be parsed as a list of tool tokens.
-const LIST_KEYS = new Set(['allowed-tools', 'agy-subagents']);
-
-// Minimal YAML parser tuned for Claude/agy skill frontmatter.
-// Handles three shapes:
-//   scalar:    key: value
-//   list:      key:
-//                - item
-//                - item
-//   list-inline: key: a, b, c    (only when key is in LIST_KEYS)
-function parseSimpleYaml(raw) {
-  const out = {};
-  const lines = raw.split('\n');
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    const m = line.match(/^([A-Za-z_][\w-]*)\s*:\s*(.*)$/);
-    if (!m) { i++; continue; }
-    const key = m[1];
-    let value = m[2];
-    // YAML block list following the key
-    if (value === '') {
-      const items = [];
-      let j = i + 1;
-      while (j < lines.length && /^\s*-\s+/.test(lines[j])) {
-        items.push(lines[j].replace(/^\s*-\s+/, '').trim());
-        j++;
-      }
-      if (items.length) {
-        out[key] = items;
-        i = j;
-        continue;
-      }
-      out[key] = '';
-      i++;
-      continue;
-    }
-    // Block scalar markers
-    if (value === '|' || value === '>') {
-      const block = [];
-      let k = i + 1;
-      while (k < lines.length && (lines[k].startsWith('  ') || lines[k] === '')) {
-        block.push(lines[k].replace(/^  /, ''));
-        k++;
-      }
-      out[key] = block.join('\n').trim();
-      i = k;
-      continue;
-    }
-    // Inline value — only split on commas for list-like keys
-    if (LIST_KEYS.has(key) && value.includes(',')) {
-      out[key] = value.split(',').map(s => s.trim()).filter(Boolean);
-    } else {
-      out[key] = value.replace(/^["']|["']$/g, '');
-    }
-    i++;
+  const parsed = YAML.parse(raw);
+  if (parsed !== null && (typeof parsed !== 'object' || Array.isArray(parsed))) {
+    throw new Error('Skill frontmatter must be a YAML mapping');
   }
-  return out;
+  return { frontmatter: parsed ?? {}, raw, body };
 }
 
 function rewriteAllowedTools(tools) {
@@ -377,20 +320,7 @@ function convertText(content, opts = {}) {
 }
 
 function serializeFrontmatter(fm) {
-  const lines = ['---'];
-  for (const [key, value] of Object.entries(fm)) {
-    if (Array.isArray(value)) {
-      lines.push(`${key}:`);
-      for (const v of value) lines.push(`  - ${v}`);
-    } else if (typeof value === 'string' && value.includes('\n')) {
-      lines.push(`${key}: |`);
-      for (const ln of value.split('\n')) lines.push(`  ${ln}`);
-    } else {
-      lines.push(`${key}: ${value}`);
-    }
-  }
-  lines.push('---', '');
-  return lines.join('\n');
+  return `---\n${YAML.stringify(fm).trimEnd()}\n---\n`;
 }
 
 // ---------------------------------------------------------------------------

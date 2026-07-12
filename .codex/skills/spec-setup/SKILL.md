@@ -3,6 +3,7 @@ name: spec-setup
 description: Initialize specs from project structure
 argument-hint: ""
 allowed-tools: Read, Write, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

@@ -1,9 +1,29 @@
 ---
 name: quality-refactor
-description: Use when accumulated tech debt needs systematic identification and safe reduction
-argument-hint: "<phase|--dir path> [--max-iterations N]"
+description: Use when accumulated tech debt needs systematic identification and
+  safe reduction
+argument-hint: <phase|--dir path> [--max-iterations N]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: run
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
+
+<run_mode>
+**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
+
+1. Before domain work, call `maestro run create quality-refactor -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
+2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
+3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
+4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
+
+**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
+</run_mode>
 
 <purpose>
 Iterative refactoring cycle via `spawn_agents_on_csv`: analyze scope for tech debt -> plan refactoring tasks -> execute each as single-row CSV wave with test verification -> reflect on strategy per round -> repeat if needed. Every change is verified against existing tests. Failed changes are reverted and retried with adjusted strategy.

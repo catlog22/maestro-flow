@@ -3,6 +3,7 @@ name: manage-codebase-refresh
 description: Refresh codebase docs from recent changes
 argument-hint: "[--since <date>] [--deep]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
+session-mode: none
 ---
 
 <purpose>

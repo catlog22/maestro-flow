@@ -3,7 +3,9 @@ name: maestro-update
 description: Detect version, preview changes, apply workflow upgrades
 argument-hint: "[--dry-run] [--force] [--setup-only]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
+
 <purpose>
 Version router — detect current version, run schema migration to latest, then follow the version-specific smart upgrade workflow.
 

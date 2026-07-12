@@ -3,7 +3,12 @@ name: maestro-milestone-complete
 description: Archive completed milestone and prepare for next
 argument-hint: "[milestone] [--force] [-y]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: deprecated
 ---
+
+<deprecated_command>
+This Codex skill is retained for compatibility only. Route to the Session/Run replacement named by the canonical Claude command and stop; do not execute legacy milestone/session writes below.
+</deprecated_command>
 
 <purpose>
 Sequential milestone archival: validate audit → archive scratch dirs → extract learnings → move artifact entries to milestone_history → advance state → clean scratch.

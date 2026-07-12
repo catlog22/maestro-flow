@@ -1,8 +1,9 @@
 ---
 name: learn-second-opinion
 description: Get alternative perspectives -- review, challenge, or consult
-argument-hint: "<target> [--mode review|challenge|consult]"
+argument-hint: <target> [--mode review|challenge|consult]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
+session-mode: none
 ---
 
 <purpose>

@@ -71,6 +71,12 @@ function walkMarkdown(dir) {
   return out;
 }
 
+function hasActiveLegacyWrite(text) {
+  const legacyTarget = String.raw`(?:\.workflow\/(?:scratch|\.scratchpad|\.[a-z-]+|milestones|phases|plans|research|active)[^\s\`"']*|context-package\.json|understanding\.md|evidence\.ndjson|status\.json)`;
+  return new RegExp(String.raw`(?:Write|Edit|write_file|edit_file|write_to_file|replace_file_content)\s*\([^\n]*${legacyTarget}`, 'i').test(text)
+    || new RegExp(String.raw`(?:write|append|persist|save|create|update|output(?:s)?(?:\s+files?)?\s+(?:to|in)|session path\s*:)\s*[^\n]*${legacyTarget}`, 'i').test(text);
+}
+
 for (const path of walkMarkdown(join(root, 'workflows'))) {
   const text = readFileSync(path, 'utf8');
   const workflowMode = text.match(/^<!-- session-mode: ([^ ]+) -->/)?.[1];
@@ -103,6 +109,18 @@ for (const dir of readdirSync(skillDir)) {
     const requiresBoundary = hasLegacy || rel.startsWith('roles/');
     if (requiresBoundary && (!text.includes('## Run Artifact Boundary') || !text.includes('Legacy Compatibility Mapping'))) {
       errors.push(`${relative(root, path)}: unclassified legacy skill child path`);
+    }
+  }
+}
+
+for (const dir of readdirSync(skillDir)) {
+  const skillPath = join(skillDir, dir, 'SKILL.md');
+  if (!existsSync(skillPath)) continue;
+  const skillText = readFileSync(skillPath, 'utf8');
+  if (field(skillText, 'session-mode') !== 'none') continue;
+  for (const path of walkMarkdown(join(skillDir, dir))) {
+    if (hasActiveLegacyWrite(readFileSync(path, 'utf8'))) {
+      errors.push(`${relative(root, path)}: none skill subtree contains an active legacy session write`);
     }
   }
 }
