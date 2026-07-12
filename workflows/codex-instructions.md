@@ -101,6 +101,10 @@ Bash({ command: "maestro explore \"FIND: ...\nSCOPE: ...\"" })
 
 Session: `maestro explore show` / `maestro explore output <id>`
 
+## Spawn Agents (CSV)
+
+`spawn_agents_on_csv` 的 `max_runtime_seconds`（单个 worker 最大运行时间，秒）**必须显式设为上限 `3600`**。
+
 ## Knowledge System
 
 **Gate rule**: run `maestro search` + `maestro load` BEFORE reading code or editing files.
