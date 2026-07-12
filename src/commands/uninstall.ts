@@ -17,6 +17,7 @@ import {
   uninstallManifest,
   scanFallbackTargets,
   performFallbackCleanup,
+  getPackageRoot,
   type UninstallResult,
 } from './install-backend.js';
 import { runUninstallFlow } from '../tui/uninstall-ui/index.js';
@@ -93,7 +94,8 @@ export function registerUninstallCommand(program: Command): void {
           }
         }
 
-        const r = performFallbackCleanup('global', '');
+        const pkgRoot = getPackageRoot();
+        const r = performFallbackCleanup('global', '', pkgRoot);
         console.error(`\n  ${formatResult(r)}`);
         console.error('\nDone (fallback cleanup).');
         return;

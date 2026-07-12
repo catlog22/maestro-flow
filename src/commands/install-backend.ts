@@ -1040,10 +1040,45 @@ export function scanFallbackTargets(
 }
 
 /**
+ * Walk a source directory and build a Set of corresponding target paths.
+ * Used by fallback cleanup to distinguish maestro-managed files from
+ * user-added content (e.g. custom workflows like Maestro-publish).
+ */
+function buildKnownPaths(
+  sourceDir: string,
+  targetDir: string,
+  fileFilter?: (name: string) => boolean,
+): Set<string> {
+  const paths = new Set<string>();
+  if (!existsSync(sourceDir)) return paths;
+
+  function walk(currentSource: string, currentTarget: string): void {
+    const st = statSync(currentSource);
+    if (st.isFile()) {
+      paths.add(currentTarget);
+      return;
+    }
+    if (st.isDirectory()) {
+      for (const entry of readdirSync(currentSource, { withFileTypes: true })) {
+        if (fileFilter && !fileFilter(entry.name)) continue;
+        walk(join(currentSource, entry.name), join(currentTarget, entry.name));
+      }
+    }
+  }
+
+  walk(sourceDir, targetDir);
+  return paths;
+}
+
+/**
  * Recursively remove all files in a directory, respecting PRESERVE and
  * CONTENT_MANAGED rules. Returns count of files removed.
+ *
+ * When `knownFiles` is provided, only files whose absolute path appears in
+ * the set are eligible for deletion — user-added content is left untouched.
+ * Directories are only removed if empty after cleaning.
  */
-function cleanDirectory(dir: string): number {
+function cleanDirectory(dir: string, knownFiles?: Set<string>): number {
   if (!existsSync(dir)) return 0;
   const st = statSync(dir);
 
@@ -1054,6 +1089,7 @@ function cleanDirectory(dir: string): number {
     if (FALLBACK_CONTENT_MANAGED.has(name)) {
       return cleanContentManagedFile(dir) ? 1 : 0;
     }
+    if (knownFiles && !knownFiles.has(dir)) return 0;
     try { unlinkSync(dir); return 1; } catch { return 0; }
   }
 
@@ -1062,19 +1098,23 @@ function cleanDirectory(dir: string): number {
     if (FALLBACK_PRESERVE.has(entry.name)) continue;
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      removed += cleanDirectory(fullPath);
+      // Pass knownFiles through — subdirectories use the same white-list
+      removed += cleanDirectory(fullPath, knownFiles);
       // Remove empty directory after cleaning
       try {
         if (existsSync(fullPath) && readdirSync(fullPath).length === 0) {
           rmSync(fullPath, { recursive: true });
         }
       } catch { /* skip */ }
+    } else if (FALLBACK_CONTENT_MANAGED.has(entry.name)) {
+      // Content-managed files (CLAUDE.md, AGENTS.md, GEMINI.md): clean
+      // injected sections even when knownFiles doesn't cover them —
+      // tag-injection cleanup is safe regardless.
+      if (cleanContentManagedFile(fullPath)) removed++;
     } else {
-      if (FALLBACK_CONTENT_MANAGED.has(entry.name)) {
-        if (cleanContentManagedFile(fullPath)) removed++;
-      } else {
-        try { unlinkSync(fullPath); removed++; } catch { /* skip */ }
-      }
+      // Unknown files: skip when white-list is active
+      if (knownFiles && !knownFiles.has(fullPath)) continue;
+      try { unlinkSync(fullPath); removed++; } catch { /* skip */ }
     }
   }
   return removed;
@@ -1101,10 +1141,16 @@ function cleanContentManagedFile(filePath: string): boolean {
 /**
  * Perform a manifest-less cleanup of all known maestro target directories,
  * hooks, MCP, and statusline. Used as fallback when manifests are lost.
+ *
+ * When `pkgRoot` is provided, source directories are scanned to build a
+ * white-list of known (maestro-managed) target paths. Only files matching
+ * the white-list are deleted — user-added content (e.g. custom workflows
+ * like Maestro-publish) is left untouched.
  */
 export function performFallbackCleanup(
   scope: 'global' | 'project',
   projectPath: string,
+  pkgRoot?: string,
 ): UninstallResult {
   const result: UninstallResult = {
     filesRemoved: 0,
@@ -1116,14 +1162,51 @@ export function performFallbackCleanup(
     mcpRemoved: { claude: false, codex: false, extras: [] },
   };
 
+  // --- Build known-path white-list from source directories ---
+  // Key: normalized target directory. Value: Set of absolute target paths
+  // that maestro would have created.
+  const dirKnownPaths = new Map<string, Set<string>>();
+  if (pkgRoot) {
+    for (const def of COMPONENT_DEFS) {
+      // Build components transform files; we can't predict exact output paths
+      // from the source alone, so skip them in fallback cleanup.
+      if (def.build) continue;
+      // Inject components (CLAUDE.md, AGENTS.md) are handled by
+      // cleanContentManagedFile which only removes marked sections — safe.
+      if (def.inject) continue;
+
+      const dir = def.target(scope, projectPath);
+      const sourceDir = join(pkgRoot, def.sourcePath);
+      if (!existsSync(sourceDir)) continue;
+
+      const norm = dir.toLowerCase();
+      let known = dirKnownPaths.get(norm);
+      if (!known) {
+        known = new Set<string>();
+        dirKnownPaths.set(norm, known);
+      }
+
+      const paths = buildKnownPaths(sourceDir, dir, def.fileFilter);
+      for (const p of paths) known.add(p);
+    }
+  }
+
   // --- Files: clean all component target directories ---
   const seen = new Set<string>();
   for (const def of COMPONENT_DEFS) {
+    // Skip build components in fallback — can't determine exact output files
+    if (def.build) continue;
+
     const dir = def.target(scope, projectPath);
     const norm = dir.toLowerCase();
     if (seen.has(norm)) continue;
     seen.add(norm);
-    result.filesRemoved += cleanDirectory(dir);
+
+    // When pkgRoot is available, pass the white-list so only known files
+    // are deleted. When not available (legacy callers), cleanDirectory
+    // falls back to its original behaviour.
+    const knownFiles = dirKnownPaths.get(norm);
+    result.filesRemoved += cleanDirectory(dir, knownFiles);
   }
 
   // --- Overlays ---
