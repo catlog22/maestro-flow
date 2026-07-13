@@ -46,7 +46,7 @@ $ARGUMENTS -- optional session ID and flags.
 
 ### Step 2: Knowledge Extraction
 
-Skip if `--skip-knowledge` or `-y`. Otherwise:
+Skip if `--skip-knowledge`. Otherwise (`-y` auto-confirms the save prompt, does NOT skip extraction):
 
 1. **Scan session artifacts** — read all sealed run outputs across the session
 2. **Extract candidates**:

@@ -29,6 +29,7 @@ contract:
 Adaptive lifecycle orchestrator: locate step → resolve args → load context → dispatch Agent(ralph-executor) per step (agent 调 `ralph next` + 执行) → extract signals → drift check → ralph complete → evaluate decision → next step → loop.
 
 Session: `.workflow/.maestro/ralph-v2-{YYYYMMDD-HHmmss}/status.json`
+`{session_dir}` = `.workflow/.maestro/ralph-v2-{YYYYMMDD-HHmmss}/`（ralph 编排目录，非工作单元 `.workflow/sessions/{id}/`）
 </purpose>
 
 <deferred_reading>
@@ -254,8 +255,8 @@ S_SESSION_DONE:
 **Roadmap opt-in detection** (设 `session.wants_roadmap`，缺省 `false`):
 ```
 wants_roadmap = (--roadmap flag)
-             OR (intent 含多发布信号: 多发布|多版本|分阶段交付|按里程碑发布|v1.*v2|multi-release|roadmap)
-             OR (.workflow/roadmap.md 已存在)   ← 向后兼容：既有 roadmap 项目行为不变
+             OR (intent 含多发布信号: 多发布|多版本|分阶段交付|multi-release|roadmap)
+             OR (current-roadmap artifact 存在 OR state.json.sessions[] 中存在 roadmap_artifact_id != null)
 ```
 默认 `false` → large 项目走单一多波次 `plan --from analyze`，不引入 roadmap 横切层；roadmap 仅多发布场景 opt-in。
 
@@ -273,8 +274,8 @@ wants_roadmap = (--roadmap flag)
 | Condition | Position |
 |-----------|----------|
 | `session_is_new == true` (新 session) | `analyze` |
-| no sessions AND no roadmap.md AND has analyze macro artifact | `roadmap` if `wants_roadmap` else `plan` (--from analyze) |
-| no sessions AND no roadmap.md AND no analyze artifact | `analyze-macro` |
+| no roadmap-produced sessions AND has analyze macro artifact | `roadmap` if `wants_roadmap` else `plan` (--from analyze) |
+| no roadmap-produced sessions AND no analyze artifact | `analyze-macro` |
 | `session_id == null` (grill/brainstorm/blueprint/init/roadmap/analyze-macro override 已定) | n/a |
 | session 已存在 + 无任何 artifact | `analyze` |
 | session 已存在 + 最新 artifact = analyze | `plan` |

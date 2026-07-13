@@ -182,7 +182,7 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | 分析 / analyze / 多维度调研 | `maestro-analyze` |
 | 规划 / plan / 任务分解 | `maestro-plan` |
 | 实现 / 执行 / execute | `maestro-execute` |
-| 验证 / verify / 验收 | `maestro-execute` |
+| 验证 / verify / 验收 | `quality-review` |
 | 调试 / debug / 排查 / bug | `quality-debug` |
 | 审查 / review / 代码审查 | `quality-review` |
 | 测试 / test / UAT | `quality-test` / `quality-auto-test` |

@@ -34,7 +34,7 @@ $ARGUMENTS — mode + optional flags.
 **Mode detection priority:**
 1. Explicit `before` / `note` / `after` / `route`
 2. Intent text that is not a mode keyword → `route`
-3. No arguments → auto-detect (`git status` has changes → `after`, else → `before`)
+3. No arguments → prompt user via AskUserQuestion (show `git status` summary, ask before/after/note)
 
 **Flags:**
 - `--task <description>` — Current task description (for targeted knowledge loading and doc title)
@@ -88,10 +88,11 @@ S_ROUTE    — Skill routing via maestro-next
 <transitions>
 
 S_PARSE:
-  → S_BEFORE   WHEN: mode == "before" OR (no args AND no uncommitted changes)
+  → S_BEFORE   WHEN: mode == "before"
   → S_NOTE     WHEN: mode == "note"
-  → S_AFTER    WHEN: mode == "after" OR (no args AND has uncommitted changes)
+  → S_AFTER    WHEN: mode == "after"
   → S_ROUTE    WHEN: mode == "route" OR intent text present
+  → PROMPT     WHEN: no args → AskUserQuestion (show git status summary, options: before/after/note)
 
 </transitions>
 

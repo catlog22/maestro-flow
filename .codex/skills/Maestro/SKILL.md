@@ -479,7 +479,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `wiki_digest` | `wiki-digest` |
 | `business_test` | `quality-auto-test {session}` |
 | `amend` | `maestro-amend "{description}"` |
-| `release` | `maestro-session-seal` |
+| `release` | *(deprecated — guide §8.1: DAG 全 sealed = 完成，无 release 分组)* |
 | `compose` | `maestro-composer "{description}"` |
 | `play` | `maestro-player "{description}"` |
 | `update` | `maestro-update` |
