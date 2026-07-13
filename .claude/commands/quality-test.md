@@ -5,7 +5,7 @@ argument-hint: "[scope] [--smoke] [--auto-fix] [--frontend-verify]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 contract:
   consumes:
-    - { kind: verification, alias: latest-verification, required: true, require_status: sealed }
+    - { kind: verification, alias: latest-verification, required: true }
     - { kind: review-findings, alias: latest-review, required: false }
     - { kind: diagnosis, alias: latest-debug, required: false }
   produces:
@@ -34,18 +34,17 @@ session-mode: run
 </invariants>
 
 <execution>
-1. **Create**：`maestro run create quality-test -- $ARGUMENTS`，再运行 `maestro run check <run_id> --stage entry`；读取 `latest-verification` 及可选 review/debug aliases。
+1. **Create**：`maestro run create quality-test -- $ARGUMENTS`；读取 `latest-verification` 及可选 review/debug aliases。
 2. **设计**：把 requirements、failed review risks、debug regressions 与已注册 test knowhow 映射为场景；`--smoke` 先跑启动/核心路径；写 typed `test-plan.json`。
 3. **执行**：逐场景收集 pass/issue/skipped；issue 自动推断 blocker/major/minor/cosmetic 并聚类。`--frontend-verify` 对每个 UI-observable criterion 断言 UI 入口、写请求 2xx、DOM 结果并记录可复核证据。
 4. **收敛**：计算 scenario coverage、diagnostic depth、observation quality、closure completeness；>80% pass 执行 pressure pass。`--auto-fix` 对 gaps 启动最多 2 轮 plan→execute→verify，再回到本 Run 复测。
-5. 写 typed outputs：`test-results.json`（schema `test-results/1.0`，alias `latest-test`）、`acceptance.json`（`acceptance/1.0`）、`coverage.json`（`coverage/1.0`）；frontend 模式另写 `e2e-results.json`（`e2e-results/1.0`）。所有 JSON 顶层必须有 `_meta`。
+5. 写 typed outputs：`test-results.json`（schema `test-results/1.0`，alias `latest-test`）、`acceptance.json`（`acceptance/1.0`）、`coverage.json`（`coverage/1.0`）；frontend 模式另写 `e2e-results.json`（`e2e-results/1.0`）。JSON 产物由文件名推断 kind，`_meta` 可选覆盖（仅同 kind 多文件或非常规 schema 时使用）。
 6. 写标准 frontmatter/固定五小节 `report.md`。全过路由 session next/audit；失败且已诊断路由 `maestro-plan`；未诊断路由 `quality-debug`，required 包含 `latest-test`。
-7. **Check**：`maestro run check <run_id> --stage exit`；确保所有场景有状态、coverage 可复算、confidence gate 通过、frontend 每条均有确定性证据、未解决 gaps 未静默放行。
-8. **Complete**：`maestro run complete <run_id>`；CLI 注册 `latest-test` 并 seal。
+7. **Complete**：`maestro run complete <run_id>`。CLI 扫描 outputs、校验 exit gate、注册 `latest-test` 并 seal。
 </execution>
 
 <success_criteria>
 - UAT pipeline、frontend mode、confidence gate 与 2 轮 closure 上限保留。
-- typed outputs 与 `_meta` 完整；`latest-test` 为 primary。
+- typed outputs 完整；`latest-test` 为 primary。
 - report handoff 与 verdict 一致，exit check 与 complete 成功。
 </success_criteria>

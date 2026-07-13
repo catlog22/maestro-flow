@@ -379,7 +379,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] Upstream context loaded via `--from` when specified
 - [ ] discoveries.ndjson append-only throughout
 - [ ] Next step suggested to user (plan for Go, brainstorm for No-Go, plan --gaps for Gaps) — never auto-executed
-- [ ] Session sealed via `maestro run check` then `maestro run complete`
+- [ ] Session sealed via `maestro run complete`
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 
@@ -388,9 +388,9 @@ When invoked as a ralph session step, end by calling the CLI (no standalone repo
 ```
 maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 ```
-Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
+Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (concerns; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
 </ralph_completion>
 
 <on_complete>
-@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
+@~/.maestro/workflows/finish-work.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
 </on_complete>

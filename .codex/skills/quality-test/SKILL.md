@@ -10,7 +10,6 @@ contract:
     - kind: verification
       alias: latest-verification
       required: true
-      require_status: sealed
     - kind: review-findings
       alias: latest-review
       required: false

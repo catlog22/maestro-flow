@@ -17,7 +17,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates: { entry: [], exit: [] }
 ---
 
 <required_reading>

@@ -12,9 +12,6 @@ contract:
   produces:
     - { path: "outputs/roadmap.json", kind: "roadmap", role: "primary", alias: "current-roadmap" }
     - { path: "outputs/roadmap.md", kind: "roadmap-doc", role: "attachment" }
-  gates:
-    entry: []
-    exit: []
 version: 0.6.0
 ---
 
@@ -93,7 +90,7 @@ Wave 1: 3 analysis rows (parallel). Wave 2: 1 assembly row.
 5. **Graceful degradation**: Wave 1 fails -> Wave 2 proceeds with seed input only. When degradation activates, flag downstream outputs as LOW CONFIDENCE. Record `degradation_event` in discoveries.ndjson. This is a defined degradation path, not a violation of invariant 6.
 6. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Defined degradation paths (invariant 5) are not violations.
 7. **Requirement mapping completeness** — every Active requirement from project.md MUST be mapped to exactly one session. No circular dependencies in session DAG.
-8. **Artifact verification before completion** — `outputs/roadmap.json` MUST exist with session DAG and `_meta` self-description. `outputs/roadmap.md` MUST exist with session summary. Declared typed output MUST be present before `maestro run complete`. If missing: DO NOT report completion.
+8. **Artifact verification before completion** — `outputs/roadmap.json` MUST exist with session DAG. `outputs/roadmap.md` MUST exist with session summary. Declared typed output MUST be present before `maestro run complete`. If missing: DO NOT report completion.
 9. **Session Locking**: If a session is `sealed` or `archived` in `state.json.sessions[]`, the roadmap generator MUST NOT modify its details or dependencies. Session generation/regeneration is restricted to `planned` or `running` sessions only.
 </invariants>
 
@@ -186,7 +183,7 @@ Merge results -> master tasks.csv.
 
 Filter `wave==2 AND status=="pending"`. Build prev_context from wave 1. Inject strategy + constraints. Spawn.
 
-Assembly agent produces `outputs/roadmap.json` (session DAG with `_meta`) and `outputs/roadmap.md` (human-readable session summary). Each session entry contains intent, depends_on, scope, and seed data. Verifies both files on disk before reporting completed.
+Assembly agent produces `outputs/roadmap.json` (session DAG) and `outputs/roadmap.md` (human-readable session summary). Each session entry contains intent, depends_on, scope, and seed data. Verifies both files on disk before reporting completed.
 
 **Strategy selection** via uncertainty assessment (5 factors):
 | Factor | Low | Medium | High |
@@ -203,7 +200,7 @@ Assembly agent produces `outputs/roadmap.json` (session DAG with `_meta`) and `o
 
 1. Export results.csv
 2. Interactive refinement (max 3 rounds, skip if -y): Approve / Refine / Regenerate
-3. Verify `outputs/roadmap.json` has valid session DAG with `_meta` self-description
+3. Verify `outputs/roadmap.json` has valid session DAG
 4. Verify `outputs/roadmap.md` exists with session summary
 5. Register sessions in `state.json.sessions[]` with `roadmap_artifact_id` and `seed_ref`
 6. **Generate context-package.json** (schema `context-package/1.0`):
@@ -260,7 +257,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] Interactive mode: interview decision table appended to `outputs/roadmap.md` "Roadmap Decisions" section
 - [ ] Wave 1 agents completed (analysis or research)
 - [ ] Wave 2 produced output (roadmap.json + roadmap.md)
-- [ ] `outputs/roadmap.json` written with session DAG, `_meta` self-description, and state.json.sessions[] updated
+- [ ] `outputs/roadmap.json` written with session DAG and state.json.sessions[] updated
 - [ ] `outputs/roadmap.md` written with session summary
 - [ ] Uncertainty assessed, strategy selected, sessions with scope + success criteria + seed data
 - [ ] Declared typed output registered by `maestro run complete`
@@ -273,5 +270,5 @@ When invoked as a ralph session step, end by calling the CLI (no standalone repo
 ```
 maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 ```
-Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
+Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (concerns; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
 </ralph_completion>

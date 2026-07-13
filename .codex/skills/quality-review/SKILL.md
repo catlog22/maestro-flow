@@ -11,7 +11,6 @@ contract:
     - kind: execution
       alias: current-execution
       required: true
-      require_status: sealed
     - kind: verification
       alias: latest-verification
       required: false
@@ -400,7 +399,7 @@ The user can approve all, selectively exclude, or skip entirely.
 
 **Spec conflict check**: If any finding directly contradicts a loaded spec entry (code behavior ≠ spec rule), suggest `maestro spec conflict mark <file> <line> --note "<evidence>"` on the spec entry. Code is the single source of truth. Log spec conflicts in review.json as `spec_conflicts[]`.
 
-**Run report update**: record verdict, caveats, and handoff in `{run_dir}/report.md`.
+**Run report update**: record verdict, concerns, and handoff in `{run_dir}/report.md`.
 
 **Register artifacts**: write the declared outputs under `{run_dir}/outputs/`; `maestro run complete` owns IDs, dependencies, aliases, and sealing. Never edit Session protocol JSON manually.
 
@@ -467,5 +466,5 @@ When invoked as a ralph session step, end by calling the CLI (no standalone repo
 ```
 maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 ```
-Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
+Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (concerns; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
 </ralph_completion>

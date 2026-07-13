@@ -9,9 +9,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates:
-    entry: []
-    exit: []
 version: 0.5.50
 ---
 
@@ -122,7 +119,7 @@ Display the recommended next command based on grill outcomes. The user decides w
 - [ ] Risk register captures all unresolved tensions
 - [ ] `context-package.json` generated with schema "context-package/1.0"
 - [ ] Declared kind=grill output registered by `maestro run complete`
-- [ ] Session sealed via `maestro run check` then `maestro run complete`
+- [ ] Session sealed via `maestro run complete`
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 
@@ -131,9 +128,9 @@ When invoked as a ralph session step, end by calling the CLI (no standalone repo
 ```
 maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 ```
-Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
+Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (concerns; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
 </ralph_completion>
 
 <on_complete>
-@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR={output_dir}, SESSION_TYPE=grill, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
+@~/.maestro/workflows/finish-work.md — SESSION_DIR={output_dir}, SESSION_TYPE=grill, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
 </on_complete>

@@ -18,7 +18,6 @@ contract:
   produces:
     - { path: "outputs/roadmap.json", kind: "roadmap", role: "primary", alias: "current-roadmap" }
     - { path: "outputs/roadmap.md", kind: "roadmap-doc", role: "attachment" }
-  gates: { entry: [], exit: [] }
 ---
 
 <purpose>
@@ -102,7 +101,7 @@ Sub-modes:
 
 **GATE 3: Refinement → Completion**
 - REQUIRED: User approved session DAG (or auto-approved with -y).
-- REQUIRED: `outputs/roadmap.json` written with session DAG and `_meta` self-description.
+- REQUIRED: `outputs/roadmap.json` written with session DAG.
 - REQUIRED: `outputs/roadmap.md` written with session summary.
 - REQUIRED: Sessions registered in `state.json.sessions[]`.
 - BLOCKED if missing: do not report completion without written outputs.
@@ -144,7 +143,7 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 
 Status verdicts:
 - **DONE** — Normal completion
-- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **DONE_WITH_CONCERNS** — Completed with concerns; pass `--concerns`
 - **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
 - **BLOCKED** — External hard blocker; pass `--reason`
 
@@ -181,7 +180,7 @@ Status verdicts:
 - [ ] Every Active requirement from project.md mapped to exactly one session
 - [ ] No circular dependencies in session DAG
 - [ ] User approved session DAG (or auto-approved with -y)
-- [ ] `outputs/roadmap.json` written with `_meta` self-description and session DAG
+- [ ] `outputs/roadmap.json` written with session DAG
 - [ ] `outputs/roadmap.md` written with session summary and frontmatter `kind: roadmap`
 - [ ] Sessions registered in `state.json.sessions[]` with `roadmap_artifact_id` and `seed_ref`
 - [ ] Root session activation confirmed via AskUserQuestion

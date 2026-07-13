@@ -32,21 +32,20 @@ session-mode: run
 </invariants>
 
 <execution>
-1. **Create**：`maestro run create quality-debug -- $ARGUMENTS`，再运行 `maestro run check <run_id> --stage entry`。`--from-test` 读取 `latest-test` gaps；standalone 从 args 收集 expected、actual、errors、timeline、reproduction。
+1. **Create**：`maestro run create quality-debug -- $ARGUMENTS`。`--from-test` 读取 `latest-test` gaps；standalone 从 args 收集 expected、actual、errors、timeline、reproduction。
 2. **领域工作 FSM**：症状基线→稳定复现→按 cluster 形成 2-3 hypotheses→逐个证伪/证实→从错误首次出现点 backward trace→隔离根因→pressure pass。`--parallel` 可按无交叉 cluster 并行；`-c` 由 Run parent/retry 关联恢复，不扫描旧目录。
 3. 写 `outputs/reproduction.json`（schema `reproduction/1.0`）与 `outputs/hypotheses.json`（`hypotheses/1.0`）；每项含命令/步骤、观察、file:line、状态和矛盾证据。
 4. 写 primary `outputs/diagnosis.json`：
    ```json
-   {"_meta":{"kind":"diagnosis","schema":"diagnosis/1.0","role":"primary","alias":"latest-debug"},"status":"confirmed|partial|inconclusive","clusters":[],"root_causes":[],"confidence":{"overall":0,"dimensions":{}},"pressure_pass":{}}
+   {"status":"confirmed|partial|inconclusive","clusters":[],"root_causes":[],"confidence":{"overall":0,"dimensions":{}},"pressure_pass":{}}
    ```
 5. 写 `outputs/fix-directions.json`（schema `fix-directions/1.0`），只含根因级修改方向、affected files、regression tests 与 risks，不含实际 patch。
-6. 写标准 frontmatter/固定五小节 `report.md`。confirmed 路由 `maestro-plan` 且 required `[latest-debug]`；inconclusive 的 next 为新的 `quality-debug` Run，并在 caveats/open_questions 记录缺失证据。
-7. **Check**：`maestro run check <run_id> --stage exit`；确认 confirmed root causes 均有 reproduction、file:line、反证压力测试和具体 fix direction；inconclusive 不得伪装 ready。
-8. **Complete**：`maestro run complete <run_id>`；CLI 注册 `latest-debug` 并 seal。
+6. 写标准 frontmatter/固定五小节 `report.md`。confirmed 路由 `maestro-plan` 且 required `[latest-debug]`；inconclusive 的 next 为新的 `quality-debug` Run，并在 concerns 记录缺失证据。
+7. **Complete**：`maestro run complete <run_id>`。CLI 扫描 outputs、校验 exit gate、注册 `latest-debug` 并 seal。
 </execution>
 
 <success_criteria>
 - scientific debug FSM、3-strike、parallel cluster、confidence/readiness 语义保留。
-- 四个 typed artifacts `_meta` 完整；root cause 证据可复核。
+- 四个 typed artifacts 完整；root cause 证据可复核。
 - report verdict/next 与 diagnosis status 一致，exit check 与 complete 成功。
 </success_criteria>

@@ -16,7 +16,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates: { entry: [], exit: [] }
 ---
 
 <purpose>
@@ -124,7 +123,7 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 
 Status verdicts:
 - **DONE** — Normal completion
-- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **DONE_WITH_CONCERNS** — Completed with concerns; pass `--concerns`
 - **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
 - **BLOCKED** — External hard blocker; pass `--reason`
 

@@ -11,9 +11,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates:
-    entry: []
-    exit: []
 version: 0.5.50
 ---
 
@@ -87,7 +84,7 @@ Follow `~/.maestro/workflows/blueprint.md` completely.
 P0: Spec Study → P1: Discovery → P1.5: Req Expansion → P2: Product Brief → P3: PRD → P4: Architecture → P5: Epics → P6: Readiness Check
 ```
 
-P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail (<60%) → P6.5 Auto-Fix (max 2 iter) → re-check
+P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/concerns | Fail (<60%) → P6.5 Auto-Fix (max 2 iter) → re-check
 
 ### Next-step routing on completion
 
@@ -117,7 +114,7 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 | W001 | warning | CLI analysis failed | Retry once. If still fails: continue but flag affected phase outputs as LOW CONFIDENCE |
 | W002 | warning | Codebase exploration failed | Continue without codebase context |
 | W003 | warning | Glossary has < 5 terms | Note in readiness check |
-| W004 | warning | Review-level readiness score (60-79%) | Proceed with caveats |
+| W004 | warning | Review-level readiness score (60-79%) | Proceed with concerns |
 | W005 | warning | External research agent failed | Continue without apiResearchContext |
 </error_codes>
 
@@ -136,12 +133,12 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 - [ ] `blueprint-summary.md` with one-page executive summary
 - [ ] All documents have valid YAML frontmatter with session_id
 - [ ] Glossary terms used consistently across all documents
-- [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented caveats
+- [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented concerns
 - [ ] Declared kind=blueprint output registered by `maestro run complete`
 - [ ] context-package.json generated for downstream consumption
-- [ ] On gate Pass/Review: session sealed via `maestro run check` then `maestro run complete`. On Fail: skip — session stays active, excluded from wiki search.
+- [ ] On gate Pass/Review: session sealed via `maestro run complete`. On Fail: skip — session stays active, excluded from wiki search.
 </success_criteria>
 
 <on_complete>
-@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR={session_dir}, SESSION_TYPE=blueprint, SESSION_ID={session_id}, LINKED_MILESTONE=null
+@~/.maestro/workflows/finish-work.md — SESSION_DIR={session_dir}, SESSION_TYPE=blueprint, SESSION_ID={session_id}, LINKED_MILESTONE=null
 </on_complete>

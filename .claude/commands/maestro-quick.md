@@ -16,7 +16,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates: { entry: [], exit: [] }
 ---
 
 <purpose>
@@ -103,7 +102,7 @@ When invoked as a ralph chain step (session context exists):
 maestro ralph complete <idx> --status {DONE|DONE_WITH_CONCERNS|NEEDS_RETRY|BLOCKED} [--evidence <scratch-dir>]
 ```
 - **DONE** — Task completed, verification passed
-- **DONE_WITH_CONCERNS** — Task completed with caveats; pass `--concerns`
+- **DONE_WITH_CONCERNS** — Task completed with concerns; pass `--concerns`
 - **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
 - **BLOCKED** — External hard blocker; pass `--reason`
 

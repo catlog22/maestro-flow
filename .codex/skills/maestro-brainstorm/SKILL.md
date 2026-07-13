@@ -10,9 +10,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates:
-    entry: []
-    exit: []
 version: 0.5.50
 ---
 
@@ -485,7 +482,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] context-package.json generated with per-item `ref` traceability
 - [ ] discoveries.ndjson append-only throughout
 - [ ] context.md aggregates session results with next-step routing
-- [ ] Session sealed via `maestro run check` then `maestro run complete` (auto mode only)
+- [ ] Session sealed via `maestro run complete` (auto mode only)
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 
@@ -494,9 +491,9 @@ When invoked as a ralph session step, end by calling the CLI (no standalone repo
 ```
 maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 ```
-Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
+Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (concerns; pass `--concerns`), **NEEDS_RETRY** (transient error), **BLOCKED** (hard blocker; pass `--reason`).
 </ralph_completion>
 
 <on_complete>
-@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR={output_dir}, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
+@~/.maestro/workflows/finish-work.md — SESSION_DIR={output_dir}, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
 </on_complete>

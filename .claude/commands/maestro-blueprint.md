@@ -16,7 +16,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates: { entry: [], exit: [] }
 ---
 
 <purpose>
@@ -81,7 +80,7 @@ Follow `~/.maestro/workflows/blueprint.md` completely.
 P0: Spec Study → P1: Discovery → P1.5: Req Expansion → P2: Product Brief → P3: PRD → P4: Architecture → P5: Epics → P6: Readiness Check
 ```
 
-P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail (<60%) → P6.5 Auto-Fix (max 2 iter) → re-check
+P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/concerns | Fail (<60%) → P6.5 Auto-Fix (max 2 iter) → re-check
 
 ### Phase Gates (MANDATORY, BLOCKING)
 
@@ -121,7 +120,7 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 
 Status verdicts:
 - **DONE** — Normal completion
-- **DONE_WITH_CONCERNS** — Completed with caveats; pass `--concerns`
+- **DONE_WITH_CONCERNS** — Completed with concerns; pass `--concerns`
 - **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
 - **BLOCKED** — External hard blocker; pass `--reason`
 
@@ -145,7 +144,7 @@ Status verdicts:
 | W001 | warning | CLI analysis failed, using fallback | Continue with available data |
 | W002 | warning | Codebase exploration failed | Continue without codebase context |
 | W003 | warning | Glossary has < 5 terms | Note in readiness check |
-| W004 | warning | Review-level readiness score (60-79%) | Proceed with caveats |
+| W004 | warning | Review-level readiness score (60-79%) | Proceed with concerns |
 | W005 | warning | External research agent failed | Continue without apiResearchContext |
 </error_codes>
 
@@ -164,7 +163,7 @@ Status verdicts:
 - [ ] `blueprint-summary.md` with one-page executive summary
 - [ ] All documents have valid YAML frontmatter with session_id
 - [ ] Glossary terms used consistently across all documents
-- [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented caveats
+- [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented concerns
 - [ ] Artifact registered in state.json (type=blueprint)
 - [ ] context-package.json generated for downstream consumption
 - [ ] On gate Pass/Review: session sealed via finish-work (finish-work.md includes AskUserQuestion confirmation before state.json artifact registration and optional spec/knowhow extraction). On Fail: skip — session stays active, excluded from wiki search.

@@ -12,9 +12,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates:
-    entry: []
-    exit: []
 version: 0.5.50
 ---
 

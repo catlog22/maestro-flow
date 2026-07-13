@@ -5,7 +5,7 @@ argument-hint: "[scope] [-y] [--task TASK-ID]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 contract:
   consumes:
-    - { kind: plan, alias: current-plan, required: true, require_status: sealed }
+    - { kind: plan, alias: current-plan, required: true }
   produces:
     - { path: outputs/execution.json, kind: execution, alias: current-execution, role: primary }
     - { path: outputs/task-results.json, kind: task-results, role: attachment }
@@ -31,21 +31,20 @@ session-mode: run
 </invariants>
 
 <execution>
-1. **Create**：`maestro run create maestro-execute -- $ARGUMENTS`，随后 `maestro run check <run_id> --stage entry`；entry 必须解析到 sealed `current-plan`。
+1. **Create**：`maestro run create maestro-execute -- $ARGUMENTS`。
 2. **领域工作**：读取 plan、task artifacts、waves、dependency graph 和 collision report；按 wave 执行。每个 task 记录 executor、attempt、files changed、commands/tests、criterion evidence 和 status。阻塞任务向下游传播 blocked refs。
 3. 对完成任务执行 scoped test/build/lint；全局只做 smoke self-check。严禁把 self-check 当独立 verify 的 acceptance 结论。
 4. 写 `outputs/execution.json`：
    ```json
-   {"_meta":{"kind":"execution","schema":"execution/1.0","role":"primary","alias":"current-execution"},"plan_ref":"current-plan","status":"completed|partial|blocked","waves":[],"completed_tasks":[],"blocked_tasks":[]}
+   {"plan_ref":"current-plan","status":"completed|partial|blocked","waves":[],"completed_tasks":[],"blocked_tasks":[]}
    ```
 5. 写 `outputs/task-results.json`、`outputs/self-check.json`、`outputs/change-manifest.json`，schemas 分别为 `task-results/1.0`、`self-check/1.0`、`change-manifest/1.0`。`self-check` 只记录 smoke；manifest 记录 repo-relative files、change type 与 task refs。
 6. 写 `report.md` 固定骨架；frontmatter verdict 映射：全部任务成功为 `ready`，有非关键阻塞为 `ready_with_concerns`，关键依赖失败为 `blocked`。next 必须为：
    ```yaml
    next:
-     - { command: maestro-verify, reason: implementation complete, required: [current-plan, current-execution] }
+     - { command: maestro-verify, reason: implementation complete, needs: [current-plan, current-execution] }
    ```
-7. **Check**：`maestro run check <run_id> --stage exit`；核对计划任务与 task-results 一致、变更文件真实存在、无 TODO-only/stub、self-check 已运行、blocked 未被标 completed。
-8. **Complete**：`maestro run complete <run_id>`；CLI 注册 `current-execution` 并 seal。不得内嵌正式 verify。
+7. **Complete**：`maestro run complete <run_id>`。CLI 扫描 outputs、校验 exit gate、注册 `current-execution` 并 seal。不得内嵌正式 verify。
 </execution>
 
 <success_criteria>

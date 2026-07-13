@@ -5,7 +5,7 @@ argument-hint: "[scope] [--quick|--deep] [--skip-specs]"
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, Agent, AskUserQuestion]
 contract:
   consumes:
-    - { kind: execution, alias: current-execution, required: true, require_status: sealed }
+    - { kind: execution, alias: current-execution, required: true }
     - { kind: verification, alias: latest-verification, required: false }
   produces:
     - { path: outputs/findings.json, kind: review-findings, alias: latest-review, role: primary }
@@ -30,16 +30,15 @@ session-mode: run
 </invariants>
 
 <execution>
-1. **Create**：`maestro run create quality-review -- $ARGUMENTS`，再执行 `maestro run check <run_id> --stage entry`。
+1. **Create**：`maestro run create quality-review -- $ARGUMENTS`。
 2. **领域工作**：从 `current-execution`/change manifest 解析文件；加载 review specs（除非 `--skip-specs`）；按 correctness、security、performance、maintainability、tests、architecture/spec consistency 审查。quick inline；standard 并行视角；deep 强制 deep-dive。聚合并去重 findings。
 3. 写 `outputs/findings.json`：
    ```json
-   {"_meta":{"kind":"review-findings","schema":"review-findings/1.0","role":"primary","alias":"latest-review"},"level":"quick|standard|deep","verdict":"pass|warn|block","findings":[],"severity_counts":{}}
+   {"level":"quick|standard|deep","verdict":"pass|warn|block","findings":[],"severity_counts":{}}
    ```
 4. 写 `outputs/spec-conflicts.json` 和 `outputs/issue-candidates.json`，schemas 为 `spec-conflicts/1.0` 与 `issue-candidates/1.0`。候选只描述问题，不手工写 issue registry。
 5. 写带标准 frontmatter/固定五小节的 `report.md`。pass/warn 路由 `quality-test`，block 路由 `maestro-plan`；required aliases 分别包含 `latest-review` 与必要的 `latest-verification`。
-6. **Check**：`maestro run check <run_id> --stage exit`；核对所有 changed files 被审查、critical/high 有证据、verdict 与严重度一致、spec conflicts 明确分类。
-7. **Complete**：`maestro run complete <run_id>`，由 CLI 注册 `latest-review`。
+6. **Complete**：`maestro run complete <run_id>`。CLI 扫描 outputs、校验 exit gate、注册 `latest-review` 并 seal。
 </execution>
 
 <success_criteria>

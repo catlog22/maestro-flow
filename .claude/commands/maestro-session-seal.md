@@ -16,7 +16,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates: { entry: [], exit: [] }
 ---
 
 <purpose>
@@ -56,7 +55,7 @@ Skip if `--skip-knowledge`. Otherwise:
 
 1. **Scan session artifacts** — read all sealed run outputs across the session
 2. **Extract candidates**:
-   - Decisions with `status: accepted` from `evidence.json` → spec candidates
+   - Decisions with `status: accepted` from `runs/*/run.json.handoff.decisions[]` → spec candidates
    - Patterns/recipes discovered during execution → knowhow candidates
    - Risks that materialized or were mitigated → learning candidates
 3. **Present to user** via `AskUserQuestion`:
@@ -70,7 +69,7 @@ Skip if `--skip-knowledge`. Otherwise:
 4. **Persist** selected items:
    - Specs → `Skill("spec-add", "...")`
    - Knowhow → `Skill("manage-knowhow-capture", "...")`
-   - Record promoted IDs in `session.json.lifecycle.promoted_spec_ids` / `promoted_knowhow_ids`
+   - Record promoted IDs in `session.json.lifecycle.promoted[]`（前缀区分 spec:/knowhow:）
 
 ### Step 3: Seal Session
 

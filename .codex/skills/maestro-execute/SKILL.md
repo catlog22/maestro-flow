@@ -10,7 +10,6 @@ contract:
     - kind: plan
       alias: current-plan
       required: true
-      require_status: sealed
   produces:
     - path: outputs/execution.json
       kind: execution

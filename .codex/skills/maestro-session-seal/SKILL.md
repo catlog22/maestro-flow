@@ -8,9 +8,6 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
-  gates:
-    entry: []
-    exit: []
 version: 0.6.0
 ---
 
@@ -50,7 +47,7 @@ Skip if `--skip-knowledge`. Otherwise (`-y` auto-confirms the save prompt, does 
 
 1. **Scan session artifacts** — read all sealed run outputs across the session
 2. **Extract candidates**:
-   - Decisions with `status: accepted` from `evidence.json` → spec candidates
+   - Decisions with `status: accepted` from `runs/*/run.json.handoff.decisions[]` → spec candidates
    - Patterns/recipes discovered during execution → knowhow candidates
    - Risks that materialized or were mitigated → learning candidates
 3. **Present to user** via `request_user_input`:
@@ -60,7 +57,7 @@ Skip if `--skip-knowledge`. Otherwise (`-y` auto-confirms the save prompt, does 
 4. **Persist** selected items:
    - Specs → `maestro spec add ...`
    - Knowhow → `maestro knowhow capture ...`
-   - Record promoted IDs in `session.json.lifecycle.promoted_spec_ids` / `promoted_knowhow_ids`
+   - Record promoted IDs in `session.json.lifecycle.promoted[]`（前缀区分 spec:/knowhow:）
 
 ### Step 3: Seal Session
 
