@@ -241,10 +241,10 @@ export class QueryBuilder {
   }
 
   deleteEdgesForFile(filePath: string): void {
-    this.conn.raw.exec(`
-      DELETE FROM edges WHERE source IN (SELECT id FROM nodes WHERE file_path = '${filePath.replace(/'/g, "''")}')
-        OR target IN (SELECT id FROM nodes WHERE file_path = '${filePath.replace(/'/g, "''")}')
-    `);
+    this.conn.raw.prepare(
+      `DELETE FROM edges WHERE source IN (SELECT id FROM nodes WHERE file_path = ?)
+        OR target IN (SELECT id FROM nodes WHERE file_path = ?)`
+    ).run(filePath, filePath);
   }
 
   // ── File CRUD ──────────────────────────────────────────────────────

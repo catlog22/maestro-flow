@@ -88,12 +88,14 @@ export function applyMigrations(conn: KgDatabaseConnection): void {
   const currentVersion = conn.getSchemaVersion();
   for (const migration of MIGRATIONS) {
     if (migration.version > currentVersion) {
-      if (migration.sql) {
-        conn.raw.exec(migration.sql);
-      }
-      conn.raw.prepare(
-        'INSERT OR REPLACE INTO schema_versions (version, applied_at, description) VALUES (?, ?, ?)'
-      ).run(migration.version, Date.now(), migration.description);
+      conn.transaction(() => {
+        if (migration.sql) {
+          conn.raw.exec(migration.sql);
+        }
+        conn.raw.prepare(
+          'INSERT OR REPLACE INTO schema_versions (version, applied_at, description) VALUES (?, ?, ?)'
+        ).run(migration.version, Date.now(), migration.description);
+      });
     }
   }
 }
