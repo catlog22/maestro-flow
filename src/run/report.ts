@@ -32,14 +32,12 @@ export function deriveHandoff(
     summary: frontmatter.summary,
     constraints: frontmatter.constraints,
     decisions: frontmatter.decisions,
-    caveats: frontmatter.caveats,
-    open_questions: frontmatter.open_questions,
+    concerns: frontmatter.concerns,
     artifact_refs: artifactRefs,
-    evidence_refs: evidenceRefs,
     next: frontmatter.next.map(item => ({
       command: item.command,
       reason: item.reason,
-      required_artifact_refs: item.required,
+      needs: item.needs,
     })),
     details: frontmatter.details,
   };

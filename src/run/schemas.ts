@@ -170,14 +170,12 @@ export const handoffSchema = z.object({
     status: z.enum(['proposed', 'accepted', 'rejected']),
     text: z.string(),
   }).strict()),
-  caveats: z.array(z.string()),
-  open_questions: z.array(z.string()),
+  concerns: z.array(z.string()),
   artifact_refs: z.array(z.string()),
-  evidence_refs: z.array(z.string()),
   next: z.array(z.object({
     command: nonEmptyString,
     reason: z.string(),
-    required_artifact_refs: z.array(z.string()),
+    needs: z.array(z.string()),
   }).strict()),
   details: z.record(z.string(), z.unknown()),
 }).strict();
@@ -233,12 +231,11 @@ export const reportFrontmatterSchema = z.object({
     text: z.string(),
     status: z.enum(['proposed', 'accepted', 'rejected']),
   }).strict()).default([]),
-  caveats: z.array(z.string()).default([]),
-  open_questions: z.array(z.string()).default([]),
+  concerns: z.array(z.string()).default([]),
   next: z.array(z.object({
     command: nonEmptyString,
     reason: z.string().default(''),
-    required: z.array(z.string()).default([]),
+    needs: z.array(z.string()).default([]),
   }).strict()).default([]),
   details: z.record(z.string(), z.unknown()).default({}),
 }).passthrough();

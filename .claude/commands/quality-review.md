@@ -8,7 +8,7 @@ contract:
     - { kind: execution, alias: current-execution, required: true }
     - { kind: verification, alias: latest-verification, required: false }
   produces:
-    - { path: outputs/findings.json, kind: review-findings, alias: latest-review, role: primary }
+    - { path: outputs/review-findings.json, kind: review-findings, alias: latest-review, role: primary }
     - { path: outputs/spec-conflicts.json, kind: spec-conflicts, role: evidence }
     - { path: outputs/issue-candidates.json, kind: issue-candidates, role: attachment }
 session-mode: run
@@ -32,12 +32,12 @@ session-mode: run
 <execution>
 1. **Create**：`maestro run create quality-review -- $ARGUMENTS`。
 2. **领域工作**：从 `current-execution`/change manifest 解析文件；加载 review specs（除非 `--skip-specs`）；按 correctness、security、performance、maintainability、tests、architecture/spec consistency 审查。quick inline；standard 并行视角；deep 强制 deep-dive。聚合并去重 findings。
-3. 写 `outputs/findings.json`：
+3. 写 `outputs/review-findings.json`：
    ```json
    {"level":"quick|standard|deep","verdict":"pass|warn|block","findings":[],"severity_counts":{}}
    ```
 4. 写 `outputs/spec-conflicts.json` 和 `outputs/issue-candidates.json`，schemas 为 `spec-conflicts/1.0` 与 `issue-candidates/1.0`。候选只描述问题，不手工写 issue registry。
-5. 写带标准 frontmatter/固定五小节的 `report.md`。pass/warn 路由 `quality-test`，block 路由 `maestro-plan`；required aliases 分别包含 `latest-review` 与必要的 `latest-verification`。
+5. 写带标准 frontmatter/固定五小节的 `report.md`。pass/warn 路由 `quality-test`，block 路由 `maestro-plan`；needs 分别包含 `latest-review` 与必要的 `latest-verification`。
 6. **Complete**：`maestro run complete <run_id>`。CLI 扫描 outputs、校验 exit gate、注册 `latest-review` 并 seal。
 </execution>
 

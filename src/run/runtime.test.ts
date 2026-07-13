@@ -50,12 +50,11 @@ decisions:
   - id: D1
     text: Use the canonical Run store
     status: accepted
-caveats: []
-open_questions: []
+concerns: []
 next:
   - command: execute
     reason: plan sealed
-    required: [current-plan]
+    needs: [current-plan]
 ---
 ## 摘要
 Plan ready.
@@ -171,7 +170,7 @@ gates:
 
     expect(artifacts.aliases['current-plan']).toBe(completed.primary_artifact_id);
     expect(run.handoff.summary).toBe('Plan ready');
-    expect(run.handoff.next[0].required_artifact_refs).toEqual(['current-plan']);
+    expect(run.handoff.next[0].needs).toEqual(['current-plan']);
     expect(Object.values(evidence.records).some((record: any) => record.point === 'D1')).toBe(true);
     expect(state.artifacts).toEqual([]);
     expect(state.sessions.some((session: any) => session.session_id === created.session_id)).toBe(true);

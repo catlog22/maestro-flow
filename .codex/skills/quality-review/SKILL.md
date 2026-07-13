@@ -15,7 +15,7 @@ contract:
       alias: latest-verification
       required: false
   produces:
-    - path: outputs/findings.json
+    - path: outputs/review-findings.json
       kind: review-findings
       alias: latest-review
       role: primary
@@ -101,7 +101,7 @@ $quality-review --continue "20260318-review-P3-auth"
 When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive validation, use defaults for level detection.
 
 **Temporary Wave Directory**: `{run_dir}/work/csv-wave/`
-**Formal Output**: `outputs/findings.json`, `outputs/spec-conflicts.json`, and `outputs/issue-candidates.json`; worker evidence belongs in `{run_dir}/evidence/`, synthesis in `{run_dir}/report.md`.
+**Formal Output**: `outputs/review-findings.json`, `outputs/spec-conflicts.json`, and `outputs/issue-candidates.json`; worker evidence belongs in `{run_dir}/evidence/`, synthesis in `{run_dir}/report.md`.
 
 **Output boundary**: temporary CSV files target `{run_dir}/work/csv-wave/`; formal review artifacts target `{run_dir}/outputs/`; external issue/spec writes require the documented confirmation gate. Review never modifies source code or Session protocol JSON.
 </context>
