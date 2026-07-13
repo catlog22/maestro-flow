@@ -106,7 +106,7 @@ S_PARSE_ROUTE:
   → S_AMEND_GOAL    WHEN: amend_mode == true AND running session exists
   → S_FALLBACK      WHEN: amend_mode == true AND no running session
   → S_STEP_LOCATE   WHEN: running session with decision step in "running" status
-  → S_RESOLVE_SESSION WHEN: intent is non-empty
+  → S_PREPARE_SESSION WHEN: intent is non-empty
   → S_FALLBACK      WHEN: no intent AND no running session
 
 S_STATUS:
@@ -183,7 +183,7 @@ S_SESSION_DONE → END               DO: A_COMPLETE_SESSION
 ### A_CREATE_SESSION (override)
 
 Same as ralph A_CREATE_SESSION with:
-1. `session_id` format: `ralph-cli-{YYYYMMDD-HHmmss}`
+1. `ralph_session_id` format: `ralph-cli-{YYYYMMDD-HHmmss}`
 2. `execution_mode: "cli-delegate"`, `cli_tool`, `platform: "codex"`
 3. Each step: `delegate_exec_id: null`, `cli_output_summary: null`, `artifacts_produced: []`
 4. Step mode/role/rule assigned per stage (see Stage Mapping)
@@ -219,9 +219,9 @@ Same as Skill(maestro-ralph-execute) A_RESOLVE_ARGS:
 
 | cli_tool | 首行格式 |
 |----------|---------|
-| claude | `/maestro-ralph-cli-execute {step.skill} {resolved_args} --session {session_id}` |
-| codex | `$maestro-ralph-cli-execute {step.skill} {resolved_args} --session {session_id}` |
-| opencode, agy | `/maestro-ralph-cli-execute {step.skill} {resolved_args} --session {session_id}` |
+| claude | `/maestro-ralph-cli-execute {step.skill} {resolved_args} --session {ralph_session_id}` |
+| codex | `$maestro-ralph-cli-execute {step.skill} {resolved_args} --session {ralph_session_id}` |
+| opencode, agy | `/maestro-ralph-cli-execute {step.skill} {resolved_args} --session {ralph_session_id}` |
 
 **Skill-adapted prompt** — 根据目标 skill 类型选择性注入 step_context 中的内容：
 
@@ -308,7 +308,7 @@ Same as ralph. All run inline via delegate.
 
 ### A_STRUCTURAL_EVALUATE
 
-**post-session**: session seal + next dep-ready session from DAG? insert lifecycle steps / complete. Adhoc: always END.
+**post-session**: session seal + next dep-ready session from DAG? insert lifecycle steps / complete. No dep-ready session: END.
 **post-debug-escalate**: always STOP → A_PAUSE_ESCALATE.
 
 ### A_APPLY_PROCEED / A_APPLY_FIX / A_APPLY_ESCALATE / A_APPLY_SCOPE_VERDICT / A_APPLY_GOAL_FIX / A_APPLY_GOAL_DONE / A_ADVANCE_SESSION

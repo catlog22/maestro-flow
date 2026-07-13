@@ -429,7 +429,7 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 13. **动态插入步骤**（A_APPLY_*）同样应用规则 7-12
 
 ### A_CREATE_SESSION
-1. `session_id` format: `ralph-v2-{YYYYMMDD-HHmmss}`
+1. `ralph_session_id` format: `ralph-v2-{YYYYMMDD-HHmmss}`
 2. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E006 + 列出缺失 skill
 3. Additional fields: `execution_mode: "agent"`，无 `cli_tool` 字段
 4. Each step: `agent_exec_name: null`（执行 Agent 名称标识）
@@ -530,7 +530,7 @@ Execution criteria: {session.execution_criteria joined by '; '}
 </goal_context>
 ```
 
-**3. Resolve agent name:** `{stage_prefix}-{session_id_short}-{HHmmss}`
+**3. Resolve agent name:** `{stage_prefix}-{ralph_session_id_short}-{HHmmss}`
 
    | Stage | Prefix |
    |-------|--------|
@@ -553,7 +553,7 @@ Execution criteria: {session.execution_criteria joined by '; '}
 Agent({
   subagent_type: "ralph-executor",
   description: "执行 step {index}: {step.skill} [{resolved_agent_name}]",
-  prompt: `Session: {session_id}
+  prompt: `Session: {ralph_session_id}
 
 {goal_context 块，仅 protocol < 2 时}
 
@@ -987,7 +987,7 @@ Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill
 
 ```json
 {
-  "session_id": "ralph-v2-{YYYYMMDD-HHmmss}",
+  "ralph_session_id": "ralph-v2-{YYYYMMDD-HHmmss}",
   "source": "ralph", "status": "running",
   "execution_mode": "agent",
   "ralph_protocol_version": "2",
