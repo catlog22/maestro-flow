@@ -55,7 +55,7 @@ $ARGUMENTS — user intent text, or special keywords.
 6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `Skill("maestro-ralph")` handoff
 7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
 8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
-9. **D-007 milestone 反查** — 数字 phase 的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查
+9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
 10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
 11. **schema** — `ralph_protocol_version: "2"` 标记 CLI-driven session；新增字段全部可选
 12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via ralph-execute）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
@@ -145,8 +145,8 @@ S_FALLBACK:
    - 学习/阅读代码/跟读/follow → `Skill("learn-follow")`；调查/为什么/investigate → `Skill("learn-investigate")`；分解/模式/decompose → `Skill("learn-decompose")`；评审/挑战/second-opinion → `Skill("learn-second-opinion")`；回顾/retro → `Skill("quality-retrospective")`
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
-   - 宽/中等意图 + 无数字 phase → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
-   - 数字 milestone 上下文 → `analyze {milestone}` → `plan {milestone}` → `execute {milestone}` → quality pipeline
+   - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
+   - session 上下文 → `analyze --session {session}` → `plan --session {session}` → `execute --session {session}` → quality pipeline
    - 已有 analyze artifact 想直达执行 → `plan --from analyze:{ANL_ID}` → execute → quality pipeline
    - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → quality pipeline
 4. 执行 step：`Bash("maestro ralph skills --platform claude --json --quiet")` 预校验 skill 名，命中写绝对路径到 `command_path`，未命中标 `missing`；同时写 `step.stage` / `step.scope` / `step.source_artifact_ref`。decision 节点不解析 command_path
@@ -164,7 +164,7 @@ S_FALLBACK:
 2. broad/medium → `AskUserQuestion` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
-5. 在最后一个 evidence-producing stage（execute/review/test）之后、`milestone-complete` 之前追加 `decision:post-goal-audit`。ralph-execute 在该节点按需动态生长 `steps[]`
+5. 在最后一个 evidence-producing stage（execute/review/test）之后追加 `decision:post-goal-audit`（session 终结审计节点）。ralph-execute 在该节点按需动态生长 `steps[]`
 6. **输出 `/goal` 绑定提示词（不阻塞，用户可在执行过程中随时输入）：**
    ```
    📋 任务分解完成。可随时复制下面一行设定目标（执行过程中输入即可）：
@@ -179,13 +179,13 @@ S_FALLBACK:
 ### A_CREATE_SESSION
 
 0. **Specs 预检**：当 chain 包含 `analyze-macro` / `analyze` / `plan` / `execute` 等执行 stage 且 `.workflow/specs/` 目录不存在时，在 steps 最前面插入 `spec-setup`（stage=`spec-setup`，无 decision）。确保下游可获得项目约束规则注入。chain ∈ {grill, brainstorm, blueprint, init, status, quick} 时跳过
-1. Read `.workflow/state.json` 获取 phase / milestone（含 D-007 反查 `phase_slugs`）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`（如存在）；读最新 blueprint artifact 注入 `blueprint_id`
+1. Read `.workflow/state.json` 获取 `active_session_id` / 匹配 `sessions[]`（含 D-007-S session 解析）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`（如存在）；读最新 blueprint artifact 注入 `blueprint_id`
 2. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）：
    ```json
    {
      "session_id", "source": "maestro", "intent", "task_type", "chain_name",
      "ralph_protocol_version": "2", "active_step_index": null,
-     "phase", "phase_is_new": false, "milestone": "",
+     "session_ref": "", "session_is_new": false,
      "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
      "auto_mode": false, "decomposition_owner": "maestro", "cli_tool": "claude",
      "context": { "run_dir": null, "plan_dir": null, "analysis_dir": null,
@@ -194,7 +194,7 @@ S_FALLBACK:
        "index": 0, "skill": "", "args": "",
        "stage": "", "scope": null, "decision": null,
        "command_scope": "global|project|missing|null", "command_path": "<abs> | null",
-       "milestone_id": null, "source_artifact_ref": null,
+       "session_ref": null, "source_artifact_ref": null,
        "status": "pending", "goal_ref": null,
        "completion_confirmed": false, "completion_status": null,
        "completion_evidence": null,
@@ -239,9 +239,9 @@ S_FALLBACK:
 - [ ] Intent classified with task_type, complexity, clarity_score
 - [ ] Chain catalog 覆盖 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / quality pipeline
 - [ ] `-y` 模式透传 `-y` 到 grill（grill 以 Auto mode 代码代答执行，stage 不跳过）
-- [ ] D-007: 数字 phase 步骤的 `milestone_id` 通过 `state.json.milestones[].phase_slugs` 反查
+- [ ] D-007-S: session 步骤的 `session_ref` 通过 `state.json.sessions[]` 的 session_id 或 intent slug 匹配
 - [ ] macro analyze 后跟 `decision:post-analyze-scope`（由 ralph 评估 scope_verdict 决定下游链路）
-- [ ] plan 支持 `{phase}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step
+- [ ] plan 支持 `--session {session}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
 - [ ] status.json 唯一真源；无 markdown 清单；post-goal-audit 节点在 decomposed 时追加；/goal 提示词以 status.json 为判据
 - [ ] Specs 预检：chain 含执行 stage + `.workflow/specs/` 不存在 → steps 最前面插入 `spec-setup`
@@ -254,6 +254,6 @@ S_FALLBACK:
 - [ ] All chains dispatched via maestro-ralph-execute
 - [ ] Low-complexity intents routed to maestro-quick
 - [ ] (super) Requirements validated before roadmap
-- [ ] (super) Each milestone scored >= 80%
+- [ ] (super) Each session scored >= 80%
 
 </appendix>

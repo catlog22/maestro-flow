@@ -29,7 +29,7 @@ CLI-delegated variant of maestro-ralph. Same chain-building logic — but this c
 
 Session: `.workflow/.maestro/ralph-cli-{YYYYMMDD-HHmmss}/status.json`
 
-**Shared with ralph**: chain building (A_RESOLVE_PHASE → A_INFER_POSITION → A_BUILD_STEPS), session schema, decomposition (A_DECOMPOSE_TASKS). See `Skill(maestro-ralph)` for full specification.
+**Shared with ralph**: chain building (A_PREPARE_SESSION → A_BUILD_STEPS), session schema, decomposition (A_DECOMPOSE_TASKS). See `Skill(maestro-ralph)` for full specification.
 </purpose>
 
 <context>
@@ -76,11 +76,7 @@ Ralph's chain-building states apply (S_PARSE_ROUTE through S_CREATE_SESSION). Ex
 S_PARSE_ROUTE   — 解析参数、路由入口
 S_STATUS        — 显示 session 进度
 S_CONTINUE      — 恢复执行
-S_RESOLVE_PHASE — (ralph shared)
-S_INFER         — (ralph shared)
-S_RESOLVE_SCOPE — (ralph shared)
-S_QUALITY_MODE  — (ralph shared)
-S_PLANNING_MODE — (ralph shared)
+S_PREPARE_SESSION — (ralph shared)
 S_DECOMPOSE     — (ralph shared)
 S_BUILD_CHAIN   — (ralph shared)
 S_CREATE_SESSION — 写 status.json
@@ -110,7 +106,7 @@ S_PARSE_ROUTE:
   → S_AMEND_GOAL    WHEN: amend_mode == true AND running session exists
   → S_FALLBACK      WHEN: amend_mode == true AND no running session
   → S_STEP_LOCATE   WHEN: running session with decision step in "running" status
-  → S_RESOLVE_PHASE WHEN: intent is non-empty
+  → S_RESOLVE_SESSION WHEN: intent is non-empty
   → S_FALLBACK      WHEN: no intent AND no running session
 
 S_STATUS:
@@ -168,7 +164,7 @@ S_DECISION_EVAL:
   → S_APPLY_VERDICT WHEN: structural      DO: A_STRUCTURAL_EVALUATE
 
 S_APPLY_VERDICT:
-  → S_STEP_LOCATE   WHEN: proceed / fix / goal-fix / scope-verdict / milestone-advance
+  → S_STEP_LOCATE   WHEN: proceed / fix / goal-fix / scope-verdict / session-advance
   → END             WHEN: escalate / reground-halt / session complete / debug-escalate
   GUARD: retry_count >= max_retries → force escalate
   GUARD: confidence_score < 60 AND proceed → override to fix
@@ -201,7 +197,7 @@ Same as Skill(maestro-ralph-execute) A_RESOLVE_ARGS:
 
 主流程加载前序产出和发现，为 prompt 生成准备素材。
 
-1. **Session base** — Read status.json → intent, phase, milestone, boundary_contract
+1. **Session base** — Read status.json → intent, session_id, boundary_contract
 2. **Previous step output** — 前一 step 的 `cli_output_summary` + `completion_caveats` + `artifacts_produced` → 关键发现 + 产物路径
 3. **Artifacts** — 按产物路径逐个 Read，提取与当前 step 相关的内容：
    - `conclusions.json` → scope, key_findings, recommendations
@@ -312,10 +308,10 @@ Same as ralph. All run inline via delegate.
 
 ### A_STRUCTURAL_EVALUATE
 
-**post-milestone**: next milestone? insert lifecycle steps / complete. Adhoc: always END.
+**post-session**: session seal + next dep-ready session from DAG? insert lifecycle steps / complete. Adhoc: always END.
 **post-debug-escalate**: always STOP → A_PAUSE_ESCALATE.
 
-### A_APPLY_PROCEED / A_APPLY_FIX / A_APPLY_ESCALATE / A_APPLY_SCOPE_VERDICT / A_APPLY_GOAL_FIX / A_APPLY_GOAL_DONE / A_ADVANCE_MILESTONE
+### A_APPLY_PROCEED / A_APPLY_FIX / A_APPLY_ESCALATE / A_APPLY_SCOPE_VERDICT / A_APPLY_GOAL_FIX / A_APPLY_GOAL_DONE / A_ADVANCE_SESSION
 
 Same as ralph. All chain mutations apply unchanged.
 
@@ -398,8 +394,8 @@ All ralph success criteria apply. Additionally:
 - [ ] S_AMEND_GOAL + A_AMEND_GOAL (5 步, RISK_LEVEL=high 不跳过)
 - [ ] `goal_changelog` 写入路径存在
 - [ ] `blueprint_id` 支持 `--from blueprint:{BLP_ID}`
-- [ ] A_STRUCTURAL_EVALUATE 处理 post-milestone + post-debug-escalate
-- [ ] A_ADVANCE_MILESTONE 插入下一里程碑 lifecycle steps
+- [ ] A_STRUCTURAL_EVALUATE 处理 post-session + post-debug-escalate
+- [ ] A_ADVANCE_SESSION 推进 DAG 到下一个 dep-ready session
 - [ ] A_REGROUND_HALT 漂移熔断（auto_confirm 不跳过）
 - [ ] Fix-loop templates（6 套）通过 compose-delegate cycle 执行
 - [ ] re-grounding 3-step 插入规则（build rule 5.5）

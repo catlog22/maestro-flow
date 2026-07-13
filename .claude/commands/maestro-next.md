@@ -102,7 +102,7 @@ S_FALLBACK:
 读 project state 推断 `lifecycle_position`（核心信号）：
 
 ```bash
-cat .workflow/state.json 2>/dev/null              # phase / milestone / artifacts
+cat .workflow/state.json 2>/dev/null              # sessions / active_session_id / artifacts
 ls -la {run_dir}/outputs/ 2>/dev/null | head -10  # 最近 artifact (mtime DESC)
 ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 ```
@@ -113,35 +113,35 @@ ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 |---------|-------------------|-----------|
 | 无 `.workflow/` + 无源码 | brainstorm | `maestro-brainstorm` |
 | 无 `.workflow/` + 有源码 | init | `maestro-init` |
-| 有 state.json，无 roadmap，无 milestones | analyze-macro | `maestro-analyze` (宏观调研) |
+| 有 state.json，无 roadmap，无 sessions | analyze-macro | `maestro-analyze` (宏观调研) |
 | 有 macro analyze artifact，无 roadmap | roadmap | `maestro-roadmap` |
-| 有 roadmap，未启动 phase | analyze | `maestro-analyze {milestone}` |
-| 最新 artifact = analyze | plan | `maestro-plan {milestone}` |
-| 最新 artifact = plan | execute | `maestro-execute {milestone}` |
-| 最新 artifact = execute | review | `quality-review {milestone}` |
-| review verdict=PASS | test-gen | `quality-auto-test {milestone}` |
-| 测试全绿 + current_milestone 存在 | milestone-audit | `maestro-milestone-audit` |
-| 测试全绿 + current_milestone=null (standalone) | review-done | 回退到 `quality-review` 或 `manage-status`（无 milestone 上下文时不推荐 milestone 命令） |
-| 当前 milestone 全 phase 完成 | milestone-complete | `maestro-milestone-complete` |
+| 有 roadmap，有 dep-ready session 未启动 | analyze | `maestro-analyze --session {dep-ready-slug}` |
+| 最新 artifact = analyze | plan | `maestro-plan --session {active-session}` |
+| 最新 artifact = plan | execute | `maestro-execute --session {active-session}` |
+| 最新 artifact = execute | review | `quality-review --session {active-session}` |
+| review verdict=PASS | test-gen | `quality-auto-test --session {active-session}` |
+| 测试全绿 + active_session_id 存在 | session-seal | seal 当前 session，推进 DAG |
+| 测试全绿 + active_session_id=null (standalone) | review-done | 回退到 `quality-review` 或 `manage-status` |
+| 当前 session 全 runs sealed | next-session | 激活下一个 dep-ready session |
 | 任一 stage 产物含 gaps/failed | debug | `quality-debug {gap}` |
 
 **Maestro Lifecycle 主线：**
 ```
 init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
-   → [per milestone] analyze → plan → execute (includes verification)
+   → [per session] analyze → plan → execute (includes verification)
    → [quality gate] review → auto-test → test
-   → milestone-audit → milestone-complete → milestone-release
+   → session-seal → next dep-ready session
 ```
 
 **quality vs odyssey 选型：**
 
 | 场景 | 推荐 | 原因 |
 |------|------|------|
-| Phase 工件链内的 bug/review/test | `quality-*` | 只读诊断，修复回流 plan→execute 主循环，保持 artifact 链完整 |
-| 独立探索性 bug、跨 phase 问题、非当前 milestone 问题 | `odyssey-debug` | 自带修复+泛化，Run 独立于 artifact 链 |
-| Phase 级代码审查（只读报告） | `quality-review` | 输出 verdict + issues，不改代码 |
+| Session 工件链内的 bug/review/test | `quality-*` | 只读诊断，修复回流 plan→execute 主循环，保持 artifact 链完整 |
+| 独立探索性 bug、跨 session 问题 | `odyssey-debug` | 自带修复+泛化，Run 独立于 artifact 链 |
+| Session 级代码审查（只读报告） | `quality-review` | 输出 verdict + issues，不改代码 |
 | 审查后要求零残留修复 | `odyssey-review-test-fix` | 自带 fix 循环直到零 finding |
-| Phase 级安全专项审计 | `security-audit` | OWASP Top 10 + STRIDE 全覆盖 |
+| Session 级安全专项审计 | `security-audit` | OWASP Top 10 + STRIDE 全覆盖 |
 | 多维运行时质量改进 | `odyssey-improve` | 6 维并行审计 + 泛化 |
 | UI 视觉优化 | `odyssey-ui` | 含发散探索（Polish/Delight） |
 
@@ -156,16 +156,13 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | `name` 关键词命中 intent | 中 | intent 含 "test" → quality-test/quality-auto-test 加分 |
 | Workflow 簇匹配 | 中 | intent 涉及学习/知识/issue 等场景触发对应簇 |
 | Recent activity 反向避免 | 低 | 刚完成的 stage 短期内降权 |
-| **前置条件不满足** | **禁止** | 候选命令的前置条件未满足时，直接从候选池移除（如 `maestro-milestone-*` 在 `current_milestone=null` 时移除） |
+| **前置条件不满足** | **禁止** | 候选命令的前置条件未满足时，直接从候选池移除 |
 
 **前置条件检查（评分前执行，不满足则移除候选）：**
 
 | 命令 | 前置条件 |
 |------|---------|
-| `maestro-milestone-audit` | `current_milestone` 存在且非 null |
-| `maestro-milestone-complete` | `current_milestone` 存在且非 null |
-| `maestro-milestone-release` | `current_milestone` 存在且非 null |
-| `maestro-merge` | 存在活跃的 fork 分支 |
+| `maestro-merge` | 存在活跃的 fork worktree |
 
 **特殊意图处理：**
 
@@ -203,7 +200,7 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | 第二意见 / challenge / consult | `learn-second-opinion` |
 | 提取知识 / harvest | `manage-harvest` / `manage-knowhow-capture` |
 | 设计 / UI / 前端打磨 | `maestro-impeccable` |
-| 里程碑 / milestone | `maestro-milestone-audit` / `maestro-milestone-release` / `maestro-milestone-complete` |
+| session 管理 / seal / 推进 | `manage-status` (查看 session DAG 进度) |
 | fork / 分支 / 并行开发 | `maestro-fork` / `maestro-merge` |
 | 覆盖层 / overlay / amend | `maestro-overlay` / `maestro-amend` |
 
@@ -217,8 +214,7 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | Issue | 缺陷管理 | `manage-issue-discover` → `manage-issue` |
 | 文档同步 | 代码大改后 | `quality-sync` → `manage-codebase-rebuild` (if major) |
 | 重构 | 技术债积累 | `quality-refactor` → `quality-review` |
-| 发布 | 里程碑结束 | `maestro-milestone-audit` → `maestro-milestone-release` |
-| 并行开发 | 多 milestone 并行 | `maestro-fork` → ... → `maestro-merge` |
+| 并行开发 | 多 session 并行 | `maestro-fork --session` → ... → `maestro-merge --session` |
 
 输出 ranked candidates，取 top N（默认 3）。
 
@@ -230,7 +226,7 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 
 ### `--list` 模式
 
-按 workflow 簇（主线 / Learning / Knowledge / Wiki / Issue / 文档 / 重构 / 发布 / 并行）分组展示全部候选 + description，结束。
+按 workflow 簇（主线 / Learning / Knowledge / Wiki / Issue / 文档 / 重构 / 并行）分组展示全部候选 + description，结束。
 
 ### 正常模式
 

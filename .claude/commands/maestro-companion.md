@@ -161,8 +161,7 @@ knowhow_searched: "{keyword or 'none'}"
 knowhow_available: {M}
 codebase_index: "{ready|missing|stale}"
 branch: "{current git branch}"
-phase: "{current phase from state.json or 'none'}"
-milestone: "{current milestone from state.json or 'none'}"
+active_session: "{active_session_id from state.json or 'none'}"
 
 # === Scope ===
 working_files: []

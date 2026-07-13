@@ -66,7 +66,7 @@ $ARGUMENTS — user intent text, or special flags.
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md`；step 含 `command_scope` + `command_path` + `completion_confirmed`
 6. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro(text) / analyze(numeric) / roadmap / plan(三路径) / execute / ...
 6.5. **Grill auto_mode 透传** — auto_mode 时为 grill step args 追加 `-y`（grill Auto mode 代码代答），stage 不跳过，产出 grill-report/terminology/context-package
-7. **D-007 milestone 反查** — 数字 phase 步骤的 `milestone_id` 由 `state.json.milestones[].phase_slugs` 反查
+7. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
 8. **schema 向后兼容** — decomposition 字段可选；`steps[]` 由 post-goal-audit 动态生长（goal_ref tagged）；既有字段不删不改；`waves` 保留空数组
 9. **Sequential execution** — one step at a time in index order; each step's result read before the next starts
 10. **Abort on failure** — failed step → mark remaining skipped → report (goal stays bound for `--continue`)
@@ -168,7 +168,7 @@ Extract:
   "task_type": "<from chain catalog below>",
   "scope":     "<module/file/area or null>",
   "issue_id":  "<ISS-XXXXXXXX-NNN if mentioned, else null>",
-  "phase_ref": "<integer if mentioned, else null>",
+  "session_ref": "<session_id or slug if mentioned, else null>",
   "urgency":   "<low|normal|high>"
 }
 ```
@@ -180,12 +180,12 @@ Extract:
 | `grill` | Stress-test, challenge assumptions, Socratic questioning on a plan/idea (**auto_mode: 透传 `-y`，grill Auto mode 代码代答，不跳过**) |
 | `quick` | Simple/small task, add a feature, quick change |
 | `blueprint` | Formal spec generation (Product Brief / PRD / Architecture / Epics) |
-| `analyze_macro` | Broad/medium intent w/o numeric phase — explore impact, produce scope_verdict |
+| `analyze_macro` | Broad/medium intent w/o specific session — explore impact, produce scope_verdict |
 | `plan_from_analyze` | Plan directly from analyze artifact (no roadmap, scope=standalone) |
 | `plan_from_blueprint` | Plan directly from blueprint artifact (scope=standalone) |
-| `plan` | Plan, design, architect a phase |
-| `execute` | Implement, develop, code a phase |
-| `analyze` | Understand, investigate, evaluate code (numeric phase) |
+| `plan` | Plan, design, architect a session |
+| `execute` | Implement, develop, code a session |
+| `analyze` | Understand, investigate, evaluate code (specific session) |
 | `verify` | Check goals met, validate results (routes to quality-review) |
 | `review` | Code quality review |
 | `test` | Run or create tests, UAT |
@@ -214,7 +214,7 @@ Extract:
 | `issue_plan` | Plan fix for an issue |
 | `issue_execute` | Fix issue end-to-end (auto-upgrades to issue-full) |
 | `feature` | Standard feature: plan→execute→review |
-| `full-lifecycle` | Complete phase: plan→execute→review→test→audit→complete |
+| `full-lifecycle` | Complete session: plan→execute→review→test |
 | `brainstorm-driven` | Start from exploration/brainstorm |
 | `spec-driven` | From spec/requirements (heavy, with init) |
 | `roadmap-driven` | From requirements (light, with init) |
@@ -225,10 +225,7 @@ Extract:
 | `quality-loop-partial` | Partial quality fix |
 | `quality-fix` | Analyze gaps→plan→execute→review |
 | `deploy` | Verify then release |
-| `milestone-close` | Close/transition milestone |
-| `milestone-release` | Release milestone with version tag |
-| `phase_transition` | Transition phase: audit→complete |
-| `next-milestone` | Advance to next milestone |
+| `next-session` | Advance to next session |
 | `state_continue` | Continue from current project state |
 
 **Selection priorities:**
@@ -237,7 +234,7 @@ Extract:
 3. 正式规格/spec-generate/7-phase → `blueprint` (single-step) 或 `blueprint-driven`
 4. 压力测试/拷问/grill/stress-test → `grill` (single-step); **auto_mode → 透传 `-y`，不跳过**
 5. 头脑风暴/探索 → `brainstorm-driven`
-5. Broad/medium intent + 无数字 phase → `analyze_macro`（产 scope_verdict）；后续 large→roadmap链；medium/small→`plan_from_analyze`
+5. Broad/medium intent + 无具体 session → `analyze_macro`（产 scope_verdict）；后续 large→roadmap链；medium/small→`plan_from_analyze`
 6. 已有 analyze artifact 直达 plan → `plan_from_analyze`
 7. 已有 blueprint artifact 直达 plan → `plan_from_blueprint`
 8. Multiple lifecycle steps implied → prefer multi-step chains
@@ -246,7 +243,7 @@ Extract:
 11. Simple task, no lifecycle context → `quick`
 12. Global fallback → `quick`
 
-**Clarity scoring**: 3=task_type+scope+phase, 2=task_type+scope, 1=task_type only, 0=empty.
+**Clarity scoring**: 3=task_type+scope+session, 2=task_type+scope, 1=task_type only, 0=empty.
 If `clarity < 2` and not `auto_mode` → transition to A_CLARIFY_INTENT.
 
 **Layer 4: State-based routing** (when `taskType === 'state_continue'`)
@@ -256,8 +253,8 @@ Read `.workflow/state.json` and route by condition:
 | Condition | Chain |
 |-----------|-------|
 | Not initialized | `init` |
-| No phases, no roadmap, has accumulated_context | `next-milestone` |
-| No phases | `brainstorm-driven` |
+| No sessions, no roadmap, has accumulated_context | `next-session` |
+| No sessions | `brainstorm-driven` |
 | pending + has context | `plan` |
 | pending, no context | `analyze` |
 | exploring/planning + has plan | `execute-review` |
@@ -266,11 +263,11 @@ Read `.workflow/state.json` and route by condition:
 | executing, tasks remain | `execute` |
 | reviewing, verdict == BLOCK | `review-fix` |
 | reviewing, verdict != BLOCK + UAT pending | `test` |
-| reviewing, verdict != BLOCK + UAT passed | `milestone-close` |
+| reviewing, verdict != BLOCK + UAT passed | `next-session` |
 | reviewing, verdict != BLOCK + UAT failed | `debug` |
-| testing, UAT passed | `milestone-close` |
+| testing, UAT passed | `next-session` |
 | testing, UAT not passed | `debug` |
-| completed | `milestone-close` |
+| completed | `next-session` |
 | blocked | `debug` |
 | fallback | `status` |
 
@@ -280,7 +277,7 @@ Read `.workflow/state.json` and route by condition:
 3. `taskToChain[taskType]` → alias lookup (see Chain Aliases below)
 4. `chainMap[taskType]` → direct lookup
 
-**Phase resolution**: structured extraction `phase_ref` → fallback regex (`phase N` or bare number) → `projectState.current_phase`.
+**Session resolution**: structured extraction `session_ref` → slug match in `state.json.sessions[]` → `active_session_id`.
 
 ### A_CLARIFY_INTENT
 
@@ -295,7 +292,7 @@ Read `.workflow/state.json` and route by condition:
 2. broad/medium → `request_user_input` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
-5. 链路末尾（evidence 产出步骤后、milestone-complete/close-out 前）追加 `decision:post-goal-audit`。S_DECISION_EVAL 据此动态生长 `steps[]`
+5. 链路末尾（evidence 产出步骤后、chain close-out 步骤前）追加 `decision:post-goal-audit`。S_DECISION_EVAL 据此动态生长 `steps[]`
 6. **Register goal via `create_goal`:**
    ```
    create_goal({ objective: "Maestro {chain}: {intent} — converge {N} sub-goals within boundary",
@@ -305,7 +302,7 @@ Read `.workflow/state.json` and route by condition:
 
 ### A_CREATE_SESSION
 
-1. Read `.workflow/state.json` 获取 phase / milestone（D-007 反查 `phase_slugs`）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`；读最新 blueprint artifact 注入 `blueprint_id`
+1. Read `.workflow/state.json` 获取 `sessions[]` / `active_session_id`（session slug 匹配）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`；读最新 blueprint artifact 注入 `blueprint_id`
 2. Resolve chain's skill list from Chain Map (see appendix)
 3. **Prevalidate via `Bash("maestro ralph skills --platform codex --json --quiet")`** 一次性拉取所有可用 codex skills（global `~/.codex/skills/` + project `.codex/skills/`，project 覆盖 global），匹配 skill 名得到：
    - 命中 → `command_scope = "global" | "project"`，`command_path = <绝对 SKILL.md 路径>`
@@ -315,7 +312,7 @@ Read `.workflow/state.json` and route by condition:
    {
      "session_id", "source": "maestro", "intent", "task_type", "chain_name",
      "ralph_protocol_version": "2", "active_step_index": null,
-     "phase", "phase_is_new": false, "milestone": "",
+     "target_session_id": "", "session_is_new": false,
      "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
      "auto_mode": false,
      "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
@@ -326,7 +323,7 @@ Read `.workflow/state.json` and route by condition:
        "stage": "", "scope": null,
        "command_scope": "global|project|missing|null",
        "command_path": "~/.codex/skills/{name}/SKILL.md | .codex/skills/{name}/SKILL.md | null",
-       "milestone_id": null, "source_artifact_ref": null,
+       "session_id": null, "source_artifact_ref": null,
        "status": "pending", "goal_ref": null,
        "completion_confirmed": false, "completion_status": null,
        "completion_evidence": null,
@@ -363,8 +360,7 @@ Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechani
 
    | Placeholder | Source |
    |-------------|--------|
-   | `{phase}` | session.phase |
-   | `{milestone}` | session.milestone |
+   | `{session}` | session.target_session_id |
    | `{plan_dir}` | session.context.plan_dir |
    | `{analysis_dir}` | session.context.analysis_dir |
    | `{brainstorm_dir}` | session.context.brainstorm_dir |
@@ -382,7 +378,7 @@ Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechani
    | Skill | Read | Context Updates |
    |-------|------|-----------------|
    | maestro-grill | grill-report.md, state.json | grill_id |
-   | maestro-analyze | context.md, state.json | analysis_dir, gaps, phase |
+   | maestro-analyze | context.md, state.json | analysis_dir, gaps, target_session_id |
    | maestro-plan | plan.json, .task/TASK-*.json | plan_dir, task_count |
    | maestro-brainstorm | .brainstorming/ | brainstorm_dir, features |
    | maestro-roadmap | specs/ | spec_session_id |
@@ -396,13 +392,13 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 
 1. 读 `session.task_decomposition`（status.json，真源）
 2. 对每个 `status != "done"` 的子目标：解析 `evidence` 产物
-3. `maestro delegate --role analyze --mode analysis` 读取 evidence、对照 done_when 判定，返回 `STATUS=all_met|has_unmet / UNMET=[{id,gap,target_phase}] / CONFIDENCE_SCORE`
+3. `maestro delegate --role analyze --mode analysis` 读取 evidence、对照 done_when 判定，返回 `STATUS=all_met|has_unmet / UNMET=[{id,gap,target_session}] / CONFIDENCE_SCORE`
 4. status.json 为写入目标：每个达成子目标 `status="done"` + `completed_at=now`；然后从 status.json 重渲染 checklist（Sync Rule）
 5. Verdict（`all_met` / `has_unmet`）由 S_DECISION_EVAL 消费。GUARD: retry >= max_retries AND still unmet → escalate
 
 ### A_APPLY_GOAL_FIX
 
-**Dynamic step-growth core** (mirrors maestro-ralph). For each unmet sub-goal (grouped by target_phase), insert before the post-goal-audit node a scoped mini-loop `Skill(maestro-plan, "--gaps {phase} G{n}: {gap}") → Skill(maestro-execute, "{phase}")`, each tagged `goal_ref: "G{n}"`, type `"skill"`. Re-append `decision:post-goal-audit {retry+1}`. Reindex, increment retry, persist + `update_plan`. `steps[]` grew.
+**Dynamic step-growth core** (mirrors maestro-ralph). For each unmet sub-goal (grouped by target_session), insert before the post-goal-audit node a scoped mini-loop `Skill(maestro-plan, "--gaps {session} G{n}: {gap}") → Skill(maestro-execute, "{session}")`, each tagged `goal_ref: "G{n}"`, type `"skill"`. Re-append `decision:post-goal-audit {retry+1}`. Reindex, increment retry, persist + `update_plan`. `steps[]` grew.
 
 ### A_APPLY_GOAL_DONE
 
@@ -441,25 +437,24 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `init` | `maestro-init` |
 | `blueprint` | `maestro-blueprint "{intent}"` |
 | `analyze_macro` | `maestro-analyze "{intent}"` |
-| `analyze` | `maestro-analyze {milestone}` |
-| `ui_design` | `maestro-impeccable build "{phase}"` |
-| `plan` | `maestro-plan {milestone}` |
+| `analyze` | `maestro-analyze {session}` |
+| `ui_design` | `maestro-impeccable build "{session}"` |
+| `plan` | `maestro-plan {session}` |
 | `plan_from_analyze` | `maestro-plan --from analyze:{analyze_macro_id}` |
 | `plan_from_blueprint` | `maestro-plan --from blueprint:{blueprint_id}` |
-| `execute` | `maestro-execute {phase}` |
-| `verify` | `quality-review {phase}` |
-| `test_gen` | `quality-auto-test {phase}` |
-| `auto_test` | `quality-auto-test {phase}` |
-| `test` | `quality-test {phase}` |
+| `execute` | `maestro-execute {session}` |
+| `verify` | `quality-review {session}` |
+| `test_gen` | `quality-auto-test {session}` |
+| `auto_test` | `quality-auto-test {session}` |
+| `test` | `quality-test {session}` |
 | `debug` | `quality-debug "{description}"` |
-| `integration_test` | `quality-auto-test {phase}` |
+| `integration_test` | `quality-auto-test {session}` |
 | `refactor` | `quality-refactor "{description}"` |
-| `review` | `quality-review {phase}` |
-| `retrospective` | `quality-retrospective {phase}` |
+| `review` | `quality-review {session}` |
+| `retrospective` | `quality-retrospective {session}` |
 | `learn` | `maestro-learn "{description}"` |
 | `sync` | `quality-sync` |
-| `milestone_audit` | `maestro-milestone-audit` |
-| `milestone_complete` | `maestro-milestone-complete` |
+| `session_seal` | `maestro-session-seal` |
 | `codebase_rebuild` | `manage-codebase-rebuild` |
 | `codebase_refresh` | `manage-codebase-refresh` |
 | `spec_setup` | `spec-setup` |
@@ -482,9 +477,9 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `wiki` | `manage-wiki` |
 | `wiki_connect` | `wiki-connect` |
 | `wiki_digest` | `wiki-digest` |
-| `business_test` | `quality-auto-test {phase}` |
+| `business_test` | `quality-auto-test {session}` |
 | `amend` | `maestro-amend "{description}"` |
-| `release` | `maestro-milestone-release` |
+| `release` | `maestro-session-seal` |
 | `compose` | `maestro-composer "{description}"` |
 | `play` | `maestro-player "{description}"` |
 | `update` | `maestro-update` |
@@ -497,27 +492,24 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 |-------|---------------------------------------|
 | `feature` | [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `quality-fix` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
-| `deploy` | quality-review → maestro-milestone-release |
+| `deploy` | quality-review → maestro-session-seal |
 | `blueprint-driven` | maestro-init → [B] maestro-blueprint → [B] maestro-plan --from blueprint:{BLP} → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `analyze-macro-driven` | [B] maestro-analyze "{intent}" → ◆ post-analyze-scope → (large: [B] maestro-roadmap --from analyze:{ANL} → [B] maestro-analyze {milestone} → [B] maestro-plan {milestone}) / (medium\|small: [B] maestro-plan --from analyze:{ANL}) → [B] maestro-execute → quality-review → manage-harvest --auto |
+| `analyze-macro-driven` | [B] maestro-analyze "{intent}" → ◆ post-analyze-scope → (large: [B] maestro-roadmap --from analyze:{ANL} → [B] maestro-analyze {session} → [B] maestro-plan {session}) / (medium\|small: [B] maestro-plan --from analyze:{ANL}) → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `grill-brainstorm` | [B] maestro-grill → [B] maestro-brainstorm --from grill:{GRL} → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto (**auto_mode: grill 透传 `-y`，Auto mode 代码代答**) |
 | `brainstorm-driven` | [B] maestro-brainstorm → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `ui-craft-build` | maestro-impeccable build → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `roadmap-driven` | maestro-init → [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `next-milestone` | [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `full-lifecycle` | [B] maestro-plan → [B] maestro-execute → quality-review → quality-test → maestro-milestone-audit → maestro-milestone-complete → manage-harvest --auto |
+| `next-session` | [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
+| `full-lifecycle` | [B] maestro-plan → [B] maestro-execute → quality-review → quality-test → manage-harvest --auto |
 | `execute-review` | [B] maestro-execute → quality-review |
 | `analyze-plan-execute` | [B] maestro-analyze -q → [B] maestro-plan --dir {run_dir} → [B] maestro-execute --dir {run_dir} → manage-harvest --auto |
 | `quality-loop` | quality-review → quality-test → quality-debug --from-uat → [B] maestro-plan --gaps → [B] maestro-execute |
 | `quality-loop-partial` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
 | `review-fix` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
-| `milestone-close` | maestro-milestone-audit → maestro-milestone-complete |
-| `milestone-release` | maestro-milestone-audit → maestro-milestone-release |
-| `phase_transition` | maestro-milestone-audit → maestro-milestone-complete |
 | `issue-full` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → quality-review → manage-issue close → manage-harvest --auto |
 | `issue-quick` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review → manage-issue close |
 
-> When S_DECOMPOSE ran, a `decision:post-goal-audit` node is appended as the final node (after the last evidence-producing step; before milestone-complete/close-out if the chain ends with one). `[B]` now denotes a context-producing skill (artifacts read into `session.context`) — execution is still sequential (no parallelism; spawning removed).
+> When S_DECOMPOSE ran, a `decision:post-goal-audit` node is appended as the final node (after the last evidence-producing step; before the chain's close-out step if the chain ends with one). `[B]` now denotes a context-producing skill (artifacts read into `session.context`) — execution is still sequential (no parallelism; spawning removed).
 
 **Chain Aliases** (taskType → chain):
 
@@ -534,7 +526,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | Skill | Flag |
 |-------|------|
 | maestro-init, maestro-analyze, maestro-brainstorm, maestro-blueprint, maestro-impeccable, maestro-roadmap | `-y` |
-| maestro-plan, maestro-execute, maestro-milestone-complete | `-y` |
+| maestro-plan, maestro-execute, maestro-session-seal | `-y` |
 | quality-auto-test, quality-retrospective | `-y` |
 | quality-test | `-y --auto-fix` |
 
@@ -558,8 +550,8 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 
 - [ ] Intent classified and chain resolved
 - [ ] Chain catalog 覆盖 blueprint / analyze_macro / plan_from_analyze / plan_from_blueprint / blueprint-driven / analyze-macro-driven 等新拓扑路径
-- [ ] D-007: 数字 phase 步骤的 `milestone_id` 通过 `state.json.milestones[].phase_slugs` 反查；写入 step
-- [ ] plan step args 支持 `{milestone}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径，`source_artifact_ref` 写入
+- [ ] D-007-S: step 的 `session_id` 通过 `state.json.sessions[]` 的 session_id 或 intent slug 匹配；写入 step
+- [ ] plan step args 支持 `{session}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径，`source_artifact_ref` 写入
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
 - [ ] Goal registered via built-in `create_goal`; status.json decomposition fields additive-only
 - [ ] status.json 唯一真源；无 markdown 清单
