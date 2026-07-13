@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -57,7 +59,7 @@ $team-review --continue "20260518-rv-auth"
 | reviewer | [roles/reviewer/role.md](roles/reviewer/role.md) | REV-* |
 | fixer | [roles/fixer/role.md](roles/fixer/role.md) | FIX-* |
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-rv-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 
 ### Review Dimensions
 Security (SEC), Correctness (COR), Performance (PRF), Maintainability (MNT)
@@ -174,13 +176,13 @@ Derive:
   dateStr       ← UTC+8 YYYYMMDD
   slug          ← first 3 meaningful words, kebab-case
   sessionId     ← "{dateStr}-rv-{slug}"
-  sessionFolder ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder ← "{run_dir}/work/csv-wave"
   skillRoot     ← resolve path to this skill directory
 
 mkdir -p {sessionFolder}
 ```
 
-When `--continue`: scan `.workflow/.csv-wave/*-rv-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
+When `--continue`: scan `{run_dir}/work/csv-wave/*-rv-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
 
 ### Mode Selection + CSV Generation (S_CSV_GEN)
 

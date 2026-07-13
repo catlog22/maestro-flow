@@ -46,6 +46,8 @@
     "mcp": "node bin/maestro-mcp.js",
     "lint": "tsc --noEmit",
     "lint:session-run": "node scripts/lint-session-run-prompts.mjs && node scripts/lint-session-run-mirrors.mjs",
+    "sync:codex-skills": "node scripts/sync-codex-run-mode.mjs --write && node scripts/lint-session-run-mirrors.mjs",
+    "lint:codex-skills": "node scripts/lint-session-run-mirrors.mjs",
     "migrate:session-run-prompts": "node scripts/migrate-session-run-prompts.mjs --write",
     "clean": "rm -rf dist",
     "build:mirrors": "node scripts/convert-claude-to-agy.mjs && node scripts/build-agents-standard.mjs && node scripts/sync-codex-run-mode.mjs --write && node scripts/lint-session-run-mirrors.mjs",

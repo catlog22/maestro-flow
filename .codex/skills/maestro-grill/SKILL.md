@@ -12,6 +12,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -27,6 +28,7 @@ Codex specifics:
 <required_reading>
 @~/.maestro/workflows/grill.md
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <deferred_reading>
@@ -119,8 +121,8 @@ Display the recommended next command based on grill outcomes. The user decides w
 - [ ] Contradictions between answers and code surfaced and resolved (or logged as risks)
 - [ ] Risk register captures all unresolved tensions
 - [ ] `context-package.json` generated with schema "context-package/1.0"
-- [ ] Artifact registered in state.json (type=grill, id=GRL-xxx)
-- [ ] Session sealed via finish-work
+- [ ] Declared kind=grill output registered by `maestro run complete`
+- [ ] Session sealed via `maestro run check` then `maestro run complete`
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 
@@ -133,5 +135,5 @@ Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--con
 </ralph_completion>
 
 <on_complete>
-@~/.maestro/workflows/finish-work.md — SESSION_DIR={output_dir}, SESSION_TYPE=grill, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
+@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR={output_dir}, SESSION_TYPE=grill, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
 </on_complete>

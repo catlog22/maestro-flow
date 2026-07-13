@@ -13,10 +13,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -39,7 +41,7 @@ $ARGUMENTS -- requirement/idea text or @file reference, plus optional flags.
 - `--from <source>`: Load upstream context package (brainstorm:ID, blueprint:BLP-xxx, analyze:ANL-xxx, @file, or path)
 - `--from-brainstorm SESSION-ID`: (backward compat alias for `--from brainstorm:ID`)
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-roadmap-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 **Output**: tasks.csv, results.csv, discoveries.ndjson, context.md, `.workflow/roadmap.md`
 
 ### Pre-load (runs unconditionally, including -y auto mode)
@@ -90,7 +92,7 @@ Wave 1: 3 analysis rows (parallel). Wave 2: 1 assembly row.
 5. **Graceful degradation**: Wave 1 fails -> Wave 2 proceeds with seed input only. When degradation activates, flag downstream outputs as LOW CONFIDENCE. Record `degradation_event` in discoveries.ndjson. This is a defined degradation path, not a violation of invariant 6.
 6. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Defined degradation paths (invariant 5) are not violations.
 7. **Requirement mapping completeness** — every Active requirement from project.md MUST be mapped to exactly one phase. No circular dependencies in phase ordering.
-8. **Artifact verification before completion** — .workflow/roadmap.md MUST exist with Milestone > Phase hierarchy and progress table. Artifact MUST be registered in state.json. If missing: DO NOT report completion.
+8. **Artifact verification before completion** — .workflow/roadmap.md MUST exist with Milestone > Phase hierarchy and progress table. Declared typed output MUST be present before `maestro run complete`. If missing: DO NOT report completion.
 9. **Milestone Locking**: If a milestone is marked as 'completed' or 'locked' in state.json, the roadmap generator MUST NOT modify its details or timeline in roadmap.md. Milestone generation/regeneration is restricted only to active or future milestones.
 </invariants>
 
@@ -260,7 +262,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] .workflow/roadmap.md written with Milestone > Phase hierarchy, state.json updated
 - [ ] context.md generated
 - [ ] Uncertainty assessed, strategy selected, milestones with phases + success criteria
-- [ ] Artifact registered in state.json with milestone entries
+- [ ] Declared typed output registered by `maestro run complete` with milestone entries
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 

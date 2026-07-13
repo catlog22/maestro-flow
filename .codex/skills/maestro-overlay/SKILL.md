@@ -4,6 +4,7 @@ description: Create or edit command overlays from natural language
 argument-hint: <intent> | --list | --remove <name>
 allowed-tools: Read, Write, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

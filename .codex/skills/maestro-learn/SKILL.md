@@ -4,6 +4,7 @@ description: Route learning intent to learn-* commands
 argument-hint: '"intent text" [-y] [--dry-run] [--chain <name>]'
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <required_reading>

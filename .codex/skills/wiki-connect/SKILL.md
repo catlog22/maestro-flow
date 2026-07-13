@@ -4,6 +4,7 @@ description: Find and link hidden connections in wiki graph
 argument-hint: "[--scope <type>] [--min-similarity N] [--fix] [--max N]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

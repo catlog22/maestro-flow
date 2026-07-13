@@ -4,6 +4,7 @@ description: Register a domain term into project glossary
 argument-hint: <canonical> <definition>
 allowed-tools: Read, Write, Bash, Glob, Grep
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>
@@ -14,7 +15,7 @@ $domain-add "auth-token" "Short-lived credential for API authentication"
 $domain-add "event-bus" "Central pub-sub message broker for cross-module communication"
 ```
 
-**CLI alternative**: `maestro domain add "<canonical>" "<definition>" --tier core|extended|peripheral`. Used by finish-work for programmatic domain term extraction from session outputs.
+**CLI alternative**: `maestro domain add "<canonical>" "<definition>" --tier core|extended|peripheral`. Used by `maestro run check` then `maestro run complete` for programmatic domain term extraction from session outputs.
 </purpose>
 
 <context>

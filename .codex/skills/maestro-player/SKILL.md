@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -23,7 +25,7 @@ Wave-based template executor via `spawn_agents_on_csv`. Load template → bind v
 
 Session: `.workflow/.maestro/MCP-{YYYYMMDD-HHmmss}/state.json`
 
-**Output boundary**: ALL file writes MUST target `.workflow/.maestro/MCP-*/` (session state) and `.workflow/.csv-wave/` (wave CSVs). Template files at `~/.maestro/templates/workflows/` are read-only during playback.
+**Output boundary**: ALL file writes MUST target `.workflow/.maestro/MCP-*/` (session state) and `{run_dir}/work/csv-wave/` (wave CSVs). Template files at `~/.maestro/templates/workflows/` are read-only during playback.
 </purpose>
 
 <invariants>

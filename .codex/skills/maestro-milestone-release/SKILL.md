@@ -4,6 +4,7 @@ description: Bump version, generate changelog, tag milestone
 argument-hint: "[<version>] [--bump patch|minor|major] [--dry-run] [--no-tag] [--no-push]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: deprecated
+version: 0.5.50
 ---
 
 <deprecated_command>

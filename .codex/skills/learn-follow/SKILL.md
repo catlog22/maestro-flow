@@ -4,6 +4,7 @@ description: Guided reading of code or wiki to extract patterns
 argument-hint: <path|wiki-id|topic> [--depth shallow|deep] [--save-wiki] [-y]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

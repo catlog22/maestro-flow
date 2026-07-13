@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -59,7 +61,7 @@ $team-tech-debt --continue "20260518-td-auth"
 | executor | [roles/executor/role.md](roles/executor/role.md) | TDFIX-* |
 | validator | [roles/validator/role.md](roles/validator/role.md) | TDVAL-* |
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-td-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 
 ### Scan Dimensions
 code, architecture, testing, dependency, documentation
@@ -184,13 +186,13 @@ Derive:
   dateStr       ← UTC+8 YYYYMMDD
   slug          ← first 3 meaningful words, kebab-case
   sessionId     ← "{dateStr}-td-{slug}"
-  sessionFolder ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder ← "{run_dir}/work/csv-wave"
   skillRoot     ← resolve path to this skill directory
 
 mkdir -p {sessionFolder}
 ```
 
-When `--continue`: scan `.workflow/.csv-wave/*-td-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
+When `--continue`: scan `{run_dir}/work/csv-wave/*-td-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
 
 ### Mode Selection + CSV Generation (S_CSV_GEN)
 

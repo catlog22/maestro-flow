@@ -14,6 +14,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -25,6 +26,7 @@ Output: `.workflow/blueprint/BLP-{slug}-{date}/` containing Product Brief, PRD, 
 <required_reading>
 @~/.maestro/workflows/blueprint.md
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <deferred_reading>
@@ -135,11 +137,11 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 - [ ] All documents have valid YAML frontmatter with session_id
 - [ ] Glossary terms used consistently across all documents
 - [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented caveats
-- [ ] Artifact registered in state.json (type=blueprint)
+- [ ] Declared kind=blueprint output registered by `maestro run complete`
 - [ ] context-package.json generated for downstream consumption
-- [ ] On gate Pass/Review: session sealed via finish-work (archive.json + optional spec/knowhow extraction). On Fail: skip — session stays active, excluded from wiki search.
+- [ ] On gate Pass/Review: session sealed via `maestro run check` then `maestro run complete`. On Fail: skip — session stays active, excluded from wiki search.
 </success_criteria>
 
 <on_complete>
-@~/.maestro/workflows/finish-work.md — SESSION_DIR={session_dir}, SESSION_TYPE=blueprint, SESSION_ID={session_id}, LINKED_MILESTONE=null
+@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR={session_dir}, SESSION_TYPE=blueprint, SESSION_ID={session_id}, LINKED_MILESTONE=null
 </on_complete>

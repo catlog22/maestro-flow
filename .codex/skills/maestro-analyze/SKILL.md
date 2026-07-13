@@ -7,16 +7,30 @@ argument-hint: '[-y|--yes] [--concurrency N] [-c|--continue] [--from <source>]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: run
 contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-  gates:
-    entry: []
-    exit: []
+  consumes:
+    - kind: guidance
+      alias: current-guidance
+      required: false
+    - kind: blueprint
+      alias: current-blueprint
+      required: false
+    - kind: diagnosis
+      alias: latest-debug
+      required: false
+  produces:
+    - path: outputs/findings.json
+      kind: findings
+      alias: current-analysis
+      role: primary
+    - path: outputs/risk-matrix.json
+      kind: risk-matrix
+      role: evidence
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -40,9 +54,9 @@ $ARGUMENTS -- milestone number, topic text, and optional flags.
 - `--continue`: Resume existing session
 - `-q, --quick`: Skip exploration + scoring, Wave 3 only
 - `--gaps [ISS-ID]`: Issue root cause analysis. If ISS-ID: single issue. If omitted: all open/registered from issues.jsonl.
-- `--from <source>`: Load upstream context package (grill:ID, brainstorm:ID, analyze:ID, blueprint:BLP-xxx, @file, or path). Resolves to context-package.json via state.json artifact lookup for typed references, or direct path for @file/path.
+- `--from <source>`: Resolve typed inputs through the `upstream` map returned by `maestro run create`; `@file` and explicit paths remain direct inputs.
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-analyze-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 **Output**: tasks.csv, results.csv, discoveries.ndjson, context.md, context-package.json (all modes), analysis.md + conclusions.json (full mode AND quick mode; quick writes minimal conclusions.json with `scope_verdict` + `implementation_scope[]` only)
 
 ### Pre-load (runs unconditionally, including -y auto mode)
@@ -124,7 +138,7 @@ S_CSV_GEN    -- 生成 tasks.csv                            PERSIST: tasks.csv
 S_WAVE_1     -- CLI Exploration (parallel spawn)           PERSIST: per-dimension findings + tasks.csv
 S_WAVE_2     -- 6-Dimension Scoring (parallel spawn)       PERSIST: scores + tasks.csv
 S_WAVE_3     -- Decision Synthesis (single agent spawn)    PERSIST: context.md + analysis.md + conclusions.json
-S_AGGREGATE  -- 注册 artifact、输出摘要                    PERSIST: state.json + results.csv
+S_AGGREGATE  -- 写 typed outputs、输出摘要                 PERSIST: outputs/ + report.md
 </states>
 
 <transitions>
@@ -278,7 +292,7 @@ Non-blocking: conflicts produce warnings, pipeline continues.
 
 1. Export results.csv
 2. **Confidence scoring** (full mode): factors -- findings_depth(.30), evidence_strength(.25), coverage_breadth(.20), user_validation(.15), consistency(.10). Thresholds: <60% deeper, 60-80% optional, 80-95% converging, >95% converge.
-3. Register artifact in state.json (type: analyze, includes context_package field pointing to context-package.json)
+3. Let `maestro run complete` register declared typed artifacts (type: analyze, includes context_package field pointing to context-package.json)
 4. Copy outputs to scratchDir, display summary
 
 5. **Side-effect confirmation gate** (skip when `-y/--yes`):
@@ -361,11 +375,11 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] Pressure pass completed ≥ 1 time on highest-risk dimension before synthesis
 - [ ] Deferred items created as issues (after user confirmation in interactive mode; auto in -y mode)
 - [ ] Scope creep redirected to Deferred section
-- [ ] Artifact registered in state.json (includes context_package field)
+- [ ] Declared typed output registered by `maestro run complete` (includes context_package field)
 - [ ] Upstream context loaded via `--from` when specified
 - [ ] discoveries.ndjson append-only throughout
 - [ ] Next step suggested to user (plan for Go, brainstorm for No-Go, plan --gaps for Gaps) — never auto-executed
-- [ ] Session sealed via finish-work (archive.json written, optional spec/knowhow extraction)
+- [ ] Session sealed via `maestro run check` then `maestro run complete`
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 
@@ -378,5 +392,5 @@ Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--con
 </ralph_completion>
 
 <on_complete>
-@~/.maestro/workflows/finish-work.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
+@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR=OUTPUT_DIR, SESSION_TYPE=analyze, SESSION_ID={artifact_id}, LINKED_MILESTONE={target_milestone or null}
 </on_complete>

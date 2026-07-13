@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -372,7 +374,7 @@ Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechani
    | `{BLP}` | session.blueprint_id |
    | `{intent}` | session.intent |
 
-   **--from auto-injection**: 当 step 是 `maestro-plan`，args 含 `{milestone}` 但无 `--from` 且无 `--dir`，且 `session.context.analysis_dir` 已填充 → 查 state.json 同 milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `step.source_artifact_ref`
+   **--from auto-injection**: 当 step 是 `maestro-plan` 且无 `--from`/`--dir` → 从当前 Session registry 与 Run `upstream` 解析最新 sealed analyze artifact，注入显式 ref，并写 `step.source_artifact_ref`
 2. Mark step `status="running"`, Persist status.json + `update_plan` (this step → in_progress)
 3. **Prepare step**: Run `Bash("maestro ralph next --session {session_id}")` to load reading and set active_step_index.
 4. **Invoke the skill directly**: execute `Skill(skill_name, resolved_args)` in coordinator context (NO spawn). Read its produced artifacts directly

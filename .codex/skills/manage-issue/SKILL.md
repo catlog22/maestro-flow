@@ -4,6 +4,7 @@ description: Create, query, update, close, and link issues
 argument-hint: <create|list|status|update|close|link> [options]
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

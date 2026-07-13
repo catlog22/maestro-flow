@@ -7,16 +7,31 @@ argument-hint: '[-y|--yes] [-c|--concurrency N] [--continue] "<phase> [--level
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: run
 contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-  gates:
-    entry: []
-    exit: []
+  consumes:
+    - kind: execution
+      alias: current-execution
+      required: true
+      require_status: sealed
+    - kind: verification
+      alias: latest-verification
+      required: false
+  produces:
+    - path: outputs/findings.json
+      kind: review-findings
+      alias: latest-review
+      role: primary
+    - path: outputs/spec-conflicts.json
+      kind: spec-conflicts
+      role: evidence
+    - path: outputs/issue-candidates.json
+      kind: issue-candidates
+      role: attachment
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -79,17 +94,17 @@ $quality-review --continue "20260318-review-P3-auth"
 **Flags**:
 - `-y, --yes`: Skip all confirmations (auto mode)
 - `-c, --concurrency N`: Max concurrent agents within each wave (default: 6)
-- `--continue [session-id]`: Resume existing session. If session-id provided, load that session directly. If omitted, list available sessions in `.workflow/.csv-wave/` matching `*-review-*` and prompt user to select. Resume reads master `tasks.csv`, skips completed waves, and continues from the next pending wave.
+- `--continue [session-id]`: Resume existing session. If session-id provided, load that session directly. If omitted, list available sessions in `{run_dir}/work/csv-wave/` matching `*-review-*` and prompt user to select. Resume reads master `tasks.csv`, skips completed waves, and continues from the next pending wave.
 - `--level quick|standard|deep`: Explicit review level (default: auto-detect from file count)
 - `--dimensions <list>`: Comma-separated subset of dimensions to review (overrides level defaults)
 - `--skip-specs`: Skip loading project specs as review context
 
 When `--yes` or `-y`: Auto-confirm dimension selection, skip interactive validation, use defaults for level detection.
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + `review.json` (structured review output)
+**Temporary Wave Directory**: `{run_dir}/work/csv-wave/`
+**Formal Output**: `outputs/findings.json`, `outputs/spec-conflicts.json`, and `outputs/issue-candidates.json`; worker evidence belongs in `{run_dir}/evidence/`, synthesis in `{run_dir}/report.md`.
 
-**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/`, `.workflow/state.json`, or `.workflow/issues/issues.jsonl` only. NEVER modify source code or files outside these paths. Review produces reports only — no source modifications.
+**Output boundary**: temporary CSV files target `{run_dir}/work/csv-wave/`; formal review artifacts target `{run_dir}/outputs/`; external issue/spec writes require the documented confirmation gate. Review never modifies source code or Session protocol JSON.
 </context>
 
 <csv_schema>
@@ -149,7 +164,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-review-P{N}-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -185,13 +200,13 @@ Parse `$ARGUMENTS` to extract:
 - `phaseArg` = remaining text after stripping all flags
 
 **Resume flow** (when `--continue`):
-1. If session-id argument provided: load `.workflow/.csv-wave/{session-id}/tasks.csv` directly
-2. If no session-id: scan `.workflow/.csv-wave/*-review-*` directories, list sessions with their status (pending wave counts), prompt user to select
+1. If session-id argument provided: load `{run_dir}/work/csv-wave/tasks.csv` directly
+2. If no session-id: scan `{run_dir}/work/csv-wave/*-review-*` directories, list sessions with their status (pending wave counts), prompt user to select
 3. Read master `tasks.csv`, identify next pending wave (lowest wave number with `status == "pending"` rows), skip to Phase 2 for that wave
 4. If no pending rows remain, skip to Phase 3 (results aggregation)
 
 Session ID: `{YYYYMMDD}-review-P{phaseArg}-{phaseSlug}` (phaseSlug from index.json or roadmap)
-Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
+Session folder: `{run_dir}/work/csv-wave/` — create via `mkdir -p`
 
 ### Phase 1: Phase Resolution -> CSV
 
@@ -199,7 +214,7 @@ Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
 
 **Decomposition Rules**:
 
-1. **Phase resolution**: Resolve `{phaseArg}` via `state.json` artifact registry to `{run_dir}/outputs/`
+1. **Execution resolution**: Resolve `current-execution` from the Run `upstream` map; never scan phase directories or `state.json` artifacts.
 2. **Related session discovery**: Query `Session ArtifactRegistry (runtime-owned)` for matching phase + milestone. Extract prior quality context (verdicts, root causes, UAT gaps) from artifact outputs by type (execute → .summaries/.task/, review → review.json, debug → understanding.md, test → uat.md)
 3. **File collection**: Read `.task/TASK-*.json` → collect `files[].path` where action != "read"
 4. **Level detection**:
@@ -371,8 +386,8 @@ Generate `context.md`:
 **Side-effect confirmation gate** (skip when `-y/--yes`):
 Before writing to external stores, present a summary to the user via `request_user_input`:
 - Issues to create (count + severity + titles)
-- Phase index update (artifact dir)
-- Artifact registration in state.json
+- Current Run report/handoff update
+- Typed artifact registration by `maestro run complete`
 The user can approve all, selectively exclude, or skip entirely.
 
 **Issue creation** (approved items only) by level threshold:
@@ -385,9 +400,9 @@ The user can approve all, selectively exclude, or skip entirely.
 
 **Spec conflict check**: If any finding directly contradicts a loaded spec entry (code behavior ≠ spec rule), suggest `maestro spec conflict mark <file> <line> --note "<evidence>"` on the spec entry. Code is the single source of truth. Log spec conflicts in review.json as `spec_conflicts[]`.
 
-**Phase index update** (after confirmation): Update `{artifact_dir}/index.json` with review status.
+**Run report update**: record verdict, caveats, and handoff in `{run_dir}/report.md`.
 
-**Register artifact** (after confirmation): Append to `Session ArtifactRegistry (runtime-owned)` with `type: "review"`, `id: REV-NNN`, `path: "scratch/{YYYYMMDD}-review-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch, not shared with plan.
+**Register artifacts**: write the declared outputs under `{run_dir}/outputs/`; `maestro run complete` owns IDs, dependencies, aliases, and sealing. Never edit Session protocol JSON manually.
 
 Display summary. **Next-step suggestion** (suggest only, NEVER auto-execute): if spec conflicts detected, suggest `maestro spec conflict list` → `$manage-knowledge-audit --scope spec`. The user decides whether to proceed.
 
@@ -442,7 +457,7 @@ echo '{"ts":"<ISO>","worker":"{id}","type":"vulnerability","data":{"location":"s
 - [ ] review.json produced with verdict and severity distribution
 - [ ] context.md produced with full review report
 - [ ] Issues created for qualifying severity findings (after user confirmation in interactive mode; auto in -y mode)
-- [ ] Phase index.json updated with review status (after user confirmation in interactive mode; auto in -y mode)
+- [ ] Review outputs and Run report validated before completion
 - [ ] discoveries.ndjson append-only throughout
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>

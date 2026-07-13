@@ -12,6 +12,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -22,6 +23,7 @@ Signal-driven overlay generator — collect workflow deficiency signals from mul
 @~/.maestro/workflows/overlays.md
 @~/.maestro/cli-tools.json
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <context>

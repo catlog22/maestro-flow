@@ -4,6 +4,7 @@ description: Initialize specs from project structure
 argument-hint: ""
 allowed-tools: Read, Write, Bash, Glob, Grep
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

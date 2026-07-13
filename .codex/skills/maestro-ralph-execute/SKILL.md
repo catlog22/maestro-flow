@@ -11,10 +11,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -167,10 +169,10 @@ S_FALLBACK:
 
 **--from auto-injection (artifact chaining):**
 
-Steps 在 build 阶段无法预知前序 artifact ID。A_RESOLVE_ARGS 运行时从 state.json 查找并注入显式引用，打通 analyze→plan→execute 数据管道：
+Steps 在 build 阶段无法预知前序 artifact ID。A_RESOLVE_ARGS 从 Session `artifacts.json` 与当前 Run `upstream` 注入显式引用，打通 analyze→plan→execute 数据管道：
 
 ```
-Read state.json.artifacts（含 milestone_history 内归档 artifacts）
+Read the current Run `upstream` map and sealed Session `artifacts.json` records
 → filter by milestone={session.milestone} (+ phase={session.phase} for execute-step lookups) + status=="completed"
 
 plan step（含 {milestone} 占位符，args 无 --from 且无 --dir）:
@@ -179,7 +181,7 @@ plan step（含 {milestone} 占位符，args 无 --from 且无 --dir）:
   3. 写 step.source_artifact_ref = "analyze:{id}"
 
 execute step（含 {phase} 占位符，args 无 --dir）:
-  1. 查同 phase+milestone 最新 completed type=="plan" artifact → id = PLN-xxx, path = scratch/...
+  1. 查当前 Session 最新 sealed kind=="plan" artifact → id/path 来自 Session registry
   2. 命中 → args 追加 --dir {run_dir}/outputs/{path}
   3. 写 step.source_artifact_ref = "plan:{id}"
 ```
@@ -377,7 +379,7 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。Skill(ma
 - [ ] Auto mode: retry 一次后 pause；interactive 提供 retry/skip/abort
 - [ ] 自调用持续到全部 completion_confirmed 或 paused
 - [ ] 只处理 session.platform == "codex" 的会话
-- [ ] --from auto-injection：milestone-level plan step 运行时从 state.json 查找同 milestone 最新 completed analyze artifact → 注入 `--from analyze:{id}`，写 `source_artifact_ref`
+- [ ] --from auto-injection：plan step 从 Run `upstream` 查找 sealed analyze artifact → 注入显式 artifact ref，写 `source_artifact_ref`
 - [ ] --from auto-injection：phase-level execute step 运行时查找同 phase+milestone 最新 completed plan artifact → 注入 `--dir`，写 `source_artifact_ref`
 - [ ] Goal context injection：`ralph_protocol_version < "2"` → 前置 `<goal_context>` block；`>= "2"` → skip（session_anchor 覆盖）
 - [ ] Goal context 包含 sub-goal description、done_when、boundary、evidence、execution_criteria

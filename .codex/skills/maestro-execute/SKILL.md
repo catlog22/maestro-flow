@@ -6,16 +6,31 @@ argument-hint: '[-y|--yes] [--concurrency N] [--continue] "<phase>
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: run
 contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-  gates:
-    entry: []
-    exit: []
+  consumes:
+    - kind: plan
+      alias: current-plan
+      required: true
+      require_status: sealed
+  produces:
+    - path: outputs/execution.json
+      kind: execution
+      alias: current-execution
+      role: primary
+    - path: outputs/task-results.json
+      kind: task-results
+      role: attachment
+    - path: outputs/self-check.json
+      kind: self-check
+      role: evidence
+    - path: outputs/change-manifest.json
+      kind: change-manifest
+      role: evidence
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -99,8 +114,8 @@ $maestro-execute --continue "20260318-execute-P3-phase3"
 
 When `--yes` or `-y`: Auto-confirm task breakdown, skip blocked-task prompts, auto-continue through all waves.
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
+**Temporary Wave Directory**: `{run_dir}/work/csv-wave/`
+**Formal Output**: frontmatter-declared execution artifacts under `{run_dir}/outputs/`; discoveries and worker traces under `{run_dir}/evidence/`; synthesis in `{run_dir}/report.md`.
 </context>
 
 <csv_schema>
@@ -156,7 +171,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-execute-P{N}-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -180,7 +195,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 10. **Pipeline continuity**: Continuous execution until all waves complete or user explicitly stops. When all tasks in a wave are blocked/failed, stop execution and report the blocked wave — this is a defined termination, not an invariant violation.
 11. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Defined termination (invariant 10) and cascading skips (invariant 6) are not violations.
 12. **Evidence required in task summaries** — task summaries MUST include: files actually modified (not just planned targets), convergence criteria verification results (pass/fail with evidence), any deviations from plan with rationale. "Task completed successfully" without evidence is INVALID. Does NOT apply to `skipped` tasks (invariant 6).
-13. **Artifact verification before completion** — for each completed task, .summaries/TASK-{NNN}-summary.md MUST exist with concrete evidence. EXC artifact MUST be registered in state.json. If any missing: DO NOT report completion. Skipped tasks are exempt (no summary expected).
+13. **Artifact verification before completion** — for each completed task, .summaries/TASK-{NNN}-summary.md MUST exist with concrete evidence. Declared EXC contract outputs MUST be present before `maestro run complete`. If any missing: DO NOT report completion. Skipped tasks are exempt (no summary expected).
 </invariants>
 
 <execution>
@@ -200,7 +215,7 @@ Parse from $ARGUMENTS:
 Derive:
   dateStr        ← UTC+8 YYYYMMDD
   sessionId      ← scratchDir ? "{dateStr}-execute-scratch" : "{dateStr}-execute-P{phaseArg}-{phaseSlug}"
-  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder  ← "{run_dir}/work/csv-wave"
 
 mkdir -p {sessionFolder}
 ```
@@ -380,7 +395,7 @@ Skip Phase 2.5 when `--skip-verify` flag present or task count == 0.
 
 2. **Update task files**: Write each task's status from CSV back to `.task/{id}.json`
 
-3. **Register EXC artifact in state.json**: Find matching plan artifact, create `{ id: "EXC-{next_id}", type: "execute", milestone, phase, scope, path, status: "completed", depends_on: plan_artifact.id, harvested: false, created_at, completed_at }`. `milestone` MUST come from D-007 `phase_slugs` reverse lookup (numeric phase) — inherit from matching plan artifact if available, otherwise reverse-lookup directly.
+3. **Validate typed execution outputs**: ensure every contract output exists, then let `maestro run complete` perform registry mutation.
 
 4. **Side-effect confirmation gate** (skip when `-y/--yes`):
    Before writing to external stores, present a summary to the user via `request_user_input`:
@@ -470,7 +485,7 @@ echo '{"ts":"<ISO>","worker":"TASK-001","type":"code_pattern","data":{"name":"Re
 - [ ] All waves executed in order with cross-wave context propagation
 - [ ] Completed tasks have .summaries/TASK-{NNN}-summary.md
 - [ ] .task/TASK-*.json statuses updated to match execution results
-- [ ] state.json updated with EXC artifact (numeric scope: milestone resolved via D-007 `phase_slugs` reverse lookup, NOT direct `current_milestone` read)
+- [ ] Declared EXC output registered by `maestro run complete`
 - [ ] Issue status synced for tasks with issue_id (all completed → resolved, any failed → in_progress)
 - [ ] Incremental specs extracted from summaries (learnings, design rationale, root causes)
 - [ ] Post-task knowledge inquiry triggered when applicable (deviation, retry>=2, design rationale)

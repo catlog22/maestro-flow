@@ -4,6 +4,7 @@ description: Initialize project with auto state detection
 argument-hint: "[-y] [--from <source>]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: bootstrap
+version: 0.5.50
 ---
 
 <bootstrap_mode>

@@ -4,6 +4,7 @@ description: Add spec entry by category with role tagging
 argument-hint: <category> <title> <content>
 allowed-tools: Read, Write, Bash, Glob, Grep
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

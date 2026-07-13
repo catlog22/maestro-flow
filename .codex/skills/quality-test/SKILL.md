@@ -6,16 +6,41 @@ argument-hint: <phase> [-y] [--smoke] [--auto-fix] [--session ID]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: run
 contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-  gates:
-    entry: []
-    exit: []
+  consumes:
+    - kind: verification
+      alias: latest-verification
+      required: true
+      require_status: sealed
+    - kind: review-findings
+      alias: latest-review
+      required: false
+    - kind: diagnosis
+      alias: latest-debug
+      required: false
+  produces:
+    - path: outputs/test-plan.json
+      kind: test-plan
+      role: attachment
+    - path: outputs/test-results.json
+      kind: test-results
+      alias: latest-test
+      role: primary
+    - path: outputs/acceptance.json
+      kind: acceptance
+      role: evidence
+    - path: outputs/coverage.json
+      kind: coverage
+      role: evidence
+    - path: outputs/e2e-results.json
+      kind: e2e-results
+      role: evidence
+      optional: true
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -271,7 +296,7 @@ Max 2 iterations:
 
 1. UAT confidence scoring (4 dims: scenario_coverage, diagnostic_depth, observation_quality, closure_completeness). Readiness gate: block if scenario_coverage < 40% or blocker without diagnosis.
 2. Display summary: smoke results, pass/fail/skip counts, diagnosis stats, auto-fix results
-3. Register artifact in state.json (type: test) -- this is the ONLY registration point; S_COMPLETE defers registration here to avoid duplicates
+3. Let `maestro run complete` register declared typed artifacts (type: test) -- this is the ONLY registration point; S_COMPLETE defers registration here to avoid duplicates
 4. Route: all passed -> milestone-audit; auto-fix succeeded -> maestro-execute; gaps remain -> quality-debug; low coverage -> quality-auto-test
 
 </actions>

@@ -11,6 +11,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -23,6 +24,7 @@ when merge conflicts occur.
 <required_reading>
 @~/.maestro/workflows/merge.md
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <context>
@@ -41,7 +43,7 @@ $ARGUMENTS — milestone number and optional flags.
 6. Artifact registry reconciliation → 7. Cleanup
 
 **Phase 2 detail:**
-- Copy worktree `scratch/*` to main `{run_dir}/outputs/`
+- Merge canonical `.workflow/sessions/` records and referenced Run artifacts
 - Merge `Session ArtifactRegistry (runtime-owned)` entries (worktree wins for same id)
 - Remove milestone `"forked"` flag in main state.json
 </context>

@@ -5,6 +5,7 @@ argument-hint: "[-y|--yes] [-c|--concurrency N] [--continue] \"[by-prompt 'what
   to look for']\""
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <required_reading>
@@ -76,7 +77,7 @@ $manage-issue-discover --continue "20260318-discover-multi"
 
 When `--yes` or `-y`: Auto-confirm perspective selection, skip interactive validation, use defaults for scope detection.
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Output Directory**: `{run_dir}/work/csv-wave/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report) + issues appended to `.workflow/issues/issues.jsonl`
 
 **Output boundary**: ALL file writes MUST target `.workflow/issues/issues.jsonl` or `.workflow/issues/discoveries/{SESSION_ID}/` only. NEVER modify source code or files outside these paths.
@@ -138,7 +139,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column.
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-discover-{mode}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -184,7 +185,7 @@ Also writes to:
 // Session IDs (UTC+8):
 //   sessionId    = DBP-{YYYYMMDD}-{HHmmss}
 //   csvSessionId = {YYYYMMDD}-discover-{mode}
-//   sessionFolder = .workflow/.csv-wave/{csvSessionId}
+//   sessionFolder = {run_dir}/work/csv-wave
 //   discoveryDir  = .workflow/issues/discoveries/{sessionId}
 
 // Create: sessionFolder, discoveryDir, .workflow/issues/

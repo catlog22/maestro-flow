@@ -11,6 +11,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -21,6 +22,7 @@ CI/CD pipeline review, and optional STRIDE threat modeling. Three tiers control 
 <required_reading>
 @~/.maestro/workflows/review.md
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <context>
@@ -66,7 +68,7 @@ $ARGUMENTS -- Parse tier and scope:
 
 **GATE 3: Report → Completion**
 - REQUIRED: Severity matrix produced with file:line references and remediation.
-- REQUIRED: Artifact registered in state.json.
+- REQUIRED: Declared typed output registered by `maestro run complete`.
 - BLOCKED if missing: do not emit completion status without severity matrix.
 
 **Phase 1: Reconnaissance**
@@ -245,7 +247,7 @@ NEXT: $quality-review
 
 **Register artifact on completion** (gated: unless `-y`, use `request_user_input` to confirm artifact registration and report writing before proceeding):
 ```
-Append to Session ArtifactRegistry (runtime-owned):
+Write the declared security-audit output under `{run_dir}/outputs/`; `maestro run complete` registers and seals it:
 {
   id: nextArtifactId(artifacts, "review"),  // RVW-NNN (security-audit reuses review type)
   type: "review",
@@ -253,7 +255,7 @@ Append to Session ArtifactRegistry (runtime-owned):
   milestone: current_milestone || null,
   phase: target_phase || null,
   scope: target_phase ? "phase" : "standalone",
-  path: "scratch/{YYYYMMDD}-security-audit-{tier}-{slug}",
+  path: "runs/{run_id}/outputs/security-audit-{tier}-{slug}",
   status: critical_count == 0 ? "completed" : "completed_with_concerns",
   tier: tier,                              // quick|standard|deep
   harvested: false,

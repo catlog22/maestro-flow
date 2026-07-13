@@ -4,6 +4,7 @@ description: Map codebase tech-stack, architecture, features, and concerns
 argument-hint: '[-y|--yes] [-c|--concurrency 4] [--continue] "[focus area]"'
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <required_reading>
@@ -58,7 +59,7 @@ $spec-map --continue "20260318-map-auth"
 
 **Output**: `.workflow/codebase/` (tech-stack.md, architecture.md, features.md, concerns.md)
 
-**Output boundary**: ALL file writes MUST target `.workflow/codebase/` (output docs) and `.workflow/.csv-wave/{sessionId}/` (session state). NEVER modify source code or files outside these paths.
+**Output boundary**: ALL file writes MUST target `.workflow/codebase/` (output docs) and `{run_dir}/work/csv-wave/` (session state). NEVER modify source code or files outside these paths.
 </context>
 
 <csv_schema>
@@ -106,7 +107,7 @@ id,title,description,focus_area,output_file,deps,context_from,wave,status,findin
 
 ### Session Initialization
 
-Parse flags from `$ARGUMENTS` (`-y`, `-c N`, `--continue`). Extract focus area (default: "full"). Generate session ID: `{YYYYMMDD}-map-{focusArea}`. Create session folder at `.workflow/.csv-wave/{sessionId}/` and `.workflow/codebase/`.
+Parse flags from `$ARGUMENTS` (`-y`, `-c N`, `--continue`). Extract focus area (default: "full"). Generate session ID: `{YYYYMMDD}-map-{focusArea}`. Create session folder at `{run_dir}/work/csv-wave/` and `.workflow/codebase/`.
 
 **Confirmation gate**: Present mapper assignment summary (4 tasks, focus area, concurrency) to user via `request_user_input`. Skip if `-y` flag is set.
 

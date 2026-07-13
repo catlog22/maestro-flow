@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -51,7 +53,7 @@ Remaining      → intent (amend_mode 时为 change_request)
 4. `enabled: false` → E012
 
 **State files**:
-- `.workflow/state.json` — artifact registry
+- `.workflow/state.json` — project metadata；artifact authority is Session `artifacts.json`
 - `.workflow/.maestro/ralph-cli-*/status.json` — session state
 </context>
 

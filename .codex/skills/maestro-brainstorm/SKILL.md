@@ -13,10 +13,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -33,8 +35,8 @@ $ARGUMENTS — topic text and optional flags.
 
 **--from resolution** (upstream context loading):
 ```
---from grill:ID     → state.json.artifacts[type=grill, id=ID].context_package → load context-package.json
---from blueprint:ID → state.json.artifacts[type=blueprint, id=ID].context_package → load
+--from grill:ID     → the upstream map returned by `maestro run create`.context_package → load context-package.json
+--from blueprint:ID → the upstream map returned by `maestro run create`.context_package → load
 --from @file        → load file directly as context-package.json
 --from path/        → load path/context-package.json
 ```
@@ -45,7 +47,7 @@ When loaded, pre-seed guidance-specification.md with:
 - `open_questions[]` → interview priority topics
 - `insights[]` → W2 role analysis context
 
-When `--from` is absent, auto-discover from state.json: latest `type=grill` artifact in same milestone → load its `context_package` if available. No match → proceed without upstream context.
+When `--from` is absent, resolve the latest compatible grill artifact from the Run `upstream` map. No match → proceed without upstream context.
 
 **9 valid roles**: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert
 
@@ -55,7 +57,7 @@ When `--from` is absent, auto-discover from state.json: latest `type=grill` arti
 3. **Project context**: Read `.workflow/project.md` (if exists) → Validated requirements (already shipped) as constraints, Active requirements as current scope. Read `state.json.accumulated_context` → deferred items as brainstorming seeds, key_decisions as locked constraints.
 4. All optional — proceed without if unavailable.
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-brainstorm-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 
 **Output** (per session):
 - `guidance-specification.md` — machine contract (Wave 1; consumed by downstream roadmap/analyze/blueprint). §11 Decision Tracking, §12 Cross-Role Resolutions.
@@ -94,7 +96,7 @@ id,title,description,role,topic,guidance_spec,deps,context_from,wave,status,find
 **Column semantics (orchestrator MUST honor when generating tasks.csv)**:
 - `description`: full agent prompt — orchestrator MUST inflate `<W1/W2/W3 prompt>` placeholders using the templates in `<agent_prompt_template>` below. Never leave it as `"..."` — the spawned agent reads ONLY this field as its task brief.
 - `output_file`: **index file only** (single primary deliverable used by Wave 3 reviewer to locate the role). Wave 2 role agents write multiple files (`analysis.md` + per-feature + findings) under the same `{role}/` directory; the CSV only tracks the index path for dependency wiring.
-- **All paths in CSV (`output_file`, any path referenced in `description`) MUST be absolute.** Orchestrator MUST resolve `<ABS_SESSION>` to the absolute session dir (e.g. `D:/proj/.workflow/.csv-wave/20260521-brainstorm-foo/`) before writing tasks.csv. Relative paths break agent Write calls.
+- **All paths in CSV (`output_file`, any path referenced in `description`) MUST be absolute.** Orchestrator MUST resolve `<ABS_SESSION>` to the absolute session dir (e.g. `D:/proj/{run_dir}/work/csv-wave/20260521-brainstorm-foo/`) before writing tasks.csv. Relative paths break agent Write calls.
 
 Wave 1: 1 guidance row. Wave 2: N role rows (parallel) — each writes `{role}/analysis.md` + `{role}/analysis-F-*.md` + `{role}/findings-*.md`. Wave 3: 1 reviewer row (reads analysis.md §2 Decision Digests; emits structured findings consumed by orchestrator).
 </csv_schema>
@@ -305,7 +307,7 @@ S_AGGREGATE  — 生成报告、注册 artifact                     PERSIST: con
 </states>
 
 <transitions>
-S_PARSE → S_ROLES      DO: parse args, detect mode (phase/scratch/review-only), load specs
+S_PARSE → S_ROLES      DO: parse args, detect mode (phase/ad-hoc/review-only), load specs
 S_ROLES → S_CSV_GEN    DO: select roles (-y: auto top N; interactive: request_user_input)
 S_CSV_GEN → S_WAVE_1   DO: generate tasks.csv (1 guidance + N roles + 1 reviewer)
 
@@ -483,7 +485,7 @@ Protocol: read before analysis, append-only, dedup by type+key.
 - [ ] context-package.json generated with per-item `ref` traceability
 - [ ] discoveries.ndjson append-only throughout
 - [ ] context.md aggregates session results with next-step routing
-- [ ] Session sealed via finish-work (auto mode only)
+- [ ] Session sealed via `maestro run check` then `maestro run complete` (auto mode only)
 - [ ] Ralph-invoked: `maestro ralph complete <idx> --status {STATUS}` called with correct verdict
 </success_criteria>
 
@@ -496,5 +498,5 @@ Status verdicts: **DONE** (normal), **DONE_WITH_CONCERNS** (caveats; pass `--con
 </ralph_completion>
 
 <on_complete>
-@~/.maestro/workflows/finish-work.md — SESSION_DIR={output_dir}, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
+@~/.maestro/workflows/`maestro run check` then `maestro run complete`.md — SESSION_DIR={output_dir}, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}, LINKED_MILESTONE=null
 </on_complete>

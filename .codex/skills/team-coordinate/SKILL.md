@@ -11,10 +11,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -68,7 +70,7 @@ $team-coordinate --continue "20260518-team-auth-system"
 - `-c, --concurrency N`: Max concurrent agents within each wave (default: 5)
 - `--continue`: Resume existing session
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-team-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 **Output**: tasks.csv, results.csv, discoveries.ndjson, context.md
 
 ### Pre-load specs (optional)
@@ -155,7 +157,7 @@ Each wave generates `wave-{N}.csv` with Input columns + `prev_context` (populate
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-team-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -231,7 +233,7 @@ Derive:
   dateStr        ← UTC+8 YYYYMMDD
   slug           ← first 3 meaningful words, kebab-case
   sessionId      ← "{dateStr}-team-{slug}"
-  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder  ← "{run_dir}/work/csv-wave"
 
 mkdir -p {sessionFolder}
 ```
@@ -239,7 +241,7 @@ mkdir -p {sessionFolder}
 ### Session Resume (S_PARSE → S_EVAL_W{N})
 
 When `--continue`:
-1. Scan `.workflow/.csv-wave/*-team-*/tasks.csv` for sessions with pending tasks
+1. Scan `{run_dir}/work/csv-wave/*-team-*/tasks.csv` for sessions with pending tasks
 2. Single match → resume. Multiple → `request_user_input` for selection.
 3. Read master tasks.csv → find first wave with pending tasks → jump to S_EVAL_W{N}
 

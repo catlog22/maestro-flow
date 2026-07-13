@@ -4,6 +4,7 @@ description: Load specs and lessons for current context
 argument-hint: "[--category <category>] [--keyword <word>]"
 allowed-tools: Read, Bash, Glob, Grep
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

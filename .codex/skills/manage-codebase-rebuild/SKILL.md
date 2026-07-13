@@ -4,6 +4,7 @@ description: Rebuild all codebase documentation from scratch
 argument-hint: '[-y|--yes] [-c|--concurrency 5] [--continue] "[--force] [--skip-commit]"'
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <required_reading>
@@ -76,7 +77,7 @@ $manage-codebase-rebuild --continue "20260318-rebuild-full"
 
 When `--yes` or `-y`: Auto-confirm rebuild (implies --force), skip all prompts.
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Output Directory**: `{run_dir}/work/csv-wave/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `context.md` (human-readable report)
 **Target**: `.workflow/codebase/` (doc-index.json, tech-registry/, feature-maps/)
 
@@ -169,7 +170,7 @@ Single wave generates `wave-1.csv`. No `prev_context` needed (all tasks independ
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-rebuild-{scope}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -189,7 +190,7 @@ Parse `$ARGUMENTS` to extract:
 - `skipCommit` from `--skip-commit`
 
 Session ID: `{YYYYMMDD}-rebuild-full`
-Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
+Session folder: `{run_dir}/work/csv-wave/` — create via `mkdir -p`
 
 **Continue mode** (`--continue`): Locate existing session by ID or most recent. Read `tasks.csv`, identify pending/failed rows. Resume from next pending wave — do NOT re-run Phase 1 cleanup. If no session found, list available sessions and exit.
 

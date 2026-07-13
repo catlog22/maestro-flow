@@ -5,6 +5,7 @@ argument-hint: '[-y|--yes] [-c|--concurrency 4] [--continue] "<path|module>
   [--patterns <list>] [--save-spec] [--save-wiki]"'
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <required_reading>
@@ -38,9 +39,9 @@ $ARGUMENTS — target path/module and optional flags.
 - `--save-spec`: Invoke `spec-add` for each new pattern
 - `--save-wiki`: Create wiki note entries per dimension group
 
-**Output**: `.workflow/.csv-wave/{session-id}/` + `.workflow/knowhow/DCS-{slug}-{date}.md`
+**Output**: `{run_dir}/work/csv-wave/` + `.workflow/knowhow/DCS-{slug}-{date}.md`
 
-**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/`, `.workflow/knowhow/DCS-{slug}-{date}.md`, and `.workflow/specs/learnings.md` only (if `--save-spec` is active, writes to `.workflow/specs/` are allowed; if `--save-wiki` is active, writes to `.workflow/wiki/` are allowed). NEVER modify source code or files outside these paths.
+**Output boundary**: ALL file writes MUST target `{run_dir}/work/csv-wave/`, `.workflow/knowhow/DCS-{slug}-{date}.md`, and `.workflow/specs/learnings.md` only (if `--save-spec` is active, writes to `.workflow/specs/` are allowed; if `--save-wiki` is active, writes to `.workflow/wiki/` are allowed). NEVER modify source code or files outside these paths.
 </context>
 
 <invariants>

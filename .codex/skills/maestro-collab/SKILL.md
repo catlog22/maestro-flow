@@ -13,10 +13,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -253,8 +255,8 @@ Generate 3 output files from cross-verify results:
 
 ### A_AGGREGATE_RESULTS
 
-1. Copy outputs to scratchDir
-2. Register CLB artifact in state.json (type: collab, scope: adhoc)
+1. Write declared collaboration outputs to `{run_dir}/outputs/` and worker evidence to `{run_dir}/evidence/`.
+2. Validate declared CLB outputs; `maestro run complete` performs registry mutation.
 3. **Spec enrichment** (gated): for each Locked decision, display the proposed spec entry. Unless `-y/--yes`, `request_user_input` to confirm before writing. Only confirmed entries execute `maestro spec add arch "<title>" "<content>" --keywords <kw> --description "<summary>"`. Under `-y`, auto-write all Locked decisions.
 4. `update_plan` all steps completed
 5. Display summary:
@@ -296,7 +298,7 @@ Generate 3 output files from cross-verify results:
 - [ ] Boundary grill executed on CONFLICT items (skip if no boundary conflicts detected)
 - [ ] Boundary grill results written to collab-report.md § Boundary Grill Results (if conflicts found)
 - [ ] collab-report.md + context.md + conclusions.json produced
-- [ ] CLB artifact registered in state.json
+- [ ] CLB typed output registered by `maestro run complete`
 - [ ] Partial degradation: continued if 2+ tools succeeded
 </success_criteria>
 

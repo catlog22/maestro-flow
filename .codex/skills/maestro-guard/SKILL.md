@@ -4,6 +4,7 @@ description: Manage editing boundary restrictions
 argument-hint: <on|off|status|allow <path>|deny <path>>
 allowed-tools: Read, Write, Bash, Glob
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

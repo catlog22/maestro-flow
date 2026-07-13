@@ -4,6 +4,7 @@ description: Manage wiki graph -- health, cleanup, search, stats
 argument-hint: "[health|search|cleanup|stats] [options]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

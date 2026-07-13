@@ -11,6 +11,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -25,6 +26,7 @@ Also supports `--sync` mode to pull latest main into an active worktree.
 <required_reading>
 @~/.maestro/workflows/fork.md
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <deferred_reading>
@@ -51,14 +53,14 @@ $ARGUMENTS — milestone number and optional flags.
 .worktrees/m{N}-{slug}/
 ├── .workflow/
 │   ├── worktree-scope.json     (milestone scope marker)
-│   ├── state.json              (scoped — this milestone's artifacts only)
+│   ├── state.json              (project metadata only)
 │   ├── project.md, roadmap.md, config.json, specs/  (read-only copies)
-│   └── scratch/                (milestone's existing + new artifacts)
+│   └── sessions/               (canonical Session/Run records)
 └── <source code>
 ```
 
 **Artifact scoping:**
-Fork copies Run artifacts belonging to the target milestone (filtered from `Session ArtifactRegistry (runtime-owned)` where `milestone == target`). New work creates Run artifacts normally, registered in the worktree's local `state.json`.
+Fork copies canonical Session/Run records needed by the target milestone. New work creates Runs normally; runtime-owned Session registries remain authoritative.
 </context>
 
 <execution>
@@ -70,7 +72,7 @@ Follow '~/.maestro/workflows/fork.md' completely.
 3. Create worktree: `git worktree add -b milestone/{slug} .worktrees/m{N}-{slug} {base_branch}` (where `base_branch` = `--base` flag value or `HEAD` if not specified)
 4. Copy `.workflow/`: shared files + milestone Run artifacts
 5. Write `worktree-scope.json` with milestone scope
-6. Write scoped `state.json` (this milestone's artifacts only)
+6. Write scoped project metadata and copy required canonical Session/Run records
 7. Update main: `worktrees.json` registry, mark milestone `"forked"`
 
 **Sync flow:**
@@ -155,7 +157,7 @@ Fork mode:
 - [ ] Shared `.workflow/` files copied (project.md, roadmap.md, config.json, specs/)
 - [ ] Milestone Run artifacts copied (filtered from artifact registry)
 - [ ] `worktree-scope.json` written with milestone scope
-- [ ] Scoped `state.json` written (this milestone's artifacts only)
+- [ ] Scoped project metadata and Session/Run records written
 - [ ] `worktrees.json` registry updated in main worktree
 - [ ] Milestone marked `"forked"` in main state.json
 

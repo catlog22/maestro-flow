@@ -6,6 +6,7 @@ argument-hint: '["<insight text>"|list|search <query>|show <INS-id>] [--category
   [--confidence high|medium|low]'
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>
@@ -96,7 +97,7 @@ Verify `.workflow/` exists (E001 if not). If `.workflow/specs/learnings.md` miss
 | gotcha, surprising, unexpected | gotcha |
 | technique, approach, method | technique |
 
-2. **Auto-link phase** from `state.json` artifact registry. `--phase 0` forces null.
+2. **Auto-link phase/Run** from canonical Session/Run metadata. `--phase 0` forces null.
 3. **Generate INS-id**: `INS-{8 hex}` from `hash(insightText + timestamp)`.
 4. **Build row** with fields: id, title (first 80 chars), summary, source="manual", lens=null, category, tags (includes "manual"), phase, phase_slug, confidence, routed_to=null, created_at.
 5. **Append** entry to `.workflow/specs/learnings.md` (append-only, never rewrite).

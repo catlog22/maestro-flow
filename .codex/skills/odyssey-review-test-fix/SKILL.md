@@ -15,6 +15,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <base>@~/.maestro/workflows/odyssey-base-codex.md</base>
@@ -22,6 +23,7 @@ contract:
 <required_reading>
 Required reading: base (`odyssey-base-codex.md`) before any actions. Load and apply base invariants, execution discipline, and shared actions before proceeding.
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>

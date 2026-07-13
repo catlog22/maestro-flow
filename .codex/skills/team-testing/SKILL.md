@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -58,7 +60,7 @@ $team-testing --continue "20260518-tst-auth"
 | executor | [roles/executor/role.md](roles/executor/role.md) | TESTRUN-* |
 | analyst | [roles/analyst/role.md](roles/analyst/role.md) | TESTANA-* |
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-tst-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 **Output**: tasks.csv, results.csv, discoveries.ndjson, context.md
 
 ### Pipeline Selection
@@ -188,13 +190,13 @@ Derive:
   dateStr       ← UTC+8 YYYYMMDD
   slug          ← first 3 meaningful words, kebab-case
   sessionId     ← "{dateStr}-tst-{slug}"
-  sessionFolder ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder ← "{run_dir}/work/csv-wave"
   skillRoot     ← resolve path to this skill directory
 
 mkdir -p {sessionFolder}
 ```
 
-When `--continue`: scan `.workflow/.csv-wave/*-tst-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
+When `--continue`: scan `{run_dir}/work/csv-wave/*-tst-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
 
 ### Scope Detection + Pipeline Selection (S_CSV_GEN)
 

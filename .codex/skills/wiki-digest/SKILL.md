@@ -4,6 +4,7 @@ description: Generate wiki digest with theme clustering and gap analysis
 argument-hint: "[<topic>|--recent N] [--type <type>] [--format brief|full] [--create-issues]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

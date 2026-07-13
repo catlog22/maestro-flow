@@ -4,6 +4,7 @@ description: Compose reusable workflow templates from natural language
 argument-hint: '"workflow description" [--resume] [--edit <template-path>]'
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

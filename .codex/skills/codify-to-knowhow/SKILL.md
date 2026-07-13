@@ -5,6 +5,7 @@ description: Manifest-driven knowledge asset generator — converts structured
 argument-hint: <package-path>
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

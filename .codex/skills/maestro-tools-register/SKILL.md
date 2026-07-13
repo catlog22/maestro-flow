@@ -5,6 +5,7 @@ description: Register tool specs - extract, generate, or optimize reusable
 argument-hint: "[description or intent]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

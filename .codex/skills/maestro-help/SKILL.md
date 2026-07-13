@@ -5,6 +5,7 @@ description: Maestro Flow command help system — search, browse, recommend
 argument-hint: "[search <keyword>|workflow|skills|agents|cli|新手|下一步|<command-name>]"
 allowed-tools: Read, Grep, Glob, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

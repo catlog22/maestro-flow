@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -71,11 +73,11 @@ $maestro-ui-codify "src/styles" --output-dir .workflow/packages --overwrite -y
 - `--overwrite`: Allow overwriting existing package directory
 - `-y, --yes`: Skip all confirmations
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Output Directory**: `{run_dir}/work/csv-wave/`
 **Core Output**: `tasks.csv` (master state) + `results.csv` (final)
 **Package Output**: `{output-dir}/{package-name}/` with design-tokens.json, layout-templates.json, animation-tokens.json, preview.html, preview.css, knowhow-manifest.json
 
-**Output boundary**: ALL file writes MUST target `.workflow/.csv-wave/{session-id}/` (wave state), `{output-dir}/{package-name}/` (reference package), `.workflow/knowhow/` (knowledge assets), and `.workflow/specs/` (spec entries). NEVER modify source code files in the scanned directory.
+**Output boundary**: ALL file writes MUST target `{run_dir}/work/csv-wave/` (wave state), `{output-dir}/{package-name}/` (reference package), `.workflow/knowhow/` (knowledge assets), and `.workflow/specs/` (spec entries). NEVER modify source code files in the scanned directory.
 </context>
 
 <csv_schema>
@@ -113,7 +115,7 @@ id,wave,title,description,agent_type,deps,status
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-ui-codify-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- wave-{N}.csv (temporary)
@@ -199,7 +201,7 @@ mkdir -p "$package_dir"
 # Session directory
 session_slug=$(echo "$package_name" | head -c 40)
 session_date=$(date -u +%Y%m%d)
-sessionFolder=".workflow/.csv-wave/${session_date}-ui-codify-${session_slug}"
+sessionFolder="{run_dir}/work/csv-wave/${session_date}-ui-codify-${session_slug}"
 mkdir -p "$sessionFolder"
 ```
 

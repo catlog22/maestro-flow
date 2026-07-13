@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -89,7 +91,7 @@ Remaining                        → intent (amend_mode 时为 change_request)
 ```
 
 **State files:**
-- `.workflow/state.json` — artifact registry, milestones, phases
+- `.workflow/state.json` — project metadata；artifact authority is Session `artifacts.json`
 - `.workflow/roadmap.md` — milestone/phase structure
 - `.workflow/.maestro/ralph-*/status.json` — ralph session state
 </context>
@@ -373,7 +375,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
     - `analyze_macro_id` 存在且当前 step 是 `roadmap` → args 改为 `--from analyze:{analyze_macro_id}`
     - `analyze_macro_id` 存在且 `scope_verdict ∈ {medium, small}` 且当前 step 是 `plan` → args 改为 `--from analyze:{analyze_macro_id}`
     - `blueprint_id` 存在 → 当前 step 是 `plan` → args 改为 `--from blueprint:{blueprint_id}`（优先级低于 phase 数字参数）
-    - **deferred chaining**（独立模式）：build 阶段前序 artifact 尚未产出，由 A_RESOLVE_ARGS（ralph-execute）运行时从 state.json 查找并注入：
+    - **deferred chaining**（独立模式）：build 阶段前序 artifact 尚未产出，由 A_RESOLVE_ARGS（ralph-execute）运行时从 Session registry / Run `upstream` 查找并注入：
       - `plan` step（含 `{milestone}` 占位符）→ 查同 milestone 最新 completed analyze artifact，`--from analyze:{milestone_analyze_id}`，写 `source_artifact_ref`
       - `execute` step（含 `{phase}` 占位符）→ 查同 phase+milestone 最新 completed plan artifact，`--dir {plan_path}`（现有逻辑），写 `source_artifact_ref = "plan:{id}"`
     - 写入 `step.source_artifact_ref` 以便审计
@@ -797,7 +799,7 @@ Decomposition 产出后通过 Codex 内置工具管理目标（由 A_DECOMPOSE_T
 - [ ] Ralph 不执行 step，只 evaluate；`Skill(maestro-ralph-execute)` 直调 handoff
 - [ ] session.platform = "codex"；所有 CLI 调用携带 `--platform codex`
 - [ ] Deferred chaining：plan/execute step 的 `--from`/`--dir` 注入由 A_RESOLVE_ARGS（ralph-execute）运行时完成；build 阶段标记意图，不预知 artifact ID
-- [ ] Milestone-level plan step 运行时获得 `--from analyze:{milestone_analyze_id}`（由 ralph-execute 从 state.json 查找注入）
+- [ ] Plan step 运行时获得 sealed analyze artifact ref（由 ralph-execute 从 Session registry / Run `upstream` 注入）
 - [ ] Phase-level execute step 运行时获得 `source_artifact_ref = "plan:{id}"`
 - [ ] 每个 step 含 `completion_summary` + `completion_decisions` + `completion_caveats` + `completion_deferred`（初始 null）
 - [ ] `completion_summary` 在 DONE/DONE_WITH_CONCERNS 时为 MUST（由 CLI `--summary` 参数传入）

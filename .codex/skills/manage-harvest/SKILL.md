@@ -12,6 +12,7 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <purpose>
@@ -24,6 +25,7 @@ spec conventions, and trackable issues. Prevents knowledge loss from completed s
 <required_reading>
 @~/.maestro/workflows/harvest.md
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <context>

@@ -7,16 +7,36 @@ argument-hint: '[-y|--yes] [-c|--concurrency N] [--continue] "[bug description]
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: run
 contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-  gates:
-    entry: []
-    exit: []
+  consumes:
+    - kind: test-results
+      alias: latest-test
+      required: false
+    - kind: review-findings
+      alias: latest-review
+      required: false
+    - kind: execution
+      alias: current-execution
+      required: false
+  produces:
+    - path: outputs/diagnosis.json
+      kind: diagnosis
+      alias: latest-debug
+      role: primary
+    - path: outputs/hypotheses.json
+      kind: hypotheses
+      role: evidence
+    - path: outputs/reproduction.json
+      kind: reproduction
+      role: evidence
+    - path: outputs/fix-directions.json
+      kind: fix-directions
+      role: attachment
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -96,10 +116,10 @@ $quality-debug --continue "20260318-debug-P3-jwt-expiry"
 
 When `--yes` or `-y`: Auto-confirm hypothesis selection, skip interactive symptom gathering (require bug description in args), use defaults for mode detection.
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
-**Core Output**: `tasks.csv` (master state) + `results.csv` (final) + `discoveries.ndjson` (shared exploration) + `understanding.md` (human-readable report)
+**Temporary Wave Directory**: `{run_dir}/work/csv-wave/`
+**Formal Output**: frontmatter-declared diagnosis artifacts under `{run_dir}/outputs/`; discoveries and hypothesis evidence under `{run_dir}/evidence/`; synthesis in `{run_dir}/report.md`.
 
-**Output boundary**: ALL file writes MUST target `DEBUG_DIR` or `.workflow/state.json` only. NEVER modify source code, test files, or other artifacts outside these paths during investigation.
+**Output boundary**: investigation state is temporary under `{run_dir}/work/`; formal diagnosis is under `{run_dir}/outputs/`; evidence is under `{run_dir}/evidence/`. Never modify source code, test files, or Session protocol JSON during investigation.
 </context>
 
 <csv_schema>
@@ -158,7 +178,7 @@ Each wave generates `wave-{N}.csv` with Input columns + `prev_context` only. Out
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-debug-P{N}-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv              (master state, persisted)
 +-- results.csv            (final export, persisted)
 +-- discoveries.ndjson     (shared board, persisted)
@@ -199,7 +219,7 @@ Derive:
   slug           ← bugDescription kebab-cased, max 40 chars
   dateStr        ← UTC+8 YYYYMMDD
   sessionId      ← phaseRef ? "{dateStr}-debug-P{phaseRef}-{slug}" : "{dateStr}-debug-{slug}"
-  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder  ← "{run_dir}/work/csv-wave"
 
 mkdir -p {sessionFolder}
 ```
@@ -419,14 +439,14 @@ CONSTRAINTS:
    Before writing to external stores, present a summary to the user via `request_user_input`:
    - UAT gaps to update (count + hypothesis titles) if --from-uat
    - Issues to update (count + issue IDs)
-   - Artifact registration in state.json
+   - Typed artifact registration by `maestro run complete`
    The user can approve all, selectively exclude, or skip entirely.
 
 3. **UAT update** (approved items only; if --from-uat): Update `uat.md` gaps with `root_cause`, `fix_direction`, `affected_files` for confirmed hypotheses.
 
 4. **Issue update** (approved items only): If `issues.jsonl` exists, update matching issues with status `diagnosed`, add `context.suggested_fix` and `context.notes`.
 
-5. **Register artifact** (approved items only; phase-scoped): Append to `Session ArtifactRegistry (runtime-owned)` with `type: "debug"`, `id: DBG-NNN`, `depends_on: triggering_review_id || exec_art.id`.
+5. **Register artifact**: write the declared diagnosis output under `{run_dir}/outputs/`; `maestro run complete` owns ID allocation, dependency links, aliases, and sealing.
 
 6. **Post-debug Knowledge Inquiry**: Prompt user to capture knowledge when:
    - Recurring root cause pattern detected -> `$spec-add debug`

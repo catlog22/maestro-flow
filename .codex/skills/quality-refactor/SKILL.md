@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -42,9 +44,9 @@ $quality-refactor "--dir {run_dir}/outputs/refactor-auth-2026-03-18"  # resume e
 - `--dir path`: Resume existing refactor Run output directory
 - `--max-iterations N`: Max refactoring rounds (default: 3)
 
-**Output**: `{run_dir}/outputs/refactor-{slug}-{date}/` with index.json, plan.json, reflection-log.md, .task/, .summaries/
+**Output**: `{run_dir}/outputs/` with index.json, plan.json, reflection-log.md, .task/, .summaries/
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-refactor-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 
 **Output boundary**: Refactoring modifies source files within the declared scope only. Ancillary outputs (reflection-log.md) MUST target `{run_dir}/outputs/`. NEVER modify files outside the confirmed scope without re-confirmation.
 </context>
@@ -98,7 +100,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-refactor-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv
 +-- results.csv
 +-- discoveries.ndjson
@@ -134,7 +136,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 
 ### Step 2: Create Run output directory
 
-Create `{run_dir}/outputs/refactor-{slug}-{date}/` with `.task/` and `.summaries/` subdirectories. Write `index.json` with type "refactor", scope, status "active", plan/execution/reflection counters.
+Create `{run_dir}/outputs/` with `.task/` and `.summaries/` subdirectories. Write `index.json` with type "refactor", scope, status "active", plan/execution/reflection counters.
 
 ### Step 3: Scope Analysis
 
@@ -168,7 +170,7 @@ Confirm with user before proceeding.
 
 ### Step 5: Execute with Reflection via CSV Waves
 
-Initialize session folder `.workflow/.csv-wave/{dateStr}-refactor-{slug}/`.
+Initialize session folder `{run_dir}/work/csv-wave/`.
 Initialize `reflection-log.md` and `discoveries.ndjson` in session folder.
 Build `tasks.csv` from plan.json tasks using csv_schema columns.
 

@@ -14,10 +14,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -48,7 +50,7 @@ $ARGUMENTS — 意图文本 + 可选 flags。
 **候选池：** 仅 A_SCORE_CANDIDATES 路由表中列出的 skill。管线编排器（`maestro` / `maestro-ralph*` / `maestro-player` / `maestro-composer`）**永远不在候选池**。
 
 **State files:**
-- `.workflow/state.json` — phase / milestone / artifact registry
+- `.workflow/state.json` — project metadata；Session `session.json` / `artifacts.json` / Run `run.json` provide lifecycle state
 - `{run_dir}/outputs/` — 最近 artifact（按 mtime 倒序定位 lifecycle）
 - `.workflow/.maestro/` — 进行中的 session（仅作引用，不修改）
 </context>

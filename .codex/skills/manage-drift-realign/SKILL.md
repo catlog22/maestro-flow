@@ -15,10 +15,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -93,14 +95,14 @@ $manage-drift-realign --continue "20260624-drift-realign"
 - `--report`: Generate report only, skip triage
 - `--auto-archive`: Auto-apply suggested actions for P1/P2, only P0 gets interactive review
 
-**Output Directory**: `.workflow/.csv-wave/{session-id}/`
+**Output Directory**: `{run_dir}/work/csv-wave/`
 **Core Output**: `tasks.csv` + `results.csv` + `discoveries.ndjson` + `context.md`
 **Report Output**: `.workflow/.drift-realign/drift-report-{date}.md` + `drift-log.jsonl`
 
 **Output boundary**: ALL file writes MUST target `.workflow/` metadata files (specs, codebase docs, roadmap.md, state.json, issues.jsonl) or `.workflow/.trash/drift-realign-{timestamp}/` (backups) or `.workflow/.drift-realign/` (session details). NEVER modify source code files.
 
 **State files read**:
-- `.workflow/state.json` — project state + artifact registry
+- `.workflow/state.json` — project metadata；Session registries provide artifact state
 - `.workflow/roadmap.md` — milestone/phase roadmap
 - `.workflow/specs/*.md` — spec entries
 - `.workflow/codebase/*.md` — codebase docs (architecture, features, tech-stack, concerns)
@@ -204,7 +206,7 @@ Parse `$ARGUMENTS` to extract:
 - Inner flags: `scope`, `since`, `depth`, `dryRun`, `reportOnly`, `autoArchive`
 
 Session ID: `{YYYYMMDD}-drift-realign`
-Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
+Session folder: `{run_dir}/work/csv-wave/` — create via `mkdir -p`
 
 ### Phase 1: Setup + Timeline
 

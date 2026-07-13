@@ -4,6 +4,7 @@ description: List registered domain terms from glossary
 argument-hint: "[--tier core|extended|peripheral]"
 allowed-tools: Read, Bash, Glob, Grep
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

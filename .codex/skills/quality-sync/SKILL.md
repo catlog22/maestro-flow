@@ -4,6 +4,7 @@ description: Sync codebase docs by tracing git diff impact
 argument-hint: "[--full] [--since <commit|HEAD~N>] [--dry-run]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

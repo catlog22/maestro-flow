@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -59,7 +61,7 @@ $team-quality-assurance --continue "20260518-qa-auth"
 | executor | [roles/executor/role.md](roles/executor/role.md) | QARUN-* |
 | analyst | [roles/analyst/role.md](roles/analyst/role.md) | QAANA-* |
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-qa-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 **Output**: tasks.csv, results.csv, discoveries.ndjson, context.md
 
 ### Scan Perspectives (scout)
@@ -183,13 +185,13 @@ Derive:
   dateStr       ← UTC+8 YYYYMMDD
   slug          ← first 3 meaningful words, kebab-case
   sessionId     ← "{dateStr}-qa-{slug}"
-  sessionFolder ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder ← "{run_dir}/work/csv-wave"
   skillRoot     ← resolve path to this skill directory
 
 mkdir -p {sessionFolder}
 ```
 
-When `--continue`: scan `.workflow/.csv-wave/*-qa-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
+When `--continue`: scan `{run_dir}/work/csv-wave/*-qa-*/tasks.csv` for sessions with pending tasks. Single match → resume. Multiple → `request_user_input`. Read master tasks.csv → find first pending wave → jump to S_WAVE_{N}.
 
 ### CSV Generation (S_CSV_GEN)
 

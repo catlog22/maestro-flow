@@ -7,16 +7,36 @@ argument-hint: '[-y|--yes] [--concurrency N] [-c|--continue] "<milestone> [--dir
 allowed-tools: spawn_agents_on_csv, Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: run
 contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-  gates:
-    entry: []
-    exit: []
+  consumes:
+    - kind: findings
+      alias: current-analysis
+      required: false
+    - kind: diagnosis
+      alias: latest-debug
+      required: false
+    - kind: blueprint
+      alias: current-blueprint
+      required: false
+  produces:
+    - path: outputs/plan.json
+      kind: plan
+      alias: current-plan
+      role: primary
+    - path: outputs/waves.json
+      kind: execution-waves
+      role: attachment
+    - path: outputs/dependency-graph.json
+      kind: dependency-graph
+      role: evidence
+    - path: outputs/collision-report.json
+      kind: collision-report
+      role: evidence
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -96,7 +116,7 @@ $ARGUMENTS — milestone number/text and optional flags.
   target_milestone = specified milestone number
   IF not found in state.json.milestones[]: ERROR
 
-**Session**: `.workflow/.csv-wave/{YYYYMMDD}-plan-P{N}-{slug}/`
+**Session**: `{run_dir}/work/csv-wave/`
 **Scratch**: `{run_dir}/outputs/` (.task/ subdir)
 
 **Pre-load** (optional): context-package.json (via `--from`, takes precedence), context.md (prior analyze), conclusions.json, codebase ARCHITECTURE.md, `maestro search`, `maestro load --type spec --category arch`, team preflight `maestro collab preflight`.
@@ -131,7 +151,7 @@ Wave 1: N exploration rows (parallel). Wave 2: 1 planning row (sequential).
 5. **Pipeline continuity**: Continuous until all waves complete. When invariant 4 (skip on failure) activates, the pipeline continues in degraded mode — this is NOT a violation of invariant 6.
 6. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Defined degradation paths (invariant 4) are not violations.
 7. **Verifiable convergence criteria required** — every task MUST have convergence.criteria[] with grep-verifiable conditions (no subjective language like "well-structured" or "properly implemented"). If any task lacks verifiable criteria: DO NOT report completion — fix the criteria first. **Degradation exception**: when invariant 4 is active (exploration failed), criteria that would normally reference exploration findings MAY use available context instead, but MUST be flagged LOW CONFIDENCE.
-8. **Artifact verification before completion** — plan.json and .task/TASK-*.json files MUST exist. PLN artifact MUST be registered in state.json. If any missing: DO NOT report completion.
+8. **Artifact verification before completion** — plan.json and .task/TASK-*.json files MUST exist. Declared PLN contract outputs MUST be present before `maestro run complete`. If any missing: DO NOT report completion.
 </invariants>
 
 <state_machine>
@@ -145,13 +165,13 @@ S_WAVE_1      — Parallel Exploration (spawn)                PERSIST: discoveri
 S_WAVE_2      — Plan Generation (spawn single agent)        PERSIST: plan.json + .task/
 S_CHECK       — Plan checking (max 3 iterations)            PERSIST: plan updates
 S_CONFIRM     — 用户确认（-y 跳过）                         PERSIST: —
-S_REGISTER    — 注册 PLN artifact、更新 index.json           PERSIST: state.json
+S_REGISTER    — 校验 PLN contract outputs，并由 `maestro run complete` 注册 typed artifacts           PERSIST: outputs/ + report.md
 </states>
 
 <transitions>
 S_PARSE → S_RESUME     WHEN: --continue
 S_PARSE → S_CONTEXT    WHEN: milestone/dir/--from resolved
-S_PARSE → S_CONTEXT    WHEN: no args + no roadmap AND latest analyze artifact found in state.json (scope=standalone). Interactive mode: confirm the auto-discovered artifact with user ("Using analyze artifact ANL-xxx from {date}. Proceed?"). -y mode: auto-proceed with log.
+S_PARSE → S_CONTEXT    WHEN: no args + no roadmap AND a compatible analyze artifact exists in the Run `upstream` map. Interactive mode confirms that artifact; `-y` auto-proceeds with a log.
 S_PARSE → ERROR        WHEN: no args + no roadmap + no analyze artifact
 
 S_RESUME → S_WAVE_1    WHEN: W1 incomplete    DO: load session, resume
@@ -262,7 +282,7 @@ Collision detection against same-milestone plans.
 
 **Note**: S_CONFIRM already gates user confirmation (or -y skip). The writes below execute only after S_CONFIRM passes.
 
-1. Register PLN artifact in state.json (scope, milestone, phase, depends_on)
+1. Validate declared PLN outputs; `maestro run complete` performs registry mutation.
 2. Update index.json with plan metadata
 3. If --gaps: link TASK files back to issues bidirectionally (task_refs[], task_plan_dir in issues.jsonl)
 4. Display: milestone, task count, wave count, check status, confidence
@@ -284,7 +304,7 @@ Collision detection against same-milestone plans.
 <error_codes>
 | Condition | Recovery |
 |-----------|----------|
-| No args and no roadmap and no analyze artifact in state.json | Provide phase number, topic, or run analyze first |
+| No args, no roadmap, and no compatible analyze artifact in `upstream` | Provide phase number/topic or run analyze first |
 | --gaps but no gap source | Run maestro-execute first |
 | Planning agent fails | Retry once with simplified context |
 | Plan-checker exceeds 3 rounds | Accept with warnings |
@@ -304,7 +324,7 @@ Collision detection against same-milestone plans.
 - [ ] Pressure pass completed on highest-complexity task
 - [ ] Collision detection against same-milestone plans (non-blocking)
 - [ ] Plan-checker passed (or minor issues acknowledged, max 3 iterations)
-- [ ] PLN artifact registered in state.json (numeric scope: milestone resolved directly from arg)
+- [ ] PLN Declared typed output registered by `maestro run complete` (numeric scope: milestone resolved directly from arg)
 - [ ] No-args fallback honored: latest analyze artifact auto-discovered when roadmap absent (§5.2 priority 6)
 - [ ] If --gaps: issues linked bidirectionally (task_refs[], task_plan_dir in issues.jsonl)
 </success_criteria>

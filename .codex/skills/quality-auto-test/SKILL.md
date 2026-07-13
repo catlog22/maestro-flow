@@ -12,10 +12,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -123,8 +125,8 @@ S_SOURCE:
   Route C (code): Explore module boundaries, API endpoints, integration points
 
   **Cross-artifact integration** (all routes, after primary extraction):
-  - **Review findings**: Query state.json for type=review artifacts on same phase. Extract critical/high findings → additional scenarios marked `source: "review_finding"`. If review verdict=="BLOCK" and these tests fail, suggest quality-debug.
-  - **Debug root causes**: Query state.json for type=debug artifacts on same phase. Generate regression test scenarios from confirmed root causes → marked `source: "debug_root_cause"`.
+  - **Review findings**: Query the Run upstream map for kind=review artifacts on same phase. Extract critical/high findings → additional scenarios marked `source: "review_finding"`. If review verdict=="BLOCK" and these tests fail, suggest quality-debug.
+  - **Debug root causes**: Query the Run upstream map for kind=debug artifacts on same phase. Generate regression test scenarios from confirmed root causes → marked `source: "debug_root_cause"`.
 
 S_INFRA:
   -> S_CSV_GEN      DO: detect framework, read 2-3 existing tests, build infrastructure_hints
@@ -291,7 +293,7 @@ You MUST call report_agent_job_result EXACTLY ONCE before exiting.
 1. Export results.csv
 2. Write state.json + report.json (with confidence section)
 3. Conditional: traceability.md (spec route), issue creation (code_defect -> issues.jsonl)
-4. Register artifact in state.json (type: test)
+4. Let `maestro run complete` register declared typed artifacts (type: test)
 5. Display summary: route, iterations, convergence status, per-layer pass rates, bugs discovered
 6. Route: converged -> quality-review; bugs -> quality-debug; >80% -> quality-test; <80% -> quality-debug; single pass all pass -> quality-test
 
@@ -334,7 +336,7 @@ Protocol: read before writing tests, append-only, dedup by type+key.
 - [ ] Convergence check includes confidence >= 60% alongside pass_rate threshold
 - [ ] Pressure pass completed on highest-pass-rate layer before completion
 - [ ] state.json, report.json, reflection-log.md written
-- [ ] TST artifact registered in state.json
+- [ ] TST Declared typed output registered by `maestro run complete`
 - [ ] If spec: traceability.md written; if failures: issues auto-created in issues.jsonl
 - [ ] If gap source: validation.json gaps updated (MISSING→COVERED)
 - [ ] Next step routed (converged → quality-review, bugs → debug, >80% → quality-test, <80% → debug)

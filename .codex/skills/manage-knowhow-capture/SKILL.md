@@ -4,6 +4,7 @@ description: Capture reusable knowledge as templates, recipes, or tips
 argument-hint: "[type] [description] [--lang lang] [--source url] [--tag tag1,tag2]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

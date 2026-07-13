@@ -13,10 +13,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -87,7 +89,7 @@ $team-lifecycle-v4 --continue "20260518-tlv4-auth-system"
 ### Session Structure
 
 ```
-.workflow/.csv-wave/{YYYYMMDD}-tlv4-{slug}/
+{run_dir}/work/csv-wave/
 +-- tasks.csv              (master state)
 +-- results.csv            (final export)
 +-- discoveries.ndjson     (cross-wave shared)
@@ -265,7 +267,7 @@ Derive:
   dateStr        ← UTC+8 YYYYMMDD
   slug           ← first 3 meaningful words, kebab-case
   sessionId      ← "{dateStr}-tlv4-{slug}"
-  sessionFolder  ← ".workflow/.csv-wave/{sessionId}"
+  sessionFolder  ← "{run_dir}/work/csv-wave"
   skillRoot      ← resolve path to this skill directory
 
 mkdir -p {sessionFolder}/{spec,plan,artifacts}

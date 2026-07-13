@@ -4,6 +4,7 @@ description: Detect version, preview changes, apply workflow upgrades
 argument-hint: "[--dry-run] [--force] [--setup-only]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 <purpose>

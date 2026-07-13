@@ -11,10 +11,12 @@ contract:
   gates:
     entry: []
     exit: []
+version: 0.5.50
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 <purpose>
@@ -31,8 +33,8 @@ $manage-status
 Reads from:
 - `.workflow/state.json` — project-level state machine
 - `.workflow/roadmap.md` — milestone and phase structure
-- `{run_dir}/outputs/index.json` — per-phase metadata and progress (resolved via state.json artifact registry)
-- `{run_dir}/outputs/.task/TASK-*.json` — individual task statuses (resolved via state.json artifact registry)
+- `{run_dir}/outputs/index.json` — per-phase metadata and progress (resolved via Session `artifacts.json` registry)
+- `{run_dir}/outputs/.task/TASK-*.json` — individual task statuses (resolved via Session `artifacts.json` registry)
 - `.workflow/wiki-index.json` — unified wiki graph index (entry counts, health)
 
 **Output boundary**: Read-only command. MUST NOT write any files. All output is displayed to the user via text.
@@ -66,7 +68,7 @@ Verify `.workflow/` exists (E001) and `state.json` is present (E002).
 
 ### Step 2: Load State Files
 
-Read: `state.json`, `roadmap.md`, per-phase `scratch/*/index.json`, task files `scratch/*/.task/TASK-*.json` (all resolved via artifact registry).
+Read: `state.json`, `roadmap.md`, Session Run metadata and typed plan artifacts (all resolved via artifact registry).
 
 ### Step 3: Calculate Progress
 
