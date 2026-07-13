@@ -1,6 +1,6 @@
 ---
 name: maestro-roadmap
-description: Generate roadmap with milestone/phase structure from requirements or upstream context
+description: Decompose requirements into session DAG with dependency edges
 argument-hint: "<requirement> [-y] [-c] [-m progressive|direct|auto] [--from <source>] [--from-brainstorm SESSION-ID] [--revise [instructions]] [--review]"
 allowed-tools:
   - Read
@@ -15,14 +15,16 @@ session-mode: run
 contract:
   discovery: self-described
   consumes: []
-  produces: []
+  produces:
+    - { path: "outputs/roadmap.json", kind: "roadmap", role: "primary", alias: "current-roadmap" }
+    - { path: "outputs/roadmap.md", kind: "roadmap-doc", role: "attachment" }
   gates: { entry: [], exit: [] }
 ---
 
 <purpose>
-Generate milestone/phase roadmap from requirements or upstream context. Three modes: create (default), revise (`--revise`), review (`--review`). For formal spec documents, use `/maestro-blueprint`.
+Decompose requirements into a session DAG. Each session is an atomic work unit with scope, success criteria, and dependency edges. Three modes: create (default), revise (`--revise`), review (`--review`). For formal spec documents, use `/maestro-blueprint`.
 
-Pipeline: brainstorm/blueprint/analyze → **roadmap** → analyze {milestone} → plan {milestone} → execute.
+Pipeline: brainstorm/blueprint/analyze → **roadmap** → analyze {session} → plan → execute.
 </purpose>
 
 <required_reading>
@@ -47,18 +49,18 @@ $ARGUMENTS -- requirement text, @file reference, or upstream context source.
 | `-m progressive\|direct\|auto` | Decomposition strategy | auto |
 | `--from <source>` | Load upstream context package (brainstorm:ID, blueprint:BLP-xxx, analyze:ANL-xxx, @file, or path). Consumes context-package.json | — |
 | `--from-brainstorm SESSION-ID` | Backward compat alias for `--from brainstorm:ID` | — |
-| `--revise [instructions]` | Revise existing roadmap. If instructions provided, apply directly. If omitted, ask user. Preserves completed phase progress. | — |
+| `--revise [instructions]` | Revise existing roadmap. Reads `current-roadmap` artifact. Preserves sealed sessions. | — |
 | `--review` | Roadmap health assessment (read-only) | — |
 
 **Input types:**
 - Direct text: `"Implement user authentication system with OAuth and 2FA"`
 - File reference: `@requirements.md`
 - Context import: `--from brainstorm:BRN-001` or `--from analyze:ANL-xxx` or `--from blueprint:BLP-xxx`
-- No args + `--revise` / `--review`: Operate on existing `.workflow/roadmap.md`
+- No args + `--revise` / `--review`: Operate on existing `current-roadmap` artifact
 
 ### Pre-load
 
-1. **Specs**: `maestro load --type spec --category arch` — load architecture constraints for phase decomposition
+1. **Specs**: `maestro load --type spec --category arch` — load architecture constraints for session decomposition
 2. **Wiki search**: `maestro search "{requirement keywords}" --json` → prior knowledge
 3. All optional — proceed without if unavailable
 </context>
@@ -67,9 +69,9 @@ $ARGUMENTS -- requirement text, @file reference, or upstream context source.
 Follows @~/.maestro/workflows/interview-mechanics.md standard.
 
 **Interaction mode**: convergent menu-driven
-**Decision tree** (strict order): mode (create / revise / review) → requirement scope (MVP / complete / phased) → decomposition strategy (progressive / direct / auto) → milestone boundaries → phase dependencies and order
-**Scope guard**: only roadmap shape; do not pre-resolve task breakdown or phase decomposition (belongs to plan)
-**Writeback target**: .workflow/roadmap.md "Roadmap Decisions" section (create if absent)
+**Decision tree** (strict order): mode (create / revise / review) → requirement scope (MVP / complete / phased) → decomposition strategy (progressive / direct / auto) → session boundaries → session dependencies
+**Scope guard**: only roadmap shape; do not pre-resolve task breakdown or session-internal decomposition (belongs to plan)
+**Writeback target**: `{run_dir}/outputs/roadmap.md` "Roadmap Decisions" section (create if absent)
 **Additional skip conditions**: --revise, --review (skip to respective mode)
 **Exit condition**: on consensus or explicit user signal → finalize Roadmap Decisions section
 </interview_protocol>
@@ -80,11 +82,11 @@ Follows @~/.maestro/workflows/interview-mechanics.md standard.
 2. Read `@~/.maestro/workflows/roadmap.md`, follow its process
 
 Sub-modes:
-- **Create** (default): Build roadmap from requirements or upstream context
-- **Revise** (`--revise`): Follow workflow roadmap.md "Mode: Revise" section
-- **Review** (`--review`): Follow workflow roadmap.md "Mode: Review" section
+- **Create** (default): Build session DAG from requirements or upstream context
+- **Revise** (`--revise`): Read `current-roadmap` artifact, apply changes, preserve sealed sessions
+- **Review** (`--review`): Read-only health assessment of session DAG
 
-### Phase Gates (MANDATORY, BLOCKING — Create mode)
+### Gates (MANDATORY, BLOCKING — Create mode)
 
 **GATE 1: Input → Decomposition**
 - REQUIRED: Requirement parsed with goal, constraints, stakeholders.
@@ -92,18 +94,18 @@ Sub-modes:
 - BLOCKED if missing: cannot decompose without parsed requirement.
 
 **GATE 2: Decomposition → Refinement**
-- REQUIRED: Milestones defined with deliverable targets.
-- REQUIRED: Phases defined within milestones with dependencies.
-- REQUIRED: Every Active requirement from project.md mapped to exactly one phase.
-- REQUIRED: No circular dependencies in phase ordering (E003 if detected).
-- BLOCKED if incomplete: finish milestone/phase decomposition before refinement.
+- REQUIRED: Sessions defined with intent, scope, and success criteria.
+- REQUIRED: DAG edges defined with `depends_on` relationships.
+- REQUIRED: Every Active requirement from project.md mapped to exactly one session.
+- REQUIRED: No circular dependencies in session DAG (E003 if detected).
+- BLOCKED if incomplete: finish session decomposition before refinement.
 
 **GATE 3: Refinement → Completion**
-- REQUIRED: User approved roadmap (or auto-approved with -y).
-- REQUIRED: `.workflow/roadmap.md` written with Milestone > Phase hierarchy.
-- REQUIRED: Artifact registered in state.json with milestone entries.
-- BLOCKED if missing: do not report completion without written roadmap.
-
+- REQUIRED: User approved session DAG (or auto-approved with -y).
+- REQUIRED: `outputs/roadmap.json` written with session DAG and `_meta` self-description.
+- REQUIRED: `outputs/roadmap.md` written with session summary.
+- REQUIRED: Sessions registered in `state.json.sessions[]`.
+- BLOCKED if missing: do not report completion without written outputs.
 
 </execution>
 
@@ -112,13 +114,25 @@ Sub-modes:
 
 ```
 === ROADMAP READY ===
-Milestones: {count}
-Phases: {total_phases}
+Sessions: {count}
+Root sessions: {roots_count} ({root_slugs})
 Strategy: {progressive|direct|auto}
-Output: .workflow/roadmap.md
+Output: {run_dir}/outputs/roadmap.json
 --- COMPLETION STATUS ---
 Status: {DONE|DONE_WITH_CONCERNS}
 Concerns: {if any}
+```
+
+After report, use `AskUserQuestion` to confirm root session activation:
+```
+question: "推荐激活 root session: {first-root-slug}，是否确认？"
+options:
+  - label: "激活推荐 session"
+    description: "设置 {first-root-slug} 为 active_session_id"
+  - label: "选择其他 session"
+    description: "从 DAG 中选择"
+  - label: "暂不激活"
+    description: "保持所有 sessions 为 planned 状态"
 ```
 
 ### Ralph-invoked completion
@@ -138,8 +152,8 @@ Status verdicts:
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Roadmap approved, need analysis | `/maestro-analyze 1` |
-| Simple project, ready to plan | `/maestro-plan 1` |
+| Session activated, need analysis | `/maestro-analyze --session {active-session-slug}` |
+| Simple project, ready to plan | `/maestro-plan --session {active-session-slug}` |
 | Need UI design first | `/maestro-impeccable build` |
 | View project dashboard | `/manage-status` |
 | Need formal spec documents | `/maestro-blueprint` |
@@ -150,24 +164,25 @@ Status verdicts:
 |------|----------|-----------|----------|
 | E001 | error | Requirement/idea text or @file required | Prompt user for input |
 | E002 | error | Context source not found (--from / --from-brainstorm) | Show available sessions/sources |
-| E003 | error | Circular dependency detected in phases | Prompt user to re-decompose |
-| E004 | error | roadmap.md not found (--revise/--review) | Run maestro-roadmap first |
-| E005 | error | Revision invalidates completed phase work | Warn user, ask to confirm or adjust |
+| E003 | error | Circular dependency detected in session DAG | Prompt user to re-decompose |
+| E004 | error | current-roadmap artifact not found (--revise/--review) | Run maestro-roadmap first |
+| E005 | error | Revision would modify sealed session | Warn user, ask to confirm or adjust |
 | W001 | warning | CLI analysis failed, using fallback | Continue with available data |
-| W002 | warning | Max refinement rounds (5) reached | Force proceed with current roadmap |
+| W002 | warning | Max refinement rounds (5) reached | Force proceed with current DAG |
 | W005 | warning | External research agent failed | Continue without apiResearchContext |
 </error_codes>
 
 <success_criteria>
-- [ ] Interactive mode: interview decision table appended to `.workflow/roadmap.md` "Roadmap Decisions" section
+- [ ] Interactive mode: interview decision table appended to `outputs/roadmap.md` "Roadmap Decisions" section
 - [ ] Requirement parsed with goal, constraints, stakeholders
-- [ ] Milestones defined with deliverable targets and version tags
+- [ ] Sessions defined with intent, scope, success criteria, and seed data
 - [ ] Decomposition strategy selected (progressive or direct)
-- [ ] Phases defined within milestones with success criteria, dependencies, and requirement mappings
-- [ ] Every Active requirement from project.md mapped to exactly one phase
-- [ ] No circular dependencies in phase ordering
-- [ ] User approved roadmap (or auto-approved with -y)
-- [ ] `.workflow/roadmap.md` written with Milestone > Phase hierarchy, scope decisions, and progress table
-- [ ] No phase directories created (phases are labels in roadmap, not directories)
-- [ ] Artifact registered in state.json with milestone entries
+- [ ] DAG edges defined with `depends_on` relationships
+- [ ] Every Active requirement from project.md mapped to exactly one session
+- [ ] No circular dependencies in session DAG
+- [ ] User approved session DAG (or auto-approved with -y)
+- [ ] `outputs/roadmap.json` written with `_meta` self-description and session DAG
+- [ ] `outputs/roadmap.md` written with session summary and frontmatter `kind: roadmap`
+- [ ] Sessions registered in `state.json.sessions[]` with `roadmap_artifact_id` and `seed_ref`
+- [ ] Root session activation confirmed via AskUserQuestion
 </success_criteria>
