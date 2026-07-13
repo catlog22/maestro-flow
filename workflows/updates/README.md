@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Update Scripts
 
 Version-specific smart upgrade workflows for `maestro-update`.

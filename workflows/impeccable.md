@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Impeccable Harvest Workflow
 
 > **Note**: Post-harvest hook, distinct from `/maestro-impeccable` command. This file is the harvest workflow invoked AFTER an impeccable run; it is not the impeccable command entry itself (see `chainMap['impeccable_*']` in `maestro.md`).

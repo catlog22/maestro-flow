@@ -4,6 +4,10 @@ name: spec-add
 alias: spec-add
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Workflow: spec-add
 
 Add a `<spec-entry>` closed-tag entry to a single target spec file by category.

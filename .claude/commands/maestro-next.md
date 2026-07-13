@@ -17,16 +17,9 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create maestro-next -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 解析 intent + project state → 路由表评分 → 推荐单个原子命令 → 确认后 `Skill()` 执行。
@@ -110,7 +103,7 @@ S_FALLBACK:
 
 ```bash
 cat .workflow/state.json 2>/dev/null              # phase / milestone / artifacts
-ls -la .workflow/scratch/ 2>/dev/null | head -10  # 最近 artifact (mtime DESC)
+ls -la {run_dir}/outputs/ 2>/dev/null | head -10  # 最近 artifact (mtime DESC)
 ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 ```
 
@@ -145,7 +138,7 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | 场景 | 推荐 | 原因 |
 |------|------|------|
 | Phase 工件链内的 bug/review/test | `quality-*` | 只读诊断，修复回流 plan→execute 主循环，保持 artifact 链完整 |
-| 独立探索性 bug、跨 phase 问题、非当前 milestone 问题 | `odyssey-debug` | 自带修复+泛化，scratch session 独立于 artifact 链 |
+| 独立探索性 bug、跨 phase 问题、非当前 milestone 问题 | `odyssey-debug` | 自带修复+泛化，Run 独立于 artifact 链 |
 | Phase 级代码审查（只读报告） | `quality-review` | 输出 verdict + issues，不改代码 |
 | 审查后要求零残留修复 | `odyssey-review-test-fix` | 自带 fix 循环直到零 finding |
 | Phase 级安全专项审计 | `security-audit` | OWASP Top 10 + STRIDE 全覆盖 |
@@ -278,7 +271,7 @@ AskUserQuestion (single-select, header: "执行确认"):
 ### Success Criteria
 
 - [ ] Intent 解析 + flags 提取完成
-- [ ] 读取 `.workflow/state.json` + scratch artifacts 推断 lifecycle_position
+- [ ] 读取 `.workflow/state.json` + Run artifacts 推断 lifecycle_position
 - [ ] 候选池等于路由表（管线编排器不在）
 - [ ] 评分综合：intent 字面匹配 + lifecycle 下一步 + workflow 簇 + recent activity
 - [ ] 空 intent / "继续" / "下一步" → 直接采用 lifecycle 推断的下一步

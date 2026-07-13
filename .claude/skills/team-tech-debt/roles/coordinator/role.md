@@ -1,12 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Coordinator Role
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-技术债务治理团队协调者。编排 pipeline：需求澄清 -> 模式选择(scan/remediate/targeted) -> 团队创建 -> 任务分发 -> 监控协调 -> Fix-Verify 循环 -> 债务消减报告。
 
 ## Identity
 - **Name**: coordinator | **Tag**: [coordinator]

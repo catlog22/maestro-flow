@@ -1,3 +1,5 @@
+
+
 # Scoring Guide
 
 How to score each dimension consistently. Used by scanner for initial audit and verifier for re-assessment.

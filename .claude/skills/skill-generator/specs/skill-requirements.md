@@ -1,3 +1,5 @@
+
+
 # Skill Requirements Specification
 
 Requirements collection specification for new Skill creation.

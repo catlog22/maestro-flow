@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Quick Task Workflow
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Prerequisites
 
@@ -63,15 +59,15 @@ Quick tasks can run mid-phase -- validation only checks project exists, not phas
 
 ---
 
-### Step 3: Create Scratch Directory
+### Step 3: Create Run output directory
 
-**Create scratch directory:**
+**Create Run output directory:**
 
 Generate slug from $DESCRIPTION (lowercase, hyphens, max 40 chars).
 Set date to current date (YYYYMMDD).
 
 ```bash
-QUICK_DIR=".workflow/scratch/${date}-quick-${slug}"
+QUICK_DIR="{run_dir}/outputs/"
 mkdir -p "$QUICK_DIR/.task"
 mkdir -p "$QUICK_DIR/.summaries"
 ```

@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Setup: v3.0 — Knowledge System Configuration
 
 v2→v3 迁移后的环境配置。验证并引导用户完成知识系统、CodeGraph、Hook 的安装和配置。

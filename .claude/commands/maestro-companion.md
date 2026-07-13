@@ -19,16 +19,9 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create maestro-companion -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Side-car utility for any task: load knowledge context (before), record structured entries (note),
@@ -65,11 +58,11 @@ $ARGUMENTS — mode + optional flags.
 
 Auto-detection: if `--type` not provided, infer from `--task` description keywords.
 
-**Output boundary**: ALL file writes MUST target `.workflow/.scratchpad/` (companion docs + `.companion-active` pointer) only. Promotion writes (spec/knowhow) are delegated to `spec-add` / `manage-knowhow-capture` skills. NEVER modify source code, `.workflow/state.json`, or files outside `.workflow/.scratchpad/`.
+**Output boundary**: ALL file writes MUST target `{run_dir}/outputs/` (companion docs + `.companion-active` pointer) only. Promotion writes (spec/knowhow) are delegated to `spec-add` / `manage-knowhow-capture` skills. NEVER modify source code, `.workflow/state.json`, or files outside `{run_dir}/outputs/`.
 
 **Companion document:**
-- Path: `.workflow/.scratchpad/companion-{YYYYMMDD-HHmmss}.md`
-- Active doc tracking: `.workflow/.scratchpad/.companion-active` (stores path of current companion doc)
+- Path: `{run_dir}/outputs/companion-{YYYYMMDD-HHmmss}.md`
+- Active doc tracking: `{run_dir}/outputs/.companion-active` (stores path of current companion doc)
 - Format: YAML frontmatter (rich metadata) + typed sections + timestamped entries
 </context>
 
@@ -149,7 +142,7 @@ ls .workflow/codebase/doc-index.json
 
 ### 4. Create companion document
 
-Create `.workflow/.scratchpad/` if needed. Resolve task type from `--type` flag or infer from `--task` keywords.
+Create `{run_dir}/outputs/` if needed. Resolve task type from `--type` flag or infer from `--task` keywords.
 
 Write companion doc with the full field template:
 
@@ -344,7 +337,7 @@ completed: ""
 - (general working notes)
 ```
 
-Write the companion doc path to `.workflow/.scratchpad/.companion-active`.
+Write the companion doc path to `{run_dir}/outputs/.companion-active`.
 
 ### 5. Output summary card
 
@@ -368,7 +361,7 @@ Mid-task commands:
 
 ### 1. Locate active companion doc
 
-Read `.workflow/.scratchpad/.companion-active` to get the doc path.
+Read `{run_dir}/outputs/.companion-active` to get the doc path.
 If missing or file not found → create a new companion doc (same as S_BEFORE step 4, minimal — no spec/knowhow loading).
 
 ### 2. Parse entry content and flags
@@ -432,7 +425,7 @@ Append to the companion doc under `## Entries`:
 
 ### 1. Load companion doc
 
-Read `.workflow/.scratchpad/.companion-active` → read the companion doc.
+Read `{run_dir}/outputs/.companion-active` → read the companion doc.
 If no active doc or doc is empty → skip to step 4 (accumulation reminder).
 
 ### 2. Populate outcome fields
@@ -485,7 +478,7 @@ Update frontmatter: `promoted_specs`, `promoted_knowhow` counts.
 
 Extract any `todo` entries → write to `follow_up` in frontmatter.
 
-Clear `.workflow/.scratchpad/.companion-active`.
+Clear `{run_dir}/outputs/.companion-active`.
 
 ### 4. Output accumulation reminder + routing
 

@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Motion Design
 
 ## Duration: The 100/300/500 Rule

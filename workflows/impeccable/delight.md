@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 > **Additional context needed**: what's appropriate for the domain (playful vs professional vs quirky vs elegant).
 
 Find the moments where personality and unexpected polish would turn a functional interface into one users remember and tell other people about. Add only where the moment earns it; delight everywhere reads as noise.

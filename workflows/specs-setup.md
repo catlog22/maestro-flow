@@ -4,6 +4,10 @@ name: spec-setup
 alias: spec-setup
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Workflow: spec-setup
 
 System specs initialization -- scan project structure, detect tech stack, generate convention files.

@@ -9,7 +9,6 @@ import {
   adaptIssueRow,
   adaptKnowledgeGraph,
   crossReferenceKgWithDocIndex,
-  loadSessionArchiveEntries,
   loadRunModeSessionEntries,
   loadVirtualEntries,
   loadVirtualJsonEntries,
@@ -106,7 +105,6 @@ export class WikiIndexer {
       join(this.workflowRoot, 'knowhow'),
       join(this.workflowRoot, 'issues'),
       join(this.workflowRoot, 'domain'),
-      join(this.workflowRoot, 'scratch'),
       join(this.workflowRoot, 'sessions'),
     ];
     for (const lw of this.linkedWorkspaces) {
@@ -124,9 +122,6 @@ export class WikiIndexer {
     if (existsSync(claudeProjectDir)) dirs.push(claudeProjectDir);
     const codexSessionsDir = join(home, '.codex', 'sessions');
     if (existsSync(codexSessionsDir)) dirs.push(codexSessionsDir);
-
-    const milestonesDir = join(this.workflowRoot, 'milestones');
-    if (existsSync(milestonesDir)) dirs.push(milestonesDir);
 
     const singletons = [
       join(this.workflowRoot, 'project.md'),
@@ -804,10 +799,6 @@ export class WikiIndexer {
     const domainEntries = await this.scanDomain();
     out.push(...domainEntries);
 
-    // scratch/*/*.md — session working documents (lowest search priority via SCRATCH_FIELD_CONFIGS)
-    const scratchEntries = await this.scanScratchDocuments();
-    out.push(...scratchEntries);
-
     return out;
   }
 
@@ -830,38 +821,6 @@ export class WikiIndexer {
       }
     }
     return results;
-  }
-
-  /**
-   * Scan .workflow/scratch session directories for .md working documents.
-   * These are indexed as 'note' type with ext.virtualKind='scratch-doc'
-   * so search.ts applies SCRATCH_FIELD_CONFIGS (lowest BM25 weight).
-   */
-  private async scanScratchDocuments(): Promise<WikiEntry[]> {
-    const scratchRoot = join(this.workflowRoot, 'scratch');
-    if (!existsSync(scratchRoot)) return [];
-    const out: WikiEntry[] = [];
-
-    for (const sessionName of await safeReaddir(scratchRoot)) {
-      const sessionDir = join(scratchRoot, sessionName);
-      let dirStat: Awaited<ReturnType<typeof stat>> | null = null;
-      try { dirStat = await stat(sessionDir); } catch { continue; }
-      if (!dirStat.isDirectory()) continue;
-
-      for (const fileName of await safeReaddir(sessionDir)) {
-        if (extname(fileName).toLowerCase() !== '.md') continue;
-        const absPath = join(sessionDir, fileName);
-        const entry = await this.parseFileEntry(absPath, 'note');
-        if (!entry) continue;
-
-        const stem = basename(fileName, extname(fileName));
-        entry.id = `scratch-${slugify(sessionName)}-${slugify(stem)}`;
-        entry.ext = { ...entry.ext, virtualKind: 'scratch-doc', sessionDir: sessionName };
-        entry.category = entry.category || 'scratch';
-        out.push(entry);
-      }
-    }
-    return out;
   }
 
   /**
@@ -1035,20 +994,8 @@ export class WikiIndexer {
       out.push(...kgEntries);
     }
 
-    // Sessions: scan archive.json under scratch/ (sealed) and
-    // milestones/{M}/artifacts/ (archived). Adapter filters out active.
-    // archive.json carries lifecycle + content_refs; context-package.json
-    // is a lazy peek for summary enrichment.
-    out.push(...(await this.scanSessionArchives(join(this.workflowRoot, 'scratch'))));
+    // Canonical Session/Run registry. Only sealed/archived Runs are indexed.
     out.push(...(await this.scanRunModeSessions()));
-    const milestonesRoot = join(this.workflowRoot, 'milestones');
-    if (existsSync(milestonesRoot)) {
-      for (const m of await safeReaddir(milestonesRoot)) {
-        const artifactsDir = join(milestonesRoot, m, 'artifacts');
-        if (!existsSync(artifactsDir)) continue;
-        out.push(...(await this.scanSessionArchives(artifactsDir)));
-      }
-    }
 
     // CLI sessions: Claude Code (~/.claude/) and Codex (~/.codex/)
     out.push(...(await this.scanCliSessions()));
@@ -1077,19 +1024,6 @@ export class WikiIndexer {
     ]);
 
     return [...claudeEntries, ...codexEntries];
-  }
-
-  private async scanSessionArchives(root: string): Promise<WikiEntry[]> {
-    if (!existsSync(root)) return [];
-    const out: WikiEntry[] = [];
-    for (const name of await safeReaddir(root)) {
-      const sessionDir = join(root, name);
-      const arch = join(sessionDir, 'archive.json');
-      if (!existsSync(arch) || !this.isInsideRoot(arch)) continue;
-      const rel = toForwardSlash(relative(this.workflowRoot, arch));
-      out.push(...(await loadSessionArchiveEntries(arch, rel)));
-    }
-    return out;
   }
 
   private async scanRunModeSessions(): Promise<WikiEntry[]> {

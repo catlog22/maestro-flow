@@ -1,3 +1,5 @@
+
+
 # Ant Output Schema
 
 **The critical contract.** Every ant MUST write a JSON file matching this schema. Pheromone updates depend on it. Schema violation = ant output discarded + worker error reported.

@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Diagnose Documentation Structure
 
 检测目标 skill 中的文档冗余和冲突问题。

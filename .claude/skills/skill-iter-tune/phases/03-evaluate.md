@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 3: Evaluate Quality
 
 > **COMPACT SENTINEL [Phase 3: Evaluate]**

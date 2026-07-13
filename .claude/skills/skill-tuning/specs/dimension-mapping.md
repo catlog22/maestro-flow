@@ -1,3 +1,5 @@
+
+
 # Dimension to Spec Mapping
 
 维度关键词到 Spec 的映射规则，用于 action-analyze-requirements 阶段的自动匹配。

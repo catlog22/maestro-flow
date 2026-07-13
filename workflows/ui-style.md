@@ -1,18 +1,14 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # UI Style Workflow (ui-ux-pro-max powered)
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Prerequisites
 
 - `.workflow/` directory initialized
-- Phase directory OR scratch mode
+- Phase directory OR ad-hoc Run mode
 - Python 3 + ui-ux-pro-max skill installed (SKILL_PATH resolved by command)
 
 ---
@@ -24,8 +20,8 @@ If argument is phase number/slug:
   Resolve PHASE_DIR from state.json artifact registry. Error if not found.
   SCRATCH_MODE = false
 
-If argument is topic text (scratch mode):
-  PHASE_DIR = .workflow/scratch/{YYYYMMDD}-ui-design-{slug}
+If argument is topic text (ad-hoc Run mode):
+  PHASE_DIR = {run_dir}/outputs/
   Create directory + minimal index.json (type="ui-design", goal=topic).
   SCRATCH_MODE = true
 ```

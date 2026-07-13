@@ -15,16 +15,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-roadmap -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Generate a milestone/phase roadmap using `spawn_agents_on_csv` with 2-wave analysis:

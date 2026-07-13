@@ -173,6 +173,10 @@ interface ArtifactInfo {
   completed_at: string | null;
 }
 
+function isCompletedArtifactStatus(status: string): boolean {
+  return status === 'sealed' || status === 'completed';
+}
+
 /** Latest completed_at timestamp (ms epoch) across a chain, or 0 if none parseable */
 function chainCompletedAt(chain: ArtifactChain): number {
   let max = 0;
@@ -276,7 +280,7 @@ function buildChains(artifacts: ArtifactInfo[]): { chains: ArtifactChain[]; orph
     }
 
     if (chain.length > 0) {
-      const allCompleted = chain.every(a => a.status === 'completed');
+      const allCompleted = chain.every(a => isCompletedArtifactStatus(a.status));
       chains.push({ artifacts: chain, allCompleted });
     }
   }
@@ -287,7 +291,7 @@ function buildChains(artifacts: ArtifactInfo[]): { chains: ArtifactChain[]; orph
   return { chains, orphans };
 }
 
-/** Read milestone + artifact chains from .workflow/state.json */
+/** Read canonical Session/Run progress from `.workflow/sessions/`. */
 function readWorkflowState(dir: string): WorkflowInfo {
   const root = findWorkspaceRoot(dir);
   if (!root) return emptyWf;
@@ -296,103 +300,45 @@ function readWorkflowState(dir: string): WorkflowInfo {
   try {
     const state = JSON.parse(readFileSync(statePath, 'utf8'));
     const result: WorkflowInfo = { ...emptyWf, workspaceRoot: root };
-
-    if (state.current_milestone) result.milestone = state.current_milestone;
-    if (state.status) result.status = state.status;
-
-    const rawArtifacts: Array<{ id?: string; type?: string; phase?: number; milestone?: string; status?: string; path?: string; depends_on?: string | string[] | null }> = Array.isArray(state.artifacts) ? state.artifacts : [];
-    const milestone = Array.isArray(state.milestones)
-      ? state.milestones.find((m: { name?: string; id?: string }) => m.name === state.current_milestone || m.id === state.current_milestone)
-      : null;
-    const phases: unknown[] = Array.isArray(milestone?.phases) ? milestone.phases : [];
-
-    // Normalize phases — accept both number[] (v2.0) and Array<{id,status,...}> (v1.0)
-    const rawPhases: Array<unknown> = phases;
-    const phaseEntries: Array<{ id: number; status?: string }> = [];
-    for (const p of rawPhases) {
-      if (typeof p === 'number') phaseEntries.push({ id: p });
-      else if (p && typeof p === 'object' && typeof (p as { id?: unknown }).id === 'number') {
-        const obj = p as { id: number; status?: string };
-        phaseEntries.push({ id: obj.id, status: obj.status });
-      }
-    }
-    const phaseIds = phaseEntries.map(p => p.id);
-
-    // Filter to current milestone artifacts
-    const msArtifacts: ArtifactInfo[] = rawArtifacts
-      .filter(a => a.milestone === state.current_milestone && a.id && a.type && a.status)
-      .map(a => ({
-        id: a.id!,
-        type: a.type!,
-        status: a.status!,
-        phase: a.phase ?? null,
-        path: a.path ?? '',
-        depends_on: a.depends_on ?? null,
-        completed_at: (a as { completed_at?: string }).completed_at ?? null,
-      }));
-
-    if (phaseIds.length > 0) {
-      result.total = phaseIds.length;
-
-      // Prefer v1.0 inline phase.status if present
-      const hasInlineStatus = phaseEntries.some(p => typeof p.status === 'string');
-      let completed = 0, inProgress = 0, planned = 0;
-
-      if (hasInlineStatus) {
-        for (const p of phaseEntries) {
-          if (p.status === 'completed') completed++;
-          else if (p.status === 'in-progress' || p.status === 'in_progress' || p.status === 'active') inProgress++;
-        }
-      } else {
-        for (const p of phaseIds) {
-          const phaseArts = msArtifacts.filter(a => a.phase === p);
-          if (phaseArts.some(a => a.type === 'execute' && a.status === 'completed')) { completed++; continue; }
-          if (phaseArts.some(a => a.type === 'plan' && a.status === 'completed')) { planned++; inProgress++; continue; }
-          if (phaseArts.length > 0) { inProgress++; }
-        }
-      }
-      result.completed = completed;
-      result.inProgress = inProgress;
-      result.planned = planned;
-
-      // Current phase — prefer in-progress, then first non-completed
-      if (hasInlineStatus) {
-        const cur = phaseEntries.find(p => p.status === 'in-progress' || p.status === 'in_progress' || p.status === 'active')
-          ?? phaseEntries.find(p => p.status !== 'completed');
-        if (cur) result.currentPhase = cur.id;
-      } else {
-        for (const p of phaseIds) {
-          if (msArtifacts.some(a => a.phase === p && a.status === 'in_progress')) {
-            result.currentPhase = p; break;
-          }
-        }
-        if (!result.currentPhase) {
-          for (const p of phaseIds) {
-            if (!msArtifacts.some(a => a.type === 'execute' && a.phase === p && a.status === 'completed')) {
-              result.currentPhase = p; break;
-            }
-          }
-        }
-      }
-
-      // Build chains (only if artifacts exist)
-      if (msArtifacts.length > 0) {
-        const { chains, orphans } = buildChains(msArtifacts);
-        result.chains = chains;
-        result.orphans = orphans;
-      }
-
-    } else if (state.phases_summary) {
-      // v1 fallback
-      const s = state.phases_summary;
-      if (typeof s.total === 'number') result.total = s.total;
-      if (typeof s.completed === 'number') result.completed = s.completed;
-      if (typeof s.in_progress === 'number') result.inProgress = s.in_progress;
-      if (state.current_phase) result.currentPhase = state.current_phase;
-    }
-
-    if (state.current_step) result.currentStep = state.current_step;
-    if (state.current_task_id) result.currentTaskId = state.current_task_id;
+    const sessionId = typeof state.active_session_id === 'string'
+      ? state.active_session_id
+      : Array.isArray(state.sessions)
+        ? [...state.sessions].reverse().find((entry: { status?: string }) => entry.status === 'running' || entry.status === 'paused')?.session_id
+        : null;
+    if (!sessionId) return result;
+    const sessionDir = join(root, '.workflow', 'sessions', sessionId);
+    const session = JSON.parse(readFileSync(join(sessionDir, 'session.json'), 'utf8')) as {
+      intent?: string; status?: string; active_run_id?: string | null;
+    };
+    const registry = JSON.parse(readFileSync(join(sessionDir, 'artifacts.json'), 'utf8')) as {
+      artifacts?: Record<string, { kind?: string; status?: string; relative_path?: string; producer_run_id?: string; created_at?: string }>;
+    };
+    const runsDir = join(sessionDir, 'runs');
+    const runs = existsSync(runsDir)
+      ? readdirSync(runsDir).map(name => {
+          try { return JSON.parse(readFileSync(join(runsDir, name, 'run.json'), 'utf8')) as { run_id: string; sequence: number; status: string }; }
+          catch { return null; }
+        }).filter((run): run is { run_id: string; sequence: number; status: string } => run !== null)
+      : [];
+    const sequenceByRun = new Map(runs.map(run => [run.run_id, run.sequence]));
+    result.milestone = session.intent ?? sessionId;
+    result.status = session.status ?? '';
+    result.total = runs.length;
+    result.completed = runs.filter(run => run.status === 'sealed').length;
+    result.inProgress = runs.filter(run => run.status === 'running' || run.status === 'blocked').length;
+    result.currentPhase = session.active_run_id ? (sequenceByRun.get(session.active_run_id) ?? 0) : 0;
+    const artifacts: ArtifactInfo[] = Object.entries(registry.artifacts ?? {}).map(([id, artifact]) => ({
+      id,
+      type: artifact.kind ?? 'artifact',
+      status: artifact.status ?? 'unknown',
+      phase: artifact.producer_run_id ? (sequenceByRun.get(artifact.producer_run_id) ?? null) : null,
+      path: artifact.relative_path ?? '',
+      depends_on: null,
+      completed_at: artifact.created_at ?? null,
+    }));
+    const { chains, orphans } = buildChains(artifacts);
+    result.chains = chains;
+    result.orphans = orphans;
 
     return result;
   } catch {
@@ -584,9 +530,7 @@ export function buildCoordinatorSegment(session: string): string {
 /** Extract readable slug from artifact path */
 function extractSlug(art: ArtifactInfo): string {
   const b = basename(art.path || '');
-  // scratch/analyze-auth-2026-04-20 → auth
-  // phases/01-auth-multi-tenant → auth-multi-tenant
-  // scratch/20260421-review-P1-auth → auth
+  // runs/20260713-001-analyze/outputs/findings.json → findings.json
   return b
     .replace(/^\d+-/, '')                    // leading number prefix
     .replace(/^\d{8}-/, '')                  // YYYYMMDD- prefix
@@ -607,7 +551,7 @@ function renderChain(chain: ArtifactChain): string {
   }
 
   const active = activeArtifact(chain);
-  const done = chain.artifacts.filter(a => a.status === 'completed').length;
+  const done = chain.artifacts.filter(a => isCompletedArtifactStatus(a.status)).length;
   const total = chain.artifacts.length;
   const typeLabel = ansiFg(TEXT_COLORS.phase) + active.type + ANSI_RESET;
 
@@ -626,7 +570,7 @@ function renderChain(chain: ArtifactChain): string {
 function renderOrphan(art: ArtifactInfo): string {
   const slug = extractSlug(art);
   const slugLabel = ansiFg(TEXT_COLORS.task) + slug + ANSI_RESET;
-  if (art.status === 'completed') {
+  if (isCompletedArtifactStatus(art.status)) {
     return `${slugLabel} ${ansiFg(TEXT_COLORS.ctxOk)}✓${ANSI_RESET}`;
   }
   const typeLabel = ansiFg(TEXT_COLORS.phase) + art.type + ANSI_RESET;
@@ -674,7 +618,7 @@ function filterAndCapChains(chains: ArtifactChain[], orphans: ArtifactInfo[]): F
 
   // Drop expired completed orphans
   const liveOrphans = orphans.filter(o => {
-    if (o.status !== 'completed') return true;
+    if (!isCompletedArtifactStatus(o.status)) return true;
     if (!o.completed_at) return false;  // unknown age + completed → drop
     const ts = Date.parse(o.completed_at);
     return !Number.isNaN(ts) && now - ts < CHAIN_DONE_TTL_MS;

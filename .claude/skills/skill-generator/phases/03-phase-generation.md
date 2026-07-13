@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 3: Phase Generation
 
 Generate Phase files based on execution mode, including declarative workflow orchestration and context strategy support.

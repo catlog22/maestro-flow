@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Diagnose Agent Coordination
 
 Analyze target skill for agent coordination failures - call chain fragility and result passing issues.

@@ -1,3 +1,5 @@
+
+
 # Swarm Protocol — Adversarial Edition
 
 Defines how the SKILL.md coordinator, Python ACO controller, and modular Workflow scripts interface.

@@ -1,17 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 3: Strategy Formulation
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-> **📌 COMPACT SENTINEL [Phase 3: strategy-formulation]**
-> This phase contains 4 execution steps (Step 3.1 — 3.4).
-> If you can read this sentinel but cannot find the full Step protocol below, context has been compressed.
-> Recovery: `Read("phases/03-strategy-formulation.md")`
-
-Select response strategies (Accept/Defend/Clarify/Experiment) based on discussion consensus, analyze paper content for supporting evidence using CLI, identify gaps requiring new experiments.
 
 ## Objective
 
@@ -74,7 +65,7 @@ const discussionConsensus = <from Phase 2 output>
 const strategicRecommendations = <from Phase 2 output>
 
 // Read consensus-strategies.json with error handling
-const strategiesPath = ".workflow/.scratchpad/consensus-strategies.json"
+const strategiesPath = "{run_dir}/outputs/consensus-strategies.json"
 const strategiesResult = safeReadJSON(strategiesPath, "Phase 3");
 
 if (!strategiesResult.success) {
@@ -396,7 +387,7 @@ ${strategy.evidenceGaps.map(g => `- ${g}`).join('\n')}
   }
 }
 
-Write(".workflow/.scratchpad/strategy-matrix.md", matrixReport)
+Write("{run_dir}/outputs/strategy-matrix.md", matrixReport)
 ```
 
 **2. Evidence References (evidence-references.json)**
@@ -422,7 +413,7 @@ const evidenceReferences = {
   }))
 }
 
-Write(".workflow/.scratchpad/evidence-references.json", JSON.stringify(evidenceReferences, null, 2))
+Write("{run_dir}/outputs/evidence-references.json", JSON.stringify(evidenceReferences, null, 2))
 ```
 
 **User Confirmation (if not auto mode)**
@@ -443,7 +434,7 @@ if (!workflowPreferences.autoYes) {
   })
 
   if (confirm["Confirm"] === "Revise") {
-    console.log("Please edit .workflow/.scratchpad/strategy-matrix.md and re-run this phase")
+    console.log("Please edit {run_dir}/outputs/strategy-matrix.md and re-run this phase")
     return
   } else if (confirm["Confirm"] === "Add Experiments") {
     console.log("Please document planned experiments and update evidence-references.json")
@@ -456,8 +447,8 @@ if (!workflowPreferences.autoYes) {
 
 - **Variable**: `strategyMatrix` (complete strategy matrix with evidence)
 - **Variable**: `evidenceMap` (evidence references for each strategy)
-- **File**: `.workflow/.scratchpad/strategy-matrix.md` (human-readable matrix)
-- **File**: `.workflow/.scratchpad/evidence-references.json` (structured evidence data)
+- **File**: `{run_dir}/outputs/strategy-matrix.md` (human-readable matrix)
+- **File**: `{run_dir}/outputs/evidence-references.json` (structured evidence data)
 - **TodoWrite**: Mark Phase 3 completed, Phase 4 in_progress
 
 ## Next Phase

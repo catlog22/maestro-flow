@@ -1,3 +1,5 @@
+
+
 # Pheromone Schema
 
 Pheromone matrix structure, update formula, evaporation rule. Authoritative spec for `pheromone/current.json` and history snapshots.

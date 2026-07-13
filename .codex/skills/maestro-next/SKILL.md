@@ -16,16 +16,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-next -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 单链推荐：解析 intent + project state → 路由表评分 → 推荐**单个原子 skill** → 确认后**在协调器上下文直接调用** `$skill {args}`。
@@ -56,7 +49,7 @@ $ARGUMENTS — 意图文本 + 可选 flags。
 
 **State files:**
 - `.workflow/state.json` — phase / milestone / artifact registry
-- `.workflow/scratch/` — 最近 artifact（按 mtime 倒序定位 lifecycle）
+- `{run_dir}/outputs/` — 最近 artifact（按 mtime 倒序定位 lifecycle）
 - `.workflow/.maestro/` — 进行中的 session（仅作引用，不修改）
 </context>
 
@@ -132,7 +125,7 @@ S_FALLBACK:
 
 ```bash
 cat .workflow/state.json 2>/dev/null              # phase / milestone / artifacts
-ls -la .workflow/scratch/ 2>/dev/null | head -10  # 最近 artifact (mtime DESC)
+ls -la {run_dir}/outputs/ 2>/dev/null | head -10  # 最近 artifact (mtime DESC)
 ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
 ```
 
@@ -309,7 +302,7 @@ brainstorm → blueprint → init → analyze-macro → roadmap
 ### Success Criteria
 
 - [ ] Intent 解析 + flags 提取完成
-- [ ] 读取 `.workflow/state.json` + scratch artifacts 推断 lifecycle_position
+- [ ] 读取 `.workflow/state.json` + Run artifacts 推断 lifecycle_position
 - [ ] 候选池等于路由表（管线编排器不在）
 - [ ] 评分综合：intent 字面匹配 + lifecycle 下一步 + workflow 簇 + recent activity
 - [ ] 空 intent / "continue" / "next" → 直接采用 lifecycle 推断的下一步

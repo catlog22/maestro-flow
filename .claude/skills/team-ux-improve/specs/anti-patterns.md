@@ -1,3 +1,5 @@
+
+
 # AI Slop Detection Catalog
 
 20 visual anti-patterns commonly produced by AI code generation. Use during scanning to flag design quality issues.

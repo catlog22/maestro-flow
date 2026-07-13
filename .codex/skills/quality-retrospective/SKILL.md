@@ -16,16 +16,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create quality-retrospective -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Multi-lens retrospective for completed phases. Context-Agent Fork loads phase artifacts once;
@@ -88,36 +81,24 @@ $quality-retrospective "3 --compare 2 -y"
 When `-y`: Accept all routing recommendations without prompting. Route all insights automatically.
 
 **Storage written**:
-- `{target_dir}/retrospective.md` -- human-readable record (target_dir resolved via state.json artifact registry to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`)
-- `{target_dir}/retrospective.json` -- structured record
+- `{run_dir}/outputs/retrospective.md` -- human-readable record
+- `{run_dir}/outputs/retrospective.json` -- structured record
 - `.workflow/specs/{category-file}.md` -- `<spec-entry>` entries appended to matching category files (one per spec-routed insight)
 - `.workflow/issues/issues.jsonl` -- appended issue rows (`source: "retrospective"`)
 - `.workflow/knowhow/TIP-*.md` -- knowhow tips (via `manage-knowhow-capture` skill)
 - `.workflow/specs/learnings.md` -- append-only insight log
 - Index auto-maintained by WikiIndexer
 
-**Storage read (never modified)** — all resolved via `state.json.artifacts[]`:
+**Storage read (never modified)** — all resolved via `Session ArtifactRegistry (runtime-owned)`:
 ```
-# D-007 milestone reverse lookup — phase N may belong to a milestone different from current
-target_milestone = resolve_milestone(target_phase)  # see below
-related = artifacts.filter(a =>
-  a.phase === target_phase && a.milestone === target_milestone
-).sort_by(completed_at asc)
-
-resolve_milestone(phase_number):
-  for ms in state.json.milestones[]:
-    if str(phase_number) in ms.phase_slugs: return ms.id
-  return state.json.current_milestone   # fallback
+Resolve the target execution from `.workflow/sessions/*/runs/*/run.json`, then
+resolve typed upstream artifacts through the owning Session `artifacts.json`.
 ```
-Each artifact's type determines its outputs at `.workflow/{a.path}/`:
-- **execute** → index.json, plan.json, .task/TASK-*.json, .summaries/TASK-*-summary.md
-- **verify** → verification.json
-- **review** → review.json (findings, verdict, severity distribution)
-- **debug** → understanding.md, evidence.ndjson (root causes, fix directions)
-- **test** → uat.md, .tests/ (UAT results, gaps, coverage)
+Each artifact points to a producer Run under `runs/{run_id}/outputs/`; supporting
+evidence is under that Run's `evidence/`, and narrative/handoff is in `report.md`.
 - Also reads: `.workflow/issues/issues.jsonl`, `.workflow/state.json`
 
-**Output boundary**: ALL file writes MUST target the phase's retrospective directory (`.workflow/scratch/{YYYYMMDD}-retrospective-P{N}/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). NEVER modify source code, verification.json, review.json, plan.json, or other existing artifacts.
+**Output boundary**: ALL file writes MUST target the phase's retrospective directory (`{run_dir}/outputs/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). NEVER modify source code, verification.json, review.json, plan.json, or other existing artifacts.
 
 ### Agent Registry
 
@@ -153,7 +134,7 @@ Each artifact's type determines its outputs at `.workflow/{a.path}/`:
 4. **Context-agent closes last**: Close all lens agents before closing `ctx`
 5. **Synthesizer is isolated**: `fork_turns: "none"` -- receives lens results only via message, not full conversation history
 6. **Stable INS-ids**: `INS-{8hex}` from `hash(phase_num + lens + title)` -- re-runs do not create duplicates
-7. **Archive before overwrite**: Move existing retrospective.{md,json} to `.history/` with timestamp before writing new ones
+7. **Immutable history**: Never overwrite or move sealed retrospective artifacts; create a new Run
 8. **Spec learnings.md**: Create `.workflow/specs/learnings.md` if it does not exist, then append insights
 9. **Route confirmation**: Unless `-y`, present routing table and ask per-group before writing spec/issue/knowhow
 10. **Lessons always written**: Append to `.workflow/specs/learnings.md` regardless of `--no-route` -- routing only controls spec/issue/knowhow creation
@@ -179,10 +160,9 @@ Update plan: Stages 1-3 → in_progress; Stages 4-8 → pending.
 Validate `--lens` values. If `--compare <M>` present, require single mode.
 
 **Stage 2: Validate phase artifacts**. For each target phase:
-- Phase directory must exist (resolved via state.json artifact registry to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`)
-- `index.json` must show `status: "completed"`
-- `.task/` directory must exist with at least one `TASK-*.json`
-- If existing `retrospective.json` found and not `--all`: emit W002, prompt overwrite
+- Target execution Run must exist and have `status: "sealed"`
+- Its primary artifact must resolve through the owning Session `artifacts.json`
+- Existing retrospective artifacts remain immutable; a rerun always writes to the current Run
 
 **Stage 3: Scan mode** -- list all completed phases without retrospective.json. Prompt user to select.
 
@@ -196,9 +176,9 @@ spawn_agent({
   task_name: "ctx",
   fork_turns: "none",
   message: `Load and summarize all phase ${targetPhase} artifacts for retrospective.
-    1. Query state.json artifacts[] for phase === ${targetPhase} && milestone === resolve_milestone(${targetPhase}) [D-007 reverse lookup via state.json.milestones[].phase_slugs; fallback to current_milestone if phase unmatched]
-    2. Load per-artifact outputs (execute→index/plan/tasks/summaries, verify→verification.json, review→review.json, debug→understanding/evidence, test→uat/tests)
-    3. Filter issues.jsonl for this phase; read state.json for project context
+    1. Resolve the sealed execution Run from `.workflow/sessions/*/runs/*/run.json`
+    2. Load its typed artifacts through the owning Session `artifacts.json`, plus Run evidence and report
+    3. Filter issues.jsonl for this Run/phase reference; read Session metadata for context
     EXPECTED: Goals vs outcomes, completion rates, verification/review/UAT results, issue counts, key metrics`
 })
 wait_agent({ timeout_ms: 1800000 })
@@ -274,9 +254,7 @@ If `!AUTO_YES`: present routing table and ask confirmation before routing each g
 
 ### Stage 7: Write Artifacts
 
-**Archive if overwriting**: If existing `retrospective.{md,json}` present, move to `{artifact_dir}/.history/` with timestamp suffix before writing new ones.
-
-Write two files to `{target_dir}/`:
+Write two files to the current `{run_dir}/outputs/` without modifying prior sealed artifacts:
 - **retrospective.json**: phase, slug, timestamp, lenses_run, metrics, findings_by_lens, distilled_insights, routing_summary
 - **retrospective.md**: Header with phase/slug/timestamp, metrics table (tasks completed, test pass rate, review issues, UAT scenarios), findings by lens, distilled insights, routing summary
 

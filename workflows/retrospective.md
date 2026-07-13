@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Retrospective Workflow
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Argument Shape
 
@@ -53,13 +49,15 @@ Validate: --lens names must be known (E002), --compare requires single mode (E00
 ## Stage 2: scan_unreviewed (mode = "scan" or "all")
 
 ```
-Read .workflow/state.json → state
+Read `.workflow/state.json` to resolve `active_session_id`, then scan
+`.workflow/sessions/*/runs/*/run.json`.
 
-candidates = all completed execute artifacts from state.artifacts, each mapped to:
-  { number, slug, title, completed_at, has_retro, phase_dir, gaps: 0, review_verdict: "—" }
+candidates = all sealed `maestro-execute` Runs, each mapped to:
+  { number: run.sequence, slug: run.run_id, title: run.intent, completed_at: run.sealed_at,
+    has_retro, run_dir, gaps: 0, review_verdict: "—" }
 
-  where phase_dir = ".workflow/" + artifact.path
-        has_retro = exists "{phase_dir}/retrospective.json"
+  where run_dir = `.workflow/sessions/{session_id}/runs/{run_id}`
+        has_retro = a sealed retrospective artifact in the owning Session `artifacts.json`
 ```
 
 ### Display backlog
@@ -83,41 +81,35 @@ candidates = all completed execute artifacts from state.artifacts, each mapped t
 | `scan`, 0 unreviewed | Print "All phases retrospected", exit 0 |
 | `scan`, 1 unreviewed | Default to that phase, ask AskUserQuestion to confirm |
 | `scan`, ≥2 unreviewed | AskUserQuestion with options: each phase as a choice + "All unreviewed" |
-| `all` | `phases = candidates` (overwrite existing — archive old retrospective.json to `.history/` first) |
+| `all` | `phases = candidates`；每个候选都创建新的 retrospective Run |
 | `single` | `phases = [parsed_phase]` (validate it exists and is completed; if `has_retro` and not `--all`, prompt to overwrite) |
 | `range` | `phases = candidates.filter(c => N <= c.number <= M)` |
 
-If overwriting existing retrospective.json:
-```
-Archive existing retrospective.{json,md} to "{candidate.phase_dir}/.history/retrospective-{YYYY-MM-DDTHH-mm-ss}.{ext}"
-```
+Existing retrospective artifacts are immutable. Re-run by creating a new Run.
 
 ---
 
 ## Stage 3: load_artifacts (per phase)
 
 ```
-artifact_dir = candidate.phase_dir
+source_run_dir = candidate.run_dir
+output_dir = current retrospective `{run_dir}/outputs/`
 
 Load artifacts bundle:
-  index           ← {artifact_dir}/index.json
-  state           ← .workflow/state.json
-  plan            ← {artifact_dir}/plan.json
-  verification    ← {artifact_dir}/verification.json
-  review          ← {artifact_dir}/review.json
-  uat             ← {artifact_dir}/uat.md
-  task_summaries  ← {artifact_dir}/.summaries/TASK-*-summary.md
-  task_jsons      ← {artifact_dir}/.task/TASK-*.json
+  execution       ← source Run primary artifact resolved through Session `artifacts.json`
+  evidence        ← {source_run_dir}/evidence/
+  report          ← {source_run_dir}/report.md
+  upstream        ← aliases and producer Runs resolved from Session `artifacts.json`
   phase_issues    ← .workflow/issues/{issues,issue-history}.jsonl filtered by phase_ref == slug|NN
-  prior_retro     ← if --compare M: load phase M's retrospective.json via artifact registry
+  prior_retro     ← if --compare M: resolve the sealed retrospective artifact from Session `artifacts.json`
 ```
 
 ### Compute base metrics
 
 ```
 metrics = {
-  tasks_planned          ← plan.tasks.length or task_jsons.length
-  tasks_completed        ← task_jsons where status=="completed"
+  tasks_planned          ← execution summary planned count
+  tasks_completed        ← execution summary completed count
   tasks_deferred         ← state.accumulated_context.deferred for this phase
   gaps_found / closed    ← verification.gaps (total vs status=="closed")
   antipatterns           ← verification.antipatterns count
@@ -146,10 +138,10 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn one Agent per active len
 
 | Lens | subagent_type | --rule template (for any inner CLI calls) | Primary inputs | Output candidates |
 |------|--------------|-------------------------------------------|----------------|-------------------|
-| technical | general-purpose | analysis-analyze-code-patterns | task_summaries, task_jsons, state.accumulated_context.key_decisions | spec stubs |
-| process | general-purpose | analysis-trace-code-execution | plan.json (planned), task_jsons (actual), issue_history timestamps, state.deferred | notes |
+| technical | general-purpose | analysis-analyze-code-patterns | execution artifact, evidence, report, upstream aliases | spec stubs |
+| process | general-purpose | analysis-trace-code-execution | execution artifact, report, issue history timestamps | notes |
 | quality | general-purpose | analysis-review-code-quality | verification (gaps + antipatterns), review (severity_distribution + findings), phase_issues | issues |
-| decision | general-purpose | analysis-review-architecture | state.accumulated_context.key_decisions, task_summaries, plan.json rationale fields | notes (or spec) |
+| decision | general-purpose | analysis-review-architecture | report handoff, execution rationale, upstream artifacts | notes (or spec) |
 
 ### Lens prompt template
 
@@ -172,12 +164,10 @@ the project's spec / note / issue stores.
 - Completed at: {index.completed_at}
 
 ## Artifacts (read these from disk)
-- Plan:           {artifact_dir}/plan.json
-- Verification:   {artifact_dir}/verification.json
-- Review:         {artifact_dir}/review.json
-- UAT notes:      {artifact_dir}/uat.md
-- Task summaries: {artifact_dir}/.summaries/
-- Task JSONs:     {artifact_dir}/.task/
+- Execution:      {source_run_dir}/outputs/<primary artifact>
+- Evidence:       {source_run_dir}/evidence/
+- Report:         {source_run_dir}/report.md
+- Upstream:       Session `artifacts.json` aliases and producer Runs
 - Phase issues:   .workflow/issues/issues.jsonl (filter phase_ref == "{phase_slug}")
 - Project state:  .workflow/state.json (decisions, deferred)
 
@@ -214,7 +204,7 @@ Return ONLY a single JSON object, no prose, matching this schema:
       "title": "Short imperative title",
       "summary": "1–3 sentences a future planner can act on",
       "confidence": "high|medium|low",
-      "evidence_refs": ["{artifact_dir}/verification.json#gaps[2]", "..."],
+      "evidence_refs": ["{source_run_dir}/evidence/<file>:<line>", "..."],
       "routed_to": "spec|note|issue|none",
       "tags": ["..."]
     }
@@ -258,9 +248,9 @@ Structure: `{ phase, phase_slug, phase_title, retrospected_at, lenses_run, metri
 
 Sections: Header (tweetable, metadata) → Metrics table → Delta table (if --compare) → Findings by Lens → Distilled Insights → Routing Recommendations.
 
-Write both to `{artifact_dir}/`.
+Write both to the current retrospective `{run_dir}/outputs/`.
 
-Glob `{artifact_dir}/retrospective.json` AND `retrospective.md` MUST exist before Stage 8 complete; BLOCKED if missing.
+Both `{run_dir}/outputs/retrospective.json` and `{run_dir}/outputs/retrospective.md` MUST exist before completion; BLOCKED if missing.
 
 ---
 
@@ -441,8 +431,8 @@ If range/all mode: loop Stages 3-8 per phase, then print aggregate summary.
       "summary": "Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; should become a project-wide convention.",
       "confidence": "high",
       "evidence_refs": [
-        ".workflow/scratch/20260415-plan-P1-auth/verification.json#gaps[2]",
-        ".workflow/scratch/20260415-plan-P1-auth/.summaries/TASK-005-summary.md:42"
+        "{run_dir}/outputs/20260415-plan-P1-auth/verification.json#gaps[2]",
+        "{run_dir}/outputs/20260415-plan-P1-auth/.summaries/TASK-005-summary.md:42"
       ],
       "tags": ["auth", "jwt", "security"],
       "routed_to": "spec",
@@ -468,9 +458,8 @@ Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; shou
 - **Phase**: 1 (01-auth)
 - **Lens**: technical
 - **Confidence**: high
-- **Evidence**: .workflow/scratch/20260415-plan-P1-auth/verification.json#gaps[2]
+- **Evidence**: {run_dir}/outputs/20260415-plan-P1-auth/verification.json#gaps[2]
 - **Routed to**: spec (coding-conventions.md#INS-a1b2c3d4)
 
 </spec-entry>
 ```
-

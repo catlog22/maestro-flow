@@ -1,3 +1,5 @@
+
+
 # Architecture Document Template (Directory Structure)
 
 Template for generating architecture decision documents as a directory of individual ADR files in Phase 4.

@@ -26,7 +26,7 @@ $ARGUMENTS — target and optional mode flag.
 | File path | Read file content |
 | Wiki ID (`<type>-<slug>`) | `maestro wiki get <id>` |
 | `HEAD` / `staged` | `git diff HEAD` / `git diff --staged` |
-| Phase number | Resolve via state.json.artifacts[] → plan.json |
+| Phase number | Resolve the sealed plan artifact through the selected Session's ArtifactRegistry |
 
 **Flags**:
 - `--mode review|challenge|consult` (default: review)

@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Explore Flow
 
 Generate multiple design system variants, render HTML prototypes for visual comparison, and let the user select, mix, or redo until the visual direction is locked.

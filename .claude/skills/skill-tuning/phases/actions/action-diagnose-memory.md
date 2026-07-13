@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Diagnose Long-tail Forgetting
 
 Analyze target skill for long-tail effect and constraint forgetting issues.

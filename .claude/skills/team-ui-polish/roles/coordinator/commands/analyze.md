@@ -1,14 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Analyze Task
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Parse user task -> detect polish scope -> determine pipeline mode -> estimate complexity.
-
-**CONSTRAINT**: Text-level analysis only. NO source code reading, NO codebase exploration.
 
 ## Signal Detection
 

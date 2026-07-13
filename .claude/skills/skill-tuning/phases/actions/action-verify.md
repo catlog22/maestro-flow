@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Verify Applied Fixes
 
 Verify that applied fixes resolved the targeted issues.

@@ -540,74 +540,9 @@ export function adaptCodebaseDocIndex(parsed: unknown, sourcePath: string): Wiki
   return out;
 }
 
-// ── Session archive adapter (lifecycle-aware) ───────────────────────────
-// Strategy 2: only sessions with archive.json declaring lifecycle.status of
-// 'sealed' or 'archived' enter the wiki index. Sessions without archive.json
-// (or with status 'active') are excluded — agents must not see promises as
-// truth.
-//
-// Source: any .workflow/scratch/*/archive.json (sealed before milestone close)
-//      or .workflow/milestones/*/artifacts/*/archive.json (archived).
-// Schema: "session-archive/1.0".
-//
-// Content summary is read lazily from referenced files (currently
-// context-package.json if listed in content_refs); archive.json itself only
-// carries lifecycle + content_refs + pruning metadata.
+// ── Session / Run adapters (run-mode lifecycle) ─────────────────────────
 
-type SessionLifecycleStatus = 'active' | 'sealed' | 'archived';
-
-interface SessionLifecycle {
-  status?: SessionLifecycleStatus;
-  sealed_at?: string | null;
-  archived_at?: string | null;
-  linked_milestone?: string | null;
-}
-
-interface SessionContentRef {
-  type?: string;
-  path?: string;
-}
-
-interface SessionPruned {
-  at?: string;
-  counts?: {
-    open_questions?: number;
-    constraints?: number;
-    insights?: number;
-    references?: number;
-  };
-  ref?: string | null;
-}
-
-interface SessionArchive {
-  $schema?: string;
-  session_id?: string;
-  session_type?: string;
-  session_path?: string;
-  lifecycle?: SessionLifecycle;
-  content_refs?: SessionContentRef[];
-  pruned?: SessionPruned | null;
-}
-
-interface ContextPackageInsight {
-  role?: string;
-  area?: string;
-  summary?: string;
-}
-
-interface ContextPackageConstraint {
-  area?: string;
-}
-
-interface ContextPackagePeek {
-  insights?: ContextPackageInsight[];
-  constraints?: ContextPackageConstraint[];
-  open_questions?: unknown[];
-  requirements?: unknown[];
-  domain?: { problem_statement?: string };
-}
-
-const SESSION_TYPE_CATEGORY: Record<string, string> = {
+const RUN_COMMAND_CATEGORY: Record<string, string> = {
   brainstorm: 'arch',
   blueprint: 'arch',
   analyze: 'arch',
@@ -615,154 +550,6 @@ const SESSION_TYPE_CATEGORY: Record<string, string> = {
   execute: 'coding',
   verify: 'review',
 };
-
-function mapSessionStatus(status: SessionLifecycleStatus): WikiStatus {
-  return status === 'archived' ? 'archived' : 'completed';
-}
-
-function buildArchiveSummary(arch: SessionArchive, peek: ContextPackagePeek | null): string {
-  const parts: string[] = [];
-  const problem = peek?.domain?.problem_statement;
-  if (problem) parts.push(problem.slice(0, 200));
-  const insightCount = peek?.insights?.length ?? 0;
-  const constraintCount = peek?.constraints?.length ?? 0;
-  const questionCount = peek?.open_questions?.length ?? 0;
-  if (insightCount || constraintCount || questionCount) {
-    parts.push(`${insightCount} insights / ${constraintCount} constraints / ${questionCount} open questions`);
-  }
-  if (arch.pruned?.counts) {
-    const c = arch.pruned.counts;
-    const total = (c.open_questions ?? 0) + (c.constraints ?? 0) + (c.insights ?? 0) + (c.references ?? 0);
-    if (total > 0) parts.push(`pruned: ${total} items`);
-  }
-  const topInsight = peek?.insights?.[0]?.summary;
-  if (topInsight && !problem) parts.push(topInsight.slice(0, 200));
-  return parts.join(' | ');
-}
-
-function buildArchiveTags(
-  sessionType: string,
-  status: SessionLifecycleStatus,
-  peek: ContextPackagePeek | null,
-): string[] {
-  const tags: string[] = ['session', status, sessionType];
-  for (const c of peek?.constraints ?? []) {
-    if (c.area && tags.length < 12) tags.push(c.area);
-  }
-  return tags;
-}
-
-/**
- * Adapter for session archive.json files. Returns the lazy reader pattern:
- * pass `peekContextPackage` to enrich summary/tags from context-package.json
- * sibling. If unavailable, archive metadata alone is used.
- */
-export function adaptSessionArchive(
-  parsed: unknown,
-  sourcePath: string,
-  peek: ContextPackagePeek | null = null,
-): WikiEntry[] {
-  if (!parsed || typeof parsed !== 'object') return [];
-  const arch = parsed as SessionArchive;
-  const status: SessionLifecycleStatus = arch.lifecycle?.status ?? 'active';
-  if (status === 'active') return [];
-
-  const sessionType = arch.session_type ?? 'session';
-  const sessionId = arch.session_id ?? arch.session_path ?? sourcePath;
-  const slug = slugify(sessionId);
-  if (!slug) return [];
-
-  const sessionDir = sourcePath.replace(/\/archive\.json$/, '');
-  const sealedAt = toIso(arch.lifecycle?.sealed_at);
-  const archivedAt = toIso(arch.lifecycle?.archived_at ?? arch.lifecycle?.sealed_at);
-
-  const related: string[] = [];
-  if (arch.lifecycle?.linked_milestone) {
-    related.push(`milestone-${arch.lifecycle.linked_milestone}`);
-  }
-  for (const ref of arch.content_refs ?? []) {
-    if (ref?.path) related.push(`session-ref-${slugify(ref.path)}`);
-  }
-
-  return [{
-    id: `session-${sessionType}-${slug}`,
-    type: 'knowhow',
-    title: `${sessionType} ${arch.session_id ?? slug}`,
-    summary: buildArchiveSummary(arch, peek),
-    tags: buildArchiveTags(sessionType, status, peek),
-    status: mapSessionStatus(status),
-    created: sealedAt,
-    updated: archivedAt,
-    related,
-    source: { kind: 'virtual', path: sourcePath },
-    body: '',
-    raw: arch,
-    ext: {
-      virtualKind: 'session',
-      sessionType,
-      lifecycleStatus: status,
-      sessionDir,
-      linkedMilestone: arch.lifecycle?.linked_milestone ?? null,
-      contentRefs: arch.content_refs ?? [],
-      pruned: arch.pruned ?? null,
-      insightCount: peek?.insights?.length ?? 0,
-      constraintCount: peek?.constraints?.length ?? 0,
-      openQuestionCount: peek?.open_questions?.length ?? 0,
-      requirementCount: peek?.requirements?.length ?? 0,
-    },
-    scope: null,
-    category: SESSION_TYPE_CATEGORY[sessionType] ?? null,
-    specCategory: null,
-    createdBy: sessionType,
-    sourceRef: arch.session_id ?? null,
-    parent: null,
-  }];
-}
-
-/**
- * Reads archive.json + optional sibling context-package.json (for summary
- * enrichment) and returns adapted WikiEntries. Tolerates missing/malformed
- * context-package — only archive.json is required.
- */
-export async function loadSessionArchiveEntries(
-  archiveAbsPath: string,
-  archiveRelPath: string,
-): Promise<WikiEntry[]> {
-  let archiveRaw: string;
-  try {
-    archiveRaw = await readFile(archiveAbsPath, 'utf-8');
-  } catch {
-    warn(`unreadable:${archiveAbsPath}`, `cannot read ${archiveAbsPath}`);
-    return [];
-  }
-  let parsedArchive: unknown;
-  try {
-    parsedArchive = JSON.parse(archiveRaw);
-  } catch {
-    warn(`bad-json:${archiveAbsPath}`, `invalid JSON at ${archiveAbsPath}`);
-    return [];
-  }
-
-  // Sibling context-package.json (lazy peek; absent or malformed is fine)
-  let peek: ContextPackagePeek | null = null;
-  const peekPath = archiveAbsPath.replace(/archive\.json$/, 'context-package.json');
-  try {
-    const peekRaw = await readFile(peekPath, 'utf-8');
-    const parsed = JSON.parse(peekRaw);
-    if (parsed && typeof parsed === 'object') peek = parsed as ContextPackagePeek;
-  } catch {
-    /* peek is optional */
-  }
-
-  try {
-    return adaptSessionArchive(parsedArchive, archiveRelPath, peek);
-  } catch (err) {
-    warn(`adapter-fail:${archiveAbsPath}`, `adapter failed at ${archiveAbsPath}: ${(err as Error).message}`);
-    return [];
-  }
-}
-
-// ── Session / Run adapters (run-mode lifecycle) ─────────────────────────
 
 interface RunModeSession {
   session_id?: string;
@@ -902,7 +689,7 @@ export async function loadRunModeSessionEntries(
       raw: run,
       ext: { virtualKind: 'session-run', sessionId, runId, command, artifactIds: knowledge.artifactIds },
       scope: null,
-      category: SESSION_TYPE_CATEGORY[command] ?? null,
+      category: RUN_COMMAND_CATEGORY[command] ?? null,
       specCategory: null,
       createdBy: command,
       sourceRef: runId,

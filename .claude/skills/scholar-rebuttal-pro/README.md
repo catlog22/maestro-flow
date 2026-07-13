@@ -1,10 +1,6 @@
+
+
 # Scholar Rebuttal Pro - 使用指南
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
 
 ## 概述
 
@@ -119,7 +115,7 @@ Skill 启动时会询问三个配置：
 - `quality-report.md` - 质量评估报告
 - `improvement-suggestions.json` - 改进建议
 
-所有输出文件位于: `.workflow/.scratchpad/`
+所有输出文件位于: `{run_dir}/outputs/`
 
 ## 架构设计
 

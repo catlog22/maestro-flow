@@ -9,17 +9,11 @@ message_types:
   fix: fix_required
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Code Optimizer
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-> **inner_loop: dynamic** — Dispatch sets per-task: `true` for single mode (one IMPL task with iterative fix cycles), `false` for fan-out/independent modes (IMPL-B01..N run as separate parallel workers). When false, each branch gets its own worker.
-
-Implement optimization changes following the strategy plan. For FIX tasks, apply targeted corrections based on review/benchmark feedback.
 
 ## Modes
 

@@ -12,7 +12,7 @@
 frontmatter (name, description, argument-hint, allowed-tools, session-mode)
 ---
 
-<run_mode>          <!-- Required when session-mode: run -->
+<required_reading>  <!-- session-mode: run MUST reference @~/.maestro/workflows/run-mode.md -->
 <purpose>           <!-- 1-5 行：目标 + 拓扑图 + 入口点 -->
 <context>           <!-- 用法示例、flag 说明 -->
 <invariants>        <!-- 全局底线规则，独立于状态转移 -->

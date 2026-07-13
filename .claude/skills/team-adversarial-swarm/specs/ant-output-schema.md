@@ -1,3 +1,5 @@
+
+
 # Ant Output Schema
 
 **The critical contract.** Every ant MUST produce JSON matching this schema.

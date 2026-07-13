@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Interview Interaction Mechanics
 
 - **One decision per turn** via AskUserQuestion, 2-4 options, first marked `(Recommended)`. User can redirect via `Other`.

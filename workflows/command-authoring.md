@@ -18,7 +18,7 @@ Core characteristics:
 frontmatter (name, description, argument-hint, allowed-tools, session-mode)
 ---
 
-<run_mode>             <!-- Required when session-mode: run -->
+<required_reading>     <!-- session-mode: run MUST reference @~/.maestro/workflows/run-mode.md -->
 <purpose>              <!-- Required -->
 <required_reading>     <!-- Conditionally required: when command delegates to a workflow file -->
 <deferred_reading>     <!-- Conditionally required: when command has lazily loaded templates -->
@@ -51,7 +51,7 @@ Every command MUST classify `session-mode` as one of:
 
 | Section | Include when | Omit when |
 |---------|-------------|-----------|
-| `<required_reading>` | Command delegates to a workflow file (`Follow 'workflow/X.md'`) | Command is self-contained with all logic inline |
+| `<required_reading>` | `session-mode: run` or command delegates to another workflow | Only stateless self-contained commands may omit it |
 | `<deferred_reading>` | Command loads templates or references on-demand during execution | No lazy-loaded dependencies exist |
 | `<interview_protocol>` | Command has **multi-round interactive decision trees** (scope → depth → dimensions, etc.) | Command only uses AskUserQuestion for simple one-shot confirmations (proceed/cancel, yes/no) |
 
@@ -385,13 +385,13 @@ Line-by-line verifiable completion standards.
 
 ```markdown
 <success_criteria>
-- [ ] plan.json written to scratch directory with summary, approach, task_ids, waves
+- [ ] `outputs/plan.json` written in the active Run with summary, approach, task_ids, and waves
 - [ ] .task/TASK-*.json files created for each task
 - [ ] Every task has `read_first[]` with at least the file being modified
 - [ ] Every task has `convergence.criteria[]` with grep-verifiable conditions
 - [ ] Plan-checker passed (or minor issues acknowledged)
 - [ ] User confirmation captured (execute/modify/cancel)
-- [ ] Artifact registered in state.json with correct scope/milestone/phase
+- [ ] Artifact declared by contract and registered by `maestro run complete`
 </success_criteria>
 ```
 
@@ -498,7 +498,7 @@ Using `maestro-plan.md` (188 lines) as the depth benchmark. Every pipeline comma
 | `<execution>` only says "Follow workflow X" with nothing else | Add at least Pre-flight + command-specific extensions + separate completion |
 | interview_protocol copies 50-line boilerplate | Reference this standard, write only 6 strategy elements (or lightweight variant) |
 | Adding interview_protocol for simple yes/no confirmations | Only add for multi-round decision trees; simple confirmations go inline in `<execution>` |
-| Adding required_reading when command has no external workflow | Only add when command delegates to a workflow file; self-contained commands omit it |
+| Omitting canonical Run reference | Every `session-mode: run` command includes `@~/.maestro/workflows/run-mode.md`; add other workflow refs as needed |
 | Pre-load rewritten step-by-step in every command | Reference § 3 standard, annotate tailoring |
 | Completion logic mixed into `<execution>` | Separate into `<completion>` section |
 | error_codes / success_criteria missing | Every command must have them, even at minimum |
@@ -764,7 +764,7 @@ When the workflow writes to index.json or state.json:
 
 | When | Field | Value |
 |------|-------|-------|
-| P5 completion | state.json.artifacts[] | New PLN artifact entry |
+| P5 completion | Run `outputs/plan.json` | Runtime registers the sealed plan artifact |
 | P5 completion | index.json.status | "confirmed" |
 | Collision detected | index.json.collisions[] | Colliding file paths |
 ```

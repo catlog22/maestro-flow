@@ -1,3 +1,5 @@
+
+
 # Chrome DevTools MCP Usage Patterns
 
 Reference for debug tool usage across all roles. Reproducer and Verifier are primary consumers.

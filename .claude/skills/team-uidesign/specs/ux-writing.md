@@ -1,3 +1,5 @@
+
+
 # UX Writing Standards
 
 Guidelines for all text content in UI components. From Impeccable's UX writing reference.

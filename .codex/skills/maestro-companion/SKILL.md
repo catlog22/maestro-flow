@@ -15,16 +15,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-companion -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Task companion command — pairs with any task to provide knowledge context loading,
@@ -82,11 +75,11 @@ $maestro-companion "route what should I do next"
 
 Auto-detection: if `--type` not provided, infer from `--task` description keywords.
 
-**Output boundary**: ALL file writes MUST target `.workflow/.scratchpad/` (companion docs + `.companion-active` pointer) only. Promotion writes (spec/knowhow) are delegated to `spec-add` / `manage-knowhow-capture` skills. NEVER modify source code, `.workflow/state.json`, or files outside `.workflow/.scratchpad/`.
+**Output boundary**: ALL file writes MUST target `{run_dir}/outputs/` (companion docs + `.companion-active` pointer) only. Promotion writes (spec/knowhow) are delegated to `spec-add` / `manage-knowhow-capture` skills. NEVER modify source code, `.workflow/state.json`, or files outside `{run_dir}/outputs/`.
 
 **Companion document:**
-- Path: `.workflow/.scratchpad/companion-{YYYYMMDD-HHmmss}.md`
-- Active doc tracking: `.workflow/.scratchpad/.companion-active` (stores path of current companion doc)
+- Path: `{run_dir}/outputs/companion-{YYYYMMDD-HHmmss}.md`
+- Active doc tracking: `{run_dir}/outputs/.companion-active` (stores path of current companion doc)
 - Format: YAML frontmatter (rich metadata) + typed sections + timestamped entries
 </context>
 
@@ -125,7 +118,7 @@ Check if `.workflow/codebase/doc-index.json` exists.
 
 ### Step 4: Create Companion Document
 
-Create `.workflow/.scratchpad/` if needed. Resolve task type from `--type` flag or infer from `--task` keywords.
+Create `{run_dir}/outputs/` if needed. Resolve task type from `--type` flag or infer from `--task` keywords.
 
 Write companion doc with full field template:
 
@@ -320,7 +313,7 @@ completed: ""
 - (general working notes)
 ```
 
-Write the companion doc path to `.workflow/.scratchpad/.companion-active`.
+Write the companion doc path to `{run_dir}/outputs/.companion-active`.
 
 ### Step 5: Output Summary Card
 
@@ -343,7 +336,7 @@ Mid-task commands:
 
 ### Step 1: Locate Active Companion Doc
 
-Read `.workflow/.scratchpad/.companion-active` to get the doc path.
+Read `{run_dir}/outputs/.companion-active` to get the doc path.
 If missing or file not found → create a new companion doc (same as Step 4 above, minimal — no spec/knowhow loading).
 
 ### Step 2: Parse Entry Content and Flags
@@ -407,7 +400,7 @@ Append to the companion doc under `## Entries`:
 
 ### Step 1: Load Companion Doc
 
-Read `.workflow/.scratchpad/.companion-active` → read the companion doc.
+Read `{run_dir}/outputs/.companion-active` → read the companion doc.
 If no active doc or doc is empty → skip to Step 4 (accumulation reminder).
 
 ### Step 2: Populate Outcome Fields
@@ -454,7 +447,7 @@ If promotable entries exist, unless `-y` is set, ask user: (If `-y` is set, skip
 
 Update frontmatter: `promoted_specs`, `promoted_knowhow` counts.
 Extract any `todo` entries → write to `follow_up` in frontmatter.
-Clear `.workflow/.scratchpad/.companion-active`.
+Clear `{run_dir}/outputs/.companion-active`.
 
 ### Step 4: Output Accumulation Reminder + Routing
 

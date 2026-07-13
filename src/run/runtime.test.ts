@@ -111,7 +111,7 @@ describe('Session/Run runtime', () => {
   it('allocates stable per-session sequence numbers and creates protected authority files', () => {
     const projectRoot = root();
     const first = createRun({ projectRoot, command: 'empty', intent: 'sequence demo' });
-    const second = createRun({ projectRoot, command: 'empty' });
+    const second = createRun({ projectRoot, command: 'empty', intent: 'sequence demo' });
 
     expect(first.session_id).toBe(second.session_id);
     expect(first.run_id).toContain('-001-');
@@ -125,7 +125,7 @@ describe('Session/Run runtime', () => {
     expect(store.readRun(first.session_id, second.run_id).sequence).toBe(2);
   });
 
-  it('checks gates idempotently, derives artifacts/handoff/evidence, and dual-writes legacy state', () => {
+  it('checks gates idempotently and derives canonical artifacts, handoff, and evidence', () => {
     const projectRoot = root();
     commandFile(projectRoot, 'demo-plan', `consumes: []
 produces:
@@ -173,11 +173,11 @@ gates:
     expect(run.handoff.summary).toBe('Plan ready');
     expect(run.handoff.next[0].required_artifact_refs).toEqual(['current-plan']);
     expect(Object.values(evidence.records).some((record: any) => record.point === 'D1')).toBe(true);
-    expect(state.artifacts.some((artifact: any) => artifact.id === completed.primary_artifact_id)).toBe(true);
+    expect(state.artifacts).toEqual([]);
     expect(state.sessions.some((session: any) => session.session_id === created.session_id)).toBe(true);
   });
 
-  it('projects legacy state artifacts into new Run upstream aliases', () => {
+  it('does not consume legacy state artifacts as Run upstream', () => {
     const projectRoot = root();
     mkdirSync(join(projectRoot, '.workflow'), { recursive: true });
     const state = migrateV1toV2({ project_name: 'legacy', status: 'active' });
@@ -187,7 +187,7 @@ gates:
       milestone: null,
       phase: null,
       scope: 'standalone',
-      path: 'scratch/legacy-plan/plan.json',
+      path: 'old-registry/plan.json',
       status: 'completed',
       depends_on: null,
       harvested: true,
@@ -205,14 +205,19 @@ gates:
   entry: []
   exit: []`);
 
-    const created = createRun({ projectRoot, command: 'consume-plan', intent: 'legacy shim' });
-    expect(created.upstream['current-plan']).toEqual({
-      artifact_id: 'PLN-007',
-      path: 'scratch/legacy-plan/plan.json',
-      kind: 'plan',
-      status: 'sealed',
-    });
-    expect(created.entry_gates.blocking).toEqual([]);
+    const created = createRun({ projectRoot, command: 'consume-plan', intent: 'canonical only' });
+    expect(created.upstream).toEqual({});
+    expect(created.entry_gates.blocking).not.toEqual([]);
+  });
+
+  it('reuses only a running Session with the same normalized intent', () => {
+    const projectRoot = root();
+    const first = createRun({ projectRoot, command: 'empty', intent: 'Auth Refactor' });
+    const unrelated = createRun({ projectRoot, command: 'empty', intent: 'Billing Refactor' });
+    const resumed = createRun({ projectRoot, command: 'empty', intent: 'auth-refactor' });
+
+    expect(unrelated.session_id).not.toBe(first.session_id);
+    expect(resumed.session_id).toBe(first.session_id);
   });
 
   it('detects mutations to sealed outputs and rejects a second completion', () => {

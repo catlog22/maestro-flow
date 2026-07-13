@@ -4,6 +4,10 @@ name: spec-load
 alias: spec-load
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Workflow: spec-load
 
 Load spec files filtered by category. Supports project, global, team, and personal scopes.

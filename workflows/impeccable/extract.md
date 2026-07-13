@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Extract Flow
 
 Identify reusable patterns, components, and design tokens, then extract and consolidate them into the design system for systematic reuse.

@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 2: Structure Planning
 
 Plan the paper structure, define the narrative arc, allocate page budgets, and create a detailed section outline.

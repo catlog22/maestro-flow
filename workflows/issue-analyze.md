@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Issue Analysis
 
 > **DEPRECATED**: Superseded by `issue-gaps-analyze.md` which adds batch support and context.md output.

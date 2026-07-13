@@ -13,7 +13,7 @@ import { join, dirname } from 'node:path';
 
 /**
  * Check if a `.workflow/` directory is a Maestro workspace by verifying
- * either the workflow state fingerprint or a MaestroGraph database exists.
+ * either the canonical Session registry or a MaestroGraph database exists.
  * This prevents false positives from other tools that use `.workflow/`, while
  * still allowing KG-only workspaces to use code-search hooks before workflow
  * state init.
@@ -26,7 +26,8 @@ export function isMaestroWorkspace(dir: string): boolean {
   try {
     const state = JSON.parse(readFileSync(statePath, 'utf8'));
     return state.version !== undefined
-      && (Array.isArray(state.artifacts) || state.phases_summary !== undefined);
+      && (Array.isArray(state.sessions) || typeof state.active_session_id === 'string'
+        || existsSync(join(dir, '.workflow', 'sessions')));
   } catch {
     return false;
   }

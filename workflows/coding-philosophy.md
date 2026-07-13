@@ -13,7 +13,7 @@
 - **Clear intent over clever code** - Be boring and obvious
 - **Follow existing code style** - Match import patterns, naming conventions, and formatting of existing codebase
 - **Minimize changes** - Only modify what's directly required; avoid refactoring, adding features, or "improving" code beyond the request
-- **No unsolicited documentation** - NEVER generate reports, documentation files, or summaries without explicit user request. If required, save to .workflow/.scratchpad/
+- **No unsolicited documentation** - NEVER generate reports, documentation files, or summaries without explicit user request. When the active command requires a report, write it only to the current Run's `report.md` or declared typed output.
 
 ## Simplicity Means
 

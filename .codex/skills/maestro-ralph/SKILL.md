@@ -14,16 +14,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-ralph -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Closed-loop decision engine for the maestro workflow lifecycle.
@@ -396,7 +389,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
 
 ### A_DELEGATE_EVALUATE
 
-1. Resolve artifact dir: `.workflow/scratch/{artifact.path}/` with fallback glob
+1. Resolve artifact dir: `{run_dir}/outputs/{artifact.path}/` with fallback glob
 2. Parse decision metadata: `{ decision, retry_count, max_retries }`
 3. Map result files:
    | Decision | Files |
@@ -454,7 +447,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
 Runs only when `task_decomposition` present.
 
 1. Read `session.task_decomposition` from status.json
-2. For each sub-goal `status != "done"`: resolve `evidence` artifact under current phase scratch dir
+2. For each sub-goal `status != "done"`: resolve `evidence` artifact under current phase Run output directory
 3. Delegate read-only audit (run_in_background, STOP, wait):
    ```
    maestro delegate "PURPOSE: 审计未完成子目标，判定 met / unmet
@@ -640,7 +633,7 @@ GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
   "cli_tool": "codex",
   "platform": "codex",            // codex skills (`.codex/skills/`)
   "passed_gates": [],
-  "context": { "issue_id": null, "scratch_dir": null, "plan_dir": null,
+  "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
     "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null },
   "steps": [{
     "index": 0,

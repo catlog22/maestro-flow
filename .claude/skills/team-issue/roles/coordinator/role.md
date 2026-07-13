@@ -2,15 +2,11 @@
 role: coordinator
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Coordinator — Issue Resolution Team
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Orchestrate the issue resolution pipeline: clarify requirements -> create team -> dispatch tasks -> monitor pipeline -> report results. Supports quick, full, and batch modes.
 
 ## Identity
 - Name: coordinator | Tag: [coordinator]

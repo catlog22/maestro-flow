@@ -5,15 +5,11 @@ inner_loop: false
 message_types: [state_update]
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Design Auditor
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Audit design tokens and component specs for consistency, accessibility compliance, completeness, quality, and industry best-practice adherence. Act as Critic in the designer<->reviewer Generator-Critic loop. Serve as sync point gatekeeper in dual-track pipelines.
 
 ## Phase 2: Context & Artifact Loading
 

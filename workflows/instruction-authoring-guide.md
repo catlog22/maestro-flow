@@ -20,7 +20,7 @@ Rule: if it has `<` and `>` wrapping a section — keep it.
 ### P2. Data Structure Schemas
 
 JSON/NDJSON templates that define write formats:
-- `state.json.artifacts[]` registration blocks — keep all field names and value patterns
+- typed artifact contracts — keep `_meta`, schema, role, alias, and output path semantics; registration is runtime-owned
 - `evidence.ndjson` / `decisions.ndjson` schema definitions
 - Any `Append to ...` with field structure
 

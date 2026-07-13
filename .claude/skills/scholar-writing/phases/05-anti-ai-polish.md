@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 5: Anti-AI Polish
 
 > **COMPACT SENTINEL [Phase 5: Anti-AI Polish]**

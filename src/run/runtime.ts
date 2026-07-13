@@ -23,13 +23,10 @@ import {
 import { SessionStore, type SessionBundle } from './store.js';
 import {
   ensureSessionProjection,
-  legacyArtifactsToUpstream,
   localISO,
   migrateV1toV2,
-  projectRunArtifactsToLegacy,
   readStateJson,
   writeStateJson,
-  type LegacyUpstreamProjection,
   type ProjectSessionEntry,
   type StateJsonV2,
 } from '../utils/state-schema.js';
@@ -94,7 +91,6 @@ interface EvaluationContext {
   session: SessionState;
   registry: ArtifactRegistry;
   scan: ArtifactScanResult;
-  legacyUpstream: Record<string, LegacyUpstreamProjection>;
   evidence: SessionBundle['evidence'];
   reportDecisions?: Array<{ id: string; status: string }>;
 }
@@ -157,10 +153,17 @@ function resolveSessionId(store: SessionStore, state: StateJsonV2, requested: st
     if (!store.sessionExists(requested)) throw new Error(`Session not found: ${requested}`);
     return requested;
   }
-  if (state.active_session_id && store.sessionExists(state.active_session_id)) {
-    const session = store.readBundle(state.active_session_id).session;
-    if (session.status === 'running' || session.status === 'paused') return state.active_session_id;
+  const intentKey = slug(intent, 'session');
+  const candidates = (state.sessions ?? []).filter(entry =>
+    (entry.status === 'running' || entry.status === 'paused')
+    && slug(entry.intent, 'session') === intentKey
+    && store.sessionExists(entry.session_id),
+  );
+  if (state.active_session_id) {
+    const active = candidates.find(entry => entry.session_id === state.active_session_id);
+    if (active) return active.session_id;
   }
+  if (candidates.length > 0) return candidates.at(-1)!.session_id;
   const base = `${dateId()}-${slug(intent, 'session')}`;
   if (!store.sessionExists(base)) return base;
   for (let index = 2; index < 1000; index++) {
@@ -196,7 +199,6 @@ function defaultAlias(kind: string, command: string): string | undefined {
 function collectUpstream(
   sessionId: string,
   registry: ArtifactRegistry,
-  legacy: Record<string, LegacyUpstreamProjection>,
   contract: CommandContract,
 ): Record<string, RunUpstream> {
   const all: Record<string, RunUpstream> = {};
@@ -209,9 +211,6 @@ function collectUpstream(
       kind: artifact.kind,
       status: artifact.status === 'sealed' ? 'sealed' : 'draft',
     };
-  }
-  for (const [alias, artifact] of Object.entries(legacy)) {
-    if (!(alias in all)) all[alias] = artifact;
   }
   if (contract.consumes.length === 0) return all;
   const selected: Record<string, RunUpstream> = {};
@@ -333,14 +332,11 @@ function artifactForGate(gate: Gate, context: EvaluationContext): { status: stri
       const artifactId = context.registry.aliases[check.alias];
       const artifact = artifactId ? context.registry.artifacts[artifactId] : undefined;
       if (artifact && artifact.kind === check.kind) return { status: artifact.status, schema: artifact.schema_version };
-      const legacy = context.legacyUpstream[check.alias];
-      if (legacy && legacy.kind === check.kind) return { status: legacy.status, schema: `${legacy.kind}/legacy` };
       return null;
     }
     const artifact = Object.values(context.registry.artifacts).find(item => item.kind === check.kind);
     if (artifact) return { status: artifact.status, schema: artifact.schema_version };
-    const legacy = Object.values(context.legacyUpstream).find(item => item.kind === check.kind);
-    return legacy ? { status: legacy.status, schema: `${legacy.kind}/legacy` } : null;
+    return null;
   }
   const byAlias = context.registry.aliases[check.artifact_ref];
   const artifact = context.registry.artifacts[byAlias ?? check.artifact_ref];
@@ -505,8 +501,7 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     const runId = `${dateId()}-${String(sequence).padStart(3, '0')}-${slug(options.command, 'run')}`;
     const runDir = ensureRunShell(store, sessionId, runId);
     const gateIds = registerRunGates(bundle.gates, source.contract, runId, sequence);
-    const legacy = legacyArtifactsToUpstream(freshState);
-    const upstream = collectUpstream(sessionId, bundle.artifacts, legacy, source.contract);
+    const upstream = collectUpstream(sessionId, bundle.artifacts, source.contract);
     const now = localISO();
     const run: CommandRun = {
       schema_version: 'command-run/1.0',
@@ -542,7 +537,6 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       session: bundle.session,
       registry: bundle.artifacts,
       scan: emptyScan,
-      legacyUpstream: legacy,
       evidence: bundle.evidence,
     };
     for (const id of gateIds) {
@@ -593,14 +587,12 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
 
   return store.update(located.sessionId, (bundle, tx) => {
     const run = tx.readRun(runId);
-    const legacy = legacyArtifactsToUpstream(projectState(projectRoot));
     const context: EvaluationContext = {
       projectRoot,
       runDir: store.runDir(located.sessionId, runId),
       session: bundle.session,
       registry: bundle.artifacts,
       scan,
-      legacyUpstream: legacy,
       evidence: bundle.evidence,
       reportDecisions: frontmatter.decisions.map(item => ({ id: item.id, status: item.status })),
     };
@@ -770,7 +762,6 @@ export function completeRun(projectRoot: string, runId: string, sessionId?: stri
       session: bundle.session,
       registry: bundle.artifacts,
       scan,
-      legacyUpstream: legacyArtifactsToUpstream(state),
       evidence: bundle.evidence,
       reportDecisions: frontmatter.decisions.map(item => ({ id: item.id, status: item.status })),
     };
@@ -810,22 +801,7 @@ export function completeRun(projectRoot: string, runId: string, sessionId?: stri
     summarizeRegistry(bundle.gates);
     tx.writeRun(run);
 
-    let nextState = ensureSessionProjection(state, projectSessionEntry(bundle.session));
-    nextState = projectRunArtifactsToLegacy(
-      nextState,
-      located.sessionId,
-      artifactIds.map(id => {
-        const artifact = bundle.artifacts.artifacts[id];
-        return {
-          artifact_id: id,
-          kind: artifact.kind,
-          producer_command: run.command.name,
-          relative_path: artifact.relative_path,
-          status: artifact.status,
-          created_at: run.sealed_at ?? localISO(),
-        };
-      }),
-    );
+    const nextState = ensureSessionProjection(state, projectSessionEntry(bundle.session));
     tx.writeJson(join(store.workflowRoot, 'state.json'), nextState);
     return {
       session_id: located.sessionId,

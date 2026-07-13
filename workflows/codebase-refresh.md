@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: codebase-refresh
 
 Incremental refresh of `.workflow/codebase/` documentation based on changes since the last rebuild or refresh.

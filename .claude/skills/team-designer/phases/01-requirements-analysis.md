@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 1: Requirements Analysis
 
 Gather team skill requirements from user input and build the `teamConfig` data structure that drives all subsequent phases.

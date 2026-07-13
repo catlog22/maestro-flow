@@ -19,22 +19,13 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create quality-retrospective -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Post-execution retrospective (复盘): four parallel lenses (technical/process/quality/decision) → distill insights → route to spec/knowhow/issue stores.
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/retrospective.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <deferred_reading>
@@ -51,12 +42,12 @@ Arguments: $ARGUMENTS
 - `-y` — Skip confirmation prompts for external writes (issues.jsonl, spec entries, knowhow capture)
 - `--no-route` — Skip routing stage (produce retrospective files only, no spec/issue/knowhow writes)
 - `--compare N` — Compare current phase retrospective against phase N (requires single phase argument)
-- `--all` — Run retrospective on all completed phases that lack retrospective.json
+- `--all` — Create a new retrospective Run for every completed execution candidate
 - `--lens <name>` — Restrict to specific lens (technical|process|quality|decision); default: all four
 
 Modes (scan/single/range/all) and storage paths defined in workflow retrospective.md Argument Shape and Stages 1-7.
 
-**Output boundary**: ALL file writes MUST target the phase's retrospective directory (`.workflow/scratch/{YYYYMMDD}-retrospective-P{N}/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). NEVER modify source code, verification.json, review.json, plan.json, or other existing artifacts.
+**Output boundary**: ALL file writes MUST target the phase's retrospective directory (`{run_dir}/outputs/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). NEVER modify source code, verification.json, review.json, plan.json, or other existing artifacts.
 </context>
 
 <invariants>
@@ -65,7 +56,7 @@ Modes (scan/single/range/all) and storage paths defined in workflow retrospectiv
 3. **Routing requires confirmation** — unless `-y` flag is set, every external write (issues.jsonl, spec entry, knowhow capture) MUST be confirmed by user before execution.
 4. **Lens independence** — each lens agent (technical/process/quality/decision) operates independently. One lens's findings MUST NOT suppress or override another's.
 5. **Append-only for specs** — learnings.md entries are appended as `<spec-entry>` blocks. NEVER overwrite or restructure existing entries.
-6. **Archive before overwrite** — if retrospective.json already exists for a phase, the existing file MUST be archived before writing a new version.
+6. **Immutable history** — never overwrite or archive a sealed retrospective artifact; create a new Run.
 </invariants>
 
 <execution>
@@ -82,7 +73,7 @@ Follow `~/.maestro/workflows/retrospective.md` Stages 1–8 in order.
 **GATE 2: Lens Analysis → Routing** (Stages 4-5 → Stage 6)
 - REQUIRED: All requested lens agents returned valid JSON (or W001 logged for partial).
 - REQUIRED: Insights distilled with stable `INS-{8hex}` IDs.
-- REQUIRED: Archive existing `retrospective.{md,json}` before overwrite.
+- REQUIRED: Preserve prior sealed retrospective artifacts and write only to the current Run.
 - BLOCKED if all lens agents failed: cannot synthesize without results.
 
 **GATE 3: Routing → Completion** (Stage 6 → Stages 7-8)

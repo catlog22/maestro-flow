@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # UI Codify: Phase 4 — Knowledge Asset Generation
 
 读取提取的 JSON 文件，构建 knowhow-manifest.json，调用 codify-to-knowhow 固化为知识资产。

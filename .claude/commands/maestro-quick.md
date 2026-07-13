@@ -19,24 +19,15 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create maestro-quick -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Execute small, ad-hoc tasks with workflow guarantees (atomic commits, state tracking) via a shortened pipeline.
 Flags --discuss and --full enable additional pipeline stages.
-**Implicit write**: state.json scratch task entry is written automatically as part of workflow tracking (no confirmation gate).
+**Implicit write**: state.json Run task entry is written automatically as part of workflow tracking (no confirmation gate).
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/quick.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <context>
@@ -57,14 +48,14 @@ Parse for:
    - Load task-relevant entries: `maestro load --type knowhow --id <id1> [id2...]`
 3. All are optional — proceed without if unavailable.
 
-**Output boundary**: ALL file writes MUST target `.workflow/scratch/` (task directory, plan.json, summaries) and modified source files as defined in plan.json tasks. State.json scratch entry is implicit workflow tracking.
+**Output boundary**: ALL file writes MUST target `{run_dir}/outputs/` (task directory, plan.json, summaries) and modified source files as defined in plan.json tasks. State.json scratch entry is implicit workflow tracking.
 </context>
 
 <invariants>
 1. **Atomic commits** — each task execution MUST produce a commit with only the files modified by that task; NEVER stage unrelated files
 2. **Evidence-based summaries** — task summaries MUST include concrete evidence (files changed, tests run, commands executed); NEVER accept "task completed successfully" as a summary
 3. **Plan before execute** — plan.json MUST be written before any task execution begins; NEVER skip planning even for single-task workflows
-4. **Scratch isolation** — all workflow artifacts MUST live under `.workflow/scratch/{task-dir}/`; NEVER write workflow metadata outside this directory
+4. **Scratch isolation** — all workflow artifacts MUST live under `{run_dir}/outputs/{task-dir}/`; NEVER write workflow metadata outside this directory
 5. **Commit confirmation** — staged files and commit message MUST be shown via AskUserQuestion before committing (unless `-y`); NEVER auto-commit without user awareness
 </invariants>
 
@@ -73,9 +64,9 @@ Parse for:
 ### Phase Gates (MANDATORY, BLOCKING)
 
 **GATE 1: Setup → Planning**
-- REQUIRED: Task description parsed and scratch directory created.
+- REQUIRED: Task description parsed and Run output directory created.
 - REQUIRED: Coding specs loaded (optional but attempted).
-- BLOCKED if: no task description (E001) or scratch directory creation failed (E002).
+- BLOCKED if: no task description (E001) or Run output directory creation failed (E002).
 
 **GATE 2: Planning → Execution**
 - REQUIRED: plan.json written with task definitions.
@@ -129,14 +120,14 @@ maestro ralph complete <idx> --status {DONE|DONE_WITH_CONCERNS|NEEDS_RETRY|BLOCK
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | Task description required (no text provided) | Check arguments format, re-run with correct input |
-| E002 | error | Scratch directory creation failed | Check disk space and .workflow/ permissions |
+| E002 | error | Run output directory creation failed | Check disk space and .workflow/ permissions |
 | W001 | warning | Verification found minor gaps | Review gaps and determine if they need fixing |
 </error_codes>
 
 <success_criteria>
-- [ ] Scratch task directory created under .workflow/scratch/
+- [ ] Run task directory created under {run_dir}/outputs/
 - [ ] plan.json written with task definitions
 - [ ] All tasks executed with summaries written
-- [ ] state.json updated with scratch task entry (implicit — part of workflow tracking, no confirmation needed)
+- [ ] state.json updated with Run task entry (implicit — part of workflow tracking, no confirmation needed)
 - [ ] Commit created with task changes: stage ONLY files modified by the task (from `.summaries/TASK-*-summary.md` "Files modified" list); confirm with `AskUserQuestion` showing staged files and proposed commit message — unless `-y` is active, in which case auto-commit
 </success_criteria>

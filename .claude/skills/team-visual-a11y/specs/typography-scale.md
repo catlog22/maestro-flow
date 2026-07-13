@@ -1,3 +1,5 @@
+
+
 # Typography Accessibility Standards
 
 Reference guide for typography readability analysis. Used by typo-auditor and fix-implementer roles.

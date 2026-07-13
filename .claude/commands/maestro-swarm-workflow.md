@@ -19,16 +19,10 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-1. Before domain work, call `maestro run create maestro-swarm-workflow -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Parallel accelerator: route intent to pre-built Workflow scripts (`wf-*.js`) for multi-agent
 concurrent execution with adversarial decision patterns. Complements ralph's sequential chain.
@@ -61,7 +55,7 @@ Remaining        → intent
 | `wf-execute` | `{ plan_dir, specs?, codebase_context?, wiki_context?, auto_commit? }` |
 | `wf-milestone-audit` | `{ milestone?, is_adhoc? }` |
 
-**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-swarm-{script}-{slug}/` (results, ralph-compatible artifacts). When inside a ralph session, writes target the corresponding step's scratch directory. NEVER modify source code, workflow scripts (`~/.maestro/workflows/swarm/`), or `.claude/commands/` files.
+**Output boundary**: ALL file writes MUST target `{run_dir}/outputs/` (results, ralph-compatible artifacts). When inside a ralph session, writes target the corresponding step's Run output directory. NEVER modify source code, workflow scripts (`~/.maestro/workflows/swarm/`), or `.claude/commands/` files.
 </context>
 
 <state_machine>
@@ -188,7 +182,7 @@ Workflow 返回 JSON 后：
 2. **Artifact 写入**（可选）：
    - 若当前在 ralph session 中（检测 `.workflow/.maestro/ralph-*/status.json` 状态为 running）：
      将结果写入对应 step 的 scratch 目录，格式兼容命令产出
-   - 否则写入 `.workflow/scratch/{YYYYMMDD}-swarm-{script}-{slug}/results.json`
+   - 否则写入 `{run_dir}/outputs/results.json`
 
 3. **Ralph 兼容产出**：
    - analyze → `analysis.md` + `context.md`（decisions）+ `conclusions.json` + `adversarial-debate.json`
@@ -279,7 +273,7 @@ ralph-execute 正常通过 `maestro ralph next` 加载并执行，swarm-workflow
 │  Cross-cutting: 3 themes                           │
 │  Decisions: 4 locked, 2 free, 1 deferred           │
 ├────────────────────────────────────────────────────┤
-│  Output: .workflow/scratch/20260530-swarm-analyze/  │
+│  Output: {run_dir}/outputs/20260530-swarm-analyze/  │
 │  Resume: /maestro-swarm-workflow --resume wf_abc123 │
 └────────────────────────────────────────────────────┘
 ```

@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: status
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Step 1: Load State
 
@@ -35,7 +31,7 @@ Legacy references to `scratch/`, hidden command directories, milestone/phase art
 
 ## Step 2: Build Virtual Phase View from Artifact Registry
 
-Derive phase progress from `state.json.artifacts[]`:
+Derive phase progress from `Session ArtifactRegistry (runtime-owned)`:
 
 ```
 milestone_artifacts = artifacts filtered by current_milestone
@@ -144,11 +140,11 @@ If there are blockers, display them prominently before the routing suggestion.
 
 ---
 
-## Step 6: Scratch Tasks (if any)
+## Step 6: Run tasks (if any)
 
-Check `.workflow/scratch/` for active tasks:
+Check `{run_dir}/outputs/` for active tasks:
 
 1. For each `scratch/*/index.json` where status != "completed":
    - Display: type, title, status, progress
-2. If active scratch tasks exist:
-   - Note: "Active scratch tasks found. These are independent of phase pipeline."
+2. If active Run tasks exist:
+   - Note: "Active Run tasks found. These are independent of phase pipeline."

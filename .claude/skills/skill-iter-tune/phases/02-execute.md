@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 2: Execute Skill
 
 > **COMPACT SENTINEL [Phase 2: Execute]**

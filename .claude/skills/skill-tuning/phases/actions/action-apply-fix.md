@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Apply Fix
 
 Apply a selected fix to the target skill with backup and rollback capability.

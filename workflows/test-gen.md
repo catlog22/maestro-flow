@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Test Generation Workflow
 
 Generate missing automated tests for a phase based on gap analysis from maestro-execute verification gate (Nyquist audit) and quality-test (UAT coverage gaps). Classifies changed files into unit/E2E/skip, discovers test infrastructure, generates a test plan for user approval, then writes tests using RED-GREEN methodology.

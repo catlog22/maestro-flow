@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 3: Phase Files Design
 
 Generate phase files in `phases/` directory, preserving full execution detail from source content. Each phase file is a complete execution instruction.

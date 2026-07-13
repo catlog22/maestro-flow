@@ -1,3 +1,5 @@
+
+
 # Tuning Strategies
 
 Fix strategies for each problem category. Implementation patterns + verification methods.

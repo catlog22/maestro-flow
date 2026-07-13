@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 4: Citation Management
 
 > **COMPACT SENTINEL [Phase 4: Citation Management]**

@@ -39,7 +39,8 @@ const runSkills = new Set([
   'workflow-skill-designer',
 ]);
 
-const legacyPattern = /\.workflow\/(?:scratch|\.scratchpad|\.[a-z-]+|milestones|phases|plans|research|active)|context-package\.json|understanding\.md|evidence\.ndjson|status\.json|finish-work\.md/;
+const RUN_MODE_REF = '@~/.maestro/workflows/run-mode.md';
+const obsoleteArtifactPattern = /\.workflow\/(?:scratch|\.scratchpad)|Legacy Compatibility Mapping/;
 
 const noneWorkflows = new Set([
   'agy-instructions.md', 'chinese-response.md', 'claude-instructions.md',
@@ -72,32 +73,70 @@ function insertGenericContract(text) {
   return `${normalized.slice(0, end)}${contract}${normalized.slice(end)}`;
 }
 
-function commandRunBlock(name) {
-  return `\n<run_mode>\n` +
-    `**Session mode:** \`run\`. This block is MANDATORY and overrides legacy artifact-path examples below.\n\n` +
-    `1. Before domain work, call \`maestro run create ${name} -- $ARGUMENTS\` and use the returned \`run_id\`, \`run_dir\`, and \`upstream\`.\n` +
-    `2. Formal JSON/Markdown deliverables MUST be written under \`{run_dir}/outputs/\`; evidence goes to \`{run_dir}/evidence/\`; process narrative and handoff go to \`{run_dir}/report.md\`.\n` +
-    `3. The model MUST NOT edit protocol JSON (\`run.json\`, \`session.json\`, \`gates.json\`, \`artifacts.json\`, \`evidence.json\`) or append to project \`state.json.artifacts[]\`.\n` +
-    `4. Run \`maestro run check {run_id}\` before completion, repair blocking gaps, then run \`maestro run complete {run_id}\`.\n\n` +
-    `**Legacy Compatibility Mapping:** Any later reference to \`scratch/\`, hidden command session directories, \`milestones/\`, \`phases/\`, \`context-package.json\`, \`understanding.md\`, \`evidence.ndjson\`, or a secondary \`status.json\` is a legacy semantic label only. Map formal deliverables to \`outputs/\`, narrative to \`report.md\`, evidence attachments to \`evidence/\`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.\n` +
-    `</run_mode>\n`;
+function stripEmbeddedRunMode(text) {
+  return text
+    .replace(/\n?<run_mode>\s*[\s\S]*?<\/run_mode>\s*/g, '\n')
+    .replace(/\n## Run Mode Contract\n[\s\S]*?(?=\n## |$)/g, '')
+    .replace(/\n## Run Artifact Boundary\n[\s\S]*?(?=\n## |$)/g, '');
 }
 
-function skillRunBlock(name) {
-  return `\n<run_mode>\n` +
-    `**Session mode:** \`run\`. The coordinator MUST call \`maestro run create ${name} -- $ARGUMENTS\` before creating workers and retain the returned \`run_id\`/\`run_dir\`.\n\n` +
-    `- Formal team deliverables go to \`{run_dir}/outputs/\`; evidence and worker traces go to \`{run_dir}/evidence/\`; the final synthesis and handoff go to \`{run_dir}/report.md\`.\n` +
-    `- \`.workflow/.team/\` may remain only as the transient Agent message bus. Its \`.msg/\`, lease, and coordination metadata are not formal artifacts and MUST NOT be indexed as Session knowledge.\n` +
-    `- **Legacy Compatibility Mapping:** Any legacy \`artifacts/\`, \`wisdom/\`, \`understanding.md\`, \`evidence.ndjson\`, or private session directory mentioned by role files is staging-only; copy the accepted result into the active Run before completion.\n` +
-    `- Before reporting success, run \`maestro run check {run_id}\`, fix blocking gaps, then \`maestro run complete {run_id}\`.\n` +
-    `</run_mode>\n`;
+function addRequiredReading(text, ref = RUN_MODE_REF) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  if (normalized.includes(ref)) return normalized;
+  const block = normalized.match(/<required_reading>([\s\S]*?)<\/required_reading>/i);
+  if (block) {
+    return normalized.replace(block[0], `<required_reading>${block[1].trimEnd()}\n${ref}\n</required_reading>`);
+  }
+  const addition = `\n<required_reading>\n${ref}\n</required_reading>\n`;
+  if (normalized.startsWith('---\n')) {
+    const end = normalized.indexOf('\n---\n', 4);
+    if (end >= 0) return `${normalized.slice(0, end + 5)}${addition}${normalized.slice(end + 5)}`;
+  }
+  const markerEnd = normalized.startsWith('<!-- session-mode:') ? normalized.indexOf('\n') : -1;
+  if (markerEnd >= 0) return `${normalized.slice(0, markerEnd + 1)}${addition}${normalized.slice(markerEnd + 1)}`;
+  return `${addition}${normalized}`;
 }
 
-function workflowRunBlock() {
-  return `\n## Run Mode Contract\n\n` +
-    `This workflow executes inside the Run created by its command. The command-provided \`run_id\`, \`run_dir\`, and resolved \`upstream\` are authoritative. Formal outputs belong in \`{run_dir}/outputs/\`, evidence in \`{run_dir}/evidence/\`, and narrative/handoff in \`{run_dir}/report.md\`. Protocol JSON is CLI-owned.\n\n` +
-    `### Legacy Compatibility Mapping\n\n` +
-    `Legacy references to \`scratch/\`, hidden command directories, milestone/phase artifact folders, \`context-package.json\`, \`understanding.md\`, \`evidence.ndjson\`, or secondary \`status.json\` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with \`maestro run check\` plus \`maestro run complete\`.\n`;
+function removeRequiredReading(text, ref = RUN_MODE_REF) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const block = normalized.match(/<required_reading>([\s\S]*?)<\/required_reading>/i);
+  if (!block || !block[1].includes(ref)) return normalized;
+  const remaining = block[1].split('\n').map(line => line.trimEnd()).filter(line => line.trim() !== ref && line.trim() !== '');
+  return normalized.replace(block[0], remaining.length > 0
+    ? `<required_reading>\n${remaining.join('\n')}\n</required_reading>`
+    : '');
+}
+
+function rewriteObsoleteArtifactPaths(text) {
+  return text
+    .replaceAll('.workflow/.scratchpad', '{run_dir}/outputs')
+    .replaceAll('.workflow/scratch', '{run_dir}/outputs')
+    .replace(/\{run_dir\}\/outputs\/(?:\{YYYYMMDD\}|\$\{date\}|\*)[^/\s`"']*\/?/g, '{run_dir}/outputs/')
+    .replace(/\{run_dir\}\/outputs\/\$\{[^}]+\}[^/\s`"']*/g, '{run_dir}/outputs')
+    .replace(/Legacy Compatibility Mapping:?/g, 'Canonical Run Artifact Boundary:')
+    .replace(/state\.json\.artifacts\[\]/g, 'Session ArtifactRegistry (runtime-owned)')
+    .replace(/\bscratch directory\b/gi, 'Run output directory')
+    .replace(/\bscratch dir\b/gi, 'Run output directory')
+    .replace(/\bscratch artifacts\b/gi, 'Run artifacts')
+    .replace(/\bscratch tasks\b/gi, 'Run tasks')
+    .replace(/\bscratch task\b/gi, 'Run task')
+    .replace(/\bscratch mode\b/gi, 'ad-hoc Run mode')
+    .replace(/\bscratch session\b/gi, 'Run')
+    .replace(/\bscratch fallback\b/gi, 'ArtifactRegistry lookup')
+    .replace(/\bscratch_dir\b/g, 'run_dir')
+    .replaceAll('.scratchpad-template', 'run-template');
+}
+
+function deprecatedCommandStub(text, name) {
+  const replacements = {
+    'maestro-milestone-audit': '`maestro-verify` or `quality-review` inside the target Session',
+    'maestro-milestone-complete': '`maestro run seal-session <session-id>` after all Runs are sealed',
+    'maestro-milestone-release': 'the project release workflow after the Session DAG is sealed',
+  };
+  const normalized = text.replace(/\r\n/g, '\n');
+  const end = normalized.indexOf('\n---\n', 4);
+  const head = end >= 0 ? normalized.slice(0, end + 5) : normalized;
+  return `${head}\n<deprecated_command>\nThis command has been removed. Use ${replacements[name] ?? 'the canonical Session/Run replacement'}. Do not create artifacts from this entry point.\n</deprecated_command>\n`;
 }
 
 function workflowMode(path) {
@@ -114,7 +153,7 @@ function workflowSpecialBlock(mode) {
     return `\n## Bootstrap Boundary\n\nThis workflow runs before any Session exists. It MUST NOT call \`maestro run create\`; project bootstrap files are written through their protected stores.\n`;
   }
   if (mode === 'deprecated') {
-    return `\n## Deprecated Workflow Boundary\n\nThis workflow is retained only for migration documentation. Entry commands MUST route to the Session/Run replacement and stop; do not execute the legacy writes below.\n`;
+    return `\n## Removed Workflow\n\nThis workflow no longer executes. Use the canonical Session/Run command replacement.\n`;
   }
   return '';
 }
@@ -123,10 +162,11 @@ function setWorkflowMode(text, mode) {
   const normalized = text.replace(/\r\n/g, '\n');
   const marker = `<!-- session-mode: ${mode} -->`;
   const withoutMarker = normalized.replace(/^<!-- session-mode: [^>]+ -->\n?/, '');
-  let body = withoutMarker.replace(/\n## Run Mode Contract\n[\s\S]*?(?=\n## |$)/, '');
+  let body = stripEmbeddedRunMode(withoutMarker);
   body = body.replace(/\n## Bootstrap Boundary\n[\s\S]*?(?=\n## |$)/, '');
   body = body.replace(/\n## Deprecated Workflow Boundary\n[\s\S]*?(?=\n## |$)/, '');
-  if (mode === 'inherited' && legacyPattern.test(body)) body = insertWorkflowBlock(body);
+  if (mode === 'inherited') body = addRequiredReading(rewriteObsoleteArtifactPaths(body));
+  if (mode === 'deprecated') return `${marker}${workflowSpecialBlock(mode)}`;
   const special = workflowSpecialBlock(mode);
   if (special) {
     const firstHeading = body.match(/^# .+$/m);
@@ -136,40 +176,6 @@ function setWorkflowMode(text, mode) {
     } else body = `${special}\n${body}`;
   }
   return `${marker}\n${body}`;
-}
-
-function skillChildRunBlock() {
-  return `\n## Run Artifact Boundary\n\n` +
-    `This file executes under the parent skill's active Run. The assignment MUST carry \`run_id\` and \`run_dir\`. Formal deliverables go to \`{run_dir}/outputs/\`, evidence/traces to \`{run_dir}/evidence/\`, and synthesis to \`{run_dir}/report.md\`. \`.workflow/.team/\` remains transient coordination only.\n\n` +
-    `**Legacy Compatibility Mapping:** Any private session, \`artifacts/\`, \`wisdom/\`, \`understanding.md\`, or \`evidence.ndjson\` path below is staging-only and MUST be promoted into the active Run before completion.\n`;
-}
-
-function insertAfterFrontmatter(text, block) {
-  const normalized = text.replace(/\r\n/g, '\n');
-  if (normalized.includes('<run_mode>')) return normalized;
-  if (normalized.startsWith('---\n')) {
-    const end = normalized.indexOf('\n---\n', 4);
-    if (end >= 0) return `${normalized.slice(0, end + 5)}${block}${normalized.slice(end + 5)}`;
-  }
-  return `${block}${normalized}`;
-}
-
-function insertWorkflowBlock(text) {
-  const normalized = text.replace(/\r\n/g, '\n');
-  if (normalized.includes('## Run Mode Contract')) return normalized;
-  const firstHeading = normalized.match(/^# .+$/m);
-  if (!firstHeading || firstHeading.index === undefined) return `${workflowRunBlock()}\n${normalized}`;
-  const lineEnd = normalized.indexOf('\n', firstHeading.index);
-  return `${normalized.slice(0, lineEnd + 1)}${workflowRunBlock()}${normalized.slice(lineEnd + 1)}`;
-}
-
-function insertSkillChildBlock(text) {
-  const normalized = text.replace(/\r\n/g, '\n');
-  if (normalized.includes('## Run Artifact Boundary')) return normalized;
-  const firstHeading = normalized.match(/^# .+$/m);
-  if (!firstHeading || firstHeading.index === undefined) return `${skillChildRunBlock()}\n${normalized}`;
-  const lineEnd = normalized.indexOf('\n', firstHeading.index);
-  return `${normalized.slice(0, lineEnd + 1)}${skillChildRunBlock()}${normalized.slice(lineEnd + 1)}`;
 }
 
 function update(path, transform) {
@@ -210,8 +216,9 @@ for (const file of readdirSync(commandDir).filter((name) => name.endsWith('.md')
     let text = insertFrontmatterField(source, 'session-mode', mode);
     if (mode === 'run') {
       text = insertGenericContract(text);
-      text = insertAfterFrontmatter(text, commandRunBlock(name));
+      text = addRequiredReading(rewriteObsoleteArtifactPaths(stripEmbeddedRunMode(text)));
     }
+    if (mode === 'deprecated') text = deprecatedCommandStub(text, name);
     return text;
   }));
 }
@@ -223,7 +230,7 @@ for (const dir of readdirSync(skillDir)) {
   const mode = runSkills.has(dir) ? 'run' : 'none';
   changed += Number(update(path, (source) => {
     let text = insertFrontmatterField(source, 'session-mode', mode);
-    if (mode === 'run') text = insertAfterFrontmatter(text, skillRunBlock(dir));
+    if (mode === 'run') text = addRequiredReading(rewriteObsoleteArtifactPaths(stripEmbeddedRunMode(text)));
     return text;
   }));
 }
@@ -247,10 +254,12 @@ for (const skillName of runSkills) {
   if (!existsSync(dir)) continue;
   for (const path of walkMarkdown(dir)) {
     if (path.endsWith(`${join(skillName, 'SKILL.md')}`) || path === join(dir, 'SKILL.md')) continue;
-    const source = readFileSync(path, 'utf8');
     const rel = relative(dir, path).replace(/\\/g, '/');
-    if (!legacyPattern.test(source) && !rel.startsWith('roles/')) continue;
-    changed += Number(update(path, insertSkillChildBlock));
+    const executable = rel.startsWith('roles/') || rel.startsWith('phases/') || rel === 'templates/skill-md.md';
+    changed += Number(update(path, (source) => {
+      const cleaned = rewriteObsoleteArtifactPaths(stripEmbeddedRunMode(source));
+      return executable ? addRequiredReading(cleaned) : removeRequiredReading(cleaned);
+    }));
   }
 }
 

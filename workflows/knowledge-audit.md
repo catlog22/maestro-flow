@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Knowledge Audit Workflow
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Prerequisites
 
@@ -15,7 +11,7 @@ Legacy references to `scratch/`, hidden command directories, milestone/phase art
 - 至少一个目标存储有内容：
   - `spec`: `.workflow/specs/*.md` 含 `<spec-entry>`
   - `knowhow`: `maestro wiki list` 非空
-  - `artifact`: `.workflow/.{analysis,brainstorm,debug,lite-plan,lite-fix}/` 或 `state.json.artifacts[]` 非空
+  - `artifact`: `.workflow/.{analysis,brainstorm,debug,lite-plan,lite-fix}/` 或 `Session ArtifactRegistry (runtime-owned)` 非空
 - 推荐：`harvest-log.jsonl` 存在（用于追溯 artifact 是否已抽取）
 
 ---
@@ -268,7 +264,7 @@ for finding in actionable_findings:
 | `supersede` (spec) | `maestro spec supersede <old-sid> --by <new-sid>`（双向链接 + deprecated，保留演化链） |
 | `deprecate` (spec) | Edit 目标文件，把 `<spec-entry ...>` 改为 `<spec-entry ... status="deprecated">`（无替代条目时） |
 | `deprecate` (knowhow) | `maestro wiki edit <slug>` 注入 `status: deprecated` frontmatter |
-| `deprecate` (artifact) | 更新 state.json.artifacts[].status = "deprecated" |
+| `deprecate` (artifact) | 更新 Session ArtifactRegistry (runtime-owned).status = "deprecated" |
 | `delete` (spec) | Edit 移除整个 `<spec-entry>` 块 |
 | `delete` (knowhow) | `maestro wiki delete <slug>` |
 | `delete` (artifact) | mv artifact_dir → `.workflow/.trash/{timestamp}/` + state.json 移入 `artifact_archive[]` |

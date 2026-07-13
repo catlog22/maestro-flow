@@ -52,7 +52,7 @@ Before applying conversion rules, determine the source type:
 
 ### Critical: No @ References
 
-Skills are loaded **progressively inline** into the conversation context. They CANNOT use `@` file references — these only work in commands.
+Skills are loaded progressively inline. The canonical Run lifecycle is a permitted shared `@` dependency; phase and domain references remain progressive.
 
 ### Source Pattern → Target Pattern (Skill)
 
@@ -70,8 +70,8 @@ Skills are loaded **progressively inline** into the conversation context. They C
 
 | Element | Why NOT |
 |---------|---------|
-| `<required_reading>` | Skills cannot use `@` refs — progressive loading |
-| `@specs/...` or `@phases/...` | `@` syntax not supported in skills |
+| `<required_reading>` | Canonical Run lifecycle only; other context uses progressive loading |
+| `@specs/...` or `@phases/...` | Not allowed; read phase/domain files on demand |
 | `<offer_next>` | Skills chain via `Skill()` calls, not offer menus |
 
 ### What to ADD (Skill-Specific)

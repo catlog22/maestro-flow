@@ -1,3 +1,5 @@
+
+
 # Convergence Criteria — Adversarial Edition
 
 When does the swarm stop? Two-layer convergence: Python signal + adversarial debate.

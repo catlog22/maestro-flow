@@ -19,23 +19,14 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create maestro-merge -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
-Merge a milestone worktree branch back into main, sync scratch artifacts, and reconcile the artifact registry.
+Merge a milestone worktree branch back into main, sync Run artifacts, and reconcile the artifact registry.
 Two-phase: git merge first, artifact sync second (only after git succeeds).
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/merge.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <context>
@@ -59,8 +50,8 @@ Follow '~/.maestro/workflows/merge.md' completely.
 - BLOCKED if: merge has unresolved conflicts — do NOT sync artifacts until git merge succeeds (prevents partial state corruption).
 
 **GATE 3: Artifact Sync → Completion**
-- REQUIRED: All scratch artifacts synced to main `.workflow/scratch/`.
-- REQUIRED: `state.json.artifacts[]` reconciled (worktree entries merged into main).
+- REQUIRED: All Run artifacts synced to main `{run_dir}/outputs/`.
+- REQUIRED: `Session ArtifactRegistry (runtime-owned)` reconciled (worktree entries merged into main).
 - REQUIRED: Worktree cleaned up (unless --no-cleanup).
 - BLOCKED if missing: artifacts not synced or registry not reconciled — main worktree would have incomplete state.
 
@@ -106,8 +97,8 @@ User selects "记录经验" → prompt for title/insight, then persist via `Skil
 - [ ] Registry health check passed (stale entries cleaned)
 - [ ] Pre-merge rebase successful (worktree has latest main)
 - [ ] Git merge completed without conflicts (or conflicts resolved via --continue)
-- [ ] All scratch artifacts synced to main `.workflow/scratch/`
-- [ ] `state.json.artifacts[]` reconciled (worktree entries merged into main)
+- [ ] All Run artifacts synced to main `{run_dir}/outputs/`
+- [ ] `Session ArtifactRegistry (runtime-owned)` reconciled (worktree entries merged into main)
 - [ ] Milestone `"forked"` flag removed in `state.json.milestones[]`
 - [ ] `roadmap.md` completed phases marked
 - [ ] Worktree removed and branch deleted (unless --no-cleanup)

@@ -1,12 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 1: Requirements Discovery
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Collect basic skill information, configuration, and execution mode based on user input.
 
 ## Objective
 
@@ -220,7 +216,7 @@ const config = {
 
   output: {
     format: outputFormat.toLowerCase(),
-    location: `.workflow/.scratchpad/${skillName}-{timestamp}`,
+    location: `{run_dir}/outputs`,
     filename_pattern: `{name}-output.${outputFormat === "HTML" ? "html" : outputFormat === "JSON" ? "json" : "md"}`
   },
 
@@ -229,7 +225,7 @@ const config = {
 };
 
 // Write configuration file
-const workDir = `.workflow/.scratchpad/skill-gen-${timestamp}`;
+const workDir = `{run_dir}/outputs/skill-gen-${timestamp}`;
 Bash(`mkdir -p "${workDir}"`);
 Write(`${workDir}/skill-config.json`, JSON.stringify(config, null, 2));
 ```

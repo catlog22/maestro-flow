@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 2: Orchestrator Design
 
 Generate the SKILL.md orchestrator file from workflowConfig, applying all coordination patterns (progressive loading, TodoWrite, data flow, conditional execution).

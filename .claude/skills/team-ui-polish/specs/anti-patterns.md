@@ -1,3 +1,5 @@
+
+
 # Anti-Pattern Catalog
 
 Complete catalog of UI design anti-patterns from Impeccable's design audit knowledge. Used by scanner for detection and optimizer for remediation.

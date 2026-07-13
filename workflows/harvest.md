@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Harvest Workflow
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Argument Shape
 
@@ -60,13 +56,13 @@ If --prune: mode = "prune", jump to Stage 9 (skip Stages 2-8).
 | Source Type | Scan Path | Key Files | ID Pattern |
 |-------------|-----------|-----------|------------|
 | `analysis` | `.workflow/.analysis/ANL-*/` | `conclusions.json`, `*.md` | `ANL-*` |
-| `brainstorm` | `.workflow/scratch/*-brainstorm-*/` | `guidance-specification.md`, `*/analysis.md`, `design-research.md` | directory name |
+| `brainstorm` | `{run_dir}/outputs/` | `guidance-specification.md`, `*/analysis.md`, `design-research.md` | directory name |
 | `lite-plan` | `.workflow/.lite-plan/*/` | `plan.json`, `plan-overview.md` | directory name |
 | `lite-fix` | `.workflow/.lite-fix/*/` | `fix-plan.json` | directory name |
 | `debug` | `.workflow/.debug/*/` | `debug-log.md`, `hypothesis-*.md` | directory name |
-| `scratchpad` | `.workflow/.scratchpad/` | `*.md`, `*.json` | filename |
+| `scratchpad` | `{run_dir}/outputs/` | `*.md`, `*.json` | filename |
 | `session` | `.workflow/active/WFS-*/` | `workflow-session.json` | `WFS-*` |
-| `import` | `.workflow/scratch/*-import-*/` | `context-package.json`, `source.*` | directory name |
+| `import` | `{run_dir}/outputs/` | `context-package.json`, `source.*` | directory name |
 | `knowhow` | `.workflow/knowhow/` | `*.md`, `digest-*.md` | filename |
 
 For each matching directory/file within `--recent` window, extract: `source_type`, `id`, `path`, `title`, `updated_at`, `summary`, `file_count`.

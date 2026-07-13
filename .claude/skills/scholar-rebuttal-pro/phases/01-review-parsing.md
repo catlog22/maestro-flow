@@ -1,12 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 1: Review Parsing & Classification
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Parse reviewer comments, classify by type (Major/Minor/Typo/Misunderstanding), extract key concerns using Agy CLI semantic analysis.
 
 ## Objective
 
@@ -168,7 +164,7 @@ if (!parseResult.success) {
 
 // Write review-analysis.json with error handling
 try {
-  Write(".workflow/.scratchpad/review-analysis.json", JSON.stringify(classificationResult, null, 2))
+  Write("{run_dir}/outputs/review-analysis.json", JSON.stringify(classificationResult, null, 2))
 } catch (error) {
   console.error(`[Phase 1] Failed to write review-analysis.json:`, error.message);
   TodoWrite([
@@ -213,7 +209,7 @@ for (const comment of classificationResult.comments) {
 }
 
 try {
-  Write(".workflow/.scratchpad/comment-classification.md", report)
+  Write("{run_dir}/outputs/comment-classification.md", report)
 } catch (error) {
   console.error(`[Phase 1] Failed to write comment-classification.md:`, error.message);
   // Non-critical, continue
@@ -224,8 +220,8 @@ try {
 
 - **Variable**: `reviewAnalysis` (parsed classification result)
 - **Variable**: `commentCategories` (summary of categories)
-- **File**: `.workflow/.scratchpad/review-analysis.json`
-- **File**: `.workflow/.scratchpad/comment-classification.md`
+- **File**: `{run_dir}/outputs/review-analysis.json`
+- **File**: `{run_dir}/outputs/comment-classification.md`
 - **TodoWrite**: Mark Phase 1 completed, Phase 2 in_progress
 
 ## Next Phase

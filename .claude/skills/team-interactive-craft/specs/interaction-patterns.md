@@ -1,3 +1,5 @@
+
+
 # Interaction Pattern Catalog
 
 Reference patterns for common interactive components. Each pattern defines the core interaction model, browser APIs, state machine, animation approach, and accessibility requirements.

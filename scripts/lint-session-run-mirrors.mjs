@@ -6,6 +6,8 @@ import YAML from 'yaml';
 
 const root = process.cwd();
 const errors = [];
+const RUN_MODE_REF = '@~/.maestro/workflows/run-mode.md';
+const obsoleteRunMode = /\.workflow\/(?:scratch|\.scratchpad)|Legacy Compatibility Mapping|state\.json\.artifacts\[\]|<run_mode>|## Run Mode Contract|## Run Artifact Boundary|\{run_dir\}\/outputs\/(?:\*|\{YYYYMMDD\}|\$\{date\})/;
 
 function parse(path) {
   const text = readFileSync(path, 'utf8');
@@ -68,9 +70,8 @@ for (const entry of readdirSync(codexDir, { withFileTypes: true })) {
     errors.push(`${relative(root, path)}: missing or invalid session-mode`);
   }
   if (mode === 'run') {
-    for (const token of ['<run_mode>', 'maestro run create', 'maestro run check', 'maestro run complete', 'Legacy Compatibility Mapping']) {
-      if (!text.includes(token)) errors.push(`${relative(root, path)}: run mode missing ${token}`);
-    }
+    if (!text.includes(RUN_MODE_REF)) errors.push(`${relative(root, path)}: run mode missing canonical workflow reference`);
+    if (obsoleteRunMode.test(text)) errors.push(`${relative(root, path)}: run mode contains embedded or obsolete lifecycle content`);
     const gates = data.contract?.gates ?? { entry: [], exit: [] };
     if (!data.contract || !Array.isArray(data.contract.consumes) || !Array.isArray(data.contract.produces)
       || !Array.isArray(gates.entry) || !Array.isArray(gates.exit)) {

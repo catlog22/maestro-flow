@@ -46,7 +46,7 @@ Commands use XML semantic tags with process steps inside `<process>`:
 | Tag | Required | Purpose |
 |-----|----------|---------|
 | `<purpose>` | Yes | What + when + what it produces (2-3 sentences) |
-| `<required_reading>` | Commands only | @ file references loaded before execution |
+| `<required_reading>` | Commands and stateful skills | Shared lifecycle references loaded before execution |
 | `<process>` | Yes | Steps — numbered or named (see Step Styles below) |
 | `<auto_mode>` | Optional | Behavior when `--auto` flag present |
 | `<offer_next>` | Recommended | Formatted completion status + next actions |
@@ -62,14 +62,14 @@ Skills (`.claude/skills/*/SKILL.md`) follow command structure with critical diff
 |--------|---------|-------|
 | Location | `.claude/commands/` | `.claude/skills/*/SKILL.md` |
 | Loading | Slash-command invocation, `@` refs resolved | Progressive inline loading into conversation |
-| `<required_reading>` | Yes — `@path` refs auto-resolved | **NO** — `@` refs do NOT work in skills |
+| `<required_reading>` | Yes — `@path` refs auto-resolved | Canonical shared lifecycle refs only; phase/domain context stays progressive |
 | External file access | `@` references | `Read()` tool calls within `<process>` steps |
 | Phase files | N/A | `Read("phases/01-xxx.md")` within process steps |
 | Frontmatter | `name`, `description`, `argument-hint` | `name`, `description`, `allowed-tools` |
 
 ### Skill-Specific Rules
 
-1. **NO `<required_reading>` tag** — Skills cannot use `@` file references. All external context must be loaded via `Read()` tool calls within `<process>` steps.
+1. **Minimal `<required_reading>`** — Stateful skills reference the canonical Run workflow. All phase/domain context is loaded via `Read()` calls within `<process>` steps.
 
 2. **Progressive phase loading** — For multi-phase skills with phase files in `phases/` subdirectory, use inline `Read()`:
    ```javascript

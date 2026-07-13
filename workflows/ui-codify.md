@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # UI Codify: Main Workflow
 
 从源代码提取设计系统，生成参考包，固化为知识资产。

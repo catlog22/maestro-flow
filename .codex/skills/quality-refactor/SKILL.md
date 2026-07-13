@@ -14,16 +14,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create quality-refactor -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Iterative refactoring cycle via `spawn_agents_on_csv`: analyze scope for tech debt -> plan refactoring tasks -> execute each as single-row CSV wave with test verification -> reflect on strategy per round -> repeat if needed. Every change is verified against existing tests. Failed changes are reverted and retried with adjusted strategy.
@@ -41,19 +34,19 @@ $quality-refactor "src/auth"                    # module path scope
 $quality-refactor "authentication"              # feature area scope
 $quality-refactor "all"                         # full codebase scan
 $quality-refactor "src/api --max-iterations 5"  # limit iteration rounds
-$quality-refactor "--dir .workflow/scratch/refactor-auth-2026-03-18"  # resume existing
+$quality-refactor "--dir {run_dir}/outputs/refactor-auth-2026-03-18"  # resume existing
 ```
 
 **Flags**:
 - `<phase|scope>`: Module path, feature area, or "all"
-- `--dir path`: Resume existing refactor scratch directory
+- `--dir path`: Resume existing refactor Run output directory
 - `--max-iterations N`: Max refactoring rounds (default: 3)
 
-**Output**: `.workflow/scratch/refactor-{slug}-{date}/` with index.json, plan.json, reflection-log.md, .task/, .summaries/
+**Output**: `{run_dir}/outputs/refactor-{slug}-{date}/` with index.json, plan.json, reflection-log.md, .task/, .summaries/
 
 **Session**: `.workflow/.csv-wave/{YYYYMMDD}-refactor-{slug}/`
 
-**Output boundary**: Refactoring modifies source files within the declared scope only. Ancillary outputs (reflection-log.md) MUST target `.workflow/scratch/{YYYYMMDD}-refactor-{slug}/`. NEVER modify files outside the confirmed scope without re-confirmation.
+**Output boundary**: Refactoring modifies source files within the declared scope only. Ancillary outputs (reflection-log.md) MUST target `{run_dir}/outputs/`. NEVER modify files outside the confirmed scope without re-confirmation.
 </context>
 
 <csv_schema>
@@ -131,7 +124,7 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 ### Step 1: Parse Scope
 
 1. Parse `$ARGUMENTS` for scope and flags
-2. If `--dir` provided: resume existing scratch directory (skip to Step 5)
+2. If `--dir` provided: resume existing Run output directory (skip to Step 5)
 3. Scope types:
    - Module path (e.g., "src/auth") -> scan that directory
    - Feature area (e.g., "authentication") -> search for related files
@@ -139,9 +132,9 @@ Each wave generates `wave-{N}.csv` with extra `prev_context` column populated fr
 4. If empty: prompt user via request_user_input with options (Module path / Feature area / Full codebase)
 5. Detect `--max-iterations N` (default: 3)
 
-### Step 2: Create Scratch Directory
+### Step 2: Create Run output directory
 
-Create `.workflow/scratch/refactor-{slug}-{date}/` with `.task/` and `.summaries/` subdirectories. Write `index.json` with type "refactor", scope, status "active", plan/execution/reflection counters.
+Create `{run_dir}/outputs/refactor-{slug}-{date}/` with `.task/` and `.summaries/` subdirectories. Write `index.json` with type "refactor", scope, status "active", plan/execution/reflection counters.
 
 ### Step 3: Scope Analysis
 
@@ -309,7 +302,7 @@ Display report: scope, tasks completed/blocked, reflection rounds, strategy adju
 </error_codes>
 
 <success_criteria>
-- [ ] Scope resolved and scratch directory created
+- [ ] Scope resolved and Run output directory created
 - [ ] Tech debt analysis completed with categorized findings
 - [ ] Refactoring plan approved by user
 - [ ] tasks.csv built from plan with proper wave assignment

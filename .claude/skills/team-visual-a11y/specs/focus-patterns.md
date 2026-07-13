@@ -1,3 +1,5 @@
+
+
 # Focus Management Patterns
 
 Reference guide for focus indicator styles, skip links, focus traps, and ARIA patterns. Used by focus-auditor and fix-implementer roles.

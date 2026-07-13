@@ -14,16 +14,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Sequential pipeline coordinator. Classify intent → decompose (broad lifecycle intents) →
@@ -323,7 +316,7 @@ Read `.workflow/state.json` and route by condition:
      "phase", "phase_is_new": false, "milestone": "",
      "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
      "auto_mode": false,
-     "context": { "issue_id": null, "scratch_dir": null, "plan_dir": null,
+     "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
        "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null, "grill_id": null },
      "steps": [{
        "index": 0, "type": "skill|decision",
@@ -512,7 +505,7 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 | `next-milestone` | [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
 | `full-lifecycle` | [B] maestro-plan → [B] maestro-execute → quality-review → quality-test → maestro-milestone-audit → maestro-milestone-complete → manage-harvest --auto |
 | `execute-review` | [B] maestro-execute → quality-review |
-| `analyze-plan-execute` | [B] maestro-analyze -q → [B] maestro-plan --dir {scratch_dir} → [B] maestro-execute --dir {scratch_dir} → manage-harvest --auto |
+| `analyze-plan-execute` | [B] maestro-analyze -q → [B] maestro-plan --dir {run_dir} → [B] maestro-execute --dir {run_dir} → manage-harvest --auto |
 | `quality-loop` | quality-review → quality-test → quality-debug --from-uat → [B] maestro-plan --gaps → [B] maestro-execute |
 | `quality-loop-partial` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
 | `review-fix` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review |

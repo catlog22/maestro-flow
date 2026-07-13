@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Learn Workflow
 
 Storage:
@@ -218,7 +222,7 @@ Find `<spec-entry>` matching target INS-id in `learnings.md`. Missing arg → E0
 
 ### Step 5.2: Resolve linked phase context (if any)
 
-If `entry.phase_slug` set (parsed from entry content): look up phase directory from `state.json` artifacts, read its `index.json` for title/status, check for `retrospective.md`.
+If `entry.phase_slug` is set, resolve the matching Session/Run through `.workflow/sessions/*/runs/*/run.json`, then resolve any retrospective through that Session's `artifacts.json`.
 
 ### Step 5.3: Resolve routed artifact (if any)
 

@@ -4,6 +4,10 @@ name: domain-add
 alias: domain-add
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Workflow: domain-add
 
 Register a domain term into `.workflow/domain/glossary.yaml`.

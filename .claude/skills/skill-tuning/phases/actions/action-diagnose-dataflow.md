@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Diagnose Data Flow Issues
 
 Analyze target skill for data flow disruption - state inconsistencies and format variations.

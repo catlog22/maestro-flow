@@ -13,19 +13,8 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-merge -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
-
 <purpose>
-Merge a completed milestone worktree branch back into main, sync scratch artifacts,
+Merge a completed milestone worktree branch back into main, sync Run artifacts,
 and reconcile artifact registry. Two-phase approach: git merge first (source code),
 artifact sync second (only after git succeeds). Prevents partial state corruption
 when merge conflicts occur.
@@ -33,6 +22,7 @@ when merge conflicts occur.
 
 <required_reading>
 @~/.maestro/workflows/merge.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <context>
@@ -51,8 +41,8 @@ $ARGUMENTS — milestone number and optional flags.
 6. Artifact registry reconciliation → 7. Cleanup
 
 **Phase 2 detail:**
-- Copy worktree `scratch/*` to main `.workflow/scratch/`
-- Merge `state.json.artifacts[]` entries (worktree wins for same id)
+- Copy worktree `scratch/*` to main `{run_dir}/outputs/`
+- Merge `Session ArtifactRegistry (runtime-owned)` entries (worktree wins for same id)
 - Remove milestone `"forked"` flag in main state.json
 </context>
 
@@ -87,8 +77,8 @@ After successful merge, ask user once: "Record milestone learnings?" If yes, per
 - [ ] Registry health check passed
 - [ ] Pre-merge rebase successful
 - [ ] Git merge completed (or conflicts resolved via --continue)
-- [ ] Scratch artifacts synced to main `.workflow/scratch/`
-- [ ] `state.json.artifacts[]` reconciled (worktree entries merged)
+- [ ] Run artifacts synced to main `{run_dir}/outputs/`
+- [ ] `Session ArtifactRegistry (runtime-owned)` reconciled (worktree entries merged)
 - [ ] Milestone `"forked"` flag removed
 - [ ] Worktree removed and branch deleted (unless --no-cleanup)
 - [ ] Registry updated

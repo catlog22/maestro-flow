@@ -13,19 +13,12 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-quick -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
-Shortened pipeline for well-understood tasks. Creates a scratch directory, runs quick analysis, generates a plan, executes tasks, and optionally verifies results. Single agent, sequential flow — no CSV waves needed.
+Shortened pipeline for well-understood tasks. Creates a Run output directory, runs quick analysis, generates a plan, executes tasks, and optionally verifies results. Single agent, sequential flow — no CSV waves needed.
 
 **Pipeline**: `[discuss] → analyze-q → plan → execute → [verify]`
 
@@ -47,16 +40,16 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 - `--commit`: Commit the changes at the end of the task
 - `-y`: Auto mode: skip confirmation and commit automatically when --commit is used
 
-**Output**: `.workflow/scratch/{slug}/` with plan.json, execution results, optional verification
+**Output**: `{run_dir}/outputs/{slug}/` with plan.json, execution results, optional verification
 
-**Output boundary**: ALL metadata writes MUST target `.workflow/scratch/{slug}/`. Source code modifications are scoped to files identified in the plan. NEVER modify unrelated source files or `.workflow/state.json` structure beyond scratch task entries.
+**Output boundary**: ALL metadata writes MUST target `{run_dir}/outputs/{slug}/`. Source code modifications are scoped to files identified in the plan. NEVER modify unrelated source files or `.workflow/state.json` structure beyond Run tasks entries.
 </context>
 
 <invariants>
 1. **Speed over ceremony** — minimal overhead, get to implementation fast
 2. **Follow existing patterns** — grep for 3+ similar implementations before writing new code
 3. **Optional commits** — commits are only created if the --commit flag is explicitly passed; otherwise, the task completes without staging or committing files
-4. **Scratch isolation** — all metadata stays in .workflow/scratch/{slug}/
+4. **Scratch isolation** — all metadata stays in {run_dir}/outputs/{slug}/
 5. **Works without init** — quick tasks function even without full .workflow/ setup
 </invariants>
 
@@ -71,7 +64,7 @@ $maestro-quick "add dark mode toggle to settings page" --discuss --full
 **GATE 2: Analysis → Plan**
 - REQUIRED: Quick analysis completed with related files identified.
 - REQUIRED: Existing patterns found (≥1 similar implementation).
-- BLOCKED if: scratch directory creation failed (E002).
+- BLOCKED if: Run output directory creation failed (E002).
 
 **GATE 3: Execute → Report**
 - REQUIRED: All plan tasks attempted and statuses recorded.
@@ -91,9 +84,9 @@ Read `.workflow/state.json` and `.workflow/project.md` if they exist. If `.workf
 
 Load coding specs + tools if available: `maestro load --type spec --category coding`. If the task involves frontend/UI work (description contains component, page, style, layout, CSS, HTML, frontend), also run `maestro load --type spec --category ui`. Browse wiki: `maestro search --category coding`, load relevant entries via `maestro load --type knowhow --id <id>`. All optional — proceed without if unavailable.
 
-### Step 3: Create Scratch Directory
+### Step 3: Create Run output directory
 
-Generate slug from task description (lowercase, hyphens, max 40 chars). Create `.workflow/scratch/{slug}/`. Write `config.json` with: `task`, `flags` (discuss, full), `created_at` (ISO), `status` ("active").
+Generate slug from task description (lowercase, hyphens, max 40 chars). Create `{run_dir}/outputs/{slug}/`. Write `config.json` with: `task`, `flags` (discuss, full), `created_at` (ISO), `status` ("active").
 
 ### Step 4: Discussion Phase (if --discuss)
 
@@ -103,7 +96,7 @@ Analyze the task for gray areas and ambiguities:
 1. Identify decision points in the task
 2. Classify each as: **Locked** (clear from context), **Free** (implementation choice), **Deferred** (need user input)
 3. For Deferred items: ask user for decisions
-4. Write `context.md` to scratch directory with all decisions
+4. Write `context.md` to Run output directory with all decisions
 
 ### Step 5: Quick Analysis
 
@@ -115,7 +108,7 @@ Rapid codebase exploration focused on the task:
 
 ### Step 6: Generate Plan
 
-Create `plan.json` in scratch directory:
+Create `plan.json` in Run output directory:
 - Decompose task into subtasks (typically 1-5 for quick tasks)
 - Each task has: id, title, description, scope, convergence_criteria, files
 - Assign single wave (sequential execution)
@@ -138,7 +131,7 @@ Update plan.json task statuses as completed.
 
 ### Step 9: Commit and Report
 
-Stage only files modified during this skill execution (tracked via task summaries). Display the file list for user confirmation before committing (skip confirmation if `-y`). Commit: `git add <file1> <file2> ... && git commit -m "quick: {slug} - {short description}"`. NEVER use `git add -A` — it may stage unrelated changes. Update `.workflow/state.json` scratch task entry (if state.json exists).
+Stage only files modified during this skill execution (tracked via task summaries). Display the file list for user confirmation before committing (skip confirmation if `-y`). Commit: `git add <file1> <file2> ... && git commit -m "quick: {slug} - {short description}"`. NEVER use `git add -A` — it may stage unrelated changes. Update `.workflow/state.json` Run tasks entry (if state.json exists).
 
 Display report: task description, scratch path, status (completed/completed-with-gaps), tasks completed/total, files modified count. If `--full`: include verification result (PASS/GAPS).
 
@@ -152,13 +145,13 @@ Before reporting completion, verify: `{scratchDir}/plan.json` exists AND `{scrat
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
 | E001 | error | Task description required | Ask user for description |
-| E002 | error | Scratch directory creation failed | Check permissions |
+| E002 | error | Run output directory creation failed | Check permissions |
 | W001 | warning | Verification found minor gaps | Report gaps, continue |
 
 </error_codes>
 
 <success_criteria>
-- [ ] Scratch directory created with config.json
+- [ ] Run output directory created with config.json
 - [ ] Analysis completed and context.md written
 - [ ] Plan generated with subtasks
 - [ ] All tasks executed and statuses updated

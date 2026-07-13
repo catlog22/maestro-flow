@@ -13,7 +13,7 @@ Generate or convert Claude Code prompt files with concrete, domain-specific cont
 - **Create agent** — new role + expertise file at `.claude/agents/`
 - **Convert** — restyle existing command/skill/agent to GSD conventions with zero content loss
 
-Content separation principle (from GSD): commands/skills own orchestration flow; agents own domain knowledge. Skills are a variant of commands but loaded progressively inline — they CANNOT use `@` file references.
+Content separation principle (from GSD): commands/skills own orchestration flow; agents own domain knowledge. Skills are loaded progressively inline; `@` references are reserved for mandatory shared lifecycle contracts such as `@~/.maestro/workflows/run-mode.md`, while phase/domain material remains progressively loaded.
 
 Invoked when user requests "create command", "new command", "create skill", "new skill", "create agent", "new agent", "convert command", "convert skill", "convert agent", "prompt generator", or "优化".
 </purpose>
@@ -52,7 +52,7 @@ Parse `$ARGUMENTS` to determine what to generate.
 - `.claude/skills/*/SKILL.md` → skill
 - `.claude/agents/` → agent
 
-**Skill vs Command distinction:** Skills (`.claude/skills/*/SKILL.md`) are loaded **progressively inline** into the conversation context. They CANNOT use `@` file references — only `Read()` tool calls within process steps. See `@specs/command-design-spec.md` → "Skill Variant" section.
+**Skill vs Command distinction:** Skills (`.claude/skills/*/SKILL.md`) are loaded progressively inline. Stateful skills MUST read the canonical Run lifecycle through `<required_reading>`; phase/domain files continue to use progressive `Read()` calls. See `@specs/command-design-spec.md` → "Skill Variant" section.
 
 If ambiguous:
 
@@ -205,12 +205,12 @@ Generate a complete command file with:
 
 Follow `@specs/command-design-spec.md` → "Skill Variant" section.
 
-Skills are command-like orchestrators but loaded **progressively inline** — they CANNOT use `@` file references.
+Skills are command-like orchestrators loaded progressively inline. The canonical Run workflow is the allowed shared startup dependency; other large context remains progressive.
 
 Generate a complete skill file with:
 
 1. **`<purpose>`** — 2-3 sentences: what + when + what it produces
-2. **NO `<required_reading>`** — skills cannot use `@` refs. External files loaded via `Read()` within process steps.
+2. **Run dependency only** — stateful skills include `@~/.maestro/workflows/run-mode.md`; other external files are loaded via `Read()` within process steps.
 3. **`<process>`** — numbered steps (GSD workflow style):
    - Step 1: Initialize / parse arguments / set workflow preferences
    - Steps 2-N: Domain-specific orchestration logic with inline `Read("phases/...")` for phase files
@@ -219,7 +219,7 @@ Generate a complete skill file with:
 4. **`<success_criteria>`** — checkbox list of verifiable conditions
 
 **Skill-specific writing rules:**
-- **NO `<required_reading>` tag** — `@` syntax not supported in skills
+- **Canonical `<required_reading>` only** — stateful skills reference `@~/.maestro/workflows/run-mode.md`; do not eagerly include phase/domain files
 - **NO `@path` references** anywhere in the file — use `Read("path")` within `<process>` steps
 - Phase files loaded on-demand: `Read("phases/01-xxx.md")` within the step that needs it
 - Frontmatter uses `allowed-tools:` (not `argument-hint:`)
@@ -281,7 +281,7 @@ $INVENTORY = {
 | Flat prose with role description, no process steps | agent (unstructured) |
 
 **Skill-specific conversion rules:**
-- **NO `<required_reading>`** — skills cannot use `@` file references (progressive loading)
+- **Minimal `<required_reading>`** — only shared lifecycle contracts are eager; phase/domain files remain progressive
 - **NO `@path` references** anywhere — replace with `Read("path")` within `<process>` steps
 - If source has `@specs/...` or `@phases/...` refs, convert to `Read("specs/...")` / `Read("phases/...")`
 - Follow `@specs/conversion-spec.md` → "Skill Conversion Rules" section
@@ -354,8 +354,8 @@ Set `$TARGET_PATH = $SOURCE_PATH` (in-place conversion) unless user specifies ou
 | Check | Pass Condition |
 |-------|---------------|
 | `<purpose>` | 2-3 sentences, no placeholders |
-| **NO `<required_reading>`** | Must NOT contain `<required_reading>` tag |
-| **NO `@` file references** | Zero `@specs/`, `@phases/`, `@./` patterns in prose |
+| **Canonical Run reference** | Stateful skills contain `@~/.maestro/workflows/run-mode.md` exactly once |
+| **No eager phase/domain references** | Zero `@specs/`, `@phases/`, `@./` patterns in prose |
 | `<process>` with numbered steps | At least 3 `## N.` headers |
 | Step 1 is initialization | Parses args, sets workflow preferences |
 | Phase file loading | Uses `Read("phases/...")` within process steps (if has phases) |

@@ -19,16 +19,10 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-1. Before domain work, call `maestro run create maestro-ralph-cli-execute -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Thin execution wrapper for CLI delegation.
 
@@ -112,7 +106,7 @@ After skill execution, scan for produced artifacts:
 |---------|-------------|
 | `conclusions.json` | `analysis_dir` |
 | `TASK-*.json` | `plan_dir` |
-| `verification.json` | `scratch_dir` |
+| `verification.json` | `run_dir` |
 | `review.json` | review stage |
 | `test-results.json`, `uat.md` | test stage |
 | `grill-report.md` | `grill_id` |
@@ -122,7 +116,7 @@ Use `Glob` to find files created/modified during execution.
 
 Extract signals from output:
 - Artifact IDs: `ANL-xxx`, `PLN-xxx`, `BLP-xxx`
-- Path signals: `scratch_dir:`, `plan_dir:`
+- Path signals: `run_dir:`, `plan_dir:`
 - Phase signals: `PHASE: N`
 
 ### A_OUTPUT_RESULT
@@ -138,7 +132,7 @@ EVIDENCE: <验证产物路径，如 verification.json、uat.md、e2e-results.jso
 DECISIONS: <本步做出的关键决策，分号分隔>
 CAVEATS: <后续步骤需注意的事项；DONE_WITH_CONCERNS 时同时作为 concerns>
 DEFERRED: <推迟到后续的工作项，分号分隔>
-SIGNALS: <key=value 对，分号分隔，如 plan_dir=.workflow/scratch/PLN-xxx;phase=2>
+SIGNALS: <key=value 对，分号分隔，如 plan_dir={run_dir}/outputs/PLN-xxx;phase=2>
 ---END---
 ```
 
@@ -156,7 +150,7 @@ SIGNALS: <key=value 对，分号分隔，如 plan_dir=.workflow/scratch/PLN-xxx;
 |------------|----------------------|
 | `analysis_dir` | `context.analysis_dir` |
 | `plan_dir` | `context.plan_dir` |
-| `scratch_dir` | `context.scratch_dir` |
+| `run_dir` | `context.run_dir` |
 | `grill_id` | `context.grill_id` |
 | `brainstorm_dir` | `context.brainstorm_dir` |
 | `blueprint_dir` | `context.blueprint_dir` |
@@ -195,12 +189,12 @@ SIGNALS: <key=value 对，分号分隔，如 plan_dir=.workflow/scratch/PLN-xxx;
 ---RESULT---
 STATUS: DONE
 SUMMARY: 生成 8 个 task 覆盖认证模块 3 个子系统，wave 1 含 5 个独立 task
-ARTIFACTS: .workflow/scratch/PLN-20260628/TASK-001.json,.workflow/scratch/PLN-20260628/TASK-002.json,.workflow/scratch/PLN-20260628/plan.json
+ARTIFACTS: {run_dir}/outputs/PLN-20260628/TASK-001.json,{run_dir}/outputs/PLN-20260628/TASK-002.json,{run_dir}/outputs/PLN-20260628/plan.json
 EVIDENCE:
 DECISIONS: 选择 wave 模式分 2 波执行；JWT 和 session 分离为独立 task
 CAVEATS: 模块 X 的外部 API 尚未确认，TASK-003 可能需调整
 DEFERRED: 性能基准测试留到 review 后
-SIGNALS: plan_dir=.workflow/scratch/PLN-20260628;PLN-xxx=PLN-20260628
+SIGNALS: plan_dir={run_dir}/outputs/PLN-20260628;PLN-xxx=PLN-20260628
 ---END---
 ```
 

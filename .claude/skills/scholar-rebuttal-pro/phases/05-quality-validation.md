@@ -1,12 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 5: Quality Validation
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Validate rebuttal quality using Agy CLI: completeness, professionalism, persuasiveness, generate improvement suggestions.
 
 ## Objective
 
@@ -68,10 +64,10 @@ Load the generated rebuttal and reference data for validation:
 const rebuttalDraft = <from Phase 4 output>
 
 // Read rebuttal.md and reference files with error handling
-const rebuttalPath = ".workflow/.scratchpad/rebuttal.md"
-const evidencePath = ".workflow/.scratchpad/evidence-references.json"
-const strategyPath = ".workflow/.scratchpad/strategy-matrix.md"
-const reviewPath = ".workflow/.scratchpad/review-analysis.json"
+const rebuttalPath = "{run_dir}/outputs/rebuttal.md"
+const evidencePath = "{run_dir}/outputs/evidence-references.json"
+const strategyPath = "{run_dir}/outputs/strategy-matrix.md"
+const reviewPath = "{run_dir}/outputs/review-analysis.json"
 
 let rebuttalContent;
 try {
@@ -498,7 +494,7 @@ qualityReport += `## Next Steps
 **Validation Tool**: Agy CLI (${new Date().toISOString()})
 `
 
-Write(".workflow/.scratchpad/quality-report.md", qualityReport)
+Write("{run_dir}/outputs/quality-report.md", qualityReport)
 
 // Generate improvement-suggestions.json
 const improvementSuggestions = {
@@ -515,12 +511,12 @@ const improvementSuggestions = {
   readyForSubmission: validationResult.overallScore >= 80 && criticalIssues.length === 0
 }
 
-Write(".workflow/.scratchpad/improvement-suggestions.json", JSON.stringify(improvementSuggestions, null, 2))
+Write("{run_dir}/outputs/improvement-suggestions.json", JSON.stringify(improvementSuggestions, null, 2))
 
 console.log(`
 Quality Report Generated:
-  - .workflow/.scratchpad/quality-report.md
-  - .workflow/.scratchpad/improvement-suggestions.json
+  - {run_dir}/outputs/quality-report.md
+  - {run_dir}/outputs/improvement-suggestions.json
 
 Ready for Submission: ${improvementSuggestions.readyForSubmission ? 'Yes ✅' : 'No ⚠️'}
 `)
@@ -554,9 +550,9 @@ Issues Found:
 Ready for Submission: ${improvementSuggestions.readyForSubmission ? 'YES ✅' : 'NO ⚠️'}
 
 Output Files:
-  📄 Rebuttal: .workflow/.scratchpad/rebuttal.md
-  📊 Quality Report: .workflow/.scratchpad/quality-report.md
-  🔧 Improvements: .workflow/.scratchpad/improvement-suggestions.json
+  📄 Rebuttal: {run_dir}/outputs/rebuttal.md
+  📊 Quality Report: {run_dir}/outputs/quality-report.md
+  🔧 Improvements: {run_dir}/outputs/improvement-suggestions.json
 
 ═══════════════════════════════════════════════════════════
 `)
@@ -580,7 +576,7 @@ if (!workflowPreferences.autoYes) {
   if (nextAction["Next Steps"] === "Revise") {
     console.log(`
 Please review and edit:
-  - .workflow/.scratchpad/rebuttal.md
+  - {run_dir}/outputs/rebuttal.md
 
 Then re-run Phase 5 for validation, or proceed to submission.
 `)
@@ -594,7 +590,7 @@ To regenerate with improvements:
   } else if (nextAction["Next Steps"] === "Export") {
     console.log(`
 Export functionality:
-  - Copy .workflow/.scratchpad/rebuttal.md to conference submission system
+  - Copy {run_dir}/outputs/rebuttal.md to conference submission system
   - Or use conference-specific export tools if available
 `)
   } else {
@@ -618,8 +614,8 @@ Good luck with your submission!
 
 - **Variable**: `qualityScore` (overall quality score and dimension scores)
 - **Variable**: `improvements` (prioritized improvement suggestions)
-- **File**: `.workflow/.scratchpad/quality-report.md` (comprehensive quality report)
-- **File**: `.workflow/.scratchpad/improvement-suggestions.json` (structured improvement data)
+- **File**: `{run_dir}/outputs/quality-report.md` (comprehensive quality report)
+- **File**: `{run_dir}/outputs/improvement-suggestions.json` (structured improvement data)
 - **TodoWrite**: Mark Phase 5 completed
 
 ## Next Phase

@@ -19,16 +19,6 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create maestro-grill -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Socratic stress-testing of plans/ideas against codebase reality. Produces grill-report.md + terminology.md + context-package.json for downstream brainstorm/analyze/roadmap.
 
@@ -37,6 +27,7 @@ Pipeline position: BEFORE brainstorm (stress-test → then elaborate).
 
 <required_reading>
 @~/.maestro/workflows/grill.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <deferred_reading>
@@ -61,7 +52,7 @@ $ARGUMENTS -- topic/plan text for interactive mode, or --from source for upstrea
 | `--depth shallow\|standard\|deep` | Branch count 3/5/8 | `standard` |
 | `--from <source>` | Load upstream material (`blueprint:ID`, `@file`, or path) | — |
 
-**Output directory**: `.workflow/scratch/{YYYYMMDD}-grill-{slug}/`
+**Output directory**: `{run_dir}/outputs/`
 **Produced files**: `grill-report.md`, `terminology.md`, `context-package.json`
 
 ### Pre-load

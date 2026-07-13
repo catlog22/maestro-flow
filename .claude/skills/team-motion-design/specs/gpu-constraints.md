@@ -1,3 +1,5 @@
+
+
 # GPU Constraints
 
 Compositor-only animation rules for 60fps performance.

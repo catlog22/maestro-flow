@@ -44,7 +44,7 @@ state.json exists → Path C (existing) | source files exist → Path B (brownfi
 
    If `--auto` flag: skip interactive questioning, extract from @ referenced document.
    If `--from <source>` (alias: `--from-brainstorm`):
-   - Locate source directory (`.workflow/scratch/*-brainstorm-*/`, `.workflow/scratch/*-import-*/`, etc.)
+   - Resolve the source from an explicit artifact reference or the selected Session's sealed Run registry; never discover formal inputs by directory glob.
    - Load `context-package.json` (preferred) or fall back to `guidance-specification.md`:
      - `domain` (name, description, problem_statement) → project vision + core value
      - `requirements[]` → project goals (Active requirements)

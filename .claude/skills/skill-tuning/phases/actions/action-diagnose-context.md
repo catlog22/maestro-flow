@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Diagnose Context Explosion
 
 Analyze target skill for context explosion issues - token accumulation and multi-turn dialogue bloat.

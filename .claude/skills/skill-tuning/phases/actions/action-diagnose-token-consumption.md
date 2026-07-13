@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Diagnose Token Consumption
 
 Analyze target skill for token consumption inefficiencies and output optimization opportunities.

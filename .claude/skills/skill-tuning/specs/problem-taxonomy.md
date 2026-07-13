@@ -1,3 +1,5 @@
+
+
 # Problem Taxonomy
 
 Classification of skill execution issues with detection patterns and severity criteria.

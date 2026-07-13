@@ -108,7 +108,7 @@ Read the following templates:
 
 ### Step 5: Create .workflow/ Structure
 
-Create directories: `.workflow/specs`, `.workflow/scratch`, `.workflow/codebase`.
+Create directories: `.workflow/specs`, `{run_dir}/outputs`, `.workflow/codebase`.
 
 ### Step 6: Write project.md
 

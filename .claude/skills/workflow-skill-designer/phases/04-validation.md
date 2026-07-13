@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 4: Validation & Integration
 
 Validate the generated skill package for structural completeness, reference integrity, and content quality. Produce a validation report and integration summary.

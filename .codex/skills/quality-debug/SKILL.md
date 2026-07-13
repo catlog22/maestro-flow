@@ -15,16 +15,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create quality-debug -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Wave-based hypothesis-driven debugging using `spawn_agents_on_csv`. Wave 1 explores hypotheses in parallel, Wave 2 attempts fixes on confirmed hypotheses in parallel.
@@ -226,7 +219,7 @@ mkdir -p {sessionFolder}
 | `--parallel` flag present | parallel (implies from-uat or from-auto-test, one agent per gap cluster) |
 | Neither flag | standalone (gather symptoms interactively) |
 
-2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase+milestone. Extract relevant outputs by type: execute -> .summaries/.task/, review -> review.json (guide hypotheses), debug -> understanding.md (avoid re-investigation), test -> uat.md + .tests/auto-test/report.json.
+2. **Related session discovery**: Query `Session ArtifactRegistry (runtime-owned)` for matching phase+milestone. Extract relevant outputs by type: execute -> .summaries/.task/, review -> review.json (guide hypotheses), debug -> understanding.md (avoid re-investigation), test -> uat.md + .tests/auto-test/report.json.
 
 2b. **Load codebase + wiki context** (optional, informs hypothesis generation):
    - If `.workflow/codebase/ARCHITECTURE.md` exists: read module boundaries to scope impact analysis
@@ -433,7 +426,7 @@ CONSTRAINTS:
 
 4. **Issue update** (approved items only): If `issues.jsonl` exists, update matching issues with status `diagnosed`, add `context.suggested_fix` and `context.notes`.
 
-5. **Register artifact** (approved items only; phase-scoped): Append to `state.json.artifacts[]` with `type: "debug"`, `id: DBG-NNN`, `depends_on: triggering_review_id || exec_art.id`.
+5. **Register artifact** (approved items only; phase-scoped): Append to `Session ArtifactRegistry (runtime-owned)` with `type: "debug"`, `id: DBG-NNN`, `depends_on: triggering_review_id || exec_art.id`.
 
 6. **Post-debug Knowledge Inquiry**: Prompt user to capture knowledge when:
    - Recurring root cause pattern detected -> `$spec-add debug`

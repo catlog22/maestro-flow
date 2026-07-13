@@ -1,12 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 1: Setup
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Initialize workspace, backup skills, parse inputs.
 
 ## Objective
 
@@ -80,7 +76,7 @@ for (const rawPath of rawPaths) {
 
 ```javascript
 const ts = Date.now();
-const workDir = `.workflow/.scratchpad/skill-iter-tune-${ts}`;
+const workDir = `{run_dir}/outputs/skill-iter-tune-${ts}`;
 
 Bash(`mkdir -p "${workDir}/backups" "${workDir}/iterations"`);
 ```

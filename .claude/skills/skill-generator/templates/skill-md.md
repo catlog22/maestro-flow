@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # SKILL.md Template
 
 Template for generating new Skill entry files.
@@ -40,10 +44,6 @@ session-mode: {{session_mode}}
 # {{display_name}}
 
 {{description}}
-
-<run_mode>
-When `session-mode: run`, call `maestro run create {{skill_name}} -- $ARGUMENTS` before domain work. Write formal artifacts to `{run_dir}/outputs/`, evidence to `{run_dir}/evidence/`, and the final handoff to `{run_dir}/report.md`. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`. When `session-mode: none`, do not create a private `.workflow` session directory.
-</run_mode>
 
 ## Architecture Overview
 

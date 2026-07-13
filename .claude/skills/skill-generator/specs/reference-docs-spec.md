@@ -1,3 +1,5 @@
+
+
 # Reference Documents Generation Specification
 
 > **IMPORTANT**: This specification defines how to organize and present reference documents in generated skills to avoid duplication issues.

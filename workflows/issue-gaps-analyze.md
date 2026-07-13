@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Issue Gaps Analysis
 
 > **CLI variants**: see `issue-gaps-analyze.codex.md` for codex-specific notes (CSV-wave variant using `spawn_agents_on_csv`).

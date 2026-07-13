@@ -18,10 +18,34 @@ function plain(s: string): string { return s.replace(ANSI, ''); }
 
 let workspace: string;
 
-function setup(stateJson: object): void {
+function setup(opts: {
+  intent?: string;
+  sessionStatus?: string;
+  runs: Array<{ id: string; sequence: number; status: string; command: string }>;
+  artifacts?: Array<{ id: string; kind: string; status: string; runId: string; path: string; createdAt?: string }>;
+}): void {
   workspace = mkdtempSync(join(tmpdir(), 'statusline-chain-test-'));
-  mkdirSync(join(workspace, '.workflow'), { recursive: true });
-  writeFileSync(join(workspace, '.workflow', 'state.json'), JSON.stringify(stateJson));
+  const sessionId = '20260713-statusline';
+  const sessionDir = join(workspace, '.workflow', 'sessions', sessionId);
+  const runsDir = join(sessionDir, 'runs');
+  mkdirSync(runsDir, { recursive: true });
+  writeFileSync(join(workspace, '.workflow', 'state.json'), JSON.stringify({
+    version: '2.0', active_session_id: sessionId, sessions: [{ session_id: sessionId, intent: opts.intent ?? 'MVP', status: opts.sessionStatus ?? 'running' }],
+  }));
+  const active = opts.runs.find(run => run.status === 'running' || run.status === 'blocked');
+  writeFileSync(join(sessionDir, 'session.json'), JSON.stringify({
+    session_id: sessionId, intent: opts.intent ?? 'MVP', status: opts.sessionStatus ?? 'running', active_run_id: active?.id ?? null,
+  }));
+  const registry: Record<string, unknown> = {};
+  for (const artifact of opts.artifacts ?? []) {
+    registry[artifact.id] = { kind: artifact.kind, status: artifact.status, producer_run_id: artifact.runId, relative_path: artifact.path, created_at: artifact.createdAt ?? isoDaysAgo(0) };
+  }
+  writeFileSync(join(sessionDir, 'artifacts.json'), JSON.stringify({ artifacts: registry, aliases: {} }));
+  for (const run of opts.runs) {
+    const dir = join(runsDir, run.id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'run.json'), JSON.stringify({ run_id: run.id, sequence: run.sequence, status: run.status, command: { name: run.command } }));
+  }
 }
 
 function teardown(): void {
@@ -36,126 +60,40 @@ describe('statusline chain rendering', () => {
   beforeEach(() => { workspace = ''; });
   afterEach(teardown);
 
-  it('renders completed chain as compact "slug ✓"', () => {
-    setup({
-      version: '2.0',
-      current_milestone: 'MVP',
-      milestones: [{ id: 'MVP', name: 'MVP', phases: [1] }],
-      artifacts: [
-        { id: 'ANL-1', type: 'analyze', milestone: 'MVP', phase: 1, status: 'completed', completed_at: isoDaysAgo(0.5) },
-        { id: 'PLN-1', type: 'plan',    milestone: 'MVP', phase: 1, status: 'completed', depends_on: 'ANL-1', completed_at: isoDaysAgo(0.5) },
-        { id: 'EXC-1', type: 'execute', milestone: 'MVP', phase: 1, status: 'completed', depends_on: 'PLN-1', completed_at: isoDaysAgo(0.5) },
-      ],
-    });
+  it('renders sealed canonical Session progress', () => {
+    setup({ intent: 'MVP', sessionStatus: 'sealed', runs: [
+      { id: '20260713-001-analyze', sequence: 1, status: 'sealed', command: 'analyze' },
+      { id: '20260713-002-plan', sequence: 2, status: 'sealed', command: 'plan' },
+    ], artifacts: [
+      { id: 'ART-001', kind: 'findings', status: 'sealed', runId: '20260713-001-analyze', path: 'runs/20260713-001-analyze/outputs/findings.json' },
+    ] });
     const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    // No A→P→E noise
-    assert.ok(!out.includes('A→P→E'), `should not contain A→P→E: ${out}`);
-    assert.ok(!out.includes('A→'), `should not contain old type abbrev arrows: ${out}`);
-    // Should contain compact form
     assert.match(out, /\bMVP\b/);
     assert.match(out, /✓/);
   });
 
-  it('renders in-progress chain with current step name + progress', () => {
-    setup({
-      version: '2.0',
-      current_milestone: 'MVP',
-      milestones: [{ id: 'MVP', name: 'MVP', phases: [1] }],
-      artifacts: [
-        { id: 'ANL-1', type: 'analyze', milestone: 'MVP', phase: 1, status: 'completed', completed_at: isoDaysAgo(0) },
-        { id: 'PLN-1', type: 'plan',    milestone: 'MVP', phase: 1, status: 'completed', depends_on: 'ANL-1', completed_at: isoDaysAgo(0) },
-        { id: 'EXC-1', type: 'execute', milestone: 'MVP', phase: 1, status: 'in_progress', depends_on: 'PLN-1' },
-      ],
-    });
+  it('renders active Run sequence and progress', () => {
+    setup({ intent: 'MVP', runs: [
+      { id: '20260713-001-analyze', sequence: 1, status: 'sealed', command: 'analyze' },
+      { id: '20260713-002-plan', sequence: 2, status: 'sealed', command: 'plan' },
+      { id: '20260713-003-execute', sequence: 3, status: 'running', command: 'execute' },
+    ], artifacts: [
+      { id: 'ART-001', kind: 'findings', status: 'sealed', runId: '20260713-001-analyze', path: 'runs/20260713-001-analyze/outputs/findings.json' },
+      { id: 'ART-002', kind: 'plan', status: 'sealed', runId: '20260713-002-plan', path: 'runs/20260713-002-plan/outputs/plan.json' },
+    ] });
     const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    assert.match(out, /execute/, `should show current step name: ${out}`);
-    assert.match(out, /\(2\/3\)/, `should show progress (2/3): ${out}`);
+    assert.match(out, /P3\b/, `should show active Run sequence: ${out}`);
+    assert.match(out, /2\/3/, `should show sealed/total progress: ${out}`);
   });
 
-  it('hides completed chains older than 48h', () => {
-    setup({
-      version: '2.0',
-      current_milestone: 'MVP',
-      milestones: [{ id: 'MVP', name: 'MVP', phases: [1] }],
-      artifacts: [
-        { id: 'OLD-1', type: 'analyze', milestone: 'MVP', phase: 1, status: 'completed', path: 'phases/01-old-feature', completed_at: isoDaysAgo(5) },
-      ],
-    });
+  it('renders canonical artifact paths without old phase directories', () => {
+    setup({ intent: 'Search migration', runs: [
+      { id: '20260713-001-review', sequence: 1, status: 'sealed', command: 'review' },
+    ], artifacts: [
+      { id: 'ART-001', kind: 'review-findings', status: 'sealed', runId: '20260713-001-review', path: 'runs/20260713-001-review/outputs/findings.json' },
+    ] });
     const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    assert.ok(!out.includes('old-feature'), `should hide stale chain: ${out}`);
-    // Should still show milestone header
-    assert.match(out, /MVP/);
-  });
-
-  it('keeps in-progress chain even if dated >48h ago', () => {
-    setup({
-      version: '2.0',
-      current_milestone: 'MVP',
-      milestones: [{ id: 'MVP', name: 'MVP', phases: [1] }],
-      artifacts: [
-        { id: 'STALE-IP', type: 'execute', milestone: 'MVP', phase: 1, status: 'in_progress', path: 'phases/01-stuck-feature' },
-      ],
-    });
-    const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    assert.match(out, /stuck-feature/, `in-progress chain must always show: ${out}`);
-  });
-
-  it('caps visible chains at 3 with +N overflow', () => {
-    const artifacts = [];
-    for (let i = 0; i < 5; i++) {
-      artifacts.push({
-        id: `A-${i}`, type: 'analyze', milestone: 'MVP', phase: 1, status: 'completed',
-        path: `phases/0${i + 1}-feature-${i}`,
-        completed_at: isoDaysAgo(i * 0.1),  // all within 48h
-      });
-    }
-    setup({
-      version: '2.0',
-      current_milestone: 'MVP',
-      milestones: [{ id: 'MVP', name: 'MVP', phases: [1] }],
-      artifacts,
-    });
-    const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    assert.match(out, /\+2/, `should show +2 overflow indicator: ${out}`);
-  });
-
-  it('handles v1.0 schema with phases as object array (no [object Object])', () => {
-    setup({
-      version: '1.0',
-      current_milestone: 'v0.3',
-      milestones: [{
-        id: 'v0.3',
-        name: 'v0.3',
-        phases: [
-          { id: 1, slug: 'core', status: 'in-progress' },
-          { id: 2, slug: 'hardening', status: 'pending' },
-        ],
-      }],
-      artifacts: [],
-    });
-    const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    assert.ok(!out.includes('[object Object]'), `must not leak [object Object]: ${out}`);
-    assert.match(out, /P1\b/, `should show numeric phase id P1: ${out}`);
-    assert.match(out, /v0\.3/);
-  });
-
-  it('v1.0 inline phase.status correctly counts completed', () => {
-    setup({
-      version: '1.0',
-      current_milestone: 'v0.2',
-      milestones: [{
-        id: 'v0.2', name: 'v0.2',
-        phases: [
-          { id: 1, status: 'completed' },
-          { id: 2, status: 'completed' },
-          { id: 3, status: 'in-progress' },
-          { id: 4, status: 'pending' },
-        ],
-      }],
-      artifacts: [],
-    });
-    const out = plain(formatStatusline({ workspace: { current_dir: workspace } }));
-    assert.match(out, /2\/4/, `should show 2/4 completed: ${out}`);
-    assert.match(out, /P3\b/, `current phase = P3 (in-progress): ${out}`);
+    assert.match(out, /Search migration/);
+    assert.ok(!out.includes('phases/'));
   });
 });

@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Roadmap (Light Mode)
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Step 1: Session Initialization
 
@@ -63,7 +59,7 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `cli-roadmap-plan-agent`
 
 ## Step 5: Write Outputs
 
-MANDATORY: apply ~/.maestro/workflows/roadmap-common.md **Roadmap Write Logic** (overwrite vs edit rules, state.json update, scratch directory); REQUIRED produce: .workflow/roadmap.md; BLOCKED if missing
+MANDATORY: apply ~/.maestro/workflows/roadmap-common.md **Roadmap Write Logic** (overwrite vs edit rules, state.json update, Run output directory); REQUIRED produce: .workflow/roadmap.md; BLOCKED if missing
 
 ---
 
@@ -94,7 +90,7 @@ Read-only health assessment. No state modifications.
 
 1. **Load** — roadmap.md + state.json, cross-reference artifact statuses
 2. **Assess** — progress tracking, drift detection, relevance, dependency health, risk
-3. **Report** → `.workflow/scratch/{YYYYMMDD}-roadmap-review.md`
+3. **Report** → `{run_dir}/outputs/`
 
 ```
 === ROADMAP REVIEW ===

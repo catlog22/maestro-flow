@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 4: Validation
 
 Validate the generated team skill package for structural completeness, reference integrity, role consistency, and team-worker compatibility.

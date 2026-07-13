@@ -1,3 +1,5 @@
+
+
 # WCAG 2.1 Criteria Matrix
 
 Reference matrix for visual accessibility audit. Maps WCAG success criteria to audit methods and responsible roles.

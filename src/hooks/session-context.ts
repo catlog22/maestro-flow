@@ -40,15 +40,12 @@ interface WorkflowState {
   [key: string]: unknown;
 }
 
-interface ScratchSession {
+interface RunModeSession {
   session_id?: string;
-  target?: string;
-  topic?: string;
-  requirement?: string;
-  current_state?: string;
+  intent?: string;
   status?: string;
-  updated_at?: string;
-  created_at?: string;
+  active_run_id?: string | null;
+  latest_completed_run_id?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,7 +73,7 @@ export function evaluateSessionContext(data: SessionContextInput): HookOutput | 
   const sourceTreeSection = workspaceRoot ? buildSourceTreeSection(workspaceRoot) : null;
   if (sourceTreeSection) sections.push(sourceTreeSection);
 
-  // 4. Recent scratch sessions
+  // 4. Recent canonical Sessions
   const sessionsSection = workspaceRoot ? buildRecentSessionsSection(workspaceRoot) : null;
   if (sessionsSection) sections.push(sessionsSection);
 
@@ -303,7 +300,7 @@ function buildSourceTreeSection(cwd: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// P3: Recent Sessions — scan scratch/*/session.json by mtime
+// P3: Recent Sessions — scan sessions/*/session.json by mtime
 // ---------------------------------------------------------------------------
 
 const SESSION_CACHE_TTL_MS = 60_000;
@@ -314,8 +311,8 @@ function getSessionCachePath(cwd: string): string {
 }
 
 function buildRecentSessionsSection(cwd: string): string | null {
-  const scratchDir = join(cwd, '.workflow', 'scratch');
-  if (!existsSync(scratchDir)) return null;
+  const sessionsDir = join(cwd, '.workflow', 'sessions');
+  if (!existsSync(sessionsDir)) return null;
 
   // Check cache
   const cachePath = getSessionCachePath(cwd);
@@ -330,13 +327,13 @@ function buildRecentSessionsSection(cwd: string): string | null {
   } catch { /* cache miss */ }
 
   try {
-    const dirs = readdirSync(scratchDir, { withFileTypes: true })
+    const dirs = readdirSync(sessionsDir, { withFileTypes: true })
       .filter(e => e.isDirectory());
 
     // Find directories containing session.json, collect with mtime
     const candidates: Array<{ dir: string; mtime: number }> = [];
     for (const d of dirs) {
-      const sessionPath = join(scratchDir, d.name, 'session.json');
+      const sessionPath = join(sessionsDir, d.name, 'session.json');
       if (existsSync(sessionPath)) {
         try {
           const st = statSync(sessionPath);
@@ -354,13 +351,13 @@ function buildRecentSessionsSection(cwd: string): string | null {
     const lines: string[] = ['## Recent Sessions'];
     for (const { dir } of top5) {
       try {
-        const session: ScratchSession = JSON.parse(
-          readFileSync(join(scratchDir, dir, 'session.json'), 'utf8'),
+        const session: RunModeSession = JSON.parse(
+          readFileSync(join(sessionsDir, dir, 'session.json'), 'utf8'),
         );
         const id = session.session_id ?? dir;
-        const desc = session.target ?? session.topic ?? session.requirement ?? '';
-        const state = session.current_state ?? session.status ?? '';
-        lines.push(`- ${id} | ${state} | ${truncate(desc, 60)}`);
+        const state = session.status ?? '';
+        const run = session.active_run_id ?? session.latest_completed_run_id ?? '-';
+        lines.push(`- ${id} | ${state} | run=${run} | ${truncate(session.intent ?? '', 60)}`);
       } catch {
         lines.push(`- ${dir}`);
       }

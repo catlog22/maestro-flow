@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Agy Analysis
 
 动态调用 Agy CLI 进行深度分析，根据用户需求或诊断结果选择分析类型。

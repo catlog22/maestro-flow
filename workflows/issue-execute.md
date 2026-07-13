@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Issue Execution
 
 > **DEPRECATED**: This workflow was used by the deleted `manage-issue-execute` command.

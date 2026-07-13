@@ -1,17 +1,8 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 2: Multi-Perspective Discussion
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-> **📌 COMPACT SENTINEL [Phase 2: multi-perspective-discussion]**
-> This phase contains 4 execution steps (Step 2.1 — 2.4).
-> If you can read this sentinel but cannot find the full Step protocol below, context has been compressed.
-> Recovery: `Read("phases/02-multi-perspective-discussion.md")`
-
-Simulate discussion from author, reviewer, and domain expert perspectives to develop consensus strategies for responding to reviewer comments.
 
 ## Objective
 
@@ -74,7 +65,7 @@ const reviewAnalysis = <from Phase 1 output>
 const commentCategories = <from Phase 1 output>
 
 // Read review-analysis.json with error handling
-const analysisPath = ".workflow/.scratchpad/review-analysis.json"
+const analysisPath = "{run_dir}/outputs/review-analysis.json"
 const analysisResult = safeReadJSON(analysisPath, "Phase 2");
 
 if (!analysisResult.success) {
@@ -321,7 +312,7 @@ ${result.expertValidation.map((v, i) => `
 `
 }
 
-Write(".workflow/.scratchpad/discussion-log.md", discussionLog)
+Write("{run_dir}/outputs/discussion-log.md", discussionLog)
 ```
 
 **2. Consensus Strategies (consensus-strategies.json)**
@@ -352,7 +343,7 @@ const consensusStrategies = {
 }
 
 try {
-  Write(".workflow/.scratchpad/consensus-strategies.json", JSON.stringify(consensusStrategies, null, 2))
+  Write("{run_dir}/outputs/consensus-strategies.json", JSON.stringify(consensusStrategies, null, 2))
 } catch (error) {
   console.error(`[Phase 2] Failed to write consensus-strategies.json:`, error.message);
   TodoWrite([
@@ -382,7 +373,7 @@ if (!workflowPreferences.autoYes) {
 
   if (confirm["Confirm"] === "Revise") {
     // Allow user to edit consensus-strategies.json
-    console.log("Please edit .workflow/.scratchpad/consensus-strategies.json and re-run this phase")
+    console.log("Please edit {run_dir}/outputs/consensus-strategies.json and re-run this phase")
     return
   }
 }
@@ -392,8 +383,8 @@ if (!workflowPreferences.autoYes) {
 
 - **Variable**: `discussionConsensus` (aggregated discussion results)
 - **Variable**: `strategicRecommendations` (consensus strategies for each issue)
-- **File**: `.workflow/.scratchpad/discussion-log.md` (full discussion transcript)
-- **File**: `.workflow/.scratchpad/consensus-strategies.json` (structured strategies)
+- **File**: `{run_dir}/outputs/discussion-log.md` (full discussion transcript)
+- **File**: `{run_dir}/outputs/consensus-strategies.json` (structured strategies)
 - **TodoWrite**: Mark Phase 2 completed, Phase 3 in_progress
 
 ## Next Phase

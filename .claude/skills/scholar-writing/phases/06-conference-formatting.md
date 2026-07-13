@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 6: Conference Formatting
 
 Assemble all polished sections into a complete LaTeX manuscript using the target conference template. Compile and verify.

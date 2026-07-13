@@ -13,16 +13,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-ralph-execute -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Single-step executor for ralph (adaptive) and maestro (static) sessions.
@@ -154,7 +147,7 @@ S_FALLBACK:
 | `{milestone}` | session.milestone |
 | `{intent}` | session.intent |
 | `{description}` | session.intent (alias) |
-| `{scratch_dir}` | session.context.scratch_dir or latest artifact path |
+| `{run_dir}` | session.context.run_dir or latest artifact path |
 | `{plan_dir}` | session.context.plan_dir |
 | `{analysis_dir}` | session.context.analysis_dir |
 | `{issue_id}` | session.context.issue_id |
@@ -187,7 +180,7 @@ plan step（含 {milestone} 占位符，args 无 --from 且无 --dir）:
 
 execute step（含 {phase} 占位符，args 无 --dir）:
   1. 查同 phase+milestone 最新 completed type=="plan" artifact → id = PLN-xxx, path = scratch/...
-  2. 命中 → args 追加 --dir .workflow/scratch/{path}
+  2. 命中 → args 追加 --dir {run_dir}/outputs/{path}
   3. 写 step.source_artifact_ref = "plan:{id}"
 ```
 
@@ -219,7 +212,7 @@ Write enriched args + source_artifact_ref back to status.json.
    |-----------|---------|--------|
    | plan | analysis conclusions + scope_verdict | `{context.analysis_dir}/conclusions.json` |
    | execute | task list + wave assignments | `{context.plan_dir}/TASK-*.json` |
-   | review | changed files + verification results | `{context.scratch_dir}/verification.json` |
+   | review | changed files + verification results | `{context.run_dir}/verification.json` |
    | test | review findings | `review.json` |
    | debug | error traces + failing test details | 前一 step 的 `completion_evidence` |
    | brainstorm | grill report | `{context.grill_id}` report |
@@ -268,7 +261,7 @@ Write enriched args + source_artifact_ref back to status.json.
    | `--decisions` | SHOULD。每条一个决策，可多次 | `"选择 ELK 而非 dagre"` |
    | `--caveats` | SHOULD。后续 step 需注意 | `"e2e 未覆盖新端点"` |
    | `--deferred` | SHOULD。推迟工作，可多次 | `"性能优化留到 review 后"` |
-5. **Propagate context signals** — 关键信号 (`PHASE: N` / `scratch_dir: path` / `BLP-xxx`) 写入 `status.json.context`
+5. **Propagate context signals** — 关键信号 (`PHASE: N` / `run_dir: path` / `BLP-xxx`) 写入 `status.json.context`
 
 完成后 S_LOCATE 触发 `Skill(maestro-ralph-execute)` 直调自调用。
 

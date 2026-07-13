@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Initialize Tuning Session
 
 Initialize the skill-tuning session by collecting target skill information, creating work directories, and setting up initial state.

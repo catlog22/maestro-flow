@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 Run systematic **technical** quality checks and generate a comprehensive report. Don't fix issues; document them for other commands to address.
 
 ## Diagnostic Scan

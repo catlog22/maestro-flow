@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: fork
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Step 1: Parse Arguments and Flags
 
@@ -84,7 +80,7 @@ wtPath = {worktreeRoot}/m{milestoneNum}-{milestoneSlug}
 
 6a: Clean up stale worktree/branch at wtPath if exists (ignore errors).
 6b: git worktree add -b {branch} {wtPath} {baseBranch}
-6c: mkdir -p {wtPath}/.workflow/scratch
+6c: mkdir -p {wtPath}/{run_dir}/outputs
 
 6d: Copy shared context → wtPath/.workflow/:
     project.md, roadmap.md, config.json (if exists), specs/ (if exists)

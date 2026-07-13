@@ -15,16 +15,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create quality-review -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Wave-based multi-dimensional code review using `spawn_agents_on_csv`. Decomposes review into independent dimension agents (Wave 1), then aggregates findings into a unified report with verdict (Wave 2).
@@ -206,8 +199,8 @@ Session folder: `.workflow/.csv-wave/{sessionId}/` — create via `mkdir -p`
 
 **Decomposition Rules**:
 
-1. **Phase resolution**: Resolve `{phaseArg}` via `state.json` artifact registry to `.workflow/scratch/{YYYYMMDD}-{type}-{slug}/`
-2. **Related session discovery**: Query `state.json.artifacts[]` for matching phase + milestone. Extract prior quality context (verdicts, root causes, UAT gaps) from artifact outputs by type (execute → .summaries/.task/, review → review.json, debug → understanding.md, test → uat.md)
+1. **Phase resolution**: Resolve `{phaseArg}` via `state.json` artifact registry to `{run_dir}/outputs/`
+2. **Related session discovery**: Query `Session ArtifactRegistry (runtime-owned)` for matching phase + milestone. Extract prior quality context (verdicts, root causes, UAT gaps) from artifact outputs by type (execute → .summaries/.task/, review → review.json, debug → understanding.md, test → uat.md)
 3. **File collection**: Read `.task/TASK-*.json` → collect `files[].path` where action != "read"
 4. **Level detection**:
 
@@ -394,7 +387,7 @@ The user can approve all, selectively exclude, or skip entirely.
 
 **Phase index update** (after confirmation): Update `{artifact_dir}/index.json` with review status.
 
-**Register artifact** (after confirmation): Append to `state.json.artifacts[]` with `type: "review"`, `id: REV-NNN`, `path: "scratch/{YYYYMMDD}-review-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch, not shared with plan.
+**Register artifact** (after confirmation): Append to `Session ArtifactRegistry (runtime-owned)` with `type: "review"`, `id: REV-NNN`, `path: "scratch/{YYYYMMDD}-review-P{N}-{slug}"`, `depends_on: exec_art.id`. Output directory is independent scratch, not shared with plan.
 
 Display summary. **Next-step suggestion** (suggest only, NEVER auto-execute): if spec conflicts detected, suggest `maestro spec conflict list` → `$manage-knowledge-audit --scope spec`. The user decides whether to proceed.
 

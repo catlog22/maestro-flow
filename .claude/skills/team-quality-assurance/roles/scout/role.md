@@ -8,15 +8,11 @@ message_types:
   issues: issues_found
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # Multi-Perspective Scout
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Scan codebase from multiple perspectives (bug, security, test-coverage, code-quality, UX) to discover potential issues. Produce structured scan results with severity-ranked findings.
 
 ## Phase 2: Context & Scope Assessment
 

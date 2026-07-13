@@ -21,16 +21,10 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-1. Before domain work, call `maestro run create maestro-ralph-v2 -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Adaptive lifecycle orchestrator: locate step → resolve args → load context → dispatch Agent(ralph-executor) per step (agent 调 `ralph next` + 执行) → extract signals → drift check → ralph complete → evaluate decision → next step → loop.
 
@@ -314,7 +308,7 @@ wants_roadmap = (--roadmap flag)
 
 **Refine from post-execute results:**
 
-在 execute artifact 的 scratch dir 中检查结果文件（verification.json 由 execute 内置 gate 产出）：
+在 execute artifact 的 Run output directory 中检查结果文件（verification.json 由 execute 内置 gate 产出）：
 
 | Condition | Position |
 |-----------|----------|
@@ -493,7 +487,7 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
 | `{milestone}` | session.milestone |
 | `{intent}` | session.intent |
 | `{description}` | session.intent (alias) |
-| `{scratch_dir}` | session.context.scratch_dir or latest artifact path |
+| `{run_dir}` | session.context.run_dir or latest artifact path |
 | `{plan_dir}` | session.context.plan_dir |
 | `{analysis_dir}` | session.context.analysis_dir |
 | `{issue_id}` | session.context.issue_id |
@@ -524,7 +518,7 @@ plan step（含 {phase} 占位符，args 无 --from 且无 --dir）:
 
 execute step（含 {phase} 占位符，args 无 --dir）:
   1. 查同 phase+milestone 最新 completed type=="plan" artifact → id = PLN-xxx, path = scratch/...
-  2. 命中 → args 追加 --dir .workflow/scratch/{path}
+  2. 命中 → args 追加 --dir {run_dir}/outputs/{path}
   3. 写 step.source_artifact_ref = "plan:{id}"
 ```
 
@@ -556,7 +550,7 @@ if goal:
    |-----------|---------|--------|
    | plan | analysis conclusions + scope_verdict | `{context.analysis_dir}/conclusions.json` |
    | execute | task list + wave assignments | `{context.plan_dir}/TASK-*.json` |
-   | review | changed files + verification results | `{context.scratch_dir}/verification.json` |
+   | review | changed files + verification results | `{context.run_dir}/verification.json` |
    | test | review findings | `review.json` |
    | debug | error traces + failing test details | 前一 step 的 `completion_evidence` |
    | brainstorm | grill report | `{context.grill_id}` report |
@@ -626,7 +620,7 @@ Agent({
 |-------|---------|---------|
 | analyze | `conclusions.json` scope_verdict + key_findings | `--summary`, context.analysis_dir |
 | plan | TASK-*.json 数量 + 主要模块 + 波次 | `--summary`, context.plan_dir |
-| execute | 修改文件数 + verification passed/failed | `--summary`, `--evidence`, context.scratch_dir |
+| execute | 修改文件数 + verification passed/failed | `--summary`, `--evidence`, context.run_dir |
 | review | verdict + findings 数量 + severity | `--summary`, `--decisions` |
 | test | pass/fail 统计 | `--summary`, `--evidence` |
 | debug | root cause + 修复内容 | `--summary`, `--decisions` |
@@ -639,7 +633,7 @@ Agent({
 |---------|--------|
 | `conclusions.json` | `analysis_dir` |
 | `TASK-*.json` | `plan_dir` |
-| `verification.json` | `scratch_dir` |
+| `verification.json` | `run_dir` |
 | `review.json` | review stage |
 | `test-results.json`, `uat.md` | test stage |
 | `grill-report.md` | `grill_id` |
@@ -652,7 +646,7 @@ Agent({
 | `ANL-xxx` (artifact ID) | `session.analyze_macro_id` |
 | `PLN-xxx` (artifact ID) | `context.plan_dir` |
 | `BLP-xxx` (artifact ID) | `session.blueprint_id` |
-| `scratch_dir:` 或 `.workflow/scratch/` 路径 | `context.scratch_dir` |
+| `run_dir:` 或 `{run_dir}/outputs/` 路径 | `context.run_dir` |
 | `plan_dir:` 路径 | `context.plan_dir` |
 | `PHASE: N` | `session.context.phase` |
 
@@ -730,7 +724,7 @@ Agent({
    |--------|---------|
    | `analysis_dir` | `context.analysis_dir` |
    | `plan_dir` | `context.plan_dir` |
-   | `scratch_dir` | `context.scratch_dir` |
+   | `run_dir` | `context.run_dir` |
    | `grill_id` | `context.grill_id` |
    | `brainstorm_dir` | `context.brainstorm_dir` |
    | `blueprint_dir` | `context.blueprint_dir` |
@@ -747,7 +741,7 @@ Agent({
 
 **1. Common setup:**
 
-1. Resolve artifact dir: `.workflow/scratch/{artifact.path}/` with fallback glob
+1. Resolve artifact dir: `{run_dir}/outputs/{artifact.path}/` with fallback glob
 2. Parse decision metadata: `{ decision, retry_count, max_retries, evaluate_via }`
 3. Map result files:
 
@@ -1055,7 +1049,7 @@ Build rules 0-14 全部适用，包括 spec-setup 预检（rule 0.5）、grill a
   "analyze_macro_id": null,
   "blueprint_id": null,
   "passed_gates": [],
-  "context": { "issue_id": null, "scratch_dir": null, "plan_dir": null,
+  "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
     "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null },
   "steps": [{
     "index": 0,

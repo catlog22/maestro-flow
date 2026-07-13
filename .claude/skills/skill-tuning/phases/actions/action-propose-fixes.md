@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Propose Fixes
 
 Generate fix proposals for identified issues with implementation strategies.

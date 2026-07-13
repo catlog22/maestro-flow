@@ -1,3 +1,5 @@
+
+
 # Swarm Protocol
 
 Master protocol document for team-swarm: defines how the LLM coordinator and Python ACO controller interface, how ants explore the task space, and how exploration results flow back to update pheromone state.

@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # State Schema
 
 Defines the state structure for skill-tuning orchestrator.

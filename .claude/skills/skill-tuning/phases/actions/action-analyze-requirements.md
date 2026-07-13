@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Analyze Requirements
 
 将用户问题描述拆解为多个分析维度，匹配 Spec，评估覆盖度，检测歧义。

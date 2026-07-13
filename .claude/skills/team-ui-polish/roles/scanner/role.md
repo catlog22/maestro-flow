@@ -5,15 +5,11 @@ inner_loop: false
 message_types: [scan_complete, scan_progress, error]
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 # UI Scanner -- 8-Dimension Design Audit
-
-## Run Artifact Boundary
-
-This file executes under the parent skill's active Run. The assignment MUST carry `run_id` and `run_dir`. Formal deliverables go to `{run_dir}/outputs/`, evidence/traces to `{run_dir}/evidence/`, and synthesis to `{run_dir}/report.md`. `.workflow/.team/` remains transient coordination only.
-
-**Legacy Compatibility Mapping:** Any private session, `artifacts/`, `wisdom/`, `understanding.md`, or `evidence.ndjson` path below is staging-only and MUST be promoted into the active Run before completion.
-
-Scan existing UI against Impeccable's 8 audit dimensions to discover all design problems. This is the team's core diagnostic engine. Every issue found here drives the entire downstream pipeline.
 
 ## Phase 2: Context & Artifact Loading
 

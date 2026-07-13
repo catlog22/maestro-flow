@@ -14,21 +14,11 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create odyssey-debug -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
-
 <base>@~/.maestro/workflows/odyssey-base-codex.md</base>
 
 <required_reading>
 Required reading: base (`odyssey-base-codex.md`) before any actions. Load and apply base invariants, execution discipline, and shared actions before proceeding.
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <purpose>
@@ -56,7 +46,7 @@ $ARGUMENTS
 
 **Flags:** `--skip-fix` analysis-only | `--skip-generalize` quick fix | `--template <name>` | `--auto` no delegate confirmation | `-y` auto-confirm | `-c` resume | `--heartbeat` /loop heartbeat
 
-**Session**: `.workflow/scratch/{YYYYMMDD}-debug-odyssey-{slug}/`
+**Session**: `{run_dir}/outputs/`
 **Output**: `session.json` | `evidence.ndjson` | `explore.json` | `understanding.md`
 
 **session.json — debug-specific fields:**
@@ -91,7 +81,7 @@ $ARGUMENTS
 4. Hypotheses ← S_DIAGNOSE | 5. Root Cause ← S_DIAGNOSE | 6. Fix & Confirmation ← S_FIX+S_CONFIRM
 7. Generalization ← S_GENERALIZE | 8. Discoveries ← S_DISCOVER | 9. Learnings ← S_RECORD
 
-**Output boundary**: ALL session artifacts MUST target the session directory (`.workflow/scratch/{YYYYMMDD}-debug-odyssey-{slug}/`) or `.workflow/state.json` only. Source code modifications during S_FIX are in-scope but MUST be committed per action. NEVER write session artifacts outside these paths.
+**Output boundary**: ALL session artifacts MUST target the session directory (`{run_dir}/outputs/`) or `.workflow/state.json` only. Source code modifications during S_FIX are in-scope but MUST be committed per action. NEVER write session artifacts outside these paths.
 
 **Knowledge Persistence categories (§9):**
 

@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 2: Structure Generation
 
 Create Skill directory structure and entry file based on configuration.
@@ -60,11 +64,11 @@ const contextStrategy = config.context_strategy || 'file';
 
 if (contextStrategy === 'file') {
   // File strategy: Create persistent context directory
-  Bash(`mkdir -p "${skillDir}/.scratchpad-template/context"`);
+  Bash(`mkdir -p "${skillDir}/run-template/context"`);
 
   // Create context template file
   Write(
-    `${skillDir}/.scratchpad-template/context/.gitkeep`,
+    `${skillDir}/run-template/context/.gitkeep`,
     "# Runtime context storage for file-based strategy"
   );
 }
@@ -81,7 +85,7 @@ Sequential + File Strategy:
   │   ├── workflow.json
   │   ├── 01-*.md
   │   └── 02-*.md
-  ├── .scratchpad-template/
+  ├── run-template/
   │   └── context/           <- File strategy persistent storage
   └── specs/
 

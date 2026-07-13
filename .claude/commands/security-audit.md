@@ -18,16 +18,6 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
-
-1. Before domain work, call `maestro run create security-audit -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Systematic security audit covering OWASP Top 10, dependency supply chain, secrets detection,
 CI/CD pipeline review, and optional STRIDE threat modeling. Three tiers control depth vs speed.
@@ -35,6 +25,7 @@ CI/CD pipeline review, and optional STRIDE threat modeling. Three tiers control 
 
 <required_reading>
 @~/.maestro/workflows/review.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <context>
@@ -50,7 +41,7 @@ $ARGUMENTS — Parse tier and scope:
 | standard | ✓ | ✓ | ✓ | ✓ | — | — |
 | deep | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-security-audit-{tier}-{slug}/` or `.workflow/state.json` only. NEVER modify source code, configuration files, or dependencies. Audit is read-only analysis.
+**Output boundary**: ALL file writes MUST target `{run_dir}/outputs/` or `.workflow/state.json` only. NEVER modify source code, configuration files, or dependencies. Audit is read-only analysis.
 </context>
 
 <invariants>
@@ -190,31 +181,7 @@ Summary: {total} findings ({critical} critical, {high} high, {medium} medium, {l
 
 **Register artifact on completion:**
 
-Confirm before writing:
-```
-AskUserQuestion("Register security-audit artifact RVW-{NNN} in state.json? (yes/no)")
-→ yes: proceed with write
-→ no: skip registration, continue to completion
-```
-
-```
-Append to state.json.artifacts[]:
-{
-  id: nextArtifactId(artifacts, "review"),  // RVW-NNN (security-audit reuses review type)
-  type: "review",
-  subtype: "security-audit",
-  milestone: current_milestone || null,
-  phase: target_phase || null,
-  scope: target_phase ? "phase" : "standalone",
-  path: "scratch/{YYYYMMDD}-security-audit-{tier}-{slug}",
-  status: critical_count == 0 ? "completed" : "completed_with_concerns",
-  tier: tier,                              // quick|standard|deep
-  harvested: false,
-  created_at: start_time,
-  completed_at: now()
-}
-```
-Write findings report to the same `path` (severity matrix, file:line refs, remediation).
+Write the declared security findings under `{run_dir}/outputs/` and the human summary to `{run_dir}/report.md`. `maestro run complete` performs registration automatically; the model never edits an artifact registry.
 </execution>
 
 <completion>

@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Grill
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Architecture
 
@@ -29,7 +25,7 @@ Legacy references to `scratch/`, hidden command directories, milestone/phase art
 ## Input
 
 - `$ARGUMENTS`: topic/plan text, or `--from <source>` for upstream input
-- All output goes to `.workflow/scratch/{YYYYMMDD}-grill-{slug}/`
+- All output goes to `{run_dir}/outputs/`
 - Registers artifact (type=grill) in state.json on completion
 - **Output boundary**: ALL file writes MUST target `{output_dir}/` or `.workflow/state.json` only.
 
@@ -69,14 +65,13 @@ Parse $ARGUMENTS to determine execution mode:
 - `--from <source>`: upstream material to grill against
 - Missing/empty args without `--from` or `--continue` = error E001
 
-**Session Detection**:
-- Check `.workflow/scratch/*-grill-*/` for existing sessions
-- Resume: load `grill-report.md` → find last completed branch → continue from next
-- New: create `.workflow/scratch/{YYYYMMDD}-grill-{slug}/`
+**Session Resolution**:
+- Use the `session_id` and `run_dir` returned by `maestro run create`; matching intent Sessions are resumed automatically.
+- Resume state comes from the current Run/Session registry and sealed upstream artifacts, never from output-directory discovery.
 
 **Output Directory Resolution**:
 ```
-output_dir = .workflow/scratch/{YYYYMMDD}-grill-{slug}/
+output_dir = {run_dir}/outputs/
 ```
 
 ---
@@ -498,4 +493,3 @@ Next steps:
   /maestro-analyze "{topic}" --from grill:{artifact_id}      — Deep analysis with grilled constraints
   /maestro-roadmap --from grill:{artifact_id}                — Direct to roadmap (if scope is clear)
 ```
-

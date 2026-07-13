@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Auto-Test Workflow (Unified)
 
 Unified automated testing with intelligent state-based routing. Merges test generation (gap-forward), business testing (PRD-forward), and integration testing (code-forward) into a single pipeline.

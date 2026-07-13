@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # UI Codify: Phase 3 — Reference Package Generation
 
 ## Prerequisites

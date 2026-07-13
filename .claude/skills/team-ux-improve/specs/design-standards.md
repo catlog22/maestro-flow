@@ -1,3 +1,5 @@
+
+
 # Visual Design Standards
 
 Reference for visual design quality detection. Scanner and diagnoser use these standards to identify design issues.

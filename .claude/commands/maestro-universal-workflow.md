@@ -19,16 +19,10 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-1. Before domain work, call `maestro run create maestro-universal-workflow -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 Dynamic workflow generator: scan library for matches or generate task-specific Workflow scripts
 on-the-fly with adversarial patterns. Scripts persist at `~/.maestro/workflows/dynamic/uwf-*.js`.
@@ -51,7 +45,7 @@ Remaining         → intent
 - Fixed scripts: `~/.maestro/workflows/swarm/wf-*.js`
 - Dynamic scripts: `~/.maestro/workflows/dynamic/uwf-*.js`
 
-**Output boundary**: ALL file writes MUST target `~/.maestro/workflows/dynamic/` (generated scripts) and `.workflow/scratch/{YYYYMMDD}-uwf-*/` (execution results). Fixed scripts at `~/.maestro/workflows/swarm/` are read-only. NEVER modify source code or `.claude/commands/` files.
+**Output boundary**: ALL file writes MUST target `~/.maestro/workflows/dynamic/` (generated scripts) and `{run_dir}/outputs/` (execution results). Fixed scripts at `~/.maestro/workflows/swarm/` are read-only. NEVER modify source code or `.claude/commands/` files.
 </context>
 
 <state_machine>

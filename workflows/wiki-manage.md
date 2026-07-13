@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Wiki Manage Workflow
 
 Unified wiki knowledge graph management — health monitoring, interactive search, orphan cleanup, and graph statistics.

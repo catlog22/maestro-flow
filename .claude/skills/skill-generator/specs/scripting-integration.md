@@ -1,3 +1,5 @@
+
+
 # Scripting Integration Specification
 
 Skill scripting integration specification that defines how to use external scripts for deterministic task execution.

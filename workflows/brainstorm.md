@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Brainstorm
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Architecture
 
@@ -40,7 +36,7 @@ Artifacts N×Role     Cross-  Apply  1×Role
 ## Input
 
 - `$ARGUMENTS`: topic text (auto mode) or role name (single role mode)
-- All output goes to `.workflow/scratch/{YYYYMMDD}-brainstorm-{slug}/`
+- All output goes to `{run_dir}/outputs/`
 - Registers artifact (type=brainstorm) in state.json on completion
 
 ### Parameters
@@ -76,7 +72,7 @@ Artifacts N×Role     Cross-  Apply  1×Role
 
 All brainstorm output goes to scratch:
 ```
-.workflow/scratch/{YYYYMMDD}-brainstorm-{slug}/
+{run_dir}/outputs/
 ├── guidance-specification.md          # Phase 2 output — machine contract (downstream consumes this)
 ├── design-research.md                 # Optional Step 1.7 output
 ├── system-architect/                  # Phase 3 per-role analysis (one folder per selected role)
@@ -115,22 +111,19 @@ All brainstorm output goes to scratch:
 - `--style-skill PKG`: validate `.claude/skills/style-{PKG}/SKILL.md` exists
 - Missing/empty args without flags = error E001
 
-**Session Detection**:
-- Check `.workflow/scratch/*-brainstorm-*/` for existing sessions
-- Multiple → AskUserQuestion to select | Single → use it
-- None + auto mode → will create new session
-- None + single role mode → error E002
+**Session Resolution**:
+- Use the `session_id` and `run_dir` returned by `maestro run create`; the runtime has already selected the matching intent Session or created one.
+- `--session ID` is forwarded to the runtime for explicit selection.
 
 **Output Directory Resolution**:
-- Phase mode (number): resolve `state.json.artifacts[phase == phaseNum].path` → `.workflow/{path}/.brainstorming/` (ERROR if phase not found)
-- All output: `.workflow/scratch/{YYYYMMDD}-brainstorm-{slug}/`
-- Existing session: use existing session directory
+- Phase mode (number): resolve the plan artifact from the returned `upstream` map (ERROR if the required alias is absent).
+- All output: `{run_dir}/outputs/`
 
 ---
 
 ### Step 1.3: Load Upstream Context (if `--from`)
 
-Resolve to `context-package.json` (`grill:ID` / `blueprint:ID` / `@file` / `path/`).
+Resolve typed inputs from the returned `upstream` map; explicit `@file`/path inputs remain read-only user-provided sources.
 
 Pre-seed from context-package:
 - `domain.terminology[]` → Step 2 (skip locked terms)
@@ -514,4 +507,3 @@ Register artifact in state.json with additional field:
   `context_package: "{output_dir}/context-package.json"`   (relative to .workflow/)
 
 **GATE Step 7.5→complete**: Glob `{output_dir}/context-package.json` MUST exist before workflow report; BLOCKED if missing.
-

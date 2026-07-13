@@ -1,3 +1,5 @@
+
+
 # 8-Dimension Quality Scoring Rubric
 
 Score each dimension 0-4. Total: 0-32.

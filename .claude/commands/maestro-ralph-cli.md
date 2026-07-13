@@ -19,16 +19,10 @@ contract:
   gates: { entry: [], exit: [] }
 ---
 
-<run_mode>
-**Session mode:** `run`. This block is MANDATORY and overrides legacy artifact-path examples below.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-1. Before domain work, call `maestro run create maestro-ralph-cli -- $ARGUMENTS` and use the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal JSON/Markdown deliverables MUST be written under `{run_dir}/outputs/`; evidence goes to `{run_dir}/evidence/`; process narrative and handoff go to `{run_dir}/report.md`.
-3. The model MUST NOT edit protocol JSON (`run.json`, `session.json`, `gates.json`, `artifacts.json`, `evidence.json`) or append to project `state.json.artifacts[]`.
-4. Run `maestro run check {run_id}` before completion, repair blocking gaps, then run `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Any later reference to `scratch/`, hidden command session directories, `milestones/`, `phases/`, `context-package.json`, `understanding.md`, `evidence.ndjson`, or a secondary `status.json` is a legacy semantic label only. Map formal deliverables to `outputs/`, narrative to `report.md`, evidence attachments to `evidence/`, and orchestration state to the active Session/Run runtime. Never create the legacy formal path.
-</run_mode>
 <purpose>
 CLI-delegated lifecycle orchestrator: compose prompt → delegate to CLI (via ralph-cli-execute wrapper) → STOP → callback → analyze structured result → mark complete → decide next → loop.
 
@@ -323,7 +317,7 @@ wants_roadmap = (--roadmap flag)
 
 **Refine from post-execute results:**
 
-在 execute artifact 的 scratch dir 中检查结果文件（verification.json 由 execute 内置 gate 产出）：
+在 execute artifact 的 Run output directory 中检查结果文件（verification.json 由 execute 内置 gate 产出）：
 
 | Condition | Position |
 |-----------|----------|
@@ -670,7 +664,7 @@ Find latest ralph-cli session, display steps + sub-goals progress.
 
 Inline 评估质量门（非 handoff）。Runs `run_in_background` → STOP → callback resume in same loop。
 
-1. Resolve artifact dir: `.workflow/scratch/{artifact.path}/` with fallback glob
+1. Resolve artifact dir: `{run_dir}/outputs/{artifact.path}/` with fallback glob
 2. Parse decision metadata: `{ decision, retry_count, max_retries }`
 3. Map result files:
 
@@ -822,7 +816,7 @@ All delegation uses `--to {session.cli_tool}` (not `--role`). The `cli_tool` is 
   "analyze_macro_id": null,
   "blueprint_id": null,
   "passed_gates": [],
-  "context": { "issue_id": null, "scratch_dir": null, "plan_dir": null,
+  "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
     "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null },
   "steps": [{
     "index": 0,

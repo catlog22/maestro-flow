@@ -1,3 +1,5 @@
+
+
 # Diagnosis Report Template
 
 Template for individual diagnosis action reports.

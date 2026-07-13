@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: Issue Management
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Input
 
@@ -326,7 +322,7 @@ Process bidirectional link:
 ```
 Find issue by ID in issues.jsonl → error if not found.
 Locate task file via artifact registry (.workflow/{path}/.task/{TASK_ID}.json)
-  or scratch fallback (.workflow/scratch/*/.task/{TASK_ID}.json) → error if not found.
+  or ArtifactRegistry lookup ({run_dir}/outputs/.task/{TASK_ID}.json) → error if not found.
 
 Update issue: set gap_ref (if null), add TASK_ID to affected_components, append issue_history entry.
 Update task: append issue ID to "issue_refs" field.

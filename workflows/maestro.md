@@ -1,13 +1,9 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: maestro
-
-## Run Mode Contract
-
-This workflow executes inside the Run created by its command. The command-provided `run_id`, `run_dir`, and resolved `upstream` are authoritative. Formal outputs belong in `{run_dir}/outputs/`, evidence in `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`. Protocol JSON is CLI-owned.
-
-### Legacy Compatibility Mapping
-
-Legacy references to `scratch/`, hidden command directories, milestone/phase artifact folders, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` describe old semantics only. Do not create those formal paths; map them to the active Run boundary and finish with `maestro run check` plus `maestro run complete`.
 
 ## Step 1: Parse & Initialize
 
@@ -197,7 +193,7 @@ resolvePhase — priority order:
   1. intent_analysis.phase_ref (from structured extraction)
   2. Regex match "phase N" or bare number from raw intent
   3. From project state artifacts: in-progress execute → first incomplete phase → latest artifact phase
-  4. null if chain is 'analyze-plan-execute' (uses {scratch_dir} instead)
+  4. null if chain is 'analyze-plan-execute' (uses {run_dir} instead)
   5. null if all chain commands are phase-independent:
      manage-status, manage-issue, manage-issue-discover, maestro-init,
      maestro-fork, maestro-merge, maestro-roadmap, spec-setup, manage-knowhow, manage-knowhow-capture,
@@ -256,7 +252,7 @@ Create session directory `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/` and wri
     "issue_id": "{resolved_issue_id or null}",
     "milestone_num": "{current_milestone_num or null}",
     "spec_session_id": null,
-    "scratch_dir": null,
+    "run_dir": null,
     "plan_dir": null,
     "analysis_dir": null,
     "brainstorm_dir": null
@@ -370,7 +366,7 @@ const chainMap = {
   'brainstorm_visualize': [{ cmd: 'brainstorm-visualize', args: '"{description}"' }],
   'impeccable-build':       [{ cmd: 'maestro-impeccable', args: '"{description}" --chain build' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'impeccable-driven':      [{ cmd: 'maestro-impeccable', args: '"{description}" --chain build' }, { cmd: 'maestro-execute', args: '{phase}' }],
-  'analyze-plan-execute': [{ cmd: 'maestro-analyze', args: '"{description}" -q' }, { cmd: 'maestro-plan', args: '--dir {scratch_dir}' }, { cmd: 'maestro-execute', args: '--dir {scratch_dir}' }, { cmd: 'manage-harvest', args: '--auto' }],
+  'analyze-plan-execute': [{ cmd: 'maestro-analyze', args: '"{description}" -q' }, { cmd: 'maestro-plan', args: '--dir {run_dir}' }, { cmd: 'maestro-execute', args: '--dir {run_dir}' }, { cmd: 'manage-harvest', args: '--auto' }],
   'quality-loop':         [{ cmd: 'quality-review', args: '{phase}' }, { cmd: 'quality-auto-test', args: '{phase}' }, { cmd: 'quality-test', args: '{phase}' }, { cmd: 'quality-debug', args: '--from-uat {phase}' }, { cmd: 'maestro-plan', args: '{phase} --gaps' }, { cmd: 'maestro-execute', args: '{phase}' }],
   'milestone-close':      [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'next-milestone':       [{ cmd: 'maestro-roadmap', args: '"{description}"' }, { cmd: 'maestro-plan', args: '{phase}' }, { cmd: 'maestro-execute', args: '{phase}' }],
@@ -436,7 +432,7 @@ detectNextAction(state):
 | `roadmap-driven` | init → roadmap → plan → execute → harvest | From requirements (light) |
 | `brainstorm-driven` | brainstorm → plan → execute → harvest | From exploration |
 | `impeccable-build` | impeccable --chain build → plan → execute | From design system generation |
-| `analyze-plan-execute` | analyze -q → plan --dir → execute --dir → harvest | Fast track (scratch mode) |
+| `analyze-plan-execute` | analyze -q → plan --dir → execute --dir → harvest | Fast track (ad-hoc Run mode) |
 | `review-fix` | plan --gaps → execute → review | Fix review-blocked issues |
 | `quality-loop` | review → test-gen → test → debug → plan --gaps → execute | Fix quality issues |
 | `quality-loop-partial` | plan --gaps → execute | Partial quality fix cycle |

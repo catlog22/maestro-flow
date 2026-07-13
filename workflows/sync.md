@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Workflow: sync
 
 Change detection, impact chain traversal, and codebase doc synchronization. Auto-triggered after execute, or manual via `/workflow:sync`.

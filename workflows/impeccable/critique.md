@@ -1,4 +1,8 @@
 <!-- session-mode: inherited -->
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 > **Additional context needed**: what the interface is trying to accomplish.
 
 ### Setup: Resolve Target and Load Ignore List

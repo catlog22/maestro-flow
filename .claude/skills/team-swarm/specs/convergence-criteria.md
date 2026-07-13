@@ -1,3 +1,5 @@
+
+
 # Convergence Criteria
 
 When does the swarm stop iterating? Defines stop conditions computed by `aco.py converged`.

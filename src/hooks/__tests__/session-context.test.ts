@@ -16,7 +16,7 @@ interface SetupOpts {
   specs?: boolean;
   project?: boolean;
   sourceRoots?: string[];
-  scratchSessions?: Array<{ name: string; session: Record<string, unknown> }>;
+  sessions?: Array<{ name: string; session: Record<string, unknown> }>;
 }
 
 function setupTestProject(opts: SetupOpts = {}): void {
@@ -31,7 +31,7 @@ function setupTestProject(opts: SetupOpts = {}): void {
       step: 2,
       task: 'implement-auth',
       status: 'in_progress',
-      artifacts: [],
+      sessions: [],
       source_roots: opts.sourceRoots,
     }));
   }
@@ -95,11 +95,11 @@ function setupTestProject(opts: SetupOpts = {}): void {
     }
   }
 
-  if (opts.scratchSessions) {
-    const scratchDir = join(TEST_DIR, '.workflow', 'scratch');
-    mkdirSync(scratchDir, { recursive: true });
-    for (const { name, session } of opts.scratchSessions) {
-      const sessionDir = join(scratchDir, name);
+  if (opts.sessions) {
+    const sessionsDir = join(TEST_DIR, '.workflow', 'sessions');
+    mkdirSync(sessionsDir, { recursive: true });
+    for (const { name, session } of opts.sessions) {
+      const sessionDir = join(sessionsDir, name);
       mkdirSync(sessionDir, { recursive: true });
       writeFileSync(join(sessionDir, 'session.json'), JSON.stringify(session));
     }
@@ -175,12 +175,12 @@ describe('evaluateSessionContext', () => {
     assert.ok(ctx.includes('hooks'));
   });
 
-  it('includes recent sessions from scratch', () => {
+  it('includes recent canonical Sessions', () => {
     setupTestProject({
       workflow: true,
-      scratchSessions: [
-        { name: '20260624-fix-search', session: { session_id: 'fix-search', target: 'Search quality', current_state: 'S_VERIFY' } },
-        { name: '20260623-improve-perf', session: { session_id: 'improve-perf', target: 'Performance', current_state: 'S_DONE' } },
+      sessions: [
+        { name: '20260624-fix-search', session: { session_id: 'fix-search', intent: 'Search quality', status: 'running', active_run_id: 'RUN-002' } },
+        { name: '20260623-improve-perf', session: { session_id: 'improve-perf', intent: 'Performance', status: 'sealed', latest_completed_run_id: 'RUN-003' } },
       ],
     });
     const result = evaluateSessionContext({ cwd: TEST_DIR });
@@ -188,7 +188,7 @@ describe('evaluateSessionContext', () => {
     const ctx = result!.hookSpecificOutput.additionalContext;
     assert.ok(ctx.includes('Recent Sessions'));
     assert.ok(ctx.includes('fix-search'));
-    assert.ok(ctx.includes('S_VERIFY'));
+    assert.ok(ctx.includes('RUN-002'));
     assert.ok(ctx.includes('improve-perf'));
   });
 

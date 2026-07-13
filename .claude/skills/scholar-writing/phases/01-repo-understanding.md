@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Phase 1: Repo Understanding
 
 Explore the research repository to understand the project, identify the main contribution, locate results, and find existing citations.

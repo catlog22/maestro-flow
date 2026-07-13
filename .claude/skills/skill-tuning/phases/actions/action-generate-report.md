@@ -1,3 +1,7 @@
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 # Action: Generate Consolidated Report
 
 Generate a comprehensive tuning report merging all diagnosis results with prioritized recommendations.

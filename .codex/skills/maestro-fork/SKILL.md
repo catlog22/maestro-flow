@@ -13,28 +13,18 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create maestro-fork -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
-
 <purpose>
 Create a git worktree for an entire milestone, enabling inter-milestone parallel development.
-The worktree scope is milestone-level — all scratch artifacts for that milestone are owned by
+The worktree scope is milestone-level — all Run artifacts for that milestone are owned by
 the worktree. Since `.workflow/` is gitignored, this command explicitly copies project context
-and milestone scratch artifacts into the worktree.
+and milestone Run artifacts into the worktree.
 
 Also supports `--sync` mode to pull latest main into an active worktree.
 </purpose>
 
 <required_reading>
 @~/.maestro/workflows/fork.md
+@~/.maestro/workflows/run-mode.md
 </required_reading>
 
 <deferred_reading>
@@ -68,7 +58,7 @@ $ARGUMENTS — milestone number and optional flags.
 ```
 
 **Artifact scoping:**
-Fork copies scratch artifacts belonging to the target milestone (filtered from `state.json.artifacts[]` where `milestone == target`). New work creates scratch artifacts normally, registered in the worktree's local `state.json`.
+Fork copies Run artifacts belonging to the target milestone (filtered from `Session ArtifactRegistry (runtime-owned)` where `milestone == target`). New work creates Run artifacts normally, registered in the worktree's local `state.json`.
 </context>
 
 <execution>
@@ -78,7 +68,7 @@ Follow '~/.maestro/workflows/fork.md' completely.
 1. Validate: initialized, roadmap exists, not inside worktree, milestone not forked
 2. Resolve milestone: `state.json.milestones[N-1]`
 3. Create worktree: `git worktree add -b milestone/{slug} .worktrees/m{N}-{slug} {base_branch}` (where `base_branch` = `--base` flag value or `HEAD` if not specified)
-4. Copy `.workflow/`: shared files + milestone scratch artifacts
+4. Copy `.workflow/`: shared files + milestone Run artifacts
 5. Write `worktree-scope.json` with milestone scope
 6. Write scoped `state.json` (this milestone's artifacts only)
 7. Update main: `worktrees.json` registry, mark milestone `"forked"`
@@ -163,7 +153,7 @@ Fork mode:
 - [ ] Milestone resolved from state.json.milestones[]
 - [ ] Git worktree created with branch `milestone/{slug}`
 - [ ] Shared `.workflow/` files copied (project.md, roadmap.md, config.json, specs/)
-- [ ] Milestone scratch artifacts copied (filtered from artifact registry)
+- [ ] Milestone Run artifacts copied (filtered from artifact registry)
 - [ ] `worktree-scope.json` written with milestone scope
 - [ ] Scoped `state.json` written (this milestone's artifacts only)
 - [ ] `worktrees.json` registry updated in main worktree

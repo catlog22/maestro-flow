@@ -1,3 +1,5 @@
+
+
 # Fix Strategies
 
 Maps issue categories to Impeccable fix strategies. Used by diagnostician for fix planning and optimizer for implementation guidance.

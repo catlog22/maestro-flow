@@ -14,16 +14,9 @@ contract:
     exit: []
 ---
 
-<run_mode>
-**Session mode:** `run`. This boundary is mandatory and overrides legacy Codex session-path examples below.
-
-1. Before domain work, call `maestro run create quality-test -- $ARGUMENTS` and retain the returned `run_id`, `run_dir`, and `upstream`.
-2. Formal deliverables go to `{run_dir}/outputs/`; evidence and worker traces go to `{run_dir}/evidence/`; synthesis and handoff go to `{run_dir}/report.md`.
-3. Do not edit protocol JSON or append to project `state.json.artifacts[]`.
-4. Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`.
-
-**Legacy Compatibility Mapping:** Later references to scratch, hidden command/team directories, milestones, phases, `context-package.json`, `understanding.md`, `evidence.ndjson`, or secondary `status.json` are semantic labels only. Map them into the active Run and never create a second formal truth source.
-</run_mode>
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 <purpose>
 Conversational UAT: present expected behavior one test at a time, user confirms or describes issues. Severity inferred from natural language (never asked). Session persists in `uat.md` across context resets. Failed tests trigger CSV-parallel diagnosis via `spawn_agents_on_csv` and optional gap-fix closure (max 2 iterations).
@@ -35,7 +28,7 @@ Conversational UAT: present expected behavior one test at a time, user confirms 
 $ARGUMENTS -- phase number and optional flags.
 
 **Flags**:
-- `<phase>`: Phase number or scratch task ID
+- `<phase>`: Phase number or Run tasks ID
 - `--smoke`: Run cold-start smoke tests before UAT
 - `--auto-fix`: Auto-trigger gap-fix loop (plan --gaps -> execute -> re-verify)
 - `--session ID`: Resume specific UAT session
@@ -48,7 +41,7 @@ $ARGUMENTS -- phase number and optional flags.
 - `{target_dir}/.tests/coverage-report.json` -- requirement coverage
 - `.tests/.csv-session/diagnosis.csv` + `diagnosis-results.csv`
 
-**Output boundary**: ALL file writes MUST target `.workflow/scratch/{YYYYMMDD}-test-P{N}-{slug}/`, `.workflow/state.json`, or `.workflow/issues.jsonl` only. NEVER modify source code or execution artifacts outside these paths.
+**Output boundary**: ALL file writes MUST target `{run_dir}/outputs/`, `.workflow/state.json`, or `.workflow/issues.jsonl` only. NEVER modify source code or execution artifacts outside these paths.
 </context>
 
 <csv_schema>

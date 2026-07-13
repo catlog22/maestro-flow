@@ -1,3 +1,5 @@
+
+
 # AI Slop Detection Catalog
 
 20 anti-patterns that signal AI-generated or low-effort design. Reference this during research (visual quality baseline), design (avoidance), review (scoring), and implementation (validation).
