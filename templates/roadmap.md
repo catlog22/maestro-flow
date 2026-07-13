@@ -1,45 +1,36 @@
+---
+kind: roadmap
+role: primary
+---
 # Roadmap: {{PROJECT_NAME}}
 
 ## Overview
 
 {{One paragraph describing the journey from start to finish}}
 
-## Milestones
+## Session DAG
 
-### Milestone 1: {{MILESTONE_1_NAME}} ({{VERSION}})
-**Target**: {{DELIVERABLE_DESCRIPTION}}
-**Status**: active | completed | planned
+| Session | Intent | Dependencies | Complexity | Status |
+|---------|--------|-------------|-----------|--------|
+| {{SESSION_1_SLUG}} | {{SESSION_1_INTENT}} | — | {{small\|medium\|large}} | planned |
 
-**Minimum-phase principle:** Default 1 phase per milestone. Only add phases for hard dependencies (runtime + not parallelizable + full barrier). Wave DAG inside each phase handles task ordering.
+## Sessions
 
-**Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-
-#### Phases
-
-- [ ] **Phase 1: {{PHASE_1_TITLE}}** — {{ONE_LINE_DESCRIPTION}}
-
-#### Phase Details
-
-##### Phase 1: {{PHASE_1_TITLE}}
-**Goal**: {{WHAT_THIS_PHASE_DELIVERS}}
-**Depends on**: Nothing (first phase)
+### {{SESSION_1_SLUG}}: {{SESSION_1_INTENT}}
+**Depends on**: Nothing (root session)
 **Requirements**: {{REQ_IDS}}
 **Success Criteria** (what must be TRUE):
   1. {{OBSERVABLE_BEHAVIOR_FROM_USER_PERSPECTIVE}}
   2. {{OBSERVABLE_BEHAVIOR_FROM_USER_PERSPECTIVE}}
+**Seed**:
+  - Features: {{FEATURES}}
+  - Constraints: {{CONSTRAINTS}}
+  - Risks: {{RISKS}}
 
 ---
 
 ## Scope Decisions
 
 - **In scope**: {{INCLUDED}}
-- **Deferred**: {{LATER_MILESTONES}}
+- **Deferred** (future sessions): {{DEFERRED}}
 - **Out of scope**: {{EXCLUDED}}
-
-## Progress
-
-| Milestone | Phase | Status | Completed |
-|-----------|-------|--------|-----------|
-| 1. {{MILESTONE_1_NAME}} | 1. {{PHASE_1_TITLE}} | Not started | - |

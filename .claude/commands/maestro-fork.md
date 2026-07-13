@@ -1,7 +1,7 @@
 ---
 name: maestro-fork
-description: Create or sync milestone worktree for parallel dev
-argument-hint: "-m <milestone-number> [--base <branch>] [--sync]"
+description: Create or sync session worktree for parallel dev
+argument-hint: "--session <session_id> [--base <branch>] [--sync]"
 allowed-tools:
   - Read
   - Write
@@ -20,7 +20,7 @@ contract:
 ---
 
 <purpose>
-Create or sync a milestone-level git worktree for parallel development.
+Create or sync a session-level git worktree for parallel development.
 Supports `--sync` mode to pull latest main changes into an active worktree.
 </purpose>
 
@@ -35,9 +35,9 @@ Supports `--sync` mode to pull latest main changes into an active worktree.
 </deferred_reading>
 
 <context>
-$ARGUMENTS -- milestone number and optional flags.
+$ARGUMENTS -- session ID (or slug) and optional flags.
 
-Modes (`Fork` / `Sync`), flags (`-m`, `--base`, `--sync`), milestone resolution, worktree layout, and artifact scoping are defined in workflow `fork.md`.
+Modes (`Fork` / `Sync`), flags (`--session`, `--base`, `--sync`), session resolution, worktree layout, and artifact scoping are defined in workflow `fork.md`.
 </context>
 
 <execution>
@@ -45,25 +45,25 @@ Follow '~/.maestro/workflows/fork.md' completely.
 
 Fork and sync algorithm steps are defined in workflow `fork.md`.
 
-### Phase Gates (MANDATORY, BLOCKING)
+### Gates (MANDATORY, BLOCKING)
 
 **Fork mode:**
 
 **GATE 1: Validation → Worktree Creation**
-- REQUIRED: Milestone resolved from state.json.milestones[].
-- REQUIRED: No existing active worktree for this milestone (E008).
+- REQUIRED: Session resolved from `state.json.sessions[]` by session_id or intent slug.
+- REQUIRED: No existing active worktree for this session (E008).
 - REQUIRED: Not running inside a worktree (E003).
-- BLOCKED if: milestone not found (E006), already forked (E008), or running inside worktree (E003).
+- BLOCKED if: session not found (E006), already forked (E008), or running inside worktree (E003).
 
 **GATE 2: Worktree Creation → Artifact Copy**
-- REQUIRED: Git worktree created with branch (`milestone/{slug}`).
-- REQUIRED: Shared `.workflow/` files copied (project.md, roadmap.md, config.json, specs/).
+- REQUIRED: Git worktree created with branch (`session/{slug}`).
+- REQUIRED: Shared `.workflow/` files copied (project.md, config.json, specs/).
 - BLOCKED if missing: worktree creation failed or shared files not copied — do not proceed to artifact scoping.
 
 **GATE 3: Artifact Copy → Completion**
-- REQUIRED: AskUserQuestion confirmation before registry writes — show milestone scope, worktree path, and state entries to be written. User must confirm or abort.
-- REQUIRED: `worktree-scope.json` written with milestone scope (after confirmation).
-- REQUIRED: Scoped `state.json` written (only this milestone's artifacts) (after confirmation).
+- REQUIRED: AskUserQuestion confirmation before registry writes — show session scope, worktree path, and state entries to be written. User must confirm or abort.
+- REQUIRED: `worktree-scope.json` written with session scope (after confirmation).
+- REQUIRED: Scoped `state.json` written (only this session's data) (after confirmation).
 - REQUIRED: `worktrees.json` registry updated in main worktree (after confirmation).
 - BLOCKED if missing: scope marker, scoped state, or registry update absent — worktree is unusable without these.
 
@@ -82,7 +82,7 @@ Fork and sync algorithm steps are defined in workflow `fork.md`.
 | Condition | Suggestion |
 |-----------|-----------|
 | Fork complete | `cd {wt.path} && /maestro-analyze` |
-| Fork + automated | `maestro delegate "run full lifecycle for milestone" --cd {wt.path} --mode write` |
+| Fork + automated | `maestro delegate "run full lifecycle for session" --cd {wt.path} --mode write` |
 | Fork + status check | Skill({ skill: "manage-status" }) |
 | Sync complete | Resume work in worktree |
 | Sync conflicts found | Resolve manually, then retry |
@@ -94,27 +94,27 @@ Fork and sync algorithm steps are defined in workflow `fork.md`.
 | E001 | error | Project not initialized | Run maestro-init first |
 | E002 | error | No roadmap found | Run maestro-roadmap first |
 | E003 | error | Running inside a worktree | Run from main worktree |
-| E004 | error | No milestone number provided | Provide `-m <N>` |
-| E005 | error | No milestones defined in state.json | Run maestro-roadmap first |
-| E006 | error | Milestone number out of range | Check available milestones |
-| E007 | error | No active worktree for milestone (--sync) | Check worktrees.json |
-| E008 | error | Milestone already has active worktree | Merge or cleanup first |
+| E004 | error | No session ID provided | Provide `--session <session_id>` |
+| E005 | error | No sessions defined in state.json | Run maestro-roadmap first |
+| E006 | error | Session not found in state.json.sessions[] | Check available sessions |
+| E007 | error | No active worktree for session (--sync) | Check worktrees.json |
+| E008 | error | Session already has active worktree | Merge or cleanup first |
 </error_codes>
 
 <success_criteria>
 Fork mode:
-- [ ] Milestone resolved from state.json.milestones[]
-- [ ] Git worktree created with branch (`milestone/{slug}`)
-- [ ] Shared `.workflow/` files copied (project.md, roadmap.md, config.json, specs/)
-- [ ] Milestone Run artifacts copied (filtered from artifact registry)
-- [ ] `worktree-scope.json` written with milestone scope
-- [ ] Scoped `state.json` written (only this milestone's artifacts)
+- [ ] Session resolved from state.json.sessions[]
+- [ ] Git worktree created with branch (`session/{slug}`)
+- [ ] Shared `.workflow/` files copied (project.md, config.json, specs/)
+- [ ] Session Run artifacts copied (filtered from artifact registry)
+- [ ] `worktree-scope.json` written with session scope
+- [ ] Scoped `state.json` written (only this session's data)
 - [ ] `worktrees.json` registry updated in main worktree
-- [ ] Milestone marked as `"forked"` in main `state.json.milestones[]`
+- [ ] Session lifecycle recorded (`session.json.lifecycle.forked_from`)
 - [ ] Summary displayed with next-step commands
 
 Sync mode:
 - [ ] Git merge main into worktree branch
-- [ ] Shared artifacts re-copied (project.md, roadmap.md, config.json, specs/)
+- [ ] Shared artifacts re-copied (project.md, config.json, specs/)
 - [ ] Conflicts reported if any
 </success_criteria>
