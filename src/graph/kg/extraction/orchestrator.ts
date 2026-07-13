@@ -48,26 +48,39 @@ export async function syncKnowledgeGraph(
       if (!shouldSync(entry.sourceType)) continue;
 
       const startMs = Date.now();
-      const sourcePath = entry.resolvePath(workflowRoot);
-      const extractionResult = entry.extractFn(sourcePath, workflowRoot);
-      const removed = mg.getConnection().transaction(() => {
-        const n = queries.deleteNodesBySourceType(entry.sourceType);
-        if (extractionResult.nodes.length > 0) {
-          queries.insertNodesBare(extractionResult.nodes);
-          queries.insertEdgesBare(extractionResult.edges);
-          queries.upsertFile(extractionResult.fileRecord);
-        }
-        return n;
-      });
-      results.push({
-        source: entry.sourceType,
-        nodesAdded: extractionResult.nodes.length,
-        nodesUpdated: 0,
-        nodesRemoved: removed,
-        edgesAdded: extractionResult.edges.length,
-        edgesRemoved: 0,
-        durationMs: Date.now() - startMs,
-      });
+      try {
+        const sourcePath = entry.resolvePath(workflowRoot);
+        const extractionResult = entry.extractFn(sourcePath, workflowRoot);
+        const removed = mg.getConnection().transaction(() => {
+          const n = queries.deleteNodesBySourceType(entry.sourceType);
+          if (extractionResult.nodes.length > 0) {
+            queries.insertNodes(extractionResult.nodes);
+            queries.insertEdges(extractionResult.edges);
+            queries.upsertFile(extractionResult.fileRecord);
+          }
+          return n;
+        });
+        results.push({
+          source: entry.sourceType,
+          nodesAdded: extractionResult.nodes.length,
+          nodesUpdated: 0,
+          nodesRemoved: removed,
+          edgesAdded: extractionResult.edges.length,
+          edgesRemoved: 0,
+          durationMs: Date.now() - startMs,
+        });
+      } catch (err) {
+        process.stderr.write(`[MaestroGraph] Failed to sync ${entry.sourceType}: ${err instanceof Error ? err.message : String(err)}\n`);
+        results.push({
+          source: entry.sourceType,
+          nodesAdded: 0,
+          nodesUpdated: 0,
+          nodesRemoved: 0,
+          edgesAdded: 0,
+          edgesRemoved: 0,
+          durationMs: Date.now() - startMs,
+        });
+      }
     }
 
     // ── Code extraction (R3) ───────────────────────────────────────
@@ -111,7 +124,7 @@ export async function syncKnowledgeGraph(
         // Phase 1: insert all nodes + file records (no edges yet)
         for (const result of allResults) {
           try {
-            queries.insertNodesBare(result.nodes);
+            queries.insertNodes(result.nodes);
             queries.upsertFile(result.fileRecord);
           } catch (err) {
             process.stderr.write(`[MaestroGraph] Failed to index ${result.fileRecord.path}: ${err instanceof Error ? err.message : String(err)}\n`);
@@ -121,11 +134,9 @@ export async function syncKnowledgeGraph(
         for (const result of allResults) {
           if (result.edges.length === 0) continue;
           try {
-            queries.insertEdgesBare(result.edges);
+            queries.insertEdges(result.edges);
           } catch (err) {
-            if (process.env.MAESTRO_DEBUG === '1') {
-              process.stderr.write(`[MaestroGraph] Edges skipped for ${result.fileRecord.path}: ${err instanceof Error ? err.message : String(err)}\n`);
-            }
+            process.stderr.write(`[MaestroGraph] Edges skipped for ${result.fileRecord.path}: ${err instanceof Error ? err.message : String(err)}\n`);
           }
         }
         return removed;
@@ -171,9 +182,7 @@ export async function syncKnowledgeGraph(
         }
       });
     } catch (err) {
-      if (process.env.MAESTRO_DEBUG === '1') {
-        process.stderr.write(`[MaestroGraph] Credibility sync skipped: ${err instanceof Error ? err.message : String(err)}\n`);
-      }
+      process.stderr.write(`[MaestroGraph] Credibility sync skipped: ${err instanceof Error ? err.message : String(err)}\n`);
     }
 
     return results;

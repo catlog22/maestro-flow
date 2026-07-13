@@ -182,11 +182,9 @@ export class QueryBuilder {
   }
 
   insertNodes(nodes: EnhancedNode[]): void {
-    this.conn.transaction(() => {
-      for (const node of nodes) {
-        this.insertNode(node);
-      }
-    });
+    for (const node of nodes) {
+      this.insertNode(node);
+    }
   }
 
   deleteNode(id: string): void {
@@ -233,11 +231,9 @@ export class QueryBuilder {
   }
 
   insertEdges(edges: EnhancedEdge[]): void {
-    this.conn.transaction(() => {
-      for (const edge of edges) {
-        this.insertEdge(edge);
-      }
-    });
+    for (const edge of edges) {
+      this.insertEdge(edge);
+    }
   }
 
   deleteEdgesFrom(source: string): void {

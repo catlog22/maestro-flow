@@ -187,16 +187,6 @@ export class KgQueryBuilder {
 
   insertNodes(nodes: UnifiedNode[]): number {
     if (nodes.length === 0) return 0;
-    let count = 0;
-    this.conn.transaction(() => {
-      count = this.insertNodesBare(nodes);
-    });
-    return count;
-  }
-
-  /** Batch insert without transaction wrapper — caller must manage transaction. */
-  insertNodesBare(nodes: UnifiedNode[]): number {
-    if (nodes.length === 0) return 0;
     const stmt = this.db.prepare(
       `INSERT OR REPLACE INTO nodes (
         id, kind, name, qualified_name, file_path, language,
@@ -313,16 +303,6 @@ export class KgQueryBuilder {
   }
 
   insertEdges(edges: UnifiedEdge[]): number {
-    if (edges.length === 0) return 0;
-    let count = 0;
-    this.conn.transaction(() => {
-      count = this.insertEdgesBare(edges);
-    });
-    return count;
-  }
-
-  /** Batch insert without transaction wrapper — caller must manage transaction. */
-  insertEdgesBare(edges: UnifiedEdge[]): number {
     if (edges.length === 0) return 0;
     const stmt = this.db.prepare(
       `INSERT INTO edges (source, target, kind, metadata, line, col, provenance)

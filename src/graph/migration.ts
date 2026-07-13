@@ -77,14 +77,16 @@ export function migrateJsonToSqlite(jsonPath?: string, dbPath?: string): {
     .map(graphEdgeToEnhanced)
     .filter(e => enhancedNodes.some(n => n.id === e.source) && enhancedNodes.some(n => n.id === e.target));
 
-  queries.insertNodes(enhancedNodes);
-  queries.insertEdges(enhancedEdges);
+  conn.transaction(() => {
+    queries.insertNodes(enhancedNodes);
+    queries.insertEdges(enhancedEdges);
 
-  if (graph.project) {
-    queries.setMetadata('project_name', graph.project.name);
-    queries.setMetadata('languages', JSON.stringify(graph.project.languages));
-    queries.setMetadata('frameworks', JSON.stringify(graph.project.frameworks));
-  }
+    if (graph.project) {
+      queries.setMetadata('project_name', graph.project.name);
+      queries.setMetadata('languages', JSON.stringify(graph.project.languages));
+      queries.setMetadata('frameworks', JSON.stringify(graph.project.frameworks));
+    }
+  });
 
   conn.runMaintenance();
   conn.close();
