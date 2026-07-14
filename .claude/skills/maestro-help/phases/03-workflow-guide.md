@@ -129,22 +129,22 @@ const taskPatterns = [
 ## Odyssey 长周期循环
 
 适用于需要深度考古、多轮诊断/修复/验证、知识泛化和持久化的复杂任务。
-每个 odyssey 命令都是自含闭环，自主循环直到完成。
+单入口 `/odyssey <intent> --mode <name>` 自含闭环，自主循环直到完成（`--mode` 可省略，从 intent 自动识别）。
 
 ### 调试类
-1. `/odyssey-debug "问题描述"` — 考古→诊断→修复→确认→泛化→知识持久化
+1. `/odyssey "问题描述" --mode debug` — 考古→诊断→修复→确认→泛化→知识持久化
 
 ### 代码改进
-1. `/odyssey-improve "改进目标"` — 多维审计→深度诊断→定向修复→验证→泛化
+1. `/odyssey "改进目标" --mode improve` — 多维审计→深度诊断→定向修复→验证→泛化
 
 ### 审查修复
-1. `/odyssey-review-test-fix "审查范围"` — 考古→探索→多维审查→修复→泛化
+1. `/odyssey "审查范围" --mode review` — 考古→探索→多维审查→修复→泛化
 
 ### 需求迭代
-1. `/odyssey-planex "需求描述"` — 计划→执行→严格验证→修复循环（直到验收通过）
+1. `/odyssey "需求描述" --mode planex` — 计划→执行→严格验证→修复循环（直到验收通过）
 
 ### UI 优化
-1. `/odyssey-ui "优化目标"` — 视觉调研→多维审计→发散探索→修复→验证
+1. `/odyssey "优化目标" --mode ui` — 视觉调研→多维审计→发散探索→修复→验证
 ```
 
 #### Step 4.3: 工作流全景图
@@ -159,7 +159,7 @@ const taskPatterns = [
 快速渠道: maestro-quick → (直接完成)
 Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute → close
 全自动:   /maestro -y → (自动路由)
-Odyssey:  odyssey-debug / odyssey-improve / odyssey-planex / odyssey-ui → (自主循环)
+Odyssey:  odyssey --mode debug|improve|planex|ui → (自主循环)
 并行加速: swarm-workflow / universal-workflow → (多 agent 并发)
 智能导航: /maestro-next → (检测状态推荐下一步)
 ```

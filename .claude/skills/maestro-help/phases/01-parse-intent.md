@@ -59,12 +59,12 @@ const commandPrefixes = ["/", "maestro-", "manage-", "quality-", "spec-", "learn
 // Known command names from catalog (without prefix)
 const knownCommands = [
   "maestro", "analyze", "plan", "execute", "init", "roadmap",
-  "brainstorm", "blueprint", "quick", "overlay", "amend", "fork", "merge", "collab",
+  "brainstorm", "blueprint", "quick", "overlay", "fork", "merge", "collab",
   "milestone-audit", "milestone-complete", "milestone-release",
   "composer", "guard", "player", "ralph", "ralph-execute",
   "grill", "next", "swarm-workflow", "universal-workflow", "companion",
-  "impeccable", "ui-codify", "update",
-  "tools-register", "tools-execute",
+  "impeccable", "update",
+  "tools",
   "issue", "issue-discover", "knowhow", "knowhow-capture",
   "status", "wiki", "harvest", "codebase-rebuild",
   "kg-extractors", "knowledge-audit",
@@ -72,7 +72,7 @@ const knownCommands = [
   "security-audit",
   "setup", "load", "add", "remove",
   "follow", "decompose", "investigate", "second-opinion",
-  "odyssey-debug", "odyssey-planex", "odyssey-ui", "odyssey-improve", "odyssey-review-test-fix"
+  "odyssey"
 ]
 
 const normalizedName = text.replace(/^\//, "").replace(/-/g, "-")

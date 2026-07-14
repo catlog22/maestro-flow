@@ -186,8 +186,7 @@ $ARGUMENTS → Parse:
 | `/maestro-blueprint` | 正式规格文档化 — 7-phase 收敛规格链 |
 | `/maestro-roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
 | `/maestro-quick` | 快速任务 |
-| `/maestro-overlay` | Overlay 管理 |
-| `/maestro-amend` | 修正补丁 |
+| `/maestro-overlay` | Overlay 管理 — 自然语言创建，或 `--amend` 从信号自动生成修正补丁 |
 | `/maestro-grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
 | `/maestro-next` | 智能导航 — 检测状态并推荐下一步最优命令 |
 | `/maestro-companion` | 知识伴侣 — 上下文加载、洞察捕获、技能路由 |
@@ -230,13 +229,15 @@ $ARGUMENTS → Parse:
 
 ### Odyssey 长周期循环 (odyssey)
 
-| 命令 | 用途 |
+单入口 `/odyssey <intent> --mode <name>`（`--mode` 可省略，从 intent 关键词自动识别）：
+
+| 模式 | 用途 |
 |------|------|
-| `/odyssey-debug` | 长周期调试 — 考古、诊断、修复、泛化 |
-| `/odyssey-improve` | 长周期代码改进 — 多维审计、深度诊断、定向修复 |
-| `/odyssey-review-test-fix` | 深度审查修复循环 |
-| `/odyssey-planex` | 需求驱动迭代 — 计划/执行/验证/修复循环 |
-| `/odyssey-ui` | 长周期 UI 优化 — 视觉调研、多维审计、修复 |
+| `--mode debug` | 长周期调试 — 考古、诊断、修复、泛化 |
+| `--mode improve` | 长周期代码改进 — 多维审计、深度诊断、定向修复 |
+| `--mode review` | 深度审查修复循环 |
+| `--mode planex` | 需求驱动迭代 — 计划/执行/验证/修复循环 |
+| `--mode ui` | 长周期 UI 优化 — 视觉调研、多维审计、修复 |
 
 ## Workflow Mapping
 
@@ -267,7 +268,7 @@ Roadmap > Milestone > Phase > Task
   plan → execute
 
 Odyssey 长周期循环（独立路径）
-  odyssey-debug / odyssey-improve / odyssey-review-test-fix / odyssey-planex / odyssey-ui
+  odyssey --mode debug|improve|review|planex|ui
 
 自适应引擎（高级）
   ralph → 自运行决策循环
@@ -289,9 +290,9 @@ Odyssey 长周期循环（独立路径）
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
 | 代码审查 | 质量管线 | `/quality-review` → `/quality-auto-test` → `/quality-test` |
 | 团队开发 | Team Lite | `/maestro-collab` |
-| 长周期调试 | Odyssey 深度循环 | `/odyssey-debug "问题描述"` |
-| 长周期改进 | Odyssey 深度循环 | `/odyssey-improve "改进目标"` |
-| 需求迭代 | Odyssey 深度循环 | `/odyssey-planex "需求描述"` |
+| 长周期调试 | Odyssey 深度循环 | `/odyssey "问题描述" --mode debug` |
+| 长周期改进 | Odyssey 深度循环 | `/odyssey "改进目标" --mode improve` |
+| 需求迭代 | Odyssey 深度循环 | `/odyssey "需求描述" --mode planex` |
 
 > 注：Path A/B 中 `analyze 1` / `plan 1` 的数字 `1` 指 **milestone 编号**（第 1 个里程碑），下游以 milestone 为入口。
 

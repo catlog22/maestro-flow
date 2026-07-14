@@ -11,8 +11,7 @@
     {"name": "maestro-blueprint", "command": "/maestro-blueprint", "category": "core", "description": "正式规格文档化 — 7-phase 收敛规格链，上游起源命令，产出 .workflow/blueprint/", "source": "../../commands/maestro-blueprint.md"},
     {"name": "maestro-roadmap", "command": "/maestro-roadmap", "category": "core", "description": "路线图编排 — Milestone > Phase 分解，下游以 milestone 为入口", "source": "../../commands/maestro-roadmap.md"},
     {"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
-    {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 创建、查看、删除命令补丁", "source": "../../commands/maestro-overlay.md"},
-    {"name": "maestro-amend", "command": "/maestro-amend", "category": "core", "description": "修正补丁 — 从工作流信号自动生成 overlay", "source": "../../commands/maestro-amend.md"},
+    {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 自然语言创建命令补丁，或 --amend 从工作流信号自动生成", "source": "../../commands/maestro-overlay.md"},
     {"name": "maestro-composer", "command": "/maestro-composer", "category": "core", "description": "编排器 — compose + play 工作流组合执行", "source": "../../commands/maestro-composer.md"},
     {"name": "maestro-guard", "command": "/maestro-guard", "category": "core", "description": "编辑边界治理", "source": "../../commands/maestro-guard.md"},
     {"name": "maestro-player", "command": "/maestro-player", "category": "core", "description": "播放器 — 执行已编排的工作流", "source": "../../commands/maestro-player.md"},
@@ -69,17 +68,11 @@
     {"name": "maestro-ralph", "command": "/maestro-ralph", "category": "ralph", "description": "Ralph 引擎 — 自适应生命周期决策节点管理", "source": "../../commands/maestro-ralph.md"},
     {"name": "maestro-ralph-execute", "command": "/maestro-ralph-execute", "category": "ralph", "description": "Ralph 执行 — 运行自适应决策链", "source": "../../commands/maestro-ralph-execute.md"},
 
-    {"name": "maestro-impeccable", "command": "/maestro-impeccable", "category": "ui", "description": "UI 生产 — 设计系统生成 + impeccable 链式编排 + 质量门控", "source": "../../commands/maestro-impeccable.md"},
-    {"name": "maestro-ui-codify", "command": "/maestro-ui-codify", "category": "ui", "description": "UI 固化 — 将设计产出转化为知识资产", "source": "../../commands/maestro-ui-codify.md"},
+    {"name": "maestro-impeccable", "command": "/maestro-impeccable", "category": "ui", "description": "UI 生产 — 设计系统生成 + impeccable 链式编排 + 质量门控 + --codify 从代码提取设计系统", "source": "../../commands/maestro-impeccable.md"},
 
-    {"name": "maestro-tools-register", "command": "/maestro-tools-register", "category": "tools", "description": "MCP 工具注册 — 注册外部工具到 Maestro", "source": "../../commands/maestro-tools-register.md"},
-    {"name": "maestro-tools-execute", "command": "/maestro-tools-execute", "category": "tools", "description": "MCP 工具执行 — 调用已注册的外部工具", "source": "../../commands/maestro-tools-execute.md"},
+    {"name": "maestro-tools", "command": "/maestro-tools", "category": "tools", "description": "工具规范管理 — register 注册可复用流程 / execute 加载并逐步执行", "source": "../../commands/maestro-tools.md"},
 
-    {"name": "odyssey-debug", "command": "/odyssey-debug", "category": "odyssey", "description": "长周期调试 — 考古、诊断、修复、确认、泛化、发现和知识持久化", "source": "../../commands/odyssey-debug.md"},
-    {"name": "odyssey-planex", "command": "/odyssey-planex", "category": "odyssey", "description": "需求驱动迭代循环 — 计划、执行、严格验证、修复循环直到验收标准达成", "source": "../../commands/odyssey-planex.md"},
-    {"name": "odyssey-ui", "command": "/odyssey-ui", "category": "odyssey", "description": "长周期 UI 优化 — 视觉调研、多维审计、发散探索、修复、验证和设计知识持久化", "source": "../../commands/odyssey-ui.md"},
-    {"name": "odyssey-improve", "command": "/odyssey-improve", "category": "odyssey", "description": "长周期代码改进 — 多维审计、深度诊断、定向修复、验证、泛化和工程知识持久化", "source": "../../commands/odyssey-improve.md"},
-    {"name": "odyssey-review-test-fix", "command": "/odyssey-review-test-fix", "category": "odyssey", "description": "深度审查修复循环 — 考古、探索、多维审查、定向修复、泛化和知识持久化", "source": "../../commands/odyssey-review-test-fix.md"}
+    {"name": "odyssey", "command": "/odyssey", "category": "odyssey", "description": "长周期迭代闭环 — 单入口五模式 (debug|improve|planex|review|ui)：考古/审计 → 修复 → 验证 → 泛化 → 发现 → 知识持久化", "source": "../../commands/odyssey.md"}
   ],
   "skills": [
     {"name": "workflow-skill-designer", "category": "meta", "description": "Meta-skill: 设计 orchestrator+phases 结构的工作流 skill", "source": "../workflow-skill-designer/SKILL.md"},
@@ -233,7 +226,7 @@
       "D_small_fix": "plan → execute",
       "E_spec_only": "blueprint → (供人阅读)",
       "F_explore_only": "brainstorm → (供人决策)",
-      "G_odyssey_deep": "odyssey-debug / odyssey-improve / odyssey-review-test-fix / odyssey-planex / odyssey-ui"
+      "G_odyssey_deep": "odyssey --mode debug|improve|review|planex|ui"
     },
     "main_pipeline": {
       "name": "主干管线",
@@ -259,7 +252,7 @@
     "odyssey": {
       "name": "Odyssey 长周期循环",
       "description": "自主循环直到完成 — 适用于需要考古、诊断、修复、泛化、知识持久化的深度任务",
-      "commands": ["odyssey-debug", "odyssey-improve", "odyssey-review-test-fix", "odyssey-planex", "odyssey-ui"]
+      "commands": ["odyssey --mode debug", "odyssey --mode improve", "odyssey --mode review", "odyssey --mode planex", "odyssey --mode ui"]
     }
   }
 }

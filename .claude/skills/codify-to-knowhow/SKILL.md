@@ -10,7 +10,7 @@ session-mode: none
 
 通用 manifest 驱动的知识资产生成器。读取 `knowhow-manifest.json`，按声明创建 knowhow 文件和 spec 条目，通过 ref 建立索引-详文桥梁。
 
-**适用场景**: 任何工作流产出需要固化为知识资产时使用。上游 skill（如 `maestro-ui-codify`）负责生成 manifest，本 skill 负责执行知识写入。
+**适用场景**: 任何工作流产出需要固化为知识资产时使用。上游 skill（如 `maestro-impeccable --codify`）负责生成 manifest，本 skill 负责执行知识写入。
 
 ## Architecture Overview
 
@@ -164,5 +164,5 @@ Completion report
 
 ## Related Commands
 
-**上游**: `maestro-ui-codify`, `learn-decompose`, 或任何生成 manifest 的 skill
+**上游**: `maestro-impeccable --codify`, `learn-decompose`, 或任何生成 manifest 的 skill
 **后续**: `maestro wiki list --category coding`, `maestro load --type spec --keyword <slug>`
