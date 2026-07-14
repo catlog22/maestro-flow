@@ -49,7 +49,7 @@ $ARGUMENTS — intent text + optional flags.
 6. Intent text present → S_STATE → S_RANK → S_PRESENT
 7. No arguments → lifecycle inference for natural next step
 
-**Candidate pool:** All 14 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`, `maestro-player`, `maestro-composer`) are NEVER in the candidate pool.
+**Candidate pool:** All 14 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) are NEVER in the candidate pool.
 </context>
 
 <invariants>
@@ -60,7 +60,7 @@ $ARGUMENTS — intent text + optional flags.
 5. **Argument pass-through** — intent text becomes first arg to target step; user can modify at confirmation; `-y` only passes through when user provided it
 6. **--suggest never executes** — show recommendation + prepare content only
 7. **--note is append-only** — never overwrite or reorder existing entries
-8. **--promote delegates** — spec/knowhow promotion routes through `spec-add` / `manage-knowhow-capture`, never writes directly
+8. **--promote delegates** — spec/knowhow promotion routes through `spec add` / `manage knowledge capture`, never writes directly
 </invariants>
 
 <state_machine>
@@ -97,7 +97,7 @@ S_NOTE:
   → END          DO: append entry to {run_dir}/outputs/companion.md
 
 S_PROMOTE:
-  → END          DO: review outputs → Skill(spec-add/manage-knowhow-capture) for each insight
+  → END          DO: review outputs → Skill(spec, "add") / Skill(manage, "knowledge capture") for each insight
 
 S_STATE:
   → S_RANK       DO: A_INFER_LIFECYCLE
@@ -192,23 +192,23 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | retrospective / retro / lessons | retrospective |
 | refactor / tech debt | quality-refactor (retained skill) |
 | sync docs | quality-sync (retained skill) |
-| issue / defect | manage-issue (retained skill) |
-| wiki / knowledge graph | manage-wiki (retained skill) |
-| spec / rule / constraint | spec-load / spec-add (retained skill) |
+| issue / defect | manage issue (retained skill) |
+| wiki / knowledge graph | manage knowledge wiki (retained skill) |
+| spec / rule / constraint | spec load / spec add (retained skill) |
 | init / project setup | maestro-init (retained skill) |
-| status / dashboard | manage-status (retained skill) |
+| status / dashboard | manage status (retained skill) |
 | security / OWASP | security-audit (retained skill) |
-| learn / explore code / follow | learn-follow / learn-investigate (retained skill) |
-| harvest / extract knowledge | manage-harvest (retained skill) |
+| learn / explore code / follow | learn follow / learn investigate (retained skill) |
+| harvest / extract knowledge | manage knowledge harvest (retained skill) |
 | fork / parallel dev | maestro-fork (retained skill) |
 
 **Auxiliary workflow clusters:**
 
 | Cluster | Trigger | Chain |
 |---------|---------|-------|
-| Learning | New code / unknown module | learn-follow → learn-decompose → learn-second-opinion |
-| Knowledge | Distill experience | manage-harvest → manage-knowhow-capture → spec-add |
-| Issue | Defect management | manage-issue-discover → manage-issue |
+| Learning | New code / unknown module | learn follow → learn decompose → learn consult |
+| Knowledge | Distill experience | manage knowledge harvest → manage knowledge capture → spec add |
+| Issue | Defect management | manage issue discover → manage issue |
 
 ### A_EXECUTE_STEP
 

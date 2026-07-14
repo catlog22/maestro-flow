@@ -135,7 +135,7 @@ Status verdicts:
 | Roadmap needed (default light) | step `roadmap` (`maestro run prepare roadmap` + `maestro run create roadmap`) |
 | Full spec package | step `blueprint` (`maestro run prepare blueprint` + `maestro run create blueprint`) |
 | Explore ideas first | step `brainstorm` (`maestro run prepare brainstorm` + `maestro run create brainstorm`) |
-| View project dashboard | `/manage-status` |
+| View project dashboard | `/manage status` |
 | Quick ad-hoc task | step `quick` (`maestro run prepare quick` + `maestro run create quick`) |
 </completion>
 

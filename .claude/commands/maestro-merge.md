@@ -65,18 +65,18 @@ After successful merge, use `AskUserQuestion` to confirm knowledge persistence:
 question: "Merge 完成。是否记录本次工作经验教训？"
 options:
   - label: "记录经验"
-    description: "通过 spec-add 持久化此次工作的关键洞察"
+    description: "通过 spec add 持久化此次工作的关键洞察"
   - label: "跳过"
     description: "不记录，直接完成"
 ```
 
-User selects "记录经验" → prompt for title/insight, then persist via `Skill("spec-add", "learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
+User selects "记录经验" → prompt for title/insight, then persist via `Skill("spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
 
 ### Next-step routing
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Merge complete | Skill({ skill: "manage-status" }) |
+| Merge complete | Skill({ skill: "manage", args: "status" }) |
 | Next dep-ready session | step `analyze` for session (`maestro run prepare analyze --session {next-dep-ready-slug}` + `maestro run create analyze --session {next-dep-ready-slug}`) |
 </completion>
 

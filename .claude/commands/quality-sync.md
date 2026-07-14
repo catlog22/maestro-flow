@@ -78,8 +78,8 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Docs refreshed | `/manage-status` |
-| Major structural changes | `/manage-codebase-rebuild` |
+| Docs refreshed | `/manage status` |
+| Major structural changes | `/manage sync rebuild` |
 | Incremental refresh | Use `--since` flag |
 </completion>
 

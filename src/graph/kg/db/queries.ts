@@ -82,6 +82,11 @@ function isRecoverableFtsFailure(err: unknown, table: 'code_fts' | 'knowledge_ft
     || /database disk image is malformed|database corruption|malformed database schema|vtable constructor failed/i.test(message);
 }
 
+function isFtsCorruption(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /database disk image is malformed|database corruption|malformed database schema|vtable constructor failed/i.test(message);
+}
+
 function clampQueryLimit(value: number | undefined, fallback: number, max: number): number {
   const candidate = Number.isFinite(value) ? Math.trunc(value as number) : fallback;
   return Math.max(1, Math.min(candidate, max));
@@ -577,6 +582,9 @@ export class KgQueryBuilder {
         return node;
       });
     } catch (err) {
+      if (isFtsCorruption(err)) {
+        process.stderr.write('[KG] MaestroGraph database corruption detected; run "maestro kg rebuild --confirm" if automatic repair fails.\n');
+      }
       if (isRecoverableFtsFailure(err, 'code_fts') && this.tryRebuildCodeFts()) {
         try {
           return this.runCodeFtsQuery(matchExpr, opts);
@@ -608,7 +616,6 @@ export class KgQueryBuilder {
       if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] code_fts recreated from nodes table');
       return true;
     } catch (err) {
-      this.codeFtsRebuilt = false;
       process.stderr.write(`[KG] code_fts rebuild failed: ${err instanceof Error ? err.message : String(err)}\n`);
       return false;
     }
@@ -658,6 +665,9 @@ export class KgQueryBuilder {
         return node;
       });
     } catch (err) {
+      if (isFtsCorruption(err)) {
+        process.stderr.write('[KG] MaestroGraph database corruption detected; run "maestro kg rebuild --confirm" if automatic repair fails.\n');
+      }
       if (isRecoverableFtsFailure(err, 'knowledge_fts') && this.tryRebuildKnowledgeFts()) {
         try {
           return this.runKnowledgeFtsQuery(matchExpr, opts);
@@ -689,7 +699,6 @@ export class KgQueryBuilder {
       if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge_fts recreated from nodes table');
       return true;
     } catch (err) {
-      this.knowledgeFtsRebuilt = false;
       process.stderr.write(`[KG] knowledge_fts rebuild failed: ${err instanceof Error ? err.message : String(err)}\n`);
       return false;
     }

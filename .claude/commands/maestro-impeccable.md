@@ -1,7 +1,7 @@
 ---
 name: maestro-impeccable
-description: Use when designing, auditing, polishing, or improving frontend UI — websites, dashboards, landing pages, components
-argument-hint: "<command|intent> [target] [flags] — 可选 chain: build|redesign|improve|enhance|launch|harden|foundation|live"
+description: Use when designing, auditing, polishing, improving, or codifying frontend UI — websites, dashboards, landing pages, components, design systems
+argument-hint: "<command|intent> [target] [flags] — chain: build|redesign|improve|enhance|launch|harden|foundation|live · --codify <source-path> 提取设计系统"
 allowed-tools:
   - Read
   - Write
@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
+  - Skill
   - AskUserQuestion
   - TodoWrite
 session-mode: run
@@ -23,8 +24,16 @@ contract:
 @~/.maestro/workflows/run-mode.md
 </required_reading>
 
+<deferred_reading>
+Codify mode only (read when `--codify` and the corresponding phase starts):
+- [ui-codify.md](~/.maestro/workflows/ui-codify.md) — read always in codify mode (main workflow orchestrator)
+- [ui-codify-extract.md](~/.maestro/workflows/ui-codify-extract.md) — read when Codify Phase 2 starts (style extraction with 3 agents)
+- [ui-codify-package.md](~/.maestro/workflows/ui-codify-package.md) — read when Codify Phase 3 starts (reference package generation)
+- [ui-codify-knowhow.md](~/.maestro/workflows/ui-codify-knowhow.md) — read when Codify Phase 4 starts (knowledge asset generation)
+</deferred_reading>
+
 <purpose>
-UI design command: direct single-command, chain multi-step with quality gates, or search design knowledge.
+UI design command: direct single-command, chain multi-step with quality gates, codify a design system from existing code, or search design knowledge.
 Parse input → prerequisites → read workflow file → execute → track.
 </purpose>
 
@@ -34,6 +43,7 @@ $ARGUMENTS first word determines mode:
 
 | First Word | Mode |
 |------------|------|
+| `--codify` / `codify` | Codify — extract design system from existing code (see `<codify_mode>`) |
 | Known command (see routing table) | Direct |
 | Chain name: build, redesign, improve, enhance, launch, harden, foundation, live | Chain |
 | continue / next / -c | Resume |
@@ -235,6 +245,79 @@ Before reading any command workflow:
    - TodoWrite: record gate result in current step notes (score, P0/P1 count, pass/fail)
 7. Final report: scores + trend + commands executed
 
+## Codify Execution
+
+<codify_mode>
+Extract a design system from existing source code into tokens, a reference package, and knowledge assets. 4-phase pipeline: validate → extract → package → knowhow.
+
+**Trigger**: first word is `--codify` or `codify`. Also reachable when the `foundation` chain reaches its `document`/`extract` steps and the user wants full reverse-extraction with knowhow persistence.
+
+**Arguments**: `--codify <source-path> [--package-name <name>] [--output-dir <path>] [--overwrite]`
+- `<source-path>` (required): Directory containing CSS/SCSS/JS/TS/HTML source files
+- `--package-name <name>`: Package name for reference output (default: auto-generated from source directory)
+- `--output-dir <path>`: Output directory for reference package (default: `.workflow/reference_style`)
+- `--overwrite`: Allow overwriting existing package directory
+
+**Output boundary**: ALL file writes MUST target the `--output-dir` path (default: `.workflow/reference_style/`) for reference packages, and `.workflow/knowhow/` for knowledge assets (via `codify-to-knowhow`). NEVER modify the source directory being analyzed.
+
+### Codify Invariants
+1. **Source read-only** — the source path being analyzed MUST NOT be modified; extraction is purely read-only
+2. **Phase-sequential loading** — workflow files (ui-codify-extract, ui-codify-package, ui-codify-knowhow) MUST be read only when their phase starts; NEVER load all phases eagerly
+3. **User confirmation before knowhow** — Phase 3→4 gate MUST present AskUserQuestion before generating knowledge assets; NEVER auto-proceed to knowhow generation
+4. **Overwrite protection** — existing package directory MUST NOT be overwritten without `--overwrite` flag (E102)
+5. **Artifact completeness** — all 5 required artifacts MUST exist before reporting completion; NEVER skip artifact verification
+6. **Token-first extraction** — design-tokens.json MUST be generated before layout-templates.json; layout extraction depends on token foundation
+
+### Step 1: Load UI Specs
+```bash
+maestro load --type spec --category ui
+```
+
+### Step 2: Execute Workflow
+Route to `~/.maestro/workflows/ui-codify.md` and follow completely. The workflow orchestrates 4 phases with deferred loading of phase-specific workflow files (see `<deferred_reading>`). Each phase reads its workflow file only when execution reaches that phase.
+
+### Codify Phase Gates (MANDATORY, BLOCKING)
+
+**GATE Phase 1 → Phase 2: Validation → Extraction**
+- REQUIRED: Source path validated and file discovery completed.
+- REQUIRED: design-tokens.json generated with color, typography, spacing tokens.
+- BLOCKED if missing: source path invalid (E101) or design-tokens.json not generated — extraction cannot proceed without token foundation.
+
+**GATE Phase 2 → Phase 3: Extraction → Package**
+- REQUIRED: layout-templates.json generated with component patterns.
+- BLOCKED if missing: layout-templates.json absent — package generation requires component patterns as input.
+
+**GATE Phase 3 → Phase 4: Package → Knowhow**
+- REQUIRED: preview.html + preview.css generated as interactive showcase.
+- BLOCKED if missing: preview artifacts not generated — knowhow phase needs rendered reference for validation.
+- REQUIRED: AskUserQuestion confirmation before proceeding to knowhow generation:
+  ```
+  question: "Preview 生成完成。是否继续将设计系统持久化为 knowhow 知识资产？"
+  options:
+    - label: "继续生成 knowhow"
+      description: "调用 codify-to-knowhow 写入 AST/DCS assets 和 spec entries"
+    - label: "仅保留 preview，跳过 knowhow"
+      description: "保留 preview.html + preview.css，不写入知识库"
+  ```
+
+**GATE Phase 4 → Completion: Knowhow → Done**
+- REQUIRED: knowhow-manifest.json created with AST/DCS assets and spec entries.
+- REQUIRED: codify-to-knowhow called and completed (only after user confirmation at Phase 3→4 gate).
+- BLOCKED if missing: knowhow-manifest.json absent or codify-to-knowhow not invoked — knowledge assets not persisted.
+
+### Artifact Verification (before completion)
+```
+REQUIRED_ARTIFACTS = [
+  "design-tokens.json",      // Phase 1
+  "layout-templates.json",   // Phase 2
+  "preview.html",            // Phase 3
+  "preview.css",             // Phase 3
+  "knowhow-manifest.json"    // Phase 4
+]
+```
+If any artifact is missing: DO NOT report completion.
+</codify_mode>
+
 ## Resume
 
 Scan `.workflow/.maestro/ui-craft-*/status.json` for `status == "running"` → most recent → resume from `current_step`.
@@ -286,6 +369,9 @@ Never auto-select: teach, shape, craft, live, document, extract, overdrive, crit
 | W001 | warning | UI specs not found via spec load | Continuing without specs — output may miss project conventions |
 | W002 | warning | Quality gate score below threshold but P0 == 0 | Auto-refine loop triggered |
 | W003 | warning | Chain step failed but non-blocking | Step failure documented, chain continues |
+| E101 | error | Codify: source path not found or not a directory | Verify `--codify <source-path>` exists |
+| E102 | error | Codify: package directory exists without `--overwrite` | Re-run with `--overwrite` or a new `--output-dir` |
+| W004 | warning | Codify: animation-tokens.json not found (optional) | Extraction continues without animation tokens |
 </error_codes>
 
 <success_criteria>
@@ -305,6 +391,17 @@ Chain mode:
 - [ ] Refine loops executed when gate fails (up to max-loops)
 - [ ] status.json updated with `status: "completed"` and final scores
 - [ ] Final report with scores, trend, and commands executed
+
+Codify mode:
+- [ ] UI specs loaded via `spec load --category ui` (if available)
+- [ ] Source path validated and file discovery completed
+- [ ] design-tokens.json generated with color, typography, spacing tokens
+- [ ] layout-templates.json generated with component patterns (universal/specialized)
+- [ ] animation-tokens.json generated (optional, W004 if missing)
+- [ ] preview.html + preview.css generated as interactive showcase
+- [ ] knowhow-manifest.json created with AST/DCS assets and spec entries
+- [ ] codify-to-knowhow called and completed successfully (after Phase 3→4 confirmation)
+- [ ] Temporary workspace cleaned up
 </success_criteria>
 
 <completion>
@@ -318,4 +415,7 @@ Chain mode:
 | Direct critique findings | `maestro impeccable polish` or targeted fix command |
 | Chain complete | Review final scores, consider `maestro impeccable improve` for iteration |
 | Chain paused/interrupted | `maestro impeccable continue` to resume |
+| Codify complete | Use extracted tokens in `maestro impeccable craft` for new builds |
+| Codify design system needs refinement | `maestro impeccable document` to regenerate DESIGN.md |
+| Codify knowledge assets persisted | `maestro search --type knowhow "design system"` to verify |
 </completion>
