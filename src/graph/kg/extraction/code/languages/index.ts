@@ -4,7 +4,7 @@
 
 import type { LanguageExtractor } from '../tree-sitter-types.js';
 import type { Language } from '../../../db/types.js';
-import { typescriptExtractor, javascriptExtractor, tsxExtractor } from './typescript.js';
+import { typescriptExtractor, javascriptExtractor, tsxExtractor, jsxExtractor } from './typescript.js';
 
 // ---------------------------------------------------------------------------
 // 基础提取器模板 — 用于尚未移植的语言 (复用通用逻辑)
@@ -77,7 +77,7 @@ const EXTRACTOR_REGISTRY: Map<Language, LanguageExtractor> = new Map();
 EXTRACTOR_REGISTRY.set('typescript', typescriptExtractor);
 EXTRACTOR_REGISTRY.set('javascript', javascriptExtractor);
 EXTRACTOR_REGISTRY.set('tsx', tsxExtractor);
-EXTRACTOR_REGISTRY.set('jsx', { ...javascriptExtractor, language: 'jsx' as Language });
+EXTRACTOR_REGISTRY.set('jsx', jsxExtractor);
 
 // ---------------------------------------------------------------------------
 // 专用提取器辅助 — 基于 createGenericExtractor 增强

@@ -1,49 +1,11 @@
 // src/graph/kg/sync/incremental-sync.ts — 增量同步
 // 参考: plan-maestrograph.md D2.4 同步优先级调度 + D1.4 FileLock
 
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import type { MaestroGraph } from '../engine.js';
 import type { SyncResult, SourceType } from '../db/types.js';
-
-// ---------------------------------------------------------------------------
-// FileLock — D1.4: SQLite 跨进程写锁保护
-// ---------------------------------------------------------------------------
-
-export class FileLock {
-  private lockPath: string;
-
-  constructor(lockPath: string) {
-    this.lockPath = lockPath;
-  }
-
-  async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    // 简化版: 使用文件锁标记
-    // 生产环境应使用 proper file-lock (如 proper-lockfile)
-    const lockId = `${process.pid}-${Date.now()}`;
-
-    // 写锁文件
-    const { writeFileSync, unlinkSync } = await import('node:fs');
-    try {
-      writeFileSync(this.lockPath, lockId, { flag: 'wx' }); // 排他创建
-    } catch {
-      // 锁已存在, 等待并重试
-      await new Promise(resolve => setTimeout(resolve, 100));
-      try {
-        writeFileSync(this.lockPath, lockId, { flag: 'wx' });
-      } catch {
-        throw new Error('Could not acquire lock: ' + this.lockPath);
-      }
-    }
-
-    try {
-      return await fn();
-    } finally {
-      try { unlinkSync(this.lockPath); } catch { /* ignore */ }
-    }
-  }
-}
+export { FileLock } from './file-lock.js';
 
 // ---------------------------------------------------------------------------
 // 增量同步 — D2.4: 知识源高优先级, 代码源异步
@@ -72,6 +34,7 @@ export async function runIncrementalSync(
   return syncKnowledgeGraph(projectPath, {
     full: options?.full,
     sources: options?.sources,
+    graph: mg,
   });
 }
 

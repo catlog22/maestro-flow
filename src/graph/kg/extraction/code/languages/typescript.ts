@@ -170,19 +170,27 @@ function traverseChildren(
   }
 }
 
-export const typescriptExtractor: LanguageExtractor = {
-  language: 'typescript' as Language,
-  grammarName: 'typescript',
-  nodeTypeMap: TS_NODE_TYPE_MAP,
-  extract(tree, sourceCode, filePath): LanguageExtractionResult {
+function extractTypeScriptFamily(
+  tree: Parameters<LanguageExtractor['extract']>[0],
+  filePath: string,
+  language: Language,
+): LanguageExtractionResult {
     const symbols: ExtractedSymbol[] = [];
     const references: ExtractedReference[] = [];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rootNode = (tree as any).rootNode;
-    traverse(rootNode, filePath, 'typescript' as Language, symbols, references, '');
+    traverse(rootNode, filePath, language, symbols, references, '');
 
     return { symbols, references, edges: [] };
+}
+
+export const typescriptExtractor: LanguageExtractor = {
+  language: 'typescript' as Language,
+  grammarName: 'typescript',
+  nodeTypeMap: TS_NODE_TYPE_MAP,
+  extract(tree, _sourceCode, filePath): LanguageExtractionResult {
+    return extractTypeScriptFamily(tree, filePath, 'typescript' as Language);
   },
 };
 
@@ -190,16 +198,23 @@ export const typescriptExtractor: LanguageExtractor = {
 export const javascriptExtractor: LanguageExtractor = {
   ...typescriptExtractor,
   language: 'javascript' as Language,
-  extract(tree, sourceCode, filePath): LanguageExtractionResult {
-    const result = typescriptExtractor.extract(tree, sourceCode, filePath);
-    // 将所有符号的 language 改为 javascript
-    for (const s of result.symbols) s.language = 'javascript' as Language;
-    for (const r of result.references) r.language = 'javascript' as Language;
-    return result;
+  extract(tree, _sourceCode, filePath): LanguageExtractionResult {
+    return extractTypeScriptFamily(tree, filePath, 'javascript' as Language);
   },
 };
 
 export const tsxExtractor: LanguageExtractor = {
   ...typescriptExtractor,
   language: 'tsx' as Language,
+  extract(tree, _sourceCode, filePath): LanguageExtractionResult {
+    return extractTypeScriptFamily(tree, filePath, 'tsx' as Language);
+  },
+};
+
+export const jsxExtractor: LanguageExtractor = {
+  ...javascriptExtractor,
+  language: 'jsx' as Language,
+  extract(tree, _sourceCode, filePath): LanguageExtractionResult {
+    return extractTypeScriptFamily(tree, filePath, 'jsx' as Language);
+  },
 };

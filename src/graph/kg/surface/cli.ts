@@ -10,7 +10,7 @@ import { bfs, findShortestPath, getCallers, getCallees, getImpactRadius } from '
 import { buildContext } from '../query/context-builder.js';
 import { syncKnowledgeGraph, type CodegraphSyncOptions } from '../extraction/orchestrator.js';
 import { getKgDatabasePath } from '../db/connection.js';
-import type { UnifiedNode, SourceType } from '../db/types.js';
+import { SOURCE_TYPES, type UnifiedNode, type SourceType } from '../db/types.js';
 
 function parseCsv(value: string | undefined): string[] | undefined {
   return value
@@ -19,7 +19,18 @@ function parseCsv(value: string | undefined): string[] | undefined {
 }
 
 function normalizeSources(value: string | undefined): SourceType[] | undefined {
-  return parseCsv(value) as SourceType[] | undefined;
+  const sources = parseCsv(value);
+  if (!sources) return undefined;
+  const valid = new Set<string>(SOURCE_TYPES);
+  const invalid = sources.filter(source => !valid.has(source));
+  if (invalid.length > 0) throw new Error(`Unsupported MaestroGraph source type(s): ${invalid.join(', ')}`);
+  return [...new Set(sources)] as SourceType[];
+}
+
+function clampInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  const candidate = Number.isFinite(parsed) ? Math.trunc(parsed) : fallback;
+  return Math.max(min, Math.min(candidate, max));
 }
 
 function parseInteger(value: string | undefined): number | undefined {
@@ -211,7 +222,7 @@ export function registerKgCommands(program: Command): void {
       const mg = await MaestroGraph.open(resolve('.'));
       try {
         const parsed = parseQuery(text);
-        const sourceTypes = opts.source?.split(',')
+        const sourceTypes = normalizeSources(opts.source)
           ?? (parsed.sourceTypes.length > 0 ? parsed.sourceTypes : undefined);
         const kinds = opts.kind?.split(',')
           ?? (parsed.kinds.length > 0 ? parsed.kinds : undefined);
@@ -220,15 +231,27 @@ export function registerKgCommands(program: Command): void {
         const output = mg.searchUnified(effectiveText, {
           sourceTypes: sourceTypes as any, // eslint-disable-line @typescript-eslint/no-explicit-any
           kinds: kinds as any, // eslint-disable-line @typescript-eslint/no-explicit-any
-          limit: Math.min(Number(opts.limit) || 20, 500),
+          limit: clampInteger(opts.limit, 20, 1, 500),
         });
         const results = output.directMatches;
+        const depth = clampInteger(opts.depth, 1, 0, 5);
+        const related = new Map<string, UnifiedNode>();
+        if (depth > 0) {
+          for (const result of results) {
+            const traversal = bfs(mg.getQueryBuilder(), result.node.id, { maxDepth: depth, maxNodes: 50 });
+            for (const [id, node] of traversal.nodes) {
+              if (id !== result.node.id) related.set(id, node);
+            }
+          }
+        }
 
         if (opts.json) {
           console.log(JSON.stringify({ query: text, parsed: { text: effectiveText, kinds, sourceTypes }, results: results.map(r => ({
             id: r.node.id, kind: r.node.kind, name: r.node.name, sourceType: r.node.sourceType,
             definition: r.node.definition.substring(0, 200), score: r.score,
-          })), summary: output.summary }, null, 2));
+          })), related: [...related.values()].map(node => ({
+            id: node.id, kind: node.kind, name: node.name, sourceType: node.sourceType,
+          })), summary: { ...output.summary, traversalDepth: depth, relatedNodes: related.size } }, null, 2));
           return;
         }
 
@@ -238,6 +261,7 @@ export function registerKgCommands(program: Command): void {
           const scoreTag = r.score > 0 ? `  (${r.score.toFixed(1)})` : '';
           console.log(`  [${r.node.sourceType}:${r.node.kind}] ${r.node.name}${def}${scoreTag}`);
         }
+        if (related.size > 0) console.log(`Related (${depth}-hop): ${related.size}`);
       } finally {
         mg.close();
       }
@@ -261,7 +285,7 @@ export function registerKgCommands(program: Command): void {
         const output = mg.searchUnified(effectiveText, {
           sourceTypes: sourceTypes as SourceType[] | undefined,
           kinds,
-          limit: Math.min(Number(opts.limit) || 20, 500),
+          limit: clampInteger(opts.limit, 20, 1, 500),
         });
 
         if (opts.json) {
@@ -500,16 +524,32 @@ export function registerKgCommands(program: Command): void {
 
       const mg = await MaestroGraph.open(resolve('.'));
       try {
-        const stats = mg.getStats();
         const checks: Array<{ name: string; status: 'pass' | 'warn' | 'fail'; detail: string }> = [];
 
         // DB 存在
         checks.push({ name: 'Database', status: 'pass', detail: dbPath });
 
+        let stats: ReturnType<MaestroGraph['getStats']>;
+        try {
+          stats = mg.getStats();
+        } catch (err) {
+          checks.push({
+            name: 'Schema',
+            status: 'fail',
+            detail: err instanceof Error ? err.message : String(err),
+          });
+          for (const check of checks) {
+            const icon = check.status === 'pass' ? '✓' : '✗';
+            console.log(`${icon} ${check.name}: ${check.detail}`);
+          }
+          process.exitCode = 1;
+          return;
+        }
+
         // Schema 版本
         checks.push({
           name: 'Schema',
-          status: stats.schemaVersion >= 2 ? 'pass' : 'warn',
+          status: stats.schemaVersion >= 2 ? 'pass' : 'fail',
           detail: `v${stats.schemaVersion}`,
         });
 

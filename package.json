@@ -44,6 +44,8 @@
     "dev": "tsc --watch",
     "start": "node bin/maestro.js",
     "mcp": "node bin/maestro-mcp.js",
+    "test": "vitest run",
+    "test:kg": "vitest run src/graph",
     "lint": "tsc --noEmit",
     "lint:session-run": "node scripts/lint-session-run-prompts.mjs && node scripts/lint-session-run-mirrors.mjs",
     "sync:codex-skills": "node scripts/sync-codex-run-mode.mjs --write && node scripts/lint-session-run-mirrors.mjs",
@@ -54,7 +56,7 @@
     "prepublishOnly": "npm run build && npm run build:mirrors"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.77",

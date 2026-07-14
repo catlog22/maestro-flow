@@ -28,6 +28,7 @@ const MAX_PROPAGATION_DEPTH = 3;
 const MAX_RELATED_TERMS = 50;
 
 export interface KnowledgeResolutionResult {
+  edges: UnifiedEdge[];
   definesEdges: number;
   constrainsEdges: number;
   documentsEdges: number;
@@ -80,6 +81,7 @@ export function resolveKnowledgeEdges(db: DatabaseSync, options?: { projectPath?
   }
 
   return {
+    edges: allEdges,
     definesEdges: allEdges.filter(e => e.kind === 'defines').length,
     constrainsEdges: allEdges.filter(e => e.kind === 'constrains').length,
     documentsEdges: allEdges.filter(e => e.kind === 'documents').length,
@@ -172,50 +174,53 @@ function resolveConstrainsEdges(db: DatabaseSync): UnifiedEdge[] {
     `SELECT id, keywords, category FROM nodes WHERE source_type = 'spec' AND status = 'active'`
   ).all() as unknown as Array<{ id: string; keywords: string | null; category: string | null }>;
 
-  // 收集所有 spec 的 keywords，建立 keyword → spec 映射
+  // 收集所有 spec 的 keywords，建立标准化 keyword → spec 映射
   const keywordToSpecs = new Map<string, Array<{ id: string; keywords: string[] }>>();
-  const allKeywords: string[] = [];
 
   for (const spec of specNodes) {
     const keywords: string[] = safeJsonParse(spec.keywords, []);
     if (keywords.length === 0) continue;
-    for (const kw of keywords) {
+    for (const rawKeyword of keywords) {
+      const kw = rawKeyword.trim().toLowerCase();
+      if (!kw) continue;
       if (!keywordToSpecs.has(kw)) {
         keywordToSpecs.set(kw, []);
-        allKeywords.push(kw);
       }
       keywordToSpecs.get(kw)!.push({ id: spec.id, keywords });
     }
   }
 
-  if (allKeywords.length === 0) return [];
+  if (keywordToSpecs.size === 0) return [];
 
-  // 分批 IN-clause 查询代码节点 (每批 500)
-  const BATCH_SIZE = 500;
-  const allCodeMatches: Array<{ id: string; name: string; kind: string; file_path: string }> = [];
-
-  for (let i = 0; i < allKeywords.length; i += BATCH_SIZE) {
-    const batch = allKeywords.slice(i, i + BATCH_SIZE);
-    const namePlaceholders = batch.map(() => '?').join(',');
-    const pathClauses = batch.map(() => `file_path LIKE '%' || ? || '%'`).join(' OR ');
-    const matches = db.prepare(
-      `SELECT id, name, kind, file_path FROM nodes
-       WHERE source_type = 'codegraph'
-         AND kind IN ('function', 'method', 'class', 'interface')
-         AND (name IN (${namePlaceholders}) OR ${pathClauses})`
-    ).all(...batch, ...batch) as unknown as Array<{
-      id: string; name: string; kind: string; file_path: string;
-    }>;
-    allCodeMatches.push(...matches);
+  // 单次读取候选代码节点，并建立 name/path-token 倒排索引。
+  // 避免 leading-wildcard LIKE 扫描和 match × keyword 笛卡尔循环。
+  const codeNodes = db.prepare(
+    `SELECT id, name, kind, file_path FROM nodes
+     WHERE source_type = 'codegraph'
+       AND kind IN ('function', 'method', 'class', 'interface')`
+  ).all() as unknown as Array<{ id: string; name: string; kind: string; file_path: string }>;
+  const matchesByKeyword = new Map<string, Map<string, typeof codeNodes[number]>>();
+  const addMatch = (keyword: string, node: typeof codeNodes[number]): void => {
+    if (!keywordToSpecs.has(keyword)) return;
+    let matches = matchesByKeyword.get(keyword);
+    if (!matches) {
+      matches = new Map();
+      matchesByKeyword.set(keyword, matches);
+    }
+    matches.set(node.id, node);
+  };
+  for (const node of codeNodes) {
+    addMatch(node.name.toLowerCase(), node);
+    const pathTokens = node.file_path.toLowerCase().split(/[^a-z0-9_$-]+/).filter(token => token.length >= 3);
+    for (const token of pathTokens) addMatch(token, node);
   }
 
-  // 应用层关联：按 keyword 匹配 spec → code
   const edges: UnifiedEdge[] = [];
   const seen = new Set<string>();
-
-  for (const match of allCodeMatches) {
-    for (const [kw, specs] of keywordToSpecs) {
-      if (match.name !== kw && !match.file_path.includes(kw)) continue;
+  for (const [kw, specs] of keywordToSpecs) {
+    const matches = matchesByKeyword.get(kw);
+    if (!matches) continue;
+    for (const match of matches.values()) {
       for (const spec of specs) {
         const key = `${spec.id}->${match.id}`;
         if (seen.has(key)) continue;
@@ -322,19 +327,22 @@ export function expandRelated(
 
   for (let d = 0; d < depth && frontier.length > 0; d++) {
     const next: string[] = [];
-    for (const nodeId of frontier) {
-      if (results.length >= MAX_RELATED_TERMS) return results;
-      const neighbors = db.prepare(
-        `SELECT target AS id, kind FROM edges WHERE source = ?
-         UNION SELECT source AS id, kind FROM edges WHERE target = ?`
-      ).all(nodeId, nodeId) as unknown as Array<{ id: string; kind: string }>;
+    const neighbors: Array<{ id: string; kind: string }> = [];
+    for (let i = 0; i < frontier.length; i += 500) {
+      const batch = frontier.slice(i, i + 500);
+      const placeholders = batch.map(() => '?').join(',');
+      neighbors.push(...db.prepare(
+        `SELECT target AS id, kind FROM edges WHERE source IN (${placeholders})
+         UNION SELECT source AS id, kind FROM edges WHERE target IN (${placeholders})`
+      ).all(...batch, ...batch) as unknown as Array<{ id: string; kind: string }>);
+    }
 
-      for (const n of neighbors) {
-        if (!visited.has(n.id)) {
-          visited.add(n.id);
-          next.push(n.id);
-          results.push({ nodeId: n.id, depth: d + 1, edgeKind: n.kind });
-        }
+    for (const n of neighbors) {
+      if (results.length >= MAX_RELATED_TERMS) return results;
+      if (!visited.has(n.id)) {
+        visited.add(n.id);
+        next.push(n.id);
+        results.push({ nodeId: n.id, depth: d + 1, edgeKind: n.kind });
       }
     }
     frontier = next;

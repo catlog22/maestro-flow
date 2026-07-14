@@ -1,5 +1,6 @@
 import { readFile, open, readdir } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import type { GraphNode, GraphEdge, Layer, TourStep, KnowledgeGraph } from '../../../../src/graph/types.js';
 import type { WikiEntry, WikiStatus } from './wiki-types.js';
@@ -206,6 +207,29 @@ function stableKgId(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+function shortStableHash(raw: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < raw.length; i++) {
+    hash ^= raw.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36).padStart(7, '0').slice(0, 7);
+}
+
+function buildKgIdMap(rawIds: Iterable<string>): Map<string, string> {
+  const ids = [...new Set(rawIds)];
+  const baseCounts = new Map<string, number>();
+  for (const raw of ids) {
+    const base = stableKgId(raw) || 'node';
+    baseCounts.set(base, (baseCounts.get(base) ?? 0) + 1);
+  }
+  return new Map(ids.map(raw => {
+    const base = stableKgId(raw) || 'node';
+    const suffix = (baseCounts.get(base) ?? 0) > 1 ? `-${shortStableHash(raw)}` : '';
+    return [raw, `kg-${base}${suffix}`];
+  }));
+}
+
 export function adaptKnowledgeGraph(
   parsed: unknown,
   sourcePath: string,
@@ -218,6 +242,8 @@ export function adaptKnowledgeGraph(
   const layers = graph.layers ?? [];
   const tour = graph.tour ?? [];
   if (nodes.length === 0) return [];
+  const idMap = buildKgIdMap(nodes.map(node => node.id));
+  const projectId = (raw: string): string => idMap.get(raw) ?? `kg-${stableKgId(raw) || `node-${shortStableHash(raw)}`}`;
 
   const ts = toIso(graph.project?.analyzedAt);
   const out: WikiEntry[] = [];
@@ -237,10 +263,10 @@ export function adaptKnowledgeGraph(
     const nodeEdges = outEdges.get(n.id) ?? [];
     const relatedIds = nodeEdges
       .slice(0, opts.maxRelatedPerNode)
-      .map(e => `kg-${stableKgId(e.target)}`);
+      .map(e => projectId(e.target));
 
     out.push({
-      id: `kg-${stableKgId(n.id)}`,
+      id: projectId(n.id),
       type: 'knowhow',
       title: n.name || n.id,
       summary: (n.summary || '').slice(0, opts.maxSummaryLength),
@@ -259,7 +285,7 @@ export function adaptKnowledgeGraph(
         filePath: n.filePath ?? null,
         complexity: n.complexity ?? null,
         kgEdges: nodeEdges.map(e => ({
-          target: `kg-${stableKgId(e.target)}`,
+          target: projectId(e.target),
           type: e.type,
           weight: e.weight ?? 1,
           direction: e.direction,
@@ -286,7 +312,7 @@ export function adaptKnowledgeGraph(
       status: 'active',
       created: ts,
       updated: ts,
-      related: (l.nodeIds ?? []).slice(0, opts.maxRelatedPerNode).map(id => `kg-${stableKgId(id)}`),
+      related: (l.nodeIds ?? []).slice(0, opts.maxRelatedPerNode).map(projectId),
       source: { kind: 'virtual', path: sourcePath },
       body: '',
       raw: l,
@@ -314,7 +340,7 @@ export function adaptKnowledgeGraph(
       status: 'active',
       created: ts,
       updated: ts,
-      related: (step.nodeIds ?? []).slice(0, opts.maxRelatedPerNode).map(id => `kg-${stableKgId(id)}`),
+      related: (step.nodeIds ?? []).slice(0, opts.maxRelatedPerNode).map(projectId),
       source: { kind: 'virtual', path: sourcePath },
       body: '',
       raw: step,
@@ -330,6 +356,98 @@ export function adaptKnowledgeGraph(
   }
 
   return out;
+}
+
+interface MaestroGraphWikiRow {
+  id: string;
+  kind: string;
+  name: string;
+  file_path: string | null;
+  source_type: string;
+  definition: string | null;
+  body: string | null;
+  category: string | null;
+  updated_at: number;
+}
+
+/** Read-only Wiki projection of the canonical MaestroGraph SQLite database. */
+export function adaptKnowledgeGraphFromDb(
+  dbPath: string,
+  sourcePath: string,
+  opts: KgAdapterOptions = DEFAULT_KG_OPTIONS,
+): WikiEntry[] {
+  const db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    const nodes = db.prepare(`
+      SELECT id, kind, name, file_path, source_type, definition, body, category, updated_at
+      FROM nodes
+      ORDER BY source_type != 'codegraph' DESC, name
+      LIMIT 5000
+    `).all() as unknown as MaestroGraphWikiRow[];
+    if (nodes.length === 0) return [];
+
+    const idMap = buildKgIdMap(nodes.map(node => node.id));
+    const selectedIds = new Set(idMap.keys());
+    const projectedEdges = db.prepare(`
+      WITH selected AS (
+        SELECT id FROM nodes
+        ORDER BY source_type != 'codegraph' DESC, name
+        LIMIT 5000
+      )
+      SELECT e.source, e.target, e.kind
+      FROM edges e
+      JOIN selected source_node ON source_node.id = e.source
+      JOIN selected target_node ON target_node.id = e.target
+      LIMIT 20000
+    `).all() as unknown as Array<{ source: string; target: string; kind: string }>;
+    const outgoing = new Map<string, Array<{ target: string; kind: string }>>();
+    for (const edge of projectedEdges) {
+      if (!selectedIds.has(edge.source) || !selectedIds.has(edge.target)) continue;
+      const list = outgoing.get(edge.source) ?? [];
+      list.push({ target: edge.target, kind: edge.kind });
+      outgoing.set(edge.source, list);
+    }
+
+    return nodes.map(node => {
+      const nodeEdges = outgoing.get(node.id) ?? [];
+      const updated = node.updated_at > 0 ? new Date(node.updated_at).toISOString() : '';
+      const summary = (node.definition || node.body || `${node.kind} in ${node.file_path ?? 'MaestroGraph'}`)
+        .slice(0, opts.maxSummaryLength);
+      return {
+        id: idMap.get(node.id)!,
+        type: 'knowhow' as const,
+        title: node.name,
+        summary,
+        tags: ['kg', `kg:${node.kind}`, `source:${node.source_type}`].slice(0, opts.maxTags),
+        status: 'active' as const,
+        created: updated,
+        updated,
+        related: nodeEdges.slice(0, opts.maxRelatedPerNode).map(edge => idMap.get(edge.target)!),
+        source: { kind: 'virtual' as const, path: sourcePath },
+        body: '',
+        raw: node,
+        ext: {
+          virtualKind: 'kg-node',
+          kgNodeId: node.id,
+          nodeType: node.kind,
+          filePath: node.file_path,
+          kgEdges: nodeEdges.map(edge => ({
+            target: idMap.get(edge.target)!,
+            type: edge.kind,
+            weight: 1,
+          })),
+        },
+        scope: null,
+        category: node.category || kgCategory(node.kind),
+        specCategory: node.source_type === 'spec' ? node.category : null,
+        createdBy: 'maestrograph-db',
+        sourceRef: node.id,
+        parent: null,
+      };
+    });
+  } finally {
+    db.close();
+  }
 }
 
 /**

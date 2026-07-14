@@ -154,15 +154,16 @@ const CASES: SearchCase[] = [
 // Test Suite
 // ---------------------------------------------------------------------------
 
-describe('CodeGraph vs MaestroGraph — 100 Boundary Search Cases', () => {
+const hasMaestroGraphFixture = existsSync(getKgDatabasePath('.'));
+
+describe.skipIf(!hasMaestroGraphFixture)('CodeGraph vs MaestroGraph — 100 Boundary Search Cases', () => {
   let mg: MaestroGraph | null = null;
   let cgAdapter: any = null;
 
   beforeAll(async () => {
     const dbPath = getKgDatabasePath('.');
-    if (existsSync(dbPath)) {
-      mg = await MaestroGraph.open('.');
-    }
+    if (!existsSync(dbPath)) throw new Error(`MaestroGraph benchmark fixture missing: ${dbPath}`);
+    mg = await MaestroGraph.open('.');
     cgAdapter = await getCodeGraphAdapter();
   });
 

@@ -65,7 +65,7 @@ export class CodeParseRunner {
     }
 
     if (this.workerParseCount >= WORKER_RECYCLE_INTERVAL) {
-      this.recycleWorker();
+      this.recycleWorker('Parse worker reached recycle limit');
     }
 
     const worker = this.ensureWorker();
@@ -76,7 +76,7 @@ export class CodeParseRunner {
     return new Promise<LanguageExtractionResult | null>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        this.recycleWorker();
+        this.recycleWorker(`Parse worker recycled after request ${id} timed out`);
         reject(new Error(`Parse timed out after ${timeoutMs}ms`));
       }, timeoutMs);
 
@@ -91,7 +91,7 @@ export class CodeParseRunner {
       pending.reject(new Error('Parse runner disposed'));
       this.pending.delete(id);
     }
-    this.recycleWorker();
+    this.recycleWorker('Parse runner disposed');
   }
 
   private ensureWorker(): Worker {
@@ -132,9 +132,11 @@ export class CodeParseRunner {
     }
   }
 
-  private recycleWorker(): void {
+  private recycleWorker(reason: string): void {
     if (!this.worker) return;
     const worker = this.worker;
+    this.rejectAllPending(reason);
+    this.workerGeneration++;
     this.worker = null;
     this.workerParseCount = 0;
     worker.terminate().catch(() => {});

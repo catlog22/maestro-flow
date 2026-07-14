@@ -55,7 +55,8 @@ export function searchUnified(
   query: string,
   options?: SearchOptions,
 ): UnifiedSearchOutput {
-  const limit = options?.limit ?? 20;
+  const requestedLimit = options?.limit ?? 20;
+  const limit = Math.max(1, Math.min(Math.trunc(requestedLimit), 500));
   const includeCode = options?.includeCode !== false;
   const includeKnowledge = options?.includeKnowledge !== false;
 
@@ -173,6 +174,13 @@ export function searchUnified(
   // 按综合评分排序, 取 top N
   allResults.sort((a, b) => b.score - a.score);
   const directMatches = allResults.slice(0, limit);
+  // Code symbols often outscore knowledge text. Preserve at least one matching
+  // knowledge result so a unified query cannot silently become code-only.
+  if (includeCode && includeKnowledge && directMatches.length > 0
+      && !directMatches.some(result => result.node.sourceType !== 'codegraph')) {
+    const bestKnowledge = allResults.find(result => result.node.sourceType !== 'codegraph');
+    if (bestKnowledge) directMatches[directMatches.length - 1] = bestKnowledge;
+  }
 
   // 统计 — 基于返回的 directMatches，保持数据一致性
   let codeSymbols = 0, domainTerms = 0, specRules = 0, knowhowDocs = 0;

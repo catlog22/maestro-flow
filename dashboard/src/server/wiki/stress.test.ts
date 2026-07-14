@@ -124,7 +124,7 @@ describe('BM25 stress — 2000-doc corpus', () => {
     const inv = buildInvertedIndex(corpus);
     const ms = Date.now() - t0;
     expect(inv.totalDocs).toBe(2001);
-    expect(inv.postings.size).toBeGreaterThan(0);
+    expect(inv.fieldPostings.size).toBeGreaterThan(0);
     expect(ms).toBeLessThan(500); // generous upper bound for CI
   });
 

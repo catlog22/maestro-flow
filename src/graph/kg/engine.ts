@@ -45,6 +45,7 @@ export class MaestroGraph {
     const dbPath = getKgDatabasePath(projectRoot);
     mg.conn = new KgDatabaseConnection();
     mg.conn.initialize(dbPath);
+    applyMigrations(mg.conn);
     mg.queries = new KgQueryBuilder(mg.conn);
     return mg;
   }
@@ -57,7 +58,7 @@ export class MaestroGraph {
     }
     mg.conn = new KgDatabaseConnection();
     mg.conn.open(dbPath);
-    try { applyMigrations(mg.conn); } catch { /* best-effort migration on open */ }
+    applyMigrations(mg.conn);
     mg.queries = new KgQueryBuilder(mg.conn);
     return mg;
   }
@@ -97,24 +98,29 @@ export class MaestroGraph {
 
   async indexAll(options?: { sources?: SourceType[] }): Promise<SyncResult[]> {
     const { syncKnowledgeGraph } = await import('./extraction/orchestrator.js');
-    return syncKnowledgeGraph(this.projectRoot, { sources: options?.sources });
+    return syncKnowledgeGraph(this.projectRoot, { sources: options?.sources, graph: this });
   }
 
   async indexKnowledge(options?: { sources?: SourceType[] }): Promise<SyncResult[]> {
     const knowledgeSources: SourceType[] = options?.sources
       ?? ['domain', 'spec', 'knowhow', 'codebase', 'issue'];
     const { syncKnowledgeGraph } = await import('./extraction/orchestrator.js');
-    return syncKnowledgeGraph(this.projectRoot, { sources: knowledgeSources });
+    return syncKnowledgeGraph(this.projectRoot, { sources: knowledgeSources, graph: this });
   }
 
   async sync(): Promise<SyncResult[]> {
     const { syncKnowledgeGraph } = await import('./extraction/orchestrator.js');
-    return syncKnowledgeGraph(this.projectRoot);
+    return syncKnowledgeGraph(this.projectRoot, { graph: this });
   }
 
   resolveReferences(): ResolutionResult {
     if (!this.conn) throw new Error('MaestroGraph not open');
-    return { edgesCreated: 0, edges: [], durationMs: 0 };
+    const result = this.resolveKnowledgeEdges();
+    return {
+      edgesCreated: result.totalEdgesCreated,
+      edges: result.edges,
+      durationMs: result.durationMs,
+    };
   }
 
   resolveKnowledgeEdges(): KnowledgeResolutionResult {

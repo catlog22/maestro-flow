@@ -111,13 +111,31 @@ export class KgDatabaseConnection {
         'SELECT MAX(version) as v FROM schema_versions'
       ).get() as unknown as { v: number } | undefined;
       return row?.v ?? 0;
-    } catch {
-      return 0;
+    } catch (err) {
+      if (err instanceof Error && /no such table:\s*schema_versions/i.test(err.message)) {
+        return 0;
+      }
+      throw new Error(
+        `Failed to read MaestroGraph schema version: ${err instanceof Error ? err.message : String(err)}`,
+        { cause: err },
+      );
     }
   }
 
   transaction<T>(fn: () => T): T {
     return sqliteTransaction(this.raw, fn);
+  }
+
+  async transactionAsync<T>(fn: () => Promise<T>): Promise<T> {
+    this.raw.exec('BEGIN IMMEDIATE');
+    try {
+      const result = await fn();
+      this.raw.exec('COMMIT');
+      return result;
+    } catch (err) {
+      this.raw.exec('ROLLBACK');
+      throw err;
+    }
   }
 
   optimize(): void {

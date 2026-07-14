@@ -63,8 +63,10 @@ export async function evaluateUnifiedInjection(
   }
 
   // D6.3: 快速损坏检测
-  if (!quickHealthCheck(projectPath)) {
-    return { inject: false, reason: 'kg-corrupted' };
+  const health = quickHealthCheck(projectPath);
+  if (!health.ok) {
+    process.stderr.write(`[MaestroGraph] Hook health check failed: ${health.reason}\n`);
+    return { inject: false, reason: `kg-corrupted:${health.reason}` };
   }
 
   try {
@@ -165,28 +167,38 @@ function isUnifiedInjectorEnabled(projectPath: string): boolean {
 // D6.3: 快速损坏检测 (< 50ms)
 // ---------------------------------------------------------------------------
 
-const _healthCache = new Map<string, { ts: number; ok: boolean }>();
+interface QuickHealthResult {
+  ts: number;
+  ok: boolean;
+  reason: string;
+}
+
+const _healthCache = new Map<string, QuickHealthResult>();
 const HEALTH_CACHE_TTL = 60_000; // 60 秒
 
-function quickHealthCheck(projectPath: string): boolean {
+function quickHealthCheck(projectPath: string): QuickHealthResult {
   const now = Date.now();
   const cacheKey = projectPath;
   const cached = _healthCache.get(cacheKey);
   if (cached && now - cached.ts < HEALTH_CACHE_TTL) {
-    return cached.ok;
+    return cached;
   }
 
+  let db: DatabaseSync | null = null;
   try {
     const dbPath = getKgDatabasePath(projectPath);
-    const db = new DatabaseSync(dbPath, { readOnly: true });
+    db = new DatabaseSync(dbPath, { readOnly: true });
     const qc = db.prepare('PRAGMA quick_check(1)').get();
-    const ok = qc && (qc as Record<string, unknown>).quick_check === 'ok';
-    db.close();
-    _healthCache.set(cacheKey, { ts: now, ok: Boolean(ok) });
-    return Boolean(ok);
-  } catch {
-    _healthCache.set(cacheKey, { ts: now, ok: false });
-    return false;
+    const detail = String((qc as Record<string, unknown> | undefined)?.quick_check ?? 'no-result');
+    const result = { ts: now, ok: detail === 'ok', reason: detail === 'ok' ? 'ok' : detail };
+    _healthCache.set(cacheKey, result);
+    return result;
+  } catch (err) {
+    const result = { ts: now, ok: false, reason: err instanceof Error ? err.message : String(err) };
+    _healthCache.set(cacheKey, result);
+    return result;
+  } finally {
+    db?.close();
   }
 }
 

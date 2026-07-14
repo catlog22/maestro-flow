@@ -8,6 +8,7 @@ import { buildContext } from '../query/context-builder.js';
 import { getKgDatabasePath } from '../db/connection.js';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { SOURCE_TYPES, type SourceType } from '../db/types.js';
 
 // ---------------------------------------------------------------------------
 // MCP Tool Schema 定义 (10 个工具)
@@ -27,7 +28,13 @@ export const KG_MCP_TOOLS: McpToolDef[] = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Search query' },
-        sourceTypes: { type: 'array', items: { type: 'string' }, description: 'Filter by source type' },
+        sourceTypes: {
+          type: 'array',
+          items: { type: 'string', enum: [...SOURCE_TYPES] },
+          maxItems: SOURCE_TYPES.length,
+          uniqueItems: true,
+          description: 'Filter by source type',
+        },
         nodeKinds: { type: 'array', items: { type: 'string' }, description: 'Filter by node kind' },
         limit: { type: 'number', description: 'Max results', default: 20 },
       },
@@ -186,19 +193,34 @@ export async function handleMcpTool(
       Math.min(Math.max(1, typeof v === 'number' ? v : def), max);
     const safeStr = (v: unknown, def: string): string =>
       typeof v === 'string' ? v.slice(0, 10_000) : def;
+    const safeSourceTypes = (value: unknown): SourceType[] | undefined => {
+      if (value === undefined) return undefined;
+      if (!Array.isArray(value) || value.length > SOURCE_TYPES.length) {
+        throw new Error(`sourceTypes must contain at most ${SOURCE_TYPES.length} values`);
+      }
+      const valid = new Set<SourceType>(SOURCE_TYPES);
+      const normalized = [...new Set(value)];
+      if (normalized.some(item => typeof item !== 'string' || !valid.has(item as SourceType))) {
+        throw new Error(`sourceTypes contains an unsupported value`);
+      }
+      return normalized as SourceType[];
+    };
 
     let result: unknown;
 
     switch (toolName) {
       case 'maestro_kg_search': {
         // Try hybrid search first (FTS5 + vector) when embedding index file exists on disk
+        let degradedReason = 'embedding-index-unavailable';
         try {
           const embPath = resolve(projectPath, '.workflow', 'kg', 'code-embedding-index.bin');
-          if (!existsSync(embPath)) throw null; // fast skip — no disk I/O for index loading
-          const embIdx = await mg.getCodeEmbeddingIndex();
-          if (embIdx && embIdx.nodeIds.length > 0) {
+          if (existsSync(embPath)) {
+            const embIdx = await mg.getCodeEmbeddingIndex();
+            if (!embIdx || embIdx.nodeIds.length === 0) {
+              degradedReason = 'embedding-index-empty';
+            } else {
             const hybridResults = await mg.searchHybrid(safeStr(input.query, ''), {
-              sourceTypes: input.sourceTypes as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+              sourceTypes: safeSourceTypes(input.sourceTypes),
               limit: safeInt(input.limit, 20, 100),
             });
             result = {
@@ -217,19 +239,23 @@ export async function handleMcpTool(
               },
             };
             break;
+            }
           }
-        } catch { /* fallback to FTS5 only */ }
+        } catch (err) {
+          degradedReason = `hybrid-error:${err instanceof Error ? err.message : String(err)}`.slice(0, 200);
+          process.stderr.write(`[MaestroGraph] Hybrid search degraded: ${degradedReason}\n`);
+        }
 
         // Fallback: FTS5 only (original behavior)
         const searchOutput = mg.searchUnified(safeStr(input.query, ''), {
-          sourceTypes: input.sourceTypes as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+          sourceTypes: safeSourceTypes(input.sourceTypes),
           limit: safeInt(input.limit, 20, 100),
         });
         result = { results: searchOutput.directMatches.map(r => ({
           id: r.node.id, kind: r.node.kind, name: r.node.name, sourceType: r.node.sourceType,
           definition: r.node.definition.substring(0, 300),
           filePath: r.node.filePath, startLine: r.node.startLine, score: r.score,
-        })), summary: searchOutput.summary };
+        })), summary: { ...searchOutput.summary, hybridSearch: false, degradedReason } };
         break;
       }
 
@@ -244,7 +270,15 @@ export async function handleMcpTool(
             maxNodes: 50,
           });
           result = {
-            node: { id: node.id, kind: node.kind, name: node.name, sourceType: node.sourceType, definition: node.definition },
+            node: {
+              id: node.id,
+              kind: node.kind,
+              name: node.name,
+              sourceType: node.sourceType,
+              ...(input.includeCode === false && node.sourceType === 'codegraph'
+                ? {}
+                : { definition: node.definition }),
+            },
             related: [...traversal.nodes.values()].filter(n => n.id !== nodeId).map(n => ({
               id: n.id, kind: n.kind, name: n.name, sourceType: n.sourceType,
             })),

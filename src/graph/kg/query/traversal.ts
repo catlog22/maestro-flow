@@ -218,18 +218,18 @@ export function getTypeHierarchy(
   let upFrontier = [nodeId];
   while (upFrontier.length > 0) {
     const next: string[] = [];
+    const incomingByNode = queries.getIncomingEdgesBatch(upFrontier);
     for (const nid of upFrontier) {
-      const incoming = queries.getIncomingEdges(nid);
+      const incoming = incomingByNode.get(nid) ?? [];
       for (const edge of incoming) {
         if (!edgeKindSet.has(edge.kind)) continue;
         if (visited.has(edge.source)) continue;
         visited.add(edge.source);
         edges.push(edge);
         next.push(edge.source);
-        const node = queries.getNode(edge.source);
-        if (node) nodes.set(edge.source, node);
       }
     }
+    queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
     upFrontier = next;
   }
 
@@ -237,18 +237,18 @@ export function getTypeHierarchy(
   let downFrontier = [nodeId];
   while (downFrontier.length > 0) {
     const next: string[] = [];
+    const outgoingByNode = queries.getOutgoingEdgesBatch(downFrontier);
     for (const nid of downFrontier) {
-      const outgoing = queries.getOutgoingEdges(nid);
+      const outgoing = outgoingByNode.get(nid) ?? [];
       for (const edge of outgoing) {
         if (!edgeKindSet.has(edge.kind)) continue;
         if (visited.has(edge.target)) continue;
         visited.add(edge.target);
         edges.push(edge);
         next.push(edge.target);
-        const node = queries.getNode(edge.target);
-        if (node) nodes.set(edge.target, node);
       }
     }
+    queries.getNodesByIds(next).forEach((node, id) => nodes.set(id, node));
     downFrontier = next;
   }
 
@@ -264,9 +264,10 @@ export function findUsages(
   nodeId: string,
 ): Array<{ node: UnifiedNode; edge: UnifiedEdge }> {
   const incoming = queries.getIncomingEdges(nodeId);
+  const nodes = queries.getNodesByIds(incoming.map(edge => edge.source));
   const result: Array<{ node: UnifiedNode; edge: UnifiedEdge }> = [];
   for (const edge of incoming) {
-    const node = queries.getNode(edge.source);
+    const node = nodes.get(edge.source);
     if (node) result.push({ node, edge });
   }
   return result;
@@ -307,10 +308,11 @@ export function getChildren(
   nodeId: string,
 ): UnifiedNode[] {
   const outgoing = queries.getOutgoingEdges(nodeId);
+  const nodes = queries.getNodesByIds(outgoing.filter(edge => edge.kind === 'contains').map(edge => edge.target));
   const children: UnifiedNode[] = [];
   for (const edge of outgoing) {
     if (edge.kind !== 'contains') continue;
-    const child = queries.getNode(edge.target);
+    const child = nodes.get(edge.target);
     if (child) children.push(child);
   }
   return children;
@@ -385,15 +387,15 @@ export function getFileDependencies(
 ): string[] {
   const fileNodes = queries.getNodesByFile(filePath);
   const depFiles = new Set<string>();
-  for (const node of fileNodes) {
-    const outgoing = queries.getOutgoingEdges(node.id);
+  const outgoingByNode = queries.getOutgoingEdgesBatch(fileNodes.map(node => node.id));
+  const targetIds: string[] = [];
+  for (const outgoing of outgoingByNode.values()) {
     for (const edge of outgoing) {
-      if (edge.kind !== 'imports') continue;
-      const target = queries.getNode(edge.target);
-      if (target && target.filePath && target.filePath !== filePath) {
-        depFiles.add(target.filePath);
-      }
+      if (edge.kind === 'imports') targetIds.push(edge.target);
     }
+  }
+  for (const target of queries.getNodesByIds(targetIds).values()) {
+    if (target.filePath && target.filePath !== filePath) depFiles.add(target.filePath);
   }
   return [...depFiles];
 }
@@ -404,15 +406,15 @@ export function getFileDependents(
 ): string[] {
   const fileNodes = queries.getNodesByFile(filePath);
   const depFiles = new Set<string>();
-  for (const node of fileNodes) {
-    const incoming = queries.getIncomingEdges(node.id);
+  const incomingByNode = queries.getIncomingEdgesBatch(fileNodes.map(node => node.id));
+  const sourceIds: string[] = [];
+  for (const incoming of incomingByNode.values()) {
     for (const edge of incoming) {
-      if (edge.kind !== 'imports') continue;
-      const source = queries.getNode(edge.source);
-      if (source && source.filePath && source.filePath !== filePath) {
-        depFiles.add(source.filePath);
-      }
+      if (edge.kind === 'imports') sourceIds.push(edge.source);
     }
+  }
+  for (const source of queries.getNodesByIds(sourceIds).values()) {
+    if (source.filePath && source.filePath !== filePath) depFiles.add(source.filePath);
   }
   return [...depFiles];
 }
@@ -428,11 +430,12 @@ export function findDeadCode(
   const allNodes = queries.searchCodeFTS('*', { limit: 10000 });
   const deadNodes: UnifiedNode[] = [];
   const kinds = options?.kinds ? new Set(options.kinds) : null;
+  const incomingByNode = queries.getIncomingEdgesBatch(allNodes.map(node => node.id));
 
   for (const node of allNodes) {
     if (kinds && !kinds.has(node.kind)) continue;
     if (node.isExported) continue;
-    const incoming = queries.getIncomingEdges(node.id);
+    const incoming = incomingByNode.get(node.id) ?? [];
     const hasExternalRef = incoming.some(e => e.kind !== 'contains');
     if (!hasExternalRef) deadNodes.push(node);
   }
@@ -494,13 +497,12 @@ export function findShortestPath(
   for (let depth = 0; depth < maxDepth && frontier.length > 0; depth++) {
     const nextFrontier: string[] = [];
 
-    for (const nodeId of frontier) {
-      const neighbors = getNeighbors(queries, nodeId, 'both', null);
-
-      for (const { neighborId, edge } of neighbors) {
+    const neighbors = getNeighborsBatch(queries, frontier, 'both', null);
+    for (const { neighborId, edge } of neighbors) {
         if (visited.has(neighborId)) continue;
         visited.add(neighborId);
-        parent.set(neighborId, { from: nodeId, edge });
+        const from = frontier.includes(edge.source) ? edge.source : edge.target;
+        parent.set(neighborId, { from, edge });
         nextFrontier.push(neighborId);
 
         if (neighborId === toId) {
@@ -513,7 +515,6 @@ export function findShortestPath(
           }
           return path;
         }
-      }
     }
 
     frontier = nextFrontier;

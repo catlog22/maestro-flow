@@ -76,6 +76,17 @@ function safeJsonParse<T>(str: string | null | undefined, fallback: T): T {
   catch { return fallback; }
 }
 
+function isRecoverableFtsFailure(err: unknown, table: 'code_fts' | 'knowledge_fts'): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return new RegExp(`no such table:\\s*${table}`, 'i').test(message)
+    || /database disk image is malformed|database corruption|malformed database schema|vtable constructor failed/i.test(message);
+}
+
+function clampQueryLimit(value: number | undefined, fallback: number, max: number): number {
+  const candidate = Number.isFinite(value) ? Math.trunc(value as number) : fallback;
+  return Math.max(1, Math.min(candidate, max));
+}
+
 function rowToNode(row: NodeRow): UnifiedNode {
   return {
     id: row.id,
@@ -557,7 +568,7 @@ export class KgQueryBuilder {
         params.push(...opts.languages);
       }
       sql += ` ORDER BY score LIMIT ?`;
-      params.push(opts.limit ?? 20);
+      params.push(clampQueryLimit(opts.limit, 20, 500));
 
       const rows = this.db.prepare(sql).all(...params) as unknown as Array<NodeRow & { score?: number }>;
       return rows.map(r => {
@@ -566,7 +577,7 @@ export class KgQueryBuilder {
         return node;
       });
     } catch (err) {
-      if (this.tryRebuildCodeFts()) {
+      if (isRecoverableFtsFailure(err, 'code_fts') && this.tryRebuildCodeFts()) {
         try {
           return this.runCodeFtsQuery(matchExpr, opts);
         } catch { /* rebuild didn't help — fall through */ }
@@ -581,21 +592,24 @@ export class KgQueryBuilder {
     if (this.codeFtsRebuilt) return false;
     this.codeFtsRebuilt = true;
     try {
-      this.db.exec(`
-        DROP TABLE IF EXISTS code_fts;
-        CREATE VIRTUAL TABLE code_fts USING fts5(
-          id, name, qualified_name, docstring, signature, keywords,
-          tokenize = 'unicode61 remove_diacritics 2',
-          content = 'nodes', content_rowid = 'rowid'
-        );
-        INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
-        SELECT rowid, id, name, qualified_name, docstring, signature, keywords
-        FROM nodes WHERE source_type = 'codegraph';
-      `);
+      this.conn.transaction(() => {
+        this.db.exec(`
+          DROP TABLE IF EXISTS code_fts;
+          CREATE VIRTUAL TABLE code_fts USING fts5(
+            id, name, qualified_name, docstring, signature, keywords,
+            tokenize = 'unicode61 remove_diacritics 2',
+            content = 'nodes', content_rowid = 'rowid'
+          );
+          INSERT INTO code_fts(rowid, id, name, qualified_name, docstring, signature, keywords)
+          SELECT rowid, id, name, qualified_name, docstring, signature, keywords
+          FROM nodes WHERE source_type = 'codegraph';
+        `);
+      });
       if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] code_fts recreated from nodes table');
       return true;
     } catch (err) {
-      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] code_fts rebuild failed:', err);
+      this.codeFtsRebuilt = false;
+      process.stderr.write(`[KG] code_fts rebuild failed: ${err instanceof Error ? err.message : String(err)}\n`);
       return false;
     }
   }
@@ -629,12 +643,13 @@ export class KgQueryBuilder {
         WHERE knowledge_fts MATCH ? AND n.source_type != 'codegraph'
       `;
       const params: (string | number | null)[] = [matchExpr];
-      if (opts.sourceTypes && opts.sourceTypes.length > 0) {
-        sql += ` AND n.source_type IN (${opts.sourceTypes.map(() => '?').join(',')})`;
-        params.push(...opts.sourceTypes);
+      const sourceTypes = opts.sourceTypes?.slice(0, 6);
+      if (sourceTypes && sourceTypes.length > 0) {
+        sql += ` AND n.source_type IN (${sourceTypes.map(() => '?').join(',')})`;
+        params.push(...sourceTypes);
       }
       sql += ` ORDER BY score LIMIT ?`;
-      params.push(opts.limit ?? 20);
+      params.push(clampQueryLimit(opts.limit, 20, 500));
 
       const rows = this.db.prepare(sql).all(...params) as unknown as Array<NodeRow & { score?: number }>;
       return rows.map(r => {
@@ -643,7 +658,7 @@ export class KgQueryBuilder {
         return node;
       });
     } catch (err) {
-      if (this.tryRebuildKnowledgeFts()) {
+      if (isRecoverableFtsFailure(err, 'knowledge_fts') && this.tryRebuildKnowledgeFts()) {
         try {
           return this.runKnowledgeFtsQuery(matchExpr, opts);
         } catch { /* rebuild didn't help */ }
@@ -658,21 +673,24 @@ export class KgQueryBuilder {
     if (this.knowledgeFtsRebuilt) return false;
     this.knowledgeFtsRebuilt = true;
     try {
-      this.db.exec(`
-        DROP TABLE IF EXISTS knowledge_fts;
-        CREATE VIRTUAL TABLE knowledge_fts USING fts5(
-          id, name, definition, body, aliases, keywords,
-          tokenize = 'trigram',
-          content = 'nodes', content_rowid = 'rowid'
-        );
-        INSERT INTO knowledge_fts(rowid, id, name, definition, body, aliases, keywords)
-        SELECT rowid, id, name, definition, body, aliases, keywords
-        FROM nodes WHERE source_type != 'codegraph';
-      `);
+      this.conn.transaction(() => {
+        this.db.exec(`
+          DROP TABLE IF EXISTS knowledge_fts;
+          CREATE VIRTUAL TABLE knowledge_fts USING fts5(
+            id, name, definition, body, aliases, keywords,
+            tokenize = 'trigram',
+            content = 'nodes', content_rowid = 'rowid'
+          );
+          INSERT INTO knowledge_fts(rowid, id, name, definition, body, aliases, keywords)
+          SELECT rowid, id, name, definition, body, aliases, keywords
+          FROM nodes WHERE source_type != 'codegraph';
+        `);
+      });
       if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge_fts recreated from nodes table');
       return true;
     } catch (err) {
-      if (process.env.MAESTRO_DEBUG === '1') console.warn('[KG] knowledge_fts rebuild failed:', err);
+      this.knowledgeFtsRebuilt = false;
+      process.stderr.write(`[KG] knowledge_fts rebuild failed: ${err instanceof Error ? err.message : String(err)}\n`);
       return false;
     }
   }
@@ -716,7 +734,7 @@ export class KgQueryBuilder {
       params.push(...opts.languages);
     }
     sql += ` ORDER BY name LIMIT ?`;
-    params.push(opts.limit ?? 20);
+    params.push(clampQueryLimit(opts.limit, 20, 500));
     const rows = this.db.prepare(sql).all(...params) as unknown as NodeRow[];
     return rows.map(rowToNode);
   }
@@ -744,12 +762,13 @@ export class KgQueryBuilder {
     }
 
     let sql = `SELECT * FROM nodes WHERE source_type != 'codegraph' AND ${whereClause}`;
-    if (opts.sourceTypes && opts.sourceTypes.length > 0) {
-      sql += ` AND source_type IN (${opts.sourceTypes.map(() => '?').join(',')})`;
-      params.push(...opts.sourceTypes);
+    const sourceTypes = opts.sourceTypes?.slice(0, 6);
+    if (sourceTypes && sourceTypes.length > 0) {
+      sql += ` AND source_type IN (${sourceTypes.map(() => '?').join(',')})`;
+      params.push(...sourceTypes);
     }
     sql += ` ORDER BY name LIMIT ?`;
-    params.push(opts.limit ?? 20);
+    params.push(clampQueryLimit(opts.limit, 20, 500));
     const rows = this.db.prepare(sql).all(...params) as unknown as NodeRow[];
     return rows.map(rowToNode);
   }

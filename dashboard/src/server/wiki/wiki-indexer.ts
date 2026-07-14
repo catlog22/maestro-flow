@@ -6,6 +6,7 @@ import { parseFrontmatter } from './frontmatter-util.js';
 import { parseSpecEntries, parseKnowhowEntries } from './spec-entry-parser.js';
 import {
   adaptCodebaseDocIndex,
+  adaptKnowledgeGraphFromDb,
   adaptIssueRow,
   adaptKnowledgeGraph,
   crossReferenceKgWithDocIndex,
@@ -984,12 +985,18 @@ export class WikiIndexer {
       out.push(...(await loadVirtualJsonEntries(codebaseIndex, adaptCodebaseDocIndex, rel)));
     }
 
-    // Knowledge Graph: .workflow/codebase/knowledge-graph.json → KG nodes/layers/tour
-    // Loaded after doc-index so cross-referencing can link kg-* ↔ codebase-comp-*
-    const kgPath = join(this.workflowRoot, 'codebase', 'knowledge-graph.json');
-    if (existsSync(kgPath) && this.isInsideRoot(kgPath)) {
-      const kgRel = toForwardSlash(relative(this.workflowRoot, kgPath));
-      const kgEntries = await loadVirtualJsonEntries(kgPath, adaptKnowledgeGraph, kgRel);
+    // Knowledge Graph: canonical MaestroGraph SQLite, with legacy JSON fallback.
+    // Loaded after doc-index so cross-referencing can link kg-* ↔ codebase-comp-*.
+    const maestroDbPath = join(this.workflowRoot, 'kg', 'maestro.db');
+    const legacyKgPath = join(this.workflowRoot, 'codebase', 'knowledge-graph.json');
+    if (existsSync(maestroDbPath) && this.isInsideRoot(maestroDbPath)) {
+      const kgRel = toForwardSlash(relative(this.workflowRoot, maestroDbPath));
+      const kgEntries = adaptKnowledgeGraphFromDb(maestroDbPath, kgRel);
+      crossReferenceKgWithDocIndex(kgEntries, out);
+      out.push(...kgEntries);
+    } else if (existsSync(legacyKgPath) && this.isInsideRoot(legacyKgPath)) {
+      const kgRel = toForwardSlash(relative(this.workflowRoot, legacyKgPath));
+      const kgEntries = await loadVirtualJsonEntries(legacyKgPath, adaptKnowledgeGraph, kgRel);
       crossReferenceKgWithDocIndex(kgEntries, out);
       out.push(...kgEntries);
     }
