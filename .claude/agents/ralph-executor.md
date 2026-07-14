@@ -76,6 +76,6 @@ EXECUTOR_OUTPUT:
 - 收到 session_id 即开始执行
 - Execute exactly one step per invocation
 - Do not call `maestro ralph complete` — completion is handled by the orchestrator
-- Do not read or modify `status.json` — session management is the orchestrator's responsibility
+- Do not read or modify session state files — session management is the orchestrator's responsibility
 - Do not skip execution steps or short-circuit — execute the full skill content
 - Do not insert/delete/reorder steps or evaluate decision nodes

@@ -29,7 +29,7 @@ Reads project state → infers position → builds adaptive chain → delegates 
 
 ### Session
 
-`.workflow/.maestro/{session_id}/status.json` — 工作流唯一真源（schema 见 `<appendix>`）。session_id 格式：`ralph-{YYYYMMDD-HHmmss}`（本 skill 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（`Skill(maestro)` coordinator 创建，静态链）。两类都由 `Skill(maestro-ralph-execute)` 推进。session-id 省略时：continue/execute 取最新 `status=="running"`；status 取最新 session（by created_at，不限 status）。
+`.workflow/sessions/{id}/session.json`（engine=ralph）+ `ralph-meta.json` — 工作流唯一真源（schema 见 `<appendix>`）。session_id 格式：`ralph-{YYYYMMDD-HHmmss}`（本 skill 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（`Skill(maestro)` coordinator 创建，静态链）。两类都由 `Skill(maestro-ralph-execute)` 推进。session-id 省略时：continue/execute 取最新 `status=="running"`；status 取最新 session（by created_at，不限 status）。`{session_dir}` = `.workflow/sessions/{id}/`（标准 session 目录）。
 
 ### Entry points
 
@@ -43,31 +43,31 @@ Reads project state → infers position → builds adaptive chain → delegates 
 
 > **CLI vs Skill 边界**：`maestro` 作为 CLI 二进制只有结构化子命令（`ralph`、`delegate`、`explore` 等），不接受裸 intent。`Bash("maestro \"some intent\"")` 会报错退出。创建 session 和路由 intent 必须通过 `Skill(maestro-ralph)` 或 `Skill(maestro)` skill 调用。CLI 层仅用于 step 加载（`ralph next`）和完成标记（`ralph complete`）。
 
-Initial decomposition (S_DECOMPOSE): boundary-clarified via ≤3 questions for broad intents (重构/全面/迁移/重写). 写入 status.json 的 `boundary_contract` / `execution_criteria` / `task_decomposition`，通过 `create_goal` 注册目标。
+Initial decomposition (S_DECOMPOSE): boundary-clarified via ≤3 questions for broad intents (重构/全面/迁移/重写). 写入 session state 的 `boundary_contract`（session.json 顶层）/ `execution_criteria` / `task_decomposition`（ralph-meta.json），通过 `create_goal` 注册目标。
 
 Step kinds:
 - **执行 step**: ralph-execute 调 `Bash("maestro ralph next")` 加载 SKILL.md + required_reading 全文，按 stdout 内联执行
-- **decision step**: `step.decision` 字段非空；回 ralph 评估（CLI 只读分析）
+- **decision step**: `chain[i].decision_ref` 非空；回 ralph 评估（CLI 只读分析）
 
 Key difference from maestro coordinator:
 - maestro: static chain → one-time selection → runs all steps
 - ralph: living chain → decision nodes re-evaluate → chain grows/shrinks dynamically
 
-Session: `.workflow/.maestro/ralph-{YYYYMMDD-HHmmss}/status.json`
+Session: `.workflow/sessions/{id}/session.json`（engine=ralph）+ `ralph-meta.json`
 Mutual invocation with `Skill(maestro-ralph-execute)` forms a self-perpetuating work loop.
 
 ### Execution Flow
 
 ```
  Skill(maestro-ralph, "intent") ─▶ ralph        infer → decompose → build chain
-                              │           resolves command_path per step
-                              │           writes status.json
+                              │           resolves command per step
+                              │           writes session.json + ralph-meta.json
                               │           calls create_goal
                               ▼
                        ralph-execute  ◀─┐ 执行 step → `maestro ralph next` + inline + `ralph complete`
                               │         │ decision step → Skill(maestro-ralph)
-                              └─────────┘ CLI writes step.completion_confirmed
-                       loop until all completion_confirmed | paused
+                              └─────────┘ CLI writes chain[i] completion (status=completed)
+                       loop until all steps completed | paused
 ```
 </purpose>
 
@@ -90,7 +90,7 @@ Remaining                        → intent (amend_mode 时为 change_request)
 **State files:**
 - `.workflow/state.json` — project metadata；artifact authority is Session `artifacts.json`
 - `.workflow/roadmap.md` — session DAG structure
-- `.workflow/.maestro/ralph-*/status.json` — ralph session state
+- `.workflow/sessions/{id}/session.json`（engine=ralph）+ `ralph-meta.json` — ralph session state
 </context>
 
 <invariants>
@@ -98,13 +98,13 @@ Remaining                        → intent (amend_mode 时为 change_request)
 2. **Handoff via `Skill(maestro-ralph-execute)` 直调** — 创建 session 后始终自动 handoff；decision 评估后始终 handoff
 3. **Decision delegates read-only** — `maestro delegate --role analyze --mode analysis`
 4. **执行 step 通过 `maestro ralph next` CLI 加载并内联执行**（详见 invariant 8）
-5. **status.json 是唯一真源** — 不生成 markdown 清单或侧文件
-6. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE`（或 DONE_WITH_CONCERNS）写入；CLI 是唯一合法写入路径
-7. **command_path 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global，限定 `.codex/skills/`），命中即写绝对路径到 status.json；未命中标 `command_scope = "missing"`
+5. **session.json + ralph-meta.json 是唯一真源** — 不生成 markdown 清单或侧文件
+6. **每个 step 必须在 chain 中标记 completed** — 由 `maestro ralph complete N --status DONE`（或 DONE_WITH_CONCERNS）写入；CLI 是唯一合法写入路径
+7. **command_path 在 A_BUILD_STEPS 解析** — 通过 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global，限定 `.codex/skills/`），命中即写绝对路径到 session state；未命中标 `command_scope = "missing"`
 8. **执行 step 加载契约** — 由 `maestro ralph next` CLI 在执行期完成：解析 frontmatter + `<required_reading>` + `<deferred_reading>`，自动读取 required 文件全文并拼入 prompt；缺失 required → 退出码 1（E007），pause session。ralph build 阶段只通过 `maestro ralph skills --platform codex` 校验路径存在性，不读 SKILL.md 内容
 9. **Decomposition is outcome-oriented** — sub-goals 为可观测交付，禁止 lifecycle 复刻；通过 `create_goal` 绑定目标，`update_goal` 在收敛时释放
 10. **Sessions are independent work units** — skill args 统一用 `--session {session}` 模式，无 phase/milestone 占位符
-11. **task_decomposition 驱动 steps[] 动态生长** — `post-goal-audit` 按 unmet 子目标插入 scoped mini-loop；字段可选/累加，既有字段不删不改
+11. **task_decomposition 驱动 chain[] 动态生长** — `post-goal-audit` 按 unmet 子目标插入 scoped mini-loop；字段可选/累加，既有字段不删不改
 12. **Platform** — `session.platform = "codex"`；CLI 调用一律带 `--platform codex`
 13. **Invariant violation = BLOCK** — violating any invariant above blocks the current operation. Do NOT bypass for "efficiency" or "clear intent" reasons. Especially invariants about ralph never executing steps and completion_confirmed by CLI.
 14. **Delegate fallback must be marked** — when A_DELEGATE_EVALUATE verdict parse fails and falls back to "fix", MUST record `parse_failed: true, confidence_score: 0` in decisions.ndjson. Subsequent steps inherit LOW CONFIDENCE flag.
@@ -117,15 +117,15 @@ Remaining                        → intent (amend_mode 时为 change_request)
 S_PARSE_ROUTE     — 解析参数、路由入口                  PERSIST: —
 S_STATUS          — 显示 session 进度                   PERSIST: —
 S_CONTINUE        — 恢复执行                            PERSIST: —
-S_PREPARE_SESSION — 一次性解析 session、position、scope、质量模式 PERSIST: session.session_id, session.session_is_new, session.lifecycle_position, session.scope_verdict, session.analyze_macro_id, session.quality_mode
+S_PREPARE_SESSION — 一次性解析 session、position、scope、质量模式 PERSIST: session.session_id, session.session_is_new, session.orchestration.quality_mode, ralph-meta.lifecycle_position, ralph-meta.scope_verdict, ralph-meta.analyze_macro_id
 S_DECOMPOSE       — 边界澄清、写执行准则+子目标清单       PERSIST: session.boundary_contract, .execution_criteria, .task_decomposition
-S_BUILD_CHAIN     — 构建步骤链                           PERSIST: session.steps[]
-S_CREATE_SESSION  — 写 status.json                      PERSIST: session (全量)
+S_BUILD_CHAIN     — 构建步骤链                           PERSIST: session.orchestration.chain[]
+S_CREATE_SESSION  — 写 session.json + ralph-meta.json    PERSIST: session (全量)
 S_CONFIRM         — 用户确认                             PERSIST: —
 S_DISPATCH        — 移交 maestro-ralph-execute           PERSIST: —
 S_DECISION_EVAL   — 委托评估质量门                       PERSIST: —
-S_APPLY_VERDICT   — 应用裁决 + 插入命令                  PERSIST: session.steps[], session.passed_gates[]
-S_AMEND_GOAL      — 修改 running session 目标               PERSIST: session.task_decomposition, .boundary_contract, .goal_changelog, .steps[]
+S_APPLY_VERDICT   — 应用裁决 + 插入命令                  PERSIST: session.orchestration.chain[], session.passed_gates[]
+S_AMEND_GOAL      — 修改 running session 目标               PERSIST: task_decomposition, boundary_contract, goal_changelog, session.orchestration.chain[]
 S_FALLBACK        — 请求用户输入                         PERSIST: —
 </states>
 
@@ -174,7 +174,7 @@ S_CONFIRM:
 S_DISPATCH:
   → END             DO: Skill(maestro-ralph-execute)
 
-S_DECISION_EVAL: (decision 节点 == `step.decision` 非空，下述 gate 名取自该字段)
+S_DECISION_EVAL: (decision 节点 == `chain[i].decision_ref` 非空，下述 gate 名取自该字段)
   → S_APPLY_VERDICT WHEN: quality-gate (post-execute, post-business-test, post-review, post-test)
                      DO: A_DELEGATE_EVALUATE
   → S_APPLY_VERDICT WHEN: goal-gate (post-goal-audit)
@@ -221,12 +221,12 @@ S_FALLBACK:
 
 ### A_SHOW_STATUS
 
-1. 若 `target_session_id` 提供 → 直接加载 `.workflow/.maestro/{target_session_id}/status.json`；否则取最新 session（by created_at，不限 status）
+1. 若 `target_session_id` 提供 → 直接加载 `.workflow/sessions/{target_session_id}/session.json` + `ralph-meta.json`；否则取最新 session（by created_at，不限 status）
 2. Display: Session, Status, Position, Progress, Current step
-3. List steps: [✓] completion_confirmed, [▸] current, [ ] pending, [◆] decision（`step.decision` 非空）；执行 step 附 `command_scope`(global/project) + `command_path`
+3. List steps: [✓] completion_confirmed, [▸] current, [ ] pending, [◆] decision（`chain[i].decision_ref` 非空）；执行 step 附 `command_scope`(global/project) + `command_path`
 4. If `task_decomposition` present (absent → skip):
    ```
-   Sub-goals  ({done}/{total})    source: {session_dir}/status.json#/task_decomposition
+   Sub-goals  ({done}/{total})    source: {session_dir}/ralph-meta.json#/task_decomposition
    [x] G1 done_when={done_when}   evidence={evidence}   confirmed={completion_confirmed}
    [ ] G2 done_when={done_when}   evidence={evidence}   confirmed=false ◀ unmet
    ```
@@ -258,11 +258,11 @@ S_FALLBACK:
 - 显式覆盖 `--quality`；无则默认：存在 `specs/REQ-*.md` 且业务明确 -> `full` (含 business-test/test)；否则 -> `standard`；`--quality quick` -> `quick`。
 
 **5. 持久化写入**:
-- 一次性将 `session_id`, `session_is_new`, `lifecycle_position`, `scope_verdict`, `quality_mode` 写入 `status.json`。
+- 一次性将 `session_id`, `session_is_new`, `lifecycle_position`, `scope_verdict`, `quality_mode` 写入 session state（`quality_mode` → `session.orchestration.quality_mode`；`lifecycle_position`/`scope_verdict` → `ralph-meta.json`）。
 
 ### A_DECOMPOSE_TASKS
 
-Runs once before chain build; additive to status.json.
+Runs once before chain build; additive to session state.
 
 **1. Classify intent breadth:**
 
@@ -301,7 +301,7 @@ create_goal({
   objective: "Ralph {intent} — converge {N} sub-goals within boundary",
   success_criteria: task_decomposition.map(g => `${g.id}: ${g.done_when}`),
   constraints: [...execution_criteria,
-    "通过 Skill(maestro-ralph-execute) 推进 step，禁止绕过直接执行 steps[*].skill",
+    "通过 Skill(maestro-ralph-execute) 推进 step，禁止绕过直接执行 chain[*].command",
     "禁止修改 boundary_contract.out_of_scope"]
 })
 ```
@@ -334,16 +334,16 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 
 1. **起点**：从 `session.lifecycle_position` 开始
 2. **跳过已完成**：跳过当前 session 下已有 completed artifact 的 stage（按 `session.session_id` 过滤）
-3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
+3. **quality_mode 过滤**：按 `session.orchestration.quality_mode` 排除不匹配 stage
 3.5. **grill auto_confirm 透传**：`auto_confirm == true` 时为 `grill` step args 追加 `-y`（grill 自身 Auto mode 用代码代答）；保留 `grill` stage 与 brainstorm 的 `--from grill:*`
-4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
-5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后、`session-seal` 之前插入 `decision:post-goal-audit`
+4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision_ref: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
+5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后、`session-seal` 之前插入 `decision_ref:post-goal-audit`
 5.5. **re-grounding 插入**：WHEN `task_decomposition` 存在 AND 执行 step（不含 decision）≥3
-   - 从第 3 个执行 step 起每隔 3 个插入 `{ decision: "post-reground", retry_count: 0, max_retries: 0, command_scope: null, command_path: null }`
+   - 从第 3 个执行 step 起每隔 3 个插入 `{ decision_ref: "post-reground", retry_count: 0, max_retries: 0, command_scope: null, command_path: null }`
    - 不在最后一个执行 step 后插入（由 goal-audit 覆盖）
    - 不与已有 quality-gate decision 节点相邻（顺延到下一个 3-step 边界）
    - fix-loop 动态插入的 step **纳入**计数（从插入点起重新计算 3-step 间隔）
-6. **终点硬约束**：`session.session_id` 存在时 chain 以 `session-seal`（decision:post-session）结尾；`session.session_id=null`（standalone）时跳过 `session-seal` stage，chain 以最后一个质量门 stage 结尾
+6. **终点硬约束**：`session.session_id` 存在时 chain 以 `session-seal`（decision_ref:post-session）结尾；`session.session_id=null`（standalone）时跳过 `session-seal` stage，chain 以最后一个质量门 stage 结尾
 7. **goal_ref 传播**：`task_decomposition` 存在时，每个 step 按 `step.stage ∈ g.lifecycle` 匹配 `step.goal_ref = g.id`（多匹配取字典序最小）；decision 节点不打 goal_ref
 8. **占位符**：`{session}` `{intent}` 由 A_RESOLVE_ARGS 运行时替换
 9. **command_path 解析**（每个执行 step，decision 节点跳过）：
@@ -371,8 +371,8 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 ### A_CREATE_SESSION
 
 1. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E006 + 列出缺失 skill
-2. Write `.workflow/.maestro/ralph-{YYYYMMDD-HHmmss}/status.json` (Appendix: Session Schema)；含 `platform: "codex"`, `cli_tool: "codex"`
-3. Display chain overview：每步显示 `{index}. {skill} [{type}] [{command_scope}]`
+2. Write `.workflow/sessions/ralph-{YYYYMMDD-HHmmss}/session.json` (engine=ralph) + `ralph-meta.json` (Appendix: Session Schema)；含 `platform: "codex"`, `cli_tool: "codex"`
+3. Display chain overview：每步显示 `{index}. {command} [{type}] [{command_scope}]`
 4. If `task_decomposition` present: call `create_goal`（由 A_DECOMPOSE_TASKS 已注册）+ `update_plan`，继续 handoff
 
 ### A_DELEGATE_EVALUATE
@@ -400,7 +400,7 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 8. **Decision log**: Append to `{session_dir}/decisions.ndjson`:
    ```json
    { "id": "DEC-{timestamp}", "timestamp": "{ISO}", "source": "ralph",
-     "node_id": "{step.decision}", "type": "quality-gate",
+     "node_id": "{chain[i].decision_ref}", "type": "quality-gate",
      "verdict": "{adjusted_verdict}", "confidence_score": {N},
      "close_call": {N>=50 && N<=70}, "summary": "{REASON}" }
    ```
@@ -433,17 +433,17 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 
 Runs only when `task_decomposition` present.
 
-1. Read `session.task_decomposition` from status.json
+1. Read `task_decomposition` from ralph-meta.json
 2. For each sub-goal `status != "done"`: resolve `evidence` artifact under current session Run output directory
 3. Delegate read-only audit (run_in_background, STOP, wait):
    ```
    maestro delegate "PURPOSE: 审计未完成子目标，判定 met / unmet
    TASK:
-     1. 读取 status.json.task_decomposition 中 status!=done 的子目标
+     1. 读取 ralph-meta.json.task_decomposition 中 status!=done 的子目标
      2. 打开 evidence 产物，对照 done_when 严格判定
      3. 输出 met / unmet，unmet 给出 gap + target_stage
    CONTEXT:
-     status.json   = {session_dir}/status.json
+     session       = {session_dir}/session.json + ralph-meta.json
      evidence      = {evidence artifacts}
      execution_criteria = {execution_criteria}
      boundary_contract  = {boundary_contract}
@@ -467,19 +467,19 @@ Runs only when `task_decomposition` present.
 
 ### A_APPLY_PROCEED
 
-1. Mark decision completed, write status.json
+1. Mark decision completed, write session state
 2. Display: ◆ Decision: {type} → proceed ({reason})
 
 ### A_APPLY_FIX
 
 1. Insert fix-loop commands after current step (see Appendix: Fix-Loop Templates)
-2. Reindex steps, increment retry_count, write status.json
+2. Reindex steps, increment retry_count, write session state
 3. Display: ◆ Decision: {type} → fix, +{N} commands inserted
 
 ### A_APPLY_ESCALATE
 
 1. Insert `[quality-debug "{gap_summary}", decision:post-debug-escalate]`
-2. Increment retry_count, reindex, write status.json
+2. Increment retry_count, reindex, write session state
 
 ### A_APPLY_SCOPE_VERDICT
 
@@ -493,19 +493,19 @@ Runs only when `task_decomposition` present.
    - 后续 `execute` / `verify` 等沿用同一 standalone scope（不带 `--session`，由 plan 写出的 task 列表驱动）
 4. 路径 C（`unknown`）：
    - 非 auto_confirm → request_user_input 二选一（large / medium-small）；auto_confirm → 默认 large
-5. Reindex steps，标 decision completed，write status.json
+5. Reindex steps，标 decision completed，write session state
 6. Display: ◆ Scope verdict: {verdict} → {kept|collapsed to standalone via analyze:{ANL_ID}}
 
 ### A_APPLY_GOAL_FIX
 
 1. 对每个 unmet 子目标 `G{n}`（按 `target_stage` 分组去重）：在 `goal-audit` 节点前插入 scoped mini-loop（见 Appendix: Fix-Loop Templates → post-goal-audit），每条插入 step `goal_ref: "G{n}"`，按 A_BUILD_STEPS 规则 9 解析 `command_path`
 2. 重新追加 `decision:post-goal-audit {retry+1}`
-3. Reindex steps, increment retry_count, write status.json
+3. Reindex steps, increment retry_count, write session state
 4. Display: ◆ Goal audit: {k} unmet → +{N} steps inserted (G{ids}), retry {r}/{max}
 
 ### A_APPLY_GOAL_DONE
 
-1. status.json: set 每个 `task_decomposition[*].status="done"`, `completion_confirmed=true`, `completed_at=now`，顶层 `task_decomposition_all_done=true`
+1. ralph-meta.json: set 每个 `task_decomposition[*].status="done"`, `completion_confirmed=true`, `completed_at=now`，顶层 `task_decomposition_all_done=true`
 2. Mark goal-audit decision completed；proceed to session seal
 3. Display: ◆ Goal audit: all met ✓
 
@@ -513,15 +513,15 @@ Runs only when `task_decomposition` present.
 
 1. Seal current session, update state.json.sessions[].status to sealed
 2. Find next dep-ready session from DAG, set active_session_id
-3. Insert full lifecycle steps for next session, reindex, write status.json
+3. Insert full lifecycle steps for next session, reindex, write session state
 
 ### A_REGROUND_EVALUATE
 
 GUARD: `task_decomposition` 存在（周期触发，见 build rule 5.5）
 
-1. Read status.json：
+1. Read session state：
    - `session.intent`, `session.boundary_contract`
-   - `steps[]` WHERE `status=="completed"` → 取 `completion_evidence`, `completion_summary`, `completion_decisions`, `completion_caveats`
+   - `chain[]` WHERE `status=="completed"` → 取 `completion_evidence`, `completion_summary`, `completion_decisions`, `completion_caveats`（结构化完成信息存于 ralph-meta.json `step_details`）
    - `task_decomposition[]` WHERE `status=="done"` → 取 `goal`, `done_when`
 2. Delegate read-only audit (run_in_background, STOP, wait):
    ```
@@ -562,7 +562,7 @@ GUARD: `task_decomposition` 存在（周期触发，见 build rule 5.5）
 
 漂移熔断（安全门，auto_confirm 不跳过）。
 
-1. Set `session.status = "paused"`，write status.json
+1. Set `session.status = "paused"`，write session state
 2. Display:
    ```
    ⚠️ Re-grounding 检测失败 — 执行已偏离 intent。
@@ -575,7 +575,7 @@ GUARD: `task_decomposition` 存在（周期触发，见 build rule 5.5）
 
 ### A_PAUSE_ESCALATE
 
-1. Set session status = "paused", write status.json
+1. Set session status = "paused", write session state
 2. Display: ◆ 已达最大重试次数，debug 已执行。请人工介入。
 3. Display: Skill(maestro-ralph, "continue") 恢复
 
@@ -589,7 +589,7 @@ GUARD: `task_decomposition` 存在（周期触发，见 build rule 5.5）
 | 2. 解析 | `change_request` 非空 → 直接用；为空 → request_user_input（修改/新增/移除/调整边界） | `change_type` + `change_request` |
 | 3. Mini Grill | `maestro delegate --role analyze --mode analysis`：评估影响 | RISK_LEVEL + AFFECTED_GOALS + INVALIDATED_STEPS + NEW_GAPS |
 | 4. 确认 | request_user_input：应用并继续 / 仅改目标 / 取消 | 用户选择 |
-| 5. 应用 | 归档旧目标（`superseded`）→ 写入新目标（`origin: CHG-xxx`）→ 重建链路 → write status.json | handoff Skill(maestro-ralph-execute) |
+| 5. 应用 | 归档旧目标（`superseded`）→ 写入新目标（`origin: CHG-xxx`）→ 重建链路 → write session state | handoff Skill(maestro-ralph-execute) |
 
 GUARD: `RISK_LEVEL == high` → request_user_input 不跳过（auto_confirm 无效）
 GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
@@ -602,57 +602,77 @@ GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
 
 ### Session Schema
 
+**session.json** (standard session, engine=ralph)：
+
 ```json
 {
-  "ralph_session_id": "ralph-{YYYYMMDD-HHmmss}",   // ralph run directory id
+  "schema_version": "session/1.0",
+  "session_id": "ralph-{YYYYMMDD-HHmmss}",   // ralph run directory id
   "source": "ralph", "status": "running",
-  "ralph_protocol_version": "2",   // CLI-driven; absent/0 → legacy; "1" → basic CLI; "2" → structured completion + enhanced anchor
-  "active_step_index": null,       // CLI-managed; only one step held at a time
-  "intent": "", "lifecycle_position": "",
-  "session_id": null, "session_is_new": false,   // DAG work-unit session
-  "auto_mode": false,
-  "quality_mode": "standard",     // "full" | "standard" | "quick"
-  "scope_verdict": null,          // "large" | "medium" | "small" | "unknown" | null
-  "analyze_macro_id": null,       // "ANL-xxx" 来自最新 macro analyze
-  "blueprint_id": null,           // "BLP-xxx" 若存在
+  "intent": "",
+  "session_is_new": false,        // DAG work-unit 标记
   "cli_tool": "codex",
   "platform": "codex",            // codex skills (`.codex/skills/`)
   "passed_gates": [],
-  "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
-    "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null },
-  "steps": [{
-    "index": 0,
-    "skill": "",                  // 执行 step 有值；decision 节点为空字符串/null
-    "args": "",
-    "stage": "",                  // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|...
-    "scope": null,                // "session"|"standalone"|null（plan 等需要）
-    "decision": null,             // 非 null → decision 节点（值为 gate 名，如 "post-execute"）；null → 执行 step
-    "retry_count": 0,             // decision 节点专用
-    "max_retries": 2,             // decision 节点专用
-    "command_scope": "global|project|missing|null",  // 执行 step；decision 节点固定 null
-    "command_path": "<absolute SKILL.md path resolved by `maestro ralph skills --platform codex --json --quiet`> | null",
-    "session_id": null,           // session 标注；每个 step 均有
-    "source_artifact_ref": null,  // "analyze:ANL-xxx" | "blueprint:BLP-xxx" | null
-    "status": "pending|running|completed|skipped|failed",
-    "goal_ref": null,
-    "completion_confirmed": false,
-    "completion_status": null,
-    "completion_evidence": null,
-    "completion_summary": null,      // 一句话总结：做了什么（MUST on DONE）
-    "completion_decisions": null,    // 本 step 做出的关键决策列表
-    "completion_caveats": null,      // 后续 step 需注意的事项
-    "completion_deferred": null,     // 被推迟到后续的工作列表
-    "completed_at": null,
-    "deferred_reads": [],         // 由 ralph next CLI 解析 SKILL.md 时填充
-    "load": null                  // { loaded_at, required_files[], deferred_files[], resolve_version } —— 由 ralph next 写入
-  }],
-  "waves": [], "current_step": 0,
-
-  // Optional decomposition block (additive; absent → decomposition off)
-  "boundary_contract": {
+  "boundary_contract": {          // Optional decomposition block (additive; absent → decomposition off)
     "in_scope": [], "out_of_scope": [], "constraints": [], "definition_of_done": ""
   },
+  "orchestration": {
+    "engine": "ralph",
+    "quality_mode": "standard",   // "full" | "standard" | "quick"
+    "auto_mode": false,
+    "ralph_protocol_version": "2",  // CLI-driven; absent/0 → legacy; "1" → basic CLI; "2" → structured completion + enhanced anchor
+    "active_step_index": null,      // CLI-managed; only one step held at a time
+    "chain": [{
+      "step_id": "step-000-analyze",
+      "command": "",                // 执行 step 有值；decision 节点为空字符串/null
+      "args": "",
+      "stage": "",                  // brainstorm|blueprint|init|analyze-macro|roadmap|analyze|plan|execute|...
+      "scope": null,                // "session"|"standalone"|null（plan 等需要）
+      "decision_ref": null,         // 非 null → decision 节点（值为 gate 名，如 "post-execute"）；null → 执行 step
+      "retry_count": 0,             // decision 节点专用
+      "max_retries": 2,             // decision 节点专用
+      "command_scope": "global|project|missing|null",  // 执行 step；decision 节点固定 null
+      "command_path": "<absolute SKILL.md path resolved by `maestro ralph skills --platform codex --json --quiet`> | null",
+      "source_artifact_ref": null,  // "analyze:ANL-xxx" | "blueprint:BLP-xxx" | null
+      "status": "pending|running|completed|skipped|failed",
+      "run_id": null,
+      "inserted_by": "build",
+      "goal_ref": null,
+      "completion_confirmed": false,
+      "completion_status": null,
+      "completed_at": null,
+      "load": null                  // { loaded_at, required_files[], deferred_files[], resolve_version } —— 由 ralph next 写入
+    }],
+    "decision_points": []           // 派生自 chain 中 decision_ref 非空的 step（gate 状态跟踪）
+  }
+}
+```
+
+**ralph-meta.json** (ralph-specific orchestration extensions)：
+
+```json
+{
+  "lifecycle_position": "",
+  "session_dag_id": null, "session_dag_is_new": false,   // DAG work-unit session
+  "scope_verdict": null,          // "large" | "medium" | "small" | "unknown" | null
+  "analyze_macro_id": null,       // "ANL-xxx" 来自最新 macro analyze
+  "blueprint_id": null,           // "BLP-xxx" 若存在
+  "decomposition_owner": "ralph",
   "execution_criteria": [],
+  "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
+    "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null },
+  "step_details": {
+    "step-000-analyze": {           // key = chain[i].step_id
+      "session_id": null,           // session 标注
+      "completion_evidence": null,
+      "completion_summary": null,      // 一句话总结：做了什么（MUST on DONE）
+      "completion_decisions": null,    // 本 step 做出的关键决策列表
+      "completion_caveats": null,      // 后续 step 需注意的事项
+      "completion_deferred": null,     // 被推迟到后续的工作列表
+      "deferred_reads": []          // 由 ralph next CLI 解析 SKILL.md 时填充
+    }
+  },
   "task_decomposition": [
     { "id": "G1", "goal": "", "boundary": "", "done_when": "",
       "evidence": "", "lifecycle": [], "status": "pending|done|superseded",
@@ -678,7 +698,7 @@ GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
 
 ### Fix-Loop Templates
 
-所有插入的执行 step 按 A_BUILD_STEPS 规则 9 解析 `command_path` + `command_scope`；`decision:*` 条目为 decision 节点（`step.decision` 字段）。
+所有插入的执行 step 按 A_BUILD_STEPS 规则 9 解析 `command_path` + `command_scope`；`decision:*` 条目为 decision 节点（`chain[i].decision_ref` 字段）。
 
 **post-execute:**
 ```
@@ -736,7 +756,7 @@ decision:post-goal-audit {retry+1}
 Decomposition 产出后通过 Codex 内置工具管理目标（由 A_DECOMPOSE_TASKS 步骤 6 调用）：
 
 - `create_goal` — 注册目标 + success_criteria + constraints
-- `update_plan` — 同步 steps[] 进度到 Codex plan 视图
+- `update_plan` — 同步 chain[] 进度到 Codex plan 视图
 - `update_goal` — 收敛时释放（A_APPLY_GOAL_DONE / session completed）；abort/pause 时保持（支持 `Skill(maestro-ralph, "continue")` 恢复）
 
 ### Error Codes
@@ -769,13 +789,13 @@ Decomposition 产出后通过 Codex 内置工具管理目标（由 A_DECOMPOSE_T
 - [ ] artifact 过滤按 session.session_id
 - [ ] quality_mode 由 A_DETERMINE_QUALITY_MODE 决定，过滤 build steps
 - [ ] Decomposition: broad intent ≤3 question clarify；narrow auto-derive
-- [ ] status.json 唯一真源：boundary_contract + execution_criteria + task_decomposition；无外部清单
-- [ ] 执行 step 含 `command_scope` + `command_path`（通过 `maestro ralph skills --platform codex --json --quiet` 预校验，project 覆盖 global）；decision step 通过 `step.decision` 字段标识
+- [ ] session.json + ralph-meta.json 唯一真源：boundary_contract + execution_criteria + task_decomposition；无外部清单
+- [ ] 执行 step 含 `command_scope` + `command_path`（通过 `maestro ralph skills --platform codex --json --quiet` 预校验，project 覆盖 global）；decision step 通过 `chain[i].decision_ref` 字段标识
 - [ ] Ralph build 阶段只通过 `ralph skills --platform codex` 校验路径存在性，不读 SKILL.md 内容；`<required_reading>` 加载由 `maestro ralph next` CLI 完成
 - [ ] 每个 step 含 `completion_confirmed` + `completion_status` + `completion_evidence` + `deferred_reads`（初始 false/null/[]）
 - [ ] 每个 sub-goal 含 `completion_confirmed`（初始 false）
 - [ ] post-goal-audit decision 仅在 decomposed 时插入，位于 session-seal 之前
-- [ ] Unmet sub-goals 动态 grow steps[]（goal_ref tagged）；max retries → escalate
+- [ ] Unmet sub-goals 动态 grow chain[]（goal_ref tagged）；max retries → escalate
 - [ ] skill args 统一用 `--session {session}` 模式
 - [ ] Chain 以 session-seal 结尾（session 存在时）
 - [ ] Decision nodes 由 maestro delegate --role analyze 评估

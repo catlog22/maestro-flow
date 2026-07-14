@@ -28,7 +28,7 @@ Each invocation: locate session → find next step → resolve args → execute 
 
 Mutual invocation with `Skill(maestro-ralph)` forms a self-perpetuating work loop.
 
-**Session**: `.workflow/.maestro/{session_id}/status.json` — 工作流唯一真源。session_id 格式 `ralph-{YYYYMMDD-HHmmss}`（Skill(maestro-ralph) 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（Skill(maestro) 创建，静态链）。两类都由本 skill 推进；省略 `[session-id]` 时取最新 `status=="running"`。Schema 详见 `Skill(maestro-ralph)` 的 Session Schema。
+**Session**: `.workflow/sessions/{id}/session.json`（engine=ralph）+ `ralph-meta.json` — 工作流唯一真源。session_id 格式 `ralph-{YYYYMMDD-HHmmss}`（Skill(maestro-ralph) 创建，自适应链）或 `maestro-{YYYYMMDD-HHmmss}`（Skill(maestro) 创建，静态链）。两类都由本 skill 推进；省略 `[session-id]` 时取最新 `status=="running"`。Schema 详见 `Skill(maestro-ralph)` 的 Session Schema。
 </purpose>
 
 <context>
@@ -39,7 +39,7 @@ $ARGUMENTS — optional `-y` flag + optional session ID.
 -y / --yes → auto = true
 Remaining  → session_id (if matches maestro-* or ralph-*)
 ```
-Also read `session.auto_mode` from status.json — if true, treat as `-y`.
+Also read `session.orchestration.auto_mode` from session.json — if true, treat as `-y`.
 
 **session_id requirement:** Once resolved (from args or auto-discovery in A_LOCATE_SESSION), `session_id` MUST be passed to ALL `maestro ralph next|complete|retry` CLI calls via `--session <session_id>`. This prevents accidental cross-session operations when multiple sessions exist.
 
@@ -47,13 +47,13 @@ Also read `session.auto_mode` from status.json — if true, treat as `-y`.
 
 | Kind | Identifier | Execution | Flow after |
 |------|-----------|-----------|------------|
-| decision step | `step.decision` 非空 | `Skill(maestro-ralph)` | Execution ends here |
-| 执行 step | `step.decision == null` | `Bash("maestro ralph next")` → 内联按其 stdout 执行 → `Bash("maestro ralph complete N --status ...")` | Self-invoke next |
+| decision step | `chain[i].decision_ref` 非空 | `Skill(maestro-ralph)` | Execution ends here |
+| 执行 step | `chain[i].decision_ref == null` | `Bash("maestro ralph next")` → 内联按其 stdout 执行 → `Bash("maestro ralph complete N --status ...")` | Self-invoke next |
 
 HARD RULES:
 - 执行 step：**统一通过 `maestro ralph next` CLI 加载**。CLI 负责读 command_path（codex SKILL.md）、解析 `<required_reading>` + `<deferred_reading>`、拼接 prompt、写 `step.load.*` + `active_step_index` + `step.status="running"`。不要再在会话里手动 Read + 解析 required_reading
 - decision step：A_EXEC_DECISION 通过 `Skill(maestro-ralph)` 直调 handoff 给 ralph 评估（不走 CLI）
-- `command_path` 由 ralph 在 A_BUILD_STEPS 写入 status.json（通过 `maestro ralph skills --platform codex` 预校验；缺失 → ralph next 返回 E006/E007 并拒绝执行）
+- step command 由 ralph 在 A_BUILD_STEPS 写入 session.orchestration.chain[]（通过 `maestro ralph skills --platform codex` 预校验；缺失内容 → ralph next 返回错误并拒绝执行）
 - 每个 step 结束必须调用 `maestro ralph complete N --status <S>` 或 `maestro ralph retry N`。STATUS 仅 4 个合法值：`DONE | DONE_WITH_CONCERNS | NEEDS_RETRY | BLOCKED`
 - Platform：`session.platform == "codex"`；ralph next CLI 自动按 platform 解析 SKILL.md（无需额外参数）
 </context>
@@ -65,7 +65,7 @@ HARD RULES:
 4. **一致性取代锁** — 同一 session 同时最多一个 step 持 `active_step_index`；CLI 校验失败直接退出码 3，不静默推进
 5. **Completion 通过 CLI 调用** — 每个 step 末尾调 `maestro ralph complete N --status <S>` 或 `maestro ralph retry N`，由 CLI 写 `completion_*` + 清 `active_step_index`
 6. **Self-invocation chain** — 持续直到全部 `completion_confirmed` 或 paused
-7. **status.json 每步骤后由 CLI 原子写盘** — resume-safe
+7. **session.json + ralph-meta.json 每步骤后由 CLI 原子写盘** — resume-safe
 8. **STATUS 枚举受限** — 仅 `DONE | DONE_WITH_CONCERNS | NEEDS_RETRY | BLOCKED`
 9. **Platform binding** — 仅处理 `session.platform == "codex"` 的会话；platform 缺失视为 codex（向前兼容）
 10. **CLI ≠ Skill** — `maestro ralph next|complete|retry` 是 CLI 子命令（Bash 调用）；`Skill(maestro-ralph)` / `Skill(maestro-ralph-execute)` 是 skill 直调。**严禁** `Bash("maestro \"intent\"")` 裸 intent 调用，CLI 不接受。
@@ -77,10 +77,10 @@ HARD RULES:
 S_LOCATE        — 定位 session + 找下一个 pending step   PERSIST: —
 S_RESOLVE_ARGS  — 解析占位符 + 丰富参数                  PERSIST: step.args (enriched)
 S_LOAD_CONTEXT  — 加载前序产出 + 发现                    PERSIST: —
-S_EXECUTE       — 执行当前 step                          PERSIST: step.status = "running", session.current_step
-S_POST_ANALYZE  — 产物 vs 目标偏离分析                    PERSIST: step.drift_score, step.drift_correction
-S_POST_EXEC     — 标记完成 + 传播上下文                   PERSIST: step.completion_*, step.status, session.context
-S_HANDLE_FAIL   — 处理失败                               PERSIST: step.status, session.status
+S_EXECUTE       — 执行当前 step                          PERSIST: chain[i].status = "running", orchestration.active_step_index
+S_POST_ANALYZE  — 产物 vs 目标偏离分析                    PERSIST: step_details.drift_score, step_details.drift_correction
+S_POST_EXEC     — 标记完成 + 传播上下文                   PERSIST: step_details.completion_*, chain[i].status, ralph-meta.context
+S_HANDLE_FAIL   — 处理失败                               PERSIST: chain[i].status, session.status
 S_COMPLETE      — 所有 step 完成                         PERSIST: session.status = "completed"
 S_FALLBACK      — 无 session 可执行                      PERSIST: —
 </states>
@@ -99,10 +99,10 @@ S_LOAD_CONTEXT:
   → S_EXECUTE       DO: A_LOAD_STEP_CONTEXT
 
 S_EXECUTE:
-  → END             WHEN: step.decision != null              DO: A_EXEC_DECISION
-  → S_POST_ANALYZE  WHEN: step.decision == null + execution succeeded (DONE|DONE_WITH_CONCERNS)  DO: A_EXEC_STEP
-  → S_COMPLETE      WHEN: step.decision == null + ralph next exit code 2 (all steps completed)
-  → S_HANDLE_FAIL   WHEN: step.decision == null + ralph next exit code 1|3 OR ralph complete with NEEDS_RETRY|BLOCKED  DO: A_EXEC_STEP
+  → END             WHEN: chain[i].decision_ref != null              DO: A_EXEC_DECISION
+  → S_POST_ANALYZE  WHEN: chain[i].decision_ref == null + execution succeeded (DONE|DONE_WITH_CONCERNS)  DO: A_EXEC_STEP
+  → S_COMPLETE      WHEN: chain[i].decision_ref == null + ralph next exit code 2 (all steps completed)
+  → S_HANDLE_FAIL   WHEN: chain[i].decision_ref == null + ralph next exit code 1|3 OR ralph complete with NEEDS_RETRY|BLOCKED  DO: A_EXEC_STEP
 
 S_POST_ANALYZE:
   → S_POST_EXEC     WHEN: drift_score == ALIGNED|MINOR_DRIFT   DO: A_POST_ANALYZE_DRIFT
@@ -131,10 +131,10 @@ S_FALLBACK:
 
 ### A_LOCATE_SESSION
 
-1. If session_id provided → load `.workflow/.maestro/{session_id}/status.json`
-2. Else: scan `.workflow/.maestro/*/status.json`, filter `status == "running"`, sort DESC, take first
-3. Extract: session_id, source, steps[], phase, milestone, intent, auto_mode, context, cli_tool, platform, active_step_index
-4. Identify next pending step index: scan `steps[]` in order, find first entry with `status == "pending"` → store as `next_step_index`. This index is passed to A_RESOLVE_ARGS for placeholder enrichment and to A_EXEC_STEP/A_EXEC_DECISION for display. The actual step activation (writing `active_step_index`) is still done by `maestro ralph next` CLI — A_LOCATE_SESSION only reads the index without writing it.
+1. If session_id provided → load `.workflow/sessions/{session_id}/session.json`
+2. Else: scan `.workflow/sessions/*/session.json`, filter `orchestration.engine == "ralph"` AND `status == "running"`, sort by mtime DESC, take first
+3. Extract: session_id, source, orchestration.chain[], intent, orchestration.auto_mode, orchestration.quality_mode, context (from ralph-meta.json), lifecycle_position (from ralph-meta.json), cli_tool, platform, orchestration.active_step_index
+4. Identify next pending step index: scan `orchestration.chain[]` in order, find first entry with `status == "pending"` → store as `next_step_index`. This index is passed to A_RESOLVE_ARGS for placeholder enrichment and to A_EXEC_STEP/A_EXEC_DECISION for display. The actual step activation (writing `active_step_index`) is still done by `maestro ralph next` CLI — A_LOCATE_SESSION only reads the index without writing it.
 
 ### A_RESOLVE_ARGS
 
@@ -196,16 +196,16 @@ if goal:
   → 传递给 A_EXEC_STEP 用于 inline execution 前注入（见 step 2 goal context pre-injection）
 ```
 
-Auto mode propagation: If auto == true or session.auto_mode == true, append -y (or appropriate yes-flag) to step.args (if not already present) before persisting, ensuring child skills run in non-interactive auto mode.
+Auto mode propagation: If auto == true or session.orchestration.auto_mode == true, append -y (or appropriate yes-flag) to step.args (if not already present) before persisting, ensuring child skills run in non-interactive auto mode.
 
-Write enriched args + source_artifact_ref back to status.json.
+Write enriched args + source_artifact_ref back to ralph-meta.json.
 
 ### A_LOAD_STEP_CONTEXT
 
 加载前序产出和发现，为 inline execution 注入上下文。
 
 1. **Previous step output** — 读前一 completed step 的 `completion_summary` + `completion_caveats` + `completion_decisions` + `completion_deferred`
-2. **Artifacts** — 按 `session.context` 中的路径逐个 Read，提取与当前 step 相关的内容：
+2. **Artifacts** — 按 `ralph-meta.json context` 中的路径逐个 Read，提取与当前 step 相关的内容：
 
    | 当前 stage | 加载什么 | Source |
    |-----------|---------|--------|
@@ -223,8 +223,8 @@ Write enriched args + source_artifact_ref back to status.json.
 
 ### A_EXEC_DECISION
 
-1. Mark step running, write status.json
-2. Display: `[{index}/{total}] ◆ {step.decision} Retry: {retry}/{max}`
+1. Mark step running, write session state
+2. Display: `[{index}/{total}] ◆ {chain[i].decision_ref} Retry: {retry}/{max}`
 3. `Skill(maestro-ralph)` — 直调 ralph 评估 + handoff
 4. 执行在此结束
 
@@ -260,7 +260,7 @@ Write enriched args + source_artifact_ref back to status.json.
    | `--decisions` | SHOULD。每条一个决策，可多次 | `"选择 ELK 而非 dagre"` |
    | `--caveats` | SHOULD。后续 step 需注意 | `"e2e 未覆盖新端点"` |
    | `--deferred` | SHOULD。推迟工作，可多次 | `"性能优化留到 review 后"` |
-5. **Propagate context signals** — 关键信号 (`PHASE: N` / `run_dir: path` / `BLP-xxx`) 写入 `status.json.context`
+5. **Propagate context signals** — 关键信号 (`PHASE: N` / `run_dir: path` / `BLP-xxx`) 写入 `ralph-meta.json context`
 
 完成后 S_LOCATE 触发 `Skill(maestro-ralph-execute)` 直调自调用。
 
@@ -305,23 +305,23 @@ Write enriched args + source_artifact_ref back to status.json.
 ### A_RETRY
 
 1. `Bash("maestro ralph retry N --session {session_id}")` — CLI 设 `step.retried = true`, `step.status = "pending"`, `step.completion_confirmed = false`, 清 `active_step_index`
-2. Display: `[{index}/{total}] ↻ {step.skill} retry`
+2. Display: `[{index}/{total}] ↻ {chain[i].command} retry`
 
 ### A_SKIP_STEP
 
-跳过执行 step — 手动编辑 `status.json`：将该 step `status` 设为 `"skipped"`，`completion_confirmed` 设为 `false`，并清 `active_step_index`（若指向此 step）。
+跳过执行 step — 手动编辑 `session.json` 中 `orchestration.chain[N].status` 设为 `"skipped"`。
 （不提供 CLI 子命令；跳过是非常规操作，避免自动化误用。）
 
 ### A_PAUSE_SESSION
 
-通常由 `ralph complete N --status BLOCKED --reason "..."` 触发，CLI 已写 `session.status = "paused"`。手动 pause 场景下直接编辑 status.json。
-Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。Skill(maestro-ralph, continue) 恢复。`
+通常由 `ralph complete N --status BLOCKED --reason "..."` 触发，CLI 已写 `session.status = "paused"`。手动 pause 场景下直接编辑 session.json。
+Display: `[{index}/{total}] ✗ {chain[i].command} 失败，会话已暂停。Skill(maestro-ralph, continue) 恢复。`
 
 ### A_COMPLETE_SESSION
 
 1. 校验：所有 step `completion_confirmed == true`（除 skipped）；task_decomposition 存在时校验 `task_decomposition_all_done == true`
 2. 任一校验失败 → 不标 completed，回 S_LOCATE 或 pause
-3. `session.status = "completed"`, write status.json
+3. `session.status = "completed"`, write session.json
 4. Display completion report:
    ```
    ============================================================
@@ -350,21 +350,21 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。Skill(ma
 | Code | Severity | Description | Recovery |
 |------|----------|-------------|----------|
 | E001 | error | No running session found | Suggest Skill(maestro) or Skill(maestro-ralph) |
-| E006 | error | command_path missing/unreachable for 执行 step | `ralph next` 拒绝；编辑 status.json 或重 build |
+| E006 | error | command_path missing/unreachable for 执行 step | `ralph next` 拒绝；编辑 session.json 或重 build |
 | E007 | error | required_reading 引用文件缺失 | `ralph next` 拒绝；CLI stderr 列出缺失路径 |
-| E008 | error | `ralph complete` idx ≠ active_step_index | 编辑 status.json 修正一致性 |
-| E009 | error | `ralph complete` step.status ≠ running | 重复 complete 或非法跳跃；编辑 status.json |
-| E010 | error | status.json schema 损坏 | `ralph check` 显示具体损坏字段 |
+| E008 | error | `ralph complete` idx ≠ active_step_index | 编辑 session.json 修正一致性 |
+| E009 | error | `ralph complete` step.status ≠ running | 重复 complete 或非法跳跃；编辑 session.json |
+| E010 | error | session state schema 损坏 | `ralph check` 显示具体损坏字段 |
 | W001 | warning | Step completed with concerns | Log and continue |
 | W005 | warning | active_step_index 指向已 completed step | `ralph next` 自动清理后继续 |
-| W007 | warning | step.skill ≠ SKILL.md frontmatter.name | 提示但不阻塞 |
+| W007 | warning | chain[i].command ≠ SKILL.md frontmatter.name | 提示但不阻塞 |
 
 ### Success Criteria
 
 - [ ] Session discovery covers maestro-* and ralph-*
-- [ ] `-y` parsed from args 或 session.auto_mode；auto=true 时透传 `-y` 到 skill args
+- [ ] `-y` parsed from args 或 session.orchestration.auto_mode；auto=true 时透传 `-y` 到 skill args
 - [ ] Placeholders resolved；per-skill enrichment 正确
-- [ ] Decision 节点（`step.decision != null`）走 `Skill(maestro-ralph)` 直调 handoff（**不调 ralph next CLI**）
+- [ ] Decision 节点（`chain[i].decision_ref != null`）走 `Skill(maestro-ralph)` 直调 handoff（**不调 ralph next CLI**）
 - [ ] 执行 step 通过 `Bash("maestro ralph next")` 加载；CLI 返回拼好的 prompt + completion 协议
 - [ ] required_reading 由 CLI 自动加载并拼入 prompt；缺失 → CLI 退出码 1，pause session
 - [ ] `<deferred_reading>` 由 CLI 记录到 `step.load.deferred_files`，执行阶段按需 Read
@@ -372,7 +372,7 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。Skill(ma
 - [ ] STATUS 枚举仅 `DONE | DONE_WITH_CONCERNS | NEEDS_RETRY | BLOCKED`
 - [ ] active_step_index 一致性由 CLI 维护；E008/E009 直接退出，不静默推进
 - [ ] step.completion_evidence 通过 `--evidence` 传入并记录
-- [ ] Context signals 由执行 step 显式写回 status.json.context（非 ralph-execute 内嵌扫描）
+- [ ] Context signals 由执行 step 显式写回 ralph-meta.json context（非 ralph-execute 内嵌扫描）
 - [ ] Auto mode: retry 一次后 pause；interactive 提供 retry/skip/abort
 - [ ] 自调用持续到全部 completion_confirmed 或 paused
 - [ ] 只处理 session.platform == "codex" 的会话
@@ -383,6 +383,6 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。Skill(ma
 - [ ] 已有 `--from` 或 `--dir` 的 step 不被 auto-injection 覆盖
 - [ ] `--summary` 在 DONE/DONE_WITH_CONCERNS 时为 MUST（动词开头，≤100 字）
 - [ ] `--decisions`/`--caveats`/`--deferred` 为 SHOULD；存在关键决策/注意事项/推迟工作时填写
-- [ ] 结构化总结由 CLI 写入 status.json，session_anchor 自动聚合注入下游 step
+- [ ] 结构化总结由 CLI 写入 session state，session_anchor 自动聚合注入下游 step
 
 </appendix>
