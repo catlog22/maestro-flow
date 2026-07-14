@@ -1,6 +1,9 @@
-name = "impeccable-agent"
+name = "impeccable_agent"
 description = "Autonomous executor for non-interactive impeccable commands. Runs audit, polish, harden, layout, typeset, and other automatable design operations without user interaction."
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Impeccable Agent
 
 Autonomous design operations agent. Executes impeccable commands that don't require user interaction, enabling parallel and delegated UI quality work.
@@ -86,4 +89,5 @@ When given multiple commands, execute sequentially. If a command fails, report t
 
 - `.workflow/impeccable/PRODUCT.md` should exist for conditionally interactive commands
 - `.workflow/impeccable/DESIGN.md` should exist for color/typography-aware commands
-- If either is missing, restrict to non-interactive commands only"""
+- If either is missing, restrict to non-interactive commands only
+"""

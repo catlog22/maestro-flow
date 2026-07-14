@@ -1086,6 +1086,75 @@ function buildAgentsOnly(
 }
 
 // ---------------------------------------------------------------------------
+// Codex TOML agent builder — converts .claude/agents/*.md → .codex/agents/*.toml
+// ---------------------------------------------------------------------------
+
+const WRITE_TOOLS = new Set(['Write', 'Edit', 'Bash', 'Agent', 'Skill']);
+
+function deriveSandboxMode(tools: string[]): string {
+  return tools.some(t => WRITE_TOOLS.has(t)) ? 'workspace-write' : 'read-only';
+}
+
+function escapeToml(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"""/g, '\\"\\"\\"');
+}
+
+function buildCodexAgentsToml(
+  claudeDir: string,
+  targetAgentsDir: string,
+): BuildStats {
+  const agentsDir = join(claudeDir, 'agents');
+  const stats: BuildStats = { commands: 0, skills: 0, agents: 0, files: 0 };
+
+  if (!existsSync(agentsDir)) return stats;
+
+  for (const entry of readdirSync(agentsDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const src = join(agentsDir, entry.name);
+    const raw = readFileSync(src, 'utf8');
+    const { frontmatter, body } = splitFrontmatter(raw);
+
+    const name = (frontmatter?.name as string ?? entry.name.replace(/\.md$/, ''))
+      .replace(/[-\s]+/g, '_').toLowerCase();
+    const desc = frontmatter?.description as string ?? '';
+
+    const toolsList = Array.isArray(frontmatter?.['allowed-tools'])
+      ? frontmatter['allowed-tools'] as string[]
+      : typeof frontmatter?.['allowed-tools'] === 'string'
+        ? (frontmatter['allowed-tools'] as string).split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+    const sandbox = deriveSandboxMode(toolsList);
+
+    let convertedBody = rewriteAgentCallSitesCodex(body);
+    convertedBody = rewriteSkillCallSitesCodex(convertedBody);
+    convertedBody = applyBodyReplacements(convertedBody, CODEX_PROFILE);
+    convertedBody = stripToolTags(convertedBody);
+
+    const tomlName = entry.name.replace(/\.md$/, '');
+    const dest = join(targetAgentsDir, `${tomlName}.toml`);
+    ensureDir(dirname(dest));
+
+    const toml = [
+      `name = "${escapeToml(name)}"`,
+      `description = "${escapeToml(desc)}"`,
+      `sandbox_mode = "${sandbox}"`,
+      '',
+      `developer_instructions = """`,
+      convertedBody.trimEnd(),
+      `"""`,
+      '',
+    ].join('\n');
+
+    writeFileSync(dest, toml, 'utf8');
+    stats.agents++;
+    stats.files++;
+  }
+
+  return stats;
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -1294,12 +1363,12 @@ export function buildCodexSkills(
   return { files: stats.files };
 }
 
-/** Build Codex agents — subagent model conversion. */
+/** Build Codex agents as TOML — subagent model conversion. */
 export function buildCodexAgents(
   claudeDir: string,
   targetDir: string,
 ): { files: number } {
-  const stats = buildAgentsOnly(claudeDir, targetDir, CODEX_PROFILE, convertTextCodex);
+  const stats = buildCodexAgentsToml(claudeDir, targetDir);
   return { files: stats.files };
 }
 

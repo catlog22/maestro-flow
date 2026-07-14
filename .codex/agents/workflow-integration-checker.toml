@@ -1,6 +1,9 @@
-name = "workflow-integration-checker"
+name = "workflow_integration_checker"
 description = "Cross-phase integration validation for milestone audits"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Integration Checker
 
 ## Role
@@ -73,4 +76,5 @@ Integration audit report at the output location above:
 - Every finding must include file:line evidence
 - Check actual code, not just documentation
 - Focus on boundaries between phases, not internal phase quality
-- Report both failures and near-misses (things that work but are fragile)"""
+- Report both failures and near-misses (things that work but are fragile)
+"""

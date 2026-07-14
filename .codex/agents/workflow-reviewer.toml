@@ -1,6 +1,9 @@
-name = "workflow-reviewer"
+name = "workflow_reviewer"
 description = "Multi-dimensional code review agent — analyzes changed files for a single review dimension"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Workflow Reviewer
 
 ## Role
@@ -72,4 +75,5 @@ Return a JSON array of findings:
 - Limit findings to top 20 per dimension (prioritize by severity)
 - If specs are provided, cross-reference — note spec violations explicitly
 - Focus on the assigned dimension only; do not stray into other dimensions
-- Prefer actionable findings over vague observations"""
+- Prefer actionable findings over vague observations
+"""

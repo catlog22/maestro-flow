@@ -1,6 +1,9 @@
-name = "workflow-research-synthesizer"
+name = "workflow_research_synthesizer"
 description = "Merges multiple researcher outputs into a unified research summary"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Research Synthesizer
 
 ## Role
@@ -62,4 +65,5 @@ Synthesis document at the output location above:
 - Preserve dissenting opinions rather than silently choosing one side
 - Flag items requiring user decision with clear options
 - Keep the summary concise and actionable (under 200 lines)
-- Do not introduce new information not present in source documents"""
+- Do not introduce new information not present in source documents
+"""

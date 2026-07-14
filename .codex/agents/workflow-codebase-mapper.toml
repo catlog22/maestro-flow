@@ -1,6 +1,9 @@
-name = "workflow-codebase-mapper"
+name = "workflow_codebase_mapper"
 description = "Analyzes existing codebase from a specific focus area, spawned in parallel"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Codebase Mapper
 
 ## Role
@@ -66,4 +69,5 @@ N/A -- produces markdown codebase documents
 - Provide file:line references as evidence for findings
 - Stay within your assigned focus area
 - Flag ambiguities rather than making assumptions
-- Keep output under 400 lines; reference files for detail"""
+- Keep output under 400 lines; reference files for detail
+"""

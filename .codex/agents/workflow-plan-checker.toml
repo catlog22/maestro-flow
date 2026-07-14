@@ -1,6 +1,9 @@
-name = "workflow-plan-checker"
+name = "workflow_plan_checker"
 description = "Validates plan quality with up to 3 revision rounds"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Plan Checker
 
 ## Role
@@ -90,4 +93,5 @@ Check report written to the output location above:
 - Every issue must include a specific suggestion for fixing it
 - Do not rewrite tasks yourself; only report issues for the planner to fix
 - Coverage check must reference specific requirements, not general impressions
-- Approve when plan is good enough, not perfect; avoid over-engineering"""
+- Approve when plan is good enough, not perfect; avoid over-engineering
+"""

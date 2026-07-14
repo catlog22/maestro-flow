@@ -1,6 +1,9 @@
-name = "workflow-project-researcher"
+name = "workflow_project_researcher"
 description = "Domain research for project initialization, spawned with different focus angles"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Project Researcher
 
 ## Role
@@ -62,4 +65,5 @@ Research document following the structure:
 - Provide evidence for claims (links, benchmarks, references)
 - Flag uncertainties explicitly rather than guessing
 - Keep documents under 500 lines; link to external resources for depth
-- Do not make implementation decisions; provide options with trade-offs"""
+- Do not make implementation decisions; provide options with trade-offs
+"""

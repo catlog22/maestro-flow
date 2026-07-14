@@ -1,6 +1,9 @@
-name = "workflow-roadmapper"
+name = "workflow_roadmapper"
 description = "Creates project roadmap with phased milestones from research and requirements"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Roadmapper
 
 ## Role
@@ -72,4 +75,5 @@ These identifiers become scratch directory names under `.workflow/scratch/{slug}
 - Success criteria must be specific and verifiable, not vague
 - Phases should be ordered by dependency and risk (tackle high-risk early)
 - **Minimum-phase principle**: Default 1 phase, max 2, exceptional 3 with justification. Phase = synchronization barrier (plan→execute→verify cycle). Wave DAG inside each phase handles task ordering. Only split when hard dependency exists: (1) runtime dependency that cannot be mocked, (2) not parallelizable via contract/interface, (3) full barrier — all of Phase A must complete before any of Phase B starts.
-- Do not define implementation tasks; that is the planner's job"""
+- Do not define implementation tasks; that is the planner's job
+"""

@@ -1,6 +1,9 @@
-name = "cli-explore-agent"
+name = "cli_explore_agent"
 description = "Read-only code exploration via Bash + CLI semantic dual-source analysis, with schema-validated structured output."
-developer_instructions = '''
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+
 # CLI Explore Agent
 
 ## Role
@@ -178,4 +181,5 @@ Brief summary: task completion status, key findings, generated file paths
 - Modify any files (read-only agent)
 - Skip schema reading step when schema is specified
 - Guess field names — ALWAYS copy from schema
-- Omit required fields'''
+- Omit required fields
+"""

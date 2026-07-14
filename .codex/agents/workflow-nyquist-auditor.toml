@@ -1,6 +1,9 @@
-name = "workflow-nyquist-auditor"
+name = "workflow_nyquist_auditor"
 description = "Test coverage audit with gap detection and test stub generation"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Nyquist Auditor
 
 ## Role
@@ -74,4 +77,5 @@ You audit test coverage by mapping requirements to test files, calculating cover
 - Never modify existing tests; only create new stubs
 - Coverage metrics must come from actual tool output, not estimates
 - Gaps must reference specific requirements or code locations
-- Prioritize gaps by risk: critical paths first, edge cases second"""
+- Prioritize gaps by risk: critical paths first, edge cases second
+"""

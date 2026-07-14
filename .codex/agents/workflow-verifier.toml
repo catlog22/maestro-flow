@@ -1,6 +1,9 @@
-name = "workflow-verifier"
+name = "workflow_verifier"
 description = "Goal-backward verification across three layers (existence, substance, connection)"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Workflow Verifier
 
 ## Role
@@ -110,4 +113,5 @@ You perform goal-backward verification of completed work using a three-layer che
 - **Cannot determine pass/fail for a criterion**: Mark as "inconclusive" with explanation; count as fail for overall status
 - **Build/test environment unavailable**: Log as gap with severity "medium", skip automated checks, perform static checks only
 - **All tasks pass all layers**: Set status to "pass" and report clean verification
-- **Any gap found**: Set status to "fail" regardless of gap severity; list all gaps for resolution"""
+- **Any gap found**: Set status to "fail" regardless of gap severity; list all gaps for resolution
+"""

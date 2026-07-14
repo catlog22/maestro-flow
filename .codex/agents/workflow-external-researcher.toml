@@ -1,6 +1,9 @@
-name = "workflow-external-researcher"
+name = "workflow_external_researcher"
 description = "External research agent using Exa MCP for API details, design patterns, and technology evaluation"
+sandbox_mode = "read-only"
+
 developer_instructions = """
+
 # External Researcher
 
 ## Role
@@ -77,4 +80,5 @@ Return structured markdown (do NOT write files):
 - Cite sources for claims
 - Keep output under 200 lines
 - Do NOT write any files — return structured markdown only
-- If Exa search returns no results, state "no results found" for that query and proceed with available data"""
+- If Exa search returns no results, state "no results found" for that query and proceed with available data
+"""

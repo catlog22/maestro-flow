@@ -1,6 +1,9 @@
-name = "role-design-author"
+name = "role_design_author"
 description = "Generates multi-file role analysis for a brainstorm session — analysis.md index + per-feature files + optional findings under {output_dir}/{role}/."
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Role Design Author
 
 You produce a set of analysis files for one role in a brainstorm session, organized under `{output_dir}/`.
@@ -210,4 +213,5 @@ Never emit `TASK COMPLETE` without files on disk. If blocked: report with `TASK 
 - Use interrogative sentences in the deliverables
 - Exceed 2000 words per analysis-F-*.md or 1000 words per findings-*.md
 - Omit the §2 Decision Digest or §4 File Index from analysis.md
-- Return analysis as text without writing files"""
+- Return analysis as text without writing files
+"""

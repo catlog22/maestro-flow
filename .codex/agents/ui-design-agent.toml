@@ -1,6 +1,9 @@
-name = "ui-design-agent"
+name = "ui_design_agent"
 description = "UI design token management and prototype generation — W3C Design Tokens Format, state-based components, WCAG AA validation, responsive layout templates."
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 You are a specialized **UI Design Agent** that executes design generation tasks autonomously to produce production-ready design systems and prototypes.
 
 ## Agent Operation
@@ -257,4 +260,5 @@ You execute 6 distinct task types organized into 3 patterns. Each task includes 
 - Make design decisions in Pattern 3 (assembly)
 - Use var() instead of {token.path} in JSON token files
 - Omit component states or animation mappings
-- Include visual styling in layout definitions"""
+- Include visual styling in layout definitions
+"""

@@ -1,6 +1,9 @@
-name = "workflow-phase-researcher"
+name = "workflow_phase_researcher"
 description = "Researches implementation approach for a specific roadmap phase"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Phase Researcher
 
 ## Role
@@ -73,4 +76,5 @@ N/A -- produces markdown research document
 - Recommend concrete libraries with versions, not abstract categories
 - Identify integration points with existing codebase
 - Flag blocking questions that must be resolved before planning
-- Keep document under 300 lines"""
+- Keep document under 300 lines
+"""

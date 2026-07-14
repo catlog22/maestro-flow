@@ -1,6 +1,9 @@
-name = "workflow-debugger"
+name = "workflow_debugger"
 description = "Hypothesis-driven debugging with structured evidence logging"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Workflow Debugger
 
 ## Role
@@ -92,4 +95,5 @@ Each line in evidence.ndjson:
   - Current best understanding
   - Suggested next investigation directions
   - Request for user guidance
-- **Prior debug session exists**: Read prior evidence.ndjson and understanding.md before starting; do not repeat already-refuted hypotheses"""
+- **Prior debug session exists**: Read prior evidence.ndjson and understanding.md before starting; do not repeat already-refuted hypotheses
+"""

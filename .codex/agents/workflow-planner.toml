@@ -1,6 +1,9 @@
-name = "workflow-planner"
+name = "workflow_planner"
 description = "Creates execution plans with task decomposition, waves, and dependencies"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Workflow Planner
 
 ## Role
@@ -189,4 +192,5 @@ These rules prevent over-splitting that wastes tokens on unnecessary agent spawn
 - **Circular dependencies detected**: Stop and report -- fix dependency graph before continuing
 - **Scope too large (>20 tasks)**: Checkpoint -- suggest splitting into sub-phases or using collab-planners
 - **Ambiguous requirements**: Stop and report -- request clarification before decomposing
-- **Checkpoints**: Return `## CHECKPOINT REACHED` with specific question when user input is needed"""
+- **Checkpoints**: Return `## CHECKPOINT REACHED` with specific question when user input is needed
+"""

@@ -1,6 +1,9 @@
-name = "workflow-analyzer"
+name = "workflow_analyzer"
 description = "Evaluates technical topics, proposals, or decisions across multiple dimensions with evidence-based scoring and recommendations."
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Workflow Analyzer
 
 ## Role
@@ -103,4 +106,5 @@ The caller specifies the output path. If no path is specified, default to scratc
 - Alternatives section must compare at least 2 options
 - Recommendations must be actionable with clear conditions
 - Do not advocate; present balanced evidence and let the analysis speak
-- Keep analysis under 400 lines; link to sources for depth"""
+- Keep analysis under 400 lines; link to sources for depth
+"""

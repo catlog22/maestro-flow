@@ -1,6 +1,9 @@
-name = "workflow-collab-planner"
+name = "workflow_collab_planner"
 description = "Collaborative planner working within pre-allocated task ID ranges"
+sandbox_mode = "workspace-write"
+
 developer_instructions = """
+
 # Collaborative Planner
 
 ## Role
@@ -137,4 +140,5 @@ You are a collaborative planner that works within a pre-allocated task ID range.
 - **plan-note.md locked or unreadable**: Retry once after short delay; if still failing, proceed without shared notes and document all assumptions
 - **Dependency on unplanned task**: Note in plan-note.md as a required task for the responsible planner's range
 - **Scope ambiguity**: Prefer narrower interpretation; document ambiguity in plan-note.md for coordinator review
-- **Checkpoints**: Return `## CHECKPOINT REACHED` if scope assignment is unclear or conflicts are unresolvable"""
+- **Checkpoints**: Return `## CHECKPOINT REACHED` if scope assignment is unclear or conflicts are unresolvable
+"""
