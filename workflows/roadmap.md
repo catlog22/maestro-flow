@@ -1,127 +1,216 @@
-<!-- session-mode: inherited -->
+# Workflow: Roadmap
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-# Workflow: Roadmap (Light Mode)
+## Worktree Guard
 
-## Step 1: Session Initialization
-
-Parse flags from `$ARGUMENTS`:
-- `--yes` / `-y` → auto mode
-- `--continue` / `-c` → resume from last state
-- `--mode` / `-m` → `progressive|direct|auto` (default: auto)
-- `--from <source>` → load upstream context package (brainstorm:ID, @file, or path). Alias: `--from-brainstorm` (backward compat)
-- Remaining text → requirement (slugified for directory name)
-
-**Run directory**: standard `{run_dir}` from `maestro run create`
-
-**Continue mode**: If `-c` and run exists, resume from last state.
-
-**Context import**: `--from` resolves to context-package (brainstorm:ID / @file / path / alias).
+Block if `.workflow/worktree-scope.json` exists — must run from main worktree.
 
 ---
 
-## Step 2: Requirement Understanding & Strategy
+## Load Project Context
 
-1. **Parse Requirement** — Extract goal, constraints, stakeholders, keywords
-   - `--from`: enrich from upstream context (`requirements`, `constraints[locked]`, `domain`, `non_goals`, `insights`, `open_questions`)
-   - `project_context`: cross-reference `already_sealed` sessions, promote `planned_sessions` items, apply `locked_decisions`
-
-2. **Codebase Exploration** — MANDATORY: execute ~/.maestro/workflows/roadmap-common.md Codebase Exploration logic; REQUIRED produce: codebase context summary; BLOCKED if missing
-
-3. **External Research** — MANDATORY: execute ~/.maestro/workflows/roadmap-common.md External Research logic; REQUIRED produce: apiResearchContext (or [LOW CONFIDENCE] if none)
-
-   `apiResearchContext` is passed into:
-   - Step 3 (Decomposition): technology complexity informs session sizing and dependency ordering
-   - Step 4 (Refinement): API constraints surface realistic dependency chains
-
-4. **Assess Uncertainty** — 5 factors (scope_clarity, technical_risk, dependency_unknown, domain_familiarity, requirement_stability). >=3 high → progressive, >=3 low → direct, else → ask
-
-5. **Strategy Selection** (skip if `-m` or `-y`) — Present assessment, user selects Progressive or Direct
-
----
-
-## Step 3: Decomposition
-
-MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `cli-roadmap-plan-agent` (include `apiResearchContext` if set). Apply **Session Decomposition Principle** from ~/.maestro/workflows/roadmap-common.md.
-
-Output: session DAG with dependency edges, scoped requirements, and seed data per session.
-
----
-
-## Step 4: Iterative Refinement
-
-1. **Present Session DAG**
-2. **Gather Feedback** (skip if `-y`): Approve / Adjust Scope / Reorder DAG / Split-Merge Sessions / Re-decompose. Max 5 rounds.
-3. **Process**: Approve (run session sizing checklist first) | Adjust scope | Reorder dependencies | Split/Merge (min 5 tasks, max 3 sessions unless justified) | Re-decompose (→ Step 3)
-4. **Loop** until approved or max rounds
-
----
-
-## Step 5: Write Outputs
-
-Write to `{run_dir}/outputs/` following ~/.maestro/workflows/roadmap-common.md **Roadmap Write Logic**:
-
-1. **`roadmap.json`** — Session DAG with `_meta.kind: "roadmap"`, `_meta.schema: "roadmap/1.0"`, `_meta.role: "primary"`, `_meta.alias: "current-roadmap"`
-2. **`roadmap.md`** — Human-readable session summary using `@templates/roadmap.md` with frontmatter `kind: roadmap`
-3. **Register sessions** in `state.json.sessions[]` with `status: "planned"`, `roadmap_artifact_id`, and `seed_ref`
-
----
-
-**GATE Step 5→6**: REQUIRED `outputs/roadmap.json` AND `outputs/roadmap.md` written BEFORE handoff.
-Glob `{run_dir}/outputs/roadmap.json` MUST exist before Step 6 handoff; BLOCKED if missing.
-
-## Step 6: Handoff
-
-Display DAG summary and recommend activation of root session(s):
-
-Use `AskUserQuestion` to confirm which root session to activate:
-```
-question: "Roadmap 完成。推荐激活 root session: {first-root-slug}，是否确认？"
-options:
-  - "激活推荐 session"
-  - "选择其他 session"
-  - "暂不激活"
-```
-
-If confirmed → set `state.json.active_session_id` to selected session.
-
-Next steps: `/maestro-analyze {active-session-slug}` | `/maestro-blueprint` | `/manage-status`
-
----
-
-## Mode: Revise (`--revise [instructions]`)
-
-1. **Load state** — read `current-roadmap` artifact via alias resolution (NOT `.workflow/roadmap.md`). Parse `roadmap.json` for current session DAG.
-2. **Get instructions** — from flag text or AskUserQuestion
-3. **Impact analysis** — dependency chain, requirement coverage, sealed sessions (immutable). Confirm.
-4. **Apply** — preserve sealed sessions (NEVER modify), update planned/running sessions, adjust DAG edges
-5. **Validate** — no circular deps, requirement coverage intact, sealed sessions unaffected
-6. **Write** — new Run `outputs/roadmap.json` + `outputs/roadmap.md`. Update `state.json.sessions[]` for changed entries.
-
-Next: `/maestro-analyze {session-slug}` | `/maestro-plan --session {slug}`
-
----
-
-## Mode: Review (`--review`)
-
-Read-only health assessment. No state modifications.
-
-1. **Load** — read `current-roadmap` artifact + `state.json.sessions[]`, cross-reference session statuses
-2. **Assess** — progress tracking, drift detection, relevance, dependency health, risk
-3. **Report** → `{run_dir}/outputs/`
+### Load Specs
 
 ```
-=== ROADMAP REVIEW ===
-Sessions: {total} ({sealed}/{total} sealed)
-Progress: {percentage}%
-Drift: {none|minor|significant} | Risk: {low|medium|high}
-
-Session Assessment:
-  [done] auth-setup — sealed, on-scope
-  [~]    payment — running, {notes}
-  [ ]    notification — planned, dep-ready
-
-Suggested: /maestro-roadmap --revise | /maestro-analyze --session {next} | /manage-status
+specs_content = maestro spec load --category arch
 ```
+
+### Load Project History (if `.workflow/` exists)
+
+Read project artifacts to understand what has already been built:
+
+- `project.md` → already_shipped (Validated), current_scope (Active), project_history (Context), locked_decisions (Key Decisions)
+- `state.json.sessions[]` → completed sessions (done work), planned sessions (deferred/upcoming work)
+- `.workflow/specs/` → project-level specs and knowhow
+- `.workflow/codebase/` → feature inventory from codebase docs
+
+**Context assembly** — pass downstream as `project_context`:
+```json
+{
+  "already_completed": ["20260301-auth-setup: User auth", "20260315-api-layer: API layer"],
+  "current_scope": ["REQ-003: Payments", "REQ-004: i18n"],
+  "planned_sessions": ["20260401-payment: Payment integration (planned)"],
+  "locked_decisions": ["JWT stateless auth", "PostgreSQL"],
+  "learnings": ["JWT has perf issues at scale — consider caching"],
+  "project_history": "Session auth-setup completed 2026-03-15: auth + API layer shipped"
+}
+```
+
+**Rules**:
+- NEVER re-plan features from `already_completed` sessions — they are done
+- `planned_sessions` items are HIGH PRIORITY candidates for new sessions (may need revision)
+- `locked_decisions` constrain technology choices in decomposition
+- `learnings` inform risk assessment and session sizing
+
+---
+
+## Codebase Exploration (conditional)
+
+- Detect if project has source files
+- MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: If yes, spawn `cli-explore-agent` for context discovery
+  - If `project_context.already_completed` exists: include as "feature audit" directive — agent should verify which shipped features are present in code and identify integration points for new work
+- Output: relevant files, patterns, tech stack, feature_audit
+
+---
+
+## External Research — API & Technology Details (Optional)
+
+MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `workflow-external-researcher` agent when requirement mentions specific technologies, APIs, or external services.
+
+**Trigger**: Technology keywords detected in requirement or codebase exploration found external dependencies. Auto-trigger in auto mode (`-y`). Skip if requirement is purely organizational/conceptual.
+
+Extract named technologies/APIs/frameworks/protocols from requirement + codebase exploration.
+
+If topics found → spawn `workflow-external-researcher` agent for API research:
+- Per technology: stable version, core API surface, auth model, integration patterns, limitations, effort signals
+- Focus on details affecting session decomposition and dependency ordering
+- Output → `apiResearchContext` (in-memory)
+
+If no topics or research fails → `apiResearchContext = null`, continue; flag roadmap as [LOW CONFIDENCE] (no external research).
+
+---
+
+## Session Decomposition Principle (MANDATORY)
+
+**Core rule: Session = independent work unit.** Each Session runs a full analyze→plan→execute→verify lifecycle. More sessions = more synchronization overhead. The wave DAG inside each Session's plan already handles task ordering and parallelism, so only create a new Session when work **cannot** start until a previous Session's entire output exists.
+
+**Default: 1 Session.** Put everything into a single Session unless a hard dependency forces a split.
+
+| Rule | Constraint |
+|------|-----------|
+| **Default** | **1 Session**. All work in one analyze→plan→execute cycle; wave DAG handles internal ordering. |
+| **Split justification** | All three hard-dependency conditions must be met (see below). |
+| **Minimum tasks per session** | 5 tasks/stories. If a session would have fewer, merge it into an adjacent session. |
+| **Merge principle** | Same-module, same-concern, or tightly-coupled work belongs in ONE session. Infra + core logic + API in one session is fine. |
+
+**Hard dependency — all three conditions required to justify a Session split:**
+1. **Runtime dependency**: Session B code at runtime MUST call Session A's real output (cannot mock/stub).
+2. **Not parallelizable**: A and B cannot develop concurrently via contract/interface/type agreement.
+3. **Full barrier**: ALL of Session A's tasks must complete before ANY of Session B's tasks can start.
+
+If only 1-2 conditions are met → keep in the same Session, use wave dependencies instead.
+
+**Session sizing checklist (applied after decomposition, before presenting to user):**
+1. Count total sessions. If > 3 → justify each split against the 3 hard-dependency conditions, merge if unjustified.
+2. Count estimated tasks per session. Any session < 5 tasks → merge into neighbor.
+3. Verify each session has a meaningful deliverable boundary (not just "setup" or "cleanup").
+
+**Progressive mode**:
+- Progressive layers (MVP → Usable → Refined) map to sessions with `depends_on` chain.
+- Each progressive layer is a session that depends on the previous one.
+- MVP session must be self-contained (no external dependencies, `depends_on: []`).
+- Each feature in exactly ONE session (no overlap).
+
+**Direct mode**:
+- All sessions are independent (parallel, no `depends_on` edges).
+- Each session scoped to a coherent domain boundary.
+
+**Session format** (both modes):
+```json
+{
+  "session_id": "{YYYYMMDD}-{intent-slug}",
+  "intent": "<what this session achieves>",
+  "depends_on": ["<prerequisite session_id or empty>"],
+  "scope": {
+    "requirements": ["<REQ-IDs mapped from project.md Active requirements>"],
+    "success_criteria": ["<observable behavior from user perspective>"],
+    "definition_of_done": "<single summary sentence>"
+  },
+  "seed": {
+    "features": ["<key deliverables>"],
+    "constraints": ["<locked technology/design constraints>"],
+    "risks": [{ "name": "...", "severity": "low|medium|high", "mitigation": "..." }],
+    "estimated_complexity": "small|medium|large"
+  },
+  "status": "planned"
+}
+```
+
+**Requirements traceability**: Every Active requirement from project.md MUST appear in exactly one session's `scope.requirements`. If a requirement maps to no session, surface it as a gap.
+
+---
+
+## Decomposition Flow
+
+### Create mode (default)
+
+Build the session DAG from the requirement (or upstream context loaded via `--from`).
+
+1. **Parse requirement** into goal, constraints, stakeholders. BLOCKED if no parsed requirement — cannot decompose.
+2. **Decompose** into sessions with intent, scope, success criteria. Define DAG edges with `depends_on`. Every Active requirement from project.md maps to exactly one session. No circular dependencies (E003 if detected).
+3. **Refine** against the sizing checklist. Present the DAG for approval (auto-approved with `-y`).
+
+### Revise mode (`--revise`)
+
+Read the `current-roadmap` artifact. Apply the requested changes. Preserve any session whose `status` is already `completed` — E005 if a revision would modify one (warn user, ask to confirm or adjust). E004 if `current-roadmap` artifact not found.
+
+### Review mode (`--review`)
+
+Read-only health assessment of the session DAG: dependency validity, requirement coverage, session sizing. No writes. E004 if `current-roadmap` artifact not found.
+
+---
+
+## Roadmap Write Logic
+
+### Output Files
+
+Write to `{run_dir}/outputs/`:
+
+1. **`roadmap.json`** — Machine-readable session DAG (primary artifact, `kind: roadmap`)
+2. **`roadmap.md`** — Human-readable session summary using the roadmap template (see `ref/roadmap-template.md`)
+
+Do NOT write to `.workflow/roadmap.md` — roadmap is a Run artifact, not a project-level file.
+
+### state.json Session Registration
+
+After writing roadmap outputs, register sessions in state.json:
+
+| Scenario | Action |
+|----------|--------|
+| `state.json` exists | Append new sessions to `sessions[]` array. Set `roadmap_artifact_id` and `seed_ref` for each. Do NOT modify existing completed sessions. |
+| `state.json` does not exist | Do not create (leave to maestro-init) |
+
+Do NOT write to `milestones[]`, `current_milestone`, or `accumulated_context` — these are deprecated fields.
+
+### Run output directory
+
+Ensure Run output directory exists: `mkdir -p {run_dir}/outputs/`
+
+---
+
+## Root Session Activation
+
+After outputs are written, confirm root session activation via `AskUserQuestion`:
+- Activate recommended root session (set first root slug as `active_session_id`)
+- Choose a different session from the DAG
+- Defer activation (keep all sessions `planned`)
+
+Skip in auto mode (`-y`) — activate the first root session automatically.
+
+---
+
+## Completion
+
+Report session count, root sessions, strategy, and output path. Verdict `DONE` on normal completion, `DONE_WITH_CONCERNS` if concerns surfaced (e.g. unmapped requirement, low-confidence research).
+
+### Error codes
+
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | Requirement/idea text or @file required | Prompt user for input |
+| E002 | Context source not found (`--from` / `--from-brainstorm`) | Show available sessions/sources |
+| E003 | Circular dependency detected in session DAG | Prompt user to re-decompose |
+| E004 | current-roadmap artifact not found (`--revise`/`--review`) | Run roadmap create first |
+| E005 | Revision would modify a completed session | Warn user, ask to confirm or adjust |
+| W001 | CLI analysis failed, using fallback | Continue with available data |
+| W002 | Max refinement rounds (5) reached | Force proceed with current DAG |
+| W005 | External research agent failed | Continue without apiResearchContext |
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Session activated, need analysis | `analyze --session {active-session-slug}` |
+| Simple project, ready to plan | `plan --session {active-session-slug}` |
+| Need UI design first | `impeccable build` |
+| View project dashboard | `manage-status` |
+| Need formal spec documents | `blueprint` |

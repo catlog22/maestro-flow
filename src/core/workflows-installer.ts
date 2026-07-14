@@ -47,3 +47,39 @@ export function installWorkflowsOnly(
     dirsCreated: copied.dirs,
   };
 }
+
+export function installPrepareFiles(
+  packageRoot: string,
+  targetDir = paths.prepare,
+): WorkflowsInstallResult {
+  const sourceDir = join(packageRoot, 'prepare');
+  if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+    return { sourceDir, targetDir, filesInstalled: 0, dirsCreated: 0 };
+  }
+  const copied = copyDirectory(sourceDir, targetDir);
+  return { sourceDir, targetDir, filesInstalled: copied.files, dirsCreated: copied.dirs };
+}
+
+export function installRefFiles(
+  packageRoot: string,
+  targetDir = paths.ref,
+): WorkflowsInstallResult {
+  const sourceDir = join(packageRoot, 'ref');
+  if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+    return { sourceDir, targetDir, filesInstalled: 0, dirsCreated: 0 };
+  }
+  const copied = copyDirectory(sourceDir, targetDir);
+  return { sourceDir, targetDir, filesInstalled: copied.files, dirsCreated: copied.dirs };
+}
+
+export function installAllStepContent(packageRoot: string): {
+  workflows: WorkflowsInstallResult;
+  prepare: WorkflowsInstallResult;
+  ref: WorkflowsInstallResult;
+} {
+  return {
+    workflows: installWorkflowsOnly(packageRoot),
+    prepare: installPrepareFiles(packageRoot),
+    ref: installRefFiles(packageRoot),
+  };
+}

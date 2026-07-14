@@ -1,39 +1,245 @@
-<!-- session-mode: inherited -->
+# Workflow: Verify
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-# Workflow: Verify Run
+Dual verification: Goal-Backward structural verification + Nyquist test coverage. Verify each acceptance criterion, check existence/substance/wiring/regression/anti-patterns. Artifacts unified as `verification.json`; gaps handed to review/test or back to plan.
 
-## Run Contract
+## Iron Law
 
-```text
-maestro run create maestro-verify
-  consumes: current-plan + current-execution
-domain pipeline
-  produces: verification, requirement-coverage, antipattern-report
-maestro run check <run_id> --stage exit
-maestro run complete <run_id> → alias latest-verification
+No completion conclusion without fresh verification evidence. Before any completion claim: IDENTIFY the command → RUN (freshly this round) → READ (full output + exit code + failure count) → VERIFY (does the output support the claim) → only then conclude and inline the evidence. No "close enough", never treat execute's self-check as the final conclusion.
+
+---
+
+## Step 0: Load specs and constraint pre-check
+
+```
+specs_content = maestro spec load --category review  → as the quality standard
 ```
 
-Verify 是独立只读 Run，不在 execute 内嵌，不修源码。
+**Constraint compliance pre-check** (skip if specs have no tech stack/constraint definitions):
 
-## Pipeline
-
-```text
-RESOLVE CRITERIA → VERIFY EACH → COVERAGE AUDIT → ANTIPATTERN SCAN
-                 → REGRESSION CHECK → VERDICT
+```
+Extract allowed_libs / disallowed_imports / required_patterns from specs
+Collect files changed by current-execution (change-manifest + Files Modified from task summaries)
+Extract imports per file (language-aware TS/JS/Python/Go/Java), check against constraints:
+  hit disallowed → violation { id:"CV-N", type:"disallowed_import", severity:"high", file, line, fix_direction }
+  allowlist exists and external package not listed → violation { type:"unlisted_dependency", severity:"medium" }
+scan required_pattern by file_glob, missing → violation { type:"missing_required_pattern" }
+constraint_violations[] merged into the final verification.json
 ```
 
-1. create + entry check；读取 plan criteria、execution task results/self-check/change manifest。
-2. 每条 criterion 按指定方法运行：test、grep、review 或 manual evidence；状态只能 passed/failed/blocked。
-3. existence：期望文件存在；substance：不是 stub/TODO-only；convergence：行为符合 criterion；regression：相关测试通过。
-4. 扫描 TODO/FIXME/HACK、disabled tests、debug logs、绕过验证和 silent fallback。
-5. 写 `outputs/verification.json`（primary/latest-verification）、`outputs/requirement-coverage.json`、`outputs/antipattern-report.json`，均带 `_meta`。
-6. verdict：全部 passed=`pass`；仅非阻断 concerns=`warn`；任一 failed=`fail`；关键前置缺失=`blocked`。
-7. `report.md` pass/warn 路由 quality-review，fail/blocked 路由 maestro-plan；领域数字用 aref。
-8. exit check 要求 criteria 零遗漏、失败有 gaps、verdict 可复算；通过后 complete。
+**CLI supplementary pre-check** (optional, skip if no CLI tool): maestro delegate (analysis) scans changed files for TODO/FIXME/stub/unused import/debug print, blocker items merged into constraint_violations, completeness_flags as supplementary context for Step 1.
 
-## Iron Gate
+---
 
-禁止降低 acceptance 标准或用 self-check 替代逐条验证。任何未检查 criterion 都使 exit check 失败。
+## Step 1: Goal-Backward structural verification
+
+### Establish must-haves
+
+Priority: `current-plan`'s success_criteria (primary contract, each is a testable truth) > each task's convergence.criteria > 3-7 observable behaviors derived from the session goal.
+
+Split each must-have into three layers:
+
+```
+Truths     — observable behavior ("user can see existing messages")
+Artifacts  — file paths that must exist and have substance (src/components/Chat.tsx)
+Key Links  — key wiring between artifacts ("Chat.tsx imports and calls /api/chat GET")
+```
+
+When there are UAT human findings (if present), parse their Gaps section into `uat_gaps[]` (type `human_verified_failure`), and merge into the final gaps.
+
+### Layer 1: Verify observable Truths
+
+For each truth: locate the supporting artifact → check artifact existence and substance → check wiring → determine truth status.
+
+| Status | Meaning |
+|------|------|
+| VERIFIED | all supporting artifacts pass, wiring complete |
+| FAILED | artifact missing, stub, or not wired |
+| UNCERTAIN | needs manual verification (visual, real-time, external service); under `--strict`, UNCERTAIN does not pass |
+
+### Layer 2: Verify Artifacts
+
+| Level | Check | Fail status |
+|------|------|----------|
+| L1 Existence | file exists on disk | MISSING |
+| L2 Substance | has real implementation (not stub/placeholder) | STUB (<~10 lines of real logic, or contains placeholder/coming soon/TODO: implement) |
+| L3 Wiring | imported and used | ORPHANED |
+
+```
+Wiring check:
+  grep -r "import.*{artifact_name}" src/ --include=*.ts --include=*.tsx --include=*.py
+  grep -r "{artifact_name}" src/ ... | grep -v "import"
+
+exists yes + substance yes + wiring yes → VERIFIED
+exists yes + substance yes + wiring no  → ORPHANED
+exists yes + substance no               → STUB
+exists no                               → MISSING
+```
+
+### Layer 3: Verify Key Links
+
+| Pattern | Check | Status |
+|------|------|------|
+| Component → API | fetch/axios calls the API path and uses the response | WIRED / PARTIAL / NOT_WIRED |
+| API → DB | model has a query and returns results | WIRED / PARTIAL / NOT_WIRED |
+| Form → Handler | onSubmit has real implementation (not console.log) | WIRED / STUB / NOT_WIRED |
+| State → Render | state variable appears in JSX/template | WIRED / NOT_WIRED |
+| Event → Handler | event listener has real handling logic | WIRED / STUB / NOT_WIRED |
+
+Record status and file:line evidence for each key link.
+
+### Identify gaps
+
+```
+Collect gaps from failed truths, missing/stub artifacts, broken links.
+Each gap: { id:"GAP-N", type:"missing_feature"|"incomplete_implementation"|"broken_integration",
+            severity:"critical"|"high"|"medium"|"low", description, fix_direction }
+```
+
+---
+
+## Step 2: Anti-pattern scan
+
+`--skip-antipattern` skips. Take changed files from change-manifest, scan each file:
+
+| Pattern | Search | Severity |
+|------|------|--------|
+| TODO/FIXME/XXX/HACK | `grep -n "TODO\|FIXME\|XXX\|HACK"` | Warning |
+| placeholder content | `grep -n -i "placeholder\|coming soon\|will be here"` | Blocker |
+| empty return | `grep -n "return null\|return {}\|return \[\]\|=> {}"` | Warning |
+| log-only function | function body has only console.log/print | Warning |
+| hardcoded test data | `grep -n "hardcoded\|dummy\|fake\|mock"` | Warning |
+| disabled tests | `grep -n "skip\|xit\|xdescribe\|@disabled"` | Warning |
+
+Classify Blocker (blocks goal) / Warning (incomplete) / Info. Write into `outputs/antipattern-report.json` (schema `antipattern-report/1.0`, role evidence). Blocker anti-patterns merged into gaps (severity critical).
+
+---
+
+## Step 3: Nyquist test coverage
+
+`--skip-tests` skips.
+
+```
+1. Probe test infrastructure:
+   find jest.config/vitest.config/pytest.ini/pyproject.toml
+   find *.test.* / *.spec.* / test_* (exclude node_modules)
+2. Build requirement→test mapping: for each success criterion / must-have truth, search for test files covering it
+   (match by filename, import, test description)
+3. Gap classification:
+   COVERED — test exists, hits the behavior, runs green
+   PARTIAL — test exists but fails or is incomplete
+   MISSING — no test
+4. When gaps exist, dispatch workflow-nyquist-auditor agent (mandatory, cannot be substituted with manual Read/Grep):
+   pass the gap list, test infrastructure, session context
+   the agent generates missing tests and returns GAPS FILLED / PARTIAL / ESCALATE
+```
+
+Write `outputs/requirement-coverage.json` (schema `requirement-coverage/1.0`, role evidence):
+
+```json
+{ "test_framework": "...", "coverage": { "statements":0, "branches":0, "functions":0, "lines":0 },
+  "requirement_coverage": [ { "requirement":"REQ-001", "tests":["auth.spec.ts"], "status":"covered" } ],
+  "gaps": [ { "requirement":"REQ-002", "description":"...", "suggested_test":"..." } ] }
+```
+
+Each requirement must be explicitly marked covered/partial/uncovered, no silent omission. Coverage below threshold records a warning.
+
+---
+
+## Step 4: Aggregate and write verification.json
+
+Merge goal-backward, constraint pre-check, anti-pattern, and Nyquist results, determine the overall verdict:
+
+```
+pass  — all truths VERIFIED, all artifacts pass L1-L3, all key links WIRED,
+        no blocker anti-patterns, no high/critical constraint violations
+warn  — only medium/low gaps, no critical
+fail  — any truth FAILED, artifact MISSING/STUB, key link NOT_WIRED,
+        blocker anti-pattern, or high/critical constraint violation
+blocked — critical path cannot be verified (missing dependency/environment)
+
+score = verified_truths / total_truths
+```
+
+When an old file exists, archive first → `outputs/.history/verification-{YYYY-MM-DDTHH-mm-ss}.json`.
+
+```
+Write outputs/verification.json (schema verification/1.0, alias latest-verification):
+{
+  "scope": "{scope}",
+  "verdict": "pass|warn|fail|blocked",
+  "verified_at": now(),
+  "criteria": [ { "id":"AC1", "status":"passed|failed|blocked",
+                  "method":"test|grep|review|manual", "evidence":[...] } ],
+  "must_haves": { "truths":[...], "artifacts":[...], "key_links":[...] },
+  "gaps": [...],                        // includes uat_gaps
+  "constraint_violations": [...],       // Step 0
+  "antipatterns": [...],                // Step 2 summary
+  "coverage_score": score
+}
+```
+
+Every criterion must have method + status + evidence, and the verdict must be re-computable.
+
+---
+
+## report.md
+
+Write `report.md` with standard frontmatter + fixed sections. frontmatter records scope, verdict, criteria counts, gap counts, coverage_score. Body references verification values via aref, does not copy content.
+
+```
+=== VERIFICATION RESULTS ===
+Scope:         {scope}
+Goal-Backward: {verified}/{total} truths verified
+  Artifacts:   {ok}/{total} (L1-L3)
+  Wiring:      {wired}/{total} key links
+Constraints:   {N} violations ({high} high, {medium} medium)
+Anti-patterns: {blocker} blockers, {warning} warnings
+Nyquist:       {coverage}% coverage ({--skip-tests ? SKIPPED : status})
+Gaps: {total}  Critical:{c} High:{h} Medium:{m} Low:{l}
+Verdict: {pass|warn|fail|blocked}
+```
+
+---
+
+## Handoff routing
+
+The verdict decides the downstream run; the report's needs includes `latest-verification` (and `current-plan` where necessary) accordingly:
+
+| verdict | Routing |
+|---------|------|
+| pass | `review` (code review), then `test` (UAT) |
+| warn | acknowledge caveats then `review` / `test` |
+| fail (only medium/low gaps) | `plan --gaps` → `execute` → re-run `verify` (gap-fix loop, cycle until gaps clear or user accepts) |
+| fail/blocked (has critical) | `plan --gaps`, needs includes `latest-verification` |
+| low test coverage | `quality-auto-test` generates missing tests |
+| needs manual verification | `test` (interactive UAT) |
+
+**gap-fix loop**: `verify → plan --gaps → execute → verify` repeats until all gaps close or the user accepts remaining gaps.
+
+→ Wrap-up follows ref/finish-work.md
+
+---
+
+## GateRecord
+
+After verification completes, inline-record one GateRecord:
+
+```json
+{ "gate": "verify", "verdict": "pass|warn|fail|blocked", "checked_at": now(),
+  "evidence": { "criteria_total": N, "passed": N, "failed": N, "gaps": N, "coverage_score": 0.0 },
+  "artifact": "outputs/verification.json" }
+```
+
+BLOCKED conditions: `verification.json` missing, or a criterion not verified, or a failed criterion lacks a corresponding gap, or coverage has a silent omission.
+
+---
+
+## Error Handling
+
+| Error | Action |
+|------|------|
+| no plan/execution | abort: `current-plan` or `current-execution` missing, run execute first |
+| no summaries | warning, analyze using task files only, mark [LOW CONFIDENCE] (partial, missing summaries) |
+| no test framework detected | skip coverage computation, warn the user |
+| coverage command failed | do requirement mapping only, mark coverage [LOW CONFIDENCE] |
+| verifier/auditor agent failed | retry once, if still failing write partial results, mark [LOW CONFIDENCE] |

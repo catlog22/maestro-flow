@@ -1,45 +1,244 @@
-<!-- session-mode: inherited -->
+# Workflow: Debug
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-# Workflow: Debug Run
+Scientific method for root-cause isolation — subagent isolation, persisted investigation state, confidence scoring. Three entry modes (standalone / from-test / parallel), produces only diagnosis and fix directions.
 
-## Iron Law
+Full investigation discipline (Iron Law, Red Flags, Rationalization Table, 3-strike architecture check, backward tracing) is in `ref/scientific-debug.md`.
 
-没有复现、日志/代码 trace 与 file:line 根因证据，不得提出确定性修复。
+---
 
-## Run Contract
+## Step 1: Check for an active session
 
-```text
-maestro run create quality-debug
-  consumes: latest-test? + latest-review? + current-execution?
-domain pipeline
-  produces: diagnosis, hypotheses, reproduction, fix-directions
-maestro run check <run_id> --stage exit
-maestro run complete <run_id> → alias latest-debug
+Search each run's `outputs/` for debug investigation state (the status and current hypothesis in the `understanding.md` header).
+
+**Active session and no arg**: show a list (number, location, status, current hypothesis), wait for response. Number → resume (load state, Step 12 dispatches a continuation agent); text → new issue (Step 3 or Step 2).
+
+| Result | Action |
+|------|------|
+| has session, no arg | offer a resume list |
+| has session, has arg | start a new investigation |
+| no session, no arg | error E001 |
+| no session, has arg | enter the corresponding mode |
+
+On resume, load `understanding.md` + `evidence.ndjson`, dispatch a continuation agent.
+
+---
+
+## Step 1.5: Load specs
+
+```
+# Mandatory, cannot be substituted with manual Read/Grep
+specs_content = maestro spec load --category debug
+→ passed to the debug agent as prior knowledge
 ```
 
-禁止源码修改；结构化调查证据属于 typed outputs，过程叙述属于 `report.md`。
+---
 
-## FSM
+## Step 2: Load test gaps (if --from-test)
 
-```text
-SYMPTOMS → REPRODUCE → HYPOTHESES → TEST → BACKWARD TRACE → DIAGNOSE
-                              ↘ refuted (max 3) ↗        ↘ INCONCLUSIVE
-DIAGNOSE → PRESSURE PASS → FIX DIRECTION → COMPLETE
+If not set, skip to Step 3. Read the Gaps section of `latest-test`. Each gap:
+
+```yaml
+- test: T-003
+  truth: "User can reply to comments"
+  status: failed
+  reason: "User reported: clicking reply does nothing"
+  severity: major
+  requirement_ref: SC-002
 ```
 
-1. create + entry check。standalone 收集 expected/actual/errors/timeline/reproduction；from-test 从 latest-test gaps 建 symptom baseline；parallel 仅按独立 cluster 并行。
-2. 为每 cluster 建 2-3 个可证伪 hypotheses。逐个记录 action、observation、file:line evidence、confirmed/refuted/testing。
-3. 从错误首次出现点沿 call/data flow 反向追踪，直到正确数据变坏的源头；禁止在症状点止步。
-4. 三个 hypothesis 失败后停止新猜测，执行 architecture check，并把所需新上下文写入 open questions。
-5. 写 `outputs/reproduction.json`、`outputs/hypotheses.json`、`outputs/diagnosis.json`（primary/latest-debug）、`outputs/fix-directions.json`；全部带 `_meta`。
-6. confidence 维度：hypothesis quality、evidence completeness、root-cause isolation、fix confidence；confirmed 前必须 pressure pass 且无矛盾证据。
-7. fix direction 只描述根因级修改位置、regression tests 与 risks，不应用 patch。
-8. `report.md` confirmed 路由 maestro-plan；partial/inconclusive 路由新的 quality-debug Run 并声明缺失证据。
-9. exit check：confirmed root cause 必有 reproduction + file:line + pressure pass + fix direction；通过后 complete。
+**Cluster by component/area**: parse the affected features from truth + reason, group by likely component (same module/same flow/same file area), each cluster becomes one investigation.
 
-## Red Flags
+| Cluster | Example |
+|------|----|
+| same component | T-003(reply) + T-004(edit) → "comment-actions" |
+| same flow | T-001(login) + T-002(session) → "auth-flow" |
+| unrelated | T-005(nav color) → standalone "nav-styling" |
 
-“先试着改”“错误显然”“加 try/catch”“多个改动一起试”都意味着返回证据收集阶段。
+**candidate enrichment**: for each gap with a `candidate_ref`, look up the issue candidate and attach `issue_context`.
+
+`--parallel` → Step 5; otherwise → Step 6 (sequential).
+
+---
+
+## Step 3: Collect symptoms (standalone)
+
+Skip when `--from-test`. Generate a slug from the issue description (lowercase, hyphenated, ≤40 chars).
+
+Ask 5 questions: 1) what should happen (expected) 2) what actually happens (actual) 3) error message 4) when it started, was it ever working 5) how to trigger (reproduction steps). Also collect `git log --oneline -10`, `git diff --stat HEAD~3`.
+
+Store responses → create the debug session directory → Step 6.
+
+---
+
+## Step 4: Determine output directory
+
+| Mode | Directory |
+|------|------|
+| scope-scoped (from test) | current run's `outputs/debug/{gap-slug}/` |
+| standalone | current run's `outputs/debug-{slug}/` |
+
+Create the directory.
+
+---
+
+## Step 5: Parallel debug agents — mandatory, not substitutable
+
+Dispatch an agent per cluster concurrently (`run_in_background: false`):
+
+- **Input**: cluster name, scope, all gaps (test_id, truth, reason, severity). Mode: `symptoms_prefilled`.
+- **Process**: form 2-3 hypotheses per gap, search code for evidence, record NDJSON, confirm/refute.
+- **Output per gap**: `root_cause`, `fix_direction`, `affected_files` (file:line), `confidence` (multi-factor), `evidence` summary.
+- **Files**: `{debug_dir}/evidence-{cluster_slug}.ndjson`, `{debug_dir}/understanding-{cluster_slug}.md`.
+
+---
+
+## Step 5.5: CLI supplementary evidence-gathering (optional)
+
+Skip if no CLI tool is enabled or the standalone context is minimal. Use the symptom summary to ask the CLI to trace the call chain, find recent changes to related files, identify error-handling gaps, and find similar patterns. See `ref/cli-supplementary.md`. Append the callback results as evidence with `type: "cli-exploration"`, and pass them as supplementary_context to the Step 5/6 agent.
+
+---
+
+## Step 6: Single debug agent (sequential) — mandatory, not substitutable
+
+Dispatch an agent (`run_in_background: false`):
+
+- **Input**: slug, description, symptoms. `symptoms_prefilled: {true when from test}`, goal: `find_and_fix`.
+- **Process**: form hypotheses, test each one, record NDJSON evidence, update `understanding.md`.
+- **Returns**: `## ROOT CAUSE FOUND` | `## CHECKPOINT REACHED` | `## INVESTIGATION INCONCLUSIVE`.
+- **Files**: `{debug_dir}/understanding.md`, `{debug_dir}/evidence.ndjson`.
+
+---
+
+## Step 7: Collect unified results
+
+Write primary `outputs/diagnosis.json` (schema `diagnosis/1.0`, alias `latest-debug`):
+
+```json
+{
+  "session_id": "{debug session ID}",
+  "completed_at": "{ISO}",
+  "status": "confirmed|partial|inconclusive",
+  "clusters": [
+    { "name": "{cluster}", "gaps": [
+      { "test_id": "T-003", "root_cause": "...", "fix_direction": "...",
+        "affected_files": ["src/components/Comments.tsx:42"],
+        "confidence": { "overall": 0.78, "dimensions": {} } } ] }
+  ],
+  "confidence": { "overall": 0, "dimensions": {} },
+  "pressure_pass": {}
+}
+```
+
+Also write `outputs/reproduction.json` (schema `reproduction/1.0`) and `outputs/hypotheses.json` (schema `hypotheses/1.0`), each item containing commands/steps, observation, file:line, status, and contradicting evidence.
+
+### Step 7.0: Debug Confidence scoring
+
+Dimensions (4): hypothesis_quality, evidence_completeness, root_cause_isolation, fix_confidence. Factors (weights): evidence_depth(.30), evidence_strength(.25), coverage_breadth(.20), reproduction(.15), consistency(.10). Mapping: <40% low, 40-70% medium, >70% high.
+
+Quality mechanisms: **Pressure Pass** (before Step 9) cross-checks confirmed vs refuted; **Devil's Advocate** (root_cause_isolation > 0.7) "is the root cause deeper?"; **Stall Detection** (no new evidence + delta < 5% for 2 consecutive continuations) "investigation may be stalling".
+
+**Readiness Gate** (blocks Step 9): evidence_completeness ≥ 40% | pressure pass done | no contradicting evidence | fix_direction has specific files. If blocked, ask: supplement the investigation or ignore risk and confirm. The confidence table is appended to `understanding.md`.
+
+### Step 7.1: Update issue candidate diagnosis
+
+For each diagnosed gap with a `candidate_ref`, add to the issue candidate: `suggested_fix: fix_direction`, `notes: root_cause`, `diagnosed: true`.
+
+---
+
+## Step 8: Update test gaps (if --from-test)
+
+Skip when standalone. For each diagnosed gap, update the uat.md Gaps of `latest-test` (add root_cause, fix_direction, affected_files).
+
+---
+
+## Step 9: Handle ROOT CAUSE FOUND
+
+```
+------------------------------------------------------------
+  ROOT CAUSE IDENTIFIED
+------------------------------------------------------------
+{root cause description}
+Evidence: {key evidence points, with file:line}
+Recommended fix: {fix suggestion}
+------------------------------------------------------------
+Options:
+1. Fix now  -- quickly apply the fix
+2. Plan fix -- plan --gaps
+3. Manual   -- investigate/fix yourself
+------------------------------------------------------------
+```
+
+Write `outputs/fix-directions.json` (schema `fix-directions/1.0`) — contains only root-cause-level change directions, affected files, regression tests, and risks, **not the actual patch**.
+
+---
+
+## Step 10-12: Checkpoint / Inconclusive / Continuation
+
+- **Checkpoint**: present to the user → on input dispatch a continuation agent; on pause store state and exit.
+- **Inconclusive**: show items checked/ruled out, offer: continue (new agent with prior state) / add context / manual investigation.
+- **Continuation**: load prior state (understanding.md + evidence.ndjson) + the user's checkpoint response, handling returns to Step 6.
+
+---
+
+## report.md
+
+Write `report.md` with standard frontmatter + fixed five sections; frontmatter records mode, target, diagnosis status, clusters/gaps counts. Body:
+
+```
+=== DEBUG SESSION ===
+Mode:        {standalone | from-test | parallel}
+Target:      {issue or scope}
+Clusters:    {N} investigated
+Gaps:        {total}
+  Diagnosed: {N} root causes found
+  Uncertain: {N} need more investigation
+```
+
+---
+
+## Handoff routing
+
+The report's needs includes `latest-debug` accordingly:
+
+| Result | Routing |
+|------|------|
+| root cause confirmed, needs fix | `plan --gaps` (required `[latest-debug]`) |
+| root cause confirmed (from test), auto-fix | `test --auto-fix` |
+| inconclusive | new `debug` run (`-c` resume), record missing evidence in concerns |
+| standalone, fix applied | `execute` |
+
+---
+
+## GateRecord
+
+Inline-record (no separate gates.json):
+
+```json
+{ "gate": "debug", "status": "confirmed|partial|inconclusive", "checked_at": now(),
+  "evidence": { "clusters": N, "diagnosed": N, "confidence": 0.0 },
+  "artifact": "outputs/diagnosis.json" }
+```
+
+BLOCKED conditions: `understanding.md` or `evidence.ndjson` missing, or Readiness Gate not passed.
+
+---
+
+## Evidence format
+
+**evidence.ndjson** — one JSON per line, append-only:
+
+```json
+{"timestamp":"2026-03-14T10:30:00+08:00","hypothesis":"JWT token not refreshed on 401","action":"grep for 401 handler","result":"Found handler but no refresh call","conclusion":"confirmed"}
+```
+
+---
+
+## Error Handling
+
+| Error | Action |
+|------|------|
+| E001 | no issue description and no active session → check the argument format and re-run |
+| E002 | test artifact for `--from-test` not found → verify this scope has test-results |
+| W001 | existing debug session found → offer resume |
+| W002 | Checkpoint, needs user input → provide the requested input |
+| W003 | some gaps inconclusive → review partial results, retry |

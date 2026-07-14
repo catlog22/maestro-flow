@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
-import { checkRun, completeRun, createRun, sealSession } from '../run/runtime.js';
+import { briefRun, checkRun, completeRun, createRun, prepareStep, sealSession } from '../run/runtime.js';
 
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
@@ -18,6 +18,18 @@ export function registerRunCommand(program: Command): void {
   const run = program
     .command('run')
     .description('Manage canonical Session/Run lifecycle');
+
+  run
+    .command('prepare <step>')
+    .description('Return prepare file + workflow metadata for pre-task thinking (read-only, stateless)')
+    .option('--workflow-root <path>', 'project root', process.cwd())
+    .action((step: string, opts: { workflowRoot: string }) => {
+      try {
+        print(prepareStep(resolve(opts.workflowRoot), step));
+      } catch (error) {
+        reportError(error);
+      }
+    });
 
   run
     .command('create <command> [args...]')
@@ -72,6 +84,19 @@ export function registerRunCommand(program: Command): void {
         const result = completeRun(resolve(opts.workflowRoot), runId, opts.session);
         print(result);
         if (!result.sealed) process.exitCode = 1;
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  run
+    .command('brief <run-id>')
+    .description('Return Resume Packet for a running Run (re-attach workflow + goals + gate status)')
+    .option('--session <id>', 'explicit Session ID')
+    .option('--workflow-root <path>', 'project root', process.cwd())
+    .action((runId: string, opts: { session?: string; workflowRoot: string }) => {
+      try {
+        print(briefRun(resolve(opts.workflowRoot), runId, opts.session));
       } catch (error) {
         reportError(error);
       }

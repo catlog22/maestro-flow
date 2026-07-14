@@ -1,9 +1,4 @@
-<!-- session-mode: inherited -->
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-# Auto-Test Workflow (Unified)
+# Workflow: Auto-Test
 
 Unified automated testing with intelligent state-based routing. Merges test generation (gap-forward), business testing (PRD-forward), and integration testing (code-forward) into a single pipeline.
 
@@ -14,7 +9,7 @@ Only Step 2 diverges (scenario source). Everything else is shared.
 
 ---
 
-### Step 0: Parse Input & Load Specs
+## Step 0: Parse Input & Load Specs
 
 **Parse arguments:**
 
@@ -35,12 +30,11 @@ Only Step 2 diverges (scenario source). Everything else is shared.
 specs_test = maestro spec load --category test
 specs_arch = maestro spec load --category arch
 ```
-
 `specs_test` for test conventions (Steps 3-5); `specs_arch` for module boundaries (Step 2).
 
 ---
 
-### Step 1: Read State & Route
+## Step 1: Read State & Route
 
 Read project state signals and auto-select scenario source. This is the **primary branch point, with Route-specific extraction in Step 2** (after Step 2 normalization, the downstream pipeline is identical).
 
@@ -84,18 +78,18 @@ Priority: Resume > Re-run > Spec > Gap > Code
 **Display route selection:**
 ```
 === AUTO-TEST ===
-来源: {ROUTE} ({reason})
-阶段: {phase_name}
+Source: {ROUTE} ({reason})
+Phase: {phase_name}
 {IF spec: "Spec: {SPEC_DIR} (mode: {SPEC_MODE})"}
 ```
 
 ---
 
-### Step 2: Source Scenarios
+## Step 2: Source Scenarios
 
 Execute the route-specific scenario extraction, then normalize ALL scenarios into the unified format. **After this step, the pipeline is identical regardless of source.**
 
-#### Route A: `spec` source (PRD-forward)
+### Route A: `spec` source (PRD-forward)
 
 1. Load spec package:
    - `requirements/REQ-*.md` — functional requirements with acceptance criteria
@@ -159,7 +153,7 @@ Execute the route-specific scenario extraction, then normalize ALL scenarios int
 
 6. Convert to unified scenario format.
 
-#### Route B: `gap` source (coverage-forward)
+### Route B: `gap` source (coverage-forward)
 
 1. Read gap sources:
    - `verification.json` → `gaps[]` with status MISSING or PARTIAL
@@ -196,7 +190,7 @@ Execute the route-specific scenario extraction, then normalize ALL scenarios int
 
 5. Convert to unified scenario format.
 
-#### Route C: `code` source (exploration-forward)
+### Route C: `code` source (exploration-forward)
 
 1. Explore codebase for testable integration points:
    - Module boundaries and cross-module calls
@@ -216,7 +210,7 @@ Execute the route-specific scenario extraction, then normalize ALL scenarios int
 
 5. Convert to unified scenario format.
 
-#### Unified Scenario Format
+### Unified Scenario Format
 
 All routes produce this identical structure:
 
@@ -256,7 +250,7 @@ All routes produce this identical structure:
 
 ---
 
-### Step 3: Discover Test Infrastructure
+## Step 3: Discover Test Infrastructure
 
 Detect existing test framework and patterns:
 
@@ -282,7 +276,7 @@ Output: `infrastructure` object passed to Steps 5-6.
 
 ---
 
-### Step 4: Generate Test Plan & Confirm
+## Step 4: Generate Test Plan & Confirm
 
 1. **Merge pre-existing tests** from `.tests/test-gen-report.json` (if exists):
    - Mark as "pre-existing" so Step 5 skips writing them
@@ -316,11 +310,11 @@ Output: `infrastructure` object passed to Steps 5-6.
 5. Display and confirm:
 ```
 === AUTO-TEST PLAN ===
-来源:  {ROUTE}
-阶段:  {phase_name}
+Source:  {ROUTE}
+Phase:  {phase_name}
 Blueprint: {blueprint_ref or "N/A"}
 
-层级分布:
+Layer distribution:
   L0 Static:      {N} checks
   L1 Unit/API:    {N} scenarios ({X} critical, {Y} high)
   L2 Integration: {N} scenarios ({X} critical, {Y} high)
@@ -338,11 +332,11 @@ Proceed? (yes/edit/cancel)
 
 ---
 
-### Step 5: Write Tests (RED-GREEN) via CSV Parallel
+## Step 5: Write Tests (RED-GREEN) via CSV Parallel
 
 **Parallel strategy**: Build `layer-L{N}-write.csv` per layer, execute via `spawn_agents_on_csv`. Each agent writes one test file independently.
 
-#### 5a. Build Write CSV
+### 5a. Build Write CSV
 
 For each layer (L1, L2, L3 — sequential):
 
@@ -354,7 +348,7 @@ Build layer-L{N}-write.csv:
   prev_context = findings from completed prior-layer scenarios (cross-layer propagation)
 ```
 
-#### 5b. Parallel Test Writing via spawn_agents_on_csv — MANDATORY, NOT SUBSTITUTABLE
+### 5b. Parallel Test Writing via spawn_agents_on_csv — MANDATORY, NOT SUBSTITUTABLE
 
 ```javascript
 spawn_agents_on_csv({
@@ -385,7 +379,7 @@ spawn_agents_on_csv({
 })
 ```
 
-#### 5c. Merge & Continue
+### 5c. Merge & Continue
 
 Merge write-results into master state. Delete temp CSV. Proceed to next layer or Step 6.
 
@@ -395,7 +389,7 @@ Merge write-results into master state. Delete temp CSV. Proceed to next layer or
 
 ---
 
-### Step 6: Execute (Progressive Layers)
+## Step 6: Execute (Progressive Layers)
 
 Run tests progressively through layers with fail-fast on critical:
 
@@ -416,7 +410,7 @@ Write iteration results to `.tests/auto-test/results-iter-{N}.json`.
 
 ---
 
-### Step 7: Reflect & Adjust (Unified Iteration Engine)
+## Step 7: Reflect & Adjust (Unified Iteration Engine)
 
 Single engine that subsumes both Generator-Critic (per-layer inner) and Reflect-Adjust (global outer). Uses `spawn_agents_on_csv` for parallel failure diagnosis.
 
@@ -512,7 +506,7 @@ END OUTER
 
 ---
 
-### Step 7.5: Test Confidence Scoring
+## Step 7.5: Test Confidence Scoring
 
 Scored after each REFLECT step. Dimensions (5): scenario_coverage, test_quality, diagnostic_accuracy, strategy_effectiveness, infrastructure_fitness. Factors (weights): completeness(.30), pass_rate_trend(.25), classification_accuracy(.20), coverage_breadth(.15), consistency(.10). Append confidence table to reflection-log.md.
 
@@ -524,7 +518,7 @@ Scored after each REFLECT step. Dimensions (5): scenario_coverage, test_quality,
 
 ---
 
-### Step 8: Complete & Write Artifacts
+## Step 8: Complete & Write Artifacts
 
 1. Update session state:
 ```json
@@ -625,9 +619,9 @@ Scored after each REFLECT step. Dimensions (5): scenario_coverage, test_quality,
 
 ---
 
-### Step 9: Post-Processing & Routing
+## Step 9: Post-Processing & Routing
 
-#### Conditional: Traceability Matrix (spec source only)
+### Conditional: Traceability Matrix (spec source only)
 
 Build REQ → AC → scenario → result mapping:
 
@@ -649,7 +643,7 @@ FOR each REQ in requirements targeted:
 Populate `requirement_coverage[]` in report.json.
 Write `.tests/auto-test/traceability.md` (human-readable table).
 
-#### Conditional: Issue Creation (when failures exist)
+### Conditional: Issue Creation (when failures exist)
 
 ```
 FOR each failure in report.failures WHERE classification == "code_defect":
@@ -668,24 +662,26 @@ FOR each failure in report.failures WHERE classification == "code_defect":
   Append to .workflow/issues/issues.jsonl
 ```
 
-#### Report Display
+Review-finding integration: extract critical/high findings from related review artifacts as additional scenarios, marked `source: "review_finding"`; when review verdict is "BLOCK" and review-finding tests fail, suggest debug. Debug root-cause integration: generate regression scenarios from confirmed root causes, marked `source: "debug_root_cause"`.
+
+### Report Display
 
 ```
 === AUTO-TEST RESULTS ===
-阶段:      {phase_name}
-来源:      {ROUTE}
-迭代:      {N} (策略: {strategy_history})
-收敛:      {status} ({final_pass_rate}%)
+Phase:      {phase_name}
+Source:      {ROUTE}
+Iterations:      {N} (strategy: {strategy_history})
+Convergence:      {status} ({final_pass_rate}%)
 
-层级结果:
+Layer results:
   L0 Static:      {pass_rate}% ({passed}/{total})
   L1 Unit/API:    {pass_rate}% ({passed}/{total})
   L2 Integration: {pass_rate}% ({passed}/{total})
   L3 E2E:         {pass_rate}% ({passed}/{total})
 
-场景: {passed} passed, {failed} failed, {blocked} blocked
+Scenarios: {passed} passed, {failed} failed, {blocked} blocked
 Bugs: {N} discovered
-{IF spec: "需求覆盖: {pct}% | 已验证: {n}/{total}"}
+{IF spec: "Requirement coverage: {pct}% | Verified: {n}/{total}"}
 
 Files:
   .tests/auto-test/state.json
@@ -695,16 +691,29 @@ Files:
   {IF spec: ".tests/auto-test/traceability.md"}
 ```
 
-#### Next-step routing
+### Next-step routing
 
 | Result | Suggestion |
 |--------|------------|
-| Converged (>=threshold) | `/quality-review {phase}` to update validation |
-| All requirements verified (spec) | `/maestro-milestone-audit` |
-| Bugs discovered (code_defects) | `/quality-debug --from-auto-test {phase}` |
-| Max iter, >80% | `/quality-test {phase}` for manual UAT on remaining gaps |
-| Max iter, <80% | `/quality-debug {phase}` for deep investigation |
-| Coverage still low | `/quality-auto-test {phase} --layer {missing}` |
-| Re-run all pass | `/quality-review {phase}` |
-| Single pass (max_iter=1), bugs found | `/quality-debug --from-auto-test {phase}` |
-| Single pass, all pass | `/quality-test {phase}` |
+| Converged (>=threshold) | `review {phase}` to update validation |
+| All requirements verified (spec) | `milestone-audit` |
+| Bugs discovered (code_defects) | `debug --from-auto-test {phase}` |
+| Max iter, >80% | `test {phase}` for manual UAT on remaining gaps |
+| Max iter, <80% | `debug {phase}` for deep investigation |
+| Coverage still low | `auto-test {phase} --layer {missing}` |
+| Re-run all pass | `review {phase}` |
+| Single pass (max_iter=1), bugs found | `debug --from-auto-test {phase}` |
+| Single pass, all pass | `test {phase}` |
+
+---
+
+## Error Codes
+
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | Phase argument required (no active sessions) | Prompt user for phase number |
+| E002 | Phase not found in artifact registry | Check state.json artifacts |
+| E003 | No test framework detected | Install test framework or configure test runner |
+| W001 | One or more test scenarios failed | Auto-iterate or suggest fix options |
+| W002 | Max iterations reached without convergence | Review reflection-log.md, suggest debug |
+| W003 | Degraded spec mode (no full spec package) | Consider running blueprint |

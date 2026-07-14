@@ -1,41 +1,297 @@
-<!-- session-mode: inherited -->
+# Workflow: Test
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-# Workflow: Test Run
+Conversational UAT — persisted state, auto-diagnosis, gap closed-loop. Core: show the expected behavior, ask if reality matches, one scenario at a time.
 
-## Run Contract
-
-```text
-maestro run create quality-test
-  consumes: latest-verification + latest-review? + latest-debug?
-domain pipeline
-  produces: test-plan, test-results, acceptance, coverage, e2e-results?
-maestro run check <run_id> --stage exit
-maestro run complete <run_id> → alias latest-test
+```
+"yes" / "y" / "next" / empty / "pass" → pass
+"skip" / "can't test" / "n/a"          → skipped
+anything else                          → recorded as an issue, severity auto-inferred
 ```
 
-结构化 UAT 真相在 typed JSON，过程叙述在 `report.md`。
+Never ask "how severe is this?".
 
-## Pipeline
+---
 
-```text
-RESOLVE → SMOKE? → DESIGN → PRESENT ONE SCENARIO → RECORD RESPONSE
-                         ↘ gaps → DIAGNOSE/ROUTE → optional closure max 2
-          → CONFIDENCE → PRESSURE PASS → VERDICT
+## Step 1: Resolve target
+
+| Input | Action |
+|------|------|
+| session/run scope | `TARGET_TYPE=scope`, resolve from the run registry |
+| none | check for an active UAT session (Step 2), otherwise prompt the user |
+
+Validate the target exists and has `latest-verification` (missing → E002).
+
+---
+
+## Step 2: Check for an active session
+
+Search each run's `outputs/` for an active UAT: `uat.md` (status, target, Current Test section).
+
+**Active session and no arg**: show a list (number, target, status, current test, progress), wait for the user response. Number → resume (Step 9); scope → create new (Step 4).
+
+**Active session and has arg**: if that target has a session, offer resume or restart.
+
+**No active session and no arg**: prompt to provide a scope to start testing.
+
+**No active session and has arg**: proceed to Step 3 or Step 4.
+
+---
+
+## Step 3: Smoke test (if --smoke)
+
+Skip if not set. Inject basic sanity checks before UAT scenarios:
+
+| Smoke | Check | Method |
+|-------|------|------|
+| App startup | process doesn't crash | run the start command, check exit code |
+| Route response | key endpoints not erroring | curl/fetch the main routes |
+| Clean build | no build errors | build command succeeds |
+| Dependencies intact | no missing dependencies | install check |
+
+Record results in the `## Smoke Tests` section of `uat.md`. Any failure → abort UAT, report as a blocker, suggest `debug` (E003).
+
+---
+
+## Step 4: Load verification context
+
+Read `latest-verification`, report.md frontmatter, and execution task summaries from the target run. Build a testable checklist from success_criteria + must_haves + task outcomes (user-observable results only).
+
+---
+
+## Step 5: Design test scenarios
+
+Build a scenario for each testable item: `id` (T-001…), `name`, `category` (e2e | integration | unit), `expected` (specific observable behavior), `requirement_ref`.
+
+Write `outputs/test-plan.json` (schema `test-plan/1.0`):
+
+```json
+{
+  "target": "{scope}",
+  "generated_at": "{ISO}",
+  "tests": [...],
+  "coverage": { "requirements_mapped": ["SC-001"], "requirements_unmapped": ["SC-003"] }
+}
 ```
 
-1. create + entry check；从 latest-verification 获取 requirements/criteria，从 review/debug 补充风险与回归场景。
-2. 写 typed `test-plan.json`；场景标明 source、requirement ref、steps、expected、evidence method。
-3. 对话 UAT 每次只呈现一个场景。pass/skip 明确记录；其他响应为 issue，severity 按语义自动推断，禁止询问等级。
-4. frontend verify 对每条 UI-observable criterion 验证入口→写请求 2xx→DOM 结果；timeout/无入口为 fail。
-5. gaps 按 component/flow 聚类。`--auto-fix` 通过新的 plan→execute→verify Runs 闭环，最多 2 轮，再复测；本 Run 不直接改源码。
-6. 写 `test-results.json`（primary/latest-test）、`acceptance.json`、`coverage.json`，frontend 时写 `e2e-results.json`；全部含 `_meta`。
-7. 计算 scenario coverage、diagnostic depth、observation quality、closure completeness；>80% pass 必做 edge pressure pass。
-8. `report.md`：全过路由 next/audit，已诊断 gaps 路由 maestro-plan，未诊断路由 quality-debug。
-9. exit check 确认场景零遗漏、coverage 可复算、gaps 未静默放行、frontend 证据确定；通过后 complete。
+Skip internal/unobservable items (refactors, type changes).
 
-## Severity Inference
+---
 
-crash/exception/cannot use→blocker；wrong/broken→major；works but/slow/inconsistent→minor；visual typo→cosmetic；默认 major。
+## Step 6: Create the UAT file
+
+When an old `uat.md` exists, archive → `outputs/.history/uat-{YYYY-MM-DDTHH-mm-ss}.md`. Create `outputs/uat.md`:
+
+```markdown
+---
+status: testing
+target: {scope}
+source: [list of summary files]
+started: {ISO}
+updated: {ISO}
+---
+
+## Current Test
+number: 1
+name: {first test name}
+expected: |
+  {what the user should observe}
+awaiting: user response
+
+## Smoke Tests
+{results if run, otherwise omit}
+
+## Tests
+
+### 1. {test name}
+expected: {observable behavior}
+result: [pending]
+
+## Summary
+total: {N}
+passed: 0
+issues: 0
+pending: {N}
+skipped: 0
+
+## Gaps
+[none yet]
+```
+
+→ Step 7.
+
+---
+
+## Step 7: Present the test
+
+```
+------------------------------------------------------------
+  TEST {number}/{total}: {name}
+------------------------------------------------------------
+Expected behavior:
+{expected}
+------------------------------------------------------------
+> type "pass" or describe what's wrong
+------------------------------------------------------------
+```
+
+Wait for the user's plain-text response.
+
+---
+
+## Step 8: Handle response
+
+| Response | Action |
+|------|------|
+| empty / "yes" / "y" / "ok" / "pass" / "next" | Pass |
+| "skip" / "can't test" / "n/a" | Skipped |
+| anything else | Issue (severity auto-inferred) |
+
+On an issue, update the Tests section (result: issue, reported: verbatim words, severity: inferred value), and append to the Gaps section:
+
+```yaml
+- test: {N}
+  truth: "{expected behavior}"
+  status: failed
+  reason: "User reported: {verbatim}"
+  severity: {inferred}
+  requirement_ref: {if mapped}
+```
+
+**Issue candidate**: aggregate the UAT gap into `outputs/issue-candidates.json` (title "UAT: {test.name} - {response}", ≤100 chars, source "uat", severity/priority from inference). Back-fill `candidate_ref` into the gap YAML.
+
+**Write triggers**: 1) an issue is found 2) session completes 3) every 5 passes (checkpoint).
+
+More tests → Step 7; none → Step 10.
+
+---
+
+## Step 9: Resume from file
+
+Read `uat.md` → find the first `result: [pending]` → update Current Test → Step 7.
+
+---
+
+## Step 10: Complete the session
+
+Update `uat.md`: `status: complete`. Archive old test artifacts → `.history/`.
+
+Write `outputs/test-results.json` (schema `test-results/1.0`, alias `latest-test`):
+
+```json
+{
+  "target": "{scope}",
+  "completed_at": "{ISO}",
+  "results": [ { "id": "T-001", "name": "...", "status": "pass|issue|skipped", "details": "..." } ],
+  "summary": { "total": N, "passed": N, "issues": N, "skipped": N }
+}
+```
+
+Write `outputs/acceptance.json` (schema `acceptance/1.0`) — per-criterion UAT conclusion and evidence.
+Write `outputs/coverage.json` (schema `coverage/1.0`):
+
+```json
+{
+  "target": "{scope}",
+  "generated_at": "{ISO}",
+  "requirements_covered": ["SC-001"],
+  "requirements_uncovered": ["SC-003"],
+  "coverage_percentage": 66.7
+}
+```
+
+issues == 0 → Step 13; issues > 0 → Step 11.
+
+---
+
+## Step 11: Auto-diagnosis
+
+1. **Cluster** gaps by component/area (same file/module → one cluster, same flow → one cluster).
+2. **Mandatory, cannot be substituted with manual Read/Grep**: dispatch one debug agent per cluster (parallel, `run_in_background: false`), pre-fill symptoms, `goal: find_root_cause`, with candidate_ref.
+3. Collect results, update `uat.md` gaps (add root_cause, fix_direction, affected_files).
+
+---
+
+## Step 12: Gap closed-loop decision
+
+`AUTO_FIX` set → skip the prompt and enter the gap-fix loop directly. Otherwise present a diagnosis table (Gap, Severity, Root Cause, Fix Direction) with options:
+
+| Choice | Action |
+|------|------|
+| 1 / "auto-fix" | enter the gap-fix loop |
+| 2 / "debug" | suggest `debug` |
+| 3 / "plan" | suggest `plan --gaps` |
+| 4 / "manual" | complete, report the results |
+
+**gap-fix loop (up to 2 rounds)**: `plan --gaps` → fix tasks → `execute` → fix → `execute` → retest. Issue lifecycle: `registered` → `planning` → `executing` → `completed` | `failed`.
+
+Pass → update `uat.md` gap to resolved; still has gaps → report the remaining, suggest manual intervention.
+
+---
+
+## Step 12.5: UAT Confidence scoring
+
+Dimensions (4): scenario_coverage, diagnostic_depth, observation_quality, closure_completeness. Factors (weights): requirements_mapped(.30), observation_specificity(.25), user_validation(.20), diagnostic_depth(.15), consistency(.10). Scoring points: init (Step 5), each user response (Step 8), after the gap-fix loop (Step 12).
+
+Quality mechanisms: **Pressure Pass** — >80% pass → ask the user to try an edge case; **Devil's Advocate** — >70% first-pass → challenge scenario difficulty; **Stall Detection** — 2 rounds of gap-fix with no improvement → stop.
+
+**Readiness Gate** (blocks Step 13): scenario_coverage < 40% | blocker gap not diagnosed | no pressure pass (if >80%) | unconfirmed remaining gap. The confidence summary is appended to `uat.md`.
+
+---
+
+## Step 13: Report
+
+Write `report.md` with standard frontmatter + fixed five sections; frontmatter records target, verdict, smoke/UAT counts, coverage_percentage. Body:
+
+```
+=== UAT RESULTS ===
+Target:      {scope}
+Smoke Tests: {run} run, {pass} passed (if run)
+UAT Tests:   {total} total
+  Passed:    {passed}
+  Issues:    {issues} ({blocker} blockers, {major} major)
+  Skipped:   {skipped}
+Diagnosis:   {diagnosed}/{issues} gaps diagnosed
+Auto-fix:    {fixed} gaps resolved (if run)
+```
+
+---
+
+## Handoff routing
+
+The report's needs includes `latest-test` accordingly:
+
+| Result | Routing |
+|------|------|
+| all pass, no gaps | session wrap-up / audit |
+| gaps auto-fixed | session wrap-up / audit |
+| gaps remaining, diagnosed | `debug` or `plan --gaps` |
+| gaps remaining, undiagnosed | `debug` (from test gaps) |
+| coverage below threshold | generate additional tests |
+
+`--frontend-verify` mode: follow `ref/frontend-verify.md`, produce `e2e-results.json` (schema `e2e-results/1.0`); any `[UI-observable]` fail or a write endpoint with no UI entry point → NEEDS_RETRY (does not pass).
+
+---
+
+## GateRecord
+
+Inline-record (no separate evidence.json):
+
+```json
+{ "gate": "test", "verdict": "pass|fail", "checked_at": now(),
+  "evidence": { "total": N, "passed": N, "issues": N, "coverage_pct": N },
+  "artifact": "outputs/test-results.json" }
+```
+
+BLOCKED conditions: Readiness Gate not passed, or `test-results.json` missing.
+
+---
+
+## Error Handling
+
+| Error | Action |
+|------|------|
+| E001 | no scope target and no active session → prompt to provide a scope |
+| E002 | target not verified (no `latest-verification`) → suggest running `execute` first (verification built in) |
+| E003 | smoke failed (app won't start) → suggest `debug` |
+| W001 | one or more scenarios failed → auto-diagnose, suggest fix options |
+| W002 | coverage below threshold → suggest generating additional tests |

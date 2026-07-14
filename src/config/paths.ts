@@ -14,12 +14,16 @@ export const paths = {
   cliHistory: join(MAESTRO_HOME, 'cli-history'),
   skillConfig: join(MAESTRO_HOME, 'skill-config.json'),
   workflows: join(MAESTRO_HOME, 'workflows'),
+  prepare: join(MAESTRO_HOME, 'prepare'),
+  ref: join(MAESTRO_HOME, 'ref'),
 
   project(root: string) {
     return {
       root: resolve(root),
       workflow: join(root, '.workflow'),
       templates: join(root, 'templates'),
+      prepare: join(root, '.workflow', 'prepare'),
+      ref: join(root, '.workflow', 'ref'),
     };
   },
 

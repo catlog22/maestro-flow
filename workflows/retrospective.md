@@ -1,29 +1,24 @@
-<!-- session-mode: inherited -->
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-# Retrospective Workflow
+# Workflow: Retrospective
 
 ## Argument Shape
 
 ```
-/quality-retrospective                          → auto-scan unreviewed phases, prompt selection
-/quality-retrospective <N>                      → retrospect single phase
-/quality-retrospective <N>..<M>                 → retrospect range (inclusive)
-/quality-retrospective --all                    → re-run for every completed phase (force)
-/quality-retrospective <N> --lens <name>        → restrict to one lens (technical|process|quality|decision|all)
-/quality-retrospective <N> --no-route           → produce retrospective.{md,json} only, skip auto-create of spec/note/issue
-/quality-retrospective <N> --compare <M>        → delta vs phase M (gstack-style trend)
+retrospective                          → auto-scan unreviewed phases, prompt selection
+retrospective <N>                      → retrospect single phase
+retrospective <N>..<M>                 → retrospect range (inclusive)
+retrospective --all                    → re-run for every completed phase (force)
+retrospective <N> --lens <name>        → restrict to one lens (technical|process|quality|decision|all)
+retrospective <N> --no-route           → produce retrospective.{md,json} only, skip auto-create of spec/note/issue
+retrospective <N> --compare <M>        → delta vs phase M (gstack-style trend)
 ```
 
 | Flag | Effect |
-|------|--------|
+|------|------|
 | `--lens <name>` | Run only the named lens. Default: all four. Repeatable. |
 | `--no-route` | Synthesize but skip Stage 6 (no spec/note/issue creation). |
-| `--all` | Force re-run for every completed phase (overwrites existing retrospective.json after archiving). |
+| `--all` | Force re-run for every completed phase (creates a new Run per candidate). |
 | `--compare <M>` | Load phase M's retrospective.json and emit a delta section. |
-| `--auto-yes` | Skip routing confirmation prompts; accept all recommendations. |
+| `-y` | Skip routing confirmation prompts; accept all recommendations. |
 
 ---
 
@@ -39,7 +34,7 @@ Build config:
   lenses     = ["technical","process","quality","decision"]
   route      = true (false if --no-route)
   compare_to = null | <phase number>
-  auto_yes   = false
+  auto_yes   = false (true if -y)
 
 Validate: --lens names must be known (E002), --compare requires single mode (E003).
 ```
@@ -52,12 +47,12 @@ Validate: --lens names must be known (E002), --compare requires single mode (E00
 Read `.workflow/state.json` to resolve `active_session_id`, then scan
 `.workflow/sessions/*/runs/*/run.json`.
 
-candidates = all sealed `maestro-execute` Runs, each mapped to:
-  { number: run.sequence, slug: run.run_id, title: run.intent, completed_at: run.sealed_at,
+candidates = all completed `maestro-execute` Runs, each mapped to:
+  { number: run.sequence, slug: run.run_id, title: run.intent, completed_at: run.completed_at,
     has_retro, run_dir, gaps: 0, review_verdict: "—" }
 
   where run_dir = `.workflow/sessions/{session_id}/runs/{run_id}`
-        has_retro = a sealed retrospective artifact in the owning Session `artifacts.json`
+        has_retro = a completed retrospective artifact in the owning Session `artifacts.json`
 ```
 
 ### Display backlog
@@ -81,7 +76,7 @@ candidates = all sealed `maestro-execute` Runs, each mapped to:
 | `scan`, 0 unreviewed | Print "All phases retrospected", exit 0 |
 | `scan`, 1 unreviewed | Default to that phase, ask AskUserQuestion to confirm |
 | `scan`, ≥2 unreviewed | AskUserQuestion with options: each phase as a choice + "All unreviewed" |
-| `all` | `phases = candidates`；每个候选都创建新的 retrospective Run |
+| `all` | `phases = candidates`; create a new retrospective Run per candidate |
 | `single` | `phases = [parsed_phase]` (validate it exists and is completed; if `has_retro` and not `--all`, prompt to overwrite) |
 | `range` | `phases = candidates.filter(c => N <= c.number <= M)` |
 
@@ -101,7 +96,7 @@ Load artifacts bundle:
   report          ← {source_run_dir}/report.md
   upstream        ← aliases and producer Runs resolved from Session `artifacts.json`
   phase_issues    ← .workflow/issues/{issues,issue-history}.jsonl filtered by phase_ref == slug|NN
-  prior_retro     ← if --compare M: resolve the sealed retrospective artifact from Session `artifacts.json`
+  prior_retro     ← if --compare M: resolve the completed retrospective artifact from Session `artifacts.json`
 ```
 
 ### Compute base metrics
@@ -110,7 +105,7 @@ Load artifacts bundle:
 metrics = {
   tasks_planned          ← execution summary planned count
   tasks_completed        ← execution summary completed count
-  tasks_deferred         ← state.accumulated_context.deferred for this phase
+  tasks_deferred         ← state deferred for this phase
   gaps_found / closed    ← verification.gaps (total vs status=="closed")
   antipatterns           ← verification.antipatterns count
   constraint_violations  ← verification.constraint_violations count
@@ -122,6 +117,8 @@ metrics = {
   uat_blockers           ← count blockers from uat.md
 }
 ```
+
+Verification fields (`gaps`, `antipatterns`, `constraint_violations`) follow the `steps/kinds/verification.yaml` schema. Review fields (`severity_distribution`, `verdict`, findings) follow the `steps/kinds/review-findings.yaml` schema.
 
 If `--compare M` is set, compute delta (current minus prior_retro) for:
 ```
@@ -230,9 +227,9 @@ Return ONLY a single JSON object, no prose, matching this schema:
 
 Spawn all lenses in parallel. Collect into `lens_results`. If any fails, log W001, proceed with successful lenses; flag retrospective as [LOW CONFIDENCE] (partial lenses).
 
----
+**GATE Stage 4→5**: REQUIRED lens analyses complete BEFORE synthesis; BLOCKED if lens_results missing.
 
-**GATE Stage 4→5**: REQUIRED lens analyses complete BEFORE synthesis; BLOCKED if lens_results missing
+---
 
 ## Stage 5: synthesize
 
@@ -256,7 +253,7 @@ Both `{run_dir}/outputs/retrospective.json` and `{run_dir}/outputs/retrospective
 
 ## Stage 6: route_outputs
 
-**Skip if `--no-route`.** Prompt user per recommendation (skip if `--auto-yes`).
+**Skip if `--no-route`.** Prompt user per recommendation (skip if `-y`).
 
 ### Display routing table
 
@@ -277,9 +274,6 @@ Accept all? [Y/n/i for individual]
 #### Target: spec
 
 Route spec-routed insights as `<spec-entry>` entries into the appropriate target file. Map insight type to roles:
-- `pattern` / `convention` → `implement`
-- `adr-candidate` / architecture → `plan`
-- quality-related → `review`
 
 ```
 Map insight type → roles → target file:
@@ -299,18 +293,18 @@ insight.routed_id = "{target_file}#INS-{INS_id}"
 #### Target: note
 
 ```
-Invoke manage-learn tip with:
+Invoke manage-knowhow-capture tip with:
   text = "[Retro phase {NN} / {lens}] {insight.title}: {insight.summary}"
   tags = insight.tags + ["retrospective", "phase-{NN}", insight.lens]
 
 insight.routed_id = "TIP-{captured_id}"
 ```
 
-Fallback: if skill ID cannot be captured, write tip file directly per `workflows/knowhow.md` Part B Step 3 and update `wiki-index.json` per Step 4; flag tip as [LOW CONFIDENCE] (skill not captured).
+Fallback: if skill ID cannot be captured, write tip file directly and flag tip as [LOW CONFIDENCE] (skill not captured).
 
 #### Target: issue
 
-Append a new entry to `.workflow/issues/issues.jsonl` matching the canonical schema from `workflows/issue.md` Step 4.
+Append a new entry to `.workflow/issues/issues.jsonl` matching the canonical issue schema.
 
 ```
 Ensure .workflow/issues/issues.jsonl exists.
@@ -321,7 +315,7 @@ Map insight.category → severity:
   antipattern→high, gotcha→medium, pattern/decision/tool/technique→low, default→medium
 Map severity → priority: critical→1, high→2, medium→3, low→4
 
-Create issue per canonical schema (workflows/issue.md Step 4):
+Create issue per canonical schema:
   title: "[Retro] {insight.title}" (max 100 chars)
   source: "retrospective", phase_ref: phase_slug, gap_ref: insight.id
   description: insight.summary
@@ -370,7 +364,7 @@ For each insight in `distilled_insights`, append a `<spec-entry>` to `.workflow/
 </spec-entry>
 ```
 
-Also append each insight to `.workflow/specs/learnings.md` as `<spec-entry>` with `category="learning"` (backward compat with milestone-complete).
+Also append each insight to `.workflow/specs/learnings.md` as `<spec-entry>` with `category="learning"`.
 
 ---
 
@@ -378,7 +372,7 @@ Also append each insight to `.workflow/specs/learnings.md` as `<spec-entry>` wit
 
 Print: phase, lenses run, insight count, routing summary, output paths.
 
-Next steps: `manage-status` | `manage-issue list --source retrospective` | `manage-learn list` | `maestro-milestone-audit`
+Next steps: `manage-status` | `manage-issue list --source retrospective` | `manage-knowhow list` | `milestone-audit`
 
 If range/all mode: loop Stages 3-8 per phase, then print aggregate summary.
 
@@ -458,8 +452,23 @@ Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; shou
 - **Phase**: 1 (01-auth)
 - **Lens**: technical
 - **Confidence**: high
-- **Evidence**: {run_dir}/outputs/20260415-plan-P1-auth/verification.json#gaps[2]
 - **Routed to**: spec (coding-conventions.md#INS-a1b2c3d4)
 
 </spec-entry>
 ```
+
+---
+
+## Error Codes
+
+| Code | Condition | Stage |
+|------|-----------|-------|
+| E001 | `.workflow/` not initialized — run init first | parse_input |
+| E002 | Unknown `--lens` name (allowed: technical, process, quality, decision) | parse_input |
+| E003 | `--compare` requires a single phase argument | parse_input |
+| E004 | Phase has not executed yet — no `.task/` or `.summaries/` artifacts | load_artifacts |
+| E005 | Phase argument out of range / phase directory not found | scan_unreviewed |
+| W001 | One or more lens agents failed — proceeding with partial coverage | multi_lens_analysis |
+| W002 | Existing retrospective found and not `--all` — prompted user | scan_unreviewed |
+| W003 | knowhow-capture tip did not return parseable INS id; fell back to direct write | route_outputs |
+| W004 | `--compare` target phase has no retrospective.json; delta omitted | load_artifacts |

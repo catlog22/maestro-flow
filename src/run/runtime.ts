@@ -10,7 +10,12 @@ import {
 } from 'node:fs';
 import { basename, join } from 'node:path';
 import { scanOutputs, type ArtifactScanResult, type DiscoveredArtifact } from './artifacts.js';
-import { resolveCommandSource, type CommandContract, type ContractGateDefinition } from './contract.js';
+import {
+  resolveCommandSource,
+  resolveStepContent,
+  type CommandContract,
+  type ContractGateDefinition,
+} from './contract.js';
 import { deriveHandoff, readReportFrontmatter } from './report.js';
 import {
   gateSchema,
@@ -83,6 +88,26 @@ export interface CompleteRunResult extends CheckRunResult {
   sealed: boolean;
   primary_artifact_id: string | null;
   artifact_ids: string[];
+}
+
+export interface PrepareStepResult {
+  step: string;
+  prepare: { path: string; content: string } | null;
+  workflow: { path: string; line_count: number } | null;
+  run_mode: { path: string; summary: string } | null;
+  refs: Array<{ path: string; when: string }>;
+}
+
+export interface BriefRunResult {
+  session_id: string;
+  run_id: string;
+  status: CommandRun['status'];
+  command: string;
+  goal: string;
+  gates: GateSummary;
+  workflow: { path: string; content: string } | null;
+  run_mode: { path: string; summary: string } | null;
+  outputs: Array<{ artifact_id: string; kind: string; role: string; path: string; status: string }>;
 }
 
 interface EvaluationContext {
@@ -816,4 +841,65 @@ export function completeRun(projectRoot: string, runId: string, sessionId?: stri
       artifact_ids: artifactIds,
     };
   });
+}
+
+function summarizeRunMode(raw: string): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && !line.startsWith('#'));
+  return lines.slice(0, 8).join('\n');
+}
+
+export function prepareStep(projectRoot: string, stepName: string): PrepareStepResult {
+  const content = resolveStepContent(projectRoot, stepName);
+  return {
+    step: stepName,
+    prepare: content.prepare ? { path: content.prepare.path, content: content.prepare.raw } : null,
+    workflow: content.workflow
+      ? { path: content.workflow.path, line_count: content.workflow.raw.split(/\r?\n/).length }
+      : null,
+    run_mode: content.runMode
+      ? { path: content.runMode.path, summary: summarizeRunMode(content.runMode.raw) }
+      : null,
+    refs: content.refs,
+  };
+}
+
+export function briefRun(projectRoot: string, runId: string, sessionId?: string): BriefRunResult {
+  const store = new SessionStore(projectRoot);
+  const located = store.findRun(runId, sessionId);
+  const bundle = store.readBundle(located.sessionId);
+  const run = located.run;
+  const content = resolveStepContent(projectRoot, run.command.name);
+
+  const outputs = run.output.produces
+    .map(id => {
+      const artifact = bundle.artifacts.artifacts[id];
+      if (!artifact) return null;
+      return {
+        artifact_id: id,
+        kind: artifact.kind,
+        role: artifact.role,
+        path: artifact.relative_path,
+        status: artifact.status,
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  return {
+    session_id: located.sessionId,
+    run_id: runId,
+    status: run.status,
+    command: run.command.name,
+    goal: run.handoff?.summary || bundle.session.intent,
+    gates: gateSummary(bundle.gates, run.gate_ids),
+    workflow: content.workflow
+      ? { path: content.workflow.path, content: content.workflow.raw }
+      : null,
+    run_mode: content.runMode
+      ? { path: content.runMode.path, summary: summarizeRunMode(content.runMode.raw) }
+      : null,
+    outputs,
+  };
 }

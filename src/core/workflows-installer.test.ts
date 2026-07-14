@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { installWorkflowsOnly } from './workflows-installer.js';
+import { installWorkflowsOnly, installPrepareFiles, installRefFiles } from './workflows-installer.js';
 
 describe('installWorkflowsOnly', () => {
   it('copies only workflows and preserves unrelated target files', () => {
@@ -26,5 +26,26 @@ describe('installWorkflowsOnly', () => {
   it('fails clearly when the package has no workflows directory', () => {
     const root = mkdtempSync(join(tmpdir(), 'maestro-workflows-only-'));
     expect(() => installWorkflowsOnly(root, join(root, 'target'))).toThrow(/workflows directory not found/);
+  });
+});
+
+describe('installPrepareFiles / installRefFiles', () => {
+  it('copies prepare files when the source directory exists', () => {
+    const root = mkdtempSync(join(tmpdir(), 'maestro-prepare-'));
+    const source = join(root, 'package');
+    const target = join(root, '.maestro', 'prepare');
+    mkdirSync(join(source, 'prepare'), { recursive: true });
+    writeFileSync(join(source, 'prepare', 'step.md'), 'prep');
+
+    const result = installPrepareFiles(source, target);
+
+    expect(result.filesInstalled).toBe(1);
+    expect(readFileSync(join(target, 'step.md'), 'utf8')).toBe('prep');
+  });
+
+  it('degrades gracefully when prepare/ref source is missing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'maestro-prepare-'));
+    expect(installPrepareFiles(root, join(root, 'p')).filesInstalled).toBe(0);
+    expect(installRefFiles(root, join(root, 'r')).filesInstalled).toBe(0);
   });
 });

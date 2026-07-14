@@ -1,18 +1,8 @@
-<!-- session-mode: inherited -->
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Workflow: Brainstorm
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                  /maestro-brainstorm                    │
-│           Unified Entry Point + Interactive Routing      │
-└───────────────────────┬─────────────────────────────────┘
-                        │
               ┌─────────┴─────────┐
               ↓                   ↓
     ┌─────────────────┐  ┌──────────────────┐
@@ -33,42 +23,7 @@ Artifacts N×Role     Cross-  Apply  1×Role
 **Auto Mode** (`--yes`/`-y`): Phase 1 → 1.5 → 2 → 3 → 4 → 5 (full pipeline)
 **Single Role Mode** (first arg = role name): Phase 1 → 3 (single role)
 
-## Input
-
-- `$ARGUMENTS`: topic text (auto mode) or role name (single role mode)
-- All output goes to `{run_dir}/outputs/`
-- Registers artifact (type=brainstorm) in state.json on completion
-
-### Parameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `--yes`, `-y` | Auto mode, skip all questions | - |
-| `--count N` | Number of roles to select | 3 |
-| `--session ID` | Use existing session | - |
-| `--update` | Update existing analysis | - |
-| `--include-questions` | Interactive context gathering | - |
-| `--skip-questions` | Use default answers | - |
-| `--style-skill PKG` | Style package for ui-designer | - |
-| `--review-only` | Skip Phase 3 (role analysis); run only Step 4.5 + Step 5 on existing role analyses | - |
-
-### Available Roles
-
-| Role ID | Title | Focus Area |
-|---------|-------|------------|
-| `data-architect` | 数据架构师 | Data models, storage strategies, data flow |
-| `product-manager` | 产品经理 | Product strategy, roadmap, prioritization |
-| `product-owner` | 产品负责人 | Backlog management, user stories, acceptance criteria |
-| `scrum-master` | 敏捷教练 | Process facilitation, impediment removal |
-| `subject-matter-expert` | 领域专家 | Domain knowledge, business rules, compliance |
-| `system-architect` | 系统架构师 | Technical architecture, scalability, integration |
-| `test-strategist` | 测试策略师 | Test strategy, quality assurance |
-| `ui-designer` | UI设计师 | Visual design, mockups, design systems |
-| `ux-expert` | UX专家 | User research, information architecture, journey |
-
-## Output
-
-### Directory Structure
+## Output Directory Structure
 
 All brainstorm output goes to scratch:
 ```
@@ -100,19 +55,19 @@ All brainstorm output goes to scratch:
 3. First non-flag arg matches valid role name → **Single Role Mode**
 4. First non-flag arg is a number → **Phase Mode** (resolve phase dir, then auto)
 5. Text provided without flags → Ask user via AskUserQuestion:
-   - "自动模式 (推荐)" — 完整流程：框架生成 → 多角色并行分析 → 跨角色复审 → 决议回流
-   - "单角色分析" — 为单个角色生成 {role}/ 分析文件
-   - "跨角色复审" — 已有多个角色分析，仅运行复审与决议回流
+   - "Auto mode (recommended)" — full pipeline: framework generation → parallel multi-role analysis → cross-role review → resolution writeback
+   - "Single role analysis" — generate {role}/ analysis files for a single role
+   - "Cross-role review" — multiple role analyses already exist, only run review and resolution writeback
 
 **Parameter Parsing**:
 - `--count N`: cap at 9, default 3
 - `--session ID`: target specific session
 - `--from <source>`: load upstream context package (grill:ID, blueprint:ID, @file, or path)
 - `--style-skill PKG`: validate `.claude/skills/style-{PKG}/SKILL.md` exists
-- Missing/empty args without flags = error E001
+- Missing/empty args without flags = error
 
 **Session Resolution**:
-- Use the `session_id` and `run_dir` returned by `maestro run create`; the runtime has already selected the matching intent Session or created one.
+- Use the `session_id` and `run_dir` returned by the runtime; the runtime has already selected the matching intent Session or created one.
 - `--session ID` is forwarded to the runtime for explicit selection.
 
 **Output Directory Resolution**:
@@ -133,7 +88,7 @@ Pre-seed from context-package:
 - `insights[]` → Step 4 role agents
 - `requirements[]` → Step 3 Phase 4.5
 
-W007 if source not found: continue without upstream; flag guidance-specification.md as [LOW CONFIDENCE] (no upstream context).
+If source not found: continue without upstream; flag guidance-specification.md as [LOW CONFIDENCE] (no upstream context).
 
 ---
 
@@ -187,7 +142,7 @@ designResearchContext = agent_output
 
 `designResearchContext` → Steps 2, 3, 4. Persisted to `{output_dir}/design-research.md`.
 
-W005 on failure: continue without external context; flag role analyses as [LOW CONFIDENCE] (no design research).
+On failure: continue without external context; flag role analyses as [LOW CONFIDENCE] (no design research).
 
 ---
 
@@ -202,16 +157,18 @@ Pass into Steps 2 and 3.
 
 ### Step 2: Terminology & Boundary Definition (Auto Mode)
 
-1. Load existing domain terms: read `.workflow/domain/glossary.yaml` 中已注册术语，避免重复定义
+1. Load existing domain terms: read already-registered terms in `.workflow/domain/glossary.yaml` to avoid duplicate definitions
 2. Extract 5-10 core domain terms (merge upstream locked terms + existing glossary terms)
-3. AskUserQuestion for Non-Goals (multiSelect, include "其他" option)
+3. AskUserQuestion for Non-Goals (multiSelect, include "Other" option)
 4. Store terminology + non_goals to session
 
-新候选术语仅存入 `context-package.json#domain.terminology[]`，不直接写 glossary.yaml。由 chain 末尾 `manage-harvest --auto` 触发 finish-work Step 3.5 统一提升为正式术语。
+New candidate terms are stored only in `context-package.json#domain.terminology[]`, not written directly to glossary.yaml. They are uniformly promoted to formal terms by `manage-harvest --auto` at the end of the chain.
 
 **Skip if**: `--yes` (auto-generate terms, empty non-goals)
 
 ### Step 3: Interactive Framework Generation (Auto Mode)
+
+→ Menu Q&A mechanics follow ref/interview-mechanics.md.
 
 Seven sub-phases producing guidance-specification.md:
 
@@ -247,8 +204,8 @@ Seven sub-phases producing guidance-specification.md:
 - Store to `session.cross_role_decisions`
 
 **Phase 4.5: Final Clarification + Feature Decomposition**
-- Ask: "是否有前面未澄清的重点需要补充？" (无需补充 / 需要补充)
-- If "需要补充": progressive questions until resolved
+- Ask: "Are there any earlier unclarified key points to add?" (No additions needed / Additions needed)
+- If "Additions needed": progressive questions until resolved
 - Extract candidate features from all Phase 1-4 decisions (max 8)
 - Each feature: F-{3-digit} ID, kebab-case slug, description, related roles, priority
 - Validate: independence, completeness, granularity balance, boundary clarity
@@ -361,6 +318,12 @@ If `need_deeper_context`: read specific files, re-invoke reviewer. Skip Step 5 i
 
 `--yes`: auto-apply resolutions (still proceed to Step 5 writeback).
 
+### Step 4.6: Boundary Grill (Auto Mode, conditional)
+
+→ Boundary conflict grilling follows ref/boundary-grill.md (triggered after cross-role review; skipped if no conflicts).
+
+Boundary grill results written to guidance-specification.md §12.5 (if conflicts found).
+
 ### Step 5: Apply Cross-Role Resolutions (Auto Mode)
 
 **5.1: Interactive Confirmation (skip if `--yes`)**
@@ -426,9 +389,9 @@ Consume `patch_targets[]` per finding. Edit types: `annotate_after_heading` / `a
 ### Step 6.5: Review-Only Mode (`--review-only --session ID`)
 
 **Step 6.5.1: Validation**
-- Require `--session ID`. Error E002 if missing.
-- Glob `{output_dir}/*/analysis.md`. Error E006 if zero files found (no role analyses to review).
-- Require `guidance-specification.md` to exist (for decision-ID context). Error E007 if missing.
+- Require `--session ID`. Error if missing.
+- Glob `{output_dir}/*/analysis.md`. Error if zero files found (no role analyses to review).
+- Require `guidance-specification.md` to exist (for decision-ID context). Error if missing.
 
 **Step 6.5.2**: Run Step 4.5 + Step 5. Skip 5.1 if `--yes`.
 
@@ -445,27 +408,18 @@ Consume `patch_targets[]` per finding. Edit types: `annotate_after_heading` / `a
 - Features in scope (N, from guidance §10)
 - Cross-role review: conflicts / gaps / synergies counts
 - Resolutions applied: count + a breakdown by type (C/G/S)
-- Next:
-  Skill({ skill: "maestro-roadmap", args: "--mode full --from brainstorm:{artifactId}" })  — Generate full spec package
-  Skill({ skill: "maestro-analyze", args: "{topic}" })   — Evaluate feasibility + lock decisions
-  Skill({ skill: "maestro-analyze", args: "{phase} -q" })   — Quick decision extraction only
-  Skill({ skill: "maestro-plan", args: "{phase}" })       — Plan directly (if scope is clear)
 
 **Single role mode report:**
 - Role analyzed
 - Framework alignment status (does analysis reference guidance decisions?)
 - Context questions answered (count)
 - Files written: list from §4 File Index
-- Next:
-  - Run more roles: `Skill({ skill: "maestro-brainstorm", args: "{another-role} --session {sessionId}" })`
-  - When 2+ roles are done, trigger review: `Skill({ skill: "maestro-brainstorm", args: "--review-only --session {sessionId}" })`
 
 **Review-only mode report:**
 - Session ID and existing roles found (N)
 - Cross-role review: conflicts / gaps / synergies counts
 - Resolutions applied: count + breakdown by type (C/G/S)
 - Patches skipped due to heading drift: count (if any)
-- Same Next-step routing as auto mode
 
 ---
 
@@ -507,3 +461,5 @@ Register artifact in state.json with additional field:
   `context_package: "{output_dir}/context-package.json"`   (relative to .workflow/)
 
 **GATE Step 7.5→complete**: Glob `{output_dir}/context-package.json` MUST exist before workflow report; BLOCKED if missing.
+
+→ Wrap-up follows ref/finish-work.md (auto mode, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}).

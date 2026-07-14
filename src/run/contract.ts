@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import { z } from 'zod';
 
+import { paths } from '../config/paths.js';
+
 const consumeSchema = z.object({
   kind: z.string().min(1),
   alias: z.string().min(1).optional(),
@@ -91,7 +93,11 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
     normalized,
     normalized.startsWith('maestro-') ? normalized.slice('maestro-'.length) : `maestro-${normalized}`,
   ]));
+  const project = paths.project(projectRoot);
   const candidates = names.flatMap(name => [
+    join(project.prepare, `${name}.md`),
+    join(paths.prepare, `${name}.md`),
+    join(projectRoot, 'prepare', `${name}.md`),
     join(projectRoot, '.claude', 'commands', `${name}.md`),
     join(projectRoot, '.claude', 'skills', name, 'SKILL.md'),
   ]);
@@ -114,4 +120,72 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
     contentHash: sha256(raw),
     contract: commandContractSchema.parse(extractContract(raw)),
   };
+}
+
+export interface ResolvedStepContent {
+  prepare: { path: string; raw: string } | null;
+  workflow: { path: string; raw: string } | null;
+  runMode: { path: string; raw: string } | null;
+  refs: Array<{ path: string; when: string }>;
+}
+
+const refEntrySchema = z.union([
+  z.string().min(1),
+  z.object({
+    path: z.string().min(1),
+    when: z.string().default(''),
+  }).passthrough(),
+]);
+
+function resolveInDirs(dirs: string[], fileName: string): { path: string; raw: string } | null {
+  for (const dir of dirs) {
+    const candidate = join(dir, fileName);
+    if (existsSync(candidate)) {
+      return { path: candidate, raw: readFileSync(candidate, 'utf8') };
+    }
+  }
+  return null;
+}
+
+function extractRefs(raw: string): Array<{ path: string; when: string }> {
+  const frontmatter = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) return [];
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(frontmatter[1]);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== 'object' || !('refs' in parsed)) return [];
+  const rawRefs = (parsed as Record<string, unknown>).refs;
+  if (!Array.isArray(rawRefs)) return [];
+  const refs: Array<{ path: string; when: string }> = [];
+  for (const entry of rawRefs) {
+    const result = refEntrySchema.safeParse(entry);
+    if (!result.success) continue;
+    refs.push(
+      typeof result.data === 'string'
+        ? { path: result.data, when: '' }
+        : { path: result.data.path, when: result.data.when },
+    );
+  }
+  return refs;
+}
+
+export function resolveStepContent(projectRoot: string, stepName: string): ResolvedStepContent {
+  const normalized = stepName.replace(/^\//, '').replace(/\.md$/i, '');
+  const project = paths.project(projectRoot);
+  const prepareDirs = [project.prepare, paths.prepare, join(projectRoot, 'prepare')];
+  const workflowDirs = [
+    join(project.workflow, 'workflows'),
+    paths.workflows,
+    join(projectRoot, 'workflows'),
+  ];
+
+  const prepare = resolveInDirs(prepareDirs, `${normalized}.md`);
+  const workflow = resolveInDirs(workflowDirs, `${normalized}.md`);
+  const runMode = resolveInDirs(workflowDirs, 'run-mode.md');
+  const refs = prepare ? extractRefs(prepare.raw) : [];
+
+  return { prepare, workflow, runMode, refs };
 }

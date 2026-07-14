@@ -67,11 +67,11 @@ afterEach(() => {
 });
 
 describe('Session/Run runtime', () => {
-  it('registers canonical create/check/complete CLI subcommands', () => {
+  it('registers canonical lifecycle CLI subcommands', () => {
     const program = new Command();
     registerRunCommand(program);
     const run = program.commands.find(command => command.name() === 'run');
-    expect(run?.commands.map(command => command.name())).toEqual(['create', 'check', 'complete', 'seal-session']);
+    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'create', 'check', 'complete', 'brief', 'seal-session']);
   });
 
   it('parses every migrated core command contract', () => {

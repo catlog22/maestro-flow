@@ -1,9 +1,11 @@
 ---
 name: maestro-next
-description: Single-command recommendation — pick the best next command from the pool and execute it
-argument-hint: "<intent> [-y] [--dry-run] [--top N] [--list]"
+description: Single-step recommendation engine — route intent to the best next step, with companion utilities
+argument-hint: "<intent> [-y] [--dry-run] [--top N] [--list] [--suggest] [--note <text>] [--promote] [--lite]"
 allowed-tools:
   - Read
+  - Write
+  - Edit
   - Bash
   - Glob
   - Grep
@@ -16,57 +18,86 @@ contract:
   produces: []
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <purpose>
-解析 intent + project state → 路由表评分 → 推荐单个原子命令 → 确认后 `Skill()` 执行。
-不创建 session、不构建 chain、不写 status.json。
+Parse intent + project state → score candidates from the step registry → recommend a single atomic step → confirm → execute via `maestro run prepare` + `maestro run create`. Also provides companion utilities: knowledge loading (--suggest), structured note recording (--note), and insight promotion (--promote).
+Does not create chains or orchestrate multi-step sequences — that is maestro/ralph territory.
 </purpose>
 
 <context>
-$ARGUMENTS — 意图文本 + 可选 flags。
+$ARGUMENTS — intent text + optional flags.
 
 **Flags:**
-- `-y` / `--yes` — 跳过确认，直接执行 top pick
-- `--dry-run` — 仅显示推荐结果，不执行
-- `--top N` — 显示前 N 个候选（默认 3）
-- `--list` — 仅列出可推荐命令池，不做推荐
 
-**候选池：** 仅 A_SCORE_CANDIDATES 路由表中列出的命令。管线编排器（`maestro` / `maestro-ralph*` / `maestro-player` / `maestro-composer`）**永远不在候选池**。
+| Flag | Effect |
+|------|--------|
+| `-y` / `--yes` | Skip confirmation, execute top pick directly |
+| `--dry-run` | Show recommendation only, do not execute |
+| `--top N` | Show top N candidates (default 3) |
+| `--list` | List all available steps grouped by workflow cluster |
+| `--suggest` | Suggest-only mode: show recommendation + prepare content, NEVER auto-execute |
+| `--note <text>` | Append a structured note to the active run's companion doc |
+| `--promote` | Interactively promote run insights to spec/knowhow |
+| `--lite` | Force lightweight companion channel (zero-run, knowledge load only) |
+| `--run` | Force standard channel (create a run even for simple tasks) |
+
+**Mode detection (priority order):**
+1. `--note` → S_NOTE (companion note mode)
+2. `--promote` → S_PROMOTE (companion promote mode)
+3. `--lite` → S_LITE (companion lightweight channel)
+4. `--suggest` → S_RANK → S_PRESENT (suggest only, never execute)
+5. `--list` → S_LIST
+6. Intent text present → S_STATE → S_RANK → S_PRESENT
+7. No arguments → lifecycle inference for natural next step
+
+**Candidate pool:** All 14 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`, `maestro-player`, `maestro-composer`) are NEVER in the candidate pool.
 </context>
 
 <invariants>
-1. **不创建 session / 不写 status.json / 不触发后续 chain** — 单次原子执行，产出由目标命令自行管理
-2. **管线编排器不在候选池** — 仅推荐原子命令
-3. **空 intent 或 "继续/下一步/next/接下来"** → 直接采用 lifecycle_position 推断的自然下一步
-4. **字面命中路由表优先** — lifecycle 仅作加分；命中失败时 lifecycle 上升为决定性信号
-5. **参数传递** — 默认 intent 原文作为第一个 arg；用户可在确认环节修改；`-y` 仅当用户传入时透传到 skill args
-6. **`--list` 模式跳过 lifecycle 推断与评分**，仅按 workflow 簇分组列出全部候选
+1. **No chain creation** — single atomic step execution; orchestration belongs to maestro/ralph
+2. **Pipeline orchestrators excluded** — only recommend registered steps
+3. **Empty intent or "continue"/"next"** → lifecycle_position inference for natural next step
+4. **Literal match priority** — keyword match takes precedence; lifecycle is tie-breaker
+5. **Argument pass-through** — intent text becomes first arg to target step; user can modify at confirmation; `-y` only passes through when user provided it
+6. **--suggest never executes** — show recommendation + prepare content only
+7. **--note is append-only** — never overwrite or reorder existing entries
+8. **--promote delegates** — spec/knowhow promotion routes through `spec-add` / `manage-knowhow-capture`, never writes directly
 </invariants>
 
 <state_machine>
 
 <states>
-S_PARSE     — 解析 ARGUMENTS、提取 flags                       PERSIST: —
-S_STATE     — 读 project state、推断 lifecycle_position         PERSIST: —
-S_RANK      — 路由表评分、生成 top-N candidates                 PERSIST: —
-S_LIST      — `--list` 模式：分组展示候选池                     PERSIST: —
-S_PRESENT   — 显示 top pick + 备选 + 推荐理由 + 执行参数        PERSIST: —
-S_CONFIRM   — AskUserQuestion 选择/修改参数（auto_mode 跳过）    PERSIST: —
-S_EXECUTE   — `Skill({ skill, args })` 单次调用                 PERSIST: —
-S_FALLBACK  — intent 空且 clarification 失败                    PERSIST: —
+S_PARSE     — Parse arguments, extract flags, detect mode
+S_LITE      — Lightweight companion: load specs + knowhow for the task, no run creation
+S_NOTE      — Append structured note to active run companion doc
+S_PROMOTE   — Review run outputs, promote insights to spec/knowhow
+S_STATE     — Read project state, infer lifecycle_position
+S_RANK      — Score candidates, generate top-N
+S_LIST      — --list mode: grouped display of all steps
+S_PRESENT   — Show top pick + alternatives + reasoning + prepare content
+S_CONFIRM   — AskUserQuestion for confirmation (skipped by -y)
+S_EXECUTE   — Run prepare + create for selected step
+S_FALLBACK  — Intent empty after clarification
 </states>
 
 <transitions>
 
 S_PARSE:
+  → S_NOTE       WHEN: --note flag
+  → S_PROMOTE    WHEN: --promote flag
+  → S_LITE       WHEN: --lite flag
   → S_LIST       WHEN: --list flag
-  → S_STATE      WHEN: intent text present
-  → S_STATE      WHEN: keyword "continue"/"next"/"go"/"继续"/"下一步"/"接下来"
-  → S_PARSE      WHEN: no intent (max 1 clarify round)    DO: AskUserQuestion
+  → S_STATE      WHEN: intent present / "continue"/"next"/"go"
+  → S_PARSE      WHEN: no intent (1 clarify round via AskUserQuestion)
   → S_FALLBACK   WHEN: clarification empty
+
+S_LITE:
+  → END          DO: load specs + knowhow → display summary → suggest next step (no run)
+
+S_NOTE:
+  → END          DO: append entry to {run_dir}/outputs/companion.md
+
+S_PROMOTE:
+  → END          DO: review outputs → Skill(spec-add/manage-knowhow-capture) for each insight
 
 S_STATE:
   → S_RANK       DO: A_INFER_LIFECYCLE
@@ -75,19 +106,19 @@ S_RANK:
   → S_PRESENT    DO: A_SCORE_CANDIDATES
 
 S_LIST:
-  → END          DO: 按 workflow 簇分组列出全部候选 + description
+  → END          DO: group steps by cluster, display with descriptions
 
 S_PRESENT:
-  → END          WHEN: --dry-run
-  → S_EXECUTE    WHEN: -y / --yes
-  → S_CONFIRM    WHEN: not auto_mode
+  → END          WHEN: --dry-run OR --suggest
+  → S_EXECUTE    WHEN: -y
+  → S_CONFIRM    WHEN: interactive
 
 S_CONFIRM:
-  → S_EXECUTE    WHEN: 用户确认 top pick / 选备选 / 改参数
-  → END          WHEN: 用户取消
+  → S_EXECUTE    WHEN: user confirms / selects alternative / modifies args
+  → END          WHEN: user cancels
 
 S_EXECUTE:
-  → END          DO: Skill({ skill: <chosen>, args: <args> }) → 输出 "✅ 已执行 /<command>"
+  → END          DO: A_EXECUTE_STEP
 
 S_FALLBACK:
   → END          DO: raise E001
@@ -98,184 +129,181 @@ S_FALLBACK:
 
 ### A_INFER_LIFECYCLE
 
-读 project state 推断 `lifecycle_position`（核心信号）：
+Read project state to infer `lifecycle_position`:
 
 ```bash
-cat .workflow/state.json 2>/dev/null              # sessions / active_session_id / artifacts
-ls -la {run_dir}/outputs/ 2>/dev/null | head -10  # 最近 artifact (mtime DESC)
-ls -la .workflow/.maestro/ 2>/dev/null | head -5  # 进行中的 session
+maestro run prepare --workflow-root .   # check if prepare command works
+cat .workflow/state.json 2>/dev/null
 ```
 
-**项目状态 → lifecycle_position → 自然下一步：**
+**State → lifecycle_position → natural next step:**
 
-| 项目状态 | lifecycle_position | 自然下一步 |
-|---------|-------------------|-----------|
-| 无 `.workflow/` + 无源码 | brainstorm | `maestro-brainstorm` |
-| 无 `.workflow/` + 有源码 | init | `maestro-init` |
-| 有 state.json，无 roadmap，无 sessions | analyze-macro | `maestro-analyze` (宏观调研) |
-| 有 macro analyze artifact，无 roadmap | roadmap | `maestro-roadmap` |
-| 有 roadmap，有 dep-ready session 未启动 | analyze | `maestro-analyze --session {dep-ready-slug}` |
-| 最新 artifact = analyze | plan | `maestro-plan --session {active-session}` |
-| 最新 artifact = plan | execute | `maestro-execute --session {active-session}` |
-| 最新 artifact = execute | review | `quality-review --session {active-session}` |
-| review verdict=PASS | test-gen | `quality-auto-test --session {active-session}` |
-| 测试全绿 + active_session_id 存在 | session-seal | seal 当前 session，推进 DAG |
-| 测试全绿 + active_session_id=null (standalone) | review-done | 回退到 `quality-review` 或 `manage-status` |
-| 当前 session 全 runs sealed | next-session | 激活下一个 dep-ready session |
-| 任一 stage 产物含 gaps/failed | debug | `quality-debug {gap}` |
+| State | lifecycle_position | Natural next |
+|-------|-------------------|-------------|
+| No `.workflow/` + no source code | brainstorm | brainstorm |
+| No `.workflow/` + has source code | init | (maestro-init, not a step) |
+| state.json exists, no roadmap, no sessions | analyze-macro | analyze |
+| Has macro analysis, no roadmap | roadmap | roadmap |
+| Has roadmap, dep-ready session unstarted | analyze | analyze --session {slug} |
+| Latest artifact = analysis | plan | plan --session {active} |
+| Latest artifact = plan | execute | execute --session {active} |
+| Latest artifact = execution | review | review --session {active} |
+| Review verdict = PASS | auto-test | auto-test --session {active} |
+| Tests green + active session | session-seal | (maestro-session-seal, not a step) |
+| Any stage has gaps/failures | debug | debug {gap} |
 
-**Maestro Lifecycle 主线：**
+**Lifecycle main line:**
 ```
 init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
-   → [per session] analyze → plan → execute (includes verification)
-   → [quality gate] review → auto-test → test
-   → session-seal → next dep-ready session
+  → [per session] analyze → plan → execute
+  → [quality gate] review → auto-test → test
+  → session-seal → next dep-ready session
 ```
-
-**quality vs odyssey 选型：**
-
-| 场景 | 推荐 | 原因 |
-|------|------|------|
-| Session 工件链内的 bug/review/test | `quality-*` | 只读诊断，修复回流 plan→execute 主循环，保持 artifact 链完整 |
-| 独立探索性 bug、跨 session 问题 | `odyssey-debug` | 自带修复+泛化，Run 独立于 artifact 链 |
-| Session 级代码审查（只读报告） | `quality-review` | 输出 verdict + issues，不改代码 |
-| 审查后要求零残留修复 | `odyssey-review-test-fix` | 自带 fix 循环直到零 finding |
-| Session 级安全专项审计 | `security-audit` | OWASP Top 10 + STRIDE 全覆盖 |
-| 多维运行时质量改进 | `odyssey-improve` | 6 维并行审计 + 泛化 |
-| UI 视觉优化 | `odyssey-ui` | 含发散探索（Polish/Delight） |
 
 ### A_SCORE_CANDIDATES
 
-**评分信号**（高→低）：
+**Scoring signals (high → low):**
 
-| 信号 | 权重 | 说明 |
-|------|------|------|
-| intent 命中路由表关键词 | 高 | 字面匹配主依据 |
-| **lifecycle 自然下一步** | **高** | 空 intent / "继续" / "next" 时为决定性 |
-| `name` 关键词命中 intent | 中 | intent 含 "test" → quality-test/quality-auto-test 加分 |
-| Workflow 簇匹配 | 中 | intent 涉及学习/知识/issue 等场景触发对应簇 |
-| Recent activity 反向避免 | 低 | 刚完成的 stage 短期内降权 |
-| **前置条件不满足** | **禁止** | 候选命令的前置条件未满足时，直接从候选池移除 |
+| Signal | Weight | Description |
+|--------|--------|-------------|
+| Intent keyword match | High | Literal match against routing table |
+| Lifecycle natural next | High | Decisive when intent is empty/"continue" |
+| Step name keyword match | Medium | Intent contains "test" → test/auto-test boosted |
+| Workflow cluster match | Medium | Learning/knowledge/issue clusters |
+| Recent activity avoidance | Low | Recently completed steps demoted |
+| Precondition unmet | Exclude | Remove from pool entirely |
 
-**前置条件检查（评分前执行，不满足则移除候选）：**
+**Intent → step routing table (candidate pool):**
 
-| 命令 | 前置条件 |
-|------|---------|
-| `maestro-merge` | 存在活跃的 fork worktree |
+| Intent keywords | Recommended step |
+|----------------|-----------------|
+| brainstorm / explore / ideate | brainstorm |
+| blueprint / spec-generate / formal doc | blueprint |
+| analyze / multi-dimension / investigate | analyze |
+| plan / task decomposition / breakdown | plan |
+| execute / implement / build | execute |
+| verify / acceptance / validate | verify |
+| debug / investigate / bug / root cause | debug |
+| review / code review / audit | review |
+| test / UAT / coverage | test / auto-test |
+| grill / pressure test / stress test | grill |
+| roadmap / milestone / phasing | roadmap |
+| quick / rapid / lightweight | quick |
+| retrospective / retro / lessons | retrospective |
+| refactor / tech debt | quality-refactor (retained skill) |
+| sync docs | quality-sync (retained skill) |
+| issue / defect | manage-issue (retained skill) |
+| wiki / knowledge graph | manage-wiki (retained skill) |
+| spec / rule / constraint | spec-load / spec-add (retained skill) |
+| init / project setup | maestro-init (retained skill) |
+| status / dashboard | manage-status (retained skill) |
+| security / OWASP | security-audit (retained skill) |
+| learn / explore code / follow | learn-follow / learn-investigate (retained skill) |
+| harvest / extract knowledge | manage-harvest (retained skill) |
+| fork / parallel dev | maestro-fork (retained skill) |
 
-**特殊意图处理：**
+**Auxiliary workflow clusters:**
 
-| Intent 模式 | top pick |
-|------------|---------|
-| 空 / "继续" / "下一步" / "next" / "接下来" | lifecycle 自然下一步 |
-| "什么状态" / "现在到哪了" / "status" | `manage-status` |
-| 字面命中路由表 | 路由表优先（lifecycle 仅加分） |
-| 无任何匹配 | lifecycle 下一步 + raise W002 |
+| Cluster | Trigger | Chain |
+|---------|---------|-------|
+| Learning | New code / unknown module | learn-follow → learn-decompose → learn-second-opinion |
+| Knowledge | Distill experience | manage-harvest → manage-knowhow-capture → spec-add |
+| Issue | Defect management | manage-issue-discover → manage-issue |
 
-**意图 → 命令路由表**（候选池）：
+### A_EXECUTE_STEP
 
-| 意图关键词 | 推荐命令 |
-|-----------|---------|
-| 头脑风暴 / 探索 / brainstorm / ideate | `maestro-brainstorm` |
-| 规格 / 正式文档 / spec-generate / blueprint | `maestro-blueprint` |
-| 分析 / analyze / 多维度调研 | `maestro-analyze` |
-| 规划 / plan / 任务分解 | `maestro-plan` |
-| 实现 / 执行 / execute | `maestro-execute` |
-| 验证 / verify / 验收 | `quality-review` |
-| 调试 / debug / 排查 / bug | `quality-debug` |
-| 审查 / review / 代码审查 | `quality-review` |
-| 测试 / test / UAT | `quality-test` / `quality-auto-test` |
-| 重构 / refactor / 技术债 | `quality-refactor` |
-| 同步文档 / sync docs | `quality-sync` |
-| 回顾 / retro | `quality-retrospective` |
-| issue / 缺陷管理 | `manage-issue` / `manage-issue-discover` |
-| wiki / 知识图谱 | `manage-wiki` (含 connect/digest 子命令) |
-| spec / 规则 / 约束 | `spec-load` / `spec-add` / `spec-setup` |
-| 项目初始化 / init | `maestro-init` |
-| 状态 / status / 仪表盘 | `manage-status` |
-| 文档重建 / codebase 文档 | `manage-codebase-rebuild` / `quality-sync` |
-| 安全 / security / OWASP | `security-audit` |
-| 跟读 / 学习 / 阅读源码 | `learn-follow` / `learn-investigate` |
-| 第二意见 / challenge / consult | `learn-second-opinion` |
-| 提取知识 / harvest | `manage-harvest` / `manage-knowhow-capture` |
-| 设计 / UI / 前端打磨 | `maestro-impeccable` |
-| session 管理 / seal / 推进 | `manage-status` (查看 session DAG 进度) |
-| fork / 分支 / 并行开发 | `maestro-fork` / `maestro-merge` |
-| 覆盖层 / overlay / amend | `maestro-overlay` / `maestro-amend` |
+For first-tier steps (those with prepare/ + workflows/ files):
 
-**辅助 workflow 簇**（场景触发，非主线）：
+```bash
+# 1. Run prepare to get pre-task thinking content
+maestro run prepare <step> --workflow-root .
 
-| 簇 | 触发 | 主推链路 |
-|----|------|---------|
-| Learning | 接触新代码/未知模块 | `learn-follow` → `learn-decompose` → `learn-second-opinion` |
-| Knowledge | 提炼经验 / 沉淀知识 | `manage-harvest` → `manage-knowhow-capture` → `spec-add` |
-| Wiki | 知识图谱整理 | `manage-wiki health` → `manage-wiki connect` → `manage-wiki digest` |
-| Issue | 缺陷管理 | `manage-issue-discover` → `manage-issue` |
-| 文档同步 | 代码大改后 | `quality-sync` → `manage-codebase-rebuild` (if major) |
-| 重构 | 技术债积累 | `quality-refactor` → `quality-review` |
-| 并行开发 | 多 session 并行 | `maestro-fork --session` → ... → `maestro-merge --session` |
+# 2. LLM performs pre-task thinking using prepare content
+#    Produces prep YAML (goal/approach/scope/risks/gates/reads)
 
-输出 ranked candidates，取 top N（默认 3）。
+# 3. Create run with prep input
+maestro run create <step> --workflow-root . [-- args...]
+#    Returns: run_id, run_dir, upstream, workflow content, run-mode, refs
+
+# 4. LLM executes the workflow (core process)
+
+# 5. Complete the run
+maestro run complete <run_id> --workflow-root .
+```
+
+For retained skills (not in step registry): execute via `Skill({ skill: <name>, args: <args> })` directly.
 
 </actions>
 
 </state_machine>
 
+<complexity_routing>
+
+### Three-way complexity routing
+
+Before executing, assess task complexity to choose the right channel:
+
+| Complexity | Channel | Criteria | Action |
+|-----------|---------|----------|--------|
+| Lightweight | Companion (zero-run) | Simple lookup, quick question, knowledge check | Load specs/knowhow, answer directly, no run created |
+| Standard | Single step (one run) | Clear atomic task matching one step | prepare → create → complete |
+| Multi-step | Recommend chain | Task spans multiple steps or needs orchestration | Recommend `/maestro` or `/maestro-ralph` instead |
+
+**Routing preference: prefer Standard over Lightweight.** When uncertain, create a run. A run with a thin report is better than a missed artifact.
+
+**Override flags:**
+- `--lite` forces Lightweight (companion channel)
+- `--run` forces Standard (single run)
+- Neither flag: auto-detect from intent complexity
+
+</complexity_routing>
+
 <presentation>
 
-### `--list` 模式
+### --list mode
 
-按 workflow 簇（主线 / Learning / Knowledge / Wiki / Issue / 文档 / 重构 / 并行）分组展示全部候选 + description，结束。
-
-### 正常模式
+Group all 14 first-tier steps by cluster + show retained skills separately:
 
 ```
-🎯 推荐 (top pick): /<command-name>
-   <description>
-   推荐理由: <命中规则 + lifecycle 位置一句话>
+Core Chain:  analyze → plan → execute → verify
+Quality:     review, test, auto-test, debug, retrospective
+Discovery:   grill, brainstorm, blueprint, roadmap, quick
 
-备选:
+Retained Skills: quality-refactor, quality-sync, manage-*, learn-*, spec-*, ...
+```
+
+### Normal mode
+
+```
+Target: /<step-name>
+  <description>
+  Reason: <match rule + lifecycle position>
+
+Alternatives:
   2. /<alt-1> — <description>
   3. /<alt-2> — <description>
 
-执行参数: <args>
+Args: <args>
 ```
 
-`--dry-run` 展示后结束；`-y` 直接 S_EXECUTE；否则：
-
-AskUserQuestion (single-select, header: "执行确认"):
-- **执行推荐** (Recommended) — run top pick with shown args
-- **选择备选** — pick from alternative commands
-- **修改参数** — adjust args before executing
-- **取消** — do nothing
+`--dry-run` / `--suggest`: display and stop.
+`-y`: execute immediately.
+Otherwise: AskUserQuestion (single-select, header: "Confirm"):
+- **Execute recommendation** (Recommended)
+- **Choose alternative**
+- **Modify arguments**
+- **Cancel**
 
 </presentation>
 
-<appendix>
-
-### Error Codes
+<error_codes>
 
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
-| E001 | error | intent 空且 clarification 后仍空 | 提供意图描述或使用 `--list` 浏览 |
-| E002 | error | 候选池为空（`.claude/commands/` 缺失或无 .md） | 检查 commands 目录 |
-| E003 | error | 选定命令名无法解析为有效 skill | 列出有效命令重选 |
-| W001 | warning | top1 与 top2 得分差距 < 阈值 | 强制展示前 3 让用户裁决 |
-| W002 | warning | intent 与所有候选匹配度均低 | 提示考虑 `/maestro` 或 `/maestro-ralph` 走管线 |
+| E001 | error | Intent empty after clarification | Provide intent or use --list |
+| E002 | error | No steps found in registry | Check prepare/ and workflows/ directories |
+| E003 | error | Selected step has no prepare/workflow files | Verify step installation |
+| W001 | warning | Top-1 and top-2 scores too close | Force show top 3 for user decision |
+| W002 | warning | No good match for intent | Suggest /maestro or /maestro-ralph for orchestration |
 
-### Success Criteria
-
-- [ ] Intent 解析 + flags 提取完成
-- [ ] 读取 `.workflow/state.json` + Run artifacts 推断 lifecycle_position
-- [ ] 候选池等于路由表（管线编排器不在）
-- [ ] 评分综合：intent 字面匹配 + lifecycle 下一步 + workflow 簇 + recent activity
-- [ ] 空 intent / "继续" / "下一步" → 直接采用 lifecycle 推断的下一步
-- [ ] top pick 展示附"推荐理由"（命中规则 + lifecycle 位置）
-- [ ] `--dry-run` 仅展示，不执行
-- [ ] `-y` 自动执行 top pick；用户传入时透传到 skill args
-- [ ] 非自动模式通过 AskUserQuestion 确认或选备选
-- [ ] 选定命令通过单次 `Skill()` 调用执行
-- [ ] 不创建 session / 不生成 status.json / 不触发后续 chain
-- [ ] `--list` 模式按 workflow 簇分组展示
-
-</appendix>
+</error_codes>

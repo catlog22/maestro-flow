@@ -1,8 +1,3 @@
-<!-- session-mode: inherited -->
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Workflow: Blueprint
 
 ## Pipeline Position
@@ -20,17 +15,6 @@ P6 gate: Pass (>=80%) → Handoff | Review (60-79%) → Handoff w/caveats | Fail
 
 GATE P2→P3: REQUIRED `product-brief.md` written with ≥5 glossary terms in `glossary.json`; BLOCKED if `product-brief.md` missing or glossary < 5 terms.
 GATE P3→P4: REQUIRED `requirements/_index.md` written with MoSCoW priority table; BLOCKED if `_index.md` missing or MoSCoW table absent.
-```
-
-## Arguments
-
-```
-$ARGUMENTS: "<idea or @file> [-y] [-c] [--from <source>]"
-
-<idea>              -- Idea text or @file reference
--y / --yes          -- Auto mode, skip interactive questions
--c / --continue     -- Resume from last checkpoint
---from <source>     -- Load upstream context package (brainstorm:ID, @file, or path) as enriched seed. Alias: --from-brainstorm
 ```
 
 ## Output Structure
@@ -101,7 +85,7 @@ Parse input, analyze the seed idea, optionally explore codebase, establish sessi
   - Set `input_type: "context-package"` — skip Phase 1.5
 - If `@file`: read file content as seed
 - If text: use directly as seed
-- Missing input → error E001
+- Missing input → error
 
 **Step 2.2: Session Initialization**
 ```
@@ -356,6 +340,8 @@ Output: .workflow/blueprint/{session_id}/
 
 Next: maestro-analyze (deep analysis) | maestro-roadmap (generate roadmap) | maestro-plan 1 (plan first phase)
 ```
+
+→ Wrap-up follows ref/finish-work.md (when gate is Pass/Review; SESSION_TYPE=blueprint, SESSION_ID={session_id}). Skipped on Fail — session stays active, excluded from wiki search.
 
 ---
 
