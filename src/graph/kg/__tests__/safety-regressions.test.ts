@@ -7,6 +7,7 @@ import { syncKnowledgeGraph } from '../extraction/orchestrator.js';
 import { resolveKnowledgeEdges } from '../resolution/knowledge-resolver.js';
 import { getExtractor } from '../extraction/code/languages/index.js';
 import { FileLock } from '../sync/file-lock.js';
+import { CredibilityStore } from '../credibility.js';
 import type { Language, SourceType, UnifiedNode, UnifiedNodeKind } from '../db/types.js';
 
 function makeNode(overrides: Partial<UnifiedNode> & Pick<UnifiedNode, 'id' | 'name'>): UnifiedNode {
@@ -171,6 +172,22 @@ describe('MaestroGraph safety regressions', () => {
       writeFileSync(lockPath, JSON.stringify({ token: 'stale', pid: 999_999, createdAt: 0 }));
       const value = await new FileLock(lockPath, { staleMs: 1, timeoutMs: 500 }).withLock(async () => 42);
       expect(value).toBe(42);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('lets callers own the credibility batch transaction boundary', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'maestro-credibility-'));
+    try {
+      const graph = await MaestroGraph.init(root);
+      try {
+        const store = new CredibilityStore(graph.rawDb);
+        graph.getConnection().transaction(() => store.incrementSearchHits(['missing-node']));
+        expect(store.getAll()).toEqual([]);
+      } finally {
+        graph.close();
+      }
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -35,8 +35,10 @@ export class KgDatabaseConnection {
 
     this.db = new DatabaseSync(dbPath);
     this.applyPragmas();
-    this.loadSchema();
-    this.setSchemaVersion(2, 'MaestroGraph unified schema v2');
+    this.transaction(() => {
+      this.loadSchema();
+      this.setSchemaVersion(2, 'MaestroGraph unified schema v2');
+    });
   }
 
   /** 打开已有 DB */

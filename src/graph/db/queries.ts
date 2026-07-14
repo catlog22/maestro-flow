@@ -326,7 +326,8 @@ export class QueryBuilder {
     query: string,
     options?: { kinds?: NodeKind[]; languages?: Language[]; pathFilters?: string[]; nameFilters?: string[]; limit?: number }
   ): EnhancedNode[] {
-    const limit = options?.limit ?? 20;
+    const requestedLimit = options?.limit ?? 20;
+    const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : 20, 500));
     const conditions: string[] = [];
     const params: (string | number | null)[] = [];
 

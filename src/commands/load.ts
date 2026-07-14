@@ -123,7 +123,8 @@ export function registerLoadCommand(program: Command): void {
       const indexer = await getIndexer();
       const index = await indexer.get();
       const defaultLimit = isList ? 20 : 10;
-      const limit = opts.limit ? parseInt(opts.limit, 10) : defaultLimit;
+      const parsedLimit = opts.limit ? Number.parseInt(opts.limit, 10) : defaultLimit;
+      const limit = Math.max(1, Math.min(Number.isFinite(parsedLimit) ? parsedLimit : defaultLimit, 500));
       let entries: WikiEntry[];
 
       if (ids.length > 0) {

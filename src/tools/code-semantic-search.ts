@@ -23,6 +23,8 @@ export const schema: ToolSchema = {
       limit: {
         type: 'number',
         description: 'Max results (default 20)',
+        minimum: 1,
+        maximum: 100,
       },
       kinds: {
         type: 'array',
@@ -38,8 +40,11 @@ export const schema: ToolSchema = {
 
 export async function handler(params: Record<string, unknown>): Promise<CcwToolResult> {
   const query = String(params.query || '');
-  const limit = typeof params.limit === 'number' ? params.limit : 20;
-  const kinds = Array.isArray(params.kinds) ? params.kinds as string[] : undefined;
+  const requestedLimit = typeof params.limit === 'number' ? params.limit : 20;
+  const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? Math.trunc(requestedLimit) : 20, 100));
+  const kinds = Array.isArray(params.kinds) && params.kinds.every(kind => typeof kind === 'string')
+    ? [...new Set(params.kinds as string[])].slice(0, 50)
+    : undefined;
 
   if (!query.trim()) {
     return { success: false, error: 'Parameter "query" is required' };

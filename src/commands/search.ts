@@ -41,6 +41,7 @@ export interface SearchResult {
   score: number | null;
   snippet: string | null;
   source: WikiEntry['source'];
+  sourceRef?: string | null;
   workspace?: string;
   confidence?: string;
 }
@@ -176,31 +177,38 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     score: maxScore > 0 ? score / maxScore : score,
     snippet: extractSnippet(entry.body, q),
     source: entry.source,
+    sourceRef: entry.sourceRef,
     workspace: entry.source.workspace,
     confidence: (entry.ext?.confidence as string) || undefined,
   }));
 
   // Async credibility search_hits increment (best-effort, never blocks)
   if (results.length > 0) {
-    incrementSearchHitsAsync(results.map(r => r.id));
+    incrementSearchHitsAsync(results.map(result => ({ id: result.id, sourceRef: result.sourceRef })));
   }
 
   return results;
 }
 
-function incrementSearchHitsAsync(entryIds: string[]): void {
+function incrementSearchHitsAsync(entries: Array<{ id: string; sourceRef?: string | null }>): void {
   const projectRoot = resolve('.');
   Promise.all([
     import('../graph/kg/engine.js'),
-    import('../graph/kg/credibility.js')
-  ]).then(([{ MaestroGraph }, { CredibilityStore, wikiIdToNodeId }]) => {
+    import('../graph/kg/credibility.js'),
+    import('../graph/kg/db/types.js'),
+  ]).then(([{ MaestroGraph }, { CredibilityStore, wikiIdToNodeId }, { validateNodeId }]) => {
     if (!MaestroGraph.isInitialized(projectRoot)) return;
     const mg = MaestroGraph.openSync(projectRoot);
     if (!mg) return;
     try {
       const store = new CredibilityStore(mg.rawDb);
-      const nodeIds = entryIds.map(wikiIdToNodeId).filter(Boolean) as string[];
-      store.incrementSearchHits(nodeIds);
+      const candidateIds = entries.map(entry =>
+        entry.sourceRef && validateNodeId(entry.sourceRef)
+          ? entry.sourceRef
+          : wikiIdToNodeId(entry.id)
+      ).filter(Boolean) as string[];
+      const existingIds = [...mg.getQueryBuilder().getNodesByIds(candidateIds).keys()];
+      mg.getConnection().transaction(() => store.incrementSearchHits(existingIds));
     } finally {
       mg.close();
     }

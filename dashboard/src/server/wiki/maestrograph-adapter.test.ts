@@ -32,6 +32,20 @@ describe('MaestroGraph Wiki projection', () => {
     ]));
   });
 
+  it('stabilizes layer IDs that normalize to the same slug', () => {
+    const entries = adaptKnowledgeGraph({
+      nodes: [{ id: 'node', type: 'class', name: 'Node', summary: '', tags: [] }],
+      edges: [],
+      layers: [
+        { id: 'pkg/a-b', name: 'Slash Layer', description: '', nodeIds: ['node'] },
+        { id: 'pkg-a/b', name: 'Dash Layer', description: '', nodeIds: ['node'] },
+      ],
+    }, 'codebase/knowledge-graph.json');
+
+    const layerIds = entries.filter(entry => entry.ext.virtualKind === 'kg-layer').map(entry => entry.id);
+    expect(new Set(layerIds).size).toBe(2);
+  });
+
   it('prefers canonical maestro.db over the legacy JSON graph', async () => {
     const workflowRoot = mkdtempSync(join(tmpdir(), 'maestro-wiki-db-'));
     roots.push(workflowRoot);

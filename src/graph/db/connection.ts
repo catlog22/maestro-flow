@@ -30,8 +30,10 @@ export class DatabaseConnection {
 
     this.db = new DatabaseSync(dbPath);
     this.applyPragmas();
-    this.loadSchema();
-    this.setSchemaVersion(1, 'Initial schema');
+    this.transaction(() => {
+      this.loadSchema();
+      this.setSchemaVersion(1, 'Initial schema');
+    });
   }
 
   open(dbPath: string): void {

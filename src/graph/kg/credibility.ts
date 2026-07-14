@@ -154,14 +154,7 @@ export class CredibilityStore {
     const stmt = this.db.prepare(
       'UPDATE credibility SET search_hits = search_hits + 1, last_hit_at = ? WHERE node_id = ?'
     );
-    this.db.exec('BEGIN');
-    try {
-      for (const id of nodeIds) stmt.run(nowMs, id);
-      this.db.exec('COMMIT');
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    for (const id of nodeIds) stmt.run(nowMs, id);
   }
 
   incrementConsumption(nodeId: string, nowMs: number = Date.now()): void {

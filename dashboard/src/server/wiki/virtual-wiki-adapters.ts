@@ -216,7 +216,7 @@ function shortStableHash(raw: string): string {
   return (hash >>> 0).toString(36).padStart(7, '0').slice(0, 7);
 }
 
-function buildKgIdMap(rawIds: Iterable<string>): Map<string, string> {
+function buildKgIdMap(rawIds: Iterable<string>, prefix = 'kg'): Map<string, string> {
   const ids = [...new Set(rawIds)];
   const baseCounts = new Map<string, number>();
   for (const raw of ids) {
@@ -226,7 +226,7 @@ function buildKgIdMap(rawIds: Iterable<string>): Map<string, string> {
   return new Map(ids.map(raw => {
     const base = stableKgId(raw) || 'node';
     const suffix = (baseCounts.get(base) ?? 0) > 1 ? `-${shortStableHash(raw)}` : '';
-    return [raw, `kg-${base}${suffix}`];
+    return [raw, `${prefix}-${base}${suffix}`];
   }));
 }
 
@@ -243,6 +243,7 @@ export function adaptKnowledgeGraph(
   const tour = graph.tour ?? [];
   if (nodes.length === 0) return [];
   const idMap = buildKgIdMap(nodes.map(node => node.id));
+  const layerIdMap = buildKgIdMap(layers.map(layer => layer.id), 'kg-layer');
   const projectId = (raw: string): string => idMap.get(raw) ?? `kg-${stableKgId(raw) || `node-${shortStableHash(raw)}`}`;
 
   const ts = toIso(graph.project?.analyzedAt);
@@ -304,7 +305,7 @@ export function adaptKnowledgeGraph(
   for (const l of layers) {
     if (!l?.id) continue;
     out.push({
-      id: `kg-layer-${stableKgId(l.id)}`,
+      id: layerIdMap.get(l.id)!,
       type: 'knowhow',
       title: l.name || l.id,
       summary: (l.description || '').slice(0, opts.maxSummaryLength),

@@ -61,9 +61,25 @@ export class IncrementalSync {
       const fileSet = new Set(allSourceFiles.map(f => f.relPath));
 
       const toProcess = [...changedFiles.added, ...changedFiles.modified];
-      const allExtracted: Array<{ relPath: string; nodes: EnhancedNode[]; edges: EnhancedEdge[] }> = [];
+      this.conn.raw.exec(`
+        DROP TABLE IF EXISTS temp._legacy_pending_edges;
+        CREATE TEMP TABLE _legacy_pending_edges (
+          source TEXT NOT NULL,
+          target TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          metadata TEXT,
+          line INTEGER,
+          col INTEGER,
+          provenance TEXT
+        );
+      `);
+      const stageEdge = this.conn.raw.prepare(`
+        INSERT INTO _legacy_pending_edges (source, target, kind, metadata, line, col, provenance)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
 
-      // Phase 1: Extract all files and collect nodes + edges
+      // Stream nodes/files into the transaction and stage edges without retaining
+      // every ExtractionResult in memory.
       for (const relPath of toProcess) {
         this.queries.deleteEdgesForFile(relPath);
         this.queries.deleteNodesByFile(relPath);
@@ -71,29 +87,20 @@ export class IncrementalSync {
 
         const absPath = join(this.projectRoot, relPath);
         const result = this.extractFile(absPath, relPath, fileSet);
-        if (result) allExtracted.push({ relPath, ...result });
-      }
-
-      // Phase 2: Insert all nodes first (so FK constraints are satisfied)
-      const allNodeIds = new Set<string>();
-      for (const { nodes } of allExtracted) {
-        this.queries.insertNodes(nodes);
-        nodesAdded += nodes.length;
-        for (const n of nodes) allNodeIds.add(n.id);
-      }
-
-      // Phase 3: Insert edges, filtering out any with missing targets
-      for (const { edges } of allExtracted) {
-        const validEdges = edges.filter(e => allNodeIds.has(e.source) && allNodeIds.has(e.target));
-        if (validEdges.length > 0) {
-          this.queries.insertEdges(validEdges);
-          edgesAdded += validEdges.length;
+        if (!result) continue;
+        this.queries.insertNodes(result.nodes);
+        nodesAdded += result.nodes.length;
+        for (const edge of result.edges) {
+          stageEdge.run(
+            edge.source,
+            edge.target,
+            edge.kind,
+            edge.metadata ? JSON.stringify(edge.metadata) : null,
+            edge.line ?? null,
+            edge.column ?? null,
+            edge.provenance ?? null,
+          );
         }
-      }
-
-      // Phase 4: Update file records
-      for (const { relPath, nodes } of allExtracted) {
-        const absPath = join(this.projectRoot, relPath);
         const hash = computeFileHash(absPath);
         const stat = statSync(absPath);
         this.queries.upsertFile({
@@ -103,10 +110,20 @@ export class IncrementalSync {
           size: stat.size,
           modifiedAt: stat.mtime.toISOString(),
           indexedAt: new Date().toISOString(),
-          nodeCount: nodes.length,
+          nodeCount: result.nodes.length,
           errors: [],
         });
       }
+
+      edgesAdded = Number(this.conn.raw.prepare(`
+        INSERT INTO edges (source, target, kind, metadata, line, col, provenance)
+        SELECT pending.source, pending.target, pending.kind, pending.metadata,
+               pending.line, pending.col, pending.provenance
+        FROM _legacy_pending_edges pending
+        JOIN nodes source_node ON source_node.id = pending.source
+        JOIN nodes target_node ON target_node.id = pending.target
+      `).run().changes);
+      this.conn.raw.exec('DROP TABLE _legacy_pending_edges');
     });
 
     this.conn.runMaintenance();

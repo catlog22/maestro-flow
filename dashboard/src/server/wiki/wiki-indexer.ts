@@ -29,6 +29,26 @@ import type {
   PersistedWikiIndex,
   PersistedEntry,
 } from './wiki-types.js';
+
+function prefixLinkedEntries(entries: WikiEntry[], idPrefix: string, workspace: string): void {
+  const idMap = new Map(entries.map(entry => [entry.id, `${idPrefix}${entry.id}`]));
+  for (const entry of entries) {
+    entry.id = idMap.get(entry.id)!;
+    entry.related = entry.related.map(id => idMap.get(id) ?? id);
+    if (entry.parent) entry.parent = idMap.get(entry.parent) ?? entry.parent;
+    const kgEdges = entry.ext?.kgEdges;
+    if (Array.isArray(kgEdges)) {
+      entry.ext.kgEdges = kgEdges.map(edge => {
+        if (!edge || typeof edge !== 'object') return edge;
+        const typed = edge as Record<string, unknown>;
+        const target = typeof typed.target === 'string' ? idMap.get(typed.target) ?? typed.target : typed.target;
+        return { ...typed, target };
+      });
+    }
+    entry.source = { ...entry.source, workspace };
+    entry.scope = 'linked';
+  }
+}
 import { buildGraph, type WikiGraph } from './graph-analysis.js';
 import { buildInvertedIndex, searchBM25, searchBM25Planned, rerankByPhraseProximity, type InvertedIndex } from './search.js';
 import { applyTimeDecay } from './time-decay.js';
@@ -316,6 +336,12 @@ export class WikiIndexer {
         e.source.workspace ? 2 : e.source.kind === 'virtual' ? 1 : 0;
       entries.sort((a, b) => a.id.localeCompare(b.id) || sourcePriority(a) - sourcePriority(b));
 
+      const entriesByOriginalId = new Map<string, WikiEntry[]>();
+      for (const entry of entries) {
+        const group = entriesByOriginalId.get(entry.id) ?? [];
+        group.push(entry);
+        entriesByOriginalId.set(entry.id, group);
+      }
       const seen = new Map<string, number>();
       const debugCollisions = process.env.MAESTRO_DEBUG === '1';
       let collisionCount = 0;
@@ -331,6 +357,29 @@ export class WikiIndexer {
           collisionCount++;
         }
         seen.set(original, n + 1);
+      }
+      const resolveCollisionRef = (owner: WikiEntry, target: string): string => {
+        const candidates = entriesByOriginalId.get(target);
+        if (!candidates || candidates.length === 0) return target;
+        if (candidates.length === 1) return candidates[0].id;
+        const sameWorkspace = candidates.filter(candidate => candidate.source.workspace === owner.source.workspace);
+        const sameSource = sameWorkspace.find(candidate => candidate.source.path === owner.source.path);
+        return sameSource?.id ?? sameWorkspace[0]?.id ?? candidates[0].id;
+      };
+      for (const entry of entries) {
+        entry.related = entry.related.map(target => resolveCollisionRef(entry, target));
+        if (entry.parent) entry.parent = resolveCollisionRef(entry, entry.parent);
+        const kgEdges = entry.ext?.kgEdges;
+        if (Array.isArray(kgEdges)) {
+          entry.ext.kgEdges = kgEdges.map(edge => {
+            if (!edge || typeof edge !== 'object') return edge;
+            const typed = edge as Record<string, unknown>;
+            const target = typeof typed.target === 'string'
+              ? resolveCollisionRef(entry, typed.target)
+              : typed.target;
+            return { ...typed, target };
+          });
+        }
       }
       if (collisionCount > 0 && debugCollisions) {
         // eslint-disable-next-line no-console
@@ -1149,16 +1198,17 @@ export class WikiIndexer {
         }
       }
 
-      const kgPath = join(lw.workflowRoot, 'codebase', 'knowledge-graph.json');
-      if (existsSync(kgPath)) {
-        const kgRel = `codebase/knowledge-graph.json`;
-        const kgEntries = await loadVirtualJsonEntries(kgPath, adaptKnowledgeGraph, kgRel);
-        for (const e of kgEntries) {
-          e.id = `${idPrefix}${e.id}`;
-          e.source = { ...e.source, workspace: lw.name };
-          e.scope = 'linked';
-          out.push(e);
-        }
+      const maestroDbPath = join(lw.workflowRoot, 'kg', 'maestro.db');
+      const legacyKgPath = join(lw.workflowRoot, 'codebase', 'knowledge-graph.json');
+      let kgEntries: WikiEntry[] = [];
+      if (existsSync(maestroDbPath)) {
+        kgEntries = adaptKnowledgeGraphFromDb(maestroDbPath, 'kg/maestro.db');
+      } else if (existsSync(legacyKgPath)) {
+        kgEntries = await loadVirtualJsonEntries(legacyKgPath, adaptKnowledgeGraph, 'codebase/knowledge-graph.json');
+      }
+      if (kgEntries.length > 0) {
+        prefixLinkedEntries(kgEntries, idPrefix, lw.name);
+        out.push(...kgEntries);
       }
     }
 
