@@ -805,7 +805,7 @@ Bash({
      3. 输出 met / unmet，unmet 给出 gap + target_stage
      4. 对照 intent + definition_of_done 判定意图保真
    CONTEXT:
-     status.json        = {session_dir}/session.json + ralph-meta.json
+     session_state      = {session_dir}/session.json + ralph-meta.json
      intent             = {session.intent}
      definition_of_done = {boundary_contract.definition_of_done}
      execution_criteria = {execution_criteria}
@@ -841,7 +841,7 @@ Bash({
      3. 判定累积产出是否仍服务 intent
      4. 输出 aligned / drifted + drift_description + corrective_action
    CONTEXT:
-     status.json        = {session_dir}/session.json + ralph-meta.json
+     session_state      = {session_dir}/session.json + ralph-meta.json
      intent             = {session.intent}
      definition_of_done = {boundary_contract.definition_of_done}
      in_scope           = {boundary_contract.in_scope}

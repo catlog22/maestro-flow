@@ -2,7 +2,8 @@
  * Coordinator Tracker — Unified progress tracking for maestro coordinators
  *
  * Tracks session state across three coordinator types:
- *   A) maestro & ralph — reads .workflow/.maestro/status.json (source field distinguishes)
+ *   A) ralph — reads .workflow/sessions/{id}/session.json (engine=ralph) + ralph-meta.json
+ *      maestro (legacy) — reads .workflow/.maestro/status.json
  *   B) maestro-link-coordinate — captures coord session_id from Bash output,
  *      reads .workflow/.maestro/walker-state.json
  *
@@ -69,7 +70,7 @@ export interface CoordinateCliOutput {
 }
 
 // ---------------------------------------------------------------------------
-// A: Read .workflow/.maestro/*/status.json (maestro & ralph)
+// A: Read session state (standard sessions + legacy .maestro/)
 // ---------------------------------------------------------------------------
 
 interface MaestroStatusJson {
@@ -93,11 +94,139 @@ interface MaestroStatusJson {
   status?: string;
 }
 
+interface StandardSessionJson {
+  session_id?: string;
+  intent?: string;
+  status?: string;
+  boundary_contract?: unknown;
+  orchestration?: {
+    engine?: string;
+    quality_mode?: string;
+    auto_mode?: boolean;
+    chain?: Array<{
+      step_id?: string;
+      command?: string;
+      status?: string;
+      run_id?: string | null;
+      decision_ref?: string | null;
+    }>;
+    decision_points?: unknown[];
+  };
+}
+
 /**
- * Scan .workflow/.maestro/ for the most recently modified status.json.
- * Returns parsed bridge data or null if none found.
+ * Read the most recent ralph/maestro session.
+ * Checks standard `.workflow/sessions/` first (engine=ralph),
+ * then falls back to legacy `.workflow/.maestro/` (maestro static chain).
  */
 export function readMaestroSession(workspaceRoot: string): CoordBridgeData | null {
+  // 1. Try standard sessions (engine=ralph)
+  const standardResult = readStandardRalphSession(workspaceRoot);
+  // 2. Try legacy .maestro/ sessions
+  const legacyResult = readLegacyMaestroSession(workspaceRoot);
+
+  if (!standardResult && !legacyResult) return null;
+  if (!standardResult) return legacyResult;
+  if (!legacyResult) return standardResult;
+  return standardResult.updated_at >= legacyResult.updated_at ? standardResult : legacyResult;
+}
+
+function readStandardRalphSession(workspaceRoot: string): CoordBridgeData | null {
+  const sessionsDir = join(workspaceRoot, '.workflow', 'sessions');
+  if (!existsSync(sessionsDir)) return null;
+
+  try {
+    const sessions = readdirSync(sessionsDir)
+      .map(name => {
+        const sessionPath = join(sessionsDir, name, 'session.json');
+        if (!existsSync(sessionPath)) return null;
+        try {
+          return { name, mtime: statSync(sessionPath).mtimeMs, path: sessionPath };
+        } catch { return null; }
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+      .sort((a, b) => b.mtime - a.mtime);
+
+    for (const s of sessions) {
+      try {
+        const raw: StandardSessionJson = JSON.parse(readFileSync(s.path, 'utf8'));
+        if (raw.orchestration?.engine !== 'ralph') continue;
+        return parseStandardSession(raw, s.mtime, s.name, workspaceRoot);
+      } catch { /* skip corrupt */ }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseStandardSession(
+  raw: StandardSessionJson,
+  mtime: number,
+  dirName: string,
+  workspaceRoot: string,
+): CoordBridgeData | null {
+  const chain = raw.orchestration?.chain ?? [];
+  const completed = chain.filter(s => s.status === 'completed' || s.status === 'sealed').length;
+  const realSteps = chain.filter(s => !s.decision_ref);
+  const realCompleted = realSteps.filter(s => s.status === 'completed' || s.status === 'sealed').length;
+
+  const runningIdx = chain.findIndex(s => s.status === 'running');
+  const pendingIdx = chain.findIndex(s => s.status === 'pending');
+  const currentIdx = runningIdx >= 0 ? runningIdx : pendingIdx;
+
+  const decisionPending = currentIdx >= 0 && !!chain[currentIdx].decision_ref &&
+    (chain[currentIdx].status === 'running' || chain[currentIdx].status === 'pending');
+
+  const currentStep = currentIdx >= 0
+    ? { index: currentIdx, skill: chain[currentIdx].command ?? '', args: '' }
+    : null;
+
+  const nextIdx = currentIdx >= 0 ? currentIdx + 1 : 0;
+  const nextStep = chain[nextIdx]
+    ? { index: nextIdx, skill: chain[nextIdx].command ?? '', args: '' }
+    : null;
+
+  const remaining = chain.slice(nextIdx).map(s => ({
+    skill: s.command ?? '',
+    args: '',
+  }));
+
+  // Read ralph-meta.json for extended fields
+  let meta: { lifecycle_position?: string; phase?: number | null; passed_gates?: string[] } = {};
+  try {
+    const metaPath = join(workspaceRoot, '.workflow', 'sessions', dirName, 'ralph-meta.json');
+    if (existsSync(metaPath)) {
+      meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+    }
+  } catch { /* ignore */ }
+
+  return {
+    session_id: '',
+    maestro_session_id: raw.session_id ?? dirName,
+    coordinator: 'ralph',
+    source: 'ralph',
+    chain_name: '',
+    intent: raw.intent ?? '',
+    phase: meta.phase ?? null,
+    steps_total: chain.length,
+    steps_completed: completed,
+    steps_real: realSteps.length,
+    steps_real_completed: realCompleted,
+    current_step: currentStep,
+    next_step: nextStep,
+    remaining_steps: remaining,
+    status: raw.status ?? 'unknown',
+    auto_mode: raw.orchestration?.auto_mode ?? false,
+    lifecycle_position: meta.lifecycle_position,
+    quality_mode: raw.orchestration?.quality_mode,
+    decision_pending: decisionPending || undefined,
+    passed_gates: meta.passed_gates,
+    updated_at: Math.floor(mtime),
+  };
+}
+
+function readLegacyMaestroSession(workspaceRoot: string): CoordBridgeData | null {
   const maestroDir = join(workspaceRoot, '.workflow', '.maestro');
   if (!existsSync(maestroDir)) return null;
 
