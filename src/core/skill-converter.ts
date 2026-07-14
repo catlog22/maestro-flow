@@ -797,6 +797,115 @@ const CODEX_PROFILE: ConversionProfile = {
 };
 
 // ---------------------------------------------------------------------------
+// Pi profile — teammate subagent model (pi-maestro-flow)
+//
+// Pi tools: same file ops as Claude + teammate() for subagent + maestro() for CLI
+// Install: https://github.com/catlog22/pi-maestro-flow
+// ---------------------------------------------------------------------------
+
+const PI_PROFILE: ConversionProfile = {
+  bodyReplacements: [
+    [/ralph skills --platform claude\b/g, 'ralph skills --platform pi'],
+    [/\bTaskCreate\b/g, 'todo({ action: "create" })'],
+    [/\bTaskUpdate\b/g, 'todo({ action: "update" })'],
+    [/\bTaskList\s*\(\s*\)/g, 'todo({ action: "list" })'],
+    [/\bTaskList\b/g, 'todo({ action: "list" })'],
+    [/\bTaskGet\b/g, 'todo({ action: "get" })'],
+    [/\bTaskStop\b/g, 'todo({ action: "cancel" })'],
+    [/\bTodoWrite\b/g, 'todo({ action: "update" })'],
+  ],
+  frontmatterToolMap: {
+    Agent: 'teammate',
+    Workflow: 'maestro',
+    TaskCreate: 'todo',
+    TaskUpdate: 'todo',
+    TaskList: 'todo',
+    TaskGet: 'todo',
+    TaskStop: 'todo',
+    TodoWrite: 'todo',
+  },
+  removedTools: new Set([
+    'TeamCreate', 'TeamDelete',
+    'ExitPlanMode', 'EnterPlanMode',
+    'ExitWorktree', 'EnterWorktree',
+    'NotebookEdit', 'Monitor',
+    'PushNotification', 'RemoteTrigger',
+    'ScheduleWakeup', 'CronCreate', 'CronDelete', 'CronList',
+    'ToolSearch', 'LSP',
+    'PowerShell',
+  ]),
+  subagentTools: ['teammate'],
+  rewriteAgentCalls: true,
+  rewriteSkillCalls: false,
+  snakeCaseUnknown: false,
+};
+
+// ---------------------------------------------------------------------------
+// Pi-specific: Agent() → teammate() call-site rewriting
+// ---------------------------------------------------------------------------
+
+function rewriteAgentCallSitesPi(body: string): string {
+  let out = body.replace(
+    /Agent\s*\(\s*(\{[^}]*\})\s*\)/g,
+    (_full, inner: string) => {
+      const promptMatch = inner.match(/prompt\s*[:=]\s*["']([^"']*)["']/);
+      const descMatch = inner.match(/description\s*[:=]\s*["']([^"']*)["']/);
+      const nameMatch = inner.match(/\bname\s*[:=]\s*["']([^"']+)["']/);
+      const typeMatch = inner.match(/\bsubagent_type\s*[:=]\s*["']([^"']+)["']/);
+      const bgMatch = inner.match(/\brun_in_background\s*[:=]\s*(true|false)/);
+
+      const parts: string[] = [];
+      if (typeMatch) parts.push(`agent: "${typeMatch[1]}"`);
+      if (nameMatch) parts.push(`name: "${nameMatch[1]}"`);
+      if (descMatch) parts.push(`description: "${descMatch[1]}"`);
+      if (promptMatch) parts.push(`prompt: "${promptMatch[1]}"`);
+      if (bgMatch?.[1] === 'true') parts.push('context: "fresh"');
+
+      return `teammate({ ${parts.join(', ')} })`;
+    },
+  );
+  out = out.replace(/\bAgent\s*\(/g, 'teammate(');
+  return out;
+}
+
+function convertTextPi(
+  content: string,
+  profile: ConversionProfile,
+  isSkillOrCommand: boolean,
+): string {
+  const { frontmatter, body } = splitFrontmatter(content);
+
+  let hasAgent = false;
+  if (isSkillOrCommand) {
+    if (detectAgentCalls(body).length > 0 || /\bAgent\s*\(/.test(body)) hasAgent = true;
+  }
+
+  let convertedBody = rewriteAgentCallSitesPi(body);
+  convertedBody = applyBodyReplacements(convertedBody, profile);
+
+  let newFrontmatter: ParsedFrontmatter | null = null;
+  if (frontmatter) {
+    const fmOut = { ...frontmatter };
+    if (fmOut['allowed-tools']) {
+      const r = rewriteAllowedToolsAgy(fmOut['allowed-tools'], profile, hasAgent);
+      if (r) {
+        if (r.hasAgent || hasAgent) {
+          for (const t of profile.subagentTools) {
+            if (!r.tools.includes(t)) r.tools.push(t);
+          }
+          r.tools.sort();
+        }
+        fmOut['allowed-tools'] = r.tools;
+      }
+    }
+    newFrontmatter = fmOut;
+  }
+
+  const fmBlock = newFrontmatter ? serializeFrontmatter(newFrontmatter) : '';
+  return fmBlock + stripToolTags(convertedBody);
+}
+
+// ---------------------------------------------------------------------------
 // Agents Standard profile
 // ---------------------------------------------------------------------------
 
@@ -894,6 +1003,7 @@ const PROFILE_SUFFIX: Record<string, string> = {
   codex: '.codex.md',
   agy: '.agy.md',
   'agents-standard': '.agents.md',
+  pi: '.pi.md',
 };
 
 function buildSkillsOnly(
@@ -1000,7 +1110,7 @@ function buildAgentsOnly(
 // ---------------------------------------------------------------------------
 
 /** Supported platform identifiers for runtime content transformation. */
-export type TargetPlatform = 'claude' | 'codex' | 'agy' | 'agents-standard';
+export type TargetPlatform = 'claude' | 'codex' | 'agy' | 'agents-standard' | 'pi';
 
 /** Strip [@tag] authoring markers — they're source-only anchors, not LLM content. */
 function stripToolTags(text: string): string {
@@ -1025,6 +1135,8 @@ export function transformContentForPlatform(
       return stripToolTags(convertTextAgy(content, AGY_PROFILE, true));
     case 'agents-standard':
       return stripToolTags(convertTextStandard(content, AGENTS_STANDARD_PROFILE));
+    case 'pi':
+      return stripToolTags(convertTextPi(content, PI_PROFILE, true));
   }
 }
 
@@ -1218,6 +1330,24 @@ export function buildCodexTree(
   targetAgentsDir: string,
 ): BuildStats {
   return buildTree(claudeDir, targetSkillsDir, targetAgentsDir, CODEX_PROFILE, convertTextCodex);
+}
+
+/** Build Pi skills (commands + skills) — teammate subagent model. */
+export function buildPiSkills(
+  claudeDir: string,
+  targetDir: string,
+): { files: number } {
+  const stats = buildSkillsOnly(claudeDir, targetDir, PI_PROFILE, convertTextPi, 'pi');
+  return { files: stats.files };
+}
+
+/** Build Pi agents — teammate subagent model. */
+export function buildPiAgents(
+  claudeDir: string,
+  targetDir: string,
+): { files: number } {
+  const stats = buildAgentsOnly(claudeDir, targetDir, PI_PROFILE, convertTextPi);
+  return { files: stats.files };
 }
 
 /** Build Eve skills (commands + skills) with frontmatter stripping & flat file naming. */

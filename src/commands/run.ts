@@ -3,7 +3,7 @@ import type { Command } from 'commander';
 import { briefRun, checkRun, completeRun, createRun, prepareStep, sealSession } from '../run/runtime.js';
 import type { TargetPlatform } from '../core/skill-converter.js';
 
-const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard'];
+const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard', 'pi'];
 
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
