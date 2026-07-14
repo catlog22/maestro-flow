@@ -238,8 +238,17 @@ async function configureProxy(): Promise<void> {
   } catch { /* undici not available */ }
 }
 
-async function loadTransformers(): Promise<{ pipeline: any }> {
+async function loadTransformers(): Promise<{ pipeline: any; env: any }> {
   return await import('@huggingface/transformers');
+}
+
+// 允许通过 HF_ENDPOINT 指向国内镜像（如 https://hf-mirror.com）。
+// @huggingface/transformers（JS 版）不读 HF_ENDPOINT（那是 Python huggingface_hub 约定），
+// 只认 env.remoteHost，故在此手动透传。
+function configureRemoteHost(env: any): void {
+  const endpoint = process.env.HF_ENDPOINT || process.env.HF_MIRROR;
+  if (!endpoint) return;
+  env.remoteHost = endpoint.endsWith('/') ? endpoint : `${endpoint}/`;
 }
 
 async function getPipeline(): Promise<any> {
@@ -247,7 +256,8 @@ async function getPipeline(): Promise<any> {
 
   await configureProxy();
   const config = await detectDevice();
-  const { pipeline } = await loadTransformers();
+  const { pipeline, env } = await loadTransformers();
+  configureRemoteHost(env);
   _pipeline = await pipeline('feature-extraction', DEFAULT_MODEL, {
     dtype: config.dtype,
     device: config.device,
