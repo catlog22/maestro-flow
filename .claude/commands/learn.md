@@ -10,7 +10,7 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
-session-mode: none
+session-mode: run
 ---
 <purpose>
 Learning toolkit for building understanding of code, decisions, and plans. Four subcommands:
