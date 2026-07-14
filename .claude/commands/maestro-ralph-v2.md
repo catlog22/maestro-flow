@@ -237,7 +237,7 @@ S_SESSION_DONE:
 **写入 session**: `session_id`, `session_is_new`。
 
 **新派生 session 时处理**：
-- intent 派生新 session slug → 写入 `session.session_id` 作为标识；`state.json.sessions[]` 由 `maestro-roadmap` / session-seal 创建
+- intent 派生新 session slug → 写入 `session.session_id` 作为标识；`state.json.sessions[]` 由 step `roadmap` / session-seal 创建
 - session_is_new=true → 该 session 尚无上游产出，lifecycle 从 analyze 起
 
 ### A_INFER_POSITION
@@ -370,21 +370,21 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 
 | Stage | Skill | Decision after | quality_mode |
 |-------|-------|----------------|--------------|
-| grill | `maestro-grill "{intent}"` | — | all (**auto_confirm → 透传 `-y` 到 grill args，不删除 stage**) |
-| brainstorm | `maestro-brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `maestro-brainstorm "{intent}"` *(otherwise)* | — | all |
-| blueprint | `maestro-blueprint "{intent}"` | — | all |
+| grill | `grill "{intent}"` | — | all (**auto_confirm → 透传 `-y` 到 grill args，不删除 stage**) |
+| brainstorm | `brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `brainstorm "{intent}"` *(otherwise)* | — | all |
+| blueprint | `blueprint "{intent}"` | — | all |
 | init | `maestro-init` | — | all |
 | spec-setup | `spec-setup` | — | all (**仅当 `.workflow/specs/` 不存在时插入**) |
-| analyze-macro | `maestro-analyze "{intent}"` | `post-analyze-scope` | all |
-| roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | — | all |
-| analyze | `maestro-analyze --session {session}` | — | all |
-| plan | `maestro-plan --session {session}` *(scope=session)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | — | all |
-| execute | `maestro-execute --session {session}` | `post-execute` | all |
-| business-test | `quality-auto-test --session {session}` | `post-business-test` | full only |
-| review | `quality-review --session {session}` | `post-review` | all (quick: append `--tier quick`) |
-| test-gen | `quality-auto-test --session {session}` | — | full / standard if coverage<80% |
-| test | `quality-test --session {session}` | `post-test` | full, standard |
-| frontend-verify | `quality-test --session {session} --frontend-verify` | `post-frontend-verify` | all（**仅当 session 交付 UI 时插入**：检出 `dashboard/` 或 UI 关键词 `landing\|page\|dashboard\|frontend\|UI\|component\|界面`） |
+| analyze-macro | `analyze "{intent}"` | `post-analyze-scope` | all |
+| roadmap | `roadmap --from analyze:{analyze_macro_id}` | — | all |
+| analyze | `analyze --session {session}` | — | all |
+| plan | `plan --session {session}` *(scope=session)* / `plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `plan --from blueprint:{blueprint_id}` *(scope=standalone)* | — | all |
+| execute | `execute --session {session}` | `post-execute` | all |
+| business-test | `auto-test --session {session}` | `post-business-test` | full only |
+| review | `review --session {session}` | `post-review` | all (quick: append `--tier quick`) |
+| test-gen | `auto-test --session {session}` | — | full / standard if coverage<80% |
+| test | `test --session {session}` | `post-test` | full, standard |
+| frontend-verify | `test --session {session} --frontend-verify` | `post-frontend-verify` | all（**仅当 session 交付 UI 时插入**：检出 `dashboard/` 或 UI 关键词 `landing\|page\|dashboard\|frontend\|UI\|component\|界面`） |
 | goal-audit | *(decision-only)* | `post-goal-audit` | all (only if decomposed) |
 | session-seal | *(decision-only)* | `post-session` | all |
 
@@ -394,7 +394,7 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 1. **起点**：从 `session.lifecycle_position` 开始
 2. **跳过已完成**：跳过当前 session 下已有 completed artifact 的 stage（按 `session.session_id` 过滤）
 3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
-3.5. **grill auto_confirm 透传**：`auto_confirm == true` 时为 `grill` step args 追加 `-y`（grill 自身 Auto mode 用代码代答，见 maestro-grill `<context>` Mode selection）；保留 `grill` stage 与 brainstorm 的 `--from grill:*`（grill 仍产出 grill-report/terminology/context-package）
+3.5. **grill auto_confirm 透传**：`auto_confirm == true` 时为 `grill` step args 追加 `-y`（grill 自身 Auto mode 用代码代答，见 grill step `<context>` Mode selection）；保留 `grill` stage 与 brainstorm 的 `--from grill:*`（grill 仍产出 grill-report/terminology/context-package）
 3.6. **frontend-verify UI 门控**：仅当当前 session 交付前端（检出 `dashboard/` 目录，或 session 目标/计划含 UI 关键词 `landing|page|dashboard|frontend|UI|component|界面`）时保留 `frontend-verify` stage + `post-frontend-verify` decision；纯后端 session 删除该 stage
 4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
 5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后、`session-seal` 之前插入 `decision:post-goal-audit`
@@ -453,15 +453,15 @@ Generate steps from `session.lifecycle_position` to `session-seal`（`session.se
 
 **2. Per-skill enrichment** (when args empty or minimal):
 
-| Skill | Required context | Source |
+| Step | Required context | Source |
 |-------|-----------------|--------|
-| maestro-brainstorm | topic | `"{intent}"` |
-| maestro-roadmap | description | `"{intent}"` |
-| maestro-analyze | session or topic | `--session {session}` or `"{intent}"` |
-| maestro-plan | --session, --from, or --dir | see --from auto-injection below |
-| maestro-execute | --session or --dir | see --from auto-injection below |
-| quality-debug | gap context | Read previous step's error/gap |
-| quality-* | session | `--session {session}` |
+| brainstorm | topic | `"{intent}"` |
+| roadmap | description | `"{intent}"` |
+| analyze | session or topic | `--session {session}` or `"{intent}"` |
+| plan | --session, --from, or --dir | see --from auto-injection below |
+| execute | --session or --dir | see --from auto-injection below |
+| debug | gap context | Read previous step's error/gap |
+| review/test/auto-test | session | `--session {session}` |
 
 **3. --from auto-injection (session-level artifact chaining):**
 
@@ -876,7 +876,7 @@ Bash({
 
 - **A_APPLY_PROCEED**: Mark decision completed, write status.json
 - **A_APPLY_FIX**: Insert fix-loop steps after current step（见 Fix-Loop Templates），reindex，increment retry_count
-- **A_APPLY_ESCALATE**: Insert `[quality-debug "{gap_summary}", decision:post-debug-escalate]`，reindex
+- **A_APPLY_ESCALATE**: Insert `[debug "{gap_summary}", decision:post-debug-escalate]`，reindex
 
 ### A_APPLY_SCOPE_VERDICT
 
@@ -963,21 +963,21 @@ GUARD: 已完成（`status: "done"`）的目标不可 supersede（skip + warn）
 
 | Stage | Skill | Decision after | quality_mode |
 |-------|-------|----------------|--------------|
-| grill | `maestro-grill "{intent}"` | — | all |
-| brainstorm | `maestro-brainstorm "{intent}"` | — | all |
-| blueprint | `maestro-blueprint "{intent}"` | — | all |
+| grill | `grill "{intent}"` | — | all |
+| brainstorm | `brainstorm "{intent}"` | — | all |
+| blueprint | `blueprint "{intent}"` | — | all |
 | init | `maestro-init` | — | all |
 | spec-setup | `spec-setup` | — | all |
-| analyze-macro | `maestro-analyze "{intent}"` | `post-analyze-scope` | all |
-| roadmap | `maestro-roadmap --from analyze:{id}` | — | all |
-| analyze | `maestro-analyze --session {session}` | — | all |
-| plan | `maestro-plan --session {session}` | — | all |
-| execute | `maestro-execute --session {session}` | `post-execute` | all |
-| business-test | `quality-auto-test --session {session}` | `post-business-test` | full only |
-| review | `quality-review --session {session}` | `post-review` | all |
-| test-gen | `quality-auto-test --session {session}` | — | full / standard |
-| test | `quality-test --session {session}` | `post-test` | full, standard |
-| frontend-verify | `quality-test --session {session} --frontend-verify` | `post-frontend-verify` | all (UI only) |
+| analyze-macro | `analyze "{intent}"` | `post-analyze-scope` | all |
+| roadmap | `roadmap --from analyze:{id}` | — | all |
+| analyze | `analyze --session {session}` | — | all |
+| plan | `plan --session {session}` | — | all |
+| execute | `execute --session {session}` | `post-execute` | all |
+| business-test | `auto-test --session {session}` | `post-business-test` | full only |
+| review | `review --session {session}` | `post-review` | all |
+| test-gen | `auto-test --session {session}` | — | full / standard |
+| test | `test --session {session}` | `post-test` | full, standard |
+| frontend-verify | `test --session {session} --frontend-verify` | `post-frontend-verify` | all (UI only) |
 | goal-audit | *(decision-only)* | `post-goal-audit` | all |
 | session-seal | *(decision-only)* | `post-session` | all |
 
@@ -1069,60 +1069,60 @@ Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill
 
 **post-execute:**
 ```
-quality-debug "{gap_summary}"
-maestro-plan --gaps --session {session}
-maestro-execute --session {session}
+debug "{gap_summary}"
+plan --gaps --session {session}
+execute --session {session}
 decision:post-execute {retry+1}
 ```
 
 **post-business-test:**
 ```
-quality-debug --from-business-test "{gap_summary}"
-maestro-plan --gaps --session {session}
-maestro-execute --session {session}
+debug --from-business-test "{gap_summary}"
+plan --gaps --session {session}
+execute --session {session}
 decision:post-execute {retry: 0}
-quality-auto-test --session {session}
+auto-test --session {session}
 decision:post-business-test {retry+1}
 ```
 
 **post-review:**
 ```
-quality-debug "{gap_summary}"
-maestro-plan --gaps --session {session}
-maestro-execute --session {session}
-quality-review --session {session}
+debug "{gap_summary}"
+plan --gaps --session {session}
+execute --session {session}
+review --session {session}
 decision:post-review {retry+1}
 ```
 
 **post-test:**
 ```
-quality-debug --from-uat "{gap_summary}"
-maestro-plan --gaps --session {session}
-maestro-execute --session {session}
+debug --from-uat "{gap_summary}"
+plan --gaps --session {session}
+execute --session {session}
 decision:post-execute {retry: 0}
-quality-auto-test --session {session}
+auto-test --session {session}
 decision:post-business-test {retry: 0}
-quality-review --session {session}
+review --session {session}
 decision:post-review {retry: 0}
-quality-auto-test --session {session}
-quality-test --session {session}
+auto-test --session {session}
+test --session {session}
 decision:post-test {retry+1}
 ```
 
 **post-frontend-verify:** (UI 写端点未接线/不可用时)
 ```
-quality-debug --from-frontend-verify "{gap_summary}"
-maestro-plan --gaps --session {session}
-maestro-execute --session {session}
-quality-test --session {session} --frontend-verify
+debug --from-frontend-verify "{gap_summary}"
+plan --gaps --session {session}
+execute --session {session}
+test --session {session} --frontend-verify
 decision:post-frontend-verify {retry+1}
 ```
 
 **post-goal-audit:** (per unmet sub-goal group)
 ```
 # for each unmet sub-goal G{n}, scoped to session:
-maestro-plan --gaps --session {session} "G{n}: {gap}"     [goal_ref: G{n}]
-maestro-execute --session {session}                       [goal_ref: G{n}]
+plan --gaps --session {session} "G{n}: {gap}"     [goal_ref: G{n}]
+execute --session {session}                       [goal_ref: G{n}]
 # after all unmet groups inserted:
 decision:post-goal-audit {retry+1}
 ```

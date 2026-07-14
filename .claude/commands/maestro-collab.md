@@ -192,7 +192,7 @@ Write 3 files:
 </success_criteria>
 
 <next_step_routing>
-- Deep feasibility → `/maestro-analyze "{topic}"`
-- Plan from conclusions → `/maestro-plan --dir {dir}`
-- Expand → `/maestro-brainstorm "{topic}"`
+- Deep feasibility → step `analyze` (`maestro run prepare analyze` + `maestro run create analyze "{topic}"`)
+- Plan from conclusions → step `plan` (`maestro run prepare plan` + `maestro run create plan --dir {dir}`)
+- Expand → step `brainstorm` (`maestro run prepare brainstorm` + `maestro run create brainstorm "{topic}"`)
 </next_step_routing>

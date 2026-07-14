@@ -74,8 +74,8 @@ Follow '~/.maestro/workflows/issue.md' completely.
 
 | Subcommand | Suggestion |
 |-----------|-----------|
-| create | `/maestro-analyze --gaps <ISS-ID>` or `/maestro-plan --gaps` |
-| list | `/maestro-analyze --gaps <ISS-ID>` for open issues |
+| create | `maestro run create analyze -- --gaps <ISS-ID>` or `maestro run create plan -- --gaps` |
+| list | `maestro run create analyze -- --gaps <ISS-ID>` for open issues |
 | close | `/manage-status` |
 </completion>
 

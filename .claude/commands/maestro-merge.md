@@ -77,7 +77,7 @@ User selects "记录经验" → prompt for title/insight, then persist via `Skil
 | Condition | Suggestion |
 |-----------|-----------|
 | Merge complete | Skill({ skill: "manage-status" }) |
-| Next dep-ready session | `/maestro-analyze --session {next-dep-ready-slug}` |
+| Next dep-ready session | step `analyze` for session (`maestro run prepare analyze --session {next-dep-ready-slug}` + `maestro run create analyze --session {next-dep-ready-slug}`) |
 </completion>
 
 <error_codes>

@@ -67,7 +67,7 @@ If the user wants a whole new section, use `mode: new-section` with `afterSectio
 **Injection point preview** — after selecting section + mode, render the target command's section map showing existing overlays and the new injection point:
 
 ```
-=== maestro-execute.md (1 overlay exists) ===
+=== quick.md (1 overlay exists) ===
 
   <purpose>
   <required_reading>
@@ -89,7 +89,7 @@ After confirming the injection point, ask whether this overlay should chain to a
 
 Use AskUserQuestion:
 - **"No chain"** — standard overlay, no skill handoff
-- **"Chain to skill"** → ask for the target skill name (e.g., `quality-review`, `maestro-execute`, `quality-test`)
+- **"Chain to skill"** → ask for the target skill name (e.g., a step like `review`, `execute`, `test` invoked via `maestro run prepare <step>` + `maestro run create <step>`)
 - **"Chain with alternatives"** → ask for primary skill + 1-2 alternative skills
 
 If chain is selected, record the skill name(s) for use in Step 3.
@@ -102,7 +102,7 @@ Build a slug from the user's intent (kebab-case, lowercase). Write to `~/.maestr
 {
   "name": "<slug>",
   "description": "<short summary of what and why>",
-  "targets": ["maestro-execute"],
+  "targets": ["quick"],
   "priority": 50,
   "enabled": true,
   "patches": [
@@ -129,13 +129,13 @@ Build a slug from the user's intent (kebab-case, lowercase). Write to `~/.maestr
 **Skill Handoff** (overlay)
 
 After the above step completes, use AskUserQuestion:
-- "Proceed to /quality-review" — Hand off to quality review
+- "Proceed to review" — Hand off to step `review` (`maestro run prepare review` + `maestro run create review`)
 - "Skip" — Continue with current command flow
-- "Alternative: /maestro-execute" — Run execution with built-in verification instead
+- "Alternative: execute" — Run step `execute` with built-in verification instead
 
 On user selection:
-- Proceed → Skill({ skill: "quality-review", args: "{phase}" })
-- Alternative → Skill({ skill: "maestro-execute", args: "{phase}" })
+- Proceed → run step `review` (`maestro run prepare review` + `maestro run create review`)
+- Alternative → run step `execute` (`maestro run prepare execute` + `maestro run create execute`)
 - Skip → continue normally
 ```
 
@@ -178,8 +178,8 @@ Show the user:
 === OVERLAY INSTALLED ===
 Name:    <slug>
 Path:    ~/.maestro/overlays/<slug>.json
-Targets: maestro-execute (applied), maestro-plan (skipped: missing)
-Chain:   quality-review (via AskUserQuestion) | none
+Targets: quick (applied), maestro-init (skipped: missing)
+Chain:   review (via AskUserQuestion) | none
 Scopes:  [global]
 
 Re-apply: maestro overlay apply

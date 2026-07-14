@@ -31,7 +31,7 @@ Exhaustive iteration until root cause confirmed or INCONCLUSIVE.
 
 <boundary>
 **In scope:** Single bug/issue full loop.
-**Out of scope:** Features → `/odyssey-planex` | Quality review → `/odyssey-review-test-fix` | UI → `/odyssey-ui` | Architecture → `/maestro-plan`
+**Out of scope:** Features → `/odyssey-planex` | Quality review → `/odyssey-review-test-fix` | UI → `/odyssey-ui` | Architecture → `/maestro-next plan`
 
 **`--template <name>`:**
 
@@ -355,7 +355,7 @@ All sibling bugs fixed or issued — no leftovers.
 |-----------|------|
 | Discovery issues | `/manage-issue list --source debug-odyssey` |
 | Document pattern | `/learn-decompose <module>` |
-| Formal review | `/quality-review <phase>` |
+| Formal review | `maestro run create review -- <phase>` |
 | Second opinion | `/learn-second-opinion <understanding.md>` |
 | Related question | `/learn-investigate "<question>"` |
 | Pending decisions | Filter evidence phase=decision status=pending |

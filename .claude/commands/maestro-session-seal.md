@@ -47,7 +47,7 @@ $ARGUMENTS -- optional session ID and flags.
 2. Read `session.json` — verify status is `running` or `paused`
 3. Verify no active runs (all runs completed or sealed)
 4. Verify critical gates passed (entry/exit gates from last verify/review run)
-5. If not ready → display blockers, suggest next action (e.g., "run quality-review first")
+5. If not ready → display blockers, suggest next action (e.g., "run the `review` step first")
 
 ### Step 2: Knowledge Extraction
 
@@ -106,7 +106,7 @@ Status: DONE
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Next session activated | `/maestro-analyze --session {next-slug}` |
+| Next session activated | step `analyze` (`maestro run prepare analyze` + `maestro run create analyze -- --session {next-slug}`) |
 | DAG complete (all sealed) | `/manage-status` |
 | Knowledge review needed | `/manage-knowledge-audit` |
 </completion>

@@ -14,7 +14,7 @@ session-mode: bootstrap
 ---
 <purpose>
 Initialize project: detect state, create `.workflow/` with project.md, state.json, config.json.
-Entry point; downstream: maestro-roadmap or maestro-brainstorm.
+Entry point; downstream: step `roadmap` or step `brainstorm`.
 </purpose>
 
 <required_reading>
@@ -132,11 +132,11 @@ Status verdicts:
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Roadmap needed (default light) | `/maestro-roadmap <requirement>` |
-| Full spec package | `/maestro-blueprint <idea>` |
-| Explore ideas first | `/maestro-brainstorm <topic>` |
+| Roadmap needed (default light) | step `roadmap` (`maestro run prepare roadmap` + `maestro run create roadmap`) |
+| Full spec package | step `blueprint` (`maestro run prepare blueprint` + `maestro run create blueprint`) |
+| Explore ideas first | step `brainstorm` (`maestro run prepare brainstorm` + `maestro run create brainstorm`) |
 | View project dashboard | `/manage-status` |
-| Quick ad-hoc task | `/maestro-quick <task>` |
+| Quick ad-hoc task | step `quick` (`maestro run prepare quick` + `maestro run create quick`) |
 </completion>
 
 <error_codes>

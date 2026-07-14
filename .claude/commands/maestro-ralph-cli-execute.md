@@ -36,7 +36,7 @@ $ARGUMENTS — `--session <id>` (session mode) 或 `<skill-name> [args...]` (dir
 **Parse:**
 ```
 --session <id>  → session_id (session mode: skill 由 ralph next 从 status.json 解析，无需传 skill name)
-First token     → skill_name (direct mode only, e.g., maestro-plan, maestro-execute)
+First token     → skill_name (direct mode only, e.g., a step name loaded via `maestro run` such as plan, execute)
 Remaining       → skill_args (direct mode only)
 ```
 
@@ -202,7 +202,7 @@ SIGNALS: plan_dir={run_dir}/outputs/PLN-20260628;PLN-xxx=PLN-20260628
 ```
 ---RESULT---
 STATUS: BLOCKED
-SUMMARY: maestro-plan 执行失败：required_reading 文件 analyze-guide.md 缺失
+SUMMARY: step plan 执行失败：required_reading 文件 analyze-guide.md 缺失
 ARTIFACTS:
 EVIDENCE:
 DECISIONS:

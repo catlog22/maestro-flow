@@ -108,6 +108,6 @@ Follow '~/.maestro/workflows/issue-discover.md' completely.
 | Condition | Suggestion |
 |-----------|-----------|
 | Issues discovered | `/manage-issue list` to review |
-| Need root cause analysis | `/maestro-analyze --gaps <ISS-ID>` |
-| Want to plan fixes | `/maestro-plan --gaps` |
+| Need root cause analysis | `maestro run create analyze -- --gaps <ISS-ID>` |
+| Want to plan fixes | `maestro run create plan -- --gaps` |
 </completion>

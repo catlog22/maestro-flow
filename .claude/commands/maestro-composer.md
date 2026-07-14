@@ -131,15 +131,15 @@ Read deferred `node-catalog.md` (fallback to built-in mapping):
 
 | Type hint | Default executor |
 |-----------|-----------------|
-| planning | `maestro-plan` |
-| execution | `maestro-execute` |
-| testing | `quality-test` |
-| review | `quality-review` |
-| brainstorm | `maestro-brainstorm` |
+| planning | step `plan` |
+| execution | step `execute` |
+| testing | step `test` |
+| review | step `review` |
+| brainstorm | step `brainstorm` |
 | analysis | `maestro delegate --to <tool> --mode analysis` |
-| verify | `maestro-execute` |
+| verify | step `execute` |
 | refactor | `quality-refactor` |
-| debug | `quality-debug` |
+| debug | step `debug` |
 
 Build `args_template` with variable placeholders. Context injection: planning-after-analysis → `--context {prev_output_path}`, execution-after-planning → `--resume-session {prev_session_id}`.
 Write `nodes.json`. Display resolved node list.
@@ -153,7 +153,7 @@ Write `nodes.json`. Display resolved node list.
 |------|-----------|
 | Artifact boundary | Source outputs plan/spec/analysis/review |
 | Execution gate | Target contains `execute` |
-| Long-running | Target is maestro-plan, maestro-blueprint |
+| Long-running | Target is step `plan`, step `blueprint` |
 | Post-testing | Source contains `test` or `auto-test` |
 | User-defined | type_hint == checkpoint |
 

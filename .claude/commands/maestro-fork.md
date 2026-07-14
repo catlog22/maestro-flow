@@ -80,7 +80,7 @@ Fork and sync algorithm steps are defined in workflow `fork.md`.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Fork complete | `cd {wt.path} && /maestro-analyze` |
+| Fork complete | `cd {wt.path}` then step `analyze` (`maestro run prepare analyze` + `maestro run create analyze`) |
 | Fork + automated | `maestro delegate "run full lifecycle for session" --cd {wt.path} --mode write` |
 | Fork + status check | Skill({ skill: "manage-status" }) |
 | Sync complete | Resume work in worktree |
@@ -91,10 +91,10 @@ Fork and sync algorithm steps are defined in workflow `fork.md`.
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|
 | E001 | error | Project not initialized | Run maestro-init first |
-| E002 | error | No roadmap found | Run maestro-roadmap first |
+| E002 | error | No roadmap found | Run step `roadmap` first (`maestro run prepare roadmap` + `maestro run create roadmap`) |
 | E003 | error | Running inside a worktree | Run from main worktree |
 | E004 | error | No session ID provided | Provide `--session <session_id>` |
-| E005 | error | No sessions defined in state.json | Run maestro-roadmap first |
+| E005 | error | No sessions defined in state.json | Run step `roadmap` first (`maestro run prepare roadmap` + `maestro run create roadmap`) |
 | E006 | error | Session not found in state.json.sessions[] | Check available sessions |
 | E007 | error | No active worktree for session (--sync) | Check worktrees.json |
 | E008 | error | Session already has active worktree | Merge or cleanup first |

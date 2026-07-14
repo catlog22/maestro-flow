@@ -31,7 +31,7 @@ plan → execute → verify → fix gaps → iterate until ALL criteria pass.
 
 <boundary>
 **In scope:** Single requirement delivery loop — from requirement parsing to all acceptance criteria passing + generalization.
-**Out of scope:** Multi-requirement orchestration → `/maestro-roadmap` | Deep debugging → `/odyssey-debug` | Code review → `/odyssey-review-test-fix` | UI optimization → `/odyssey-ui`
+**Out of scope:** Multi-requirement orchestration → `/maestro-next roadmap` | Deep debugging → `/odyssey-debug` | Code review → `/odyssey-review-test-fix` | UI optimization → `/odyssey-ui`
 
 **`--template <name>`:**
 
@@ -553,7 +553,7 @@ Max iterations (default 3) prevents infinite loops. Each iteration records crite
 |-----------|------|
 | All criteria passed | `/odyssey-review-test-fix <changed-files>` |
 | Max iterations, still failing | `/odyssey-debug "<failing criterion>"` |
-| Formal review | `/quality-review <phase>` |
+| Formal review | `maestro run create review -- <phase>` |
 | Issues from discoveries | `/manage-issue list --source planex-odyssey` |
 | Pattern worth documenting | `/learn-decompose <module>` |
 </next_step_routing>

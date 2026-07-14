@@ -135,7 +135,7 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 |-----------|-----------|
 | codebase 文档已重建 | `/manage-status` |
 | spec 标记待更新 | 手动编辑标记的 spec 文件 |
-| roadmap 已过时 | `/maestro-roadmap` 重新生成 |
+| roadmap 已过时 | `maestro run prepare roadmap` + `maestro run create roadmap` 重新生成 |
 | state.json 需清理 | `/manage-knowledge-audit --scope artifact` |
 | 需要完整同步 | `/quality-sync --full` |
 | project.md 已过时 | 编辑 `.workflow/project.md` |

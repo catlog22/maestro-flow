@@ -97,7 +97,7 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 | 查看演化链 | `maestro spec history <sid>` — 确认 supersede 链完整 |
 | Spec 冲突标记已存在 | `maestro spec conflict list` — 查看当前冲突状态 |
 | 知识健康检查 | `maestro spec health` — 悬空/循环 supersedes 校验 |
-| Full phase retrospective | `/quality-retrospective` |
+| Full phase retrospective | `maestro run prepare retrospective` + `maestro run create retrospective` |
 </completion>
 
 <error_codes>

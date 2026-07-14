@@ -55,7 +55,7 @@ Multiple combinable. No flags + no description → interactive (scan + AskUserQu
 1. **Non-invasive only** — amendments MUST use the overlay system (`~/.maestro/overlays/*.json`); direct edits to `.claude/commands/*.md` are NEVER permitted
 2. **Idempotent patches** — re-running the same amendment MUST produce identical overlay JSON; overlay markers prevent duplicate injection
 3. **Pristine source reads** — signal diagnosis MUST read from `$PKG_ROOT/.claude/commands/` (untouched originals), not installed copies
-4. **Code bugs excluded** — signals classified as code bugs MUST be routed to `/maestro-quick` or `/maestro-plan --gaps`, NEVER patched via overlay
+4. **Code bugs excluded** — signals classified as code bugs MUST be routed to step `quick` or step `plan` (`--gaps`), NEVER patched via overlay
 5. **User confirmation before install** — overlay JSON MUST be previewed and confirmed by the user before `maestro overlay add` runs (unless `-y`)
 6. **Section existence verified** — target section MUST be confirmed to exist in the pristine source before drafting a patch; missing sections trigger `new-section` mode
 </invariants>
@@ -136,7 +136,7 @@ Per signal, determine:
 | Entirely new concern | _(new section)_ | new-section |
 
 Read pristine source from `$PKG_ROOT/.claude/commands/<name>.md` to confirm section.
-Classify: command deficiency → proceed; code bug → skip (suggest /maestro-quick).
+Classify: command deficiency → proceed; code bug → skip (suggest step `quick`).
 
 ### A_GROUP_OVERLAYS
 
@@ -167,7 +167,7 @@ On validation failure: fix JSON, retry (max 2).
 |------|-----------|----------|
 | E001 | No signals from any source | Verify artifact paths or provide description |
 | E002 | Signal source path invalid or unreadable | Check `--from-*` path; ensure artifact exists |
-| E003 | All signals are code bugs, not command gaps | Use /maestro-quick or /maestro-plan --gaps |
+| E003 | All signals are code bugs, not command gaps | Use step `quick` or step `plan --gaps` |
 | E004 | Overlay validation failed after 2 retries | Review JSON manually |
 | W001 | Some signals skipped (code bugs) | Route to appropriate fix command |
 | W002 | Target command has >= 3 existing overlays | Consider consolidating |

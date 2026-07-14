@@ -254,7 +254,7 @@ resolve_milestone(phase_number):
 
 **新派生 phase 时 milestone 处理**：
 - state.json 当前 milestone 仍 active → 沿用，新增 phase
-- intent 派生新 milestone 名 → 写入 session 仅作标签；`state.json.milestones` 由 `maestro-roadmap` / `maestro-milestone-release` 创建
+- intent 派生新 milestone 名 → 写入 session 仅作标签；`state.json.milestones` 由 step `roadmap`（`maestro run prepare roadmap` + `maestro run create roadmap`）创建（`maestro-milestone-release` 已随里程碑概念移除）
 
 ### A_INFER_POSITION
 
@@ -324,8 +324,7 @@ wants_roadmap = (--roadmap flag)
 | passed==true, no review.json | `business-test` |
 | review.json: verdict=="BLOCK" | `review-failed` |
 | review.json: verdict!="BLOCK" | `test` |
-| uat.md: all passed + `session.milestone` 存在 | `milestone-audit` |
-| uat.md: all passed + `session.milestone=null` (standalone) | 标记 session completed（无 milestone 可审计） |
+| uat.md: all passed | 标记 session completed（里程碑概念已移除，session 为终结单元） |
 | uat.md: has failures | `test-failed` |
 
 ### A_DETERMINE_QUALITY_MODE
@@ -409,30 +408,28 @@ narrow → derive defaults from intent + codebase, skip questions.
 
 ### A_BUILD_STEPS
 
-Generate steps from `session.lifecycle_position` to `milestone-complete`（`session.milestone` 存在时）或最后一个质量门（standalone 时）。
+Generate steps from `session.lifecycle_position` to 最后一个质量门（里程碑概念已移除，session 为终结单元）。
 
 > CLI 注：每个执行 step 通过 `maestro delegate` 外部委托执行（见 Stage Mapping 表的 delegate_mode/delegate_rule 分配）。
 
-| Stage | Skill (independent) | Skill (unified) | Decision after | quality_mode |
+| Stage | Step (independent) | Step (unified) | Decision after | quality_mode |
 |-------|---------------------|-----------------|----------------|--------------|
-| grill | `maestro-grill "{intent}"` | *(same)* | — | all (**auto_confirm → 透传 `-y` 到 grill args，不删除 stage**) |
-| brainstorm | `maestro-brainstorm "{intent}" --from grill:{grill_id}` *(if grill ran)* / `maestro-brainstorm "{intent}"` *(otherwise)* | *(same)* | — | all |
-| blueprint | `maestro-blueprint "{intent}"` | *(same)* | — | all |
+| grill | step `grill` (args `"{intent}"`) | *(same)* | — | all (**auto_confirm → 透传 `-y` 到 grill args，不删除 stage**) |
+| brainstorm | step `brainstorm` (args `"{intent}" --from grill:{grill_id}` *(if grill ran)* / `"{intent}"` *(otherwise)*) | *(same)* | — | all |
+| blueprint | step `blueprint` (args `"{intent}"`) | *(same)* | — | all |
 | init | `maestro-init` | *(same)* | — | all |
 | spec-setup | `spec-setup` | *(same)* | — | all (**仅当 `.workflow/specs/` 不存在时插入**) |
-| analyze-macro | `maestro-analyze "{intent}"` | *(same)* | `post-analyze-scope` | all |
-| roadmap | `maestro-roadmap --from analyze:{analyze_macro_id}` | *(same)* | — | all |
-| analyze | `maestro-analyze {phase}` | `maestro-analyze` | — | all |
-| plan | `maestro-plan {phase}` *(scope=phase)* / `maestro-plan --from analyze:{analyze_macro_id}` *(scope=standalone)* / `maestro-plan --from blueprint:{blueprint_id}` *(scope=standalone)* | `maestro-plan` | — | all |
-| execute | `maestro-execute {phase}` | `maestro-execute` | `post-execute` | all |
-| business-test | `quality-auto-test {phase}` | `quality-auto-test` | `post-business-test` | full only |
-| review | `quality-review {phase}` | `quality-review` | `post-review` | all (quick: append `--tier quick`) |
-| test-gen | `quality-auto-test {phase}` | `quality-auto-test` | — | full / standard if coverage<80% |
-| test | `quality-test {phase}` | `quality-test` | `post-test` | full, standard |
-| frontend-verify | `quality-test {phase} --frontend-verify` | `quality-test --frontend-verify` | `post-frontend-verify` | all（**仅当 phase 交付 UI 时插入**：检出 `dashboard/` 或 UI 关键词 `landing\|page\|dashboard\|frontend\|UI\|component\|界面`） |
-| milestone-audit | `maestro-milestone-audit` | *(same)* | — | all |
+| analyze-macro | step `analyze` (args `"{intent}"`) | *(same)* | `post-analyze-scope` | all |
+| roadmap | step `roadmap` (args `--from analyze:{analyze_macro_id}`) | *(same)* | — | all |
+| analyze | step `analyze` (args `{phase}`) | step `analyze` | — | all |
+| plan | step `plan` (args `{phase}` *(scope=phase)* / `--from analyze:{analyze_macro_id}` *(scope=standalone)* / `--from blueprint:{blueprint_id}` *(scope=standalone)*) | step `plan` | — | all |
+| execute | step `execute` (args `{phase}`) | step `execute` | `post-execute` | all |
+| business-test | step `auto-test` (args `{phase}`) | step `auto-test` | `post-business-test` | full only |
+| review | step `review` (args `{phase}`) | step `review` | `post-review` | all (quick: append `--tier quick`) |
+| test-gen | step `auto-test` (args `{phase}`) | step `auto-test` | — | full / standard if coverage<80% |
+| test | step `test` (args `{phase}`) | step `test` | `post-test` | full, standard |
+| frontend-verify | step `test` (args `{phase} --frontend-verify`) | step `test` (args `--frontend-verify`) | `post-frontend-verify` | all（**仅当 phase 交付 UI 时插入**：检出 `dashboard/` 或 UI 关键词 `landing\|page\|dashboard\|frontend\|UI\|component\|界面`） |
 | goal-audit | *(decision-only)* | *(same)* | `post-goal-audit` | all (only if decomposed) |
-| milestone-complete | `maestro-milestone-complete` | *(same)* | `post-milestone` | all |
 
 > 所有执行 stage 通过 `maestro ralph next` CLI 加载，由 A_DISPATCH_DELEGATE 委托到外部 CLI 工具执行；decision 节点单独作为独立 step 插入。
 
@@ -443,16 +440,16 @@ Generate steps from `session.lifecycle_position` to `milestone-complete`（`sess
 1. **起点**：从 `session.lifecycle_position` 开始
 2. **跳过已完成**：跳过当前 milestone+phase 下已有 completed artifact 的 stage（按 `session.phase` 过滤）；unified 按 milestone 过滤
 3. **quality_mode 过滤**：按 `session.quality_mode` 排除不匹配 stage
-3.5. **grill auto_confirm 透传**：`auto_confirm == true` 时为 `grill` step args 追加 `-y`（grill 自身 Auto mode 用代码代答，见 maestro-grill `<context>` Mode selection）；保留 `grill` stage 与 brainstorm 的 `--from grill:*`（grill 仍产出 grill-report/terminology/context-package）
+3.5. **grill auto_confirm 透传**：`auto_confirm == true` 时为 `grill` step args 追加 `-y`（grill 自身 Auto mode 用代码代答，见 step `grill` 的 `<context>` Mode selection）；保留 `grill` stage 与 brainstorm 的 `--from grill:*`（grill 仍产出 grill-report/terminology/context-package）
 3.6. **frontend-verify UI 门控**：仅当当前 phase 交付前端（检出 `dashboard/` 目录，或 phase 目标/计划含 UI 关键词 `landing|page|dashboard|frontend|UI|component|界面`）时保留 `frontend-verify` stage + `post-frontend-verify` decision；纯后端 phase 删除该 stage
 4. **决策节点**：每个 Decision after 非空的 stage 之后插入 `{ decision: "<gate>", retry_count: 0, max_retries: 2, command_scope: null, command_path: null }`
-5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后、`milestone-complete` 之前插入 `decision:post-goal-audit`
+5. **goal-audit 插入**：`task_decomposition` 存在时，在最后一个 evidence-producing stage（execute/review/test）之后插入 `decision:post-goal-audit`
 5.5. **re-grounding 插入**：WHEN `task_decomposition` 存在 AND 执行 step（不含 decision）≥3
    - 从第 3 个执行 step 起每隔 3 个插入 `{ decision: "post-reground", retry_count: 0, max_retries: 0, command_scope: null, command_path: null }`
    - 不在最后一个执行 step 后插入（由 goal-audit 覆盖）
    - 不与已有 quality-gate decision 节点相邻（顺延到下一个 3-step 边界）
    - fix-loop 动态插入的 step **纳入**计数（从插入点起重新计算 3-step 间隔）
-6. **终点硬约束**：`session.milestone` 存在时 chain 以 `milestone-complete` 结尾；`session.milestone=null`（standalone）时跳过 `milestone-audit` + `milestone-complete` stage，chain 以最后一个质量门 stage 结尾
+6. **终点硬约束**：里程碑概念已移除，chain 统一以最后一个质量门 stage 结尾（session 为终结单元，无 milestone-audit / milestone-complete stage）
 7. **goal_ref 传播**：`task_decomposition` 存在时，每个 step 按 `step.stage ∈ g.lifecycle` 匹配 `step.goal_ref = g.id`（多匹配取字典序最小）；decision 节点不打 goal_ref
 8. **占位符**：independent 保留 `{phase}` `{intent}`；unified 不带 `{phase}`
 9. **command_path 解析**（每个执行 step，decision 节点跳过）：
@@ -768,11 +765,9 @@ Set session paused, display "请人工介入", suggest `/maestro-ralph-cli conti
 | review, business-test | analysis | `analysis-review-code-quality` |
 | test, test-gen, frontend-verify | write | — |
 | grill, brainstorm | write | — |
-| debug, quality-debug | write | `analysis-diagnose-bug-root-cause` |
+| debug | write | `analysis-diagnose-bug-root-cause` |
 | blueprint | write | `planning-design-component-spec` |
 | init, spec-setup | write | — |
-| milestone-audit | analysis | `analysis-review-code-quality` |
-| milestone-complete | write | — |
 
 Fix-loop 插入的 step 按此表分配 `delegate_mode` + `delegate_rule`。
 
@@ -884,60 +879,60 @@ All delegation uses `--to {session.cli_tool}` (not `--role`). The `cli_tool` is 
 
 **post-execute:**
 ```
-quality-debug "{gap_summary}"
-maestro-plan --gaps {phase}
-maestro-execute {phase}
+step debug "{gap_summary}"
+step plan --gaps {phase}
+step execute {phase}
 decision:post-execute {retry+1}
 ```
 
 **post-business-test:**
 ```
-quality-debug --from-business-test "{gap_summary}"
-maestro-plan --gaps {phase}
-maestro-execute {phase}
+step debug --from-business-test "{gap_summary}"
+step plan --gaps {phase}
+step execute {phase}
 decision:post-execute {retry: 0}
-quality-auto-test {phase}
+step auto-test {phase}
 decision:post-business-test {retry+1}
 ```
 
 **post-review:**
 ```
-quality-debug "{gap_summary}"
-maestro-plan --gaps {phase}
-maestro-execute {phase}
-quality-review {phase}
+step debug "{gap_summary}"
+step plan --gaps {phase}
+step execute {phase}
+step review {phase}
 decision:post-review {retry+1}
 ```
 
 **post-test:**
 ```
-quality-debug --from-uat "{gap_summary}"
-maestro-plan --gaps {phase}
-maestro-execute {phase}
+step debug --from-uat "{gap_summary}"
+step plan --gaps {phase}
+step execute {phase}
 decision:post-execute {retry: 0}
-quality-auto-test {phase}
+step auto-test {phase}
 decision:post-business-test {retry: 0}
-quality-review {phase}
+step review {phase}
 decision:post-review {retry: 0}
-quality-auto-test {phase}
-quality-test {phase}
+step auto-test {phase}
+step test {phase}
 decision:post-test {retry+1}
 ```
 
 **post-frontend-verify:** (UI 写端点未接线/不可用时)
 ```
-quality-debug --from-frontend-verify "{gap_summary}"
-maestro-plan --gaps {phase}
-maestro-execute {phase}
-quality-test {phase} --frontend-verify
+step debug --from-frontend-verify "{gap_summary}"
+step plan --gaps {phase}
+step execute {phase}
+step test {phase} --frontend-verify
 decision:post-frontend-verify {retry+1}
 ```
 
 **post-goal-audit:** (per unmet sub-goal group)
 ```
 # for each unmet sub-goal G{n}, scoped to target_phase:
-maestro-plan --gaps {target_phase} "G{n}: {gap}"     [goal_ref: G{n}]
-maestro-execute {target_phase}                       [goal_ref: G{n}]
+step plan --gaps {target_phase} "G{n}: {gap}"     [goal_ref: G{n}]
+step execute {target_phase}                       [goal_ref: G{n}]
 # after all unmet groups inserted:
 decision:post-goal-audit {retry+1}
 ```

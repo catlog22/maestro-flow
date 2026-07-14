@@ -151,15 +151,15 @@ S_FALLBACK:
 
 **Per-skill enrichment** (when args empty or minimal):
 
-| Skill | Required context | Source |
+| Step | Required context | Source |
 |-------|-----------------|--------|
-| maestro-brainstorm | topic | `"{intent}"` |
-| maestro-roadmap | description | `"{intent}"` |
-| maestro-analyze | phase or topic | `{phase}` or `"{intent}"` |
-| maestro-plan | phase, --from, or --dir | see --from auto-injection below |
-| maestro-execute | phase or --dir | see --from auto-injection below |
-| quality-debug | gap context | Read previous step's error/gap |
-| quality-* | phase | `{phase}` |
+| brainstorm | topic | `"{intent}"` |
+| roadmap | description | `"{intent}"` |
+| analyze | phase or topic | `{phase}` or `"{intent}"` |
+| plan | phase, --from, or --dir | see --from auto-injection below |
+| execute | phase or --dir | see --from auto-injection below |
+| debug | gap context | Read previous step's error/gap |
+| review/test/auto-test | phase | `{phase}` |
 
 **--from auto-injection (phase-level artifact chaining):**
 
@@ -370,8 +370,8 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro
      Session:  {session_id} [{source}]
      Steps:    {completed}/{total}   confirmed: {confirmed}/{completed}
 
-     [✓] 0.   maestro-plan 1            [global]
-     [✓] 1.   maestro-execute 1         [project]
+     [✓] 0.   plan 1                   [global]
+     [✓] 1.   execute 1                [project]
      [✓] 2. ◆ post-execute               [decision]
      ...
    ============================================================

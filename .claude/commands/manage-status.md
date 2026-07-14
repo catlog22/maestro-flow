@@ -83,9 +83,9 @@ Next-step decision table defined in workflow status.md Step 5.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Phase needs analysis | `/maestro-analyze {phase}` |
-| Phase needs planning | `/maestro-plan {phase}` |
-| Phase needs execution | `/maestro-execute {phase}` |
-| Milestone ready for audit | `/maestro-milestone-audit` |
+| Phase needs analysis | step `analyze` (`maestro run prepare analyze` + `maestro run create analyze -- {phase}`) |
+| Phase needs planning | step `plan` (`maestro run prepare plan` + `maestro run create plan -- {phase}`) |
+| Phase needs execution | step `execute` (`maestro run prepare execute` + `maestro run create execute -- {phase}`) |
+| Session ready to seal | step `session-seal` |
 | Issues need triage | `/manage-issue list` |
 </completion>

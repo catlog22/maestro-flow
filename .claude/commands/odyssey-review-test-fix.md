@@ -405,6 +405,6 @@ Every finding must have action (fix/issue/decision). Decision pending must AskUs
 | Deeper debug needed | `/odyssey-debug "<finding>"` |
 | Issues created | `/manage-issue list --source review-odyssey` |
 | Document pattern | `/learn-decompose <module>` |
-| Plan fixes | `/maestro-plan --gaps` |
+| Plan fixes | `maestro run create plan -- --gaps` |
 </next_step_routing>
 </output>
