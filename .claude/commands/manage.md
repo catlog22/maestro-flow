@@ -49,7 +49,7 @@ Parse the first token of $ARGUMENTS as the top-level subcommand. Parse the secon
 - No subcommand → default to `status`.
 - Unrecognized top-level token → E_INVALID_SUBCOMMAND: display the table above.
 - For `issue`/`knowledge`/`sync`: remaining tokens after the group action are that action's own arguments (subcommand + flags), parsed per the target section.
-- Each section is self-contained: read its `<required_reading>` and `<deferred_reading>` only when that section is dispatched.
+- Each section is self-contained: read its `<deferred_reading>` only when that section is dispatched.
 </dispatch>
 
 ---
@@ -61,11 +61,6 @@ Parse the first token of $ARGUMENTS as the top-level subcommand. Parse the secon
 <purpose>
 Project dashboard: artifact progress, task counts, active work, next-step suggestions.
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/status.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 <context>
 No arguments required.
@@ -149,10 +144,6 @@ Issue lifecycle management. Second token selects the mode:
 Issue lifecycle management: create, list, status, update, close, link. Stored in `.workflow/issues/issues.jsonl`. For automated discovery, use `/manage issue discover`.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/issue.md
-</required_reading>
-
 <deferred_reading>
 - [issue.json template](~/.maestro/templates/issue.json) — read when creating or updating issue records (create, update, close)
 </deferred_reading>
@@ -234,10 +225,6 @@ Follow '~/.maestro/workflows/issue.md' completely.
 <purpose>
 Automated issue discovery: multi-perspective (8 perspectives) or prompt-driven. Deduplicates and records to `issues.jsonl`. For CRUD operations, use `/manage issue <create|list|...>`.
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/issue-discover.md
-</required_reading>
 
 <deferred_reading>
 - [issue.json template](~/.maestro/templates/issue.json) — read when creating issue records from findings (Step 6/11)
@@ -351,10 +338,6 @@ Capture reusable knowledge into `.workflow/knowhow/` with type-specific structur
 Auto-indexed by WikiIndexer (type=knowhow), searchable via `maestro search --type knowhow`.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/knowhow.md
-</required_reading>
-
 <context>
 Remaining tokens after `knowledge capture` — type token + description + optional flags.
 
@@ -457,10 +440,6 @@ Follow '~/.maestro/workflows/knowhow.md' completely.
 Manage knowhow across two stores: workflow (`.workflow/knowhow/`) and system memory (`~/.claude/projects/*/memory/`). Operations: list, search, view, edit, delete, prune.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/knowhow.md
-</required_reading>
-
 <context>
 Remaining tokens after `knowledge knowhow` — action + args.
 
@@ -556,11 +535,6 @@ Follow '~/.maestro/workflows/knowhow.md' Part A (KnowHow Management) completely.
 <purpose>
 审查 spec/knowhow/artifact 存储，识别矛盾/失效/孤儿，通过 keep/deprecate/delete 三态清理。对称于 harvest（写入入口）。
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/knowledge-audit.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 <deferred_reading>
 - @~/.maestro/workflows/harvest.md (audit 检测的 artifact 是 harvest 的产物源)
@@ -703,11 +677,6 @@ Follow `~/.maestro/workflows/knowledge-audit.md` Stages 1-8 in order.
 Extract knowledge from workflow artifacts → route to wiki/spec/issue stores. Works on any artifact (vs retrospective which is phase-scoped).
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/harvest.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <deferred_reading>
 - @~/.maestro/workflows/issue.md (issues.jsonl schema for issue routing — read when creating issues in Stage 6c)
 - @~/.maestro/workflows/specs-add.md (spec entry format — read when routing to spec in Stage 6b)
@@ -822,10 +791,6 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 <purpose>
 Wiki graph management: health, search, cleanup, stats, connect, digest.
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/wiki-manage.md
-</required_reading>
 
 <context>
 Remaining tokens after `knowledge wiki` — action and optional flags.
@@ -1070,10 +1035,6 @@ If `--scan-only`: stop after Phase 2 summary.
 Register a domain term into `.workflow/domain/glossary.yaml`. Domain terms are automatically injected into agent context via hooks (domain-compact for all prompts, domain-expanded on keyword match).
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/domain-add.md
-</required_reading>
-
 <context>
 Remaining tokens after `knowledge domain` -- expects `<canonical> "<definition>"`
 
@@ -1150,11 +1111,6 @@ Artifact/code synchronization. Second token selects the operation:
 <purpose>
 检测代码重构/增量变更后，代码现实与 .workflow/ 文档之间的漂移。互补于 `/manage knowledge audit`（检测知识存储内部矛盾）。本命令通过 git 时间线 + session 历史检测 code↔document 漂移。
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/drift-realign.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 <deferred_reading>
 - ~/.maestro/workflows/knowledge-audit.md (交叉引用已有审计发现)
@@ -1308,10 +1264,6 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 <purpose>
 Full rebuild of `.workflow/codebase/` docs: 4 parallel mapper agents → tech-stack, architecture, features, concerns. Destructive — overwrites existing docs.
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/codebase-rebuild.md
-</required_reading>
 
 <context>
 Remaining tokens after `sync rebuild` -- optional flags.

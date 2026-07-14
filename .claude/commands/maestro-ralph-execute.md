@@ -18,10 +18,6 @@ contract:
   produces: []
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <purpose>
 Single-step executor for ralph (adaptive) and maestro (static) sessions.
 Each invocation: locate session → find next step → resolve args → execute → update → self-invoke next.

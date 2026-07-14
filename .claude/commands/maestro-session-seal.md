@@ -24,10 +24,6 @@ Seal a completed session: verify all runs are done, extract knowledge (specs/kno
 Replaces the deprecated `maestro-milestone-complete` with session-level semantics and integrated knowledge capture.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <context>
 $ARGUMENTS -- optional session ID and flags.
 

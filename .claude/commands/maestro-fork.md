@@ -23,11 +23,6 @@ Create or sync a session-level git worktree for parallel development.
 Supports `--sync` mode to pull latest main changes into an active worktree.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/fork.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <deferred_reading>
 - [worktrees.json](~/.maestro/templates/worktrees.json) — read when updating registry
 - [worktree-scope.json](~/.maestro/templates/worktree-scope.json) — read when writing scope marker

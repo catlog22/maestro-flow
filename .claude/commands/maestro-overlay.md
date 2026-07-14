@@ -9,7 +9,7 @@ allowed-tools:
   - Glob
   - Grep
   - AskUserQuestion
-session-mode: run
+session-mode: none
 contract:
   discovery: self-described
   consumes: []
@@ -26,12 +26,6 @@ non-invasively, auto-applied by `maestro install`. Two modes:
 Both modes use the same overlay system (`~/.maestro/overlays/*.json`) — non-invasive, idempotent,
 survives reinstall.
 </purpose>
-
-<required_reading>
-@~/.maestro/workflows/overlays.md
-@~/.maestro/cli-tools.json
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 <context>
 **Mode selection**: `--amend` (or any `--from-*` / `--scan` signal flag) → **Amend mode** (signal-driven auto-generation, jump to `<amend_mode>` in execution). Otherwise → **Default mode** (natural-language intent, steps 1–5 below).

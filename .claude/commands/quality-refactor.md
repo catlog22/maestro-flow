@@ -22,11 +22,6 @@ contract:
 Targeted refactoring with safety guarantees: plan → confirm → execute with test verification per change → reflection-log.md.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/refactor.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <context>
 Scope: $ARGUMENTS (required)
 - Module path: "src/auth" - specific directory

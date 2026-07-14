@@ -19,10 +19,6 @@ contract:
   produces: []
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <purpose>
 Orchestrate all maestro commands: classify intent → select chain → create session → dispatch to `maestro-ralph-execute`.
 Session: `.workflow/.maestro/{session_id}/status.json`.

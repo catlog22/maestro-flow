@@ -17,10 +17,6 @@ Initialize project: detect state, create `.workflow/` with project.md, state.jso
 Entry point; downstream: step `roadmap` or step `brainstorm`.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/init.md
-</required_reading>
-
 <deferred_reading>
 - [project.md](~/.maestro/templates/project.md) — read when generating project description
 - [state.json](~/.maestro/templates/state.json) — read when creating initial state

@@ -20,10 +20,6 @@ contract:
   produces: []
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <deferred_reading>
 Codify mode only (read when `--codify` and the corresponding phase starts):
 - [ui-codify.md](~/.maestro/workflows/ui-codify.md) — read always in codify mode (main workflow orchestrator)

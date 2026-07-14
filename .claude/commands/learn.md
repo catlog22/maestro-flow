@@ -10,7 +10,7 @@ allowed-tools:
   - Grep
   - Agent
   - AskUserQuestion
-session-mode: run
+session-mode: none
 contract:
   discovery: self-described
   consumes: []
@@ -29,20 +29,18 @@ All findings persist to `.workflow/knowhow/` and append `<spec-entry>` blocks to
 <routing>
 $ARGUMENTS — parse first token as `<subcommand>`, remainder as that subcommand's args.
 
-| Subcommand | Section | session-mode |
-|------------|---------|--------------|
-| `follow`      | [Subcommand: follow](#subcommand-follow) | none |
-| `investigate` | [Subcommand: investigate](#subcommand-investigate) | run (reads `@~/.maestro/workflows/run-mode.md`) |
-| `decompose`   | [Subcommand: decompose](#subcommand-decompose) | none |
-| `consult`     | [Subcommand: consult](#subcommand-consult) | none |
+| Subcommand | Section |
+|------------|---------|
+| `follow`      | [Subcommand: follow](#subcommand-follow) |
+| `investigate` | [Subcommand: investigate](#subcommand-investigate) |
+| `decompose`   | [Subcommand: decompose](#subcommand-decompose) |
+| `consult`     | [Subcommand: consult](#subcommand-consult) |
 
 **Routing errors:**
 | Code | Condition | Recovery |
 |------|-----------|----------|
 | E_NO_SUBCOMMAND | No subcommand provided in $ARGUMENTS | Display valid subcommands (follow, investigate, decompose, consult), prompt user to select |
 | E_INVALID_SUBCOMMAND | Unrecognized first token | Display valid subcommands with usage hints |
-
-Only the routed subcommand's `investigate` requires the run-mode reading; other subcommands ignore it.
 </routing>
 
 ---
@@ -214,10 +212,6 @@ Write understanding map: Key Concepts, Patterns (table: name/location/convention
 ## Subcommand: investigate
 
 **Usage**: `/learn investigate <question> [--scope <path>] [--max-hypotheses N] [-y]`
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 
 <purpose>
 Systematic investigation for understanding questions (not bug-fixing).

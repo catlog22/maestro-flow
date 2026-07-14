@@ -18,10 +18,6 @@ contract:
   produces: []
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <base>@~/.maestro/workflows/odyssey-base.md</base>
 
 <purpose>

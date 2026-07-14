@@ -22,11 +22,6 @@ Systematic security audit covering OWASP Top 10, dependency supply chain, secret
 CI/CD pipeline review, and optional STRIDE threat modeling. Three tiers control depth vs speed.
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/review.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <context>
 $ARGUMENTS — Parse tier and scope:
 - Tier: `quick` (default) | `standard` | `deep`

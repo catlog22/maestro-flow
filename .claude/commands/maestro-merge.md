@@ -23,11 +23,6 @@ Merge a session worktree branch back into main, sync Run artifacts, and reconcil
 Two-step: git merge first, artifact sync second (only after git succeeds).
 </purpose>
 
-<required_reading>
-@~/.maestro/workflows/merge.md
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 <context>
 $ARGUMENTS -- session ID (or slug) and optional flags.
 
