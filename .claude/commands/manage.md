@@ -19,6 +19,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Unified project management hub. Routes to four subcommand groups:
 - **status** — project dashboard (progress, tasks, active work, next steps)

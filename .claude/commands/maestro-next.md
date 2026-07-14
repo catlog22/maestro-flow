@@ -18,6 +18,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Parse intent + project state → score candidates from the step registry → recommend a single atomic step → confirm → execute via `maestro run prepare` + `maestro run create`. Also provides companion utilities: knowledge loading (--suggest), structured note recording (--note), and insight promotion (--promote).
 Does not create chains or orchestrate multi-step sequences — that is maestro/ralph territory.

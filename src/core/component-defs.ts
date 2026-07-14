@@ -203,8 +203,8 @@ export const COMPONENT_DEFS: ComponentDef[] = [
   },
   {
     id: 'commands',
-    label: 'Commands (Core)',
-    description: 'Core maestro/manage/spec/quality commands',
+    label: 'Commands',
+    description: 'All Claude slash commands (maestro, manage, odyssey, learn, spec, quality, security)',
     sourcePath: join('.claude', 'commands'),
     target: (mode, projectPath) =>
       mode === 'global'
@@ -214,35 +214,6 @@ export const COMPONENT_DEFS: ComponentDef[] = [
     mandatory: true,
     category: 'commands',
     platform: 'claude',
-    fileFilter: (name) => !name.startsWith('odyssey-') && !name.startsWith('learn-'),
-  },
-  {
-    id: 'commands-odyssey',
-    label: 'Odyssey Commands',
-    description: 'Long-running cycles: debug, improve, planex, review, UI',
-    sourcePath: join('.claude', 'commands'),
-    target: (mode, projectPath) =>
-      mode === 'global'
-        ? join(homedir(), '.claude', 'commands')
-        : join(projectPath, '.claude', 'commands'),
-    alwaysGlobal: false,
-    category: 'commands',
-    platform: 'claude',
-    fileFilter: (name) => name.startsWith('odyssey-'),
-  },
-  {
-    id: 'commands-learn',
-    label: 'Learn Commands',
-    description: 'Knowledge extraction: decompose, follow, investigate',
-    sourcePath: join('.claude', 'commands'),
-    target: (mode, projectPath) =>
-      mode === 'global'
-        ? join(homedir(), '.claude', 'commands')
-        : join(projectPath, '.claude', 'commands'),
-    alwaysGlobal: false,
-    category: 'commands',
-    platform: 'claude',
-    fileFilter: (name) => name.startsWith('learn-'),
   },
   {
     id: 'agents',
@@ -739,6 +710,8 @@ for (const entry of EXTRA_PLATFORMS) {
 const VALID_IDS = new Set(COMPONENT_DEFS.map((d) => d.id));
 
 const LEGACY_SKILL_TO_GROUP = new Map<string, string>();
+LEGACY_SKILL_TO_GROUP.set('commands-odyssey', 'commands');
+LEGACY_SKILL_TO_GROUP.set('commands-learn', 'commands');
 for (const s of EXTRA_TEAM_SKILLS) LEGACY_SKILL_TO_GROUP.set(s.name, 'skills-extra-team');
 for (const s of SCHOLAR_SKILLS) LEGACY_SKILL_TO_GROUP.set(s.name, 'skills-scholar');
 for (const s of META_SKILLS) LEGACY_SKILL_TO_GROUP.set(s.name, 'skills-meta');

@@ -447,11 +447,21 @@ Grill session {artifact_id} completed.
 
 ## Error Handling
 
-| Error | Action |
-|------|------|
-| no topic and no `--from`/`--continue` | abort: missing topic, provide a plan/idea to grill |
-| `--continue` but no prior grill session | abort: no session to resume, start a fresh grill |
-| codebase scan found no relevant anchors (W001) | warn, proceed with reduced code-grounded challenges, mark affected branches [LOW CONFIDENCE] |
-| CLI exploration failed in auto mode | retry once; if still failing, fall back to interactive Q&A for that branch |
-| terminology collision unresolved | record as an open question in `grill-report.md`, do not silently pick a term |
-| max branch count reached with open contradictions | force synthesis, record unresolved contradictions under Risk Register |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | No topic/plan and no --from/--continue flag | Prompt user for topic text |
+| E002 | error | --session ID not found | Show available sessions |
+| W001 | warning | Codebase scan failed or returned empty | Continue without code grounding, note limitation |
+| W002 | warning | CLI exploration timeout in auto mode | Skip question, mark as open |
+| W003 | warning | Max branch depth reached without resolution | Force synthesis, offer continuation |
+
+## Success Criteria
+
+- [ ] All depth-selected branches walked (shallow=3, standard=5, deep=8)
+- [ ] Each branch has >= 2 question-answer pairs with evidence or explicit user input
+- [ ] `grill-report.md` written with Branch Log table, all Q&A entries, synthesis section
+- [ ] `terminology.md` written with >= 5 terms, code references where applicable
+- [ ] Every locked decision has evidence (code reference or explicit user confirmation)
+- [ ] Contradictions between answers and code surfaced and resolved (or logged as risks)
+- [ ] Risk register captures all unresolved tensions
+- [ ] `context-package.json` generated with schema "context-package/1.0"

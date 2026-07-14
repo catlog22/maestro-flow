@@ -45,7 +45,7 @@ function validatePrompt(path, kind) {
   if (mode === 'deprecated' && !text.includes('<deprecated_command>')) {
     errors.push(`${relative(root, path)}: deprecated command missing mandatory replacement block`);
   }
-  if (mode === 'none' && /\.workflow\/(?:scratch|\.scratchpad|\.[a-z-]+|milestones|phases)|context-package\.json|understanding\.md|evidence\.ndjson|status\.json/.test(text)) {
+  if (mode === 'none' && hasActiveLegacyWrite(text)) {
     errors.push(`${relative(root, path)}: ${kind} classified none but contains legacy session writes`);
   }
   if (mode === 'none' && /^contract:/m.test(text)) {
@@ -73,7 +73,10 @@ function walkMarkdown(dir) {
 }
 
 function hasActiveLegacyWrite(text) {
-  const legacyTarget = String.raw`(?:\.workflow\/(?:scratch|\.scratchpad|\.[a-z-]+|milestones|phases|plans|research|active)[^\s\`"']*|context-package\.json|understanding\.md|evidence\.ndjson|status\.json)`;
+  // Artifact filenames such as understanding.md and evidence.ndjson are also
+  // valid inside canonical knowledge stores. Detect legacy locations and
+  // runtime-owned protocol files instead of banning those names globally.
+  const legacyTarget = String.raw`(?:\.workflow\/(?:scratch|\.scratchpad|\.[a-z-]+|milestones|phases|plans|research|active)[^\s\`"']*|context-package\.json|status\.json)`;
   return new RegExp(String.raw`(?:Write|Edit|write_file|edit_file|write_to_file|replace_file_content)\s*\([^\n]*${legacyTarget}`, 'i').test(text)
     || new RegExp(String.raw`(?:write|append|persist|save|create|update|output(?:s)?(?:\s+files?)?\s+(?:to|in)|session path\s*:)\s*[^\n]*${legacyTarget}`, 'i').test(text);
 }

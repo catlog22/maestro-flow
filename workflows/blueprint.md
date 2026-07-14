@@ -398,5 +398,35 @@ Resume: `-c` reads blueprint-config.json, resumes from first incomplete phase.
 | Phase 6 | Validation fails | No | Partial report; flag readiness-report.md as [LOW CONFIDENCE] (validation incomplete) |
 | Phase 6.5 | Max iterations (2) | No | Force handoff; flag readiness-report.md as [LOW CONFIDENCE] (auto-fix exhausted) |
 | Step 2.5 | External research fails | No | apiResearchContext = null, continue; flag apiResearchContext as [LOW CONFIDENCE] (no external research) |
+| Init | E006: `.workflow/` not initialized | Yes | Run maestro-init first |
+| Phase 6 | E007: Readiness Fail after 2 auto-fix iterations | No | Present manual fix options |
+| Step 2.5 | W005: External research agent failed | No | Continue without apiResearchContext |
 
 CLI Fallback Chain: Role-based resolution → degraded mode (local only); flag affected phase artifacts as [LOW CONFIDENCE] (CLI unavailable, local-only analysis)
+
+## Success Criteria
+
+- [ ] `blueprint-config.json` created with session metadata and phase tracking
+- [ ] `product-brief.md` with vision, goals, scope, multi-perspective synthesis
+- [ ] `glossary.json` with 5+ core terms for cross-document consistency
+- [ ] `requirements/` directory with `_index.md` + individual `REQ-*.md` + `NFR-*.md` files
+- [ ] All requirements have RFC 2119 keywords and acceptance criteria
+- [ ] `architecture/` directory with `_index.md` + individual `ADR-*.md` files
+- [ ] Architecture includes state machine, config model, error handling, observability (service type)
+- [ ] `epics/` directory with `_index.md` + individual `EPIC-*.md` files
+- [ ] Cross-Epic dependency map (Mermaid) and MVP subset tagged
+- [ ] `readiness-report.md` with 4-dimension quality scores and traceability matrix
+- [ ] `blueprint-summary.md` with one-page executive summary
+- [ ] All documents have valid YAML frontmatter with session_id
+- [ ] Glossary terms used consistently across all documents
+- [ ] Readiness gate: Pass (>=80%) or Review (>=60%) with documented concerns
+- [ ] context-package.json generated for downstream consumption
+
+## Next-Step Routing
+
+| Condition | Next Step |
+|-----------|-----------|
+| Gate Pass/Review | step `roadmap` with `--from blueprint:{artifact_id}` |
+| Gate Fail | fix issues, re-run readiness check |
+| Need implementation plan | step `plan` with `--from blueprint:{artifact_id}` |
+| Need stress-testing | step `grill` on the blueprint |

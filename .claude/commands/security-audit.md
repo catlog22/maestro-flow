@@ -17,6 +17,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Systematic security audit covering OWASP Top 10, dependency supply chain, secrets detection,
 CI/CD pipeline review, and optional STRIDE threat modeling. Three tiers control depth vs speed.

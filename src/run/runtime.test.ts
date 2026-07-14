@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { Command } from 'commander';
 import { createSessionState } from './defaults.js';
@@ -80,6 +81,7 @@ Plan ready.
 
 afterEach(() => {
   for (const path of roots.splice(0)) rmSync(path, { recursive: true, force: true });
+  vi.unstubAllEnvs();
   process.exitCode = undefined;
 });
 
@@ -97,6 +99,60 @@ describe('Session/Run runtime', () => {
       expect(source.path.replaceAll('\\', '/')).toMatch(new RegExp(`/prepare/${step}\\.md$`));
       expect(source.contract.produces.length).toBeGreaterThan(0);
     }
+  });
+
+  it('loads installed global Claude contracts without losing project precedence', () => {
+    const projectRoot = root();
+    const claudeHome = root();
+    vi.stubEnv('MAESTRO_CLAUDE_HOME', claudeHome);
+    const globalCommandDir = join(claudeHome, 'commands');
+    mkdirSync(globalCommandDir, { recursive: true });
+    const globalContract = `<contract>
+consumes: []
+produces:
+  - kind: global-plan
+    primary: true
+    path: outputs/global-plan.json
+gates:
+  entry: []
+  exit: []
+</contract>
+`;
+    const globalCommandPath = join(globalCommandDir, 'installed-plan.md');
+    writeFileSync(globalCommandPath, globalContract, 'utf8');
+
+    const created = createRun({ projectRoot, command: 'installed-plan', intent: 'installed command' });
+    const run = new SessionStore(projectRoot).readRun(created.session_id, created.run_id);
+    const emptyHash = createHash('sha256').update('').digest('hex');
+    expect(run.command.source_path.replaceAll('\\', '/')).toMatch(/\/commands\/installed-plan\.md$/);
+    expect(run.command.content_hash).toBe(createHash('sha256').update(globalContract).digest('hex'));
+    expect(run.command.content_hash).not.toBe(emptyHash);
+    expect(checkRun(projectRoot, created.run_id).gates.blocking).toHaveLength(1);
+
+    const globalSkillDir = join(claudeHome, 'skills', 'installed-skill');
+    mkdirSync(globalSkillDir, { recursive: true });
+    writeFileSync(join(globalSkillDir, 'SKILL.md'), `<contract>
+consumes: []
+produces:
+  - kind: global-skill
+gates:
+  entry: []
+  exit: []
+</contract>
+`, 'utf8');
+    const globalSkill = resolveCommandSource(projectRoot, 'installed-skill');
+    expect(globalSkill.path).toBe(join(globalSkillDir, 'SKILL.md'));
+    expect(globalSkill.contract.produces[0]?.kind).toBe('global-skill');
+
+    commandFile(projectRoot, 'installed-plan', `consumes: []
+produces:
+  - kind: project-plan
+gates:
+  entry: []
+  exit: []`);
+    const projectSource = resolveCommandSource(projectRoot, 'installed-plan');
+    expect(projectSource.path).toBe(join(projectRoot, '.claude', 'commands', 'installed-plan.md'));
+    expect(projectSource.contract.produces[0]?.kind).toBe('project-plan');
   });
 
   it('resolves every migrated command through workflow YAML associations', () => {

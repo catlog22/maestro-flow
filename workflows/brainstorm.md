@@ -472,12 +472,48 @@ Artifact registration and state updates are handled by `maestro run complete`.
 
 ## Error Handling
 
-| Error | Action |
-|------|------|
-| no topic and no role/flags | abort: missing topic or role, provide one to brainstorm |
-| `--review-only` without `--session ID` | abort: review-only requires an existing session to re-review |
-| unknown role name | abort: role not in the valid-roles set, list valid roles |
-| a role analysis agent failed (W001) | record, continue with the successful roles, flag the session [LOW CONFIDENCE] (partial roles) |
-| all role agents failed | abort: no role analysis produced, cannot synthesize guidance |
-| cross-role review found an unresolved boundary conflict | record it in guidance-specification.md §11 as an open question, do not silently drop it |
-| `--from` upstream context package missing/invalid | warn, proceed without upstream seeding, note the gap in the report |
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | Topic or role argument required | Prompt user for topic text or role name |
+| E002 | error | No active session for single role mode | Guide user to run auto mode first |
+| E003 | error | Invalid role name | Show valid roles list |
+| E006 | error | `--review-only` but no `{role}/analysis.md` found | Run auto or single-role mode first |
+| E007 | error | `--review-only` but `guidance-specification.md` missing | Run auto mode to generate guidance first |
+| W001 | warning | Role analysis agent failed | Record, continue with successful roles, flag [LOW CONFIDENCE] |
+| W002 | warning | Project context (.workflow/) not found | Continue without project context |
+| W003 | warning | Role template not found | Use generic analysis structure |
+| W004 | warning | Validation score < 60 | Log warning, suggest manual review |
+| W005 | warning | External research agent failed | Continue without designResearchContext |
+| W006 | warning | Reviewer patch_targets heading drift | Skip that patch; report in final summary |
+
+All role agents failing is a hard abort — no synthesis is possible without any role analysis.
+
+## Success Criteria
+
+**Auto mode**:
+- [ ] `guidance-specification.md` with RFC 2119 keywords, terminology, non-goals, feature decomposition (§10), decision tracking (§11), cross-role resolutions placeholder (§12)
+- [ ] `design-research.md` persisted when Step 1.7 external research ran (fail-soft: absence not a failure)
+- [ ] `{role}/analysis.md` written for each selected role, containing §2 Decision Digest (4 tables) + §3 Cross-Cutting Foundations + §4 File Index
+- [ ] `{role}/analysis-F-{id}-{slug}.md` written per feature (one file per feature, < 2000 words)
+- [ ] Each `{role}/analysis.md` §2 Decisions table has ≥ 1 row per feature
+- [ ] Cross-role review executed; output includes `patch_targets[]` for every finding
+- [ ] Boundary grill executed after cross-role review (skip if no conflicts detected)
+- [ ] If findings exist: each accepted resolution applied AND logged in `guidance-specification.md` §12
+- [ ] If zero findings: final report explicitly states "No cross-role issues detected"
+- [ ] Session metadata updated with completion status (review_findings_count, resolutions_applied, patches_skipped)
+
+**Single role mode**:
+- [ ] `{role}/analysis.md` written with §2 Decision Digest + §4 File Index
+- [ ] `{role}/analysis-F-*.md` written when guidance §10 feature list available
+- [ ] Session metadata updated
+
+## Next-Step Routing
+
+| Condition | Next Step |
+|-----------|-----------|
+| Need formal spec package | step `blueprint` with `--from brainstorm:{artifact_id}` |
+| Quick roadmap needed | step `roadmap` with `--from brainstorm:{artifact_id}` |
+| Need deeper analysis first | step `analyze` with `--from brainstorm:{artifact_id}` |
+| Need stress-testing first | step `grill` |
+| `html-prototypes/` produced | Load brainstorm-visualize.md and launch visualizer |
+| DESIGN.md established | step `execute` via impeccable build |

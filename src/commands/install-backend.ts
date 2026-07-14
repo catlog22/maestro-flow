@@ -464,6 +464,53 @@ export function copyRecursive(
   }
 }
 
+/**
+ * Remove files in `dest` that do not exist in `src` (after applying the same
+ * fileFilter). Prevents stale files from accumulating across installs when
+ * source commands/skills/agents are deleted or merged.
+ *
+ * Only operates on flat or shallow directories — walks recursively but
+ * respects PRESERVE_FILES and never removes non-empty directories.
+ */
+export function pruneOrphans(
+  src: string,
+  dest: string,
+  fileFilter?: (name: string) => boolean,
+): number {
+  if (!existsSync(dest) || !existsSync(src)) return 0;
+  const srcStat = statSync(src);
+  if (srcStat.isFile()) return 0;
+
+  const sourceEntries = new Set(
+    readdirSync(src).filter(name => !fileFilter || fileFilter(name)),
+  );
+
+  let removed = 0;
+  for (const entry of readdirSync(dest)) {
+    if (PRESERVE_FILES.has(entry)) continue;
+    if (entry.endsWith('.md.disabled')) continue;
+    if (sourceEntries.has(entry)) {
+      const srcPath = join(src, entry);
+      const destPath = join(dest, entry);
+      if (statSync(srcPath).isDirectory() && existsSync(destPath) && statSync(destPath).isDirectory()) {
+        removed += pruneOrphans(srcPath, destPath);
+      }
+      continue;
+    }
+    const orphanPath = join(dest, entry);
+    try {
+      const st = statSync(orphanPath);
+      if (st.isDirectory()) {
+        rmSync(orphanPath, { recursive: true });
+      } else {
+        unlinkSync(orphanPath);
+      }
+      removed++;
+    } catch { /* skip */ }
+  }
+  return removed;
+}
+
 // Re-export injectDocFile from shared core
 export { injectDocFile, type MigrateResult } from '../core/tag-injector.js';
 

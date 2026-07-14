@@ -21,6 +21,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Adaptive lifecycle orchestrator: locate step → resolve args → load context → dispatch [@subagent] Agent(ralph-executor) per step (agent 调 `ralph next` + 执行) → extract signals → drift check → ralph complete → evaluate decision → next step → loop.
 

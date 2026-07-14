@@ -18,6 +18,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Create or sync a session-level git worktree for parallel development.
 Supports `--sync` mode to pull latest main changes into an active worktree.

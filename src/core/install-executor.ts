@@ -18,6 +18,7 @@ import {
   addCodexMcpServer,
   addExtraMcpServer,
   copyRecursive,
+  pruneOrphans,
   injectDocFile,
   createTargetBackup,
   uninstallManifest,
@@ -170,6 +171,16 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
       } else {
         copyRecursive(comp.sourceFull, comp.targetDir, stats, manifest, comp.def.fileFilter);
       }
+    }
+
+    // --- Prune orphans: remove files in target that no longer exist in source ---
+    let pruned = 0;
+    for (const comp of components) {
+      if (comp.def.build || comp.def.inject) continue;
+      pruned += pruneOrphans(comp.sourceFull, comp.targetDir, comp.def.fileFilter);
+    }
+    if (pruned > 0) {
+      progress('components', 'active', `Pruned ${pruned} orphan files`);
     }
 
     if (cancelled()) throw new CancelledError();

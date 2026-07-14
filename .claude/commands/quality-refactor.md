@@ -18,6 +18,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Targeted refactoring with safety guarantees: plan → confirm → execute with test verification per change → reflection-log.md.
 </purpose>

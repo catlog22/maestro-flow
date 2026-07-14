@@ -18,6 +18,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Seal a completed session: verify all runs are done, extract knowledge (specs/knowhow promotion), mark session as sealed, and recommend the next dep-ready session from the DAG.
 

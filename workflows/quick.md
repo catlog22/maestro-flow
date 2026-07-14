@@ -264,6 +264,16 @@ If any artifact is missing: DO NOT report completion. Complete the missing step 
 
 ---
 
+## Success Criteria
+
+- [ ] Run task directory created under {run_dir}/outputs/
+- [ ] plan.json written with task definitions
+- [ ] All tasks executed with summaries written
+- [ ] state.json updated with Run task entry
+- [ ] Commit created with task changes: stage ONLY files modified by the task; confirm with AskUserQuestion showing staged files and proposed commit message (unless `-y` auto-commits)
+
+---
+
 ## Next-step routing
 
 | Condition | Suggestion |

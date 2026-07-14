@@ -11,10 +11,6 @@ allowed-tools:
   - Agent
   - AskUserQuestion
 session-mode: none
-contract:
-  discovery: self-described
-  consumes: []
-  produces: []
 ---
 <purpose>
 Learning toolkit for building understanding of code, decisions, and plans. Four subcommands:

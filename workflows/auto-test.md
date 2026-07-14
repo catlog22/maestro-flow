@@ -716,6 +716,26 @@ Files:
 
 ---
 
+## Success Criteria
+
+- [ ] Phase resolved from artifact registry
+- [ ] Route auto-selected from project state (spec/gap/code)
+- [ ] Scenarios extracted and normalized to unified format
+- [ ] Test infrastructure discovered (framework, patterns, conventions)
+- [ ] test-plan.json generated with layer distribution
+- [ ] Tests written following RED-GREEN methodology and existing patterns
+- [ ] Tests executed progressively (L0→L3) with fail-fast on critical
+- [ ] Iteration engine ran (inner: test_defect fix, outer: strategy adjust)
+- [ ] Test confidence scored per iteration with 5-dimension factor model
+- [ ] Convergence check includes confidence >= 60% alongside pass_rate threshold
+- [ ] Pressure pass completed on highest-pass-rate layer before completion
+- [ ] report.json includes confidence section
+- [ ] If spec source: traceability matrix built, traceability.md written
+- [ ] If failures: issues created in issues.jsonl (confirmed by user unless `-y`)
+- [ ] If gap source: validation.json gaps updated (MISSING→COVERED)
+
+---
+
 ## Error Codes
 
 | Code | Condition | Recovery |

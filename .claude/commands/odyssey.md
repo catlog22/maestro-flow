@@ -18,6 +18,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <base>@~/.maestro/workflows/odyssey-base.md</base>
 
 <purpose>
@@ -295,6 +299,11 @@ Pending decisions must [@ask] AskUserQuestion — no silent resolve.
 - `archaeology`: `sha`, `author`, `date`, `message`, `relevance`
 - `explore`: `category` (call_chain|recent_change|error_gap|similar_pattern), `detail`
 - `diagnosis`: `hypothesis`, `result` (confirmed|disproved|inconclusive)
+- `discovery`: `file`, `line`, `classification` (safe|risk|bug), `action` (fix|issue|decision|skip)
+- `decision`: `question`, `options`, `context`, `status` (pending|resolved|deferred), `resolution`
+- `self-iteration`: `stage`, `round`, `assessment`, `expansion`
+
+These shared field specs apply to the `discovery`/`decision`/`self-iteration` phases in every mode (improve/planex/review/ui use identical structures).
 
 **explore.json**: `{call_chains, recent_changes, error_gaps, similar_patterns, cli_tool, timestamp}`
 
@@ -338,7 +347,7 @@ S_CONFIRM → S_FIX           : needs_rework
 
 **A_CONFIRM** — (1) Run covering tests. (2) `maestro delegate --role review --mode analysis` (`run_in_background: true`): EXPECTED JSON `{verdict, findings [{severity, description, suggestion}], regression_risk}`. (3) `session.json.confirmation`: `{test_result, cli_review, overall: "confirmed|needs_rework"}`. (4) Update §6. `needs_rework` → S_FIX. `confirmed` → mark G3.
 
-**Generalize source:** confirmed root cause + applied fix. **Discover routing:** `bug` → back to S_FIX; new bug → S_DIAGNOSE.
+**Generalize source:** confirmed root cause + applied fix. **Thoroughness floor:** ALL 3 layers (syntax/semantic/structural) must be attempted and logged — a single-layer quick grep does NOT satisfy (see shared A_GENERALIZE). **Discover routing:** `bug` → back to S_FIX; new bug → S_DIAGNOSE.
 
 **Knowledge Persistence (§9):**
 
@@ -440,7 +449,7 @@ S_VERIFY → S_FIX           : needs_rework
 
 **A_ESCALATE_DIAGNOSIS** — `retries++`. < 3: `maestro delegate --role analyze`, new hypotheses, → S_DIAGNOSE. >= 3: Normal → [@ask] AskUserQuestion | `-y` → INCONCLUSIVE → S_RECORD.
 
-**A_FIX** — (1) Exhaustive fix: ALL diagnosed issues by severity tier (critical → high → medium → low within fix_threshold), one dimension at a time. After each tier, re-verify **current tier's dimension only**; new findings at same or higher severity append to current tier. Cross-dimension regression checks run once at S_VERIFY after all tiers. (2) For each fix: implement → evidence phase=fix. (3) Normal: [@ask] AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
+**A_FIX** — (1) Exhaustive fix: ALL diagnosed issues by severity tier (critical → high → medium → low within fix_threshold), one dimension at a time. After each tier, re-verify **current tier's dimension only** (not all dimensions); new findings at same or higher severity append to current tier. Cross-dimension regression checks run once at S_VERIFY after all tiers. **No partial-tier advancement** — each tier fully addressed (fixed or individually classified) before advancing; blanket "pre-existing" skip forbidden. (2) For each fix: implement → evidence phase=fix. (3) Normal: [@ask] AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
 
 **A_VERIFY** — (1) Run tests covering modified areas. (2) Re-capture metrics, compare with `baseline_metrics`. (3) CLI-assisted: `maestro delegate --role review --mode analysis` (`run_in_background: true`). (4) `needs_rework` → S_FIX; `verified` → mark G4. (5) Write `confirmation`. Update §5 (before/after metrics table).
 
@@ -577,7 +586,7 @@ ${specs_content}
 ${prior_summaries}
 " --to ${resolved_executor} --mode write --id planex-${slug}-${task_id}
 ```
-Run `run_in_background: true`, wait for callback. **Deviation Rule** (max 3 auto-fix per task): first attempt normal dispatch → retry `--resume planex-${slug}-${task_id}` simplified → fallback to Agent path → all 3 fail → mark task `blocked`, checkpoint, continue remaining.
+Run `run_in_background: true`, wait for callback. **Deviation Rule (MANDATORY hard limit — max 3 retries per task):** first attempt normal dispatch → retry `--resume planex-${slug}-${task_id}` simplified → fallback to Agent path → all 3 fail → mark task `blocked`, checkpoint, continue remaining. NEVER exceed 3 attempts on a single task.
 - **Step 4 — Per-Task Evidence:** `{"phase":"execution","type":"task-completed","task_id":"T1","executor":"...","files_modified":[],"summary":"","attempt":1}`; update task status.
 - **Step 5 — Post-Execution Validation.** Skip if `verification_tool == "Skip"` OR `--skip-verify` OR no completed tasks. **Check 1** Summary Consistency (task status vs git diff). **Check 2** CLI Verification Gate:
 ```bash
@@ -725,7 +734,7 @@ for tier in [critical, high, medium, low].filter(>= threshold):
   re-review modified area (new findings → append, continue; max 2 per tier)
   tier done → auto-commit
 ```
-Normal: [@ask] AskUserQuestion per tier | `-y`: auto-fix all. Remaining > 0 → retry (max_fix_rounds = 5). Unchanged 2 rounds → classify each individually. After 5 rounds remaining > 0 → escalate: Normal: [@ask] AskUserQuestion (continue/accept/reclassify) | `-y`: classify remaining as `deferred`, proceed. Blanket "pre-existing" forbidden. Commit per tier: `"odyssey-review({slug}): FIX-{tier} — {N} items fixed"`.
+Normal: [@ask] AskUserQuestion per tier | `-y`: auto-fix all. Remaining > 0 → retry (**MANDATORY hard limit: max_fix_rounds = 5**). Unchanged 2 rounds → classify each individually. After 5 rounds remaining > 0 → escalate: Normal: [@ask] AskUserQuestion (continue/accept/reclassify) | `-y`: classify remaining as `deferred`, proceed. **No partial-tier advancement** — a tier is complete only when every finding is fixed or individually classified. Blanket "pre-existing" forbidden. Commit per tier: `"odyssey-review({slug}): FIX-{tier} — {N} items fixed"`.
 
 **A_CONFIRM** — Run tests + `maestro delegate --role review --mode analysis` (`run_in_background: true`) zero-residual review. `remaining == 0 AND new == 0` → confirmed, mark G3; otherwise → needs_rework → S_FIX. Update `confirmation` + `remaining_actionable` + §5.
 

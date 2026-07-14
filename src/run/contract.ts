@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
@@ -94,15 +95,27 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
     normalized.startsWith('maestro-') ? normalized.slice('maestro-'.length) : `maestro-${normalized}`,
   ]));
   const project = paths.project(projectRoot);
-  const candidates = names.flatMap(name => [
+  const prepareCandidates = names.flatMap(name => [
     join(project.prepare, `${name}.md`),
     join(paths.prepare, `${name}.md`),
     join(projectRoot, 'prepare', `${name}.md`),
+  ]);
+  const projectClaudeCandidates = names.flatMap(name => [
     join(projectRoot, '.claude', 'commands', `${name}.md`),
     join(projectRoot, '.claude', 'skills', name, 'SKILL.md'),
   ]);
-  const path = candidates.find(candidate => existsSync(candidate))
-    ?? resolveStepContent(projectRoot, normalized).prepare?.path;
+  const claudeHome = process.env.MAESTRO_CLAUDE_HOME ?? join(homedir(), '.claude');
+  const globalClaudeCandidates = names.flatMap(name => [
+    join(claudeHome, 'commands', `${name}.md`),
+    join(claudeHome, 'skills', name, 'SKILL.md'),
+  ]);
+  const projectCandidates = [
+    ...prepareCandidates,
+    ...projectClaudeCandidates,
+  ];
+  const path = projectCandidates.find(candidate => existsSync(candidate))
+    ?? resolveStepContent(projectRoot, normalized).prepare?.path
+    ?? globalClaudeCandidates.find(candidate => existsSync(candidate));
   if (!path) {
     const empty = '';
     return {

@@ -78,13 +78,13 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
 | `quality-debug` | `debug` | 形态 A |
 | `quality-auto-test` | `auto-test` | 形态 B（现版 workflow 文件） |
 | `quality-retrospective` | `retrospective` | 形态 B |
-| `maestro-collab` | `collab` | 形态 B |
+| `maestro-quick` | `quick` | 短链 step；保留 `maestro-quick` 作为 YAML 命令关联名 |
 | `maestro-grill` | `grill` | 形态 B |
 | `maestro-brainstorm` | `brainstorm` | 其多角色编排逻辑内聚在正文，不拆；形态 B |
 | `maestro-blueprint` | `blueprint` | 形态 B |
 | `maestro-roadmap` | `roadmap` | 产 session DAG 写 state.json 的例外语义保留；形态 B |
 
-### 2.2 合并进三入口（共 9 个 → 3 个）
+### 2.2 合并进三入口（共 8 个 → 3 个）
 
 | 现有命令 | 去向 |
 |------|------|
@@ -95,7 +95,6 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
 | `maestro-ralph-cli` | 并入 ralph：`--engine cli`（delegate 路径） |
 | `maestro-ralph-execute` | 成为 driver 内部实现，命令删除 |
 | `maestro-ralph-cli-execute` | 成为 `--engine cli` 内部包装，命令删除 |
-| `maestro-quick` | 并入预设：`maestro --preset quick` / `ralph --preset quick`，命令删除 |
 | `maestro-companion` | **并入 next**：route→`--suggest`、before→prepare 吸收、note→`--note`、after→`--promote`（§1.3），命令删除 |
 
 ### 2.3 不迁移（第二/三档 + session 动词，入口保留）
@@ -103,6 +102,7 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
 | 类别 | 命令 | 说明 |
 |------|------|------|
 | Run-aware Skill | `odyssey-*`、`learn-*`、team-* 全家 | 保留入口，自己调 run 生命周期 |
+| 独立入口 | `maestro-collab` | 保留多工具交叉验证职能，不迁为 step；与 `maestro collab` 人类团队协作 CLI 区分 |
 | Plain Skill | `maestro-overlay`/`amend`/`composer`/`player`/`swarm-workflow`、`manage-*`、`spec-*`、scholar-* | 不进 run 体系 |
 | session 动词 | `maestro-init`/`session-seal`/`fork`/`merge` | 独立保留；ralph/maestro 可在 seal 决策点自动触发 seal |
 | 已下线 | `maestro-milestone-*` | 按指南 §8.1，不迁 |
@@ -111,7 +111,7 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
 
 ## 三、step 文件迁移规程（每个第一档命令的机械步骤）
 
-对 §2.1 每个命令执行同一套操作（产出 `prepare/{name}.md` + `workflow/{name}.md` 双文件，对应简化规划 §3.9a 三层拆分）：
+对 §2.1 每个命令执行同一套操作（产出 `prepare/{name}.md` + `workflows/{name}.md` 双文件，对应简化规划 §3.9a 三层拆分）：
 
 ```text
 1. 素材提取：
@@ -126,16 +126,17 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
    · 领域 workflow 文档（如 brainstorm.md）改列 frontmatter refs:（path + 一句摘要），
      由 create 组装 deferred 清单
    · `<required_reading>` 中的思考材料落为 prepare 正文
-3. workflow 文件（workflows/{name}.md，无 YAML 头，核心流程正文）：
+3. workflow 文件（workflows/{name}.md，YAML 关联头 + 核心流程正文）：
+   · frontmatter 固定声明 `name`、`prepare`、`commands`、`session-mode: inherited`
+   · `name` 与文件 basename 一致，`prepare` 唯一关联同名 prepare 文件，`commands` 保留原命令名作为兼容解析入口
    对回退版/现版 workflow 做词汇清洗——
    · `run check` → 删；`seal` → `complete`；`gates.json` → 内联 GateRecord；
      `phase` → `session`；协议段落 → 删除，归 run-mode.md
    · 内联 JSON 模板删 _meta
 4. 参考层：共享文档迁 ref/；run-mode.md 保留原位（由 create 注入）
-5. 落位：源码仓 `{prepare/,workflows/,ref/}` → install → `~/.maestro/steps/{prepare,workflow}/`
-6. 原 .claude/commands/{name}.md 替换为 3 行 deprecation stub：
-   指向 `maestro-next --step {name}`，一个过渡版本后删除
-7. 零重复与词汇清洗核对：frontmatter 模板换 5+2 键块式 YAML、
+5. 落位：源码仓 `prepare/`、`workflows/`、`ref/` → install → `~/.maestro/prepare/`、`~/.maestro/workflows/`、`~/.maestro/ref/`
+6. 删除原 `.claude/commands/{name}.md` Skill 入口；兼容命令名由 workflow YAML `commands` 关联到 step，`maestro-next --step {name}` 直接按 step 名调用
+7. 零重复与词汇清洗核对：prepare frontmatter 使用 5+2 键块式 YAML，workflow frontmatter 通过 lint 校验关联唯一性、
    禁令列表删 gates.json/evidence.json 字样（规划 §六映射表）
 ```
 
@@ -148,8 +149,8 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
 | 入口 | 保留 | 删除 | 新增 |
 |------|------|------|------|
 | `maestro-next` | 意图解析、推荐-确认交互 | 自带路由表（评分细则移入共享 scorer 素材） | `--step` 显式覆盖；driver 调用；companion 四模式（`--suggest`/`--note`/`--promote`/prepare 吸收 before）；复杂度三路分流（§1.3，`--lite`/`--run` 覆盖） |
-| `maestro` | 意图分类、chain catalog、`--dry-run`/`-y`/`-c`/`--super`、分解契约（invariant 4） | "dispatch via ralph-execute"（invariant 1，driver 取代）；`.maestro/*/status.json`（→ `session.json.orchestration`） | `--preset quick`；chain 写 orchestration.chain[] |
-| `maestro-ralph` | 决策点模型、drift check、3-strike 升级 | v2/cli 变体文件、execute 包装、status.json | `--engine inline\|agent\|cli`；`--preset quick` |
+| `maestro` | 意图分类、chain catalog、`--dry-run`/`-y`/`-c`/`--super`、分解契约（invariant 4） | "dispatch via ralph-execute"（invariant 1，driver 取代）；`.maestro/*/status.json`（→ `session.json.orchestration`） | `quick` 路由到同名 step；chain 写 orchestration.chain[] |
+| `maestro-ralph` | 决策点模型、drift check、3-strike 升级 | v2/cli 变体文件、execute 包装、status.json | `--engine inline\|agent\|cli` |
 
 三入口共同约束（承简化规划 §7.7）：**入口只含路由 + 生命周期驱动，零领域内容**——以 delegation-check 内容分离标准验收。
 
@@ -161,12 +162,12 @@ title: "三入口迁移规划 — 多 skill 收敛为 maestro-next / maestro / m
 |------|------|------|
 | **0 依赖** | CLI 收敛完成（简化规划 §八步骤 2：prepare/brief/create --prep/complete + 分页器 + 注册表加载） | `maestro steps list` 可枚举；`run create` 返回出生包 |
 | **1 核心链试点** | analyze/plan/execute/verify 按 §三迁为 step；`next` 重写为 driver 单步投影（含 companion 四模式融入 + 复杂度三路分流，§1.3） | `next --step analyze → plan → execute → verify` 人工驱动全闭环；`--suggest` 零副作用；轻量意图走 companion 通道不建 run |
-| **2 静态链** | `maestro` 重写（chain catalog 接 driver）；quick 并入 preset | `maestro "<intent>" --dry-run` 出链、`-y` 连跑核心链闭环 |
+| **2 静态链** | `maestro` 重写（chain catalog 接 driver）；quick 作为正式 step 纳入路由 | `maestro "<intent>" --dry-run` 出链、`-y` 连跑核心链闭环，低复杂度执行意图可路由到 `quick` |
 | **3 自适应链** | ralph 合并 5 变体（先 `--engine inline`，再 agent，再 cli 逐个迁移验证） | 同一任务三 engine 各跑通一次；decision point 升级路径可触发 |
-| **4 铺开** | 其余 10 个第一档 step 迁移（quality-* → 上游 grill/brainstorm/blueprint/roadmap/collab） | 每个 step 至少被 next 驱动跑通一次 |
-| **5 收尾** | 入口文件换 stub；`.codex/`/`.agy/` 镜像重做（只余 3 入口 + 第二/三档）；一个过渡版本后删 stub | 全仓 grep 无失效引用；`maestro-help` 路由表更新 |
+| **4 铺开** | 其余 10 个第一档 step 迁移（quality-* → 上游 grill/brainstorm/blueprint/roadmap/quick） | 每个 step 至少被 next 驱动跑通一次；14 个 workflow YAML 关联通过 lint |
+| **5 收尾** | 删除已迁移的 14 个独立入口；`.codex/`/`.agy/` 镜像重做（只余 3 编排入口 + 独立 `maestro-collab` + 第二/三档） | 全仓 grep 无失效引用；`maestro-help` 路由表更新 |
 
-回滚策略：Wave 1–4 期间原命令文件未删（stub 在 Wave 5）——任何 step 迁移失败可即时回退为原入口，与简化规划 §7.6"降档兼容"一致。
+回滚策略：迁移提交前保留原命令文件；落地后由 workflow YAML 的 `commands` 关联维持旧命令名解析。任何 step 迁移失败可回退对应 prepare/workflow 配对，与简化规划 §7.6"降档兼容"一致。
 
 ---
 

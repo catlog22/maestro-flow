@@ -184,6 +184,22 @@ Skip in auto mode (`-y`) — select the first root session automatically. The ch
 
 ---
 
+## Success Criteria
+
+- [ ] Requirement parsed with goal, constraints, stakeholders
+- [ ] Sessions defined with intent, scope, success criteria, and seed data
+- [ ] Decomposition strategy selected (progressive or direct)
+- [ ] DAG edges defined with `depends_on` relationships
+- [ ] Every Active requirement from project.md mapped to exactly one session
+- [ ] No circular dependencies in session DAG
+- [ ] User approved session DAG (or auto-approved with -y)
+- [ ] `outputs/roadmap.json` written with session DAG
+- [ ] `outputs/roadmap.md` written with session summary and frontmatter `kind: roadmap`
+- [ ] Sessions registered in `state.json.sessions[]` with `roadmap_artifact_id` and `seed_ref`
+- [ ] Root session activation confirmed via AskUserQuestion
+
+---
+
 ## Completion
 
 Report session count, root sessions, strategy, and output path. Verdict `DONE` on normal completion, `DONE_WITH_CONCERNS` if concerns surfaced (e.g. unmapped requirement, low-confidence research).

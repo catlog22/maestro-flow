@@ -465,6 +465,22 @@ Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; shou
 
 ---
 
+## Success Criteria
+
+- [ ] Mode correctly resolved (scan / single / range / all)
+- [ ] At least one phase selected and validated (status == "completed", artifacts exist)
+- [ ] All requested lens agents returned valid JSON, or W001 logged for partial coverage
+- [ ] `retrospective.json` written with metrics, findings_by_lens, distilled_insights, routing_recommendations
+- [ ] `retrospective.md` written and human-readable (metrics table, per-lens findings, insights, routing table)
+- [ ] Each insight has a stable `INS-{8hex}` id
+- [ ] If routing enabled: every recommendation either created an artifact or was explicitly skipped by user
+- [ ] Spec entries (if any) appended as `<spec-entry>` to matching `.workflow/specs/{category-file}.md`
+- [ ] Issue rows (if any) match canonical issues.jsonl schema (status "open", full issue_history)
+- [ ] `.workflow/specs/learnings.md` appended with one `<spec-entry>` per insight regardless of routing target
+- [ ] No existing phase artifacts modified (verification.json, review.json, plan.json untouched)
+
+---
+
 ## Error Codes
 
 | Code | Condition | Step |

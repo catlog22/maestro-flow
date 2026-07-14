@@ -10,10 +10,6 @@ allowed-tools:
   - Grep
   - AskUserQuestion
 session-mode: none
-contract:
-  discovery: self-described
-  consumes: []
-  produces: []
 ---
 <purpose>
 Turn instructions into command overlays — JSON patch files that augment `.claude/commands/*.md`

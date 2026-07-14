@@ -17,6 +17,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Fan-out requirement to multiple CLI tools in parallel → cross-verify for consensus/conflicts → synthesize into unified report with downstream artifacts (context.md + conclusions.json).
 </purpose>

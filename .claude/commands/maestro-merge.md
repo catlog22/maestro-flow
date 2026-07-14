@@ -18,6 +18,10 @@ contract:
   produces: []
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
 <purpose>
 Merge a session worktree branch back into main, sync Run artifacts, and reconcile the artifact registry.
 Two-step: git merge first, artifact sync second (only after git succeeds).
