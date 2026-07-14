@@ -172,7 +172,11 @@ function extractRefs(raw: string): Array<{ path: string; when: string }> {
   return refs;
 }
 
-export function resolveStepContent(projectRoot: string, stepName: string): ResolvedStepContent {
+export function resolveStepContent(
+  projectRoot: string,
+  stepName: string,
+  platformSuffix?: string,
+): ResolvedStepContent {
   const normalized = stepName.replace(/^\//, '').replace(/\.md$/i, '');
   const project = paths.project(projectRoot);
   const prepareDirs = [project.prepare, paths.prepare, join(projectRoot, 'prepare')];
@@ -182,9 +186,17 @@ export function resolveStepContent(projectRoot: string, stepName: string): Resol
     join(projectRoot, 'workflows'),
   ];
 
-  const prepare = resolveInDirs(prepareDirs, `${normalized}.md`);
-  const workflow = resolveInDirs(workflowDirs, `${normalized}.md`);
-  const runMode = resolveInDirs(workflowDirs, 'run-mode.md');
+  // Platform override: e.g. execute.codex.md takes priority over execute.md
+  const overrideName = platformSuffix ? `${normalized}${platformSuffix}` : null;
+  const prepare = (overrideName && resolveInDirs(prepareDirs, overrideName))
+    || resolveInDirs(prepareDirs, `${normalized}.md`);
+  const workflow = (overrideName && resolveInDirs(workflowDirs, overrideName))
+    || resolveInDirs(workflowDirs, `${normalized}.md`);
+
+  const runModeOverride = platformSuffix
+    ? resolveInDirs(workflowDirs, `run-mode${platformSuffix}`)
+    : null;
+  const runMode = runModeOverride || resolveInDirs(workflowDirs, 'run-mode.md');
   const refs = prepare ? extractRefs(prepare.raw) : [];
 
   return { prepare, workflow, runMode, refs };

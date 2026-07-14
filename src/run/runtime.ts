@@ -17,6 +17,7 @@ import {
   type ContractGateDefinition,
 } from './contract.js';
 import {
+  PLATFORM_SUFFIX,
   transformContentForPlatform,
   type TargetPlatform,
 } from '../core/skill-converter.js';
@@ -861,7 +862,8 @@ export function prepareStep(
   stepName: string,
   platform?: TargetPlatform,
 ): PrepareStepResult {
-  const content = resolveStepContent(projectRoot, stepName);
+  const suffix = platform ? PLATFORM_SUFFIX[platform] : undefined;
+  const content = resolveStepContent(projectRoot, stepName, suffix);
   const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
   return {
     step: stepName,
@@ -887,7 +889,8 @@ export function briefRun(
   const located = store.findRun(runId, sessionId);
   const bundle = store.readBundle(located.sessionId);
   const run = located.run;
-  const content = resolveStepContent(projectRoot, run.command.name);
+  const suffix = platform ? PLATFORM_SUFFIX[platform] : undefined;
+  const content = resolveStepContent(projectRoot, run.command.name, suffix);
   const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
 
   const outputs = run.output.produces
