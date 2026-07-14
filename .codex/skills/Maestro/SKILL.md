@@ -1,421 +1,253 @@
 ---
 name: maestro
 description: Auto-route intent to optimal command chain
-argument-hint: '"intent text" [-y] [-c|--continue] [--dry-run] [--super]'
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input,
-  create_goal, update_plan, update_goal
+argument-hint: <intent> [-y] [-c] [--dry-run] [--super]
+allowed-tools:
+  - Bash
+  - Edit
+  - Glob
+  - Grep
+  - Read
+  - Write
+  - followup_task
+  - interrupt_agent
+  - list_agents
+  - request_user_input
+  - send_message
+  - spawn_agent
+  - spawn_agents_on_csv
+  - update_plan
+  - wait_agent
 session-mode: run
-contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-version: 0.5.50
+contract: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-@~/.maestro/workflows/codex-run-mode.md
-</required_reading>
-
 <purpose>
-Sequential pipeline coordinator. Classify intent → decompose (broad lifecycle intents) →
-resolve chain → **directly invoke each skill in-context, one at a time** → report.
-
-### Notation
-
-`Skill(name)` / `Skill(name, args)` = 加载 `~/.codex/skills/{name}/SKILL.md` 或 `.codex/skills/{name}/SKILL.md`（project 覆盖 global），args 填入目标 SKILL.md `<context>` 块的输入参数位。这是 skill 间的内部调用，**不是 CLI 命令**。严禁翻译为 `Bash("maestro {name} {args}")`。
-
-合法 CLI 子命令仅限结构化操作：`maestro ralph next`、`maestro ralph complete`、`maestro delegate`、`maestro explore` 等。
-
-Entry points:
-- **`Skill(maestro, "intent")`** — Classify → decompose → chain → execute
-- **`Skill(maestro, "--continue")`** — Resume from first pending step
-- **`Skill(maestro, "--dry-run intent")`** — Show chain, no execution
-- **`Skill(maestro, "--super intent")`** — Production-ready mode (read maestro-super.md)
-
-Codex specifics (parity with maestro-ralph):
-- **No agent spawning** — skills run directly in coordinator context, sequentially.
-- **Goal created via built-in tool** — `create_goal` binds the decomposed sub-goal checklist;
-  `update_plan` mirrors steps; `update_goal` releases on convergence.
+Orchestrate all maestro commands: classify intent → select chain → create session → dispatch to `maestro-ralph-execute`.
+Session: `.workflow/.maestro/{session_id}/status.json`.
 </purpose>
 
 <deferred_reading>
-- [maestro-super.md](~/.maestro/workflows/maestro-super.md) — read when `--super` flag is active
+- [maestro.md](~/.maestro/workflows/maestro.md) — read at execution start for intent analysis + chain selection
+- [maestro-super.md](~/.maestro/workflows/maestro-super.md) — read when `--super` flag active
+- [node-catalog](~/.maestro/templates/workflows/specs/node-catalog.md) — read at `A_COMPOSE_TEMPLATE` node resolution (`--compose`)
+- [template-schema](~/.maestro/templates/workflows/specs/template-schema.md) — read at `A_COMPOSE_TEMPLATE` persist step (`--compose`) and `A_PLAY_TEMPLATE` load step (`--play`)
 </deferred_reading>
 
 <context>
-$ARGUMENTS — user intent text, or special flags.
+$ARGUMENTS — user intent text, or special keywords.
+
+**Keywords:** `continue`/`next`/`go` → state-based routing; `status` → `Skill("manage", "status")`
 
 **Flags:**
-- `-y, --yes` — Auto mode: skip all prompts; propagate `-y` to each skill
-- `--continue` — Resume latest paused session from first pending step
-- `--dry-run` — Display planned chain without executing
-- `--super` — Read and follow `maestro-super.md` completely
-
-**Session state**: `.workflow/.maestro/{session-id}/`
+- `-y` / `--yes` — Auto mode: skip clarification, skip confirmation, auto-skip on errors
+- `-c` / `--continue` — Resume previous session. **`-c` is reserved for `--continue` across all maestro commands** — downstream skills MUST NOT redefine `-c` for other purposes to prevent collision via transparent forwarding.
+- `--dry-run` — Show chain without executing
+- `--super` — Read and follow `maestro-super.md`
+- `--compose [--edit <path>]` — Compose a reusable workflow template (NL → DAG) instead of running a live chain. Routes to `A_COMPOSE_TEMPLATE`.
+- `--play <template-slug|path> [--context k=v...] [--list] [--dry-run]` — Execute a saved workflow template through the ralph chain runner. Routes to `A_PLAY_TEMPLATE`.
 </context>
 
 <invariants>
-1. **Skills invoked DIRECTLY in-context** — coordinator runs `Skill(skill_name, resolved_args)` itself, sequentially. NO spawn_agents_on_csv, NO wave/CSV/worker.
-2. **Coordinator owns the loop** — classify → decompose → resolve chain → for each step: resolve args → invoke skill → read result → persist → next.
-3. **Decomposition contract shared with maestro-ralph** — broad/lifecycle intents run S_DECOMPOSE producing the SAME additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`). Reference maestro-ralph `A_DECOMPOSE_TASKS`
-4. **Goal is tool-created** — `A_DECOMPOSE_TASKS` calls `create_goal` with sub-goal success criteria. `update_goal` on convergence; held while aborted/paused
-5. **status.json 唯一真源** — 不生成 `goal-checklist.md`；step 含 `command_scope` + `command_path` + `completion_confirmed`
-6. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro(text) / analyze(numeric) / roadmap / plan(三路径) / execute / ...
-6.5. **Grill auto_mode 透传** — auto_mode 时为 grill step args 追加 `-y`（grill Auto mode 代码代答），stage 不跳过，产出 grill-report/terminology/context-package
-7. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
-8. **schema 向后兼容** — decomposition 字段可选；`steps[]` 由 post-goal-audit 动态生长（goal_ref tagged）；既有字段不删不改；`waves` 保留空数组
-9. **Sequential execution** — one step at a time in index order; each step's result read before the next starts
-10. **Abort on failure** — failed step → mark remaining skipped → report (goal stays bound for `--continue`)
-11. **CLI ≠ Skill** — 本 skill 通过 `Skill(maestro, "intent")` 调用。`maestro` CLI 二进制不接受裸 intent（`Bash("maestro \"intent\"")` 会报错退出）。CLI 层只有结构化子命令：`ralph`、`delegate`、`explore`、`search` 等。
+1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
+2. **Session before execution** — status.json created before any step runs
+3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
+4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，下游 ralph 只消费不覆盖（当 `decomposition_owner == "maestro"` 时跳过二次提问，仅做 shape 校验 + 缺省字段补齐）
+5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
+6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `spawn_agent({ task_name: "maestro_ralph", message: "Execute skill maestro-ralph" })` handoff
+7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
+8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
+9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
+10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
+11. **schema** — `ralph_protocol_version: "2"` 标记 CLI-driven session；新增字段全部可选
+12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via ralph-execute）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
+13. **Classification evidence** — S_CLASSIFY 的 chain 选择决策 MUST 记录到 status.json 的 `classification_rationale` 字段：匹配了哪个 pattern、排除了哪些备选、confidence level。无记录的分类不可进入 S_CREATE。
+14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
+15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 session 生命周期 + step 排序 + cross-step decision 节点；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）只单次推荐，不得出现在 FSM step 内。
+16. **模板输出边界（--compose）** — `A_COMPOSE_TEMPLATE` 的写入 MUST 限定 `~/.maestro/templates/workflows/`（模板 JSON + index.json）与 `.workflow/templates/design-drafts/`（草稿）；NEVER 修改源码或 `.claude/commands/`。`--play` 视模板为只读，运行态只写 session status.json。
 </invariants>
 
 <state_machine>
 
 <states>
-S_PARSE         — 解析参数、检测 flags              PERSIST: —
-S_CONTINUE      — 加载已有 session，定位 resume 点   PERSIST: session (loaded)
-S_CLASSIFY      — 意图分类、解析 chain (A_CLASSIFY)   PERSIST: —
-S_DECOMPOSE     — 边界澄清、写执行准则+子目标、建 goal PERSIST: session.boundary_contract, .execution_criteria, .task_decomposition
-S_CREATE        — 创建 session + status.json         PERSIST: session.status, session.steps[]
-S_DRY_RUN       — 显示 chain 后结束                  PERSIST: —
-S_CONFIRM       — 用户确认（auto_mode 跳过）          PERSIST: —
-S_STEP_LOOP     — 逐步直接调用 skill → 读结果 → 循环  PERSIST: session.current_step, session.steps[], session.context
-S_DECISION_EVAL — 评估 post-goal-audit 决策节点       PERSIST: —
-S_COMPLETE      — 标记完成、释放目标                  PERSIST: session.status = "completed"
-S_ABORTED       — 失败中止、标记剩余 skipped          PERSIST: session.status = "aborted"
-S_FALLBACK      — 意图无法分类，请求输入              PERSIST: —
+S_PARSE         — 解析参数、检测 flags                PERSIST: —
+S_RESUME        — 扫描已有 session、恢复执行           PERSIST: —
+S_COMPOSE       — 组合 workflow 模板（--compose）      PERSIST: template file + index
+S_PLAY          — 执行已存 workflow 模板（--play）      PERSIST: player session status.json
+S_CLASSIFY      — 意图分类、chain 选择                 PERSIST: —
+S_DECOMPOSE     — 边界澄清、写执行准则+子目标清单       PERSIST: session.boundary_contract, .execution_criteria, .task_decomposition
+S_CREATE        — 创建 session + status.json           PERSIST: session (全量)
+S_DRY_RUN       — 显示 chain 后结束                    PERSIST: —
+S_CONFIRM       — 用户确认（auto_mode 跳过）            PERSIST: —
+S_DISPATCH      — 移交 maestro-ralph-execute           PERSIST: —
+S_FALLBACK      — 意图无法分类、请求输入                PERSIST: —
 </states>
 
 <transitions>
 
 S_PARSE:
-  → S_CONTINUE    WHEN: --continue flag
+  → S_COMPOSE     WHEN: --compose flag
+  → S_PLAY        WHEN: --play flag
+  → S_RESUME      WHEN: -c / --continue flag
   → S_CLASSIFY    WHEN: intent text present
+  → S_CLASSIFY    WHEN: keyword "continue"/"next"/"go"    DO: A_STATE_BASED_ROUTE
   → S_FALLBACK    WHEN: no intent AND no flags
 
-S_CONTINUE:
-  → S_STEP_LOOP   WHEN: session found, has pending steps     DO: A_RESUME_SESSION
+S_RESUME:
+  → S_DISPATCH    WHEN: session found                     DO: A_LOCATE_SESSION
   → S_FALLBACK    WHEN: no session found
 
+S_COMPOSE:
+  → END           DO: A_COMPOSE_TEMPLATE
+
+S_PLAY:
+  → S_DISPATCH    WHEN: template resolved                 DO: A_PLAY_TEMPLATE (build DAG steps → status.json)
+  → S_FALLBACK    WHEN: template not found / --list        DO: list templates from index.json
+
 S_CLASSIFY:
-  → S_DECOMPOSE   WHEN: chain resolved                      DO: A_CLASSIFY
+  → S_DECOMPOSE   WHEN: chain resolved                    DO: A_CLASSIFY_INTENT
   → S_FALLBACK    WHEN: no match AND auto_mode
-  → S_CLASSIFY    WHEN: no match AND not auto_mode          DO: A_CLARIFY_INTENT
-                   GUARD: max 1 clarification attempt → S_FALLBACK
+  → S_CLASSIFY    WHEN: no match AND not auto_mode        DO: A_CLARIFY
+                   GUARD: max 2 clarification rounds → S_FALLBACK
 
 S_DECOMPOSE:
   → S_CREATE      DO: A_DECOMPOSE_TASKS
-                   GUARD: broad intent (重构/全面/重写/迁移/overhaul/migrate/rewrite) on multi-step lifecycle chain → MUST clarify even if auto_mode
+                   GUARD: broad intent (重构/全面/重写/迁移/overhaul/migrate/rewrite) on a multi-step lifecycle chain → MUST clarify even if auto_mode
                    GUARD: single-step chain OR narrow intent OR chain ∈ {status,init,quick} → skip decomposition (pass through)
 
 S_CREATE:
-  → S_DRY_RUN     WHEN: --dry-run flag                      DO: A_CREATE_SESSION
-  → S_CONFIRM     WHEN: not auto_mode                       DO: A_CREATE_SESSION
-  → S_STEP_LOOP   WHEN: auto_mode                           DO: A_CREATE_SESSION
+  → S_DRY_RUN     WHEN: --dry-run flag                    DO: A_CREATE_SESSION
+  → S_CONFIRM     WHEN: not auto_mode                     DO: A_CREATE_SESSION
+  → S_DISPATCH    WHEN: auto_mode                         DO: A_CREATE_SESSION
 
 S_DRY_RUN:
-  → END           DO: display chain with step types + sub-goal summary
+  → END           DO: display chain with step types
 
 S_CONFIRM:
-  → S_STEP_LOOP   WHEN: user confirms
-  → S_ABORTED     WHEN: user cancels
+  → S_DISPATCH    WHEN: user confirms
+  → S_PARSE       WHEN: user wants to modify
+  → END           WHEN: user cancels
 
-S_STEP_LOOP:
-  → S_DECISION_EVAL WHEN: next step.type == "decision"
-  → S_STEP_LOOP   WHEN: next step.type == "skill"           DO: A_EXEC_STEP
-  → S_COMPLETE    WHEN: no pending steps
-  → S_ABORTED     WHEN: step failed (auto_mode: retry once then abort)
-
-S_DECISION_EVAL:                                            ENTRY: A_GOAL_AUDIT_EVALUATE (produces verdict)
-  → S_STEP_LOOP   WHEN: verdict == all_met                  DO: A_APPLY_GOAL_DONE
-  → S_STEP_LOOP   WHEN: verdict == has_unmet                DO: A_APPLY_GOAL_FIX
-  → S_ABORTED     WHEN: retry >= max_retries AND unmet      DO: escalate (insert quality-debug "{gaps}")
-
-S_COMPLETE:
-  → END           DO: A_FINALIZE
-
-S_ABORTED:
-  → END           DO: A_ABORT_REPORT
+S_DISPATCH:
+  → END           DO: spawn_agent({ task_name: "maestro_ralph_execute", message: "Execute skill maestro-ralph-execute" })
 
 S_FALLBACK:
-  → S_CLASSIFY    WHEN: user provides new intent            DO: request_user_input
+  → S_CLASSIFY    WHEN: user provides new intent           DO: request_user_input
   → END           WHEN: user cancels
 
 </transitions>
 
 <actions>
 
-### A_CLASSIFY
+### A_STATE_BASED_ROUTE
 
-**Layer 1: Exact-match (fast path)**
-- `--chain <name>` flag → validate against chainMap, use directly (E002 if not found)
-- `continue`/`next`/`go`/`继续`/`下一步` → `state_continue`
-- `status`/`状态`/`dashboard` → `status`
+1. Read `.workflow/state.json` → determine next logical step
+2. Convert to equivalent intent for chain classification
 
-If matched, skip to chain resolution.
+### A_LOCATE_SESSION
 
-**Layer 2: Semantic intent matching**
+1. Scan `.workflow/.maestro/*/status.json`, filter `status == "running"`, sort DESC
+2. Take most recent; if not found → S_FALLBACK
 
-Directly match user intent to the best `task_type` (maps to chain in Chain Map). Use LLM semantic understanding — no rigid keyword lookup.
+### A_COMPOSE_TEMPLATE
 
-Extract:
-```json
-{
-  "task_type": "<from chain catalog below>",
-  "scope":     "<module/file/area or null>",
-  "issue_id":  "<ISS-XXXXXXXX-NNN if mentioned, else null>",
-  "session_ref": "<session_id or slug if mentioned, else null>",
-  "urgency":   "<low|normal|high>"
-}
-```
+Compose a reusable workflow template (natural language → DAG). `--edit <path>` loads an existing template for revision.
 
-**Chain catalog — select by best semantic fit:**
+1. **Parse intent** → candidate nodes (verb signals: analyze/review→analysis-cli, plan/design→planning, implement/build→execution, test→testing; then/next→sequential edge, parallel→fan-out) + variables + complexity. Confirm parse via `request_user_input`.
+2. **Resolve nodes** → map each step to an executor. Read deferred `node-catalog.md` (fallback: planning→`plan`, execution→`execute`, testing→`test`, review→`review`, analysis→`maestro delegate --to <tool> --mode analysis`). Build `args_template` with `{variable}` placeholders. Confirm mapping.
+3. **Build DAG** → sequential/fan-out edges, auto-inject checkpoints (artifact boundaries, before any `execute`, after any `test`), finalize `context_schema`. Validate: **≤20 nodes, acyclic, no orphans**. Display ASCII pipeline; confirm via `request_user_input`.
+4. **Persist** → read deferred `template-schema.md`; assemble template JSON (`template_id: wft-<slug>-<date>`, nodes, edges, checkpoints, context_schema) → write to `~/.maestro/templates/workflows/<slug>.json` + update `index.json`. **All writes target `~/.maestro/templates/workflows/` only.** Abandoning any gate saves a draft to `.workflow/templates/design-drafts/`.
+5. Output: template path/ID + `/maestro --play <template-id>` to run it.
 
-| task_type | When user intent is about... |
-|-----------|---------------------------|
-| `grill` | Stress-test, challenge assumptions, Socratic questioning on a plan/idea (**auto_mode: 透传 `-y`，grill Auto mode 代码代答，不跳过**) |
-| `quick` | Simple/small task, add a feature, quick change |
-| `blueprint` | Formal spec generation (Product Brief / PRD / Architecture / Epics) |
-| `analyze_macro` | Broad/medium intent w/o specific session — explore impact, produce scope_verdict |
-| `plan_from_analyze` | Plan directly from analyze artifact (no roadmap, scope=standalone) |
-| `plan_from_blueprint` | Plan directly from blueprint artifact (scope=standalone) |
-| `plan` | Plan, design, architect a session |
-| `execute` | Implement, develop, code a session |
-| `analyze` | Understand, investigate, evaluate code (specific session) |
-| `verify` | Check goals met, validate results (routes to quality-review) |
-| `review` | Code quality review |
-| `test` | Run or create tests, UAT |
-| `test_gen` | Generate tests for coverage gaps |
-| `debug` | Diagnose, troubleshoot, fix broken behavior |
-| `refactor` | Restructure, clean up, reduce tech debt |
-| `init` | Initialize project |
-| `sync` | Update/sync documentation |
-| `retrospective` | Phase review, post-mortem, 复盘 |
-| `learn` | Capture insights, record learnings |
-| `release` | Publish, ship, tag version |
-| `amend` | Revise workflow commands |
-| `compose` | Design/compose reusable workflows |
-| `overlay` | Create/edit command overlays |
-| `update` | Update maestro itself |
-| `harvest` | Extract knowledge from artifacts |
-| `domain_add` | Register a domain term into glossary |
-| `domain_list` | List registered domain terms |
-| `domain_discover` | Discover domain term candidates from codebase |
-| `wiki` | Manage wiki graph |
-| `knowhow` | Manage knowhow entries |
-| `ui_design` | UI design, build new UI |
-| `issue` | Issue CRUD — create, list, close, query |
-| `issue_discover` | Discover/find issues in codebase |
-| `issue_analyze` | Analyze a specific issue |
-| `issue_plan` | Plan fix for an issue |
-| `issue_execute` | Fix issue end-to-end (auto-upgrades to issue-full) |
-| `feature` | Standard feature: plan→execute→review |
-| `full-lifecycle` | Complete session: plan→execute→review→test |
-| `brainstorm-driven` | Start from exploration/brainstorm |
-| `spec-driven` | From spec/requirements (heavy, with init) |
-| `roadmap-driven` | From requirements (light, with init) |
-| `analyze-plan-execute` | Fast track: analyze→plan→execute |
-| `execute-review` | Resume after planning |
-| `review-fix` | Fix review-blocked issues |
-| `quality-loop` | Full quality improvement cycle |
-| `quality-loop-partial` | Partial quality fix |
-| `quality-fix` | Analyze gaps→plan→execute→review |
-| `deploy` | Verify then release |
-| `next-session` | Advance to next session |
-| `state_continue` | Continue from current project state |
+### A_PLAY_TEMPLATE
 
-**Selection priorities:**
-1. `issue_id` present → prefer issue chains
-2. UI/design/界面/页面/原型 → prefer `ui_design`
-3. 正式规格/spec-generate/7-phase → `blueprint` (single-step) 或 `blueprint-driven`
-4. 压力测试/拷问/grill/stress-test → `grill` (single-step); **auto_mode → 透传 `-y`，不跳过**
-5. 头脑风暴/探索 → `brainstorm-driven`
-5. Broad/medium intent + 无具体 session → `analyze_macro`（产 scope_verdict）；后续 large→roadmap链；medium/small→`plan_from_analyze`
-6. 已有 analyze artifact 直达 plan → `plan_from_analyze`
-7. 已有 blueprint artifact 直达 plan → `plan_from_blueprint`
-8. Multiple lifecycle steps implied → prefer multi-step chains
-9. Single specific action → prefer single-step chains
-10. "问题" describing broken behavior → `debug`; tracked item with ISS-ID → `issue`
-11. Simple task, no lifecycle context → `quick`
-12. Global fallback → `quick`
+Execute a saved workflow template through the ralph chain runner. Flags: `--context k=v` (repeatable), `--list`, `--dry-run`.
 
-**Clarity scoring**: 3=task_type+scope+session, 2=task_type+scope, 1=task_type only, 0=empty.
-If `clarity < 2` and not `auto_mode` → transition to A_CLARIFY_INTENT.
+1. **Resolve template**: absolute path → as-is; slug → `~/.maestro/templates/workflows/index.json` lookup. `--list` → display index and END. Read deferred `template-schema.md` to validate (`template_id`, `nodes`, `edges`, `context_schema` required).
+2. **Bind context**: parse `--context k=v`; collect missing required variables via `request_user_input`; bind `{variable}` placeholders (leave `{N-xxx.field}` and `{prev_*}` for runtime resolution by ralph-execute).
+3. **Topological sort** (Kahn) template nodes → linear `steps[]` (parallel nodes share a batch index). Each step carries `skill`/`args`/`type` (skill|cli|agent|checkpoint) resolved as in `A_CREATE_SESSION`; cli nodes run async via `Bash(run_in_background)` + STOP, checkpoints pause with resume via `-c`.
+4. **Create session**: write `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json` (`source: "maestro"`, `template_id`, bound `context`, topologically-ordered `steps[]`). `--dry-run` → display plan and END.
+5. Dispatch to `maestro-ralph-execute` (S_DISPATCH) — the runner honors checkpoints, resume-safety, and per-step `completion_confirmed` exactly as for classified chains.
 
-**Layer 4: State-based routing** (when `taskType === 'state_continue'`)
+### A_CLASSIFY_INTENT
 
-Read `.workflow/state.json` and route by condition:
+1. Read `~/.maestro/workflows/maestro.md` from deferred_reading
+2. Match intent to task_type via chain catalog (semantic)
+3. Select chain from chainMap，遵循拓扑约束：
+   - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式透传 `-y` 到 grill，grill 以 Auto mode 执行，不跳过**）
+   - 头脑风暴/探索 → `brainstorm`
+   - 学习/阅读代码/跟读/follow → `Skill("learn", "follow")`；调查/为什么/investigate → `Skill("learn", "investigate")`；分解/模式/decompose → `Skill("learn", "decompose")`；评审/挑战/second-opinion → `Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective`）
+   - 正式规格/spec-generate/7-phase → `blueprint`
+   - 项目初始化 → `init`
+   - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
+   - session 上下文 → `analyze --session {session}` → `plan --session {session}` → `execute --session {session}` → quality pipeline
+   - 已有 analyze artifact 想直达执行 → `plan --from analyze:{ANL_ID}` → execute → quality pipeline
+   - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → quality pipeline
+4. 执行 step：`Bash("maestro ralph skills --platform codex --json --quiet")` 预校验 skill 名，命中写绝对路径到 `command_path`，未命中标 `missing`；同时写 `step.stage` / `step.scope` / `step.source_artifact_ref`。decision 节点不解析 command_path
 
-| Condition | Chain |
-|-----------|-------|
-| Not initialized | `init` |
-| No sessions, no roadmap, has accumulated_context | `next-session` |
-| No sessions | `brainstorm-driven` |
-| pending + has context | `plan` |
-| pending, no context | `analyze` |
-| exploring/planning + has plan | `execute-review` |
-| exploring/planning, no plan | `plan` |
-| executing, all tasks done | `review` |
-| executing, tasks remain | `execute` |
-| reviewing, verdict == BLOCK | `review-fix` |
-| reviewing, verdict != BLOCK + UAT pending | `test` |
-| reviewing, verdict != BLOCK + UAT passed | `next-session` |
-| reviewing, verdict != BLOCK + UAT failed | `debug` |
-| testing, UAT passed | `next-session` |
-| testing, UAT not passed | `debug` |
-| completed | `next-session` |
-| blocked | `debug` |
-| fallback | `status` |
+### A_CLARIFY
 
-**Chain resolution order:**
-1. `forceChain` → `chainMap[forceChain]` (E002 if not found)
-2. `state_continue` → Layer 4 state routing → `{ chain, argsOverride? }`
-3. `taskToChain[taskType]` → alias lookup (see Chain Aliases below)
-4. `chainMap[taskType]` → direct lookup
-
-**Session resolution**: structured extraction `session_ref` → slug match in `state.json.sessions[]` → `active_session_id`.
-
-### A_CLARIFY_INTENT
-
-1. `request_user_input` with available chain types
+1. `request_user_input` with parsed intent + available chain options
 2. Re-classify with user response
 
 ### A_DECOMPOSE_TASKS
 
-与 maestro-ralph `A_DECOMPOSE_TASKS` 共享分解契约。Condensed:
+设 `session.decomposition_owner = "maestro"`。下游 ralph 只消费不二次提问（invariant 4）。Condensed:
 
 1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
 2. broad/medium → `request_user_input` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
-5. 链路末尾（evidence 产出步骤后、chain close-out 步骤前）追加 `decision:post-goal-audit`。S_DECISION_EVAL 据此动态生长 `steps[]`
-6. **Register goal via `create_goal`:**
+5. 在最后一个 evidence-producing stage（execute/review/test）之后追加 `decision:post-goal-audit`（session 终结审计节点）。ralph-execute 在该节点按需动态生长 `steps[]`
+6. **输出 `/goal` 绑定提示词（不阻塞，用户可在执行过程中随时输入）：**
    ```
-   create_goal({ objective: "Maestro {chain}: {intent} — converge {N} sub-goals within boundary",
-     success_criteria: task_decomposition.map(g => `${g.id}: ${g.done_when}`),
-     constraints: [...execution_criteria, "stay within boundary_contract; resume via Skill(maestro, "--continue")"] })
+   📋 任务分解完成。可随时复制下面一行设定目标（执行过程中输入即可）：
+
+   /goal 完成以下子目标：
+   {for each G in task_decomposition:}
+   - {G.id}: {G.goal} — 完成条件: {G.done_when}
+   {end for}
+   达成条件: {session_dir}/status.json 中 task_decomposition[*].status == "done" 且 task_decomposition[*].completion_confirmed == true 且 steps[*].completion_confirmed == true。未达成时：阅读 {session_dir}/status.json 取得 execution_criteria / boundary_contract / task_decomposition / steps 作为行动手册，调用 /maestro-ralph continue 推进；严禁手动执行 skill 或越界修改 status.json.boundary_contract.out_of_scope。
    ```
 
 ### A_CREATE_SESSION
 
-1. Read `.workflow/state.json` 获取 `sessions[]` / `active_session_id`（session slug 匹配）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`；读最新 blueprint artifact 注入 `blueprint_id`
-2. Resolve chain's skill list from Chain Map (see appendix)
-3. **Prevalidate via `Bash("maestro ralph skills --platform codex --json --quiet")`** 一次性拉取所有可用 codex skills（global `~/.codex/skills/` + project `.codex/skills/`，project 覆盖 global），匹配 skill 名得到：
-   - 命中 → `command_scope = "global" | "project"`，`command_path = <绝对 SKILL.md 路径>`
-   - 未命中 → `command_scope = "missing"`, `command_path = null`
-4. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）:
+0. **Specs 预检**：当 chain 包含 `analyze-macro` / `analyze` / `plan` / `execute` 等执行 stage 且 `.workflow/specs/` 目录不存在时，在 steps 最前面插入 `spec-setup`（stage=`spec-setup`，无 decision）。确保下游可获得项目约束规则注入。chain ∈ {grill, brainstorm, blueprint, init, status, quick} 时跳过
+1. Read `.workflow/state.json` 获取 `active_session_id` / 匹配 `sessions[]`（含 D-007-S session 解析）；读最新 macro analyze artifact 注入 `scope_verdict` + `analyze_macro_id`（如存在）；读最新 blueprint artifact 注入 `blueprint_id`
+2. Create `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json`（与 ralph 共用 schema）：
    ```json
    {
      "session_id", "source": "maestro", "intent", "task_type", "chain_name",
      "ralph_protocol_version": "2", "active_step_index": null,
-     "target_session_id": "", "session_is_new": false,
+     "session_ref": "", "session_is_new": false,
      "scope_verdict": null, "analyze_macro_id": null, "blueprint_id": null,
-     "auto_mode": false,
-     "context": { "issue_id": null, "run_dir": null, "plan_dir": null,
-       "analysis_dir": null, "brainstorm_dir": null, "blueprint_dir": null, "grill_id": null },
+     "auto_mode": false, "decomposition_owner": "maestro", "cli_tool": "claude",
+     "context": { "run_dir": null, "plan_dir": null, "analysis_dir": null,
+       "brainstorm_dir": null, "blueprint_dir": null, "issue_id": null },
      "steps": [{
-       "index": 0, "type": "skill|decision",
-       "skill": "", "args": "",
-       "stage": "", "scope": null,
-       "command_scope": "global|project|missing|null",
-       "command_path": "~/.codex/skills/{name}/SKILL.md | .codex/skills/{name}/SKILL.md | null",
-       "session_id": null, "source_artifact_ref": null,
+       "index": 0, "skill": "", "args": "",
+       "stage": "", "scope": null, "decision": null,
+       "command_scope": "global|project|missing|null", "command_path": "<abs> | null",
+       "session_ref": null, "source_artifact_ref": null,
        "status": "pending", "goal_ref": null,
        "completion_confirmed": false, "completion_status": null,
        "completion_evidence": null,
        "completion_summary": null, "completion_decisions": null,
        "completion_caveats": null, "completion_deferred": null,
-       "completed_at": null
+       "completed_at": null,
+       "deferred_reads": [], "load": null
      }],
      "waves": [], "current_step": 0, "status": "running",
      "boundary_contract": {}, "execution_criteria": [],
-     "task_decomposition": [{ "id": "G1", "goal": "", "done_when": "", "evidence": "",
-       "status": "pending|done|superseded", "completion_confirmed": false, "completed_at": null,
+     "task_decomposition": [{ "status": "pending|done|superseded",
        "superseded_by": null, "superseded_at": null, "origin": null }],
      "task_decomposition_all_done": false,
      "goal_changelog": []
    }
    ```
-   Decomposition fields written ONLY if A_DECOMPOSE_TASKS produced them (additive)
-5. Validate: 所有 step 的 `command_scope != "missing"`；否则 raise E006 列出缺失 skill
-6. Initialize tracking:
-   - If decomposed: goal already registered by A_DECOMPOSE_TASKS. Else: `create_goal({ objective: "Maestro {chain}: {N} steps [{skill list}]" })`
-   - `update_plan({ plan: steps.map(step => ({ step, status: "pending" })) })`
-
-### A_RESUME_SESSION
-
-1. Glob `.workflow/.maestro/maestro-*/status.json` sorted desc, load most recent
-2. Find first pending step → set as resume point
-3. Rebuild `update_plan` from status.json (completed→"completed", current→"in_progress", rest→"open")
-
-### A_EXEC_STEP
-
-Direct in-context skill invocation — **replaces the old spawn/wave/CSV mechanism**.
-
-1. **buildSkillCall**: replace placeholders + append auto-yes flag if `auto_mode` (see Appendix: Auto-Yes Flag Map):
-
-   | Placeholder | Source |
-   |-------------|--------|
-   | `{session}` | session.target_session_id |
-   | `{plan_dir}` | session.context.plan_dir |
-   | `{analysis_dir}` | session.context.analysis_dir |
-   | `{brainstorm_dir}` | session.context.brainstorm_dir |
-   | `{spec_session_id}` | session.context.spec_session_id |
-   | `{GRL}` | session.context.grill_id |
-   | `{ANL}` | session.analyze_macro_id |
-   | `{BLP}` | session.blueprint_id |
-   | `{intent}` | session.intent |
-
-   **--from auto-injection**: 当 step 是 `maestro-plan` 且无 `--from`/`--dir` → 从当前 Session registry 与 Run `upstream` 解析最新 sealed analyze artifact，注入显式 ref，并写 `step.source_artifact_ref`
-2. Mark step `status="running"`, Persist status.json + `update_plan` (this step → in_progress)
-3. **Prepare step**: Run `Bash("maestro ralph next --session {session_id}")` to load reading and set active_step_index.
-4. **Invoke the skill directly**: execute `Skill(skill_name, resolved_args)` in coordinator context (NO spawn). Read its produced artifacts directly
-5. On success: mark step `status="done"`. **Structured completion**: `Bash("maestro ralph complete {idx} --session {session_id} --status DONE --summary \"...\" [--decisions \"...\"] [--caveats \"...\"] [--deferred \"...\"]")`（`--summary` MUST，动词开头 ≤100 字）。**Barrier-context update** (when step is a context-producing skill):
-   | Skill | Read | Context Updates |
-   |-------|------|-----------------|
-   | maestro-grill | grill-report.md, state.json | grill_id |
-   | maestro-analyze | context.md, state.json | analysis_dir, gaps, target_session_id |
-   | maestro-plan | plan.json, .task/TASK-*.json | plan_dir, task_count |
-   | maestro-brainstorm | .brainstorming/ | brainstorm_dir, features |
-   | maestro-roadmap | specs/ | spec_session_id |
-   | maestro-execute | results.csv | exec_completed, exec_failed |
-5. On failure: mark `status="failed"`; auto_mode → retry once → still failed → S_ABORTED
-6. Persist status.json + `update_plan` after every step
-
-### A_GOAL_AUDIT_EVALUATE
-
-S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condensed:
-
-1. 读 `session.task_decomposition`（status.json，真源）
-2. 对每个 `status != "done"` 的子目标：解析 `evidence` 产物
-3. `maestro delegate --role analyze --mode analysis` 读取 evidence、对照 done_when 判定，返回 `STATUS=all_met|has_unmet / UNMET=[{id,gap,target_session}] / CONFIDENCE_SCORE`
-4. status.json 为写入目标：每个达成子目标 `status="done"` + `completed_at=now`；然后从 status.json 重渲染 checklist（Sync Rule）
-5. Verdict（`all_met` / `has_unmet`）由 S_DECISION_EVAL 消费。GUARD: retry >= max_retries AND still unmet → escalate
-
-### A_APPLY_GOAL_FIX
-
-**Dynamic step-growth core** (mirrors maestro-ralph). For each unmet sub-goal (grouped by target_session), insert before the post-goal-audit node a scoped mini-loop `Skill(maestro-plan, "--gaps {session} G{n}: {gap}") → Skill(maestro-execute, "{session}")`, each tagged `goal_ref: "G{n}"`, type `"skill"`. Re-append `decision:post-goal-audit {retry+1}`. Reindex, increment retry, persist + `update_plan`. `steps[]` grew.
-
-### A_APPLY_GOAL_DONE
-
-1. status.json：全部 `task_decomposition[*].status="done"` + `completion_confirmed=true` + `completed_at=now` + `task_decomposition_all_done=true`
-2. `update_goal({ status: "complete" })`
-3. 继续到 chain 的终结步骤
-
-### A_FINALIZE
-
-1. Set `session.status = "completed"`, write status.json
-2. Sync `update_plan`: all steps → "completed"
-3. `update_goal({ status: "complete" })` — release goal (idempotent if already released)
-4. Generate completion report (see Appendix: Report Format)
-
-### A_ABORT_REPORT
-
-1. Mark remaining steps `skipped` in status.json
-2. Set `session.status = "aborted"`, write status.json; sync `update_plan`
-3. Do NOT call `update_goal` — goal stays for `--continue` resume
-4. Display abort report with failure details
+3. Validate: 所有 step 的 `command_scope != "missing"`，否则 raise E005 列出缺失 skill
+4. Initialize tracking via `update_plan`
+5. If `--super`: read `maestro-super.md`, follow it completely
 
 </actions>
 
@@ -423,164 +255,41 @@ S_DECISION_EVAL 入口；镜像 maestro-ralph `A_GOAL_AUDIT_EVALUATE`。Condense
 
 <appendix>
 
-### Chain Map (Full)
-
-**Single-step chains:**
-
-| Chain | Command + Args |
-|-------|---------------|
-| `grill` | `maestro-grill "{intent}"` |
-| `status` | `manage-status` |
-| `init` | `maestro-init` |
-| `blueprint` | `maestro-blueprint "{intent}"` |
-| `analyze_macro` | `maestro-analyze "{intent}"` |
-| `analyze` | `maestro-analyze {session}` |
-| `ui_design` | `maestro-impeccable build "{session}"` |
-| `plan` | `maestro-plan {session}` |
-| `plan_from_analyze` | `maestro-plan --from analyze:{analyze_macro_id}` |
-| `plan_from_blueprint` | `maestro-plan --from blueprint:{blueprint_id}` |
-| `execute` | `maestro-execute {session}` |
-| `verify` | `quality-review {session}` |
-| `test_gen` | `quality-auto-test {session}` |
-| `auto_test` | `quality-auto-test {session}` |
-| `test` | `quality-test {session}` |
-| `debug` | `quality-debug "{description}"` |
-| `integration_test` | `quality-auto-test {session}` |
-| `refactor` | `quality-refactor "{description}"` |
-| `review` | `quality-review {session}` |
-| `retrospective` | `quality-retrospective {session}` |
-| `learn` | `maestro-learn "{description}"` |
-| `sync` | `quality-sync` |
-| `session_seal` | `maestro-session-seal` |
-| `codebase_rebuild` | `manage-codebase-rebuild` |
-| `codebase_refresh` | `manage-codebase-refresh` |
-| `spec_setup` | `spec-setup` |
-| `spec_add` | `spec-add "{description}"` |
-| `spec_load` | `spec-load` |
-| `spec_map` | `manage-codebase-rebuild` |
-| `spec_remove` | `spec-remove "{description}"` |
-| `domain_add` | `domain-add "{description}"` |
-| `domain_list` | `domain-list` |
-| `domain_discover` | `domain-discover` |
-| `knowhow_capture` | `manage-knowhow-capture "{description}"` |
-| `knowhow` | `manage-knowhow "{description}"` |
-| `issue` | `manage-issue "{description}"` |
-| `issue_discover` | `manage-issue-discover "{description}"` |
-| `issue_analyze` | `maestro-analyze --gaps "{description}"` |
-| `issue_plan` | `maestro-plan --gaps` |
-| `issue_execute` | `maestro-execute` |
-| `quick` | `maestro-quick "{description}"` |
-| `harvest` | `manage-harvest "{description}"` |
-| `wiki` | `manage-wiki` |
-| `wiki_connect` | `wiki-connect` |
-| `wiki_digest` | `wiki-digest` |
-| `business_test` | `quality-auto-test {session}` |
-| `amend` | `maestro-amend "{description}"` |
-| `release` | *(deprecated — guide §8.1: DAG 全 sealed = 完成，无 release 分组)* |
-| `compose` | `maestro-composer "{description}"` |
-| `play` | `maestro-player "{description}"` |
-| `update` | `maestro-update` |
-| `overlay` | `maestro-overlay "{description}"` |
-| `link_coordinate` | `maestro-link-coordinate "{description}"` |
-
-**Multi-step chains:**
-
-| Chain | Steps (→ = sequential, [B] = context-producing barrier) |
-|-------|---------------------------------------|
-| `feature` | [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `quality-fix` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
-| `deploy` | quality-review → maestro-session-seal |
-| `blueprint-driven` | maestro-init → [B] maestro-blueprint → [B] maestro-plan --from blueprint:{BLP} → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `analyze-macro-driven` | [B] maestro-analyze "{intent}" → ◆ post-analyze-scope → (large: [B] maestro-roadmap --from analyze:{ANL} → [B] maestro-analyze {session} → [B] maestro-plan {session}) / (medium\|small: [B] maestro-plan --from analyze:{ANL}) → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `grill-brainstorm` | [B] maestro-grill → [B] maestro-brainstorm --from grill:{GRL} → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto (**auto_mode: grill 透传 `-y`，Auto mode 代码代答**) |
-| `brainstorm-driven` | [B] maestro-brainstorm → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `ui-craft-build` | maestro-impeccable build → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `roadmap-driven` | maestro-init → [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `next-session` | [B] maestro-roadmap → [B] maestro-plan → [B] maestro-execute → quality-review → manage-harvest --auto |
-| `full-lifecycle` | [B] maestro-plan → [B] maestro-execute → quality-review → quality-test → manage-harvest --auto |
-| `execute-review` | [B] maestro-execute → quality-review |
-| `analyze-plan-execute` | [B] maestro-analyze -q → [B] maestro-plan --dir {run_dir} → [B] maestro-execute --dir {run_dir} → manage-harvest --auto |
-| `quality-loop` | quality-review → quality-test → quality-debug --from-uat → [B] maestro-plan --gaps → [B] maestro-execute |
-| `quality-loop-partial` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
-| `review-fix` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review |
-| `issue-full` | [B] maestro-analyze --gaps → [B] maestro-plan --gaps → [B] maestro-execute → quality-review → manage-issue close → manage-harvest --auto |
-| `issue-quick` | [B] maestro-plan --gaps → [B] maestro-execute → quality-review → manage-issue close |
-
-> When S_DECOMPOSE ran, a `decision:post-goal-audit` node is appended as the final node (after the last evidence-producing step; before the chain's close-out step if the chain ends with one). `[B]` now denotes a context-producing skill (artifacts read into `session.context`) — execution is still sequential (no parallelism; spawning removed).
-
-**Chain Aliases** (taskType → chain):
-
-| taskType | Chain |
-|----------|-------|
-| `spec_generate` | `blueprint-driven` |
-| `spec-driven` | `blueprint-driven` |
-| `brainstorm` | `brainstorm-driven` |
-| `issue_execute` | `issue-full` |
-| `analyze_macro` | `analyze-macro-driven` |
-
-### Auto-Yes Flag Map
-
-| Skill | Flag |
-|-------|------|
-| maestro-init, maestro-analyze, maestro-brainstorm, maestro-blueprint, maestro-impeccable, maestro-roadmap | `-y` |
-| maestro-plan, maestro-execute, maestro-session-seal | `-y` |
-| quality-auto-test, quality-retrospective | `-y` |
-| quality-test | `-y --auto-fix` |
-
-### Context-Producing Skills
-
-`maestro-analyze`, `maestro-plan`, `maestro-brainstorm`, `maestro-roadmap`, `maestro-execute` — their artifacts are read into `session.context` after the step completes (see A_EXEC_STEP step 4). Other skills produce no coordinator context. No parallelism — all steps run sequentially.
-
 ### Error Codes
 
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | Intent unclassifiable after clarification | Default to `feature` chain |
-| E002 | error | Intent unresolvable after retry | List chains, abort |
-| E003 | error | Step skill invocation failed | auto_mode retry once, then abort chain |
-| E004 | error | Context artifact not found | Retry step once, then abort |
-| E005 | error | --continue: no session found | List sessions, prompt |
-| E006 | error | command_scope == "missing" for one or more steps | List missing skills, abort build |
-| W001 | warning | Context artifact partial | Continue with available context |
+| Code | Severity | Description | Recovery |
+|------|----------|-------------|----------|
+| E001 | error | No intent and project not initialized | Prompt or suggest maestro-init |
+| E002 | error | Clarity too low after 2 rounds | Show parsed intent, ask rephrase |
+| E003 | error | Chain step failed + user abort | Record partial, suggest -c resume |
+| E004 | error | Resume session not found | Show available sessions |
+| E005 | error | command_scope == "missing" for one or more steps | List missing skills, abort build |
+| W001 | warning | Ambiguous intent, multiple chains | Present options |
+| W002 | warning | Step completed with warnings | Log and continue |
+| W003 | warning | State suggests different chain | Show discrepancy |
 
 ### Success Criteria
 
-- [ ] Intent classified and chain resolved
-- [ ] Chain catalog 覆盖 blueprint / analyze_macro / plan_from_analyze / plan_from_blueprint / blueprint-driven / analyze-macro-driven 等新拓扑路径
-- [ ] D-007-S: step 的 `session_id` 通过 `state.json.sessions[]` 的 session_id 或 intent slug 匹配；写入 step
-- [ ] plan step args 支持 `{session}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径，`source_artifact_ref` 写入
+- [ ] Intent classified with task_type, complexity, clarity_score
+- [ ] Chain catalog 覆盖 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / quality pipeline
+- [ ] `-y` 模式透传 `-y` 到 grill（grill 以 Auto mode 代码代答执行，stage 不跳过）
+- [ ] D-007-S: session 步骤的 `session_ref` 通过 `state.json.sessions[]` 的 session_id 或 intent slug 匹配
+- [ ] macro analyze 后跟 `decision:post-analyze-scope`（由 ralph 评估 scope_verdict 决定下游链路）
+- [ ] plan 支持 `--session {session}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；`source_artifact_ref` 写入 step
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
-- [ ] Goal registered via built-in `create_goal`; status.json decomposition fields additive-only
-- [ ] status.json 唯一真源；无 markdown 清单
-- [ ] 每个 step 含 `command_scope` + `command_path` + `completion_confirmed` 字段
-- [ ] post-goal-audit node appended as final node; unmet sub-goals dynamically grow steps[] (goal_ref tagged)
-- [ ] Session dir initialized with status.json before first step
-- [ ] Every skill invoked DIRECTLY in-context — NO spawn_agents_on_csv, NO wave/CSV/worker
-- [ ] Sequential execution; status.json + update_plan persisted after every step
-- [ ] Context-producing skills' artifacts read into session.context before next step's args assembled
-- [ ] Failed step → remaining skipped → abort reported (goal held for --continue)
-- [ ] --dry-run shows chain + sub-goal summary, no execution
-- [ ] --continue resumes from first pending step
-- [ ] update_goal released on convergence (A_APPLY_GOAL_DONE / A_FINALIZE); held while aborted
-- [ ] 每个 step completion 含 `--summary`（MUST）+ `--decisions/--caveats/--deferred`（SHOULD）
-- [ ] task_decomposition 支持 `superseded` 状态 + `goal_changelog` 审计轨迹
-
-### Report Format
-
-```
-=== MAESTRO COMPLETE ===
-Session:  {sessionId}
-Chain:    {chain}
-Steps:    {completed}/{total}   Sub-goals: {done}/{total}
-
-STEP RESULTS:
-  [1] maestro-analyze --gaps  →  ✓  found 3 gaps
-  [2] maestro-plan --gaps     →  ✓  12 tasks
-  [◆] post-goal-audit          →  ✓  all sub-goals met
-  ...
-
-State:    .workflow/.maestro/{sessionId}/status.json
-Resume:   Skill(maestro, "--continue")
-```
+- [ ] status.json 唯一真源；无 markdown 清单；post-goal-audit 节点在 decomposed 时追加；/goal 提示词以 status.json 为判据
+- [ ] Specs 预检：chain 含执行 stage + `.workflow/specs/` 不存在 → steps 最前面插入 `spec-setup`
+- [ ] Chain selected and confirmed (or auto-confirmed)
+- [ ] Session dir created with status.json before execution; decomposition fields additive-only
+- [ ] 执行 step 含 `command_scope` + `command_path` + `completion_confirmed`；decision step 由 `step.decision` 标识
+- [ ] `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global）
+- [ ] Session schema 含 `ralph_protocol_version: "2"` + `active_step_index: null` + step.load 占位
+- [ ] 用户传入 `-y` 时透传到 skill args
+- [ ] All chains dispatched via maestro-ralph-execute
+- [ ] Low-complexity intents routed to step `quick`
+- [ ] (super) Requirements validated before roadmap
+- [ ] (super) Each session scored >= 80%
+- [ ] (compose) `--compose` produces a validated template (≤20 nodes, acyclic, no orphans) written to `~/.maestro/templates/workflows/` + index; drafts preserved on abandon
+- [ ] (play) `--play <template>` binds context, topologically sorts nodes → `steps[]`, and dispatches via maestro-ralph-execute; `--list`/`--dry-run` short-circuit
 
 </appendix>

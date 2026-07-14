@@ -1,0 +1,70 @@
+{
+  "team_name": "issue",
+  "team_display_name": "Issue Resolution",
+  "description": "Unified team skill for issue processing pipeline (plan → queue → execute). Issue creation handled by issue-discover, CRUD by issue-manage.",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Pipeline orchestration, mode selection, task chain creation, progress monitoring",
+      "message_types": ["task_assigned", "pipeline_update", "escalation", "shutdown", "error"]
+    },
+    "explorer": {
+      "task_prefix": "EXPLORE",
+      "responsibility": "Issue context analysis, codebase exploration, dependency identification, impact assessment",
+      "message_types": ["context_ready", "impact_assessed", "error"],
+      "reuses_agent": "cli-explore-agent"
+    },
+    "planner": {
+      "task_prefix": "SOLVE",
+      "responsibility": "Solution design, task decomposition via issue-plan-agent",
+      "message_types": ["solution_ready", "multi_solution", "error"],
+      "reuses_agent": "issue-plan-agent"
+    },
+    "reviewer": {
+      "task_prefix": "AUDIT",
+      "responsibility": "Solution review, technical feasibility validation, risk assessment",
+      "message_types": ["approved", "rejected", "concerns", "error"],
+      "reuses_agent": null
+    },
+    "integrator": {
+      "task_prefix": "MARSHAL",
+      "responsibility": "Queue formation, conflict detection, execution order optimization via issue-queue-agent",
+      "message_types": ["queue_ready", "conflict_found", "error"],
+      "reuses_agent": "issue-queue-agent"
+    },
+    "implementer": {
+      "task_prefix": "BUILD",
+      "responsibility": "Code implementation, test verification, result submission via code-developer",
+      "message_types": ["impl_complete", "impl_failed", "error"],
+      "reuses_agent": "code-developer"
+    }
+  },
+
+  "pipelines": {
+    "quick": {
+      "description": "Simple issues, skip review",
+      "task_chain": ["EXPLORE-001", "SOLVE-001", "MARSHAL-001", "BUILD-001"]
+    },
+    "full": {
+      "description": "Complex issues, with CP-2 review cycle (max 2 rounds)",
+      "task_chain": ["EXPLORE-001", "SOLVE-001", "AUDIT-001", "MARSHAL-001", "BUILD-001"]
+    },
+    "batch": {
+      "description": "Batch processing 5-100 issues with parallel exploration and execution",
+      "task_chain": "EXPLORE-001..N(batch≤5) → SOLVE-001..N(batch≤3) → AUDIT-001 → MARSHAL-001 → BUILD-001..M(DAG parallel)"
+    }
+  },
+
+  "collaboration_patterns": ["CP-1", "CP-2", "CP-3", "CP-5"],
+
+  "session_dirs": {
+    "base": ".workflow/.team-plan/issue/",
+    "context": ".workflow/.team-plan/issue/context-{issueId}.json",
+    "audit": ".workflow/.team-plan/issue/audit-report.json",
+    "queue": ".workflow/issues/queue/execution-queue.json",
+    "solutions": ".workflow/issues/solutions/",
+    "messages": ".workflow/.team-msg/issue/"
+  }
+}

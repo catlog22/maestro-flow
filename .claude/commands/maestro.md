@@ -34,7 +34,7 @@ Session: `.workflow/.maestro/{session_id}/status.json`.
 <context>
 $ARGUMENTS — user intent text, or special keywords.
 
-**Keywords:** `continue`/`next`/`go` → state-based routing; `status` → `Skill("manage", "status")`
+**Keywords:** `continue`/`next`/`go` → state-based routing; `status` → `[@skill] Skill("manage", "status")`
 
 **Flags:**
 - `-y` / `--yes` — Auto mode: skip clarification, skip confirmation, auto-skip on errors
@@ -51,7 +51,7 @@ $ARGUMENTS — user intent text, or special keywords.
 3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
 4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，下游 ralph 只消费不覆盖（当 `decomposition_owner == "maestro"` 时跳过二次提问，仅做 shape 校验 + 缺省字段补齐）
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
-6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `Skill("maestro-ralph")` handoff
+6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `[@skill] Skill("maestro-ralph")` handoff
 7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
 8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
 9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
@@ -126,10 +126,10 @@ S_CONFIRM:
   → END           WHEN: user cancels
 
 S_DISPATCH:
-  → END           DO: Skill({ skill: "maestro-ralph-execute" })
+  → END           DO: [@skill] Skill({ skill: "maestro-ralph-execute" })
 
 S_FALLBACK:
-  → S_CLASSIFY    WHEN: user provides new intent           DO: AskUserQuestion
+  → S_CLASSIFY    WHEN: user provides new intent           DO: [@ask] AskUserQuestion
   → END           WHEN: user cancels
 
 </transitions>
@@ -150,9 +150,9 @@ S_FALLBACK:
 
 Compose a reusable workflow template (natural language → DAG). `--edit <path>` loads an existing template for revision.
 
-1. **Parse intent** → candidate nodes (verb signals: analyze/review→analysis-cli, plan/design→planning, implement/build→execution, test→testing; then/next→sequential edge, parallel→fan-out) + variables + complexity. Confirm parse via `AskUserQuestion`.
+1. **Parse intent** → candidate nodes (verb signals: analyze/review→analysis-cli, plan/design→planning, implement/build→execution, test→testing; then/next→sequential edge, parallel→fan-out) + variables + complexity. Confirm parse via `[@ask] AskUserQuestion`.
 2. **Resolve nodes** → map each step to an executor. Read deferred `node-catalog.md` (fallback: planning→`plan`, execution→`execute`, testing→`test`, review→`review`, analysis→`maestro delegate --to <tool> --mode analysis`). Build `args_template` with `{variable}` placeholders. Confirm mapping.
-3. **Build DAG** → sequential/fan-out edges, auto-inject checkpoints (artifact boundaries, before any `execute`, after any `test`), finalize `context_schema`. Validate: **≤20 nodes, acyclic, no orphans**. Display ASCII pipeline; confirm via `AskUserQuestion`.
+3. **Build DAG** → sequential/fan-out edges, auto-inject checkpoints (artifact boundaries, before any `execute`, after any `test`), finalize `context_schema`. Validate: **≤20 nodes, acyclic, no orphans**. Display ASCII pipeline; confirm via `[@ask] AskUserQuestion`.
 4. **Persist** → read deferred `template-schema.md`; assemble template JSON (`template_id: wft-<slug>-<date>`, nodes, edges, checkpoints, context_schema) → write to `~/.maestro/templates/workflows/<slug>.json` + update `index.json`. **All writes target `~/.maestro/templates/workflows/` only.** Abandoning any gate saves a draft to `.workflow/templates/design-drafts/`.
 5. Output: template path/ID + `/maestro --play <template-id>` to run it.
 
@@ -161,7 +161,7 @@ Compose a reusable workflow template (natural language → DAG). `--edit <path>`
 Execute a saved workflow template through the ralph chain runner. Flags: `--context k=v` (repeatable), `--list`, `--dry-run`.
 
 1. **Resolve template**: absolute path → as-is; slug → `~/.maestro/templates/workflows/index.json` lookup. `--list` → display index and END. Read deferred `template-schema.md` to validate (`template_id`, `nodes`, `edges`, `context_schema` required).
-2. **Bind context**: parse `--context k=v`; collect missing required variables via `AskUserQuestion`; bind `{variable}` placeholders (leave `{N-xxx.field}` and `{prev_*}` for runtime resolution by ralph-execute).
+2. **Bind context**: parse `--context k=v`; collect missing required variables via `[@ask] AskUserQuestion`; bind `{variable}` placeholders (leave `{N-xxx.field}` and `{prev_*}` for runtime resolution by ralph-execute).
 3. **Topological sort** (Kahn) template nodes → linear `steps[]` (parallel nodes share a batch index). Each step carries `skill`/`args`/`type` (skill|cli|agent|checkpoint) resolved as in `A_CREATE_SESSION`; cli nodes run async via `Bash(run_in_background)` + STOP, checkpoints pause with resume via `-c`.
 4. **Create session**: write `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json` (`source: "maestro"`, `template_id`, bound `context`, topologically-ordered `steps[]`). `--dry-run` → display plan and END.
 5. Dispatch to `maestro-ralph-execute` (S_DISPATCH) — the runner honors checkpoints, resume-safety, and per-step `completion_confirmed` exactly as for classified chains.
@@ -173,7 +173,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 3. Select chain from chainMap，遵循拓扑约束：
    - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式透传 `-y` 到 grill，grill 以 Auto mode 执行，不跳过**）
    - 头脑风暴/探索 → `brainstorm`
-   - 学习/阅读代码/跟读/follow → `Skill("learn", "follow")`；调查/为什么/investigate → `Skill("learn", "investigate")`；分解/模式/decompose → `Skill("learn", "decompose")`；评审/挑战/second-opinion → `Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective`）
+   - 学习/阅读代码/跟读/follow → `[@skill] Skill("learn", "follow")`；调查/为什么/investigate → `[@skill] Skill("learn", "investigate")`；分解/模式/decompose → `[@skill] Skill("learn", "decompose")`；评审/挑战/second-opinion → `[@skill] Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective`）
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
    - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
@@ -184,7 +184,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 
 ### A_CLARIFY
 
-1. `AskUserQuestion` with parsed intent + available chain options
+1. `[@ask] AskUserQuestion` with parsed intent + available chain options
 2. Re-classify with user response
 
 ### A_DECOMPOSE_TASKS
@@ -192,7 +192,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 设 `session.decomposition_owner = "maestro"`。下游 ralph 只消费不二次提问（invariant 4）。Condensed:
 
 1. 分类意图广度。narrow / 单步 / `{status,init,quick}` 链跳过
-2. broad/medium → `AskUserQuestion` ≤3 轮：Scope / Constraints / Definition of Done
+2. broad/medium → `[@ask] AskUserQuestion` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
 5. 在最后一个 evidence-producing stage（execute/review/test）之后追加 `decision:post-goal-audit`（session 终结审计节点）。ralph-execute 在该节点按需动态生长 `steps[]`

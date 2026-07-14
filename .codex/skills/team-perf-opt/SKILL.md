@@ -1,0 +1,176 @@
+---
+name: team-perf-opt
+description: Unified team skill for performance optimization. Coordinator orchestrates pipeline, workers are team-worker agents. Supports single/fan-out/independent parallel modes. Triggers on "team perf-opt".
+allowed-tools:
+  - Bash
+  - Edit
+  - Glob
+  - Grep
+  - Read
+  - Write
+  - create_goal
+  - followup_task
+  - interrupt_agent
+  - list_agents
+  - mcp__maestro__team_msg
+  - request_user_input
+  - send_message
+  - spawn_agent
+  - spawn_agents_on_csv
+  - update_goal
+  - wait_agent
+session-mode: run
+---
+
+> **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
+# Team Performance Optimization
+
+Profile application performance, identify bottlenecks, design optimization strategies, implement changes, benchmark improvements, and review code quality.
+
+## Architecture
+
+```
+spawn_agent({ task_name: "team_perf_opt", message: "Execute skill team-perf-opt, args: "<task-description>"" })
+                    |
+         SKILL.md (this file) = Router
+                    |
+     +--------------+--------------+
+     |                             |
+  no --role flag              --role <name>
+     |                             |
+  Coordinator                  Worker
+  roles/coordinator/role.md    roles/<name>/role.md
+     |
+     +-- analyze -> dispatch -> spawn workers -> STOP
+                                    |
+                    +-------+-------+-------+-------+-------+
+                    v       v       v       v       v
+                 [profiler] [strategist] [optimizer] [benchmarker] [reviewer]
+                 (team-worker agents)
+
+Pipeline (Single mode):
+  PROFILE-001 -> STRATEGY-001 -> IMPL-001 -> BENCH-001 + REVIEW-001 (fix cycle)
+
+Pipeline (Fan-out mode):
+  PROFILE-001 -> STRATEGY-001 -> [IMPL-B01..N](parallel) -> BENCH+REVIEW per branch
+
+Pipeline (Independent mode):
+  [Pipeline A: PROFILE-A->STRATEGY-A->IMPL-A->BENCH-A+REVIEW-A]
+  [Pipeline B: PROFILE-B->STRATEGY-B->IMPL-B->BENCH-B+REVIEW-B] (parallel)
+```
+
+## Role Registry
+
+| Role | Path | Prefix | Inner Loop |
+|------|------|--------|------------|
+| coordinator | [roles/coordinator/role.md](roles/coordinator/role.md) | — | — |
+| profiler | [roles/profiler/role.md](roles/profiler/role.md) | PROFILE-* | false |
+| strategist | [roles/strategist/role.md](roles/strategist/role.md) | STRATEGY-* | false |
+| optimizer | [roles/optimizer/role.md](roles/optimizer/role.md) | IMPL-*, FIX-* | true |
+| benchmarker | [roles/benchmarker/role.md](roles/benchmarker/role.md) | BENCH-* | false |
+| reviewer | [roles/reviewer/role.md](roles/reviewer/role.md) | REVIEW-*, QUALITY-* | false |
+
+
+## Pre-load (coordinator, before dispatch)
+
+1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for module boundaries
+2. **Specs (coding)**: `maestro load --type spec --category coding` — load coding constraints as shared context
+3. **Wiki knowledge**: `maestro search "performance optimization profiling" --json` — top 5 entries as prior context
+4. All optional — proceed without if unavailable
+## Role Router
+
+Parse `$ARGUMENTS`:
+- Has `--role <name>` → Read `roles/<name>/role.md`, execute Phase 2-4
+- No `--role` → `@roles/coordinator/role.md`, execute entry router
+
+## Shared Constants
+
+- **Session prefix**: `PERF-OPT`
+- **Session path**: `.workflow/.team/PERF-OPT-<slug>-<date>/`
+- **Team name**: `perf-opt`
+- **CLI tools**: `maestro delegate --mode analysis` (read-only), `maestro delegate --mode write` (modifications)
+- **Message bus**: `mcp__maestro__team_msg(session_id=<session-id>, ...)`
+
+## Worker Spawn Template
+
+Coordinator spawns workers using this template:
+
+```
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none" })
+```
+
+**Inner Loop roles** (optimizer): Set `inner_loop` dynamically — `true` for single mode, `false` for fan-out/independent (parallel branches).
+**Single-task roles** (profiler, strategist, benchmarker, reviewer): Set `inner_loop: false`.
+
+## User Commands
+
+| Command | Action |
+|---------|--------|
+| `check` / `status` | Output execution status graph (branch-grouped), no advancement |
+| `resume` / `continue` | Check worker states, advance next step |
+| `revise <TASK-ID> [feedback]` | Create revision task + cascade downstream (scoped to branch) |
+| `feedback <text>` | Analyze feedback impact, create targeted revision chain |
+| `recheck` | Re-run quality check |
+| `improve [dimension]` | Auto-improve weakest dimension |
+
+## Session Directory
+
+```
+.workflow/.team/PERF-OPT-<slug>-<date>/
++-- session.json                    # Session metadata + status + parallel_mode
++-- artifacts/
+|   +-- baseline-metrics.json       # Profiler: before-optimization metrics
+|   +-- bottleneck-report.md        # Profiler: ranked bottleneck findings
+|   +-- optimization-plan.md        # Strategist: prioritized optimization plan
+|   +-- benchmark-results.json      # Benchmarker: after-optimization metrics
+|   +-- review-report.md            # Reviewer: code review findings
+|   +-- branches/B01/...            # Fan-out branch artifacts
+|   +-- pipelines/A/...             # Independent pipeline artifacts
++-- explorations/                   # Shared explore cache
++-- wisdom/patterns.md              # Discovered patterns and conventions
++-- discussions/                    # Discussion records
++-- .msg/messages.jsonl             # Team message bus
++-- .msg/meta.json                  # Session metadata
+```
+
+## Completion Action
+
+When the pipeline completes:
+
+```
+request_user_input({
+  questions: [{
+    question: "Team pipeline complete. What would you like to do?",
+    header: "Completion",
+    multiSelect: false,
+    options: [
+      { label: "Archive & Clean (Recommended)", description: "Archive session, clean up tasks and team resources" },
+      { label: "Keep Active", description: "Keep session active for follow-up work or inspection" },
+      { label: "Export Results", description: "Export deliverables to a specified location, then clean" }
+    ]
+  }]
+})
+```
+
+## Specs Reference
+
+- [specs/pipelines.md](specs/pipelines.md) — Pipeline definitions and task registry
+- [specs/team-config.json](specs/team-config.json) — Team configuration
+
+## Error Handling
+
+| Scenario | Resolution |
+|----------|------------|
+| Unknown --role value | Error with role registry list |
+| Role file not found | Error with expected path (roles/{name}/role.md) |
+| Profiling tool not available | Fallback to static analysis methods |
+| Benchmark regression detected | Auto-create FIX task with regression details |
+| Review-fix cycle exceeds 3 iterations | Escalate to user |
+| One branch IMPL fails | Mark that branch failed, other branches continue |
+| Fast-advance conflict | Coordinator reconciles on next callback |
+| Completion action fails | Default to Keep Active |

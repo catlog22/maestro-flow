@@ -1,0 +1,129 @@
+{
+  "team_name": "ultra-analyze",
+  "version": "1.0.0",
+  "description": "深度分析团队 - 将单体分析工作流拆分为5角色协作：探索→分析→讨论→综合，支持多管道模式和讨论循环",
+  "skill_entry": "team-ultra-analyze",
+  "invocation": "Skill(skill=\"team-ultra-analyze\", args=\"--role=coordinator ...\")",
+
+  "roles": {
+    "coordinator": {
+      "name": "coordinator",
+      "responsibility": "Orchestration",
+      "task_prefix": null,
+      "description": "分析团队协调者。话题澄清、管道选择、会话管理、讨论循环驱动、结果汇报",
+      "message_types_sent": ["pipeline_selected", "discussion_round", "direction_adjusted", "task_unblocked", "error", "shutdown"],
+      "message_types_received": ["exploration_ready", "analysis_ready", "discussion_processed", "synthesis_ready", "error"],
+      "commands": ["dispatch", "monitor"]
+    },
+    "explorer": {
+      "name": "explorer",
+      "responsibility": "Orchestration (代码库探索编排)",
+      "task_prefix": "EXPLORE-*",
+      "description": "代码库探索者。通过 cli-explore-agent 多角度并行探索代码库，收集上下文",
+      "message_types_sent": ["exploration_ready", "error"],
+      "message_types_received": [],
+      "commands": ["explore"],
+      "cli_tools": ["agy"]    },
+    "analyst": {
+      "name": "analyst",
+      "responsibility": "Read-only analysis (深度分析)",
+      "task_prefix": "ANALYZE-*",
+      "description": "深度分析师。基于探索结果，通过 CLI 多视角深度分析，生成结构化洞察",
+      "message_types_sent": ["analysis_ready", "error"],
+      "message_types_received": [],
+      "commands": ["analyze"],
+      "cli_tools": ["agy", "codex", "claude"]
+    },
+    "discussant": {
+      "name": "discussant",
+      "responsibility": "Analysis + Exploration (讨论处理)",
+      "task_prefix": "DISCUSS-*",
+      "description": "讨论处理者。根据用户反馈调整分析方向，执行深入探索或补充分析",
+      "message_types_sent": ["discussion_processed", "error"],
+      "message_types_received": [],
+      "commands": ["deepen"],
+      "cli_tools": ["agy"],
+      "cli_tools": ["agy"]    },
+    "synthesizer": {
+      "name": "synthesizer",
+      "responsibility": "Read-only analysis (综合结论)",
+      "task_prefix": "SYNTH-*",
+      "description": "综合整合者。跨视角整合所有探索、分析、讨论结果，生成最终结论和建议",
+      "message_types_sent": ["synthesis_ready", "error"],
+      "message_types_received": [],
+      "commands": ["synthesize"]
+    }
+  },
+
+  "pipeline_modes": {
+    "quick": {
+      "description": "快速分析：单探索→单分析→直接综合",
+      "stages": ["EXPLORE", "ANALYZE", "SYNTH"],
+      "entry_role": "explorer",
+      "estimated_time": "10-15min"
+    },
+    "standard": {
+      "description": "标准分析：多角度并行探索→多视角分析→讨论→综合",
+      "stages": ["EXPLORE-multi", "ANALYZE-multi", "DISCUSS", "SYNTH"],
+      "entry_role": "explorer",
+      "parallel_stages": [["EXPLORE-001", "EXPLORE-002"], ["ANALYZE-001", "ANALYZE-002"]],
+      "estimated_time": "30-60min"
+    },
+    "deep": {
+      "description": "深度分析：多探索→多分析→讨论循环→综合",
+      "stages": ["EXPLORE-multi", "ANALYZE-multi", "DISCUSS-loop", "SYNTH"],
+      "entry_role": "explorer",
+      "parallel_stages": [["EXPLORE-001", "EXPLORE-002", "EXPLORE-003"], ["ANALYZE-001", "ANALYZE-002", "ANALYZE-003"]],
+      "discussion_loop": { "max_rounds": 5, "participants": ["discussant", "analyst"] },
+      "estimated_time": "1-2hr"
+    }
+  },
+
+  "discussion_loop": {
+    "max_rounds": 5,
+    "trigger": "user feedback via coordinator",
+    "participants": ["discussant", "analyst"],
+    "flow": "coordinator(AskUser) → DISCUSS-N(deepen) → [optional ANALYZE-fix] → coordinator(AskUser) → ... → SYNTH"
+  },
+
+  "shared_memory": {
+    "file": "shared-memory.json",
+    "fields": {
+      "explorations": { "owner": "explorer", "type": "array" },
+      "analyses": { "owner": "analyst", "type": "array" },
+      "discussions": { "owner": "discussant", "type": "array" },
+      "synthesis": { "owner": "synthesizer", "type": "object" },
+      "decision_trail": { "owner": "coordinator", "type": "array" },
+      "current_understanding": { "owner": "coordinator", "type": "object" }
+    }
+  },
+
+  "collaboration_patterns": [
+    "CP-1: Linear Pipeline (Quick mode)",
+    "CP-3: Fan-out (Explorer/Analyst parallel exploration)",
+    "CP-2: Review-Fix Cycle (Discussion loop: Discussant ↔ Analyst)",
+    "CP-8: User-in-the-loop (Coordinator ↔ User discussion rounds)"
+  ],
+
+  "session_directory": {
+    "pattern": ".workflow/.team/UAN-{slug}-{date}",
+    "subdirectories": ["explorations", "analyses", "discussions"]
+  },
+
+  "analysis_dimensions": {
+    "architecture": ["架构", "architecture", "design", "structure", "设计"],
+    "implementation": ["实现", "implement", "code", "coding", "代码"],
+    "performance": ["性能", "performance", "optimize", "bottleneck", "优化"],
+    "security": ["安全", "security", "auth", "permission", "权限"],
+    "concept": ["概念", "concept", "theory", "principle", "原理"],
+    "comparison": ["比较", "compare", "vs", "difference", "区别"],
+    "decision": ["决策", "decision", "choice", "tradeoff", "选择"]
+  },
+
+  "analysis_perspectives": {
+    "technical": { "tool": "agy", "focus": "Implementation, code patterns, technical feasibility" },
+    "architectural": { "tool": "claude", "focus": "System design, scalability, component interactions" },
+    "business": { "tool": "codex", "focus": "Value, ROI, stakeholder impact, strategy" },
+    "domain_expert": { "tool": "agy", "focus": "Domain-specific patterns, best practices, standards" }
+  }
+}

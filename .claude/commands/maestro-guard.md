@@ -38,7 +38,7 @@ and blocks operations targeting files outside boundaries. Requires hooks level >
 <invariants>
 1. **Config-only mutation** — guard MUST only modify the `guard` section of `.workflow/config.json`; NEVER touch other config sections or files
 2. **Non-destructive** — `off` MUST preserve existing paths and mode; NEVER clear the path list when disabling
-3. **Mode switch confirmation** — switching between allow/deny mode MUST require AskUserQuestion confirmation when existing paths will be cleared
+3. **Mode switch confirmation** — switching between allow/deny mode MUST require [@ask] AskUserQuestion confirmation when existing paths will be cleared
 4. **Hook dependency** — guard MUST warn when enabled but `workflow-guard` hook is not active (hooks level < full)
 5. **Path normalization** — all paths MUST use forward slashes with trailing slash for directories; NEVER store raw backslash paths
 </invariants>
@@ -57,7 +57,7 @@ and blocks operations targeting files outside boundaries. Requires hooks level >
 
 **GATE 3: Execute → Confirm**
 - REQUIRED: Config mutation applied (for on/off/allow/deny) or status displayed (for status).
-- REQUIRED: Mode-switch AskUserQuestion answered (for allow↔deny transitions with existing paths).
+- REQUIRED: Mode-switch [@ask] AskUserQuestion answered (for allow↔deny transitions with existing paths).
 - BLOCKED if: user declines mode switch.
 
 **Step 1: Parse subcommand**
@@ -90,14 +90,14 @@ Read `.workflow/config.json`. If file missing, initialize with empty guard secti
 
 **`allow <path>`:**
 - Normalize path to forward slashes, ensure trailing slash for directories
-- If `guard.mode` is `deny`, AskUserQuestion: "Switching from deny to allow mode will clear existing paths ({N} paths). Continue?" — abort if user declines.
+- If `guard.mode` is `deny`, [@ask] AskUserQuestion: "Switching from deny to allow mode will clear existing paths ({N} paths). Continue?" — abort if user declines.
 - Add path to `guard.paths` (deduplicate)
 - Set `guard.enabled = true` if not already
 - Write config
 
 **`deny <path>`:**
 - Normalize path to forward slashes, ensure trailing slash for directories
-- If `guard.mode` is `allow`, AskUserQuestion: "Switching from allow to deny mode will clear existing paths ({N} paths). Continue?" — abort if user declines.
+- If `guard.mode` is `allow`, [@ask] AskUserQuestion: "Switching from allow to deny mode will clear existing paths ({N} paths). Continue?" — abort if user declines.
 - Set `guard.mode = "deny"`
 - Add path to `guard.paths` (deduplicate)
 - Set `guard.enabled = true` if not already (symmetric with `allow`: adding a deny path auto-enables the guard)

@@ -74,7 +74,7 @@ S_STATE     — Read project state, infer lifecycle_position
 S_RANK      — Score candidates, generate top-N
 S_LIST      — --list mode: grouped display of all steps
 S_PRESENT   — Show top pick + alternatives + reasoning + prepare content
-S_CONFIRM   — AskUserQuestion for confirmation (skipped by -y)
+S_CONFIRM   — [@ask] AskUserQuestion for confirmation (skipped by -y)
 S_EXECUTE   — Run prepare + create for selected step
 S_FALLBACK  — Intent empty after clarification
 </states>
@@ -87,7 +87,7 @@ S_PARSE:
   → S_LITE       WHEN: --lite flag
   → S_LIST       WHEN: --list flag
   → S_STATE      WHEN: intent present / "continue"/"next"/"go"
-  → S_PARSE      WHEN: no intent (1 clarify round via AskUserQuestion)
+  → S_PARSE      WHEN: no intent (1 clarify round via [@ask] AskUserQuestion)
   → S_FALLBACK   WHEN: clarification empty
 
 S_LITE:
@@ -97,7 +97,7 @@ S_NOTE:
   → END          DO: append entry to {run_dir}/outputs/companion.md
 
 S_PROMOTE:
-  → END          DO: review outputs → Skill(spec, "add") / Skill(manage, "knowledge capture") for each insight
+  → END          DO: review outputs → [@skill] Skill(spec, "add") / [@skill] Skill(manage, "knowledge capture") for each insight
 
 S_STATE:
   → S_RANK       DO: A_INFER_LIFECYCLE
@@ -231,7 +231,7 @@ maestro run create <step> --workflow-root . [-- args...]
 maestro run complete <run_id> --workflow-root .
 ```
 
-For retained skills (not in step registry): execute via `Skill({ skill: <name>, args: <args> })` directly.
+For retained skills (not in step registry): execute via `[@skill] Skill({ skill: <name>, args: <args> })` directly.
 
 </actions>
 
@@ -288,7 +288,7 @@ Args: <args>
 
 `--dry-run` / `--suggest`: display and stop.
 `-y`: execute immediately.
-Otherwise: AskUserQuestion (single-select, header: "Confirm"):
+Otherwise: [@ask] AskUserQuestion (single-select, header: "Confirm"):
 - **Execute recommendation** (Recommended)
 - **Choose alternative**
 - **Modify arguments**

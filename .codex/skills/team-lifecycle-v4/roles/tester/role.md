@@ -2,19 +2,18 @@
 role: tester
 prefix: TEST
 inner_loop: false
-message_types:
-  success: test_result
-  fix: fix_required
-  error: error
+message_types: 
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
 # Tester
 
-Test execution with iterative fix cycle.
-
 ## Identity
 - Tag: [tester] | Prefix: TEST-*
-- Responsibility: Detect framework -> run tests -> fix failures -> report results
+- Responsibility: Detect framework → run tests → fix failures → report results
 
 ## Boundaries
 ### MUST
@@ -37,24 +36,16 @@ Framework detection (priority order):
 | 3 | Config files | vitest.config.*, jest.config.*, pytest.ini |
 
 Affected test discovery from executor's modified files:
-
-1. **Read upstream implementation discovery**:
-   ```javascript
-   const implDiscovery = JSON.parse(Read(`{session}/discoveries/IMPL-001.json`))
-   const modifiedFiles = implDiscovery.files_modified || []
-   ```
-
-2. **Search for matching test files**:
-   - Search: <name>.test.ts, <name>.spec.ts, tests/<name>.test.ts, __tests__/<name>.test.ts
+- Search: <name>.test.ts, <name>.spec.ts, tests/<name>.test.ts, __tests__/<name>.test.ts
 
 ## Phase 3: Test Execution + Fix Cycle
 
 Config: MAX_ITERATIONS=10, PASS_RATE_TARGET=95%, AFFECTED_TESTS_FIRST=true
 
 Loop:
-1. Run affected tests -> parse results
-2. Pass rate met -> run full suite
-3. Failures -> select strategy -> fix -> re-run
+1. Run affected tests → parse results
+2. Pass rate met → run full suite
+3. Failures → select strategy → fix → re-run
 
 Strategy selection:
 | Condition | Strategy |
@@ -70,7 +61,7 @@ Test commands:
 | jest | jest <files> --no-coverage | jest --no-coverage |
 | pytest | pytest <files> -v | pytest -v |
 
-## Phase 4: Result Analysis + Report
+## Phase 4: Result Analysis
 
 Failure classification:
 | Severity | Patterns |
@@ -80,41 +71,11 @@ Failure classification:
 | Medium | Timeout, async errors |
 | Low | Warnings, deprecations |
 
-### Write Discovery
-
-```javascript
-Write(`{session}/discoveries/{id}.json`, JSON.stringify({
-  task_id: "{id}",
-  type: "test_result",
-  framework: "vitest",
-  pass_rate: 98,
-  total_tests: 50,
-  passed: 49,
-  failed: 1,
-  failures: [{ test: "SSO integration", severity: "Medium", error: "timeout" }],
-  fix_iterations: 2,
-  files_tested: ["src/auth/oauth.test.ts"]
-}, null, 2))
-```
-
-### Report Result
-
 Report routing:
 | Condition | Type |
 |-----------|------|
 | Pass rate >= target | test_result (success) |
 | Pass rate < target after max iterations | fix_required |
-
-```javascript
-report_agent_job_result({
-  id: "{id}",
-  status: "completed",  // or "failed"
-  findings: "Ran 50 tests. Pass rate: 98% (49/50). Fixed 2 failures in 2 iterations. Remaining: timeout in SSO integration test.",
-  quality_score: "",
-  supervision_verdict: "",
-  error: ""
-})
-```
 
 ## Error Handling
 
@@ -123,4 +84,3 @@ report_agent_job_result({
 | Framework not detected | Prompt coordinator |
 | No tests found | Report to coordinator |
 | Infinite fix loop | Abort after MAX_ITERATIONS |
-| Upstream discovery file missing | Report error, mark failed |

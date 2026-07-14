@@ -2,14 +2,14 @@
 role: strategist
 prefix: STRATEGY
 inner_loop: false
-message_types:
-  success: strategy_ready
-  error: error
+message_types: 
 ---
 
-# Test Strategist
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Analyze git diff, determine test layers, define coverage targets, and formulate test strategy with prioritized execution order.
+# Test Strategist
 
 ## Phase 2: Context & Environment Detection
 

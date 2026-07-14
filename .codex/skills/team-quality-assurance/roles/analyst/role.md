@@ -2,15 +2,14 @@
 role: analyst
 prefix: QAANA
 inner_loop: false
-message_types:
-  success: analysis_ready
-  report: quality_report
-  error: error
+message_types: 
 ---
 
-# Quality Analyst
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Analyze defect patterns, coverage gaps, test effectiveness, and generate comprehensive quality reports. Maintain defect pattern database and provide quality scoring.
+# Quality Analyst
 
 ## Phase 2: Context Loading
 
@@ -61,6 +60,14 @@ PURPOSE: Deep quality analysis on QA results to identify defect patterns and imp
 TASK: Classify defects by root cause, identify high-density files, analyze coverage gaps vs risk, generate recommendations
 MODE: analysis
 ```
+
+### Tech Profile Scan
+
+After quality analysis, emit context-aware trigger signals (based on detected codebase characteristics):
+
+1. Check defect patterns → signals (`injection_risk`, `auth_detected`, `sql_detected`)
+2. Check coverage data → risk signals (`test_gap`, `perf_sensitive`, `legacy_patterns`)
+3. Include `tech_profile` in Phase 5 state_update data
 
 ## Phase 4: Report Generation & Output
 

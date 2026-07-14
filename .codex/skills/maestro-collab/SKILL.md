@@ -1,34 +1,28 @@
 ---
 name: maestro-collab
-description: Use when a question needs cross-verification from multiple CLI
-  tools or diverse analytical perspectives
-argument-hint: '"<requirement>" [--tools agy,qwen,claude] [--mode
-  analysis|write] [--rule <template>] [-y]'
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+description: Use when a question needs cross-verification from multiple CLI tools or diverse analytical perspectives
+argument-hint: <requirement> [--tools agy,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]
+allowed-tools:
+  - Bash
+  - Glob
+  - Grep
+  - Read
+  - Write
+  - followup_task
+  - interrupt_agent
+  - list_agents
+  - request_user_input
+  - send_message
+  - spawn_agent
+  - spawn_agents_on_csv
+  - wait_agent
 session-mode: run
-contract:
-  discovery: self-described
-  consumes: []
-  produces: []
-version: 0.5.50
+contract: 
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-@~/.maestro/workflows/codex-run-mode.md
-</required_reading>
-
 <purpose>
-Direct CLI fan-out collaboration via `shell_exec`. Diamond topology:
-Fan-out (parallel `shell_exec` → `maestro delegate --to <tool>`) → Cross-verify (coordinator) → Synthesize (coordinator).
-
-Each CLI tool independently analyzes the requirement via `maestro delegate` shell call.
-Coordinator waits for ALL CLI results to completion via shell-exec-protocol.md,
-then cross-verifies for consensus/conflicts and synthesizes into unified report.
-
-NO spawn_agents_on_csv. NO spawn_agent. ALL CLI calls directly by coordinator via shell_exec.
+Fan-out requirement to multiple CLI tools in parallel → cross-verify for consensus/conflicts → synthesize into unified report with downstream artifacts (context.md + conclusions.json).
 </purpose>
-
 
 <context>
 $ARGUMENTS — requirement text and optional flags.
@@ -36,241 +30,142 @@ $ARGUMENTS — requirement text and optional flags.
 **Flags**:
 - `--tools <list>`: Comma-separated CLI tools (default: first 3 enabled)
 - `--mode analysis|write`: Delegate mode (default: analysis)
-- `--rule <template>`: Shared rule template for all delegates (see Rule Reference below)
-- `-y`: Skip confirmations
+- `--rule <template>`: Shared rule template for all delegates
+- `-y`: Skip plan confirmation
 
-**Rule Reference** — common `--rule` values for collab scenarios:
+**Pre-load** (optional): `maestro load --type spec --category arch` + `maestro search --category arch` → include in delegate prompts.
 
-| Scenario | Rule | Description |
-|----------|------|-------------|
-| Code quality review | `analysis-review-code-quality` | 代码质量多维评审 |
-| Architecture review | `analysis-review-architecture` | 架构设计评审 |
-| Bug root cause | `analysis-diagnose-bug-root-cause` | Bug 根因诊断 |
-| Security assessment | `analysis-assess-security-risks` | 安全风险评估 |
-| Performance analysis | `analysis-analyze-performance` | 性能瓶颈分析 |
-| Code pattern analysis | `analysis-analyze-code-patterns` | 代码模式/反模式识别 |
-| Architecture design | `planning-plan-architecture-design` | 架构方案设计 |
-| Task breakdown | `planning-breakdown-task-steps` | 任务分解规划 |
-| Migration strategy | `planning-plan-migration-strategy` | 迁移策略制定 |
-| Rigorous style | `universal-universal-rigorous-style` | 严谨风格（通用） |
-
-**Auto-select** (no --tools): read `~/.maestro/cli-tools.json` → filter enabled + eligible → first 3. Exclude api-endpoint when --mode write. Minimum 2 required.
-
-**Session**: `.workflow/.maestro/{YYYYMMDD}-collab-{slug}/`
-**Scratch**: `{run_dir}/outputs/`
-
-**Output files**:
-- `collab-report.md` — merged findings (Consensus/Conflicts/Unique/Recommendations)
+**Output**: `{run_dir}/outputs/`
+- `collab-report.md` — merged findings with consensus/conflict/unique tags
 - `context.md` — Locked/Free/Deferred decisions (plan compatible)
-- `conclusions.json` — session_id, tools[], consensus_level, recommendation, confidence, dimensions[], decisions[]
-- `per-tool/{tool}-output.md` — raw CLI outputs
-
-**Downstream compatibility**:
-
-| Consumer | Artifact |
-|----------|----------|
-| maestro-plan | context.md + conclusions.json (via --dir) |
-| maestro-analyze | context.md as prior context (via state.json) |
-| maestro-ralph | artifact chain lookup (type=collab) |
+- `conclusions.json` — structured: session_id, tools[], consensus_level, recommendation, confidence, dimensions[], decisions[]
+- `per-tool/{tool}-output.md` — raw outputs
 </context>
-
-<invariants>
-1. **ALL analysis via shell_exec → maestro delegate** — coordinator NEVER performs analysis internally, NEVER spawns agents for analysis
-2. **shell_exec is the execution mechanism** — every delegate call: `shell_exec("maestro delegate ...", { timeout: N })`
-3. **shell-exec-protocol.md governs lifecycle** — MUST follow shell_exec → wait for completion → parse for every delegate
-4. **NEVER fire-and-forget** — every shell_exec MUST complete before proceeding, result consumed before next step
-5. **NEVER substitute internal reasoning** — if CLI fails, report failure; do NOT generate analysis yourself as replacement
-6. **Indefinite wait** — shell_exec has NO max timeout; continue waiting until CLI returns regardless of elapsed time; NEVER abandon a running session
-7. **Same prompt, different --to** — fan-out delegates all use identical base prompt, only `--to <tool>` differs
-7. **Minimum 2 tools** — abort if fewer eligible
-8. **Partial degradation** — 1 tool fails → continue with remaining (minimum 2 results for cross-verify)
-</invariants>
 
 <state_machine>
 
 <states>
-S_PARSE          — 解析参数、发现工具                       PERSIST: —
-S_CONFIRM        — 展示计划、用户确认（-y 跳过）            PERSIST: —
-S_FAN_OUT        — 并行 shell_exec fan-out + 等待完成          PERSIST: per-tool outputs
-S_CROSS_VERIFY   — 交叉验证：共识/冲突/独特分类              PERSIST: cross-verify.md
-S_SYNTHESIZE     — 生成最终报告                              PERSIST: reports
-S_AGGREGATE      — 注册 artifact、输出摘要                   PERSIST: state.json
+S_PARSE           — 解析参数、提取 flags                      PERSIST: —
+S_DISCOVER        — 发现可用 CLI 工具                          PERSIST: —
+S_CONFIRM         — 展示计划、用户确认（-y 跳过）              PERSIST: —
+S_FANOUT          — 构建 prompt、并行启动 delegate、STOP       PERSIST: —
+S_COLLECT         — 回调到达、收集结果                          PERSIST: per-tool outputs
+S_CROSS_VERIFY    — 分类发现（共识/冲突/独有）                  PERSIST: —
+S_BOUNDARY_GRILL  — 边界冲突检测与解决                          PERSIST: —
+S_SYNTHESIZE      — 解决冲突、生成 3 个输出文件                 PERSIST: outputs
+S_REGISTER        — 注册 CLB artifact                          PERSIST: state.json
+S_REPORT          — 显示摘要 + next-step routing               PERSIST: —
 </states>
 
 <transitions>
 
 S_PARSE:
-  → S_CONFIRM    WHEN: eligible tools >= 2               DO: A_PARSE_AND_DISCOVER
-  → ERROR(E002)  WHEN: eligible tools < 2
+  → S_DISCOVER    WHEN: requirement non-empty              DO: extract requirement, tools, mode, rule, autoYes
+  → S_PARSE       WHEN: requirement empty                  DO: request_user_input for requirement
+
+S_DISCOVER:
+  → S_CONFIRM     WHEN: eligible tools >= 2                DO: A_DISCOVER_TOOLS
+  → ERROR(E002)   WHEN: eligible tools < 2
 
 S_CONFIRM:
-  → S_FAN_OUT    WHEN: -y OR user confirms
-  → S_PARSE      WHEN: user modifies tools
-  → END          WHEN: user cancels
+  → S_FANOUT      WHEN: autoYes                            DO: A_SETUP_SESSION
+  → S_FANOUT      WHEN: user confirms "执行"               DO: A_SETUP_SESSION
+  → S_DISCOVER    WHEN: user selects "修改工具选择"         DO: re-select tools, validate >= 2
+  → END           WHEN: user cancels
 
-S_FAN_OUT:
-  → S_CROSS_VERIFY  WHEN: 2+ delegates completed        DO: A_FAN_OUT_DELEGATES
-  → ERROR(E004)     WHEN: all failed OR fewer than 2 completed
+S_FANOUT:
+  → S_COLLECT     DO: A_PARALLEL_DELEGATE then STOP — wait for callbacks
+
+S_COLLECT:
+  → S_CROSS_VERIFY  WHEN: all callbacks arrived            DO: A_COLLECT_OUTPUTS
+  → ERROR(E004)     WHEN: all delegates failed
+  GUARD: 1+ succeeded → continue with partial results (W001)
 
 S_CROSS_VERIFY:
-  → S_BOUNDARY_GRILL  DO: A_CROSS_VERIFY
+  → S_BOUNDARY_GRILL  DO: A_CLASSIFY_FINDINGS
 
 S_BOUNDARY_GRILL:
   → S_SYNTHESIZE    WHEN: no boundary conflicts detected     DO: —
   → S_SYNTHESIZE    WHEN: conflicts detected + resolved      DO: A_BOUNDARY_GRILL
-  GUARD: max 3 conflicts × 3 questions; non-blocking (see boundary-grill.md)
+  GUARD: max 3 conflicts × 3 questions; non-blocking
 
 S_SYNTHESIZE:
-  → S_AGGREGATE     DO: A_SYNTHESIZE
+  → S_REGISTER      DO: A_GENERATE_OUTPUTS
 
-S_AGGREGATE:
-  → END             DO: A_AGGREGATE_RESULTS
+S_REGISTER:
+  → S_REPORT        WHEN: user confirms or -y    DO: append CLB artifact to state.json (type: collab, scope: adhoc)
+  → S_REPORT        WHEN: user declines           DO: skip artifact registration, proceed to report
+  GUARD: request_user_input "Register collab artifact to state.json?" (skipped if -y)
+
+S_REPORT:
+  → END             DO: display summary (requirement, tools, consensus_level, per-tool status, artifact id, output dir)
 
 </transitions>
 
 <actions>
 
-### A_PARSE_AND_DISCOVER
-
-1. Parse flags: requirement, tools, mode, rule, autoYes
-2. Read `~/.maestro/cli-tools.json` → build eligible tool list
-3. Auto-select if no --tools: first 3 eligible in config order
-4. Build shared delegate prompt (6-field format):
-   ```
-   PURPOSE: {requirement} + cross-verification analysis
-   TASK: {specific analysis tasks from requirement}
-   MODE: {mode}
-   CONTEXT: @**/* | {project context if available}
-   EXPECTED: Structured findings with evidence, confidence per dimension
-   CONSTRAINTS: {scope limits}
-   ```
-5. Create session + scratch dirs
-6. `update_plan` with all phases pending
-
-### A_FAN_OUT_DELEGATES
-
-#### Phase 1: Parallel Launch
-
-Launch ALL delegate commands simultaneously in parallel:
+### A_DISCOVER_TOOLS
 
 ```
-// Parallel fan-out — one shell_exec per selected tool:
-Bash(`maestro delegate "<shared_prompt>" --to agy --mode <mode> [--rule <rule>]`, { run_in_background: true })
-Bash(`maestro delegate "<shared_prompt>" --to claude --mode <mode> [--rule <rule>]`, { run_in_background: true })
-// ... one call per selected tool
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
+Bash("maestro tools list --json 2>/dev/null || cat ~/.maestro/cli-tools.json")
 ```
+**Note:** Shell commands MUST use the Bash tool (not PowerShell). Use POSIX syntax within Bash calls.
+Filter: enabled == true. If --mode write: exclude type == "api-endpoint".
+Auto-select (no --tools): first 3 eligible in config order.
 
-#### Phase 2: Block Until ALL Complete
+### A_SETUP_SESSION
 
-Each `shell_exec` call blocks until its delegate completes. Save each result:
+Create: `{run_dir}/outputs/` + `per-tool/`.
 
-- **Completed** → save output to `{scratchDir}/per-tool/{tool}-output.md`
-- **Failed** → log error for that tool
+### A_PARALLEL_DELEGATE
 
-**Blocking guarantees (per shell-exec-protocol.md):**
-- Each `shell_exec` waits until CLI returns — no short-circuit
-- NO max timeout — delegate can run as long as needed
-- NO early exit — all tools must complete before proceeding
+1. Build shared prompt:
+   ```
+   PURPOSE: {requirement}; success = actionable findings with evidence
+   TASK: {auto-decomposed into 3-5 specific verbs}
+   MODE: {delegateMode}
+   CONTEXT: @**/*
+   EXPECTED: Structured findings with file:line refs, confidence (0-100), prioritized recommendations
+   CONSTRAINTS: {from requirement}
+   ```
+2. Launch ALL delegates in ONE message — multiple `Bash(run_in_background: true)`:
+   ```
+   maestro delegate "${prompt}" --to {tool} --mode ${mode} [--rule ${rule}]
+   ```
+3. **STOP immediately after launch. Wait for background callbacks.**
 
-#### Phase 3: Validate
+### A_COLLECT_OUTPUTS
 
-- Count completed tools
-- completed < 2 → ERROR(E004)
-- 1 tool failed but 2+ succeeded → W001, log failure, continue
+On each callback: `maestro delegate output <id>` → write `per-tool/{tool}-output.md`.
 
-**Iron rules**:
-- NEVER skip waiting — every shell_exec MUST complete before proceeding
-- NEVER proceed to S_CROSS_VERIFY while any delegate is still running
-- NEVER set a max timeout on shell_exec calls
-- NEVER generate analysis internally as substitute for CLI output
-- NEVER summarize or paraphrase — save raw CLI output verbatim
+### A_CLASSIFY_FINDINGS
 
-### A_CROSS_VERIFY
-
-Coordinator reads ALL per-tool outputs from `{scratchDir}/per-tool/` and classifies each finding:
+Read all per-tool outputs. For each finding:
 
 | Condition | Tag |
 |-----------|-----|
-| 2+ tools agree on same finding | CONSENSUS |
-| Tools have contradictory findings | CONFLICT |
-| Only 1 tool identified | UNIQUE |
+| 2+ tools agree | CONSENSUS |
+| Tools disagree | CONFLICT |
+| 1 tool only | UNIQUE |
 
-For each CONFLICT: note which tools disagree, their evidence, and confidence levels.
-
-Compute: `consensus_level = consensus_count / total_findings * 100`
-
-Write results to `{scratchDir}/cross-verify.md`.
+consensus_level = consensus_count / total_findings * 100.
+If consensus_level < 40%: W003.
 
 ### A_BOUNDARY_GRILL
 
-Run boundary grill per `~/.maestro/workflows/boundary-grill.md` after cross-verification.
+Run boundary grill per `~/.maestro/workflows/boundary-grill.md`.
 Input: classified CONFLICT findings + per-tool outputs. Check upstream scope if `--from` used.
-IF conflicts → tag with resolution, feed into A_SYNTHESIZE. No conflicts → pass through.
+IF conflicts → tag with resolution, feed into A_GENERATE_OUTPUTS. No conflicts → pass through.
 
-### A_SYNTHESIZE
+### A_GENERATE_OUTPUTS
 
-Generate 3 output files from cross-verify results:
+Resolve conflicts via evidence-weighted voting:
+- Higher confidence wins; more specific evidence (file:line) wins over general; tied → SUGGESTED
 
-1. **collab-report.md**:
-   ```markdown
-   # Collaborative Analysis: {requirement}
-
-   ## Summary
-   Tools: {tool list} | Consensus: {consensus_level}%
-
-   ## Consensus Findings
-   {findings agreed by 2+ tools, with evidence}
-
-   ## Conflicts
-   {contradictory findings with per-tool positions and evidence}
-
-   ## Unique Insights
-   {single-tool findings worth noting}
-
-   ## Recommendations
-   {actionable recommendations, prioritized}
-
-   ## Per-Tool Confidence
-   | Tool | Confidence | Key Contribution |
-   |------|-----------|-----------------|
-   ```
-
-2. **context.md**: Locked (CONSENSUS) / Free (UNIQUE w/ strong evidence) / Deferred (CONFLICT unresolved)
-
-3. **conclusions.json**:
-   ```json
-   {
-     "session_id": "", "subject": "", "mode": "",
-     "tools": [], "consensus_level": 0,
-     "recommendation": "Go|No-Go|Conditional",
-     "confidence": 0,
-     "dimensions": [{ "name": "", "consensus": "", "details": "" }],
-     "decisions": [{ "area": "", "status": "locked|free|deferred", "rationale": "" }]
-   }
-   ```
-
-### A_AGGREGATE_RESULTS
-
-1. Write declared collaboration outputs to `{run_dir}/outputs/` and worker evidence to `{run_dir}/evidence/`.
-2. Validate declared CLB outputs; `maestro run complete` performs registry mutation.
-3. **Spec enrichment** (gated): for each Locked decision, display the proposed spec entry. Unless `-y/--yes`, `request_user_input` to confirm before writing. Only confirmed entries execute `maestro spec add arch "<title>" "<content>" --keywords <kw> --description "<summary>"`. Under `-y`, auto-write all Locked decisions.
-4. `update_plan` all steps completed
-5. Display summary:
-   ```
-   == Collab Analysis Complete ==
-   Requirement: {requirement}
-   Tools: {tool list with status}
-   Consensus Level: {consensus_level}%
-
-   Key Findings:
-     CONSENSUS: {count}
-     CONFLICT:  {count}
-     UNIQUE:    {count}
-
-   Reports: {scratchDir}/collab-report.md
-   Next: $maestro-plan --dir {scratchDir}
-   ```
+Write 3 files:
+1. **collab-report.md**: Summary, Consensus Findings, Resolved Conflicts, Unresolved Items, Unique Insights, Recommendations, Per-Tool Confidence table
+2. **context.md**: Locked (CONSENSUS items), Free (UNIQUE with strong evidence), Deferred (UNRESOLVED conflicts). Standard Locked/Free/Deferred format for plan compatibility.
+3. **conclusions.json**: session_id, subject, mode, tools[], consensus_level, recommendation (Go/No-Go/Conditional), confidence, dimensions[{name, score, findings}], decisions[{title, classification, source_tools, rationale}]
 
 </actions>
 
@@ -279,28 +174,24 @@ Generate 3 output files from cross-verify results:
 <error_codes>
 | Code | Condition | Recovery |
 |------|-----------|----------|
-| E002 | Fewer than 2 eligible tools | Check cli-tools.json, specify --tools |
-| E004 | All delegates failed or < 2 completed | Show per-tool errors, abort |
-| W001 | One tool failed | Continue with remaining |
-| W004 | consensus_level < 40% | Flag in summary as low-confidence |
+| E002 | Fewer than 2 eligible tools | Check cli-tools.json, enable more tools |
+| E004 | All delegates failed | Abort with per-tool error details |
+| W001 | One tool failed | Continue with remaining (partial degradation) |
+| W003 | consensus_level < 40% | Flag in summary, recommend manual review |
 </error_codes>
 
 <success_criteria>
-- [ ] ALL analysis performed via shell_exec → maestro delegate — zero internal analysis
-- [ ] Parallel shell_exec calls used for fan-out launch
-- [ ] Every shell_exec waited to completion — no timeout cap, no early exit
-- [ ] All shell_exec calls waited to completion — no early exit
-- [ ] Per-tool raw outputs saved to {scratchDir}/per-tool/
-- [ ] Cross-verify: CONSENSUS/CONFLICT/UNIQUE classified, consensus_level computed
+- [ ] All delegates launched in parallel via Bash(run_in_background: true), STOP after launch
+- [ ] Cross-verification: consensus/conflict/unique classification with consensus_level
 - [ ] Boundary grill executed on CONFLICT items (skip if no boundary conflicts detected)
 - [ ] Boundary grill results written to collab-report.md § Boundary Grill Results (if conflicts found)
-- [ ] collab-report.md + context.md + conclusions.json produced
-- [ ] CLB typed output registered by `maestro run complete`
-- [ ] Partial degradation: continued if 2+ tools succeeded
+- [ ] 3 output files produced (collab-report.md, context.md, conclusions.json)
+- [ ] CLB artifact registered in state.json
+- [ ] Partial degradation: continued if 1+ tools succeeded
 </success_criteria>
 
 <next_step_routing>
-- Deep feasibility analysis → `$maestro-analyze "{topic}"`
-- Plan from conclusions → `$maestro-plan --dir {scratchDir}`
-- Expand exploration → `$maestro-brainstorm "{topic}"`
+- Deep feasibility → step `analyze` (`maestro run prepare analyze` + `maestro run create analyze "{topic}"`)
+- Plan from conclusions → step `plan` (`maestro run prepare plan` + `maestro run create plan --dir {dir}`)
+- Expand → step `brainstorm` (`maestro run prepare brainstorm` + `maestro run create brainstorm "{topic}"`)
 </next_step_routing>

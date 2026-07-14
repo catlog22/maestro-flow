@@ -1,0 +1,95 @@
+{
+  "team_name": "roadmap-dev",
+  "team_display_name": "Roadmap Dev",
+  "skill_name": "team-roadmap-dev",
+  "skill_path": "~  or <project>/.claude/skills/team-roadmap-dev/",
+  "design_source": "roadmap-driven development workflow design (2026-02-24)",
+  "pipeline_type": "Phased",
+  "pipeline": {
+    "stages": [
+      { "name": "PLAN", "role": "planner", "blockedBy": [] },
+      { "name": "EXEC", "role": "executor", "blockedBy": ["PLAN"] },
+      { "name": "VERIFY", "role": "verifier", "blockedBy": ["EXEC"] }
+    ],
+    "diagram": "Coordinator (roadmap) → PLAN → EXEC → VERIFY → Coordinator (transition)",
+    "gap_closure": "VERIFY fails → PLAN (gaps) → EXEC (gaps) → VERIFY (re-check), max 3 iterations"
+  },
+  "roles": [
+    {
+      "name": "coordinator",
+      "display_name": "RD Coordinator",
+      "responsibility_type": "Orchestration",
+      "task_prefix": null,
+      "description": "Human interaction, roadmap discussion, phase transitions, state management",
+      "commands": ["roadmap-discuss", "dispatch", "monitor", "pause", "resume"],
+      "message_types": ["phase_started", "phase_complete", "gap_closure", "project_complete", "error"]
+    },
+    {
+      "name": "planner",
+      "display_name": "RD Planner",
+      "responsibility_type": "Orchestration",
+      "task_prefix": "PLAN",
+      "description": "Research, context gathering, task JSON generation via CLI planning tool",
+      "commands": ["research", "create-plans"],
+      "cli_tools": [{"tool": "agy", "mode": "analysis"}],
+      "message_types": ["plan_ready", "plan_progress", "error"]
+    },
+    {
+      "name": "executor",
+      "display_name": "RD Executor",
+      "responsibility_type": "Code generation",
+      "task_prefix": "EXEC",
+      "description": "Code implementation from IMPL-*.json tasks, wave-based parallel execution",
+      "commands": ["implement"],
+      "cli_tools": [{"tool": "agy", "mode": "write"}],
+      "message_types": ["exec_complete", "exec_progress", "error"]
+    },
+    {
+      "name": "verifier",
+      "display_name": "RD Verifier",
+      "responsibility_type": "Validation",
+      "task_prefix": "VERIFY",
+      "description": "Convergence criteria verification, gap detection, fix loop trigger",
+      "commands": ["verify"],
+      "cli_tools": [{"tool": "agy", "mode": "analysis"}],
+      "message_types": ["verify_passed", "gaps_found", "error"]
+    }
+  ],
+  "artifacts": {
+    "fixed": {
+      "roadmap.md": {
+        "created_by": "coordinator (roadmap-discuss)",
+        "purpose": "Phase plan with requirements and success criteria",
+        "lifecycle": "Created once, updated at phase transitions"
+      },
+      "state.md": {
+        "created_by": "coordinator",
+        "purpose": "Living memory",
+        "lifecycle": "Updated every significant action"
+      },
+      "config.json": {
+        "created_by": "coordinator (roadmap-discuss)",
+        "purpose": "Session settings: mode, depth, gates",
+        "lifecycle": "Created once, rarely updated"
+      }
+    },
+    "dynamic": {
+      "context.md": { "created_by": "planner (research)", "per": "phase" },
+      "IMPL_PLAN.md": { "created_by": "planner (create-plans)", "per": "phase", "purpose": "Implementation overview with task dependency graph" },
+      "IMPL-*.json": { "created_by": "planner (create-plans)", "per": "phase", "path": ".task/", "schema": "unified-flat-schema", "purpose": "Task JSON files with convergence criteria" },
+      "TODO_LIST.md": { "created_by": "planner (create-plans)", "per": "phase", "purpose": "Checklist tracking for all tasks" },
+      "summary-{ID}.md": { "created_by": "executor (implement)", "per": "task", "yaml_frontmatter": true },
+      "verification.md": { "created_by": "verifier (verify)", "per": "phase" }
+    }
+  },
+  "init_prerequisite": {
+    "required_files": [".workflow/project-tech.json"],
+    "optional_files": [".workflow/specs/*.md"],
+    "init_command": "/workflow:spec:setup "
+  },
+  "_metadata": {
+    "created_at": "2026-02-24",
+    "version": "1.1.0",
+    "based_on": "roadmap-driven development workflow design"
+  }
+}

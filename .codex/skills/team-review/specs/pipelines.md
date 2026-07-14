@@ -1,6 +1,6 @@
-# Review Pipelines
 
-Pipeline definitions and task registry for team-review.
+
+# Review Pipelines
 
 ## Pipeline Modes
 

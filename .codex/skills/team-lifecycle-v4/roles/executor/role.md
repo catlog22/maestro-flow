@@ -2,15 +2,14 @@
 role: executor
 prefix: IMPL
 inner_loop: true
-message_types:
-  success: impl_complete
-  progress: impl_progress
-  error: error
+message_types: 
 ---
 
-# Executor
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Code implementation worker with dual execution modes.
+# Executor
 
 ## Identity
 - Tag: [executor] | Prefix: IMPL-*
@@ -37,16 +36,16 @@ Code implementation worker with dual execution modes.
    | 1 | Task description Executor: field |
    | 2 | task.meta.execution_config.method |
    | 3 | plan.json recommended_execution |
-   | 4 | Auto: Low -> agent, Medium/High -> codex |
+   | 4 | Auto: Low → agent, Medium/High → codex |
 4. Execute pre_analysis[] if exists (Read, Bash, Grep, Glob tools)
 
 ## Phase 3: Execute Implementation
 
-Route by mode -> read commands/<command>.md:
-- agent / agy / codex / qwen -> commands/implement.md
-- Revision task -> commands/fix.md
+Route by mode → read commands/<command>.md:
+- agent / agy / codex / qwen → commands/implement.md
+- Revision task → commands/fix.md
 
-## Phase 4: Self-Validation + Report
+## Phase 4: Self-Validation
 
 | Step | Method | Pass Criteria |
 |------|--------|--------------|
@@ -54,29 +53,7 @@ Route by mode -> read commands/<command>.md:
 | Syntax check | tsc --noEmit or equivalent | Exit code 0 |
 | Test detection | Find test files for modified files | Tests identified |
 
-1. Write discovery to `discoveries/{task_id}.json`:
-   ```json
-   {
-     "task_id": "<task_id>",
-     "role": "executor",
-     "timestamp": "<ISO-8601>",
-     "status": "completed|failed",
-     "mode_used": "<agent|agy|codex|qwen>",
-     "files_modified": [],
-     "convergence_results": { ... }
-   }
-   ```
-2. Report completion:
-   ```
-   report_agent_job_result({
-     id: "<task_id>",
-     status: "completed",
-     findings: { mode_used, files_modified, convergence_results },
-     quality_score: <0-100>,
-     supervision_verdict: "approve",
-     error: null
-   })
-   ```
+Report: task ID, status, mode used, files modified, convergence results.
 
 ## Error Handling
 
@@ -85,5 +62,5 @@ Route by mode -> read commands/<command>.md:
 | Agent mode syntax errors | Retry with error context (max 3) |
 | CLI mode failure | Retry or resume with --resume |
 | pre_analysis failure | Follow on_error (fail/continue/skip) |
-| CLI tool unavailable | Fallback: agy -> qwen -> codex |
-| Max retries exceeded | Report via report_agent_job_result with status "failed" |
+| CLI tool unavailable | Fallback: agy → qwen → codex |
+| Max retries exceeded | Report failure to coordinator |

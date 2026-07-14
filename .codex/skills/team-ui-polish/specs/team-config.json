@@ -1,0 +1,73 @@
+{
+  "team_name": "ui-polish",
+  "team_display_name": "UI Polish",
+  "description": "Auto-discover and fix UI design issues using Impeccable design standards",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Pipeline orchestration, scope assessment, GC loop management",
+      "message_types": ["task_unblocked", "gc_checkpoint", "fix_required", "error", "shutdown"]
+    },
+    "scanner": {
+      "task_prefix": "SCAN",
+      "responsibility": "8-dimension UI audit using Impeccable design standards",
+      "message_types": ["scan_complete", "scan_progress", "error"]
+    },
+    "diagnostician": {
+      "task_prefix": "DIAG",
+      "responsibility": "Root cause analysis, severity classification, fix prioritization",
+      "message_types": ["diag_complete", "diag_progress", "error"]
+    },
+    "optimizer": {
+      "task_prefix": "OPT",
+      "responsibility": "Apply targeted fixes following Impeccable design standards",
+      "message_types": ["opt_complete", "opt_progress", "error"]
+    },
+    "verifier": {
+      "task_prefix": "VERIFY",
+      "responsibility": "Before/after comparison, regression detection",
+      "message_types": ["verify_passed", "verify_failed", "fix_required", "error"]
+    }
+  },
+
+  "pipelines": {
+    "scan-only": {
+      "description": "Discover + diagnose, no fixes (report only)",
+      "task_chain": ["SCAN-001", "DIAG-001"],
+      "complexity": "low"
+    },
+    "targeted": {
+      "description": "Fix specific dimensions only",
+      "task_chain": ["SCAN-001", "DIAG-001", "OPT-001", "VERIFY-001"],
+      "complexity": "medium"
+    },
+    "full": {
+      "description": "Complete polish cycle with GC loop",
+      "task_chain": ["SCAN-001", "DIAG-001", "OPT-001", "VERIFY-001"],
+      "gc_loop": true,
+      "complexity": "high"
+    }
+  },
+
+  "innovation_patterns": {
+    "generator_critic": {
+      "generator": "optimizer",
+      "critic": "verifier",
+      "max_rounds": 2,
+      "convergence": "verify.regressions === 0 && verify.score_delta >= 0",
+      "escalation": "Coordinator intervenes after max rounds"
+    }
+  },
+
+  "session_dirs": {
+    "base": ".workflow/.team/UIP-{slug}-{YYYY-MM-DD}/",
+    "scan": "scan/",
+    "diagnosis": "diagnosis/",
+    "optimization": "optimization/",
+    "verification": "verification/",
+    "evidence": "evidence/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

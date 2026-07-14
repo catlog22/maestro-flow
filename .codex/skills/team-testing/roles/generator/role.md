@@ -2,15 +2,14 @@
 role: generator
 prefix: TESTGEN
 inner_loop: true
-message_types:
-  success: tests_generated
-  revision: tests_revised
-  error: error
+message_types: 
 ---
 
-# Test Generator
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Generate test code by layer (L1 unit / L2 integration / L3 E2E). Acts as the Generator in the Generator-Critic loop. Supports revision mode for GC loop iterations.
+# Test Generator
 
 ## Phase 2: Context Loading
 
@@ -22,7 +21,7 @@ Generate test code by layer (L1 unit / L2 integration / L3 E2E). Acts as the Gen
 | .msg/meta.json | <session>/wisdom/.msg/meta.json | No |
 
 1. Extract session path and layer from task description
-2. Load test specs: Run `maestro load --type spec --category test` for test framework conventions and coverage targets
+2. Load test specs: Run `ccw spec load --category test` for test framework conventions and coverage targets
 3. Read test strategy:
 
 ```
@@ -63,7 +62,8 @@ For revision mode:
 **CLI delegation** (medium/high complexity):
 
 ```
-shell_exec(`maestro delegate "PURPOSE: Generate <layer> tests using <framework> to achieve coverage target; success = all priority files covered with quality tests
+Bash({
+  command: `maestro delegate "PURPOSE: Generate <layer> tests using <framework> to achieve coverage target; success = all priority files covered with quality tests
 TASK: • Analyze source files • Generate test cases (happy path, edge cases, errors) • Write test files with proper structure • Ensure import resolution
 MODE: write
 CONTEXT: @<source-files> @<session>/strategy/test-strategy.md | Memory: Framework: <framework>, Layer: <layer>, Round: <round>
@@ -72,9 +72,9 @@ Effective patterns: <patterns-from-meta>>
 EXPECTED: Test files in <session>/tests/<layer>/ with: proper test structure, comprehensive coverage, correct imports, framework conventions
 CONSTRAINTS: Follow test strategy priorities | Use framework best practices | <layer>-appropriate assertions
 Source files to test:
-<file-list-with-content>" --role implement --mode write --cd <session>`, { timeout: 30000 })
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-// NEVER skip — must wait for test files to be generated before verification
+<file-list-with-content>" --tool agy --mode write --cd <session>`,
+  run_in_background: false
+})
 ```
 
 **Output verification**:

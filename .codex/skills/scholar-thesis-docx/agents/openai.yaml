@@ -1,0 +1,4 @@
+interface:
+  display_name: "Thesis DOCX"
+  short_description: "Audit and revise thesis Word documents"
+  default_prompt: "Use $thesis-docx to audit, revise, and format a thesis Word document with school-specific rules."

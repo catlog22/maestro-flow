@@ -1,0 +1,84 @@
+{
+  "team_name": "frontend",
+  "skill_name": "team-frontend",
+  "team_display_name": "Frontend Development",
+  "description": "全栈前端开发团队，内置 ui-ux-pro-max 设计智能。具备需求分析、设计系统生成、前端实现、质量保证的完整能力。",
+  "pipeline_type": "adaptive",
+  "roles": [
+    {
+      "name": "coordinator",
+      "task_prefix": null,
+      "responsibility_type": "Orchestration",
+      "description": "需求澄清、行业识别、流水线编排、进度监控、GC循环控制",
+      "message_types": ["task_unblocked", "sync_checkpoint", "fix_required", "error", "shutdown"]
+    },
+    {
+      "name": "analyst",
+      "task_prefix": "ANALYZE",
+      "responsibility_type": "Read-only analysis",
+      "description": "需求分析、调用 ui-ux-pro-max 获取设计智能、行业推理规则匹配",
+      "message_types": ["analyze_ready", "analyze_progress", "error"]
+    },
+    {
+      "name": "architect",
+      "task_prefix": "ARCH",
+      "responsibility_type": "Code generation",
+      "description": "消费设计智能、定义设计令牌系统、组件架构、技术选型",
+      "message_types": ["arch_ready", "arch_revision", "arch_progress", "error"]
+    },
+    {
+      "name": "developer",
+      "task_prefix": "DEV",
+      "responsibility_type": "Code generation",
+      "description": "消费架构产出、实现前端组件/页面代码",
+      "message_types": ["dev_complete", "dev_progress", "error"]
+    },
+    {
+      "name": "qa",
+      "task_prefix": "QA",
+      "responsibility_type": "Read-only analysis",
+      "description": "5维度代码审查：代码质量、可访问性、设计合规、UX最佳实践、Pre-Delivery验证",
+      "message_types": ["qa_passed", "qa_result", "fix_required", "error"]
+    }
+  ],
+  "pipelines": {
+    "page": {
+      "description": "单页面开发：分析→架构→开发→质检",
+      "task_chain": ["ANALYZE-001", "ARCH-001", "DEV-001", "QA-001"],
+      "collaboration_patterns": ["CP-1", "CP-2"],
+      "complexity": "low"
+    },
+    "feature": {
+      "description": "多组件特性：分析→架构→质检→开发→质检",
+      "task_chain": ["ANALYZE-001", "ARCH-001", "QA-001", "DEV-001", "QA-002"],
+      "collaboration_patterns": ["CP-1", "CP-2", "CP-8"],
+      "complexity": "medium"
+    },
+    "system": {
+      "description": "完整前端系统：分析→架构→[开发令牌 ∥ 架构组件]→质检→开发组件→最终质检",
+      "task_chain": ["ANALYZE-001", "ARCH-001", "QA-001", "ARCH-002||DEV-001", "QA-002", "DEV-002", "QA-003"],
+      "sync_points": ["QA-001", "QA-002"],
+      "collaboration_patterns": ["CP-1", "CP-2", "CP-8", "CP-9"],
+      "complexity": "high"
+    }
+  },
+  "uipro_config": {
+    "search_paths": [
+      "G:/github_lib/ui-ux-pro-max-skill/src/ui-ux-pro-max",
+      "../ui-ux-pro-max-skill/src/ui-ux-pro-max",
+      "./ui-ux-pro-max"
+    ],
+    "fallback": "LLM general design knowledge",
+    "data_domains": ["product", "style", "typography", "color", "landing", "chart", "ux", "web"],
+    "supported_stacks": ["html-tailwind", "react", "nextjs", "vue", "svelte", "shadcn"]
+  },
+  "shared_memory_schema": {
+    "design_intelligence": {},
+    "design_token_registry": {},
+    "component_inventory": [],
+    "style_decisions": [],
+    "qa_history": [],
+    "industry_context": {}
+  },
+  "generated_at": "2026-02-17T00:00:00+08:00"
+}

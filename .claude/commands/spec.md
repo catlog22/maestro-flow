@@ -84,7 +84,7 @@ Scope-to-directory mapping, category-to-file mapping, and entry format defined i
 1. **Idempotent append** — duplicate entry ID MUST be rejected (E003-level check on title + category match before write)
 2. **Category validation** — category MUST be one of: coding, arch, quality, debug, test, review, learning, ui. Invalid category → E003
 3. **Scope isolation** — writes target ONLY the scope-resolved directory; project scope NEVER writes to global (~/.maestro/specs/), global scope NEVER writes to project (.workflow/specs/)
-4. **Confirmation gate** — MUST AskUserQuestion before appending entry (unless -y flag); NEVER write without user confirmation in interactive mode
+4. **Confirmation gate** — MUST [@ask] AskUserQuestion before appending entry (unless -y flag); NEVER write without user confirmation in interactive mode
 5. **Entry format invariance** — all entries MUST use `<spec-entry>` closed-tag format with id, keywords, and category attributes
 6. **Output boundary** — ALL file writes MUST target the scope-resolved specs directory (.workflow/specs/, ~/.maestro/specs/, .workflow/collab/specs/, or .workflow/collab/{uid}/specs/) and optionally .workflow/knowhow/ for --ref mode. NEVER modify source code or files outside these paths
 </invariants>
@@ -107,10 +107,10 @@ Follow '~/.maestro/workflows/specs-add.md' completely.
 
 **GATE 3: Format → Write**
 - REQUIRED: `<spec-entry>` block formatted with id, keywords, category attributes.
-- REQUIRED: User confirmation via AskUserQuestion (unless -y flag).
+- REQUIRED: User confirmation via [@ask] AskUserQuestion (unless -y flag).
 - BLOCKED if: user declines confirmation — abort without writing.
 
-**Confirmation gate**: Unless -y flag is passed, after formatting the `<spec-entry>` block but before appending to the target file, AskUserQuestion showing the formatted entry, target file path, and scope. Proceed only on user confirm.
+**Confirmation gate**: Unless -y flag is passed, after formatting the `<spec-entry>` block but before appending to the target file, [@ask] AskUserQuestion showing the formatted entry, target file path, and scope. Proceed only on user confirm.
 </execution>
 
 <error_codes>
@@ -271,7 +271,7 @@ Arguments -- expects `<entry-id>` (e.g., `spec-learnings-003`, `spec-coding-conv
 </context>
 
 <invariants>
-1. **Confirmation required** — MUST AskUserQuestion before deletion (unless -y flag); NEVER remove entries silently
+1. **Confirmation required** — MUST [@ask] AskUserQuestion before deletion (unless -y flag); NEVER remove entries silently
 2. **Referential integrity** — before removing, check if other spec entries reference the target entry; warn user if references exist
 3. **Cascade explicit** — ref-type entries MUST NOT cascade-delete the linked knowhow file unless --cascade is explicitly passed; default leaves orphan knowhow intact
 4. **Atomic removal** — use `maestro wiki remove-entry` for atomic operation; NEVER manually edit spec files to remove entries
@@ -295,7 +295,7 @@ Follow '~/.maestro/workflows/specs-remove.md' completely.
 - BLOCKED if: E002 (specs not initialized), E003 (entry not found), E004 (wrong type).
 
 **GATE 3: Confirm → Remove**
-- REQUIRED: User confirmed removal via AskUserQuestion (unless -y flag).
+- REQUIRED: User confirmed removal via [@ask] AskUserQuestion (unless -y flag).
 - REQUIRED: If --cascade and entry has ref attribute, user additionally confirmed knowhow file deletion.
 - BLOCKED if: user declines — abort without modification.
 </execution>
@@ -344,7 +344,7 @@ No arguments expected.
 <invariants>
 1. **Non-destructive** — NEVER overwrite existing spec files; if a file already exists, skip it and report as already-initialized
 2. **Idempotent** — safe to re-run on an initialized project; re-running MUST NOT duplicate entries or corrupt existing content
-3. **Confirmation gate** — MUST AskUserQuestion showing all files to be created before writing; NEVER write without user confirmation
+3. **Confirmation gate** — MUST [@ask] AskUserQuestion showing all files to be created before writing; NEVER write without user confirmation
 4. **Output boundary** — ALL file writes MUST target .workflow/specs/ (spec files) and .workflow/knowhow/ (recipe knowhow) only. NEVER modify source code, .workflow/state.json, or files outside these paths
 5. **Core files mandatory** — coding-conventions.md, architecture-constraints.md, and learnings.md MUST always be created (unless they already exist)
 6. **Signal-driven optionals** — optional spec files (quality-rules.md, test-conventions.md, ui-conventions.md) MUST only be created when corresponding framework/tool signals are detected in the codebase; NEVER create optional files without evidence
@@ -366,7 +366,7 @@ Follow '~/.maestro/workflows/specs-setup.md' completely.
 - REQUIRED: Optional spec files determined by detected signals only.
 
 **GATE 3: Plan → Write**
-- REQUIRED: User confirmed the full list of files to create via AskUserQuestion (showing core specs, optional specs, recipe knowhow, and detected signals).
+- REQUIRED: User confirmed the full list of files to create via [@ask] AskUserQuestion (showing core specs, optional specs, recipe knowhow, and detected signals).
 - BLOCKED if: user declines — abort without writing.
 
 **GATE 4: Write → Report**
@@ -374,7 +374,7 @@ Follow '~/.maestro/workflows/specs-setup.md' completely.
 - REQUIRED: Existing files skipped (not overwritten).
 - REQUIRED: .proposed.md files created when slug collision detected (W003).
 
-**Confirmation gate**: After scanning codebase and determining which files/directories will be created (core specs, optional specs, recipe knowhow), AskUserQuestion showing the full list of files to create with their categories and detected signals. Proceed only on user confirm.
+**Confirmation gate**: After scanning codebase and determining which files/directories will be created (core specs, optional specs, recipe knowhow), [@ask] AskUserQuestion showing the full list of files to create with their categories and detected signals. Proceed only on user confirm.
 </execution>
 
 <error_codes>

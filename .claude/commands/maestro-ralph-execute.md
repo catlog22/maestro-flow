@@ -40,12 +40,12 @@ Also read `session.orchestration.auto_mode` from session.json — if true, treat
 
 | Kind | Identifier | Execution | Flow after |
 |------|-----------|-----------|------------|
-| decision step | `step.decision` 非空 | `Skill("maestro-ralph")` | Execution ends here |
+| decision step | `step.decision` 非空 | `[@skill] Skill("maestro-ralph")` | Execution ends here |
 | 执行 step | `step.decision == null` | `Bash("maestro ralph next")` → 内联按其 stdout 执行 → `Bash("maestro ralph complete N --status ...")` | Self-invoke next |
 
 HARD RULES:
 - 执行 step：**统一通过 `maestro ralph next` CLI 加载**。CLI 通过 `resolveStepContent()` 加载内容、创建标准 Run、更新 chain step 状态为 running。不要在会话里手动 Read + 解析文件
-- decision step：A_EXEC_DECISION 通过 `Skill({ skill: "maestro-ralph" })` handoff 给 ralph 评估（不走 CLI）
+- decision step：A_EXEC_DECISION 通过 `[@skill] Skill({ skill: "maestro-ralph" })` handoff 给 ralph 评估（不走 CLI）
 - step command 由 ralph 在 A_BUILD_STEPS 写入 session.orchestration.chain[]（缺失内容 → ralph next 返回错误并拒绝执行）
 - 每个 step 结束必须调用 `maestro ralph complete N --status <S>` 或 `maestro ralph retry N`。STATUS 仅 4 个合法值：`DONE | DONE_WITH_CONCERNS | NEEDS_RETRY | BLOCKED`（**`NEEDS_CONTEXT` 已废除**，context 容量由 harness 自动压缩处理）
 </context>
@@ -102,7 +102,7 @@ S_POST_ANALYZE:
   → S_POST_EXEC     WHEN: drift_score == MAJOR_DRIFT + retried     DO: A_POST_ANALYZE_DRIFT (proceed with caveats)
 
 S_POST_EXEC:
-  → S_LOCATE        DO: Bash("maestro ralph complete ...") + Skill("maestro-ralph-execute")
+  → S_LOCATE        DO: Bash("maestro ralph complete ...") + [@skill] Skill("maestro-ralph-execute")
                      NOTE: CLI 已写完 chain step status + ralph-meta completion details；无需额外写盘
 
 S_HANDLE_FAIL:
@@ -217,7 +217,7 @@ Write enriched args + source_artifact_ref back to ralph-meta.json.
 
 1. Mark step running, write session state
 2. Display: `[{index}/{total}] ◆ {step.decision} Retry: {retry}/{max}`
-3. `Skill({ skill: "maestro-ralph" })` — ralph 评估 + handoff
+3. `[@skill] Skill({ skill: "maestro-ralph" })` — ralph 评估 + handoff
 4. 执行在此结束
 
 ### A_EXEC_STEP
@@ -285,7 +285,7 @@ Write enriched args + source_artifact_ref back to ralph-meta.json.
 
 6. **Propagate context signals** — 按 4c checklist 将关键信号写入 `ralph-meta.json context`
 
-完成后 S_LOCATE 触发 `Skill({ skill: "maestro-ralph-execute" })` 自调用。
+完成后 S_LOCATE 触发 `[@skill] Skill({ skill: "maestro-ralph-execute" })` 自调用。
 
 ### A_POST_ANALYZE_DRIFT
 
@@ -400,7 +400,7 @@ Display: `[{index}/{total}] ✗ {step.skill} 失败，会话已暂停。/maestro
 - [ ] Session discovery covers engine=ralph sessions in `.workflow/sessions/`
 - [ ] `-y` parsed from args 或 session.auto_mode；auto=true 时透传 `-y` 到 skill args
 - [ ] Placeholders resolved；per-skill enrichment 正确
-- [ ] Decision 节点（`step.decision != null`）走 Skill("maestro-ralph") handoff（**不调 ralph next CLI**）
+- [ ] Decision 节点（`step.decision != null`）走 [@skill] Skill("maestro-ralph") handoff（**不调 ralph next CLI**）
 - [ ] 执行 step 通过 `Bash("maestro ralph next")` 加载；CLI 返回拼好的 prompt + completion 协议
 - [ ] required_reading 由 CLI 自动加载并拼入 prompt；缺失 → CLI 退出码 1，pause session
 - [ ] `<deferred_reading>` 由 CLI 记录到 `step.load.deferred_files`，执行阶段按需 Read

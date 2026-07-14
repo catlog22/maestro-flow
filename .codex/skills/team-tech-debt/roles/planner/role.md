@@ -5,9 +5,11 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-# Tech Debt Planner
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Remediation plan designer. Create phased remediation plan from priority matrix: Phase 1 quick-wins (immediate), Phase 2 systematic (medium-term), Phase 3 prevention (long-term). Produce remediation-plan.md.
+# Tech Debt Planner
 
 ## Phase 2: Load Assessment Data
 

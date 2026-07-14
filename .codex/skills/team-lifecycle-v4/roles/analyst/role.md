@@ -3,14 +3,14 @@ role: analyst
 prefix: RESEARCH
 inner_loop: false
 discuss_rounds: [DISCUSS-001]
-message_types:
-  success: research_ready
-  error: error
+message_types: 
 ---
 
-# Analyst
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Research and codebase exploration for context gathering.
+# Analyst
 
 ## Identity
 - Tag: [analyst] | Prefix: RESEARCH-*
@@ -28,22 +28,18 @@ Research and codebase exploration for context gathering.
 
 ## Phase 2: Seed Analysis
 
-1. Read upstream state:
-   - Read `tasks.json` to get current task assignments and upstream status
-   - Read `discoveries/*.json` to load any prior discoveries from upstream roles
+1. Read upstream artifacts via team_msg(operation="get_state")
 2. Extract session folder from task description
 3. Parse topic from task description
-4. If topic references file (@path or .md/.txt) -> read it
+4. If topic references file (@path or .md/.txt) → read it
 5. CLI seed analysis:
    ```
-   shell_exec(`maestro delegate "PURPOSE: Analyze topic, extract structured seed info.
-   TASK: * Extract problem statement * Identify target users * Determine domain
-   * List constraints * Identify 3-5 exploration dimensions
+   Bash({ command: `maestro delegate "PURPOSE: Analyze topic, extract structured seed info.
+   TASK: • Extract problem statement • Identify target users • Determine domain
+   • List constraints • Identify 3-5 exploration dimensions
    TOPIC: <topic-content>
    MODE: analysis
-   EXPECTED: JSON with: problem_statement, target_users[], domain, constraints[], exploration_dimensions[]" --role analyze --mode analysis`, { timeout: 30000 })
-   // Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-   // NEVER skip — seed analysis result is required for context packaging
+   EXPECTED: JSON with: problem_statement, target_users[], domain, constraints[], exploration_dimensions[]" --tool agy --mode analysis`, run_in_background: false })
    ```
 6. Parse result JSON
 
@@ -54,50 +50,46 @@ Research and codebase exploration for context gathering.
 | package.json / Cargo.toml / pyproject.toml / go.mod exists | Explore |
 | No project files | Skip (codebase_context = null) |
 
-When project detected:
+When project detected — prefer `maestro explore` multi-prompt:
+```bash
+maestro explore \
+  "FIND: tech stack and framework detection
+SCOPE: package.json, Cargo.toml, pyproject.toml, go.mod, src/
+EXPECTED: tech_stack list with versions" \
+  "FIND: architecture patterns and conventions
+SCOPE: src/
+EXCLUDE: tests, node_modules
+EXPECTED: patterns list with file:line evidence" \
+  --max-turns 3 --json
 ```
-shell_exec(`maestro delegate "PURPOSE: Explore codebase for context
-TASK: * Identify tech stack * Map architecture patterns * Document conventions * List integration points
-MODE: analysis
-CONTEXT: @**/*
-EXPECTED: JSON with: tech_stack[], architecture_patterns[], conventions[], integration_points[]" --role explore --mode analysis`, { timeout: 30000 })
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-// NEVER skip — codebase context is required for downstream roles
-```
+
+**Fallback**: `maestro delegate "PURPOSE: Explore codebase for context ..." --tool agy --mode analysis`
+
+### Tech Profile Scan
+
+After codebase exploration, scan results for context-aware trigger signals (based on detected codebase characteristics):
+
+1. Check imports/dependencies → framework signals (`sql_detected`, `auth_detected`, `ml_detected`, `frontend_framework`)
+2. Check file patterns → infrastructure signals (`devops_detected`, `data_migration`, `realtime_detected`)
+3. Check code patterns → risk signals (`perf_sensitive`, `crypto_usage`, `legacy_patterns`, `test_gap`)
+4. Include `tech_profile` in Phase 5 state_update data:
+   ```json
+   "tech_profile": {
+     "signals": ["<detected signals>"],
+     "evidence": { "<signal>": ["<file paths>"] },
+     "confidence": "high|medium|low"
+   }
+   ```
 
 ## Phase 4: Context Packaging
 
-1. Write blueprint-config.json -> <session>/spec/
-2. Write discovery-context.json -> <session>/spec/
+1. Write blueprint-config.json → <session>/spec/
+2. Write discovery-context.json → <session>/spec/
 3. Inline Discuss (DISCUSS-001):
    - Artifact: <session>/spec/discovery-context.json
    - Perspectives: product, risk, coverage
 4. Handle verdict per consensus protocol
-5. Write discovery to `discoveries/<task_id>.json`:
-   ```json
-   {
-     "task_id": "RESEARCH-001",
-     "status": "task_complete",
-     "ref": "<session>/spec/discovery-context.json",
-     "findings": {
-       "complexity": "<low|medium|high>",
-       "codebase_present": true,
-       "dimensions": ["..."],
-       "discuss_verdict": "<verdict>"
-     },
-     "data": {
-       "output_paths": ["blueprint-config.json", "discovery-context.json"]
-     }
-   }
-   ```
-6. Report via `report_agent_job_result`:
-   ```
-   report_agent_job_result({
-     id: "RESEARCH-001",
-     status: "completed",
-     findings: { complexity, codebase_present, dimensions, discuss_verdict, output_paths }
-   })
-   ```
+5. Report: complexity, codebase presence, dimensions, discuss verdict, output paths
 
 ## Error Handling
 

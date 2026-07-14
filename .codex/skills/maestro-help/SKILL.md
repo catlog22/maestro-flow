@@ -1,225 +1,334 @@
 ---
 name: maestro-help
-description: Maestro Flow command help system — search, browse, recommend
-  commands, skills, agents, CLI tools, and workflows
-argument-hint: "[search <keyword>|workflow|skills|agents|cli|新手|下一步|<command-name>]"
-allowed-tools: Read, Grep, Glob, request_user_input
+description: Maestro Flow 命令帮助系统。搜索命令、浏览技能、工作流推荐、新手引导。Triggers on "maestro-help", "帮助", "命令", "怎么用", "skill", "workflow", "maestro 怎么用".
+allowed-tools:
+  - Glob
+  - Grep
+  - Read
+  - request_user_input
 session-mode: none
-version: 0.5.50
 ---
 
-<purpose>
-Maestro Flow 帮助系统。根据用户查询提供命令搜索、技能浏览、工作流推荐、CLI 参考和新手引导。
+# Maestro Help
 
-支持 7 种操作模式：
-1. **Command Search** — 搜索命令名、描述、分类
-2. **Command Documentation** — 读取命令源文件，提供详细用法
-3. **Smart Recommendations** — 根据项目状态推荐下一步命令
-4. **Workflow Guide** — 根据任务类型推荐工作流和命令序列
-5. **Beginner Onboarding** — 展示核心命令和入门路径
-6. **Skill & Agent Browsing** — 浏览 Skill 和 Agent 目录
-7. **CLI Reference** — 终端命令参考
-</purpose>
+Maestro Flow 命令帮助系统，提供命令搜索、技能浏览、工作流推荐、新手引导功能。
 
-<context>
+## Trigger Conditions
 
-## Mode Routing
+- 关键词: "maestro-help", "帮助", "命令", "怎么用", "maestro 怎么用", "工作流", "skill", "workflow", "有哪些命令", "用什么命令"
+- 场景: 询问命令用法、搜索命令、请求下一步建议、选择工作流、浏览 Skill/Agent 目录
+- 斜杠: `/maestro-help`, `/maestro-help search <keyword>`, `/maestro-help skills`, `/maestro-help guide`
 
-$ARGUMENTS 为空 → Mode 5 (Beginner Onboarding)
-$ARGUMENTS 匹配关键词 → 路由到对应模式：
+## Architecture Overview
 
-| 关键词 | Mode | 说明 |
-|--------|------|------|
-| "search", "搜索", "查找" | 1 | Command Search |
-| 命令名 (如 "analyze", "plan") | 2 | Documentation |
-| "下一步", "next", "推荐", "继续" | 3 | Smart Recommendations |
-| "工作流", "workflow", "流程", "管线" | 4 | Workflow Guide |
-| "新手", "入门", "getting started" | 5 | Beginner Onboarding |
-| "skill", "agent", "技能" | 6 | Skill & Agent Browsing |
-| "cli", "终端", "terminal" | 7 | CLI Reference |
-| 其他自由文本 | 1 | Fuzzy Search |
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  Maestro Help (SKILL.md) — Orchestrator                          │
+│  → Parse intent → Route to mode → Execute phase → Present        │
+└────────────────────────┬─────────────────────────────────────────┘
+                         │
+    ┌────────────────────┼────────────────────────┐
+    ↓                    ↓                        ↓
+┌──────────┐      ┌──────────────┐         ┌──────────┐
+│ Phase 1  │      │  Phase 2     │         │ Phase 3  │
+│ Parse    │─────→│  Search &    │────────→│ Workflow │
+│ Intent   │      │  Present     │         │ Guide    │
+└──────────┘      └──────────────┘         └──────────┘
+                       ↑       ↗                │
+                       └──────┘                  ↓
+                    (refine search)          present guide
+```
 
-**Output boundary**: This skill is read-only — it MUST NOT write any files. All output is displayed directly to the user via text response.
+## Key Design Principles
+
+1. **Catalog 驱动**: 所有查询基于 `index/catalog.json`，不做硬编码
+2. **Guide 深度链接**: 命令详情链接到 `guide/` 目录中的参考文档
+3. **上下文感知**: 根据项目状态（.workflow/ 是否存在、当前 Phase）调整推荐
+4. **中英双语**: 命令名英文，说明和示例中文
 
 ## Data Source
 
-读取同目录下的 `catalog.json` 作为唯一数据源：
+Single source of truth: **[index/catalog.json](index/catalog.json)**
 
-| 字段 | 内容 |
-|------|------|
-| `commands[]` | 56 个 slash 命令（name, command, category, description, source） |
-| `skills[]` | 10 个 Skill（name, category, description, source） |
-| `agents[]` | 22 个 Agent（name, category, description） |
-| `cli_commands[]` | 21 个终端命令（command, description, category） |
-| `guide_files[]` | 17 个 Guide 文档索引 |
-| `essential_commands[]` | 10 个核心命令 |
-| `workflows` | 拓扑 + 6 条合法路径 (Path A-F) + 3 个辅助流程 |
+| Field | Purpose |
+|-------|---------|
+| `commands[]` | 64 个 slash 命令，含分类和描述 |
+| `skills[]` | 44 个 Skill，含分类和描述 |
+| `agents[]` | 24 个 Agent，含分类和描述 |
+| `cli_commands[]` | 21 个终端命令 |
+| `guide_files[]` | 17 个 Guide 文档索引（planned，尚未创建） |
+| `essential_commands[]` | 10 个核心命令（新手用） |
+| `workflows` | 主干管线、快速渠道、Issue 闭环、初始化路径 |
 
-## Project State Detection
-
-Mode 3 (Smart Recommendations) 需要检测项目状态：
-1. 检查 `.workflow/state.json` 是否存在
-2. 读取 currentMilestone, currentPhase, phaseStatus
-3. 根据状态映射到推荐命令
-
-</context>
-
-<invariants>
-1. **Catalog First** — 先查 catalog.json，再按需读 source 文件
-2. **Guide 链接** — 深层问题引用 guide/ 文档，告知用户具体文件名
-3. **不执行命令** — 本 skill 只提供信息和推荐，不执行 maestro 命令
-4. **精确匹配** — 搜索支持命令名（不含前缀）、分类名、关键词模糊匹配
-5. **上下文感知** — 检查 .workflow/ 状态调整推荐
-</invariants>
-
-<execution>
+## Operation Modes
 
 ### Mode 1: Command Search
 
-1. 读取 `catalog.json` 的 `commands[]` + `cli_commands[]`
-2. 按 name、description、category 过滤，匹配 $ARGUMENTS 中的搜索词
-3. 按 relevance 排序：exact match > starts with > contains
-4. 展示 top 5 结果：
+**Triggers**: "搜索命令", "find command", "search", 命令名关键词
 
-```
-找到 N 个匹配命令：
-
-$maestro-analyze — 多维度分析
-  分类: pipeline | 查看详情 →
-
-$maestro-plan — 任务规划
-  分类: pipeline | 查看详情 →
-...
-```
+**Process**:
+1. Read `Ref: phases/01-parse-intent.md` — 解析搜索意图
+2. Query `catalog.json` commands[] + cli_commands[]
+3. Filter by name, description, category
+4. Present top 5 相关结果，含命令名、描述、分类
 
 ### Mode 2: Command Documentation
 
-1. 在 `catalog.json` commands[] 中定位命令
-2. 通过 `source` 路径读取命令源文件（如 `../../commands$maestro-analyze.md`）
-3. 提取 `<purpose>`、`argument-hint`、`<context>` 中的用法示例
-4. 如有对应 guide 文档，读取相关段落
+**Triggers**: "怎么用", "how to use", "详情", 具体命令名
 
-Guide 映射：
-- analyze/plan/execute → `guide/command-usage-guide.md`
-- init/roadmap/blueprint → `guide/quick-start-guide.md`
-- ralph → `guide/maestro-ralph-guide.md`
-- maestro (协调器) → `guide/maestro-coordinator-guide.md`
-- delegate → `guide/delegate-async-guide.md`
-- overlay/amend → `guide/overlay-guide.md`
+**Process**:
+1. Locate command in `catalog.json`
+2. Read source file via `source` path（从 catalog 相对路径）
+3. 若有对应 guide 文档，读取并提取相关段落
+4. 提供上下文相关的用法示例
 
 ### Mode 3: Smart Recommendations
 
-检测项目状态 → 推荐下一步命令：
+**Triggers**: "下一步", "what's next", "推荐", "继续"
 
-| 当前状态 | 推荐命令 | 原因 |
-|---------|---------|------|
-| 无 .workflow/ | `$maestro-init` | 项目未初始化 |
-| init 完成，无上游 context | `$maestro-brainstorm` 或 `$maestro-analyze "topic"` | 先探索再规划；brainstorm 发散，analyze 宏观探索影响面 |
-| analyze 完成，scope_verdict=large | `$maestro-roadmap --from analyze:ANL-xxx` | 大范围需求，需要 Milestone > Phase 分解 |
-| analyze 完成，scope_verdict=medium/small | `$maestro-plan --from analyze:ANL-xxx` | 跳过 roadmap 直达规划（Path C） |
-| roadmap 完成，phase=pending | `$maestro-analyze 1` | 微观分析：Phase 级深入探索 |
-| analyze (微观) 完成 | `$maestro-plan 1` | Phase 级规划 |
-| plan 完成 | `$maestro-execute` | 开始执行 |
-| execute 完成 | `$quality-review` | 进入质量管线 |
-| quality 全通过 | `$maestro-milestone-audit` | 里程碑审计 |
-| 所有 Phase 完成 | `$maestro-milestone-complete` | 关闭里程碑 |
+**Process**:
+1. 检测当前项目状态（.workflow/state.json）
+2. 根据 workflows 配置推荐后续命令
+3. Explain WHY 每个推荐适合当前状态
 
 ### Mode 4: Workflow Guide
 
-根据任务类型推荐工作流和命令序列：
+**Triggers**: "工作流", "workflow", "怎么开始", "用什么流程"
 
-**Path A — 完整新项目**:
-- `brainstorm` → `blueprint`(可选) → `analyze "topic"`(宏观) → `roadmap` → `analyze 1`(微观) → `plan 1` → `execute` → `quality-review`
-
-**Path B — 旧项目大功能**:
-- `analyze "feature X"`(宏观) → `roadmap` → `analyze 1`(微观) → `plan 1` → `execute` → `quality-review`
-
-**Path C — 中等功能（跳过 roadmap）**:
-- `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` → `quality-review`
-
-**Path D — 小改动**:
-- `plan "fix auth bug"` → `execute` → `quality-review`
-- 快速: `$maestro-quick "功能描述"`
-- 全自动: `/maestro -y "功能描述"`
-
-**Path E/F — 纯文档/纯探索**:
-- `blueprint "project idea"` → (供人阅读)
-- `brainstorm "idea"` → (供人决策)
-
-**Bug 修复**:
-- 快速: `$maestro-quick "Bug 描述"`
-- Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute → close
-
-**代码审查**:
-- `$quality-review` → `$quality-auto-test` → `$quality-test`
-- 失败循环: `$quality-debug` → `$maestro-plan --gaps` → `$maestro-execute`
+**Process**:
+1. Read `Ref: phases/03-workflow-guide.md`
+2. 分析用户任务类型和复杂度
+3. 推荐匹配的工作流（主干管线/快速渠道/Issue 闭环）
+4. 给出具体命令序列
 
 ### Mode 5: Beginner Onboarding
 
-从 `catalog.json essential_commands[]` 读取核心命令：
+**Triggers**: "新手", "getting started", "常用命令", "入门"
 
-| 命令 | 用途 | 何时使用 |
-|------|------|---------|
-| `$maestro` | 智能协调器 | 不确定用哪个命令时 |
-| `$maestro-init` | 初始化项目 | 首次使用 |
-| `$maestro-brainstorm` | 头脑风暴 | 新项目发散探索、多角色创意 |
-| `$maestro-blueprint` | 规格文档化 | 正式 7-phase 收敛规格链 |
-| `$maestro-analyze` | 双层分析 | 宏观: `"topic"` 探索影响面；微观: `1` Phase 级深入 |
-| `$maestro-roadmap` | 路线图编排 | scope_verdict=large 时，Milestone > Phase 分解 |
-| `$maestro-plan` | 规划 | 分析完成后，支持 `--from analyze:ANL-xxx` 直达 |
-| `$maestro-execute` | 执行 | 计划完成后 |
-| `$maestro-quick` | 快速任务 | 简单任务跳过管线 |
-
-快速上手路径：
-1. `maestro install --force`
-2. `$maestro-init`
-3. `$maestro "任务描述"` — 自动选择最佳工作流
+**Process**:
+1. Query `catalog.json` essential_commands[]
+2. 逐个展示核心命令的简要说明
+3. 引导用户完成首次项目初始化
 
 ### Mode 6: Skill & Agent Browsing
 
-**Skills** — 从 `catalog.json` skills[] 读取，按分类展示：
+**Triggers**: "skill", "agent", "技能", "有哪些 skill", "团队"
 
-- **Meta (2)**: workflow-skill-designer, skill-iter-tune
-- **Team (6)**: team-coordinate, team-executor, team-lifecycle-v4, team-quality-assurance, team-review, team-tech-debt, team-testing
-- **Knowledge (1)**: codify-to-knowhow
+**Process**:
+1. Read `Ref: phases/02-search-present.md`
+2. Query `catalog.json` skills[] 或 agents[]
+3. Filter by category
+4. 呈现分类列表，含描述
 
-**Agents** — 从 `catalog.json` agents[] 读取，按分类展示：
+### Mode 7: CLI Command Reference
 
-- **Workflow (15)**: analyzer, planner, executor, verifier, reviewer, debugger, research-agent, roadmapper, plan-checker, phase-researcher, project-researcher, research-synthesizer, codebase-mapper, nyquist-auditor, integration-checker, external-researcher, collab-planner
-- **Team (2)**: supervisor, worker
-- **Brainstorm (2)**: role-design-author, cross-role-reviewer
-- **CLI (1)**: cli-explore-agent
-- **UI (1)**: ui-design-agent
+**Triggers**: "终端命令", "CLI", "maestro 命令", "terminal"
 
-### Mode 7: CLI Reference
+**Process**:
+1. Query `catalog.json` cli_commands[]
+2. 按分类分组呈现
+3. 含别名和常用选项
 
-从 `catalog.json` cli_commands[] 读取，按分类展示：
+## Execution Flow
 
-| 分类 | 命令 |
+```
+Input: $ARGUMENTS (free text)
+
+Phase 1: Parse Intent
+   └─ Ref: phases/01-parse-intent.md
+      ├─ 分析关键词确定 operation mode
+      ├─ 提取搜索词 / 命令名 / 分类过滤
+      └─ Output: { mode, query, category?, context? }
+
+Phase 2: Search & Present  (Mode 1/2/3/6/7)
+   └─ Ref: phases/02-search-present.md
+      ├─ 查询 catalog.json
+      ├─ 按模式过滤和排序
+      ├─ 读取 source 文件（Mode 2）
+      └─ Output: 格式化结果
+
+Phase 3: Workflow Guide  (Mode 4/5)
+   └─ Ref: phases/03-workflow-guide.md
+      ├─ 检测项目状态
+      ├─ 匹配工作流模板
+      ├─ 生成推荐命令序列
+      └─ Output: 引导信息
+```
+
+**Phase Reference Documents** (read on-demand):
+
+| Phase | Document | Purpose |
+|-------|----------|---------|
+| 1 | [phases/01-parse-intent.md](phases/01-parse-intent.md) | 意图解析和模式路由 |
+| 2 | [phases/02-search-present.md](phases/02-search-present.md) | 搜索和呈现 |
+| 3 | [phases/03-workflow-guide.md](phases/03-workflow-guide.md) | 工作流推荐和引导 |
+
+## Input Processing
+
+```
+$ARGUMENTS → Parse:
+  ├─ "search <keyword>"  → Mode 1: Command Search
+  ├─ 命令名 (如 "analyze") → Mode 2: Documentation
+  ├─ "下一步" / "next"     → Mode 3: Smart Recommendations
+  ├─ "工作流" / "workflow" → Mode 4: Workflow Guide
+  ├─ "新手" / "入门"       → Mode 5: Beginner Onboarding
+  ├─ "skill" / "agent"    → Mode 6: Skill & Agent Browsing
+  ├─ "CLI" / "终端"        → Mode 7: CLI Reference
+  ├─ 空参数               → Mode 5: Beginner Onboarding
+  └─ 其他自由文本          → Mode 1: Command Search (fuzzy)
+```
+
+## Command Catalog Quick Reference
+
+### 上游起源 + 核心 (core)
+
+| 命令 | 用途 |
 |------|------|
-| Setup | install, uninstall, update, launcher |
-| Dashboard | view, stop |
-| Execution | delegate, coordinate (coord), cli, run, serve |
-| Knowledge | spec, wiki, knowhow (kh) |
-| Config | hooks, overlay, ext, tool |
-| Team | collab (team), agent-msg (msg) |
-| Visualization | brainstorm-visualize (bv) |
+| `/maestro` | 智能协调器，自动路由 |
+| `/maestro-init` | 项目初始化 |
+| `/maestro-brainstorm` | 头脑风暴 — 发散探索，多角色创意 |
+| `/maestro-blueprint` | 正式规格文档化 — 7-phase 收敛规格链 |
+| `/maestro-roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
+| `/maestro-quick` | 快速任务 |
+| `/maestro-overlay` | Overlay 管理 — 自然语言创建，或 `--amend` 从信号自动生成修正补丁 |
+| `/maestro-grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
+| `/maestro-next` | 智能导航 — 检测状态并推荐下一步最优命令 |
+| `/maestro-companion` | 知识伴侣 — 上下文加载、洞察捕获、技能路由 |
+| `/maestro-swarm-workflow` | Swarm 并行加速器 — 多 agent 并发执行 |
+| `/maestro-universal-workflow` | 动态对抗工作流生成器 |
 
-</execution>
+### 理解层 + 执行管线 (pipeline)
 
-<error_codes>
-| Code | Severity | Condition | Recovery |
-|------|----------|-----------|----------|
-| E001 | error | catalog.json 读取失败 | 回退到 Glob 扫描 .claude/commands/*.md |
-| W001 | warning | 搜索无结果 | 模糊匹配最近命令，建议查看全部 |
-| W002 | warning | Source 文件不存在 | 仅展示 catalog 描述 |
-| W003 | warning | 项目未初始化 | 推荐先运行 $maestro-init |
-</error_codes>
+| 命令 | 用途 |
+|------|------|
+| `/maestro-analyze` | 双层分析 — 宏观(文本参数)探索影响面 / 微观(数字参数)Phase 级深入 |
+| `/maestro-plan` | 任务规划 — 支持 `--from analyze:ANL-xxx` 直达 |
+| `/maestro-execute` | 任务执行 |
 
-<success_criteria>
-- [ ] 正确路由到对应操作模式
-- [ ] 搜索结果包含命令名、描述、分类
-- [ ] 文档模式展示了命令源文件的关键内容
-- [ ] 推荐模式基于项目状态提供了合理的下一步建议
-- [ ] 工作流推荐包含具体命令序列
-</success_criteria>
+### 质量管线 (quality)
+
+| 命令 | 用途 |
+|------|------|
+| `/quality-review` | 代码审查 |
+| `/quality-auto-test` | 自动测试 |
+| `/quality-test` | 业务测试 |
+| `/quality-debug` | 质量调试 |
+| `/quality-refactor` | 重构 |
+| `/quality-retrospective` | 复盘 |
+
+### 管理命令 (manage)
+
+| 命令 | 用途 |
+|------|------|
+| `/manage-issue` | Issue 管理 |
+| `/manage-issue-discover` | Issue 发现 |
+| `/manage-knowhow` | 知识管理 |
+| `/manage-knowhow-capture` | 知识捕获 |
+| `/manage-status` | 状态查看 |
+| `/manage-wiki` | Wiki 管理 |
+| `/manage-harvest` | 收获 |
+| `/manage-codebase-rebuild` | 代码库重建 |
+| `/manage-kg-extractors` | 知识图谱提取器管理 |
+| `/manage-knowledge-audit` | 知识审计 |
+
+### Odyssey 长周期循环 (odyssey)
+
+单入口 `/odyssey <intent> --mode <name>`（`--mode` 可省略，从 intent 关键词自动识别）：
+
+| 模式 | 用途 |
+|------|------|
+| `--mode debug` | 长周期调试 — 考古、诊断、修复、泛化 |
+| `--mode improve` | 长周期代码改进 — 多维审计、深度诊断、定向修复 |
+| `--mode review` | 深度审查修复循环 |
+| `--mode planex` | 需求驱动迭代 — 计划/执行/验证/修复循环 |
+| `--mode ui` | 长周期 UI 优化 — 视觉调研、多维审计、修复 |
+
+## Workflow Mapping
+
+### 层级模型
+
+```
+Roadmap > Milestone > Phase > Task
+```
+
+- **Roadmap** = 项目级常驻规划文档
+- **Milestone** = 可独立交付的版本节点（v0.1.0-rc1, v0.2.0）
+- **Phase** = Milestone 内的同步屏障执行阶段
+- **Task** = Phase 内的具体代码修改单元（wave DAG 管理并行）
+
+### 命令拓扑
+
+```
+上游起源层（并列，可选）
+  brainstorm（发散/轻量）  |  blueprint（收敛/重型）  |  grill（压力测试）
+
+理解层
+  analyze 双层: 宏观(文本参数) → scope_verdict | 微观(数字参数) → Phase 级决策
+
+编排层（可选）
+  roadmap — 消费上游 context，纯 Milestone > Phase 分解
+
+执行层
+  plan → execute
+
+Odyssey 长周期循环（独立路径）
+  odyssey --mode debug|improve|review|planex|ui
+
+自适应引擎（高级）
+  ralph → 自运行决策循环
+  swarm-workflow / universal-workflow → 多 agent 并行执行
+```
+
+### 合法路径
+
+| 路径 | 场景 | 命令序列 |
+|------|------|---------|
+| Path A | 完整新项目 | `brainstorm` → `blueprint`(可选) → `analyze "topic"` → `roadmap` → `analyze 1` → `plan 1` → `execute` |
+| Path B | 旧项目大功能 | `analyze "feature X"` → `roadmap` → `analyze 1` → `plan 1` → `execute` |
+| Path C | 中等功能 | `analyze "feature X"` → `plan --from analyze:ANL-xxx` → `execute` |
+| Path D | 小改动 | `plan "fix auth bug"` → `execute` |
+| Path E | 纯规格文档 | `blueprint "project idea"` → (供人阅读) |
+| Path F | 纯探索 | `brainstorm "idea"` → (供人决策) |
+| 快速修复 | 已知简单问题 | `/maestro-quick "修复描述"` |
+| Bug 追踪 | Issue 闭环 | `/manage-issue-discover` → `/manage-issue create` → analyze/plan/execute → close |
+| 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
+| 代码审查 | 质量管线 | `/quality-review` → `/quality-auto-test` → `/quality-test` |
+| 团队开发 | Team Lite | `/maestro-collab` |
+| 长周期调试 | Odyssey 深度循环 | `/odyssey "问题描述" --mode debug` |
+| 长周期改进 | Odyssey 深度循环 | `/odyssey "改进目标" --mode improve` |
+| 需求迭代 | Odyssey 深度循环 | `/odyssey "需求描述" --mode planex` |
+
+> 注：Path A/B 中 `analyze 1` / `plan 1` 的数字 `1` 指 **milestone 编号**（第 1 个里程碑），下游以 milestone 为入口。
+
+## Core Rules
+
+1. **Catalog First**: 先查 catalog.json，再按需读 source 文件
+2. **Guide 链接**: 对深层问题引用 guide/ 文档，告知用户具体文件名
+3. **上下文感知**: 检查 .workflow/ 存在性和 state.json 当前状态
+4. **精确匹配**: 搜索时支持命令名（不含前缀）、分类名、关键词
+5. **不执行命令**: 本 skill 只提供信息和推荐，不执行任何 maestro 命令
+
+## Error Handling
+
+| 场景 | 处理 |
+|------|------|
+| 命令未找到 | 模糊搜索最近匹配，提示正确命令名 |
+| 项目未初始化 | 推荐先运行 `/maestro-init` |
+| Guide 文件不存在 | 跳过，仅提供 catalog 中的描述 |
+| 参数为空 | 默认进入 Beginner Onboarding 模式 |
+
+## Related Resources
+
+- **Guide 目录**: `guide/` — 17 个专题指南文档
+- **Delegate 参考**: `~/.maestro/workflows/delegate-usage.md`
+- **Coding 哲学**: `~/.maestro/workflows/coding-philosophy.md`
+- **CLI 工具配置**: `~/.maestro/cli-tools.json`
+
+## Statistics
+
+- **Slash 命令**: 64 个（13 个分类：core/pipeline/milestone/manage/quality/spec/learn/worktree/team/ralph/ui/tools/odyssey）
+- **CLI 命令**: 21 个
+- **Skills**: 44 个（5 个分类：meta/team/knowledge/quality/scholar）
+- **Agents**: 24 个（4 个分类：workflow/team/cli/ui）
+- **Guide 文档**: 17 个（planned，尚未创建）
+- **工作流路径**: 7 个合法路径 (Path A-G) + 4 个辅助流程

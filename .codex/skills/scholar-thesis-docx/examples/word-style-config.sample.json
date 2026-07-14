@@ -1,0 +1,35 @@
+{
+  "styles": {
+    "Body": {
+      "TargetStyleName": "正文",
+      "FontName": "Times New Roman",
+      "EastAsiaFontName": "宋体",
+      "Size": 12,
+      "LineSpacingMultiple": 1.5
+    },
+    "Heading1": {
+      "TargetStyleName": "标题 1",
+      "EastAsiaFontName": "黑体",
+      "Size": 16,
+      "Alignment": "Center"
+    },
+    "Heading2": {
+      "TargetStyleName": "标题 2",
+      "EastAsiaFontName": "黑体"
+    },
+    "Heading3": {
+      "TargetStyleName": "标题 3",
+      "EastAsiaFontName": "黑体"
+    },
+    "FigureCaption": {
+      "TargetStyleName": "图标注",
+      "EastAsiaFontName": "宋体",
+      "Size": 10.5
+    },
+    "TableCaption": {
+      "TargetStyleName": "表标注",
+      "EastAsiaFontName": "宋体",
+      "Size": 10.5
+    }
+  }
+}

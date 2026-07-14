@@ -28,7 +28,7 @@ and iterate exhaustively until the mode's exit condition is met or escalation is
 
 <mode_dispatch>
 
-**Mode selection precedence:** explicit `--mode <name>` > intent keyword auto-detection > AskUserQuestion (Normal) / error E000 (`-y`).
+**Mode selection precedence:** explicit `--mode <name>` > intent keyword auto-detection > [@ask] AskUserQuestion (Normal) / error E000 (`-y`).
 
 **Auto-detection from `<intent>` keywords** (first match wins, ordered):
 
@@ -40,7 +40,7 @@ and iterate exhaustively until the mode's exit condition is met or escalation is
 | improve, optimize, performance, security, refactor quality, reliability, observability | `improve` |
 | review, audit, check, inspect, "look over", zero-residual | `review` |
 
-Ambiguous / no match → Normal: AskUserQuestion (5-way mode pick) | `-y`: E000.
+Ambiguous / no match → Normal: [@ask] AskUserQuestion (5-way mode pick) | `-y`: E000.
 
 **Mode registry:**
 
@@ -218,7 +218,7 @@ Commit: `"odyssey-{mode}({slug}): GENERALIZE — pattern scan complete"`
    | risk + complex | Create issue |
    | safe | Skip with logged per-item reason |
 
-   Normal: AskUserQuestion per hit | `-y`: auto-fix bugs with fix_template, create issue for rest
+   Normal: [@ask] AskUserQuestion per hit | `-y`: auto-fix bugs with fix_template, create issue for rest
 
 3. **Cross-phase loops:** `cross_phase_loops++` on fix/audit/execute return. `loops >= max_loops` → must log per-item reasons, advance to S_RECORD.
 
@@ -230,12 +230,12 @@ Commit: `"odyssey-{mode}({slug}): DISCOVER — sibling triage complete"`
 
 1. Finalize understanding.md learnings section — persist by the active mode's **Knowledge Persistence categories** (see mode section). For improve/ui, also emit the metrics/before-after section. Completion summary lists suggested `/spec add` commands.
 
-2. Mark record goal done. Pending decisions: Normal → AskUserQuestion | `-y` → skip (show deferred count).
+2. Mark record goal done. Pending decisions: Normal → [@ask] AskUserQuestion | `-y` → skip (show deferred count).
 
 3. **Goal audit (hardened):**
    - `done` → confirmed
    - `skipped` → confirmed ONLY if corresponding `skip_when` flag is true
-   - **Hard rule:** generalize + discover goals CANNOT be `skipped` unless `skip_generalize == true`. Fix/verify goals CANNOT be `skipped` unless `skip_fix == true`. Pending without flag → `failed` (Normal: AskUserQuestion | `-y`: record `failed`)
+   - **Hard rule:** generalize + discover goals CANNOT be `skipped` unless `skip_generalize == true`. Fix/verify goals CANNOT be `skipped` unless `skip_fix == true`. Pending without flag → `failed` (Normal: [@ask] AskUserQuestion | `-y`: record `failed`)
    - `phase_goals_all_done = true` only when all goals pass this audit
 
 4. `current_state = "COMPLETED"`, emit the mode's completion summary.
@@ -246,11 +246,11 @@ Commit: `"odyssey-{mode}({slug}): RECORD — summary and knowledge persistence"`
 
 | Decision Point | Normal | `-y` |
 |---------------|--------|------|
-| Mode ambiguous at dispatch | AskUserQuestion (5-way) | E000 |
-| Fix/improvement confirmation | AskUserQuestion | auto-proceed, `deferred` |
-| A_DISCOVER hit routing | AskUserQuestion | auto-fix bugs w/ template, issue for rest |
-| A_RECORD pending decisions | AskUserQuestion | skip (show deferred count) |
-| Goal audit unflagged-pending | AskUserQuestion | record `failed` |
+| Mode ambiguous at dispatch | [@ask] AskUserQuestion (5-way) | E000 |
+| Fix/improvement confirmation | [@ask] AskUserQuestion | auto-proceed, `deferred` |
+| A_DISCOVER hit routing | [@ask] AskUserQuestion | auto-fix bugs w/ template, issue for rest |
+| A_RECORD pending decisions | [@ask] AskUserQuestion | skip (show deferred count) |
+| Goal audit unflagged-pending | [@ask] AskUserQuestion | record `failed` |
 
 ### Shared Goal Prompt convergence rules
 
@@ -262,7 +262,7 @@ Stop when the mode's exit condition holds AND phase_goals_all_done=true:
   review  — remaining_actionable==0, confirmation==confirmed
   ui      — audit+diverge findings all addressed (fix/issue/decision)
 Generalization exhausted (3 layers). All siblings fixed or issued — no leftovers.
-Pending decisions must AskUserQuestion — no silent resolve.
+Pending decisions must [@ask] AskUserQuestion — no silent resolve.
 ```
 
 ---
@@ -330,11 +330,11 @@ S_CONFIRM → S_FIX           : needs_rework
 
 **A_EXPLORE** — Skip if no CLI tools (W006). `maestro delegate --role explore --mode analysis` (`run_in_background: true`): PURPOSE call chains, recent changes, error gaps, similar patterns; EXPECTED JSON `{call_chains, recent_changes, error_gaps, similar_patterns}`. Write `explore.json` + evidence phase=explore. Update §3. Mark G2.
 
-**A_DIAGNOSE** — (1) Hypotheses from evidence, ranked [HIGH]/[MEDIUM]/[LOW] → §4. (2) Test each → evidence phase=diagnosis. (3) Ambiguity → evidence phase=decision; Normal: AskUserQuestion | `-y`: defer. (4) Confirmed → `session.json.root_cause` + §5. Mark G1.
+**A_DIAGNOSE** — (1) Hypotheses from evidence, ranked [HIGH]/[MEDIUM]/[LOW] → §4. (2) Test each → evidence phase=diagnosis. (3) Ambiguity → evidence phase=decision; Normal: [@ask] AskUserQuestion | `-y`: defer. (4) Confirmed → `session.json.root_cause` + §5. Mark G1.
 
-**A_ESCALATE_DIAGNOSIS** — `diagnosis_retries++`. < 3: `maestro delegate --role analyze`, new hypotheses, → S_DIAGNOSE. >= 3: Normal → AskUserQuestion | `-y` → INCONCLUSIVE → S_RECORD.
+**A_ESCALATE_DIAGNOSIS** — `diagnosis_retries++`. < 3: `maestro delegate --role analyze`, new hypotheses, → S_DIAGNOSE. >= 3: Normal → [@ask] AskUserQuestion | `-y` → INCONCLUSIVE → S_RECORD.
 
-**A_FIX** — (1) Present root cause + proposed fix. Normal: AskUserQuestion | `-y`: auto proceed. (2) Implement fix, evidence phase=decision.
+**A_FIX** — (1) Present root cause + proposed fix. Normal: [@ask] AskUserQuestion | `-y`: auto proceed. (2) Implement fix, evidence phase=decision.
 
 **A_CONFIRM** — (1) Run covering tests. (2) `maestro delegate --role review --mode analysis` (`run_in_background: true`): EXPECTED JSON `{verdict, findings [{severity, description, suggestion}], regression_risk}`. (3) `session.json.confirmation`: `{test_result, cli_review, overall: "confirmed|needs_rework"}`. (4) Update §6. `needs_rework` → S_FIX. `confirmed` → mark G3.
 
@@ -436,11 +436,11 @@ S_VERIFY → S_FIX           : needs_rework
 
 **A_AUDIT** — Spawn 6 parallel Agents (one per dimension, or `--dimensions` subset). Each returns `[{title, severity, dimension, file, line, description, suggestion, measurement}]`. Merge → evidence phase=audit. Write `session.json.audit_result`. Update §3 (findings by dimension + severity matrix). Mark G2.
 
-**A_DIAGNOSE** — Root cause analysis for critical/high findings — don't fix symptoms. (1) Group by dimension, prioritize by severity; for each: hypothesis → trace code path + git history → evidence phase=diagnosis. (2) Ambiguity → evidence phase=decision; Normal: AskUserQuestion | `-y`: defer. (3) CLI-assisted for complex findings (`run_in_background: true`). (4) Write `session.json.diagnoses[]`. Update §4. Mark G3.
+**A_DIAGNOSE** — Root cause analysis for critical/high findings — don't fix symptoms. (1) Group by dimension, prioritize by severity; for each: hypothesis → trace code path + git history → evidence phase=diagnosis. (2) Ambiguity → evidence phase=decision; Normal: [@ask] AskUserQuestion | `-y`: defer. (3) CLI-assisted for complex findings (`run_in_background: true`). (4) Write `session.json.diagnoses[]`. Update §4. Mark G3.
 
-**A_ESCALATE_DIAGNOSIS** — `retries++`. < 3: `maestro delegate --role analyze`, new hypotheses, → S_DIAGNOSE. >= 3: Normal → AskUserQuestion | `-y` → INCONCLUSIVE → S_RECORD.
+**A_ESCALATE_DIAGNOSIS** — `retries++`. < 3: `maestro delegate --role analyze`, new hypotheses, → S_DIAGNOSE. >= 3: Normal → [@ask] AskUserQuestion | `-y` → INCONCLUSIVE → S_RECORD.
 
-**A_FIX** — (1) Exhaustive fix: ALL diagnosed issues by severity tier (critical → high → medium → low within fix_threshold), one dimension at a time. After each tier, re-verify **current tier's dimension only**; new findings at same or higher severity append to current tier. Cross-dimension regression checks run once at S_VERIFY after all tiers. (2) For each fix: implement → evidence phase=fix. (3) Normal: AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
+**A_FIX** — (1) Exhaustive fix: ALL diagnosed issues by severity tier (critical → high → medium → low within fix_threshold), one dimension at a time. After each tier, re-verify **current tier's dimension only**; new findings at same or higher severity append to current tier. Cross-dimension regression checks run once at S_VERIFY after all tiers. (2) For each fix: implement → evidence phase=fix. (3) Normal: [@ask] AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
 
 **A_VERIFY** — (1) Run tests covering modified areas. (2) Re-capture metrics, compare with `baseline_metrics`. (3) CLI-assisted: `maestro delegate --role review --mode analysis` (`run_in_background: true`). (4) `needs_rework` → S_FIX; `verified` → mark G4. (5) Write `confirmation`. Update §5 (before/after metrics table).
 
@@ -539,7 +539,7 @@ S_FIX → S_VERIFY (loop)
 ```
 Discover routes to S_EXECUTE (not FIX): area needing same implementation → new task, `cross_phase_loops++`.
 
-**A_INTAKE extra** — Define acceptance criteria: analyze requirement → derive testable criteria, each with `verify_method` (test|grep|cli-review|manual). Normal: AskUserQuestion to confirm/edit | `-y`: auto-derive, record `{"phase":"decision","type":"criteria-confirmation","status":"deferred"}`. Mark G1.
+**A_INTAKE extra** — Define acceptance criteria: analyze requirement → derive testable criteria, each with `verify_method` (test|grep|cli-review|manual). Normal: [@ask] AskUserQuestion to confirm/edit | `-y`: auto-derive, record `{"phase":"decision","type":"criteria-confirmation","status":"deferred"}`. Mark G1.
 
 **A_PLAN** — (1) Decompose requirement into ordered tasks mapped to acceptance criteria. (2) CLI-assisted planning (optional):
 ```bash
@@ -553,7 +553,7 @@ EXPECTED: JSON [{task_id, title, description, criteria_refs, deps}]
 Run `run_in_background: true`, wait for callback. (3) Write `session.json.plan`, append evidence (planning), update §2. Mark G2.
 
 **A_EXECUTE** —
-- **Step 1 — Execution Options Confirmation.** Skip if `-y` OR `--method` explicitly set OR `execution_config.confirmed == true` (resume). Load tools: `maestro delegate-config show --json`. AskUserQuestion 3 questions: Executor (Auto domain routing | Agent all | specific CLI | custom) / Review (Skip | {tool}) / Verify (Auto | specific tool | Skip). Parse → write `execution_config`, set `confirmed: true`. `--skip-verify` overrides verification to `"Skip"`.
+- **Step 1 — Execution Options Confirmation.** Skip if `-y` OR `--method` explicitly set OR `execution_config.confirmed == true` (resume). Load tools: `maestro delegate-config show --json`. [@ask] AskUserQuestion 3 questions: Executor (Auto domain routing | Agent all | specific CLI | custom) / Review (Skip | {tool}) / Verify (Auto | specific tool | Skip). Parse → write `execution_config`, set `confirmed: true`. `--skip-verify` overrides verification to `"Skip"`.
 - **Step 2 — Executor Resolution** (method == "auto"): domain routing — frontend (UI/component/page/style, .tsx/.jsx/.vue/.css/.html/.svelte) | backend (API/server/db/service, .go/.rs/.java/.py/.sql/.proto) | general (mixed/config/tests, .ts/.js/other). Resolution: `execution_config.domain_routing[domain]` → fallback `.default` ("agent").
 - **Step 3 — Task Execution** per plan order (independent tasks may parallelize). **Agent path:** spawn Agent with task definition + criteria refs + prior task summaries + specs_content → implement → verify convergence → auto-fix (max 3) → return. **CLI path:**
 ```bash
@@ -609,9 +609,9 @@ Run `run_in_background: true`. `overall == "passed"` → proceed to S_VERIFY wit
 | `test` | Run relevant tests, check pass/fail |
 | `grep` | Grep for expected pattern |
 | `cli-review` | `maestro delegate "PURPOSE: Verify criterion {id}: {criterion}\nTASK: Read implementation \| Check behavior \| Report pass/fail with file:line\nMODE: analysis\nCONTEXT: @{relevant_files}\nEXPECTED: JSON {criterion_id, status, evidence}" --role review --mode analysis` |
-| `manual` | Normal: AskUserQuestion / `-y`: record `deferred` |
+| `manual` | Normal: [@ask] AskUserQuestion / `-y`: record `deferred` |
 
-Record per criterion: `{"phase":"verification","type":"criterion-check","criterion_id":"AC1","method":"","result":"passed|failed","evidence":"","iteration":N}`. Update `acceptance_criteria[].status`. Append to `iterations[]`. Update §4 pass/fail table. **Route:** all passed → mark G4 → next. Some failed + iteration < max → S_FIX. Some failed + iteration >= max → Normal: AskUserQuestion (continue/lower bar/accept) / `-y`: `deferred`, proceed S_RECORD.
+Record per criterion: `{"phase":"verification","type":"criterion-check","criterion_id":"AC1","method":"","result":"passed|failed","evidence":"","iteration":N}`. Update `acceptance_criteria[].status`. Append to `iterations[]`. Update §4 pass/fail table. **Route:** all passed → mark G4 → next. Some failed + iteration < max → S_FIX. Some failed + iteration >= max → Normal: [@ask] AskUserQuestion (continue/lower bar/accept) / `-y`: `deferred`, proceed S_RECORD.
 
 **A_FIX** — (1) Increment `current_iteration`. (2) For each failed criterion: diagnose gap → targeted code fix (not re-implementation). (3) CLI fix review (optional): `maestro delegate` review fixes for regressions, EXPECTED `{verdict, regression_risk, concerns}`. (4) Append evidence (fix), update §5 → S_VERIFY.
 
@@ -725,7 +725,7 @@ for tier in [critical, high, medium, low].filter(>= threshold):
   re-review modified area (new findings → append, continue; max 2 per tier)
   tier done → auto-commit
 ```
-Normal: AskUserQuestion per tier | `-y`: auto-fix all. Remaining > 0 → retry (max_fix_rounds = 5). Unchanged 2 rounds → classify each individually. After 5 rounds remaining > 0 → escalate: Normal: AskUserQuestion (continue/accept/reclassify) | `-y`: classify remaining as `deferred`, proceed. Blanket "pre-existing" forbidden. Commit per tier: `"odyssey-review({slug}): FIX-{tier} — {N} items fixed"`.
+Normal: [@ask] AskUserQuestion per tier | `-y`: auto-fix all. Remaining > 0 → retry (max_fix_rounds = 5). Unchanged 2 rounds → classify each individually. After 5 rounds remaining > 0 → escalate: Normal: [@ask] AskUserQuestion (continue/accept/reclassify) | `-y`: classify remaining as `deferred`, proceed. Blanket "pre-existing" forbidden. Commit per tier: `"odyssey-review({slug}): FIX-{tier} — {N} items fixed"`.
 
 **A_CONFIRM** — Run tests + `maestro delegate --role review --mode analysis` (`run_in_background: true`) zero-residual review. `remaining == 0 AND new == 0` → confirmed, mark G3; otherwise → needs_rework → S_FIX. Update `confirmation` + `remaining_actionable` + §5.
 
@@ -823,7 +823,7 @@ Discover routes: new component to audit → S_AUDIT; fixable sibling → S_FIX.
 
 **A_DIVERGE** — Goes beyond defect fixing — "what would make this delightful?" **Step 1 — 2 parallel Agents:** Polish Agent (shadows, borders, transitions, hover, feedback, empty states, skeleton loading, scroll behavior) + Delight Agent (motion design, progressive disclosure, smart defaults, contextual hints, celebratory feedback, personality in copy). Each returns `[{idea, category (polish|delight), impact, effort, description, inspiration}]`. **Step 2 — CLI-assisted:** `maestro delegate --role analyze --mode analysis` — polish opportunities, micro-interactions, visual rhythm, delight moments. **Step 3 — Consolidate:** merge audit findings + divergent ideas → prioritized list (severity × impact × effort). Evidence phase=diverge. Update §4. Mark G3.
 
-**A_FIX** — Skip if `--skip-fix`. (1) Exhaustive fix: ALL findings/ideas by priority tier (critical → high → medium → low + high-impact ideas). After each tier, re-review — new findings append. (2) Each fix → evidence phase=fix. (3) Normal: AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
+**A_FIX** — Skip if `--skip-fix`. (1) Exhaustive fix: ALL findings/ideas by priority tier (critical → high → medium → low + high-impact ideas). After each tier, re-review — new findings append. (2) Each fix → evidence phase=fix. (3) Normal: [@ask] AskUserQuestion per-fix | `-y`: auto-proceed, record `deferred`.
 
 **A_VERIFY** — (1) Run tests (lint, unit, visual regression). (2) `maestro delegate --role review --mode analysis` — visual correctness, interaction states, accessibility, responsive. (3) `needs_rework` → S_FIX; `verified` → mark G4. Update §5, write `confirmation`.
 

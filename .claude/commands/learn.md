@@ -81,7 +81,7 @@ Arguments — target and optional flags.
 3. **Anchor requirement** — every extracted pattern MUST include a `file:line` anchor; unanchored patterns SHALL NOT be persisted to learnings.md
 4. **Convention cross-ref** — MUST check every finding against `coding-conventions.md` and mark status (documented/candidate); NEVER persist without status tag
 5. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
-6. **Confirmation gate** — unless `-y` is set, MUST present findings and target files via AskUserQuestion before any writes
+6. **Confirmation gate** — unless `-y` is set, MUST present findings and target files via [@ask] AskUserQuestion before any writes
 7. **Depth contract** — `--depth shallow` MUST NOT descend into function bodies; `--depth deep` MUST cover every branch and sub-expression
 </invariants>
 
@@ -104,7 +104,7 @@ Arguments — target and optional flags.
 - BLOCKED if: unanchored patterns remain in extraction results.
 
 **GATE 4: Persistence → Completion** (S_PERSIST → END)
-- REQUIRED: Unless `-y`, AskUserQuestion showing files to write and spec-entries to append — user must confirm.
+- REQUIRED: Unless `-y`, [@ask] AskUserQuestion showing files to write and spec-entries to append — user must confirm.
 - REQUIRED: KNW-follow-{slug}-{date}.md written with understanding map.
 - REQUIRED: learnings.md appended (not overwritten) with new spec-entry blocks.
 - BLOCKED if: user declines confirmation — offer to adjust findings before retry.
@@ -126,7 +126,7 @@ S_PERSIST      — 写 understanding map + spec-entry 块         PERSIST: knowh
 
 S_RESOLVE:
   → S_CONTEXT     WHEN: target resolved
-  → S_RESOLVE     WHEN: unresolvable                       DO: AskUserQuestion with suggestions
+  → S_RESOLVE     WHEN: unresolvable                       DO: [@ask] AskUserQuestion with suggestions
 
 S_CONTEXT:
   → S_ORDER       DO: A_BUILD_CONTEXT_WEB
@@ -141,7 +141,7 @@ S_EXTRACT:
   → S_PERSIST     DO: A_EXTRACT_PATTERNS
 
 S_PERSIST:
-  → END           GATE: unless -y, AskUserQuestion showing files to write and spec-entries to append — proceed only on confirm
+  → END           GATE: unless -y, [@ask] AskUserQuestion showing files to write and spec-entries to append — proceed only on confirm
                   DO: write KNW-follow + append .workflow/specs/learnings.md [+ wiki note if --save-wiki]
 
 </transitions>
@@ -243,8 +243,8 @@ Arguments — question text and optional flags.
 3. **Scope lock** — once `--scope` is resolved in S_FRAME, NEVER expand search scope without explicit user confirmation via S_ESCALATE
 4. **Hypothesis cap** — MUST NOT generate more than `--max-hypotheses` (default 3) before triggering escalation; NEVER silently exceed the cap
 5. **Structured evidence format** — every evidence entry MUST include `{ts, type, source, relevance, content, note}`; incomplete entries SHALL NOT be appended
-6. **3-strike escalation** — after all hypotheses fail, MUST escalate to user via AskUserQuestion; NEVER silently conclude as INCONCLUSIVE without user interaction
-7. **Confirmation gate** — unless `-y` is set, MUST present report.md path and spec-entries via AskUserQuestion before final writes
+6. **3-strike escalation** — after all hypotheses fail, MUST escalate to user via [@ask] AskUserQuestion; NEVER silently conclude as INCONCLUSIVE without user interaction
+7. **Confirmation gate** — unless `-y` is set, MUST present report.md path and spec-entries via [@ask] AskUserQuestion before final writes
 </invariants>
 
 <state_machine>
@@ -284,11 +284,11 @@ S_TEST:
   → S_ESCALATE    WHEN: max_hypotheses all failed              DO: A_TEST_HYPOTHESIS
 
 S_ESCALATE:
-  → S_HYPOTHESIZE WHEN: user broadens scope or provides new hypothesis   DO: AskUserQuestion
+  → S_HYPOTHESIZE WHEN: user broadens scope or provides new hypothesis   DO: [@ask] AskUserQuestion
   → S_REPORT      WHEN: user selects "Escalate" or still stuck          DO: mark INCONCLUSIVE
 
 S_REPORT:
-  → END           GATE: unless -y, AskUserQuestion showing report.md path and spec-entries to append — proceed only on confirm
+  → END           GATE: unless -y, [@ask] AskUserQuestion showing report.md path and spec-entries to append — proceed only on confirm
                   DO: A_SYNTHESIZE_REPORT
 
 </transitions>
@@ -385,7 +385,7 @@ Arguments — target path/module and optional flags.
 
 **Flags**:
 - `--patterns <list>`: Comma-separated pattern names to look for (default: detect all)
-- `--save-spec`: `Skill("spec")` (add subcommand) for each new pattern
+- `--save-spec`: `[@skill] Skill("spec")` (add subcommand) for each new pattern
 - `--save-wiki`: create wiki note per dimension group
 - `-y`: Skip confirmation prompts for knowhow/spec writes
 
@@ -400,7 +400,7 @@ Arguments — target path/module and optional flags.
 2. **Evidence-anchored findings** — every pattern MUST include at least one `file:line` anchor from source; unanchored patterns SHALL NOT be persisted
 3. **Dedup before persist** — MUST cross-reference against existing `learnings.md` and `coding-conventions.md` before writing; duplicate entries SHALL NOT be appended
 4. **Parallel agent isolation** — each dimension agent operates independently; NEVER share state between agents during analysis
-5. **Confirmation gate** — unless `-y` is set, MUST present all findings and target files via AskUserQuestion before any writes
+5. **Confirmation gate** — unless `-y` is set, MUST present all findings and target files via [@ask] AskUserQuestion before any writes
 6. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
 </invariants>
 
@@ -419,7 +419,7 @@ S_PERSIST    — 写文件 + 可选 spec add/wiki create         PERSIST: knowho
 
 S_RESOLVE:
   → S_DEDUP       WHEN: file list resolved
-  → S_RESOLVE     WHEN: unresolvable                     DO: AskUserQuestion
+  → S_RESOLVE     WHEN: unresolvable                     DO: [@ask] AskUserQuestion
 
 S_DEDUP:
   → S_ANALYZE     DO: read coding-conventions.md + .workflow/specs/learnings.md → build known pattern set
@@ -434,7 +434,7 @@ S_CATALOG:
   → S_PERSIST     DO: write KNW-decompose report (grouped by dimension: pattern table + details)
 
 S_PERSIST:
-  → END           GATE: unless -y, AskUserQuestion showing files to write and patterns to persist — proceed only on confirm
+  → END           GATE: unless -y, [@ask] AskUserQuestion showing files to write and patterns to persist — proceed only on confirm
                   DO: append .workflow/specs/learnings.md [+ spec add if --save-spec] [+ wiki note if --save-wiki]
 
 </transitions>
@@ -443,7 +443,7 @@ S_PERSIST:
 
 ### A_PARALLEL_DIMENSION_ANALYSIS
 
-Spawn 4 Agents in single message:
+[@subagent] Spawn 4 Agents in single message:
 
 | Agent | Dimension | Looks for |
 |-------|-----------|-----------|
@@ -519,7 +519,7 @@ Arguments — target and optional mode flag.
 - `--mode review|challenge|consult` (default: review)
 - `-y`: Skip confirmation prompts for knowhow/spec writes
 
-**Pre-load** (optional): `Skill("spec")` (load subcommand) for conventions + `maestro search "<target topic>"` for related entries.
+**Pre-load** (optional): `[@skill] Skill("spec")` (load subcommand) for conventions + `maestro search "<target topic>"` for related entries.
 
 **Output**: `.workflow/knowhow/KNW-opinion-{slug}-{YYYY-MM-DD}.md`
 
@@ -532,7 +532,7 @@ Arguments — target and optional mode flag.
 3. **Evidence-backed verdicts** — every finding MUST include a `location` reference (file:line or section); ungrounded opinions SHALL NOT appear in the report
 4. **Mode contract** — MUST execute exactly the mode specified (review/challenge/consult); NEVER mix mode behaviors within a single execution
 5. **Append-only learnings** — `.workflow/specs/learnings.md` MUST be appended, NEVER overwritten or truncated
-6. **Confirmation gate** — unless `-y` is set, MUST present findings and target files via AskUserQuestion before any writes
+6. **Confirmation gate** — unless `-y` is set, MUST present findings and target files via [@ask] AskUserQuestion before any writes
 </invariants>
 
 <state_machine>
@@ -549,7 +549,7 @@ S_PERSIST    — 写文件、append .workflow/specs/learnings.md      PERSIST: k
 
 S_RESOLVE:
   → S_CONTEXT     WHEN: target resolved                DO: read target content
-  → S_RESOLVE     WHEN: unresolvable                   DO: AskUserQuestion for clarification
+  → S_RESOLVE     WHEN: unresolvable                   DO: [@ask] AskUserQuestion for clarification
 
 S_CONTEXT:
   → S_EXECUTE     DO: load specs + wiki search (optional, proceed without)
@@ -563,7 +563,7 @@ S_SYNTHESIZE:
   → S_PERSIST     DO: merge perspectives → agreements, disagreements, verdict, top 3 recommendations
 
 S_PERSIST:
-  → END           GATE: unless -y, AskUserQuestion showing files to write and spec-entries to append — proceed only on confirm
+  → END           GATE: unless -y, [@ask] AskUserQuestion showing files to write and spec-entries to append — proceed only on confirm
                   DO: write KNW-opinion + append <spec-entry> blocks to .workflow/specs/learnings.md
 
 </transitions>
@@ -571,7 +571,7 @@ S_PERSIST:
 <actions>
 
 ### A_REVIEW
-Spawn 3 Agents in single message:
+[@subagent] Spawn 3 Agents in single message:
 
 | Agent | Focus | Question |
 |-------|-------|----------|
@@ -582,7 +582,7 @@ Spawn 3 Agents in single message:
 Each returns: persona, verdict (approve/concern/reject), confidence, findings[{severity, description, location, suggestion}], summary.
 
 ### A_CHALLENGE
-Spawn 1 adversarial Agent:
+[@subagent] Spawn 1 adversarial Agent:
 - Find weakest assumption
 - Propose concrete breaking scenario
 - Identify single biggest risk
@@ -593,7 +593,7 @@ Spawn 1 adversarial Agent:
 Interactive loop:
 1. Agent studies target
 2. Display "Target loaded. What would you like to know?"
-3. AskUserQuestion → Agent answers with code refs → repeat until "done"
+3. [@ask] AskUserQuestion → Agent answers with code refs → repeat until "done"
 4. Compile Q&A into report
 
 </actions>

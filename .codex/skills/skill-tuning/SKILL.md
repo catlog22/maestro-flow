@@ -1,0 +1,192 @@
+---
+name: skill-tuning
+description: Universal skill diagnosis and optimization tool. Detect and fix skill execution issues including context explosion, long-tail forgetting, data flow disruption, and agent coordination failures. Supports Agy CLI for deep analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis", "optimize skill", "skill debug".
+allowed-tools:
+  - Bash
+  - Glob
+  - Grep
+  - Read
+  - Write
+  - followup_task
+  - interrupt_agent
+  - list_agents
+  - request_user_input
+  - send_message
+  - spawn_agent
+  - spawn_agents_on_csv
+  - wait_agent
+session-mode: run
+---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+
+# Skill Tuning
+
+Autonomous diagnosis and optimization for skill execution issues.
+
+## Pre-load (before execution)
+
+1. **Codebase docs**: If `.workflow/codebase/ARCHITECTURE.md` exists, read for project context
+2. **Specs**: `maestro load --type spec --category coding` — load coding conventions
+3. **Wiki knowledge**: `maestro search "skill design optimization" --json` — top 5 entries as prior context
+4. All optional — proceed without if unavailable
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Phase 0: Read Specs (mandatory)                    │
+│  → problem-taxonomy.md, tuning-strategies.md         │
+└─────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────┐
+│  Orchestrator (state-driven)                         │
+│  Read state → Select action → Execute → Update → ✓ │
+└─────────────────────────────────────────────────────┘
+        ↓                           ↓
+┌──────────────────────┐   ┌──────────────────┐
+│  Diagnosis Phase     │   │ Agy CLI       │
+│  • Context          │   │ Deep analysis    │
+│  • Memory           │   │ (on-demand)      │
+│  • DataFlow         │   │                  │
+│  • Agent            │   │ Complex issues   │
+│  • Docs             │   │ Architecture     │
+│  • Token Usage      │   │ Performance      │
+└──────────────────────┘   └──────────────────┘
+                ↓
+        ┌───────────────────┐
+        │  Fix & Verify     │
+        │  Apply → Re-test  │
+        └───────────────────┘
+```
+
+## Core Issues Detected
+
+| Priority | Problem | Root Cause | Fix Strategy |
+|----------|---------|-----------|--------------|
+| **P0** | Authoring Violation | Intermediate files, state bloat, file relay | eliminate_intermediate, minimize_state |
+| **P1** | Data Flow Disruption | Scattered state, inconsistent formats | state_centralization, schema_enforcement |
+| **P2** | Agent Coordination | Fragile chains, no error handling | error_wrapping, result_validation |
+| **P3** | Context Explosion | Unbounded history, full content passing | sliding_window, path_reference |
+| **P4** | Long-tail Forgetting | Early constraint loss | constraint_injection, checkpoint_restore |
+| **P5** | Token Consumption | Verbose prompts, state bloat | prompt_compression, lazy_loading |
+
+## Problem Categories (Detailed Specs)
+
+See [specs/problem-taxonomy.md](specs/problem-taxonomy.md) for:
+- Detection patterns (regex/checks)
+- Severity calculations
+- Impact assessments
+
+## Tuning Strategies (Detailed Specs)
+
+See [specs/tuning-strategies.md](specs/tuning-strategies.md) for:
+- 10+ strategies per category
+- Implementation patterns
+- Verification methods
+
+## Workflow
+
+| Step | Action | Orchestrator Decision | Output |
+|------|--------|----------------------|--------|
+| 1 | `action-init` | status='pending' | Backup, session created |
+| 2 | `action-analyze-requirements` | After init | Required dimensions + coverage |
+| 3 | Diagnosis (6 types) | Focus areas | state.diagnosis.{type} |
+| 4 | `action-agy-analysis` | Critical issues OR user request | Deep findings |
+| 5 | `action-generate-report` | All diagnosis complete | state.final_report |
+| 6 | `action-propose-fixes` | Issues found | state.proposed_fixes[] |
+| 7 | `action-apply-fix` | Pending fixes | Applied + verified |
+| 8 | `action-complete` | Quality gates pass | session.status='completed' |
+
+## Action Reference
+
+| Category | Actions | Purpose |
+|----------|---------|---------|
+| **Setup** | action-init | Initialize backup, session state |
+| **Analysis** | action-analyze-requirements | Decompose user request via Agy CLI |
+| **Diagnosis** | action-diagnose-{context,memory,dataflow,agent,docs,token_consumption} | Detect category-specific issues |
+| **Deep Analysis** | action-agy-analysis | Agy CLI: complex/critical issues |
+| **Reporting** | action-generate-report | Consolidate findings → final_report |
+| **Fixing** | action-propose-fixes, action-apply-fix | Generate + apply fixes |
+| **Verify** | action-verify | Re-run diagnosis, check gates |
+| **Exit** | action-complete, action-abort | Finalize or rollback |
+
+Full action details: [phases/actions/](phases/actions/)
+
+## State Management
+
+**Single source of truth**: `{run_dir}/outputs/skill-tuning-{ts}/state.json`
+
+```json
+{
+  "status": "pending|running|completed|failed",
+  "target_skill": { "name": "...", "path": "..." },
+  "diagnosis": {
+    "context": {...},
+    "memory": {...},
+    "dataflow": {...},
+    "agent": {...},
+    "docs": {...},
+    "token_consumption": {...}
+  },
+  "issues": [{"id":"...", "severity":"...", "category":"...", "strategy":"..."}],
+  "proposed_fixes": [...],
+  "applied_fixes": [...],
+  "quality_gate": "pass|fail",
+  "final_report": "..."
+}
+```
+
+See [phases/state-schema.md](phases/state-schema.md) for complete schema.
+
+## Orchestrator Logic
+
+See [phases/orchestrator.md](phases/orchestrator.md) for:
+- Decision logic (termination checks → action selection)
+- State transitions
+- Error recovery
+
+## Key Principles
+
+1. **Problem-First**: Diagnosis before any fix
+2. **Data-Driven**: Record traces, token counts, snapshots
+3. **Iterative**: Multiple rounds until quality gates pass
+4. **Reversible**: All changes with backup checkpoints
+5. **Non-Invasive**: Minimal changes, maximum clarity
+
+## Usage Examples
+
+```bash
+# Basic skill diagnosis
+/skill-tuning "Fix memory leaks in my skill"
+
+# Deep analysis with Agy
+/skill-tuning "Architecture issues in async workflow"
+
+# Focus on specific areas
+/skill-tuning "Optimize token consumption and fix agent coordination"
+
+# Custom issue
+/skill-tuning "My skill produces inconsistent outputs"
+```
+
+## Output
+
+After completion, review:
+- `{run_dir}/outputs/skill-tuning-{ts}/state.json` - Full state with final_report
+- `state.final_report` - Markdown summary (in state.json)
+- `state.applied_fixes` - List of applied fixes with verification results
+
+## Reference Documents
+
+| Document | Purpose |
+|----------|---------|
+| [specs/problem-taxonomy.md](specs/problem-taxonomy.md) | Classification + detection patterns |
+| [specs/tuning-strategies.md](specs/tuning-strategies.md) | Fix implementation guide |
+| [specs/dimension-mapping.md](specs/dimension-mapping.md) | Dimension ↔ Spec mapping |
+| [specs/quality-gates.md](specs/quality-gates.md) | Quality verification criteria |
+| [phases/orchestrator.md](phases/orchestrator.md) | Workflow orchestration |
+| [phases/state-schema.md](phases/state-schema.md) | State structure definition |
+| [phases/actions/](phases/actions/) | Individual action implementations |

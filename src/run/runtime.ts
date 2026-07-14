@@ -16,6 +16,10 @@ import {
   type CommandContract,
   type ContractGateDefinition,
 } from './contract.js';
+import {
+  transformContentForPlatform,
+  type TargetPlatform,
+} from '../core/skill-converter.js';
 import { deriveHandoff, readReportFrontmatter } from './report.js';
 import {
   gateSchema,
@@ -92,6 +96,7 @@ export interface CompleteRunResult extends CheckRunResult {
 
 export interface PrepareStepResult {
   step: string;
+  platform: string;
   prepare: { path: string; content: string } | null;
   workflow: { path: string; line_count: number } | null;
   run_mode: { path: string; summary: string } | null;
@@ -851,11 +856,17 @@ function summarizeRunMode(raw: string): string {
   return lines.slice(0, 8).join('\n');
 }
 
-export function prepareStep(projectRoot: string, stepName: string): PrepareStepResult {
+export function prepareStep(
+  projectRoot: string,
+  stepName: string,
+  platform?: TargetPlatform,
+): PrepareStepResult {
   const content = resolveStepContent(projectRoot, stepName);
+  const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
   return {
     step: stepName,
-    prepare: content.prepare ? { path: content.prepare.path, content: content.prepare.raw } : null,
+    platform: platform ?? 'claude',
+    prepare: content.prepare ? { path: content.prepare.path, content: tx(content.prepare.raw) } : null,
     workflow: content.workflow
       ? { path: content.workflow.path, line_count: content.workflow.raw.split(/\r?\n/).length }
       : null,
@@ -866,12 +877,18 @@ export function prepareStep(projectRoot: string, stepName: string): PrepareStepR
   };
 }
 
-export function briefRun(projectRoot: string, runId: string, sessionId?: string): BriefRunResult {
+export function briefRun(
+  projectRoot: string,
+  runId: string,
+  sessionId?: string,
+  platform?: TargetPlatform,
+): BriefRunResult {
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   const bundle = store.readBundle(located.sessionId);
   const run = located.run;
   const content = resolveStepContent(projectRoot, run.command.name);
+  const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
 
   const outputs = run.output.produces
     .map(id => {
@@ -895,10 +912,10 @@ export function briefRun(projectRoot: string, runId: string, sessionId?: string)
     goal: run.handoff?.summary || bundle.session.intent,
     gates: gateSummary(bundle.gates, run.gate_ids),
     workflow: content.workflow
-      ? { path: content.workflow.path, content: content.workflow.raw }
+      ? { path: content.workflow.path, content: tx(content.workflow.raw) }
       : null,
     run_mode: content.runMode
-      ? { path: content.runMode.path, summary: summarizeRunMode(content.runMode.raw) }
+      ? { path: content.runMode.path, summary: summarizeRunMode(tx(content.runMode.raw)) }
       : null,
     outputs,
   };

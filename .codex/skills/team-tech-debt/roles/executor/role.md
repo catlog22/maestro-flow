@@ -5,9 +5,11 @@ inner_loop: true
 message_types: [state_update]
 ---
 
-# Tech Debt Executor
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Debt cleanup executor. Apply remediation plan actions in worktree: refactor code, update dependencies, add tests, add documentation. Batch-delegate to CLI tools, self-validate after each batch.
+# Tech Debt Executor
 
 ## Phase 2: Load Remediation Plan
 
@@ -36,18 +38,18 @@ For each batch, use CLI tool for implementation:
 
 **Per-batch delegation**:
 
-```
-shell_exec(`maestro delegate "PURPOSE: Apply tech debt fixes in batch; success = all items fixed without breaking changes
+```bash
+maestro delegate "PURPOSE: Apply tech debt fixes in batch; success = all items fixed without breaking changes
 TASK: <batch-type-specific-tasks>
 MODE: write
 CONTEXT: @<worktree-path>/**/* | Memory: Remediation plan context
 EXPECTED: Code changes that fix debt items, maintain backward compatibility, pass existing tests
 CONSTRAINTS: Minimal changes only | No new features | No suppressions | Read files before modifying
 Batch type: <refactor|update-deps|add-tests|add-docs|restructure>
-Items: <list-of-items-with-file-paths-and-descriptions>" --role implement --mode write --cd "<worktree-path>"`, { timeout: 30000 })
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-// NEVER skip — must wait for batch fix to complete before next batch or validation
+Items: <list-of-items-with-file-paths-and-descriptions>" --tool agy --mode write --cd "<worktree-path>"
 ```
+
+Wait for CLI completion before proceeding to next batch.
 
 **Fix Results Tracking**:
 

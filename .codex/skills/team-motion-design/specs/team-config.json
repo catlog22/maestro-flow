@@ -1,0 +1,99 @@
+{
+  "team_name": "motion-design",
+  "team_display_name": "Motion Design",
+  "description": "Motion design team for animation token systems, scroll choreography, GPU-accelerated transforms, reduced-motion fallback",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Scope assessment, pipeline orchestration, performance gate management, GC loop control",
+      "message_types": ["task_unblocked", "perf_checkpoint", "fix_required", "error", "shutdown"]
+    },
+    "motion-researcher": {
+      "task_prefix": "MRESEARCH",
+      "responsibility": "Audit existing animations, measure paint/composite costs, catalog easing patterns",
+      "message_types": ["research_ready", "research_progress", "error"]
+    },
+    "choreographer": {
+      "task_prefix": "CHOREO",
+      "responsibility": "Design animation token system, scroll-triggered reveal sequences, transition state diagrams",
+      "message_types": ["choreography_ready", "choreography_progress", "error"]
+    },
+    "animator": {
+      "task_prefix": "ANIM",
+      "inner_loop": true,
+      "responsibility": "Implement CSS animations/transitions, JS orchestration, IntersectionObserver triggers, rAF coordination",
+      "message_types": ["animation_ready", "animation_revision", "animation_progress", "error"]
+    },
+    "motion-tester": {
+      "task_prefix": "MTEST",
+      "responsibility": "Chrome DevTools perf traces, compositor-only verification, FPS measurement, layout thrashing detection, reduced-motion validation",
+      "message_types": ["perf_passed", "perf_warning", "fix_required", "error"]
+    }
+  },
+
+  "pipelines": {
+    "tokens": {
+      "description": "Animation token system: research -> choreography -> animation -> test",
+      "task_chain": ["MRESEARCH-001", "CHOREO-001", "ANIM-001", "MTEST-001"],
+      "complexity": "low"
+    },
+    "component": {
+      "description": "Component animation: research -> choreography -> animation -> test (GC loop)",
+      "task_chain": ["MRESEARCH-001", "CHOREO-001", "ANIM-001", "MTEST-001"],
+      "gc_loop": { "generator": "ANIM", "critic": "MTEST", "trigger": "FPS < 60 or layout thrashing" },
+      "complexity": "medium"
+    },
+    "page": {
+      "description": "Page scroll choreography: research -> choreography -> parallel animations -> test",
+      "task_chain": [
+        "MRESEARCH-001", "CHOREO-001",
+        "ANIM-001..N:parallel",
+        "MTEST-001"
+      ],
+      "parallel_fan_out": { "after": "CHOREO-001", "tasks": "ANIM-*", "join_before": "MTEST-001" },
+      "complexity": "high"
+    }
+  },
+
+  "innovation_patterns": {
+    "generator_critic": {
+      "generator": "animator",
+      "critic": "motion-tester",
+      "max_rounds": 2,
+      "convergence": "perf.score >= 8 && perf.fps >= 60 && perf.thrashing_count === 0",
+      "trigger": "FPS < 60 or layout thrashing detected",
+      "escalation": "Coordinator intervenes after max rounds"
+    },
+    "shared_memory": {
+      "file": "shared-memory.json",
+      "fields": {
+        "motion-researcher": ["animation_inventory", "performance_baseline", "easing_catalog"],
+        "choreographer": ["motion_tokens", "scroll_sequences", "state_diagrams"],
+        "animator": ["keyframe_registry", "orchestrator_registry"],
+        "motion-tester": ["perf_history", "issue_registry"]
+      }
+    },
+    "parallel_fan_out": {
+      "pattern": "CP-3",
+      "description": "Multiple ANIM tasks execute in parallel for page mode, joined before MTEST",
+      "trigger": "page pipeline after CHOREO-001 completion"
+    },
+    "review_fix": {
+      "pattern": "CP-2",
+      "description": "Animator and motion-tester in Generator-Critic loop",
+      "max_rounds": 2,
+      "trigger": "FPS < 60 or layout thrashing detected"
+    }
+  },
+
+  "session_dirs": {
+    "base": ".workflow/.team/MD-{slug}-{YYYY-MM-DD}/",
+    "research": "research/",
+    "choreography": "choreography/",
+    "animations": "animations/",
+    "testing": "testing/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

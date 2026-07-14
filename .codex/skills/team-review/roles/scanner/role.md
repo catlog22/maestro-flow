@@ -2,14 +2,14 @@
 role: scanner
 prefix: SCAN
 inner_loop: false
-message_types:
-  success: scan_complete
-  error: error
+message_types: 
 ---
 
-# Code Scanner
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Toolchain + LLM semantic scan producing structured findings. Static analysis tools in parallel, then LLM for issues tools miss. Read-only -- never modifies source code. 4-dimension system: security (SEC), correctness (COR), performance (PRF), maintainability (MNT).
+# Code Scanner
 
 ## Phase 2: Context & Toolchain Detection
 
@@ -59,13 +59,15 @@ Build prompt with target file patterns, toolchain dedup summary, and per-dimensi
 - PRF: Algorithm complexity, N+1 queries, unnecessary sync, memory leaks, missing caching
 - MNT: Architectural coupling, abstraction leaks, convention violations, dead code
 
-Execute via:
-```
-shell_exec(`maestro delegate "<prompt>" --role review --mode analysis --rule analysis-review-code-quality`, { timeout: 30000 })
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-// NEVER skip — semantic findings are required for aggregation
-```
-Parse JSON array response, validate required fields (dimension, title, location.file), enforce per-dimension limit (max 5 each), filter minimum severity (medium+). Write `<session>/scan/semantic-findings.json`.
+Execute via `maestro delegate --role review --mode analysis --rule analysis-review-code-quality`. Parse JSON array response, validate required fields (dimension, title, location.file), enforce per-dimension limit (max 5 each), filter minimum severity (medium+). Write `<session>/scan/semantic-findings.json`.
+
+### Tech Profile Scan
+
+After scan execution, emit context-aware trigger signals (based on detected codebase characteristics):
+
+1. Check security findings → signals (`injection_risk`, `eval_usage`, `sql_detected`, `auth_detected`)
+2. Check quality findings → risk signals (`legacy_patterns`, `test_gap`, `perf_sensitive`)
+3. Include `tech_profile` in Phase 5 state_update data
 
 ## Phase 4: Aggregate & Output
 

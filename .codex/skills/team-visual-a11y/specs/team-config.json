@@ -1,0 +1,109 @@
+{
+  "team_name": "visual-a11y",
+  "team_display_name": "Visual Accessibility",
+  "description": "Visual accessibility QA team with parallel auditors, remediation planning, and fix implementation with re-audit verification",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Scope assessment (page/component/full site), pipeline orchestration, parallel fan-in coordination",
+      "message_types": ["task_unblocked", "fan_in_complete", "gc_check", "error", "shutdown"]
+    },
+    "color-auditor": {
+      "task_prefix": "COLOR",
+      "responsibility": "OKLCH lightness/chroma analysis, contrast ratio (WCAG 2.1 + APCA), color blindness simulation",
+      "message_types": ["audit_complete", "audit_progress", "error"]
+    },
+    "typo-auditor": {
+      "task_prefix": "TYPO",
+      "responsibility": "Typography readability: font size at breakpoints, line-height ratios, clamp() validation, reading width",
+      "message_types": ["audit_complete", "audit_progress", "error"]
+    },
+    "focus-auditor": {
+      "task_prefix": "FOCUS",
+      "responsibility": "Focus-visible completeness: tab-order, focus indicator visibility, skip-link, focus traps, ARIA live regions",
+      "message_types": ["audit_complete", "audit_progress", "error"]
+    },
+    "remediation-planner": {
+      "task_prefix": "REMED",
+      "responsibility": "Synthesize audit findings into prioritized remediation plan with code-level fix guidance",
+      "message_types": ["plan_ready", "plan_progress", "error"]
+    },
+    "fix-implementer": {
+      "task_prefix": "FIX",
+      "inner_loop": true,
+      "responsibility": "Implement a11y fixes: OKLCH color corrections, focus styles, ARIA attributes, reduced-motion queries",
+      "message_types": ["fix_complete", "fix_progress", "error"]
+    }
+  },
+
+  "pipelines": {
+    "audit-only": {
+      "description": "3 parallel auditors -> remediation plan",
+      "task_chain": [
+        "COLOR-001 || TYPO-001 || FOCUS-001",
+        "REMED-001"
+      ],
+      "fan_in_points": ["REMED-001"],
+      "complexity": "medium"
+    },
+    "full": {
+      "description": "3 parallel auditors -> remediation -> fix -> 2 parallel re-auditors",
+      "task_chain": [
+        "COLOR-001 || TYPO-001 || FOCUS-001",
+        "REMED-001",
+        "FIX-001",
+        "COLOR-002 || FOCUS-002"
+      ],
+      "fan_in_points": ["REMED-001"],
+      "gc_points": ["COLOR-002", "FOCUS-002"],
+      "complexity": "high"
+    }
+  },
+
+  "innovation_patterns": {
+    "parallel_fan_in": {
+      "pattern": "CP-3",
+      "description": "3 auditors run simultaneously, remediation waits for all 3",
+      "fan_in_count": 3,
+      "fan_in_roles": ["color-auditor", "typo-auditor", "focus-auditor"],
+      "gate_task": "REMED-001"
+    },
+    "generator_critic": {
+      "pattern": "CP-2",
+      "generator": "fix-implementer",
+      "critic": ["color-auditor", "focus-auditor"],
+      "max_rounds": 2,
+      "convergence": "re-audit finds 0 critical and 0 high issues",
+      "escalation": "Coordinator intervenes after max rounds"
+    },
+    "shared_memory": {
+      "file": ".msg/meta.json",
+      "fields": {
+        "color-auditor": ["total_combinations", "pass_count", "fail_count", "critical_count"],
+        "typo-auditor": ["total_rules", "pass_count", "fail_count", "breakpoints_tested"],
+        "focus-auditor": ["total_elements", "pass_count", "fail_count", "skip_link_present"],
+        "remediation-planner": ["total_issues", "critical", "high", "medium", "low"],
+        "fix-implementer": ["total_fixes", "critical_fixed", "high_fixed", "files_modified"]
+      }
+    },
+    "chrome_devtools": {
+      "description": "Chrome DevTools integration for rendered verification",
+      "tools": ["evaluate_script", "take_screenshot", "navigate_page", "resize_page", "emulate", "lighthouse_audit"],
+      "degradation": "If unavailable, degrade to static analysis only"
+    }
+  },
+
+  "session_dirs": {
+    "base": ".workflow/.team/VA-{slug}-{YYYY-MM-DD}/",
+    "color_audit": "audits/color/",
+    "typo_audit": "audits/typography/",
+    "focus_audit": "audits/focus/",
+    "remediation": "remediation/",
+    "fixes": "fixes/",
+    "re_audit": "re-audit/",
+    "evidence": "evidence/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

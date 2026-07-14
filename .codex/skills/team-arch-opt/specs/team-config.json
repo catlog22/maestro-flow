@@ -1,0 +1,263 @@
+{
+  "version": "5.0.0",
+  "team_name": "arch-opt",
+  "team_display_name": "Architecture Optimization",
+  "skill_name": "team-arch-opt",
+  "skill_path": "~  or <project>/.claude/skills/team-arch-opt/",
+  "pipeline_type": "Linear with Review-Fix Cycle (Parallel-Capable)",
+  "completion_action": "interactive",
+  "has_inline_discuss": true,
+  "has_shared_explore": true,
+  "has_checkpoint_feedback": true,
+  "has_session_resume": true,
+
+  "roles": [
+    {
+      "name": "coordinator",
+      "type": "orchestrator",
+      "description": "Orchestrates architecture optimization pipeline, manages task chains, handles review-fix cycles",
+      "spec_path": "roles/coordinator/role.md",
+      "tools": ["Task", "TaskCreate", "TaskList", "TaskGet", "TaskUpdate", "TeamCreate", "TeamDelete", "SendMessage", "AskUserQuestion", "Read", "Write", "Bash", "Glob", "Grep"]
+    },
+    {
+      "name": "analyzer",
+      "type": "orchestration",
+      "description": "Analyzes architecture: dependency graphs, coupling/cohesion, layering violations, God Classes, dead code",
+      "role_spec": "roles/analyzer/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "ANALYZE",
+        "inner_loop": false,
+        "additional_prefixes": [],
+        "discuss_rounds": [],
+        "cli_tools": ["explore"],
+        "message_types": {
+          "success": "analyze_complete",
+          "error": "error"
+        }
+      },
+      "weight": 1,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "designer",
+      "type": "orchestration",
+      "description": "Designs refactoring strategies from architecture analysis, produces prioritized refactoring plan with discrete REFACTOR-IDs",
+      "role_spec": "roles/designer/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "DESIGN",
+        "inner_loop": false,
+        "additional_prefixes": [],
+        "discuss_rounds": ["DISCUSS-REFACTOR"],
+        "cli_tools": ["discuss"],
+        "message_types": {
+          "success": "design_complete",
+          "error": "error"
+        }
+      },
+      "weight": 2,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "refactorer",
+      "type": "code_generation",
+      "description": "Implements architecture refactoring changes following the design plan",
+      "role_spec": "roles/refactorer/role.md",
+      "inner_loop": "dynamic",
+      "frontmatter": {
+        "prefix": "REFACTOR",
+        "inner_loop": "dynamic",
+        "additional_prefixes": ["FIX"],
+        "discuss_rounds": [],
+        "cli_tools": ["explore"],
+        "message_types": {
+          "success": "refactor_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      },
+      "weight": 3,
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "validator",
+      "type": "validation",
+      "description": "Validates refactoring: build checks, test suites, dependency metrics, API compatibility",
+      "role_spec": "roles/validator/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "VALIDATE",
+        "inner_loop": false,
+        "additional_prefixes": [],
+        "discuss_rounds": [],
+        "cli_tools": [],
+        "message_types": {
+          "success": "validate_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      },
+      "weight": 4,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "reviewer",
+      "type": "read_only_analysis",
+      "description": "Reviews refactoring code for correctness, pattern consistency, completeness, migration safety, and best practices",
+      "role_spec": "roles/reviewer/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "REVIEW",
+        "inner_loop": false,
+        "additional_prefixes": ["QUALITY"],
+        "discuss_rounds": ["DISCUSS-REVIEW"],
+        "cli_tools": ["discuss"],
+        "message_types": {
+          "success": "review_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      },
+      "weight": 4,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    }
+  ],
+
+  "parallel_config": {
+    "modes": ["single", "fan-out", "independent", "auto"],
+    "default_mode": "auto",
+    "max_branches": 5,
+    "auto_mode_rules": {
+      "single": "refactoring_count <= 2",
+      "fan-out": "refactoring_count >= 3"
+    }
+  },
+
+  "pipeline": {
+    "stages": [
+      {
+        "stage": 1,
+        "name": "Architecture Analysis",
+        "roles": ["analyzer"],
+        "blockedBy": [],
+        "fast_advance": true
+      },
+      {
+        "stage": 2,
+        "name": "Refactoring Design",
+        "roles": ["designer"],
+        "blockedBy": ["ANALYZE"],
+        "fast_advance": true
+      },
+      {
+        "stage": 3,
+        "name": "Code Refactoring",
+        "roles": ["refactorer"],
+        "blockedBy": ["DESIGN"],
+        "fast_advance": false
+      },
+      {
+        "stage": 4,
+        "name": "Validate & Review",
+        "roles": ["validator", "reviewer"],
+        "blockedBy": ["REFACTOR"],
+        "fast_advance": false,
+        "parallel": true,
+        "review_fix_cycle": {
+          "trigger": "REVIEW or VALIDATE finds issues",
+          "target_stage": 3,
+          "max_iterations": 3
+        }
+      }
+    ],
+    "parallel_pipelines": {
+      "fan-out": {
+        "shared_stages": [1, 2],
+        "branch_stages": [3, 4],
+        "branch_prefix": "B",
+        "review_fix_cycle": {
+          "scope": "per_branch",
+          "max_iterations": 3
+        }
+      },
+      "independent": {
+        "pipeline_prefix_chars": "ABCDEFGHIJ",
+        "review_fix_cycle": {
+          "scope": "per_pipeline",
+          "max_iterations": 3
+        }
+      }
+    },
+    "diagram": "See pipeline-diagram section"
+  },
+
+  "cli_tools": [
+    {
+      "name": "explore",
+      "implementation": "maestro delegate with analysis mode",
+      "callable_by": ["analyzer", "refactorer"],
+      "purpose": "Shared codebase exploration for architecture-critical structures, dependency graphs, and module boundaries",
+      "has_cache": true,
+      "cache_domain": "explorations"
+    },
+    {
+      "name": "discuss",
+      "implementation": "maestro delegate with analysis mode",
+      "callable_by": ["designer", "reviewer"],
+      "purpose": "Multi-perspective discussion for refactoring approaches and review findings",
+      "has_cache": false
+    }
+  ],
+
+  "shared_resources": [
+    {
+      "name": "Architecture Baseline",
+      "path": "<session>/artifacts/architecture-baseline.json",
+      "usage": "Pre-refactoring architecture metrics for comparison",
+      "scope": "shared (fan-out) / per-pipeline (independent)"
+    },
+    {
+      "name": "Architecture Report",
+      "path": "<session>/artifacts/architecture-report.md",
+      "usage": "Analyzer output consumed by designer",
+      "scope": "shared (fan-out) / per-pipeline (independent)"
+    },
+    {
+      "name": "Refactoring Plan",
+      "path": "<session>/artifacts/refactoring-plan.md",
+      "usage": "Designer output consumed by refactorer",
+      "scope": "shared (fan-out) / per-pipeline (independent)"
+    },
+    {
+      "name": "Validation Results",
+      "path": "<session>/artifacts/validation-results.json",
+      "usage": "Validator output consumed by reviewer",
+      "scope": "per-branch (fan-out) / per-pipeline (independent)"
+    }
+  ],
+
+  "shared_memory_namespacing": {
+    "single": {
+      "analyzer": "analyzer",
+      "designer": "designer",
+      "refactorer": "refactorer",
+      "validator": "validator",
+      "reviewer": "reviewer"
+    },
+    "fan-out": {
+      "analyzer": "analyzer",
+      "designer": "designer",
+      "refactorer": "refactorer.B{NN}",
+      "validator": "validator.B{NN}",
+      "reviewer": "reviewer.B{NN}"
+    },
+    "independent": {
+      "analyzer": "analyzer.{P}",
+      "designer": "designer.{P}",
+      "refactorer": "refactorer.{P}",
+      "validator": "validator.{P}",
+      "reviewer": "reviewer.{P}"
+    }
+  }
+}

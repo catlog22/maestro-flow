@@ -1,6 +1,8 @@
-# Implement
 
-Execute implementation from task JSON via agent or CLI delegation.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+# Implement
 
 ## Agent Mode
 
@@ -10,14 +12,14 @@ Direct implementation using Edit/Write/Bash tools:
 2. Read task.implementation[] as step-by-step instructions
 3. For each step:
    - Substitute [variable] placeholders with pre_analysis results
-   - New file -> Write tool; Modify file -> Edit tool
+   - New file → Write tool; Modify file → Edit tool
    - Follow task.reference patterns
 4. Apply task.rationale.chosen_approach
 5. Mitigate task.risks[] during implementation
 
 Quality rules:
 - Verify module existence before referencing
-- Incremental progress -- small working changes
+- Incremental progress — small working changes
 - Follow existing patterns from task.reference
 - ASCII-only, no premature abstractions
 
@@ -51,9 +53,8 @@ CONSTRAINTS: Only modify listed files | Follow existing patterns
 
 CLI call:
 ```
-shell_exec(`maestro delegate "<prompt>" --role implement --mode write --rule development-implement-feature`, { timeout: 30000 })
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-// NEVER skip — implementation must complete before convergence check
+Bash({ command: `maestro delegate "<prompt>" --to <tool> --mode write --rule development-implement-feature`,
+  run_in_background: false, timeout: 3600000 })
 ```
 
 Resume strategy:
@@ -61,5 +62,3 @@ Resume strategy:
 |----------|---------|
 | new | --id <session>-<task_id> |
 | resume | --resume <parent_id> |
-
-RoleSpec: `.codex/skills/team-lifecycle-v4/roles/executor/role.md`

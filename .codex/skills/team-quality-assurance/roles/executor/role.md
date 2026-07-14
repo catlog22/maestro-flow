@@ -3,16 +3,14 @@ role: executor
 prefix: QARUN
 inner_loop: true
 additional_prefixes: [QARUN-gc]
-message_types:
-  success: tests_passed
-  failure: tests_failed
-  coverage: coverage_report
-  error: error
+message_types: 
 ---
 
-# Test Executor
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Run test suites, collect coverage data, and perform automatic fix cycles when tests fail. Implements the execution side of the Generator-Executor (GC) loop.
+# Test Executor
 
 ## Phase 2: Environment Detection
 
@@ -26,7 +24,7 @@ Run test suites, collect coverage data, and perform automatic fix cycles when te
 | Target layer | task description `layer: L1/L2/L3` | Yes |
 
 1. Extract session path and target layer from task description
-2. Load validation specs: Run `maestro load --type spec --category review` for verification rules and acceptance criteria
+2. Load validation specs: Run `ccw spec load --category quality` for verification rules and acceptance criteria
 3. Read .msg/meta.json for strategy and generated test file list
 3. Detect test command by framework:
 

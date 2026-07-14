@@ -1,0 +1,105 @@
+{
+  "team_name": "interactive-craft",
+  "team_display_name": "Interactive Craft",
+  "description": "Interactive component team with vanilla JS + CSS. Research -> interaction design -> build -> a11y test.",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Scope assessment, pipeline orchestration, GC loop control between builder and a11y-tester",
+      "message_types": ["task_unblocked", "a11y_checkpoint", "fix_required", "error", "shutdown"]
+    },
+    "researcher": {
+      "task_prefix": "RESEARCH",
+      "responsibility": "Interaction pattern analysis, browser API audit, reference pattern collection",
+      "message_types": ["research_ready", "research_progress", "error"]
+    },
+    "interaction-designer": {
+      "task_prefix": "INTERACT",
+      "responsibility": "State machine design, event flow mapping, gesture specification, animation choreography",
+      "message_types": ["blueprint_ready", "blueprint_revision", "blueprint_progress", "error"]
+    },
+    "builder": {
+      "task_prefix": "BUILD",
+      "inner_loop": true,
+      "responsibility": "Vanilla JS + CSS component implementation, progressive enhancement, GPU-only animations",
+      "message_types": ["build_ready", "build_revision", "build_progress", "error"]
+    },
+    "a11y-tester": {
+      "task_prefix": "A11Y",
+      "responsibility": "Keyboard navigation, screen reader, reduced motion, focus management, contrast testing",
+      "message_types": ["a11y_passed", "a11y_result", "fix_required", "error"]
+    }
+  },
+
+  "pipelines": {
+    "single": {
+      "description": "Single component: research -> interaction design -> build -> a11y test",
+      "task_chain": ["RESEARCH-001", "INTERACT-001", "BUILD-001", "A11Y-001"],
+      "complexity": "low"
+    },
+    "gallery": {
+      "description": "Gallery with base component + scroll container: two build phases",
+      "task_chain": [
+        "RESEARCH-001",
+        "INTERACT-001", "BUILD-001",
+        "INTERACT-002", "BUILD-002",
+        "A11Y-001"
+      ],
+      "complexity": "medium"
+    },
+    "page": {
+      "description": "Full interactive page with parallel component builds",
+      "task_chain": [
+        "RESEARCH-001",
+        "INTERACT-001",
+        "BUILD-001..N (parallel)",
+        "A11Y-001"
+      ],
+      "parallel_stage": "BUILD-001..N",
+      "complexity": "high"
+    }
+  },
+
+  "innovation_patterns": {
+    "generator_critic": {
+      "generator": "builder",
+      "critic": "a11y-tester",
+      "max_rounds": 2,
+      "convergence": "a11y.critical_count === 0 && a11y.high_count === 0",
+      "escalation": "Coordinator intervenes after max rounds"
+    },
+    "shared_memory": {
+      "file": "shared-memory.json",
+      "fields": {
+        "researcher": ["interaction_inventory", "browser_apis"],
+        "interaction-designer": ["state_machines", "event_flows"],
+        "builder": ["component_registry", "implementation_decisions"],
+        "a11y-tester": ["audit_history"]
+      }
+    },
+    "dynamic_pipeline": {
+      "criteria": {
+        "single": "scope.component_count <= 1",
+        "gallery": "scope.has_gallery || scope.has_scroll_collection",
+        "page": "scope.is_full_page || scope.section_count > 2"
+      }
+    },
+    "parallel_fanout": {
+      "pattern": "CP-3",
+      "description": "Multiple BUILD tasks spawned in parallel after single INTERACT blueprint",
+      "trigger": "page mode after INTERACT-001 completes",
+      "fallback": "If parallel fails, coordinator falls back to sequential execution"
+    }
+  },
+
+  "session_dirs": {
+    "base": ".workflow/.team/IC-{slug}-{YYYY-MM-DD}/",
+    "research": "research/",
+    "interaction": "interaction/blueprints/",
+    "build": "build/components/",
+    "a11y": "a11y/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

@@ -5,9 +5,11 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-# Tech Debt Validator
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Cleanup result validator. Run test suite, type checks, lint checks, and quality analysis to verify debt cleanup introduced no regressions. Compare before/after debt scores, produce validation-report.json.
+# Tech Debt Validator
 
 ## Phase 2: Load Context
 
@@ -58,14 +60,15 @@ Execute 4-layer validation (all commands in worktree):
 **Auto-fix attempt** (when total_regressions <= 3):
 - Use CLI tool to fix regressions in worktree:
   ```
-  shell_exec(`cd "${worktreePath}" && maestro delegate "PURPOSE: Fix regressions found in validation
+  Bash({
+    command: `cd "${worktreePath}" && maestro delegate "PURPOSE: Fix regressions found in validation
   TASK: ${regressionDetails}
   MODE: write
   CONTEXT: @${modifiedFiles.join(' @')}
   EXPECTED: Fixed regressions
-  CONSTRAINTS: Fix only regressions | Preserve debt cleanup changes | No suppressions" --role implement --mode write`, { timeout: 30000 })
-  // Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-  // NEVER skip — must wait for fix before re-running validation
+  CONSTRAINTS: Fix only regressions | Preserve debt cleanup changes | No suppressions" --tool agy --mode write`,
+    run_in_background: false
+  })
   ```
 - Re-run validation checks after fix attempt
 

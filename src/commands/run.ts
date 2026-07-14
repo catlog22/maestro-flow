@@ -1,6 +1,9 @@
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import { briefRun, checkRun, completeRun, createRun, prepareStep, sealSession } from '../run/runtime.js';
+import type { TargetPlatform } from '../core/skill-converter.js';
+
+const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard'];
 
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
@@ -23,9 +26,14 @@ export function registerRunCommand(program: Command): void {
     .command('prepare <step>')
     .description('Return prepare file + workflow metadata for pre-task thinking (read-only, stateless)')
     .option('--workflow-root <path>', 'project root', process.cwd())
-    .action((step: string, opts: { workflowRoot: string }) => {
+    .option('--platform <name>', 'target platform for tool substitution (claude|codex|agy|agents-standard)')
+    .action((step: string, opts: { workflowRoot: string; platform?: string }) => {
       try {
-        print(prepareStep(resolve(opts.workflowRoot), step));
+        const platform = opts.platform as TargetPlatform | undefined;
+        if (platform && !VALID_PLATFORMS.includes(platform)) {
+          throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
+        }
+        print(prepareStep(resolve(opts.workflowRoot), step, platform));
       } catch (error) {
         reportError(error);
       }
@@ -93,10 +101,15 @@ export function registerRunCommand(program: Command): void {
     .command('brief <run-id>')
     .description('Return Resume Packet for a running Run (re-attach workflow + goals + gate status)')
     .option('--session <id>', 'explicit Session ID')
+    .option('--platform <name>', 'target platform for tool substitution (claude|codex|agy|agents-standard)')
     .option('--workflow-root <path>', 'project root', process.cwd())
-    .action((runId: string, opts: { session?: string; workflowRoot: string }) => {
+    .action((runId: string, opts: { session?: string; platform?: string; workflowRoot: string }) => {
       try {
-        print(briefRun(resolve(opts.workflowRoot), runId, opts.session));
+        const platform = opts.platform as TargetPlatform | undefined;
+        if (platform && !VALID_PLATFORMS.includes(platform)) {
+          throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
+        }
+        print(briefRun(resolve(opts.workflowRoot), runId, opts.session, platform));
       } catch (error) {
         reportError(error);
       }

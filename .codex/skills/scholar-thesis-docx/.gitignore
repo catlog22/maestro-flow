@@ -1,0 +1,23 @@
+# Word temporary files
+~$*.docx
+
+# Local validation artifacts
+tmp-*.docx
+tmp-*.svg
+tmp-*.mmd
+tmp-*.pdf
+tmp-*.png
+tmp-*.json
+tmp-*.txt
+**/tmp-*.docx
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# OS/editor
+.DS_Store
+Thumbs.db

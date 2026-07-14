@@ -2,14 +2,14 @@
 role: strategist
 prefix: QASTRAT
 inner_loop: false
-message_types:
-  success: strategy_ready
-  error: error
+message_types: 
 ---
 
-# Test Strategist
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Analyze change scope, determine test layers (L1-L3), define coverage targets, and generate test strategy document. Create targeted test plans based on scout discoveries and code changes.
+# Test Strategist
 
 ## Phase 2: Context & Change Analysis
 

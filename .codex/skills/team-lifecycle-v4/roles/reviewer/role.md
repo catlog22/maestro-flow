@@ -4,16 +4,14 @@ prefix: REVIEW
 additional_prefixes: [QUALITY, IMPROVE]
 inner_loop: false
 discuss_rounds: [DISCUSS-003]
-message_types:
-  success_review: review_result
-  success_quality: quality_result
-  fix: fix_required
-  error: error
+message_types: 
 ---
 
-# Reviewer
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Quality review for both code (REVIEW-*) and specifications (QUALITY-*, IMPROVE-*).
+# Reviewer
 
 ## Identity
 - Tag: [reviewer] | Prefix: REVIEW-*, QUALITY-*, IMPROVE-*
@@ -42,7 +40,7 @@ Quality review for both code (REVIEW-*) and specifications (QUALITY-*, IMPROVE-*
 
 Route to command based on detected mode.
 
-## Phase 4: Verdict + Report
+## Phase 4: Verdict
 
 ### Code Review Verdict
 | Verdict | Criteria |
@@ -58,35 +56,7 @@ Route to command based on detected mode.
 | REVIEW | Score 60-79% |
 | FAIL | Score < 60% |
 
-### Write Discovery
-
-```javascript
-Write(`{session}/discoveries/{id}.json`, JSON.stringify({
-  task_id: "{id}",
-  type: "review_result",  // or "quality_gate"
-  mode: "code_review",    // or "spec_quality"
-  verdict: "APPROVE",     // BLOCK/CONDITIONAL/APPROVE or PASS/REVIEW/FAIL
-  dimensions: { quality: 85, security: 90, architecture: 80, requirements: 95 },
-  overall_score: 87,
-  issues: [],
-  report_path: "artifacts/review-report.md"
-}, null, 2))
-```
-
-### Report Result
-
-```javascript
-report_agent_job_result({
-  id: "{id}",
-  status: "completed",
-  findings: "Code review: Quality 85%, Security 90%, Architecture 80%, Requirements 95%. Verdict: APPROVE.",
-  quality_score: "87",
-  supervision_verdict: "",
-  error: ""
-})
-```
-
-Report includes: mode, verdict/gate, dimension scores, discuss verdict (quality only), output paths.
+Report: mode, verdict/gate, dimension scores, discuss verdict (quality only), output paths.
 
 ## Error Handling
 
@@ -95,4 +65,3 @@ Report includes: mode, verdict/gate, dimension scores, discuss verdict (quality 
 | Missing context | Request from coordinator |
 | Invalid mode | Abort with error |
 | Discuss fails | Proceed without discuss, log warning |
-| Upstream discovery file missing | Report error, mark failed |

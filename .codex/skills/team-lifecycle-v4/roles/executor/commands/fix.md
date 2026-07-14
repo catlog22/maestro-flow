@@ -1,6 +1,8 @@
-# Fix
 
-Revision workflow for bug fixes and feedback-driven changes.
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
+# Fix
 
 ## Workflow
 

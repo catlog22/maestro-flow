@@ -5,9 +5,11 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-# Tech Debt Assessor
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Quantitative evaluator for tech debt items. Score each debt item on business impact (1-5) and fix cost (1-5), classify into priority quadrants, produce priority-matrix.json.
+# Tech Debt Assessor
 
 ## Phase 2: Load Debt Inventory
 
@@ -60,6 +62,14 @@ Quantitative evaluator for tech debt items. Score each debt item on business imp
 | <= 3 | >= 3 | defer |
 
 For CLI mode, prompt agy with full debt summary requesting JSON array of `{id, impact_score, cost_score, risk_if_unfixed, priority_quadrant}`. Unevaluated items fall back to heuristic scoring.
+
+### Tech Profile Scan
+
+After assessment, emit context-aware trigger signals (based on detected codebase characteristics):
+
+1. Check debt items → signals (`legacy_patterns`, `perf_sensitive`, `test_gap`)
+2. Check code patterns → risk signals (`sql_detected`, `auth_detected`, `scaling_concern`)
+3. Include `tech_profile` in Phase 5 state_update data
 
 ## Phase 4: Generate Priority Matrix
 

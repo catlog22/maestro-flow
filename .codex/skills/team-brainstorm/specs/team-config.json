@@ -1,0 +1,86 @@
+{
+  "team_name": "team-brainstorm",
+  "team_display_name": "Team Brainstorm",
+  "description": "Head brainstorming team with Generator-Critic loop, shared memory, and dynamic pipeline selection",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Topic clarification, complexity assessment, pipeline selection, convergence monitoring",
+      "message_types": ["pipeline_selected", "gc_loop_trigger", "task_unblocked", "error", "shutdown"]
+    },
+    "ideator": {
+      "task_prefix": "IDEA",
+      "responsibility": "Multi-angle idea generation, concept exploration, divergent thinking",
+      "message_types": ["ideas_ready", "ideas_revised", "error"]
+    },
+    "challenger": {
+      "task_prefix": "CHALLENGE",
+      "responsibility": "Devil's advocate, assumption challenging, feasibility questioning",
+      "message_types": ["critique_ready", "error"]
+    },
+    "synthesizer": {
+      "task_prefix": "SYNTH",
+      "responsibility": "Cross-idea integration, theme extraction, conflict resolution",
+      "message_types": ["synthesis_ready", "error"]
+    },
+    "evaluator": {
+      "task_prefix": "EVAL",
+      "responsibility": "Scoring and ranking, priority recommendation, final selection",
+      "message_types": ["evaluation_ready", "error"]
+    }
+  },
+
+  "pipelines": {
+    "quick": {
+      "description": "Simple topic: generate → challenge → synthesize",
+      "task_chain": ["IDEA-001", "CHALLENGE-001", "SYNTH-001"],
+      "gc_loops": 0
+    },
+    "deep": {
+      "description": "Complex topic with Generator-Critic loop (max 2 rounds)",
+      "task_chain": ["IDEA-001", "CHALLENGE-001", "IDEA-002", "CHALLENGE-002", "SYNTH-001", "EVAL-001"],
+      "gc_loops": 2
+    },
+    "full": {
+      "description": "Parallel fan-out ideation + Generator-Critic + evaluation",
+      "task_chain": ["IDEA-001", "IDEA-002", "IDEA-003", "CHALLENGE-001", "IDEA-004", "SYNTH-001", "EVAL-001"],
+      "gc_loops": 1,
+      "parallel_groups": [["IDEA-001", "IDEA-002", "IDEA-003"]]
+    }
+  },
+
+  "innovation_patterns": {
+    "generator_critic": {
+      "generator": "ideator",
+      "critic": "challenger",
+      "max_rounds": 2,
+      "convergence_trigger": "critique.severity < HIGH"
+    },
+    "shared_memory": {
+      "file": "shared-memory.json",
+      "fields": {
+        "ideator": "generated_ideas",
+        "challenger": "critique_insights",
+        "synthesizer": "synthesis_themes",
+        "evaluator": "evaluation_scores"
+      }
+    },
+    "dynamic_pipeline": {
+      "selector": "coordinator",
+      "criteria": "topic_complexity + scope + time_constraint"
+    }
+  },
+
+  "collaboration_patterns": ["CP-1", "CP-3", "CP-7"],
+
+  "session_dirs": {
+    "base": ".workflow/.team/BRS-{slug}-{YYYY-MM-DD}/",
+    "ideas": "ideas/",
+    "critiques": "critiques/",
+    "synthesis": "synthesis/",
+    "evaluation": "evaluation/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

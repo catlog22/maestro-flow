@@ -1,0 +1,107 @@
+{
+  "team_name": "uidesign",
+  "team_display_name": "UI Design",
+  "description": "UI design team with CP-9 Dual-Track for parallel design and implementation",
+  "version": "1.0.0",
+
+  "roles": {
+    "coordinator": {
+      "task_prefix": null,
+      "responsibility": "Scope assessment, dual-track orchestration, sync point management, GC loop control",
+      "message_types": ["task_unblocked", "sync_checkpoint", "fix_required", "error", "shutdown"]
+    },
+    "researcher": {
+      "task_prefix": "RESEARCH",
+      "responsibility": "Design system analysis, component inventory, accessibility baseline audit",
+      "message_types": ["research_ready", "research_progress", "error"]
+    },
+    "designer": {
+      "task_prefix": "DESIGN",
+      "responsibility": "Design token definition, component specifications, layout design",
+      "message_types": ["design_ready", "design_revision", "design_progress", "error"]
+    },
+    "reviewer": {
+      "task_prefix": "AUDIT",
+      "additional_prefixes": [],
+      "responsibility": "8-dimension Impeccable-aligned audit (anti-slop, color, typography, spacing, motion, interaction, hierarchy, responsive)",
+      "message_types": ["audit_result", "audit_passed", "fix_required", "error"]
+    },
+    "implementer": {
+      "task_prefix": "BUILD",
+      "responsibility": "Component code implementation, CSS generation, design token consumption",
+      "message_types": ["build_complete", "build_progress", "error"]
+    }
+  },
+
+  "pipelines": {
+    "component": {
+      "description": "Single component: research → design → audit → build",
+      "task_chain": ["RESEARCH-001", "DESIGN-001", "AUDIT-001", "BUILD-001"],
+      "complexity": "low"
+    },
+    "system": {
+      "description": "Design system with dual-track: design tokens → audit → parallel build+components → audit → build components",
+      "task_chain": [
+        "RESEARCH-001",
+        "DESIGN-001:tokens", "AUDIT-001",
+        "DESIGN-002:components || BUILD-001:tokens",
+        "AUDIT-002", "BUILD-002:components"
+      ],
+      "sync_points": ["AUDIT-001", "AUDIT-002"],
+      "complexity": "medium"
+    },
+    "full-system": {
+      "description": "Complete design system with 3 audit checkpoints",
+      "task_chain": [
+        "RESEARCH-001",
+        "DESIGN-001:tokens", "AUDIT-001",
+        "DESIGN-002:components || BUILD-001:tokens",
+        "AUDIT-002",
+        "BUILD-002:components", "AUDIT-003"
+      ],
+      "sync_points": ["AUDIT-001", "AUDIT-002", "AUDIT-003"],
+      "complexity": "high"
+    }
+  },
+
+  "innovation_patterns": {
+    "generator_critic": {
+      "generator": "designer",
+      "critic": "reviewer",
+      "max_rounds": 2,
+      "convergence": "audit.score >= 8 && audit.critical_count === 0",
+      "escalation": "Coordinator intervenes after max rounds"
+    },
+    "shared_memory": {
+      "file": "shared-memory.json",
+      "fields": {
+        "researcher": ["component_inventory", "accessibility_patterns"],
+        "designer": ["design_token_registry", "style_decisions"],
+        "reviewer": ["audit_history"],
+        "implementer": ["component_inventory"]
+      }
+    },
+    "dynamic_pipeline": {
+      "criteria": {
+        "component": "scope.component_count <= 1",
+        "system": "scope.component_count <= 5 && scope.has_token_system",
+        "full-system": "scope.component_count > 5 || scope.is_full_redesign"
+      }
+    },
+    "dual_track": {
+      "pattern": "CP-9",
+      "description": "Design and implementation proceed in parallel after sync checkpoints",
+      "sync_mechanism": "AUDIT tasks serve as sync points between tracks",
+      "fallback": "If dual-track fails, coordinator falls back to sequential execution"
+    }
+  },
+
+  "session_dirs": {
+    "base": ".workflow/.team/UDS-{slug}-{YYYY-MM-DD}/",
+    "research": "research/",
+    "design": "design/",
+    "audit": "audit/",
+    "build": "build/",
+    "messages": ".workflow/.team-msg/{team-name}/"
+  }
+}

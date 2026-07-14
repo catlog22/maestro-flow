@@ -1,6 +1,6 @@
-# Testing Pipelines
 
-Pipeline definitions and task registry for team-testing.
+
+# Testing Pipelines
 
 ## Pipeline Selection
 

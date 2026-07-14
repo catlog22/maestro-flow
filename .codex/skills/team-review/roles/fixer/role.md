@@ -2,14 +2,14 @@
 role: fixer
 prefix: FIX
 inner_loop: true
-message_types:
-  success: fix_complete
-  error: fix_failed
+message_types: 
 ---
 
-# Code Fixer
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Fix code based on reviewed findings. Load manifest, plan fix groups, apply with rollback-on-failure, verify. Code-generation role -- modifies source files.
+# Code Fixer
 
 ## Phase 2: Context & Scope Resolution
 

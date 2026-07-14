@@ -235,7 +235,7 @@ Automated issue discovery: multi-perspective (8 perspectives) or prompt-driven. 
 Remaining tokens after `issue discover` -- optional. Parse first remaining token to determine mode.
 
 **Modes:**
-- _(empty)_ -- interactive mode selection (AskUserQuestion)
+- _(empty)_ -- interactive mode selection ([@ask] AskUserQuestion)
 - `multi-perspective` -- 8-perspective parallel agent scan
 - `by-prompt "..."` -- prompt-driven iterative agent exploration (CLI-planned)
 
@@ -266,7 +266,7 @@ Remaining tokens after `issue discover` -- optional. Parse first remaining token
 
 <execution>
 Determine mode from remaining tokens:
-- No arguments or empty → interactive selection via AskUserQuestion
+- No arguments or empty → interactive selection via [@ask] AskUserQuestion
 - First token is `multi-perspective` → multi-perspective mode
 - First token is `by-prompt` → prompt-driven mode, remaining tokens are the user prompt
 
@@ -358,7 +358,7 @@ Remaining tokens after `knowledge capture` — type token + description + option
 | `document`/`doc`/`文档` | document | DOC- | (general fallback) |
 | `insight`/`ins`/`洞察`/`经验` | insight | INS- | content, tags, phase (replaces former manage-learn) |
 | Short text + `--tag` | tip | TIP- | — |
-| No args | — | — | AskUserQuestion (10 options) |
+| No args | — | — | [@ask] AskUserQuestion (10 options) |
 
 **Output**: `.workflow/knowhow/{PREFIX}-{YYYYMMDD}-{slug}.md` with YAML frontmatter (title, description, type, category, created, tags, source, lang, status)
 
@@ -380,7 +380,7 @@ Follow '~/.maestro/workflows/knowhow.md' completely.
 ### Phase Gates (MANDATORY, BLOCKING)
 
 **GATE 1: Type Detection → Content Collection** (Type routing → Content extraction)
-- REQUIRED: Type detected from first token or selected via AskUserQuestion.
+- REQUIRED: Type detected from first token or selected via [@ask] AskUserQuestion.
 - REQUIRED: Type maps to a valid prefix (KNW-/TPL-/RCP-/REF-/DCS-/TIP-/AST-/BLP-/DOC-/INS-).
 - BLOCKED if type unresolvable after interactive prompt.
 
@@ -971,7 +971,7 @@ Each agent returns: `[{pattern_type, regex_evidence, file_count, sample_matches:
 
 **GATE 2: Generation → Write** (Phase 2 → Phase 3)
 - REQUIRED: At least 1 pattern meets `--min-count` threshold.
-- REQUIRED: User confirmed pattern groups via AskUserQuestion.
+- REQUIRED: User confirmed pattern groups via [@ask] AskUserQuestion.
 - BLOCKED if `--scan-only` is set — stop after summary.
 
 **GATE 3: Write → Validation** (Phase 3 → KG Index)
@@ -990,7 +990,7 @@ For each discovered pattern with ≥3 occurrences:
 ### Phase 3: Validate & write
 
 1. Show discovered patterns summary to user
-2. AskUserQuestion: confirm/edit/skip each pattern group
+2. [@ask] AskUserQuestion: confirm/edit/skip each pattern group
 3. Write `.workflow/kg/extractors.yaml`
 4. Run `maestro kg index` to verify new symbols are extracted
 
@@ -1058,7 +1058,7 @@ Domain term lifecycle: discover/manual → register → active → (optional) de
 1. **Single-term atomic operation** — each invocation registers exactly ONE term; NEVER batch-write multiple terms in a single execution
 2. **Glossary append-only** — existing terms in `glossary.yaml` SHALL NOT be modified or removed; only new entries are appended
 3. **Duplicate guard** — MUST check for exact canonical name match AND near-matches before writing; NEVER create duplicate entries
-4. **Confirmation mandatory** — MUST present term details (canonical, definition, aliases, tier, path) via AskUserQuestion before any glossary write; NEVER write without user confirmation
+4. **Confirmation mandatory** — MUST present term details (canonical, definition, aliases, tier, path) via [@ask] AskUserQuestion before any glossary write; NEVER write without user confirmation
 5. **Schema compliance** — every term entry MUST include canonical name, definition, tier, and at least one alias/keyword; incomplete entries SHALL NOT be persisted
 6. **Domain directory prerequisite** — `.workflow/domain/` MUST exist before writing; NEVER auto-create the directory (E002 if missing)
 </invariants>
@@ -1066,7 +1066,7 @@ Domain term lifecycle: discover/manual → register → active → (optional) de
 <execution>
 Follow '~/.maestro/workflows/domain-add.md' completely.
 
-**Confirmation gate**: Before writing to glossary.yaml, AskUserQuestion showing the term canonical name, definition, extracted aliases/keywords, tier, and target file path. Proceed only on user confirm.
+**Confirmation gate**: Before writing to glossary.yaml, [@ask] AskUserQuestion showing the term canonical name, definition, extracted aliases/keywords, tier, and target file path. Proceed only on user confirm.
 </execution>
 
 <error_codes>
@@ -1200,7 +1200,7 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 
 ### Platform Inquiry（Stage 2a，交互式）
 
-当 `session_summary.by_platform` 包含多个平台且 session 总量 > 20 时，使用 AskUserQuestion 询问用户修改主要在哪个平台进行。用户选择后以 `--platform` 参数重新获取 timeline，缩小后续分析范围。
+当 `session_summary.by_platform` 包含多个平台且 session 总量 > 20 时，使用 [@ask] AskUserQuestion 询问用户修改主要在哪个平台进行。用户选择后以 `--platform` 参数重新获取 timeline，缩小后续分析范围。
 
 ### Session 详情加载策略（Stage 2b）
 
@@ -1273,7 +1273,7 @@ Remaining tokens after `sync rebuild` -- optional flags.
 - `--force` -- Skip confirmation prompt and proceed directly
 - `--skip-commit` -- Do not auto-commit after rebuild
 
-**Confirmation gate:** Unless `--force` is set, prompt the user (AskUserQuestion) before executing git commit. Show the list of changed files and proposed commit message. If `--skip-commit` is set, skip the commit entirely.
+**Confirmation gate:** Unless `--force` is set, prompt the user ([@ask] AskUserQuestion) before executing git commit. Show the list of changed files and proposed commit message. If `--skip-commit` is set, skip the commit entirely.
 
 **Mapper agent assignments (when `--focus` omitted):**
 | Agent | Focus | Output file |

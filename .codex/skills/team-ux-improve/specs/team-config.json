@@ -1,0 +1,181 @@
+{
+  "version": "5.0.0",
+  "team_name": "ux-improve",
+  "team_display_name": "UX Improve",
+  "team_purpose": "Systematically discover and fix UI/UX interaction issues including unresponsive buttons, missing feedback, and state refresh problems",
+  "skill_name": "team-ux-improve",
+  "skill_path": "~  or <project>/.claude/skills/team-ux-improve/",
+  "worker_agent": "team-worker",
+  "pipeline_type": "Standard",
+  "completion_action": "interactive",
+  "has_inline_discuss": false,
+  "has_shared_explore": true,
+  "roles": [
+    {
+      "name": "coordinator",
+      "display_name": "Coordinator",
+      "type": "orchestrator",
+      "responsibility_type": "orchestration",
+      "role_spec": "roles/coordinator/role.md",
+      "task_prefix": null,
+      "inner_loop": false,
+      "allowed_tools": ["Agent", "AskUserQuestion", "Read", "Write", "Bash", "Glob", "Grep", "TaskList", "TaskGet", "TaskUpdate", "TaskCreate", "TeamCreate", "TeamDelete", "SendMessage", "mcp__maestro__team_msg"],
+      "description": "Orchestrates the UX improvement pipeline, spawns workers, monitors progress"
+    },
+    {
+      "name": "scanner",
+      "display_name": "UI Scanner",
+      "type": "worker",
+      "responsibility_type": "read_only_analysis",
+      "role_spec": "roles/scanner/role.md",
+      "task_prefix": "SCAN",
+      "inner_loop": false,
+      "allowed_tools": ["Read", "Grep", "Glob", "Bash", "mcp__maestro__read_file", "mcp__maestro__team_msg", "TaskList", "TaskGet", "TaskUpdate", "SendMessage"],
+      "description": "Scans UI components to identify interaction issues (unresponsive buttons, missing feedback, state not refreshing)",
+      "frontmatter": {
+        "prefix": "SCAN",
+        "inner_loop": false,
+        "message_types": {
+          "success": "scan_complete",
+          "error": "error"
+        }
+      }
+    },
+    {
+      "name": "diagnoser",
+      "display_name": "State Diagnoser",
+      "type": "worker",
+      "responsibility_type": "orchestration",
+      "role_spec": "roles/diagnoser/role.md",
+      "task_prefix": "DIAG",
+      "inner_loop": false,
+      "allowed_tools": ["Read", "Grep", "Bash", "mcp__maestro__read_file", "mcp__maestro__team_msg", "TaskList", "TaskGet", "TaskUpdate", "SendMessage"],
+      "description": "Diagnoses root causes of UI issues: state management problems, event binding failures, async handling errors",
+      "frontmatter": {
+        "prefix": "DIAG",
+        "inner_loop": false,
+        "message_types": {
+          "success": "diag_complete",
+          "error": "error"
+        }
+      }
+    },
+    {
+      "name": "designer",
+      "display_name": "UX Designer",
+      "type": "worker",
+      "responsibility_type": "orchestration",
+      "role_spec": "roles/designer/role.md",
+      "task_prefix": "DESIGN",
+      "inner_loop": false,
+      "allowed_tools": ["Read", "Write", "Bash", "mcp__maestro__read_file", "mcp__maestro__write_file", "mcp__maestro__team_msg", "TaskList", "TaskGet", "TaskUpdate", "SendMessage"],
+      "description": "Designs feedback mechanisms (loading/error/success states) and state management patterns (React/Vue reactive updates)",
+      "frontmatter": {
+        "prefix": "DESIGN",
+        "inner_loop": false,
+        "message_types": {
+          "success": "design_complete",
+          "error": "error"
+        }
+      }
+    },
+    {
+      "name": "implementer",
+      "display_name": "Code Implementer",
+      "type": "worker",
+      "responsibility_type": "code_generation",
+      "role_spec": "roles/implementer/role.md",
+      "task_prefix": "IMPL",
+      "inner_loop": true,
+      "allowed_tools": ["Read", "Write", "Edit", "Bash", "mcp__maestro__read_file", "mcp__maestro__write_file", "mcp__maestro__edit_file", "mcp__maestro__team_msg", "TaskList", "TaskGet", "TaskUpdate", "SendMessage"],
+      "description": "Generates executable fix code with proper state management, event handling, and UI feedback bindings",
+      "frontmatter": {
+        "prefix": "IMPL",
+        "inner_loop": true,
+        "message_types": {
+          "success": "impl_complete",
+          "error": "error"
+        }
+      }
+    },
+    {
+      "name": "tester",
+      "display_name": "Test Engineer",
+      "type": "worker",
+      "responsibility_type": "validation",
+      "role_spec": "roles/tester/role.md",
+      "task_prefix": "TEST",
+      "inner_loop": false,
+      "allowed_tools": ["Read", "Write", "Bash", "mcp__maestro__read_file", "mcp__maestro__write_file", "mcp__maestro__team_msg", "TaskList", "TaskGet", "TaskUpdate", "SendMessage"],
+      "description": "Generates test cases to verify fixes (loading states, error handling, state updates)",
+      "frontmatter": {
+        "prefix": "TEST",
+        "inner_loop": false,
+        "message_types": {
+          "success": "test_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      }
+    }
+  ],
+  "utility_members": [
+    {
+      "name": "explorer",
+      "display_name": "Codebase Explorer",
+      "role_spec": "roles/explorer/role.md",
+      "callable_by": "coordinator",
+      "purpose": "Explore codebase for UI component patterns, state management conventions, and framework-specific patterns",
+      "allowed_tools": ["Read", "Grep", "Glob", "Bash", "mcp__maestro__read_file", "mcp__maestro__team_msg"],
+      "frontmatter": {
+        "prefix": "EXPLORE",
+        "inner_loop": false,
+        "message_types": {
+          "success": "explore_complete",
+          "error": "error"
+        }
+      }
+    }
+  ],
+  "pipeline": {
+    "stages": [
+      {
+        "stage_id": 1,
+        "stage_name": "UI Scanning",
+        "roles": ["scanner"],
+        "dependencies": [],
+        "description": "Scan UI components for interaction issues"
+      },
+      {
+        "stage_id": 2,
+        "stage_name": "Root Cause Diagnosis",
+        "roles": ["diagnoser"],
+        "dependencies": ["scanner"],
+        "description": "Diagnose root causes of identified issues"
+      },
+      {
+        "stage_id": 3,
+        "stage_name": "Solution Design",
+        "roles": ["designer"],
+        "dependencies": ["diagnoser"],
+        "description": "Design feedback mechanisms and state management solutions"
+      },
+      {
+        "stage_id": 4,
+        "stage_name": "Code Implementation",
+        "roles": ["implementer"],
+        "dependencies": ["designer"],
+        "description": "Generate fix code with proper state handling"
+      },
+      {
+        "stage_id": 5,
+        "stage_name": "Test Validation",
+        "roles": ["tester"],
+        "dependencies": ["implementer"],
+        "description": "Generate and run tests to verify fixes"
+      }
+    ],
+    "diagram": "scanner (SCAN) → diagnoser (DIAG) → designer (DESIGN) → implementer (IMPL) → tester (TEST)",
+    "fast_advance_eligible": ["scanner→diagnoser", "diagnoser→designer", "designer→implementer"]
+  }
+}

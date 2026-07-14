@@ -1,72 +1,55 @@
 ---
 name: codify-to-knowhow
-description: Manifest-driven knowledge asset generator — converts structured
-  packages into knowhow + spec entries
-argument-hint: <package-path>
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+description: Manifest-driven knowledge asset generator — converts any structured package into maestro knowhow + spec entries with ref linking. Triggers on "codify-to-knowhow", "style to knowhow", "知识固化".
+allowed-tools:
+  - Bash
+  - Edit
+  - Glob
+  - Grep
+  - Read
+  - Write
+  - update_plan
+auto-continue: true
 session-mode: none
-version: 0.5.50
 ---
 
-<purpose>
-Sequential manifest-driven knowledge asset generator. Reads `knowhow-manifest.json` from a package directory, writes knowhow files and spec entries with ref linking. No wave execution needed — pure sequential file operations.
+# Codify to Knowhow
 
-**Core workflow**: Validate Manifest -> Write Knowhow Files -> Write Spec Entries -> Verify & Index
+通用 manifest 驱动的知识资产生成器。读取 `knowhow-manifest.json`，按声明创建 knowhow 文件和 spec 条目，通过 ref 建立索引-详文桥梁。
+
+**适用场景**: 任何工作流产出需要固化为知识资产时使用。上游 skill（如 `maestro-impeccable --codify`）负责生成 manifest，本 skill 负责执行知识写入。
+
+## Architecture Overview
 
 ```
-+---------------------------------------------------------------------------+
-|                  CODIFY TO KNOWHOW (Direct Execution)                     |
-+---------------------------------------------------------------------------+
-|                                                                           |
-|  Step 1: Parse package-path from $ARGUMENTS                              |
-|                                                                           |
-|  Step 2: Load & Validate knowhow-manifest.json                           |
-|     +-- Validate required fields: slug, roles, knowhow[], specs[]        |
-|     +-- Parse manifest object                                            |
-|                                                                           |
-|  Step 3: Generate Knowhow Assets                                         |
-|     +-- For each manifest.knowhow[]:                                     |
-|     |   +-- Idempotency check (skip if file exists)                      |
-|     |   +-- Build frontmatter + body with <knowhow-entry> tags           |
-|     |   +-- Write to .workflow/knowhow/{PREFIX}-{slug}-{fileSlug}.md     |
-|                                                                           |
-|  Step 4: Generate Spec Entries                                            |
-|     +-- For each manifest.specs[]:                                       |
-|     |   +-- Idempotency check (skip if title exists)                     |
-|     |   +-- Write via maestro spec add CLI (fallback: direct append)     |
-|     |   +-- Include ref attribute linking to knowhow file                |
-|                                                                           |
-|  Step 5: Refresh Wiki Index                                               |
-|     +-- maestro wiki health                                              |
-|                                                                           |
-|  Step 6: Verify & Report                                                  |
-|     +-- Verify knowhow files exist                                       |
-|     +-- Verify spec entries written                                      |
-|     +-- Verify ref links resolve                                         |
-|     +-- Output completion report                                         |
-|                                                                           |
-+---------------------------------------------------------------------------+
+┌─────────────────────────────────────────────────────────────┐
+│  Codify to Knowhow (SKILL.md) — Manifest-Driven            │
+│  → Read manifest → Create knowhow → Create specs → Verify  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+    ┌──────────┬───────────┼───────────┬──────────┐
+    ↓          ↓           ↓           ↓          │
+┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐      │
+│Phase 1 │ │Phase 2 │ │Phase 3 │ │Phase 4 │      │
+│ Load   │ │Generate│ │Generate│ │ Index  │      │
+│Manifest│ │Knowhow │ │ Specs  │ │ Verify │      │
+└───┬────┘ └───┬────┘ └───┬────┘ └───┬────┘      │
+    │          │          │          │             │
+ manifest   AST-/DCS-  spec-entry  verified       │
+ parsed     files       + ref       assets        │
 ```
 
-</purpose>
+## Key Design Principles
 
-<context>
-```bash
-$codify-to-knowhow ".workflow/reference_style/my-style-v1"
-```
+1. **Manifest 驱动**: 所有行为由 `knowhow-manifest.json` 声明，不含硬编码领域知识
+2. **幂等执行**: 每个写入前按 slug 检查已存在资产，存在则跳过
+3. **ref 桥梁**: spec-entry 通过 `ref` 引用 knowhow 详文
+4. **闭合标签**: 所有条目使用 `<spec-entry>`/`<knowhow-entry>` 闭合标签
+5. **上游生成 manifest**: 本 skill 不做知识提取，只做知识写入
 
-**Arguments**:
-- `<package-path>` (positional, required): Directory containing `knowhow-manifest.json`
+## Manifest Format
 
-**Upstream**: `maestro-ui-codify`, `learn-decompose`, or any skill that generates a manifest
-**Downstream**: `maestro search --category coding`, `maestro load --type spec --keyword <slug>`
-
-**Output boundary**: ALL file writes MUST target `.workflow/knowhow/` (knowhow assets) and `.workflow/specs/` (spec entries) only. NEVER modify source code, manifest files, or files outside these paths.
-</context>
-
-<manifest_schema>
-
-### knowhow-manifest.json
+`knowhow-manifest.json` 由上游 skill 生成，放在 package 目录中：
 
 ```json
 {
@@ -84,7 +67,6 @@ $codify-to-knowhow ".workflow/reference_style/my-style-v1"
       "assetType": "design-tokens",
       "codePaths": ["src/styles/"],
       "tags": ["design-tokens", "colors"],
-      "body": "## Colors\n\n...",
       "entries": [
         {
           "category": "pattern",
@@ -100,353 +82,94 @@ $codify-to-knowhow ".workflow/reference_style/my-style-v1"
     {
       "category": "coding",
       "keywords": "colors,design-tokens",
-      "title": "Color Coding Convention",
+      "title": "颜色编码约定",
       "ref": "knowhow/AST-my-style-v1-tokens.md",
-      "body": "Use var(--color-primary) for primary colors..."
+      "body": "主色使用 var(--color-primary)..."
     }
   ]
 }
 ```
 
-**Required fields**:
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `slug` | Yes | Package slug, used in file naming |
-| `roles` | Yes | Role annotation array |
-| `knowhow` | Yes | Knowhow asset declarations (can be empty) |
-| `specs` | Yes | Spec entry declarations (can be empty) |
-| `domain` | No | Domain identifier (ui-design, api, data) |
-| `packagePath` | No | Original package path (metadata) |
-
-**knowhow[] item fields**:
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `prefix` | Yes | File prefix: AST, DCS, BLP, TIP, RCP, REF |
-| `fileSlug` | Yes | File name suffix (e.g. "tokens") |
-| `title` | Yes | Document title |
-| `category` | Yes | asset, decision, blueprint, tip, recipe, reference |
-| `tags` | Yes | Tag array |
-| `body` | Yes | Markdown body content |
-| `assetType` | No | Asset subtype (design-tokens, components, etc.) |
-| `codePaths` | No | Related source code paths |
-| `entries` | No | Sub-entries with `<knowhow-entry>` closed tags |
-
-**specs[] item fields**:
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `category` | Yes | coding, arch, quality, debug, test, review, learning |
-| `title` | Yes | Entry title |
-| `keywords` | Yes | Comma-separated keywords |
-| `body` | Yes | Entry body text |
-| `ref` | No | Reference path to knowhow file |
-
-</manifest_schema>
-
-<invariants>
-1. **Manifest Required**: No manifest = error exit, no fallback
-2. **Idempotent Writes**: Same-slug file exists = skip, never overwrite
-3. **Closed Tags**: All entries use `<spec-entry>` / `<knowhow-entry>` closed-tag format
-4. **Upstream Generates Manifest**: This skill only writes, never extracts knowledge
-5. **CLI First, File Fallback**: Prefer `maestro spec add` CLI with `--ref` param; fall back to direct file append on failure (with confirmation log)
-6. **Ref Bridge**: Spec entries reference knowhow files via `ref` attribute — both CLI path (`--ref` flag) and fallback path (`ref` attr in `<spec-entry>`) carry the ref
-</invariants>
-
-<execution>
-
-### Step 1: Parse Package Path
-
-**Parse first positional from `$ARGUMENTS` and assign to `package_path`**:
-
-| Variable | Source | Default |
-|----------|--------|---------|
-| `package_path` | first positional from $ARGUMENTS (required) | ERROR if missing |
-
-```bash
-# Parse first positional argument from $ARGUMENTS
-package_path="$(echo "$ARGUMENTS" | awk '{print $1}')"
-test -n "$package_path" || { echo "ERROR: package_path is required as first positional argument"; exit 1; }
-
-# Validate directory exists
-test -d "$package_path" || { echo "ERROR: Package path not found: $package_path"; exit 1; }
-
-# Validate manifest exists
-manifest_file="${package_path}/knowhow-manifest.json"
-test -f "$manifest_file" || { echo "ERROR: knowhow-manifest.json not found in $package_path"; exit 1; }
-```
-
-### Step 2: Load & Validate Manifest
-
-Read `${package_path}/knowhow-manifest.json` and validate:
-
-```javascript
-const manifest = JSON.parse(manifestContent);
-
-// Required field validation
-const required = ['slug', 'roles', 'knowhow', 'specs'];
-const missing = required.filter(f => !manifest[f]);
-if (missing.length > 0) {
-  ERROR("Missing required fields: " + missing.join(', '));
-  EXIT(1);
-}
-
-// Summary
-REPORT(`Manifest loaded:
-  Slug: ${manifest.slug}
-  Domain: ${manifest.domain || 'generic'}
-  Roles: ${manifest.roles.join(', ')}
-  Knowhow assets: ${manifest.knowhow.length}
-  Spec entries: ${manifest.specs.length}
-`);
-```
-
-### Step 3: Generate Knowhow Assets
-
-Ensure `.workflow/knowhow/` exists. For each `manifest.knowhow[]` item:
-
-```bash
-mkdir -p .workflow/knowhow
-```
-
-```javascript
-const knowhowPaths = [];
-
-for (const asset of manifest.knowhow) {
-  const filename = `${asset.prefix}-${manifest.slug}-${asset.fileSlug}.md`;
-  const filepath = `.workflow/knowhow/${filename}`;
-
-  // Idempotency check
-  if (fileExists(filepath)) {
-    REPORT(`SKIP: ${filename} (already exists)`);
-    continue;
-  }
-
-  // Build frontmatter
-  let frontmatter = `---
-title: ${asset.title}
-type: ${asset.category}`;
-
-  if (asset.assetType) {
-    frontmatter += `\nassetType: ${asset.assetType}`;
-  }
-
-  frontmatter += `\nroles: [${manifest.roles.join(', ')}]`;
-
-  if (asset.codePaths && asset.codePaths.length > 0) {
-    frontmatter += `\ncodePaths:`;
-    for (const cp of asset.codePaths) {
-      frontmatter += `\n  - ${cp}`;
-    }
-  }
-
-  frontmatter += `\ntags: [${asset.tags.join(', ')}]`;
-  frontmatter += `\n---`;
-
-  // Build body
-  let body = asset.body || '';
-
-  // If entries[], generate <knowhow-entry> closed tags
-  if (asset.entries && asset.entries.length > 0) {
-    const today = new Date().toISOString().split('T')[0];
-    for (let i = 0; i < asset.entries.length; i++) {
-      const entry = asset.entries[i];
-      const entryId = `${asset.prefix}-${manifest.slug}-${String(i + 1).padStart(3, '0')}`;
-      body += `\n\n<knowhow-entry keywords="${entry.category},${entry.keywords}" date="${today}" title="${entry.title}" description="${entry.description || ''}" id="${entryId}" roles="${manifest.roles.join(',')}" source="codify-to-knowhow">
-
-### ${entry.title}
-
-${entry.body}
-
-</knowhow-entry>`;
-    }
-  }
-
-  const content = `${frontmatter}\n\n${body}`;
-  Write(filepath, content);
-  REPORT(`CREATED: ${filename}`);
-  knowhowPaths.push(filepath);
-}
-
-const skippedCount = manifest.knowhow.length - knowhowPaths.length;
-REPORT(`Knowhow assets: ${knowhowPaths.length} created, ${skippedCount} skipped`);
-```
-
-### Step 4: Generate Spec Entries
-
-For each `manifest.specs[]` item, write spec entry with `<spec-entry>` closed tag:
-
-```javascript
-const categoryFileMap = {
-  coding: 'coding-conventions.md',
-  pattern: 'coding-conventions.md',
-  arch: 'architecture-constraints.md',
-  decision: 'architecture-constraints.md',
-  quality: 'quality-rules.md',
-  rule: 'quality-rules.md',
-  validation: 'quality-rules.md',
-  debug: 'debug-notes.md',
-  test: 'test-conventions.md',
-  review: 'review-standards.md',
-  learning: 'learnings.md',
-  bug: 'learnings.md',
-  tools: 'tools.md',
-  ui: 'ui-conventions.md'
-};
-
-const today = new Date().toISOString().split('T')[0];
-let specEntryCount = 0;
-
-for (const spec of manifest.specs) {
-  const targetFile = `.workflow/specs/${categoryFileMap[spec.category]}`;
-
-  // Idempotency: check if title already exists
-  const titleExists = Bash(`grep -q "${spec.title}" "${targetFile}" 2>/dev/null && echo "exists" || echo "new"`);
-
-  if (titleExists.trim() === 'exists') {
-    REPORT(`SKIP spec: "${spec.title}" (already exists in ${spec.category})`);
-    continue;
-  }
-
-  // Build spec-entry closed tag
-  let refAttr = '';
-  if (spec.ref) {
-    refAttr = `\n  ref="${spec.ref}"`;
-  }
-
-  const entryBlock = `
-
-<spec-entry roles="${manifest.roles.join(',')}" keywords="${spec.keywords}" date="${today}" title="${spec.title}" description="${spec.description || ''}"${refAttr}>
-
-### ${spec.title}
-
-${spec.body}
-
-</spec-entry>`;
-
-  // Prefer CLI, fallback to direct append
-  const descFlag = spec.description ? ` --description "${spec.description}"` : '';
-  const refFlag = spec.ref ? ` --ref "${spec.ref}"` : '';
-  const cliResult = Bash(`maestro spec add ${spec.category} "${spec.title}" "${spec.body}" --keywords "${spec.keywords}"${descFlag}${refFlag} 2>/dev/null`);
-
-  if (cliResult.exitCode !== 0) {
-    // Fallback: direct file append — confirm before writing
-    REPORT(`CLI failed for "${spec.title}", falling back to direct append to ${targetFile}`);
-    Edit(targetFile, { append: entryBlock });
-  }
-
-  specEntryCount++;
-  REPORT(`CREATED spec: "${spec.title}" -> ${spec.category}`);
-}
-
-REPORT(`Spec entries: ${specEntryCount} created`);
-```
-
-### Step 5: Refresh Wiki Index
-
-```bash
-maestro wiki health 2>/dev/null || echo "Wiki index refresh skipped (command not available)"
-```
-
-### Step 6: Verify & Report
-
-**6a: Verify knowhow files**:
-
-```bash
-echo "=== Knowhow Asset Verification ==="
-for file in ${knowhowPaths}; do
-  if test -f "$file"; then
-    echo "  OK: $file"
-  else
-    echo "  MISSING: $file"
-  fi
-done
-```
-
-**6b: Verify spec entries** (verify by actual targetFile set from manifest, not hardcoded categories):
-
-```javascript
-// Collect unique target files from manifest specs
-const verifiedFiles = new Set();
-for (const spec of manifest.specs) {
-  const targetFile = `.workflow/specs/${categoryFileMap[spec.category]}`;
-  verifiedFiles.add(targetFile);
-}
-```
-
-```bash
-echo "=== Spec Entry Verification ==="
-for target_file in ${verifiedFiles}; do
-  grep -c "${slug}" "${target_file}" 2>/dev/null && \
-    echo "  OK: ${target_file}" || echo "  MISSING: No entries in ${target_file}"
-done
-```
-
-**6c: Verify ref links** (scan only the target files derived from the manifest):
-
-```bash
-echo "=== Ref Link Verification ==="
-refs=$(grep -oP 'ref="knowhow/[^"]*"' ${verifiedFiles} 2>/dev/null | grep "${slug}" || true)
-
-if [ -n "$refs" ]; then
-  echo "$refs" | while IFS= read -r ref; do
-    filepath=$(echo "$ref" | grep -oP 'knowhow/[^"]*')
-    if test -f ".workflow/$filepath"; then
-      echo "  OK: $filepath"
-    else
-      echo "  BROKEN: $filepath (file not found)"
-    fi
-  done
-else
-  echo "  WARNING: No ref links found for ${slug}"
-fi
-```
-
-**6d: Completion report**:
+## Execution Flow
 
 ```
-=== Codify to Knowhow Complete ===
+Input: <package-path> (must contain knowhow-manifest.json)
 
-Package: {slug}
-Source: {packagePath}
+Phase 1: Load and Validate Manifest
+   └─ Ref: phases/01-load-manifest.md
+      ├─ Validate package path and manifest existence
+      ├─ Parse knowhow-manifest.json
+      └─ Output: manifest object
 
-Knowhow Assets:
-  {list of created/skipped files}
+Phase 2: Generate Knowhow Assets
+   └─ Ref: phases/02-generate-knowhow.md
+      ├─ Idempotency check per file
+      ├─ Write knowhow files per manifest.knowhow[]
+      └─ Output: knowhowPaths[]
 
-Spec Entries ({specEntryCount} created):
-  {list of created/skipped entries by category}
+Phase 3: Generate Spec Entries
+   └─ Ref: phases/03-generate-specs.md
+      ├─ Idempotency check per entry
+      ├─ Write spec entries per manifest.specs[]
+      └─ Output: specEntryCount
 
-Ref Links: spec -> knowhow bridge established
-Wiki Index: refreshed
-
-Next steps:
-  maestro search --category coding    # Browse by role
-  maestro load --type spec --keyword {slug}    # Load related specs
-  maestro load --type knowhow --id <id>                # Load full entry
+Phase 4: Index and Verify
+   └─ Ref: phases/04-index-verify.md
+      └─ Output: verification report
 ```
 
-</execution>
+**Phase Reference Documents**:
 
-<error_codes>
+| Phase | Document | Purpose |
+|-------|----------|---------|
+| 1 | [phases/01-load-manifest.md](phases/01-load-manifest.md) | Load and validate manifest |
+| 2 | [phases/02-generate-knowhow.md](phases/02-generate-knowhow.md) | Create knowhow files |
+| 3 | [phases/03-generate-specs.md](phases/03-generate-specs.md) | Create spec entries with ref |
+| 4 | [phases/04-index-verify.md](phases/04-index-verify.md) | Verify assets and index |
 
-| Error | Resolution |
-|-------|------------|
-| Package path not found | Abort: "Package path not found: {path}" |
-| Manifest not found | Abort: "knowhow-manifest.json not found in {path}" |
-| Missing required fields | Abort: "Missing required fields: {list}" |
-| Idempotent conflict | Skip existing assets, report skip count |
-| CLI spec add failed | Fallback to direct file append |
-| Wiki health failed | Warning, continue (non-critical) |
+## Core Rules
 
-</error_codes>
+1. **Manifest 必需**: 无 manifest 则报错退出
+2. **幂等写入**: 同 slug 文件存在则跳过
+3. **闭合标签**: 所有 entry 使用闭合标签格式
+4. **Auto-Continue**: Phase 完成后自动执行下一 Phase
+5. **不提取知识**: 本 skill 只写入，知识提取由上游完成
 
-<success_criteria>
-- [ ] Package path validated and manifest loaded
-- [ ] All required manifest fields present
-- [ ] Knowhow files written to .workflow/knowhow/ (idempotent)
-- [ ] Spec entries written with <spec-entry> closed tags (idempotent)
-- [ ] Ref links from specs point to existing knowhow files
-- [ ] Wiki index refreshed
-- [ ] Completion report with asset counts
-</success_criteria>
+## Data Flow
+
+```
+Input (packagePath)
+    ↓
+Phase 1 → manifest: { slug, knowhow[], specs[] }
+    ↓
+Phase 2 → knowhowPaths: string[], knowhowIds: string[]
+    ↓
+Phase 3 → specEntryCount: number
+    ↓
+Phase 4 → verificationResult
+    ↓
+Completion report
+```
+
+## update_plan Pattern
+
+```json
+[
+  {"content": "Phase 1: 加载 Manifest", "status": "in_progress"},
+  {"content": "Phase 2: 生成 Knowhow 资产", "status": "pending"},
+  {"content": "Phase 3: 生成 Spec 条目", "status": "pending"},
+  {"content": "Phase 4: 索引验证", "status": "pending"}
+]
+```
+
+## Error Handling
+
+- **Manifest 不存在**: 报告错误，提示上游 skill 需先生成 manifest
+- **Manifest 格式错误**: 报告缺失字段
+- **幂等冲突**: 跳过已存在资产，报告跳过数量
+- **CLI 失败**: 回退到 Write tool 直接写文件
+
+## Related Commands
+
+**上游**: `maestro-impeccable --codify`, `learn-decompose`, 或任何生成 manifest 的 skill
+**后续**: `maestro wiki list --category coding`, `maestro load --type spec --keyword <slug>`

@@ -2,15 +2,14 @@
 role: scout
 prefix: SCOUT
 inner_loop: false
-message_types:
-  success: scan_ready
-  error: error
-  issues: issues_found
+message_types: 
 ---
 
-# Multi-Perspective Scout
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Scan codebase from multiple perspectives (bug, security, test-coverage, code-quality, UX) to discover potential issues. Produce structured scan results with severity-ranked findings.
+# Multi-Perspective Scout
 
 ## Phase 2: Context & Scope Assessment
 
@@ -37,30 +36,38 @@ Scan codebase from multiple perspectives (bug, security, test-coverage, code-qua
 
 ## Phase 3: Multi-Perspective Scan
 
-**Low complexity**: Use `mcp__ace-tool__search_context` for quick pattern-based scan.
+**Low complexity**: Use `` for quick pattern-based scan.
 
-**Medium/High complexity**: CLI fan-out -- one `maestro delegate --mode analysis` per perspective:
+**Medium/High complexity**: Multi-prompt `maestro explore` (preferred for read-only scan):
 
-For each active perspective, build prompt and execute:
+Build one prompt per active perspective:
+```bash
+maestro explore \
+  "FIND: <perspective1> issues and anti-patterns
+SCOPE: <scan-scope>
+ATTENTION: common <perspective1> problems
+EXPECTED: severity + file:line + description" \
+  "FIND: <perspective2> issues and anti-patterns
+SCOPE: <scan-scope>
+EXPECTED: severity + file:line + description" \
+  --max-turns 3 --json
 ```
-PURPOSE: Scan code from <perspective> perspective to discover potential issues
-TASK: Analyze code patterns for <perspective> problems, identify anti-patterns, check for common issues
-MODE: analysis
-CONTEXT: @<scan-scope>
-EXPECTED: List of findings with severity (critical/high/medium/low), file:line references, description
-CONSTRAINTS: Focus on actionable findings only
-```
-```
-shell_exec(`maestro delegate "<prompt>" --role analyze --mode analysis`, { timeout: 30000 })
-// Execution mapping: @~/.maestro/workflows/shell-exec-protocol.md
-// NEVER skip — each perspective's findings are required for aggregation
-```
+
+**Fallback** (when deeper analysis needed per perspective): `maestro delegate "<prompt>" --role analyze --mode analysis`
 
 After all perspectives complete:
 - Parse CLI outputs into structured findings
 - Deduplicate by file:line (merge perspectives for same location)
 - Compare against known defect patterns from .msg/meta.json
 - Rank by severity: critical > high > medium > low
+
+### Tech Profile Scan
+
+After scanning, emit context-aware trigger signals (based on detected codebase characteristics):
+
+1. Check scan findings → signals (`sql_detected`, `auth_detected`, `injection_risk`, `eval_usage`)
+2. Check quality issues → risk signals (`test_gap`, `legacy_patterns`, `perf_sensitive`)
+3. Include `tech_profile` in Phase 5 state_update data
 
 ## Phase 4: Result Aggregation
 

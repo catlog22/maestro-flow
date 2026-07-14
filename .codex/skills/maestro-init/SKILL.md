@@ -1,184 +1,161 @@
 ---
 name: maestro-init
 description: Initialize project with auto state detection
-argument-hint: "[-y] [--from <source>]"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, request_user_input
+argument-hint: [-y] [--from <source>] [--from-brainstorm SESSION-ID]
+allowed-tools:
+  - Bash
+  - Glob
+  - Grep
+  - Read
+  - Write
+  - followup_task
+  - interrupt_agent
+  - list_agents
+  - request_user_input
+  - send_message
+  - spawn_agent
+  - spawn_agents_on_csv
+  - wait_agent
 session-mode: bootstrap
-version: 0.5.50
 ---
-
-<bootstrap_mode>
-This skill initializes protected project state before a Session exists. It MUST NOT call `maestro run create`; bootstrap files remain owned by their protected stores.
-</bootstrap_mode>
-
 <purpose>
-Sequential project setup skill. Detects project state (empty/code/existing), gathers project information through deep questioning or document extraction, then creates the `.workflow/` directory structure. No parallel agents — single sequential flow.
-
-When `-y`: After config questions, run research without further interaction. Expects idea document via @ reference.
+Initialize project: detect state, create `.workflow/` with project.md, state.json, config.json.
+Entry point; downstream: step `roadmap` or step `brainstorm`.
 </purpose>
 
+<deferred_reading>
+- [project.md](~/.maestro/templates/project.md) — read when generating project description
+- [state.json](~/.maestro/templates/state.json) — read when creating initial state
+- [config.json](~/.maestro/templates/config.json) — read when creating workflow configuration
+</deferred_reading>
+
 <context>
+$ARGUMENTS — none for interactive mode, or `-y` with `@file` reference for auto mode.
 
-```bash
-$maestro-init ""
-$maestro-init "-y"
-$maestro-init "--from brainstorm:20260318-brainstorm-auth"
-```
+**Flags:**
 
-**Flags**:
-- `-y`: Skip interactive questioning; extract from provided document
-- `--from <source>`: Load upstream context package (brainstorm:ID, @file, or path). Consumes context-package.json. Alias: `--from-brainstorm`
+| Flag | Effect | Default |
+|------|--------|---------|
+| `-y` / `--yes` | Automatic mode. After config questions, runs research without further interaction. Expects idea document via @ reference. | `false` |
+| `--from <source>` | Load upstream context package (brainstorm:ID, @file, or path). Consumes context-package.json to pre-fill project vision, goals, constraints, and terminology. Skips interactive questioning. Alias: `--from-brainstorm` | — |
 
-**Output**: `.workflow/` directory with project.md, state.json, config.json, specs/
+**Load project state if exists:**
+Check for `.workflow/state.json` -- loads context if project already initialized.
 
-**Output boundary**: ALL file writes MUST target `.workflow/` (project files, state, config, specs). NEVER modify existing source code or files outside `.workflow/`.
+**Output boundary**: ALL file writes MUST target `.workflow/` (project.md, state.json, config.json, specs/) only. NEVER modify source code or files outside `.workflow/`.
 </context>
 
 <invariants>
-1. **Never create roadmap** — init only creates .workflow/ structure; roadmap is a separate step
-2. **Deep questioning over speed** — follow threads, ask clarifying questions (unless -y)
-3. **Detect, don't assume** — scan for existing files, package managers, frameworks before asking
-4. **Templates are source of truth** — always read templates before writing files
-5. **Idempotent check** — if .workflow/ exists, refuse to overwrite (E002)
+1. **Idempotent init** — re-running init on an already-initialized project MUST detect existing `.workflow/` and warn (E002); NEVER silently overwrite existing state
+2. **Scope guard** — init MUST only make initialization decisions; NEVER prejudge roadmap structure, plan scope, or implementation details
+3. **All artifacts required** — init MUST NOT report completion until project.md, state.json, and config.json all exist; missing artifacts MUST be created before exit
+4. **Template-driven** — deferred templates (project.md, state.json, config.json) MUST be read from `~/.maestro/templates/` and customized; NEVER generate from scratch without template
+5. **Interview writes back** — all interactive decisions MUST be written to project.md/config.json before proceeding to research or completion; NEVER leave decisions unrecorded
 </invariants>
+
+<interview_protocol>
+Follows @~/.maestro/workflows/interview-mechanics.md standard.
+
+**Interaction mode**: convergent menu-driven
+**Decision tree** (strict order): project type (greenfield / existing codebase onboarding) → tech stack detection and confirmation → directory structure preferences → initial configuration (specs categories, wiki bootstrap)
+**Scope guard**: only init decisions; do not prejudge roadmap structure or plan scope
+**Writeback target**: project.md (project description) + config.json (settings) + state.json (initial state)
+**Additional skip conditions**: --from source (upstream context pre-fills decisions)
+**Exit condition**: all configuration questions settled → proceed to workflow execution
+</interview_protocol>
 
 <execution>
 
 ### Phase Gates (MANDATORY, BLOCKING)
 
-**GATE 1: Parse → Detect**
-- REQUIRED: Arguments parsed; flags extracted.
-- BLOCKED if: `-y` set but no document reference provided (E001).
+**GATE 1: Pre-flight → Interview**
+- REQUIRED: `.workflow/` existence check completed.
+- REQUIRED: `--from` source validated (if provided).
+- BLOCKED if: E002 (greenfield conflict with existing `.workflow/`) unresolved.
 
-**GATE 2: Detect → Gather**
-- REQUIRED: Project state classified (empty/code/existing).
-- BLOCKED if: existing `.workflow/` detected (E002).
+**GATE 2: Interview → Research**
+- REQUIRED: All interview decisions recorded in project.md and config.json.
+- REQUIRED: `.workflow/` directory created with initial structure.
+- BLOCKED if: interview decisions not yet written to files.
 
-**GATE 3: Gather → Write**
-- REQUIRED: All project information gathered (interactive or extracted).
-- REQUIRED: Templates read from `~/.maestro/templates/`.
-- BLOCKED if: templates unreadable.
+**GATE 3: Research → Completion**
+- REQUIRED: All 3 required artifacts exist (project.md, state.json, config.json).
+- REQUIRED: `.workflow/specs/` initialized.
+- BLOCKED if: any artifact missing — write it before reporting completion.
 
-### Step 1: Parse Arguments
+### Pre-flight
 
-Extract flags from arguments:
-- `-y` flag presence
-- `--from <source>` value (or `--from-brainstorm SESSION-ID` alias)
-- Remaining text as project description
+1. Check if `.workflow/` already exists — if so, load state and warn (E002 for greenfield conflicts)
+2. Validate `--from` source is accessible if provided
 
-### Step 2: Detect Project State
+Follow '~/.maestro/workflows/init.md' completely.
 
-Check for `.workflow/state.json` and common manifests (`package.json`, `pyproject.toml`, `Cargo.toml`, `go.mod`).
+### Artifact Verification (before completion)
 
-Classify as:
-- **existing**: `.workflow/state.json` found — warn and exit (E002)
-- **code**: Source files present but no `.workflow/` — onboarding existing codebase
-- **empty**: Greenfield project
-
-### Step 3: Gather Project Information
-
-**If `--from` (or `--from-brainstorm`)**:
-- Read `.workflow/.brainstorm/{SESSION-ID}/guidance-specification.md`
-- Extract these fields from the document (match by heading or frontmatter key):
-  - `## Vision` or `vision:` → project.md Core Value Proposition
-  - `## Goals` or `goals:` → project.md Requirements (Validated)
-  - `## Constraints` or `constraints:` → project.md Constraints section
-  - `## Terminology` or `terminology:` → project.md Glossary section
-  - `## Tech Decisions` or `tech_stack:` → project.md Tech Stack section
-- Skip interactive questioning — all project info comes from the document
-
-**If `-y`**:
-- Extract project info from provided document/@ reference
-- Minimal interactive questions (confirm core value only)
-
-**Otherwise (interactive)**:
-- Deep questioning flow (ask via `request_user_input`, follow each thread with clarifying questions until satisfied):
-  1. "What problem does this project solve? Who feels the pain today?" — core value proposition
-  2. "Who are the target users? How do they currently work around this problem?" — user personas
-  3. "What are the must-have features for a first usable version?" — key requirements (follow threads, don't rush)
-  4. "What are known constraints — budget, timeline, team size, tech mandates, compliance?" — constraints/limitations
-  5. "What tech stack preferences or existing infrastructure must be used?" — tech stack decisions
-- For each answer, probe deeper: "Why?", "What happens if not?", "Can you give an example?"
-
-### Step 4: Read Templates
-
-Read the following templates:
-- `~/.maestro/templates/project.md`
-- `~/.maestro/templates/state.json`
-- `~/.maestro/templates/config.json`
-
-### Step 5: Create .workflow/ Structure
-
-Create directories: `.workflow/specs`, `{run_dir}/outputs`, `.workflow/codebase`.
-
-### Step 6: Write project.md
-
-Populate template with: project name, core value proposition, requirements (Validated/Active/Out of Scope), key decisions, constraints, tech stack. Write to `.workflow/project.md`.
-
-### Step 7: Write state.json
-
-Initialize from template with `current_milestone: null`, `status: "initialized"`, empty `artifacts[]`. Write to `.workflow/state.json`.
-
-### Step 8: Write config.json
-
-Configuration questions (or defaults for -y). Ask via `request_user_input`:
-
-**Granularity** — task decomposition detail level:
-```json
-{ "questions": [{ "id": "granularity", "header": "Task Granularity", "question": "How granular should task breakdowns be?", "options": [{ "label": "medium (Recommended)", "description": "Balanced: one task per logical feature" }, { "label": "fine", "description": "Detailed: one task per function/component" }, { "label": "coarse", "description": "High-level: one task per epic/module" }] }] }
 ```
-
-**Workflow agents** — enable parallel research agents during analyze/plan:
-```json
-{ "questions": [{ "id": "workflow_agents", "header": "Workflow Agents", "question": "Enable parallel research agents for analysis and planning phases?", "options": [{ "label": "enabled (Recommended)", "description": "Spawn parallel agents for research, patterns, risks" }, { "label": "disabled", "description": "Sequential single-agent flow only" }] }] }
+REQUIRED_ARTIFACTS = [
+  ".workflow/project.md",    // Core Value, Requirements, Key Decisions
+  ".workflow/state.json",    // artifacts[], initialized to idle state
+  ".workflow/config.json"    // Workflow configuration
+]
 ```
-
-**Gate preferences** — milestone completion gates:
-```json
-{ "questions": [{ "id": "gate_preferences", "header": "Quality Gates", "question": "What quality gates should be enforced at milestone boundaries?", "options": [{ "label": "standard (Recommended)", "description": "Audit report required, all tasks completed" }, { "label": "strict", "description": "Audit + code review + test coverage threshold" }, { "label": "relaxed", "description": "Manual approval only, no automated checks" }] }] }
-```
-
-Write collected configuration to `.workflow/config.json`.
-
-### Step 9: Initialize specs/
-
-Run `Bash("maestro spec init")` to create empty seed files in `.workflow/specs/`.
-
-If project state is **code** (existing source files detected in Step 2):
-- Suggest `$spec-setup` to scan codebase and populate specs with detected conventions
-- Ask user via `request_user_input`: "Source files detected. Run spec-setup to scan codebase conventions?" with options: "Yes, scan now (Recommended)" / "No, skip for now"
-- Only run `$spec-setup` if user confirms
-
-If project state is **empty** (greenfield, no source files found in Step 2):
-- Skip spec-setup entirely — no code to scan
-- Specs are populated progressively by analyze, plan, and execute stages via `maestro spec add`
-
-### Step 10: Completion Report
-
-Display created files and next steps: `$maestro-blueprint` (full spec), `$maestro-roadmap` (roadmap), `$manage-status`, `$maestro-brainstorm`, `$maestro-quick`.
-
+If any artifact is missing: DO NOT report completion. Write the missing file first.
 </execution>
 
+<completion>
+### Standalone report
+
+```
+=== WORKFLOW INITIALIZED ===
+Project: {project_name}
+State:   .workflow/state.json (active)
+
+Created:
+  .workflow/project.md
+  .workflow/state.json
+  .workflow/config.json
+  .workflow/specs/
+```
+
+### Ralph-invoked completion
+
+End the step by calling the CLI (no text block output):
+```
+maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+```
+
+Status verdicts:
+- **DONE** — Normal completion
+- **DONE_WITH_CONCERNS** — Completed with concerns; pass `--concerns`
+- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
+- **BLOCKED** — External hard blocker; pass `--reason`
+
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Roadmap needed (default light) | step `roadmap` (`maestro run prepare roadmap` + `maestro run create roadmap`) |
+| Full spec package | step `blueprint` (`maestro run prepare blueprint` + `maestro run create blueprint`) |
+| Explore ideas first | step `brainstorm` (`maestro run prepare brainstorm` + `maestro run create brainstorm`) |
+| View project dashboard | `/manage status` |
+| Quick ad-hoc task | step `quick` (`maestro run prepare quick` + `maestro run create quick`) |
+</completion>
+
 <error_codes>
-
-| Code | Severity | Description | Recovery |
-|------|----------|-------------|----------|
-| E001 | error | No arguments when -y requires document | Ask user for document reference |
-| E002 | error | .workflow/ already exists | Show status, suggest manage-status |
-| E003 | error | Context source not found (--from / --from-brainstorm) | List available sessions |
-| W001 | warning | Could not detect tech stack | Continue with manual input |
-
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | No arguments provided when -y requires @ reference | Check arguments format, re-run with correct input |
+| E002 | error | .workflow/ already exists for greenfield init | Check .workflow/ directory state, resolve conflicts |
+| E003 | error | Context source not found (--from / --from-brainstorm) | Check arguments format, re-run with correct input |
+| W001 | warning | Research agent failed, continuing with partial results | Retry research or proceed with partial results |
 </error_codes>
 
 <success_criteria>
-- [ ] Project state correctly detected (empty/code/existing)
-- [ ] `.workflow/` directory structure created
-- [ ] `project.md` populated with project information
-- [ ] `state.json` initialized with correct status
-- [ ] `config.json` written with configuration
-- [ ] `specs/` initialized with convention files
-- [ ] Completion report displayed with next steps
-
-### Artifact Verification
-Before reporting completion, verify: .workflow/project.md, .workflow/state.json, .workflow/config.json all exist. If any missing: DO NOT report completion.
+- [ ] `.workflow/project.md` created with Core Value, Requirements (Validated/Active/Out of Scope), Key Decisions
+- [ ] `.workflow/state.json` created with artifacts[] array, initialized to idle state
+- [ ] `.workflow/config.json` created with workflow / execution / git / gates / codebase / guard / collab / specInjection / dashboard segments
+- [ ] `.workflow/specs/` initialized with convention files
+- [ ] All interview decisions written to project.md / config.json before proceeding
+- [ ] Research completed (if enabled) — parallel agents spawned with results merged
+- [ ] Next-step routing displayed in completion report
 </success_criteria>

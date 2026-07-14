@@ -54,7 +54,7 @@ Skip if `--skip-knowledge`. Otherwise:
    - Decisions with `status: accepted` from `runs/*/run.json.handoff.decisions[]` → spec candidates
    - Patterns/recipes discovered during execution → knowhow candidates
    - Risks that materialized or were mitigated → learning candidates
-3. **Present to user** via `AskUserQuestion`:
+3. **Present to user** via `[@ask] AskUserQuestion`:
    ```
    question: "以下知识候选项值得持久化吗？"
    options:
@@ -63,8 +63,8 @@ Skip if `--skip-knowledge`. Otherwise:
      - "跳过" (no knowledge extraction)
    ```
 4. **Persist** selected items:
-   - Specs → `Skill("spec", "add ...")`
-   - Knowhow → `Skill("manage", "knowledge capture ...")`
+   - Specs → `[@skill] Skill("spec", "add ...")`
+   - Knowhow → `[@skill] Skill("manage", "knowledge capture ...")`
    - Record promoted IDs in `session.json.lifecycle.promoted[]`（前缀区分 spec:/knowhow:）
 
 ### Step 3: Seal Session

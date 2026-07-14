@@ -1,0 +1,246 @@
+{
+  "version": "5.0.0",
+  "team_name": "perf-opt",
+  "team_display_name": "Performance Optimization",
+  "skill_name": "team-perf-opt",
+  "skill_path": "~  or <project>/.claude/skills/team-perf-opt/",
+  "worker_agent": "team-worker",
+  "pipeline_type": "Linear with Review-Fix Cycle (Parallel-Capable)",
+  "completion_action": "interactive",
+  "has_inline_discuss": true,
+  "has_shared_explore": true,
+  "has_checkpoint_feedback": true,
+  "has_session_resume": true,
+
+  "roles": [
+    {
+      "name": "coordinator",
+      "type": "orchestrator",
+      "description": "Orchestrates performance optimization pipeline, manages task chains, handles review-fix cycles",
+      "spec_path": "roles/coordinator/role.md",
+      "tools": ["Task", "TaskCreate", "TaskList", "TaskGet", "TaskUpdate", "TeamCreate", "TeamDelete", "SendMessage", "AskUserQuestion", "Read", "Write", "Bash", "Glob", "Grep"]
+    },
+    {
+      "name": "profiler",
+      "type": "orchestration",
+      "description": "Profiles application performance, identifies CPU/memory/IO/network/rendering bottlenecks",
+      "role_spec": "roles/profiler/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "PROFILE",
+        "inner_loop": false,
+        "additional_prefixes": [],
+        "discuss_rounds": [],
+        "delegates_to": [],
+        "message_types": {
+          "success": "profile_complete",
+          "error": "error"
+        }
+      },
+      "weight": 1,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "strategist",
+      "type": "orchestration",
+      "description": "Analyzes bottleneck reports, designs prioritized optimization plans with concrete strategies",
+      "role_spec": "roles/strategist/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "STRATEGY",
+        "inner_loop": false,
+        "additional_prefixes": [],
+        "discuss_rounds": ["DISCUSS-OPT"],
+        "delegates_to": [],
+        "message_types": {
+          "success": "strategy_complete",
+          "error": "error"
+        }
+      },
+      "weight": 2,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "optimizer",
+      "type": "code_generation",
+      "description": "Implements optimization changes following the strategy plan",
+      "role_spec": "roles/optimizer/role.md",
+      "inner_loop": "dynamic",
+      "frontmatter": {
+        "prefix": "IMPL",
+        "inner_loop": "dynamic",
+        "additional_prefixes": ["FIX"],
+        "discuss_rounds": [],
+        "delegates_to": [],
+        "message_types": {
+          "success": "impl_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      },
+      "weight": 3,
+      "tools": ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "benchmarker",
+      "type": "validation",
+      "description": "Runs benchmarks, compares before/after metrics, validates performance improvements",
+      "role_spec": "roles/benchmarker/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "BENCH",
+        "inner_loop": false,
+        "additional_prefixes": [],
+        "discuss_rounds": [],
+        "delegates_to": [],
+        "message_types": {
+          "success": "bench_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      },
+      "weight": 4,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    },
+    {
+      "name": "reviewer",
+      "type": "read_only_analysis",
+      "description": "Reviews optimization code for correctness, side effects, and regression risks",
+      "role_spec": "roles/reviewer/role.md",
+      "inner_loop": false,
+      "frontmatter": {
+        "prefix": "REVIEW",
+        "inner_loop": false,
+        "additional_prefixes": ["QUALITY"],
+        "discuss_rounds": ["DISCUSS-REVIEW"],
+        "delegates_to": [],
+        "message_types": {
+          "success": "review_complete",
+          "error": "error",
+          "fix": "fix_required"
+        }
+      },
+      "weight": 4,
+      "tools": ["Read", "Bash", "Glob", "Grep", "Task"]
+    }
+  ],
+
+  "parallel_config": {
+    "modes": ["single", "fan-out", "independent", "auto"],
+    "default_mode": "auto",
+    "max_branches": 5,
+    "auto_mode_rules": {
+      "single": "optimization_count <= 2",
+      "fan-out": "optimization_count >= 3"
+    }
+  },
+
+  "pipeline": {
+    "stages": [
+      {
+        "stage": 1,
+        "name": "Performance Profiling",
+        "roles": ["profiler"],
+        "blockedBy": [],
+        "fast_advance": true
+      },
+      {
+        "stage": 2,
+        "name": "Optimization Strategy",
+        "roles": ["strategist"],
+        "blockedBy": ["PROFILE"],
+        "fast_advance": true
+      },
+      {
+        "stage": 3,
+        "name": "Code Optimization",
+        "roles": ["optimizer"],
+        "blockedBy": ["STRATEGY"],
+        "fast_advance": false
+      },
+      {
+        "stage": 4,
+        "name": "Benchmark & Review",
+        "roles": ["benchmarker", "reviewer"],
+        "blockedBy": ["IMPL"],
+        "fast_advance": false,
+        "parallel": true,
+        "review_fix_cycle": {
+          "trigger": "REVIEW or BENCH finds issues",
+          "target_stage": 3,
+          "max_iterations": 3
+        }
+      }
+    ],
+    "parallel_pipelines": {
+      "fan-out": {
+        "shared_stages": [1, 2],
+        "branch_stages": [3, 4],
+        "branch_prefix": "B",
+        "review_fix_cycle": {
+          "scope": "per_branch",
+          "max_iterations": 3
+        }
+      },
+      "independent": {
+        "pipeline_prefix_chars": "ABCDEFGHIJ",
+        "review_fix_cycle": {
+          "scope": "per_pipeline",
+          "max_iterations": 3
+        }
+      }
+    },
+    "diagram": "See pipeline-diagram section"
+  },
+
+  "shared_resources": [
+    {
+      "name": "Performance Baseline",
+      "path": "<session>/artifacts/baseline-metrics.json",
+      "usage": "Before-optimization metrics for comparison",
+      "scope": "shared (fan-out) / per-pipeline (independent)"
+    },
+    {
+      "name": "Bottleneck Report",
+      "path": "<session>/artifacts/bottleneck-report.md",
+      "usage": "Profiler output consumed by strategist",
+      "scope": "shared (fan-out) / per-pipeline (independent)"
+    },
+    {
+      "name": "Optimization Plan",
+      "path": "<session>/artifacts/optimization-plan.md",
+      "usage": "Strategist output consumed by optimizer",
+      "scope": "shared (fan-out) / per-pipeline (independent)"
+    },
+    {
+      "name": "Benchmark Results",
+      "path": "<session>/artifacts/benchmark-results.json",
+      "usage": "Benchmarker output consumed by reviewer",
+      "scope": "per-branch (fan-out) / per-pipeline (independent)"
+    }
+  ],
+
+  "shared_memory_namespacing": {
+    "single": {
+      "profiler": "profiler",
+      "strategist": "strategist",
+      "optimizer": "optimizer",
+      "benchmarker": "benchmarker",
+      "reviewer": "reviewer"
+    },
+    "fan-out": {
+      "profiler": "profiler",
+      "strategist": "strategist",
+      "optimizer": "optimizer.B{NN}",
+      "benchmarker": "benchmarker.B{NN}",
+      "reviewer": "reviewer.B{NN}"
+    },
+    "independent": {
+      "profiler": "profiler.{P}",
+      "strategist": "strategist.{P}",
+      "optimizer": "optimizer.{P}",
+      "benchmarker": "benchmarker.{P}",
+      "reviewer": "reviewer.{P}"
+    }
+  }
+}

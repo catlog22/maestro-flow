@@ -1,6 +1,6 @@
-# QA Pipelines
 
-Pipeline definitions and task registry for team-quality-assurance.
+
+# QA Pipelines
 
 ## Pipeline Modes
 

@@ -1,0 +1,71 @@
+{
+  "_comment": "User-facing config template. Coordinator generates this from task description in Phase 1. Fields prefixed with _ are documentation, omit from real config.",
+
+  "swarm": {
+    "_comment": "Top-level swarm parameters",
+    "n_ants": 5,
+    "max_iterations": 5,
+    "elite_keep": 3
+  },
+
+  "aco": {
+    "_comment": "ACO algorithm hyperparameters - defaults are sane",
+    "alpha": 1.0,
+    "beta": 2.0,
+    "rho": 0.2,
+    "q": 1.0,
+    "tau_init": 1.0,
+    "tau_min": 0.01,
+    "tau_max": 10.0
+  },
+
+  "task_space": {
+    "_comment": "Define the search space. Use EITHER 'nodes' (explicit) OR 'auto_discover_from' (glob).",
+    "type": "graph",
+    "nodes": ["node_a", "node_b", "node_c"],
+    "_alt_auto_discover": "auto_discover_from: 'src/**/*.ts'",
+    "max_path_length": 5,
+    "start_nodes": "any",
+    "edges": "complete"
+  },
+
+  "scoring": {
+    "_comment": "How verified_score is computed. mode = script | llm | fallback",
+    "mode": "fallback",
+    "_alt_script": "script_path: '../my-scoring-rule.py' (file must define def score(ant_artifact) -> float)",
+    "_alt_llm": "rubric: 'custom scoring rubric text for scorer role'",
+    "self_score_discount": 0.5
+  },
+
+  "ant_prompt": {
+    "_comment": "What the ant actually tries to achieve. This is the bridge between task semantics and ACO mechanics.",
+    "objective": "Find the file with the highest density of suspicious code patterns",
+    "evidence_requirements": [
+      "At least 1 file:line reference per node visited",
+      "Concrete code snippet showing the suspicious pattern"
+    ],
+    "tools_hint": "Use Grep + Read for code-based exploration"
+  },
+
+  "convergence": {
+    "_comment": "Stop conditions - any-of triggers convergence",
+    "max_iterations": 5,
+    "stagnation": {
+      "enabled": true,
+      "patience": 2,
+      "min_delta": 0.01
+    },
+    "entropy_floor": {
+      "enabled": true,
+      "threshold": 0.5
+    },
+    "budget_tokens": {
+      "enabled": false,
+      "max": 100000
+    },
+    "target_score": {
+      "enabled": true,
+      "value": 0.95
+    }
+  }
+}

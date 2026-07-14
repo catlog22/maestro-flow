@@ -54,7 +54,7 @@ Follow '~/.maestro/workflows/merge.md' completely.
 <completion>
 ### Knowledge inquiry
 
-After successful merge, use `AskUserQuestion` to confirm knowledge persistence:
+After successful merge, use `[@ask] AskUserQuestion` to confirm knowledge persistence:
 
 ```
 question: "Merge 完成。是否记录本次工作经验教训？"
@@ -65,13 +65,13 @@ options:
     description: "不记录，直接完成"
 ```
 
-User selects "记录经验" → prompt for title/insight, then persist via `Skill("spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
+User selects "记录经验" → prompt for title/insight, then persist via `[@skill] Skill("spec", "add learning \"<title>\" \"<insight>\" --keywords <kw1>,<kw2> --description \"<summary>\"")`. User selects "跳过" → proceed to next-step routing.
 
 ### Next-step routing
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Merge complete | Skill({ skill: "manage", args: "status" }) |
+| Merge complete | [@skill] Skill({ skill: "manage", args: "status" }) |
 | Next dep-ready session | step `analyze` for session (`maestro run prepare analyze --session {next-dep-ready-slug}` + `maestro run create analyze --session {next-dep-ready-slug}`) |
 </completion>
 

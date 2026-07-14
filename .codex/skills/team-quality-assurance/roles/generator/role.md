@@ -3,15 +3,14 @@ role: generator
 prefix: QAGEN
 inner_loop: false
 additional_prefixes: [QAGEN-fix]
-message_types:
-  success: tests_generated
-  revised: tests_revised
-  error: error
+message_types: 
 ---
 
-# Test Generator
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+</required_reading>
 
-Generate test code according to strategist's strategy and layers. Support L1 unit tests, L2 integration tests, L3 E2E tests. Follow project's existing test patterns and framework conventions.
+# Test Generator
 
 ## Phase 2: Strategy & Pattern Loading
 
