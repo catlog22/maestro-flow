@@ -7,7 +7,7 @@ Lifecycle verbs: **prepare → create → brief → complete**.
 
 ## Prepare (optional, read-only)
 
-- `maestro prepare <step>` resolves what a step would consume and produce without side effects.
+- `maestro run prepare <step>` resolves what a step would consume and produce without side effects.
 - Read-only and idempotent — it never allocates a Session or creates directories.
 - Use it to preview upstream availability and the derived artifact contract before committing to a Run.
 
@@ -31,5 +31,6 @@ Lifecycle verbs: **prepare → create → brief → complete**.
 
 ## Completion
 
-1. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically — repair any blocking artifact it reports.
-2. Report success only when the Run is completed. Completed artifacts are immutable; revisions create new Runs/artifacts.
+1. Run `maestro run check {run_id}` and repair any blocking artifact or exit gate it reports.
+2. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically.
+3. Report success only when the Run is completed. Completed artifacts are immutable; revisions create new Runs/artifacts.

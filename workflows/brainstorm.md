@@ -1,3 +1,10 @@
+---
+name: brainstorm
+prepare: brainstorm
+commands: [maestro-brainstorm]
+session-mode: inherited
+---
+
 # Workflow: Brainstorm
 
 ## Architecture

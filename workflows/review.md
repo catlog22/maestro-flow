@@ -1,3 +1,10 @@
+---
+name: review
+prepare: review
+commands: [quality-review]
+session-mode: inherited
+---
+
 # Workflow: Review
 
 Layered multi-dimensional code review — parallel agents, severity grading, iterative deep-dive. Artifacts unified as `review-findings.json`; findings handed to test or plan.

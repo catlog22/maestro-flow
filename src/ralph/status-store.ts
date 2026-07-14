@@ -1,10 +1,5 @@
 // ---------------------------------------------------------------------------
 // Status store — ralph session resolution via standard SessionStore.
-//
-// Replaces the proprietary `.workflow/.maestro/ralph-*/status.json` model.
-// Sessions now live in `.workflow/sessions/{id}/session.json` (standard path).
-// Ralph-specific metadata in `ralph-meta.json` alongside session.json.
-//
 // Backward-compatible API surface for cmd-*.ts callers.
 // ---------------------------------------------------------------------------
 

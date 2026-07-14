@@ -1,3 +1,10 @@
+---
+name: plan
+prepare: plan
+commands: [maestro-plan]
+session-mode: inherited
+---
+
 # Workflow: Plan
 
 5-step pipeline: Context Collection → Clarification → Planning → Plan Checking → Confirmation.

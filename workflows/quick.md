@@ -1,3 +1,10 @@
+---
+name: quick
+prepare: quick
+commands: [maestro-quick]
+session-mode: inherited
+---
+
 # Workflow: Quick
 
 ## Prerequisites

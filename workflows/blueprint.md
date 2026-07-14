@@ -1,3 +1,10 @@
+---
+name: blueprint
+prepare: blueprint
+commands: [maestro-blueprint]
+session-mode: inherited
+---
+
 # Workflow: Blueprint
 
 ## Pipeline Position

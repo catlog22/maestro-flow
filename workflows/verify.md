@@ -1,3 +1,10 @@
+---
+name: verify
+prepare: verify
+commands: [maestro-verify]
+session-mode: inherited
+---
+
 # Workflow: Verify
 
 Dual verification: Goal-Backward structural verification + Nyquist test coverage. Verify each acceptance criterion, check existence/substance/wiring/regression/anti-patterns. Artifacts unified as `verification.json`; gaps handed to review/test or back to plan.

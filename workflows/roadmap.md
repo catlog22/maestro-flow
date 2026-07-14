@@ -1,3 +1,10 @@
+---
+name: roadmap
+prepare: roadmap
+commands: [maestro-roadmap]
+session-mode: inherited
+---
+
 # Workflow: Roadmap
 
 ## Worktree Guard

@@ -1,3 +1,10 @@
+---
+name: test
+prepare: test
+commands: [quality-test]
+session-mode: inherited
+---
+
 # Workflow: Test
 
 Conversational UAT — persisted state, auto-diagnosis, gap closed-loop. Core: show the expected behavior, ask if reality matches, one scenario at a time.

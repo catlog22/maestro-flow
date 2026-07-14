@@ -1,3 +1,10 @@
+---
+name: debug
+prepare: debug
+commands: [quality-debug]
+session-mode: inherited
+---
+
 # Workflow: Debug
 
 Scientific method for root-cause isolation — subagent isolation, persisted investigation state, confidence scoring. Three entry modes (standalone / from-test / parallel), produces only diagnosis and fix directions.

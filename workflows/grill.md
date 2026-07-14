@@ -1,3 +1,10 @@
+---
+name: grill
+prepare: grill
+commands: [maestro-grill]
+session-mode: inherited
+---
+
 # Workflow: Grill
 
 ## Architecture

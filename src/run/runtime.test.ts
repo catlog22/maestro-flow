@@ -14,12 +14,29 @@ import { Command } from 'commander';
 import { createSessionState } from './defaults.js';
 import { sessionStateSchema } from './schemas.js';
 import { SessionStore } from './store.js';
-import { checkRun, completeRun, createRun, sealSession } from './runtime.js';
+import { checkRun, completeRun, createRun, prepareStep, sealSession } from './runtime.js';
 import { registerRunCommand } from '../commands/run.js';
 import { resolveCommandSource } from './contract.js';
 import { migrateV1toV2, readStateJson, writeStateJson } from '../utils/state-schema.js';
 
 const roots: string[] = [];
+
+const migratedStepAssociations = {
+  'maestro-analyze': 'analyze',
+  'quality-auto-test': 'auto-test',
+  'maestro-blueprint': 'blueprint',
+  'maestro-brainstorm': 'brainstorm',
+  'quality-debug': 'debug',
+  'maestro-execute': 'execute',
+  'maestro-grill': 'grill',
+  'maestro-plan': 'plan',
+  'maestro-quick': 'quick',
+  'quality-retrospective': 'retrospective',
+  'quality-review': 'review',
+  'maestro-roadmap': 'roadmap',
+  'quality-test': 'test',
+  'maestro-verify': 'verify',
+} as const;
 
 function root(): string {
   const path = mkdtempSync(join(tmpdir(), 'maestro-run-'));
@@ -75,14 +92,18 @@ describe('Session/Run runtime', () => {
   });
 
   it('parses every migrated core command contract', () => {
-    const names = [
-      'maestro-analyze', 'maestro-plan', 'maestro-execute', 'maestro-verify',
-      'quality-review', 'quality-test', 'quality-debug',
-    ];
-    for (const name of names) {
-      const source = resolveCommandSource(process.cwd(), name);
-      expect(source.relativePath).toBe(`.claude/commands/${name}.md`);
+    for (const [command, step] of Object.entries(migratedStepAssociations)) {
+      const source = resolveCommandSource(process.cwd(), command);
+      expect(source.path.replaceAll('\\', '/')).toMatch(new RegExp(`/prepare/${step}\\.md$`));
       expect(source.contract.produces.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('resolves every migrated command through workflow YAML associations', () => {
+    for (const [command, step] of Object.entries(migratedStepAssociations)) {
+      const prepared = prepareStep(process.cwd(), command);
+      expect(prepared.prepare?.path.replaceAll('\\', '/')).toMatch(new RegExp(`/prepare/${step}\\.md$`));
+      expect(prepared.workflow?.path.replaceAll('\\', '/')).toMatch(new RegExp(`/workflows/${step}\\.md$`));
     }
   });
 

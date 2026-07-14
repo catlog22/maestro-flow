@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { basename, join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import YAML from 'yaml';
 import { z } from 'zod';
@@ -101,7 +101,8 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
     join(projectRoot, '.claude', 'commands', `${name}.md`),
     join(projectRoot, '.claude', 'skills', name, 'SKILL.md'),
   ]);
-  const path = candidates.find(candidate => existsSync(candidate));
+  const path = candidates.find(candidate => existsSync(candidate))
+    ?? resolveStepContent(projectRoot, normalized).prepare?.path;
   if (!path) {
     const empty = '';
     return {
@@ -137,6 +138,34 @@ const refEntrySchema = z.union([
   }).passthrough(),
 ]);
 
+const workflowAssociationSchema = z.object({
+  name: z.string().min(1),
+  prepare: z.string().min(1),
+  commands: z.array(z.string().min(1)).min(1),
+}).passthrough();
+
+type WorkflowAssociation = z.infer<typeof workflowAssociationSchema>;
+
+function extractFrontmatter(raw: string): Record<string, unknown> | null {
+  const frontmatter = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  if (!frontmatter) return null;
+  try {
+    const parsed = YAML.parse(frontmatter[1]);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractWorkflowAssociation(raw: string): WorkflowAssociation | null {
+  const parsed = extractFrontmatter(raw);
+  if (!parsed) return null;
+  const result = workflowAssociationSchema.safeParse(parsed);
+  return result.success ? result.data : null;
+}
+
 function resolveInDirs(dirs: string[], fileName: string): { path: string; raw: string } | null {
   for (const dir of dirs) {
     const candidate = join(dir, fileName);
@@ -148,16 +177,9 @@ function resolveInDirs(dirs: string[], fileName: string): { path: string; raw: s
 }
 
 function extractRefs(raw: string): Array<{ path: string; when: string }> {
-  const frontmatter = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
-  if (!frontmatter) return [];
-  let parsed: unknown;
-  try {
-    parsed = YAML.parse(frontmatter[1]);
-  } catch {
-    return [];
-  }
-  if (!parsed || typeof parsed !== 'object' || !('refs' in parsed)) return [];
-  const rawRefs = (parsed as Record<string, unknown>).refs;
+  const parsed = extractFrontmatter(raw);
+  if (!parsed || !('refs' in parsed)) return [];
+  const rawRefs = parsed.refs;
   if (!Array.isArray(rawRefs)) return [];
   const refs: Array<{ path: string; when: string }> = [];
   for (const entry of rawRefs) {
@@ -170,6 +192,29 @@ function extractRefs(raw: string): Array<{ path: string; when: string }> {
     );
   }
   return refs;
+}
+
+function resolveAssociatedWorkflow(
+  dirs: string[],
+  commandName: string,
+): { path: string; raw: string; association: WorkflowAssociation } | null {
+  for (const dir of dirs) {
+    if (!existsSync(dir)) continue;
+    const matches = readdirSync(dir, { withFileTypes: true })
+      .filter(entry => entry.isFile() && entry.name.endsWith('.md') && !/\.(?:codex|agy|pi)\.md$/.test(entry.name))
+      .map(entry => {
+        const path = join(dir, entry.name);
+        const raw = readFileSync(path, 'utf8');
+        return { path, raw, association: extractWorkflowAssociation(raw) };
+      })
+      .filter((item): item is { path: string; raw: string; association: WorkflowAssociation } =>
+        item.association?.commands.includes(commandName) === true);
+    if (matches.length > 1) {
+      throw new Error(`Workflow command association is ambiguous for ${commandName}: ${matches.map(item => item.path).join(', ')}`);
+    }
+    if (matches.length === 1) return matches[0];
+  }
+  return null;
 }
 
 export function resolveStepContent(
@@ -186,12 +231,24 @@ export function resolveStepContent(
     join(projectRoot, 'workflows'),
   ];
 
-  // Platform override: e.g. execute.codex.md takes priority over execute.md
-  const overrideName = platformSuffix ? `${normalized}${platformSuffix}` : null;
-  const prepare = (overrideName && resolveInDirs(prepareDirs, overrideName))
-    || resolveInDirs(prepareDirs, `${normalized}.md`);
-  const workflow = (overrideName && resolveInDirs(workflowDirs, overrideName))
-    || resolveInDirs(workflowDirs, `${normalized}.md`);
+  const directWorkflow = resolveInDirs(workflowDirs, `${normalized}.md`);
+  const associatedWorkflow = directWorkflow
+    ? { ...directWorkflow, association: extractWorkflowAssociation(directWorkflow.raw) }
+    : resolveAssociatedWorkflow(workflowDirs, normalized);
+  const workflowBase = associatedWorkflow
+    ? basename(associatedWorkflow.path, '.md')
+    : normalized;
+  const prepareBase = associatedWorkflow?.association?.prepare ?? workflowBase;
+
+  // Platform override: e.g. execute.codex.md takes priority over execute.md.
+  // Resolve the override from the canonical workflow/prepare names, not from a
+  // command alias such as maestro-execute.
+  const prepareOverride = platformSuffix ? `${prepareBase}${platformSuffix}` : null;
+  const workflowOverride = platformSuffix ? `${workflowBase}${platformSuffix}` : null;
+  const prepare = (prepareOverride && resolveInDirs(prepareDirs, prepareOverride))
+    || resolveInDirs(prepareDirs, `${prepareBase}.md`);
+  const workflow = (workflowOverride && resolveInDirs(workflowDirs, workflowOverride))
+    || associatedWorkflow;
 
   const runModeOverride = platformSuffix
     ? resolveInDirs(workflowDirs, `run-mode${platformSuffix}`)

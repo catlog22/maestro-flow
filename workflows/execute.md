@@ -1,3 +1,10 @@
+---
+name: execute
+prepare: execute
+commands: [maestro-execute]
+session-mode: inherited
+---
+
 # Workflow: Execute
 
 Wave-based parallel execution — atomic commits, checkpoint resume, built-in smoke self-check. Artifacts unified as `execution.json`; implementation scope and evidence handed to verify.

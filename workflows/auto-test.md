@@ -1,3 +1,10 @@
+---
+name: auto-test
+prepare: auto-test
+commands: [quality-auto-test]
+session-mode: inherited
+---
+
 # Workflow: Auto-Test
 
 Unified automated testing with intelligent state-based routing. Merges test generation (gap-forward), business testing (PRD-forward), and integration testing (code-forward) into a single pipeline.

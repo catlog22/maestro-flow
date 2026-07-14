@@ -1,3 +1,10 @@
+---
+name: analyze
+prepare: analyze
+commands: [maestro-analyze]
+session-mode: inherited
+---
+
 # Workflow: Analyze
 
 Multi-dimensional iterative analysis: CLI exploration → multi-perspective synthesis → discussion timeline → intent tracking → six-dimension scoring → decision extraction. Preserves macro/micro, quick, gaps, and up-to-5-round convergence semantics.

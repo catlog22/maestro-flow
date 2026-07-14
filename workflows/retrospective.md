@@ -1,3 +1,10 @@
+---
+name: retrospective
+prepare: retrospective
+commands: [quality-retrospective]
+session-mode: inherited
+---
+
 # Workflow: Retrospective
 
 ## Argument Shape
