@@ -42,6 +42,7 @@ Parse the first token of $ARGUMENTS as the top-level subcommand. Parse the secon
 | `knowledge` | `wiki` | [knowledge → wiki](#knowledge-wiki) |
 | `knowledge` | `extractors` | [knowledge → extractors](#knowledge-extractors) |
 | `knowledge` | `domain` | [knowledge → domain](#knowledge-domain) |
+| `sync` | `codebase` | [sync → codebase](#sync-codebase) |
 | `sync` | `drift` | [sync → drift](#sync-drift) |
 | `sync` | `rebuild` | [sync → rebuild](#sync-rebuild) |
 
@@ -1102,8 +1103,81 @@ Follow '~/.maestro/workflows/domain-add.md' completely.
 ## sync
 
 Artifact/code synchronization. Second token selects the operation:
+- `codebase` → [incremental codebase doc sync](#sync-codebase)
 - `drift` → [detect and realign artifact drift](#sync-drift)
 - `rebuild` → [full codebase doc rebuild](#sync-rebuild)
+
+<a id="sync-codebase"></a>
+### sync → codebase
+
+<purpose>
+Sync codebase docs after code changes: git diff → trace impact via doc-index.json → refresh `.workflow/codebase/` docs. Incremental by default; use `--full` for complete resync.
+</purpose>
+
+<required_reading>
+@~/.maestro/workflows/sync.md
+</required_reading>
+
+<context>
+Remaining tokens after `sync codebase` — optional flags:
+- `--full` — Complete resync of all tracked files (ignores git diff, rebuilds all docs)
+- `--since <commit|HEAD~N>` — Diff since specific commit (default: last sync timestamp)
+- `--dry-run` — Show what would be updated without writing changes
+
+**Output boundary**: ALL file writes MUST target `.workflow/codebase/`, `.workflow/state.json`, or `doc-index.json` only. NEVER modify source code or files outside `.workflow/`. `--dry-run` MUST suppress all writes.
+</context>
+
+<invariants>
+1. **Source code is read-only** — sync reads source files to generate documentation. NEVER modify source code, test files, or any non-documentation files.
+2. **Dry-run is side-effect-free** — when `--dry-run` is set, NO file writes occur. Report only what would change.
+3. **Impact trace before refresh** — NEVER regenerate a doc file without first tracing which source changes affect it via doc-index.json. Untargeted full-refresh requires explicit `--full` flag.
+4. **Idempotent sync** — running sync twice with the same diff MUST produce identical results. State.json timestamp prevents redundant re-runs.
+5. **Incremental by default** — without `--full`, only changed components are refreshed. NEVER silently expand to a full rebuild.
+</invariants>
+
+<execution>
+Follow '~/.maestro/workflows/sync.md' completely.
+
+### Phase Gates (MANDATORY, BLOCKING)
+
+**GATE 1: Diff → Impact Trace**
+- REQUIRED: Git diff computed (or --full flag set for all files).
+- BLOCKED if no diff and no --full: nothing to sync (W001).
+
+**GATE 2: Impact Trace → Refresh**
+- REQUIRED: Affected components traced via doc-index.json.
+- BLOCKED if trace fails: cannot refresh docs without impact mapping.
+
+**GATE 3: Refresh → Completion**
+- REQUIRED: `.workflow/codebase/` docs refreshed for affected components.
+- REQUIRED: If `--dry-run` is set, skip state.json write and report what would change. Otherwise, update state.json with sync timestamp.
+- BLOCKED if missing: do not report completion without updated docs.
+</execution>
+
+<completion>
+### Next-step routing
+
+| Condition | Suggestion |
+|-----------|-----------|
+| Docs refreshed | `/manage status` |
+| Major structural changes | `/manage sync rebuild` |
+| Incremental refresh | Use `--since` flag |
+</completion>
+
+<error_codes>
+| Code | Severity | Condition | Recovery |
+|------|----------|-----------|----------|
+| E001 | error | .workflow/ not initialized | Suggest running `/maestro-init` first|
+| W001 | warning | No changes detected since last sync | Report clean state, skip updates |
+</error_codes>
+
+<success_criteria>
+- [ ] state.json updated with current sync timestamp (skipped if `--dry-run`)
+- [ ] Codebase docs refreshed for all affected components
+- [ ] doc-index.json reflects current file state
+- [ ] Changes tracked and logged
+- [ ] project.md Tech Stack section refreshed if dependency manifests changed
+</success_criteria>
 
 <a id="sync-drift"></a>
 ### sync → drift
@@ -1161,7 +1235,7 @@ Remaining tokens after `sync drift` — flags.
 4. **Mutual exclusion** — `--report` 与 `--auto-archive` 互斥；同时传入 MUST trigger E006
 5. **Auto-depth escalation** — `drift_window` > 180 天 MUST auto-upgrade to `--depth deep` with W002 warning
 6. **Audit trail** — every triage decision MUST be logged in `drift-log.jsonl` with finding ID, action, and timestamp
-7. **Rebuild trigger** — codebase scope 的 3+ P0 finding MUST auto-trigger `/quality-sync --full` after triage
+7. **Rebuild trigger** — codebase scope 的 3+ P0 finding MUST auto-trigger `/manage sync codebase --full` after triage
 </invariants>
 
 <execution>
@@ -1188,14 +1262,14 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 **GATE 4: Triage → Apply** (Stages 6-7 → Stage 8)
 - REQUIRED: 备份 tarball 生成于 `.workflow/.trash/drift-realign-{timestamp}/`。
 - REQUIRED: 所有用户决策已记录（或 `--auto-archive`/`--report` 已生效）。
-- REQUIRED: codebase scope 的 rebuild 动作自动触发 `/quality-sync --full`。
+- REQUIRED: codebase scope 的 rebuild 动作自动触发 `/manage sync codebase --full`。
 - BLOCKED if 备份失败 (E005)。
 
 ### Execution Constraints
 
 - **Code-as-Truth**: 代码是唯一真理源。当文档说 X 但代码做 Y 时，文档漂移。
 - **Parallel scan**: Stage 4 在单条消息中派发 4 个 agent（roadmap-scanner、spec-scanner、codebase-scanner、artifact-scanner）。
-- **Auto-rebuild**: 当 codebase-scanner 检测到严重漂移（3+ P0 finding）时，分诊后自动触发 `/quality-sync --full`。若 sync 报告重大结构变更，建议 `/manage sync rebuild`。
+- **Auto-rebuild**: 当 codebase-scanner 检测到严重漂移（3+ P0 finding）时，分诊后自动触发 `/manage sync codebase --full`。若 sync 报告重大结构变更，建议 `/manage sync rebuild`。
 - **Long gap handling**: 当 `drift_window` > 180 天时，自动升级为 `--depth deep` 并警告用户 (W002)。
 
 ### Platform Inquiry（Stage 2a，交互式）
@@ -1222,7 +1296,7 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 | spec 标记待更新 | 手动编辑标记的 spec 文件 |
 | roadmap 已过时 | `maestro run prepare roadmap` + `maestro run create roadmap` 重新生成 |
 | state.json 需清理 | `/manage knowledge audit --scope artifact` |
-| 需要完整同步 | `/quality-sync --full` |
+| 需要完整同步 | `/manage sync codebase --full` |
 | project.md 已过时 | 编辑 `.workflow/project.md` |
 </completion>
 
@@ -1251,7 +1325,7 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 - [ ] 变更前备份 tarball 已生成
 - [ ] archive 动作已将文件移入 `.trash/`
 - [ ] update 动作已注入 TODO 标记及提示
-- [ ] rebuild 动作已自动触发 `/quality-sync --full`
+- [ ] rebuild 动作已自动触发 `/manage sync codebase --full`
 - [ ] `state.json` 已更新 `last_drift_realign` 时间戳
 - [ ] `drift-report-{date}.md` 已生成
 - [ ] `drift-log.jsonl` 已追加
@@ -1332,7 +1406,7 @@ Follow '~/.maestro/workflows/codebase-rebuild.md' completely.
 | Condition | Suggestion |
 |-----------|-----------|
 | View updated state | `/manage status` |
-| Incremental updates later | `/quality-sync` |
+| Incremental updates later | `/manage sync codebase` |
 | Verify KG stats | `maestro kg stats` |
 | Future change impact | `maestro kg diff-wiki` |
 </completion>

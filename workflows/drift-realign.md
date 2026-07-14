@@ -270,7 +270,7 @@ Action?  [k]eep / [u]pdate / [a]rchive / [r]ebuild / [s]kip / [q]uit
 | `keep` | 确认无漂移或可接受，标记为已审查（记录到 drift-log.jsonl action=keep）|
 | `update` | 在目标文件顶部注入 TODO 标记：`<!-- DRIFT-TODO: {update_hint} (DFT-{id}, {date}) -->` |
 | `archive` | 移动到 .trash/（先备份）|
-| `rebuild` | 标记为自动重建目标（codebase scope 触发 `/quality-sync --full`）|
+| `rebuild` | 标记为自动重建目标（codebase scope 触发 `/manage sync codebase --full`）|
 | `skip` | 跳过本条不做决策（记录到 drift-log.jsonl action=skipped，下次 re-run 会重新出现）|
 
 ---
@@ -295,7 +295,7 @@ for each actionable finding:
 | `skip` | 写 drift-log.jsonl 一条 action=skipped 记录（不标记 reviewed，下次 re-run 重现）|
 | `update` | 在目标文件头部插入 TODO 注释块：`<!-- DRIFT-TODO: {update_hint} (DFT-{id}, {date}) -->` |
 | `archive` | 移动文件到 `.trash/{timestamp}/` + 更新 state.json 引用 |
-| `rebuild` | 收集 rebuild 目标；全部其他 action 完成后：通过 `Skill()` 自动调用 `/quality-sync --full` |
+| `rebuild` | 收集 rebuild 目标；全部其他 action 完成后：通过 `Skill()` 自动调用 `/manage sync codebase --full` |
 
 rebuild 后处理：
 - 若 W001 或重大结构变更 → MUST run `/manage-codebase-rebuild`
@@ -340,7 +340,7 @@ state.json 原子写：备份 → 写新版本 → re-read 验证。
 | DFT-abc12345 | User chose keep — marked as reviewed |
 
 ## Auto-Rebuilt
-- /quality-sync --full triggered: {yes/no}
+- /manage sync codebase --full triggered: {yes/no}
 - /manage-codebase-rebuild suggested: {yes/no}
 
 ## Backup
@@ -372,7 +372,7 @@ Scope: all
   Findings:  18 total (4 P0 / 9 P1 / 5 P2)
   Updated:   6 (TODO markers injected)
   Archived:  3 (moved to .trash/)
-  Rebuilt:   2 (via /quality-sync --full)
+  Rebuilt:   2 (via /manage sync codebase --full)
   Kept:      7 (marked as reviewed)
 
   Report:  .workflow/.drift-realign/drift-report-2026-06-24.md

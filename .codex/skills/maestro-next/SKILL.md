@@ -188,7 +188,7 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 | quick / rapid / lightweight | quick |
 | retrospective / retro / lessons | retrospective |
 | refactor / tech debt | quality-refactor (retained skill) |
-| sync docs | quality-sync (retained skill) |
+| sync docs | manage sync codebase (retained skill) |
 | issue / defect | manage issue (retained skill) |
 | wiki / knowledge graph | manage knowledge wiki (retained skill) |
 | spec / rule / constraint | spec load / spec add (retained skill) |
@@ -266,7 +266,7 @@ Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
 Discovery:   grill, brainstorm, blueprint, roadmap, quick
 
-Retained Skills: quality-refactor, quality-sync, manage-*, learn-*, spec-*, ...
+Retained Skills: quality-refactor, manage sync codebase, manage-*, learn-*, spec-*, ...
 ```
 
 ### Normal mode

@@ -96,7 +96,7 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 
 | Condition | Suggestion |
 |-----------|-----------|
-| All tests pass | `/quality-sync` (update codebase docs) |
+| All tests pass | `/manage sync codebase` (update codebase docs) |
 | Test failures after refactor | `maestro run create debug -- "test failures after refactor in {scope}"` |
 | No test suite available | `maestro run create auto-test -- {phase}` |
 </completion>

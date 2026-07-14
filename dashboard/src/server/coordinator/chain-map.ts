@@ -79,7 +79,7 @@ export const CHAIN_MAP: Record<string, ChainStepDef[]> = {
   'integration_test':   [{ cmd: 'quality-integration-test', args: '{phase}' }],
   'refactor':           [{ cmd: 'quality-refactor', args: '"{description}"' }],
   'review':             [{ cmd: 'quality-review', args: '{phase}' }],
-  'sync':               [{ cmd: 'quality-sync', args: '{phase}' }],
+  'sync':               [{ cmd: 'manage sync codebase', args: '{phase}' }],
   'phase_transition':   [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'phase_add':          [{ cmd: 'maestro-phase-add', args: '"{description}"' }],
   'milestone_audit':    [{ cmd: 'maestro-milestone-audit' }],

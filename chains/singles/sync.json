@@ -18,7 +18,7 @@
   "nodes": {
     "sync": {
       "type": "command",
-      "cmd": "quality-sync",
+      "cmd": "manage sync codebase",
       "next": "done",
       "analyze": false,
       "args": "{phase}",

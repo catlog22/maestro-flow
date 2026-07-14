@@ -47,7 +47,7 @@
     {"name": "security-audit", "command": "/security-audit", "category": "quality", "description": "OWASP/STRIDE 安全审计", "source": "../../commands/security-audit.md"},
     {"name": "quality-debug", "command": "/quality-debug", "category": "quality", "description": "质量调试 — 诊断测试失败并提供修复方案", "source": "../../commands/quality-debug.md"},
     {"name": "quality-refactor", "command": "/quality-refactor", "category": "quality", "description": "代码重构 — 结构优化和模式改进", "source": "../../commands/quality-refactor.md"},
-    {"name": "quality-sync", "command": "/quality-sync", "category": "quality", "description": "质量同步 — 跨 Phase 质量状态对齐", "source": "../../commands/quality-sync.md"},
+    {"name": "manage-sync-codebase", "command": "/manage sync codebase", "category": "quality", "description": "代码库文档增量同步 — git diff → 影响追踪 → 刷新 codebase 文档", "source": "../../commands/manage.md"},
     {"name": "quality-retrospective", "command": "/quality-retrospective", "category": "quality", "description": "质量复盘 — 阶段性质量回顾和改进", "source": "../../commands/quality-retrospective.md"},
 
     {"name": "spec-setup", "command": "/spec-setup", "category": "spec", "description": "Spec 初始化 — 创建项目规范文件", "source": "../../commands/spec-setup.md"},

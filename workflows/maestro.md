@@ -322,7 +322,7 @@ const chainMap = {
   'review':             [{ cmd: 'quality-review', args: '{phase}' }],
   'retrospective':      [{ cmd: 'quality-retrospective', args: '{phase}' }],
   'learn':              [{ cmd: 'manage-learn', args: '"{description}"' }],
-  'sync':               [{ cmd: 'quality-sync' }],
+  'sync':               [{ cmd: 'manage sync codebase' }],
   'milestone_close':    [{ cmd: 'maestro-milestone-audit' }, { cmd: 'maestro-milestone-complete' }],
   'milestone_audit':    [{ cmd: 'maestro-milestone-audit' }],
   'milestone_complete': [{ cmd: 'maestro-milestone-complete' }],
