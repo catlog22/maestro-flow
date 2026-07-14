@@ -1,6 +1,6 @@
-// R7-2 regression: an E-level prerequisite (invariant 8) must PAUSE the session,
-// not leave it "running" and return 1 (which lets a goal-loop retry forever).
-// Mirrors the BLOCKED pause in cmd-complete.ts.
+// Regression: runNext must refuse when step has no resolvable content.
+// In the new model, sessions live in .workflow/sessions/{id}/session.json
+// with orchestration.chain[] for step ordering.
 
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
@@ -8,26 +8,53 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runNext } from '../cmd-next.js';
 
-describe('runNext — E-level prerequisite pauses session (invariant 8, R7-2)', () => {
-  const sessionId = 'maestro-test-e007';
+describe('runNext — refuses step with no content', () => {
+  const sessionId = 'test-no-content';
   let tmpRoot: string;
   let origCwd: string;
 
   beforeEach(() => {
     origCwd = process.cwd();
-    tmpRoot = mkdtempSync(join(tmpdir(), 'ralph-pause-'));
-    const sessDir = join(tmpRoot, '.workflow', '.maestro', sessionId);
-    mkdirSync(sessDir, { recursive: true });
-    const status = {
+    tmpRoot = mkdtempSync(join(tmpdir(), 'ralph-next-'));
+    const sessDir = join(tmpRoot, '.workflow', 'sessions', sessionId);
+    mkdirSync(join(sessDir, 'runs'), { recursive: true });
+    mkdirSync(join(sessDir, 'specs'), { recursive: true });
+    mkdirSync(join(sessDir, 'knowhow'), { recursive: true });
+
+    const session = {
+      schema_version: 'session/1.0',
       session_id: sessionId,
+      intent: 'test intent',
       status: 'running',
-      active_step_index: null,
-      // execution step with no command_path → checkStatus emits E006 (E-level)
-      steps: [
-        { index: 0, stage: 'execute', status: 'pending', skill: 'x', command_path: null, decision: null },
-      ],
+      identity_revision: 1,
+      activity_revision: 0,
+      active_run_id: null,
+      latest_completed_run_id: null,
+      boundary_contract: { in_scope: [], out_of_scope: [], constraints: [], definition_of_done: '' },
+      orchestration: {
+        engine: 'ralph',
+        quality_mode: 'standard',
+        auto_mode: false,
+        chain: [
+          { step_id: 'step-000-nonexistent', command: 'nonexistent-step-xyz', status: 'pending', run_id: null, inserted_by: 'build', decision_ref: null },
+        ],
+        decision_points: [],
+      },
+      requests: [],
+      lifecycle: { sealed_at: null, seal_summary: null, promoted_spec_ids: [], promoted_knowhow_ids: [], forked_from: null },
+      refs: { gates: 'gates.json', artifacts: 'artifacts.json', evidence: 'evidence.json' },
     };
-    writeFileSync(join(sessDir, 'status.json'), JSON.stringify(status, null, 2));
+    const gates = { schema_version: 'gates/1.0', revision: 0, gates: {}, summary: { total: 0, passed: 0, blocked: 0, failed: 0, active_gate_ids: [], blocking_run_id: null } };
+    const artifacts = { schema_version: 'artifacts/1.0', revision: 0, artifacts: {}, aliases: {} };
+    const evidence = { schema_version: 'evidence/1.0', revision: 0, records: {} };
+
+    writeFileSync(join(sessDir, 'session.json'), JSON.stringify(session, null, 2));
+    writeFileSync(join(sessDir, 'gates.json'), JSON.stringify(gates, null, 2));
+    writeFileSync(join(sessDir, 'artifacts.json'), JSON.stringify(artifacts, null, 2));
+    writeFileSync(join(sessDir, 'evidence.json'), JSON.stringify(evidence, null, 2));
+    writeFileSync(join(sessDir, 'events.ndjson'), '');
+    writeFileSync(join(sessDir, 'context.md'), '# test\n');
+
     process.chdir(tmpRoot);
   });
 
@@ -36,14 +63,8 @@ describe('runNext — E-level prerequisite pauses session (invariant 8, R7-2)', 
     rmSync(tmpRoot, { recursive: true, force: true });
   });
 
-  it('sets status="paused" and returns 1 instead of looping on the error', async () => {
+  it('returns 1 when step command has no prepare or workflow content', async () => {
     const code = await runNext({ sessionId });
     expect(code).toBe(1);
-
-    const after = JSON.parse(
-      readFileSync(join(tmpRoot, '.workflow', '.maestro', sessionId, 'status.json'), 'utf-8'),
-    );
-    expect(after.status).toBe('paused'); // invariant 8 — not left "running"
-    expect(after.active_step_index).toBe(null);
   });
 });

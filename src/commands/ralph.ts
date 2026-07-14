@@ -1,16 +1,17 @@
 // ---------------------------------------------------------------------------
-// `maestro ralph` — Ralph step loader & status.json driver.
+// `maestro ralph` — Ralph step loader & standard session driver.
 //
 // Subcommands:
 //   skills     List effective commands + skills (global + project, project wins)
-//   check      Run health check against current ralph status.json
+//   check      Run health check against current ralph session
 //   session    Show current ralph session summary
-//   next       Load next pending step + required_reading, write status.json
+//   next       Load next pending step, create standard Run, print prompt
 //   complete   Mark current step done / concerns / retry / blocked
 //   retry      Sugar for `complete <idx> --status NEEDS_RETRY`
+//   ledger     Verification ledger interface
 //
-// Data contract: drives `.workflow/.maestro/ralph-*/status.json`.
-// NOT to be confused with `maestro coordinate` (graph chain walker).
+// Data contract: drives `.workflow/sessions/{id}/session.json` (engine=ralph)
+//                + `ralph-meta.json` for orchestration extensions.
 // ---------------------------------------------------------------------------
 
 import type { Command } from 'commander';
@@ -41,7 +42,7 @@ export type RalphCompletionStatus = typeof VALID_STATUSES[number];
 export function registerRalphCommand(program: Command): void {
   const ralph = program
     .command('ralph')
-    .description('Ralph step loader & status.json driver (separate from coordinate)');
+    .description('Ralph step loader & standard session driver');
 
   // ── skills ──────────────────────────────────────────────────────────────
   ralph
@@ -60,8 +61,8 @@ export function registerRalphCommand(program: Command): void {
   // ── check ───────────────────────────────────────────────────────────────
   ralph
     .command('check')
-    .description('Health-check the current ralph status.json')
-    .option('--session <id>', 'Session id (default: latest running ralph-*)')
+    .description('Health-check the current ralph session')
+    .option('--session <id>', 'Session id (default: latest ralph-engine session)')
     .option('--json', 'Output findings as JSON')
     .action(async (opts: { session?: string; json?: boolean }) => {
       const run = await loadCheckCmd();
@@ -73,7 +74,7 @@ export function registerRalphCommand(program: Command): void {
   ralph
     .command('session')
     .description('Show current ralph session summary')
-    .option('--session <id>', 'Session id (default: latest running ralph-*)')
+    .option('--session <id>', 'Session id (default: latest ralph-engine session)')
     .action(async (opts: { session?: string }) => {
       const run = await loadSessionCmd();
       const code = await run({ sessionId: opts.session });
@@ -83,8 +84,8 @@ export function registerRalphCommand(program: Command): void {
   // ── next ────────────────────────────────────────────────────────────────
   ralph
     .command('next')
-    .description('Load next pending step + required_reading, write status.json, print prompt')
-    .option('--session <id>', 'Session id (default: latest running ralph-*)')
+    .description('Load next pending step, create standard Run, print prompt')
+    .option('--session <id>', 'Session id (default: latest ralph-engine session)')
     .option('--execution-owner <owner>', 'Claim execution ownership')
     .option('--owner-epoch <epoch>', 'Epoch for lease ownership', Number.parseInt)
     .option('--lease-id <id>', 'Lease identifier for concurrency safety')
@@ -111,11 +112,11 @@ export function registerRalphCommand(program: Command): void {
     .option('--decisions <text>', 'Key decision made (repeatable)', collect, [] as string[])
     .option('--caveats <text>', 'Warnings/notes for downstream steps')
     .option('--deferred <text>', 'Deferred work item (repeatable)', collect, [] as string[])
-    .option('--session <id>', 'Session id (default: latest running ralph-*)')
+    .option('--session <id>', 'Session id (default: latest ralph-engine session)')
     .option('--execution-owner <owner>', 'Execution owner of the lease')
     .option('--owner-epoch <epoch>', 'Epoch of the lease owner', Number.parseInt)
     .option('--lease-id <id>', 'Lease ID for concurrency check')
-    .option('--expected-skill <name>', 'Verify the active step runs this skill name')
+    .option('--expected-skill <name>', 'Verify the active step runs this command name')
     .option('--expected-step-index <idx>', 'Verify the active step index', Number.parseInt)
     .action(async (indexArg: string, opts: {
       status: string;
@@ -168,7 +169,7 @@ export function registerRalphCommand(program: Command): void {
   ralph
     .command('retry <index>')
     .description('Sugar: mark step at <index> as NEEDS_RETRY')
-    .option('--session <id>', 'Session id (default: latest running ralph-*)')
+    .option('--session <id>', 'Session id (default: latest ralph-engine session)')
     .option('--execution-owner <owner>', 'Execution owner of the lease')
     .option('--owner-epoch <epoch>', 'Epoch of the lease owner', Number.parseInt)
     .option('--lease-id <id>', 'Lease ID for concurrency check')

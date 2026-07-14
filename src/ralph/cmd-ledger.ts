@@ -1,7 +1,20 @@
-import { readFileSync, existsSync } from 'node:fs';
+// ---------------------------------------------------------------------------
+// `maestro ralph ledger` — verification ledger via standard evidence store.
+//
+// Queries and adds verification entries. Evidence is stored in the session's
+// evidence.json via the standard SessionStore, with ralph-meta.json holding
+// the verification_ledger for backward-compatible queries.
+// ---------------------------------------------------------------------------
+
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import type { RalphSession, VerificationLedgerEntry } from './status-schema.js';
-import { resolveSession, writeStatus, workflowRoot } from './status-store.js';
+import { SessionStore } from '../run/store.js';
+import {
+  resolveRalphSession,
+  updateRalphMeta,
+  workflowRoot,
+} from './session-adapter.js';
+import type { VerificationLedgerEntry } from './status-schema.js';
 
 export interface LedgerCmdOptions {
   sessionId: string;
@@ -16,28 +29,23 @@ export interface LedgerCmdOptions {
 }
 
 export async function runLedger(opts: LedgerCmdOptions): Promise<number> {
-  const resolved = resolveSession(workflowRoot(), opts.sessionId);
+  const projectRoot = workflowRoot();
+  const resolved = resolveRalphSession(projectRoot, opts.sessionId);
   if (!resolved) {
-    console.error(`[ralph ledger] no session found with id "${opts.sessionId}" in .workflow/.maestro/`);
+    console.error(`[ralph ledger] no ralph session found with id "${opts.sessionId}"`);
     return 1;
   }
-  const { statusPath, data } = resolved;
 
   if (opts.action === 'query') {
-    return handleQuery(data, opts);
-  } else {
-    return handleAdd(data, statusPath, opts);
+    return handleQuery(resolved.meta.verification_ledger ?? [], opts);
   }
+  return handleAdd(projectRoot, resolved.sessionId, opts);
 }
 
-function handleQuery(session: RalphSession, opts: LedgerCmdOptions): number {
-  const ledger = session.verification_ledger ?? [];
-  
-  // Find a matching entry: same authority, dimension, and subjects list (ignoring order)
+function handleQuery(ledger: VerificationLedgerEntry[], opts: LedgerCmdOptions): number {
   const entry = ledger.find(e => {
     if (e.authority !== opts.authority) return false;
     if (e.dimension !== opts.dimension) return false;
-    
     const s1 = [...e.subject_ids].sort();
     const s2 = [...opts.subjects].sort();
     if (s1.length !== s2.length) return false;
@@ -49,7 +57,6 @@ function handleQuery(session: RalphSession, opts: LedgerCmdOptions): number {
     return 1;
   }
 
-  // Verify risk ceiling
   const riskLevels = { low: 1, medium: 2, high: 3 };
   const requestedRisk = opts.riskCeiling ? riskLevels[opts.riskCeiling] : 1;
   const recordedRisk = riskLevels[entry.risk_ceiling] ?? 1;
@@ -58,37 +65,32 @@ function handleQuery(session: RalphSession, opts: LedgerCmdOptions): number {
     return 1;
   }
 
-  // Verify confidence (advisory decisions, low confidence are rejected for fast path)
   if (entry.confidence === 'low') {
     console.log('[ralph ledger] rejected: recorded confidence is low');
     return 1;
   }
 
-  // Verify verdict is successful
   if (entry.verdict !== 'pass' && entry.verdict !== 'success' && entry.verdict !== 'DONE') {
     console.log(`[ralph ledger] rejected: recorded verdict is "${entry.verdict}" (not pass/success)`);
     return 1;
   }
 
-  // Check concerns
   if (entry.concerns) {
     console.log(`[ralph ledger] rejected: entry contains concerns: "${entry.concerns}"`);
     return 1;
   }
 
-  // Verify scope hash (boundary_contract)
-  const currentScopeHash = computeScopeHash(session);
+  const currentScopeHash = computeScopeHash(resolveRalphSession(workflowRoot(), opts.sessionId)!.bundle.session);
   if (currentScopeHash !== entry.scope_hash) {
     console.log('[ralph ledger] rejected: scope_hash changed (boundary contract modified)');
     return 1;
   }
 
-  // Verify evidence hashes (subjects)
   for (const subject of opts.subjects) {
     const recordedHash = entry.evidence_hashes[subject];
     const currentHash = computeFileHash(subject);
     if (currentHash !== recordedHash) {
-      console.log(`[ralph ledger] rejected: hash changed for subject "${subject}" (got "${currentHash}", recorded "${recordedHash}")`);
+      console.log(`[ralph ledger] rejected: hash changed for subject "${subject}"`);
       return 1;
     }
   }
@@ -97,13 +99,16 @@ function handleQuery(session: RalphSession, opts: LedgerCmdOptions): number {
   return 0;
 }
 
-function handleAdd(session: RalphSession, statusPath: string, opts: LedgerCmdOptions): number {
+function handleAdd(projectRoot: string, sessionId: string, opts: LedgerCmdOptions): number {
   if (!opts.verdict) {
     console.error('[ralph ledger] error: --verdict is required for add action');
     return 1;
   }
 
-  const scopeHash = computeScopeHash(session);
+  const resolved = resolveRalphSession(projectRoot, sessionId);
+  if (!resolved) return 1;
+
+  const scopeHash = computeScopeHash(resolved.bundle.session);
   const evidenceHashes: Record<string, string> = {};
   for (const subject of opts.subjects) {
     evidenceHashes[subject] = computeFileHash(subject);
@@ -122,20 +127,18 @@ function handleAdd(session: RalphSession, statusPath: string, opts: LedgerCmdOpt
     created_at: new Date().toISOString(),
   };
 
-  session.verification_ledger = session.verification_ledger ?? [];
-  
-  // Remove any pre-existing entry with same authority, dimension, and subjects
-  session.verification_ledger = session.verification_ledger.filter(e => {
-    if (e.authority !== opts.authority) return true;
-    if (e.dimension !== opts.dimension) return true;
-    const s1 = [...e.subject_ids].sort();
-    const s2 = [...opts.subjects].sort();
-    if (s1.length !== s2.length) return true;
-    return !s1.every((val, i) => val === s2[i]);
+  updateRalphMeta(projectRoot, sessionId, (meta) => {
+    meta.verification_ledger = meta.verification_ledger ?? [];
+    meta.verification_ledger = meta.verification_ledger.filter(e => {
+      if (e.authority !== opts.authority) return true;
+      if (e.dimension !== opts.dimension) return true;
+      const s1 = [...e.subject_ids].sort();
+      const s2 = [...opts.subjects].sort();
+      if (s1.length !== s2.length) return true;
+      return !s1.every((val, i) => val === s2[i]);
+    });
+    meta.verification_ledger.push(entry);
   });
-
-  session.verification_ledger.push(entry);
-  writeStatus(statusPath, session);
 
   console.log(`[ralph ledger] entry added successfully for subjects: ${opts.subjects.join(', ')}`);
   return 0;
@@ -148,20 +151,19 @@ function computeHash(content: string): string {
 function computeFileHash(filePath: string): string {
   if (!existsSync(filePath)) return 'missing';
   try {
-    const content = readFileSync(filePath);
-    return computeHash(content.toString('utf8'));
+    return computeHash(readFileSync(filePath, 'utf8'));
   } catch {
     return 'error';
   }
 }
 
-function computeScopeHash(session: RalphSession): string {
-  const boundary = session.boundary_contract ?? {};
+function computeScopeHash(session: import('../run/schemas.js').SessionState): string {
+  const bc = session.boundary_contract;
   const str = JSON.stringify({
-    in_scope: boundary.in_scope ?? [],
-    out_of_scope: boundary.out_of_scope ?? [],
-    constraints: boundary.constraints ?? [],
-    definition_of_done: boundary.definition_of_done ?? '',
+    in_scope: bc.in_scope,
+    out_of_scope: bc.out_of_scope,
+    constraints: bc.constraints,
+    definition_of_done: bc.definition_of_done,
   });
   return computeHash(str);
 }

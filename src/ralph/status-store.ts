@@ -1,91 +1,57 @@
 // ---------------------------------------------------------------------------
-// Status store — locates ralph session dir and reads/writes status.json.
-// Atomic write via `.tmp` + rename so a crash never leaves a partial file.
+// Status store — ralph session resolution via standard SessionStore.
+//
+// Replaces the proprietary `.workflow/.maestro/ralph-*/status.json` model.
+// Sessions now live in `.workflow/sessions/{id}/session.json` (standard path).
+// Ralph-specific metadata in `ralph-meta.json` alongside session.json.
+//
+// Backward-compatible API surface for cmd-*.ts callers.
 // ---------------------------------------------------------------------------
 
-import { existsSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { RalphSession } from './status-schema.js';
+import { SessionStore } from '../run/store.js';
+import {
+  resolveRalphSession,
+  type ResolvedRalphSession,
+} from './session-adapter.js';
 
-export interface ResolvedSession {
-  sessionId: string;
-  sessionDir: string;       // absolute
-  statusPath: string;       // absolute
-  data: RalphSession;
-}
+export type { ResolvedRalphSession };
 
-function ralphRoot(workflowRoot: string): string {
-  return join(workflowRoot, '.workflow', '.maestro');
-}
-
-/**
- * List all maestro / ralph session directories sorted by mtime DESC.
- *
- * Both prefixes share the same status.json schema (see status-schema.ts).
- * `ralph-*` sessions come from `/maestro-ralph` (adaptive chain), `maestro-*`
- * sessions come from `/maestro` (static chain). The CLI treats them
- * uniformly — both are driven by `maestro-ralph-execute`.
- */
-export function listRalphSessions(workflowRoot: string): string[] {
-  const root = ralphRoot(workflowRoot);
-  if (!existsSync(root)) return [];
-  const entries: Array<{ name: string; mtimeMs: number }> = [];
-  for (const name of readdirSync(root)) {
-    if (!isSessionDirName(name)) continue;
-    const full = join(root, name);
-    try {
-      const st = statSync(full);
-      if (st.isDirectory()) entries.push({ name, mtimeMs: st.mtimeMs });
-    } catch { /* ignore */ }
-  }
-  entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return entries.map(e => e.name);
-}
-
-function isSessionDirName(name: string): boolean {
-  return name.startsWith('ralph-') || name.startsWith('maestro-');
-}
-
-/**
- * Resolve a ralph session: by explicit id, or the latest running one.
- * Returns null when nothing matches — callers decide how to surface.
- */
-export function resolveSession(
-  workflowRoot: string,
-  sessionId?: string,
-  opts: { requireRunning?: boolean } = {},
-): ResolvedSession | null {
-  const root = ralphRoot(workflowRoot);
-  if (sessionId) {
-    const statusPath = join(root, sessionId, 'status.json');
-    if (!existsSync(statusPath)) return null;
-    const data = readStatus(statusPath);
-    return { sessionId, sessionDir: join(root, sessionId), statusPath, data };
-  }
-  for (const name of listRalphSessions(workflowRoot)) {
-    const statusPath = join(root, name, 'status.json');
-    if (!existsSync(statusPath)) continue;
-    try {
-      const data = readStatus(statusPath);
-      if (opts.requireRunning && data.status !== 'running') continue;
-      return { sessionId: name, sessionDir: join(root, name), statusPath, data };
-    } catch { /* skip corrupt */ }
-  }
-  return null;
-}
-
-function readStatus(statusPath: string): RalphSession {
-  const raw = readFileSync(statusPath, 'utf-8');
-  return JSON.parse(raw) as RalphSession;
-}
-
-/** Atomic write: stage to `.tmp`, then rename. */
-export function writeStatus(statusPath: string, data: RalphSession): void {
-  const tmp = `${statusPath}.tmp`;
-  writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
-  renameSync(tmp, statusPath);
-}
+export { resolveRalphSession };
 
 export function workflowRoot(): string {
   return resolve(process.cwd());
+}
+
+/**
+ * List ralph-engine sessions sorted by mtime DESC.
+ * Returns session IDs from `.workflow/sessions/`.
+ */
+export function listRalphSessions(projectRoot: string): string[] {
+  const store = new SessionStore(projectRoot);
+  if (!existsSync(store.sessionsRoot)) return [];
+
+  const entries: Array<{ name: string; mtimeMs: number }> = [];
+  for (const name of readdirSync(store.sessionsRoot)) {
+    const dir = join(store.sessionsRoot, name);
+    const sessionFile = join(dir, 'session.json');
+    try {
+      if (!statSync(dir).isDirectory()) continue;
+      if (!existsSync(sessionFile)) continue;
+      entries.push({ name, mtimeMs: statSync(sessionFile).mtimeMs });
+    } catch { /* skip */ }
+  }
+  entries.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+  const result: string[] = [];
+  for (const e of entries) {
+    try {
+      const bundle = store.readBundle(e.name);
+      if (bundle.session.orchestration.engine === 'ralph') {
+        result.push(e.name);
+      }
+    } catch { /* skip corrupt */ }
+  }
+  return result;
 }

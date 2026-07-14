@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// Ralph status.json schema — TypeScript shape only.
+// Ralph orchestration types — used by session-adapter.ts for ralph-meta.json.
 //
-// Source of truth: `.workflow/.maestro/ralph-{ts}/status.json`.
-// All new fields are additive — legacy sessions (without `ralph_protocol_version`)
-// fall back to pre-CLI ralph-execute inline logic.
+// Session state now lives in standard `.workflow/sessions/{id}/session.json`.
+// Ralph-specific metadata in `ralph-meta.json` alongside session.json.
+// These types are retained for backward compatibility and type definitions.
 // ---------------------------------------------------------------------------
 
 export const RALPH_PROTOCOL_VERSION = '2';
