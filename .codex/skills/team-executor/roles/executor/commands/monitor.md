@@ -137,7 +137,7 @@ Ready tasks found?
 **Spawn worker tool call**:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <subject>", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <subject>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ---

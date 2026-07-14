@@ -138,7 +138,7 @@ All browser inspection operations use Chrome DevTools MCP. Reproducer and Verifi
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ## User Commands

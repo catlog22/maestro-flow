@@ -16,7 +16,7 @@ Suitable for scenarios that need immediate results.
 
 ```javascript
 // Agent call - synchronous
-const result = spawn_agent({ task_name: "<task_name>", message: "Execute task..." });
+const result = spawn_agent({ task_name: "<task_name>", message: "Execute task...", agent_type: "universal_executor" });
 
 // Result immediately available
 console.log(result);
@@ -99,7 +99,7 @@ Execute task:
 Code exploration agent for quick codebase understanding.
 
 ```javascript
-spawn_agent({ task_name: "<task_name>", message: "<message>" });
+spawn_agent({ task_name: "<task_name>", message: "<message>", agent_type: "explore" });
 ```
 
 **Applicable Scenarios**:
@@ -112,7 +112,7 @@ spawn_agent({ task_name: "<task_name>", message: "<message>" });
 Deep code analysis agent.
 
 ```javascript
-spawn_agent({ task_name: "<task_name>", message: "<message>" });
+spawn_agent({ task_name: "<task_name>", message: "<message>", agent_type: "cli_explore_agent" });
 ```
 
 **Applicable Scenarios**:

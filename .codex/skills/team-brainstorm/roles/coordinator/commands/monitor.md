@@ -113,7 +113,7 @@ Find ready tasks, spawn workers, STOP.
    b. team_msg log -> task_unblocked
    c. Spawn team-worker (see SKILL.md Spawn Template):
       ```
-      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none" })
+      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none", agent_type: "team_worker" })
       ```
    d. Add to active_workers
 5. Parallel spawn rules:
@@ -127,7 +127,7 @@ Find ready tasks, spawn workers, STOP.
 
 **Parallel ideator spawn** (Full pipeline):
 ```
-spawn_agent({ task_name: "ideator_<n>", message: "<message>" })
+spawn_agent({ task_name: "ideator_<n>", message: "<message>", agent_type: "team_worker" })
 ```
 
 6. Update session, output summary, STOP

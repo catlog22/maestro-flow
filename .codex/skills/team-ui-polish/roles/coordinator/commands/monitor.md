@@ -147,7 +147,7 @@ Find ready tasks, spawn workers, STOP.
    d. Spawn team-worker:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 **Spawn rules by mode**:

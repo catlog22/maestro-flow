@@ -87,7 +87,7 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ## Supervisor Spawn Template
@@ -97,7 +97,7 @@ Supervisor is a **resident agent** (independent from team-worker). Spawned once 
 ### Spawn (Phase 2 — once per session)
 
 ```
-spawn_agent({ task_name: "supervisor", message: "Spawn resident supervisor", fork_turns: "none" })
+spawn_agent({ task_name: "supervisor", message: "Spawn resident supervisor", fork_turns: "none", agent_type: "team_supervisor" })
 ```
 
 ### Wake (handleSpawnNext — per CHECKPOINT task)

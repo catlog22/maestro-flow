@@ -68,7 +68,7 @@ Set the task ID to match `ANT-<k>-<i>` (or record mapping in `.msg/meta.json` if
 For each assignment, spawn one team-worker:
 
 ```
-spawn_agent({ task_name: "ant_<k>_<i>", message: "Spawn ant <ANT-k-i>", fork_turns: "none" })
+spawn_agent({ task_name: "ant_<k>_<i>", message: "Spawn ant <ANT-k-i>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 All N spawns in a single message (parallel).
@@ -108,7 +108,7 @@ If all completed -> proceed.
 If `config.scoring.mode == "llm"`:
 
 ```
-spawn_agent({ task_name: "scorer_<k>", message: "<message>", fork_turns: "none" })
+spawn_agent({ task_name: "scorer_<k>", message: "<message>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 STOP and await scorer callback. On callback resume at Step 3.

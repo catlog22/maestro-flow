@@ -88,7 +88,7 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 **Parallel ideator spawn** (Full pipeline with N angles):
@@ -96,7 +96,7 @@ spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "
 When Full pipeline has N parallel IDEA tasks, spawn N distinct team-worker agents named `ideator-1`, `ideator-2`, etc.
 
 ```
-spawn_agent({ task_name: "ideator_<n>", message: "<message>", fork_turns: "none" })
+spawn_agent({ task_name: "ideator_<n>", message: "<message>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ## User Commands

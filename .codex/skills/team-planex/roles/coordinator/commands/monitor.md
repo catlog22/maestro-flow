@@ -149,7 +149,7 @@ Collect task states from list_agents()
       |   +- PLAN-* -> planner
       |   +- EXEC-* -> executor
       +- Spawn team-worker:
-         spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <subject>", fork_turns: "none" })
+         spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <subject>", fork_turns: "none", agent_type: "team_worker" })
       +- Add to session.active_workers
       Update session -> output summary -> STOP
 ```

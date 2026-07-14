@@ -123,7 +123,7 @@ Find ready tasks, spawn workers, STOP.
    b. team_msg log -> task_unblocked
    c. Spawn team-worker (see SKILL.md Spawn Template):
       ```
-      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none" })
+      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none", agent_type: "team_worker" })
       ```
    d. Add to active_workers
 
@@ -139,7 +139,7 @@ Find ready tasks, spawn workers, STOP.
 
 **Parallel spawn** (Batch mode with multiple ready tasks for same role):
 ```
-spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none" })
+spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 6. Update session, output summary, STOP

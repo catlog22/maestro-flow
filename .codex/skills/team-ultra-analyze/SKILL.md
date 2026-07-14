@@ -98,7 +98,7 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<agent_name>", message: "Spawn <role> worker", fork_turns: "none" })
+spawn_agent({ task_name: "<agent_name>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ## User Commands

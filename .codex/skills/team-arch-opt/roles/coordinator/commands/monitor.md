@@ -119,7 +119,7 @@ Find ready tasks, spawn workers, STOP.
    c. team_msg log -> task_unblocked
    d. Spawn team-worker (see SKILL.md Spawn Template):
       ```
-      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none" })
+      spawn_agent({ task_name: "<role>", message: "Spawn <role> worker for <task-id>", fork_turns: "none", agent_type: "team_worker" })
       ```
    e. Add to active_workers
 5. Parallel spawn rules by mode:

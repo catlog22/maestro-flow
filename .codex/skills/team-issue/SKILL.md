@@ -91,13 +91,13 @@ Parse `$ARGUMENTS`:
 Coordinator spawns workers using this template:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 **Parallel spawn** (Batch mode, N explorer or M implementer instances):
 
 ```
-spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none" })
+spawn_agent({ task_name: "<role>_<n>", message: "<message>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ## User Commands

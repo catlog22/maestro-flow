@@ -31,7 +31,7 @@ Save full report to `<session>/artifacts/swarm-report.json` (raw data for analys
 ### Step 2: Spawn analyst worker
 
 ```
-spawn_agent({ task_name: "analyst", message: "Spawn analyst for swarm synthesis", fork_turns: "none" })
+spawn_agent({ task_name: "analyst", message: "Spawn analyst for swarm synthesis", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 STOP. Resume on analyst callback.

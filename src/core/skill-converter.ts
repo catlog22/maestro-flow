@@ -265,9 +265,9 @@ export const TOOL_FIELD_MAP: Record<string, Record<string, FieldMapping>> = {
         name: 'task_name',
         prompt: 'message',
         description: 'message',
-        subagent_type: null,
+        subagent_type: 'agent_type',
+        model: 'model',
         run_in_background: null,
-        model: null,
         isolation: null,
         mode: null,
       },
@@ -367,15 +367,22 @@ function rewriteAgentCallSitesCodex(body: string): string {
       const promptMatch = inner.match(/prompt\s*[:=]\s*["']([^"']*)["']/);
       const descMatch = inner.match(/description\s*[:=]\s*["']([^"']*)["']/);
       const forkMatch = inner.match(/\brun_in_background\s*[:=]\s*(true|false)/);
+      const typeMatch = inner.match(/\bsubagent_type\s*[:=]\s*["']([^"']+)["']/);
+      const modelMatch = inner.match(/\bmodel\s*[:=]\s*["']([^"']+)["']/);
 
       const rawName = nameMatch?.[1] ?? '<task_name>';
       const taskName = fm.transforms?.task_name === 'lowercase_underscore'
         ? toSnakeCase(rawName)
         : rawName;
       const message = promptMatch?.[1] ?? descMatch?.[1] ?? '<message>';
-      const forkTurns = forkMatch?.[1] === 'true' ? ', fork_turns: "none"' : '';
 
-      return `${fm.tool}({ ${fm.fields.name}: "${taskName}", ${fm.fields.prompt}: "${message}"${forkTurns} })`;
+      const extras: string[] = [];
+      if (forkMatch?.[1] === 'true') extras.push('fork_turns: "none"');
+      if (typeMatch) extras.push(`agent_type: "${toSnakeCase(typeMatch[1])}"`);
+      if (modelMatch) extras.push(`model: "${modelMatch[1]}"`);
+      const extraStr = extras.length > 0 ? ', ' + extras.join(', ') : '';
+
+      return `${fm.tool}({ task_name: "${taskName}", message: "${message}"${extraStr} })`;
     },
   );
   out = out.replace(/\bAgent\s*\(/g, `${fm.tool}(`);
@@ -882,27 +889,57 @@ const AGENTS_STANDARD_PROFILE: ConversionProfile = {
 // Partial tree builders — skills-only and agents-only
 // ---------------------------------------------------------------------------
 
+/** Platform suffix for override files: "codex" → ".codex.md" */
+const PROFILE_SUFFIX: Record<string, string> = {
+  codex: '.codex.md',
+  agy: '.agy.md',
+  'agents-standard': '.agents.md',
+};
+
 function buildSkillsOnly(
   claudeDir: string,
   targetSkillsDir: string,
   profile: ConversionProfile,
   convertFn: (content: string, profile: ConversionProfile, isSkillOrCommand: boolean) => string,
+  platformKey?: string,
 ): BuildStats {
   const commandsDir = join(claudeDir, 'commands');
   const skillsDir = join(claudeDir, 'skills');
   const stats: BuildStats = { commands: 0, skills: 0, agents: 0, files: 0 };
+  const suffix = platformKey ? PROFILE_SUFFIX[platformKey] : undefined;
 
   // commands/*.md → targetSkillsDir/<name>/SKILL.md
+  // Override: if <name>.codex.md exists alongside <name>.md, use it as-is (strip tags only).
   if (existsSync(commandsDir)) {
-    for (const entry of readdirSync(commandsDir, { withFileTypes: true })) {
+    const allFiles = readdirSync(commandsDir, { withFileTypes: true });
+    const overrides = new Set<string>();
+    if (suffix) {
+      for (const entry of allFiles) {
+        if (entry.isFile() && entry.name.endsWith(suffix)) {
+          overrides.add(entry.name.replace(suffix, ''));
+        }
+      }
+    }
+
+    for (const entry of allFiles) {
       if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      // Skip override source files (they're consumed by their base name)
+      if (suffix && entry.name.endsWith(suffix)) continue;
       const name = entry.name.replace(/\.md$/, '');
-      const src = join(commandsDir, entry.name);
       const destDir = join(targetSkillsDir, name);
       const dest = join(destDir, 'SKILL.md');
       ensureDir(destDir);
-      const out = convertFn(readFileSync(src, 'utf8'), profile, true);
-      writeFileSync(dest, out, 'utf8');
+
+      if (overrides.has(name)) {
+        // Platform-specific override — use as-is, only strip tags
+        const overrideSrc = join(commandsDir, name + suffix);
+        const raw = readFileSync(overrideSrc, 'utf8');
+        writeFileSync(dest, stripToolTags(raw), 'utf8');
+      } else {
+        const src = join(commandsDir, entry.name);
+        const out = convertFn(readFileSync(src, 'utf8'), profile, true);
+        writeFileSync(dest, out, 'utf8');
+      }
       stats.commands++;
       stats.files++;
     }
@@ -1023,7 +1060,7 @@ export function buildAgySkills(
   claudeDir: string,
   targetDir: string,
 ): { files: number } {
-  const stats = buildSkillsOnly(claudeDir, targetDir, AGY_PROFILE, convertTextAgy);
+  const stats = buildSkillsOnly(claudeDir, targetDir, AGY_PROFILE, convertTextAgy, 'agy');
   return { files: stats.files };
 }
 
@@ -1041,7 +1078,7 @@ export function buildAgentsStandardSkills(
   claudeDir: string,
   targetDir: string,
 ): { files: number } {
-  const stats = buildSkillsOnly(claudeDir, targetDir, AGENTS_STANDARD_PROFILE, convertTextStandard);
+  const stats = buildSkillsOnly(claudeDir, targetDir, AGENTS_STANDARD_PROFILE, convertTextStandard, 'agents-standard');
   return { files: stats.files };
 }
 
@@ -1161,7 +1198,7 @@ export function buildCodexSkills(
   claudeDir: string,
   targetDir: string,
 ): { files: number } {
-  const stats = buildSkillsOnly(claudeDir, targetDir, CODEX_PROFILE, convertTextCodex);
+  const stats = buildSkillsOnly(claudeDir, targetDir, CODEX_PROFILE, convertTextCodex, 'codex');
   return { files: stats.files };
 }
 

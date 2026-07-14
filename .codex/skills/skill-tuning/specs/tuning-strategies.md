@@ -274,7 +274,7 @@ function validateAgentResult(result, requiredFields) {
 ### flatten_nesting
 
 ```javascript
-// Before: Agent A's prompt tells it to call spawn_agent({ task_name: "<task_name>", message: "<message>" })
+// Before: Agent A's prompt tells it to call spawn_agent({ task_name: "<task_name>", message: "<message>", agent_type: "b" })
 // After: Agent A returns signal, orchestrator handles
 // Agent A: return { needs_agent_b: true, context: {...} }
 // Orchestrator:

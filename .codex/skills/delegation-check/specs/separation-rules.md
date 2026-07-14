@@ -57,13 +57,13 @@ A delegation prompt tells the agent what to do *this time*. The agent definition
 ```
 # BAD — prompt redefines role
 spawn_agent({ task_name: "<task_name>", message: "You are a code quality expert. Your job is to review plans...
-    <objective>Verify phase 5 plans</objective>" })
+    <objective>Verify phase 5 plans</objective>", agent_type: "gsd_plan_checker" })
 
 # GOOD — prompt states objective only
 spawn_agent({ task_name: "<task_name>", message: "<verification_context>
     <files_to_read>...</files_to_read>
   </verification_context>
-  <expected_output>## VERIFICATION PASSED or ## ISSUES FOUND</expected_output>" })
+  <expected_output>## VERIFICATION PASSED or ## ISSUES FOUND</expected_output>", agent_type: "gsd_plan_checker" })
 ```
 
 **Why it's wrong:** The agent's `<role>` section already defines identity. Re-definition in prompt can contradict, confuse, or override the agent's self-understanding.
@@ -79,12 +79,12 @@ spawn_agent({ task_name: "<task_name>", message: "<verification_context>
 spawn_agent({ task_name: "<task_name>", message: "<objective>Create plans for phase 3</objective>
     Remember: tasks should have 2-3 items max.
     | TOO VAGUE | JUST RIGHT |
-    | " })
+    | ", agent_type: "gsd_planner" })
 
 # GOOD — agent's own <task_breakdown> section owns this knowledge
 spawn_agent({ task_name: "<task_name>", message: "<planning_context>
     <files_to_read>...</files_to_read>
-  </planning_context>" })
+  </planning_context>", agent_type: "gsd_planner" })
 ```
 
 **Why it's wrong:** Domain knowledge in prompts duplicates agent content. When agent evolves, prompt doesn't update — they diverge. Agent's domain sections are the single source of truth.
@@ -150,11 +150,11 @@ spawn_agent({ task_name: "<task_name>", message: "<planning_context>
 ```
 # BAD — prompt overrides agent's process
 spawn_agent({ task_name: "<task_name>", message: "Step 1: Read the roadmap. Step 2: Extract requirements.
-    Step 3: Create task breakdown. Step 4: Assign waves..." })
+    Step 3: Create task breakdown. Step 4: Assign waves...", agent_type: "gsd_planner" })
 
 # GOOD — prompt states objective, agent decides process
 spawn_agent({ task_name: "<task_name>", message: "<objective>Create plans for phase 5</objective>
-    <files_to_read>...</files_to_read>" })
+    <files_to_read>...</files_to_read>", agent_type: "gsd_planner" })
 ```
 
 **Exception — Revision instructions:** `<instructions>` block in revision prompts is acceptable because it tells the agent *what changed* (checker issues), not *how to work*.
@@ -177,7 +177,7 @@ Return what changed.
 ```
 # BAD — prompt decides implementation details
 spawn_agent({ task_name: "<task_name>", message: "Use React Query for data fetching. Use Zustand for state management.
-    <objective>Plan the frontend architecture</objective>" })
+    <objective>Plan the frontend architecture</objective>", agent_type: "gsd_planner" })
 
 # GOOD — user decisions passed through from CONTEXT.md
 spawn_agent({

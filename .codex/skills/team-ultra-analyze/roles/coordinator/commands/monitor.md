@@ -238,7 +238,7 @@ Find and spawn the next ready tasks.
 3. Spawn team-worker for each ready task:
 
 ```
-spawn_agent({ task_name: "<agent_name>", message: "Spawn <role> worker for <task-subject>", fork_turns: "none" })
+spawn_agent({ task_name: "<agent_name>", message: "Spawn <role> worker for <task-subject>", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 4. **Parallel spawn rules**:

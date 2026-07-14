@@ -127,7 +127,7 @@ Validate session
 When executor spawns workers, use `team-worker` agent with role-spec path:
 
 ```
-spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none" })
+spawn_agent({ task_name: "<role>", message: "Spawn <role> worker", fork_turns: "none", agent_type: "team_worker" })
 ```
 
 ---

@@ -283,7 +283,7 @@ const tasks = [
 \`\`\`javascript
 const results = await Promise.all(
   tasks.map(task =>
-    spawn_agent({ task_name: "<task_name>", message: "<message>" })
+    spawn_agent({ task_name: "<task_name>", message: "<message>", agent_type: "universal_executor" })
   )
 );
 \`\`\`
