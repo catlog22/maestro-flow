@@ -10,6 +10,7 @@ allowed-tools:
   - Glob
   - Grep
   - Agent
+  - SendMessage
   - AskUserQuestion
   - TodoWrite
 session-mode: run
@@ -20,7 +21,7 @@ contract:
 ---
 
 <purpose>
-Orchestrate all maestro commands: classify intent → select chain → create session → dispatch to `maestro-ralph-execute`.
+Orchestrate all maestro commands: classify intent → select chain → create session → dispatch [@subagent] Agent(ralph-executor) per step → extract signals → drift check → complete → loop.
 Session: `.workflow/.maestro/{session_id}/status.json`.
 </purpose>
 
@@ -46,18 +47,18 @@ $ARGUMENTS — user intent text, or special keywords.
 </context>
 
 <invariants>
-1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
+1. **All chains dispatch via Agent(ralph-executor)** — maestro 拥有完整执行循环，每步派发一个 unnamed executor agent
 2. **Session before execution** — status.json created before any step runs
 3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
 4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，下游 ralph 只消费不覆盖（当 `decomposition_owner == "maestro"` 时跳过二次提问，仅做 shape 校验 + 缺省字段补齐）
 5. **status.json 唯一真源** — 不生成 `goal-checklist.md` 或外部清单
-6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点不走 CLI，走 `[@skill] Skill("maestro-ralph")` handoff
+6. **执行步骤统一通过 `maestro ralph next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点由主流程通过 [@subagent] Agent() 评估，不 handoff 到其他 skill
 7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
 8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
 9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
 10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
 11. **schema** — `ralph_protocol_version: "2"` 标记 CLI-driven session；新增字段全部可选
-12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via ralph-execute）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
+12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via Agent(ralph-executor)）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
 13. **Classification evidence** — S_CLASSIFY 的 chain 选择决策 MUST 记录到 status.json 的 `classification_rationale` 字段：匹配了哪个 pattern、排除了哪些备选、confidence level。无记录的分类不可进入 S_CREATE。
 14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
 15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 session 生命周期 + step 排序 + cross-step decision 节点；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）只单次推荐，不得出现在 FSM step 内。
@@ -76,7 +77,16 @@ S_DECOMPOSE     — 边界澄清、写执行准则+子目标清单       PERSIST
 S_CREATE        — 创建 session + status.json           PERSIST: session (全量)
 S_DRY_RUN       — 显示 chain 后结束                    PERSIST: —
 S_CONFIRM       — 用户确认（auto_mode 跳过）            PERSIST: —
-S_DISPATCH      — 移交 maestro-ralph-execute           PERSIST: —
+S_DISPATCH      — 进入执行循环                         PERSIST: —
+S_STEP_LOCATE   — 找下一个 pending step                  PERSIST: —
+S_STEP_DISPATCH — 派发 unnamed executor agent            PERSIST: step.status = "running"
+S_STEP_ANALYZE  — 提取信号 + 组装 completion 参数        PERSIST: —
+S_STEP_DRIFT    — 产物 vs 目标偏离分析                    PERSIST: step.drift_score
+S_STEP_COMPLETE — 调 `ralph complete` 上报                PERSIST: step.completion_*
+S_DECISION_EVAL — 启动分析 Agent 评估质量门            PERSIST: —
+S_APPLY_VERDICT — 应用裁决                            PERSIST: steps[]
+S_SESSION_DONE  — 所有 step 完成                      PERSIST: status
+S_HANDLE_FAIL   — 处理失败                            PERSIST: step.status
 S_FALLBACK      — 意图无法分类、请求输入                PERSIST: —
 </states>
 
@@ -126,7 +136,59 @@ S_CONFIRM:
   → END           WHEN: user cancels
 
 S_DISPATCH:
-  → END           DO: [@skill] Skill({ skill: "maestro-ralph-execute" })
+  → S_STEP_LOCATE
+
+S_STEP_LOCATE:
+  → S_STEP_DISPATCH WHEN: pending execution step found (step.decision == null)
+  → S_DECISION_EVAL WHEN: pending decision step found (step.decision != null)
+  → S_SESSION_DONE  WHEN: no pending steps (all completed/skipped)
+  → S_HANDLE_FAIL   WHEN: has failed step and no pending
+
+S_STEP_DISPATCH:
+  → S_STEP_ANALYZE  WHEN: task-notification status=completed           DO: A_STEP_DISPATCH
+  → S_HANDLE_FAIL   WHEN: task-notification status=failed              DO: mark BLOCKED
+
+S_STEP_ANALYZE:
+  → S_STEP_DRIFT    WHEN: STATUS == DONE|DONE_WITH_CONCERNS   DO: A_STEP_EXTRACT
+  → S_HANDLE_FAIL   WHEN: STATUS == NEEDS_RETRY|BLOCKED       DO: A_STEP_EXTRACT
+
+S_STEP_DRIFT:
+  → S_STEP_COMPLETE WHEN: ALIGNED|MINOR_DRIFT                  DO: A_STEP_DRIFT_ANALYZE
+  → S_STEP_DISPATCH     WHEN: MAJOR_DRIFT + not retried            DO: A_STEP_DRIFT_ANALYZE (retry)
+  → S_STEP_COMPLETE WHEN: MAJOR_DRIFT + retried                DO: A_STEP_DRIFT_ANALYZE (DONE_WITH_CONCERNS)
+
+S_STEP_COMPLETE:
+  → S_STEP_LOCATE   DO: A_STEP_COMPLETE (loop to next step)
+
+S_DECISION_EVAL:
+  → S_APPLY_VERDICT WHEN: quality-gate (post-execute, post-review, post-test)
+                     DO: A_AGENT_EVALUATE
+  → S_APPLY_VERDICT WHEN: goal-gate (post-goal-audit)
+                     DO: A_AGENT_GOAL_AUDIT
+  → S_APPLY_VERDICT WHEN: scope-gate (post-analyze-scope)
+                     DO: A_SCOPE_EVALUATE
+
+S_APPLY_VERDICT:
+  → S_STEP_LOCATE WHEN: verdict == "proceed"             DO: A_APPLY_PROCEED
+  → S_STEP_LOCATE WHEN: post-goal-audit + has_unmet      DO: A_APPLY_GOAL_FIX
+  → S_SESSION_DONE WHEN: post-goal-audit + all_met        DO: A_APPLY_GOAL_DONE
+  → S_STEP_LOCATE WHEN: post-analyze-scope               DO: A_APPLY_SCOPE_VERDICT
+  → S_STEP_LOCATE WHEN: verdict == "fix"                 DO: A_APPLY_FIX
+  → S_STEP_LOCATE WHEN: verdict == "escalate"            DO: A_APPLY_ESCALATE
+  GUARD: retry_count >= max_retries → force escalate
+  GUARD: confidence_score < 60 AND proceed → override to fix
+  GUARD: auto_confirm → skip user prompt, apply adjusted verdict
+  GUARD: not auto_confirm → [@ask] AskUserQuestion with override options
+
+S_SESSION_DONE:
+  → END            DO: A_COMPLETE_SESSION
+
+S_HANDLE_FAIL:
+  → S_STEP_LOCATE WHEN: auto + not retried              DO: A_RETRY
+  → END              WHEN: auto + retried                   DO: A_PAUSE_SESSION
+  → S_STEP_LOCATE WHEN: interactive + retry
+  → S_STEP_LOCATE WHEN: interactive + skip
+  → END              WHEN: interactive + abort
 
 S_FALLBACK:
   → S_CLASSIFY    WHEN: user provides new intent           DO: [@ask] AskUserQuestion
@@ -164,7 +226,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 2. **Bind context**: parse `--context k=v`; collect missing required variables via `[@ask] AskUserQuestion`; bind `{variable}` placeholders (leave `{N-xxx.field}` and `{prev_*}` for runtime resolution by ralph-execute).
 3. **Topological sort** (Kahn) template nodes → linear `steps[]` (parallel nodes share a batch index). Each step carries `skill`/`args`/`type` (skill|cli|agent|checkpoint) resolved as in `A_CREATE_SESSION`; cli nodes run async via `Bash(run_in_background)` + STOP, checkpoints pause with resume via `-c`.
 4. **Create session**: write `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json` (`source: "maestro"`, `template_id`, bound `context`, topologically-ordered `steps[]`). `--dry-run` → display plan and END.
-5. Dispatch to `maestro-ralph-execute` (S_DISPATCH) — the runner honors checkpoints, resume-safety, and per-step `completion_confirmed` exactly as for classified chains.
+5. 进入 S_DISPATCH → S_STEP_LOCATE 执行循环 — 每步派发 Agent(ralph-executor)，主流程管理 checkpoint、resume-safety、`completion_confirmed`。
 
 ### A_CLASSIFY_INTENT
 
@@ -206,6 +268,111 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
    {end for}
    达成条件: {session_dir}/status.json 中 task_decomposition[*].status == "done" 且 task_decomposition[*].completion_confirmed == true 且 steps[*].completion_confirmed == true。未达成时：阅读 {session_dir}/status.json 取得 execution_criteria / boundary_contract / task_decomposition / steps 作为行动手册，调用 /maestro-ralph continue 推进；严禁手动执行 skill 或越界修改 status.json.boundary_contract.out_of_scope。
    ```
+
+### A_STEP_DISPATCH
+
+加载前序产出 + 派发 executor agent。模型同 maestro-ralph 的 A_STEP_DISPATCH。
+
+1. **前序上下文**：读前一 completed step 的 `completion_summary` + `completion_caveats` + `completion_decisions` + `completion_deferred`
+2. **Goal context**：`step.goal_ref` 非空时组装 `<goal_context>` 块
+3. **Resolve agent name**：`{stage_prefix}-{session_id_short}-{HHmmss}`（prefix: grl/brn/anm/ana/pln/exe/rev/tst/dbg/run）
+4. **派发（unnamed executor）**：
+
+```
+[@subagent] Agent({
+  subagent_type: "ralph-executor",
+  description: "执行 step {index}: {step.skill} [{resolved_agent_name}]",
+  prompt: `Session: {session_id}
+
+{goal_context 块}
+
+{loaded_step_context}
+`
+})
+```
+
+5. 写 `step.agent_exec_name`（仅日志标识）
+6. Display: `[{index}/{total}] ⟶ {step.skill} → {resolved_agent_name}`
+7. 等待 task-notification → agent_output
+
+### A_STEP_EXTRACT
+
+从 agent 返回提取信号（同 maestro-ralph A_STEP_EXTRACT）：
+
+| Stage | 提取什么 | 写入字段 |
+|-------|---------|---------|
+| analyze | scope_verdict + key_findings | `--summary`, context.analysis_dir |
+| plan | TASK-*.json 数量 + 波次 | `--summary`, context.plan_dir |
+| execute | 修改文件数 + verification | `--summary`, `--evidence`, context.run_dir |
+| review | verdict + findings + severity | `--summary`, `--decisions` |
+| test | pass/fail 统计 | `--summary`, `--evidence` |
+
+组装 completion params：`--summary`（MUST，≤100 字），`--decisions`/`--caveats`/`--deferred`/`--evidence`（SHOULD）。
+
+### A_STEP_DRIFT_ANALYZE
+
+产物 vs 目标偏离分析（同 maestro-ralph A_STEP_DRIFT_ANALYZE）：
+
+| drift_score | 动作 |
+|-------------|------|
+| ALIGNED | 正常 complete |
+| MINOR_DRIFT | 偏离追加 caveats，正常 complete |
+| MAJOR_DRIFT + 未重试 | `maestro ralph retry {index}` → 回 S_STEP_DISPATCH |
+| MAJOR_DRIFT + 已重试 | DONE_WITH_CONCERNS complete |
+
+### A_STEP_COMPLETE
+
+1. 使用 A_STEP_EXTRACT 组装的参数调 `Bash("maestro ralph complete {index} --status DONE --summary ...")`
+2. 传播 context signals 到 status.json context 字段
+3. Display: `[{index}/{total}] ✓ {step.skill} → {SUMMARY}`
+4. Loop → S_STEP_LOCATE
+
+### A_AGENT_EVALUATE
+
+通过 Agent 评估质量门（同 maestro-ralph A_AGENT_EVALUATE）：
+
+```
+[@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
+  description: "评估 {decision} 质量门",
+  prompt: "PURPOSE: 评估 {decision} 质量门结果
+TASK: 读取结果文件 | 分析状态 | 评估严重性 | 给出建议
+FILES: {result_file_paths}
+SESSION: {session_dir}/status.json
+EXPECTED:
+---VERDICT---
+STATUS: PASS|FAIL|PARTIAL|BLOCKED
+REASON: <原因>
+CONFIDENCE_SCORE: 0-100
+---END---
+CONSTRAINTS: 只评估不修改文件"
+})
+```
+
+Parse verdict → 调整 → 写 decisions.ndjson → S_APPLY_VERDICT。
+Parse 失败 → fallback fix + `parse_failed: true`（invariant 18）。
+
+### A_AGENT_GOAL_AUDIT
+
+子目标审计（同 maestro-ralph A_AGENT_GOAL_AUDIT）：Agent 读 task_decomposition，对照 evidence 判定 met/unmet。
+
+### A_SCOPE_EVALUATE
+
+post-analyze-scope 触发：读 macro analyze artifact → 提取 scope_verdict → 写 status.json。
+
+### A_APPLY_PROCEED / A_APPLY_FIX / A_APPLY_ESCALATE / A_APPLY_GOAL_FIX / A_APPLY_GOAL_DONE / A_APPLY_SCOPE_VERDICT
+
+- **A_APPLY_PROCEED**: mark decision completed
+- **A_APPLY_FIX**: 插入 fix-loop steps → reindex → increment retry
+- **A_APPLY_ESCALATE**: 插入 `debug "{gap}"` + decision → reindex
+- **A_APPLY_GOAL_FIX**: 每个 unmet 子目标插入 scoped mini-loop（plan --gaps + execute），追加 post-goal-audit {retry+1}
+- **A_APPLY_GOAL_DONE**: set `task_decomposition[*].status="done"`, `task_decomposition_all_done=true`
+- **A_APPLY_SCOPE_VERDICT**: 依据 scope_verdict 重塑下游链路（同 maestro-ralph）
+
+### A_RETRY / A_PAUSE_SESSION / A_COMPLETE_SESSION
+
+- **A_RETRY**: `Bash("maestro ralph retry {index}")`
+- **A_PAUSE_SESSION**: `ralph complete N --status BLOCKED`
+- **A_COMPLETE_SESSION**: 校验 `completion_confirmed` + `task_decomposition_all_done` → `status = "completed"`
 
 ### A_CREATE_SESSION
 
@@ -282,11 +449,16 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 - [ ] `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global）
 - [ ] Session schema 含 `ralph_protocol_version: "2"` + `active_step_index: null` + step.load 占位
 - [ ] 用户传入 `-y` 时透传到 skill args
-- [ ] All chains dispatched via maestro-ralph-execute
+- [ ] All chains dispatched via Agent(ralph-executor) — maestro 拥有完整执行循环
+- [ ] One agent per step — unnamed Agent({ subagent_type: "ralph-executor" }) 派发
+- [ ] Executor 结果通过 task-notification 回传主流程
+- [ ] 主流程调 `maestro ralph complete` 上报（非 agent 上报）
+- [ ] Decision 节点通过 Agent 评估，不 handoff 到其他 skill
+- [ ] drift_score 分析：ALIGNED/MINOR_DRIFT → complete；MAJOR_DRIFT → retry/concerns
 - [ ] Low-complexity intents routed to step `quick`
 - [ ] (super) Requirements validated before roadmap
 - [ ] (super) Each session scored >= 80%
 - [ ] (compose) `--compose` produces a validated template (≤20 nodes, acyclic, no orphans) written to `~/.maestro/templates/workflows/` + index; drafts preserved on abandon
-- [ ] (play) `--play <template>` binds context, topologically sorts nodes → `steps[]`, and dispatches via maestro-ralph-execute; `--list`/`--dry-run` short-circuit
+- [ ] (play) `--play <template>` binds context, topologically sorts nodes → `steps[]`, and dispatches via Agent(ralph-executor) 执行循环; `--list`/`--dry-run` short-circuit
 
 </appendix>
