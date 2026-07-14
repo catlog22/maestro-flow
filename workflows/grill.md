@@ -30,9 +30,7 @@ Parse $ARGUMENTS to determine execution mode:
 - `--from <source>`: upstream material to grill against
 - Missing/empty args without `--from` or `--continue` = error
 
-**Session Resolution**:
-- Use the `session_id` and `run_dir` returned by the runtime; matching intent Sessions are resumed automatically.
-- Resume state comes from the current Run/Session registry and sealed upstream artifacts, never from output-directory discovery.
+**Session Resolution**: Runtime handles session resolution, artifact registration, and state updates. Contract inputs are resolved and injected by the runtime via `maestro run create`.
 
 **Output Directory Resolution**:
 ```
@@ -406,29 +404,11 @@ If any missing: produce the missing artifact before Step 7. Do NOT register comp
 
 ---
 
-## Step 7: Register Artifact
+## Step 7: Wrap-up
 
-### 7.1: Register in state.json
+### 7.1: Artifact Registration
 
-```jsonc
-{
-  "id": "GRL-{NNN}",
-  "type": "grill",
-  "scope": "standalone",
-  "path": "{output_dir relative to .workflow/}",
-  "status": "completed",
-  "context_package": "{output_dir}/context-package.json",
-  "created_at": "{ISO-8601}",
-  "metadata": {
-    "topic": "{topic}",
-    "depth": "{depth}",
-    "branches_completed": {N},
-    "decisions_locked": {N},
-    "decisions_open": {N},
-    "terms_defined": {N}
-  }
-}
-```
+Artifact registration and state updates are handled by `maestro run complete`.
 
 ### 7.2: Domain Knowledge Flow
 
@@ -455,3 +435,16 @@ Grill session {artifact_id} completed.
 ```
 
 → Wrap-up follows ref/finish-work.md (SESSION_TYPE=grill, SESSION_ID={artifact_id}).
+
+---
+
+## Error Handling
+
+| Error | Action |
+|------|------|
+| no topic and no `--from`/`--continue` | abort: missing topic, provide a plan/idea to grill |
+| `--continue` but no prior grill session | abort: no session to resume, start a fresh grill |
+| codebase scan found no relevant anchors (W001) | warn, proceed with reduced code-grounded challenges, mark affected branches [LOW CONFIDENCE] |
+| CLI exploration failed in auto mode | retry once; if still failing, fall back to interactive Q&A for that branch |
+| terminology collision unresolved | record as an open question in `grill-report.md`, do not silently pick a term |
+| max branch count reached with open contradictions | force synthesis, record unresolved contradictions under Risk Register |

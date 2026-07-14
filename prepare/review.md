@@ -14,14 +14,16 @@ contract:
 refs:
   - { path: ref/spec-conflict.md, when: A contradiction between code and a spec entry is found }
   - { path: ref/cli-supplementary.md, when: standard/deep needs CLI cross-validation }
-gates: []
+gates: [dimension-coverage, severity-triaged]
 ---
 
-## Preparation
+# Pre-task Thinking: review
+
+## Purpose
 
 Review is a read-only assessment of `current-execution`'s change manifest. Before starting, establish awareness of this round's scope and existing constraints.
 
-### Level determination
+## Input Interpretation
 
 The review level determines dimension coverage and execution method, inferred automatically by changed-file count by default:
 
@@ -33,7 +35,9 @@ The review level determines dimension coverage and execution method, inferred au
 
 The six dimensions: correctness, security, performance, architecture, maintainability, best-practices. `--dimensions <list>` can override the level default.
 
-### Context injection (optional, may continue if missing)
+## Required Context
+
+Context injection (optional, may continue if missing):
 
 - Architecture doc: `.workflow/codebase/ARCHITECTURE.md` → component boundaries, layering rules
 - Wiki constraints: `maestro search "architecture constraint" --json` → recorded decisions
@@ -41,7 +45,7 @@ The six dimensions: correctness, security, performance, architecture, maintainab
 - Conflict state: `maestro spec conflict list` → spec entries currently marked as conflicting (prioritize during review)
 - Role knowledge: `maestro search --category review` → pick relevant items → `maestro load --type knowhow --id`
 
-### Boundaries
+## Boundaries and Invariants
 
 - Review is read-only on source — problems found are not fixed in this run; source modification belongs to the debug→plan→execute loop.
 - Every finding must be anchored to `file:line` and carry severity, evidence, impact, recommendation; vague conclusions without anchors are forbidden.
@@ -49,3 +53,16 @@ The six dimensions: correctness, security, performance, architecture, maintainab
 - Each dimension produces findings independently; one dimension's result must not suppress or override another's.
 - When a same-session `prior-review` exists, do a delta comparison; do not re-report already-resolved findings as new problems.
 - When code and a spec entry contradict: if the code is evolved practice (spec is outdated), suggest `maestro spec supersede`; if there's a genuine dispute, `maestro spec conflict mark`; never silently accept the contradiction or edit the spec in place.
+
+## Risk Checklist
+
+- Is every finding anchored to `file:line` with severity, evidence, impact, recommendation? A vague finding without an anchor is not actionable.
+- Is the verdict driven by findings data, not preference? Severity must not be softened without new evidence.
+- Are dimensions genuinely independent? One dimension suppressing or overriding another's findings undermines coverage.
+- On a re-review, did you delta against `prior-review`? Re-reporting already-resolved findings as new is noise.
+- Did a code/spec contradiction get routed correctly? Evolved practice → `spec supersede`; genuine dispute → `spec conflict mark`; never silently accept or edit the spec in place.
+
+## Gate Intent
+
+- `dimension-coverage`: the dimensions required by the level all produced findings (quick = correctness + security; standard/deep = all 6), and each finding is anchored to `file:line` with severity/evidence/impact/recommendation.
+- `severity-triaged`: every finding has a triaged severity and there are no unhandled UNMET spec-compliance criteria; the PASS/WARN/BLOCK verdict is driven by finding data, not preference.

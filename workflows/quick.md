@@ -42,30 +42,11 @@ If missing: Error E002 — "Quick mode requires an initialized project. Run init
 
 ---
 
-## Step 3: Create Run Output Directory
+## Step 3: Resolve Run Output Directory
 
-Generate slug from `$DESCRIPTION` (lowercase, hyphens, max 40 chars). Set date to current date (YYYYMMDD).
+Runtime handles session resolution, artifact registration, and state updates. The Run directory (`$QUICK_DIR = {run_dir}/outputs/`) and its scaffolding (`.task/`, `.summaries/`) are created and injected by the runtime via `maestro run create`.
 
-```bash
-QUICK_DIR="{run_dir}/outputs/"
-mkdir -p "$QUICK_DIR/.task"
-mkdir -p "$QUICK_DIR/.summaries"
-```
-
-Write index.json:
-```json
-{
-  "id": "{YYYYMMDD}-quick-{slug}",
-  "type": "quick",
-  "title": "{$DESCRIPTION}",
-  "status": "active",
-  "created_at": "{ISO timestamp}",
-  "updated_at": "{ISO timestamp}",
-  "flags": { "discuss": {$DISCUSS_MODE}, "full": {$FULL_MODE} },
-  "plan": { "task_ids": [], "task_count": 0 },
-  "execution": { "method": "agent", "tasks_completed": 0, "tasks_total": 0 }
-}
-```
+Generate the task slug from `$DESCRIPTION` (lowercase, hyphens, max 40 chars) for use in the task ID and commit message.
 
 Report: "Creating quick task: {$DESCRIPTION}\nDirectory: {$QUICK_DIR}"
 
@@ -168,8 +149,7 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `workflow-planner` agent
 
 After planner returns:
 1. Verify plan.json exists at `${QUICK_DIR}/plan.json`
-2. Update index.json plan fields
-3. Report: "Plan created: ${QUICK_DIR}/plan.json"
+2. Report: "Plan created: ${QUICK_DIR}/plan.json"
 
 If plan not found: "Planner failed to create plan.json"
 
@@ -210,8 +190,7 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `workflow-executor` agen
 
 After executor returns:
 1. Verify summaries exist
-2. Update index.json execution fields
-3. Report completion status
+2. Report completion status
 
 ---
 
@@ -235,25 +214,13 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `workflow-verifier` agen
 
 ---
 
-## Step 9: Update State
+## Step 9: Complete
 
-Read state.json. Add quick task to quick_tasks array:
-```json
-{
-  "id": "{YYYYMMDD}-quick-{slug}",
-  "description": "{$DESCRIPTION}",
-  "completed_at": "{ISO timestamp}",
-  "directory": "{$QUICK_DIR}",
-  "verified": {$FULL_MODE ? verification_status : "skipped"}
-}
-```
-Update last_updated timestamp.
+Artifact registration and state updates are handled by `maestro run complete`.
 
 ---
 
 ## Step 10: Commit and Complete
-
-Update index.json status to "completed".
 
 Commit quick task artifacts — stage ONLY files modified by the task (from `.summaries/TASK-*-summary.md` "Files modified" list) plus the Run artifacts and state.json; confirm with `AskUserQuestion` showing staged files and proposed commit message (unless `-y`, then auto-commit):
 ```bash

@@ -110,7 +110,7 @@ Each gap: { id:"GAP-N", type:"missing_feature"|"incomplete_implementation"|"brok
 | hardcoded test data | `grep -n "hardcoded\|dummy\|fake\|mock"` | Warning |
 | disabled tests | `grep -n "skip\|xit\|xdescribe\|@disabled"` | Warning |
 
-Classify Blocker (blocks goal) / Warning (incomplete) / Info. Write into `outputs/antipattern-report.json` (schema `antipattern-report/1.0`, role evidence). Blocker anti-patterns merged into gaps (severity critical).
+Classify Blocker (blocks goal) / Warning (incomplete) / Info. Write into `outputs/antipattern-report.json`. Blocker anti-patterns merged into gaps (severity critical).
 
 ---
 
@@ -133,7 +133,7 @@ Classify Blocker (blocks goal) / Warning (incomplete) / Info. Write into `output
    the agent generates missing tests and returns GAPS FILLED / PARTIAL / ESCALATE
 ```
 
-Write `outputs/requirement-coverage.json` (schema `requirement-coverage/1.0`, role evidence):
+Write `outputs/requirement-coverage.json`:
 
 ```json
 { "test_framework": "...", "coverage": { "statements":0, "branches":0, "functions":0, "lines":0 },
@@ -160,10 +160,10 @@ blocked — critical path cannot be verified (missing dependency/environment)
 score = verified_truths / total_truths
 ```
 
-When an old file exists, archive first → `outputs/.history/verification-{YYYY-MM-DDTHH-mm-ss}.json`.
+When an old file exists, archive first → `outputs/.history/verification-{YYYY-MM-DDTHH-mm-ss}.json`. Artifact paths and metadata are declared in `prepare/verify.md` contract.
 
 ```
-Write outputs/verification.json (schema verification/1.0, alias latest-verification):
+Write outputs/verification.json:
 {
   "scope": "{scope}",
   "verdict": "pass|warn|fail|blocked",

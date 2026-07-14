@@ -15,14 +15,14 @@ retrospective <N> --compare <M>        → delta vs phase M (gstack-style trend)
 | Flag | Effect |
 |------|------|
 | `--lens <name>` | Run only the named lens. Default: all four. Repeatable. |
-| `--no-route` | Synthesize but skip Stage 6 (no spec/note/issue creation). |
+| `--no-route` | Synthesize but skip Step 6 (no spec/note/issue creation). |
 | `--all` | Force re-run for every completed phase (creates a new Run per candidate). |
 | `--compare <M>` | Load phase M's retrospective.json and emit a delta section. |
 | `-y` | Skip routing confirmation prompts; accept all recommendations. |
 
 ---
 
-## Stage 1: parse_input
+## Step 1: parse_input
 
 ```
 Require .workflow/ exists (E001).
@@ -30,7 +30,7 @@ Parse $ARGUMENTS → first non-flag token as phase/range/"--all", remaining as f
 
 Build config:
   mode       = "scan" | "single" | "range" | "all"
-  phases     = [] (filled in Stage 2)
+  phases     = [] (filled in Step 2)
   lenses     = ["technical","process","quality","decision"]
   route      = true (false if --no-route)
   compare_to = null | <phase number>
@@ -41,18 +41,17 @@ Validate: --lens names must be known (E002), --compare requires single mode (E00
 
 ---
 
-## Stage 2: scan_unreviewed (mode = "scan" or "all")
+## Step 2: scan_unreviewed (mode = "scan" or "all")
 
 ```
-Read `.workflow/state.json` to resolve `active_session_id`, then scan
-`.workflow/sessions/*/runs/*/run.json`.
+The runtime supplies the set of completed execution Runs eligible for retrospection
+(session resolution, Run enumeration, and artifact lookup are handled by the runtime).
 
-candidates = all completed `maestro-execute` Runs, each mapped to:
+candidates = all completed execution Runs, each mapped to:
   { number: run.sequence, slug: run.run_id, title: run.intent, completed_at: run.completed_at,
     has_retro, run_dir, gaps: 0, review_verdict: "—" }
 
-  where run_dir = `.workflow/sessions/{session_id}/runs/{run_id}`
-        has_retro = a completed retrospective artifact in the owning Session `artifacts.json`
+  where has_retro = whether a completed retrospective artifact already exists for that Run
 ```
 
 ### Display backlog
@@ -76,27 +75,27 @@ candidates = all completed `maestro-execute` Runs, each mapped to:
 | `scan`, 0 unreviewed | Print "All phases retrospected", exit 0 |
 | `scan`, 1 unreviewed | Default to that phase, ask AskUserQuestion to confirm |
 | `scan`, ≥2 unreviewed | AskUserQuestion with options: each phase as a choice + "All unreviewed" |
-| `all` | `phases = candidates`; create a new retrospective Run per candidate |
+| `all` | `phases = candidates` (one retrospective Run per candidate) |
 | `single` | `phases = [parsed_phase]` (validate it exists and is completed; if `has_retro` and not `--all`, prompt to overwrite) |
 | `range` | `phases = candidates.filter(c => N <= c.number <= M)` |
 
-Existing retrospective artifacts are immutable. Re-run by creating a new Run.
+Existing retrospective artifacts are immutable — a re-run produces a new artifact. Run creation and artifact registration are handled by the runtime.
 
 ---
 
-## Stage 3: load_artifacts (per phase)
+## Step 3: load_artifacts (per phase)
 
 ```
 source_run_dir = candidate.run_dir
 output_dir = current retrospective `{run_dir}/outputs/`
 
-Load artifacts bundle:
-  execution       ← source Run primary artifact resolved through Session `artifacts.json`
+Load artifacts bundle (typed inputs are resolved and injected by the runtime; do not read the artifact registry directly):
+  execution       ← source Run primary execution artifact
   evidence        ← {source_run_dir}/evidence/
   report          ← {source_run_dir}/report.md
-  upstream        ← aliases and producer Runs resolved from Session `artifacts.json`
+  upstream        ← upstream aliases and producer Runs of the source Run
   phase_issues    ← .workflow/issues/{issues,issue-history}.jsonl filtered by phase_ref == slug|NN
-  prior_retro     ← if --compare M: resolve the completed retrospective artifact from Session `artifacts.json`
+  prior_retro     ← if --compare M: the completed retrospective artifact for phase M
 ```
 
 ### Compute base metrics
@@ -127,7 +126,7 @@ delta = { vs_phase, tasks_completed, gaps_found, issues_opened, rework_iteration
 
 ---
 
-## Stage 4: multi_lens_analysis
+## Step 4: multi_lens_analysis
 
 MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn one Agent per active lens **in parallel** (`run_in_background: false`). Each returns JSON.
 
@@ -169,7 +168,7 @@ the project's spec / note / issue stores.
 - Project state:  .workflow/state.json (decisions, deferred)
 
 ## Pre-computed metrics
-{json_dump of metrics block from Stage 3}
+{json_dump of metrics block from Step 3}
 
 ## Instructions
 1. Read the listed artifacts; do not guess at files that don't exist.
@@ -227,11 +226,11 @@ Return ONLY a single JSON object, no prose, matching this schema:
 
 Spawn all lenses in parallel. Collect into `lens_results`. If any fails, log W001, proceed with successful lenses; flag retrospective as [LOW CONFIDENCE] (partial lenses).
 
-**GATE Stage 4→5**: REQUIRED lens analyses complete BEFORE synthesis; BLOCKED if lens_results missing.
+**GATE Step 4→5**: REQUIRED lens analyses complete BEFORE synthesis; BLOCKED if lens_results missing.
 
 ---
 
-## Stage 5: synthesize
+## Step 5: synthesize
 
 ### Generate insight IDs
 
@@ -239,7 +238,7 @@ Spawn all lenses in parallel. Collect into `lens_results`. If any fails, log W00
 
 ### Build retrospective.json
 
-Structure: `{ phase, phase_slug, phase_title, retrospected_at, lenses_run, metrics, delta, findings_by_lens, distilled_insights, routing_recommendations, tweetable }`. Each insight's `routed_id` is null (populated in Stage 6).
+Structure: `{ phase, phase_slug, phase_title, retrospected_at, lenses_run, metrics, delta, findings_by_lens, distilled_insights, routing_recommendations, tweetable }`. Each insight's `routed_id` is null (populated in Step 6).
 
 ### Build retrospective.md
 
@@ -251,7 +250,7 @@ Both `{run_dir}/outputs/retrospective.json` and `{run_dir}/outputs/retrospective
 
 ---
 
-## Stage 6: route_outputs
+## Step 6: route_outputs
 
 **Skip if `--no-route`.** Prompt user per recommendation (skip if `-y`).
 
@@ -333,9 +332,9 @@ After all routings complete, re-write `retrospective.json` with the `routed_id` 
 
 ---
 
-## Stage 7: persist_insights
+## Step 7: persist_insights
 
-Append every distilled insight (including `routed_to: "none"`) to the knowhow store.
+Append every distilled insight (including `routed_to: "none"`) to the knowhow store. Require user confirmation (or `-y` flag) before writing to external stores.
 
 ### Bootstrap
 
@@ -368,13 +367,13 @@ Also append each insight to `.workflow/specs/learnings.md` as `<spec-entry>` wit
 
 ---
 
-## Stage 8: next_step
+## Step 8: next_step
 
 Print: phase, lenses run, insight count, routing summary, output paths.
 
 Next steps: `manage-status` | `manage-issue list --source retrospective` | `manage-knowhow list` | `milestone-audit`
 
-If range/all mode: loop Stages 3-8 per phase, then print aggregate summary.
+If range/all mode: loop Steps 3-8 per phase, then print aggregate summary.
 
 ---
 
@@ -461,7 +460,7 @@ Refresh-on-use prevents replay attacks. Implemented in src/auth/refresh.ts; shou
 
 ## Error Codes
 
-| Code | Condition | Stage |
+| Code | Condition | Step |
 |------|-----------|-------|
 | E001 | `.workflow/` not initialized — run init first | parse_input |
 | E002 | Unknown `--lens` name (allowed: technical, process, quality, decision) | parse_input |

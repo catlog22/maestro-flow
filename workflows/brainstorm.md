@@ -66,9 +66,7 @@ All brainstorm output goes to scratch:
 - `--style-skill PKG`: validate `.claude/skills/style-{PKG}/SKILL.md` exists
 - Missing/empty args without flags = error
 
-**Session Resolution**:
-- Use the `session_id` and `run_dir` returned by the runtime; the runtime has already selected the matching intent Session or created one.
-- `--session ID` is forwarded to the runtime for explicit selection.
+**Session Resolution**: Runtime handles session resolution, artifact registration, and state updates. Contract inputs are resolved and injected by the runtime via `maestro run create`. `--session ID` is forwarded to the runtime for explicit selection.
 
 **Output Directory Resolution**:
 - Phase mode (number): resolve the plan artifact from the returned `upstream` map (ERROR if the required alias is absent).
@@ -457,9 +455,22 @@ Write `{output_dir}/context-package.json` by extracting from session artifacts:
 - `open_questions[]`: from §4-N SHOULD/MAY items → `{ area, question, options[], ref }`
 - `references[]`: `{ type: "guidance", path: "guidance-specification.md" }` + `{ type: "role-analysis", path: "{role}/analysis.md" }` per role
 
-Register artifact in state.json with additional field:
-  `context_package: "{output_dir}/context-package.json"`   (relative to .workflow/)
+Artifact registration and state updates are handled by `maestro run complete`.
 
 **GATE Step 7.5→complete**: Glob `{output_dir}/context-package.json` MUST exist before workflow report; BLOCKED if missing.
 
 → Wrap-up follows ref/finish-work.md (auto mode, SESSION_TYPE=brainstorm, SESSION_ID={artifact_id}).
+
+---
+
+## Error Handling
+
+| Error | Action |
+|------|------|
+| no topic and no role/flags | abort: missing topic or role, provide one to brainstorm |
+| `--review-only` without `--session ID` | abort: review-only requires an existing session to re-review |
+| unknown role name | abort: role not in the valid-roles set, list valid roles |
+| a role analysis agent failed (W001) | record, continue with the successful roles, flag the session [LOW CONFIDENCE] (partial roles) |
+| all role agents failed | abort: no role analysis produced, cannot synthesize guidance |
+| cross-role review found an unresolved boundary conflict | record it in guidance-specification.md §11 as an open question, do not silently drop it |
+| `--from` upstream context package missing/invalid | warn, proceed without upstream seeding, note the gap in the report |

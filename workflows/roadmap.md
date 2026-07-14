@@ -153,38 +153,27 @@ Read-only health assessment of the session DAG: dependency validity, requirement
 
 ### Output Files
 
-Write to `{run_dir}/outputs/`:
+Artifact paths and metadata are declared in `prepare/roadmap.md` contract. Write to `{run_dir}/outputs/`:
 
-1. **`roadmap.json`** — Machine-readable session DAG (primary artifact, `kind: roadmap`)
+1. **`roadmap.json`** — Machine-readable session DAG
 2. **`roadmap.md`** — Human-readable session summary using the roadmap template (see `ref/roadmap-template.md`)
 
 Do NOT write to `.workflow/roadmap.md` — roadmap is a Run artifact, not a project-level file.
 
-### state.json Session Registration
+### Session Registration
 
-After writing roadmap outputs, register sessions in state.json:
-
-| Scenario | Action |
-|----------|--------|
-| `state.json` exists | Append new sessions to `sessions[]` array. Set `roadmap_artifact_id` and `seed_ref` for each. Do NOT modify existing completed sessions. |
-| `state.json` does not exist | Do not create (leave to maestro-init) |
-
-Do NOT write to `milestones[]`, `current_milestone`, or `accumulated_context` — these are deprecated fields.
-
-### Run output directory
-
-Ensure Run output directory exists: `mkdir -p {run_dir}/outputs/`
+Artifact registration and state updates (session DAG registration, activation) are handled by `maestro run complete`.
 
 ---
 
 ## Root Session Activation
 
-After outputs are written, confirm root session activation via `AskUserQuestion`:
-- Activate recommended root session (set first root slug as `active_session_id`)
+After outputs are written, confirm which root session to activate via `AskUserQuestion`:
+- Activate the recommended root session (first root in the DAG)
 - Choose a different session from the DAG
 - Defer activation (keep all sessions `planned`)
 
-Skip in auto mode (`-y`) — activate the first root session automatically.
+Skip in auto mode (`-y`) — select the first root session automatically. The chosen activation is applied by the runtime via `maestro run complete`.
 
 ---
 

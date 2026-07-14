@@ -6,24 +6,24 @@ Multi-dimensional iterative analysis: CLI exploration → multi-perspective synt
 
 ```
 Full mode (-q absent):
-  Phase 1: Setup & Scoping        → session init, dimension selection, report discussion area init
+  Step 1: Setup & Scoping        → session init, dimension selection, report discussion area init
      │
-  Phase 2: CLI Exploration        → outputs/exploration-codebase.json, outputs/perspectives.json
+  Step 2: CLI Exploration        → outputs/exploration-codebase.json, outputs/perspectives.json
      │                              (cli-explore-agent three layers + multi-CLI parallel)
      │
-  Phase 3: Interactive Discussion → report.md discussion section (up to 5 rounds)
+  Step 3: Interactive Discussion → report.md discussion section (up to 5 rounds)
      │                              (Decision Recording, Intent Coverage)
      │
-  Phase 4: Six-Dimension Scoring  → 6 dims × 1-5 points + risk matrix
+  Step 4: Six-Dimension Scoring  → 6 dims × 1-5 points + risk matrix
      │
-  Phase 5: Synthesis & Conclusion → outputs/findings.json, report.md conclusion area
+  Step 5: Synthesis & Conclusion → outputs/findings.json, report.md conclusion area
      │
-  Phase 6: Decision Extraction    → findings.json#decisions (Locked/Free/Deferred)
+  Step 6: Decision Extraction    → findings.json#decisions (Locked/Free/Deferred)
 
 Quick mode (-q):
-  Phase 1: Setup (minimal)        → load upstream, skip scoping
+  Step 1: Setup (minimal)        → load upstream, skip scoping
      │
-  Phase 6: Decision Extraction    → findings.json#decisions
+  Step 6: Decision Extraction    → findings.json#decisions
 ```
 
 ## Mode Determination
@@ -35,33 +35,33 @@ No positional arg + has roadmap               → current milestone micro
 No positional arg + no roadmap                → macro fallback
 Mixed input (e.g. "1 milestone")              → handled as text, goes macro
 --gaps [ISS-ID]                               → gaps, goes issue root-cause analysis (ref/issue-gaps-analyze.md)
--q                                            → quick, skip Phase 2-5, jump directly to Phase 6
+-q                                            → quick, skip Step 2-5, jump directly to Step 6
 ```
 
-macro mode additionally evaluates `scope_verdict` during Phase 5 synthesis:
+macro mode additionally evaluates `scope_verdict` during Step 5 synthesis:
 - `large`: 3+ independent subsystems, or a hard serial dependency barrier exists → downstream goes roadmap
 - `medium`: 1-2 subsystems, parallelizable → downstream goes plan
 - `small`: single file or few-file change → downstream goes plan
 
-## Stage Gates (Full mode, active when both `-q` and `--gaps` are absent)
+## Step Gates (Full mode, active when both `-q` and `--gaps` are absent)
 
 Mandatory and blocking. Cannot advance if any gate is unmet.
 
-**GATE exploration-done (Phase 2 → 3)**
+**GATE exploration-done (Step 2 → 3)**
 - cli-explore-agent complete, `outputs/exploration-codebase.json` written and contains ≥1 code anchor
 - ≥1 CLI delegate complete, output landed in `outputs/perspectives.json`
 - discussion area records baseline confidence score
 
-**GATE discussion-round (Phase 3 → 4)**
+**GATE discussion-round (Step 3 → 4)**
 - discussion area contains ≥1 round of interaction with user feedback
 - confidence re-scored ≥1 time and delta shown
 - pressure pass completed ≥1 time
 
-**GATE scoring-complete (Phase 4 → 5)**
+**GATE scoring-complete (Step 4 → 5)**
 - all six dimensions scored
 - each dimension's score cites exploration/perspectives evidence, **not manual Read**
 
-**GATE intent-covered (Phase 5 → 6)**
+**GATE intent-covered (Step 5 → 6)**
 - findings.json decisions and recommendations written
 - Intent Coverage Matrix has no unhandled ❌ (or user confirms defer)
 
@@ -69,7 +69,7 @@ Mandatory and blocking. Cannot advance if any gate is unmet.
 
 ## Process
 
-### Phase 1: Setup & Scoping
+### Step 1: Setup & Scoping
 
 Parse mode/flags (see above). Load upstream and project context:
 
@@ -81,7 +81,7 @@ Parse mode/flags (see above). Load upstream and project context:
 3. domain glossary: read `.workflow/domain/glossary.yaml` (if it exists), use canonical terms throughout the analysis; record new term candidates in the report.
 4. Existing same-milestone analyze artifacts: read their decisions, skip already-decided areas.
 
-**quick routing**: after loading context, jump directly to Phase 6.
+**quick routing**: after loading context, jump directly to Step 6.
 
 **Scoping & dimension selection** (skipped when `-c`/`-y`, interactive AskUserQuestion, up to 3 questions):
 
@@ -98,7 +98,7 @@ Parse mode/flags (see above). Load upstream and project context:
    | decision | Criteria, Trade-off Analysis, Risk Assessment, Impact |
    | external_research | Standard Stack, Architecture Patterns, Don't Hand-Roll, Common Pitfalls (external web search) |
 
-   When the goal contains unfamiliar technology keywords, or the codebase has no pattern for that domain (Phase 2 exploration relevant_files is empty), automatically suggest `external_research`.
+   When the goal contains unfamiliar technology keywords, or the codebase has no pattern for that domain (Step 2 exploration relevant_files is empty), automatically suggest `external_research`.
 
 2. **Analysis perspective** (multiSelect, up to 4):
 
@@ -115,7 +115,7 @@ Parse mode/flags (see above). Load upstream and project context:
 
 Initialize report.md discussion area: dynamic TOC, session metadata, User Intent (original question, for intent tracking), Current Understanding replaceable block (overwritten each round, not appended), empty discussion timeline, dimension selection rationale.
 
-### Phase 2: CLI Exploration
+### Step 2: CLI Exploration
 
 Codebase exploration first, then (optional) external research, then CLI analysis.
 
@@ -150,7 +150,7 @@ Construct exploration context from Step 2.1 findings then spawn. When `researchC
 
 CLI calls use `run_in_background: true`, wait for results before continuing.
 
-**Step 2.3 Aggregation**: merge explorations + CLI results; for multi-perspective, extract synthesis (converging themes, conflicting views, unique contributions); write `outputs/perspectives.json`. It contains `technical_solutions[]`: `{round, solution, problem, rationale, alternatives, status: proposed|validated|rejected, evidence_refs[], next_action}`, filled across the Phase 3 rounds.
+**Step 2.3 Aggregation**: merge explorations + CLI results; for multi-perspective, extract synthesis (converging themes, conflicting views, unique contributions); write `outputs/perspectives.json`. It contains `technical_solutions[]`: `{round, solution, problem, rationale, alternatives, status: proposed|validated|rejected, evidence_refs[], next_action}`, filled across the Step 3 rounds.
 
 **Step 2.4 Round 1**: append to discussion timeline — sources, key findings with code anchors, discussion points, open questions.
 
@@ -158,7 +158,7 @@ CLI calls use `run_in_background: true`, wait for results before continuing.
 
 **Step 2.6 baseline confidence**: 6 dims × factors (weights): findings_depth(.30), evidence_strength(.25), coverage_breadth(.20), user_validation(.15), consistency(.10). Score each dimension. Thresholds: <60% keep going deeper | 60-80% needs user confirmation to converge | >80% proceed to synthesis (necessary convergence threshold).
 
-### Phase 3: Interactive Discussion Loop
+### Step 3: Interactive Discussion Loop
 
 Up to 5 rounds, each round:
 
@@ -202,7 +202,7 @@ Go-deeper sub-direction: AskUserQuestion (single, "Deep-dive direction", up to 4
 **3.8 Re-score confidence** (each round): show delta `Confidence: {prev}% → {current}% ({±N%}), {weakest_dim} still needs deepening`.
 
 **3.9 Quality mechanisms**:
-- **Pressure Pass** (mandatory ≥1 before Phase 4): highest-confidence finding → pressure gradient (evidence demand → assumption probe → boundary/tradeoff → root cause check). Record under `#### Pressure Test`.
+- **Pressure Pass** (mandatory ≥1 before Step 4): highest-confidence finding → pressure gradient (evidence demand → assumption probe → boundary/tradeoff → root cause check). Record under `#### Pressure Test`.
 - **Devil's Advocate**: a dimension > 0.7 → challenge "what if [finding] doesn't hold?" (once per dimension)
 - **Scope Minimizer**: findings > 5 and scope expanding → "minimal viable conclusion set?"
 - **Stall Detection**: 2 consecutive rounds delta < 5% → "analysis may be stalling, suggest switching direction or converging"
@@ -211,7 +211,7 @@ Go-deeper sub-direction: AskUserQuestion (single, "Deep-dive direction", up to 4
 
 **Auto (-y)**: auto deep-dive ≤3 rounds, readiness gate auto-overridden and residual risk recorded.
 
-### Phase 4: Six-Dimension Scoring
+### Step 4: Six-Dimension Scoring
 
 Synthesizing all exploration, discussion, and feedback, score six dimensions:
 
@@ -226,7 +226,7 @@ Synthesizing all exploration, discussion, and feedback, score six dimensions:
 
 Each dimension cites specific evidence (code ref, exploration data point) and marks a per-dimension confidence %. Construct a probability-impact risk matrix. Form a Go/No-Go/Conditional recommendation and overall confidence %. Write the confidence summary (each dimension's score + overall + pressure pass result + residual risks) into the report conclusion area.
 
-### Phase 5: Synthesis & Conclusion
+### Step 5: Synthesis & Conclusion
 
 **5.1 Intent Coverage check** (mandatory before synthesis):
 ```markdown
@@ -241,7 +241,7 @@ Gate: each ❌ Missed item must either (a) get an added round or (b) be user-con
 
 **5.2 Synthesize insights**: compile the Decision Trail, key conclusions with evidence + confidence, recommendations with rationale + priority + actionable steps (**merge validated `technical_solutions[]` into high-priority recommendations**), open questions and follow-up suggestions → write into `outputs/findings.json`.
 
-**5.3 Write findings.json** (primary, alias `current-analysis`):
+**5.3 Write findings.json** (artifact paths and metadata are declared in `prepare/analyze.md` contract):
 ```json
 {
   "mode": "macro|micro|quick|gaps",
@@ -254,7 +254,7 @@ Gate: each ❌ Missed item must either (a) get an added round or (b) be user-con
 }
 ```
 
-**5.4 Write risk-matrix.json** (evidence):
+**5.4 Write risk-matrix.json**:
 ```json
 { "risks": [], "assumptions": [], "open_questions": [] }
 ```
@@ -263,7 +263,7 @@ Gate: each ❌ Missed item must either (a) get an added round or (b) be user-con
 
 **5.6 Interactive recommendation review** (auto skips): AskUserQuestion (up to 4 at a time, by priority): confirm → accepted / modify → modified / delete → rejected. Write back each recommendation's `review_status` to findings.json.
 
-### Phase 6: Decision Extraction
+### Step 6: Decision Extraction
 
 **Always executed** — in full mode after synthesis, in quick mode as the main step.
 
@@ -289,7 +289,7 @@ If `researchContext` exists: append a research-backed suggestion for each Free a
 
 Write the classification into `findings.json#decisions[]`, each item marked `{title, class: locked|free|deferred, context, options[], chosen, reason}`.
 
-**6.5 Deferred → issue**: create an issue in `.workflow/issues/issues.jsonl` for each Deferred decision: `status: deferred, priority: 5, severity: low, source: analyze, tags: [deferred, analyze]`.
+**6.5 Deferred → issue**: for each Deferred decision, create an issue in `.workflow/issues/issues.jsonl`: `status: deferred, priority: 5, severity: low, source: analyze, tags: [deferred, analyze]`. Require user confirmation (or `-y` flag) before writing to external stores.
 
 ### Wrap-up
 

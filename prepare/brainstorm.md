@@ -3,26 +3,29 @@ name: brainstorm
 description: Multi-role brainstorming with cross-role conflict resolution, providing multi-perspective analysis before implementation
 argument-hint: "[topic|role-name] [--yes] [--count N] [--session ID] [--update] [--skip-questions] [--include-questions] [--style-skill PKG] [--review-only] [--from <source>]"
 contract:
-  consumes: []
+  consumes:
+    - { kind: context-package, alias: upstream-context, required: false }
   produces:
-    - guidance-specification.md
-    - design-research.md
-    - "{role}/analysis.md"
-    - context-package.json
+    - { path: outputs/guidance-specification.md, kind: guidance, alias: current-guidance, role: primary }
+    - { path: outputs/design-research.md, kind: design-research, role: attachment, optional: true }
+    - { path: "outputs/{role}/analysis.md", kind: analysis, role: attachment }
+    - { path: outputs/context-package.json, kind: context-package, alias: brainstorm-context, role: attachment }
 refs:
   - { path: ref/interview-mechanics.md, when: Entering the menu Q&A of interactive framework generation }
   - { path: ref/boundary-grill.md, when: The cross-role re-review detects a boundary conflict }
   - { path: ref/finish-work.md, when: The wrap-up phase (auto mode) }
-gates: []
+gates: [guidance-generated, roles-converged]
 ---
 
-# Pre-task thinking
+# Pre-task Thinking: brainstorm
+
+## Purpose
 
 Brainstorm does multi-role brainstorming and resolves cross-role conflicts. Auto mode: guidance spec generation → parallel role analysis → cross-role re-review → resolution flowback. Single-role mode: add a single role analysis to an existing session.
 
 Pipeline: grill (optional) → **brainstorm** → roadmap / analyze / blueprint.
 
-## Mode determination
+## Input Interpretation
 
 $ARGUMENTS determines the mode, by priority:
 
@@ -36,7 +39,7 @@ $ARGUMENTS determines the mode, by priority:
 
 No arguments and no flags = error (missing topic/role).
 
-## Flags
+Flags:
 
 | Flag | Effect | Default |
 |------|--------|---------|
@@ -50,24 +53,31 @@ No arguments and no flags = error (missing topic/role).
 | `--review-only` | run only cross-role re-review on existing analysis | false |
 | `--from <source>` | load upstream context package (grill:ID, blueprint:ID, @file, path) | — |
 
-## Valid roles
+Valid roles: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert.
 
-data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert.
+## Required Context
 
-## Input and boundaries
-
-- All output is written to `{run_dir}/outputs/` (the orchestrator must first resolve to an absolute path before passing to sub-agents)
-- **Output boundary**: all file writes must land in `{output_dir}/` or `.workflow/state.json`; modifying source code or files outside this is forbidden
-
-## Pre-load (optional, continue if missing)
+Pre-load (optional, continue if missing):
 
 1. **Architecture specs**: `maestro load --type spec --category arch` — as constraint context for multi-role analysis
 2. **Role knowledge**: `maestro search --category arch` → identify relevant entries → `maestro load --type knowhow --id <id>`
 
-## Interaction essentials
+## Boundaries and Invariants
 
-- Interaction style: **convergent menu-driven**
-- Decision tree (order is flexible, user can jump): mode (auto / single-role / review-only) → role selection and `--count` → `--from` upstream source → whether to enable the design-research and DESIGN.md sub-flow
-- Scope guard: make only brainstorm decisions, do not pre-resolve roadmap/plan choices
-- Flowback target: guidance-specification.md §11 (create if absent)
-- Additional skip conditions: `--skip-questions`, `--session` (existing session)
+- All output is written to `{run_dir}/outputs/` (the orchestrator must first resolve to an absolute path before passing to sub-agents).
+- **Output boundary**: all file writes must land in `{output_dir}/` or `.workflow/state.json`; modifying source code or files outside this is forbidden.
+- Scope guard: make only brainstorm decisions, do not pre-resolve roadmap/plan choices.
+- Flowback target: guidance-specification.md §11 (create if absent).
+- Interaction style: **convergent menu-driven**; decision tree (order is flexible, user can jump): mode (auto / single-role / review-only) → role selection and `--count` → `--from` upstream source → whether to enable the design-research and DESIGN.md sub-flow. Skip conditions: `--skip-questions`, `--session` (existing session).
+
+## Risk Checklist
+
+- Does the mode routing match the arguments? A misread mode (e.g. treating a role name as a topic) sends the whole run down the wrong branch.
+- Are role analyses independent? Each role must produce its own analysis without one role's output suppressing another's.
+- Did cross-role conflicts get resolved, not buried? Every boundary conflict surfaced in re-review must have an explicit resolution flowed back, not silently dropped.
+- Is the scope confined to brainstorm decisions? Pre-resolving roadmap/plan choices is scope creep.
+
+## Gate Intent
+
+- `guidance-generated`: `guidance-specification.md` is written with the §10 Feature Decomposition list before parallel role analysis (Step 3→4); a missing spec or feature list blocks.
+- `roles-converged`: all selected `{role}/analysis.md` files are verified on disk (Step 4→4.5), cross-role conflicts are resolved and flowed back, and `context-package.json` exists before the report (Step 7.5→complete).

@@ -4,7 +4,7 @@ Layered multi-dimensional code review — parallel agents, severity grading, ite
 
 ---
 
-## Phase 0: Spec Compliance pre-check
+## Step 0: Spec Compliance pre-check
 
 1. Read acceptance criteria from each execution task's `convergence.criteria[]`.
 2. For each criterion, grep for the function/endpoint/component named in it.
@@ -163,7 +163,7 @@ Iterate (deep up to 3 rounds, standard 1 round):
 
 Filter by level threshold: quick → critical only | standard → critical + high | deep → critical + high + medium.
 
-Write qualifying findings into `outputs/issue-candidates.json` (schema `issue-candidates/1.0`):
+Write qualifying findings into `outputs/issue-candidates.json`:
 
 ```
 Each candidate:
@@ -182,7 +182,7 @@ Candidates only describe problems, no manual writing to the issue registry. Form
 
 ## Step 9: Write spec-conflicts
 
-For each finding that directly contradicts a loaded spec entry (code behavior ≠ spec rule), write into `outputs/spec-conflicts.json` (schema `spec-conflicts/1.0`):
+For each finding that directly contradicts a loaded spec entry (code behavior ≠ spec rule), write into `outputs/spec-conflicts.json`:
 
 ```
 Each item:
@@ -197,10 +197,10 @@ Code is the single source of truth. Determination and handling details see `ref/
 
 ## Step 10: Write review-findings.json
 
-When an old file exists, archive first → `outputs/.history/review-findings-{YYYY-MM-DDTHH-mm-ss}.json`.
+When an old file exists, archive first → `outputs/.history/review-findings-{YYYY-MM-DDTHH-mm-ss}.json`. Artifact paths and metadata are declared in `prepare/review.md` contract.
 
 ```
-Write outputs/review-findings.json (schema review-findings/1.0, alias latest-review):
+Write outputs/review-findings.json:
 {
   "scope": "{scope}",
   "level": "quick" | "standard" | "deep",
@@ -262,7 +262,7 @@ The verdict decides the downstream run; the report's needs includes `latest-revi
 
 ## GateRecord
 
-After review completes, inline-record one GateRecord (no separate gates.json):
+After review completes, inline-record one GateRecord (no separate gate artifact):
 
 ```json
 { "gate": "review", "verdict": "PASS|WARN|BLOCK", "checked_at": now(),

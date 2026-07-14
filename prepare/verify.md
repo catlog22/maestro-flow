@@ -12,10 +12,12 @@ contract:
     - { path: outputs/antipattern-report.json, kind: antipattern-report, role: evidence }
 refs:
   - { path: ref/finish-work.md, when: Wrapping up and archiving the verification }
-gates: []
+gates: [goal-backward-verified, nyquist-covered]
 ---
 
-# Pre-task thinking: verify
+# Pre-task Thinking: verify
+
+## Purpose
 
 verify is the iron-gate of an independent run; the output is a verification conclusion where "every criterion has an objective pass/fail/blocked + evidence," not "it looks fine." Establish verification discipline before you start.
 
@@ -25,13 +27,17 @@ Before any "pass/done" declaration: IDENTIFY (which command proves it) → RUN (
 
 Forbidden phrasings: `should run now` / `probably passes` / `looks right` / `I'm confident` / `based on my review this is done` — all replaced with evidence: `Tests pass: 42/42 green (exit 0)` / `All 5 truths VERIFIED, with file:line`.
 
-## Goal-shaping questions
+## Input Interpretation
 
 - The verification sources are the two typed artifacts `current-plan` and `current-execution`, with their paths injected by create — extract criteria/requirements from plan, implementation scope from execution/change-manifest.
 - `--strict`: raise the judgment bar; UNCERTAIN does not pass; boundary/error paths must be explicitly verified.
 - `--skip-tests`: skip Nyquist test coverage, do only goal-backward structural verification.
 - `--skip-antipattern`: skip the anti-pattern scan.
+
+## Boundaries and Invariants
+
 - This run **reads source only** by default — gaps found are not fixed here; fixing belongs to the plan→execute loop.
+- No conclusion without fresh evidence run this round; self-check from execute is supporting evidence only, never the final verdict.
 
 ## Red-flag thinking — stop the moment one appears and run verification first
 
@@ -46,7 +52,14 @@ The moment you catch any of these thoughts, stop, run the verification command a
 
 Table of invalid reasons: a one-line change most easily buries an insidious bug; once the code changes, historical results are stale; reading ≠ running; build success ≠ functional correctness; happy path passing ≠ boundary/error path passing; an agent's self-report is a claim, not evidence.
 
-## Risk checklist
+## Required Context
+
+- `current-plan`: success_criteria is the primary contract (each is a testable truth), convergence.criteria is the per-task basis — verify both item by item.
+- `current-execution` + change-manifest: take the implementation scope and changed-files list as the target surface for verification scanning.
+- Review specs (review category): `maestro load --type spec --category review` as quality standards; when it contains tech-stack constraints, do a constraint-compliance pre-check first.
+- UAT human findings (if any): merge into gaps, marked `human_verified_failure`.
+
+## Risk Checklist
 
 - Does every criterion have a method + status + evidence? method is one of test/grep/review/manual; "close enough" is forbidden.
 - Did you reuse execute's self-check as the final conclusion? self-check can only be supporting evidence; the final verdict must be independently recomputed this run.
@@ -55,14 +68,8 @@ Table of invalid reasons: a one-line change most easily buries an insidious bug;
 - Is regression risk covered? Are the changed files' direct importers affected, are existing tests still green?
 - Does coverage have a silent omission? Every requirement must be explicitly marked covered/partial/uncovered; missing one means verification is incomplete.
 
-## Upstream reading suggestions
+## Gate Intent
 
-- `current-plan`: success_criteria is the primary contract (each is a testable truth), convergence.criteria is the per-task basis — verify both item by item.
-- `current-execution` + change-manifest: take the implementation scope and changed-files list as the target surface for verification scanning.
-- Review specs (review category): `maestro load --type spec --category review` as quality standards; when it contains tech-stack constraints, do a constraint-compliance pre-check first.
-- UAT human findings (if any): merge into gaps, marked `human_verified_failure`.
-
-## Gate selection suggestions (inline judgment, not a separate gates.json)
-
-- All criteria verified, all failures have an actionable gap, coverage has no silent omission, and the verdict is consistent with the item-by-item results — all four together allow complete.
+- `goal-backward-verified`: every success criterion and per-task convergence.criterion is checked across the three layers (existence L1, substance L2, wiring L3), each with method + status + fresh evidence; every failure has an actionable gap and coverage has no silent omission.
+- `nyquist-covered`: test coverage is computed from a live run this round (skipped only under `--skip-tests`); regression risk on changed files' direct importers is assessed.
 - verdict mapping: pass → all VERIFIED with no blocker; warn → only medium/low gaps; fail/blocked → has a critical gap or a key path unverified.

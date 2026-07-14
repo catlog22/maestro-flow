@@ -185,7 +185,7 @@ If `verificationTool == "Skip"` or there are no completed tasks, skip. **This is
    - Substance: files have real implementation, not stub/placeholder/TODO-only/empty return
    - Wiring: files are imported and used by the system, not orphaned
    - Anti-patterns: scan for TODO/FIXME/HACK, placeholder, debug print, disabled tests
-4. Write outputs/self-check.json (schema self-check/1.0):
+4. Write outputs/self-check.json:
    { checks:[{criterion, status:"verified"|"failed"|"uncertain", evidence}],
      structure:{existence[], substance[], wiring[]}, anti_patterns[],
      overall:"passed"|"gaps_found" }
@@ -197,18 +197,20 @@ The self-check only records the smoke conclusion as supporting evidence for veri
 
 ## Step 7: Write artifacts
 
+Artifact paths and metadata are declared in `prepare/execute.md` contract.
+
 ```
-outputs/execution.json (schema execution/1.0, alias current-execution):
+outputs/execution.json:
 { "plan_ref":"current-plan", "status":"completed|partial|blocked",
   "waves":[...], "completed_tasks":[...], "blocked_tasks":[...] }
 
-outputs/task-results.json (schema task-results/1.0, role attachment):
+outputs/task-results.json:
   per-task executor, attempt, files changed, commands/tests, criterion evidence, status
 
-outputs/change-manifest.json (schema change-manifest/1.0, role evidence):
+outputs/change-manifest.json:
   repo-relative file paths, change type (create/modify/delete), task refs
 
-outputs/self-check.json (Step 6, role evidence)
+outputs/self-check.json (Step 6)
 ```
 
 ---

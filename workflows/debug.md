@@ -8,7 +8,7 @@ Full investigation discipline (Iron Law, Red Flags, Rationalization Table, 3-str
 
 ## Step 1: Check for an active session
 
-Search each run's `outputs/` for debug investigation state (the status and current hypothesis in the `understanding.md` header).
+The runtime supplies active debug investigation state (session resolution and Run enumeration are handled by the runtime); an active investigation is identified by its `understanding.md` header (status and current hypothesis).
 
 **Active session and no arg**: show a list (number, location, status, current hypothesis), wait for response. Number → resume (load state, Step 12 dispatches a continuation agent); text → new issue (Step 3 or Step 2).
 
@@ -111,7 +111,7 @@ Dispatch an agent (`run_in_background: false`):
 
 ## Step 7: Collect unified results
 
-Write primary `outputs/diagnosis.json` (schema `diagnosis/1.0`, alias `latest-debug`):
+Write `outputs/diagnosis.json` (artifact paths and metadata are declared in `prepare/debug.md` contract):
 
 ```json
 {
@@ -129,7 +129,7 @@ Write primary `outputs/diagnosis.json` (schema `diagnosis/1.0`, alias `latest-de
 }
 ```
 
-Also write `outputs/reproduction.json` (schema `reproduction/1.0`) and `outputs/hypotheses.json` (schema `hypotheses/1.0`), each item containing commands/steps, observation, file:line, status, and contradicting evidence.
+Also write `outputs/reproduction.json` and `outputs/hypotheses.json`, each item containing commands/steps, observation, file:line, status, and contradicting evidence.
 
 ### Step 7.0: Debug Confidence scoring
 
@@ -168,7 +168,7 @@ Options:
 ------------------------------------------------------------
 ```
 
-Write `outputs/fix-directions.json` (schema `fix-directions/1.0`) — contains only root-cause-level change directions, affected files, regression tests, and risks, **not the actual patch**.
+Write `outputs/fix-directions.json` — contains only root-cause-level change directions, affected files, regression tests, and risks, **not the actual patch**.
 
 ---
 
@@ -211,7 +211,7 @@ The report's needs includes `latest-debug` accordingly:
 
 ## GateRecord
 
-Inline-record (no separate gates.json):
+Inline-record (no separate gate artifact):
 
 ```json
 { "gate": "debug", "status": "confirmed|partial|inconclusive", "checked_at": now(),

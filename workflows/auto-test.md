@@ -645,6 +645,8 @@ Write `.tests/auto-test/traceability.md` (human-readable table).
 
 ### Conditional: Issue Creation (when failures exist)
 
+Require user confirmation (or `-y` flag) before writing to external stores.
+
 ```
 FOR each failure in report.failures WHERE classification == "code_defect":
   issue = {

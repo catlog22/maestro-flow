@@ -25,7 +25,7 @@ Validate the target exists and has `latest-verification` (missing → E002).
 
 ## Step 2: Check for an active session
 
-Search each run's `outputs/` for an active UAT: `uat.md` (status, target, Current Test section).
+The runtime supplies the active UAT session state (session resolution and Run enumeration are handled by the runtime); an active UAT is identified by its `uat.md` (status, target, Current Test section).
 
 **Active session and no arg**: show a list (number, target, status, current test, progress), wait for the user response. Number → resume (Step 9); scope → create new (Step 4).
 
@@ -62,7 +62,7 @@ Read `latest-verification`, report.md frontmatter, and execution task summaries 
 
 Build a scenario for each testable item: `id` (T-001…), `name`, `category` (e2e | integration | unit), `expected` (specific observable behavior), `requirement_ref`.
 
-Write `outputs/test-plan.json` (schema `test-plan/1.0`):
+Write `outputs/test-plan.json` (artifact paths and metadata are declared in `prepare/test.md` contract):
 
 ```json
 {
@@ -175,7 +175,7 @@ Read `uat.md` → find the first `result: [pending]` → update Current Test →
 
 Update `uat.md`: `status: complete`. Archive old test artifacts → `.history/`.
 
-Write `outputs/test-results.json` (schema `test-results/1.0`, alias `latest-test`):
+Write `outputs/test-results.json`:
 
 ```json
 {
@@ -186,8 +186,8 @@ Write `outputs/test-results.json` (schema `test-results/1.0`, alias `latest-test
 }
 ```
 
-Write `outputs/acceptance.json` (schema `acceptance/1.0`) — per-criterion UAT conclusion and evidence.
-Write `outputs/coverage.json` (schema `coverage/1.0`):
+Write `outputs/acceptance.json` — per-criterion UAT conclusion and evidence.
+Write `outputs/coverage.json`:
 
 ```json
 {

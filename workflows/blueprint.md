@@ -290,8 +290,8 @@ Gate decision: Pass (>=80) / Review (60-79) / Fail (<60)
 
 | Gate Result | Action |
 |-------------|--------|
-| Pass (>=80%) | Proceed to Step 11 (Final Handoff) |
-| Review (60-79%) | Proceed to Step 11 with caveats logged |
+| Pass (>=80%) | Proceed to Step 10 (Final Handoff) |
+| Review (60-79%) | Proceed to Step 10 with caveats logged |
 | Fail (<60%) | Trigger Step 9 (Auto-Fix), then re-run Step 8 |
 
 ### Step 9: Auto-Fix (Phase 6.5, conditional)
@@ -315,11 +315,11 @@ Triggered when Phase 6 score < 60%.
 
 **Output**: Updated Phase 2-5 documents, updated blueprint-config.json with iteration tracking
 
-### Step 11: Final Handoff
+### Step 10: Final Handoff
 
 Blueprint specification package is complete. Suggest next workflow steps.
 
-**Step 11.1: Handoff Options (AskUserQuestion)**
+**Step 10.1: Handoff Options (AskUserQuestion)**
 
 | Option | Action |
 |--------|--------|
@@ -329,7 +329,7 @@ Blueprint specification package is complete. Suggest next workflow steps.
 | Create issues | Generate issues per Epic via Skill({ skill: "manage-issue" }) |
 | Export only | Blueprint complete, no further action |
 
-### Step 12: Final Report
+### Step 11: Final Report
 
 ```
 == blueprint complete ==
