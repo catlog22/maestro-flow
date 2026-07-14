@@ -53,10 +53,10 @@ allowed-tools: {tools}           # omit if unrestricted
 
 ```javascript
 spawn_agent({
-  subagent_type: "{agent-name}",
-  prompt: filled_prompt,
-  description: "{Verb} {target}",
-  run_in_background: false
+  task_name: "{agent_name}",
+  message: filled_prompt,
+  fork_turns: "none",
+  agent_type: "{agent_name}"
 })
 ```
 

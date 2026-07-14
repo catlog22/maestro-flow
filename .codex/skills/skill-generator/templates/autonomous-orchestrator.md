@@ -116,9 +116,8 @@ async function runOrchestrator() {
       const actionPrompt = Read(\`phases/actions/${actionId}.md\`);
 
       const result = await spawn_agent({
-        subagent_type: 'universal-executor',
-        run_in_background: false,
-        prompt: \`
+        task_name: \`action_\${actionId}\`,
+        message: \`
 [STATE]
 \${JSON.stringify(state, null, 2)}
 
@@ -127,7 +126,8 @@ async function runOrchestrator() {
 
 [RETURN]
 Return JSON with stateUpdates field.
-\`
+\`,
+        fork_turns: "none"
       });
 
       const actionResult = JSON.parse(result);

@@ -247,16 +247,17 @@ async function executePhase(phaseId, phaseConfig, workDir) {
 
   // Use Task to invoke Agent
   const result = await spawn_agent({
-    subagent_type: phaseConfig.agent?.type || 'universal-executor',
-    run_in_background: phaseConfig.agent?.run_in_background || false,
-    prompt: \`
+    task_name: \`phase_\${phaseId}\`,
+    message: \`
 [PHASE] \${phaseId}
 [WORK_DIR] \${workDir}
 [INPUT] \${phaseConfig.input ? \`\${workDir}/\${phaseConfig.input}\` : 'None'}
 [OUTPUT] \${workDir}/\${phaseConfig.output}
 
 \${phasePrompt}
-\`
+\`,
+    fork_turns: "none",
+    agent_type: phaseConfig.agent?.type || undefined
   });
 
   return JSON.parse(result);
@@ -580,9 +581,8 @@ async function runOrchestrator(workDir) {
       const actionPrompt = Read(\`\${skillDir}/phases/actions/\${actionId}.md\`);
 
       const result = await spawn_agent({
-        subagent_type: 'universal-executor',
-        run_in_background: false,
-        prompt: \`
+        task_name: \`action_\${actionId}\`,
+        message: \`
 [STATE]
 \${JSON.stringify(state, null, 2)}
 
@@ -597,7 +597,8 @@ ${contextStrategy}
 
 [RETURN FORMAT]
 Return JSON: { "status": "completed"|"failed", "stateUpdates": {...}, "summary": "..." }
-\`
+\`,
+        fork_turns: "none"
       });
 
       const actionResult = JSON.parse(result);

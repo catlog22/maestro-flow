@@ -310,14 +310,15 @@ function generatePhaseFromRequirements(phase, config) {
       phaseContent += `### Step: ${agentType} Delegation\n\n`;
       phaseContent += '```javascript\n';
       phaseContent += `const result = spawn_agent({\n`;
-      phaseContent += `  subagent_type: "${mapAgentType(agentType)}",\n`;
-      phaseContent += `  prompt: \`\n`;
+      phaseContent += `  task_name: "${agentType}",\n`;
+      phaseContent += `  message: \`\n`;
       phaseContent += `    [ROLE] ${agentType}\n`;
       phaseContent += `    [TASK] ${phase.description}\n`;
       phaseContent += `    [INPUT] \${inputData}\n`;
       phaseContent += `    [OUTPUT] \${outputPath}\n`;
       phaseContent += `  \`,\n`;
-      phaseContent += `  run_in_background: false\n`;
+      phaseContent += `  fork_turns: "none",\n`;
+      phaseContent += `  agent_type: "${mapAgentType(agentType)}"\n`;
       phaseContent += `});\n`;
       phaseContent += '```\n\n';
     }
@@ -348,7 +349,7 @@ function generatePhaseFromRequirements(phase, config) {
   return phaseContent;
 }
 
-// Map custom agent type names to Task subagent_types
+// Map custom agent type names to V2 agent_type values
 function mapAgentType(agentType) {
   const mapping = {
     'cli-explore-agent': 'cli-explore-agent',

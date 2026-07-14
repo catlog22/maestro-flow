@@ -107,7 +107,7 @@ Skills are loaded progressively inline. The canonical Run lifecycle is a permitt
 | `## Auto Mode` / `## Auto Mode Defaults` | `<auto_mode>` section |
 | `## Quick Reference` | Preserve as-is within appropriate section |
 | Inline `request_user_input` calls | Preserve verbatim — these belong in commands |
-| `spawn_agent()` / agent spawning calls | Preserve verbatim within process steps |
+| `spawn_agent()` / agent spawning calls | Convert per Agent Dispatch Conversion rules below |
 | Banner displays (`━━━`) | Preserve verbatim |
 | Code blocks (```bash, ```javascript, etc.) | **Preserve exactly** — never modify code content |
 | Tables | **Preserve exactly** — never reformat table content |
@@ -143,6 +143,47 @@ Content that was under plain `##` headers gets wrapped in XML tags:
 | `<success_criteria>` | Generate from existing content, mark `<!-- TODO: verify -->` |
 | `<offer_next>` | Add skeleton with `<!-- TODO: fill next commands -->` |
 | Banners | Add before major transitions if missing |
+
+## Agent Dispatch Conversion
+
+> **Canonical V2 API reference**: `.codex/multi-agents-v2-schema.md` — 见 `## 调用模板` section 获取 copy-paste-ready 模板和字段契约。
+
+When converting Claude commands/skills to Codex, all agent dispatch calls must be rewritten to V2 `spawn_agent()` protocol:
+
+### Claude Agent() → Codex spawn_agent()
+
+| Claude (source) | Codex V2 (target) |
+|-----------------|-------------------|
+| `Agent({ subagent_type: "X", prompt: "..." })` | `spawn_agent({ task_name: "X", message: "...", agent_type: "X" })` |
+| `Agent({ subagent_type: "X", description: "D", prompt: "..." })` | `spawn_agent({ task_name: "X", message: "...", fork_turns: "none", agent_type: "X" })` |
+| `SendMessage({ to: "X", message: "..." })` | `send_message({ target: "X", message: "..." })` |
+| Waiting for task-notification | `wait_agent({ timeout_ms: 3600000 })` |
+| `AskUserQuestion(...)` | `request_user_input(...)` |
+
+### Field Mapping
+
+| Claude field | V2 field | Notes |
+|-------------|----------|-------|
+| `subagent_type` | `agent_type` | **MUST map** — without this the spawned agent runs without its system prompt |
+| `prompt` | `message` | Rename only |
+| `description` | *(drop or use as task_name suffix)* | V2 has no description field |
+| `name` | `task_name` | V2 uses task_name for addressing |
+| `run_in_background` | *(drop)* | V2 agents are async by default; use `wait_agent()` to block |
+
+### agent_type Resolution
+
+1. Check `.codex/agents/*.toml` for matching `name` field (underscore form of the agent name)
+2. Claude `subagent_type: "ralph-executor"` → Codex `agent_type: "ralph_executor"` (hyphen → underscore)
+3. Claude `subagent_type: "team-worker"` → Codex `agent_type: "team_worker"`
+4. If no matching `.toml` exists → omit `agent_type` (default agent) and add `<!-- TODO: create agent definition -->`
+5. If source `Agent()` has no `subagent_type` (generic agent) → omit `agent_type`（不是遗漏，是设计决策；Claude 原版用 `// generic agent` 注释标注）
+
+### Existing spawn_agent() Calls
+
+If source already contains `spawn_agent()` calls (pre-converted or Codex-native):
+- Verify `agent_type` is present when a specialized agent is intended
+- Fix `subagent_type` → `agent_type` if the wrong field name was used
+- Preserve all other fields verbatim
 
 ## Agent Conversion Rules
 

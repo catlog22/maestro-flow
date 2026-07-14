@@ -101,11 +101,12 @@ async function execute${toPascalCase(id)}(context) {
 
   // 3. Launch Agent for in-depth analysis
   const agentResult = await spawn_agent({
-    subagent_type: '\${agent.type}',
-    prompt: \`
+    task_name: "agent_analysis",
+    message: \`
 \${generateAgentPrompt(analysis_type, scope)}
     \`,
-    run_in_background: false
+    fork_turns: "none",
+    agent_type: '\${agent.type}'
   });
 
   results.push({ type: 'agent', data: agentResult });
@@ -413,15 +414,16 @@ const semanticContext = await mcp__ace_tool__search_context({
 
 // Use semantic search results as Agent input context
 const agentResult = await spawn_agent({
-  subagent_type: 'Explore',
-  prompt: \`
+  task_name: "explore_auth",
+  message: \`
 Based on following semantic search results, perform in-depth analysis:
 
 \${semanticContext}
 
 Task: Analyze authentication logic implementation details...
   \`,
-  run_in_background: false
+  fork_turns: "none",
+  agent_type: "Explore"
 });
 \`\`\`
 

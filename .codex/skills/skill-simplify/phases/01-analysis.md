@@ -61,7 +61,7 @@ const inventory = {
 
 **Extraction rules**:
 - **Code blocks**: Match ` ```language ... ``` ` pairs, record start/end/language/first-line-as-purpose
-- **Agent calls**: Match `spawn_agent(`, `Task(`, `subagent_type=`, record type and prompt summary
+- **Agent calls**: Match `spawn_agent(`, `agent_type:`, record type and message summary
 - **Data structures**: Match `const xxx = {`, `const xxx = [`, JSON schema objects
 - **Routing branches**: Match `if/else`, `switch/case`, ternary `? :` with meaningful branching
 - **Error handlers**: Match `catch`, error table rows `| Error |`, fallback patterns

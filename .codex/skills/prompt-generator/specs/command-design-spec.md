@@ -208,10 +208,10 @@ Commands spawn agents via `spawn_agent()` with structured prompts:
 
 ```javascript
 spawn_agent({
-  subagent_type: "agent-name",
-  prompt: filled_prompt,
-  description: "Verb Phase {X}",
-  run_in_background: false
+  task_name: "agent_name",
+  message: filled_prompt,
+  fork_turns: "none",
+  agent_type: "agent_name"
 })
 ```
 

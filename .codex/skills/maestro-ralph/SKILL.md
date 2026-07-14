@@ -50,7 +50,8 @@ Session: `.workflow/sessions/{id}/session.json` (engine=ralph) + `ralph-meta.jso
 const result = spawn_agent({
   task_name: `ralph_exec_step_${index}`,
   message: `Session: ${ralph_session_id}\n\n${loaded_step_context}`,
-  fork_turns: "none"
+  fork_turns: "none",
+  agent_type: "ralph_executor"
 });
 
 // 2. wait for completion (max 1 hour)
@@ -69,7 +70,8 @@ if (status.timed_out) {
 spawn_agent({
   task_name: `ralph_eval_${decision_ref}`,
   message: `EVALUATE decision: ${decision_description}\n\nCONSTRAINTS: Read-only analysis\n\n${evidence}`,
-  fork_turns: "none"
+  fork_turns: "none",
+  agent_type: "ralph_executor"
 });
 wait_agent({ timeout_ms: 3600000 });
 ```
@@ -110,7 +112,7 @@ followup_task({
 
 | Claude | Codex V2 |
 |--------|----------|
-| `Agent({ subagent_type: "ralph-executor", prompt: "..." })` | `spawn_agent({ task_name: "ralph_exec_step_N", message: "..." })` |
+| `Agent({ subagent_type: "ralph-executor", prompt: "..." })` | `spawn_agent({ task_name: "ralph_exec_step_N", message: "...", agent_type: "ralph_executor" })` |
 | 等待 task-notification `<result>` | `wait_agent({ timeout_ms: 3600000 })` |
 | Agent failed → BLOCKED | `wait_agent.timed_out` → `interrupt_agent` → BLOCKED |
 | `Agent()` for evaluation | `spawn_agent` for evaluation |
@@ -135,7 +137,8 @@ Agent({ subagent_type: "ralph-executor", description: "...", prompt: "..." })
 spawn_agent({
   task_name: `ralph_exec_step_${index}`,
   message: `Session: ${ralph_session_id}\n\n${loaded_step_context}`,
-  fork_turns: "none"
+  fork_turns: "none",
+  agent_type: "ralph_executor"
 })
 // 然后
 wait_agent({ timeout_ms: 3600000 })
@@ -153,7 +156,8 @@ Agent({ description: "评估...", prompt: "..." })
 spawn_agent({
   task_name: `ralph_eval_${decision_ref}`,
   message: "EVALUATE: ...\nCONSTRAINTS: Read-only",
-  fork_turns: "none"
+  fork_turns: "none",
+  agent_type: "ralph_executor"
 })
 wait_agent({ timeout_ms: 3600000 })
 ```

@@ -91,7 +91,7 @@ TEXT-LEVEL ONLY. No source code reading.
    ```
 9. Write team-session.json
 10. Spawn resident supervisor (if pipeline has CHECKPOINT tasks AND `supervision !== false`):
-   - Use SKILL.md Supervisor Spawn Template (subagent_type: "team-supervisor")
+   - Use SKILL.md Supervisor Spawn Template (agent_type: "team_supervisor")
    - Wait for "[supervisor] Ready" callback before proceeding to Phase 3
    - Record supervisor in active_workers with `resident: true` flag
 

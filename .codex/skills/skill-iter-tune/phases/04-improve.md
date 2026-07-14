@@ -77,10 +77,8 @@ const suggestionsText = evaluation.suggestions.map((s, i) =>
 ).join('\n');
 
 spawn_agent({
-  subagent_type: 'general-purpose',
-  run_in_background: false,
-  description: `Apply skill improvements iteration ${N}`,
-  prompt: `## Task: Apply Targeted Improvements to Skill Files
+  task_name: `improve_iter_${N}`,
+  message: `## Task: Apply Targeted Improvements to Skill Files
 
 You are improving a workflow skill based on evaluation feedback. Apply ONLY the suggested changes -- do not refactor, add features, or "improve" beyond what is explicitly suggested.
 
@@ -126,7 +124,8 @@ ${suggestionsText}
 - Medium-priority suggestions applied if feasible
 - Low-priority suggestions applied if trivial
 - Changes summary written to ${iterDir}/iteration-${N}-changes.md
-`
+`,
+  fork_turns: "none"
 });
 ```
 

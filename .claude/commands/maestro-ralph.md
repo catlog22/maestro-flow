@@ -732,7 +732,7 @@ Execution criteria: {session.execution_criteria joined by '; '}
 **Mode: `agent`（默认）** — 同步 Agent 评估：
 
 ```
-[@subagent] Agent({
+[@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
   description: "评估 {decision} 质量门（同步评估 Agent，不传 name）",
   prompt: "PURPOSE: 评估 {decision} 质量门结果
 TASK: 读取以下结果文件 | 分析状态 | 评估严重性 | 给出建议
@@ -796,7 +796,7 @@ Bash({
 1. Read `session.task_decomposition` from session state
 2. Dispatch audit（按 `evaluate_via` 模式，默认 `agent`）:
    ```
-   [@subagent] Agent({
+   [@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
      description: "审计子目标完成情况（同步评估 Agent，不传 name）",
      prompt: "PURPOSE: 审计未完成子目标，判定 met / unmet
    TASK:
@@ -832,7 +832,7 @@ Bash({
 1. Read session state：intent, boundary_contract, completed steps, done goals
 2. Dispatch reground（按 `evaluate_via` 模式，默认 `agent`）:
    ```
-   [@subagent] Agent({
+   [@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
      description: "意图保真检查（同步评估 Agent，不传 name）",
      prompt: "PURPOSE: 意图保真检查 — 对照 intent 验证累积执行是否漂移
    TASK:
@@ -931,7 +931,7 @@ Bash({
 
 **Phase 3 Agent prompt:**
 ```
-[@subagent] Agent({
+[@subagent] Agent({  // generic agent — 评估类无专属定义，通过 prompt CONSTRAINTS 约束行为
   description: "Amend impact analysis（同步评估 Agent，不传 name）",
   prompt: "PURPOSE: 评估目标修改对 running session 的影响
 TASK:
@@ -1114,6 +1114,17 @@ Multi-match within a priority → `[@ask] AskUserQuestion`。Cross-priority → 
 | session-seal | *(decision-only)* | `post-session` | all |
 
 Build rules 0.5-13 全部适用，包括 spec-setup 预检（rule 0.5）、grill auto_confirm 透传（rule 3.5）、frontend-verify UI 门控（rule 3.6）、re-grounding 插入（rule 5.5）等。
+
+### Agent Dispatch Contract
+
+| 场景 | subagent_type | 理由 |
+|------|--------------|------|
+| 执行 step（A_STEP_DISPATCH） | `"ralph-executor"` | 需加载 executor 行为定义（`.claude/agents/ralph-executor.md`） |
+| 评估/审计/保真/影响分析 | *(omit)* | generic agent，通过 prompt CONSTRAINTS 约束为只读 |
+
+**Codex V2 转换规则**：
+- 有 `subagent_type` → `agent_type: "<name>"` (加载 `.codex/agents/*.toml`)
+- 无 `subagent_type` → 不加 `agent_type`（default agent，prompt 自约束）
 
 ### Session Schema
 

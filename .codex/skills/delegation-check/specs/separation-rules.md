@@ -181,12 +181,14 @@ spawn_agent({ task_name: "<task_name>", message: "Use React Query for data fetch
 
 # GOOD — user decisions passed through from CONTEXT.md
 spawn_agent({
-  subagent_type: "gsd-planner",
-  prompt: "<planning_context>
+  task_name: "plan_frontend",
+  message: "<planning_context>
     <files_to_read>
     - {context_path} (USER DECISIONS - locked: React Query, Zustand)
     </files_to_read>
-  </planning_context>"
+  </planning_context>",
+  fork_turns: "none",
+  agent_type: "gsd_planner"
 })
 ```
 

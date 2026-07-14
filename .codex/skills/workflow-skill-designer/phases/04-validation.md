@@ -158,8 +158,8 @@ function validateContentQuality(config) {
     }
 
     // Agent prompt preservation
-    const sourceAgents = (sourceBody.match(/Task\(|subagent_type/g) || []).length;
-    const phaseAgents = (phaseContent.match(/Task\(|subagent_type/g) || []).length;
+    const sourceAgents = (sourceBody.match(/spawn_agent\(|agent_type/g) || []).length;
+    const phaseAgents = (phaseContent.match(/spawn_agent\(|agent_type/g) || []).length;
     if (phaseAgents < sourceAgents) {
       results.errors.push(
         `Phase ${phase.number} missing agent calls: source=${sourceAgents}, phase=${phaseAgents}`

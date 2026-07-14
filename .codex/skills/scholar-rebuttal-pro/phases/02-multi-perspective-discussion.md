@@ -154,10 +154,9 @@ If `team-ultra-analyze` skill is available, use it for richer discussion:
 
 ```javascript
 // Spawn team-ultra-analyze for multi-perspective discussion
-Task({
-  subagent_type: "team-ultra-analyze",
-  description: "Multi-perspective rebuttal strategy discussion",
-  prompt: `Analyze reviewer comment from three perspectives (author/reviewer/expert) and develop consensus response strategy.
+spawn_agent({
+  task_name: "ultra_analyze_discussion",
+  message: `Analyze reviewer comment from three perspectives (author/reviewer/expert) and develop consensus response strategy.
 
 REVIEWER COMMENT:
 ${issue.text}
@@ -173,7 +172,8 @@ ROLES:
 - Expert: Validate technical accuracy and academic norms
 
 OUTPUT: Consensus strategy with rationale, priority, and source strategy ID`,
-  run_in_background: false
+  fork_turns: "none",
+  agent_type: "team_worker"
 })
 ```
 

@@ -142,6 +142,78 @@ Payload:
 <payload text>
 ```
 
+## 调用模板
+
+Copy-paste-ready 模板。所有 `.codex/` 文件中的 `spawn_agent()` 调用必须遵循以下字段契约。
+
+### Executor Dispatch（带专属 agent 定义）
+
+```ts
+spawn_agent({
+  task_name: "ralph_exec_step_1",
+  message: "Session: ralph-20260714-120000\n\n<task content>",
+  fork_turns: "none",
+  agent_type: "ralph_executor"   // → 加载 .codex/agents/ralph-executor.toml
+})
+wait_agent({ timeout_ms: 3600000 })
+```
+
+### Generic Dispatch（评估/临时 agent，无专属定义）
+
+```ts
+spawn_agent({
+  task_name: "evaluate_quality_gate",
+  message: "EVALUATE: ...\nCONSTRAINTS: Read-only analysis",
+  fork_turns: "none"
+  // 不传 agent_type — default agent，通过 message 中的 CONSTRAINTS 约束行为
+})
+wait_agent({ timeout_ms: 3600000 })
+```
+
+### Team Worker Dispatch
+
+```ts
+spawn_agent({
+  task_name: "<role>",
+  message: "## Role Assignment\nrole: <role>\nrole_spec: ...\nsession: ...",
+  fork_turns: "none",
+  agent_type: "team_worker"   // → 加载 .codex/agents/team-worker.toml
+})
+```
+
+### 字段契约
+
+| 字段 | 必填 | 类型 | 说明 |
+|------|------|------|------|
+| `task_name` | **Yes** | string | 小写字母 + 数字 + 下划线 |
+| `message` | **Yes** | string | 完整任务 prompt |
+| `fork_turns` | No | `"none"` \| `"all"` | 上下文传递，默认 `"all"` |
+| `agent_type` | No | string | 加载 `.codex/agents/<name>.toml` 的 `developer_instructions` |
+
+### 禁止字段（Claude 时代，V2 不存在）
+
+| 禁止字段 | 替代 |
+|----------|------|
+| ~~`subagent_type`~~ | `agent_type` |
+| ~~`prompt`~~ | `message` |
+| ~~`description`~~ | 编入 `message` 或 `task_name` |
+| ~~`run_in_background`~~ | V2 agent 默认异步，用 `wait_agent()` 阻塞 |
+| ~~`name`~~ | `task_name` |
+
+### Claude → V2 快速对照
+
+```
+Agent({ subagent_type: "X", description: "D", prompt: "P" })
+  ↓
+spawn_agent({ task_name: "X", message: "P", fork_turns: "none", agent_type: "X" })
+wait_agent({ timeout_ms: 3600000 })
+
+Agent({ description: "D", prompt: "P" })  // generic, 无 subagent_type
+  ↓
+spawn_agent({ task_name: "desc_slug", message: "P", fork_turns: "none" })  // 不传 agent_type
+wait_agent({ timeout_ms: 3600000 })
+```
+
 ## 源码参考
 
 - 输入 Schema: [`multi_agents_spec.rs#L96-L350`](https://github.com/openai/codex/blob/d7ba5ff/codex-rs/core/src/tools/handlers/multi_agents_spec.rs#L96-L350)

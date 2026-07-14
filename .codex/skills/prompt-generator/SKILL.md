@@ -357,7 +357,7 @@ Set `$TARGET_PATH = $SOURCE_PATH` (in-place conversion) unless user specifies ou
 | `<process>` with numbered steps | At least 3 `## N.` headers |
 | Step 1 is initialization | Parses args or loads context |
 | Last step is status/report | Displays results or routes to `<offer_next>` |
-| Agent spawning (if complex) | `spawn_agent({` call with `subagent_type` |
+| Agent spawning (if complex) | `spawn_agent({` call with `agent_type` (V2 field, not `subagent_type`) |
 | Agent prompt structure | `<files_to_read>` + `<objective>` or `<output>` blocks |
 | Return handling | Routes on `## TASK COMPLETE` / `## TASK BLOCKED` markers |
 | `<offer_next>` | Banner + summary + next command suggestion |

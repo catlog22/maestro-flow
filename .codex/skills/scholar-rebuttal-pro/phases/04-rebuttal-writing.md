@@ -191,11 +191,10 @@ TONE GUIDELINES:
 `
 
 // Call rebuttal-writer agent
-const agentResult = Task({
-  subagent_type: "general-purpose", // Use general-purpose agent with full write capabilities
-  description: "Generate academic rebuttal document",
-  prompt: agentPrompt,
-  run_in_background: false
+const agentResult = spawn_agent({
+  task_name: "rebuttal_writer",
+  message: agentPrompt,
+  fork_turns: "none"
 })
 
 // Parse agent output
