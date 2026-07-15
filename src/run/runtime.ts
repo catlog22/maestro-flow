@@ -63,6 +63,7 @@ export interface CreateRunResult {
   run_dir: string;
   upstream: Record<string, RunUpstream>;
   entry_gates: GateSummary;
+  next: { command: string; reason: string };
 }
 
 export interface SealSessionResult {
@@ -599,6 +600,12 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
       run_dir: `.workflow/sessions/${sessionId}/runs/${runId}`,
       upstream,
       entry_gates: entrySummary,
+      next: {
+        command: `maestro run brief ${runId}`,
+        reason: entrySummary.blocking.length > 0
+          ? 'entry gates blocking — inspect gate status, resolve missing upstream before executing'
+          : 'load the workflow execution manual, execute it, then run: maestro run check → maestro run complete',
+      },
     };
   });
 }

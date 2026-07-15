@@ -213,6 +213,8 @@ gates:
   entry: []
   exit: []`);
     const created = createRun({ projectRoot, command: 'demo-plan', intent: 'plan demo' });
+    expect(created.next.command).toBe(`maestro run brief ${created.run_id}`);
+    expect(created.next.reason).toContain('maestro run check');
 
     const missing = checkRun(projectRoot, created.run_id);
     expect(missing.gates.blocking).toHaveLength(1);
@@ -284,6 +286,8 @@ gates:
     const created = createRun({ projectRoot, command: 'consume-plan', intent: 'canonical only' });
     expect(created.upstream).toEqual({});
     expect(created.entry_gates.blocking).not.toEqual([]);
+    expect(created.next.command).toBe(`maestro run brief ${created.run_id}`);
+    expect(created.next.reason).toContain('blocking');
   });
 
   it('reuses only a running Session with the same normalized intent', () => {

@@ -219,13 +219,17 @@ maestro run prepare <step> --workflow-root .
 # 2. LLM performs pre-task thinking using prepare content
 #    Produces prep YAML (goal/approach/scope/risks/gates/reads)
 
-# 3. Create run with prep input
-maestro run create <step> --workflow-root . [-- args...]
-#    Returns: run_id, run_dir, upstream, workflow content, run-mode, refs
+# 3. Create run — always pass --session (ASCII slug) + --intent
+maestro run create <step> --session YYYYMMDD-<step>-<topic> --intent "<short goal>" --workflow-root . [-- args...]
+#    Returns: run_id, run_dir, upstream (alias→artifact), entry_gates, next (progressive hint)
 
-# 4. LLM executes the workflow (core process)
+# 4. Load the execution manual (follow the `next` hint from create)
+maestro run brief <run_id> --workflow-root .
+#    Returns: workflow content, run-mode summary, goal, gate status
 
-# 5. Complete the run
+# 5. LLM executes the workflow (core process)
+
+# 6. Complete the run
 maestro run complete <run_id> --workflow-root .
 ```
 
@@ -246,7 +250,7 @@ Before executing, assess task complexity to choose the right channel:
 | Complexity | Channel | Criteria | Action |
 |-----------|---------|----------|--------|
 | Lightweight | Companion (zero-run) | Simple lookup, quick question, knowledge check | Load specs/knowhow, answer directly, no run created |
-| Standard | Single step (one run) | Clear atomic task matching one step | prepare → create → complete |
+| Standard | Single step (one run) | Clear atomic task matching one step | prepare → create → brief → complete |
 | Multi-step | Recommend chain | Task spans multiple steps or needs orchestration | Recommend `/maestro` or `/maestro-ralph` instead |
 
 **Routing preference: prefer Standard over Lightweight.** When uncertain, create a run. A run with a thin report is better than a missed artifact.

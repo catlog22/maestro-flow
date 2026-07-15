@@ -538,6 +538,8 @@ Workflow files (`workflows/*.md`) are the **implementation** behind pipeline com
 
 ### Content Boundary: Command vs Workflow
 
+**Scope note**: this matrix applies when a dedicated command file exists for the workflow. First-tier steps (paired `prepare/<step>.md` + `workflows/<step>.md` with no dedicated command file) place error codes, success criteria, and completion content in the workflow file instead — see the prepare/workflow authoring spec.
+
 | Content | Owned by | Rationale |
 |---------|----------|-----------|
 | Error code registry (`<error_codes>`) | **Command** | Command is the contract surface |

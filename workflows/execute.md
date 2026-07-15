@@ -192,7 +192,7 @@ If `verificationTool == "Skip"` or there are no completed tasks, skip. **This is
    - Substance: files have real implementation, not stub/placeholder/TODO-only/empty return
    - Wiring: files are imported and used by the system, not orphaned
    - Anti-patterns: scan for TODO/FIXME/HACK, placeholder, debug print, disabled tests
-4. Write outputs/self-check.json:  # GATE: self-check-passed (overall == "passed")
+4. Write outputs/self-check.json:  # GATE: self-check-passed (smoke executed + no unhandled critical violation, see Step 4 Check 3; gaps_found does NOT block)
    { checks:[{criterion, status:"verified"|"failed"|"uncertain", evidence}],
      structure:{existence[], substance[], wiring[]}, anti_patterns[],
      overall:"passed"|"gaps_found" }
@@ -280,7 +280,7 @@ BLOCKED conditions: `execution.json` missing, or there are completed tasks but m
 - [ ] All tasks in plan reached terminal state (done/blocked)
 - [ ] Each completed task has summary, evidence, and status
 - [ ] Atomic commits produced per task (only task's changed files)
-- [ ] Self-check smoke (build/test) passed
+- [ ] Self-check smoke (build/test) executed and recorded (gaps_found recorded as concerns for verify)
 - [ ] No unhandled tech-stack violations
 - [ ] execution.json written with completion status
 - [ ] Blocked tasks have checkpoint for resume
