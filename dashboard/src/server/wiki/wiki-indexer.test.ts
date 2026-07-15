@@ -370,62 +370,327 @@ describe('virtual adapters: codebase doc-index', () => {
 });
 
 describe('virtual adapters: run-mode sessions', () => {
-  async function writeRunModeFixture(sessionStatus: 'running' | 'sealed' | 'archived' = 'sealed'): Promise<void> {
-    await write('sessions/20260713-search/session.json', JSON.stringify({
-      schema_version: 'session/1.0',
-      session_id: '20260713-search',
-      intent: 'Optimize Maestro Search indexing',
-      status: sessionStatus,
-      latest_completed_run_id: 'RUN-002',
-      lifecycle: { sealed_at: '2026-07-13T01:00:00.000Z', archived_at: sessionStatus === 'archived' ? '2026-07-13T02:00:00.000Z' : null },
-    }));
-    await write('sessions/20260713-search/artifacts.json', JSON.stringify({
-      schema_version: 'artifacts/1.0',
-      artifacts: {
-        'ART-findings': {
-          kind: 'findings', role: 'primary', producer_run_id: 'RUN-002',
-          relative_path: 'runs/20260713-002-analyze/outputs/findings.json', status: 'sealed',
-        },
-        'ART-draft': {
-          kind: 'notes', role: 'attachment', producer_run_id: 'RUN-002',
-          relative_path: 'runs/20260713-002-analyze/work/draft.json', status: 'draft',
-        },
-      },
-      aliases: { 'current-analysis': 'ART-findings' },
-    }));
-    await write('sessions/20260713-search/runs/20260713-001-plan/run.json', JSON.stringify({
-      schema_version: 'command-run/1.0', run_id: 'RUN-001', session_id: '20260713-search',
-      command: { name: 'plan' }, status: 'running', output: { produces: [] }, started_at: '2026-07-13T00:00:00.000Z',
-    }));
-    await write('sessions/20260713-search/runs/20260713-002-analyze/run.json', JSON.stringify({
-      schema_version: 'command-run/1.0', run_id: 'RUN-002', session_id: '20260713-search',
-      command: { name: 'analyze' }, status: 'sealed',
-      output: { produces: ['ART-findings', 'ART-draft'], primary_artifact_id: 'ART-findings', verdict: 'ready' },
-      handoff: { summary: 'Handoff fallback summary', artifact_refs: ['ART-findings'] },
-      started_at: '2026-07-13T00:30:00.000Z', sealed_at: '2026-07-13T01:00:00.000Z',
-    }));
-    await write('sessions/20260713-search/runs/20260713-002-analyze/outputs/findings.json', JSON.stringify({
-      summary: 'Typed artifact is the preferred searchable summary',
-      findings: [{ summary: 'Nested evidence' }],
-    }));
-    await write('sessions/20260713-search/runs/20260713-002-analyze/report.md', '---\nsummary: Report projection fallback\n---\n## 摘要\nReport body');
-    await write('sessions/20260713-search/runs/20260713-002-analyze/work/draft.json', JSON.stringify({ summary: 'MUST NOT INDEX DRAFT' }));
+  const SESSION_ID = '20260713-search';
+  const SESSION_ENTRY_ID = 'session-20260713-search';
+  const DEBUG_RUN_ID = 'RUN-002';
+  const ANALYZE_RUN_ID = 'RUN-005';
+  const REVIEW_RUN_ID = 'RUN-010';
+  const DRAFT_RUN_ID = 'RUN-007';
+
+  const runEntryId = (runId: string): string => `session-run-20260713-search-${runId.toLowerCase()}`;
+
+  function v11Run(
+    runId: string,
+    command: string,
+    status: 'running' | 'sealed',
+    primary: string | null,
+    overrides: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return {
+      schema_version: 'run/1.1',
+      run_id: runId,
+      parent_run_id: null,
+      command,
+      status,
+      goal: null,
+      input: { args: [], consumes: [] },
+      gates: [],
+      primary,
+      handoff: null,
+      started_at: '2026-07-13T00:00:00.000Z',
+      ended_at: status === 'sealed' ? '2026-07-13T01:00:00.000Z' : null,
+      ...overrides,
+    };
   }
 
-  it('indexes only sealed sessions/runs and prefers sealed typed artifacts over projections', async () => {
+  async function writeRunModeFixture(sessionStatus: 'running' | 'sealed' | 'archived' = 'sealed'): Promise<void> {
+    await write('specs/run-indexing-rule.md', [
+      '---',
+      'title: Run indexing rule',
+      'status: active',
+      'category: coding',
+      `sourceRef: "${SESSION_ID}/${REVIEW_RUN_ID}"`,
+      '---',
+      '# Run indexing rule',
+      'A promoted rule with session provenance.',
+    ].join('\n'));
+
+    await write('sessions/20260713-search/session.json', JSON.stringify({
+      schema_version: 'session/1.1',
+      session_id: SESSION_ID,
+      intent: 'Optimize Maestro Search indexing',
+      status: sessionStatus,
+      revision: 7,
+      active_run_id: sessionStatus === 'running' ? DRAFT_RUN_ID : null,
+      boundary_contract: {
+        in_scope: ['wiki index'], out_of_scope: [], constraints: [], definition_of_done: 'Searchable sealed Runs',
+      },
+      gates: [],
+      orchestration: {
+        engine: 'manual', quality_mode: 'standard', auto_mode: false, chain: [], decision_points: [],
+      },
+      requests: [],
+      lifecycle: {
+        sealed_at: sessionStatus === 'running' ? null : '2026-07-13T02:00:00.000Z',
+        seal_summary: 'Session seal fallback summary',
+        promoted: sessionStatus === 'running' ? [] : ['spec:project:run-indexing-rule'],
+        forked_from: null,
+      },
+    }));
+    await write('sessions/20260713-search/artifacts.json', JSON.stringify({
+      schema_version: 'artifacts/1.1',
+      artifacts: {
+        'ART-debug-notes': {
+          kind: 'notes', role: 'attachment', run_id: DEBUG_RUN_ID,
+          path: 'runs/20260713-002-debug/outputs/notes.json', hash: '0'.repeat(64),
+          status: 'sealed', replaces: null,
+        },
+        'ART-diagnosis': {
+          kind: 'diagnosis', role: 'primary', run_id: DEBUG_RUN_ID,
+          path: 'runs/20260713-002-debug/outputs/diagnosis.json', hash: 'a'.repeat(64),
+          status: 'sealed', replaces: null,
+        },
+        'ART-analysis': {
+          kind: 'findings', role: 'primary', run_id: ANALYZE_RUN_ID,
+          path: 'runs/20260713-005-analyze/outputs/findings.json', hash: 'b'.repeat(64),
+          status: 'sealed', replaces: null,
+        },
+        'ART-review': {
+          kind: 'review-findings', role: 'primary', run_id: REVIEW_RUN_ID,
+          path: 'runs/20260713-010-review/outputs/review-findings.json', hash: 'c'.repeat(64),
+          status: 'sealed', replaces: null,
+        },
+        'ART-draft': {
+          kind: 'draft-notes', role: 'attachment', run_id: DEBUG_RUN_ID,
+          path: 'runs/20260713-002-debug/outputs/draft-notes.json', hash: 'd'.repeat(64),
+          status: 'draft', replaces: null,
+        },
+        'ART-running': {
+          kind: 'running-output', role: 'primary', run_id: DRAFT_RUN_ID,
+          path: 'runs/20260713-007-test/outputs/running-output.json', hash: 'e'.repeat(64),
+          status: 'sealed', replaces: null,
+        },
+      },
+      aliases: {
+        'latest-debug': 'ART-diagnosis',
+        'current-analysis': 'ART-analysis',
+        'latest-review': 'ART-review',
+        'draft-notes': 'ART-draft',
+      },
+    }));
+
+    // Write Run directories in reverse sequence order. The adapter must choose
+    // the latest sealed Run by the NNN directory sequence, not readdir order.
+    await write('sessions/20260713-search/runs/20260713-010-review/run.json', JSON.stringify(v11Run(
+      REVIEW_RUN_ID,
+      'quality-review',
+      'sealed',
+      'ART-review',
+      {
+        gates: [
+          { id: 'GATE-010-01', title: 'Legacy browser proof', blocking: false, status: 'waived', check: { type: 'manual', prompt: 'Verify browser' }, waiver: 'CI has no browser (qa-bot @ 2026-07-13)' },
+          { id: 'GATE-010-02', title: 'Unit tests', blocking: true, status: 'passed', check: { type: 'command', argv: ['npm', 'test'], expect_exit: 0 }, waiver: null },
+        ],
+        handoff: {
+          verdict: 'ready_with_concerns', summary: 'Review handoff fallback', constraints: [], decisions: [],
+          concerns: [], artifact_refs: ['ART-review'], next: [],
+        },
+        started_at: '2026-07-13T01:30:00.000Z', ended_at: '2026-07-13T02:00:00.000Z',
+      },
+    )));
+    await write('sessions/20260713-search/runs/20260713-010-review/outputs/review-findings.json', JSON.stringify({
+      summary: 'Latest review artifact summary', findings: [{ severity: 'low', title: 'No regression' }],
+    }));
+    await write('sessions/20260713-search/runs/20260713-010-review/report.md', [
+      '---',
+      'summary: Review projection fallback',
+      '---',
+      'Inline producer reference {{aref:latest-debug#/diagnosis/0/summary}}.',
+      'Unknown reference {{aref:missing-alias#/ignored}}.',
+      '',
+      '```aref',
+      'source: ART-analysis',
+      'pointer: /findings',
+      'as: table',
+      '```',
+      '',
+      '```aref',
+      'source: draft-notes',
+      'pointer: /notes',
+      'as: list',
+      '```',
+    ].join('\n'));
+
+    await write('sessions/20260713-search/runs/20260713-005-analyze/run.json', JSON.stringify(v11Run(
+      ANALYZE_RUN_ID,
+      'analyze',
+      'sealed',
+      'ART-analysis',
+      {
+        handoff: {
+          verdict: 'ready', summary: 'Analysis handoff fallback', constraints: [], decisions: [],
+          concerns: [], artifact_refs: ['ART-analysis'], next: [],
+        },
+        started_at: '2026-07-13T01:00:00.000Z', ended_at: '2026-07-13T01:20:00.000Z',
+      },
+    )));
+    await write('sessions/20260713-search/runs/20260713-005-analyze/outputs/findings.json', JSON.stringify({
+      summary: 'Analysis artifact summary', findings: [{ summary: 'Intermediate evidence' }],
+    }));
+
+    await write('sessions/20260713-search/runs/20260713-002-debug/run.json', JSON.stringify(v11Run(
+      DEBUG_RUN_ID,
+      'quality-debug',
+      'sealed',
+      'ART-diagnosis',
+      {
+        handoff: {
+          verdict: 'ready',
+          summary: 'Debug handoff fallback',
+          constraints: [
+            { text: 'Preserve locked search semantics', status: 'locked' },
+            { text: 'Explore optional telemetry', status: 'open' },
+          ],
+          decisions: [
+            { text: 'Adopt zephyrdecisionneedle for exact discovery', status: 'accepted' },
+            { text: 'Discard rejecteddecisionneedle entirely', status: 'rejected' },
+          ],
+          concerns: ['Embedding fallback remains observable'],
+          artifact_refs: ['ART-diagnosis'],
+          next: [],
+        },
+        started_at: '2026-07-13T00:10:00.000Z', ended_at: '2026-07-13T00:40:00.000Z',
+      },
+    )));
+    await write('sessions/20260713-search/runs/20260713-002-debug/outputs/diagnosis.json', JSON.stringify({
+      summary: 'Typed diagnosis is the preferred summary', diagnosis: [{ summary: 'Nested diagnosis evidence' }],
+    }));
+    await write('sessions/20260713-search/runs/20260713-002-debug/outputs/notes.json', JSON.stringify({
+      summary: 'Secondary attachment must not replace the primary summary',
+    }));
+    await write('sessions/20260713-search/runs/20260713-002-debug/outputs/draft-notes.json', JSON.stringify({
+      summary: 'MUST NOT INDEX DRAFT ARTIFACT',
+    }));
+
+    await write('sessions/20260713-search/runs/20260713-007-test/run.json', JSON.stringify(v11Run(
+      DRAFT_RUN_ID,
+      'quality-test',
+      'running',
+      'ART-running',
+      { started_at: '2026-07-13T01:25:00.000Z' },
+    )));
+    await write('sessions/20260713-search/runs/20260713-007-test/outputs/running-output.json', JSON.stringify({
+      summary: 'MUST NOT INDEX RUNNING RUN',
+    }));
+  }
+
+  async function writeCategoryFixture(): Promise<Map<string, string>> {
+    const cases = new Map<string, string>([
+      ['grill', 'arch'], ['maestro-grill', 'arch'],
+      ['brainstorm', 'arch'], ['maestro-brainstorm', 'arch'],
+      ['blueprint', 'arch'], ['maestro-blueprint', 'arch'],
+      ['roadmap', 'arch'], ['maestro-roadmap', 'arch'],
+      ['analyze', 'arch'], ['maestro-analyze', 'arch'],
+      ['plan', 'coding'], ['maestro-plan', 'coding'],
+      ['execute', 'coding'], ['maestro-execute', 'coding'],
+      ['verify', 'review'], ['review', 'review'], ['quality-review', 'review'],
+      ['test', 'test'], ['quality-test', 'test'], ['auto-test', 'test'], ['quality-auto-test', 'test'],
+      ['debug', 'debug'], ['quality-debug', 'debug'],
+      ['retrospective', 'learning'], ['quality-retrospective', 'learning'],
+    ]);
+    await write('sessions/category-map/session.json', JSON.stringify({
+      schema_version: 'session/1.1', session_id: 'category-map', intent: 'Category mapping', status: 'sealed',
+      revision: 1, active_run_id: null,
+      boundary_contract: { in_scope: [], out_of_scope: [], constraints: [], definition_of_done: 'All categories mapped' },
+      gates: [], orchestration: { engine: 'manual', quality_mode: 'standard', auto_mode: false, chain: [], decision_points: [] },
+      requests: [], lifecycle: { sealed_at: '2026-07-13T03:00:00.000Z', seal_summary: null, promoted: [], forked_from: null },
+    }));
+    await write('sessions/category-map/artifacts.json', JSON.stringify({
+      schema_version: 'artifacts/1.1', artifacts: {}, aliases: {},
+    }));
+    let sequence = 1;
+    for (const command of cases.keys()) {
+      const seq = String(sequence).padStart(3, '0');
+      const runId = `RUN-CAT-${seq}`;
+      await write(`sessions/category-map/runs/20260713-${seq}-${command}/run.json`, JSON.stringify(v11Run(
+        runId, command, 'sealed', null, { ended_at: `2026-07-13T03:${seq.slice(-2)}:00.000Z` },
+      )));
+      sequence++;
+    }
+    return cases;
+  }
+
+  it('indexes v1.1 sealed Runs with structured handoff, kinds, provenance, aref edges, and waivers', async () => {
     await writeRunModeFixture();
     const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
 
-    const session = index.byId['session-20260713-search'];
-    const run = index.byId['session-run-20260713-search-run-002'];
+    const session = index.byId[SESSION_ENTRY_ID];
+    const debugRun = index.byId[runEntryId(DEBUG_RUN_ID)];
+    const analyzeRun = index.byId[runEntryId(ANALYZE_RUN_ID)];
+    const reviewRun = index.byId[runEntryId(REVIEW_RUN_ID)];
+    const promotedSpec = index.byId['spec:project:run-indexing-rule'];
     expect(session).toBeDefined();
-    expect(run).toBeDefined();
-    expect(index.byId['session-run-20260713-search-run-001']).toBeUndefined();
-    expect(run.summary).toBe('Typed artifact is the preferred searchable summary');
-    expect(run.body).toContain('Nested evidence');
-    expect(run.body).not.toContain('MUST NOT INDEX DRAFT');
-    expect(session.summary).toBe(run.summary);
-    expect(run.source.path).toBe('sessions/20260713-search/runs/20260713-002-analyze/run.json');
+    expect(debugRun).toBeDefined();
+    expect(analyzeRun).toBeDefined();
+    expect(reviewRun).toBeDefined();
+    expect(index.byId[runEntryId(DRAFT_RUN_ID)]).toBeUndefined();
+
+    expect(session.summary).toBe('Latest review artifact summary');
+    expect(session.related).toEqual(expect.arrayContaining([
+      runEntryId(DEBUG_RUN_ID), runEntryId(ANALYZE_RUN_ID), runEntryId(REVIEW_RUN_ID),
+      'spec:project:run-indexing-rule',
+    ]));
+    expect(promotedSpec.related).toContain(SESSION_ENTRY_ID);
+
+    expect(debugRun.summary).toContain('Typed diagnosis is the preferred summary');
+    expect(debugRun.summary).toContain('Adopt zephyrdecisionneedle for exact discovery');
+    expect(debugRun.summary).not.toContain('rejecteddecisionneedle');
+    expect(debugRun.body).toContain('## 决策');
+    expect(debugRun.body).toContain('Adopt zephyrdecisionneedle for exact discovery');
+    expect(debugRun.body).not.toContain('Discard rejecteddecisionneedle entirely');
+    expect(debugRun.body).toContain('## 约束');
+    expect(debugRun.body).toContain('Preserve locked search semantics');
+    expect(debugRun.body).not.toContain('Explore optional telemetry');
+    expect(debugRun.body).toContain('## 关注点');
+    expect(debugRun.body).toContain('Embedding fallback remains observable');
+    expect(debugRun.body).toContain('Nested diagnosis evidence');
+    expect(debugRun.body).not.toContain('MUST NOT INDEX DRAFT ARTIFACT');
+    expect(debugRun.tags).toEqual(expect.arrayContaining(['quality-debug', 'verdict:ready', 'constraint', 'diagnosis']));
+    expect(debugRun.category).toBe('debug');
+    expect(debugRun.ext.kinds).toEqual(['diagnosis', 'notes']);
+    expect(debugRun.ext.artifactIds).toEqual(['ART-diagnosis', 'ART-debug-notes']);
+
+    expect(analyzeRun.category).toBe('arch');
+    expect(analyzeRun.ext.kinds).toEqual(['findings']);
+    expect(reviewRun.category).toBe('review');
+    expect(reviewRun.tags).toEqual(expect.arrayContaining(['verdict:ready_with_concerns', 'review-findings']));
+    expect(reviewRun.ext.kinds).toEqual(['review-findings']);
+    expect(reviewRun.ext.arefArtifactIds).toEqual(['ART-diagnosis', 'ART-analysis']);
+    expect(reviewRun.related).toEqual(expect.arrayContaining([runEntryId(DEBUG_RUN_ID), runEntryId(ANALYZE_RUN_ID)]));
+    expect(index.backlinks[runEntryId(DEBUG_RUN_ID)]).toContain(runEntryId(REVIEW_RUN_ID));
+    expect(index.backlinks[runEntryId(ANALYZE_RUN_ID)]).toContain(runEntryId(REVIEW_RUN_ID));
+    expect(reviewRun.body).toContain('## 豁免');
+    expect(reviewRun.body).toContain('Legacy browser proof');
+    expect(reviewRun.body).toContain('CI has no browser');
+    expect(reviewRun.body).not.toContain('Unit tests');
+    expect(reviewRun.source.path).toBe('sessions/20260713-search/runs/20260713-010-review/run.json');
+  });
+
+  it('finds a Run by an accepted decision-only term', async () => {
+    await writeRunModeFixture();
+    const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
+    const result = await indexer.searchWithMeta('zephyrdecisionneedle', 10, { skipEmbedding: true });
+    expect(result.results.map(item => item.entry.id)).toContain(runEntryId(DEBUG_RUN_ID));
+    expect(result.results[0]?.entry.id).toBe(runEntryId(DEBUG_RUN_ID));
+  });
+
+  it('maps every supported Run command to its search category', async () => {
+    const cases = await writeCategoryFixture();
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    for (const [command, category] of cases) {
+      const entry = index.entries.find(item => item.ext.virtualKind === 'session-run' && item.ext.command === command);
+      expect(entry?.category, command).toBe(category);
+    }
   });
 
   it('skips an unsealed session even when a child run claims sealed', async () => {
@@ -444,13 +709,13 @@ describe('virtual adapters: run-mode sessions', () => {
     await writeRunModeFixture();
     const indexer = new WikiIndexer({ workflowRoot: tmpRoot });
     const first = await indexer.get();
-    expect(first.byId['session-run-20260713-search-run-002'].summary).toContain('preferred');
+    expect(first.byId[runEntryId(DEBUG_RUN_ID)].summary).toContain('preferred');
 
     await new Promise(resolve => setTimeout(resolve, 20));
-    await write('sessions/20260713-search/runs/20260713-002-analyze/outputs/findings.json', JSON.stringify({
-      summary: 'Updated nested artifact summary',
+    await write('sessions/20260713-search/runs/20260713-002-debug/outputs/diagnosis.json', JSON.stringify({
+      summary: 'Updated nested diagnosis summary',
     }));
     const refreshed = await indexer.get();
-    expect(refreshed.byId['session-run-20260713-search-run-002'].summary).toBe('Updated nested artifact summary');
+    expect(refreshed.byId[runEntryId(DEBUG_RUN_ID)].summary).toContain('Updated nested diagnosis summary');
   });
 });
