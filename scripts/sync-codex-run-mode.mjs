@@ -111,6 +111,7 @@ for (const entry of readdirSync(codexRoot, { withFileTypes: true })) {
   let mode = source?.mode ?? null;
   if (!mode) mode = obsoleteArtifactPattern.test(body) ? 'run' : 'none';
   if (mode === 'none' && obsoleteArtifactPattern.test(body)) mode = 'run';
+  if (mode === 'brief') mode = 'none';
   data.version = packageVersion;
   data['session-mode'] = mode;
   if (mode === 'run') data.contract = source?.contract ?? data.contract ?? genericContract();

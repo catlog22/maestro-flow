@@ -104,6 +104,14 @@ export interface PrepareStepResult {
   refs: Array<{ path: string; when: string }>;
 }
 
+export interface SkillContentResult {
+  step: string;
+  platform: string;
+  prepare: { path: string; content: string } | null;
+  workflow: { path: string; content: string } | null;
+  refs: Array<{ path: string; when: string }>;
+}
+
 export interface BriefRunResult {
   session_id: string;
   run_id: string;
@@ -874,6 +882,25 @@ export function prepareStep(
       : null,
     run_mode: content.runMode
       ? { path: content.runMode.path, summary: summarizeRunMode(content.runMode.raw) }
+      : null,
+    refs: content.refs,
+  };
+}
+
+export function skillContent(
+  projectRoot: string,
+  stepName: string,
+  platform?: TargetPlatform,
+): SkillContentResult {
+  const suffix = platform ? PLATFORM_SUFFIX[platform] : undefined;
+  const content = resolveStepContent(projectRoot, stepName, suffix);
+  const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
+  return {
+    step: stepName,
+    platform: platform ?? 'claude',
+    prepare: content.prepare ? { path: content.prepare.path, content: tx(content.prepare.raw) } : null,
+    workflow: content.workflow
+      ? { path: content.workflow.path, content: tx(content.workflow.raw) }
       : null,
     refs: content.refs,
   };

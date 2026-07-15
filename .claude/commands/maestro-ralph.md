@@ -1,7 +1,7 @@
 ---
 name: maestro-ralph
 description: "Adaptive lifecycle orchestrator — compose, dispatch ralph-executor agent, evaluate decision, loop"
-argument-hint: "<intent> [-y] [--amend [change]] [--roadmap] [--engine swarm|universal] | status | continue"
+argument-hint: "<intent>|status|continue [-y] [--amend] [--roadmap]"
 allowed-tools:
   - Read
   - Write
@@ -14,6 +14,8 @@ allowed-tools:
   - Agent
   - SendMessage
   - Workflow
+  - TaskCreate
+  - TaskUpdate
 session-mode: run
 contract:
   discovery: self-described
@@ -96,7 +98,22 @@ Remaining      → intent (amend_mode 时为 change_request)
 20. **分解契约单一所有者** — `boundary_contract` / `task_decomposition` 由 session 创建者拥有
 21. **控制权优先级（范式治理）** — FSM 独占 session 生命周期 + step 排序 + retry/fix/escalate + cross-step decision 节点
 22. **引擎只做并行加速，不做状态决策** — `--engine swarm|universal` 通过 Workflow 引擎并行执行单个 step，MUST NOT 修改 session state、MUST NOT 推进 step、MUST NOT 触碰 decision 节点；引擎产出写入该 step 的 Run output dir（格式兼容对应命令产物），由主流程照常 `ralph complete`。生成/固定脚本对引擎只读（`wf-*.js` 从不被编辑；`uwf-*.js` 仅由 universal 生成器按幂等命名覆盖）。
+23. **Goal tracking 与 session 双写** — 主流程在 session 创建、step 派发、step 完成时同步创建/更新 goal，补充 session.json 的 UI 可见进度。
 </invariants>
+
+<goal_tracking>
+
+**时机与操作**（goal 是 session.json 的 UI 镜像，不替代 session 状态）：
+
+| 时机 | 操作 | 示例 |
+|------|------|------|
+| S_CREATE（session 创建后） | [@task] TaskCreate 整体 session goal | `TaskCreate({ description: "Session: {intent_summary}", subject: "所有 steps completed + task_decomposition_all_done" })` |
+| A_STEP_DISPATCH（step 派发时） | [@task] TaskCreate 当前 step goal | `TaskCreate({ description: "Step {index}: {step.skill}", subject: "{step.stage} 完成" })` |
+| A_STEP_COMPLETE（step 完成时） | [@task] TaskUpdate step goal | `TaskUpdate({ taskId: step_goal_id, status: "completed" })` |
+| A_APPLY_GOAL_DONE（子目标全完成） | [@task] TaskUpdate session goal | `TaskUpdate({ taskId: session_goal_id, status: "completed" })` |
+| S_HANDLE_FAIL（step 失败） | [@task] TaskUpdate step goal | `TaskUpdate({ taskId: step_goal_id, status: "failed" })` |
+
+</goal_tracking>
 
 <state_machine>
 

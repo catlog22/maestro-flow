@@ -1,7 +1,7 @@
 ---
 name: learn
 description: Understand code through guided reading, investigation, pattern extraction, or second opinions
-argument-hint: "<subcommand> [args...] where subcommand = follow|investigate|decompose|consult"
+argument-hint: "follow|investigate|decompose|consult [args...]"
 allowed-tools:
   - Read
   - Write

@@ -1,7 +1,7 @@
 ---
 name: maestro-impeccable
 description: Use when designing, auditing, polishing, improving, or codifying frontend UI — websites, dashboards, landing pages, components, design systems
-argument-hint: "<command|intent> [target] [flags] — chain: build|redesign|improve|enhance|launch|harden|foundation|live · --codify <source-path> 提取设计系统"
+argument-hint: "build|redesign|improve|enhance|launch|harden|foundation|live [target] [--codify <path>]"
 allowed-tools:
   - Read
   - Write

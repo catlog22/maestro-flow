@@ -1,7 +1,7 @@
 ---
 name: maestro-guard
 description: Manage editing boundary restrictions
-argument-hint: "<on|off|status|allow <path>|deny <path>>"
+argument-hint: "on|off|status|allow|deny [path]"
 allowed-tools:
   - Read
   - Write

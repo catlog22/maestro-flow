@@ -1,7 +1,7 @@
 ---
 name: maestro-overlay
 description: Create or edit command overlays from natural language, or auto-generate them from workflow deficiency signals
-argument-hint: "<intent> | --amend [description] [--from-verify <dir>] [--from-review <dir>] [--from-session <id>] [--from-issues ISS-xxx,...] [--scan] [--dry-run] [-y]"
+argument-hint: "<intent> | --amend [--scan] [--dry-run] [-y]"
 allowed-tools:
   - Read
   - Write

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
-import { briefRun, checkRun, completeRun, createRun, prepareStep, sealSession } from '../run/runtime.js';
+import { briefRun, checkRun, completeRun, createRun, prepareStep, skillContent, sealSession } from '../run/runtime.js';
 import type { TargetPlatform } from '../core/skill-converter.js';
 
 const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard', 'pi'];
@@ -110,6 +110,23 @@ export function registerRunCommand(program: Command): void {
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
         }
         print(briefRun(resolve(opts.workflowRoot), runId, opts.session, platform));
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  run
+    .command('skill <step>')
+    .description('Load prepare + workflow content for a step (stateless, no Session)')
+    .option('--platform <name>', 'target platform for tool substitution (claude|codex|agy|agents-standard)')
+    .option('--workflow-root <path>', 'project root', process.cwd())
+    .action((step: string, opts: { platform?: string; workflowRoot: string }) => {
+      try {
+        const platform = opts.platform as TargetPlatform | undefined;
+        if (platform && !VALID_PLATFORMS.includes(platform)) {
+          throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
+        }
+        print(skillContent(resolve(opts.workflowRoot), step, platform));
       } catch (error) {
         reportError(error);
       }

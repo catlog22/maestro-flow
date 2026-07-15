@@ -24,7 +24,7 @@ function validatePrompt(path, kind) {
   const text = readFileSync(path, 'utf8');
   const mode = field(text, 'session-mode');
   if (!mode) errors.push(`${relative(root, path)}: missing session-mode classification`);
-  if (!['run', 'none', 'bootstrap', 'deprecated'].includes(mode ?? '')) {
+  if (!['run', 'none', 'brief', 'bootstrap', 'deprecated'].includes(mode ?? '')) {
     errors.push(`${relative(root, path)}: invalid session-mode ${mode}`);
   }
   if (mode === 'run') {
@@ -45,11 +45,11 @@ function validatePrompt(path, kind) {
   if (mode === 'deprecated' && !text.includes('<deprecated_command>')) {
     errors.push(`${relative(root, path)}: deprecated command missing mandatory replacement block`);
   }
-  if (mode === 'none' && hasActiveLegacyWrite(text)) {
-    errors.push(`${relative(root, path)}: ${kind} classified none but contains legacy session writes`);
+  if ((mode === 'none' || mode === 'brief') && hasActiveLegacyWrite(text)) {
+    errors.push(`${relative(root, path)}: ${kind} classified ${mode} but contains legacy session writes`);
   }
-  if (mode === 'none' && /^contract:/m.test(text)) {
-    errors.push(`${relative(root, path)}: ${kind} has a Run contract but is classified none`);
+  if ((mode === 'none' || mode === 'brief') && /^contract:/m.test(text)) {
+    errors.push(`${relative(root, path)}: ${kind} has a Run contract but is classified ${mode}`);
   }
 }
 
@@ -164,6 +164,7 @@ else {
     if (!text.includes(token)) errors.push(`workflows/run-mode.md: missing ${token}`);
   }
 }
+
 
 for (const dir of readdirSync(skillDir)) {
   const skillPath = join(skillDir, dir, 'SKILL.md');

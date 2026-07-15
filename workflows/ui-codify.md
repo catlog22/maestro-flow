@@ -135,7 +135,7 @@ echo "  Output: $package_dir"
 
 ## Phase 2: Parallel Agent Extraction (Deferred)
 
-MANDATORY: execute ui-codify-extract.md steps; REQUIRED produce: design-tokens.json, animation-tokens.json, layout-templates.json; BLOCKED if missing.
+MANDATORY: execute `~/.maestro/workflows/ui-codify-extract.md` steps; REQUIRED produce: design-tokens.json, animation-tokens.json, layout-templates.json; BLOCKED if missing.
 
 Variables available to Phase 2:
 - `source_path` — absolute path to source directory
@@ -152,7 +152,7 @@ Phase 2 writes:
 
 ## Phase 3: Reference Package Generation (Deferred)
 
-MANDATORY: execute ui-codify-package.md steps; REQUIRED produce: preview.html, preview.css, token files copied to package_dir; BLOCKED if missing.
+MANDATORY: execute `~/.maestro/workflows/ui-codify-package.md` steps; REQUIRED produce: preview.html, preview.css, token files copied to package_dir; BLOCKED if missing.
 
 Variables available to Phase 3:
 - `temp_dir` — temporary workspace with extraction results
@@ -172,7 +172,7 @@ Phase 3 writes:
 
 ## Phase 4: Knowledge Asset Generation (Deferred)
 
-MANDATORY: execute ui-codify-knowhow.md steps; REQUIRED produce: knowhow-manifest.json, knowhow files, spec entries; BLOCKED if missing.
+MANDATORY: execute `~/.maestro/workflows/ui-codify-knowhow.md` steps; REQUIRED produce: knowhow-manifest.json, knowhow files, spec entries; BLOCKED if missing.
 
 Variables available to Phase 4:
 - `package_dir` — package directory with all token files
