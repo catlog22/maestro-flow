@@ -1230,7 +1230,7 @@ decision:post-execute {retry+1}
 
 **post-business-test:**
 ```
-debug --from-business-test "{gap_summary}"
+debug "{gap_summary}"
 plan --gaps --session {session}
 execute --session {session}
 decision:post-execute {retry: 0}

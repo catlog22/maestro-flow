@@ -212,7 +212,7 @@ TUI 功能：**[1] Tools** / **[2] Roles** / **[3] Register**（注册别名）/
 | `debug.md` | Step 5.5 | `explore` | 广域证据收集 |
 | `verify.md` | V0.8 | `analyze` | 反模式/完整性预扫描 |
 | `plan.md` | P1 Step 5b | `explore` | 收集模式/依赖/冲突 |
-| `test-gen.md` | Step 3.5 | `analyze` | 边界条件和边缘场景分析 |
+| `auto-test.md` | CLI 补充分析 | `analyze` | 边界条件和边缘场景分析 |
 | `execute.md` | E2.5 | `analyze` | wave 后语义验证 |
 | `milestone-audit.md` | Step 5.5 | `analyze` | 跨阶段导入一致性检查 |
 

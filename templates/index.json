@@ -45,7 +45,7 @@
     "gaps": []
   },
 
-  "_optional_note_validation": "Populated only when quality-test/quality-test-gen workflows run",
+  "_optional_note_validation": "Populated only when quality-test/quality-auto-test workflows run",
   "validation": {
     "status": "pending",
     "test_coverage": null,

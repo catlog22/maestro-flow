@@ -434,7 +434,7 @@ detectNextAction(state):
 | `impeccable-build` | impeccable --chain build → plan → execute | From design system generation |
 | `analyze-plan-execute` | analyze -q → plan --dir → execute --dir → harvest | Fast track (ad-hoc Run mode) |
 | `review-fix` | plan --gaps → execute → review | Fix review-blocked issues |
-| `quality-loop` | review → test-gen → test → debug → plan --gaps → execute | Fix quality issues |
+| `quality-loop` | review → auto-test → test → debug → plan --gaps → execute | Fix quality issues |
 | `quality-loop-partial` | plan --gaps → execute | Partial quality fix cycle |
 | `milestone-close` | audit → complete | Close a milestone |
 | `milestone-release` | audit → release | Release with version tag |

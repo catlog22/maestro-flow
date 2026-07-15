@@ -212,7 +212,7 @@ Optional CLI delegate auxiliary analysis at key workflow stages. All execute wit
 | `debug.md` | Step 5.5 | `explore` | Broad evidence collection |
 | `verify.md` | V0.8 | `analyze` | Anti-pattern/completeness pre-scan |
 | `plan.md` | P1 Step 5b | `explore` | Collect patterns/dependencies/conflicts |
-| `test-gen.md` | Step 3.5 | `analyze` | Boundary conditions and edge case analysis |
+| `auto-test.md` | CLI supplementary analysis | `analyze` | Boundary conditions and edge case analysis |
 | `execute.md` | E2.5 | `analyze` | Post-wave semantic verification |
 | `milestone-audit.md` | Step 5.5 | `analyze` | Cross-phase import consistency check |
 

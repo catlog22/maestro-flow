@@ -22,13 +22,11 @@ Only commands that exist in `~/.claude/commands/` are listed.
 |----------|-------------|--------------|--------------|
 | `quality-review` | code | review-findings | `{phase}` |
 | `quality-test` | code | test-passed | `{phase}` |
-| `quality-test-gen` | code | test-generated | `{phase}` |
+| `quality-auto-test` | code, requirement | auto-test-report | `{phase}` |
 | `quality-debug` | bug-report | diagnosis | `"{goal}"` |
 | `quality-refactor` | codebase | refactored-code | `"{goal}"` |
-| `quality-integration-test` | requirement | test-passed | `{phase}` |
 | `quality-sync` | code | synced-docs | `{phase}` |
 | `quality-retrospective` | phase | retrospective | `{phase}` |
-| `quality-business-test` | requirement | test-passed | `{phase}` |
 
 ## Management Commands (as skill nodes)
 
