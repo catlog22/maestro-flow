@@ -662,44 +662,83 @@ export function adaptCodebaseDocIndex(parsed: unknown, sourcePath: string): Wiki
 // ── Session / Run adapters (run-mode lifecycle) ─────────────────────────
 
 const RUN_COMMAND_CATEGORY: Record<string, string> = {
+  grill: 'arch',
+  'maestro-grill': 'arch',
   brainstorm: 'arch',
+  'maestro-brainstorm': 'arch',
   blueprint: 'arch',
+  'maestro-blueprint': 'arch',
+  roadmap: 'arch',
+  'maestro-roadmap': 'arch',
   analyze: 'arch',
+  'maestro-analyze': 'arch',
   plan: 'coding',
+  'maestro-plan': 'coding',
   execute: 'coding',
+  'maestro-execute': 'coding',
   verify: 'review',
+  review: 'review',
+  'quality-review': 'review',
+  test: 'test',
+  'quality-test': 'test',
+  'auto-test': 'test',
+  'quality-auto-test': 'test',
+  debug: 'debug',
+  'quality-debug': 'debug',
+  retrospective: 'learning',
+  'quality-retrospective': 'learning',
 };
 
 interface RunModeSession {
+  schema_version?: 'session/1.1';
   session_id?: string;
   intent?: string;
   status?: string;
-  latest_completed_run_id?: string | null;
-  lifecycle?: { sealed_at?: string | null; archived_at?: string | null; seal_summary?: string | null };
+  lifecycle?: { sealed_at?: string | null; seal_summary?: string | null; promoted?: string[] };
 }
 
 interface RunModeArtifact {
   kind?: string;
   role?: string;
-  producer_run_id?: string;
-  relative_path?: string;
+  run_id?: string;
+  path?: string;
   status?: string;
 }
 
 interface RunModeRegistry {
+  schema_version?: 'artifacts/1.1';
   artifacts?: Record<string, RunModeArtifact>;
+  aliases?: Record<string, string>;
+}
+
+interface RunModeHandoffItem {
+  text?: string;
+  status?: string;
+}
+
+interface RunModeGate {
+  title?: string;
+  status?: string;
+  waiver?: string | null;
 }
 
 interface RunModeRun {
+  schema_version?: 'run/1.1';
   run_id?: string;
-  session_id?: string;
-  command?: { name?: string };
+  command?: string;
   status?: string;
-  output?: { produces?: string[]; primary_artifact_id?: string | null; verdict?: string | null };
-  handoff?: { summary?: string; artifact_refs?: string[] } | null;
+  primary?: string | null;
+  gates?: RunModeGate[];
+  handoff?: {
+    verdict?: string;
+    summary?: string;
+    constraints?: RunModeHandoffItem[];
+    decisions?: RunModeHandoffItem[];
+    concerns?: string[];
+    artifact_refs?: string[];
+  } | null;
   started_at?: string;
-  completed_at?: string | null;
-  sealed_at?: string | null;
+  ended_at?: string | null;
 }
 
 function isIndexedLifecycle(status: string | undefined): boolean {
@@ -728,41 +767,105 @@ function extractReportSummary(raw: string): string {
   return section?.replace(/\s+/g, ' ').trim().slice(0, 500) ?? '';
 }
 
+function runDirectorySequence(name: string): number {
+  const match = name.match(/^\d{8}-(\d{3})-/);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function compareRunDirectories(left: string, right: string): number {
+  return runDirectorySequence(left) - runDirectorySequence(right) || left.localeCompare(right);
+}
+
+function structuredHandoffBody(run: RunModeRun): { body: string; firstDecision: string; hasLockedConstraints: boolean } {
+  const acceptedDecisions = (run.handoff?.decisions ?? [])
+    .filter(item => item.status === 'accepted' && item.text?.trim())
+    .map(item => item.text!.trim());
+  const lockedConstraints = (run.handoff?.constraints ?? [])
+    .filter(item => item.status === 'locked' && item.text?.trim())
+    .map(item => item.text!.trim());
+  const concerns = (run.handoff?.concerns ?? []).map(item => item.trim()).filter(Boolean);
+  const waivers = (run.gates ?? [])
+    .filter(gate => gate.status === 'waived' && gate.waiver?.trim())
+    .map(gate => gate.title?.trim() ? `${gate.title!.trim()}：${gate.waiver!.trim()}` : gate.waiver!.trim());
+  const sections: string[] = [];
+  if (acceptedDecisions.length > 0) sections.push(`## 决策\n${acceptedDecisions.map(item => `- ${item}`).join('\n')}`);
+  if (lockedConstraints.length > 0) sections.push(`## 约束\n${lockedConstraints.map(item => `- ${item}`).join('\n')}`);
+  if (concerns.length > 0) sections.push(`## 关注点\n${concerns.map(item => `- ${item}`).join('\n')}`);
+  if (waivers.length > 0) sections.push(`## 豁免\n${waivers.map(item => `- ${item}`).join('\n')}`);
+  return {
+    body: sections.join('\n\n'),
+    firstDecision: acceptedDecisions[0] ?? '',
+    hasLockedConstraints: lockedConstraints.length > 0,
+  };
+}
+
+function resolveArefArtifact(source: string, registry: RunModeRegistry): string | null {
+  const artifactId = registry.aliases?.[source] ?? source;
+  return registry.artifacts?.[artifactId]?.status === 'sealed' ? artifactId : null;
+}
+
+function extractArefArtifactIds(report: string, registry: RunModeRegistry): string[] {
+  const sources: string[] = [];
+  for (const match of report.matchAll(/\{\{aref:([^}#\s]+)(?:#[^}]*)?\}\}/g)) sources.push(match[1]);
+  for (const match of report.matchAll(/```aref\s*\r?\n([\s\S]*?)```/gi)) {
+    const source = match[1].match(/^\s*source:\s*["']?([^"'\s#]+)["']?\s*$/m)?.[1];
+    if (source) sources.push(source);
+  }
+  return [...new Set(sources.map(source => resolveArefArtifact(source, registry)).filter((id): id is string => Boolean(id)))];
+}
+
 async function readRunKnowledge(
   sessionDir: string,
   runDir: string,
   run: RunModeRun,
   registry: RunModeRegistry,
-): Promise<{ summary: string; body: string; artifactIds: string[] }> {
-  const artifactIds = [
-    run.output?.primary_artifact_id,
-    ...(run.output?.produces ?? []),
-    ...(run.handoff?.artifact_refs ?? []),
-  ].filter((id): id is string => typeof id === 'string' && id.length > 0);
-  const uniqueIds = [...new Set(artifactIds)];
+): Promise<{
+  summary: string;
+  body: string;
+  artifactIds: string[];
+  kinds: string[];
+  arefArtifactIds: string[];
+  hasLockedConstraints: boolean;
+}> {
+  const artifactEntries = Object.entries(registry.artifacts ?? {})
+    .filter(([, artifact]) => artifact.run_id === run.run_id && artifact.status === 'sealed')
+    .sort(([leftId], [rightId]) => Number(rightId === run.primary) - Number(leftId === run.primary));
+  const uniqueIds = artifactEntries.map(([id]) => id);
+  const kinds = [...new Set(artifactEntries.map(([, artifact]) => artifact.kind?.trim() ?? '').filter(Boolean))];
   const bodies: string[] = [];
   let summary = '';
 
-  for (const id of uniqueIds) {
-    const artifact = registry.artifacts?.[id];
-    if (!artifact || artifact.producer_run_id !== run.run_id || artifact.status !== 'sealed') continue;
-    if (!artifact.relative_path || artifact.role === 'report') continue;
-    const absPath = resolve(sessionDir, artifact.relative_path);
+  for (const [, artifact] of artifactEntries) {
+    if (!artifact.path || artifact.role === 'report') continue;
+    const absPath = resolve(sessionDir, artifact.path);
     if (!absPath.startsWith(`${resolve(sessionDir)}${sep}`)) continue;
     try {
       const raw = await readFile(absPath, 'utf-8');
       bodies.push(raw.slice(0, 50_000));
-      if (!summary && artifact.relative_path.toLowerCase().endsWith('.json')) {
+      if (!summary && artifact.path.toLowerCase().endsWith('.json')) {
         try { summary = extractArtifactSummary(JSON.parse(raw)); } catch { /* malformed artifact is ignored */ }
       }
     } catch { /* registry may contain a stale optional attachment */ }
   }
 
+  let report = '';
+  try { report = await readFile(join(runDir, 'report.md'), 'utf-8'); } catch { /* projection is optional */ }
   if (!summary) {
-    try { summary = extractReportSummary(await readFile(join(runDir, 'report.md'), 'utf-8')); } catch { /* projection is optional */ }
+    summary = extractReportSummary(report);
   }
   if (!summary) summary = run.handoff?.summary?.trim().slice(0, 500) ?? '';
-  return { summary, body: bodies.join('\n\n'), artifactIds: uniqueIds };
+  const structured = structuredHandoffBody(run);
+  if (structured.firstDecision && !summary.includes(structured.firstDecision)) {
+    summary = [summary, `决策：${structured.firstDecision}`].filter(Boolean).join('；').slice(0, 500);
+  }
+  return {
+    summary,
+    body: [structured.body, ...bodies].filter(Boolean).join('\n\n'),
+    artifactIds: uniqueIds,
+    kinds,
+    arefArtifactIds: extractArefArtifactIds(report, registry),
+    hasLockedConstraints: structured.hasLockedConstraints,
+  };
 }
 
 /** Load a run-mode session and its sealed runs without indexing draft projections. */
@@ -772,6 +875,12 @@ export async function loadRunModeSessionEntries(
 ): Promise<WikiEntry[]> {
   let session: RunModeSession;
   try { session = JSON.parse(await readFile(sessionAbsPath, 'utf-8')) as RunModeSession; } catch { return []; }
+  if (session.schema_version !== 'session/1.1') {
+    if (process.env.MAESTRO_DEBUG === '1') {
+      warn(`run-session-schema:${sessionAbsPath}`, `unsupported run-mode session schema at ${sessionAbsPath}`);
+    }
+    return [];
+  }
   if (!isIndexedLifecycle(session.status)) return [];
 
   const sessionDir = dirname(sessionAbsPath);
@@ -781,32 +890,54 @@ export async function loadRunModeSessionEntries(
 
   let registry: RunModeRegistry = {};
   try { registry = JSON.parse(await readFile(join(sessionDir, 'artifacts.json'), 'utf-8')) as RunModeRegistry; } catch { /* optional */ }
+  if (registry.schema_version !== 'artifacts/1.1') {
+    if (process.env.MAESTRO_DEBUG === '1') {
+      warn(`run-artifacts-schema:${sessionDir}`, `unsupported run-mode artifact registry schema at ${sessionDir}`);
+    }
+    registry = {};
+  }
 
   const runEntries: WikiEntry[] = [];
   const runsRoot = join(sessionDir, 'runs');
-  for (const runName of await safeReadDirNames(runsRoot)) {
+  const runNames = (await safeReadDirNames(runsRoot)).sort(compareRunDirectories);
+  for (const runName of runNames) {
     const runDir = join(runsRoot, runName);
     let run: RunModeRun;
     try { run = JSON.parse(await readFile(join(runDir, 'run.json'), 'utf-8')) as RunModeRun; } catch { continue; }
+    if (run.schema_version !== 'run/1.1') {
+      if (process.env.MAESTRO_DEBUG === '1') {
+        warn(`run-schema:${runDir}`, `unsupported run schema at ${runDir}`);
+      }
+      continue;
+    }
     if (!isIndexedLifecycle(run.status)) continue;
     const runId = run.run_id ?? runName;
-    const command = run.command?.name ?? 'run';
+    const command = run.command?.trim() || 'run';
     const knowledge = await readRunKnowledge(sessionDir, runDir, run, registry);
     const runRel = `${sessionRelPath.replace(/\/session\.json$/, '')}/runs/${runName}/run.json`;
+    const verdictTag = run.handoff?.verdict ? [`verdict:${run.handoff.verdict}`] : [];
+    const constraintTag = knowledge.hasLockedConstraints ? ['constraint'] : [];
+    const arefRunEntries = [...new Set(knowledge.arefArtifactIds
+      .map(id => registry.artifacts?.[id]?.run_id)
+      .filter((producerRunId): producerRunId is string => Boolean(producerRunId) && producerRunId !== runId)
+      .map(producerRunId => `session-run-${sessionSlug}-${slugify(producerRunId)}`))];
     runEntries.push({
       id: `session-run-${sessionSlug}-${slugify(runId)}`,
       type: 'knowhow',
       title: `${command} ${runId}`,
       summary: knowledge.summary,
-      tags: ['session', 'run', run.status!, command],
+      tags: ['session', 'run', run.status!, command, ...verdictTag, ...constraintTag, ...knowledge.kinds],
       status: runModeStatus(run.status),
       created: toIso(run.started_at),
-      updated: toIso(run.sealed_at ?? run.completed_at ?? run.started_at),
-      related: [`session-${sessionSlug}`],
+      updated: toIso(run.ended_at ?? run.started_at),
+      related: [`session-${sessionSlug}`, ...arefRunEntries],
       source: { kind: 'virtual', path: runRel },
       body: knowledge.body,
       raw: run,
-      ext: { virtualKind: 'session-run', sessionId, runId, command, artifactIds: knowledge.artifactIds },
+      ext: {
+        virtualKind: 'session-run', sessionId, runId, command,
+        artifactIds: knowledge.artifactIds, arefArtifactIds: knowledge.arefArtifactIds, kinds: knowledge.kinds,
+      },
       scope: null,
       category: RUN_COMMAND_CATEGORY[command] ?? null,
       specCategory: null,
@@ -816,9 +947,9 @@ export async function loadRunModeSessionEntries(
     });
   }
 
-  const latest = runEntries.find(e => (e.ext?.runId as string | undefined) === session.latest_completed_run_id)
-    ?? runEntries.at(-1);
+  const latest = runEntries.at(-1);
   const summary = latest?.summary || session.lifecycle?.seal_summary || session.intent || '';
+  const promotedRefs = [...new Set((session.lifecycle?.promoted ?? []).map(ref => ref.trim()).filter(Boolean))];
   const sessionEntry: WikiEntry = {
     id: `session-${sessionSlug}`,
     type: 'knowhow',
@@ -827,12 +958,15 @@ export async function loadRunModeSessionEntries(
     tags: ['session', session.status!],
     status: runModeStatus(session.status),
     created: toIso(session.lifecycle?.sealed_at),
-    updated: toIso(session.lifecycle?.archived_at ?? session.lifecycle?.sealed_at),
+    updated: toIso(session.lifecycle?.sealed_at),
     related: runEntries.map(e => e.id),
     source: { kind: 'virtual', path: sessionRelPath },
     body: latest?.body ?? '',
     raw: session,
-    ext: { virtualKind: 'session', sessionId, lifecycleStatus: session.status, runCount: runEntries.length },
+    ext: {
+      virtualKind: 'session', sessionId, lifecycleStatus: session.status,
+      runCount: runEntries.length, promotedRefs,
+    },
     scope: null,
     category: null,
     specCategory: null,
