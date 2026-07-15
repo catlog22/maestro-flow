@@ -78,6 +78,15 @@ $ARGUMENTS
 | `--executor <tool>` | planex | Explicit CLI executor | first enabled |
 | `--skip-verify` | planex | Skip post-execution validation gate | false |
 
+**Run creation** (per run-mode.md §Start or Resume):
+```bash
+# command-name is odyssey-{mode} — resolves the mode's own prepare contract and workflow
+maestro run create odyssey-<mode> \
+  --session YYYYMMDD-odyssey-{mode}-{topic} \
+  --intent "<short goal phrase>" \
+  [-- flags...]
+```
+
 **Session**: `{run_dir}/outputs/`
 **Output**: `session.json` | `evidence.ndjson` | `understanding.md` | `explore.json` (debug/review only)
 

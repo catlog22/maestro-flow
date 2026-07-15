@@ -88,6 +88,15 @@ $ARGUMENTS
 | `--executor <tool>` | planex | Explicit CLI executor | first enabled |
 | `--skip-verify` | planex | Skip post-execution validation gate | false |
 
+**Run creation** (per run-mode.md §Start or Resume):
+```bash
+# command-name is odyssey-{mode} — resolves the mode's own prepare contract and workflow
+maestro run create odyssey-<mode> \
+  --session YYYYMMDD-odyssey-{mode}-{topic} \
+  --intent "<short goal phrase>" \
+  [-- flags...]
+```
+
 **Session**: `{run_dir}/outputs/`
 **Output**: `session.json` | `evidence.ndjson` | `understanding.md` | `explore.json` (debug/review only)
 
@@ -119,17 +128,7 @@ All base invariants apply (evidence append-only, session-as-state, phase goal tr
 </invariants>
 
 <goal_tracking>
-
-**时机与操作**（goal 是 session.json 的 UI 镜像，不替代 session 状态）：
-
-| 时机 | 操作 | 示例 |
-|------|------|------|
-| INTAKE gate 通过后 | [@task] TaskCreate 整体 session goal | `TaskCreate({ description: "Odyssey {mode}: {intent_summary}", subject: "所有 phase gates 通过 + END 状态" })` |
-| Phase 进入时 | [@task] TaskCreate phase goal | `TaskCreate({ description: "Phase: {STATE_NAME}", subject: "{phase_gate} 条件达成" })` |
-| Phase gate 通过时 | [@task] TaskUpdate phase goal | `TaskUpdate({ taskId: phase_goal_id, status: "completed" })` |
-| END 状态到达时 | [@task] TaskUpdate session goal | `TaskUpdate({ taskId: session_goal_id, status: "completed" })` |
-| Phase gate BLOCKED 时 | [@task] TaskUpdate phase goal | `TaskUpdate({ taskId: phase_goal_id, status: "failed" })` |
-
+@~/.maestro/workflows/goal-tracking.md
 </goal_tracking>
 
 <self_iteration>
