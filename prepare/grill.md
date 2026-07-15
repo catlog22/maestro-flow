@@ -9,10 +9,11 @@ contract:
     - { path: outputs/grill-report.md, kind: grill-report, alias: current-grill, role: primary }
     - { path: outputs/terminology.md, kind: terminology, role: attachment }
     - { path: outputs/context-package.json, kind: context-package, alias: grill-context, role: attachment }
+  gates:
+    exit: [terminology-aligned, branches-walked]
 refs:
   - { path: ref/interview-mechanics.md, when: Entering the Q&A loop of branch walking }
   - { path: ref/finish-work.md, when: The wrap-up phase }
-gates: [terminology-aligned, branches-walked]
 ---
 
 # Pre-task Thinking: grill

@@ -16,11 +16,12 @@ contract:
     - { path: outputs/dependency-graph.json, kind: dependency-graph, role: evidence }
     - { path: outputs/collision-report.json, kind: collision-report, role: evidence }
     - { path: outputs/evidence/plan-check.json, kind: plan-check, role: evidence, optional: true }
+  gates:
+    exit: [context-collected, plan-generated, plan-checked, plan-confirmed]
 refs:
   - { path: ref/boundary-grill.md, when: Task boundary / file write conflicts need arbitration }
   - { path: ref/tdd.md, when: --tdd mode, generating a RED-GREEN-REFACTOR task chain }
   - { path: ref/finish-work.md, when: Wrapping up, archiving, and extracting spec/knowhow }
-gates: [context-collected, plan-generated, plan-checked, plan-confirmed]
 ---
 
 # Pre-task Thinking: plan

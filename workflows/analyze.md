@@ -54,21 +54,21 @@ macro mode additionally evaluates `scope_verdict` during Step 5 synthesis:
 
 Mandatory and blocking. Cannot advance if any gate is unmet.
 
-**GATE exploration-done (Step 2 → 3)**
+**GATE: exploration-done (Step 2 → 3)**
 - cli-explore-agent complete, `outputs/exploration-codebase.json` written and contains ≥1 code anchor
 - ≥1 CLI delegate complete, output landed in `outputs/perspectives.json`
 - discussion area records baseline confidence score
 
-**GATE discussion-round (Step 3 → 4)**
+**GATE: discussion-round (Step 3 → 4)**
 - discussion area contains ≥1 round of interaction with user feedback
 - confidence re-scored ≥1 time and delta shown
 - pressure pass completed ≥1 time
 
-**GATE scoring-complete (Step 4 → 5)**
+**GATE: scoring-complete (Step 4 → 5)**
 - all six dimensions scored
 - each dimension's score cites exploration/perspectives evidence, **not manual Read**
 
-**GATE intent-covered (Step 5 → 6)**
+**GATE: intent-covered (Step 5 → 6)**
 - findings.json decisions and recommendations written
 - Intent Coverage Matrix has no unhandled ❌ (or user confirms defer)
 

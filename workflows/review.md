@@ -285,11 +285,14 @@ The verdict decides the downstream run; the report's needs includes `latest-revi
 
 ## GateRecord
 
-After review completes, inline-record one GateRecord (no separate gate artifact):
+After review completes, inline-record one entry per declared gate (no separate gate artifact):
 
 ```json
-{ "gate": "review", "verdict": "PASS|WARN|BLOCK", "checked_at": now(),
-  "evidence": { "findings": N, "critical": N, "high": N },
+{ "gate": "dimension-coverage", "verdict": "PASS|WARN|BLOCK", "checked_at": now(),
+  "evidence": { "dimensions_covered": N, "findings": N },
+  "artifact": "outputs/review-findings.json" }
+{ "gate": "severity-triaged", "verdict": "PASS|WARN|BLOCK", "checked_at": now(),
+  "evidence": { "critical": N, "high": N, "triaged": N },
   "artifact": "outputs/review-findings.json" }
 ```
 

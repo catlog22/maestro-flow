@@ -259,12 +259,15 @@ Body contains an execution status summary (completed/failed task counts, blocked
 
 ## GateRecord
 
-After execution completes, inline-record one GateRecord. **GATE: execution-complete**
+After execution completes, inline-record one entry per declared gate. **GATE: execution-complete**
 
 ```json
-{ "gate": "execute", "verdict": "ready|ready_with_concerns|blocked", "checked_at": now(),
-  "evidence": { "completed": N, "blocked": N, "self_check": "passed|gaps_found" },
+{ "gate": "execution-complete", "verdict": "ready|ready_with_concerns|blocked", "checked_at": now(),
+  "evidence": { "completed": N, "blocked": N },
   "artifact": "outputs/execution.json" }
+{ "gate": "self-check-passed", "verdict": "ready|ready_with_concerns|blocked", "checked_at": now(),
+  "evidence": { "smoke_ran": true, "self_check": "passed|gaps_found", "critical_violations": N },
+  "artifact": "outputs/self-check.json" }
 ```
 
 BLOCKED conditions: `execution.json` missing, or there are completed tasks but missing summary/status not updated, or Step 4 has an unhandled critical violation.

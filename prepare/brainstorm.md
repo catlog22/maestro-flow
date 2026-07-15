@@ -10,11 +10,12 @@ contract:
     - { path: outputs/design-research.md, kind: design-research, role: attachment, optional: true }
     - { path: "outputs/{role}/analysis.md", kind: analysis, role: attachment }
     - { path: outputs/context-package.json, kind: context-package, alias: brainstorm-context, role: attachment }
+  gates:
+    exit: [guidance-generated, roles-converged]
 refs:
   - { path: ref/interview-mechanics.md, when: Entering the menu Q&A of interactive framework generation }
   - { path: ref/boundary-grill.md, when: The cross-role re-review detects a boundary conflict }
   - { path: ref/finish-work.md, when: The wrap-up phase (auto mode) }
-gates: [guidance-generated, roles-converged]
 ---
 
 # Pre-task Thinking: brainstorm

@@ -12,10 +12,11 @@ contract:
     - { path: outputs/hypotheses.json, kind: hypotheses, role: evidence }
     - { path: outputs/reproduction.json, kind: reproduction, role: evidence }
     - { path: outputs/fix-directions.json, kind: fix-directions, role: attachment }
+  gates:
+    exit: [hypothesis-tested, evidence-grounded]
 refs:
   - { path: ref/scientific-debug.md, when: The full Iron Law / 3-strike / backward tracing discipline is needed }
   - { path: ref/cli-supplementary.md, when: CLI supplementary evidence collection is needed }
-gates: [hypothesis-tested, evidence-grounded]
 ---
 
 # Pre-task Thinking: debug

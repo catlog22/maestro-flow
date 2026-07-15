@@ -14,8 +14,9 @@ contract:
     - { path: .tests/auto-test/state.json, kind: auto-test-state, role: evidence }
     - { path: .tests/auto-test/reflection-log.md, kind: reflection-log, role: attachment }
     - { path: .tests/auto-test/traceability.md, kind: traceability, role: evidence, optional: true }
+  gates:
+    exit: [tests-generated, execution-converged]
 refs: []
-gates: [tests-generated, execution-converged]
 ---
 
 # Pre-task Thinking: auto-test

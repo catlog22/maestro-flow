@@ -10,9 +10,10 @@ contract:
     - { path: outputs/verification.json, kind: verification, alias: latest-verification, role: primary }
     - { path: outputs/requirement-coverage.json, kind: requirement-coverage, role: evidence }
     - { path: outputs/antipattern-report.json, kind: antipattern-report, role: evidence }
+  gates:
+    exit: [goal-backward-verified, nyquist-covered]
 refs:
   - { path: ref/finish-work.md, when: Wrapping up and archiving the verification }
-gates: [goal-backward-verified, nyquist-covered]
 ---
 
 # Pre-task Thinking: verify

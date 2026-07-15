@@ -10,8 +10,9 @@ contract:
   produces:
     - { path: outputs/retrospective.json, kind: retrospective, alias: latest-retrospective, role: primary }
     - { path: outputs/retrospective.md, kind: retrospective-doc, role: attachment }
+  gates:
+    exit: [lenses-complete, insights-routed]
 refs: []
-gates: [lenses-complete, insights-routed]
 ---
 
 # Pre-task Thinking: retrospective

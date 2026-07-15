@@ -239,9 +239,9 @@ Pass → update `uat.md` gap to resolved; still has gaps → report the remainin
 
 Dimensions (4): scenario_coverage, diagnostic_depth, observation_quality, closure_completeness. Factors (weights): requirements_mapped(.30), observation_specificity(.25), user_validation(.20), diagnostic_depth(.15), consistency(.10). Scoring points: init (Step 5), each user response (Step 8), after the gap-fix loop (Step 12).
 
-Quality mechanisms: **Pressure Pass** — >80% pass → ask the user to try an edge case; **Devil's Advocate** — >70% first-pass → challenge scenario difficulty; **Stall Detection** — 2 rounds of gap-fix with no improvement → stop. **GATE: pass-rate-met** — pass rate evaluated against quality thresholds before a pressure pass is required.
+Quality mechanisms: **Pressure Pass** — >80% pass → ask the user to try an edge case; **Devil's Advocate** — >70% first-pass → challenge scenario difficulty; **Stall Detection** — 2 rounds of gap-fix with no improvement → stop. **GATE: pass-rate-met** — each scenario has a real observed outcome (timeout / no-response / missing-entry may never be scored as pass); under `--frontend-verify`, any `[UI-observable]` failure or a write endpoint with no UI entry forces NEEDS_RETRY. (The pressure-pass mechanism above is a separate quality lever, not the gate's definition.)
 
-**Readiness Gate** (blocks Step 13): scenario_coverage < 40% | blocker gap not diagnosed | no pressure pass (if >80%) | unconfirmed remaining gap. The confidence summary is appended to `uat.md`. **GATE: coverage-met** — scenario_coverage ≥ 40% required to pass the Readiness Gate.
+**Readiness Gate** (blocks Step 13): scenario_coverage < 40% | blocker gap not diagnosed | no pressure pass (if >80%) | unconfirmed remaining gap. The confidence summary is appended to `uat.md`. **GATE: coverage-met** — two components must both hold: (1) every mapped scenario source has a corresponding UAT scenario, and (2) the Readiness Gate passes (scenario_coverage ≥ 40%).
 
 ---
 
@@ -296,11 +296,14 @@ The report's needs includes `latest-test` accordingly:
 
 ## GateRecord
 
-Inline-record (no separate evidence.json):
+Inline-record one entry per declared gate (no separate evidence.json):
 
 ```json
-{ "gate": "test", "verdict": "pass|fail", "checked_at": now(),
-  "evidence": { "total": N, "passed": N, "issues": N, "coverage_pct": N },
+{ "gate": "coverage-met", "verdict": "pass|fail", "checked_at": now(),
+  "evidence": { "total": N, "sources_mapped": N, "coverage_pct": N },
+  "artifact": "outputs/test-results.json" }
+{ "gate": "pass-rate-met", "verdict": "pass|fail", "checked_at": now(),
+  "evidence": { "passed": N, "issues": N, "needs_retry": false },
   "artifact": "outputs/test-results.json" }
 ```
 

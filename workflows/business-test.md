@@ -5,6 +5,8 @@
 </required_reading>
 # Business Test Workflow (PRD-Forward)
 
+> **DEPRECATED** — superseded by `auto-test`. This workflow is equivalent to `auto-test max_iter=3` (inner loop cleans test defects, up to 3 outer passes; see `auto-test.md` "Degenerate cases"). Artifacts and gate mapping are covered by the `auto-test.md` migration table. Prefer `auto-test` for new work; this file is retained for backward compatibility.
+
 ## Requirement Coverage
 
 | REQ | Title | AC Total | Passed | Failed | Coverage | Verdict |

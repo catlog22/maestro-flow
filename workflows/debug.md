@@ -234,12 +234,15 @@ The report's needs includes `latest-debug` accordingly:
 
 ## GateRecord
 
-Inline-record (no separate gate artifact):
+Inline-record one entry per declared gate (no separate gate artifact):
 
 ```json
-{ "gate": "debug", "status": "confirmed|partial|inconclusive", "checked_at": now(),
+{ "gate": "hypothesis-tested", "status": "confirmed|partial|inconclusive", "checked_at": now(),
   "evidence": { "clusters": N, "diagnosed": N, "confidence": 0.0 },
   "artifact": "outputs/diagnosis.json" }
+{ "gate": "evidence-grounded", "status": "confirmed|partial|inconclusive", "checked_at": now(),
+  "evidence": { "evidence_records": N, "backward_traced": true },
+  "artifact": "outputs/evidence.ndjson" }
 ```
 
 BLOCKED conditions: `understanding.md` or `evidence.ndjson` missing, or Readiness Gate not passed.

@@ -17,10 +17,11 @@ contract:
     - { path: readiness-report.md, kind: readiness-report, role: evidence }
     - { path: blueprint-summary.md, kind: blueprint-summary, role: attachment }
     - { path: context-package.json, kind: context-package, alias: blueprint-context, role: attachment }
+  gates:
+    exit: [phases-complete, readiness-passed]
 refs:
   - { path: ref/interview-mechanics.md, when: Entering the depth-first menu Q&A of each phase }
   - { path: ref/finish-work.md, when: The wrap-up phase (at gate Pass/Review) }
-gates: [phases-complete, readiness-passed]
 ---
 
 # Pre-task Thinking: blueprint

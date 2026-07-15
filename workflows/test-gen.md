@@ -5,6 +5,8 @@
 </required_reading>
 # Test Generation Workflow
 
+> **DEPRECATED** — superseded by `auto-test`. This workflow is equivalent to `auto-test max_iter=1` (single pass: generate → execute once → log, no adaptive loop; see `auto-test.md` "Degenerate cases"). Artifacts and gate mapping are covered by the `auto-test.md` migration table. Prefer `auto-test` for new work; this file is retained for backward compatibility.
+
 Generate missing automated tests for a phase based on gap analysis from maestro-execute verification gate (Nyquist audit) and quality-test (UAT coverage gaps). Classifies changed files into unit/E2E/skip, discovers test infrastructure, generates a test plan for user approval, then writes tests using RED-GREEN methodology.
 
 Tests expose bugs -- fixing is for quality-debug or maestro-execute.

@@ -11,10 +11,11 @@ contract:
     - { path: outputs/review-findings.json, kind: review-findings, alias: latest-review, role: primary }
     - { path: outputs/spec-conflicts.json, kind: spec-conflicts, role: evidence }
     - { path: outputs/issue-candidates.json, kind: issue-candidates, role: attachment }
+  gates:
+    exit: [dimension-coverage, severity-triaged]
 refs:
   - { path: ref/spec-conflict.md, when: A contradiction between code and a spec entry is found }
   - { path: ref/cli-supplementary.md, when: standard/deep needs CLI cross-validation }
-gates: [dimension-coverage, severity-triaged]
 ---
 
 # Pre-task Thinking: review

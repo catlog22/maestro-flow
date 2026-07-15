@@ -9,8 +9,9 @@ contract:
     - { path: outputs/index.json, kind: index, role: attachment }
     - { path: "outputs/.summaries/TASK-*-summary.md", kind: task-summary, role: attachment }
     - { path: outputs/verification.json, kind: verification, role: evidence, optional: true }
+  gates:
+    exit: [plan-verified, tasks-committed]
 refs: []
-gates: [plan-verified, tasks-committed]
 ---
 
 # Pre-task Thinking: quick

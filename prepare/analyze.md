@@ -10,11 +10,12 @@ contract:
   produces:
     - { path: outputs/findings.json, kind: findings, alias: current-analysis, role: primary }
     - { path: outputs/risk-matrix.json, kind: risk-matrix, role: evidence }
+  gates:
+    exit: [exploration-done, discussion-round, scoring-complete, intent-covered]
 refs:
   - { path: ref/boundary-grill.md, when: A boundary/responsibility conflict is detected during exploration and discussion }
   - { path: ref/issue-gaps-analyze.md, when: --gaps mode triggers, taking the issue root-cause analysis branch }
   - { path: ref/finish-work.md, when: Wrapping up, archiving, and extracting spec/knowhow }
-gates: [exploration-done, discussion-round, scoring-complete, intent-covered]
 ---
 
 # Pre-task Thinking: analyze

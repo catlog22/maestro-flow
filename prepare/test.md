@@ -15,10 +15,11 @@ contract:
     - { path: outputs/uat.md, kind: uat-log, role: attachment }
     - { path: outputs/issue-candidates.json, kind: issue-candidates, role: attachment, optional: true }
     - { path: outputs/e2e-results.json, kind: e2e-results, role: evidence, optional: true }
+  gates:
+    exit: [coverage-met, pass-rate-met]
 refs:
   - { path: ref/frontend-verify.md, when: --frontend-verify is passed, taking the deterministic browser acceptance path }
   - { path: ref/severity-inference.md, when: Inferring issue severity from the user's natural language }
-gates: [coverage-met, pass-rate-met]
 ---
 
 # Pre-task Thinking: test
@@ -73,5 +74,5 @@ Context injection (optional, may continue if missing):
 
 ## Gate Intent
 
-- `coverage-met`: every mapped scenario source (requirements, tool steps, review findings, debug root causes) is represented as a UAT scenario; the readiness gate is passed and `test-results.json` is written.
-- `pass-rate-met`: each scenario has a real observed outcome (no timeout / no-response / missing-entry scored as pass); in `--frontend-verify`, any `[UI-observable]` failure or a write endpoint with no UI entry forces NEEDS_RETRY.
+- `coverage-met`: two components must both hold — (1) every mapped scenario source (requirements, tool steps, review findings, debug root causes) has a corresponding UAT scenario, and (2) the Readiness Gate passes (scenario_coverage ≥ 40%). `test-results.json` is written.
+- `pass-rate-met`: each scenario has a real observed outcome (timeout / no-response / missing-entry may never be scored as pass); under `--frontend-verify`, any `[UI-observable]` failure or a write endpoint with no UI entry forces NEEDS_RETRY.

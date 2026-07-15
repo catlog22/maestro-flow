@@ -39,18 +39,18 @@ Agent mode (auto-selected by scope):
 
 ## Step Gates (Create mode, mandatory blocking)
 
-**GATE context-collected (Step 1 → Step 2)**
+**GATE: context-collected (Step 1 → Step 2)**
 - upstream context loaded (analyze findings / --from source / roadmap)
 - codebase docs read (if ARCHITECTURE.md / FEATURES.md exist)
 - Wiki searched by phase keywords
 - Blocking: no context source at all → E001
 
-**GATE plan-generated (Step 3 → Step 4)**
+**GATE: plan-generated (Step 3 → Step 4)**
 - plan.json + tasks/TASK-*.json written out by the planner agent
 - inline planning in the main flow is FORBIDDEN
 - Blocking: planner produced no plan.json or tasks → cannot proceed to checking
 
-**GATE plan-checked (Step 4 → Step 5)**
+**GATE: plan-checked (Step 4 → Step 5)**
 - plan-checker passes (or minor issues confirmed)
 - boundary grill complete
 - confidence scored via the 5-dimension factor model
@@ -58,7 +58,7 @@ Agent mode (auto-selected by scope):
 - UI plan: every delivery wave has a `[UI-observable]` criterion
 - Blocking: checker found a critical, or a UI plan lacks `[UI-observable]` coverage
 
-**GATE plan-confirmed (Step 5 → wrap-up)**
+**GATE: plan-confirmed (Step 5 → wrap-up)**
 - user confirms (execute/modify/cancel)
 - Blocking: no confirmation → don't register artifacts, don't report completion
 

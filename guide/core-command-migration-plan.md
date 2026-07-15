@@ -2,6 +2,8 @@
 title: "核心命令迁移行动规划 — Session/Run 模型"
 ---
 
+> **状态（2026-07-15）**：迁移已落地，本文转为历史规划参考。contract 以实现为准——各命令的 consumes/produces/gates 权威定义在 `prepare/*.md`（gates 为 `contract.gates.exit` 字符串列表；entry 门不显式声明，隐式派生自 required consumes）。本文 §五 的 `gates:` 字段已同步为实现名；aliases/kinds 若与 prepare 文件不一致，以 prepare 为准。现行架构见 `guide/session-run-architecture.md`。
+>
 > 配套 `session-run-structure-guide.md`（目标文件体系定义）。本文只规划**核心命令 `.md` 的改造动作**，不重复结构定义；schema/命名/aref 语法一律引用结构指南。
 > **核心命令** = `maestro-analyze` · `maestro-plan` · `maestro-execute` · **verify**（垂直切片）+ `quality-review` · `quality-test` · `quality-debug`（质量核心）。上游命令（grill/brainstorm/blueprint/roadmap）沿用同骨架，列为 Phase 3。
 
@@ -120,8 +122,8 @@ contract:
     - { kind: findings,   primary: true, path: outputs/findings.json, alias: current-analysis }
     - { kind: risk-matrix,               path: outputs/risk-matrix.json }
   gates:
-    entry: [inputs-resolved]
-    exit:  [exploration-evidenced, intent-coverage-complete, confidence-threshold-met, analysis-verdict-ready]
+    # entry 门隐式派生自 consumes(required)
+    exit: [exploration-done, discussion-round, scoring-complete, intent-covered]
 ```
 
 - **产物迁移**：`explorations + perspectives + conclusions.json` → 合并为 `findings.json`；`discussion.md`/`analysis.md` → `report.md §讨论`；删 `context.md`/`context-package.json`。
@@ -143,8 +145,8 @@ contract:
     - { kind: waves,                          path: outputs/waves.json }
     - { kind: dependency-graph,               path: outputs/dependency-graph.json }
   gates:
-    entry: [planning-context-loaded]
-    exit:  [tasks-generated-by-planner, task-contracts-complete, dependency-graph-valid, plan-checker-passed, plan-confirmed]
+    # entry 门隐式派生自 consumes(required)
+    exit: [context-collected, plan-generated, plan-checked, plan-confirmed]
 ```
 
 - **产物迁移**：`.task/TASK-*.json` → `outputs/tasks/TASK-*.json`（不再隐藏目录）；`plan-check` → `evidence/plan-check.json` + `evidence.json`；删 Session 级 `tasks.json` 设想。
@@ -166,8 +168,8 @@ contract:
     - { kind: self-check,                     path: outputs/self-check.json }
     - { kind: change-manifest,                path: outputs/change-manifest.json }
   gates:
-    entry: [plan-sealed, task-claims-valid]
-    exit:  [task-results-complete, changes-within-scope, self-check-passed, reflection-captured]
+    # entry 门隐式派生自 consumes(required)
+    exit: [execution-complete, self-check-passed]
 ```
 
 - **产物迁移**：`.summaries/` → `outputs/task-results.json`；**`verification.json` → `self-check.json`（更名，仅 build/test/static 冒烟）**；`reflection.md` → `report.md §复盘`。
@@ -189,8 +191,8 @@ contract:
     - { kind: requirement-coverage,                path: outputs/requirement-coverage.json }
     - { kind: antipattern-report,                  path: outputs/antipattern-report.json }
   gates:
-    entry: [plan-and-execution-sealed]
-    exit:  [requirements-traced, constraints-validated, verification-verdict-ready]
+    # entry 门隐式派生自 consumes(required)
+    exit: [goal-backward-verified, nyquist-covered]
 ```
 
 - **改造点**：`verification.json` verdict = `passed|passed_with_concerns|failed`；`latest-verification` alias 指本 Run primary；**post-verify 决策点**消费它（结构指南 §5.2 orchestration）——Ralph 据此决定放行 / 插 debug→fix 环。
@@ -209,8 +211,8 @@ contract:
     - { kind: spec-conflicts,                 path: outputs/spec-conflicts.json }
     - { kind: issue-candidates,               path: outputs/issue-candidates.json }
   gates:
-    entry: [review-target-sealed, review-specs-loaded]
-    exit:  [dimensions-complete, findings-evidenced, spec-conflicts-classified, issue-candidates-ready]
+    # entry 门隐式派生自 consumes(required)
+    exit: [dimension-coverage, severity-triaged]
 ```
 
 - **产物迁移**：`review.json` → `findings.json`；质量判断 → `evidence.json`；Gate → `gates.json`（不生成 Run 级 `quality-gates.json`）。
@@ -230,8 +232,8 @@ contract:
     - { kind: acceptance,                  path: outputs/acceptance.json }
     - { kind: coverage,                    path: outputs/coverage.json }
   gates:
-    entry: [test-target-sealed, test-environment-ready]
-    exit:  [required-scenarios-executed, results-evidenced, acceptance-verdict-ready]
+    # entry 门隐式派生自 consumes(required)
+    exit: [coverage-met, pass-rate-met]
 ```
 
 - **产物迁移**：**`uat.md` → `acceptance.json`（机器真相源）**；`test-results.json` 按 scenario ID 组织；补 `e2e-results.json`（如适用）。
@@ -251,8 +253,8 @@ contract:
     - { kind: reproduction,                  path: outputs/reproduction.json }
     - { kind: fix-directions,                path: outputs/fix-directions.json }
   gates:
-    entry: [symptom-anchored, prior-attempt-loaded]   # retry 时 prior-attempt-loaded blocking
-    exit:  [root-cause-evidenced, fix-direction-specific, source-remains-readonly]
+    # entry 门隐式派生自 consumes(required)；retry 前传约束见 prepare/debug.md
+    exit: [hypothesis-tested, evidence-grounded]
 ```
 
 - **产物迁移**：`understanding.md` → `report.md §理解`；`evidence.ndjson` → `evidence/` + 结论入 `evidence.json`；`diagnosis.json` 分 `confirmed/suspected/rejected`。
@@ -278,8 +280,8 @@ contract:
     - { kind: terminology,                    path: outputs/terminology.json, alias: current-terminology }
     - { kind: context-package,                path: outputs/context-package.json, alias: initial-context }
   gates:
-    entry: [topic-resolved]
-    exit:  [branches-fully-walked, decisions-evidenced, terminology-structured]
+    # entry 门隐式派生自 consumes(required)
+    exit: [terminology-aligned, branches-walked]
 ```
 
 - **产物迁移**：直写 outputs/；将 `terminology.md` 改写为类型定义的 `outputs/terminology.json`；`grill-report.md` 带 YAML frontmatter kind = "grill-report"。
@@ -298,8 +300,8 @@ contract:
     - { kind: decisions,                         path: outputs/decisions.json, alias: brainstorm-decisions }
     - { kind: brainstorm-roles,                  path: outputs/roles/ }
   gates:
-    entry: [grill-context-resolved]
-    exit:  [roles-fully-elaborated, decisions-converged]
+    # entry 门隐式派生自 consumes(required)
+    exit: [guidance-generated, roles-converged]
 ```
 
 - **产物迁移**：直写 outputs/；多角色的细分讨论移入 `outputs/roles/` 目录；`decisions.json` 存放脑暴敲定的方向。
@@ -322,8 +324,8 @@ contract:
     - { kind: epics-pack,                       path: outputs/epics/ }
     - { kind: readiness-report,                 path: outputs/readiness-report.json }
   gates:
-    entry: [spec-context-resolved]
-    exit:  [prd-requirements-rfc, adrs-conformed-to-arch, epic-dag-valid, readiness-threshold-passed]
+    # entry 门隐式派生自 consumes(required)
+    exit: [phases-complete, readiness-passed]
 ```
 
 - **产物迁移**：所有子目录包全部输出到 `outputs/` 下，readiness-report 转为 `outputs/readiness-report.json`。
@@ -341,8 +343,8 @@ contract:
     - { kind: roadmap,        primary: true, path: outputs/roadmap.md }
     - { kind: milestones-pack,               path: outputs/milestones.json, alias: current-roadmap }
   gates:
-    entry: [blueprint-loaded]
-    exit:  [phases-milestoned, requirements-mapped-to-phases]
+    # entry 门隐式派生自 consumes(required)
+    exit: [dag-valid, sessions-registered]
 ```
 
 - **产物迁移**：不直接修改全局 `state.json`；直写 `outputs/roadmap.md` 及包含全部阶段定义的 `outputs/milestones.json`。

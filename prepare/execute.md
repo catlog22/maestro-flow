@@ -10,9 +10,10 @@ contract:
     - { path: outputs/task-results.json, kind: task-results, role: attachment }
     - { path: outputs/self-check.json, kind: self-check, role: evidence }
     - { path: outputs/change-manifest.json, kind: change-manifest, role: evidence }
+  gates:
+    exit: [execution-complete, self-check-passed]
 refs:
   - { path: ref/finish-work.md, when: Wrapping up, archiving, and extracting incremental learnings }
-gates: [execution-complete, self-check-passed]
 ---
 
 # Pre-task Thinking: execute
@@ -55,4 +56,4 @@ The output of execute is "an implementation consistent with the real diff + trac
 ## Gate Intent
 
 - `execution-complete`: every task in the plan reaches a terminal state (done / blocked with checkpoint); `execution.json` is written and completed tasks carry a summary + status.
-- `self-check-passed`: the build/test smoke ran this round and no critical tech-stack violation (allowed_languages / disallowed_imports) is left unhandled — a smoke gap or an unhandled violation blocks.
+- `self-check-passed`: the gate fails only when the build/test smoke was not run this round or an unhandled critical tech-stack violation (allowed_languages / disallowed_imports) remains. A self-check result of `gaps_found` does **not** block run completion — gaps are recorded as concerns in the report for the separate verify run to consume (formal acceptance lives in verify, not here).

@@ -243,12 +243,15 @@ The verdict decides the downstream run; the report's needs includes `latest-veri
 
 ## GateRecord
 
-After verification completes, inline-record one GateRecord:
+After verification completes, inline-record one entry per declared gate:
 
 ```json
-{ "gate": "verify", "verdict": "pass|warn|fail|blocked", "checked_at": now(),
-  "evidence": { "criteria_total": N, "passed": N, "failed": N, "gaps": N, "coverage_score": 0.0 },
+{ "gate": "goal-backward-verified", "verdict": "pass|warn|fail|blocked", "checked_at": now(),
+  "evidence": { "criteria_total": N, "passed": N, "failed": N, "gaps": N },
   "artifact": "outputs/verification.json" }
+{ "gate": "nyquist-covered", "verdict": "pass|warn|fail|blocked", "checked_at": now(),
+  "evidence": { "coverage_score": 0.0, "silent_omissions": N },
+  "artifact": "outputs/requirement-coverage.json" }
 ```
 
 BLOCKED conditions: `verification.json` missing, or a criterion not verified, or a failed criterion lacks a corresponding gap, or coverage has a silent omission.

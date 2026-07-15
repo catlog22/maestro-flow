@@ -8,10 +8,11 @@ contract:
   produces:
     - { path: outputs/roadmap.json, kind: roadmap, role: primary, alias: current-roadmap }
     - { path: outputs/roadmap.md, kind: roadmap-doc, role: attachment }
+  gates:
+    exit: [dag-valid, sessions-registered]
 refs:
   - { path: ref/interview-mechanics.md, when: Entering the interactive interview Q&A loop }
   - { path: ref/roadmap-template.md, when: Generating the roadmap.md artifact }
-gates: [dag-valid, sessions-registered]
 ---
 
 # Pre-task Thinking: roadmap
