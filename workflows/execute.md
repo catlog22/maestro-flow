@@ -192,7 +192,7 @@ If `verificationTool == "Skip"` or there are no completed tasks, skip. **This is
    - Substance: files have real implementation, not stub/placeholder/TODO-only/empty return
    - Wiring: files are imported and used by the system, not orphaned
    - Anti-patterns: scan for TODO/FIXME/HACK, placeholder, debug print, disabled tests
-4. Write outputs/self-check.json:
+4. Write outputs/self-check.json:  # GATE: self-check-passed (overall == "passed")
    { checks:[{criterion, status:"verified"|"failed"|"uncertain", evidence}],
      structure:{existence[], substance[], wiring[]}, anti_patterns[],
      overall:"passed"|"gaps_found" }
@@ -259,7 +259,7 @@ Body contains an execution status summary (completed/failed task counts, blocked
 
 ## GateRecord
 
-After execution completes, inline-record one GateRecord:
+After execution completes, inline-record one GateRecord. **GATE: execution-complete**
 
 ```json
 { "gate": "execute", "verdict": "ready|ready_with_concerns|blocked", "checked_at": now(),

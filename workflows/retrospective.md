@@ -233,7 +233,7 @@ Return ONLY a single JSON object, no prose, matching this schema:
 
 Spawn all lenses in parallel. Collect into `lens_results`. If any fails, log W001, proceed with successful lenses; flag retrospective as [LOW CONFIDENCE] (partial lenses).
 
-**GATE Step 4→5**: REQUIRED lens analyses complete BEFORE synthesis; BLOCKED if lens_results missing.
+**GATE Step 4→5**: REQUIRED lens analyses complete BEFORE synthesis; BLOCKED if lens_results missing. **GATE: lenses-complete**
 
 ---
 
@@ -335,7 +335,7 @@ insight.routed_id = issue_id
 
 ### Update retrospective.json with routed_ids
 
-After all routings complete, re-write `retrospective.json` with the `routed_id` field on each insight populated. Re-render `retrospective.md` routing recommendations table to show the resolved IDs.
+After all routings complete, re-write `retrospective.json` with the `routed_id` field on each insight populated. Re-render `retrospective.md` routing recommendations table to show the resolved IDs. **GATE: insights-routed**
 
 ---
 

@@ -167,6 +167,8 @@ AskUserQuestion({
 
 ### 3.4: Write Terminology File
 
+**GATE: terminology-aligned** — terminology.md written with code-collision resolutions.
+
 Write `{output_dir}/terminology.md`:
 
 ```markdown
@@ -310,6 +312,8 @@ All questions asked (or user signals "enough") → update branch status, update 
 ---
 
 ## Step 5: Synthesis
+
+Entered after all depth-selected branches are walked to completion. **GATE: branches-walked**
 
 ### 5.1: Decision Summary
 

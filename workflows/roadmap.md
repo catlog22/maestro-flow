@@ -143,7 +143,7 @@ If only 1-2 conditions are met → keep in the same Session, use wave dependenci
 Build the session DAG from the requirement (or upstream context loaded via `--from`).
 
 1. **Parse requirement** into goal, constraints, stakeholders. BLOCKED if no parsed requirement — cannot decompose.
-2. **Decompose** into sessions with intent, scope, success criteria. Define DAG edges with `depends_on`. Every Active requirement from project.md maps to exactly one session. No circular dependencies (E003 if detected).
+2. **Decompose** into sessions with intent, scope, success criteria. Define DAG edges with `depends_on`. Every Active requirement from project.md maps to exactly one session. No circular dependencies (E003 if detected). **GATE: dag-valid**
 3. **Refine** against the sizing checklist. Present the DAG for approval (auto-approved with `-y`).
 
 ### Revise mode (`--revise`)
@@ -169,7 +169,7 @@ Do NOT write to `.workflow/roadmap.md` — roadmap is a Run artifact, not a proj
 
 ### Session Registration
 
-Artifact registration and state updates (session DAG registration, activation) are handled by `maestro run complete`.
+Artifact registration and state updates (session DAG registration, activation) are handled by `maestro run complete`. **GATE: sessions-registered** — every session written to `state.json.sessions[]` with `roadmap_artifact_id` and `seed_ref`.
 
 ---
 

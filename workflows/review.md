@@ -134,6 +134,9 @@ verdict:
   PASS  → no critical, no high
 ```
 
+**GATE: dimension-coverage** — all requested dimensions merged into all_findings (no dimension silently dropped).
+**GATE: severity-triaged** — every finding graded and severity_dist computed BEFORE verdict.
+
 ---
 
 ## Step 6.5: CLI supplementary analysis (standard + deep)

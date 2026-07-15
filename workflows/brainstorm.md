@@ -235,7 +235,7 @@ Seven sub-phases producing guidance-specification.md:
 
 **Output**: `{output_dir}/guidance-specification.md`, session metadata (workflow-session.json)
 
-**GATE Step 3→4**: REQUIRED `guidance-specification.md` written with §10 Feature Decomposition list; BLOCKED if `guidance-specification.md` missing or §10 feature list absent.
+**GATE Step 3→4**: REQUIRED `guidance-specification.md` written with §10 Feature Decomposition list; BLOCKED if `guidance-specification.md` missing or §10 feature list absent. **GATE: guidance-generated**
 
 ### Step 3.5: Visual Style Foundation (Auto Mode, conditional)
 
@@ -290,7 +290,7 @@ Agent({
 - §4: listed files exist on disk, feature coverage matches
 - system-architect: §3 has "Data Model" and "State Machine" headings
 
-**GATE Step 4→4.5**: REQUIRED all `{role}/analysis.md` verified on disk via Glob (per role in selected_roles); BLOCKED if any `analysis.md` missing.
+**GATE Step 4→4.5**: REQUIRED all `{role}/analysis.md` verified on disk via Glob (per role in selected_roles); BLOCKED if any `analysis.md` missing. **GATE: roles-converged**
 
 ### Step 4.5: Cross-Role Review (Auto Mode)
 

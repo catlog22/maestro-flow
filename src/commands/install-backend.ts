@@ -493,7 +493,7 @@ export function pruneOrphans(
       const srcPath = join(src, entry);
       const destPath = join(dest, entry);
       if (statSync(srcPath).isDirectory() && existsSync(destPath) && statSync(destPath).isDirectory()) {
-        removed += pruneOrphans(srcPath, destPath);
+        removed += pruneOrphans(srcPath, destPath, fileFilter);
       }
       continue;
     }

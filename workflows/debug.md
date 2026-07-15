@@ -144,7 +144,7 @@ Dimensions (4): hypothesis_quality, evidence_completeness, root_cause_isolation,
 
 Quality mechanisms: **Pressure Pass** (before Step 9) cross-checks confirmed vs refuted; **Devil's Advocate** (root_cause_isolation > 0.7) "is the root cause deeper?"; **Stall Detection** (no new evidence + delta < 5% for 2 consecutive continuations) "investigation may be stalling".
 
-**Readiness Gate** (blocks Step 9): evidence_completeness ≥ 40% | pressure pass done | no contradicting evidence | fix_direction has specific files. If blocked, ask: supplement the investigation or ignore risk and confirm. The confidence table is appended to `understanding.md`.
+**Readiness Gate** (blocks Step 9): evidence_completeness ≥ 40% | pressure pass done | no contradicting evidence | fix_direction has specific files. If blocked, ask: supplement the investigation or ignore risk and confirm. The confidence table is appended to `understanding.md`. **GATE: evidence-grounded**
 
 ### Step 7.1: Update issue candidate diagnosis
 
@@ -159,6 +159,8 @@ Skip when standalone. For each diagnosed gap, update the uat.md Gaps of `latest-
 ---
 
 ## Step 9: Handle ROOT CAUSE FOUND
+
+Reached when hypotheses have been tested to confirmation. **GATE: hypothesis-tested**
 
 ```
 ------------------------------------------------------------

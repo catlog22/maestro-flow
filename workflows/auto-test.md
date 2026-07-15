@@ -392,7 +392,7 @@ Merge write-results into master state. Delete temp CSV. Proceed to next layer or
 
 **If `--max-iter 1`:** After all layers written and run once, jump directly to Step 8 (single-pass mode, replaces test-gen behavior). Skip Steps 6-7.
 
-**GATE Step 5→6**: write-results merged into master state BEFORE execution; REQUIRED: `.tests/auto-test/.csv-session/layer-L*-write-results.csv` merged and temp CSV deleted; BLOCKED if write-results missing or unmerged.
+**GATE Step 5→6**: write-results merged into master state BEFORE execution; REQUIRED: `.tests/auto-test/.csv-session/layer-L*-write-results.csv` merged and temp CSV deleted; BLOCKED if write-results missing or unmerged. **GATE: tests-generated**
 
 ---
 
@@ -497,7 +497,7 @@ OUTER LOOP (max_iter iterations):
       Aggressive --(regression)--> Surgical --(fixed)--> Aggressive
       Any --(stuck 3+ iters)--> Reflective --(insight)--> Conservative
 
-  CONVERGENCE CHECK:
+  CONVERGENCE CHECK:  # GATE: execution-converged
     pass_rate >= threshold (95%) → Step 8 (converged)
     iteration >= max_iter → Step 8 (max_iter_reached)
     all remaining failures = code_defect → Step 8 (confirmed_defects)

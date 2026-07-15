@@ -284,7 +284,7 @@ Score on 4 dimensions (25% each):
 3. **Traceability**: goals → requirements → architecture → epics (matrix generated)
 4. **Depth**: acceptance criteria testable, ADRs justified, stories estimable
 
-Gate decision: Pass (>=80) / Review (60-79) / Fail (<60)
+Gate decision: Pass (>=80) / Review (60-79) / Fail (<60) — **GATE: readiness-passed** (Pass/Review)
 
 **Step 8.2: Generate Reports**
 - `readiness-report.md` — quality scores, issue list (Error/Warning/Info), traceability matrix
@@ -324,7 +324,7 @@ Triggered when Phase 6 score < 60%.
 
 ### Step 10: Final Handoff
 
-Blueprint specification package is complete. Suggest next workflow steps.
+Blueprint specification package is complete (all 6 phases done). Suggest next workflow steps. **GATE: phases-complete**
 
 **Step 10.1: Handoff Options (AskUserQuestion)**
 

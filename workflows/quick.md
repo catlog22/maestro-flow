@@ -185,7 +185,7 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: Spawn `workflow-plan-checker` 
 - If iteration_count < 2: display "Sending back to planner for revision... (iteration {N}/2)", spawn planner with revision context + checker issues, re-check, increment.
 - If iteration_count >= 2: display "Max iterations reached. {N} issues remain." Offer 1) Force proceed, 2) Abort; if Force proceed, flag plan as [LOW CONFIDENCE] (remaining issues).
 
-**GATE Step 6→7**: REQUIRED plan.json verified by plan-checker BEFORE execution; BLOCKED if plan.json not verified.
+**GATE Step 6→7**: REQUIRED plan.json verified by plan-checker BEFORE execution; BLOCKED if plan.json not verified. **GATE: plan-verified**
 
 ---
 
@@ -229,7 +229,7 @@ Artifact registration and state updates are handled by `maestro run complete`.
 
 ## Step 10: Commit and Complete
 
-Commit quick task artifacts — stage ONLY files modified by the task (from `.summaries/TASK-*-summary.md` "Files modified" list) plus the Run artifacts and state.json; confirm with `AskUserQuestion` showing staged files and proposed commit message (unless `-y`, then auto-commit):
+Commit quick task artifacts — stage ONLY files modified by the task (from `.summaries/TASK-*-summary.md` "Files modified" list) plus the Run artifacts and state.json; confirm with `AskUserQuestion` showing staged files and proposed commit message (unless `-y`, then auto-commit). **GATE: tasks-committed**
 ```bash
 git add "${QUICK_DIR}/" .workflow/state.json
 git commit -m "quick({slug}): ${DESCRIPTION}"

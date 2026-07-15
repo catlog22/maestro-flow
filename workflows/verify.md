@@ -102,6 +102,8 @@ Each gap: { id:"GAP-N", type:"missing_feature"|"incomplete_implementation"|"brok
             severity:"critical"|"high"|"medium"|"low", description, fix_direction }
 ```
 
+**GATE: goal-backward-verified** — all must-have truths resolved across Layers 1-3 (existence/substance/wiring) with gaps identified BEFORE anti-pattern scan.
+
 ---
 
 ## Step 2: Anti-pattern scan
@@ -148,7 +150,7 @@ Write `outputs/requirement-coverage.json`:
   "gaps": [ { "requirement":"REQ-002", "description":"...", "suggested_test":"..." } ] }
 ```
 
-Each requirement must be explicitly marked covered/partial/uncovered, no silent omission. Coverage below threshold records a warning.
+Each requirement must be explicitly marked covered/partial/uncovered, no silent omission. Coverage below threshold records a warning. **GATE: nyquist-covered** — every requirement explicitly classified covered/partial/uncovered (no silent omission).
 
 ---
 

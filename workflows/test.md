@@ -239,9 +239,9 @@ Pass → update `uat.md` gap to resolved; still has gaps → report the remainin
 
 Dimensions (4): scenario_coverage, diagnostic_depth, observation_quality, closure_completeness. Factors (weights): requirements_mapped(.30), observation_specificity(.25), user_validation(.20), diagnostic_depth(.15), consistency(.10). Scoring points: init (Step 5), each user response (Step 8), after the gap-fix loop (Step 12).
 
-Quality mechanisms: **Pressure Pass** — >80% pass → ask the user to try an edge case; **Devil's Advocate** — >70% first-pass → challenge scenario difficulty; **Stall Detection** — 2 rounds of gap-fix with no improvement → stop.
+Quality mechanisms: **Pressure Pass** — >80% pass → ask the user to try an edge case; **Devil's Advocate** — >70% first-pass → challenge scenario difficulty; **Stall Detection** — 2 rounds of gap-fix with no improvement → stop. **GATE: pass-rate-met** — pass rate evaluated against quality thresholds before a pressure pass is required.
 
-**Readiness Gate** (blocks Step 13): scenario_coverage < 40% | blocker gap not diagnosed | no pressure pass (if >80%) | unconfirmed remaining gap. The confidence summary is appended to `uat.md`.
+**Readiness Gate** (blocks Step 13): scenario_coverage < 40% | blocker gap not diagnosed | no pressure pass (if >80%) | unconfirmed remaining gap. The confidence summary is appended to `uat.md`. **GATE: coverage-met** — scenario_coverage ≥ 40% required to pass the Readiness Gate.
 
 ---
 
