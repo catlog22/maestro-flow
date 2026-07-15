@@ -113,12 +113,16 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   let backupPath: string | null = null;
   const warnings: string[] = [];
 
+  // Pre-scan components once (shared by backup + component-install phases)
+  const components = (config.installComponents || config.backupClaudeMd || config.backupAll)
+    ? scanComponents(pkgRoot, config.mode, config.projectPath)
+        .filter((c) => c.available && config.selectedComponentIds.includes(c.def.id))
+    : [];
+
   // --- Backup ---
   if (config.backupClaudeMd || config.backupAll) {
     if (cancelled()) throw new CancelledError();
     progress('backup', 'active', 'Creating backup...');
-    const components = scanComponents(pkgRoot, config.mode, config.projectPath)
-      .filter((c) => c.available && config.selectedComponentIds.includes(c.def.id));
     backupPath = createTargetBackup(components, {
       backupClaudeMd: config.backupClaudeMd,
       backupAll: config.backupAll,
@@ -153,14 +157,13 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   // --- Components ---
   if (config.installComponents) {
     if (cancelled()) throw new CancelledError();
-    progress('components', 'active', 'Scanning...');
     const stats: CopyStats = { files: 0, dirs: 0, skipped: 0 };
-    const components = scanComponents(pkgRoot, config.mode, config.projectPath)
-      .filter((c) => c.available && config.selectedComponentIds.includes(c.def.id));
+    const total = components.length;
 
-    for (const comp of components) {
+    for (let i = 0; i < total; i++) {
+      const comp = components[i];
       if (cancelled()) throw new CancelledError();
-      progress('components', 'active', comp.def.label);
+      progress('components', 'active', `[${i + 1}/${total}] ${comp.def.label}`);
       if (comp.def.build) {
         const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
         stats.files += result.files;

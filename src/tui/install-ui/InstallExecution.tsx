@@ -137,9 +137,22 @@ export function InstallExecution({ config, pkgRoot, version, onComplete }: Insta
     return () => { cancelledRef.current = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const doneCount = steps.filter((s) => s.status === 'done').length;
-  const totalCount = steps.length;
-  const percent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+  // Weighted progress: components step gets weight proportional to component count
+  const componentWeight = config.installComponents ? Math.max(config.selectedComponentIds.length, 1) : 1;
+  const percent = (() => {
+    let totalW = 0, doneW = 0;
+    for (const step of steps) {
+      const w = step.key === 'components' ? componentWeight : 1;
+      totalW += w;
+      if (step.status === 'done') {
+        doneW += w;
+      } else if (step.status === 'active') {
+        const m = step.detail.match(/\[(\d+)\/(\d+)\]/);
+        if (m) doneW += ((parseInt(m[1], 10) - 1) / parseInt(m[2], 10)) * w;
+      }
+    }
+    return totalW > 0 ? Math.round((doneW / totalW) * 100) : 0;
+  })();
 
   const timeStr = elapsed >= 60
     ? `${Math.floor(elapsed / 60)}m ${(elapsed % 60).toString().padStart(2, '0')}s`

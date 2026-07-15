@@ -491,11 +491,12 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
 
   // --- Actions ---
   const toggleStep = useCallback((id: string) => {
+    if (id === 'embedding') return; // config-only item, no toggle
     if (ALL_PLATFORMS.includes(id as Platform)) {
       togglePlatform(id as Platform);
       return;
     }
-    if (ADDON_IDS.has(id)) {
+    if (id === 'chinese' || ADDON_IDS.has(id)) {
       toggleAddon(id);
       return;
     }
