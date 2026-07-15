@@ -1,7 +1,7 @@
 ---
 name: maestro-next
 description: Single-step recommendation engine — route intent to the best next step, with companion utilities
-argument-hint: "<intent> [-y] [--dry-run] [--top N] [--list] [--suggest] [--note <text>] [--promote] [--lite]"
+argument-hint: "<intent>|--list|--suggest [-y] [--dry-run]"
 allowed-tools:
   - Read
   - Write
@@ -53,7 +53,7 @@ $ARGUMENTS — intent text + optional flags.
 6. Intent text present → S_STATE → S_RANK → S_PRESENT
 7. No arguments → lifecycle inference for natural next step
 
-**Candidate pool:** All 14 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) are NEVER in the candidate pool.
+**Candidate pool:** All 13 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) and standalone commands (`maestro-grill`) are NEVER in the candidate pool.
 </context>
 
 <invariants>
@@ -158,7 +158,7 @@ cat .workflow/state.json 2>/dev/null
 
 **Lifecycle main line:**
 ```
-init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
+init → {brainstorm | blueprint | analyze-macro} → roadmap
   → [per session] analyze → plan → execute
   → [quality gate] review → auto-test → test
   → session-seal → next dep-ready session
@@ -179,32 +179,33 @@ init → {grill | brainstorm | blueprint | analyze-macro} → roadmap
 
 **Intent → step routing table (candidate pool):**
 
-| Intent keywords | Recommended step |
-|----------------|-----------------|
-| brainstorm / explore / ideate | brainstorm |
-| blueprint / spec-generate / formal doc | blueprint |
-| analyze / multi-dimension / investigate | analyze |
-| plan / task decomposition / breakdown | plan |
-| execute / implement / build | execute |
-| verify / acceptance / validate | verify |
-| debug / investigate / bug / root cause | debug |
-| review / code review / audit | review |
-| test / UAT / coverage | test / auto-test |
-| grill / pressure test / stress test | grill |
-| roadmap / milestone / phasing | roadmap |
-| quick / rapid / lightweight | quick |
-| retrospective / retro / lessons | retrospective |
-| refactor / tech debt | quality-refactor (retained skill) |
-| sync docs | manage sync codebase (retained skill) |
-| issue / defect | manage issue (retained skill) |
-| wiki / knowledge graph | manage knowledge wiki (retained skill) |
-| spec / rule / constraint | spec load / spec add (retained skill) |
-| init / project setup | maestro-init (retained skill) |
-| status / dashboard | manage status (retained skill) |
-| security / OWASP | security-audit (retained skill) |
-| learn / explore code / follow | learn follow / learn investigate (retained skill) |
-| harvest / extract knowledge | manage knowledge harvest (retained skill) |
-| fork / parallel dev | maestro-fork (retained skill) |
+| Intent keywords | Recommended step | What it does |
+|----------------|-----------------|--------------|
+| brainstorm / ideate / what-if / perspectives / multi-role | brainstorm | Multi-role creative exploration with cross-role conflict resolution |
+| blueprint / PRD / architecture doc / formal spec / epic | blueprint | Generate formal specification package (Brief, PRD, Architecture, Epics) via 6-phase document chain |
+| analyze / assess / evaluate / multi-dimension / findings | analyze | Systematic multi-angle assessment producing findings + risk-matrix for plan consumption |
+| plan / decompose / breakdown / task split / DAG / waves | plan | Decompose confirmed analysis into executable task DAG with waves and collision avoidance |
+| execute / implement / build / code / develop | execute | Implement code changes following current-plan DAG+waves with smoke self-check |
+| verify / validate / acceptance / confirm implementation | verify | Independent verification of requirement coverage and behavioral correctness against plan |
+| debug / bug / error / root cause / failing / broken / trace | debug | Scientific-method root cause diagnosis — reproduction, hypothesis testing, backward tracing |
+| review / code review / audit / inspect / PR review | review | Layered multi-dimensional code review producing traceable review-findings |
+| test / UAT / manual test / browser test / acceptance test | test | Conversational UAT + coverage + optional browser acceptance on verified deliverables |
+| auto-test / automated test / CI test / pipeline test / L0-L3 | auto-test | Automated CSV-layered test pipeline iterating to convergence |
+| roadmap / milestone / phasing / session plan / work breakdown | roadmap | Decompose requirements into session DAG with scope, success criteria, dependency edges |
+| quick / small / ad-hoc / one-off / trivial | quick | Shortened pipeline for small tasks, preserving atomic commits and state tracking |
+| retrospective / retro / lessons learned / post-mortem / reflect | retrospective | Post-phase four-lens review (technical/process/quality/decision) → spec/knowhow/issue routing |
+| grill / pressure test / stress test | maestro-grill (standalone command) | Not in candidate pool — route to `/maestro-grill` directly |
+| refactor / tech debt | quality-refactor (retained skill) | — |
+| sync docs | manage sync codebase (retained skill) | — |
+| issue / defect | manage issue (retained skill) | — |
+| wiki / knowledge graph | manage knowledge wiki (retained skill) | — |
+| spec / rule / constraint | spec load / spec add (retained skill) | — |
+| init / project setup | maestro-init (retained skill) | — |
+| status / dashboard | manage status (retained skill) | — |
+| security / OWASP | security-audit (retained skill) | — |
+| learn / explore code / follow | learn follow / learn investigate (retained skill) | — |
+| harvest / extract knowledge | manage knowledge harvest (retained skill) | — |
+| fork / parallel dev | maestro-fork (retained skill) | — |
 
 **Auxiliary workflow clusters:**
 
@@ -237,6 +238,8 @@ maestro run complete <run_id> --workflow-root .
 
 For retained skills (not in step registry): execute via `[@skill] Skill({ skill: <name>, args: <args> })` directly.
 
+For standalone commands redirected from routing table (e.g. grill → maestro-grill): display redirect message and suggest the user invoke `/maestro-grill` directly. Do NOT attempt step execution.
+
 </actions>
 
 </state_machine>
@@ -266,12 +269,12 @@ Before executing, assess task complexity to choose the right channel:
 
 ### --list mode
 
-Group all 14 first-tier steps by cluster + show retained skills separately:
+Group all 13 first-tier steps by cluster + show retained skills separately:
 
 ```
 Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
-Discovery:   grill, brainstorm, blueprint, roadmap, quick
+Discovery:   brainstorm, blueprint, roadmap, quick
 
 Retained Skills: quality-refactor, manage sync codebase, manage-*, learn-*, spec-*, ...
 ```
