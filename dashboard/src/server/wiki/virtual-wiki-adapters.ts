@@ -894,7 +894,7 @@ export async function loadRunModeSessionEntries(
     if (process.env.MAESTRO_DEBUG === '1') {
       warn(`run-artifacts-schema:${sessionDir}`, `unsupported run-mode artifact registry schema at ${sessionDir}`);
     }
-    registry = {};
+    return [];
   }
 
   const runEntries: WikiEntry[] = [];

@@ -699,6 +699,16 @@ describe('virtual adapters: run-mode sessions', () => {
     expect(index.entries.filter(e => e.source.path.startsWith('sessions/'))).toEqual([]);
   });
 
+  it('skips a sealed session with an unsupported artifact registry instead of indexing empty Run shells', async () => {
+    await writeRunModeFixture();
+    await write('sessions/20260713-search/artifacts.json', JSON.stringify({
+      schema_version: 'artifacts/1.0', artifacts: {}, aliases: {},
+    }));
+
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+    expect(index.entries.filter(e => e.source.path.startsWith('sessions/'))).toEqual([]);
+  });
+
   it('preserves archived lifecycle status', async () => {
     await writeRunModeFixture('archived');
     const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();

@@ -397,27 +397,35 @@ export class WikiIndexer {
         const value = ref.trim();
         const directId = resolveCollisionRef(owner, value);
         const direct = entriesByResolvedId.get(directId);
-        if (direct && (direct.type === 'spec' || direct.type === 'knowhow')) return direct;
+        if (
+          direct
+          && direct.source.workspace === owner.source.workspace
+          && (direct.type === 'spec' || direct.type === 'knowhow')
+        ) return direct;
 
         const typedRef = value.match(/^(spec|knowhow):(.+)$/);
         if (typedRef) {
           const [, type, payload] = typedRef;
           const candidates = entries.filter(entry =>
             entry.type === type
+            && entry.source.workspace === owner.source.workspace
             && entry.ext?.virtualKind !== 'session'
             && entry.ext?.virtualKind !== 'session-run'
             && (entry.sourceRef === payload || entry.id === payload));
           if (candidates.length > 0) {
-            const sameWorkspace = candidates.filter(candidate => candidate.source.workspace === owner.source.workspace);
-            const sameSource = sameWorkspace.find(candidate => candidate.source.path === owner.source.path);
-            return sameSource ?? sameWorkspace[0] ?? candidates[0];
+            const sameSource = candidates.find(candidate => candidate.source.path === owner.source.path);
+            return sameSource ?? candidates[0];
           }
         }
 
         const fallbackId = promotedRefToWikiId(value);
         if (!fallbackId) return null;
         const fallback = entriesByResolvedId.get(resolveCollisionRef(owner, fallbackId));
-        return fallback && (fallback.type === 'spec' || fallback.type === 'knowhow') ? fallback : null;
+        return fallback
+          && fallback.source.workspace === owner.source.workspace
+          && (fallback.type === 'spec' || fallback.type === 'knowhow')
+          ? fallback
+          : null;
       };
       for (const sessionEntry of entries) {
         if (sessionEntry.ext?.virtualKind !== 'session') continue;
