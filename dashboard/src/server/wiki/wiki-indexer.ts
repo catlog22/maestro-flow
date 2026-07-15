@@ -19,6 +19,10 @@ import {
 } from './virtual-wiki-adapters.js';
 import { homedir } from 'node:os';
 import { existsSync, readdirSync, statSync, createWriteStream, renameSync as renameSyncFs } from 'node:fs';
+import { buildGraph, type WikiGraph } from './graph-analysis.js';
+import { buildInvertedIndex, searchBM25, searchBM25Planned, rerankByPhraseProximity, type InvertedIndex } from './search.js';
+import { applyTimeDecay } from './time-decay.js';
+import type { EmbeddingIndex } from './embedding.js';
 import type {
   WikiEntry,
   WikiFilters,
@@ -49,10 +53,13 @@ function prefixLinkedEntries(entries: WikiEntry[], idPrefix: string, workspace: 
     entry.scope = 'linked';
   }
 }
-import { buildGraph, type WikiGraph } from './graph-analysis.js';
-import { buildInvertedIndex, searchBM25, searchBM25Planned, rerankByPhraseProximity, type InvertedIndex } from './search.js';
-import { applyTimeDecay } from './time-decay.js';
-import type { EmbeddingIndex } from './embedding.js';
+
+function promotedRefToWikiId(ref: string): string | null {
+  const value = ref.trim();
+  if (/^(?:spec|knowhow)-/.test(value)) return value;
+  const match = value.match(/^(spec|knowhow):(.+)$/);
+  return match ? `${match[1]}-${slugify(match[2])}` : null;
+}
 
 export interface LinkedWorkspaceConfig {
   name: string;
@@ -379,6 +386,56 @@ export class WikiIndexer {
               : typed.target;
             return { ...typed, target };
           });
+        }
+      }
+
+      // Session lifecycle promotion refs are projected by the virtual adapter.
+      // Reconcile both directions only after collision references have settled,
+      // so the promoted target and source session use final deterministic IDs.
+      const entriesByResolvedId = new Map(entries.map(entry => [entry.id, entry]));
+      const resolvePromotedEntry = (owner: WikiEntry, ref: string): WikiEntry | null => {
+        const value = ref.trim();
+        const directId = resolveCollisionRef(owner, value);
+        const direct = entriesByResolvedId.get(directId);
+        if (direct && (direct.type === 'spec' || direct.type === 'knowhow')) return direct;
+
+        const typedRef = value.match(/^(spec|knowhow):(.+)$/);
+        if (typedRef) {
+          const [, type, payload] = typedRef;
+          const candidates = entries.filter(entry =>
+            entry.type === type
+            && entry.ext?.virtualKind !== 'session'
+            && entry.ext?.virtualKind !== 'session-run'
+            && (entry.sourceRef === payload || entry.id === payload));
+          if (candidates.length > 0) {
+            const sameWorkspace = candidates.filter(candidate => candidate.source.workspace === owner.source.workspace);
+            const sameSource = sameWorkspace.find(candidate => candidate.source.path === owner.source.path);
+            return sameSource ?? sameWorkspace[0] ?? candidates[0];
+          }
+        }
+
+        const fallbackId = promotedRefToWikiId(value);
+        if (!fallbackId) return null;
+        const fallback = entriesByResolvedId.get(resolveCollisionRef(owner, fallbackId));
+        return fallback && (fallback.type === 'spec' || fallback.type === 'knowhow') ? fallback : null;
+      };
+      for (const sessionEntry of entries) {
+        if (sessionEntry.ext?.virtualKind !== 'session') continue;
+        const sessionId = sessionEntry.ext.sessionId;
+        const promotedRefs = sessionEntry.ext.promotedRefs;
+        if (typeof sessionId !== 'string' || !Array.isArray(promotedRefs)) continue;
+
+        const sourceSessionId = resolveCollisionRef(sessionEntry, `session-${slugify(sessionId)}`);
+        for (const promotedRef of promotedRefs) {
+          if (typeof promotedRef !== 'string') continue;
+          const promotedEntry = resolvePromotedEntry(sessionEntry, promotedRef);
+          if (!promotedEntry) continue;
+          if (!sessionEntry.related.includes(promotedEntry.id)) {
+            sessionEntry.related.push(promotedEntry.id);
+          }
+          if (!promotedEntry.related.includes(sourceSessionId)) {
+            promotedEntry.related.push(sourceSessionId);
+          }
         }
       }
       if (collisionCount > 0 && debugCollisions) {

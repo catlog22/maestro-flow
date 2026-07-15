@@ -56,10 +56,11 @@ export interface CodeSearchResult {
   signature?: string;
 }
 
-/** Options for runUnifiedSearch — type/category filters and result cap. */
+/** Options for runUnifiedSearch — wiki facets and result cap. */
 export interface UnifiedSearchOptions {
   type?: string;
   category?: string;
+  kind?: string;
   workspace?: string;
   limit: number;
   /** Include entries with status="deprecated" (superseded). Default: excluded. */
@@ -138,6 +139,10 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   if (opts.category) {
     filtered = filtered.filter(r => r.entry.category === opts.category);
   }
+  const kind = opts.kind;
+  if (kind) {
+    filtered = filtered.filter(r => r.entry.tags.includes(kind));
+  }
   if (opts.workspace) {
     filtered = filtered.filter(r => r.entry.source.workspace === opts.workspace);
   }
@@ -146,8 +151,8 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     filtered = filtered.filter(r => (r.entry.ext?.status as string | undefined) !== 'deprecated');
   }
 
-  // CATEGORY_CAPS only when user didn't explicitly filter by type/category
-  const applyCaps = !opts.type && !opts.category;
+  // CATEGORY_CAPS only when user didn't explicitly select a wiki facet.
+  const applyCaps = !opts.type && !opts.category && !opts.kind;
   const seen = new Set<string>();
   const deduped: typeof filtered = [];
   const catCounts = new Map<string, number>();
@@ -290,6 +295,7 @@ export function registerSearchCommand(program: Command): void {
     .description('Unified knowledge search across wiki + code (mixed by default)')
     .option('--type <type>', `Filter by type: ${VALID_TYPES.join(', ')}`)
     .option('--category <cat>', 'Filter by category (e.g. coding, arch, debug, test, review, learning)')
+    .option('--kind <kind>', 'Filter wiki artifacts by exact kind tag (wiki only)')
     .option('--code', 'Code graph results only (no wiki)')
     .option('--kg', 'KG unified search (MaestroGraph full-source)')
     .option('--all', 'Alias for default mixed mode (backward compat)')
@@ -302,12 +308,20 @@ export function registerSearchCommand(program: Command): void {
     .action(async (queryParts: string[], opts) => {
       const q = queryParts.join(' ');
       const limit = parseInt(opts.limit, 10) || 20;
-      const wikiOnly = opts.wikiOnly === true;
+      const wikiOnly = opts.wikiOnly === true || typeof opts.kind === 'string';
       const codeOnly = opts.code === true && !opts.all;
       const kgMode = opts.kg === true;
 
       if (opts.type && !VALID_TYPES.includes(opts.type)) {
         console.error(`Error: --type must be one of ${VALID_TYPES.join(', ')} (got "${opts.type}")`);
+        process.exit(1);
+      }
+      if (opts.kind && opts.code) {
+        console.error('Error: --kind is a wiki artifact facet and cannot be combined with --code');
+        process.exit(1);
+      }
+      if (opts.kind && kgMode) {
+        console.error('Error: --kind is a wiki artifact facet and cannot be combined with --kg');
         process.exit(1);
       }
 
@@ -344,7 +358,7 @@ export function registerSearchCommand(program: Command): void {
 
       // Parallel: wiki + code search (skip irrelevant source based on flags)
       const [wikiResults, codeResults] = await Promise.all([
-        codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
+        codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, kind: opts.kind, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
         wikiOnly ? [] : runCodeSearch(q, limit),
       ]);
 
