@@ -211,10 +211,10 @@ Audit findings + diverge ideas (severity >= medium OR impact = high).
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Design pattern | Component pattern + applicable scenarios + token references | `/spec add ui` |
-| Interaction spec | State definitions + transition rules + feedback patterns | `/spec add ui` |
-| Accessibility rule | WCAG requirement + implementation approach | `/spec add ui` |
-| Reusable generalization pattern | Pattern signature + application scope | `/spec add coding` |
+| Design pattern | Component pattern + applicable scenarios + token references | `$spec add ui` |
+| Interaction spec | State definitions + transition rules + feedback patterns | `$spec add ui` |
+| Accessibility rule | WCAG requirement + implementation approach | `$spec add ui` |
+| Reusable generalization pattern | Pattern signature + application scope | `$spec add coding` |
 
 ---
 
@@ -285,11 +285,11 @@ Goals:      {done}/{total} ({skipped} skipped)
 
 | Condition | Next |
 |-----------|------|
-| Discovery issues created | `/manage issue list --source ui-odyssey` |
-| Backend/data issue found | `/odyssey <target> --mode planex` |
-| Deep bug investigation | `/odyssey <target> --mode debug` |
-| Code quality review | `/odyssey <changed-files> --mode review` |
-| Document pattern | `/learn decompose <component>` |
-| Second opinion | `/learn consult <understanding.md>` |
-| Design/interaction pattern to persist | `/spec add ui "..."` |
+| Discovery issues created | `$manage issue list --source ui-odyssey` |
+| Backend/data issue found | `$odyssey <target> --mode planex` |
+| Deep bug investigation | `$odyssey <target> --mode debug` |
+| Code quality review | `$odyssey <changed-files> --mode review` |
+| Document pattern | `$learn decompose <component>` |
+| Second opinion | `$learn consult <understanding.md>` |
+| Design/interaction pattern to persist | `$spec add ui "..."` |
 | Pending decisions | Filter evidence phase=decision status=pending |

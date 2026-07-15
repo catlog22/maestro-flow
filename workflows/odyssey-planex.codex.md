@@ -256,10 +256,10 @@ Max iterations (default 3) prevents infinite loops.
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Multi-round fix cycle pattern | Problem scenario + fix iteration + final approach | `/spec add debug` |
-| Reusable implementation pattern | Pattern + applicable scope + code template | `/spec add coding` |
-| Acceptance criteria template | Standard template + verify_method suggestion | `/spec add review` |
-| Generalization pattern | Signature + risk + fix template | `/spec add coding` |
+| Multi-round fix cycle pattern | Problem scenario + fix iteration + final approach | `$spec add debug` |
+| Reusable implementation pattern | Pattern + applicable scope + code template | `$spec add coding` |
+| Acceptance criteria template | Standard template + verify_method suggestion | `$spec add review` |
+| Generalization pattern | Signature + risk + fix template | `$spec add coding` |
 
 ---
 
@@ -343,11 +343,11 @@ Status:      {ALL_PASSED|PARTIAL|ESCALATED}
 
 | Condition | Next |
 |-----------|------|
-| Discovery issues created | `/manage issue list --source planex-odyssey` |
-| Deeper debug needed | `/odyssey <finding> --mode debug` |
-| Formal review of changes | `/odyssey <changed-files> --mode review` |
-| UI-related findings | `/odyssey <component> --mode ui` |
-| Document pattern | `/learn decompose <module>` |
-| Second opinion | `/learn consult <understanding.md>` |
-| Reusable pattern to persist | `/spec add coding "..."` |
+| Discovery issues created | `$manage issue list --source planex-odyssey` |
+| Deeper debug needed | `$odyssey <finding> --mode debug` |
+| Formal review of changes | `$odyssey <changed-files> --mode review` |
+| UI-related findings | `$odyssey <component> --mode ui` |
+| Document pattern | `$learn decompose <module>` |
+| Second opinion | `$learn consult <understanding.md>` |
+| Reusable pattern to persist | `$spec add coding "..."` |
 | Pending decisions | Filter evidence phase=decision status=pending |

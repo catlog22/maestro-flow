@@ -511,9 +511,9 @@ All role agents failing is a hard abort — no synthesis is possible without any
 
 | Condition | Next Step |
 |-----------|-----------|
-| Need formal spec package | step `blueprint` with `--from brainstorm:{artifact_id}` |
-| Quick roadmap needed | step `roadmap` with `--from brainstorm:{artifact_id}` |
-| Need deeper analysis first | step `analyze` with `--from brainstorm:{artifact_id}` |
-| Need stress-testing first | step `grill` |
+| Need formal spec package | `blueprint --from brainstorm:{artifact_id}` |
+| Quick roadmap needed | `roadmap --from brainstorm:{artifact_id}` |
+| Need deeper analysis first | `analyze --from brainstorm:{artifact_id}` |
+| Need stress-testing first | `grill` |
 | `html-prototypes/` produced | `maestro run skill brainstorm-visualize` to launch visualizer |
-| DESIGN.md established | step `execute` via impeccable build |
+| DESIGN.md established | `execute` via impeccable build |

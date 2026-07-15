@@ -330,9 +330,9 @@ Blueprint specification package is complete (all 6 phases done). Suggest next wo
 
 | Option | Action |
 |--------|--------|
-| Analyze specification | Run `maestro-analyze` to deep-analyze the blueprint outputs |
-| Generate roadmap | Run `maestro-roadmap` to convert Epics into a phased execution roadmap |
-| Plan first phase | Skill({ skill: "maestro-plan", args: "1" }) |
+| Analyze specification | `analyze --from blueprint:{artifact_id}` |
+| Generate roadmap | `roadmap --from blueprint:{artifact_id}` |
+| Plan first phase | `plan 1 --from blueprint:{artifact_id}` |
 | Create issues | Generate issues per Epic via Skill({ skill: "manage-issue" }) |
 | Export only | Blueprint complete, no further action |
 
@@ -345,7 +345,7 @@ Output: .workflow/blueprint/{session_id}/
   blueprint-config.json, product-brief.md, requirements/, architecture/, epics/,
   readiness-report.md, blueprint-summary.md
 
-Next: maestro-analyze (deep analysis) | maestro-roadmap (generate roadmap) | maestro-plan 1 (plan first phase)
+Next: analyze (deep analysis) | roadmap (generate roadmap) | plan 1 (plan first phase)
 ```
 
 → Wrap-up follows ref/finish-work.md (when gate is Pass/Review; SESSION_TYPE=blueprint, SESSION_ID={session_id}). Skipped on Fail — session stays active, excluded from wiki search.
@@ -426,7 +426,7 @@ CLI Fallback Chain: Role-based resolution → degraded mode (local only); flag a
 
 | Condition | Next Step |
 |-----------|-----------|
-| Gate Pass/Review | step `roadmap` with `--from blueprint:{artifact_id}` |
+| Gate Pass/Review | `roadmap --from blueprint:{artifact_id}` |
 | Gate Fail | fix issues, re-run readiness check |
-| Need implementation plan | step `plan` with `--from blueprint:{artifact_id}` |
-| Need stress-testing | step `grill` on the blueprint |
+| Need implementation plan | `plan --from blueprint:{artifact_id}` |
+| Need stress-testing | `grill` |

@@ -78,7 +78,7 @@ CONTEXT: key_decisions, blockers, deferred
 If issue_state exists: display ISSUES panel (open count, critical count, by-status breakdown, critical issues list).
 - Omit critical sub-section if none. Note blockers→issues migration if applicable. Note deferred items.
 
-If issue_state is null: "No issues tracked. Use /manage-issue create to discover issues."
+If issue_state is null: "No issues tracked. Use `/manage issue create` to discover issues."
 
 Status icons:
 - `[x]` completed
@@ -102,9 +102,9 @@ Else if .workflow/worktrees.json has active entries → ACTIVE WORKTREES panel: 
 ### Step 5.0: Issue-Aware Routing
 
 If issue_state exists, evaluate BEFORE status routing:
-- critical_open > 0 → suggest manage-issue list --severity critical, quality-debug --from-uat
-- diagnosed > 0 → suggest maestro-plan --gaps
-- registered > 0 → suggest quality-debug
+- critical_open > 0 → suggest `/manage issue list` --severity critical, `debug` --from-uat
+- diagnosed > 0 → suggest `plan` --gaps
+- registered > 0 → suggest `debug`
 
 ### Step 5.1: Status-Based Routing
 
@@ -112,23 +112,23 @@ Based on current project state, suggest the next command:
 
 | Current State | Suggested Command |
 |---|---|
-| No phases planned | /maestro-brainstorm 1 or /maestro-plan 1 |
-| Phase pending, needs analysis | /maestro-analyze \<N\> |
-| Phase pending, needs decisions | /maestro-analyze \<N\> -q |
-| Phase planned, not executed | /maestro-execute \<N\> |
-| Phase executing, tasks blocked | /quality-debug \<N\> |
-| Phase executed, not verified | /quality-review \<N\> |
-| Phase verified with gaps | /maestro-plan \<N\> --gaps |
-| Phase verified, not reviewed | /quality-review \<N\> |
-| Phase reviewed, BLOCK verdict | /maestro-plan \<N\> --gaps |
-| Phase reviewed, PASS/WARN | /quality-test \<N\> |
-| Low test coverage | /quality-auto-test \<N\> |
+| No phases planned | brainstorm 1 or plan 1 |
+| Phase pending, needs analysis | analyze \<N\> |
+| Phase pending, needs decisions | analyze \<N\> -q |
+| Phase planned, not executed | execute \<N\> |
+| Phase executing, tasks blocked | debug \<N\> |
+| Phase executed, not verified | review \<N\> |
+| Phase verified with gaps | plan \<N\> --gaps |
+| Phase verified, not reviewed | review \<N\> |
+| Phase reviewed, BLOCK verdict | plan \<N\> --gaps |
+| Phase reviewed, PASS/WARN | test \<N\> |
+| Low test coverage | auto-test \<N\> |
 | UAT passed, all phases done | /maestro-milestone-audit |
-| UAT has failures | /quality-debug --from-uat \<N\> |
-| Need integration tests | /quality-auto-test \<N\> |
+| UAT has failures | debug --from-uat \<N\> |
+| Need integration tests | auto-test \<N\> |
 | All milestone phases complete | /maestro-milestone-audit |
 | Milestone audit passed | /maestro-milestone-complete |
-| Ad-hoc small task | /maestro-quick \<task\> |
+| Ad-hoc small task | quick \<task\> |
 
 Display:
 ```

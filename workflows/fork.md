@@ -148,10 +148,10 @@ Display:
     cd {wtPath}
 
     # Sequential lifecycle for each phase:
-    /maestro-analyze {firstPending.phase}
-    /maestro-plan {firstPending.phase}
-    /maestro-execute {firstPending.phase}
-    /quality-review {firstPending.phase}
+    analyze {firstPending.phase}
+    plan {firstPending.phase}
+    execute {firstPending.phase}
+    review {firstPending.phase}
     # ... repeat for next phases in milestone
 
   Or delegate (automated):

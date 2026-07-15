@@ -193,9 +193,9 @@ Write context.md to session output directory.
 Display: group breakdown, per-issue root cause, confidence, cross-refs.
 
 Next steps:
-  - maestro-plan --gaps (plan fix tasks linked to analyzed issues)
-  - maestro-analyze --gaps {ISS-ID} (re-analyze specific issue with deeper context)
-  - manage-issue list (review all issues)
+  - plan --gaps (plan fix tasks linked to analyzed issues)
+  - analyze --gaps {ISS-ID} (re-analyze specific issue with deeper context)
+  - /manage issue list (review all issues)
 ```
 
 ---

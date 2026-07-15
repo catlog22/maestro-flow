@@ -224,10 +224,10 @@ Confirmed root cause + applied fix.
 
 | Category | Content | Follow-up |
 |----------|---------|-----------|
-| Recurring root cause pattern | Type + triggers + fix + detection | `/spec add debug` |
-| Non-obvious workaround | Problem + steps + why obvious fix fails | `/spec add learning` |
-| Architecture boundary violation | Violation + correct boundary + verification | `/spec add arch` |
-| Reusable generalization pattern | Signature + risk + fix template + scope | `/spec add coding` |
+| Recurring root cause pattern | Type + triggers + fix + detection | `$spec add debug` |
+| Non-obvious workaround | Problem + steps + why obvious fix fails | `$spec add learning` |
+| Architecture boundary violation | Violation + correct boundary + verification | `$spec add arch` |
+| Reusable generalization pattern | Signature + risk + fix template + scope | `$spec add coding` |
 
 ---
 
@@ -298,9 +298,9 @@ Goals:      {done}/{total} ({skipped} skipped)
 
 | Condition | Next |
 |-----------|------|
-| Discovery issues | `/manage issue list --source debug-odyssey` |
-| Document pattern | `/learn decompose <module>` |
-| Formal review | `/odyssey <changed-files> --mode review` |
-| Second opinion | `/learn consult <understanding.md>` |
-| Related question | `/learn investigate "<question>"` |
+| Discovery issues | `$manage issue list --source debug-odyssey` |
+| Document pattern | `$learn decompose <module>` |
+| Formal review | `$odyssey <changed-files> --mode review` |
+| Second opinion | `$learn consult <understanding.md>` |
+| Related question | `$learn investigate "<question>"` |
 | Pending decisions | Filter evidence phase=decision status=pending |
