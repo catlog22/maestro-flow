@@ -449,7 +449,7 @@ Grill session {artifact_id} completed.
 
 ---
 
-## Error Handling
+## Error Codes
 
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|

@@ -31,26 +31,17 @@ $ARGUMENTS determines the mode:
 | Range | `<N>..<M>` | retrospect a range (inclusive) |
 | All | `--all` | create a new retrospective Run for each completed phase |
 
-Flags:
-
-| Flag | Effect |
-|------|--------|
-| `--lens <name>` | limit to the specified lens (technical\|process\|quality\|decision); default is all four; repeatable |
-| `--no-route` | skip the routing phase (produce only retrospective files, write no spec/issue/knowhow) |
-| `--compare N` | compare with phase N's retrospective (requires a single-phase argument) |
-| `--all` | force re-run for each completed phase |
-| `-y` | skip confirmation prompts for external writes (issues.jsonl, spec entries, knowhow capture) |
+Lens selection defaults to all four; a specific lens narrows analysis. Routing can be skipped to produce only retrospective files without external writes, and re-runs on completed phases are opt-in. External writes stay gated on confirmation unless auto-approved.
 
 ## Required Context
 
-- Source phase artifacts (verification.json, review.json, plan.json, execution artifacts): read-only inputs for lens analysis.
-- Schema pointers for parsing: review findings → `steps/kinds/review-findings.yaml`; verification → `steps/kinds/verification.yaml`; issues.jsonl → issue kind definition (for auto-creating issues).
+- Source phase artifacts (verification.json, review.json, plan.json, execution artifacts) are read-only inputs for lens analysis.
 
 ## Boundaries and Invariants
 
 - **Output boundary**: all file writes must land in the phase's retrospective directory (`{run_dir}/outputs/`), `.workflow/state.json`, `.workflow/issues.jsonl`, or `.workflow/specs/` (append-only). Never modify source, verification.json, review.json, plan.json, or other existing artifacts.
 1. **Source artifacts read-only** — never modify verification.json, review.json, plan.json, or any execution artifact; retrospective reads them only for analysis
-2. **Stable insight ID** — `INS-{8hex}` must be determined by `hash(phase_num + lens + title)`; re-runs must not create duplicate insights
+2. **Stable insight ID** — insight IDs must be deterministic and stable across re-runs to prevent duplicates
 3. **Routing needs confirmation** — unless `-y`, every external write (issues.jsonl, spec entries, knowhow capture) must be confirmed by the user
 4. **Lens independence** — each lens agent runs independently; one lens's findings must not suppress or override another's
 5. **spec append-only** — learnings.md entries are appended as `<spec-entry>` blocks; never overwrite or restructure existing entries

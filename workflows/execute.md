@@ -271,6 +271,19 @@ BLOCKED conditions: `execution.json` missing, or there are completed tasks but m
 
 ---
 
+## Success Criteria
+
+- [ ] Execution method selected (agent/cli/auto)
+- [ ] All tasks in plan reached terminal state (done/blocked)
+- [ ] Each completed task has summary, evidence, and status
+- [ ] Atomic commits produced per task (only task's changed files)
+- [ ] Self-check smoke (build/test) passed
+- [ ] No unhandled tech-stack violations
+- [ ] execution.json written with completion status
+- [ ] Blocked tasks have checkpoint for resume
+
+---
+
 ## Checkpoint resume
 
 ```
@@ -285,13 +298,15 @@ Resume behavior:
 
 ---
 
-## Error Handling
+---
 
-| Error | Action |
-|------|------|
-| no plan | abort: `current-plan` missing, run plan first |
-| task file missing | skip that task, record error, continue the current wave |
-| agent dispatch failed | retry once, mark blocked if still failing |
-| delegate failed | `--resume ${fixedId}` → fall back to agent, mark [LOW CONFIDENCE] |
-| git commit failed | record warning, mark [LOW CONFIDENCE] (commit failed), don't mark fully complete until commit succeeds |
-| entire wave all blocked | stop execution, report the blocked wave; downstream tasks with unmet dependencies marked upstream_blocked |
+## Error Codes
+
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No plan | Abort: `current-plan` missing, run plan first |
+| E002 | Entire wave all blocked | Stop execution, report the blocked wave; downstream tasks with unmet dependencies marked upstream_blocked |
+| W001 | Task file missing | Skip that task, record error, continue the current wave |
+| W002 | Agent dispatch failed | Retry once, mark blocked if still failing |
+| W003 | Delegate failed | `--resume ${fixedId}` → fall back to agent, mark [LOW CONFIDENCE] |
+| W004 | Git commit failed | Record warning, mark [LOW CONFIDENCE] (commit failed), don't mark fully complete until commit succeeds |

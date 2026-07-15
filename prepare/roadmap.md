@@ -35,25 +35,6 @@ $ARGUMENTS determines the execution mode:
 
 No arguments and no `--revise`/`--review` → error (missing requirement, E001).
 
-Flags:
-
-| Flag | Effect | Default |
-|------|--------|---------|
-| `-y` / `--yes` | Auto mode — skip interactive questions, use recommended defaults | false |
-| `-c` / `--continue` | continue from the last checkpoint | false |
-| `-m progressive\|direct\|auto` | decomposition strategy | auto |
-| `--from <source>` | load upstream context package (`brainstorm:ID`, `blueprint:BLP-xxx`, `analyze:ANL-xxx`, `@file`, or path); consumes `context-package.json` | — |
-| `--from-brainstorm SESSION-ID` | backward-compatible alias for `--from brainstorm:ID` | — |
-| `--revise [instructions]` | revise an existing roadmap, preserving already-completed sessions | — |
-| `--review` | roadmap health assessment (read-only) | — |
-
-Input types:
-
-- Direct text: `"Implement user authentication system with OAuth and 2FA"`
-- File reference: `@requirements.md`
-- Context import: `--from brainstorm:BRN-001` / `--from analyze:ANL-xxx` / `--from blueprint:BLP-xxx`
-- No arguments + `--revise` / `--review`: operate on the existing `current-roadmap` artifact
-
 ## Required Context
 
 Pre-load (all optional, continue if missing):
@@ -67,6 +48,9 @@ Pre-load (all optional, continue if missing):
 - Do not write `.workflow/roadmap.md` — roadmap is a Run artifact, not a project-level file.
 - Sessions are registered into `state.json.sessions[]`; do not touch already-completed sessions, and do not write `milestones[]` / `current_milestone` / `accumulated_context` (deprecated fields).
 - Scope guard: define only the roadmap shape, do not pre-resolve task splitting or intra-session decomposition (which belongs to plan).
+- **Default is 1 session** — split only when all three hard-dependency conditions hold: Session B's code calls Session A's real output at runtime (cannot mock), the two cannot develop concurrently via a contract/interface agreement, and every Session A task must complete before any Session B task starts. If only 1-2 conditions hold, keep in one session and use wave dependencies.
+- **Minimum 5 tasks per session** — a session with fewer must be merged into an adjacent one.
+- **Re-justify after decomposition** — if the result has more than 3 sessions, re-check each split against the 3 hard-dependency conditions and merge any that are unjustified.
 - Interaction style: **convergent menu-driven** (per `ref/interview-mechanics.md`); decision tree (strict order): mode (create/revise/review) → requirement scope (MVP/complete/phased) → decomposition strategy (progressive/direct/auto) → session boundaries → session dependencies. Write-back target: the "Roadmap Decisions" section of `{run_dir}/outputs/roadmap.md` (create if absent). Skip conditions: `--revise`, `--review` jump directly to the corresponding mode. Exit condition: consensus reached or an explicit user signal → finalize the Roadmap Decisions section.
 
 ## Risk Checklist

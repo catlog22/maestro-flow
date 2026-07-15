@@ -384,7 +384,7 @@ Next: maestro-analyze (deep analysis) | maestro-roadmap (generate roadmap) | mae
 
 Resume: `-c` reads blueprint-config.json, resumes from first incomplete phase.
 
-## Error Handling
+## Error Codes
 
 | Phase | Error | Blocking? | Action |
 |-------|-------|-----------|--------|

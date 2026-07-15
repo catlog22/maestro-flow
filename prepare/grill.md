@@ -35,16 +35,6 @@ $ARGUMENTS determines the execution mode, by priority:
 
 No arguments and no `--from`/`--continue` → error (missing topic).
 
-Flags:
-
-| Flag | Effect | Default |
-|------|--------|---------|
-| `-y` / `--yes` | Auto mode — CLI exploration replaces human answers | false |
-| `-c` / `--continue` | continue from the last grill session | — |
-| `--session ID` | continue the specified session | — |
-| `--depth shallow\|standard\|deep` | branch count 3/5/8 | standard |
-| `--from <source>` | load upstream material (`blueprint:ID`, `@file`, path) | — |
-
 ## Required Context
 
 Pre-load (all optional, continue if missing):
@@ -57,8 +47,7 @@ Pre-load (all optional, continue if missing):
 - All output is written to `{run_dir}/outputs/`.
 - **Output boundary**: all file writes must land in `{output_dir}/` or `.workflow/state.json`; modifying source code or files outside this is forbidden.
 - Interaction style: **adversarial Socratic**, not menu-driven.
-- Questions cite concrete code: `The code at {file:line} uses {symbol}, your proposal calls it {term}, which wins?`
-- Concrete scenarios: `What happens to {action} when {condition}?`
+- Questions must cite concrete code evidence (file:line anchors), not abstract claims.
 - Challenge contradictions: the moment an answer conflicts with code evidence or a prior answer, challenge it on the spot with evidence.
 - Progress branch by branch: basic → specific → adversarial.
 

@@ -470,7 +470,7 @@ Artifact registration and state updates are handled by `maestro run complete`.
 
 ---
 
-## Error Handling
+## Error Codes
 
 | Code | Severity | Condition | Recovery |
 |------|----------|-----------|----------|

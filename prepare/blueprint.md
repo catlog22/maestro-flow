@@ -31,29 +31,9 @@ Blueprint is a 6-phase formal spec document chain: Product Brief → PRD → Arc
 
 Pipeline: brainstorm (optional) → **blueprint** → analyze / roadmap / plan.
 
-The internal document chain:
-
-```
-P0: Spec Study → P1: Discovery → P1.5: Req Expansion → P2: Product Brief → P3: PRD → P4: Architecture → P5: Epics → P6: Readiness Check
-```
-
-P6 gate: Pass (≥80%) → Handoff | Review (60-79%) → Handoff w/concerns | Fail (<60%) → P6.5 Auto-Fix (max 2 rounds) → re-check.
-
 ## Input Interpretation
 
-| Flag | Effect | Default |
-|------|--------|---------|
-| `-y` / `--yes` | Auto mode, skip interactive questions, use recommended defaults | false |
-| `-c` / `--continue` | continue from the last checkpoint (read blueprint-config.json) | false |
-| `--from <source>` | load upstream context package (brainstorm:ID, @file, path), consuming context-package.json | — |
-| `--from-brainstorm SESSION-ID` | backward-compatible alias for `--from brainstorm:ID` | — |
-
-Input types:
-
-- Direct text: `"Build a real-time collaboration platform with WebSocket"`
-- File reference: `@requirements.md`
-- Context import: `--from brainstorm:BRN-001` / `--from @requirements.md` / `--from path/`
-- Continuation: `-c` (resume from the first incomplete phase)
+Input is routed by its shape: direct idea text or an `@file` reference starts a fresh spec; `--from <source>` imports an upstream context package (brainstorm, `@file`, or path); `-c` resumes from the first incomplete phase using the persisted `blueprint-config.json`.
 
 ## Required Context
 

@@ -29,9 +29,9 @@ The review level determines dimension coverage and execution method, inferred au
 
 | Level | Trigger | Dimensions | Execution |
 |-------|---------|------------|-----------|
-| quick | `--level quick` or auto ≤3 files | correctness, security | inline scan, no agents dispatched |
-| standard | default, or auto 4-19 files | all 6 dimensions | parallel agents |
-| deep | `--level deep` or auto ≥20 files / critical session | all 6 dimensions | parallel agents + mandatory deep-dive |
+| quick | `--level quick` or small scope | correctness, security | inline scan, no agents dispatched |
+| standard | default | all 6 dimensions | parallel agents |
+| deep | `--level deep` or large scope / critical session | all 6 dimensions | parallel agents + mandatory deep-dive |
 
 The six dimensions: correctness, security, performance, architecture, maintainability, best-practices. `--dimensions <list>` can override the level default.
 

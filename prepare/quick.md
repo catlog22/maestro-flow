@@ -31,15 +31,6 @@ $ARGUMENTS determines the execution mode:
 
 When description is empty, follow up with `AskUserQuestion`; if still empty, ask again.
 
-Flags:
-
-| Flag | Effect |
-|------|--------|
-| `--full` | plan-checking (max 2 iteration rounds) + post-execution verification |
-| `--discuss` | pre-plan decision extraction (gray areas, Locked/Free/Deferred classification) |
-| `-y` / `--yes` | Auto mode: skip commit confirmation, auto-approve state writes |
-| (remaining text) | task description |
-
 ## Required Context
 
 Pre-load (all optional, continue if missing):
@@ -52,11 +43,11 @@ Pre-load (all optional, continue if missing):
 
 - **Precondition**: `.workflow/state.json` must exist (project initialized); quick can run mid-phase, only validating that the project exists.
 - **Output boundary**: all file writes must land in `{run_dir}/outputs/` (task directory, plan.json, summaries) and the source files modified by the plan.json task definitions. The state.json scratch entry is implicit workflow tracking.
-1. **Atomic commit** — each task execution must produce a commit containing only the files changed by that task; never stage unrelated files
-2. **Evidence-based summary** — the task summary must contain concrete evidence (files changed, tests run, commands executed); never accept "task completed successfully" as a summary
-3. **Plan before execute** — plan.json must be written before any task execution; do not skip planning even for a single task
-4. **Scratch isolation** — all workflow artifacts must land in `{run_dir}/outputs/{task-dir}/`; never write workflow metadata outside this
-5. **Commit confirmation** — before committing, staged files and the commit message must be shown via `AskUserQuestion` (except `-y`); never commit silently
+- **Atomic commit** — each task execution produces a commit containing only the files changed by that task; unrelated files are never staged.
+- **Evidence-based summary** — the task summary carries concrete evidence (files changed, tests run, commands executed); "task completed successfully" is not an acceptable summary.
+- **Plan before execute** — plan.json exists before any task execution; planning is never skipped, even for a single task.
+- **Scratch isolation** — all workflow artifacts land in `{run_dir}/outputs/{task-dir}/`; workflow metadata is never written outside this.
+- **Commit confirmation** — staged files and the commit message are shown via `AskUserQuestion` before committing (except `-y`); commits are never silent.
 
 ## Risk Checklist
 
@@ -67,5 +58,5 @@ Pre-load (all optional, continue if missing):
 
 ## Gate Intent
 
-- `plan-verified`: plan.json is written before any task execution; in `--full` mode it is verified by plan-checker before execution (Step 6→7), blocked if unverified.
+- `plan-verified`: plan.json is written before any task execution; in `--full` mode it is verified by plan-checker before execution (plan-verified gate), blocked if unverified.
 - `tasks-committed`: each task produces an atomic commit of only its changed files with an evidence-based summary; outside `-y`, staged files and message are confirmed via `AskUserQuestion` before committing.

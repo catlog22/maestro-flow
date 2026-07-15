@@ -39,22 +39,6 @@ $ARGUMENTS determines the mode, by priority:
 
 No arguments and no flags = error (missing topic/role).
 
-Flags:
-
-| Flag | Effect | Default |
-|------|--------|---------|
-| `--yes` / `-y` | Auto mode, skip interactive questions | false |
-| `--count N` | number of roles to choose (max 9) | 3 |
-| `--session ID` | use an existing session | — |
-| `--update` | update existing analysis (single role) | false |
-| `--skip-questions` | skip context-collection questions | false |
-| `--include-questions` | force context collection (even if analysis already exists) | false |
-| `--style-skill PKG` | style package for the ui-designer role | — |
-| `--review-only` | run only cross-role re-review on existing analysis | false |
-| `--from <source>` | load upstream context package (grill:ID, blueprint:ID, @file, path) | — |
-
-Valid roles: data-architect, product-manager, product-owner, scrum-master, subject-matter-expert, system-architect, test-strategist, ui-designer, ux-expert.
-
 ## Required Context
 
 Pre-load (optional, continue if missing):
@@ -79,5 +63,5 @@ Pre-load (optional, continue if missing):
 
 ## Gate Intent
 
-- `guidance-generated`: `guidance-specification.md` is written with the §10 Feature Decomposition list before parallel role analysis (Step 3→4); a missing spec or feature list blocks.
-- `roles-converged`: all selected `{role}/analysis.md` files are verified on disk (Step 4→4.5), cross-role conflicts are resolved and flowed back, and `context-package.json` exists before the report (Step 7.5→complete).
+- `guidance-generated`: `guidance-specification.md` is written with the §10 Feature Decomposition list before parallel role analysis (guidance-generated gate); a missing spec or feature list blocks.
+- `roles-converged`: all selected `{role}/analysis.md` files are verified on disk, cross-role conflicts are resolved and flowed back, and `context-package.json` exists after cross-role conflicts resolved (roles-converged gate).

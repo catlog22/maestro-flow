@@ -229,6 +229,18 @@ The verdict decides the downstream run; the report's needs includes `latest-veri
 
 ---
 
+## Success Criteria
+
+- [ ] Goal-backward verification covers all success criteria from plan
+- [ ] Three layers checked: existence (L1), substance (L2), wiring (L3)
+- [ ] Every criterion has method + status + fresh evidence
+- [ ] Anti-pattern scan completed (TODO/FIXME/HACK, stubs, disabled tests)
+- [ ] Nyquist test coverage computed from live run (unless --skip-tests)
+- [ ] No silent coverage omissions (every requirement explicitly classified)
+- [ ] verification.json written with verdict
+
+---
+
 ## GateRecord
 
 After verification completes, inline-record one GateRecord:
@@ -243,12 +255,14 @@ BLOCKED conditions: `verification.json` missing, or a criterion not verified, or
 
 ---
 
-## Error Handling
+---
 
-| Error | Action |
-|------|------|
-| no plan/execution | abort: `current-plan` or `current-execution` missing, run execute first |
-| no summaries | warning, analyze using task files only, mark [LOW CONFIDENCE] (partial, missing summaries) |
-| no test framework detected | skip coverage computation, warn the user |
-| coverage command failed | do requirement mapping only, mark coverage [LOW CONFIDENCE] |
-| verifier/auditor agent failed | retry once, if still failing write partial results, mark [LOW CONFIDENCE] |
+## Error Codes
+
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No plan/execution | Abort: `current-plan` or `current-execution` missing, run execute first |
+| W001 | No summaries | Warning, analyze using task files only, mark [LOW CONFIDENCE] (partial, missing summaries) |
+| W002 | No test framework detected | Skip coverage computation, warn the user |
+| W003 | Coverage command failed | Do requirement mapping only, mark coverage [LOW CONFIDENCE] |
+| W004 | Verifier/auditor agent failed | Retry once, if still failing write partial results, mark [LOW CONFIDENCE] |

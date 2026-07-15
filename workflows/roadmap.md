@@ -76,30 +76,9 @@ If no topics or research fails → `apiResearchContext = null`, continue; flag r
 
 ---
 
-## Session Decomposition Principle (MANDATORY)
+## Session Decomposition Principle
 
-**Core rule: Session = independent work unit.** Each Session runs a full analyze→plan→execute→verify lifecycle. More sessions = more synchronization overhead. The wave DAG inside each Session's plan already handles task ordering and parallelism, so only create a new Session when work **cannot** start until a previous Session's entire output exists.
-
-**Default: 1 Session.** Put everything into a single Session unless a hard dependency forces a split.
-
-| Rule | Constraint |
-|------|-----------|
-| **Default** | **1 Session**. All work in one analyze→plan→execute cycle; wave DAG handles internal ordering. |
-| **Split justification** | All three hard-dependency conditions must be met (see below). |
-| **Minimum tasks per session** | 5 tasks/stories. If a session would have fewer, merge it into an adjacent session. |
-| **Merge principle** | Same-module, same-concern, or tightly-coupled work belongs in ONE session. Infra + core logic + API in one session is fine. |
-
-**Hard dependency — all three conditions required to justify a Session split:**
-1. **Runtime dependency**: Session B code at runtime MUST call Session A's real output (cannot mock/stub).
-2. **Not parallelizable**: A and B cannot develop concurrently via contract/interface/type agreement.
-3. **Full barrier**: ALL of Session A's tasks must complete before ANY of Session B's tasks can start.
-
-If only 1-2 conditions are met → keep in the same Session, use wave dependencies instead.
-
-**Session sizing checklist (applied after decomposition, before presenting to user):**
-1. Count total sessions. If > 3 → justify each split against the 3 hard-dependency conditions, merge if unjustified.
-2. Count estimated tasks per session. Any session < 5 tasks → merge into neighbor.
-3. Verify each session has a meaningful deliverable boundary (not just "setup" or "cleanup").
+Session decomposition follows the rules defined in the prepare contract (see prepare/roadmap.md Boundaries).
 
 **Progressive mode**:
 - Progressive layers (MVP → Usable → Refined) map to sessions with `depends_on` chain.
@@ -204,7 +183,7 @@ Skip in auto mode (`-y`) — select the first root session automatically. The ch
 
 Report session count, root sessions, strategy, and output path. Verdict `DONE` on normal completion, `DONE_WITH_CONCERNS` if concerns surfaced (e.g. unmapped requirement, low-confidence research).
 
-### Error codes
+## Error Codes
 
 | Code | Condition | Recovery |
 |------|-----------|----------|

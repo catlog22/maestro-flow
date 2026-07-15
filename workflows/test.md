@@ -263,6 +263,21 @@ Auto-fix:    {fixed} gaps resolved (if run)
 
 ---
 
+## Success Criteria
+
+- [ ] Target resolved (from scope or active session)
+- [ ] Test scenarios designed from verification context
+- [ ] UAT file created with structured format
+- [ ] Tests presented to user with expected behaviors
+- [ ] User responses recorded and gaps identified
+- [ ] Auto-diagnosis run for failing scenarios
+- [ ] Gap closed-loop decision applied (fix/accept/defer)
+- [ ] UAT confidence scored with pressure pass
+- [ ] Readiness gate passed (coverage ≥40%, blocker gaps diagnosed)
+- [ ] test-results.json written
+
+---
+
 ## Handoff routing
 
 The report's needs includes `latest-test` accordingly:
@@ -293,12 +308,12 @@ BLOCKED conditions: Readiness Gate not passed, or `test-results.json` missing.
 
 ---
 
-## Error Handling
+## Error Codes
 
-| Error | Action |
-|------|------|
-| E001 | no scope target and no active session → prompt to provide a scope |
-| E002 | target not verified (no `latest-verification`) → suggest running `execute` first (verification built in) |
-| E003 | smoke failed (app won't start) → suggest `debug` |
-| W001 | one or more scenarios failed → auto-diagnose, suggest fix options |
-| W002 | coverage below threshold → suggest generating additional tests |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No scope target and no active session | Prompt to provide a scope |
+| E002 | Target not verified (no `latest-verification`) | Suggest running `execute` first (verification built in) |
+| E003 | Smoke failed (app won't start) | Suggest `debug` |
+| W001 | One or more scenarios failed | Auto-diagnose, suggest fix options |
+| W002 | Coverage below threshold | Suggest generating additional tests |

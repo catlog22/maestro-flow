@@ -270,6 +270,19 @@ The verdict decides the downstream run; the report's needs includes `latest-revi
 
 ---
 
+## Success Criteria
+
+- [ ] Review level determined (quick/standard/deep)
+- [ ] All required dimensions produced findings (quick: 2, standard/deep: 6)
+- [ ] Every finding anchored to file:line with severity/evidence/impact/recommendation
+- [ ] Severity triage completed (severity_dist computed)
+- [ ] Spec-conflict routing applied (supersede for evolved practice, conflict mark for disputes)
+- [ ] Delta comparison with prior-review (if exists)
+- [ ] review-findings.json written with PASS/WARN/BLOCK verdict
+- [ ] issue-candidates.json written (if findings warrant)
+
+---
+
 ## GateRecord
 
 After review completes, inline-record one GateRecord (no separate gate artifact):
@@ -284,12 +297,12 @@ BLOCKED conditions: `review-findings.json` missing, or there are unhandled UNMET
 
 ---
 
-## Error Handling
+## Error Codes
 
-| Error | Action |
-|------|------|
-| no change manifest | abort: `current-execution` missing or has no completed tasks |
-| no changed files (E004) | abort: no changed files detected for this scope |
-| reviewer agent failed (W001) | record, continue with available dimension results |
-| all agents failed | abort: all dimension agents failed, cannot complete the review |
-| deep-dive agent failed | record that finding as unresolved, skip enrichment, mark [LOW CONFIDENCE] |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No change manifest (`current-execution` missing or has no completed tasks) | Abort; run `execute` first |
+| E002 | No changed files detected for this scope | Abort; verify scope has pending changes |
+| E003 | All dimension agents failed | Abort; cannot complete the review, retry |
+| W001 | Reviewer agent failed (one dimension) | Record, continue with available dimension results |
+| W002 | Deep-dive agent failed | Record finding as unresolved, skip enrichment, mark [LOW CONFIDENCE] |

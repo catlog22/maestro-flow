@@ -361,6 +361,18 @@ Record as it occurs:
 > - **Next Action**: [follow-up or none]
 ```
 
+## Success Criteria
+
+- [ ] Scope determined (small/medium/large) from codebase analysis
+- [ ] CLI exploration completed with concrete evidence
+- [ ] Interactive discussion rounds reached consensus or max rounds
+- [ ] Six-dimension scoring completed with evidence citations
+- [ ] Intent coverage matrix shows no unhandled ❌
+- [ ] Decision extraction captured all locked/free/deferred decisions
+- [ ] findings.json written with all scored dimensions
+
+---
+
 ## Domain Invariants
 
 - Every one of the six dimension scores must cite exploration/CLI evidence; manual Read/Grep is invalid.
@@ -369,11 +381,13 @@ Record as it occurs:
 - `-q` only skips exploration and scoring; decision extraction cannot be omitted.
 - `--gaps` goes issue root-cause analysis; a root cause cannot be confirmed without evidence.
 
-## Error Handling
+---
 
-| Error | Handling |
-|------|------|
-| cli-explore-agent failed | retry once; if still failing record W001, mark subsequent decisions LOW CONFIDENCE, continue with existing context |
-| CLI timeout | shorten prompt and retry; if still failing mark that perspective [LOW CONFIDENCE] and continue |
-| Max rounds reached (5) | force synthesis, offer a continue option |
-| No relevant findings | broaden the search or ask the user to clarify |
+## Error Codes
+
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No relevant findings | Broaden the search or ask the user to clarify |
+| W001 | cli-explore-agent failed | Retry once; if still failing mark subsequent decisions LOW CONFIDENCE, continue with existing context |
+| W002 | CLI timeout | Shorten prompt and retry; if still failing mark that perspective [LOW CONFIDENCE] and continue |
+| W003 | Max rounds reached (5) | Force synthesis, offer a continue option |

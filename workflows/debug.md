@@ -205,6 +205,20 @@ Gaps:        {total}
 
 ---
 
+## Success Criteria
+
+- [ ] Entry mode determined (standalone/from-test/parallel/continuation)
+- [ ] Symptoms collected (expected/actual/errors/timeline/reproduction)
+- [ ] Hypotheses generated and tested with evidence
+- [ ] 3-strike rule honored (max 3 failed hypotheses → escalate)
+- [ ] Evidence append-only (evidence.ndjson maintained)
+- [ ] Root cause confirmed with reproduction or code/log evidence
+- [ ] Debug confidence scored (hypothesis_quality, evidence_completeness, root_cause_isolation, fix_confidence)
+- [ ] diagnosis.json written with status (confirmed/partial/inconclusive)
+- [ ] fix-directions.json written (if root cause confirmed)
+
+---
+
 ## Handoff routing
 
 The report's needs includes `latest-debug` accordingly:
@@ -242,12 +256,12 @@ BLOCKED conditions: `understanding.md` or `evidence.ndjson` missing, or Readines
 
 ---
 
-## Error Handling
+## Error Codes
 
-| Error | Action |
-|------|------|
-| E001 | no issue description and no active session → check the argument format and re-run |
-| E002 | test artifact for `--from-test` not found → verify this scope has test-results |
-| W001 | existing debug session found → offer resume |
-| W002 | Checkpoint, needs user input → provide the requested input |
-| W003 | some gaps inconclusive → review partial results, retry |
+| Code | Condition | Recovery |
+|------|-----------|----------|
+| E001 | No issue description and no active session | Check the argument format and re-run |
+| E002 | Test artifact for `--from-test` not found | Verify this scope has test-results |
+| W001 | Existing debug session found | Offer resume |
+| W002 | Checkpoint, needs user input | Provide the requested input |
+| W003 | Some gaps inconclusive | Review partial results, retry |
