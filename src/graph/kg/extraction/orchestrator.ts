@@ -9,6 +9,7 @@ import { forEachCodeExtractionResult } from './code/code-extractor.js';
 import { resolveKnowledgeEdges } from '../resolution/knowledge-resolver.js';
 import type { SyncResult, SourceType } from '../db/types.js';
 import { FileLock } from '../sync/file-lock.js';
+import { writeSyncState, getGitHead } from '../sync-state.js';
 
 export interface CodegraphSyncOptions {
   srcDirs?: string[];
@@ -192,6 +193,9 @@ async function syncKnowledgeGraphUnlocked(
         edgesRemoved: 0,
         durationMs: Date.now() - startMs,
       });
+
+      // 记录同步水位 — kg-sync hook 据此发现"已提交但未同步"的变更
+      writeSyncState(projectPath, getGitHead(projectPath));
     }
 
     // ── Cross-source edge resolution ────────────────────────────────

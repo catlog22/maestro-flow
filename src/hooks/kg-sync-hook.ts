@@ -2,13 +2,16 @@
  * KG Sync Hook — UserPromptSubmit
  *
  * Silently syncs the Knowledge Graph when source files have changed.
- * Uses CooldownGuard for cross-process debouncing.
+ * Change detection: dirty source files (git status) OR HEAD moved since the
+ * last successful sync (covers commit / pull / branch switch, which leave a
+ * clean working tree). Uses CooldownGuard for cross-process debouncing.
  */
 
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { kgSyncGuard } from '../utils/cooldown-guard.js';
 import { invalidateSearchIndex } from '../search/daemon-client.js';
+import { readSyncState, getGitHead } from '../graph/kg/sync-state.js';
 
 const SOURCE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java',
@@ -43,7 +46,7 @@ export async function evaluateKgSync(
       return { synced: false, reason: 'cooldown' };
     }
 
-    if (!detectSourceChanges(projectPath)) {
+    if (!detectSourceChanges(projectPath) && !headMovedSinceLastSync(projectPath)) {
       kgSyncGuard.markDone(sessionId);
       return { synced: false, reason: 'no-changes' };
     }
@@ -72,7 +75,10 @@ export async function evaluateKgSync(
       ).catch(() => {});
     }
     return { synced: true, filesChanged, durationMs: Date.now() - start };
-  } catch {
+  } catch (e: unknown) {
+    if (process.env.MAESTRO_DEBUG === '1') {
+      console.error(`[kg-sync] sync failed: ${e instanceof Error ? e.message : e}`);
+    }
     return { synced: false, reason: 'sync-error' };
   }
 }
@@ -80,6 +86,17 @@ export async function evaluateKgSync(
 // ---------------------------------------------------------------------------
 // Internal
 // ---------------------------------------------------------------------------
+
+/**
+ * True when git HEAD differs from the recorded sync watermark — catches
+ * committed changes that git status cannot see. Missing watermark counts
+ * as moved so pre-watermark databases self-heal with one sync.
+ */
+function headMovedSinceLastSync(projectPath: string): boolean {
+  const head = getGitHead(projectPath);
+  if (!head) return false;
+  return readSyncState(projectPath)?.lastSyncHead !== head;
+}
 
 function detectSourceChanges(projectPath: string): boolean {
   try {

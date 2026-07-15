@@ -14,6 +14,8 @@
 
 `maestro explore` takes priority over Glob, Grep, and Read. When locating files or searching code patterns, call `maestro explore` first and stop to wait for results.
 
+**Exception — known symbol name**: to locate the definition/signature of a named symbol, run `maestro search "<Symbol>" --code` first (indexed, returns file:line + signature instantly). Fall back to explore/Grep only if it misses.
+
 ```bash
 maestro explore "FIND: <target + condition>\nSCOPE: <paths>" [more prompts...] [options]
 ```
@@ -115,7 +117,16 @@ maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--id 
 ### Query Rules
 
 1-3 core keywords per query — multiple short queries beat one long one.
-Separate concepts from symbols. Add `--code` for symbols, `--kg` for full-source.
+Separate concepts from symbols. Add `--kg` for full-source.
+
+| Target | Tool |
+|--------|------|
+| Known symbol → definition/signature | `maestro search "<Symbol>" --code` (file:line, no agent cost) |
+| Concept / knowledge / conventions | `maestro search "<keywords>"` |
+| Usage sweep / pattern scan | `maestro explore` |
+| Exact regex / line content | Grep |
+
+Zero code hits with a hint (e.g. `code index not initialized`) → run the hinted command, then retry — don't abandon code search.
 
 ```bash
 # ❌ keyword dump

@@ -52,8 +52,32 @@ export interface CodeSearchResult {
   kind: string;
   name: string;
   filePath: string;
+  line: number | null;
   score: number | null;
   signature?: string;
+}
+
+/** Availability of the codegraph index backing code search. */
+export type CodeIndexStatus = 'ok' | 'not-initialized' | 'empty' | 'error';
+
+/** Code search results plus index availability for actionable feedback. */
+export interface CodeSearchOutcome {
+  results: CodeSearchResult[];
+  status: CodeIndexStatus;
+}
+
+/** Actionable hint for a degraded code index, or null when healthy. */
+export function codeIndexHint(status: CodeIndexStatus): string | null {
+  switch (status) {
+    case 'not-initialized':
+      return 'code index not initialized — run "maestro kg init" to enable code search (hooks keep it synced afterwards)';
+    case 'empty':
+      return 'code index is empty — run "maestro kg sync --source codegraph"';
+    case 'error':
+      return 'code search failed — rerun with MAESTRO_DEBUG=1 for details';
+    default:
+      return null;
+  }
 }
 
 /** Options for runUnifiedSearch — wiki facets and result cap. */
@@ -260,24 +284,32 @@ async function runKgSearch(q: string, limit: number): Promise<{ results: KgSearc
 }
 
 /**
- * Search MaestroGraph for code nodes matching the query. Gracefully returns
- * empty when MaestroGraph is not initialized.
+ * Search MaestroGraph for code nodes matching the query. Never throws —
+ * a degraded index is reported via `status` so callers can surface a hint.
  */
-async function runCodeSearch(q: string, limit: number): Promise<CodeSearchResult[]> {
+async function runCodeSearch(q: string, limit: number): Promise<CodeSearchOutcome> {
   try {
     const { MaestroGraph } = await import('../graph/kg/engine.js');
-    if (!MaestroGraph.isInitialized(resolve('.'))) return [];
+    if (!MaestroGraph.isInitialized(resolve('.'))) return { results: [], status: 'not-initialized' };
     const mg = await MaestroGraph.open(resolve('.'));
     try {
       const results = mg.searchCode(q, { limit });
-      return results.map((n: { id: string; kind: string; name: string; filePath: string; _bm25Score?: number; signature?: string }) => ({
-        id: n.id,
-        kind: n.kind,
-        name: n.name,
-        filePath: n.filePath,
-        score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
-        signature: n.signature || undefined,
-      }));
+      if (results.length === 0) {
+        const codeNodes = mg.getStats().nodesBySourceType['codegraph'] ?? 0;
+        if (codeNodes === 0) return { results: [], status: 'empty' };
+      }
+      return {
+        results: results.map((n: { id: string; kind: string; name: string; filePath: string; startLine?: number; _bm25Score?: number; signature?: string }) => ({
+          id: n.id,
+          kind: n.kind,
+          name: n.name,
+          filePath: n.filePath,
+          line: typeof n.startLine === 'number' && n.startLine > 0 ? n.startLine : null,
+          score: typeof n._bm25Score === 'number' ? n._bm25Score : null,
+          signature: n.signature || undefined,
+        })),
+        status: 'ok',
+      };
     } finally {
       mg.close();
     }
@@ -285,7 +317,7 @@ async function runCodeSearch(q: string, limit: number): Promise<CodeSearchResult
     if (process.env.MAESTRO_DEBUG === '1') {
       console.error(`[search] code search failed: ${e instanceof Error ? e.message : e}`);
     }
-    return [];
+    return { results: [], status: 'error' };
   }
 }
 
@@ -357,10 +389,12 @@ export function registerSearchCommand(program: Command): void {
       }
 
       // Parallel: wiki + code search (skip irrelevant source based on flags)
-      const [wikiResults, codeResults] = await Promise.all([
+      const [wikiResults, codeOutcome] = await Promise.all([
         codeOnly ? [] : runUnifiedSearch(q, { type: opts.type, category: opts.category, kind: opts.kind, workspace: opts.workspace, limit, skipEmbedding, includeDeprecated: opts.includeDeprecated === true }),
-        wikiOnly ? [] : runCodeSearch(q, limit),
+        wikiOnly ? { results: [], status: 'ok' as CodeIndexStatus } : runCodeSearch(q, limit),
       ]);
+      const codeResults = codeOutcome.results;
+      const codeHint = wikiOnly ? null : codeIndexHint(codeOutcome.status);
 
       const meta = getLastSearchMeta();
       const embTag = meta.embeddingUsed ? `+emb(${meta.embeddingDocs})` : 'bm25';
@@ -368,12 +402,19 @@ export function registerSearchCommand(program: Command): void {
       // --code: code graph results only
       if (codeOnly) {
         if (opts.json) {
-          console.log(JSON.stringify({ query: q, count: codeResults.length, results: codeResults }, null, 2));
+          console.log(JSON.stringify({
+            query: q,
+            count: codeResults.length,
+            codeIndex: codeOutcome.status,
+            ...(codeHint ? { hint: codeHint } : {}),
+            results: codeResults,
+          }, null, 2));
           return;
         }
         console.log(`Search: "${q}" (code ${codeResults.length}, ${embTag})`);
         if (codeResults.length === 0) {
           console.log('  No matches found.');
+          if (codeHint) console.log(`  Hint: ${codeHint}`);
           return;
         }
         for (const r of codeResults) {
@@ -397,7 +438,16 @@ export function registerSearchCommand(program: Command): void {
           else dt = r.kind;
           typeCountsJson[dt] = (typeCountsJson[dt] ?? 0) + 1;
         }
-        console.log(JSON.stringify({ query: q, wikiCount, codeCount, typeCounts: typeCountsJson, count: merged.length, results: merged }, null, 2));
+        console.log(JSON.stringify({
+          query: q,
+          wikiCount,
+          codeCount,
+          codeIndex: codeOutcome.status,
+          ...(codeHint ? { codeIndexHint: codeHint } : {}),
+          typeCounts: typeCountsJson,
+          count: merged.length,
+          results: merged,
+        }, null, 2));
         return;
       }
 
@@ -424,6 +474,7 @@ export function registerSearchCommand(program: Command): void {
         ? `${countParts.join(' + ')} = ${merged.length} results`
         : '0 results';
       console.log(`Search: "${q}" (${countSummary}, ${embTag})`);
+      if (codeHint) console.log(`  Note: ${codeHint}`);
 
       if (qTerms.length > 4) {
         console.log(`  Hint: ${qTerms.length} terms — split into 1-3 keyword queries for better precision`);
@@ -672,7 +723,12 @@ function printCodeResult(r: CodeSearchResult, indent: string, isTTY: boolean, qT
   const scoreTag = r.score !== null ? `  (${r.score.toFixed(4)})` : '';
   const name = isTTY ? highlightTerms(r.name, qTerms) : r.name;
   const sigTag = r.signature ? `  ${truncate(r.signature, 60)}` : '';
-  console.log(`${indent}[${r.kind}] ${name}  ${r.filePath}${sigTag}${scoreTag}`);
+  console.log(`${indent}[${r.kind}] ${name}  ${codeLocation(r)}${sigTag}${scoreTag}`);
+}
+
+/** file:line reference — directly consumable by Read/editor jumps. */
+function codeLocation(r: CodeSearchResult): string {
+  return r.line !== null ? `${r.filePath}:${r.line}` : r.filePath;
 }
 
 // ── Multi-signal score normalization ────────────────────────────────
@@ -833,7 +889,7 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
       source: 'code',
       kind: r.kind,
       name: r.name,
-      detail: r.filePath,
+      detail: codeLocation(r),
       normalizedScore: codeRanks[i] * CODE_WEIGHT,
       signature: r.signature,
     });
