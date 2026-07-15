@@ -6,6 +6,7 @@
  */
 
 import { agentLoop, type AgentLoopResult } from './agent-loop.js';
+import type { StreamEmitter } from './stream-json-emitter.js';
 import { createClient } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildExplorePrompt } from './prompt-parser.js';
@@ -40,6 +41,8 @@ export interface PipelineParams {
   cache?: boolean;
   cacheTtlMs?: number;
   onProgress?: (msg: string) => void;
+  /** Protocol event sink passed to inner agent loops (default: NDJSON on stdout) */
+  emitter?: StreamEmitter;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +106,7 @@ async function executeReference(
           toolSchemas: useTools ? TOOL_SCHEMAS : [],
           maxTurns: params.maxTurns,
           cwd: params.cwd,
+          emitter: params.emitter,
         });
         params.onProgress?.(`[${stepIndex}] reference ${ep.name} — done`);
         const output: ReferenceOutput = {
@@ -342,6 +346,7 @@ async function runSingleAgent(ep: NamedEndpoint, prompt: string, useTools: boole
     toolSchemas: useTools ? TOOL_SCHEMAS : [],
     maxTurns: params.maxTurns,
     cwd: params.cwd,
+    emitter: params.emitter,
   });
 }
 

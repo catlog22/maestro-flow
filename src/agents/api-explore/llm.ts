@@ -14,6 +14,7 @@ export interface LlmResponse {
   content: string | null;
   toolCalls: LlmToolCall[];
   usage: { inputTokens: number; outputTokens: number };
+  stopReason?: string;
 }
 
 export interface LlmConfig {
@@ -149,6 +150,7 @@ async function callOpenAi(
   return {
     content: msg.content,
     toolCalls,
+    stopReason: choice.finish_reason ?? undefined,
     usage: {
       inputTokens: response.usage?.prompt_tokens ?? 0,
       outputTokens: response.usage?.completion_tokens ?? 0,
@@ -314,6 +316,7 @@ async function callAnthropic(
   return {
     content,
     toolCalls,
+    stopReason: data.stop_reason ?? undefined,
     usage: {
       inputTokens: data.usage?.input_tokens ?? 0,
       outputTokens: data.usage?.output_tokens ?? 0,
@@ -479,6 +482,7 @@ async function callOpenAiResponses(
   return {
     content,
     toolCalls,
+    stopReason: data.status === 'incomplete' ? 'length' : undefined,
     usage: {
       inputTokens: data.usage?.input_tokens ?? 0,
       outputTokens: data.usage?.output_tokens ?? 0,

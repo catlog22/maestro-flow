@@ -2,15 +2,7 @@ import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions.js';
 import { callLlm, type LlmConfig, type LlmCallOptions } from './llm.js';
 import { executeToolAsync, type ToolSchema } from './tools.js';
-import {
-  emitInit,
-  emitMessage,
-  emitToolUse,
-  emitToolResult,
-  emitResult,
-} from './stream-json-emitter.js';
-
-const SAFETY_MAX_TURNS = 100;
+import { stdoutEmitter, type StreamEmitter } from './stream-json-emitter.js';
 
 export interface AgentLoopParams {
   prompt: string;
@@ -21,6 +13,8 @@ export interface AgentLoopParams {
   maxTurns?: number;
   llmOptions?: LlmCallOptions;
   cwd: string;
+  /** Protocol event sink (default: NDJSON on stdout — the standalone agent protocol) */
+  emitter?: StreamEmitter;
   beforeTurn?: (ctx: { turn: number; messages: ChatCompletionMessageParam[] }) => Promise<void> | void;
 }
 
@@ -33,9 +27,10 @@ export interface AgentLoopResult {
 
 export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
   const { prompt, systemPrompt, client, llmConfig, toolSchemas, cwd } = params;
-  const maxTurns = params.maxTurns ?? SAFETY_MAX_TURNS;
+  const maxTurns = params.maxTurns ?? 0;
+  const emitter = params.emitter ?? stdoutEmitter;
 
-  emitInit();
+  emitter.init();
 
   const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -47,24 +42,19 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let totalOutput = 0;
   let turn = 0;
   let toolCalled = false;
+  let pendingContent = '';
 
   while (true) {
     turn++;
 
     await params.beforeTurn?.({ turn, messages });
 
-    if (turn > maxTurns) {
-      messages.push({
-        role: 'user',
-        content: 'Provide your final answer now based on what you have gathered.',
-      });
-    }
-
-    if (turn > maxTurns + 1) {
-      const fallback = `Reached safety limit (${maxTurns} turns). Partial results above.`;
-      emitMessage(fallback);
-      emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
-      return { content: fallback, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
+    if (maxTurns > 0 && turn > maxTurns && !pendingContent) {
+      const over = turn - maxTurns;
+      const nudge = over === 1
+        ? 'You have used all allocated turns. Provide your final answer now based on what you have gathered.'
+        : `You are ${over} turns over the limit. Stop calling tools and return your answer immediately.`;
+      messages.push({ role: 'user', content: nudge });
     }
 
     let response;
@@ -72,8 +62,8 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       response = await callLlm(client, llmConfig, messages, tools, params.llmOptions);
     } catch (err) {
       const errMsg = `LLM API error: ${err instanceof Error ? err.message : String(err)}`;
-      emitMessage(errMsg);
-      emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
+      emitter.message(errMsg);
+      emitter.result({ input_tokens: totalInput, output_tokens: totalOutput });
       return { content: errMsg, usage: { inputTokens: totalInput, outputTokens: totalOutput }, apiError: true };
     }
 
@@ -81,9 +71,10 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     totalOutput += response.usage.outputTokens;
 
     if (response.toolCalls.length > 0) {
+      pendingContent = '';
       toolCalled = true;
       if (response.content) {
-        emitMessage(response.content, true);
+        emitter.message(response.content, true);
       }
 
       messages.push({
@@ -97,7 +88,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       });
 
       for (const tc of response.toolCalls) {
-        emitToolUse(tc.name, safeParseJson(tc.arguments), tc.id);
+        emitter.toolUse(tc.name, safeParseJson(tc.arguments), tc.id);
       }
 
       const results = await Promise.all(
@@ -111,7 +102,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       );
 
       for (const r of results) {
-        emitToolResult(r.id, r.result, r.error);
+        emitter.toolResult(r.id, r.result, r.error);
         messages.push({ role: 'tool', tool_call_id: r.id, content: r.result });
       }
     } else if (!toolCalled && turn <= 2) {
@@ -125,9 +116,21 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         content: 'You must call Search before answering. Pick a keyword from the query and search.',
       });
     } else {
-      const content = response.content ?? '';
-      emitMessage(content);
-      emitResult({ input_tokens: totalInput, output_tokens: totalOutput });
+      const text = response.content ?? '';
+      const truncated = response.stopReason === 'length' || response.stopReason === 'max_tokens';
+
+      if (truncated && text) {
+        pendingContent += text;
+        emitter.message(text, true);
+        messages.push({ role: 'assistant', content: text });
+        messages.push({ role: 'user', content: 'Continue.' });
+        continue;
+      }
+
+      const content = pendingContent + text;
+      pendingContent = '';
+      emitter.message(text);
+      emitter.result({ input_tokens: totalInput, output_tokens: totalOutput });
       return { content, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
     }
   }

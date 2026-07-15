@@ -57,6 +57,8 @@ export interface NamedEndpoint {
   name: string;
   llmConfig: LlmConfig;
   maxTurns?: number;
+  /** Per-endpoint max concurrent jobs (unset = unlimited) */
+  concurrency?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +139,7 @@ export function getAllEndpoints(config: ExploreConfig): NamedEndpoint[] {
         name,
         llmConfig: { model: ep.model, baseUrl: ep.baseUrl, apiKey: ep.apiKey, format: fmt, extraBody: ep.extraBody },
         maxTurns: ep.maxTurns,
+        concurrency: ep.concurrency,
       });
     }
   }
@@ -155,7 +158,7 @@ export function resolveEndpoints(
     for (const name of names) {
       const ep = name === 'default' ? getDefaultEndpoint(config) : getNamedEndpoint(name, config);
       const epConfig = config.endpoints?.[name];
-      if (ep) results.push({ name, llmConfig: ep, maxTurns: epConfig?.maxTurns });
+      if (ep) results.push({ name, llmConfig: ep, maxTurns: epConfig?.maxTurns, concurrency: epConfig?.concurrency });
     }
     return results;
   }

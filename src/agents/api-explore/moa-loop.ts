@@ -10,6 +10,7 @@
 import { readdirSync } from 'node:fs';
 import { buildSystemPrompt } from './system-prompt.js';
 import { executeSteps, createPipelineContext } from './moa-pipeline.js';
+import type { StreamEmitter } from './stream-json-emitter.js';
 import type { PipelineStep, ResolvedMoaPreset } from './config.js';
 
 export interface ReferenceOutput {
@@ -40,6 +41,8 @@ export interface MoaLoopParams {
   cache?: boolean;
   cacheTtlMs?: number;
   pipeline?: PipelineStep[];
+  /** Protocol event sink passed to inner agent loops (default: NDJSON on stdout) */
+  emitter?: StreamEmitter;
 }
 
 export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
@@ -66,6 +69,7 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
     cache: params.cache,
     cacheTtlMs: params.cacheTtlMs,
     onProgress: params.onProgress,
+    emitter: params.emitter,
   });
 
   const degraded = ctx.referenceOutputs.length > 0 && ctx.referenceOutputs.every(r => r.error || !r.content);

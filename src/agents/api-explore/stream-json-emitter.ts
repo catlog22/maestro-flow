@@ -3,26 +3,50 @@ export interface StreamJsonUsage {
   output_tokens: number;
 }
 
-function emit(obj: Record<string, unknown>): void {
-  process.stdout.write(JSON.stringify(obj) + '\n');
+/** One protocol event (init | message | tool_use | tool_result | result). */
+export type StreamEvent = Record<string, unknown> & { type: string };
+
+/** Receives every protocol event emitted by the agent loop. */
+export interface StreamEmitter {
+  init(): void;
+  message(content: string, delta?: boolean, role?: 'assistant' | 'user'): void;
+  toolUse(name: string, input: Record<string, unknown>, toolId: string): void;
+  toolResult(toolId: string, content: string, isError?: boolean): void;
+  result(usage?: StreamJsonUsage): void;
 }
 
-export function emitInit(): void {
-  emit({ type: 'init' });
+function buildEmitter(sink: (event: StreamEvent) => void): StreamEmitter {
+  return {
+    init: () => sink({ type: 'init' }),
+    message: (content, delta = false, role = 'assistant') =>
+      sink({ type: 'message', content, delta, role }),
+    toolUse: (name, input, toolId) =>
+      sink({ type: 'tool_use', tool_name: name, parameters: input, tool_id: toolId }),
+    toolResult: (toolId, content, isError = false) =>
+      sink({ type: 'tool_result', tool_id: toolId, content, is_error: isError }),
+    result: (usage) => sink({ type: 'result', ...(usage ? { usage } : {}) }),
+  };
 }
 
-export function emitMessage(content: string, delta = false, role: 'assistant' | 'user' = 'assistant'): void {
-  emit({ type: 'message', content, delta, role });
-}
+/** NDJSON on stdout — the standalone agent binary protocol. */
+export const stdoutEmitter: StreamEmitter = buildEmitter(
+  (event) => process.stdout.write(JSON.stringify(event) + '\n'),
+);
 
-export function emitToolUse(name: string, input: Record<string, unknown>, toolId: string): void {
-  emit({ type: 'tool_use', tool_name: name, parameters: input, tool_id: toolId });
-}
+/** Drops all events — for in-process embedding where the protocol stream is unused. */
+export const silentEmitter: StreamEmitter = buildEmitter(() => {});
 
-export function emitToolResult(toolId: string, content: string, isError = false): void {
-  emit({ type: 'tool_result', tool_id: toolId, content, is_error: isError });
-}
+/** Cap for tool_result content stored in traces — keeps session files bounded. */
+const TRACE_TOOL_RESULT_LIMIT = 2_000;
 
-export function emitResult(usage?: StreamJsonUsage): void {
-  emit({ type: 'result', ...(usage ? { usage } : {}) });
+/** Collects events into `trace` for session persistence; tool results are truncated. */
+export function createTraceEmitter(trace: StreamEvent[]): StreamEmitter {
+  return buildEmitter((event) => {
+    if (event.type === 'tool_result' && typeof event.content === 'string'
+        && event.content.length > TRACE_TOOL_RESULT_LIMIT) {
+      const omitted = event.content.length - TRACE_TOOL_RESULT_LIMIT;
+      event = { ...event, content: event.content.slice(0, TRACE_TOOL_RESULT_LIMIT) + `\n…[truncated ${omitted} chars]` };
+    }
+    trace.push(event);
+  });
 }

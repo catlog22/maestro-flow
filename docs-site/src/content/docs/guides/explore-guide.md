@@ -79,7 +79,7 @@ MOA 模板配置：`~/.maestro/moa.json`
 | `format` | API 格式：`"openai"`（默认）或 `"anthropic"` | ❌ |
 | `maxTurns` | 该端点最大搜索轮数（覆盖全局） | ❌ |
 | `extraBody` | 模型特定参数（如 `enable_thinking`、`temperature`） | ❌ |
-| `concurrency` | 该端点最大并发数（默认 1 = 串行） | ❌ |
+| `concurrency` | 该端点最大并发 job 数（默认无限制） | ❌ |
 
 ### API 格式（format）
 
@@ -146,7 +146,7 @@ maestro explore "<PROMPT>" [more prompts...] [options]
 | `-e, --endpoint <names>` | 端点名称（逗号分隔） | 第一个可用 |
 | `--all` | 每个 prompt 扇出到所有端点 | — |
 | `--parallel <n>` | 最大并行端点队列数 | 配置或 `4` |
-| `--ep-concurrency <n>` | 同一端点最大并发 job 数 | `1`（串行） |
+| `--ep-concurrency <n>` | 同一端点最大并发 job 数 | 无限制（或端点配置 `concurrency`） |
 | `--max-turns <n>` | 最大搜索轮数（覆盖配置） | 配置或 `6` |
 | `-f, --file <path>` | 从 JSON/文本文件加载 prompt | — |
 | `--cd <dir>` | 工作目录 | 当前目录 |
@@ -234,23 +234,25 @@ maestro explore "内联 prompt" -f more-prompts.json
 
 ## 执行模型
 
-**同端点串行，跨端点并行。**
+**默认全并行，配置可限流。**
 
 ```
-端点 A:  [job1] → [job2] → [job3]    ← 串行（避免限流）
-端点 B:  [job4] → [job5]              ← 串行
+端点 A:  [job1] [job2] [job3]    ← 默认并行
+端点 B:  [job4] → [job5]          ← concurrency: 1 时串行
           ↑ 并行 ↑
 ```
 
-- 同一 API 的 job 排队逐个执行，避免触发 rate limit
-- 不同 API 的队列同时运行
-- `--ep-concurrency 2` 可提升单端点并发（API 允许时）
+- 所有 job 默认并行执行（同端点、跨端点均并行）
+- 限流优先级：`--ep-concurrency`（全局覆盖）> 端点配置 `concurrency` > 无限制
+- 端点易触发 rate limit 时，在其配置中加 `"concurrency": 1` 恢复串行
 
 ---
 
 ## Session 管理
 
 每次 explore 结果自动保存到 `.workflow/explore/{session-id}.json`，按工作空间隔离。
+
+**输出分工**：文本模式下每个 job 完成即向 stdout 输出该结果（不等全部完成）；`--json` 在全部完成后输出结果数组（不含 trace）。session JSON 额外记录每个 job 的详细调用轨迹 `trace`（assistant 消息、工具调用、截断后的工具结果）与 token 用量 `usage`。
 
 ```bash
 maestro explore show                    # 列出历史

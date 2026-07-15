@@ -28,25 +28,18 @@ function truncatePrompt(prompt: string, maxLen = 60): string {
   return oneLine.length > maxLen ? oneLine.slice(0, maxLen - 1) + '…' : oneLine;
 }
 
-function formatResults(results: ExploreResult[]): string {
-  if (results.length === 1) {
-    const r = results[0];
+function formatResultSection(r: ExploreResult, index: number, total: number): string {
+  if (total === 1) {
     if (r.error) return `Error (${r.endpointName}/${r.model}): ${r.error}`;
     return r.content ?? '(no output)';
   }
+  const promptTag = truncatePrompt(r.prompt);
+  const header = `── [${index + 1}] ${promptTag} ── ${r.endpointName} (${r.model}) ${(r.durationMs / 1000).toFixed(1)}s`;
+  return r.error ? `${header}\nError: ${r.error}` : `${header}\n${r.content ?? '(no output)'}`;
+}
 
-  const sections: string[] = [];
-  for (let i = 0; i < results.length; i++) {
-    const r = results[i];
-    const promptTag = truncatePrompt(r.prompt);
-    const header = `── [${i + 1}] ${promptTag} ── ${r.endpointName} (${r.model}) ${(r.durationMs / 1000).toFixed(1)}s`;
-    if (r.error) {
-      sections.push(`${header}\nError: ${r.error}`);
-    } else {
-      sections.push(`${header}\n${r.content ?? '(no output)'}`);
-    }
-  }
-  return sections.join('\n\n');
+function formatResults(results: ExploreResult[]): string {
+  return results.map((r, i) => formatResultSection(r, i, results.length)).join('\n\n');
 }
 
 export interface PromptEntry {
@@ -90,7 +83,7 @@ export function registerExploreCommand(program: Command): void {
     .option('-e, --endpoint <names>', 'Endpoint name(s), comma-separated (default: first available)')
     .option('--all', 'Fan out to all configured endpoints')
     .option('--parallel <n>', 'Max concurrent endpoint queues (default: from config or 4)', parseInt)
-    .option('--ep-concurrency <n>', 'Max concurrent jobs per endpoint (default: 1 = serial)', parseInt)
+    .option('--ep-concurrency <n>', 'Max concurrent jobs per endpoint (default: unlimited, or endpoint config "concurrency")', parseInt)
     .option('--max-turns <n>', 'Max agent turns per job (default: from config or 6)', parseInt)
     .option('--cd <dir>', 'Working directory for exploration')
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
@@ -198,7 +191,8 @@ export function registerExploreCommand(program: Command): void {
       }
       process.stderr.write('\n');
 
-      const epConcurrency = opts.epConcurrency ?? 1;
+      const epConcurrency = opts.epConcurrency;
+      const jobIndex = new Map(jobs.map((j, i) => [j.id, i]));
       const startTime = Date.now();
       const results = await runExploreJobs({
         jobs,
@@ -210,6 +204,12 @@ export function registerExploreCommand(program: Command): void {
         circuitBreaker: config.circuitBreaker,
         allEndpoints: allEps,
         onProgress: (msg) => process.stderr.write(`${msg}\n`),
+        // Stream each agent result to stdout as soon as its job completes (text mode)
+        onJobDone: opts.json ? undefined : (result) => {
+          const idx = jobIndex.get(result.id) ?? 0;
+          const sep = totalJobs === 1 ? '\n' : '\n\n';
+          process.stdout.write(formatResultSection(result, idx, totalJobs) + sep);
+        },
       });
       const totalDuration = Date.now() - startTime;
 
@@ -236,10 +236,11 @@ export function registerExploreCommand(program: Command): void {
       }
 
       if (opts.json) {
-        process.stdout.write(JSON.stringify(results, null, 2) + '\n');
-      } else {
-        process.stdout.write(formatResults(results) + '\n');
+        // Detailed call traces live in the session JSON; keep stdout JSON result-only
+        const stdoutResults = results.map(({ trace, ...rest }) => rest);
+        process.stdout.write(JSON.stringify(stdoutResults, null, 2) + '\n');
       }
+      // Text mode: sections were already streamed via onJobDone
 
       const failed = results.filter(r => r.error);
       if (failed.length > 0) {

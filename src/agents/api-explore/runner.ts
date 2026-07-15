@@ -1,16 +1,17 @@
 /**
  * Parallel explore runner.
  *
- * Execution model: serial within same endpoint, parallel across endpoints.
- * Each endpoint gets its own queue; jobs in the same queue run one-by-one.
- * Different endpoint queues run concurrently.
+ * Execution model: parallel by default, both across endpoints and within
+ * the same endpoint. Each endpoint gets its own queue; a queue is throttled
+ * only when a limit is configured.
  *
- * Per-endpoint concurrency can be raised via `endpointConcurrency` option
- * (default 1 = fully serial per endpoint).
+ * Per-queue limit resolution: `endpointConcurrency` option (CLI override)
+ * > endpoint config `concurrency` > unlimited.
  */
 
 import { readdirSync } from 'node:fs';
 import { createClient, probeEndpoint, type LlmConfig } from './llm.js';
+import { createTraceEmitter, silentEmitter, type StreamEvent } from './stream-json-emitter.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
@@ -26,6 +27,8 @@ export interface ExploreJob {
   llmConfig: LlmConfig;
   /** Per-endpoint maxTurns override */
   maxTurns?: number;
+  /** Per-endpoint max concurrent jobs (unset = unlimited) */
+  concurrency?: number;
 }
 
 export interface ExploreResult {
@@ -36,6 +39,9 @@ export interface ExploreResult {
   content: string | null;
   error?: string;
   durationMs: number;
+  usage?: { inputTokens: number; outputTokens: number };
+  /** Detailed call trace (messages, tool calls, truncated tool results) — persisted in session JSON */
+  trace?: StreamEvent[];
 }
 
 export interface RunnerOptions {
@@ -44,7 +50,7 @@ export interface RunnerOptions {
   maxTurns: number;
   /** Max concurrent endpoint queues (default: number of distinct endpoints) */
   concurrency: number;
-  /** Max concurrent jobs within the same endpoint (default: 1 = serial) */
+  /** Explicit max concurrent jobs within the same endpoint (overrides endpoint config; default: unlimited) */
   endpointConcurrency?: number;
   /** When set, route each job through MOA instead of a single-endpoint agentLoop */
   moaPreset?: ResolvedMoaPreset;
@@ -109,6 +115,7 @@ async function runSingleJob(
   moaPreset?: ResolvedMoaPreset,
 ): Promise<ExploreResult> {
   const start = Date.now();
+  const trace: StreamEvent[] = [];
   try {
     if (moaPreset) {
       const moaResult = await moaAgentLoop({
@@ -116,6 +123,7 @@ async function runSingleJob(
         preset: moaPreset,
         cwd,
         maxTurns: globalMaxTurns,
+        emitter: silentEmitter,
       });
       return {
         id: job.id,
@@ -139,6 +147,7 @@ async function runSingleJob(
       toolSchemas: TOOL_SCHEMAS,
       cwd,
       maxTurns: job.maxTurns ?? globalMaxTurns,
+      emitter: createTraceEmitter(trace),
     });
 
     return {
@@ -149,6 +158,8 @@ async function runSingleJob(
       content: result.apiError ? null : result.content,
       error: result.apiError ? result.content : undefined,
       durationMs: Date.now() - start,
+      usage: result.usage,
+      trace: trace.length > 0 ? trace : undefined,
     };
   } catch (err) {
     return {
@@ -159,6 +170,7 @@ async function runSingleJob(
       content: null,
       error: err instanceof Error ? err.message : String(err),
       durationMs: Date.now() - start,
+      trace: trace.length > 0 ? trace : undefined,
     };
   }
 }
@@ -201,7 +213,7 @@ async function drainQueue(
           callbacks.onProgress?.(
             `[${globalIdx + 1}/${totalJobs}] ${job.endpointName} tripped, no fallback available — skipping`,
           );
-          results.push({
+          const skipped: ExploreResult = {
             id: job.id,
             prompt: job.prompt,
             endpointName: job.endpointName,
@@ -209,7 +221,9 @@ async function drainQueue(
             content: null,
             error: `Circuit breaker open for ${job.endpointName}, no fallback available`,
             durationMs: 0,
-          });
+          };
+          results.push(skipped);
+          callbacks.onJobDone?.(skipped);
           continue;
         }
       }
@@ -293,7 +307,7 @@ async function drainQueue(
 export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult[]> {
   const {
     jobs, cwd, maxTurns, concurrency,
-    endpointConcurrency = 1,
+    endpointConcurrency,
     moaPreset,
     circuitBreaker: cbConfig,
     allEndpoints,
@@ -366,42 +380,44 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
     q.push(job);
   }
 
+  // Per-queue job limit: CLI override > endpoint config > unlimited
+  const queueLimits = new Map<string, number>();
+  for (const [name, queue] of queues) {
+    const limit = endpointConcurrency ?? queue[0]?.concurrency;
+    queueLimits.set(name, Number.isFinite(limit) && (limit as number) > 0 ? (limit as number) : Infinity);
+  }
+
   const endpointNames = [...queues.keys()];
+  const limitDesc = [...queueLimits.values()].every(v => v === Infinity)
+    ? 'unlimited'
+    : endpointNames.map(n => `${n}=${queueLimits.get(n) === Infinity ? '∞' : queueLimits.get(n)}`).join(', ');
   onProgress?.(
-    `Scheduling: ${endpointNames.length} endpoint(s), ${endpointConcurrency} job(s)/endpoint, ${concurrency} max parallel`,
+    `Scheduling: ${endpointNames.length} endpoint(s), ${limitDesc} job(s)/endpoint, ${concurrency} max parallel`,
   );
 
-  // Suppress stream-json-emitter NDJSON stdout writes
-  const origStdoutWrite = process.stdout.write.bind(process.stdout);
-  process.stdout.write = (() => true) as typeof process.stdout.write;
-
   const allResults: ExploreResult[] = [];
-  try {
-    // Run endpoint queues in parallel, capped by concurrency
-    const queueEntries = [...queues.entries()];
-    let nextQueue = 0;
+  // Run endpoint queues in parallel, capped by concurrency
+  const queueEntries = [...queues.entries()];
+  let nextQueue = 0;
 
-    async function runEndpointSlot(): Promise<void> {
-      while (nextQueue < queueEntries.length) {
-        const idx = nextQueue++;
-        const [, queue] = queueEntries[idx];
-        const results = await drainQueue(
-          queue, endpointConcurrency, cwd, maxTurns, dirListing,
-          jobs.length, jobIndexMap,
-          { onProgress, onJobStart, onJobDone },
-          moaPreset,
-          breaker,
-          allEndpoints,
-        );
-        allResults.push(...results);
-      }
+  async function runEndpointSlot(): Promise<void> {
+    while (nextQueue < queueEntries.length) {
+      const idx = nextQueue++;
+      const [name, queue] = queueEntries[idx];
+      const results = await drainQueue(
+        queue, queueLimits.get(name) ?? Infinity, cwd, maxTurns, dirListing,
+        jobs.length, jobIndexMap,
+        { onProgress, onJobStart, onJobDone },
+        moaPreset,
+        breaker,
+        allEndpoints,
+      );
+      allResults.push(...results);
     }
-
-    const endpointSlots = Math.min(concurrency, queueEntries.length);
-    await Promise.allSettled(Array.from({ length: endpointSlots }, () => runEndpointSlot()));
-  } finally {
-    process.stdout.write = origStdoutWrite;
   }
+
+  const endpointSlots = Math.min(concurrency, queueEntries.length);
+  await Promise.allSettled(Array.from({ length: endpointSlots }, () => runEndpointSlot()));
 
   // Persist and log circuit breaker summary
   if (breaker) {
@@ -422,7 +438,7 @@ export interface PromptEntry {
   endpoint?: string;
 }
 
-type NamedEndpoint = { name: string; llmConfig: LlmConfig; maxTurns?: number };
+type NamedEndpoint = { name: string; llmConfig: LlmConfig; maxTurns?: number; concurrency?: number };
 
 /**
  * Build job list from prompt entries. Default: 1 prompt = 1 agent (first endpoint).
@@ -461,6 +477,7 @@ export function buildJobsFromEntries(
         endpointName: ep.name,
         llmConfig: ep.llmConfig,
         maxTurns: ep.maxTurns,
+        concurrency: ep.concurrency,
       });
     }
   }
@@ -488,6 +505,7 @@ export function buildJobs(
         endpointName: ep.name,
         llmConfig: ep.llmConfig,
         maxTurns: ep.maxTurns,
+        concurrency: ep.concurrency,
       });
     }
   }

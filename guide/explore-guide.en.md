@@ -80,7 +80,7 @@ MOA preset config: `~/.maestro/moa.json`
 | `format` | API format: `"openai"` (default) or `"anthropic"` | No |
 | `maxTurns` | Max search rounds for this endpoint (overrides global) | No |
 | `extraBody` | Model-specific params (e.g. `enable_thinking`, `temperature`) | No |
-| `concurrency` | Max concurrent jobs on this endpoint (default: 1 = serial) | No |
+| `concurrency` | Max concurrent jobs on this endpoint (default: unlimited) | No |
 
 ### API Format
 
@@ -166,7 +166,7 @@ maestro explore "<PROMPT>" [more prompts...] [options]
 | `-e, --endpoint <names>` | Endpoint name(s), comma-separated | First available |
 | `--all` | Fan out each prompt to all endpoints | — |
 | `--parallel <n>` | Max concurrent endpoint queues | Config or `4` |
-| `--ep-concurrency <n>` | Max concurrent jobs per endpoint | `1` (serial) |
+| `--ep-concurrency <n>` | Max concurrent jobs per endpoint | unlimited (or endpoint config `concurrency`) |
 | `--max-turns <n>` | Max search rounds (overrides config) | Config or `6` |
 | `-f, --file <path>` | Load prompts from JSON/text file | — |
 | `--cd <dir>` | Working directory | Current |
@@ -250,23 +250,25 @@ maestro explore "inline prompt" -f more-prompts.json
 
 ## Execution Model
 
-**Serial within endpoint, parallel across endpoints.**
+**Fully parallel by default; throttle via config.**
 
 ```
-Endpoint A:  [job1] → [job2] → [job3]    ← serial (avoids rate limits)
-Endpoint B:  [job4] → [job5]              ← serial
+Endpoint A:  [job1] [job2] [job3]    ← parallel by default
+Endpoint B:  [job4] → [job5]          ← serial when concurrency: 1
               ↑ parallel ↑
 ```
 
-- Same API jobs queue and run one-by-one to avoid rate limits
-- Different API queues run concurrently
-- `--ep-concurrency 2` raises per-endpoint parallelism when the API allows it
+- All jobs run concurrently by default (within and across endpoints)
+- Limit resolution: `--ep-concurrency` (global override) > endpoint config `concurrency` > unlimited
+- For rate-limited APIs, set `"concurrency": 1` on that endpoint to restore serial execution
 
 ---
 
 ## Session Management
 
 Results auto-save to `.workflow/explore/{session-id}.json`, scoped per workspace.
+
+**Output split**: in text mode each job's result streams to stdout as soon as it completes (no waiting for the rest); `--json` prints the full result array once all jobs finish (trace excluded). The session JSON additionally records each job's detailed call trace (`trace`: assistant messages, tool calls, truncated tool results) and token `usage`.
 
 ```bash
 maestro explore show                    # List history
