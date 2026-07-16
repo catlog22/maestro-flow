@@ -16,7 +16,7 @@ vi.mock('../search/daemon-client.js', () => ({
 
 import { registerSearchCommand, runUnifiedSearch } from './search.js';
 
-function wikiEntry(id: string, tags: string[]): WikiEntry {
+function wikiEntry(id: string, tags: string[], overrides: Partial<WikiEntry> = {}): WikiEntry {
   return {
     id,
     type: 'knowhow',
@@ -37,6 +37,7 @@ function wikiEntry(id: string, tags: string[]): WikiEntry {
     createdBy: 'quality-debug',
     sourceRef: id,
     parent: null,
+    ...overrides,
   };
 }
 
@@ -66,5 +67,52 @@ describe('search artifact kind facet', () => {
 
     const search = program.commands.find(command => command.name() === 'search');
     expect(search?.options.some(option => option.long === '--kind')).toBe(true);
+  });
+});
+
+describe('search session/run topology exposure', () => {
+  beforeEach(() => {
+    daemonSearch.mockReset();
+    daemonSearch.mockResolvedValue({
+      ok: true,
+      embeddingUsed: false,
+      embeddingDocs: 0,
+      results: [
+        {
+          entry: wikiEntry('session-20260712-legacy', ['session', 'sealed'], {
+            ext: { virtualKind: 'session', sessionId: '20260712-legacy', runCount: 2 },
+            related: ['session-run-20260712-legacy-run-001', 'spec:project:legacy-promoted-rule'],
+          }),
+          score: 9,
+        },
+        {
+          entry: wikiEntry('session-run-20260712-legacy-run-001', ['session', 'run', 'diagnosis'], {
+            ext: { virtualKind: 'session-run', sessionId: '20260712-legacy', runId: 'RUN-001' },
+            related: ['session-20260712-legacy'],
+            parent: 'session-20260712-legacy',
+          }),
+          score: 8,
+        },
+        { entry: wikiEntry('plain-knowhow', ['pattern'], { ext: {} }), score: 7 },
+      ],
+    });
+  });
+
+  it('exposes sessionId/runId/runCount/related on run-mode entries only', async () => {
+    const results = await runUnifiedSearch('legacy', { limit: 20, skipEmbedding: true });
+
+    const session = results.find(result => result.id === 'session-20260712-legacy');
+    expect(session?.sessionId).toBe('20260712-legacy');
+    expect(session?.runCount).toBe(2);
+    expect(session?.related).toEqual(['session-run-20260712-legacy-run-001', 'spec:project:legacy-promoted-rule']);
+
+    const run = results.find(result => result.id === 'session-run-20260712-legacy-run-001');
+    expect(run?.sessionId).toBe('20260712-legacy');
+    expect(run?.runId).toBe('RUN-001');
+    expect(run?.related).toEqual(['session-20260712-legacy']);
+
+    const plain = results.find(result => result.id === 'plain-knowhow');
+    expect(plain?.sessionId).toBeUndefined();
+    expect(plain?.related).toBeUndefined();
   });
 });

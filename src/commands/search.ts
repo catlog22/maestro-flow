@@ -44,6 +44,11 @@ export interface SearchResult {
   sourceRef?: string | null;
   workspace?: string;
   confidence?: string;
+  /** Session/Run topology — present only on run-mode session and run entries. */
+  sessionId?: string;
+  runId?: string;
+  runCount?: number;
+  related?: string[];
 }
 
 /** A code search result from CodeGraph. */
@@ -209,6 +214,7 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
     sourceRef: entry.sourceRef,
     workspace: entry.source.workspace,
     confidence: (entry.ext?.confidence as string) || undefined,
+    ...sessionTopology(entry),
   }));
 
   // Async credibility search_hits increment (best-effort, never blocks)
@@ -217,6 +223,18 @@ export async function runUnifiedSearch(q: string, opts: UnifiedSearchOptions & {
   }
 
   return results;
+}
+
+/** Session/Run topology fields for run-mode entries; empty for everything else. */
+function sessionTopology(entry: WikiEntry): Pick<SearchResult, 'sessionId' | 'runId' | 'runCount' | 'related'> {
+  const virtualKind = entry.ext?.virtualKind;
+  if (virtualKind !== 'session' && virtualKind !== 'session-run') return {};
+  return {
+    sessionId: typeof entry.ext?.sessionId === 'string' ? entry.ext.sessionId : undefined,
+    runId: typeof entry.ext?.runId === 'string' ? entry.ext.runId : undefined,
+    runCount: typeof entry.ext?.runCount === 'number' ? entry.ext.runCount : undefined,
+    related: entry.related.length > 0 ? entry.related : undefined,
+  };
 }
 
 function incrementSearchHitsAsync(entries: Array<{ id: string; sourceRef?: string | null }>): void {
@@ -493,7 +511,8 @@ export function registerSearchCommand(program: Command): void {
           const confBadge = r.confidence === 'contested' ? ' [CONTESTED]'
             : r.confidence === 'low' ? ' [LOW CONFIDENCE]'
             : '';
-          console.log(`  [wiki:${r.kind}]  ${name}  ${r.detail}${confBadge}${scoreTag}`);
+          const runsTag = r.runCount !== undefined ? `  runs:${r.runCount}` : '';
+          console.log(`  [wiki:${r.kind}]  ${name}  ${r.detail}${runsTag}${confBadge}${scoreTag}`);
           const subtitle = pickSubtitle(r);
           if (subtitle) {
             const text = isTTY ? highlightTerms(subtitle, qTerms) : subtitle;
@@ -749,6 +768,11 @@ export interface MergedResult {
   signature?: string;
   category?: string;
   confidence?: string;
+  /** Session/Run topology — present only on run-mode session and run entries. */
+  sessionId?: string;
+  runId?: string;
+  runCount?: number;
+  related?: string[];
 }
 
 const WIKI_TYPE_BOOST: Record<string, number> = {
@@ -881,6 +905,10 @@ function mergeAndNormalize(wiki: SearchResult[], code: CodeSearchResult[], limit
       summary: r.summary || undefined,
       category: r.category ?? undefined,
       confidence: r.confidence,
+      sessionId: r.sessionId,
+      runId: r.runId,
+      runCount: r.runCount,
+      related: r.related,
     });
   }
   for (let i = 0; i < codeScored.length; i++) {

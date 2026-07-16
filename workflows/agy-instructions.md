@@ -99,12 +99,13 @@ Session: `maestro explore show` / `maestro explore output <id>`
 **Gate rule**: run `maestro search` + `maestro load` BEFORE reading code or editing files. 空结果 ≠ 免检：返回 hint 时先执行 hint 再重试；确认无既有知识后照常推进，任务结束按 Record 补录。
 
 ```bash
-maestro search "<query>" [--type <type>] [--category <cat>] [--code] [--kg]
+maestro search "<query>" [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg]
 maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--id <id>]
 ```
 
 **--type**: `spec`, `knowhow`, `domain`, `issue`, `session`, `scratch`, `note`, `project`, `roadmap`
 **--category** (spec only): `coding`, `arch`, `debug`, `test`, `review`, `learning`, `ui`
+**--kind**: sealed run 产物 kind 过滤（如 `diagnosis`, `review-findings`, `lessons`），仅 wiki 结果
 
 ### Query Rules
 

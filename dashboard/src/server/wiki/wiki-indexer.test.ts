@@ -620,6 +620,158 @@ describe('virtual adapters: run-mode sessions', () => {
     return cases;
   }
 
+  async function writeLegacyRunModeFixture(): Promise<void> {
+    await write('specs/legacy-promoted-rule.md', [
+      '---',
+      'title: Legacy promoted rule',
+      'status: active',
+      'category: coding',
+      '---',
+      '# Legacy promoted rule',
+      'A rule promoted from a v1.0 session.',
+    ].join('\n'));
+
+    await write('sessions/20260712-legacy/session.json', JSON.stringify({
+      schema_version: 'session/1.0',
+      session_id: '20260712-legacy',
+      intent: 'Legacy schema indexing',
+      status: 'sealed',
+      identity_revision: 1,
+      activity_revision: 3,
+      active_run_id: null,
+      latest_completed_run_id: 'RUN-001',
+      boundary_contract: { in_scope: [], out_of_scope: [], constraints: [], definition_of_done: 'Sealed legacy run searchable' },
+      orchestration: { engine: 'manual', quality_mode: 'standard', auto_mode: false, chain: [], decision_points: [] },
+      requests: [],
+      lifecycle: {
+        sealed_at: '2026-07-12T05:00:00.000Z',
+        seal_summary: 'Legacy seal summary',
+        promoted_spec_ids: ['project:legacy-promoted-rule'],
+        promoted_knowhow_ids: [],
+        forked_from: null,
+      },
+      refs: { gates: 'gates.json', artifacts: 'artifacts.json', evidence: 'evidence.json' },
+    }));
+    await write('sessions/20260712-legacy/artifacts.json', JSON.stringify({
+      schema_version: 'artifacts/1.0',
+      revision: 4,
+      artifacts: {
+        'ART-legacy-diagnosis': {
+          kind: 'diagnosis', role: 'primary', producer_run_id: 'RUN-001',
+          relative_path: 'runs/20260712-001-quality-debug/outputs/diagnosis.json',
+          media_type: 'application/json', schema_version: 'diagnosis/1',
+          content_hash: 'a'.repeat(64), size: 100, status: 'sealed', derived_from: [], replaces: null,
+        },
+      },
+      aliases: { 'latest-diagnosis': 'ART-legacy-diagnosis' },
+    }));
+    await write('sessions/20260712-legacy/gates.json', JSON.stringify({
+      schema_version: 'gates/1.0',
+      revision: 2,
+      gates: {
+        'GATE-001': {
+          key: 'legacy-browser', title: 'Legacy browser proof', scope: 'exit', run_id: 'RUN-001',
+          required: true, blocking: false, applicable_modes: ['standard'], status: 'waived',
+          check: { type: 'manual', prompt: 'Verify browser' }, evidence_refs: [],
+          waiver: { reason: 'CI has no browser', approved_by: 'qa-bot', approved_at: '2026-07-12' },
+        },
+        'GATE-002': {
+          key: 'unit-tests', title: 'Unit tests', scope: 'exit', run_id: 'RUN-001',
+          required: true, blocking: true, applicable_modes: ['standard'], status: 'passed',
+          check: { type: 'command', argv: ['npm', 'test'], expect_exit: 0 }, evidence_refs: [],
+          waiver: null,
+        },
+      },
+      summary: { total: 2, passed: 1, blocked: 0, failed: 0, active_gate_ids: [], blocking_run_id: null },
+    }));
+
+    await write('sessions/20260712-legacy/runs/20260712-001-quality-debug/run.json', JSON.stringify({
+      schema_version: 'command-run/1.0',
+      session_id: '20260712-legacy', run_id: 'RUN-001', sequence: 1, parent_run_id: null,
+      command: {
+        name: 'quality-debug', version: '1.0.0', source_path: 'commands/quality-debug.md',
+        content_hash: 'f'.repeat(64), resolved_prompt_hash: 'f'.repeat(64),
+      },
+      status: 'sealed',
+      input: { args: [], consumes: [], context_identity_revision: 1 },
+      gate_ids: ['GATE-001', 'GATE-002'],
+      output: { produces: ['ART-legacy-diagnosis'], primary_artifact_id: 'ART-legacy-diagnosis', verdict: 'ready' },
+      handoff: {
+        schema_version: 'command-handoff/1.0', producer_run_id: 'RUN-001', command: 'quality-debug',
+        verdict: 'ready', summary: 'Legacy handoff fallback',
+        constraints: [
+          { id: 'C1', status: 'locked', text: 'Keep legacy adapter read-only' },
+          { id: 'C2', status: 'open', text: 'Open telemetry question' },
+        ],
+        decisions: [
+          { id: 'D1', status: 'accepted', text: 'Adopt legacynormalizationneedle for dual-schema reads' },
+          { id: 'D2', status: 'rejected', text: 'Discard legacyrejectedneedle entirely' },
+        ],
+        concerns: ['Legacy sessions must stay searchable'],
+        artifact_refs: ['ART-legacy-diagnosis'], next: [], details: {},
+      },
+      started_at: '2026-07-12T04:00:00.000Z',
+      completed_at: '2026-07-12T04:30:00.000Z',
+      sealed_at: '2026-07-12T04:45:00.000Z',
+    }));
+    await write('sessions/20260712-legacy/runs/20260712-001-quality-debug/outputs/diagnosis.json', JSON.stringify({
+      summary: 'Legacy diagnosis artifact summary',
+    }));
+
+    await write('sessions/20260712-legacy/runs/20260712-002-analyze/run.json', JSON.stringify({
+      schema_version: 'command-run/1.0',
+      session_id: '20260712-legacy', run_id: 'RUN-002', sequence: 2, parent_run_id: null,
+      command: {
+        name: 'analyze', version: '1.0.0', source_path: 'commands/analyze.md',
+        content_hash: 'f'.repeat(64), resolved_prompt_hash: 'f'.repeat(64),
+      },
+      status: 'completed',
+      input: { args: [], consumes: [], context_identity_revision: 1 },
+      gate_ids: [],
+      output: { produces: [], primary_artifact_id: null, verdict: 'ready' },
+      handoff: null,
+      started_at: '2026-07-12T04:50:00.000Z',
+      completed_at: '2026-07-12T04:55:00.000Z',
+      sealed_at: null,
+    }));
+  }
+
+  it('indexes v1.0 sealed sessions through the legacy normalization path', async () => {
+    await writeLegacyRunModeFixture();
+    const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
+
+    const session = index.byId['session-20260712-legacy'];
+    const run = index.byId['session-run-20260712-legacy-run-001'];
+    expect(session).toBeDefined();
+    expect(run).toBeDefined();
+    // completed-but-unsealed v1.0 runs stay out of the index
+    expect(index.byId['session-run-20260712-legacy-run-002']).toBeUndefined();
+
+    expect(run.title).toBe('quality-debug RUN-001');
+    expect(run.category).toBe('debug');
+    expect(run.updated).toBe('2026-07-12T04:45:00.000Z');
+    expect(run.summary).toContain('Legacy diagnosis artifact summary');
+    expect(run.summary).toContain('Adopt legacynormalizationneedle for dual-schema reads');
+    expect(run.body).toContain('## 决策');
+    expect(run.body).not.toContain('legacyrejectedneedle');
+    expect(run.body).toContain('## 约束');
+    expect(run.body).toContain('Keep legacy adapter read-only');
+    expect(run.body).not.toContain('Open telemetry question');
+    expect(run.body).toContain('## 关注点');
+    expect(run.body).toContain('Legacy sessions must stay searchable');
+    expect(run.body).toContain('## 豁免');
+    expect(run.body).toContain('CI has no browser (qa-bot @ 2026-07-12)');
+    expect(run.body).not.toContain('Unit tests');
+    expect(run.tags).toEqual(expect.arrayContaining(['quality-debug', 'verdict:ready', 'constraint', 'diagnosis']));
+    expect(run.ext.artifactIds).toEqual(['ART-legacy-diagnosis']);
+
+    expect(session.summary).toContain('Legacy diagnosis artifact summary');
+    expect(session.related).toEqual(expect.arrayContaining([
+      'session-run-20260712-legacy-run-001', 'spec:project:legacy-promoted-rule',
+    ]));
+    expect(index.byId['spec:project:legacy-promoted-rule'].related).toContain('session-20260712-legacy');
+  });
+
   it('indexes v1.1 sealed Runs with structured handoff, kinds, provenance, aref edges, and waivers', async () => {
     await writeRunModeFixture();
     const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();
@@ -702,7 +854,7 @@ describe('virtual adapters: run-mode sessions', () => {
   it('skips a sealed session with an unsupported artifact registry instead of indexing empty Run shells', async () => {
     await writeRunModeFixture();
     await write('sessions/20260713-search/artifacts.json', JSON.stringify({
-      schema_version: 'artifacts/1.0', artifacts: {}, aliases: {},
+      schema_version: 'artifacts/2.0', artifacts: {}, aliases: {},
     }));
 
     const index = await new WikiIndexer({ workflowRoot: tmpRoot }).get();

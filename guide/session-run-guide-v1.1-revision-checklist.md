@@ -69,7 +69,7 @@ title: "基线指南 v1.1 修订核对清单 — session-run-structure-guide.md"
 | 28 | §十二命名 | Gate ID 补 session 级 `GATE-S-{NN}` | §3.4 | 与 §6.2 GateRecord 注释一致 | ✅ |
 | 29 | §十三落地要点 | 第 2 条 v1.0→v1.1；新增第 7 条：入口重组/三档分类/注册表指向规划 §七，命令与 CLI 不在本次范围 | §七 §八 | 范围边界声明清晰 | ✅ |
 | 30 | 尾注 | 新增 v1.1 修订来源行（指向简化规划） | — | 溯源链完整：FINAL → 指南 → 规划 | ✅ |
-| 31 | WikiIndexer Session/Run 读侧适配器 | 同步 `session/1.1`、`artifacts/1.1`、`run/1.1` 字段并直接拒绝 v1.0；跟踪 handoff、kind/provenance、aref/waiver 搜索增强 | `session-run-search-enhancement-plan.md` P0–P3 | v1.1 fixture 覆盖 NNN latest、sealed-only、互链、BM25 命中与 cache invalidation；focused test 通过 | ✅ |
+| 31 | WikiIndexer Session/Run 读侧适配器 | 同步 `session/1.1`、`artifacts/1.1`、`run/1.1` 字段；跟踪 handoff、kind/provenance、aref/waiver 搜索增强。后续修订：runtime 仍写 v1.0（步骤 2 未执行），读侧增加 v1.0→v1.1 归一化以保持当前及历史 session 可搜，仅未知版本拒绝 | `session-run-search-enhancement-plan.md` P0–P3 | v1.1 + v1.0 fixture 覆盖 NNN latest、sealed-only、互链、BM25 命中与 cache invalidation；focused test 通过 | ✅ |
 
 ---
 

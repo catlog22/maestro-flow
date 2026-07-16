@@ -868,14 +868,120 @@ async function readRunKnowledge(
   };
 }
 
+// ── v1.0 schema normalization ───────────────────────────────────────────
+// The run runtime still writes v1.0 documents (src/run/schemas.ts); until the
+// v1.1 CLI convergence lands, both generations must index identically.
+// Normalize v1.0 into the v1.1 shape at the read boundary so the rest of the
+// adapter stays single-schema. Unknown versions are still rejected.
+
+interface LegacyRunModeGate {
+  title?: string;
+  run_id?: string | null;
+  status?: string;
+  waiver?: { reason?: string; approved_by?: string; approved_at?: string } | null;
+}
+
+function normalizeRunModeSession(raw: Record<string, unknown>): RunModeSession | null {
+  if (raw.schema_version === 'session/1.1') return raw as RunModeSession;
+  if (raw.schema_version !== 'session/1.0') return null;
+  const legacy = raw as RunModeSession & {
+    lifecycle?: { promoted_spec_ids?: string[]; promoted_knowhow_ids?: string[] };
+  };
+  return {
+    schema_version: 'session/1.1',
+    session_id: legacy.session_id,
+    intent: legacy.intent,
+    status: legacy.status,
+    lifecycle: {
+      sealed_at: legacy.lifecycle?.sealed_at ?? null,
+      seal_summary: legacy.lifecycle?.seal_summary ?? null,
+      promoted: [
+        ...(legacy.lifecycle?.promoted_spec_ids ?? []).map(id => `spec:${id}`),
+        ...(legacy.lifecycle?.promoted_knowhow_ids ?? []).map(id => `knowhow:${id}`),
+      ],
+    },
+  };
+}
+
+function normalizeRunModeRegistry(raw: Record<string, unknown>): RunModeRegistry | null {
+  if (raw.schema_version === 'artifacts/1.1') return raw as RunModeRegistry;
+  if (raw.schema_version !== 'artifacts/1.0') return null;
+  const legacy = raw as {
+    artifacts?: Record<string, RunModeArtifact & { producer_run_id?: string; relative_path?: string }>;
+    aliases?: Record<string, string>;
+  };
+  const artifacts: Record<string, RunModeArtifact> = {};
+  for (const [id, artifact] of Object.entries(legacy.artifacts ?? {})) {
+    artifacts[id] = {
+      kind: artifact.kind,
+      role: artifact.role,
+      run_id: artifact.producer_run_id,
+      path: artifact.relative_path,
+      status: artifact.status,
+    };
+  }
+  return { schema_version: 'artifacts/1.1', artifacts, aliases: legacy.aliases ?? {} };
+}
+
+function legacyWaiverText(waiver: NonNullable<LegacyRunModeGate['waiver']>): string {
+  const reason = waiver.reason?.trim() ?? '';
+  if (!waiver.approved_by) return reason;
+  return `${reason} (${waiver.approved_by} @ ${waiver.approved_at ?? '?'})`;
+}
+
+interface LegacyRunModeRun {
+  run_id?: string;
+  command?: { name?: string };
+  status?: string;
+  output?: { primary_artifact_id?: string | null };
+  handoff?: RunModeRun['handoff'];
+  started_at?: string;
+  completed_at?: string | null;
+  sealed_at?: string | null;
+}
+
+function normalizeRunModeRun(raw: Record<string, unknown>, legacyGates: LegacyRunModeGate[]): RunModeRun | null {
+  if (raw.schema_version === 'run/1.1') return raw as RunModeRun;
+  if (raw.schema_version !== 'command-run/1.0') return null;
+  const legacy = raw as LegacyRunModeRun;
+  const runId = legacy.run_id;
+  return {
+    schema_version: 'run/1.1',
+    run_id: runId,
+    command: legacy.command?.name,
+    status: legacy.status,
+    primary: legacy.output?.primary_artifact_id ?? null,
+    gates: legacyGates
+      .filter(gate => gate.run_id === runId)
+      .map(gate => ({
+        title: gate.title,
+        status: gate.status,
+        waiver: gate.waiver ? legacyWaiverText(gate.waiver) : null,
+      })),
+    handoff: legacy.handoff ?? null,
+    started_at: legacy.started_at,
+    ended_at: legacy.sealed_at ?? legacy.completed_at ?? null,
+  };
+}
+
+/** v1.0 keeps gates in a session-level gates.json; v1.1 inlines them per run. */
+async function readLegacySessionGates(sessionDir: string): Promise<LegacyRunModeGate[]> {
+  try {
+    const registry = JSON.parse(await readFile(join(sessionDir, 'gates.json'), 'utf-8')) as {
+      gates?: Record<string, LegacyRunModeGate>;
+    };
+    return Object.values(registry.gates ?? {});
+  } catch { return []; }
+}
+
 /** Load a run-mode session and its sealed runs without indexing draft projections. */
 export async function loadRunModeSessionEntries(
   sessionAbsPath: string,
   sessionRelPath: string,
 ): Promise<WikiEntry[]> {
-  let session: RunModeSession;
-  try { session = JSON.parse(await readFile(sessionAbsPath, 'utf-8')) as RunModeSession; } catch { return []; }
-  if (session.schema_version !== 'session/1.1') {
+  let session: RunModeSession | null;
+  try { session = normalizeRunModeSession(JSON.parse(await readFile(sessionAbsPath, 'utf-8'))); } catch { return []; }
+  if (!session) {
     if (process.env.MAESTRO_DEBUG === '1') {
       warn(`run-session-schema:${sessionAbsPath}`, `unsupported run-mode session schema at ${sessionAbsPath}`);
     }
@@ -888,23 +994,24 @@ export async function loadRunModeSessionEntries(
   const sessionSlug = slugify(sessionId);
   if (!sessionSlug) return [];
 
-  let registry: RunModeRegistry = {};
-  try { registry = JSON.parse(await readFile(join(sessionDir, 'artifacts.json'), 'utf-8')) as RunModeRegistry; } catch { /* optional */ }
-  if (registry.schema_version !== 'artifacts/1.1') {
+  let registry: RunModeRegistry | null = null;
+  try { registry = normalizeRunModeRegistry(JSON.parse(await readFile(join(sessionDir, 'artifacts.json'), 'utf-8'))); } catch { /* missing registry → unsupported */ }
+  if (!registry) {
     if (process.env.MAESTRO_DEBUG === '1') {
       warn(`run-artifacts-schema:${sessionDir}`, `unsupported run-mode artifact registry schema at ${sessionDir}`);
     }
     return [];
   }
 
+  const legacyGates = await readLegacySessionGates(sessionDir);
   const runEntries: WikiEntry[] = [];
   const runsRoot = join(sessionDir, 'runs');
   const runNames = (await safeReadDirNames(runsRoot)).sort(compareRunDirectories);
   for (const runName of runNames) {
     const runDir = join(runsRoot, runName);
-    let run: RunModeRun;
-    try { run = JSON.parse(await readFile(join(runDir, 'run.json'), 'utf-8')) as RunModeRun; } catch { continue; }
-    if (run.schema_version !== 'run/1.1') {
+    let run: RunModeRun | null;
+    try { run = normalizeRunModeRun(JSON.parse(await readFile(join(runDir, 'run.json'), 'utf-8')), legacyGates); } catch { continue; }
+    if (!run) {
       if (process.env.MAESTRO_DEBUG === '1') {
         warn(`run-schema:${runDir}`, `unsupported run schema at ${runDir}`);
       }

@@ -195,25 +195,31 @@ WikiIndexer automatically indexes the following data sources:
 
 | Source | Path | Description |
 |--------|------|-------------|
-| Spec | `.workflow/spec/` | Specification documents |
+| Project / Roadmap | `.workflow/project.md`, `roadmap.md` | Project singletons |
+| Spec | `.workflow/specs/` | Specification documents |
 | Knowhow | `.workflow/knowhow/` | Knowledge entries |
-| Scratch | `.workflow/scratch/` | Temporary documents, uses independent BM25F config (lower weights) |
-| Session Archive | `.workflow/session/` | Archived session records |
-| Claude Code sessions | `~/.claude/` | Claude Code session history (auto-scanned) |
-| Codex sessions | `~/.codex/sessions/` | Codex session history (auto-scanned) |
+| Issue | `.workflow/issues/` | Issue JSONL rows (virtual entries) |
+| Domain | `.workflow/domain/` | Domain glossary |
+| Run-mode sessions | `.workflow/sessions/` | Session/Run lifecycle artifacts (see below) |
+| Codebase / KG | `.workflow/codebase/`, `kg/` | doc-index components/features/ADRs, knowledge graph nodes |
+| Claude Code sessions | `~/.claude/projects/<slug>/` | Claude Code session transcripts (auto-scanned) |
+| Codex sessions | `~/.codex/sessions/` | Codex session transcripts (auto-scanned) |
 
 During index building, WikiIndexer automatically selects the corresponding BM25F configuration (default/kg/scratch) based on entry type.
 
-### Wiki Session Parsing
+### CLI Session Transcripts
 
-WikiIndexer automatically parses and indexes Claude Code and Codex session history:
+Claude Code and Codex JSONL transcripts are parsed into lightweight note entries (category `session`), filterable with `--type session`; mixed search caps each source at 3 results to prevent low-value spam. The daemon monitors CLI session directories at startup and discovers new sessions automatically.
 
-- **Claude Code**: Scans session files under `~/.claude/` directory
-- **Codex**: Scans session files under `~/.codex/sessions/` directory
-- **Session Archive**: Scans `archive.json` under `.workflow/scratch/` (sessions with lifecycle state `sealed` or `archived`)
-- **Auto-detection**: Daemon monitors CLI session directories at startup, automatically discovers new sessions
+### Run-mode Session/Run Entries
 
-Session history serves as a searchable knowledge source, filterable with `--type session`.
+Session/Run lifecycle artifacts under `.workflow/sessions/` are indexed with these rules:
+
+- **Sealed/archived only**: `running`/draft sessions and runs stay out of the index, consistent with aref resolving sealed artifacts only;
+- **Dual-schema reads**: the adapter accepts both the v1.0 documents the runtime currently writes (`session/1.0` + `artifacts/1.0` + `command-run/1.0`, gates in a separate `gates.json`) and the v1.1 target state (`session/1.1` + `artifacts/1.1` + `run/1.1`, gates inlined). v1.0 is normalized into the v1.1 shape at the read boundary; unknown versions are rejected (warnings visible with `MAESTRO_DEBUG=1`);
+- **Entry shape**: one entry per sealed session plus one per sealed run (both type `knowhow`). Run bodies are prefixed with structured handoff sections (decisions/constraints/concerns/waivers) followed by sealed artifact contents (50KB cap per file);
+- **Tags**: run entries carry `session`, `run`, the command name, `verdict:<verdict>`, `constraint` (when locked constraints exist), and artifact kinds (e.g. `diagnosis`, `review-findings`) for `--kind` filtering;
+- **Topology**: session entries link `related` to all run entries and promoted spec/knowhow entries (bidirectional), run entries link `parent` back to the session, and aref references form cross-run edges; search results expose `sessionId`/`runId`/`runCount`/`related` for these entries.
 
 ---
 
@@ -346,6 +352,11 @@ interface SearchResult {
   score: number;        // BM25F score
   snippet: string;      // Context snippet (keywords highlighted)
   source: { path: string };  // Source file path
+  // Present only on run-mode session/run entries (topology exposure)
+  sessionId?: string;   // Owning session
+  runId?: string;       // Run ID for run entries
+  runCount?: number;    // Run count for session entries
+  related?: string[];   // session→runs / run→session + aref edges
 }
 ```
 
@@ -362,7 +373,9 @@ maestro search "query" --type issue      # Search issues only
 maestro search "query" --type domain     # Search domains only
 ```
 
-Valid types: `project`, `roadmap`, `spec`, `issue`, `knowhow`, `note`, `domain`
+Valid types: `project`, `roadmap`, `spec`, `issue`, `knowhow`, `note`, `domain`, `session`, `scratch`
+
+`session`/`scratch` are virtual type aliases that filter by category (CLI session transcript entries).
 
 ### Filter by Category
 
@@ -374,6 +387,16 @@ maestro search "query" --category debug    # Debug notes
 maestro search "query" --category test     # Test specifications
 maestro search "query" --category learning # Lessons learned
 ```
+
+### Filter by Artifact Kind
+
+```bash
+maestro search "timeout" --kind diagnosis        # Runs with diagnosis artifacts only
+maestro search "regression" --kind review-findings
+maestro search "lessons" --kind lessons
+```
+
+`--kind` matches entry tags exactly (run-mode run entries carry their artifact kinds as tags). It applies to wiki results only and cannot be combined with `--code`/`--kg`.
 
 ### Filter by Workspace
 
@@ -425,7 +448,7 @@ If an entry has abnormally high score, it may be due to:
 
 ```bash
 # Unified search (recommended)
-maestro search <query> [--type <type>] [--category <cat>] [--code] [--kg] [--all] [--no-emb] [--json]
+maestro search <query> [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg] [--all] [--no-emb] [--json]
 
 # Wiki system search
 maestro wiki search <query> [--json]

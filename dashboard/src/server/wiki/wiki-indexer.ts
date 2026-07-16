@@ -237,7 +237,7 @@ export class WikiIndexer {
         let st;
         try { st = statSync(path); } catch { continue; }
         if (st.isDirectory()) { visit(path); continue; }
-        if (name === 'session.json' || name === 'artifacts.json' || name === 'run.json' || name === 'report.md' || dir.includes(`${sep}outputs`)) {
+        if (name === 'session.json' || name === 'artifacts.json' || name === 'gates.json' || name === 'run.json' || name === 'report.md' || dir.includes(`${sep}outputs`)) {
           out.set(path, Number(st.mtimeMs));
         }
       }
