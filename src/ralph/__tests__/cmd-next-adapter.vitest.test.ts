@@ -55,6 +55,43 @@ function stepCommand(root: string, name: string, contract: string, body = 'workf
   writeFileSync(join(wfDir, `${name}.md`), `# ${name}\n\n${body}\n`, 'utf8');
 }
 
+/**
+ * Write a run-mode.md so its summary + control line are injected. Written to
+ * `.workflow/workflows/` (the project.workflow dir), which resolveStepContent
+ * checks before the installed global `~/.maestro/workflows/run-mode.md` — so the
+ * test controls run-mode content instead of resolving against the real install.
+ */
+function writeRunMode(root: string): void {
+  const wfDir = join(root, '.workflow', 'workflows');
+  mkdirSync(wfDir, { recursive: true });
+  // Mirror the real run-mode shape: the "Start or Resume" `run create`
+  // instruction sits past the 8-line summary window, so summarizeRunMode drops
+  // it (eliminating G9) while keeping the leading protocol lines.
+  // summarizeRunMode keeps the first 8 non-empty non-# lines. Headings are
+  // filtered out (not treated as boundaries), so 8 non-heading lines must
+  // precede the `run create` instruction for it to fall past the window.
+  writeFileSync(join(wfDir, 'run-mode.md'), `# Canonical Run Mode
+
+Lifecycle verbs: prepare -> create -> brief -> complete.
+Load the workflow manual, then execute it.
+Write formal artifacts under outputs/.
+Retain the returned run_id and run_dir.
+Consume upstream only from the injected map.
+Do not locate artifacts by glob or mtime.
+Report status via the completion verb.
+Preview upstream availability before committing.
+Run \`maestro run create <command-name>\` before domain work.
+`, 'utf8');
+}
+
+/** Write a prepare file with refs frontmatter for the given workflow base. */
+function writePrepareWithRefs(root: string, base: string, refs: Array<{ path: string; when: string }>): void {
+  const prepDir = join(root, 'prepare');
+  mkdirSync(prepDir, { recursive: true });
+  const refLines = refs.map(r => `  - path: ${r.path}\n    when: ${r.when}`).join('\n');
+  writeFileSync(join(prepDir, `${base}.md`), `---\nrefs:\n${refLines}\n---\n# prepare ${base}\n`, 'utf8');
+}
+
 function seedRalphSession(
   root: string,
   sessionId: string,
@@ -272,6 +309,52 @@ Plan is ready
     // Chain step must stay pending — a lease conflict never advances the chain.
     const chain = new SessionStore(root).readBundle('sess-lease').session.orchestration.chain;
     expect(chain[0].status).toBe('pending');
+  });
+
+  it('injects the run-mode summary + control line, not the full "Start or Resume" protocol (P2.5/G8)', async () => {
+    stepCommand(root, 'demo-plan', PLAN_CONTRACT, 'WORKFLOW_BODY_HERE');
+    writeRunMode(root);
+    seedRalphSession(root, 'sess-rm', 'inject run-mode', [{ command: 'demo-plan' }], { step_details: {} });
+
+    const cap = captureStdout();
+    const code = await runNext({ sessionId: 'sess-rm' });
+    cap.restore();
+    expect(code).toBe(0);
+    const out = cap.text();
+
+    // Summary keeps a run-mode content line but drops the section heading and
+    // the standalone-executor `run create` instruction line.
+    expect(out).toContain('Load the workflow manual, then execute it.');
+    expect(out).not.toContain('## Start or Resume');
+    expect(out).not.toContain('maestro run create <command-name>');
+
+    // Generated control line: run already created + outputs/report.md + prohibition.
+    const runId = new SessionStore(root).readBundle('sess-rm').session.orchestration.chain[0].run_id!;
+    expect(out).toContain(`Run already created: ${runId}`);
+    expect(out).toContain('/outputs/');
+    expect(out).toContain('report.md');
+    expect(out).toContain('Do NOT call `maestro run create`');
+
+    // Workflow body still present after the run-mode separator.
+    expect(out).toContain('WORKFLOW_BODY_HERE');
+  });
+
+  it('emits a deferred-reading manifest from prepare refs, without inlining ref bodies (P2.5/G3)', async () => {
+    stepCommand(root, 'demo-plan', PLAN_CONTRACT, 'WORKFLOW_BODY_HERE');
+    // The workflow base for `demo-plan` is `demo-plan`; its prepare declares refs.
+    writePrepareWithRefs(root, 'demo-plan', [
+      { path: 'docs/schema.md', when: 'before touching the store' },
+    ]);
+    seedRalphSession(root, 'sess-refs', 'deferred reading', [{ command: 'demo-plan' }], { step_details: {} });
+
+    const cap = captureStdout();
+    const code = await runNext({ sessionId: 'sess-refs' });
+    cap.restore();
+    expect(code).toBe(0);
+    const out = cap.text();
+
+    expect(out).toContain('**按需参考（Read when needed）**:');
+    expect(out).toContain('- docs/schema.md — before touching the store');
   });
 });
 

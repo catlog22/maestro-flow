@@ -22,7 +22,7 @@
 
 import { resolveStepContent } from '../run/contract.js';
 import { runNextStep, type NextResult } from '../run/next.js';
-import type { RunUpstream, PrevHandoff } from '../run/runtime.js';
+import { summarizeRunMode, type RunUpstream, type PrevHandoff } from '../run/runtime.js';
 import {
   buildEnvelope,
   buildIntentSection,
@@ -159,9 +159,26 @@ function emitPrompt(
     body = content.prepare.raw;
   }
 
-  // Inject run-mode if available
+  // Inject run-mode as a summary (not the raw full text). Progressive control
+  // injection (plan P2.5/G8): the run-mode protocol is not re-shipped in full to
+  // the orchestrated executor — the summary carries the essentials and a
+  // generated control line compensates for the artifact-boundary guidance lost
+  // when the full "Start or Resume" section (which tells a standalone executor to
+  // `maestro run create`) is dropped. The Run is already created here.
   if (content.runMode) {
-    body = content.runMode.raw + '\n\n---\n\n' + body;
+    const control = [
+      `<!-- run-mode: summary only — full protocol at ${content.runMode.path} -->`,
+      `Run already created: ${runId} — write formal artifacts to ${result.run_dir}/outputs/, human synthesis to ${result.run_dir}/report.md. Do NOT call \`maestro run create\`.`,
+    ].join('\n');
+    body = summarizeRunMode(content.runMode.raw) + '\n\n' + control + '\n\n---\n\n' + body;
+  }
+
+  // Deferred-reading manifest (plan P2.5/G3): list prepare-declared refs as
+  // path + when so the executor can Read on demand. Manifest only — ref bodies
+  // are never inlined.
+  const refsSection = buildRefsSection(content.refs);
+  if (refsSection) {
+    body = body + '\n\n' + refsSection;
   }
 
   // Skill config defaults
@@ -185,6 +202,19 @@ function emitPrompt(
 
   const tail = configSection ? '\n\n' + configSection + completionMeta : completionMeta;
   process.stdout.write(head + body + tail + '\n');
+}
+
+/**
+ * Deferred-reading manifest from prepare-declared refs (path + when). Manifest
+ * only — ref bodies are never inlined (plan P2.5/G3). Null when there are none.
+ */
+function buildRefsSection(refs: Array<{ path: string; when: string }>): string | null {
+  if (refs.length === 0) return null;
+  const lines = ['**按需参考（Read when needed）**:'];
+  for (const ref of refs) {
+    lines.push(ref.when ? `- ${ref.path} — ${ref.when}` : `- ${ref.path}`);
+  }
+  return lines.join('\n');
 }
 
 // ── Upstream + prev-handoff birth sections (from NextResult) ──────────────────

@@ -40,6 +40,8 @@ export interface NextResult {
   upstream: Record<string, RunUpstream>;
   entry_gates: { passed: number; failed: number; skipped: number; blocking: number };
   prev_handoff: PrevHandoff | null;
+  /** Prepare-declared deferred-reading refs (path + when). Manifest only. */
+  refs: Array<{ path: string; when: string }>;
   next: { command: string; reason: string };
 }
 
@@ -198,6 +200,14 @@ function renderBirthPacket(r: NextResult): string {
     lines.push('');
   }
 
+  if (r.refs.length > 0) {
+    lines.push('**按需参考（Read when needed）**:');
+    for (const ref of r.refs) {
+      lines.push(ref.when ? `- ${ref.path} — ${ref.when}` : `- ${ref.path}`);
+    }
+    lines.push('');
+  }
+
   lines.push(`next: ${r.next.command}`);
   lines.push(`      ${r.next.reason}`);
   return lines.join('\n');
@@ -338,6 +348,7 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
       blocking: created.entry_gates.blocking.length,
     },
     prev_handoff: prev,
+    refs: content.refs,
     next: created.next,
   };
 

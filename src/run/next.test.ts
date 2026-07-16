@@ -34,6 +34,14 @@ function stepCommand(projectRoot: string, name: string, contract: string, body =
   writeFileSync(join(wfDir, `${name}.md`), `# ${name}\n\n${body}\n`, 'utf8');
 }
 
+/** Write a prepare file with refs frontmatter for the given workflow base. */
+function writePrepareWithRefs(projectRoot: string, base: string, refs: Array<{ path: string; when: string }>): void {
+  const prepDir = join(projectRoot, 'prepare');
+  mkdirSync(prepDir, { recursive: true });
+  const refLines = refs.map(r => `  - path: ${r.path}\n    when: ${r.when}`).join('\n');
+  writeFileSync(join(prepDir, `${base}.md`), `---\nrefs:\n${refLines}\n---\n# prepare ${base}\n`, 'utf8');
+}
+
 const PLAN_CONTRACT = `consumes: []
 produces:
   - kind: plan
@@ -261,5 +269,31 @@ describe('run next — birth packet', () => {
     const parsed = JSON.parse(outcome.message);
     expect(parsed.run_id).toBe(outcome.result?.run_id);
     expect(parsed.next.command).toContain('maestro run brief');
+  });
+
+  it('carries prepare refs as a deferred-reading manifest (path + when), never inlined', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    writePrepareWithRefs(projectRoot, 'demo-plan', [
+      { path: 'docs/schema.md', when: 'before touching the store' },
+    ]);
+    seedSession(projectRoot, 's', 'deferred reading', [{ command: 'demo-plan' }], { active: true });
+    const outcome = runNextStep(projectRoot);
+    expect(outcome.exitCode).toBe(0);
+    // Structured field.
+    expect(outcome.result?.refs).toEqual([{ path: 'docs/schema.md', when: 'before touching the store' }]);
+    // Human-readable manifest — path + when only.
+    expect(outcome.message).toContain('**按需参考（Read when needed）**:');
+    expect(outcome.message).toContain('- docs/schema.md — before touching the store');
+  });
+
+  it('omits the deferred-reading section when there are no refs', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'no refs', [{ command: 'demo-plan' }], { active: true });
+    const outcome = runNextStep(projectRoot);
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.result?.refs).toEqual([]);
+    expect(outcome.message).not.toContain('按需参考');
   });
 });

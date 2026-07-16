@@ -163,6 +163,8 @@ export interface BriefRunResult {
   gates: GateSummary;
   workflow: { path: string; content: string } | null;
   run_mode: { path: string; summary: string } | null;
+  /** Prepare-declared deferred-reading refs (path + when). Manifest only. */
+  refs: Array<{ path: string; when: string }>;
   outputs: Array<{ artifact_id: string; kind: string; role: string; path: string; status: string }>;
   goal_mode: { platform: string; instructions: string } | null;
   /** Aliases this Run consumed, resolved back to upstream artifacts. */
@@ -171,6 +173,8 @@ export interface BriefRunResult {
   prev_handoff: PrevHandoff | null;
   /** Session anchor grounding (Intent / Boundary Contract / Execution Progress). */
   anchor: AnchorSection;
+  /** Next lifecycle verb pointer, closing next→brief→check→complete. */
+  next: { command: string; reason: string };
 }
 
 export interface CompleteRunOptions {
@@ -1140,7 +1144,7 @@ export function completeRun(
   });
 }
 
-function summarizeRunMode(raw: string): string {
+export function summarizeRunMode(raw: string): string {
   const lines = raw
     .split(/\r?\n/)
     .map(line => line.trim())
@@ -1310,10 +1314,34 @@ export function briefRun(
     run_mode: content.runMode
       ? { path: content.runMode.path, summary: summarizeRunMode(tx(content.runMode.raw)) }
       : null,
+    refs: content.refs,
     outputs,
     goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
     upstream,
     prev_handoff: prevHandoff,
     anchor,
+    next: briefNext(located.sessionId, runId, run.status),
+  };
+}
+
+/**
+ * Next lifecycle verb after `run brief`, closing next→brief→check→complete
+ * (plan P2.5/G4). A live Run points at `run check` (pre-completion gate check —
+ * does not seal); a sealed Run points at `run next` to advance the chain.
+ */
+function briefNext(
+  sessionId: string,
+  runId: string,
+  status: CommandRun['status'],
+): { command: string; reason: string } {
+  if (status === 'sealed' || status === 'completed') {
+    return {
+      command: `maestro run next --session ${sessionId}`,
+      reason: 'run sealed — advance the chain',
+    };
+  }
+  return {
+    command: `maestro run check ${runId}`,
+    reason: `pre-completion gate check (does not seal); when clean, run: maestro run complete ${runId}`,
   };
 }

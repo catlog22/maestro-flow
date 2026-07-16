@@ -51,6 +51,14 @@ function commandFile(projectRoot: string, name: string, contract: string): void 
   writeFileSync(join(dir, `${name}.md`), `<contract>\n${contract}\n</contract>\n`, 'utf8');
 }
 
+/** Write a prepare file with refs frontmatter for the given workflow base. */
+function writePrepareWithRefs(projectRoot: string, base: string, refs: Array<{ path: string; when: string }>): void {
+  const dir = join(projectRoot, 'prepare');
+  mkdirSync(dir, { recursive: true });
+  const refLines = refs.map(r => `  - path: ${r.path}\n    when: ${r.when}`).join('\n');
+  writeFileSync(join(dir, `${base}.md`), `---\nrefs:\n${refLines}\n---\n# prepare ${base}\n`, 'utf8');
+}
+
 function writePlanRun(projectRoot: string, sessionId: string, runId: string): void {
   const dir = join(projectRoot, '.workflow', 'sessions', sessionId, 'runs', runId);
   writeFileSync(join(dir, 'outputs', 'plan.json'), JSON.stringify({
@@ -371,6 +379,10 @@ produces: []
 gates:
   entry: []
   exit: []`);
+    // Prepare refs for demo-exec drive the brief deferred-reading manifest (G3).
+    writePrepareWithRefs(projectRoot, 'demo-exec', [
+      { path: 'docs/schema.md', when: 'before touching the store' },
+    ]);
 
     const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'brief anchor demo' });
     writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
@@ -389,6 +401,34 @@ gates:
     // anchor grounding — intent always present; boundary empty here
     expect(brief.anchor.intent).toBe('**Intent**: brief anchor demo');
     expect(brief.anchor.boundary_contract).toBeNull();
+    // deferred-reading refs manifest (G3)
+    expect(brief.refs).toEqual([{ path: 'docs/schema.md', when: 'before touching the store' }]);
+    // next pointer for a live Run — check gate, not seal (G4)
+    expect(brief.next.command).toBe(`maestro run check ${execRun.run_id}`);
+    expect(brief.next.reason).toContain('does not seal');
+    expect(brief.next.reason).toContain(`maestro run complete ${execRun.run_id}`);
+  });
+
+  it('brief of a sealed Run points next at run next to advance the chain (G4)', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'demo-plan', `consumes: []
+produces:
+  - kind: plan
+    primary: true
+    path: outputs/plan.json
+    alias: current-plan
+gates:
+  entry: []
+  exit: []`);
+
+    const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'sealed brief demo' });
+    writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
+    expect(completeRun(projectRoot, planRun.run_id).sealed).toBe(true);
+
+    const brief = briefRun(projectRoot, planRun.run_id, planRun.session_id);
+    expect(brief.status).toBe('sealed');
+    expect(brief.next.command).toBe(`maestro run next --session ${planRun.session_id}`);
+    expect(brief.next.reason).toContain('run sealed');
   });
 
   it('prepare --session attaches the previous handoff and consume status; bare prepare is unchanged', () => {

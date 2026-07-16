@@ -92,11 +92,33 @@ src/ralph/
 
 验收：ralph 现有测试全绿；fixture session 下 `ralph next` 输出与 P0 基线相比仅新增 upstream 表 + 上一步 handoff 差异（anchor 段不变）；lease 冲突路径行为不变。
 
+### P2.5 — 渐进式补齐（审计 G8/G3/G4，立即实施）
+
+> 来源：2026-07-16 流程审计（flow-gap-audit）。三项均为 P3/P4 未覆盖的新缺口，按收益/成本排序。
+
+**G8 — ralph 注入 run-mode 摘要 + 状态感知控制行（替代全文 raw）**
+- `cmd-next.ts` emitPrompt 的 `content.runMode.raw` 全文前置改为 `summarizeRunMode`（与 brief/prepare 对齐，runtime.ts 导出）；
+- 同时注入一段生成式控制行（补偿全文中丢失的产物边界指引）：`Run already created: {run_id} — 正式产物写 {run_dir}/outputs/，人类叙述写 {run_dir}/report.md`；
+- 顺带消除 G9：run-mode "Start or Resume" 的 `run create` 指令文案不再进入被编排 executor 的上下文；
+- **这是继 reconcile 之后第二处对 P2"逐字节等价"红线的有意例外**——协议常量不逐步重发，属渐进式原则的直接落实。
+
+**G3 — refs 延迟加载通道补齐（next/brief/ralph 三路径）**
+- `NextResult` 与 `BriefRunResult` 增加 `refs: Array<{path, when}>`（源自 resolveStepContent 的 prepare refs）；
+- `run next` 出生包渲染"**按需参考（Read when needed）**"清单段；brief JSON 返回含 refs 字段；
+- ralph emitPrompt 追加 deferred-reading 清单段（path + when），兑现 ralph-executor.md "按需 Read" 的悬空指令；
+- 原则：**清单入包、正文按需**——refs 正文永不内嵌。
+
+**G4 — brief 补 next 指针，闭合 next→brief→check→complete 四段链**
+- `BriefRunResult` 增加 `next: { command: "maestro run check {run_id}", reason }`，reason 说明 check 为"完成前预检、不封存，通过后 run complete"。
+
+验收：`npm run lint` + `npx vitest run src/run src/ralph` 全绿；adapter 测试更新——ralph 输出含 run-mode 摘要与控制行、不含 "Start or Resume" 段、含 deferred-reading 清单；next/brief 测试断言 refs 与 next 指针。
+
 ### P3 — 共享上下文增强（P2 稳定后）
 
 1. **进度信号单源化**：`ralph complete` 同时派生 `run.json.handoff`（summary/decisions/concerns）；anchor 的 Execution Progress / Accumulated Signals 改读 handoff，**handoff 缺失时回退 step_details**（双写过渡期）；跑完整 ralph session 验证后删旧读取路径。
 2. **session 级 priors 共享**：约定首个 run 写 `outputs/priors.json`（spec/doc-index/wiki 命中），注册 alias `session-priors`；后续命令 contract `consumes` 加 `{ kind: priors, alias: session-priors, required: false }`——零新 schema、零新真相源。
 3. **文档同步**：`workflows/run-mode.md` "Start or Resume" 补充"被编排器派发时 Run 已创建，直接使用注入的 run_id/upstream"；`prepare/*.md` Input Interpretation 提及 `session-priors`；改动后跑 `npm run sync:codex-skills`（.codex 镜像）。
+4. **审计归并（G1/G2/G7）**：prepare 文档的 Required Context 改条件式（"注入了 session-priors 则不重复 load"，随 P3.2）；brief 裁掉与出生包逐字重复的 upstream 段；anchor 基于 identity_revision 对未变 boundary_contract 发指针而非全文。
 
 ### P4（可选）— 决策点分级
 
