@@ -24,7 +24,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -40,7 +40,7 @@ CONTEXT:
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -57,7 +57,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **RESEARCH-001** (researcher):
 ```
-create_goal({
+update_plan({
   subject: "RESEARCH-001",
   description: "PURPOSE: Analyze interaction patterns, browser API availability, and reference implementations | Success: 3 research artifacts with valid data
 TASK:
@@ -72,12 +72,12 @@ CONTEXT:
 EXPECTED: <session>/research/*.json | All 3 research files with valid JSON
 CONSTRAINTS: Read-only analysis | Focus on <interaction-scope>"
 })
-update_goal({ taskId: "RESEARCH-001", owner: "researcher" })
+update_plan({ taskId: "RESEARCH-001", owner: "researcher" })
 ```
 
 **INTERACT-001** (interaction-designer):
 ```
-create_goal({
+update_plan({
   subject: "INTERACT-001",
   description: "PURPOSE: Design complete interaction blueprint with state machine and event flows | Success: Blueprint with all states, events, and keyboard mappings defined
 TASK:
@@ -94,12 +94,12 @@ CONTEXT:
 EXPECTED: <session>/interaction/blueprints/<component-name>.md | Complete state machine + event map + keyboard coverage
 CONSTRAINTS: Vanilla JS only | GPU-only animations | Progressive enhancement"
 })
-update_goal({ taskId: "INTERACT-001", addBlockedBy: ["RESEARCH-001"], owner: "interaction-designer" })
+update_plan({ taskId: "INTERACT-001", addBlockedBy: ["RESEARCH-001"], owner: "interaction-designer" })
 ```
 
 **BUILD-001** (builder):
 ```
-create_goal({
+update_plan({
   subject: "BUILD-001",
   description: "PURPOSE: Implement interactive component as vanilla JS + CSS | Success: Working ES module + CSS with all states, touch-aware, keyboard accessible
 TASK:
@@ -118,12 +118,12 @@ CONTEXT:
 EXPECTED: <session>/build/components/<name>.js + <name>.css | Zero dependencies, all states implemented
 CONSTRAINTS: No npm packages | ES modules only | No inline styles | < 5ms per frame"
 })
-update_goal({ taskId: "BUILD-001", addBlockedBy: ["INTERACT-001"], owner: "builder" })
+update_plan({ taskId: "BUILD-001", addBlockedBy: ["INTERACT-001"], owner: "builder" })
 ```
 
 **A11Y-001** (a11y-tester):
 ```
-create_goal({
+update_plan({
   subject: "A11Y-001",
   description: "PURPOSE: Audit accessibility of built component | Success: Audit report with pass/fail per check, 0 critical issues
 TASK:
@@ -140,7 +140,7 @@ CONTEXT:
 EXPECTED: <session>/a11y/a11y-audit-001.md | Per-check pass/fail with remediation suggestions
 CONSTRAINTS: Read-only analysis | GC convergence: 0 critical issues"
 })
-update_goal({ taskId: "A11Y-001", addBlockedBy: ["BUILD-001"], owner: "a11y-tester" })
+update_plan({ taskId: "A11Y-001", addBlockedBy: ["BUILD-001"], owner: "a11y-tester" })
 ```
 
 ---

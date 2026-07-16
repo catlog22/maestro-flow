@@ -103,7 +103,7 @@ TEXT-LEVEL ONLY. No source code reading.
 
 Delegate to @commands/dispatch.md:
 1. Read specs/pipelines.md for selected pipeline's task registry
-2. Create tasks via create_goal with blockedBy
+2. Create tasks via update_plan with blockedBy
 3. Update session meta.json with pipeline.tasks_total
 
 ## Phase 4: Spawn-and-Stop

@@ -11,8 +11,8 @@
 3. Topological sort tasks (respect blockedBy)
 4. Validate all owners exist in role registry (SKILL.md)
 5. For each task (in order):
-   - create_goal with structured description (see template below)
-   - update_goal with blockedBy + owner assignment
+   - update_plan with structured description (see template below)
+   - update_plan with blockedBy + owner assignment
 6. Update team-session.json with pipeline.tasks_total
 7. Validate chain (no orphans, no cycles, all refs valid)
 
@@ -43,7 +43,7 @@ RoleSpec: ~  or <project>/.claude/skills/team-lifecycle-v4/roles/<role>/role.md
 
 CHECKPOINT tasks are dispatched like regular tasks but handled differently at spawn time:
 
-- Created via create_goal with proper blockedBy (upstream tasks that must complete first)
+- Created via update_plan with proper blockedBy (upstream tasks that must complete first)
 - Owner: supervisor
 - **NOT spawned as team-worker** — coordinator wakes the resident supervisor via send_message
 - If `supervision: false` in team-session.json, skip creating CHECKPOINT tasks entirely

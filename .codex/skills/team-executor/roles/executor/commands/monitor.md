@@ -127,7 +127,7 @@ Ready tasks found?
       +- Is task owner an Inner Loop role AND already has active_worker?
       |   +- YES -> SKIP spawn (existing worker picks it up)
       |   +- NO -> normal spawn below
-      +- update_goal -> in_progress
+      +- update_plan -> in_progress
       +- team_msg log -> task_unblocked (session_id=<session-id>)
       +- Spawn team-worker (see spawn tool call below)
       +- Add to session.active_workers
@@ -184,7 +184,7 @@ Receive capability_gap from [<role>]
 
 ### Worker Failure Handling
 
-1. Reset task -> pending via update_goal
+1. Reset task -> pending via update_plan
 2. Log via team_msg (type: error)
 3. Report to user: task reset, will retry on next resume
 

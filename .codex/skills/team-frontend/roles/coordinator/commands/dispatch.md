@@ -25,7 +25,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -41,7 +41,7 @@ CONTEXT:
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -58,7 +58,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **ANALYZE-001** (analyst):
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-001",
   description: "PURPOSE: Analyze frontend requirements and retrieve design intelligence | Success: design-intelligence.json produced with industry-specific recommendations
 TASK:
@@ -74,12 +74,12 @@ CONTEXT:
 EXPECTED: <session>/analysis/design-intelligence.json + requirements.md | Structured design data
 CONSTRAINTS: Read-only analysis | No code modifications"
 })
-update_goal({ taskId: "ANALYZE-001", owner: "analyst" })
+update_plan({ taskId: "ANALYZE-001", owner: "analyst" })
 ```
 
 **ARCH-001** (architect):
 ```
-create_goal({
+update_plan({
   subject: "ARCH-001",
   description: "PURPOSE: Define design token system and component architecture | Success: design-tokens.json + component specs produced
 TASK:
@@ -96,12 +96,12 @@ CONTEXT:
 EXPECTED: <session>/architecture/design-tokens.json + component-specs/ + project-structure.md
 CONSTRAINTS: Use ui-ux-pro-max recommendations for token values | Support light/dark mode"
 })
-update_goal({ taskId: "ARCH-001", addBlockedBy: ["ANALYZE-001"], owner: "architect" })
+update_plan({ taskId: "ARCH-001", addBlockedBy: ["ANALYZE-001"], owner: "architect" })
 ```
 
 **DEV-001** (developer):
 ```
-create_goal({
+update_plan({
   subject: "DEV-001",
   description: "PURPOSE: Implement frontend page/components from architecture artifacts | Success: All planned files implemented with design token usage
 TASK:
@@ -118,12 +118,12 @@ CONTEXT:
 EXPECTED: src/styles/tokens.css + component files | Design-token compliant code
 CONSTRAINTS: Use CSS variables from tokens | Mobile-first responsive | WCAG AA"
 })
-update_goal({ taskId: "DEV-001", addBlockedBy: ["ARCH-001"], owner: "developer" })
+update_plan({ taskId: "DEV-001", addBlockedBy: ["ARCH-001"], owner: "developer" })
 ```
 
 **QA-001** (qa):
 ```
-create_goal({
+update_plan({
   subject: "QA-001",
   description: "PURPOSE: Execute 5-dimension quality audit on implementation | Success: Score >= 8 with 0 critical issues
 TASK:
@@ -140,7 +140,7 @@ CONTEXT:
 EXPECTED: <session>/qa/audit-001.md | Weighted score + verdict + categorized issues
 CONSTRAINTS: Read-only review | No code modifications"
 })
-update_goal({ taskId: "QA-001", addBlockedBy: ["DEV-001"], owner: "qa" })
+update_plan({ taskId: "QA-001", addBlockedBy: ["DEV-001"], owner: "qa" })
 ```
 
 ---

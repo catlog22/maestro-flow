@@ -24,7 +24,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -40,7 +40,7 @@ CONTEXT:
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -57,7 +57,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **RESEARCH-001** (researcher):
 ```
-create_goal({
+update_plan({
   subject: "RESEARCH-001",
   description: "PURPOSE: Analyze existing design system, build component inventory, assess accessibility baseline | Success: 4 research artifacts produced with valid data
 TASK:
@@ -73,12 +73,12 @@ CONTEXT:
 EXPECTED: <session>/research/*.json | All 4 research files with valid JSON
 CONSTRAINTS: Read-only analysis | Focus on <design-scope>"
 })
-update_goal({ taskId: "RESEARCH-001", owner: "researcher" })
+update_plan({ taskId: "RESEARCH-001", owner: "researcher" })
 ```
 
 **DESIGN-001** (designer):
 ```
-create_goal({
+update_plan({
   subject: "DESIGN-001",
   description: "PURPOSE: Define component design with tokens and specifications | Success: Design tokens + component spec with all states defined
 TASK:
@@ -95,12 +95,12 @@ CONTEXT:
 EXPECTED: <session>/design/design-tokens.json + component-specs/*.md | Complete token system + spec
 CONSTRAINTS: Follow W3C Design Tokens Format | All color tokens need light/dark"
 })
-update_goal({ taskId: "DESIGN-001", addBlockedBy: ["RESEARCH-001"], owner: "designer" })
+update_plan({ taskId: "DESIGN-001", addBlockedBy: ["RESEARCH-001"], owner: "designer" })
 ```
 
 **AUDIT-001** (reviewer):
 ```
-create_goal({
+update_plan({
   subject: "AUDIT-001",
   description: "PURPOSE: Audit design for consistency, accessibility, and quality | Success: Audit score >= 8 with 0 critical issues
 TASK:
@@ -117,12 +117,12 @@ CONTEXT:
 EXPECTED: <session>/audit/audit-001.md | 5-dimension scored report
 CONSTRAINTS: Read-only analysis | GC convergence: score >= 8 and 0 critical"
 })
-update_goal({ taskId: "AUDIT-001", addBlockedBy: ["DESIGN-001"], owner: "reviewer" })
+update_plan({ taskId: "AUDIT-001", addBlockedBy: ["DESIGN-001"], owner: "reviewer" })
 ```
 
 **BUILD-001** (implementer):
 ```
-create_goal({
+update_plan({
   subject: "BUILD-001",
   description: "PURPOSE: Implement component code from design specs | Success: Production code with token consumption and accessibility
 TASK:
@@ -139,7 +139,7 @@ CONTEXT:
 EXPECTED: <session>/build/**/* | Component + tokens CSS/TS + tests
 CONSTRAINTS: Use var(--token-name) only | Follow project patterns"
 })
-update_goal({ taskId: "BUILD-001", addBlockedBy: ["AUDIT-001"], owner: "implementer" })
+update_plan({ taskId: "BUILD-001", addBlockedBy: ["AUDIT-001"], owner: "implementer" })
 ```
 
 ---

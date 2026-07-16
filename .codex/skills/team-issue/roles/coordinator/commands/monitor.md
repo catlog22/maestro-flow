@@ -40,7 +40,7 @@ Worker completed. Process and advance.
 | `[integrator]` or task ID `MARSHAL-*` | integrator |
 | `[implementer]` or task ID `BUILD-*` | implementer |
 
-2. Mark task as completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task as completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 
 4. **Review gate check** (when reviewer completes):
@@ -119,7 +119,7 @@ Find ready tasks, spawn workers, STOP.
 2. No ready + work in progress -> report waiting, STOP
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
-   a. update_goal -> in_progress
+   a. update_plan -> in_progress
    b. team_msg log -> task_unblocked
    c. Spawn team-worker (see SKILL.md Spawn Template):
       ```

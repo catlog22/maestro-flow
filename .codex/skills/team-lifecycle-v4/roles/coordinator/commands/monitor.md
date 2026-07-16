@@ -38,8 +38,8 @@ Worker completed. Process and advance.
      a. `get_state(role=<callback_role>)` → extract `tech_profile.signals`
      b. Merge with previously collected signals from other roles
      c. Evaluate against trigger matrix (§4)
-     d. P0 matches → create_goal with blockedBy on current stage, blocks downstream
-     e. P1 matches → create_goal parallel with REVIEW/TEST stage
+     d. P0 matches → update_plan with blockedBy on current stage, blocks downstream
+     e. P1 matches → update_plan parallel with REVIEW/TEST stage
      f. Log: `team_msg(type="specialist_injection", data={ specialist, signals, priority, evidence })`
      g. Dedup: skip if same specialist already injected this session
 5. Check for checkpoints:
@@ -63,7 +63,7 @@ When PLAN-001 completes, coordinator creates IMPL tasks based on complexity:
 | Medium (3-4 modules) | Create IMPL-{1..N}, each blockedBy: [PLAN-001] only, InnerLoop: false |
 | High (5+ modules) | Create IMPL-{1..N} with DAG deps from plan.json, InnerLoop per dispatch rules |
 
-3. For each IMPL task: create_goal with structured description (dispatch.md template)
+3. For each IMPL task: update_plan with structured description (dispatch.md template)
 4. Set blockedBy:
    - **Parallel tasks**: blockedBy: [PLAN-001] (or [CHECKPOINT-003] if supervision enabled)
    - **Serial chain within DAG**: blockedBy includes upstream IMPL task IDs
@@ -83,7 +83,7 @@ When PLAN-001 completes, coordinator creates IMPL tasks based on complexity:
 | Medium (3-4 modules) | Create IMPL-{1..N}, each blockedBy: [PLAN-001] only, InnerLoop: false |
 | High (5+ modules) | Create IMPL-{1..N} with DAG deps from plan.json, InnerLoop per dispatch rules |
 
-3. For each IMPL task: create_goal with structured description (dispatch.md template)
+3. For each IMPL task: update_plan with structured description (dispatch.md template)
 4. Set blockedBy:
    - **Parallel tasks**: blockedBy: [PLAN-001] (or [CHECKPOINT-003] if supervision enabled)
    - **Serial chain within DAG**: blockedBy includes upstream IMPL task IDs
@@ -151,7 +151,7 @@ Find ready tasks, spawn workers, STOP.
    a. Check if inner loop role with active worker -> skip (worker picks up)
    b. **CHECKPOINT-* task** -> wake resident supervisor (see below)
    c. Other tasks -> standard spawn:
-      - update_goal -> in_progress
+      - update_plan -> in_progress
       - team_msg log -> task_unblocked
       - Spawn team-worker (see SKILL.md Worker Spawn Template)
       - Add to active_workers
@@ -173,7 +173,7 @@ When a ready task has prefix `CHECKPOINT-*`:
      summary: "Checkpoint request: <CHECKPOINT-NNN>"
    })
    ```
-4. Do NOT update_goal in_progress — supervisor claims the task itself
+4. Do NOT update_plan in_progress — supervisor claims the task itself
 5. Do NOT add duplicate entry to active_workers (supervisor already tracked)
 
 ## handleComplete

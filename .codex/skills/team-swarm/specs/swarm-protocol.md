@@ -52,7 +52,7 @@ Master protocol document for team-swarm: defines how the LLM coordinator and Pyt
 [Coordinator] iteration k (k = 1..K):
   ├─> python aco.py select --iter k
   │    └─> returns N ant assignments (paths to explore)
-  ├─> create_goal × N ant tasks
+  ├─> update_plan × N ant tasks
   ├─> spawn N × team-worker(ant) in background
   └─> STOP (await all callbacks)
   

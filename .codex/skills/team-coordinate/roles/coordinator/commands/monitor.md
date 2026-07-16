@@ -179,7 +179,7 @@ Ready tasks found?
       +- Is task owner an Inner Loop role AND that role already has an active_worker?
       |   +- YES -> SKIP spawn (existing worker will pick it up via inner loop)
       |   +- NO -> normal spawn below
-      +- update_goal -> in_progress
+      +- update_plan -> in_progress
       +- team_msg log -> task_unblocked (session_id=<session-id>)
       +- Spawn team-worker (see spawn tool call below)
       +- Add to session.active_workers
@@ -266,7 +266,7 @@ Parse capability_gap message:
       2. Fill template with: frontmatter (role, prefix, inner_loop, message_types) + Phase 2-4 content
       3. Write to <session-folder>/role-specs/<new-role>.md
       4. Add to session.roles[]
-  +- Create new task(s) via create_goal
+  +- Create new task(s) via update_plan
   +- Update team-session.json
   +- Spawn new team-worker -> STOP
 ```
@@ -277,7 +277,7 @@ Parse capability_gap message:
 
 When a worker has unexpected status (not completed, not in_progress):
 
-1. Reset task -> pending via update_goal
+1. Reset task -> pending via update_plan
 2. Log via team_msg (type: error)
 3. Report to user: task reset, will retry on next resume
 
@@ -290,7 +290,7 @@ handleCallback / handleResume detects:
   +- Task is in_progress (was fast-advanced by predecessor)
   +- No active_worker entry for this task
   +- Resolution:
-      1. update_goal -> reset task to pending
+      1. update_plan -> reset task to pending
       2. Remove stale active_worker entry (if any)
       3. Log via team_msg (type: error)
       4. -> handleSpawnNext (will re-spawn the task normally)

@@ -100,7 +100,7 @@ Delegate to @commands/dispatch.md:
 1. Read dependency graph from task-analysis.json
 2. Read specs/pipelines.md for debug-pipeline task registry
 3. Topological sort tasks
-4. Create tasks via create_goal, then set blockedBy via update_goal
+4. Create tasks via update_plan, then set blockedBy via update_plan
 5. Update team-session.json
 
 ## Phase 4: Spawn-and-Stop

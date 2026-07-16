@@ -24,7 +24,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -40,7 +40,7 @@ CONTEXT:
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -56,7 +56,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **COLOR-001** (color-auditor):
 ```
-create_goal({
+update_plan({
   subject: "COLOR-001",
   description: "PURPOSE: OKLCH color contrast audit for all color combinations | Success: Complete color audit with WCAG 2.1 + APCA contrast ratios and color blindness assessment
 TASK:
@@ -74,12 +74,12 @@ CONTEXT:
 EXPECTED: <session>/audits/color/color-audit-001.md | Pass/fail per color combination
 CONSTRAINTS: Read-only analysis | Use Chrome DevTools for computed styles when available"
 })
-update_goal({ taskId: "COLOR-001", owner: "color-auditor" })
+update_plan({ taskId: "COLOR-001", owner: "color-auditor" })
 ```
 
 **TYPO-001** (typo-auditor):
 ```
-create_goal({
+update_plan({
   subject: "TYPO-001",
   description: "PURPOSE: Typography readability audit across all viewports | Success: Complete typography audit with size, line-height, reading width at each breakpoint
 TASK:
@@ -97,12 +97,12 @@ CONTEXT:
 EXPECTED: <session>/audits/typography/typo-audit-001.md | Breakpoint-by-breakpoint report
 CONSTRAINTS: Read-only analysis | Screenshot at multiple viewports if Chrome DevTools available"
 })
-update_goal({ taskId: "TYPO-001", owner: "typo-auditor" })
+update_plan({ taskId: "TYPO-001", owner: "typo-auditor" })
 ```
 
 **FOCUS-001** (focus-auditor):
 ```
-create_goal({
+update_plan({
   subject: "FOCUS-001",
   description: "PURPOSE: Focus management and keyboard accessibility audit | Success: Complete focus audit with tab order, indicator visibility, ARIA coverage
 TASK:
@@ -122,14 +122,14 @@ CONTEXT:
 EXPECTED: <session>/audits/focus/focus-audit-001.md | Element-by-element focus report
 CONSTRAINTS: Read-only analysis | Tab through elements if Chrome DevTools available"
 })
-update_goal({ taskId: "FOCUS-001", owner: "focus-auditor" })
+update_plan({ taskId: "FOCUS-001", owner: "focus-auditor" })
 ```
 
 **CRITICAL**: COLOR-001, TYPO-001, FOCUS-001 have NO blockedBy -- they run in PARALLEL.
 
 **REMED-001** (remediation-planner):
 ```
-create_goal({
+update_plan({
   subject: "REMED-001",
   description: "PURPOSE: Synthesize all 3 audit findings into prioritized remediation plan | Success: Complete remediation plan with severity ranking, code-level fix guidance, WCAG criterion mapping
 TASK:
@@ -149,7 +149,7 @@ CONTEXT:
 EXPECTED: <session>/remediation/remediation-plan.md | All critical/high issues addressed
 CONSTRAINTS: Read-only synthesis | No code modifications"
 })
-update_goal({ taskId: "REMED-001", addBlockedBy: ["COLOR-001", "TYPO-001", "FOCUS-001"], owner: "remediation-planner" })
+update_plan({ taskId: "REMED-001", addBlockedBy: ["COLOR-001", "TYPO-001", "FOCUS-001"], owner: "remediation-planner" })
 ```
 
 ---
@@ -160,7 +160,7 @@ Same as audit-only (COLOR-001, TYPO-001, FOCUS-001, REMED-001), plus:
 
 **FIX-001** (fix-implementer):
 ```
-create_goal({
+update_plan({
   subject: "FIX-001",
   description: "PURPOSE: Implement accessibility fixes from remediation plan | Success: All critical and high severity issues fixed with passing contrast ratios and ARIA validation
 TASK:
@@ -181,12 +181,12 @@ CONTEXT:
 EXPECTED: Modified source files + <session>/fixes/fix-summary-001.md | All critical/high fixes applied
 CONSTRAINTS: Modify only files identified in remediation plan | Preserve existing functionality"
 })
-update_goal({ taskId: "FIX-001", addBlockedBy: ["REMED-001"], owner: "fix-implementer" })
+update_plan({ taskId: "FIX-001", addBlockedBy: ["REMED-001"], owner: "fix-implementer" })
 ```
 
 **COLOR-002** (color-auditor):
 ```
-create_goal({
+update_plan({
   subject: "COLOR-002",
   description: "PURPOSE: Re-audit color contrast after fixes applied | Success: All color combinations pass WCAG target level
 TASK:
@@ -204,12 +204,12 @@ CONTEXT:
 EXPECTED: <session>/re-audit/color-audit-002.md | Before/after comparison with pass/fail
 CONSTRAINTS: Read-only verification | Focus on fixed items + regression check"
 })
-update_goal({ taskId: "COLOR-002", addBlockedBy: ["FIX-001"], owner: "color-auditor" })
+update_plan({ taskId: "COLOR-002", addBlockedBy: ["FIX-001"], owner: "color-auditor" })
 ```
 
 **FOCUS-002** (focus-auditor):
 ```
-create_goal({
+update_plan({
   subject: "FOCUS-002",
   description: "PURPOSE: Re-audit focus management after fixes applied | Success: All focus indicators visible with correct ARIA attributes
 TASK:
@@ -228,7 +228,7 @@ CONTEXT:
 EXPECTED: <session>/re-audit/focus-audit-002.md | Before/after comparison with pass/fail
 CONSTRAINTS: Read-only verification | Focus on fixed items + regression check"
 })
-update_goal({ taskId: "FOCUS-002", addBlockedBy: ["FIX-001"], owner: "focus-auditor" })
+update_plan({ taskId: "FOCUS-002", addBlockedBy: ["FIX-001"], owner: "focus-auditor" })
 ```
 
 **CRITICAL**: COLOR-002 and FOCUS-002 both blocked only by FIX-001 -- they run in PARALLEL after fixes.

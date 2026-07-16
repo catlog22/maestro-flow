@@ -23,7 +23,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <completion criteria>
 TASK:
@@ -41,7 +41,7 @@ InnerLoop: false
 execution_method: <method>
 code_review: <setting>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ## Pipeline Router
@@ -58,7 +58,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **EXPLORE-001** (explorer):
 ```
-create_goal({
+update_plan({
   subject: "EXPLORE-001",
   description: "PURPOSE: Analyze issue context and map codebase impact | Success: Context report with relevant files and dependencies
 TASK:
@@ -73,12 +73,12 @@ CONSTRAINTS: Exploration and analysis only, no solution design
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "EXPLORE-001", owner: "explorer" })
+update_plan({ taskId: "EXPLORE-001", owner: "explorer" })
 ```
 
 **SOLVE-001** (planner):
 ```
-create_goal({
+update_plan({
   subject: "SOLVE-001",
   description: "PURPOSE: Design solution and decompose into implementation tasks | Success: Bound solution with task decomposition
 TASK:
@@ -94,12 +94,12 @@ CONSTRAINTS: Solution design only, no code implementation
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "SOLVE-001", addBlockedBy: ["EXPLORE-001"], owner: "planner" })
+update_plan({ taskId: "SOLVE-001", addBlockedBy: ["EXPLORE-001"], owner: "planner" })
 ```
 
 **MARSHAL-001** (integrator):
 ```
-create_goal({
+update_plan({
   subject: "MARSHAL-001",
   description: "PURPOSE: Form execution queue with conflict detection and ordering | Success: Execution queue file with resolved conflicts
 TASK:
@@ -115,12 +115,12 @@ CONSTRAINTS: Queue formation only, no implementation
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "MARSHAL-001", addBlockedBy: ["SOLVE-001"], owner: "integrator" })
+update_plan({ taskId: "MARSHAL-001", addBlockedBy: ["SOLVE-001"], owner: "integrator" })
 ```
 
 **BUILD-001** (implementer):
 ```
-create_goal({
+update_plan({
   subject: "BUILD-001",
   description: "PURPOSE: Implement solution plan and verify with tests | Success: Code changes committed, tests pass
 TASK:
@@ -139,7 +139,7 @@ InnerLoop: false
 execution_method: <execution_method>
 code_review: <code_review>"
 })
-update_goal({ taskId: "BUILD-001", addBlockedBy: ["MARSHAL-001"], owner: "implementer" })
+update_plan({ taskId: "BUILD-001", addBlockedBy: ["MARSHAL-001"], owner: "implementer" })
 ```
 
 ---
@@ -150,7 +150,7 @@ Creates 5 tasks. EXPLORE-001 and SOLVE-001 same as Quick, then AUDIT gate before
 
 **AUDIT-001** (reviewer):
 ```
-create_goal({
+update_plan({
   subject: "AUDIT-001",
   description: "PURPOSE: Review solution for technical feasibility, risk, and completeness | Success: Clear verdict (approved/concerns/rejected) with scores
 TASK:
@@ -166,7 +166,7 @@ CONSTRAINTS: Review only, do not modify solutions
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "AUDIT-001", addBlockedBy: ["SOLVE-001"], owner: "reviewer" })
+update_plan({ taskId: "AUDIT-001", addBlockedBy: ["SOLVE-001"], owner: "reviewer" })
 ```
 
 **MARSHAL-001**: Same as Quick, but `addBlockedBy: ["AUDIT-001"]`.
@@ -189,7 +189,7 @@ For each issue in issue_ids (up to 5), create an EXPLORE task with distinct owne
 | N > 1 | owner: "explorer-1", "explorer-2", ..., "explorer-N" (max 5) |
 
 ```
-create_goal({
+update_plan({
   subject: "EXPLORE-<NNN>",
   description: "PURPOSE: Analyze issue <issueId> context and map codebase impact | Success: Context report for <issueId>
 TASK:
@@ -204,13 +204,13 @@ CONSTRAINTS: Single issue scope, exploration only
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "EXPLORE-<NNN>", owner: "explorer-<N>" })
+update_plan({ taskId: "EXPLORE-<NNN>", owner: "explorer-<N>" })
 ```
 
 **SOLVE-001..N** (planner, sequential after all EXPLORE):
 
 ```
-create_goal({
+update_plan({
   subject: "SOLVE-<NNN>",
   description: "PURPOSE: Design solution for <issueId> | Success: Bound solution with tasks
 TASK:
@@ -226,12 +226,12 @@ CONSTRAINTS: Solution design only
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "SOLVE-<NNN>", addBlockedBy: ["EXPLORE-001", ..., "EXPLORE-<N>"], owner: "planner" })
+update_plan({ taskId: "SOLVE-<NNN>", addBlockedBy: ["EXPLORE-001", ..., "EXPLORE-<N>"], owner: "planner" })
 ```
 
 **AUDIT-001** (reviewer, batch review):
 ```
-create_goal({
+update_plan({
   subject: "AUDIT-001",
   description: "PURPOSE: Batch review all solutions | Success: Verdict for each solution
 TASK:
@@ -247,7 +247,7 @@ CONSTRAINTS: Review only
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "AUDIT-001", addBlockedBy: ["SOLVE-001", ..., "SOLVE-<N>"], owner: "reviewer" })
+update_plan({ taskId: "AUDIT-001", addBlockedBy: ["SOLVE-001", ..., "SOLVE-<N>"], owner: "reviewer" })
 ```
 
 **MARSHAL-001** (integrator): `addBlockedBy: ["AUDIT-001"]`.
@@ -264,7 +264,7 @@ When M is known (deferred creation after MARSHAL), assign distinct owners:
 | M > 2 | owner: "implementer-1", ..., "implementer-M" (max 3) |
 
 ```
-create_goal({
+update_plan({
   subject: "BUILD-<NNN>",
   description: "PURPOSE: Implement solution for <issueId> | Success: Code committed, tests pass
 TASK:
@@ -282,7 +282,7 @@ InnerLoop: false
 execution_method: <execution_method>
 code_review: <code_review>"
 })
-update_goal({ taskId: "BUILD-<NNN>", addBlockedBy: ["MARSHAL-001"], owner: "implementer-<M>" })
+update_plan({ taskId: "BUILD-<NNN>", addBlockedBy: ["MARSHAL-001"], owner: "implementer-<M>" })
 ```
 
 ---
@@ -293,7 +293,7 @@ When AUDIT rejects a solution, coordinator creates fix tasks dynamically in hand
 
 **SOLVE-fix-001** (planner, revision):
 ```
-create_goal({
+update_plan({
   subject: "SOLVE-fix-001",
   description: "PURPOSE: Revise solution addressing reviewer feedback (fix cycle <round>) | Success: Revised solution addressing rejection reasons
 TASK:
@@ -310,12 +310,12 @@ CONSTRAINTS: Address reviewer concerns specifically
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "SOLVE-fix-001", addBlockedBy: ["AUDIT-001"], owner: "planner" })
+update_plan({ taskId: "SOLVE-fix-001", addBlockedBy: ["AUDIT-001"], owner: "planner" })
 ```
 
 **AUDIT-002** (reviewer, re-review):
 ```
-create_goal({
+update_plan({
   subject: "AUDIT-002",
   description: "PURPOSE: Re-review revised solution (fix cycle <round>) | Success: Verdict on revised solution
 TASK:
@@ -331,7 +331,7 @@ CONSTRAINTS: Focus on previously rejected dimensions
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "AUDIT-002", addBlockedBy: ["SOLVE-fix-001"], owner: "reviewer" })
+update_plan({ taskId: "AUDIT-002", addBlockedBy: ["SOLVE-fix-001"], owner: "reviewer" })
 ```
 
 ## Validation

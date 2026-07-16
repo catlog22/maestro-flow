@@ -41,7 +41,7 @@ Worker completed. Process and advance.
 
 2. Check if progress update (inner loop) or final completion
 3. Progress -> update session state, STOP
-4. Completion -> mark task done via update_goal(status="completed"), remove from active_workers
+4. Completion -> mark task done via update_plan(status="completed"), remove from active_workers
 5. Check for checkpoints:
    - QARUN-* completes -> read meta.json for coverage:
      - coverage >= target OR gc_rounds >= MAX_GC_ROUNDS -> proceed to handleSpawnNext
@@ -49,7 +49,7 @@ Worker completed. Process and advance.
 
 **GC Fix Task Creation** (when coverage below target):
 ```
-create_goal({
+update_plan({
   subject: "QAGEN-fix-<round>: Fix tests for <layer> (GC #<round>)",
   description: "PURPOSE: Fix failing tests and improve coverage | Success: Coverage meets target
 TASK:
@@ -65,7 +65,7 @@ CONSTRAINTS: Only modify test files | No source changes
 InnerLoop: false
 RoleSpec: ~  or <project>/.claude/skills/team-quality-assurance/roles/generator/role.md"
 })
-create_goal({
+update_plan({
   subject: "QARUN-gc-<round>: Re-execute <layer> (GC #<round>)",
   description: "PURPOSE: Re-execute tests after fixes | Success: Coverage >= target
 TASK: Execute test suite, measure coverage, report results
@@ -78,7 +78,7 @@ CONSTRAINTS: Read-only execution
 InnerLoop: false
 RoleSpec: ~  or <project>/.claude/skills/team-quality-assurance/roles/executor/role.md"
 })
-update_goal({ taskId: "QARUN-gc-<round>", addBlockedBy: ["QAGEN-fix-<round>"] })
+update_plan({ taskId: "QARUN-gc-<round>", addBlockedBy: ["QAGEN-fix-<round>"] })
 ```
 
 6. -> handleSpawnNext
@@ -138,7 +138,7 @@ Then STOP.
 
 1. No active workers -> handleSpawnNext
 2. Has active -> check each status
-   - completed -> mark done via update_goal
+   - completed -> mark done via update_plan
    - in_progress -> still running
 3. Some completed -> handleSpawnNext
 4. All running -> report status, STOP
@@ -166,7 +166,7 @@ Find ready tasks, spawn workers, STOP.
 | QAANA-* | analyst | false |
 
    b. Check if inner loop role with active worker -> skip (worker picks up next task)
-   c. update_goal -> in_progress
+   c. update_plan -> in_progress
    d. team_msg log -> task_unblocked
    e. Spawn team-worker:
 

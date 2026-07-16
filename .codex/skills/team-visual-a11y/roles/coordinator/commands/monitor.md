@@ -39,7 +39,7 @@ Worker completed. Process and advance.
 | `[remediation-planner]` or `REMED-*` | remediation-planner |
 | `[fix-implementer]` or `FIX-*` | fix-implementer |
 
-2. Mark task completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 
 4. Check checkpoint for completed task:
@@ -81,7 +81,7 @@ Worker completed. Process and advance.
 
    **GC Fix Task Creation** (when re-audit finds issues):
    ```
-   create_goal({ subject: "FIX-002",
+   update_plan({ subject: "FIX-002",
      description: "PURPOSE: Address remaining issues from re-audit | Success: All critical/high issues resolved
    TASK:
      - Parse re-audit reports for remaining issues
@@ -89,7 +89,7 @@ Worker completed. Process and advance.
    CONTEXT:
      - Session: <session-folder>
      - Upstream artifacts: re-audit/color-audit-002.md, re-audit/focus-audit-002.md" })
-   update_goal({ taskId: "FIX-002", addBlockedBy: ["COLOR-002", "FOCUS-002"], owner: "fix-implementer" })
+   update_plan({ taskId: "FIX-002", addBlockedBy: ["COLOR-002", "FOCUS-002"], owner: "fix-implementer" })
    ```
    Then create new re-audit tasks blocked by FIX-002. Increment gc_state.round.
 
@@ -164,7 +164,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
    a. Check inner loop role with active worker -> skip (worker picks up)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

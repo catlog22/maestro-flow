@@ -46,7 +46,7 @@ Worker completed. Verify completion, check pipeline conditions, advance.
 
 2. Check if progress update (inner loop) or final completion
 3. Progress -> update session state, STOP
-4. Completion -> mark task done via update_goal(status="completed"), remove from active_workers
+4. Completion -> mark task done via update_plan(status="completed"), remove from active_workers
 5. Check for checkpoints:
    - scanner completes -> read meta.json for findings_count:
      - findings_count === 0 -> delete remaining REV-*/FIX-* tasks -> handleComplete
@@ -120,7 +120,7 @@ Then STOP.
 
 1. No active workers -> handleSpawnNext
 2. Has active -> check each status
-   - completed -> mark done via update_goal
+   - completed -> mark done via update_plan
    - in_progress -> still running
    - other -> worker failure -> reset to pending
 3. Some completed -> handleSpawnNext
@@ -140,7 +140,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> take first ready task:
    a. Determine role from prefix (use Role-Worker Map)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

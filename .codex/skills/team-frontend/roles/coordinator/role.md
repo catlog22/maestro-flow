@@ -117,7 +117,7 @@ mcp__maestro__team_msg({
 
 Delegate to @commands/dispatch.md:
 1. Read specs/pipelines.md for selected pipeline task registry
-2. Create tasks via create_goal, then set blockedBy via update_goal
+2. Create tasks via update_plan, then set blockedBy via update_plan
 3. Update session.json
 
 ## Phase 4: Spawn-and-Stop

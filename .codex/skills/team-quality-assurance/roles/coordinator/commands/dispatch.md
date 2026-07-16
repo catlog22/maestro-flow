@@ -11,8 +11,8 @@
 3. Topological sort tasks (respect addBlockedBy)
 4. Validate all owners exist in role registry (SKILL.md)
 5. For each task (in order):
-   - create_goal with structured description (see template below)
-   - update_goal with addBlockedBy + owner assignment
+   - update_plan with structured description (see template below)
+   - update_plan with addBlockedBy + owner assignment
 6. Update session.json with pipeline.tasks_total
 7. Validate chain (no orphans, no cycles, all refs valid)
 

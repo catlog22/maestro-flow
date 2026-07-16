@@ -36,7 +36,7 @@ Triggered when a worker sends completion message.
 2. Mark task as completed:
 
 ```
-update_goal({ taskId: "<task-id>", status: "completed" })
+update_plan({ taskId: "<task-id>", status: "completed" })
 ```
 
 3. Record completion in session state
@@ -142,7 +142,7 @@ Fix cycles are tracked per branch/pipeline in `session.json`:
 
 **Fan-out mode**:
 ```
-create_goal({
+update_plan({
   subject: "FIX-B{NN}-{cycle}",
   description: "PURPOSE: Fix issues in branch B{NN} from review/benchmark | Success: All flagged issues resolved
 TASK:
@@ -169,7 +169,7 @@ Create new BENCH and REVIEW with retry suffix:
 
 **Independent mode**:
 ```
-create_goal({
+update_plan({
   subject: "FIX-{P}01-{cycle}",
   ...same pattern with pipeline prefix...
   status: "pending"

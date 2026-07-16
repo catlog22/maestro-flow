@@ -39,7 +39,7 @@ Bash(`mkdir -p "${sessionFolder}/phase-${phaseNumber}"`)
 ### Step 3: Create PLAN Task (Assigned to Planner)
 
 ```javascript
-const planTaskId = create_goal({
+const planTaskId = update_plan({
   subject: `PLAN-${phaseNumber}01: Plan phase ${phaseNumber} - ${phaseGoal}`,
   description: `[coordinator] Plan creation for phase ${phaseNumber}.
 
@@ -65,7 +65,7 @@ ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 1. Invoke spawn_agent({ task_name: "team_roadmap_dev", message: "Execute skill team-roadmap-dev, args: "--role=planner"" })
 2. Follow planner role.md research + create-plans commands
 3. Use roadmap requirements as input for plan generation
-4. update_goal this task to completed when plan is written`,
+4. update_plan this task to completed when plan is written`,
   activeForm: `Planning phase ${phaseNumber}`
 })
 ```
@@ -73,7 +73,7 @@ ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 ### Step 4: Create EXEC Task (Assigned to Executor, Blocked by PLAN)
 
 ```javascript
-const execTaskId = create_goal({
+const execTaskId = update_plan({
   subject: `EXEC-${phaseNumber}01: Execute phase ${phaseNumber} - ${phaseGoal}`,
   description: `[coordinator] Execute plans for phase ${phaseNumber}.
 
@@ -92,18 +92,18 @@ ${phaseGoal}
 2. Follow executor role.md implement command
 3. Execute all plans in wave order
 4. Write summary to ${sessionFolder}/phase-${phaseNumber}/summary-01.md
-5. update_goal this task to completed when all plans executed`,
+5. update_plan this task to completed when all plans executed`,
   activeForm: `Executing phase ${phaseNumber}`
 })
 
 // Set dependency: EXEC blocked by PLAN
-update_goal({ taskId: execTaskId, addBlockedBy: [planTaskId] })
+update_plan({ taskId: execTaskId, addBlockedBy: [planTaskId] })
 ```
 
 ### Step 5: Create VERIFY Task (Assigned to Verifier, Blocked by EXEC)
 
 ```javascript
-const verifyTaskId = create_goal({
+const verifyTaskId = update_plan({
   subject: `VERIFY-${phaseNumber}01: Verify phase ${phaseNumber} - ${phaseGoal}`,
   description: `[coordinator] Verify phase ${phaseNumber} against success criteria.
 
@@ -128,12 +128,12 @@ ${phaseSuccessCriteria.map(c => `- ${c}`).join('\n')}
 3. Check each success criterion against actual implementation
 4. Write verification to ${sessionFolder}/phase-${phaseNumber}/verification.md
 5. If gaps found: list them with gap IDs in verification.md
-6. update_goal this task to completed with result (passed/gaps_found)`,
+6. update_plan this task to completed with result (passed/gaps_found)`,
   activeForm: `Verifying phase ${phaseNumber}`
 })
 
 // Set dependency: VERIFY blocked by EXEC
-update_goal({ taskId: verifyTaskId, addBlockedBy: [execTaskId] })
+update_plan({ taskId: verifyTaskId, addBlockedBy: [execTaskId] })
 ```
 
 ### Step 6: Update state.md

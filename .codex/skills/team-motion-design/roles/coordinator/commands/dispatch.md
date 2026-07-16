@@ -24,7 +24,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -40,7 +40,7 @@ CONTEXT:
 EXPECTED: <deliverable path> + <quality criteria>
 CONSTRAINTS: <scope limits, focus areas>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -57,7 +57,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **MRESEARCH-001** (motion-researcher):
 ```
-create_goal({
+update_plan({
   subject: "MRESEARCH-001",
   description: "PURPOSE: Audit existing animations, measure performance baseline, catalog easing patterns | Success: 3 research artifacts produced with valid data
 TASK:
@@ -73,12 +73,12 @@ CONTEXT:
 EXPECTED: <session>/research/*.json | All 3 research files with valid JSON
 CONSTRAINTS: Read-only analysis | Focus on existing animation patterns"
 })
-update_goal({ taskId: "MRESEARCH-001", owner: "motion-researcher" })
+update_plan({ taskId: "MRESEARCH-001", owner: "motion-researcher" })
 ```
 
 **CHOREO-001** (choreographer):
 ```
-create_goal({
+update_plan({
   subject: "CHOREO-001",
   description: "PURPOSE: Design animation token system with easing functions, duration scale, stagger formulas | Success: Complete motion-tokens.json with all token categories
 TASK:
@@ -96,12 +96,12 @@ CONTEXT:
 EXPECTED: <session>/choreography/motion-tokens.json | Complete token system
 CONSTRAINTS: Follow motion-tokens.md schema | All tokens must have reduced-motion fallback"
 })
-update_goal({ taskId: "CHOREO-001", addBlockedBy: ["MRESEARCH-001"], owner: "choreographer" })
+update_plan({ taskId: "CHOREO-001", addBlockedBy: ["MRESEARCH-001"], owner: "choreographer" })
 ```
 
 **ANIM-001** (animator):
 ```
-create_goal({
+update_plan({
   subject: "ANIM-001",
   description: "PURPOSE: Implement CSS custom properties and utility classes from motion tokens | Success: Production-ready CSS with token consumption and reduced-motion overrides
 TASK:
@@ -118,12 +118,12 @@ CONTEXT:
 EXPECTED: <session>/animations/keyframes/*.css | Token CSS + utility classes + reduced-motion
 CONSTRAINTS: Compositor-only animations | No layout-triggering properties | will-change budget"
 })
-update_goal({ taskId: "ANIM-001", addBlockedBy: ["CHOREO-001"], owner: "animator" })
+update_plan({ taskId: "ANIM-001", addBlockedBy: ["CHOREO-001"], owner: "animator" })
 ```
 
 **MTEST-001** (motion-tester):
 ```
-create_goal({
+update_plan({
   subject: "MTEST-001",
   description: "PURPOSE: Verify animation performance and accessibility compliance | Success: 60fps confirmed, no layout thrashing, reduced-motion present
 TASK:
@@ -141,7 +141,7 @@ CONTEXT:
 EXPECTED: <session>/testing/reports/perf-report-001.md | Performance validation report
 CONSTRAINTS: Target 60fps | Flag any layout-triggering properties"
 })
-update_goal({ taskId: "MTEST-001", addBlockedBy: ["ANIM-001"], owner: "motion-tester" })
+update_plan({ taskId: "MTEST-001", addBlockedBy: ["ANIM-001"], owner: "motion-tester" })
 ```
 
 ---
@@ -167,7 +167,7 @@ GC loop between animator and motion-tester (max 2 rounds).
 
 **ANIM-001..N** (parallel): One ANIM task per scroll section or page area:
 ```
-create_goal({
+update_plan({
   subject: "ANIM-<NNN>",
   description: "PURPOSE: Implement animations for <section-name> | Success: Scroll-triggered reveals with 60fps performance
 TASK:
@@ -183,7 +183,7 @@ CONTEXT:
 EXPECTED: <session>/animations/keyframes/<section>.css + orchestrators/<section>.js
 CONSTRAINTS: Compositor-only | will-change budget | Follow motion-tokens"
 })
-update_goal({ taskId: "ANIM-<NNN>", addBlockedBy: ["CHOREO-001"], owner: "animator" })
+update_plan({ taskId: "ANIM-<NNN>", addBlockedBy: ["CHOREO-001"], owner: "animator" })
 ```
 
 **MTEST-001**: Blocked by all ANIM tasks. Full page performance validation.

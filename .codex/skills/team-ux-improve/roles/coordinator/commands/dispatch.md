@@ -32,7 +32,7 @@ Create task chains based on execution mode. Generate structured task description
 Every task description uses structured format for clarity:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -51,14 +51,14 @@ CONSTRAINTS: <scope limits, focus areas>
 InnerLoop: <true|false>
 <additional-metadata-fields>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Standard Pipeline Tasks
 
 **SCAN-001: UI Component Scanning**
 ```
-create_goal({
+update_plan({
   subject: "SCAN-001",
   description: "PURPOSE: Scan UI components to identify interaction issues (unresponsive buttons, missing feedback, state not refreshing) | Success: Complete issue report with file:line references and severity classification
 TASK:
@@ -77,12 +77,12 @@ CONSTRAINTS: Focus on interaction issues only, exclude styling/layout problems
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "SCAN-001", owner: "scanner" })
+update_plan({ taskId: "SCAN-001", owner: "scanner" })
 ```
 
 **DIAG-001: Root Cause Diagnosis**
 ```
-create_goal({
+update_plan({
   subject: "DIAG-001",
   description: "PURPOSE: Diagnose root causes of identified UI issues | Success: Complete diagnosis report with fix recommendations for each issue
 TASK:
@@ -102,12 +102,12 @@ CONSTRAINTS: Focus on actionable root causes, provide specific fix strategies
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "DIAG-001", addBlockedBy: ["SCAN-001"], owner: "diagnoser" })
+update_plan({ taskId: "DIAG-001", addBlockedBy: ["SCAN-001"], owner: "diagnoser" })
 ```
 
 **DESIGN-001: Solution Design**
 ```
-create_goal({
+update_plan({
   subject: "DESIGN-001",
   description: "PURPOSE: Design feedback mechanisms and state management solutions for identified issues | Success: Complete implementation guide with code patterns and examples
 TASK:
@@ -128,12 +128,12 @@ CONSTRAINTS: Solutions must be framework-appropriate, provide complete working e
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "DESIGN-001", addBlockedBy: ["DIAG-001"], owner: "designer" })
+update_plan({ taskId: "DESIGN-001", addBlockedBy: ["DIAG-001"], owner: "designer" })
 ```
 
 **IMPL-001: Code Implementation**
 ```
-create_goal({
+update_plan({
   subject: "IMPL-001",
   description: "PURPOSE: Generate fix code with proper state management, event handling, and UI feedback bindings | Success: All fixes implemented and validated
 TASK:
@@ -156,12 +156,12 @@ CONSTRAINTS: Maintain existing code style, ensure backward compatibility, valida
 ---
 InnerLoop: true"
 })
-update_goal({ taskId: "IMPL-001", addBlockedBy: ["DESIGN-001"], owner: "implementer" })
+update_plan({ taskId: "IMPL-001", addBlockedBy: ["DESIGN-001"], owner: "implementer" })
 ```
 
 **TEST-001: Test Validation**
 ```
-create_goal({
+update_plan({
   subject: "TEST-001",
   description: "PURPOSE: Generate and run tests to verify fixes (loading states, error handling, state updates) | Success: Pass rate >= 95%, all critical fixes validated
 TASK:
@@ -183,7 +183,7 @@ CONSTRAINTS: Pass rate threshold: 95%, max fix iterations: 5
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "TEST-001", addBlockedBy: ["IMPL-001"], owner: "tester" })
+update_plan({ taskId: "TEST-001", addBlockedBy: ["IMPL-001"], owner: "tester" })
 ```
 
 ---

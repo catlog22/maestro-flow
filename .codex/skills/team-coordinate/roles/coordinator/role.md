@@ -57,7 +57,7 @@ All coordinator state changes MUST be logged to team_msg BEFORE send_message:
 
 1. `team_msg(operation="log", ...)` — log the event
 2. `send_message(...)` — communicate to worker/user
-3. `update_goal(...)` — update task state
+3. `update_plan(...)` — update task state
 
 Read state before every handler: `team_msg(operation="get_state", session_id=<session-id>)`
 
@@ -91,7 +91,7 @@ Phase 1 needs task analysis
 | commands/monitor.md | Command | Pipeline monitoring and handlers |
 | team-worker | Subagent | Worker spawning |
 | TeamCreate / TeamDelete | System | Team lifecycle |
-| create_goal / list_agents / wait_agent / update_goal | System | Task lifecycle |
+| update_plan / list_agents / wait_agent / update_plan | System | Task lifecycle |
 | team_msg | System | Message bus operations |
 | send_message | System | Inter-agent communication |
 | request_user_input | System | User interaction |
@@ -146,7 +146,7 @@ For callback/check/resume/adapt/complete: load `@commands/monitor.md` and execut
 4. Detect fast-advance orphans (in_progress without recent activity) -> reset to pending
 5. Determine remaining pipeline from reconciled state
 6. Rebuild team if disbanded (TeamCreate + spawn needed workers only)
-7. Create missing tasks, set dependencies via update_goal({ addBlockedBy })
+7. Create missing tasks, set dependencies via update_plan({ addBlockedBy })
 8. Verify dependency chain integrity
 9. Update session file with reconciled state
 10. Kick first executable task's worker -> Phase 4
@@ -280,7 +280,7 @@ mcp__maestro__team_msg({
 Delegate to `@commands/dispatch.md` which creates the full task chain:
 1. Reads dependency_graph from task-analysis.json
 2. Topological sorts tasks
-3. Creates tasks via create_goal, then sets dependencies via update_goal({ addBlockedBy })
+3. Creates tasks via update_plan, then sets dependencies via update_plan({ addBlockedBy })
 4. Assigns owner based on role mapping from task-analysis.json
 5. Includes `Session: <session-folder>` in every task description
 6. Sets InnerLoop flag for multi-task roles

@@ -43,7 +43,7 @@ Worker completed. Process and advance.
 3. Progress update -> update session state, STOP
 4. Completion -> mark task done:
    ```
-   update_goal({ taskId: "<task-id>", status: "completed" })
+   update_plan({ taskId: "<task-id>", status: "completed" })
    ```
 5. Remove from active_workers, record completion in session
 
@@ -119,7 +119,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
    a. Check inner loop role with active worker -> skip (worker picks up)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

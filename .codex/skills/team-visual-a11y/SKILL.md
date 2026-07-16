@@ -8,7 +8,7 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - create_goal
+  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -26,7 +26,6 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
-  - update_goal
   - wait_agent
 session-mode: run
 ---

@@ -24,7 +24,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -42,7 +42,7 @@ CONSTRAINTS: <scope limits, focus areas>
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -59,7 +59,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **EXPLORE-001** (explorer):
 ```
-create_goal({
+update_plan({
   subject: "EXPLORE-001",
   description: "PURPOSE: Explore codebase structure for analysis topic | Success: Key files, patterns, and findings collected
 TASK:
@@ -77,12 +77,12 @@ CONSTRAINTS: Focus on <topic> scope
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "EXPLORE-001", owner: "explorer" })
+update_plan({ taskId: "EXPLORE-001", owner: "explorer" })
 ```
 
 **ANALYZE-001** (analyst):
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-001",
   description: "PURPOSE: Deep analysis of topic from technical perspective | Success: Actionable insights with confidence levels
 TASK:
@@ -101,12 +101,12 @@ CONSTRAINTS: Focus on technical perspective | <dimensions>
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "ANALYZE-001", addBlockedBy: ["EXPLORE-001"], owner: "analyst" })
+update_plan({ taskId: "ANALYZE-001", addBlockedBy: ["EXPLORE-001"], owner: "analyst" })
 ```
 
 **SYNTH-001** (synthesizer):
 ```
-create_goal({
+update_plan({
   subject: "SYNTH-001",
   description: "PURPOSE: Integrate analysis into final conclusions | Success: Executive summary with recommendations
 TASK:
@@ -123,7 +123,7 @@ CONSTRAINTS: Pure integration, no new exploration
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "SYNTH-001", addBlockedBy: ["ANALYZE-001"], owner: "synthesizer" })
+update_plan({ taskId: "SYNTH-001", addBlockedBy: ["ANALYZE-001"], owner: "synthesizer" })
 ```
 
 ---
@@ -136,7 +136,7 @@ Create tasks in dependency order with parallel exploration and analysis windows:
 
 ```
 // For each perspective[i]:
-create_goal({
+update_plan({
   subject: "EXPLORE-<NNN>",
   description: "PURPOSE: Explore codebase from <perspective> angle | Success: Perspective-specific files and patterns collected
 TASK:
@@ -154,13 +154,13 @@ CONSTRAINTS: Focus on <perspective> angle
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "EXPLORE-<NNN>", owner: "explorer-<i+1>" })
+update_plan({ taskId: "EXPLORE-<NNN>", owner: "explorer-<i+1>" })
 ```
 
 **ANALYZE-001..N** (analyst, parallel): One per perspective. Each blocked by its corresponding EXPLORE-N.
 
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-<NNN>",
   description: "PURPOSE: Deep analysis from <perspective> perspective | Success: Insights with confidence and evidence
 TASK:
@@ -179,13 +179,13 @@ CONSTRAINTS: <perspective> perspective | <dimensions>
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "ANALYZE-<NNN>", addBlockedBy: ["EXPLORE-<NNN>"], owner: "analyst-<i+1>" })
+update_plan({ taskId: "ANALYZE-<NNN>", addBlockedBy: ["EXPLORE-<NNN>"], owner: "analyst-<i+1>" })
 ```
 
 **DISCUSS-001** (discussant): Blocked by all ANALYZE tasks.
 
 ```
-create_goal({
+update_plan({
   subject: "DISCUSS-001",
   description: "PURPOSE: Process analysis results into discussion summary | Success: Convergent themes and discussion points identified
 TASK:
@@ -204,18 +204,18 @@ CONSTRAINTS: Aggregate only, no new exploration
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "DISCUSS-001", addBlockedBy: ["ANALYZE-001", ..., "ANALYZE-<N>"], owner: "discussant" })
+update_plan({ taskId: "DISCUSS-001", addBlockedBy: ["ANALYZE-001", ..., "ANALYZE-<N>"], owner: "discussant" })
 ```
 
 **SYNTH-001** (synthesizer): Blocked by DISCUSS-001.
 
 ```
-create_goal({
+update_plan({
   subject: "SYNTH-001",
   description: "PURPOSE: Cross-perspective integration into final conclusions | Success: Executive summary with prioritized recommendations
 ...same as Quick mode SYNTH-001 but blocked by DISCUSS-001..."
 })
-update_goal({ taskId: "SYNTH-001", addBlockedBy: ["DISCUSS-001"], owner: "synthesizer" })
+update_plan({ taskId: "SYNTH-001", addBlockedBy: ["DISCUSS-001"], owner: "synthesizer" })
 ```
 
 ---
@@ -232,7 +232,7 @@ Dynamic tasks created during discussion loop:
 
 **DISCUSS-N** (subsequent rounds):
 ```
-create_goal({
+update_plan({
   subject: "DISCUSS-<NNN>",
   description: "PURPOSE: Process discussion round <N> | Success: Updated understanding with user feedback integrated
 TASK:
@@ -250,12 +250,12 @@ EXPECTED: <session>/discussions/discussion-round-<NNN>.json
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "DISCUSS-<NNN>", owner: "discussant" })
+update_plan({ taskId: "DISCUSS-<NNN>", owner: "discussant" })
 ```
 
 **ANALYZE-fix-N** (direction adjustment):
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-fix-<N>",
   description: "PURPOSE: Supplementary analysis with adjusted focus | Success: New insights from adjusted direction
 TASK:
@@ -272,7 +272,7 @@ EXPECTED: <session>/analyses/analysis-fix-<N>.json
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "ANALYZE-fix-<N>", owner: "analyst" })
+update_plan({ taskId: "ANALYZE-fix-<N>", owner: "analyst" })
 ```
 
 ## Phase 4: Validation

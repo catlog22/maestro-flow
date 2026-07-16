@@ -1,6 +1,6 @@
 ---
 name: manage
-description: Project management hub — status, issues, knowledge stores, and drift/rebuild sync
+description: Project management hub — status, issues, knowledge stores, and drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest / wiki / domain；约束类规则走 /spec add。Triggers on "项目状态", "issue 管理", "知识沉淀", "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
 argument-hint: <subcommand> [args...] where subcommand = status|issue|knowledge|sync
 allowed-tools:
   - Bash
@@ -126,9 +126,9 @@ Next-step decision table defined in workflow status.md Step 5.
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Phase needs analysis | step `analyze` (`maestro run prepare analyze` + `maestro run create analyze -- {phase}`) |
-| Phase needs planning | step `plan` (`maestro run prepare plan` + `maestro run create plan -- {phase}`) |
-| Phase needs execution | step `execute` (`maestro run prepare execute` + `maestro run create execute -- {phase}`) |
+| Phase needs analysis | step `analyze` (`maestro run prepare --platform codex analyze` + `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- {phase}`) |
+| Phase needs planning | step `plan` (`maestro run prepare --platform codex plan` + `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- {phase}`) |
+| Phase needs execution | step `execute` (`maestro run prepare --platform codex execute` + `maestro run create execute --session YYYYMMDD-execute-{topic} --intent "{goal}" -- {phase}`) |
 | Session ready to seal | step `session-seal` |
 | Issues need triage | `/manage issue list` |
 </completion>
@@ -202,8 +202,8 @@ Follow '~/.maestro/workflows/issue.md' completely.
 
 | Action | Suggestion |
 |-----------|-----------|
-| create | `maestro run create analyze -- --gaps <ISS-ID>` or `maestro run create plan -- --gaps` |
-| list | `maestro run create analyze -- --gaps <ISS-ID>` for open issues |
+| create | `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- --gaps <ISS-ID>` or `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- --gaps` |
+| list | `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- --gaps <ISS-ID>` for open issues |
 | close | `/manage status` |
 </completion>
 
@@ -317,8 +317,8 @@ Follow '~/.maestro/workflows/issue-discover.md' completely.
 | Condition | Suggestion |
 |-----------|-----------|
 | Issues discovered | `/manage issue list` to review |
-| Need root cause analysis | `maestro run create analyze -- --gaps <ISS-ID>` |
-| Want to plan fixes | `maestro run create plan -- --gaps` |
+| Need root cause analysis | `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- --gaps <ISS-ID>` |
+| Want to plan fixes | `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- --gaps` |
 </completion>
 
 ---
@@ -751,7 +751,7 @@ Extraction patterns, classification rules, routing infrastructure, and fragment 
 | 查看演化链 | `maestro spec history <sid>` — 确认 supersede 链完整 |
 | Spec 冲突标记已存在 | `maestro spec conflict list` — 查看当前冲突状态 |
 | 知识健康检查 | `maestro spec health` — 悬空/循环 supersedes 校验 |
-| Full phase retrospective | `maestro run prepare retrospective` + `maestro run create retrospective` |
+| Full phase retrospective | `maestro run prepare --platform codex retrospective` + `maestro run create retrospective --session YYYYMMDD-retrospective-{topic} --intent "{goal}"` |
 </completion>
 
 <error_codes>
@@ -1297,7 +1297,7 @@ Follow `~/.maestro/workflows/drift-realign.md` Stages 1-9 in order.
 |-----------|-----------|
 | codebase 文档已重建 | `/manage status` |
 | spec 标记待更新 | 手动编辑标记的 spec 文件 |
-| roadmap 已过时 | `maestro run prepare roadmap` + `maestro run create roadmap` 重新生成 |
+| roadmap 已过时 | `maestro run prepare --platform codex roadmap` + `maestro run create roadmap --session YYYYMMDD-roadmap-{topic} --intent "{goal}"` 重新生成 |
 | state.json 需清理 | `/manage knowledge audit --scope artifact` |
 | 需要完整同步 | `/manage sync codebase --full` |
 | project.md 已过时 | 编辑 `.workflow/project.md` |

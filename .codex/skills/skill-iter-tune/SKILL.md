@@ -8,7 +8,7 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - create_goal
+  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -16,7 +16,6 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
-  - update_goal
   - wait_agent
 session-mode: run
 ---
@@ -177,7 +176,7 @@ while (true) {
   });
 
   // Update update_plan
-  update_goal(iterationTask, {
+  update_plan(iterationTask, {
     subject: `Iteration ${state.current_iteration}/${state.max_iterations}`,
     status: 'in_progress',
     activeForm: `Running iteration ${state.current_iteration}`
@@ -298,14 +297,14 @@ Phase 1: Setup
 
 ```javascript
 // Initial state
-create_goal({ subject: "Phase 1: Setup workspace", activeForm: "Setting up workspace" })
-create_goal({ subject: "Iteration Loop", activeForm: "Running iterations" })
-create_goal({ subject: "Phase 5: Final Report", activeForm: "Generating report" })
+update_plan({ subject: "Phase 1: Setup workspace", activeForm: "Setting up workspace" })
+update_plan({ subject: "Iteration Loop", activeForm: "Running iterations" })
+update_plan({ subject: "Phase 5: Final Report", activeForm: "Generating report" })
 
 // Chain mode: create per-skill tracking tasks
 if (state.execution_mode === 'chain') {
   for (const skillName of state.chain_order) {
-    create_goal({
+    update_plan({
       subject: `Chain: ${skillName}`,
       activeForm: `Tracking ${skillName}`,
       description: `Skill chain member position ${state.chain_order.indexOf(skillName) + 1}`
@@ -318,18 +317,18 @@ if (state.execution_mode === 'chain') {
 // Chain mode: per-skill status updates
 if (state.execution_mode === 'chain') {
   // After each skill executes in Phase 2:
-  update_goal(chainSkillTask, {
+  update_plan(chainSkillTask, {
     subject: `Chain: ${skillName} — Iter ${N} executed`,
     activeForm: `${skillName} iteration ${N}`
   })
   // After Phase 3 evaluates:
-  update_goal(chainSkillTask, {
+  update_plan(chainSkillTask, {
     subject: `Chain: ${skillName} — Score ${chainScores[skillName]}/100`,
     activeForm: `${skillName} scored`
   })
 } else {
   // Single mode (existing)
-  create_goal({
+  update_plan({
     subject: `Iteration ${N}: Score ${score}/100`,
     activeForm: `Iteration ${N} complete`,
     description: `Strengths: ... | Weaknesses: ... | Suggestions: ${count}`
@@ -337,7 +336,7 @@ if (state.execution_mode === 'chain') {
 }
 
 // Completed — collapse
-update_goal(iterLoop, {
+update_plan(iterLoop, {
   subject: `Iteration Loop (${totalIters} iters, final: ${finalScore})`,
   status: 'completed'
 })

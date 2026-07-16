@@ -42,7 +42,7 @@ The SKILL.md follows a strict template. Every generated SKILL.md contains these 
 ---
 name: ${teamConfig.skillName}
 description: "${teamConfig.domain}. Triggers on ${teamConfig.skillName}."
-allowed-tools: TeamCreate(*), TeamDelete(*), send_message(*), create_goal(*), update_goal(*), list_agents(*), wait_agent(*), spawn_agent(*), request_user_input(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*)
+allowed-tools: TeamCreate(*), TeamDelete(*), send_message(*), update_plan(*), update_plan(*), list_agents(*), wait_agent(*), spawn_agent(*), request_user_input(*), Read(*), Write(*), Edit(*), Bash(*), Glob(*), Grep(*)
 ---
 ```
 

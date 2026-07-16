@@ -214,7 +214,7 @@ CONSTRAINTS: Follow skill flow exactly, produce realistic output`;
   }
 
   // Update per-skill update_plan
-  // update_goal chain skill task with execution status
+  // update_plan chain skill task with execution status
 
   // Record per-skill execution
   if (!state.iterations[N - 1].execution.chain_executions) {

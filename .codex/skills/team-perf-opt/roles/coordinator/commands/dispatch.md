@@ -27,7 +27,7 @@
 Every task description uses structured format for clarity:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -47,7 +47,7 @@ InnerLoop: <true|false>
 BranchId: <B01|A|none>",
   status: "pending"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -67,7 +67,7 @@ Create tasks in dependency order (backward compatible, unchanged):
 
 **PROFILE-001** (profiler, Stage 1):
 ```
-create_goal({
+update_plan({
   subject: "PROFILE-001",
   description: "PURPOSE: Profile application performance to identify bottlenecks | Success: Baseline metrics captured, top 3-5 bottlenecks ranked by severity
 TASK:
@@ -89,7 +89,7 @@ InnerLoop: false",
 
 **STRATEGY-001** (strategist, Stage 2):
 ```
-create_goal({
+update_plan({
   subject: "STRATEGY-001",
   description: "PURPOSE: Design prioritized optimization plan from bottleneck analysis | Success: Actionable plan with measurable success criteria per optimization
 TASK:
@@ -109,12 +109,12 @@ CONSTRAINTS: Focus on highest-impact optimizations | Risk assessment required | 
 InnerLoop: false",
   status: "pending"
 })
-update_goal({ taskId: "STRATEGY-001", addBlockedBy: ["PROFILE-001"] })
+update_plan({ taskId: "STRATEGY-001", addBlockedBy: ["PROFILE-001"] })
 ```
 
 **IMPL-001** (optimizer, Stage 3):
 ```
-create_goal({
+update_plan({
   subject: "IMPL-001",
   description: "PURPOSE: Implement optimization changes per strategy plan | Success: All planned optimizations applied, code compiles, existing tests pass
 TASK:
@@ -133,12 +133,12 @@ CONSTRAINTS: Preserve existing behavior | Minimal changes per optimization | Fol
 InnerLoop: true",
   status: "pending"
 })
-update_goal({ taskId: "IMPL-001", addBlockedBy: ["STRATEGY-001"] })
+update_plan({ taskId: "IMPL-001", addBlockedBy: ["STRATEGY-001"] })
 ```
 
 **BENCH-001** (benchmarker, Stage 4 - parallel):
 ```
-create_goal({
+update_plan({
   subject: "BENCH-001",
   description: "PURPOSE: Benchmark optimization results against baseline | Success: All plan success criteria met, no regressions detected
 TASK:
@@ -157,12 +157,12 @@ CONSTRAINTS: Must compare against baseline | Flag any regressions
 InnerLoop: false",
   status: "pending"
 })
-update_goal({ taskId: "BENCH-001", addBlockedBy: ["IMPL-001"] })
+update_plan({ taskId: "BENCH-001", addBlockedBy: ["IMPL-001"] })
 ```
 
 **REVIEW-001** (reviewer, Stage 4 - parallel):
 ```
-create_goal({
+update_plan({
   subject: "REVIEW-001",
   description: "PURPOSE: Review optimization code for correctness, side effects, and regression risks | Success: All dimensions reviewed, verdict issued
 TASK:
@@ -181,7 +181,7 @@ CONSTRAINTS: Focus on optimization changes only | Provide specific file:line ref
 InnerLoop: false",
   status: "pending"
 })
-update_goal({ taskId: "REVIEW-001", addBlockedBy: ["IMPL-001"] })
+update_plan({ taskId: "REVIEW-001", addBlockedBy: ["IMPL-001"] })
 ```
 
 ---
@@ -208,16 +208,16 @@ For each target index `i` (0-based), with prefix char `P = pipeline_prefix_chars
 // Create session subdirectory for this pipeline
 Bash("mkdir -p <session>/artifacts/pipelines/<P>")
 
-create_goal({ subject: "PROFILE-<P>01", ... })
-create_goal({ subject: "STRATEGY-<P>01", ... })
-create_goal({ subject: "IMPL-<P>01", ... })
-create_goal({ subject: "BENCH-<P>01", ... })
-create_goal({ subject: "REVIEW-<P>01", ... })
-// Then set dependencies via update_goal:
-update_goal({ taskId: "STRATEGY-<P>01", addBlockedBy: ["PROFILE-<P>01"] })
-update_goal({ taskId: "IMPL-<P>01", addBlockedBy: ["STRATEGY-<P>01"] })
-update_goal({ taskId: "BENCH-<P>01", addBlockedBy: ["IMPL-<P>01"] })
-update_goal({ taskId: "REVIEW-<P>01", addBlockedBy: ["IMPL-<P>01"] })
+update_plan({ subject: "PROFILE-<P>01", ... })
+update_plan({ subject: "STRATEGY-<P>01", ... })
+update_plan({ subject: "IMPL-<P>01", ... })
+update_plan({ subject: "BENCH-<P>01", ... })
+update_plan({ subject: "REVIEW-<P>01", ... })
+// Then set dependencies via update_plan:
+update_plan({ taskId: "STRATEGY-<P>01", addBlockedBy: ["PROFILE-<P>01"] })
+update_plan({ taskId: "IMPL-<P>01", addBlockedBy: ["STRATEGY-<P>01"] })
+update_plan({ taskId: "BENCH-<P>01", addBlockedBy: ["IMPL-<P>01"] })
+update_plan({ taskId: "REVIEW-<P>01", addBlockedBy: ["IMPL-<P>01"] })
 ```
 
 Task descriptions follow same template as single mode, with additions:
@@ -228,7 +228,7 @@ Task descriptions follow same template as single mode, with additions:
 
 Example for pipeline A with target "optimize rendering":
 ```
-create_goal({
+update_plan({
   subject: "PROFILE-A01",
   description: "PURPOSE: Profile rendering performance | Success: Rendering bottlenecks identified
 TASK:
@@ -284,7 +284,7 @@ Write("<session>/artifacts/branches/B{NN}/optimization-detail.md",
 6. Create branch tasks for each branch B{NN}:
 
 ```
-create_goal({
+update_plan({
   subject: "IMPL-B{NN}",
   description: "PURPOSE: Implement optimization OPT-{NNN} | Success: Single optimization applied, compiles, tests pass
 TASK:
@@ -303,9 +303,9 @@ InnerLoop: false
 BranchId: B{NN}",
   status: "pending"
 })
-update_goal({ taskId: "IMPL-B{NN}", addBlockedBy: ["STRATEGY-001"] })
+update_plan({ taskId: "IMPL-B{NN}", addBlockedBy: ["STRATEGY-001"] })
 
-create_goal({
+update_plan({
   subject: "BENCH-B{NN}",
   description: "PURPOSE: Benchmark branch B{NN} optimization | Success: OPT-{NNN} metrics meet success criteria
 TASK:
@@ -324,9 +324,9 @@ InnerLoop: false
 BranchId: B{NN}",
   status: "pending"
 })
-update_goal({ taskId: "BENCH-B{NN}", addBlockedBy: ["IMPL-B{NN}"] })
+update_plan({ taskId: "BENCH-B{NN}", addBlockedBy: ["IMPL-B{NN}"] })
 
-create_goal({
+update_plan({
   subject: "REVIEW-B{NN}",
   description: "PURPOSE: Review branch B{NN} optimization code | Success: Code quality verified for OPT-{NNN}
 TASK:
@@ -345,7 +345,7 @@ InnerLoop: false
 BranchId: B{NN}",
   status: "pending"
 })
-update_goal({ taskId: "REVIEW-B{NN}", addBlockedBy: ["IMPL-B{NN}"] })
+update_plan({ taskId: "REVIEW-B{NN}", addBlockedBy: ["IMPL-B{NN}"] })
 ```
 
 7. Update session.json:

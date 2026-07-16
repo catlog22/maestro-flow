@@ -71,7 +71,7 @@ Overlapping files -> log warning to `wisdom/issues.md`, continue.
 ### 3d. Create EXEC-* Task
 
 ```
-create_goal({
+update_plan({
   subject: "EXEC-00N: Implement <issue-title>",
   description: `Implement solution for issue <issueId>.
 

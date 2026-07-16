@@ -27,7 +27,7 @@
 Every task description uses structured format for clarity:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <measurable completion criteria>
 TASK:
@@ -46,7 +46,7 @@ CONSTRAINTS: <scope limits, focus areas>
 InnerLoop: <true|false>
 BranchId: <B01|A|none>"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Mode Router
@@ -66,7 +66,7 @@ Create tasks in dependency order (backward compatible, unchanged):
 
 **ANALYZE-001** (analyzer, Stage 1):
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-001",
   description: "PURPOSE: Analyze codebase architecture to identify structural issues | Success: Baseline metrics captured, top 3-7 issues ranked by severity
 TASK:
@@ -83,12 +83,12 @@ CONSTRAINTS: Focus on <refactoring-scope> | Analyze before any changes
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "ANALYZE-001", owner: "analyzer" })
+update_plan({ taskId: "ANALYZE-001", owner: "analyzer" })
 ```
 
 **DESIGN-001** (designer, Stage 2):
 ```
-create_goal({
+update_plan({
   subject: "DESIGN-001",
   description: "PURPOSE: Design prioritized refactoring plan from architecture analysis | Success: Actionable plan with measurable success criteria per refactoring
 TASK:
@@ -107,12 +107,12 @@ CONSTRAINTS: Focus on highest-impact refactorings | Risk assessment required | N
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "DESIGN-001", addBlockedBy: ["ANALYZE-001"], owner: "designer" })
+update_plan({ taskId: "DESIGN-001", addBlockedBy: ["ANALYZE-001"], owner: "designer" })
 ```
 
 **REFACTOR-001** (refactorer, Stage 3):
 ```
-create_goal({
+update_plan({
   subject: "REFACTOR-001",
   description: "PURPOSE: Implement refactoring changes per design plan | Success: All planned refactorings applied, code compiles, existing tests pass
 TASK:
@@ -131,12 +131,12 @@ CONSTRAINTS: Preserve existing behavior | Update all references | Follow code co
 ---
 InnerLoop: true"
 })
-update_goal({ taskId: "REFACTOR-001", addBlockedBy: ["DESIGN-001"], owner: "refactorer" })
+update_plan({ taskId: "REFACTOR-001", addBlockedBy: ["DESIGN-001"], owner: "refactorer" })
 ```
 
 **VALIDATE-001** (validator, Stage 4 - parallel):
 ```
-create_goal({
+update_plan({
   subject: "VALIDATE-001",
   description: "PURPOSE: Validate refactoring results against baseline | Success: Build passes, tests pass, no metric regressions, API compatible
 TASK:
@@ -156,12 +156,12 @@ CONSTRAINTS: Must compare against baseline | Flag any regressions or broken impo
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "VALIDATE-001", addBlockedBy: ["REFACTOR-001"], owner: "validator" })
+update_plan({ taskId: "VALIDATE-001", addBlockedBy: ["REFACTOR-001"], owner: "validator" })
 ```
 
 **REVIEW-001** (reviewer, Stage 4 - parallel):
 ```
-create_goal({
+update_plan({
   subject: "REVIEW-001",
   description: "PURPOSE: Review refactoring code for correctness, pattern consistency, and migration safety | Success: All dimensions reviewed, verdict issued
 TASK:
@@ -179,7 +179,7 @@ CONSTRAINTS: Focus on refactoring changes only | Provide specific file:line refe
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "REVIEW-001", addBlockedBy: ["REFACTOR-001"], owner: "reviewer" })
+update_plan({ taskId: "REVIEW-001", addBlockedBy: ["REFACTOR-001"], owner: "reviewer" })
 ```
 
 ---
@@ -206,15 +206,15 @@ For each target index `i` (0-based), with prefix char `P = pipeline_prefix_chars
 // Create session subdirectory for this pipeline
 Bash("mkdir -p <session>/artifacts/pipelines/<P>")
 
-create_goal({ subject: "ANALYZE-<P>01", ... })
-create_goal({ subject: "DESIGN-<P>01", ... })
-update_goal({ taskId: "DESIGN-<P>01", addBlockedBy: ["ANALYZE-<P>01"] })
-create_goal({ subject: "REFACTOR-<P>01", ... })
-update_goal({ taskId: "REFACTOR-<P>01", addBlockedBy: ["DESIGN-<P>01"] })
-create_goal({ subject: "VALIDATE-<P>01", ... })
-update_goal({ taskId: "VALIDATE-<P>01", addBlockedBy: ["REFACTOR-<P>01"] })
-create_goal({ subject: "REVIEW-<P>01", ... })
-update_goal({ taskId: "REVIEW-<P>01", addBlockedBy: ["REFACTOR-<P>01"] })
+update_plan({ subject: "ANALYZE-<P>01", ... })
+update_plan({ subject: "DESIGN-<P>01", ... })
+update_plan({ taskId: "DESIGN-<P>01", addBlockedBy: ["ANALYZE-<P>01"] })
+update_plan({ subject: "REFACTOR-<P>01", ... })
+update_plan({ taskId: "REFACTOR-<P>01", addBlockedBy: ["DESIGN-<P>01"] })
+update_plan({ subject: "VALIDATE-<P>01", ... })
+update_plan({ taskId: "VALIDATE-<P>01", addBlockedBy: ["REFACTOR-<P>01"] })
+update_plan({ subject: "REVIEW-<P>01", ... })
+update_plan({ taskId: "REVIEW-<P>01", addBlockedBy: ["REFACTOR-<P>01"] })
 ```
 
 Task descriptions follow same template as single mode, with additions:
@@ -225,7 +225,7 @@ Task descriptions follow same template as single mode, with additions:
 
 Example for pipeline A with target "refactor auth module":
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-A01",
   description: "PURPOSE: Analyze auth module architecture | Success: Auth module structural issues identified
 TASK:
@@ -243,7 +243,7 @@ CONSTRAINTS: Focus on auth module scope
 InnerLoop: false
 PipelineId: A"
 })
-update_goal({ taskId: "ANALYZE-A01", owner: "analyzer" })
+update_plan({ taskId: "ANALYZE-A01", owner: "analyzer" })
 ```
 
 ---
@@ -281,7 +281,7 @@ Write("<session>/artifacts/branches/B{NN}/refactoring-detail.md",
 6. Create branch tasks for each branch B{NN}:
 
 ```
-create_goal({
+update_plan({
   subject: "REFACTOR-B{NN}",
   description: "PURPOSE: Implement refactoring REFACTOR-{NNN} | Success: Single refactoring applied, compiles, tests pass
 TASK:
@@ -300,9 +300,9 @@ CONSTRAINTS: Only implement this branch's refactoring | Do not touch files outsi
 InnerLoop: false
 BranchId: B{NN}"
 })
-update_goal({ taskId: "REFACTOR-B{NN}", addBlockedBy: ["DESIGN-001"], owner: "refactorer" })
+update_plan({ taskId: "REFACTOR-B{NN}", addBlockedBy: ["DESIGN-001"], owner: "refactorer" })
 
-create_goal({
+update_plan({
   subject: "VALIDATE-B{NN}",
   description: "PURPOSE: Validate branch B{NN} refactoring | Success: REFACTOR-{NNN} passes build, tests, and metric checks
 TASK:
@@ -320,9 +320,9 @@ CONSTRAINTS: Only validate this branch's changes
 InnerLoop: false
 BranchId: B{NN}"
 })
-update_goal({ taskId: "VALIDATE-B{NN}", addBlockedBy: ["REFACTOR-B{NN}"], owner: "validator" })
+update_plan({ taskId: "VALIDATE-B{NN}", addBlockedBy: ["REFACTOR-B{NN}"], owner: "validator" })
 
-create_goal({
+update_plan({
   subject: "REVIEW-B{NN}",
   description: "PURPOSE: Review branch B{NN} refactoring code | Success: Code quality verified for REFACTOR-{NNN}
 TASK:
@@ -340,7 +340,7 @@ CONSTRAINTS: Only review this branch's changes
 InnerLoop: false
 BranchId: B{NN}"
 })
-update_goal({ taskId: "REVIEW-B{NN}", addBlockedBy: ["REFACTOR-B{NN}"], owner: "reviewer" })
+update_plan({ taskId: "REVIEW-B{NN}", addBlockedBy: ["REFACTOR-B{NN}"], owner: "reviewer" })
 ```
 
 7. Update session.json:

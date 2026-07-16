@@ -166,7 +166,7 @@ Collect task states from list_agents()
 
 ## Worker Failure Handling
 
-1. Reset task -> pending via update_goal
+1. Reset task -> pending via update_plan
 2. Log via team_msg (type: error)
 3. Report to user
 

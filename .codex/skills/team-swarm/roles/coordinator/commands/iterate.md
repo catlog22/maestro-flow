@@ -54,11 +54,11 @@ On error -> log to issues.md, request_user_input (retry / abort).
 For each assignment:
 
 ```
-create_goal({
+update_plan({
   subject: "ANT-<k>-<i>: explore from <start_node>",
   description: "Session: <session_path>\nAssignment: <assignment JSON>\nObjective: <config.ant_prompt.objective>"
 })
-update_goal({ taskId: <new>, owner: "ant" })
+update_plan({ taskId: <new>, owner: "ant" })
 ```
 
 Set the task ID to match `ANT-<k>-<i>` (or record mapping in `.msg/meta.json` if framework auto-assigns IDs).

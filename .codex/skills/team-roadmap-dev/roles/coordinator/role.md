@@ -35,7 +35,7 @@
 - Modify task outputs (workers own their deliverables)
 - Skip dependency validation when creating task chains
 
-> **Core principle**: coordinator is the orchestrator, not the executor. All actual work must be delegated to worker roles via create_goal.
+> **Core principle**: coordinator is the orchestrator, not the executor. All actual work must be delegated to worker roles via update_plan.
 
 ---
 
@@ -113,7 +113,7 @@ For callback/check/resume/complete: load `@commands/monitor.md` and execute matc
 |------|------|---------|---------|
 | `request_user_input` | Human interaction | coordinator | Clarify requirements, roadmap discussion |
 | `TeamCreate` | Team management | coordinator | Create roadmap-dev team |
-| `create_goal` | Task dispatch | coordinator | Create PLAN-*, EXEC-*, VERIFY-* tasks |
+| `update_plan` | Task dispatch | coordinator | Create PLAN-*, EXEC-*, VERIFY-* tasks |
 | `send_message` | Worker communication | coordinator | Receive worker callbacks |
 | `mcp__maestro__team_msg` | Message bus | coordinator | Log all communications |
 | `Read/Write` | File operations | coordinator | Session state management |

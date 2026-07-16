@@ -8,7 +8,7 @@ allowed-tools:
   - Grep
   - Read
   - Write
-  - create_goal
+  - update_plan
   - followup_task
   - interrupt_agent
   - list_agents
@@ -17,7 +17,6 @@ allowed-tools:
   - send_message
   - spawn_agent
   - spawn_agents_on_csv
-  - update_goal
   - wait_agent
 session-mode: run
 ---
@@ -248,7 +247,7 @@ Coordinator supports `resume` / `continue` for interrupted sessions:
 3. Audit list_agents -> reconcile session state <-> task status
 4. Reset in_progress -> pending (interrupted tasks)
 5. Rebuild team and spawn needed workers only
-6. Create missing tasks, set dependencies via update_goal({ addBlockedBy })
+6. Create missing tasks, set dependencies via update_plan({ addBlockedBy })
 7. Kick first executable task -> Phase 4 coordination loop
 
 ---

@@ -49,7 +49,7 @@ Worker completed. Process and advance.
 
 2. Check if progress update (inner loop) or final completion
 3. Progress -> update session state, STOP
-4. Completion -> mark task done via update_goal(status="completed"), remove from active_workers
+4. Completion -> mark task done via update_plan(status="completed"), remove from active_workers
 5. Check for checkpoints:
    - TESTRUN-* completes -> read meta.json for executor.pass_rate and executor.coverage:
      - (pass_rate >= 0.95 AND coverage >= target) OR gc_rounds[layer] >= MAX_GC_ROUNDS -> proceed to handleSpawnNext
@@ -57,7 +57,7 @@ Worker completed. Process and advance.
 
 **GC Fix Task Creation** (when coverage below target):
 ```
-create_goal({
+update_plan({
   subject: "TESTGEN-<layer>-fix-<round>: Revise <layer> tests (GC #<round>)",
   description: "PURPOSE: Revise tests to fix failures and improve coverage | Success: pass_rate >= 0.95 AND coverage >= target
 TASK:
@@ -74,7 +74,7 @@ CONSTRAINTS: Only modify test files
 InnerLoop: true
 RoleSpec: ~  or <project>/.claude/skills/team-testing/roles/generator/role.md"
 })
-create_goal({
+update_plan({
   subject: "TESTRUN-<layer>-fix-<round>: Re-execute <layer> (GC #<round>)",
   description: "PURPOSE: Re-execute tests after revision | Success: pass_rate >= 0.95
 CONTEXT:
@@ -148,7 +148,7 @@ Then STOP.
 
 1. No active workers -> handleSpawnNext
 2. Has active -> check each status
-   - completed -> mark done via update_goal
+   - completed -> mark done via update_plan
    - in_progress -> still running
 3. Some completed -> handleSpawnNext
 4. All running -> report status, STOP
@@ -167,7 +167,7 @@ Find ready tasks, spawn workers, STOP.
 4. Has ready -> for each ready task:
    a. Determine role from prefix (use Role-Worker Map)
    b. Check if inner loop role (generator/executor) with active worker -> skip (worker picks up next task)
-   c. update_goal -> in_progress
+   c. update_plan -> in_progress
    d. team_msg log -> task_unblocked
    e. Spawn team-worker:
 

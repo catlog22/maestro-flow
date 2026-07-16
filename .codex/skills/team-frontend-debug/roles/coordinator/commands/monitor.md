@@ -45,11 +45,11 @@ Analyzer needs more evidence. Create supplemental reproduction task.
 
 1. Parse Analyzer's evidence request (dimensions, specific actions)
 2. Create REPRODUCE-002 task:
-   - create_goal with description from Analyzer's request
-   - update_goal to set owner (no blockedBy — can start immediately)
+   - update_plan with description from Analyzer's request
+   - update_plan to set owner (no blockedBy — can start immediately)
 3. Create ANALYZE-002 task:
-   - create_goal + update_goal with addBlockedBy: [REPRODUCE-002]
-   - update_goal FIX-001 with addBlockedBy to include ANALYZE-002
+   - update_plan + update_plan with addBlockedBy: [REPRODUCE-002]
+   - update_plan FIX-001 with addBlockedBy to include ANALYZE-002
 4. Update team-session.json with new tasks
 5. -> handleSpawnNext
 
@@ -113,7 +113,7 @@ Find ready tasks, spawn workers, STOP.
 4. Has ready -> for each:
    a. Check if inner loop role with active worker -> skip (worker picks up)
    b. Standard spawn:
-      - update_goal -> in_progress
+      - update_plan -> in_progress
       - team_msg log -> task_unblocked
       - Spawn team-worker (see SKILL.md Worker Spawn Template)
       - Add to active_workers

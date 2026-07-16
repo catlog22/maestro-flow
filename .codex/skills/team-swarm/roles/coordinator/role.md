@@ -60,7 +60,7 @@ When coordinator needs to execute a phase command:
 | commands/converge.md | Command | Phase 4: convergence handler + analyst spawn |
 | `scripts/aco.py` | Script | All numeric decisions (Bash subprocess) |
 | team-worker | Subagent | Worker spawning (ant, scorer, analyst) |
-| create_goal / list_agents / wait_agent / update_goal | System | Task lifecycle |
+| update_plan / list_agents / wait_agent / update_plan | System | Task lifecycle |
 | team_msg | System | Message bus |
 | send_message / request_user_input | System | Comms |
 
@@ -147,8 +147,8 @@ Delegate to `@commands/init-swarm.md`:
 2. Bash: `python aco.py --session <session> select --iter <k>`
    -> returns `{assignments: [{ant_id, start_node, edge_preferences, max_path_length}, ...]}`
 3. For each assignment:
-   - create_goal `ANT-<k>-<i>` with description including session path + assignment
-   - update_goal set owner = `ant`
+   - update_plan `ANT-<k>-<i>` with description including session path + assignment
+   - update_plan set owner = `ant`
 4. Spawn N × team-worker(ant) in background, each with assignment injected into prompt:
    ```
    role: ant

@@ -105,7 +105,7 @@ TEXT-LEVEL ONLY. No source code reading.
 Delegate to @commands/dispatch.md:
 1. Read specs/pipelines.md for selected pipeline's task registry
 2. Topological sort tasks
-3. Create tasks via create_goal with blockedBy
+3. Create tasks via update_plan with blockedBy
 4. Update session.json
 
 ## Phase 4: Spawn-and-Stop

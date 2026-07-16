@@ -38,7 +38,7 @@ Worker completed. Process and advance.
 | `[animator]` or `ANIM-*` | animator |
 | `[motion-tester]` or `MTEST-*` | motion-tester |
 
-2. Mark task completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 
 4. Check checkpoint for completed task:
@@ -63,7 +63,7 @@ Worker completed. Process and advance.
 
    **GC Fix Task Creation**:
    ```
-   create_goal({ subject: "ANIM-fix-<round>",
+   update_plan({ subject: "ANIM-fix-<round>",
      description: "PURPOSE: Address performance issues from motion-tester report | Success: All critical perf issues resolved
    TASK:
      - Parse performance report for specific issues (layout thrashing, unsafe properties, excessive will-change)
@@ -73,7 +73,7 @@ Worker completed. Process and advance.
    CONTEXT:
      - Session: <session-folder>
      - Upstream artifacts: testing/reports/perf-report-<NNN>.md" })
-   update_goal({ taskId: "ANIM-fix-<round>", owner: "animator" })
+   update_plan({ taskId: "ANIM-fix-<round>", owner: "animator" })
    ```
    Then create new MTEST task blocked by fix. Increment gc_state.round.
 
@@ -145,7 +145,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
    a. Check inner loop role with active worker -> skip (worker picks up)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

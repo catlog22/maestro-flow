@@ -16,7 +16,7 @@ contract:
 ---
 
 <purpose>
-Parse intent + project state → score candidates from the step registry → recommend a single atomic step → confirm → execute via `maestro run prepare` + `maestro run create`. Also provides companion utilities: knowledge loading (--suggest), structured note recording (--note), and insight promotion (--promote).
+Parse intent + project state → score candidates from the step registry → recommend a single atomic step → confirm → execute via `maestro run prepare --platform codex` + `maestro run create`. Also provides companion utilities: knowledge loading (--suggest), structured note recording (--note), and insight promotion (--promote).
 Does not create chains or orchestrate multi-step sequences — that is maestro/ralph territory.
 </purpose>
 
@@ -129,7 +129,7 @@ S_FALLBACK:
 Read project state to infer `lifecycle_position`:
 
 ```bash
-maestro run prepare --workflow-root .   # check if prepare command works
+maestro run prepare --platform codex --workflow-root .   # check if prepare command works
 cat .workflow/state.json 2>/dev/null
 ```
 
@@ -214,7 +214,7 @@ For first-tier steps (those with prepare/ + workflows/ files):
 
 ```bash
 # 1. Run prepare to get pre-task thinking content
-maestro run prepare <step> --workflow-root .
+maestro run prepare --platform codex <step> --workflow-root .
 
 # 2. LLM performs pre-task thinking using prepare content
 #    Produces prep YAML (goal/approach/scope/risks/gates/reads)
@@ -224,7 +224,7 @@ maestro run create <step> --session YYYYMMDD-<step>-<topic> --intent "<short goa
 #    Returns: run_id, run_dir, upstream (alias→artifact), entry_gates, next (progressive hint)
 
 # 4. Load the execution manual (follow the `next` hint from create)
-maestro run brief <run_id> --workflow-root .
+maestro run brief --platform codex <run_id> --workflow-root .
 #    Returns: workflow content, run-mode summary, goal, gate status
 
 # 5. LLM executes the workflow (core process)

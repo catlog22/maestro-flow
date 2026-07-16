@@ -39,7 +39,7 @@ Worker completed. Process and advance.
 | `[analyzer-A]` or task ID `ANALYZE-A01` | Pipeline `A` (independent) |
 | `[analyzer]` or task ID `ANALYZE-001` | No branch (single) |
 
-2. Mark task as completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task as completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 4. **CP-2.5 check** (auto/fan-out mode only):
    - If completed task is DESIGN-001 AND parallel_mode is `auto` or `fan-out`:
@@ -115,7 +115,7 @@ Find ready tasks, spawn workers, STOP.
    a. Check inner_loop: parse task description `InnerLoop:` field (NOT role.md default)
       - InnerLoop: true AND same-role worker already active -> skip (worker picks up)
       - InnerLoop: false OR no active same-role worker -> spawn new worker
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker (see SKILL.md Spawn Template):
       ```

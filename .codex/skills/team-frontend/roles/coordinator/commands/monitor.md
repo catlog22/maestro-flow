@@ -55,7 +55,7 @@ Triggered when a worker sends completion message.
 2. Mark task as completed:
 
 ```
-update_goal({ taskId: "<task-id>", status: "completed" })
+update_plan({ taskId: "<task-id>", status: "completed" })
 ```
 
 3. Record completion in session state
@@ -79,7 +79,7 @@ update_goal({ taskId: "<task-id>", status: "completed" })
 
 **GC Fix Task Creation**:
 ```
-create_goal({
+update_plan({
   subject: "DEV-fix-<round>",
   description: "PURPOSE: Fix issues identified in QA audit | Success: All critical/high issues resolved
 TASK:
@@ -93,9 +93,9 @@ CONTEXT:
 EXPECTED: Fixed source files | QA issues resolved
 CONSTRAINTS: Targeted fixes only | Do not introduce regressions"
 })
-update_goal({ taskId: "DEV-fix-<round>", owner: "developer" })
+update_plan({ taskId: "DEV-fix-<round>", owner: "developer" })
 
-create_goal({
+update_plan({
   subject: "QA-recheck-<round>",
   description: "PURPOSE: Re-audit after developer fixes | Success: Score >= 8, critical == 0
 TASK:
@@ -109,7 +109,7 @@ CONTEXT:
 EXPECTED: <session>/qa/audit-<NNN>.md | Improved score
 CONSTRAINTS: Read-only review"
 })
-update_goal({ taskId: "QA-recheck-<round>", addBlockedBy: ["DEV-fix-<round>"], owner: "qa" })
+update_plan({ taskId: "QA-recheck-<round>", addBlockedBy: ["DEV-fix-<round>"], owner: "qa" })
 ```
 
 6. Proceed to handleSpawnNext

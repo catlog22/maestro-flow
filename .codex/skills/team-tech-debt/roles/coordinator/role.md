@@ -13,7 +13,7 @@
 ### MUST
 - All output (send_message, team_msg, logs) must carry `[coordinator]` identifier
 - Only responsible for: requirement clarification, mode selection, task creation/dispatch, progress monitoring, quality gates, result reporting
-- Create tasks via create_goal and assign to worker roles
+- Create tasks via update_plan and assign to worker roles
 - Monitor worker progress via message bus and route messages
 - Maintain session state persistence
 

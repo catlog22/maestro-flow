@@ -38,7 +38,7 @@ Worker completed. Process and advance.
 | `[optimizer]` or `OPT-*` | optimizer |
 | `[verifier]` or `VERIFY-*` | verifier |
 
-2. Mark task completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 
 4. Check checkpoint for completed task:
@@ -62,7 +62,7 @@ Worker completed. Process and advance.
 
    **GC Fix Task Creation**:
    ```
-   create_goal({ subject: "OPT-fix-<round>",
+   update_plan({ subject: "OPT-fix-<round>",
      description: "PURPOSE: Address verification regressions | Success: All regressions resolved
    TASK:
      - Parse verification feedback for specific regressions
@@ -70,7 +70,7 @@ Worker completed. Process and advance.
    CONTEXT:
      - Session: <session-folder>
      - Upstream artifacts: verification/verify-report.md" })
-   update_goal({ taskId: "OPT-fix-<round>", owner: "optimizer" })
+   update_plan({ taskId: "OPT-fix-<round>", owner: "optimizer" })
    ```
    Then create new VERIFY task blocked by OPT-fix. Increment gc_state.round.
 
@@ -142,7 +142,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
    a. Check inner loop role with active worker -> skip (worker picks up)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

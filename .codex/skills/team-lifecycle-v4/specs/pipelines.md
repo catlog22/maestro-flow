@@ -119,7 +119,7 @@ Specialists are injected based on **codebase signals** detected by explorer/anal
 analyst (RESEARCH-001) emits tech_profile in state_update
   → coordinator evaluateSpecialistInjection (in handleCallback)
   → signal combination matches trigger matrix
-  → P0: create_goal blocking downstream | P1: create_goal parallel with REVIEW/TEST
+  → P0: update_plan blocking downstream | P1: update_plan parallel with REVIEW/TEST
 ```
 
 ### Common Trigger Examples

@@ -118,7 +118,7 @@ After confirming the injection point, ask whether this overlay should chain to a
 
 Use request_user_input:
 - **"No chain"** — standard overlay, no skill handoff
-- **"Chain to skill"** → ask for the target skill name (e.g., a step like `review`, `execute`, `test` invoked via `maestro run prepare <step>` + `maestro run create <step>`)
+- **"Chain to skill"** → ask for the target skill name (e.g., a step like `review`, `execute`, `test` invoked via `maestro run prepare --platform codex <step>` + `maestro run create <step> --session YYYYMMDD-<step>-{topic} --intent "{goal}"`)
 - **"Chain with alternatives"** → ask for primary skill + 1-2 alternative skills
 
 If chain is selected, record the skill name(s) for use in Step 3.
@@ -158,13 +158,13 @@ Build a slug from the user's intent (kebab-case, lowercase). Write to `~/.maestr
 **Skill Handoff** (overlay)
 
 After the above step completes, use request_user_input:
-- "Proceed to review" — Hand off to step `review` (`maestro run prepare review` + `maestro run create review`)
+- "Proceed to review" — Hand off to step `review` (`maestro run prepare --platform codex review` + `maestro run create review --session YYYYMMDD-review-{topic} --intent "{goal}"`)
 - "Skip" — Continue with current command flow
 - "Alternative: execute" — Run step `execute` with built-in verification instead
 
 On user selection:
-- Proceed → run step `review` (`maestro run prepare review` + `maestro run create review`)
-- Alternative → run step `execute` (`maestro run prepare execute` + `maestro run create execute`)
+- Proceed → run step `review` (`maestro run prepare --platform codex review` + `maestro run create review --session YYYYMMDD-review-{topic} --intent "{goal}"`)
+- Alternative → run step `execute` (`maestro run prepare --platform codex execute` + `maestro run create execute --session YYYYMMDD-execute-{topic} --intent "{goal}"`)
 - Skip → continue normally
 ```
 

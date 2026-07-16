@@ -38,7 +38,7 @@ Worker completed. Process and advance.
 | `[builder]` or `BUILD-*` | builder |
 | `[a11y-tester]` or `A11Y-*` | a11y-tester |
 
-2. Mark task completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 
 4. Check checkpoint for completed task:
@@ -65,7 +65,7 @@ Worker completed. Process and advance.
 
    **GC Fix Task Creation**:
    ```
-   create_goal({ subject: "BUILD-fix-<round>",
+   update_plan({ subject: "BUILD-fix-<round>",
      description: "PURPOSE: Address a11y audit feedback | Success: All critical/high issues resolved
    TASK:
      - Parse a11y audit feedback for specific issues
@@ -73,7 +73,7 @@ Worker completed. Process and advance.
    CONTEXT:
      - Session: <session-folder>
      - Upstream artifacts: a11y/a11y-audit-<NNN>.md" })
-   update_goal({ taskId: "BUILD-fix-<round>", owner: "builder" })
+   update_plan({ taskId: "BUILD-fix-<round>", owner: "builder" })
    ```
    Then create new A11Y task blocked by fix. Increment gc_state.round.
 
@@ -144,7 +144,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
    a. Check inner loop role with active worker -> skip (worker picks up)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

@@ -38,7 +38,7 @@ Worker completed. Process and advance.
 | `[reviewer]` or `AUDIT-*` | reviewer |
 | `[implementer]` or `BUILD-*` | implementer |
 
-2. Mark task completed: `update_goal({ taskId: "<task-id>", status: "completed" })`
+2. Mark task completed: `update_plan({ taskId: "<task-id>", status: "completed" })`
 3. Record completion in session state
 
 4. Check checkpoint for completed task:
@@ -63,7 +63,7 @@ Worker completed. Process and advance.
 
    **GC Fix Task Creation**:
    ```
-   create_goal({ subject: "DESIGN-fix-<round>",
+   update_plan({ subject: "DESIGN-fix-<round>",
      description: "PURPOSE: Address audit feedback | Success: All critical/high issues resolved
    TASK:
      - Parse audit feedback for specific issues
@@ -71,7 +71,7 @@ Worker completed. Process and advance.
    CONTEXT:
      - Session: <session-folder>
      - Upstream artifacts: audit/audit-<NNN>.md" })
-   update_goal({ taskId: "DESIGN-fix-<round>", owner: "designer" })
+   update_plan({ taskId: "DESIGN-fix-<round>", owner: "designer" })
    ```
    Then create new AUDIT task blocked by fix. Increment gc_state.round.
 
@@ -144,7 +144,7 @@ Find ready tasks, spawn workers, STOP.
 3. No ready + nothing in progress -> handleComplete
 4. Has ready -> for each:
    a. Check inner loop role with active worker -> skip (worker picks up)
-   b. update_goal -> in_progress
+   b. update_plan -> in_progress
    c. team_msg log -> task_unblocked
    d. Spawn team-worker:
 

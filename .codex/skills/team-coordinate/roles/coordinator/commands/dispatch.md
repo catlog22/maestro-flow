@@ -20,7 +20,7 @@ Create task chains from dynamic dependency graphs. Builds pipelines from the tas
 
 - **Delegation**: Inline execution (coordinator processes directly)
 - **Inputs**: task-analysis.json + team-session.json
-- **Output**: create_goal calls with dependency chains
+- **Output**: update_plan calls with dependency chains
 
 ## Phase 2: Context Loading
 
@@ -41,7 +41,7 @@ Create task chains from dynamic dependency graphs. Builds pipelines from the tas
 4. **For each task** (in topological order):
 
 ```
-create_goal({
+update_plan({
   subject: "<PREFIX>-<NNN>",
   description: "PURPOSE: <goal> | Success: <success_criteria>
 TASK:
@@ -59,7 +59,7 @@ CONSTRAINTS: <scope limits>
 InnerLoop: <true|false>
 RoleSpec: <session-folder>/role-specs/<role-name>.md"
 })
-update_goal({ taskId: "<PREFIX>-<NNN>", addBlockedBy: [<dependency-list from graph>], owner: "<role-name>" })
+update_plan({ taskId: "<PREFIX>-<NNN>", addBlockedBy: [<dependency-list from graph>], owner: "<role-name>" })
 ```
 
 5. **Update team-session.json** with pipeline and tasks_total
@@ -130,6 +130,6 @@ RoleSpec: <session-folder>/role-specs/<role-name>.md
 |----------|------------|
 | Circular dependency detected | Report cycle, halt task creation |
 | Owner not in role registry | Error, coordinator must fix roles first |
-| create_goal fails | Log error, report to coordinator |
+| update_plan fails | Log error, report to coordinator |
 | Duplicate task subject | Skip creation, log warning |
 | Empty dependency graph | Error, task analysis may have failed |

@@ -24,7 +24,7 @@ Create the initial task chain for team-planex pipeline. Creates PLAN-001 for pla
 Create a single PLAN-001 task for the planner:
 
 ```
-create_goal({
+update_plan({
   subject: "PLAN-001: Requirement decomposition and solution design",
   description: `Decompose requirements into issues and generate solutions.
 
@@ -36,7 +36,7 @@ Execution method: <agent|codex|agy>
 ## Instructions
 1. Parse input to get issue list
 2. For each issue: call issue-plan-agent → write solution artifact
-3. After each solution: create EXEC-* task with solution_file path, then update_goal to set owner: executor
+3. After each solution: create EXEC-* task with solution_file path, then update_plan to set owner: executor
 4. After all issues: send all_planned signal
 
 InnerLoop: true`,
@@ -49,7 +49,7 @@ InnerLoop: true`,
 Planner creates EXEC-* tasks at runtime using this template:
 
 ```
-create_goal({
+update_plan({
   subject: "EXEC-00N: Implement <issue-title>",
   description: `Implement solution for issue <issueId>.
 
@@ -68,7 +68,7 @@ InnerLoop: true`,
 When coordinator handles `add` command, create additional PLAN tasks:
 
 ```
-create_goal({
+update_plan({
   subject: "PLAN-00N: Additional requirement decomposition",
   description: `Additional requirements to decompose.
 

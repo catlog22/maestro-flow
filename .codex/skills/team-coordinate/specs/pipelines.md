@@ -15,7 +15,7 @@ Phase 1: analyze-task.md
 
 Phase 2: dispatch.md
   -> Read task-analysis.json dependency graph
-  -> Create create_goal entries per dependency node
+  -> Create update_plan entries per dependency node
   -> Set blockedBy chains from graph edges
   -> Output: list_agents with correct DAG
 

@@ -23,7 +23,7 @@
 Every task description uses structured format:
 
 ```
-create_goal({
+update_plan({
   subject: "<TASK-ID>",
   description: "PURPOSE: <what this task achieves> | Success: <completion criteria>
 TASK:
@@ -40,7 +40,7 @@ CONSTRAINTS: <scope limits>
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
+update_plan({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<role>" })
 ```
 
 ### Pipeline Router
@@ -57,7 +57,7 @@ update_goal({ taskId: "<TASK-ID>", addBlockedBy: [<dependency-list>], owner: "<r
 
 **IDEA-001** (ideator):
 ```
-create_goal({
+update_plan({
   subject: "IDEA-001",
   description: "PURPOSE: Generate multi-angle ideas for brainstorm topic | Success: >= 6 unique ideas across all angles
 TASK:
@@ -73,12 +73,12 @@ CONSTRAINTS: Divergent thinking only, no evaluation
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "IDEA-001", owner: "ideator" })
+update_plan({ taskId: "IDEA-001", owner: "ideator" })
 ```
 
 **CHALLENGE-001** (challenger):
 ```
-create_goal({
+update_plan({
   subject: "CHALLENGE-001",
   description: "PURPOSE: Challenge assumptions and assess feasibility of generated ideas | Success: Each idea rated by severity
 TASK:
@@ -94,12 +94,12 @@ CONSTRAINTS: Critical analysis only, do not generate alternative ideas
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "CHALLENGE-001", addBlockedBy: ["IDEA-001"], owner: "challenger" })
+update_plan({ taskId: "CHALLENGE-001", addBlockedBy: ["IDEA-001"], owner: "challenger" })
 ```
 
 **SYNTH-001** (synthesizer):
 ```
-create_goal({
+update_plan({
   subject: "SYNTH-001",
   description: "PURPOSE: Synthesize ideas and critiques into integrated proposals | Success: >= 1 consolidated proposal
 TASK:
@@ -114,7 +114,7 @@ CONSTRAINTS: Integration and synthesis only, no new ideas
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "SYNTH-001", addBlockedBy: ["CHALLENGE-001"], owner: "synthesizer" })
+update_plan({ taskId: "SYNTH-001", addBlockedBy: ["CHALLENGE-001"], owner: "synthesizer" })
 ```
 
 ### Deep Pipeline
@@ -123,7 +123,7 @@ Creates all 6 tasks. First 2 same as Quick, then:
 
 **IDEA-002** (ideator, GC revision):
 ```
-create_goal({
+update_plan({
   subject: "IDEA-002",
   description: "PURPOSE: Revise ideas based on critique feedback (GC Round 1) | Success: HIGH/CRITICAL challenges addressed
 TASK:
@@ -138,12 +138,12 @@ CONSTRAINTS: Address critique only, focused revision
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "IDEA-002", addBlockedBy: ["CHALLENGE-001"], owner: "ideator" })
+update_plan({ taskId: "IDEA-002", addBlockedBy: ["CHALLENGE-001"], owner: "ideator" })
 ```
 
 **CHALLENGE-002** (challenger, round 2):
 ```
-create_goal({
+update_plan({
   subject: "CHALLENGE-002",
   description: "PURPOSE: Validate revised ideas (GC Round 2) | Success: Severity assessment of revised ideas
 TASK:
@@ -158,13 +158,13 @@ CONSTRAINTS: Focus on revised/new ideas
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "CHALLENGE-002", addBlockedBy: ["IDEA-002"], owner: "challenger" })
+update_plan({ taskId: "CHALLENGE-002", addBlockedBy: ["IDEA-002"], owner: "challenger" })
 ```
 
 **SYNTH-001** blocked by CHALLENGE-002. **EVAL-001** blocked by SYNTH-001:
 
 ```
-create_goal({
+update_plan({
   subject: "EVAL-001",
   description: "PURPOSE: Score and rank synthesized proposals | Success: Ranked list with weighted scores
 TASK:
@@ -179,7 +179,7 @@ CONSTRAINTS: Evaluation only, no new proposals
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "EVAL-001", addBlockedBy: ["SYNTH-001"], owner: "evaluator" })
+update_plan({ taskId: "EVAL-001", addBlockedBy: ["SYNTH-001"], owner: "evaluator" })
 ```
 
 ### Full Pipeline

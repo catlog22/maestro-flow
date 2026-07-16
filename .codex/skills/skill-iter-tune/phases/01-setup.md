@@ -130,7 +130,7 @@ Write(`${workDir}/iteration-state.json`, JSON.stringify(initialState, null, 2));
 // Chain mode: create per-skill tracking tasks
 if (initialState.execution_mode === 'chain') {
   for (const skill of targetSkills) {
-    create_goal({
+    update_plan({
       subject: `Chain: ${skill.name}`,
       activeForm: `Tracking ${skill.name}`,
       description: `Skill chain member: ${skill.path} | Position: ${targetSkills.indexOf(skill) + 1}/${targetSkills.length}`

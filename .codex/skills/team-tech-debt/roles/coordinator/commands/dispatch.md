@@ -19,7 +19,7 @@
 
 ### Delegation Mode
 
-**Mode**: Direct（coordinator 直接操作 create_goal/update_goal）
+**Mode**: Direct（coordinator 直接操作 update_plan/update_plan）
 
 ### Decision Logic
 
@@ -70,7 +70,7 @@ for (const stage of pipeline) {
   ].join('')
 
   // 创建任务
-  create_goal({
+  update_plan({
     subject: `${stage.prefix}-001: ${stage.desc}`,
     description: fullDesc,
     activeForm: `${stage.desc}进行中`
@@ -86,7 +86,7 @@ for (const stage of pipeline) {
     .map(dep => taskIds[dep])
     .filter(Boolean)
 
-  update_goal({
+  update_plan({
     taskId: newTask.id,
     owner: stage.owner,
     addBlockedBy: blockedByIds
@@ -117,21 +117,21 @@ if (!chainValid) {
 ```javascript
 function createFixVerifyTasks(fixVerifyIteration, sessionFolder) {
   // 创建修复任务
-  create_goal({
+  update_plan({
     subject: `TDFIX-fix-${fixVerifyIteration}: 修复回归问题 (Fix-Verify #${fixVerifyIteration})`,
     description: `修复验证发现的回归问题\nsession: ${sessionFolder}\ntype: fix-verify`,
     activeForm: `Fix-Verify #${fixVerifyIteration} 修复中`
   })
 
   // 创建重新验证任务
-  create_goal({
+  update_plan({
     subject: `TDVAL-verify-${fixVerifyIteration}: 重新验证 (Fix-Verify #${fixVerifyIteration})`,
     description: `重新验证修复结果\nsession: ${sessionFolder}`,
     activeForm: `Fix-Verify #${fixVerifyIteration} 验证中`
   })
 
   // 设置依赖: TDVAL-verify 依赖 TDFIX-fix
-  // ... update_goal addBlockedBy
+  // ... update_plan addBlockedBy
 }
 ```
 

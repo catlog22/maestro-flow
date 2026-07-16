@@ -66,7 +66,7 @@ Triggered when a worker sends completion message (via send_message callback).
 ```
 wait_agent({ timeout_ms: 3600000, taskId: "<task-id>" })
 // If still "in_progress" (worker failed to mark) → fallback:
-update_goal({ taskId: "<task-id>", status: "completed" })
+update_plan({ taskId: "<task-id>", status: "completed" })
 ```
 
 3. Record completion in session state via team_msg
@@ -132,7 +132,7 @@ ELSE:
 
 DISCUSS-N (subsequent round):
 ```
-create_goal({
+update_plan({
   subject: "DISCUSS-<NNN>",
   description: "PURPOSE: Process discussion round <N> | Success: Updated understanding
 TASK:
@@ -149,12 +149,12 @@ EXPECTED: <session>/discussions/discussion-round-<NNN>.json
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "DISCUSS-<NNN>", owner: "discussant" })
+update_plan({ taskId: "DISCUSS-<NNN>", owner: "discussant" })
 ```
 
 ANALYZE-fix-N (direction adjustment):
 ```
-create_goal({
+update_plan({
   subject: "ANALYZE-fix-<N>",
   description: "PURPOSE: Supplementary analysis with adjusted focus | Success: New insights from adjusted direction
 TASK:
@@ -171,7 +171,7 @@ EXPECTED: <session>/analyses/analysis-fix-<N>.json
 ---
 InnerLoop: false"
 })
-update_goal({ taskId: "ANALYZE-fix-<N>", owner: "analyst" })
+update_plan({ taskId: "ANALYZE-fix-<N>", owner: "analyst" })
 ```
 
 SYNTH-001 (created dynamically — check existence first):
@@ -179,7 +179,7 @@ SYNTH-001 (created dynamically — check existence first):
 // Guard: only create if SYNTH-001 doesn't exist yet (dispatch may have pre-created it)
 const existingSynth = list_agents().find(t => t.subject === 'SYNTH-001')
 if (!existingSynth) {
-create_goal({
+update_plan({
   subject: "SYNTH-001",
   description: "PURPOSE: Integrate all analysis into final conclusions | Success: Executive summary with recommendations
 TASK:
@@ -198,7 +198,7 @@ InnerLoop: false"
 })
 }
 // Always update blockedBy to reference the last DISCUSS task (whether pre-existing or newly created)
-update_goal({ taskId: "SYNTH-001", addBlockedBy: ["<last-DISCUSS-task-id>"], owner: "synthesizer" })
+update_plan({ taskId: "SYNTH-001", addBlockedBy: ["<last-DISCUSS-task-id>"], owner: "synthesizer" })
 ```
 
 7. Record user feedback to decision_trail via team_msg:

@@ -176,7 +176,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 3. Select chain from chainMap，遵循拓扑约束：
    - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式透传 `-y` 到 grill，grill 以 Auto mode 执行，不跳过**）
    - 头脑风暴/探索 → `brainstorm`
-   - 学习/阅读代码/跟读/follow → `Skill("learn", "follow")`；调查/为什么/investigate → `Skill("learn", "investigate")`；分解/模式/decompose → `Skill("learn", "decompose")`；评审/挑战/second-opinion → `Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective`）
+   - 学习/阅读代码/跟读/follow → `Skill("learn", "follow")`；调查/为什么/investigate → `Skill("learn", "investigate")`；分解/模式/decompose → `Skill("learn", "decompose")`；评审/挑战/second-opinion → `Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare --platform codex retrospective` + `maestro run create retrospective --session YYYYMMDD-retrospective-{topic} --intent "{goal}"`）
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
    - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）

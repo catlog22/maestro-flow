@@ -175,16 +175,16 @@ triggerGapClosure:
   +- Log: team_msg gap_closure
   +- Create gap closure task chain:
   |
-  |   create_goal: PLAN-{phase}{suffix}
+  |   update_plan: PLAN-{phase}{suffix}
   |     subject: "PLAN-{phase}{suffix}: Gap closure for phase {phase} (iteration {gap_iteration})"
   |     description: includes gap list, references to previous verification
   |     blockedBy: [] (immediate start)
   |
-  |   create_goal: EXEC-{phase}{suffix}
+  |   update_plan: EXEC-{phase}{suffix}
   |     subject: "EXEC-{phase}{suffix}: Execute gap fixes for phase {phase}"
   |     blockedBy: [PLAN-{phase}{suffix}]
   |
-  |   create_goal: VERIFY-{phase}{suffix}
+  |   update_plan: VERIFY-{phase}{suffix}
   |     subject: "VERIFY-{phase}{suffix}: Verify gap closure for phase {phase}"
   |     blockedBy: [EXEC-{phase}{suffix}]
   |
@@ -231,7 +231,7 @@ Ready tasks found?
       |   PLAN-*   -> planner
       |   EXEC-*   -> executor
       |   VERIFY-* -> verifier
-      +- update_goal -> in_progress
+      +- update_plan -> in_progress
       +- team_msg log -> task_unblocked (team_session_id=<session-id>)
       +- Spawn team-worker (see spawn call below)
       +- Add to session.active_workers
@@ -367,7 +367,7 @@ All phases completed (no pending, no in_progress across all phases)
 
 When a worker has unexpected status (not completed, not in_progress):
 
-1. Reset task -> pending via update_goal
+1. Reset task -> pending via update_plan
 2. Remove from active_workers
 3. Log via team_msg (type: error)
 4. Report to user: task reset, will retry on next resume
