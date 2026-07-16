@@ -15,6 +15,7 @@ import {
   resolveStepContent,
   type CommandContract,
   type ContractGateDefinition,
+  type SessionMode,
 } from './contract.js';
 import {
   PLATFORM_SUFFIX,
@@ -37,6 +38,12 @@ import {
   buildProgressSection,
 } from './inject.js';
 import { SessionStore, type SessionBundle } from './store.js';
+import {
+  requeueChainStepForRetry,
+  nextPendingDecisionIndex,
+  nextPendingIndex,
+  updateChainStepStatus,
+} from './chain.js';
 import {
   ensureSessionProjection,
   localISO,
@@ -188,6 +195,39 @@ export interface CompleteRunOptions {
    * (e.g. ralph complete --summary when the executor wrote no frontmatter).
    */
   summaryFallback?: string;
+  /**
+   * CLI-supplied decisions appended to the derived handoff.decisions (status
+   * `accepted`). Aligns ralph `--decisions` onto the P3 handoff single-source:
+   * ralph parked them in ralph-meta; here they ride the run's handoff so the
+   * next step's birth packet can surface them via prev_handoff.
+   */
+  decisions?: string[];
+}
+
+/** Chain-advancement instruction carried by `run complete --verdict`. */
+export type CompletionVerdict = 'done' | 'done-with-concerns' | 'needs-retry' | 'blocked';
+
+export interface CompleteVerdictResult {
+  session_id: string;
+  run_id: string;
+  verdict: CompletionVerdict;
+  /** True when the run sealed (done / done-with-concerns / needs-retry paths). */
+  run_sealed: boolean;
+  /** The chain step this run was bound to, or null for a non-chain run. */
+  chain: {
+    step_id: string;
+    index: number;
+    /** The chain step's status after the verdict was applied. */
+    step_status: string;
+    /** Retry counter after a needs-retry bump (null otherwise). */
+    retry: { count: number; max: number; exhausted: boolean } | null;
+  } | null;
+  /** Session status after the verdict (paused on blocked, unchanged otherwise). */
+  session_status: SessionState['status'];
+  /** Next-step pointer closing the loop back to `run next` / decide / seal. */
+  next: { command: string; reason: string };
+  /** The underlying seal result (run gates, artifacts, warnings, errors). */
+  seal: CompleteRunResult;
 }
 
 interface EvaluationContext {
@@ -726,9 +766,23 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   const store = new SessionStore(options.projectRoot);
   const state = projectState(options.projectRoot);
   const intent = options.intent?.trim() || options.command;
+  const source = resolveCommandSource(options.projectRoot, options.command);
+
+  if (source.sessionMode === 'none') {
+    throw new Error(
+      `Command "${options.command}" declares session-mode: none and cannot create a Run. `
+      + `Use it directly without the run lifecycle.`,
+    );
+  }
+  if (source.sessionMode === 'brief') {
+    throw new Error(
+      `Command "${options.command}" declares session-mode: brief. `
+      + `Use "maestro run skill ${options.command}" instead of "maestro run create".`,
+    );
+  }
+
   const sessionId = resolveSessionId(store, state, options.sessionId, intent, options.command);
   if (!store.sessionExists(sessionId)) store.createSession(sessionId, intent);
-  const source = resolveCommandSource(options.projectRoot, options.command);
 
   return store.update(sessionId, (bundle, tx) => {
     const freshState = projectState(options.projectRoot);
@@ -1055,6 +1109,25 @@ function mergeNotesIntoConcerns(handoff: Handoff, notes: string[]): void {
   }
 }
 
+/**
+ * Append CLI-supplied decisions to a derived handoff, de-duplicated by text. IDs
+ * continue the report-frontmatter decision numbering (D-CLI-n) so they never
+ * collide with report decisions; status is `accepted` (the orchestrator asserted
+ * them). Report-frontmatter decisions remain the primary channel.
+ */
+function mergeDecisionsIntoHandoff(handoff: Handoff, decisions: string[]): void {
+  if (decisions.length === 0) return;
+  const seen = new Set(handoff.decisions.map(d => d.text));
+  let ordinal = 0;
+  for (const decision of decisions) {
+    const trimmed = decision.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    ordinal++;
+    handoff.decisions.push({ id: `D-CLI-${ordinal}`, status: 'accepted', text: trimmed });
+  }
+}
+
 export function completeRun(
   projectRoot: string,
   runId: string,
@@ -1119,6 +1192,7 @@ export function completeRun(
       run.handoff.summary = options.summaryFallback.trim();
     }
     mergeNotesIntoConcerns(run.handoff, notes);
+    mergeDecisionsIntoHandoff(run.handoff, options.decisions ?? []);
     run.status = 'sealed';
     run.sealed_at = localISO();
     bundle.session.latest_completed_run_id = runId;
@@ -1142,6 +1216,170 @@ export function completeRun(
       artifact_ids: artifactIds,
     };
   });
+}
+
+export interface CompleteVerdictOptions extends CompleteRunOptions {
+  /** Chain-advancement instruction. Defaults to `done`. */
+  verdict?: CompletionVerdict;
+  /** Reason text (blocked) merged into the handoff concerns, ralph `--reason`. */
+  reason?: string;
+}
+
+/**
+ * Locate the chain step a Run is bound to (run_id match), or null when the Run is
+ * not part of the session's predefined chain (an ad-hoc `run create`).
+ */
+function chainStepForRun(session: SessionState, runId: string): { index: number; step_id: string } | null {
+  const chain = session.orchestration.chain;
+  for (let i = 0; i < chain.length; i++) {
+    if (chain[i].run_id === runId) return { index: i, step_id: chain[i].step_id };
+  }
+  return null;
+}
+
+/**
+ * The next-step pointer after a verdict is applied, closing complete → next.
+ * Reads the post-verdict session: a paused session (blocked verdict) points at
+ * resuming; a pending execution step points at `run next`; a pending decision
+ * node hands off to the orchestrator; a fully-drained chain points at
+ * `run seal-session`.
+ */
+function completionNextPointer(session: SessionState): { command: string; reason: string } {
+  const sessionId = session.session_id;
+  if (session.status === 'paused') {
+    return {
+      command: `maestro run next --session ${sessionId}`,
+      reason: 'session paused (blocked step) — resolve the blocker, then resume',
+    };
+  }
+  if (nextPendingIndex(session, true) !== null) {
+    return {
+      command: `maestro run next --session ${sessionId}`,
+      reason: 'more pending steps — advance the chain',
+    };
+  }
+  if (nextPendingDecisionIndex(session) !== null) {
+    return {
+      command: `maestro run next --session ${sessionId}`,
+      reason: 'next node is a decision — the orchestrator evaluates it',
+    };
+  }
+  return {
+    command: `maestro run seal-session ${sessionId}`,
+    reason: 'all steps complete — seal the session',
+  };
+}
+
+/**
+ * `run complete` with a chain-advancement verdict — the generic-layer equivalent
+ * of `ralph complete <idx> --status <S>`. All four verdicts first run the
+ * standard seal path (completeRun: derive handoff + register artifacts + seal the
+ * Run), so run.json is sealed regardless of the chain outcome. The verdict then
+ * drives the bound chain step:
+ *
+ *   done / done-with-concerns → step `sealed`   (terminal; matches next.ts
+ *                                                 reconcileSealedSteps)
+ *   needs-retry               → step `pending`, run_id cleared, retry.count++
+ *   blocked                   → step `failed`,  session `paused`
+ *
+ * A non-chain Run (no chain step bound to its run_id) still seals and carries its
+ * signals via the handoff, but the chain and session status are left untouched —
+ * the verdict is advisory there, never an error.
+ *
+ * Signals ride the handoff (P3 single-source): reason (blocked) and an auto
+ * done-with-concerns note fold into notes → handoff.concerns; decisions append to
+ * handoff.decisions; evidence paths register as extra artifacts. No handoff
+ * schema field is added — the verdict itself lives only in the chain transition.
+ */
+export function completeRunWithVerdict(
+  projectRoot: string,
+  runId: string,
+  sessionId: string,
+  options: CompleteVerdictOptions = {},
+): CompleteVerdictResult {
+  const verdict = options.verdict ?? 'done';
+  const store = new SessionStore(projectRoot);
+  const session = store.readBundle(sessionId).session;
+  const boundStep = chainStepForRun(session, runId);
+
+  // Compose the notes channel: caller notes + blocked reason + an auto concern
+  // for done-with-concerns when the caller left the notes empty (ralph appended a
+  // `concerns` string on DONE_WITH_CONCERNS; here the equivalent is a handoff
+  // concern so the signal survives on the P3 single-source).
+  const notes = [...(options.notes ?? [])];
+  if (verdict === 'blocked' && options.reason?.trim()) {
+    notes.push(options.reason.trim());
+  }
+  if (verdict === 'done-with-concerns' && notes.length === 0) {
+    notes.push('completed with concerns');
+  }
+
+  const seal = completeRun(projectRoot, runId, sessionId, {
+    notes,
+    extraArtifacts: options.extraArtifacts,
+    summaryFallback: options.summaryFallback,
+    decisions: options.decisions,
+  });
+
+  // Non-chain run: verdict is advisory, chain/session untouched. Signals already
+  // landed on the handoff via completeRun above.
+  if (!boundStep) {
+    const current = store.readBundle(sessionId).session;
+    return {
+      session_id: sessionId,
+      run_id: runId,
+      verdict,
+      run_sealed: seal.sealed,
+      chain: null,
+      session_status: current.status,
+      next: completionNextPointer(current),
+      seal,
+    };
+  }
+
+  // Drive the bound chain step. A blocked seal (exit gates / scan errors) leaves
+  // the run un-sealed; the verdict still applies to the chain so the orchestrator
+  // sees the intended transition, but the un-sealed run status is reported.
+  let retry: { count: number; max: number; exhausted: boolean } | null = null;
+  let stepStatus: string;
+  switch (verdict) {
+    case 'done':
+    case 'done-with-concerns':
+      updateChainStepStatus(projectRoot, sessionId, boundStep.index, 'sealed', runId);
+      stepStatus = 'sealed';
+      break;
+    case 'needs-retry': {
+      retry = requeueChainStepForRetry(projectRoot, sessionId, boundStep.index);
+      stepStatus = 'pending';
+      break;
+    }
+    case 'blocked':
+      updateChainStepStatus(projectRoot, sessionId, boundStep.index, 'failed', runId);
+      store.update(sessionId, (draft) => {
+        draft.session.status = 'paused';
+        draft.session.activity_revision++;
+        return null;
+      });
+      stepStatus = 'failed';
+      break;
+  }
+
+  const after = store.readBundle(sessionId).session;
+  return {
+    session_id: sessionId,
+    run_id: runId,
+    verdict,
+    run_sealed: seal.sealed,
+    chain: {
+      step_id: boundStep.step_id,
+      index: boundStep.index,
+      step_status: stepStatus,
+      retry,
+    },
+    session_status: after.status,
+    next: completionNextPointer(after),
+    seal,
+  };
 }
 
 export function summarizeRunMode(raw: string): string {

@@ -9,6 +9,7 @@ contract:
     - { kind: blueprint, alias: current-blueprint, required: false }
     - { kind: roadmap, alias: current-roadmap, required: false }
     - { kind: plan, alias: current-plan, required: false }
+    - { kind: priors, alias: session-priors, required: false }
   produces:
     - { path: outputs/plan.json, kind: plan, alias: current-plan, role: primary }
     - { path: "outputs/tasks/TASK-{NNN}.json", kind: plan-task, role: attachment }
@@ -38,9 +39,10 @@ The output of plan is "task JSON an executor can follow to finish the work," not
 
 ## Required Context
 
+- With `session-priors` (injected by upstream): the spec / doc-index / wiki hits it lists are already resolved — reuse them directly and do **not** re-run `maestro spec load` or wiki search for the same ground. Only collect what priors does not cover (or when priors is absent).
 - With `current-analysis`: read `findings.json#decisions` — locked as inviolable constraints, free left to the implementer's discretion, deferred explicitly excluded; `findings[]` and recommendation as task-scope input. If upstream gave implementation_scope, 1 scope item → 1 task.
 - With `latest-debug` (--gaps): produce one fix task per gap, with issue_id bidirectionally back-linking issues.jsonl.
-- Project specs (arch category): passed in as constraint context for the planner.
+- Project specs (arch category): passed in as constraint context for the planner — load via `maestro spec load` only when `session-priors` did not already carry them.
 
 ## Boundaries and Invariants
 

@@ -266,6 +266,11 @@ Gate: each ❌ Missed item must either (a) get an added round or (b) be user-con
 { "risks": [], "assumptions": [], "open_questions": [] }
 ```
 
+**5.4b Write priors.json** (optional, session-scoped shared context): if this is the session's first run, record the spec / doc-index / wiki hits gathered during exploration so downstream plan/execute can reuse them without re-searching. Registered as alias `session-priors` by the contract; skip when nothing worth carrying forward.
+```json
+{ "specs": [], "doc_index": [], "wiki": [] }
+```
+
 **5.5 report conclusion area**: conclusion summary, ranked conclusions, prioritized recommendations; Current Understanding (Final); Decision Trail (key decisions, direction-change timeline, trade-offs); Intent Coverage Matrix; session stats.
 
 **5.6 Interactive recommendation review** (auto skips): AskUserQuestion (up to 4 at a time, by priority): confirm → accepted / modify → modified / delete → rejected. Write back each recommendation's `review_status` to findings.json.

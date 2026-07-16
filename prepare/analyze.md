@@ -10,6 +10,7 @@ contract:
   produces:
     - { path: outputs/findings.json, kind: findings, alias: current-analysis, role: primary }
     - { path: outputs/risk-matrix.json, kind: risk-matrix, role: evidence }
+    - { path: outputs/priors.json, kind: priors, alias: session-priors, role: evidence, optional: true }
   gates:
     exit: [exploration-done, discussion-round, scoring-complete, intent-covered]
 refs:

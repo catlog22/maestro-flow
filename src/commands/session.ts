@@ -1,0 +1,276 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { Command } from 'commander';
+import { migrateAllSessions, migrateSession } from '../run/migrate.js';
+import {
+  chainDefinitionSchema,
+  createChainSession,
+  insertChainStep,
+  parseDecompositionInput,
+  parsePositionInput,
+  replaceChainStep,
+  skipChainStep,
+  updateSessionMeta,
+  type ChainDefinition,
+} from '../run/chain-admin.js';
+
+function print(value: unknown): void {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function reportError(error: unknown): void {
+  console.error(`[maestro session] ${(error as Error).message}`);
+  process.exitCode = 1;
+}
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolveStdin) => {
+    if (process.stdin.isTTY) {
+      resolveStdin('');
+      return;
+    }
+    let data = '';
+    process.stdin.setEncoding('utf8');
+    const onReadable = (): void => {
+      let chunk: unknown;
+      while ((chunk = process.stdin.read()) !== null) {
+        data += chunk as string;
+      }
+    };
+    const onEnd = (): void => {
+      process.stdin.off('readable', onReadable);
+      process.stdin.off('end', onEnd);
+      resolveStdin(data);
+    };
+    process.stdin.on('readable', onReadable);
+    process.stdin.on('end', onEnd);
+  });
+}
+
+/** Load + validate a chain definition from a file path, or `-` for stdin. */
+async function loadChainDefinition(chainFile: string): Promise<ChainDefinition> {
+  const raw = chainFile === '-' ? await readStdin() : readFileSync(resolve(chainFile), 'utf-8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`invalid chain-file JSON: ${(error as Error).message}`);
+  }
+  return chainDefinitionSchema.parse(parsed);
+}
+
+/** Read + JSON-parse a file path (or `-` for stdin). Throws on malformed JSON. */
+async function readJson(pathOrStdin: string, label: string): Promise<unknown> {
+  const raw = pathOrStdin === '-' ? await readStdin() : readFileSync(resolve(pathOrStdin), 'utf-8');
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error(`invalid ${label} JSON: ${(error as Error).message}`);
+  }
+}
+
+function chainSummary(steps: ChainDefinition['steps']): { total: number; steps: Array<{ command: string; decision: boolean }> } {
+  return {
+    total: steps.length,
+    steps: steps.map(s => ({ command: s.command, decision: Boolean(s.decision_ref) })),
+  };
+}
+
+export function registerSessionCommand(program: Command): void {
+  const session = program
+    .command('session')
+    .description('Session orchestration: create predefined-chain sessions, edit chains, migrate legacy state');
+
+  session
+    .command('migrate')
+    .description('Fold legacy ralph-meta.json into session.json and stamp session/1.1 (idempotent)')
+    .option('--session <id>', 'migrate one Session; omit to migrate every Session under .workflow/sessions/')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((opts: { session?: string; workflowRoot: string }) => {
+      try {
+        const root = resolve(opts.workflowRoot);
+        if (opts.session) {
+          print(migrateSession(root, opts.session));
+          return;
+        }
+        const results = migrateAllSessions(root);
+        print(results);
+        if (results.some(entry => entry.error)) process.exitCode = 1;
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  session
+    .command('create <slug>')
+    .description('Create a Session, optionally from a predefined chain definition (--chain-file)')
+    .requiredOption('--intent <text>', 'session intent (overrides intent inside --chain-file)')
+    .option('--chain-file <path>', 'chain definition JSON file; "-" reads stdin. Omit for an empty-chain session')
+    .option('--engine <name>', 'orchestration engine: ralph|coordinator|manual')
+    .option('--quality <mode>', 'quality mode: quick|standard|full')
+    .option('--auto', 'enable auto mode')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action(async (slug: string, opts: {
+      intent: string;
+      chainFile?: string;
+      engine?: string;
+      quality?: string;
+      auto?: boolean;
+      workflowRoot: string;
+    }) => {
+      try {
+        const root = resolve(opts.workflowRoot);
+        if (opts.engine && !['ralph', 'coordinator', 'manual'].includes(opts.engine)) {
+          throw new Error(`invalid --engine "${opts.engine}" (ralph|coordinator|manual)`);
+        }
+        if (opts.quality && !['quick', 'standard', 'full'].includes(opts.quality)) {
+          throw new Error(`invalid --quality "${opts.quality}" (quick|standard|full)`);
+        }
+        const definition = opts.chainFile ? await loadChainDefinition(opts.chainFile) : undefined;
+        const result = createChainSession(root, slug, {
+          intent: opts.intent,
+          engine: opts.engine as 'ralph' | 'coordinator' | 'manual' | undefined,
+          qualityMode: opts.quality as 'quick' | 'standard' | 'full' | undefined,
+          autoMode: opts.auto,
+          definition,
+        });
+        print({
+          session_id: result.sessionId,
+          session_dir: result.sessionDir,
+          engine: result.session.orchestration.engine,
+          chain: chainSummary(definition?.steps ?? []),
+          next: `maestro run next --session ${result.sessionId}`,
+        });
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  const chain = session
+    .command('chain')
+    .description('Edit a Session chain (insert / skip / replace pending steps)');
+
+  chain
+    .command('insert')
+    .description('Insert a pending step after another step (step_id or index). Cannot insert before the active position')
+    .requiredOption('--session <id>', 'Session ID')
+    .requiredOption('--after <step_id|index>', 'insert after this step (step_id or numeric index)')
+    .requiredOption('--command <cmd>', 'command for the new step')
+    .option('--args <text>', 'step args string')
+    .option('--stage <name>', 'stage label')
+    .option('--goal-ref <id>', 'goal reference id')
+    .option('--decision-ref <id>', 'mark as a decision node gating this decision point')
+    .option('--inserted-by <actor>', 'who inserted the step (e.g. a decision gate name)', 'manual')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((opts: {
+      session: string;
+      after: string;
+      command: string;
+      args?: string;
+      stage?: string;
+      goalRef?: string;
+      decisionRef?: string;
+      insertedBy: string;
+      workflowRoot: string;
+    }) => {
+      try {
+        const step = insertChainStep(resolve(opts.workflowRoot), opts.session, {
+          after: opts.after,
+          command: opts.command,
+          args: opts.args,
+          stage: opts.stage,
+          goalRef: opts.goalRef,
+          decisionRef: opts.decisionRef,
+          insertedBy: opts.insertedBy,
+        });
+        print({ session_id: opts.session, inserted: step });
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  chain
+    .command('skip')
+    .description('Skip a pending chain step (marks status=skipped; only pending steps)')
+    .requiredOption('--session <id>', 'Session ID')
+    .requiredOption('--step <step_id>', 'step to skip')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((opts: { session: string; step: string; workflowRoot: string }) => {
+      try {
+        const step = skipChainStep(resolve(opts.workflowRoot), opts.session, opts.step);
+        print({ session_id: opts.session, skipped: step });
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  chain
+    .command('replace')
+    .description('Replace fields of a pending chain step in place (only pending steps)')
+    .requiredOption('--session <id>', 'Session ID')
+    .requiredOption('--step <step_id>', 'step to replace')
+    .option('--command <cmd>', 'new command (regenerates step_id)')
+    .option('--args <text>', 'new args string')
+    .option('--stage <name>', 'new stage label')
+    .option('--goal-ref <id>', 'new goal reference id')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((opts: {
+      session: string;
+      step: string;
+      command?: string;
+      args?: string;
+      stage?: string;
+      goalRef?: string;
+      workflowRoot: string;
+    }) => {
+      try {
+        const step = replaceChainStep(resolve(opts.workflowRoot), opts.session, opts.step, {
+          command: opts.command,
+          args: opts.args,
+          stage: opts.stage,
+          goalRef: opts.goalRef,
+        });
+        print({ session_id: opts.session, replaced: step });
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  const meta = session
+    .command('meta')
+    .description('Update session orchestration meta (position / decomposition)');
+
+  meta
+    .command('update')
+    .description('Integral-replace orchestration.position and/or decomposition (schema-validated). At least one --*-file required')
+    .requiredOption('--session <id>', 'Session ID')
+    .option('--position-file <path>', 'position block JSON file; "-" reads stdin')
+    .option('--decomposition-file <path>', 'decomposition block JSON file; "-" reads stdin')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action(async (opts: {
+      session: string;
+      positionFile?: string;
+      decompositionFile?: string;
+      workflowRoot: string;
+    }) => {
+      try {
+        if (!opts.positionFile && !opts.decompositionFile) {
+          throw new Error('at least one of --position-file / --decomposition-file is required');
+        }
+        // `-` may appear at most once (a single stdin stream can not feed both).
+        if (opts.positionFile === '-' && opts.decompositionFile === '-') {
+          throw new Error('only one block may read stdin ("-"); pass a file path for the other');
+        }
+        const update: { position?: ReturnType<typeof parsePositionInput>; decomposition?: ReturnType<typeof parseDecompositionInput> } = {};
+        if (opts.positionFile) {
+          update.position = parsePositionInput(await readJson(opts.positionFile, 'position-file'));
+        }
+        if (opts.decompositionFile) {
+          update.decomposition = parseDecompositionInput(await readJson(opts.decompositionFile, 'decomposition-file'));
+        }
+        print(updateSessionMeta(resolve(opts.workflowRoot), opts.session, update));
+      } catch (error) {
+        reportError(error);
+      }
+    });
+}

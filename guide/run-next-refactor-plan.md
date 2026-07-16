@@ -118,7 +118,7 @@ src/ralph/
 1. **进度信号单源化**：`ralph complete` 同时派生 `run.json.handoff`（summary/decisions/concerns）；anchor 的 Execution Progress / Accumulated Signals 改读 handoff，**handoff 缺失时回退 step_details**（双写过渡期）；跑完整 ralph session 验证后删旧读取路径。
 2. **session 级 priors 共享**：约定首个 run 写 `outputs/priors.json`（spec/doc-index/wiki 命中），注册 alias `session-priors`；后续命令 contract `consumes` 加 `{ kind: priors, alias: session-priors, required: false }`——零新 schema、零新真相源。
 3. **文档同步**：`workflows/run-mode.md` "Start or Resume" 补充"被编排器派发时 Run 已创建，直接使用注入的 run_id/upstream"；`prepare/*.md` Input Interpretation 提及 `session-priors`；改动后跑 `npm run sync:codex-skills`（.codex 镜像）。
-4. **审计归并（G1/G2/G7）**：prepare 文档的 Required Context 改条件式（"注入了 session-priors 则不重复 load"，随 P3.2）；brief 裁掉与出生包逐字重复的 upstream 段；anchor 基于 identity_revision 对未变 boundary_contract 发指针而非全文。
+4. **审计归并（G1/G7；G2 撤销）**：prepare 文档的 Required Context 改条件式（"注入了 session-priors 则不重复 load"，随 P3.2）；anchor 基于 identity_revision 对未变 boundary_contract 发指针而非全文（G7，可选）。**G2（brief 裁 upstream）撤销**：pi-maestro-flow 桥接（bridge.ts/extension）以 `maestro run brief` 为压缩后唯一重锚入口，brief 必须自足——upstream 重叠是刻意冗余，保留。
 
 ### P4（可选）— 决策点分级
 

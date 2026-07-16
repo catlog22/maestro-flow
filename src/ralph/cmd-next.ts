@@ -23,6 +23,7 @@
 import { resolveStepContent } from '../run/contract.js';
 import { runNextStep, type NextResult } from '../run/next.js';
 import { summarizeRunMode, type RunUpstream, type PrevHandoff } from '../run/runtime.js';
+import { SessionStore } from '../run/store.js';
 import {
   buildEnvelope,
   buildIntentSection,
@@ -183,7 +184,8 @@ function emitPrompt(
 
   // Skill config defaults
   const configSection = buildSkillConfigSection(command, args);
-  const anchor = buildSessionAnchor(sessionId, session, meta, chainStep, detail);
+  const store = new SessionStore(workflowRoot());
+  const anchor = buildSessionAnchor(store, sessionId, session, meta, chainStep, detail);
   const upstreamSection = buildUpstreamSection(result.upstream, result.prev_handoff);
   const headParts = [anchor, upstreamSection].filter((s): s is string => Boolean(s));
   const head = headParts.length > 0 ? headParts.join('\n\n') + '\n\n' : '';
@@ -249,6 +251,7 @@ function buildUpstreamSection(
 }
 
 function buildSessionAnchor(
+  store: SessionStore,
   sessionId: string,
   session: SessionState,
   meta: RalphMeta,
@@ -275,15 +278,20 @@ function buildSessionAnchor(
       buildScopeSection(meta),
       buildBoundaryContractSection(session.boundary_contract),
       buildProgressSection({
-        recent: completedSteps.length > 0 && meta.step_details
+        recent: completedSteps.length > 0
           ? completedSteps.slice(-5).map(s => {
-              const d = meta.step_details![s.step_id];
+              const handoff = readStepHandoff(store, sessionId, s.run_id);
+              const d = meta.step_details?.[s.step_id];
+              // Progress summary/caveats prefer the completed Run's handoff
+              // (single source), falling back to ralph-meta step_details during
+              // the dual-write transition. Stage has no handoff analogue, so it
+              // always comes from step_details.
               return {
                 step_id: s.step_id,
                 command: s.command,
                 stage: d?.stage ?? null,
-                summary: d?.completion_summary ?? null,
-                caveats: d?.completion_caveats ?? null,
+                summary: handoff?.summary || (d?.completion_summary ?? null),
+                caveats: concernsAsCaveat(handoff) ?? (d?.completion_caveats ?? null),
               };
             })
           : [],
@@ -293,9 +301,29 @@ function buildSessionAnchor(
       buildGoalsSection(meta),
       buildCurrentGoalSection(meta, detail),
       buildCriteriaSection(meta),
-      buildSignalsSection(collectSignals(meta, completedSteps)),
+      buildSignalsSection(collectSignals(store, sessionId, meta, completedSteps)),
     ],
   });
+}
+
+/** Handoff of a completed chain step's Run, or null when unreadable/absent. */
+function readStepHandoff(
+  store: SessionStore,
+  sessionId: string,
+  runId: string | null,
+): { summary: string; concerns: string[] } | null {
+  if (!runId) return null;
+  try {
+    const handoff = store.readRun(sessionId, runId).handoff;
+    return handoff ? { summary: handoff.summary, concerns: handoff.concerns } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A handoff's concerns joined into the single Progress caveats slot. */
+function concernsAsCaveat(handoff: { concerns: string[] } | null): string | null {
+  return handoff && handoff.concerns.length > 0 ? handoff.concerns.join('; ') : null;
 }
 
 // ── Ralph extension sections (ralph-meta grounded) ───────────────────────────
@@ -338,17 +366,23 @@ function buildCriteriaSection(meta: RalphMeta): string | null {
 }
 
 function collectSignals(
+  store: SessionStore,
+  sessionId: string,
   meta: RalphMeta,
   completedSteps: SessionState['orchestration']['chain'],
 ): { caveats: string[]; deferred: string[] } {
   const caveats: string[] = [];
   const deferred: string[] = [];
-  if (meta.step_details) {
-    for (const s of completedSteps) {
-      const d = meta.step_details[s.step_id];
-      if (d?.completion_caveats) caveats.push(d.completion_caveats);
-      if (d?.completion_deferred?.length) deferred.push(...d.completion_deferred);
-    }
+  for (const s of completedSteps) {
+    const handoff = readStepHandoff(store, sessionId, s.run_id);
+    const d = meta.step_details?.[s.step_id];
+    // Caveats prefer the completed Run's handoff.concerns (single source),
+    // falling back to step_details.completion_caveats during the dual-write
+    // transition. Deferred work has no handoff analogue — concerns folds the
+    // caveats+deferred semantics — so it always reads step_details (hybrid).
+    if (handoff && handoff.concerns.length > 0) caveats.push(...handoff.concerns);
+    else if (d?.completion_caveats) caveats.push(d.completion_caveats);
+    if (d?.completion_deferred?.length) deferred.push(...d.completion_deferred);
   }
   return { caveats, deferred };
 }

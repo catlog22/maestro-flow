@@ -5,6 +5,7 @@ argument-hint: "[scope] [-y] [--task TASK-ID] [--method agent|cli|auto] [--execu
 contract:
   consumes:
     - { kind: plan, alias: current-plan, required: true }
+    - { kind: priors, alias: session-priors, required: false }
   produces:
     - { path: outputs/execution.json, kind: execution, alias: current-execution, role: primary }
     - { path: outputs/task-results.json, kind: task-results, role: attachment }
@@ -32,9 +33,10 @@ The output of execute is "an implementation consistent with the real diff + trac
 ## Required Context
 
 - With `current-plan`: read waves, dependency graph, collision report, and each task's convergence.criteria as the basis for execution and self-check.
-- Project specs (coding category): `maestro load --type spec --category coding` is **mandatory and cannot be replaced by manual Read/Grep** — pass it to each executor as coding conventions.
+- With `session-priors` (injected by upstream): its spec / doc-index / wiki hits are already resolved from a prior run — reuse them as the coding-convention context instead of repeating the load/search. Absent priors, collect fresh below.
+- Project specs (coding category): unless `session-priors` already carries the coding specs, `maestro load --type spec --category coding` is **mandatory and cannot be replaced by manual Read/Grep** — pass it to each executor as coding conventions.
 - UI specs (conditional load): when a task involves frontend/UI (component/page/style/layout/CSS/HTML keywords, or focus_paths falling in a UI directory), append `--category ui`.
-- The architecture doc `.workflow/codebase/ARCHITECTURE.md` and wiki search results: injected as shared context into the executor; may continue if missing (record a warning).
+- The architecture doc `.workflow/codebase/ARCHITECTURE.md` and wiki search results: injected as shared context into the executor; reuse the `session-priors` copy when present, else search; may continue if missing (record a warning).
 
 ## Boundaries and Invariants
 

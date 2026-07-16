@@ -111,6 +111,13 @@ interface StandardSessionJson {
       decision_ref?: string | null;
     }>;
     decision_points?: unknown[];
+    // session/1.1 promoted block (← ralph-meta.json). Present once a session is
+    // migrated; absent in 1.0 files where the ralph-meta.json fallback applies.
+    position?: {
+      lifecycle?: string;
+      phase?: number | null;
+      passed_gates?: string[];
+    } | null;
   };
 }
 
@@ -167,9 +174,9 @@ function parseStandardSession(
   workspaceRoot: string,
 ): CoordBridgeData | null {
   const chain = raw.orchestration?.chain ?? [];
-  const completed = chain.filter(s => s.status === 'completed' || s.status === 'sealed').length;
+  const completed = chain.filter(s => s.status === 'completed' || s.status === 'sealed' || s.status === 'skipped').length;
   const realSteps = chain.filter(s => !s.decision_ref);
-  const realCompleted = realSteps.filter(s => s.status === 'completed' || s.status === 'sealed').length;
+  const realCompleted = realSteps.filter(s => s.status === 'completed' || s.status === 'sealed' || s.status === 'skipped').length;
 
   const runningIdx = chain.findIndex(s => s.status === 'running');
   const pendingIdx = chain.findIndex(s => s.status === 'pending');
@@ -192,14 +199,30 @@ function parseStandardSession(
     args: '',
   }));
 
-  // Read ralph-meta.json for extended fields
-  let meta: { lifecycle_position?: string; phase?: number | null; passed_gates?: string[] } = {};
-  try {
-    const metaPath = join(workspaceRoot, '.workflow', 'sessions', dirName, 'ralph-meta.json');
-    if (existsSync(metaPath)) {
-      meta = JSON.parse(readFileSync(metaPath, 'utf8'));
-    }
-  } catch { /* ignore */ }
+  // Extended fields (lifecycle / phase / passed_gates): session/1.1 promoted them
+  // into orchestration.position, so prefer it. When a session predates migration
+  // (1.0, no position block) fall back to the legacy ralph-meta.json read. The
+  // existsSync guard keeps the fallback a graceful degradation.
+  let lifecyclePosition: string | undefined;
+  let phase: number | null = null;
+  let passedGates: string[] | undefined;
+  const position = raw.orchestration?.position;
+  if (position) {
+    lifecyclePosition = position.lifecycle;
+    phase = position.phase ?? null;
+    passedGates = position.passed_gates;
+  } else {
+    try {
+      const metaPath = join(workspaceRoot, '.workflow', 'sessions', dirName, 'ralph-meta.json');
+      if (existsSync(metaPath)) {
+        const meta: { lifecycle_position?: string; phase?: number | null; passed_gates?: string[] } =
+          JSON.parse(readFileSync(metaPath, 'utf8'));
+        lifecyclePosition = meta.lifecycle_position;
+        phase = meta.phase ?? null;
+        passedGates = meta.passed_gates;
+      }
+    } catch { /* ignore */ }
+  }
 
   return {
     session_id: '',
@@ -208,7 +231,7 @@ function parseStandardSession(
     source: 'ralph',
     chain_name: '',
     intent: raw.intent ?? '',
-    phase: meta.phase ?? null,
+    phase,
     steps_total: chain.length,
     steps_completed: completed,
     steps_real: realSteps.length,
@@ -218,10 +241,10 @@ function parseStandardSession(
     remaining_steps: remaining,
     status: raw.status ?? 'unknown',
     auto_mode: raw.orchestration?.auto_mode ?? false,
-    lifecycle_position: meta.lifecycle_position,
+    lifecycle_position: lifecyclePosition,
     quality_mode: raw.orchestration?.quality_mode,
     decision_pending: decisionPending || undefined,
-    passed_gates: meta.passed_gates,
+    passed_gates: passedGates,
     updated_at: Math.floor(mtime),
   };
 }

@@ -10,8 +10,10 @@
 //   retry      Sugar for `complete <idx> --status NEEDS_RETRY`
 //   ledger     Verification ledger interface
 //
-// Data contract: drives `.workflow/sessions/{id}/session.json` (engine=ralph)
-//                + `ralph-meta.json` for orchestration extensions.
+// Data contract: drives `.workflow/sessions/{id}/session.json` (session/1.1,
+//                orchestration is the single source). `ralph-meta.json` is a
+//                legacy read-fallback for unmigrated sessions only; next/
+//                complete/retry are deprecated aliases for the `run` verbs.
 // ---------------------------------------------------------------------------
 
 import type { Command } from 'commander';
@@ -38,6 +40,21 @@ async function loadLedgerCmd() {
 
 const VALID_STATUSES = ['DONE', 'DONE_WITH_CONCERNS', 'NEEDS_RETRY', 'BLOCKED'] as const;
 export type RalphCompletionStatus = typeof VALID_STATUSES[number];
+
+/**
+ * One-line deprecation notice for the ralph step verbs. Behaviour is unchanged
+ * (未迁移 ralph-meta sessions keep the old path — backward-compat red line); this
+ * only points new work at the generic run verbs. stderr so it never pollutes the
+ * executor-facing stdout prompt.
+ */
+function deprecationNotice(verb: 'next' | 'complete' | 'retry'): void {
+  const target = verb === 'next'
+    ? 'maestro run next'
+    : verb === 'retry'
+      ? 'maestro run complete --verdict needs-retry'
+      : 'maestro run complete --verdict <done|done-with-concerns|needs-retry|blocked>';
+  console.error(`[ralph ${verb}] deprecated — new sessions should use "${target}". This alias stays for un-migrated ralph sessions.`);
+}
 
 export function registerRalphCommand(program: Command): void {
   const ralph = program
@@ -90,6 +107,7 @@ export function registerRalphCommand(program: Command): void {
     .option('--owner-epoch <epoch>', 'Epoch for lease ownership', Number.parseInt)
     .option('--lease-id <id>', 'Lease identifier for concurrency safety')
     .action(async (opts: { session?: string; executionOwner?: string; ownerEpoch?: number; leaseId?: string }) => {
+      deprecationNotice('next');
       const run = await loadNextCmd();
       const code = await run({
         sessionId: opts.session,
@@ -134,6 +152,7 @@ export function registerRalphCommand(program: Command): void {
       expectedSkill?: string;
       expectedStepIndex?: number;
     }) => {
+      deprecationNotice('complete');
       const status = opts.status.toUpperCase() as RalphCompletionStatus;
       if (!(VALID_STATUSES as readonly string[]).includes(status)) {
         console.error(`[ralph complete] --status must be one of: ${VALID_STATUSES.join(', ')} (got "${opts.status}")`);
@@ -179,6 +198,7 @@ export function registerRalphCommand(program: Command): void {
       ownerEpoch?: number;
       leaseId?: string;
     }) => {
+      deprecationNotice('retry');
       const index = Number.parseInt(indexArg, 10);
       if (!Number.isFinite(index) || index < 0) {
         console.error(`[ralph retry] <index> must be a non-negative integer (got "${indexArg}")`);

@@ -1,0 +1,72 @@
+// createRalphSession delegation — after M4 the adapter builds sessions via the
+// generic createChainSession. These tests lock the ralph-facing behavior:
+// explicit session id used verbatim, engine=ralph, pre-built chain/decision_points
+// overlaid, quality/auto/boundary honored, and ralph-meta.json written.
+
+import { describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createRalphSession, readMeta, type ChainStep } from '../session-adapter.js';
+import { SessionStore } from '../../run/store.js';
+
+let root: string;
+
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), 'create-ralph-'));
+});
+
+afterEach(() => {
+  try { rmSync(root, { recursive: true, force: true }); } catch { /* ignore */ }
+});
+
+function chain(): ChainStep[] {
+  return [
+    { step_id: 'step-000-analyze', command: 'analyze', status: 'pending', run_id: null, inserted_by: 'build', decision_ref: null },
+    { step_id: 'step-001-execute', command: 'execute', status: 'pending', run_id: null, inserted_by: 'build', decision_ref: null },
+  ];
+}
+
+describe('createRalphSession (delegates to createChainSession)', () => {
+  it('creates a ralph session with the explicit id, engine, chain and meta', () => {
+    const id = 'ralph-20260716-101010';
+    const result = createRalphSession(root, id, 'do the ralph thing', {
+      qualityMode: 'full',
+      autoMode: true,
+      chain: chain(),
+      decisionPoints: [
+        { point_id: 'post-execute', after_step_id: 'step-001-execute', status: 'pending', retry_count: 0, max_retries: 2, evidence_ref: null },
+      ],
+      meta: { lifecycle_position: 'execute', milestone: 'M1' },
+    });
+
+    expect(result.sessionId).toBe(id);
+    const store = new SessionStore(root);
+    const session = store.readBundle(id).session;
+    expect(session.orchestration.engine).toBe('ralph');
+    expect(session.orchestration.quality_mode).toBe('full');
+    expect(session.orchestration.auto_mode).toBe(true);
+    expect(session.orchestration.chain).toHaveLength(2);
+    expect(session.orchestration.chain[0].step_id).toBe('step-000-analyze');
+    expect(session.orchestration.decision_points).toHaveLength(1);
+    expect(session.intent).toBe('do the ralph thing');
+
+    // ralph-meta.json still written alongside session.json
+    expect(existsSync(join(result.sessionDir, 'ralph-meta.json'))).toBe(true);
+    const meta = readMeta(result.sessionDir);
+    expect(meta.lifecycle_position).toBe('execute');
+    expect(meta.milestone).toBe('M1');
+    expect(JSON.parse(readFileSync(join(result.sessionDir, 'ralph-meta.json'), 'utf-8')).lifecycle_position).toBe('execute');
+  });
+
+  it('defaults quality_mode/auto_mode and writes an empty chain when none given', () => {
+    const id = 'ralph-20260716-111111';
+    const result = createRalphSession(root, id, 'minimal');
+    const store = new SessionStore(root);
+    const session = store.readBundle(id).session;
+    expect(session.orchestration.quality_mode).toBe('standard');
+    expect(session.orchestration.auto_mode).toBe(false);
+    expect(session.orchestration.chain).toHaveLength(0);
+    expect(result.meta.lifecycle_position).toBe('analyze');
+  });
+});

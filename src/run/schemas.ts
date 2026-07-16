@@ -10,6 +10,13 @@ export const boundaryContractSchema = z.object({
   definition_of_done: z.string(),
 }).strict();
 
+// Chain step retry counter. Default max aligns with the current ralph decision
+// ceiling (max_retries: 2 in maestro-ralph.md); count starts at 0.
+const chainRetrySchema = z.object({
+  count: z.number().int().nonnegative(),
+  max: z.number().int().nonnegative(),
+}).strict();
+
 const orchestrationStepSchema = z.object({
   step_id: nonEmptyString,
   command: nonEmptyString,
@@ -17,6 +24,90 @@ const orchestrationStepSchema = z.object({
   run_id: z.string().nullable(),
   inserted_by: nonEmptyString,
   decision_ref: z.string().nullable(),
+  // session/1.1 chain enrichment (← ralph-meta step_details). All optional so
+  // session/1.0 chains parse untouched.
+  args: z.string().optional(),
+  stage: z.string().nullable().optional(),
+  goal_ref: z.string().nullable().optional(),
+  retry: chainRetrySchema.optional(),
+}).strict();
+
+// ── ralph-meta decomposition types, zod-ified locally ────────────────────────
+// Migrated from RalphTaskDecompositionItem / GoalChangelogEntry in
+// src/ralph/status-schema.ts. Defined here (not imported) because src/run must
+// never depend on src/ralph.
+
+const taskDecompositionItemSchema = z.object({
+  id: nonEmptyString,
+  goal: z.string(),
+  boundary: z.string().optional(),
+  done_when: z.string().optional(),
+  evidence: z.string().optional(),
+  lifecycle: z.array(z.string()).optional(),
+  status: z.enum(['pending', 'done', 'superseded']),
+  completion_confirmed: z.boolean().optional(),
+  completed_at: z.string().nullable().optional(),
+  superseded_by: z.string().nullable().optional(),
+  superseded_at: z.string().nullable().optional(),
+  origin: z.string().nullable().optional(),
+}).strict();
+
+const goalSnapshotSchema = z.object({
+  id: nonEmptyString,
+  goal: z.string(),
+  done_when: z.string().optional(),
+}).strict();
+
+const goalChangelogEntrySchema = z.object({
+  id: nonEmptyString,
+  timestamp: z.string(),
+  change_type: z.enum(['modify', 'add', 'remove', 'boundary']),
+  reason: z.string(),
+  impact_assessment: z.object({
+    risk_level: z.enum(['low', 'medium', 'high']),
+    invalidated_steps: z.array(z.number().int()),
+    new_steps_inserted: z.number().int(),
+  }).strict().optional(),
+  before: z.object({
+    goals: z.array(goalSnapshotSchema),
+    boundary_snippet: z.string().optional(),
+  }).strict(),
+  after: z.object({
+    goals: z.array(goalSnapshotSchema),
+    boundary_snippet: z.string().optional(),
+  }).strict(),
+}).strict();
+
+// ── ralph-meta orchestration blocks, promoted into session.json ──────────────
+
+// Exported so the `session meta update` write path can validate a caller-supplied
+// position / decomposition block directly (yielding a precise field error) before
+// 整块替换 into the session, rather than surfacing a whole-session parse failure.
+export const positionSchema = z.object({
+  lifecycle: z.string(),
+  phase: z.number().int().nullable(),
+  phase_is_new: z.boolean(),
+  milestone: z.string(),
+  planning_mode: z.string().nullable(),
+  passed_gates: z.array(z.string()),
+  scope_verdict: z.string().nullable(),
+}).strict();
+
+export const decompositionSchema = z.object({
+  execution_criteria: z.array(z.string()),
+  goals: z.array(taskDecompositionItemSchema),
+  changelog: z.array(goalChangelogEntrySchema),
+}).strict();
+
+const leaseSchema = z.object({
+  owner: z.string().nullable(),
+  epoch: z.number().int().nonnegative(),
+  id: z.string().nullable(),
+}).strict();
+
+const executorSchema = z.object({
+  platform: z.string(),
+  cli_tool: z.string(),
 }).strict();
 
 const decisionPointSchema = z.object({
@@ -29,7 +120,9 @@ const decisionPointSchema = z.object({
 }).strict();
 
 export const sessionStateSchema = z.object({
-  schema_version: z.literal('session/1.0'),
+  // Accept both generations; the store rewrites to session/1.1. session/1.0 files
+  // are read losslessly — new orchestration fields carry optional/nullable defaults.
+  schema_version: z.enum(['session/1.0', 'session/1.1']),
   session_id: nonEmptyString,
   intent: nonEmptyString,
   status: z.enum(['running', 'paused', 'sealed', 'archived', 'failed']),
@@ -44,6 +137,12 @@ export const sessionStateSchema = z.object({
     auto_mode: z.boolean(),
     chain: z.array(orchestrationStepSchema),
     decision_points: z.array(decisionPointSchema),
+    // session/1.1 orchestration blocks (← ralph-meta.json). Absent in 1.0 files;
+    // default to null so non-ralph sessions carry zero weight.
+    position: positionSchema.nullable().optional().default(null),
+    decomposition: decompositionSchema.nullable().optional().default(null),
+    lease: leaseSchema.nullable().optional().default(null),
+    executor: executorSchema.nullable().optional().default(null),
   }).strict(),
   requests: z.array(z.object({
     request_id: nonEmptyString,
@@ -241,6 +340,13 @@ export const reportFrontmatterSchema = z.object({
 }).passthrough();
 
 export type SessionState = z.infer<typeof sessionStateSchema>;
+export type OrchestrationStep = z.infer<typeof orchestrationStepSchema>;
+export type OrchestrationPosition = z.infer<typeof positionSchema>;
+export type OrchestrationDecomposition = z.infer<typeof decompositionSchema>;
+export type OrchestrationLease = z.infer<typeof leaseSchema>;
+export type OrchestrationExecutor = z.infer<typeof executorSchema>;
+export type TaskDecompositionItem = z.infer<typeof taskDecompositionItemSchema>;
+export type GoalChangelogEntry = z.infer<typeof goalChangelogEntrySchema>;
 export type Gate = z.infer<typeof gateSchema>;
 export type GateRegistry = z.infer<typeof gateRegistrySchema>;
 export type Artifact = z.infer<typeof artifactSchema>;

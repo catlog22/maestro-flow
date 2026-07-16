@@ -45,12 +45,16 @@ const commandContractSchema = z.object({
 export type CommandContract = z.infer<typeof commandContractSchema>;
 export type ContractGateDefinition = z.infer<typeof gateDefinitionSchema>;
 
+const SESSION_MODES = ['run', 'brief', 'none', 'bootstrap'] as const;
+export type SessionMode = typeof SESSION_MODES[number];
+
 export interface ResolvedCommandSource {
   path: string;
   relativePath: string;
   raw: string;
   contentHash: string;
   contract: CommandContract;
+  sessionMode: SessionMode;
 }
 
 function sha256(value: string): string {
@@ -124,15 +128,22 @@ export function resolveCommandSource(projectRoot: string, commandName: string): 
       raw: empty,
       contentHash: sha256(empty),
       contract: commandContractSchema.parse({}),
+      sessionMode: 'run',
     };
   }
   const raw = readFileSync(path, 'utf8');
+  const fm = extractFrontmatter(raw);
+  const rawMode = fm?.['session-mode'];
+  const sessionMode: SessionMode = typeof rawMode === 'string' && (SESSION_MODES as readonly string[]).includes(rawMode)
+    ? rawMode as SessionMode
+    : 'run';
   return {
     path,
     relativePath: relative(projectRoot, path).replaceAll('\\', '/'),
     raw,
     contentHash: sha256(raw),
     contract: commandContractSchema.parse(extractContract(raw)),
+    sessionMode,
   };
 }
 

@@ -93,8 +93,9 @@ CONCERNS: {description if applicable}
 
 End the step by calling the CLI (no text block output):
 ```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+maestro run complete --session {session_id} --verdict {done|done-with-concerns|needs-retry|blocked} [--evidence {path}]
 ```
+(run-id 可省略 — 自动解析当前 running 步)
 
 ### Next-step routing
 

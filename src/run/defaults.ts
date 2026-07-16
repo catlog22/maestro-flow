@@ -2,7 +2,7 @@ import type { ArtifactRegistry, EvidenceStore, GateRegistry, SessionState } from
 
 export function createSessionState(sessionId: string, intent: string): SessionState {
   return {
-    schema_version: 'session/1.0',
+    schema_version: 'session/1.1',
     session_id: sessionId,
     intent,
     status: 'running',
@@ -22,6 +22,10 @@ export function createSessionState(sessionId: string, intent: string): SessionSt
       auto_mode: false,
       chain: [],
       decision_points: [],
+      position: null,
+      decomposition: null,
+      lease: null,
+      executor: null,
     },
     requests: [],
     lifecycle: {

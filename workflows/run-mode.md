@@ -13,6 +13,8 @@ Lifecycle verbs: **prepare → create → brief → complete**.
 
 ## Start or Resume
 
+> **Dispatched by an orchestrator?** When `ralph next` or `maestro run next` invokes you, the Run is already created and its `run_id` / `run_dir` / `upstream` are injected in the birth packet — use them directly and do **NOT** call `maestro run create` (a second create mints an empty duplicate Run). The steps below apply only to a command starting a Run on its own.
+
 1. Read the caller frontmatter `name` as `<command-name>`.
 2. **Compose a session slug** — `YYYYMMDD-{command}-{topic}` where `{topic}` is a 1–3 word ASCII-only slug derived from the intent (e.g. `20260715-odyssey-jwt-auth`). NEVER let the runtime auto-generate from a Chinese or long intent string.
 3. Run `maestro run create <command-name> --session <slug> --intent "<short intent phrase>" -- $ARGUMENTS` before domain work.

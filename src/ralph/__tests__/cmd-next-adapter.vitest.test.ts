@@ -356,6 +356,84 @@ Plan is ready
     expect(out).toContain('**按需参考（Read when needed）**:');
     expect(out).toContain('- docs/schema.md — before touching the store');
   });
+
+  it('sources the Progress summary from the completed step Run handoff (P3.1 single source)', async () => {
+    stepCommand(root, 'demo-plan', PLAN_CONTRACT);
+    stepCommand(root, 'demo-execute', EXEC_CONTRACT);
+    seedRalphSession(root, 'sess-ho', 'handoff source', [
+      { command: 'demo-plan' },
+      { command: 'demo-execute' },
+    ], { step_details: {} });
+
+    // Step 0: run a real plan step to completion so its Run carries a sealed
+    // handoff. step_details.completion_summary is deliberately left blank — the
+    // Progress line must come from the handoff, not the meta fallback.
+    let cap = captureStdout();
+    expect(await runNext({ sessionId: 'sess-ho' })).toBe(0);
+    cap.restore();
+    const store = new SessionStore(root);
+    const planRunId = store.readBundle('sess-ho').session.orchestration.chain[0].run_id!;
+    const runDir = join(root, '.workflow', 'sessions', 'sess-ho', 'runs', planRunId);
+    writeFileSync(join(runDir, 'outputs', 'plan.json'), JSON.stringify({
+      _meta: { kind: 'plan', schema: 'plan/1.0', role: 'primary', alias: 'current-plan' },
+      tasks: [{ id: 'T1' }],
+    }, null, 2));
+    writeFileSync(join(runDir, 'report.md'), `---
+verdict: ready
+summary: Handoff-sourced summary
+constraints: []
+decisions: []
+concerns:
+  - lock the store first
+next: []
+---
+## 摘要
+Handoff-sourced summary
+`, 'utf8');
+    expect(await runComplete({ sessionId: 'sess-ho', index: 0, status: 'DONE', evidence: [], summary: 'Handoff-sourced summary' })).toBe(0);
+
+    // Step 1: the anchor's Progress line for the completed step-0 must show the
+    // handoff summary + concern, not the empty step_details.
+    cap = captureStdout();
+    expect(await runNext({ sessionId: 'sess-ho' })).toBe(0);
+    cap.restore();
+    const out = cap.text();
+    expect(out).toContain('**Execution Progress**:');
+    expect(out).toContain('Handoff-sourced summary');
+    expect(out).toContain('⚠️ lock the store first');
+    expect(out).toContain('**⚠️ Accumulated Signals**:');
+    expect(out).toContain('Caveats: lock the store first');
+  });
+
+  it('falls back to step_details when a completed step has no readable Run handoff (P3.1 dual-write)', async () => {
+    stepCommand(root, 'demo-plan', PLAN_CONTRACT);
+    stepCommand(root, 'demo-execute', EXEC_CONTRACT);
+    // step-0 is completed but carries no run_id, so no handoff is readable —
+    // Progress + Signals must fall back to ralph-meta step_details.
+    seedRalphSession(root, 'sess-fallback', 'meta fallback', [
+      { command: 'demo-plan', status: 'completed' },
+      { command: 'demo-execute' },
+    ], {
+      step_details: {
+        'step-000-demo-plan': {
+          args: '',
+          stage: 'plan',
+          skill: 'demo-plan',
+          completion_summary: 'meta fallback summary',
+          completion_caveats: 'meta fallback caveat',
+        },
+      },
+    });
+
+    const cap = captureStdout();
+    expect(await runNext({ sessionId: 'sess-fallback' })).toBe(0);
+    cap.restore();
+    const out = cap.text();
+    expect(out).toContain('**Execution Progress**:');
+    expect(out).toContain('meta fallback summary');
+    expect(out).toContain('⚠️ meta fallback caveat');
+    expect(out).toContain('Caveats: meta fallback caveat');
+  });
 });
 
 describe('ralph complete — signal passthrough', () => {

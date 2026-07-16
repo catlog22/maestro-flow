@@ -2,17 +2,17 @@
 // Session adapter — bridges ralph orchestration concepts to the standard
 // SessionStore (`.workflow/sessions/`).
 //
-// Ralph-specific metadata (task_decomposition, goal_changelog, lifecycle_position,
-// etc.) lives in `ralph-meta.json` alongside session.json.  Chain steps map to
-// `session.orchestration.chain[]`; decision nodes map to
-// `session.orchestration.decision_points[]`.
+// Orchestration state (chain, decision_points, position, decomposition, lease,
+// executor) is single-sourced in session.json (session/1.1). `ralph-meta.json`
+// remains only as a legacy read-fallback for unmigrated sessions and as the
+// legacy carrier of verification_ledger (see verification-ledger.ts).
 // ---------------------------------------------------------------------------
 
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { SessionStore, type SessionBundle } from '../run/store.js';
 import type { SessionState } from '../run/schemas.js';
-import { createSessionState } from '../run/defaults.js';
+import { createChainSession, chainStepId } from '../run/chain-admin.js';
 // Chain navigation/mutation is engine-agnostic and canonical in src/run/chain.ts.
 // Re-export here so existing ralph callers keep importing from the adapter while
 // the logic lives in one place. Dependency direction is ralph → run only.
@@ -178,9 +178,9 @@ export interface ChainStep {
   decision_ref: string | null;
 }
 
-export function chainStepId(index: number, command: string): string {
-  return `step-${String(index).padStart(3, '0')}-${command}`;
-}
+// Re-export the canonical step-id builder (defined in src/run/chain-admin.ts).
+// Direction ralph → run only; existing ralph callers keep importing it here.
+export { chainStepId };
 
 // ── Session creation helpers ─────────────────────────────────────────────────
 
@@ -197,32 +197,33 @@ export function createRalphSession(
     meta?: Partial<RalphMeta>;
   } = {},
 ): ResolvedRalphSession {
-  const store = new SessionStore(projectRoot);
-  const bundle = store.createSession(sessionId, intent);
-
-  // Set ralph-specific session fields
-  store.update(sessionId, (draft) => {
-    draft.session.orchestration.engine = 'ralph';
-    draft.session.orchestration.quality_mode = opts.qualityMode ?? 'standard';
-    draft.session.orchestration.auto_mode = opts.autoMode ?? false;
-    if (opts.boundaryContract) {
-      draft.session.boundary_contract = opts.boundaryContract;
-    }
-    if (opts.chain) {
-      draft.session.orchestration.chain = opts.chain;
-    }
-    if (opts.decisionPoints) {
-      draft.session.orchestration.decision_points = opts.decisionPoints;
-    }
-    return null;
+  // Delegate the session shell (dir, session.json, engine/quality/auto/boundary)
+  // to the generic creator; sessionId is an explicit ralph id so it is used
+  // verbatim. Ralph passes a pre-built chain/decision_points, so those are
+  // overlaid here rather than derived from a chain definition.
+  const { sessionId: id } = createChainSession(projectRoot, sessionId, {
+    intent,
+    engine: 'ralph',
+    qualityMode: opts.qualityMode,
+    autoMode: opts.autoMode,
+    boundaryContract: opts.boundaryContract,
   });
 
-  const sessionDir = store.sessionDir(sessionId);
+  const store = new SessionStore(projectRoot);
+  if (opts.chain || opts.decisionPoints) {
+    store.update(id, (draft) => {
+      if (opts.chain) draft.session.orchestration.chain = opts.chain;
+      if (opts.decisionPoints) draft.session.orchestration.decision_points = opts.decisionPoints;
+      return null;
+    });
+  }
+
+  const sessionDir = store.sessionDir(id);
   const meta: RalphMeta = { ...defaultMeta(), ...opts.meta };
   writeMeta(sessionDir, meta);
 
-  const updatedBundle = store.readBundle(sessionId);
-  return { sessionId, sessionDir, bundle: updatedBundle, meta };
+  const updatedBundle = store.readBundle(id);
+  return { sessionId: id, sessionDir, bundle: updatedBundle, meta };
 }
 
 // ── Update helpers ───────────────────────────────────────────────────────────
@@ -237,6 +238,72 @@ export function updateRalphMeta(
   const meta = readMeta(sessionDir);
   updater(meta);
   writeMeta(sessionDir, meta);
+}
+
+// ── session.json-first position / decomposition readers (1.1 with meta fallback)
+
+/**
+ * Effective lifecycle-position fields for a ralph session: session/1.1 promoted
+ * them into orchestration.position, so read that first and fall back to
+ * ralph-meta.json only when the block is absent (un-migrated 1.0 session). The
+ * shape mirrors the ralph-meta fields the display code reads.
+ */
+export interface EffectivePosition {
+  lifecycle_position: string;
+  phase: number | null;
+  phase_is_new: boolean;
+  milestone: string;
+  planning_mode: string | null;
+  scope_verdict: string | null;
+  passed_gates: string[];
+}
+
+export function effectivePosition(session: SessionState, meta: RalphMeta): EffectivePosition {
+  const p = session.orchestration.position;
+  if (p) {
+    return {
+      lifecycle_position: p.lifecycle,
+      phase: p.phase,
+      phase_is_new: p.phase_is_new,
+      milestone: p.milestone,
+      planning_mode: p.planning_mode,
+      scope_verdict: p.scope_verdict,
+      passed_gates: p.passed_gates,
+    };
+  }
+  return {
+    lifecycle_position: meta.lifecycle_position,
+    phase: meta.phase,
+    phase_is_new: meta.phase_is_new ?? false,
+    milestone: meta.milestone,
+    planning_mode: meta.planning_mode ?? null,
+    scope_verdict: meta.scope_verdict ?? null,
+    passed_gates: meta.passed_gates ?? [],
+  };
+}
+
+/**
+ * Effective sub-goal decomposition for a ralph session: session/1.1 promoted
+ * task_decomposition + execution_criteria into orchestration.decomposition, so
+ * read that first and fall back to the legacy ralph-meta arrays when absent.
+ */
+export interface EffectiveDecomposition {
+  execution_criteria: string[];
+  goals: RalphTaskDecompositionItem[];
+}
+
+export function effectiveDecomposition(session: SessionState, meta: RalphMeta): EffectiveDecomposition {
+  const d = session.orchestration.decomposition;
+  if (d) {
+    return {
+      execution_criteria: d.execution_criteria,
+      goals: d.goals as RalphTaskDecompositionItem[],
+    };
+  }
+  return {
+    execution_criteria: meta.execution_criteria ?? [],
+    goals: meta.task_decomposition ?? [],
+  };
 }
 
 // ── Workflow root helper (matches old status-store API) ──────────────────────

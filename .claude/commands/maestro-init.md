@@ -115,14 +115,15 @@ Created:
 
 End the step by calling the CLI (no text block output):
 ```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+maestro run complete --session {session_id} --verdict {VERDICT} [--evidence {path}]
 ```
+(run-id 可省略 — 自动解析当前 running 步)
 
-Status verdicts:
-- **DONE** — Normal completion
-- **DONE_WITH_CONCERNS** — Completed with concerns; pass `--concerns`
-- **NEEDS_RETRY** — Tooling error / transient issue; ralph will retry
-- **BLOCKED** — External hard blocker; pass `--reason`
+Verdicts:
+- **done** — Normal completion
+- **done-with-concerns** — Completed with concerns; pass `--note`
+- **needs-retry** — Tooling error / transient issue; orchestrator will retry
+- **blocked** — External hard blocker; pass `--reason`
 
 ### Next-step routing
 

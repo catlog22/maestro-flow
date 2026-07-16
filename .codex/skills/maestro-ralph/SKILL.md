@@ -35,10 +35,11 @@ version: 0.5.50
 > **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 <purpose>
-Adaptive lifecycle orchestrator: locate step → resolve args → load context → dispatch executor via `spawn_agent` per step → `wait_agent` for result → extract signals → drift check → ralph complete → evaluate decision → next step → loop.
+Adaptive lifecycle orchestrator: locate step → resolve args → load context → dispatch executor via `spawn_agent` per step → `wait_agent` for result → extract signals → drift check → `run complete --verdict` → evaluate decision → next step → loop.
 
-Session: `.workflow/sessions/{id}/session.json` (engine=ralph) + `ralph-meta.json`
-`{session_dir}` = `.workflow/sessions/{id}/`（标准 session 目录）
+Session: `.workflow/sessions/{id}/session.json`（engine=ralph；orchestration 为唯一编排真相源，含 chain/decision_points/position/decomposition/lease/executor）。步进进度看 `runs/{run_id}/run.json` handoff/anchor，非 session.json 内的 step 明细。
+`{session_dir}` = `.workflow/sessions/{id}/`（标准 session 目录）。
+遗留 `ralph-meta.json` 仅作旧 session 的 legacy 读兜底，不再写入。
 </purpose>
 
 <deferred_reading>
@@ -74,12 +75,13 @@ if (status.timed_out) {
 
 ### Evaluation Agent（decision 节点）
 
+评估类无专属定义 —— 不加 `agent_type`（generic agent），通过 message 中的 CONSTRAINTS 约束为只读（对齐 Claude 版 Agent Dispatch Contract：无 `subagent_type` → 不加 `agent_type`）。
+
 ```ts
 spawn_agent({
   task_name: `ralph_eval_${decision_ref}`,
   message: `EVALUATE decision: ${decision_description}\n\nCONSTRAINTS: Read-only analysis\n\n${evidence}`,
-  fork_turns: "none",
-  agent_type: "ralph_executor"
+  fork_turns: "none"
 });
 wait_agent({ timeout_ms: 3600000 });
 ```
@@ -107,25 +109,26 @@ followup_task({
 
 1. **Ralph owns the full loop** — locate step → resolve args → load context → spawn_agent → wait_agent → extract signals → drift → complete，全部在本命令内完成
 2. **One agent per step** — 每个执行 step 通过 `spawn_agent` 派发，结果通过 `wait_agent` 获取
-3. **Agent is a thin wrapper** — executor agent 调 `ralph next` 获取 skill prompt 并执行，返回输出文本；arg resolution、context loading、signal extraction、drift analysis、ralph complete 均由主流程完成
+3. **Agent is a thin wrapper** — executor agent 调 `maestro run next`（或主编排传入 run_id 时走 `run brief {run_id}`）获取 skill prompt 并执行，返回输出文本；arg resolution、context loading、signal extraction、drift analysis、`run complete --verdict` 均由主流程完成
 4. **spawn_agent for all dispatch** — executor 和 evaluator 均使用 `spawn_agent`，task_name 用于 display/日志标识
-5. **主流程调 `ralph complete`** — 每个 step 完成后由主流程调 `maestro ralph complete`，非 agent 上报
-6. **Decision evaluation inline** — decision 节点不 handoff，通过 `spawn_agent` 在本循环内评估
-7. **wait_agent timeout = max** — 所有 `wait_agent` 调用 MUST 使用 `timeout_ms: 3600000`（最大值 1 小时）
-8. **interrupt on timeout** — `wait_agent` 返回 `timed_out: true` 时，MUST 调 `interrupt_agent` 中断后转 S_HANDLE_FAIL
+5. **主流程调 `run complete --verdict`** — 每个 step 完成后由主流程调 `maestro run complete --session {session} --verdict ...`（免 run-id，自动解析当前 running 步），非 agent 上报
+6. **Decision evaluation inline** — decision 节点不 handoff，通过 `spawn_agent` 在本循环内评估；裁决落盘经 `maestro run decide`
+7. **session.json orchestration 是唯一编排真相源** — 状态写入经 CLI 动词（`session create --chain-file` / `session chain insert|skip|replace` / `run next` / `run complete --verdict` / `run decide` / `session meta update`），prompt 层不得直写 session.json 或 ralph-meta.json
+8. **wait_agent timeout = max** — 所有 `wait_agent` 调用 MUST 使用 `timeout_ms: 3600000`（最大值 1 小时）
+9. **interrupt on timeout** — `wait_agent` 返回 `timed_out: true` 时，MUST 调 `interrupt_agent` 中断后转 S_HANDLE_FAIL
 
 ## State Machine
 
-与 Claude 版本完全一致（S_LOCATE → S_COMPOSE → S_STEP_DISPATCH → S_STEP_ANALYZE → ...），仅 agent dispatch 方式不同：
+与 Claude 版本完全一致（S_LOCATE → S_COMPOSE → S_STEP_DISPATCH → S_STEP_ANALYZE → ...），仅 agent dispatch 方式不同。下表左列为 Claude 版语义、右列为本命令的 Codex V2 落地形式：
 
-| Claude | Codex V2 |
+| Claude 版语义 | Codex V2 |
 |--------|----------|
-| `Agent({ subagent_type: "ralph-executor", prompt: "..." })` | `spawn_agent({ task_name: "ralph_exec_step_N", message: "...", agent_type: "ralph_executor" })` |
+| 派发 executor 子代理（subagent ralph-executor） | `spawn_agent({ task_name: "ralph_exec_step_N", message: "...", agent_type: "ralph_executor" })` |
 | 等待 task-notification `<result>` | `wait_agent({ timeout_ms: 3600000 })` |
-| Agent failed → BLOCKED | `wait_agent.timed_out` → `interrupt_agent` → BLOCKED |
-| `Agent()` for evaluation | `spawn_agent` for evaluation |
-| `SendMessage` for context | `send_message` / `followup_task` |
-| `AskUserQuestion` for confirmation | `request_user_input` for confirmation |
+| 子代理失败 → BLOCKED | `wait_agent.timed_out` → `interrupt_agent` → BLOCKED |
+| generic 评估子代理（无 subagent_type） | `spawn_agent`（不加 `agent_type`）for evaluation |
+| 跨代理消息传递（context） | `send_message` / `followup_task` |
+| 用户确认提问 | `request_user_input` for confirmation |
 
 ## Execution
 
@@ -133,14 +136,10 @@ followup_task({
 
 仅以下区域需要 V2 适配：
 
-### A_STEP_DISPATCH 替换
+### A_STEP_DISPATCH（Codex V2 形式）
 
-原文:
-```
-Agent({ subagent_type: "ralph-executor", description: "...", prompt: "..." })
-```
+Claude 版派发 executor subagent（`subagent_type: "ralph-executor"`），Codex 落地为 `spawn_agent` + `wait_agent`。executor 内部调 `maestro run next --session {session}` 建 Run + 拿出生包并内联执行；主编排携 run_id 时改走 `run brief {run_id}`。
 
-替换为:
 ```ts
 spawn_agent({
   task_name: `ralph_exec_step_${index}`,
@@ -152,20 +151,15 @@ spawn_agent({
 wait_agent({ timeout_ms: 3600000 })
 ```
 
-### A_AGENT_EVALUATE / A_AGENT_GOAL_AUDIT / A_AGENT_REGROUND 替换
+### A_AGENT_EVALUATE / A_AGENT_GOAL_AUDIT / A_AGENT_REGROUND（Codex V2 形式）
 
-原文:
-```
-Agent({ description: "评估...", prompt: "..." })
-```
+评估类无专属定义 —— `spawn_agent` 不加 `agent_type`（generic agent），通过 message 的 CONSTRAINTS 约束为只读。裁决落盘经 `maestro run decide`（见 Claude 版 A_APPLY_*）。
 
-替换为:
 ```ts
 spawn_agent({
   task_name: `ralph_eval_${decision_ref}`,
   message: "EVALUATE: ...\nCONSTRAINTS: Read-only",
-  fork_turns: "none",
-  agent_type: "ralph_executor"
+  fork_turns: "none"
 })
 wait_agent({ timeout_ms: 3600000 })
 ```
@@ -179,7 +173,8 @@ const result = wait_agent({ timeout_ms: 3600000 });
 if (result.timed_out) {
   interrupt_agent({ target: task_name });
   // 设置 STATUS=BLOCKED，reason="executor_timeout"
-  // 写入 ralph-meta.json step_details[step_id].completion_status = "BLOCKED"
+  // 落盘经 CLI：maestro run complete --session {session} --verdict blocked --reason "executor_timeout"
+  //   （CLI 写 chain step failed + session paused；prompt 层不直写 session.json / ralph-meta.json）
   // 转 S_HANDLE_FAIL
 }
 ```

@@ -182,6 +182,10 @@ export class SessionStore {
       const draft = clone(current);
       const tx = new StoreTransaction(this, sessionId);
       const result = mutator(draft, tx);
+      // Write-back always lands schema_version at session/1.1: a session/1.0 file
+      // read into memory is upgraded (new fields already carry defaults) the moment
+      // it is persisted. Reads stay lossless; only writes migrate the version tag.
+      draft.session.schema_version = 'session/1.1';
       sessionStateSchema.parse(draft.session);
       gateRegistrySchema.parse(draft.gates);
       artifactRegistrySchema.parse(draft.artifacts);

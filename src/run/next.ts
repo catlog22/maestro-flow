@@ -7,11 +7,28 @@
 // `maestro run brief <run_id>`. It deliberately does NOT emit the workflow body
 // — that stays behind `run brief`, the single skill-text injection point.
 //
+// The birth packet also carries two recommendation blocks (exit 0):
+//   - **Queue**    — a preview of the pending steps after the advanced one
+//                    (chain-forward view, max 3, decision nodes flagged ◆);
+//   - **Recommended** — the prior step's handoff.next[] suggestions.
+// When a step is already running (exit 3) it prints a step info card instead of
+// a bare refusal; when the next node is a decision it prints a decision card
+// (exit 2); a chain-complete session surfaces the prior handoff's next[] as
+// `run create` suggestions (exit 2).
+//
+// `--pick <step_id>` advances a specific pending execution step rather than the
+// queue head (parallel groundwork); the single-running guard still wins.
+//
+// Halt contract: the earliest pending decision node gates every dispatch past
+// its chain position (head or --pick) — it must be adjudicated via `run decide`
+// before any later step may start.
+//
 // Exit codes mirror `maestro ralph next`:
 //   0 — printed a step birth packet
-//   2 — no pending execution step (decision node next, or all complete)
+//   2 — no dispatchable step (decision node gates the chain, or all complete)
 //   3 — refused: a step is already running (complete it first)
-//   1 — generic error (unresolvable session, ambiguous session, bad content)
+//   1 — generic error (unresolvable session, ambiguous session, bad content,
+//       bad --pick target)
 //
 // src/run must not depend on src/ralph, so the chain helpers live in
 // src/run/chain.ts (canonical) rather than being imported from the ralph adapter.
@@ -27,9 +44,26 @@ import {
   nextPendingDecisionIndex,
   updateChainStepStatus,
 } from './chain.js';
+import { checkLease, claimLease } from './lease.js';
 import { SessionStore } from './store.js';
 import { readStateJson } from '../utils/state-schema.js';
 import type { SessionState, Handoff } from './schemas.js';
+
+/** Chain-forward preview entry: an upcoming step the orchestrator should expect. */
+export interface QueueEntry {
+  index: number;
+  step_id: string;
+  command: string;
+  /** True when this queue entry is a decision node (evaluated, not dispatched). */
+  is_decision: boolean;
+}
+
+/** A prior-step handoff.next[] suggestion surfaced to the orchestrator. */
+export interface RecommendedEntry {
+  command: string;
+  reason: string;
+  needs: string[];
+}
 
 export interface NextResult {
   session_id: string;
@@ -43,6 +77,10 @@ export interface NextResult {
   /** Prepare-declared deferred-reading refs (path + when). Manifest only. */
   refs: Array<{ path: string; when: string }>;
   next: { command: string; reason: string };
+  /** Pending steps after the advanced one (chain-forward preview, max 3). */
+  queue?: QueueEntry[];
+  /** Prior step handoff.next[] suggestions (command + reason + needs). */
+  recommended?: RecommendedEntry[];
 }
 
 export interface NextCmdOptions {
@@ -54,6 +92,20 @@ export interface NextCmdOptions {
    * this unset so its own behaviour is unchanged.
    */
   args?: string[];
+  /**
+   * Advance a specific pending execution step (by step_id) rather than the queue
+   * head. The target must exist, be `pending`, and be an execution step (not a
+   * decision node); otherwise exit 1. The single-running guard still applies.
+   */
+  pick?: string;
+  /**
+   * Lease claim checked against session.orchestration.lease before advancing.
+   * A null lease (or a lease with a null owner) skips verification entirely, so
+   * non-leased sessions are unaffected. A mismatch is exit 1 (mirrors ralph).
+   */
+  executionOwner?: string;
+  ownerEpoch?: number;
+  leaseId?: string;
 }
 
 export interface NextOutcome {
@@ -143,15 +195,18 @@ function resolveSession(projectRoot: string, store: SessionStore, sessionId?: st
 
 // ── Prev handoff (latest_completed_run_id fast path) ─────────────────────────
 
-function prevHandoff(store: SessionStore, session: SessionState): PrevHandoff | null {
+/** Full handoff of the latest completed Run, or null when unreadable/absent. */
+function latestHandoff(store: SessionStore, session: SessionState): Handoff | null {
   const runId = session.latest_completed_run_id;
   if (!runId) return null;
-  let handoff: Handoff | null;
   try {
-    handoff = store.readRun(session.session_id, runId).handoff;
+    return store.readRun(session.session_id, runId).handoff;
   } catch {
     return null;
   }
+}
+
+function toPrevHandoff(handoff: Handoff | null): PrevHandoff | null {
   if (!handoff) return null;
   return {
     run_id: handoff.producer_run_id,
@@ -163,7 +218,59 @@ function prevHandoff(store: SessionStore, session: SessionState): PrevHandoff | 
   };
 }
 
+/** handoff.next[] suggestions as a recommendation list (empty when none). */
+function recommendedFrom(handoff: Handoff | null): RecommendedEntry[] {
+  if (!handoff || handoff.next.length === 0) return [];
+  return handoff.next.map(n => ({ command: n.command, reason: n.reason, needs: n.needs }));
+}
+
+// ── Queue preview (chain-forward pending steps after the advanced one) ────────
+
+/**
+ * Pending steps after `afterIdx` (exclusive) as a chain-forward preview. Both
+ * execution and decision steps are listed (decision nodes flagged) so the
+ * orchestrator can see what is coming; capped at `limit` entries.
+ */
+function buildQueue(session: SessionState, afterIdx: number, limit = 3): QueueEntry[] {
+  const chain = session.orchestration.chain;
+  const queue: QueueEntry[] = [];
+  for (let i = afterIdx + 1; i < chain.length && queue.length < limit; i++) {
+    const step = chain[i];
+    if (step.status !== 'pending') continue;
+    queue.push({
+      index: i,
+      step_id: step.step_id,
+      command: step.command,
+      is_decision: Boolean(step.decision_ref),
+    });
+  }
+  return queue;
+}
+
 // ── Birth packet rendering ───────────────────────────────────────────────────
+
+function renderQueueSection(queue: QueueEntry[]): string[] {
+  if (queue.length === 0) return [];
+  const lines = ['**Queue（后续步骤）**:'];
+  for (const q of queue) {
+    const mark = q.is_decision ? ' ◆' : '';
+    lines.push(`- [${q.index}] ${q.command}${mark}`);
+  }
+  lines.push('');
+  return lines;
+}
+
+function renderRecommendedSection(recommended: RecommendedEntry[]): string[] {
+  if (recommended.length === 0) return [];
+  const lines = ['**Recommended（建议）**:'];
+  for (const r of recommended) {
+    const needs = r.needs.length > 0 ? ` (needs: ${r.needs.join(', ')})` : '';
+    const reason = r.reason ? ` — ${r.reason}` : '';
+    lines.push(`- ${r.command}${reason}${needs}`);
+  }
+  lines.push('');
+  return lines;
+}
 
 function renderBirthPacket(r: NextResult): string {
   const lines: string[] = [];
@@ -208,8 +315,83 @@ function renderBirthPacket(r: NextResult): string {
     lines.push('');
   }
 
+  lines.push(...renderQueueSection(r.queue ?? []));
+  lines.push(...renderRecommendedSection(r.recommended ?? []));
+
   lines.push(`next: ${r.next.command}`);
   lines.push(`      ${r.next.reason}`);
+  return lines.join('\n');
+}
+
+// ── Running / decision cards (non-advance branches) ───────────────────────────
+
+/**
+ * Step info card for the running-step guard (exit 3). Reads the Run for its
+ * run_dir / started_at (gracefully degrading when unreadable) and points the
+ * executor at `run brief` (re-inject context) / `run complete` (finish the step).
+ */
+function renderRunningCard(
+  store: SessionStore,
+  session: SessionState,
+  sessionId: string,
+  runningIdx: number,
+): string {
+  const step = session.orchestration.chain[runningIdx];
+  const total = session.orchestration.chain.length;
+  const runId = step.run_id;
+
+  let runDir: string | null = null;
+  let startedAt: string | null = null;
+  if (runId) {
+    try {
+      const run = store.readRun(sessionId, runId);
+      runDir = store.runDir(sessionId, runId);
+      startedAt = run.started_at;
+    } catch {
+      /* degrade gracefully — the card still shows the chain-side facts */
+    }
+  }
+
+  const lines: string[] = [];
+  lines.push(`## Step running — step [${runningIdx}/${total}] ${step.command}`);
+  lines.push('');
+  lines.push(`step_id:  ${step.step_id}`);
+  lines.push(`run_id:   ${runId ?? '<unknown>'}`);
+  lines.push(`run_dir:  ${runDir ?? '<unreadable>'}`);
+  if (startedAt) lines.push(`started:  ${startedAt}`);
+  lines.push(`goal:     ${session.intent}`);
+  lines.push('');
+  lines.push('**如何调用**:');
+  lines.push(`- 继续执行/重新注入上下文: maestro run brief ${runId ?? '<run-id>'} --session ${sessionId}`);
+  lines.push(`- 完成本步: maestro run complete ${runId ?? '<run-id>'} --session ${sessionId}`);
+  return lines.join('\n');
+}
+
+/**
+ * Decision card for the decision-node branch (exit 2). Surfaces the matching
+ * decision_points entry so the orchestrator (prompt layer) has the point_id /
+ * retry budget / evidence in hand when it evaluates the gate.
+ */
+function renderDecisionCard(session: SessionState, decisionIdx: number): string {
+  const dp = session.orchestration.chain[decisionIdx];
+  const point = session.orchestration.decision_points.find(p => p.point_id === dp.decision_ref);
+
+  const lines: string[] = [];
+  lines.push(`## Decision node — ${dp.decision_ref}`);
+  lines.push('');
+  lines.push(`step_id:      ${dp.step_id}`);
+  lines.push(`decision_ref: ${dp.decision_ref}`);
+  if (point) {
+    lines.push(`point_id:     ${point.point_id}`);
+    lines.push(`after_step:   ${point.after_step_id ?? '<none>'}`);
+    lines.push(`status:       ${point.status}`);
+    lines.push(`retries:      ${point.retry_count}/${point.max_retries}`);
+    lines.push(`evidence:     ${point.evidence_ref ?? '<none>'}`);
+  } else {
+    lines.push('  (no matching decision_points entry)');
+  }
+  lines.push('');
+  lines.push('→ decision 由编排器（prompt 层）评估裁决，不经 run next 推进');
   return lines.join('\n');
 }
 
@@ -244,6 +426,38 @@ function reconcileSealedSteps(
   return dirty ? store.readBundle(session.session_id).session : session;
 }
 
+// ── --pick target resolution ──────────────────────────────────────────────────
+
+type PickResult =
+  | { kind: 'ok'; index: number }
+  | { kind: 'error'; message: string };
+
+/**
+ * Resolve a `--pick <step_id>` target to its chain index. The step must exist,
+ * be `pending`, and be an execution step (not a decision node); otherwise the
+ * error lists the pickable pending execution step_ids.
+ */
+function resolvePick(session: SessionState, pick: string): PickResult {
+  const chain = session.orchestration.chain;
+  const idx = chain.findIndex(s => s.step_id === pick);
+  const pending = chain
+    .filter(s => s.status === 'pending' && !s.decision_ref)
+    .map(s => s.step_id);
+  const pickable = pending.length > 0 ? `\n  pending steps: ${pending.join(', ')}` : '\n  (no pending execution steps)';
+
+  if (idx === -1) {
+    return { kind: 'error', message: `[run next] --pick step not found: ${pick}${pickable}` };
+  }
+  const step = chain[idx];
+  if (step.decision_ref) {
+    return { kind: 'error', message: `[run next] --pick step "${pick}" is a decision node, not an execution step${pickable}` };
+  }
+  if (step.status !== 'pending') {
+    return { kind: 'error', message: `[run next] --pick step "${pick}" is "${step.status}", not pending${pickable}` };
+  }
+  return { kind: 'ok', index: idx };
+}
+
 // ── Core driver ──────────────────────────────────────────────────────────────
 
 export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): NextOutcome {
@@ -256,6 +470,18 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   const { sessionId } = resolved;
   let session = resolved.session;
 
+  // Lease guard (§1.4): a leased session refuses advancement unless the claim
+  // matches. Inert for null-lease sessions, so it also replaces the old engine
+  // filter — the gate is the lease itself, not the engine tag.
+  const conflict = checkLease(session.orchestration.lease, {
+    executionOwner: opts.executionOwner,
+    ownerEpoch: opts.ownerEpoch,
+    leaseId: opts.leaseId,
+  });
+  if (conflict) {
+    return { exitCode: 1, result: null, message: `[run next] ${conflict}` };
+  }
+
   if (session.status !== 'running') {
     return { exitCode: 1, result: null, message: `[run next] session is "${session.status}", not running` };
   }
@@ -266,35 +492,46 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   // agnostic; the step-driver owns chain progression.
   session = reconcileSealedSteps(projectRoot, store, session);
 
-  // Refuse when a step is already running — caller must complete it first.
+  // Refuse when a step is already running — caller must complete it first. The
+  // single-running guard wins over --pick.
   const runningIdx = activeStepIndex(session);
   if (runningIdx !== null) {
-    const step = session.orchestration.chain[runningIdx];
     return {
       exitCode: 3,
       result: null,
-      message: [
-        `[run next] step ${runningIdx} is still running (command=${step.command})`,
-        `  → complete it first: maestro run complete ${step.run_id ?? '<run-id>'} --session ${sessionId}`,
-      ].join('\n'),
+      message: renderRunningCard(store, session, sessionId, runningIdx),
     };
   }
 
-  const nextIdx = nextPendingIndex(session, true);
-  if (nextIdx === null) {
-    const decisionIdx = nextPendingDecisionIndex(session);
-    if (decisionIdx !== null) {
-      const dp = session.orchestration.chain[decisionIdx];
-      return {
-        exitCode: 2,
-        result: null,
-        message: [
-          `[run next] no pending execution step; next is a decision node: ${dp.decision_ref}`,
-          '  → decision nodes are evaluated by the orchestrator, not via run next',
-        ].join('\n'),
-      };
+  // Resolve which pending step to advance: --pick target when given, else queue
+  // head. A decision node next (no pending execution step) prints a decision card.
+  let nextIdx: number;
+  if (opts.pick) {
+    const picked = resolvePick(session, opts.pick);
+    if (picked.kind === 'error') {
+      return { exitCode: 1, result: null, message: picked.message };
     }
-    return { exitCode: 2, result: null, message: '[run next] no pending steps — all complete' };
+    nextIdx = picked.index;
+  } else {
+    const head = nextPendingIndex(session, true);
+    if (head === null) {
+      const decisionIdx = nextPendingDecisionIndex(session);
+      if (decisionIdx !== null) {
+        return { exitCode: 2, result: null, message: renderDecisionCard(session, decisionIdx) };
+      }
+      // Chain complete: surface the prior handoff's next[] as `run create`
+      // suggestions when present (covers empty-chain sessions too).
+      return { exitCode: 2, result: null, message: renderAllCompleteMessage(store, session, sessionId) };
+    }
+    nextIdx = head;
+  }
+
+  // Halt contract: an unresolved decision node earlier in the chain gates every
+  // dispatch past it (head or --pick) — the orchestrator must adjudicate it via
+  // `run decide` before any later step may start.
+  const gateIdx = nextPendingDecisionIndex(session);
+  if (gateIdx !== null && gateIdx < nextIdx) {
+    return { exitCode: 2, result: null, message: renderDecisionCard(session, gateIdx) };
   }
 
   const chainStep = session.orchestration.chain[nextIdx];
@@ -308,7 +545,10 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   }
 
   // Capture the prior step handoff before create advances state.
-  const prev = prevHandoff(store, session);
+  const handoff = latestHandoff(store, session);
+  const prev = toPrevHandoff(handoff);
+  const recommended = recommendedFrom(handoff);
+  const queue = buildQueue(session, nextIdx);
 
   let created;
   try {
@@ -328,6 +568,24 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
   }
 
   updateChainStepStatus(projectRoot, sessionId, nextIdx, 'running', created.run_id);
+
+  // Lease claim (§1.4 / M6): now that the step is live, write/renew the lease so
+  // subsequent next/complete calls carry the fencing triple. Mirrors the ralph
+  // cmd-next path (`m.execution_owner = ...` post-advance). checkLease already
+  // rejected a conflicting claim above, so this only writes on a fresh claim or a
+  // matching renewal; a call without --execution-owner leaves the lease untouched.
+  const claim = claimLease(session.orchestration.lease, {
+    executionOwner: opts.executionOwner,
+    ownerEpoch: opts.ownerEpoch,
+    leaseId: opts.leaseId,
+  });
+  if (claim) {
+    store.update(sessionId, (draft) => {
+      draft.session.orchestration.lease = claim;
+      draft.session.activity_revision++;
+      return null;
+    });
+  }
 
   const result: NextResult = {
     session_id: sessionId,
@@ -350,6 +608,8 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     prev_handoff: prev,
     refs: content.refs,
     next: created.next,
+    queue,
+    recommended,
   };
 
   return {
@@ -357,4 +617,19 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
     result,
     message: opts.json ? JSON.stringify(result, null, 2) : renderBirthPacket(result),
   };
+}
+
+/**
+ * The "all complete" message (exit 2), optionally extended with `run create`
+ * suggestions from the last completed step's handoff.next[]. An empty chain
+ * takes this path too, so a chain-less session still gets recommendations.
+ */
+function renderAllCompleteMessage(store: SessionStore, session: SessionState, sessionId: string): string {
+  const recommended = recommendedFrom(latestHandoff(store, session));
+  const lines = ['[run next] no pending steps — all complete'];
+  for (const r of recommended) {
+    const reason = r.reason ? ` — ${r.reason}` : '';
+    lines.push(`  suggested: maestro run create ${r.command} --session ${sessionId}${reason}`);
+  }
+  return lines.join('\n');
 }

@@ -1,19 +1,20 @@
 // ---------------------------------------------------------------------------
-// `maestro ralph ledger` — verification ledger via standard evidence store.
+// `maestro ralph ledger` — verification ledger interface.
 //
-// Queries and adds verification entries. Evidence is stored in the session's
-// evidence.json via the standard SessionStore, with ralph-meta.json holding
-// the verification_ledger for backward-compatible queries.
+// Queries and adds verification entries. M6 splits the ledger into its own
+// session-scoped `verification-ledger.json`: writes land there (upsertLedgerFile),
+// and reads merge that file with the legacy ralph-meta.verification_ledger so an
+// un-migrated session's cached findings still resolve. ralph-meta.json is left
+// untouched — no .bak rename, no destructive migration.
 // ---------------------------------------------------------------------------
 
 import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { SessionStore } from '../run/store.js';
 import {
   resolveRalphSession,
-  updateRalphMeta,
   workflowRoot,
 } from './session-adapter.js';
+import { mergedLedger, upsertLedgerFile } from './verification-ledger.js';
 import type { VerificationLedgerEntry } from './status-schema.js';
 
 export interface LedgerCmdOptions {
@@ -37,7 +38,10 @@ export async function runLedger(opts: LedgerCmdOptions): Promise<number> {
   }
 
   if (opts.action === 'query') {
-    return handleQuery(resolved.meta.verification_ledger ?? [], opts);
+    // Merge the independent verification-ledger.json with the legacy ralph-meta
+    // ledger so both migrated and un-migrated sessions resolve.
+    const ledger = mergedLedger(resolved.sessionDir, resolved.meta.verification_ledger ?? []);
+    return handleQuery(ledger, opts);
   }
   return handleAdd(projectRoot, resolved.sessionId, opts);
 }
@@ -127,18 +131,9 @@ function handleAdd(projectRoot: string, sessionId: string, opts: LedgerCmdOption
     created_at: new Date().toISOString(),
   };
 
-  updateRalphMeta(projectRoot, sessionId, (meta) => {
-    meta.verification_ledger = meta.verification_ledger ?? [];
-    meta.verification_ledger = meta.verification_ledger.filter(e => {
-      if (e.authority !== opts.authority) return true;
-      if (e.dimension !== opts.dimension) return true;
-      const s1 = [...e.subject_ids].sort();
-      const s2 = [...opts.subjects].sort();
-      if (s1.length !== s2.length) return true;
-      return !s1.every((val, i) => val === s2[i]);
-    });
-    meta.verification_ledger.push(entry);
-  });
+  // Writes go to the independent verification-ledger.json (M6), which upserts by
+  // authority + dimension + subject set. ralph-meta.json is not modified.
+  upsertLedgerFile(resolved.sessionDir, entry);
 
   console.log(`[ralph ledger] entry added successfully for subjects: ${opts.subjects.join(', ')}`);
   return 0;

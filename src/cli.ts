@@ -30,6 +30,7 @@ program
 const commandLoaders: Record<string, () => Promise<(p: Command) => void>> = {
   serve:      async () => (await import('./commands/serve.js')).registerServeCommand,
   run:        async () => (await import('./commands/run.js')).registerRunCommand,
+  session:    async () => (await import('./commands/session.js')).registerSessionCommand,
   ext:        async () => (await import('./commands/ext.js')).registerExtCommand,
   tool:       async () => (await import('./commands/tool.js')).registerToolCommand,
   cli:        async () => (await import('./commands/cli.js')).registerCliCommand,

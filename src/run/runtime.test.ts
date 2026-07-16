@@ -98,7 +98,7 @@ describe('Session/Run runtime', () => {
     const program = new Command();
     registerRunCommand(program);
     const run = program.commands.find(command => command.name() === 'run');
-    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'next', 'create', 'check', 'complete', 'brief', 'skill', 'seal-session']);
+    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'next', 'create', 'check', 'complete', 'brief', 'skill', 'decide', 'seal-session', 'log-mutation', 'mutations']);
   });
 
   it('parses every migrated core command contract', () => {
@@ -188,7 +188,7 @@ gates:
 
   it('uses strict protocol schemas', () => {
     const valid = createSessionState('20260713-demo', 'demo');
-    expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.0');
+    expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.1');
     expect(() => sessionStateSchema.parse({ ...valid, unexpected: true })).toThrow(/unrecognized/i);
   });
 

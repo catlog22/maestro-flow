@@ -193,15 +193,16 @@ CONCERNS: {count} critical findings require immediate action
 ```
 
 Status mapping:
-- **DONE** — No critical/high findings
-- **DONE_WITH_CONCERNS** — Critical/high findings documented with remediation
+- **done** — No critical/high findings
+- **done-with-concerns** — Critical/high findings documented with remediation
 
 ### Ralph-invoked completion
 
 End the step by calling the CLI (no text block output):
 ```
-maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
+maestro run complete --session {session_id} --verdict {VERDICT} [--evidence {path}]
 ```
+(run-id 可省略 — 自动解析当前 running 步)
 
 ### Next-step routing
 
