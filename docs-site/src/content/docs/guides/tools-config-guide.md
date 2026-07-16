@@ -194,7 +194,9 @@ maestro statusline config
 
 ### 概览
 
-Maestro 搜索系统基于 BM25F 算法，提供统一的知识搜索能力，支持 spec、knowhow、issue、domain 等多种数据源。
+Maestro 搜索系统基于 BM25F 算法，提供统一的知识搜索能力，支持 spec、knowhow、issue、domain、session、run 等多种数据源。
+
+v0.5.50+ 适配 Session/Run 架构：搜索结果归一化读取 session 和 run 级产物，支持拓扑关系透出。
 
 ### 基本用法
 
@@ -214,8 +216,15 @@ maestro search "oauth pkce" --type spec --category arch --limit 10
 # 代码搜索（需启用 MaestroGraph）
 maestro search "UserService" --code
 
+# KG 统一搜索（MaestroGraph full-source）
+maestro search "UserService" --kg
+
 # 搜索所有来源（wiki + code），统一归一化排名
 maestro search "UserService" --all
+
+# 搜索 session/run 级产物（v0.5.50+）
+maestro search "auth" --type session
+maestro search "login" --type run
 
 # JSON 输出（适合脚本消费）
 maestro search "jwt token" --json
@@ -248,7 +257,7 @@ maestro search "jwt token" --json
       "summary": 1.5,
       "body": 1
     },
-    "sources": ["spec", "knowhow", "issue", "domain"],
+    "sources": ["spec", "knowhow", "issue", "domain", "session", "run"],
     "enableCodeSearch": true
   }
 }

@@ -7,10 +7,10 @@
 ## File Path
 
 ```
-<session>/artifacts/ant-<iteration>-<ant_id>.json
+{run_dir}/outputs/ant-<iteration>-<ant_id>.json
 ```
 
-Example: `artifacts/ant-3-2.json` (ant id 2 in iteration 3)
+Example: `{run_dir}/outputs/ant-3-2.json` (ant id 2 in iteration 3)
 
 ## Schema
 

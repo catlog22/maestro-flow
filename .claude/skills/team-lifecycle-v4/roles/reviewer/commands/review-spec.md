@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Spec Quality Review
 
 ## Inputs
@@ -41,6 +37,6 @@
 
 ## Output
 
-Write to <session>/artifacts/:
+Write to {run_dir}/outputs/:
 - readiness-report.md: Dimension scores, issue list, traceability matrix
 - blueprint-summary.md: Executive summary of all spec docs

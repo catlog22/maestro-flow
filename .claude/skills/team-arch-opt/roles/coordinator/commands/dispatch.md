@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: Dispatch
 
 ## Phase 2: Context Loading
@@ -78,7 +74,7 @@ CONTEXT:
   - Scope: <refactoring-scope>
   - Branch: none
   - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/artifacts/architecture-baseline.json + <session>/artifacts/architecture-report.md | Quantified metrics with evidence
+EXPECTED: {run_dir}/outputs/architecture-baseline.json + {run_dir}/outputs/architecture-report.md | Quantified metrics with evidence
 CONSTRAINTS: Focus on <refactoring-scope> | Analyze before any changes
 ---
 InnerLoop: false"
@@ -102,7 +98,7 @@ CONTEXT:
   - Branch: none
   - Upstream artifacts: architecture-baseline.json, architecture-report.md
   - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/artifacts/refactoring-plan.md | Priority-ordered with structural improvement targets, discrete REFACTOR-IDs
+EXPECTED: {run_dir}/outputs/refactoring-plan.md | Priority-ordered with structural improvement targets, discrete REFACTOR-IDs
 CONSTRAINTS: Focus on highest-impact refactorings | Risk assessment required | Non-overlapping file targets per REFACTOR-ID
 ---
 InnerLoop: false"
@@ -151,7 +147,7 @@ CONTEXT:
   - Branch: none
   - Upstream artifacts: architecture-baseline.json, refactoring-plan.md
   - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/artifacts/validation-results.json | Per-dimension validation with verdicts
+EXPECTED: {run_dir}/outputs/validation-results.json | Per-dimension validation with verdicts
 CONSTRAINTS: Must compare against baseline | Flag any regressions or broken imports
 ---
 InnerLoop: false"
@@ -174,7 +170,7 @@ CONTEXT:
   - Branch: none
   - Upstream artifacts: refactoring-plan.md, validation-results.json (if available)
   - Shared memory: <session>/wisdom/.msg/meta.json
-EXPECTED: <session>/artifacts/review-report.md | Per-dimension findings with severity
+EXPECTED: {run_dir}/outputs/review-report.md | Per-dimension findings with severity
 CONSTRAINTS: Focus on refactoring changes only | Provide specific file:line references
 ---
 InnerLoop: false"
@@ -204,7 +200,7 @@ For each target index `i` (0-based), with prefix char `P = pipeline_prefix_chars
 
 ```
 // Create session subdirectory for this pipeline
-Bash("mkdir -p <session>/artifacts/pipelines/<P>")
+Bash("mkdir -p {run_dir}/outputs/pipelines/<P>")
 
 TaskCreate({ subject: "ANALYZE-<P>01", ... })
 TaskCreate({ subject: "DESIGN-<P>01", ... })
@@ -219,7 +215,7 @@ TaskUpdate({ taskId: "REVIEW-<P>01", addBlockedBy: ["REFACTOR-<P>01"] })
 
 Task descriptions follow same template as single mode, with additions:
 - `Pipeline: <P>` in CONTEXT
-- Artifact paths use `<session>/artifacts/pipelines/<P>/` instead of `<session>/artifacts/`
+- Artifact paths use `{run_dir}/outputs/pipelines/<P>/` instead of `{run_dir}/outputs/`
 - Meta.json namespace uses `<role>.<P>` (e.g., `analyzer.A`, `refactorer.B`)
 - Each pipeline's scope is its specific target from `independent_targets[i]`
 
@@ -237,7 +233,7 @@ CONTEXT:
   - Scope: refactor auth module
   - Pipeline: A
   - Shared memory: <session>/wisdom/.msg/meta.json (namespace: analyzer.A)
-EXPECTED: <session>/artifacts/pipelines/A/architecture-baseline.json + architecture-report.md
+EXPECTED: {run_dir}/outputs/pipelines/A/architecture-baseline.json + architecture-report.md
 CONSTRAINTS: Focus on auth module scope
 ---
 InnerLoop: false
@@ -254,7 +250,7 @@ TaskUpdate({ taskId: "ANALYZE-A01", owner: "analyzer" })
 
 **Procedure**:
 
-1. Read `<session>/artifacts/refactoring-plan.md` to count REFACTOR-IDs
+1. Read `{run_dir}/outputs/refactoring-plan.md` to count REFACTOR-IDs
 2. Read `.msg/meta.json` -> `designer.refactoring_count`
 3. **Auto mode decision**:
 
@@ -271,10 +267,10 @@ TaskUpdate({ taskId: "ANALYZE-A01", owner: "analyzer" })
 
 ```
 // Create branch artifact directory
-Bash("mkdir -p <session>/artifacts/branches/B{NN}")
+Bash("mkdir -p {run_dir}/outputs/branches/B{NN}")
 
 // Extract single REFACTOR detail to branch
-Write("<session>/artifacts/branches/B{NN}/refactoring-detail.md",
+Write("{run_dir}/outputs/branches/B{NN}/refactoring-detail.md",
   extracted REFACTOR-{NNN} block from refactoring-plan.md)
 ```
 
@@ -314,7 +310,7 @@ CONTEXT:
   - Branch: B{NN}
   - Upstream artifacts: architecture-baseline.json, branches/B{NN}/refactoring-detail.md
   - Shared memory: <session>/wisdom/.msg/meta.json (namespace: validator.B{NN})
-EXPECTED: <session>/artifacts/branches/B{NN}/validation-results.json
+EXPECTED: {run_dir}/outputs/branches/B{NN}/validation-results.json
 CONSTRAINTS: Only validate this branch's changes
 ---
 InnerLoop: false
@@ -334,7 +330,7 @@ CONTEXT:
   - Branch: B{NN}
   - Upstream artifacts: branches/B{NN}/refactoring-detail.md
   - Shared memory: <session>/wisdom/.msg/meta.json (namespace: reviewer.B{NN})
-EXPECTED: <session>/artifacts/branches/B{NN}/review-report.md
+EXPECTED: {run_dir}/outputs/branches/B{NN}/review-report.md
 CONSTRAINTS: Only review this branch's changes
 ---
 InnerLoop: false

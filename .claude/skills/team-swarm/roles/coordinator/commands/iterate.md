@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: iterate
 
 ## Two Entry Points
@@ -147,7 +143,7 @@ inner_loop: false
 ## Context
 Iteration to score: <k>
 Output file: <session>/scores/iter-<k>-scores.json
-Read all artifacts: <session>/artifacts/ant-<k>-*.json`
+Read all artifacts: {run_dir}/outputs/ant-<k>-*.json`
 })
 ```
 

@@ -5,18 +5,14 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Refactoring Designer
 
 ## Phase 2: Analysis Loading
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Architecture report | <session>/artifacts/architecture-report.md | Yes |
-| Architecture baseline | <session>/artifacts/architecture-baseline.json | Yes |
+| Architecture report | {run_dir}/outputs/architecture-report.md | Yes |
+| Architecture baseline | {run_dir}/outputs/architecture-baseline.json | Yes |
 | .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
 | Wisdom files | <session>/wisdom/patterns.md | No |
 
@@ -62,7 +58,7 @@ Define measurable success criteria per refactoring (target metric improvement or
 
 ## Phase 4: Plan Output
 
-1. Write refactoring plan to `<session>/artifacts/refactoring-plan.md`:
+1. Write refactoring plan to `{run_dir}/outputs/refactoring-plan.md`:
 
    Each refactoring MUST have a unique REFACTOR-ID and self-contained detail block:
 

@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [diag_complete, diag_progress, error]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Root Cause Diagnostician
 
 ## Phase 2: Context & Artifact Loading

@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Monitor Pipeline
 
 ## Constants
@@ -194,7 +190,12 @@ Pipeline done. Generate report and completion action.
 | full | All 4 tasks (+ any fix tasks) completed |
 
 1. If any tasks not completed -> handleSpawnNext
-2. If all completed -> transition to coordinator Phase 5
+2. Run lifecycle completion (before transitioning to Phase 5):
+   - Read run_id from `team-session.json.run.run_id`
+   - Write `{run_dir}/report.md` with frontmatter (verdict/summary/concerns)
+   - Run `maestro run complete <run_id>`
+   - If complete fails: log warning, continue (do not block completion action)
+3. If all completed -> transition to coordinator Phase 5
 
 ## handleAdapt
 

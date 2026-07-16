@@ -196,25 +196,25 @@
   "shared_resources": [
     {
       "name": "Performance Baseline",
-      "path": "<session>/artifacts/baseline-metrics.json",
+      "path": "{run_dir}/outputs/baseline-metrics.json",
       "usage": "Before-optimization metrics for comparison",
       "scope": "shared (fan-out) / per-pipeline (independent)"
     },
     {
       "name": "Bottleneck Report",
-      "path": "<session>/artifacts/bottleneck-report.md",
+      "path": "{run_dir}/outputs/bottleneck-report.md",
       "usage": "Profiler output consumed by strategist",
       "scope": "shared (fan-out) / per-pipeline (independent)"
     },
     {
       "name": "Optimization Plan",
-      "path": "<session>/artifacts/optimization-plan.md",
+      "path": "{run_dir}/outputs/optimization-plan.md",
       "usage": "Strategist output consumed by optimizer",
       "scope": "shared (fan-out) / per-pipeline (independent)"
     },
     {
       "name": "Benchmark Results",
-      "path": "<session>/artifacts/benchmark-results.json",
+      "path": "{run_dir}/outputs/benchmark-results.json",
       "usage": "Benchmarker output consumed by reviewer",
       "scope": "per-branch (fan-out) / per-pipeline (independent)"
     }

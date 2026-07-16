@@ -88,7 +88,7 @@ During Phase 2-4 execution, if you detect codebase signals relevant to specialis
 
 After execution, publish contributions:
 
-1. Write deliverable to `<session>/artifacts/<prefix>-<task-id>-<name>.md`
+1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md`
 2. Prepare state data for the reporting phase
 3. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
 
@@ -201,7 +201,7 @@ Determine report variant based on loop state:
 - Task list accessible via TaskList/TaskGet
 
 ## Output
-- Completed task artifacts in `<session>/artifacts/`
+- Completed task artifacts in `{run_dir}/outputs/`
 - Wisdom file contributions in `<session>/wisdom/`
 - State updates via message bus (`team_msg` with type `state_update`)
 - Final report delivered via SendMessage to coordinator

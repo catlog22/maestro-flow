@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Test Engineer
 
 ## Phase 2: Environment Detection
@@ -69,7 +65,7 @@ If new edge cases or test patterns discovered:
 1. Write test findings to `<session>/wisdom/contributions/tester-edge-cases-<timestamp>.md`
 2. Format: Edge case description, test scenario, expected behavior, actual behavior
 
-Write report to `<session>/artifacts/test-report.md`.
+Write report to `{run_dir}/outputs/test-report.md`.
 
 Share state via team_msg:
 ```

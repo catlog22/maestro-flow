@@ -7,10 +7,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Synthesizer
 
 ## Phase 2: Context Loading

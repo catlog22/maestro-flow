@@ -9,10 +9,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Test Executor
 
 ## Phase 2: Context Loading

@@ -5,10 +5,6 @@ inner_loop: true
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Animation Implementer
 
 ## Phase 2: Context & Artifact Loading

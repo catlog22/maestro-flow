@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Monitor Pipeline
 
 ## Constants
@@ -188,6 +184,11 @@ Pipeline done. Generate report and completion action.
 1. Verify all tasks (including fix-verify tasks) have status "completed"
 2. If any not completed -> handleSpawnNext
 3. If all completed:
+   - Run lifecycle completion:
+     - Read run_id from team-session.json.run.run_id
+     - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+     - Run `maestro run complete <run_id>`
+     - If complete fails: log warning, continue (do not block completion action)
    - Read final state from .msg/meta.json
    - If worktree exists and validation passed: commit, push, gh pr create, cleanup worktree
    - Compile summary: total tasks, completed, gc_rounds, debt_score_before, debt_score_after

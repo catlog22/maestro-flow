@@ -7,10 +7,6 @@ message_types:
   error: fix_failed
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Code Fixer
 
 ## Phase 2: Context & Scope Resolution

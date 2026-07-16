@@ -213,25 +213,25 @@
   "shared_resources": [
     {
       "name": "Architecture Baseline",
-      "path": "<session>/artifacts/architecture-baseline.json",
+      "path": "{run_dir}/outputs/architecture-baseline.json",
       "usage": "Pre-refactoring architecture metrics for comparison",
       "scope": "shared (fan-out) / per-pipeline (independent)"
     },
     {
       "name": "Architecture Report",
-      "path": "<session>/artifacts/architecture-report.md",
+      "path": "{run_dir}/outputs/architecture-report.md",
       "usage": "Analyzer output consumed by designer",
       "scope": "shared (fan-out) / per-pipeline (independent)"
     },
     {
       "name": "Refactoring Plan",
-      "path": "<session>/artifacts/refactoring-plan.md",
+      "path": "{run_dir}/outputs/refactoring-plan.md",
       "usage": "Designer output consumed by refactorer",
       "scope": "shared (fan-out) / per-pipeline (independent)"
     },
     {
       "name": "Validation Results",
-      "path": "<session>/artifacts/validation-results.json",
+      "path": "{run_dir}/outputs/validation-results.json",
       "usage": "Validator output consumed by reviewer",
       "scope": "per-branch (fan-out) / per-pipeline (independent)"
     }

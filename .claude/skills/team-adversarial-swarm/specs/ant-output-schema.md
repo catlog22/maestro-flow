@@ -10,7 +10,7 @@ Inherited from team-swarm with adversarial scoring integration notes.
 ## File Path
 
 ```
-<session>/artifacts/ant-<iteration>-<ant_id>.json
+{run_dir}/outputs/ant-<iteration>-<ant_id>.json
 ```
 
 ## Schema

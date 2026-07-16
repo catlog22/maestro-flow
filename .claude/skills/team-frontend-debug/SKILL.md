@@ -6,7 +6,7 @@ session-mode: run
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Frontend Debug Team
@@ -184,7 +184,7 @@ AskUserQuestion({
 .workflow/.team/TFD-<slug>-<date>/
 ├── team-session.json           # Session state + role registry
 ├── evidence/                   # Screenshots, snapshots, network logs
-├── artifacts/                  # Test reports, RCA reports, patches, verification reports
+├── {run_dir}/outputs/          # Run deliverables: test reports, RCA reports, patches, verification reports
 ├── wisdom/                     # Cross-task debug knowledge
 └── .msg/                       # Team message bus
 ```

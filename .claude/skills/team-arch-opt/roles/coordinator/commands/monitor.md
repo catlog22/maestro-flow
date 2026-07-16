@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Monitor Pipeline
 
 ## Constants
@@ -186,7 +182,14 @@ Completion check by mode:
 | Fan-out | ALL branches have VALIDATE + REVIEW completed (or escalated), shared stages done |
 | Independent | ALL pipelines have VALIDATE + REVIEW completed (or escalated) |
 
-1. For fan-out/independent: aggregate per-branch/pipeline results to `<session>/artifacts/aggregate-results.json`
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: log warning, continue (do not block completion action)
+  |
+
+1. For fan-out/independent: aggregate per-branch/pipeline results to `{run_dir}/outputs/aggregate-results.json`
 2. If any tasks not completed, return to handleSpawnNext
 3. If all completed -> transition to coordinator Phase 5
 

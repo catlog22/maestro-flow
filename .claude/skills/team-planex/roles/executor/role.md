@@ -7,10 +7,6 @@ message_types:
   error: impl_failed
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Executor
 
 ## Phase 2: Task & Solution Loading

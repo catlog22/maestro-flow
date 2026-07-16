@@ -7,10 +7,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Code Scanner
 
 ## Phase 2: Context & Toolchain Detection

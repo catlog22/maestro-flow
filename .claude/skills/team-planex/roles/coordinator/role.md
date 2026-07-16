@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator Role
 
@@ -85,7 +85,7 @@ TEXT-LEVEL ONLY. No source code reading.
    - `skill_root` = `<project_root>/.claude/skills/team-planex`
 2. Generate session ID: `PEX-<slug>-<date>`
 3. Create session folder: `.workflow/.team/<session-id>/`
-4. Create subdirectories: `artifacts/solutions/`, `wisdom/`
+4. Create subdirectories: `wisdom/` (planner solutions go to `{run_dir}/outputs/solutions/`)
 5. Call `TeamCreate` with team name (default: "planex")
 6. Initialize wisdom files (learnings.md, decisions.md, conventions.md, issues.md)
 7. Initialize meta.json with pipeline metadata:
@@ -104,6 +104,18 @@ mcp__maestro__team_msg({
 })
 ```
 
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-planex --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-planex-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+
 ## Phase 3: Create Task Chain
 
 Delegate to `@commands/dispatch.md`:
@@ -121,6 +133,12 @@ Delegate to `@commands/dispatch.md`:
 **ONE_STEP_PER_INVOCATION**: true — coordinator does one operation per wake-up, then STOPS.
 
 ## Phase 5: Report + Completion Action
+
+Run lifecycle completion (before generating the summary):
+- Read run_id from team-session.json.run.run_id
+- Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+- Run `maestro run complete <run_id>`
+- If complete fails: log warning, continue (do not block completion action)
 
 1. Load session state -> count completed tasks, duration
 2. List deliverables with output paths

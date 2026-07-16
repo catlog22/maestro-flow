@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Tech Debt Planner
 
 ## Phase 2: Load Assessment Data

@@ -8,10 +8,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Ant Role — Phase 2-4
 
 ## Boundaries
@@ -21,7 +17,7 @@ message_types:
 - Load swarm-config.json to understand objective + task semantics
 - Build a path of length 1..max_path_length starting from start_node
 - Bias choices using `edge_preferences` (pheromone-derived) BUT may deviate when evidence supports it
-- Output strict-schema JSON to `<session>/artifacts/ant-<iter>-<id>.json` (see specs/ant-output-schema.md)
+- Output strict-schema JSON to `{run_dir}/outputs/ant-<iter>-<id>.json` (see specs/ant-output-schema.md)
 - Self-validate output before reporting (JSON parses + required fields + node validity)
 - Provide ≥ 1 evidence anchor per path
 
@@ -119,7 +115,7 @@ Build the full artifact matching specs/ant-output-schema.md. All required fields
 | Field | Required | Content |
 |-------|----------|---------|
 | files_produced | If ant wrote any | `[artifact_path]` at minimum |
-| artifacts_written | Always | `<session>/artifacts/ant-<iter>-<id>.json` |
+| artifacts_written | Always | `{run_dir}/outputs/ant-<iter>-<id>.json` |
 | verification_method | Always | "schema_validated + node_validity_checked" |
 
 #### Quality Gate
@@ -136,7 +132,7 @@ Build the full artifact matching specs/ant-output-schema.md. All required fields
    - Confirm `len(path_decisions) == len(path) - 1`
 2. **Node validity**: every node in path ∈ task_space.json#nodes
 3. **Evidence check**: at least 1 evidence anchor present; if file_ref, Read to confirm existence
-4. **Write artifact**: `Write(<session>/artifacts/ant-<iter>-<id>.json, <json_string>)`
+4. **Write artifact**: `Write({run_dir}/outputs/ant-<iter>-<id>.json, <json_string>)`
 5. **Re-read to confirm write**: Read it back, parse, sanity check
 
 ### State Update
@@ -151,7 +147,7 @@ Set Phase 5 `team_msg.log` data:
   "self_score": <float>,
   "self_confidence": <float>,
   "path_length": <int>,
-  "artifact_path": "<session>/artifacts/ant-<k>-<i>.json",
+  "artifact_path": "{run_dir}/outputs/ant-<k>-<i>.json",
   "verification": "schema_pass + node_valid + evidence_present"
 }
 ```

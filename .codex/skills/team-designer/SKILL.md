@@ -1,6 +1,9 @@
 ---
 name: team-designer
-description: Meta-skill for generating team skills following the v4 architecture pattern. Produces complete skill packages with SKILL.md router, coordinator, worker roles, specs, and templates. Triggers on "team-designer", "design team".
+description: Meta-skill for generating team skills following the v4 architecture
+  pattern. Produces complete skill packages with SKILL.md router, coordinator,
+  worker roles, specs, and templates. Triggers on "team-designer", "design
+  team".
 allowed-tools:
   - Bash
   - Edit
@@ -18,10 +21,18 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team Skill Designer

@@ -9,10 +9,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Test Generator
 
 ## Phase 2: Strategy & Pattern Loading

@@ -5,10 +5,6 @@ inner_loop: true
 message_types: [opt_complete, opt_progress, error]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # UI Optimizer -- Targeted Fix Application
 
 ## Phase 2: Context & Artifact Loading

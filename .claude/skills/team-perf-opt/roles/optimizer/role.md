@@ -9,10 +9,6 @@ message_types:
   fix: fix_required
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Code Optimizer
 
 ## Modes
@@ -26,9 +22,9 @@ message_types:
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Optimization plan | <session>/artifacts/optimization-plan.md | Yes (IMPL, no branch) |
-| Branch optimization detail | <session>/artifacts/branches/B{NN}/optimization-detail.md | Yes (IMPL with branch) |
-| Pipeline optimization plan | <session>/artifacts/pipelines/{P}/optimization-plan.md | Yes (IMPL with pipeline) |
+| Optimization plan | {run_dir}/outputs/optimization-plan.md | Yes (IMPL, no branch) |
+| Branch optimization detail | {run_dir}/outputs/branches/B{NN}/optimization-detail.md | Yes (IMPL with branch) |
+| Pipeline optimization plan | {run_dir}/outputs/pipelines/{P}/optimization-plan.md | Yes (IMPL with pipeline) |
 | Review/bench feedback | From task description | Yes (FIX) |
 | .msg/meta.json | <session>/.msg/meta.json | Yes |
 | Wisdom files | <session>/wisdom/patterns.md | No |
@@ -44,9 +40,9 @@ message_types:
 | Neither present | - | Single mode -- load full optimization plan |
 
 3. **Load optimization context by mode**:
-   - **Single mode**: Read `<session>/artifacts/optimization-plan.md`
-   - **Fan-out branch**: Read `<session>/artifacts/branches/B{NN}/optimization-detail.md`
-   - **Independent pipeline**: Read `<session>/artifacts/pipelines/{P}/optimization-plan.md`
+   - **Single mode**: Read `{run_dir}/outputs/optimization-plan.md`
+   - **Fan-out branch**: Read `{run_dir}/outputs/branches/B{NN}/optimization-detail.md`
+   - **Independent pipeline**: Read `{run_dir}/outputs/pipelines/{P}/optimization-plan.md`
 
 4. For FIX: parse review/benchmark feedback for specific issues to address
 5. Use ACE search or CLI tools to load implementation context for target files
@@ -94,6 +90,6 @@ Append to context_accumulator for next IMPL/FIX task (single/inner-loop mode onl
 - Any discovered patterns or caveats for subsequent iterations
 
 **Branch output paths**:
-- Single: write artifacts to `<session>/artifacts/`
-- Fan-out: write artifacts to `<session>/artifacts/branches/B{NN}/`
-- Independent: write artifacts to `<session>/artifacts/pipelines/{P}/`
+- Single: write artifacts to `{run_dir}/outputs/`
+- Fan-out: write artifacts to `{run_dir}/outputs/branches/B{NN}/`
+- Independent: write artifacts to `{run_dir}/outputs/pipelines/{P}/`

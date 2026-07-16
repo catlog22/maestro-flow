@@ -6,10 +6,6 @@ additional_prefixes: [SOLVE-fix]
 message_types: [solution_ready, multi_solution, error]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Issue Planner
 
 ## Phase 2: Context Loading

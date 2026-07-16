@@ -6,7 +6,7 @@ session-mode: run
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team Adversarial Swarm
@@ -86,9 +86,9 @@ SKILL.md (Coordinator — this file)
 ├── trails/                 # Per-iteration trails (managed by aco.py)
 ├── scores/                 # Adversarial scoring results
 │   └── iter-<k>-scores.json
-├── artifacts/
+├── artifacts/              # scratch/intermediate; formal deliverables go to {run_dir}/outputs/
 │   ├── ant-<k>-<id>.json   # Ant outputs
-│   └── best-solution.md    # Final synthesis
+│   └── best-solution.md    # Final synthesis -> {run_dir}/outputs/best-solution.md
 ├── workflows/              # Workflow run artifacts
 │   ├── explore-<k>.json    # Per-iteration explore results
 │   ├── score-<k>.json      # Per-iteration score results
@@ -137,6 +137,18 @@ Write 到 `<session>/swarm-config.json`。
 3. `Bash: python <aco.py> --session <session> init`
 4. 解析输出: `{ n_nodes, n_edges, pheromone_path }`
 
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-adversarial-swarm --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-adversarial-swarm-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+
 ### Phase 3: Iteration Loop
 
 ```python
@@ -184,7 +196,7 @@ Coordinator 负责 Workflow 间的数据桥接和 Python 脚本调用。
      args: { best, top_k, convergence_story, objective }
    })
    ```
-3. 将 synthesis 结果写入 `<session>/artifacts/best-solution.md`
+3. 将 synthesis 结果写入 `{run_dir}/outputs/best-solution.md`
 4. 展示完成摘要 + AskUserQuestion（归档 / 保留 / 导出 / 再跑一轮）
 
 ---
@@ -230,6 +242,12 @@ synthesize(best, top_k) → best-solution.md
 | 幻觉集群 (>50% 蚁被降分) | 暂停，AskUserQuestion（继续/调整评分规则） |
 
 ## Completion
+
+Run lifecycle completion (before displaying results):
+- Read run_id from team-session.json.run.run_id
+- Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+- Run `maestro run complete <run_id>`
+- If complete fails: log warning, continue (do not block completion action)
 
 展示最终结果 + 交互选择:
 - **归档**: 保存 session，展示 best-solution.md

@@ -8,17 +8,13 @@ message_types:
   fix: fix_required
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Performance Benchmarker
 
 ## Phase 2: Environment & Baseline Loading
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Baseline metrics | <session>/artifacts/baseline-metrics.json (shared) | Yes |
+| Baseline metrics | {run_dir}/outputs/baseline-metrics.json (shared) | Yes |
 | Optimization plan / detail | Varies by mode (see below) | Yes |
 | .msg/meta.json | <session>/.msg/meta.json | Yes |
 
@@ -32,13 +28,13 @@ message_types:
 | Neither present | - | Single mode -- full benchmark |
 
 3. **Load baseline metrics**:
-   - Single / Fan-out: Read `<session>/artifacts/baseline-metrics.json` (shared baseline)
-   - Independent: Read `<session>/artifacts/pipelines/{P}/baseline-metrics.json`
+   - Single / Fan-out: Read `{run_dir}/outputs/baseline-metrics.json` (shared baseline)
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/baseline-metrics.json`
 
 4. **Load optimization context**:
-   - Single: Read `<session>/artifacts/optimization-plan.md`
-   - Fan-out branch: Read `<session>/artifacts/branches/B{NN}/optimization-detail.md`
-   - Independent: Read `<session>/artifacts/pipelines/{P}/optimization-plan.md`
+   - Single: Read `{run_dir}/outputs/optimization-plan.md`
+   - Fan-out branch: Read `{run_dir}/outputs/branches/B{NN}/optimization-detail.md`
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/optimization-plan.md`
 
 5. Load .msg/meta.json for project type and optimization scope
 6. Detect available benchmark tools from project:

@@ -3,7 +3,7 @@ role: coordinator
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Coordinator Role — team-swarm
@@ -134,6 +134,18 @@ Delegate to `@commands/init-swarm.md`:
 5. Parse stdout JSON: capture `n_nodes`, `n_edges`, `pheromone_path`
 6. Initialize team-session.json with `iteration: 0`, `status: "active"`
 7. Log state_update via team_msg with config summary
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-swarm --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-swarm-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 ---
 

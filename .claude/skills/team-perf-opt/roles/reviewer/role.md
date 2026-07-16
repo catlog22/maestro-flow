@@ -10,10 +10,6 @@ message_types:
   fix: fix_required
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Optimization Reviewer
 
 ## Phase 2: Context Loading
@@ -35,9 +31,9 @@ message_types:
 | Neither present | - | Single mode -- review all optimization changes |
 
 3. **Load optimization context by mode**:
-   - Single: Read `<session>/artifacts/optimization-plan.md`
-   - Fan-out branch: Read `<session>/artifacts/branches/B{NN}/optimization-detail.md`
-   - Independent: Read `<session>/artifacts/pipelines/{P}/optimization-plan.md`
+   - Single: Read `{run_dir}/outputs/optimization-plan.md`
+   - Fan-out branch: Read `{run_dir}/outputs/branches/B{NN}/optimization-detail.md`
+   - Independent: Read `{run_dir}/outputs/pipelines/{P}/optimization-plan.md`
 
 4. Load .msg/meta.json for scoped optimizer namespace
 5. Identify changed files from optimizer context -- read ONLY files modified by this branch/pipeline

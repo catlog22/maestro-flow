@@ -6,7 +6,7 @@ session-mode: run
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team Swarm
@@ -141,10 +141,10 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 │   └── history/<iter>.json     # Per-iter snapshot
 ├── trails/<iter>.jsonl         # Per-iter all-ant paths + scores
 ├── scores/iter-<iter>-scores.json  # Scorer output (if mode == llm)
-├── artifacts/
-│   ├── ant-<iter>-<id>.json    # Per-ant schema-locked output
-│   ├── swarm-report.json       # Phase 4 full report dump
-│   └── best-solution.md        # Analyst final synthesis
+├── artifacts/                  # scratch/intermediate (aco.py working dir); formal deliverables go to {run_dir}/outputs/
+│   ├── ant-<iter>-<id>.json    # Per-ant schema-locked output -> {run_dir}/outputs/ant-<iter>-<id>.json
+│   ├── swarm-report.json       # Phase 4 full report dump -> {run_dir}/outputs/swarm-report.json
+│   └── best-solution.md        # Analyst final synthesis -> {run_dir}/outputs/best-solution.md
 ├── best.json                   # Canonical best solution
 ├── wisdom/                     # learnings / decisions / issues
 └── .msg/                       # Message bus

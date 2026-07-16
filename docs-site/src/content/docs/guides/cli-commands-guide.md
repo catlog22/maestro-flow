@@ -163,10 +163,11 @@ maestro delegate "continue" --to gemini --resume
 
 图工作流协调器，支持 step 模式和 auto 模式。
 
+> **注意**：v0.5.50+ 已移除 chains 数据层（coordinate 图执行子系统退役）。coordinate 命令仍可用于基于 session 的工作流协调。
+
 ```bash
-maestro coordinate list                                    # 列出链图
-maestro coordinate run "implement auth" --chain default -y # 自动运行
-maestro coordinate start "implement auth" --chain default  # 步进模式
+maestro coordinate list                                    # 列出可用工作流
+maestro coordinate start "implement auth"                  # 步进模式
 maestro coordinate next <sessionId>                        # 下一步
 maestro coordinate status <sessionId>                      # 会话状态
 maestro coordinate report --session <id> --node <id> --status SUCCESS
@@ -174,10 +175,8 @@ maestro coordinate report --session <id> --node <id> --status SUCCESS
 
 | 选项 | 说明 |
 |------|------|
-| `--chain <name>` | 指定链图 |
 | `--tool <tool>` | 智能体工具（默认 `claude`） |
 | `-y` | 自动确认模式 |
-| `--parallel` | 启用 fork/join 并行 |
 | `--dry-run` | 预览执行计划 |
 | `-c` | 恢复会话 |
 
@@ -198,10 +197,17 @@ maestro cli -p "fix bug" --tool gemini --mode write
 **run** -- 执行指定名称的工作流：
 
 ```bash
-maestro run <workflow>           # 执行
-maestro run <workflow> --dry-run # 预览
-maestro run <workflow> -c config.json
+maestro run <workflow>                        # 执行
+maestro run <workflow> --dry-run              # 预览
+maestro run <workflow> -c config.json         # 指定配置
+maestro run <workflow> --session my-feature   # 显式 session 命名
 ```
+
+| 选项 | 说明 |
+|------|------|
+| `--session <name>` | 显式 session 命名（v0.5.50+）。合法字符：`a-z 0-9 -`，不合法字符自动转为 ASCII slug |
+| `--dry-run` | 预览执行计划 |
+| `-c <path>` | 指定配置文件 |
 
 **serve** -- 启动工作流服务器：
 

@@ -38,11 +38,11 @@ UX improvement pipeline modes and task registry.
 
 | Task | Output Path |
 |------|-------------|
-| SCAN-001 | <session>/artifacts/scan-report.md |
-| DIAG-001 | <session>/artifacts/diagnosis.md |
-| DESIGN-001 | <session>/artifacts/design-guide.md |
-| IMPL-001 | <session>/artifacts/fixes/ |
-| TEST-001 | <session>/artifacts/test-report.md |
+| SCAN-001 | {run_dir}/outputs/scan-report.md |
+| DIAG-001 | {run_dir}/outputs/diagnosis.md |
+| DESIGN-001 | {run_dir}/outputs/design-guide.md |
+| IMPL-001 | {run_dir}/outputs/fixes/ |
+| TEST-001 | {run_dir}/outputs/test-report.md |
 
 ## Wisdom System
 

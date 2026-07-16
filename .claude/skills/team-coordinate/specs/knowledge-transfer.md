@@ -6,7 +6,7 @@
 
 | Channel | Scope | Mechanism | When to Use |
 |---------|-------|-----------|-------------|
-| **Artifacts** | Producer -> Consumer | Write to `<session>/artifacts/<name>.md`, consumer reads in Phase 2 | Structured deliverables (reports, plans, specs) |
+| **Artifacts** | Producer -> Consumer | Write to `{run_dir}/outputs/<name>.md`, consumer reads in Phase 2 | Structured deliverables (reports, plans, specs) |
 | **State Updates** | Cross-role | `team_msg(operation="log", type="state_update", data={...})` / `team_msg(operation="get_state", session_id=<session-id>)` | Key findings, decisions, metadata (small, structured data) |
 | **Wisdom** | Cross-task | Append to `<session>/wisdom/{learnings,decisions,conventions,issues}.md` | Patterns, conventions, risks discovered during execution |
 | **Context Accumulator** | Intra-role (inner loop) | In-memory array, passed to each subsequent task in same-prefix loop | Prior task summaries within same role's inner loop |
@@ -34,7 +34,7 @@ Every role MUST load context in this order before starting work.
 
 | Step | Action | Required |
 |------|--------|----------|
-| 1 | Write deliverable to `<session>/artifacts/<task-id>-<name>.md` | Yes |
+| 1 | Write deliverable to `{run_dir}/outputs/<task-id>-<name>.md` | Yes |
 | 2 | Send `team_msg(type="state_update")` with payload (see schema below) | Yes |
 | 3 | Append wisdom entries for learnings, decisions, issues found | If applicable |
 
@@ -46,7 +46,7 @@ Sent via `team_msg(type="state_update")` on task completion.
 {
   "status": "task_complete",
   "task_id": "<TASK-NNN>",
-  "ref": "<session>/artifacts/<filename>",
+  "ref": "{run_dir}/outputs/<filename>",
   "key_findings": [
     "Finding 1",
     "Finding 2"

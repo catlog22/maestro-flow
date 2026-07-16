@@ -38,7 +38,7 @@
     {
       "id": "odyssey",
       "name": "Odyssey",
-      "description": "Long-running deep-cycle commands — exhaustive iteration with archaeology, fix, generalization, and knowledge persistence",
+      "description": "Long-running deep-cycle commands — mode-specific routing (odyssey-{mode}). Exhaustive iteration with archaeology, fix, generalization, and knowledge persistence",
       "icon": "mountain",
       "color": "rose"
     },

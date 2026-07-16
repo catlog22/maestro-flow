@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Dispatch Debug Tasks
 
 ## Workflow
@@ -53,7 +49,7 @@ CONTEXT:
   - Session: <session-folder>
   - Base URL: <base-url>
   - Features: <feature-list-from-task-analysis>
-EXPECTED: <session>/artifacts/TEST-001-report.md + <session>/artifacts/TEST-001-issues.json
+EXPECTED: {run_dir}/outputs/TEST-001-report.md + {run_dir}/outputs/TEST-001-issues.json
 CONSTRAINTS: Use Chrome DevTools MCP only | Do not modify any code | Test all listed features
 ---
 InnerLoop: true
@@ -71,9 +67,9 @@ TASK:
   - Produce consolidated RCA report covering all issues
 CONTEXT:
   - Session: <session-folder>
-  - Upstream: <session>/artifacts/TEST-001-issues.json
+  - Upstream: {run_dir}/outputs/TEST-001-issues.json
   - Test evidence: <session>/evidence/
-EXPECTED: <session>/artifacts/ANALYZE-001-rca.md with root causes for all issues
+EXPECTED: {run_dir}/outputs/ANALYZE-001-rca.md with root causes for all issues
 CONSTRAINTS: Read-only analysis | Skip low-severity warnings unless user requests
 ---
 InnerLoop: false
@@ -93,8 +89,8 @@ TASK:
   - Document all changes
 CONTEXT:
   - Session: <session-folder>
-  - Upstream: <session>/artifacts/ANALYZE-001-rca.md
-EXPECTED: Modified source files + <session>/artifacts/FIX-001-changes.md
+  - Upstream: {run_dir}/outputs/ANALYZE-001-rca.md
+EXPECTED: Modified source files + {run_dir}/outputs/FIX-001-changes.md
 CONSTRAINTS: Minimal changes per issue | Follow existing code style
 ---
 InnerLoop: true
@@ -112,10 +108,10 @@ TASK:
   - Report pass/fail per scenario
 CONTEXT:
   - Session: <session-folder>
-  - Original test report: <session>/artifacts/TEST-001-report.md
-  - Fix changes: <session>/artifacts/FIX-001-changes.md
+  - Original test report: {run_dir}/outputs/TEST-001-report.md
+  - Fix changes: {run_dir}/outputs/FIX-001-changes.md
   - Failed features: <from TEST-001-issues.json>
-EXPECTED: <session>/artifacts/VERIFY-001-report.md with pass/fail per previously-failed scenario
+EXPECTED: {run_dir}/outputs/VERIFY-001-report.md with pass/fail per previously-failed scenario
 CONSTRAINTS: Only re-test failed scenarios | Use Chrome DevTools MCP only
 ---
 InnerLoop: false
@@ -162,7 +158,7 @@ CONTEXT:
   - Session: <session-folder>
   - Upstream: <session>/evidence/
   - Bug description: <bug-description>
-EXPECTED: <session>/artifacts/ANALYZE-001-rca.md with root cause, file:line, fix recommendation
+EXPECTED: {run_dir}/outputs/ANALYZE-001-rca.md with root cause, file:line, fix recommendation
 CONSTRAINTS: Read-only analysis | Request more evidence if inconclusive
 ---
 InnerLoop: false
@@ -180,8 +176,8 @@ TASK:
   - Run syntax/type check on modified files
 CONTEXT:
   - Session: <session-folder>
-  - Upstream: <session>/artifacts/ANALYZE-001-rca.md
-EXPECTED: Modified source files + <session>/artifacts/FIX-001-changes.md
+  - Upstream: {run_dir}/outputs/ANALYZE-001-rca.md
+EXPECTED: Modified source files + {run_dir}/outputs/FIX-001-changes.md
 CONSTRAINTS: Minimal changes | Follow existing code style | No breaking changes
 ---
 InnerLoop: true
@@ -200,8 +196,8 @@ TASK:
 CONTEXT:
   - Session: <session-folder>
   - Original evidence: <session>/evidence/
-  - Fix changes: <session>/artifacts/FIX-001-changes.md
-EXPECTED: <session>/artifacts/VERIFY-001-report.md with pass/fail verdict
+  - Fix changes: {run_dir}/outputs/FIX-001-changes.md
+EXPECTED: {run_dir}/outputs/VERIFY-001-report.md with pass/fail verdict
 CONSTRAINTS: Use Chrome DevTools MCP only | Same steps as reproduction
 ---
 InnerLoop: false

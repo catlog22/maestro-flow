@@ -118,6 +118,8 @@ MOA 模板配置：`~/.maestro/moa.json`
 
 优先级：`api.json` proxy > `cli-tools.json` proxy。
 
+**代理传输层回退**（v0.5.50+）：当通过代理连接端点失败（传输层错误如 `ECONNREFUSED`、`ETIMEDOUT`）时，自动直连回退。仅传输错误触发回退，HTTP 状态码错误（如 401、429）不会重试。
+
 ### 遗留单端点配置
 
 ```json

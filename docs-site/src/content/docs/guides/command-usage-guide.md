@@ -326,12 +326,14 @@ analyze → plan → execute → verify → review → test → milestone-audit 
 
 ## 六、规范与知识
 
+> **路由边界**（v0.5.50+）：`/spec` 管理项目约束规则（编码规范、架构约束、质量标准）；`/manage knowledge` 管理可复用知识文档（决策记录、操作配方、参考资料）。约束类走 `/spec add`，知识类走 `/manage knowhow capture`。
+
 ```bash
 /spec-setup                                     # 扫描项目生成规范
-/spec-add coding "所有 API 使用 Hono 框架"       # 录入规范
+/spec-add coding "所有 API 使用 Hono 框架"       # 录入约束规则
 /spec-load --role implement                     # 加载规范
 /manage-codebase-refresh                        # 增量刷新代码库文档
-/manage-knowhow search "认证"                   # 搜索知识复用
+/manage-knowhow search "认证"                   # 搜索可复用知识
 /manage-knowledge-audit --scope all             # 审计三存储，清理过期/矛盾条目
 /manage-status                                  # 项目仪表板
 /maestro-companion before --task "实现认证"      # 任务前加载知识上下文

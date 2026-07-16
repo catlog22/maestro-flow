@@ -8,18 +8,14 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Optimization Strategist
 
 ## Phase 2: Analysis Loading
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Bottleneck report | <session>/artifacts/bottleneck-report.md | Yes |
-| Baseline metrics | <session>/artifacts/baseline-metrics.json | Yes |
+| Bottleneck report | {run_dir}/outputs/bottleneck-report.md | Yes |
+| Baseline metrics | {run_dir}/outputs/baseline-metrics.json | Yes |
 | .msg/meta.json | <session>/.msg/meta.json | Yes |
 | Wisdom files | <session>/wisdom/patterns.md | No |
 
@@ -63,7 +59,7 @@ Define measurable success criteria per optimization (target metric value or impr
 
 ## Phase 4: Plan Output
 
-1. Write optimization plan to `<session>/artifacts/optimization-plan.md`:
+1. Write optimization plan to `{run_dir}/outputs/optimization-plan.md`:
 
    Each optimization MUST have a unique OPT-ID and self-contained detail block:
 

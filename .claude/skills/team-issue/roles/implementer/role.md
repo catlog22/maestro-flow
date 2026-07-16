@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [impl_complete, impl_failed, error]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Issue Implementer
 
 ## Modes

@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Monitor Pipeline
 
 ## Constants
@@ -182,9 +178,14 @@ Pipeline done. Generate report and completion action.
 
 1. All tasks completed or deleted (no pending, no in_progress)
 2. Read final session state from meta.json
-3. Generate pipeline summary: mode, target, findings_count, stages_completed, fix results (if applicable), deliverable paths
-4. Update session: pipeline_status='complete', completed_at=<timestamp>
-5. Read session.completion_action:
+3. Run lifecycle completion:
+   - Read run_id from team-session.json.run.run_id
+   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+   - Run `maestro run complete <run_id>`
+   - If complete fails: log warning, continue (do not block completion action)
+4. Generate pipeline summary: mode, target, findings_count, stages_completed, fix results (if applicable), deliverable paths
+5. Update session: pipeline_status='complete', completed_at=<timestamp>
+6. Read session.completion_action:
    - interactive -> AskUserQuestion (Archive/Keep/Export)
    - auto_archive -> Archive & Clean (status=completed, TeamDelete)
    - auto_keep -> Keep Active (status=paused)

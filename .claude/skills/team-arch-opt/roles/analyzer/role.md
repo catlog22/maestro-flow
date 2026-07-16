@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Architecture Analyzer
 
 ## Phase 2: Context & Environment Detection
@@ -72,13 +68,13 @@ After analysis, scan findings for context-aware trigger signals (based on detect
 
 ## Phase 4: Report Generation
 
-1. Write architecture baseline to `<session>/artifacts/architecture-baseline.json`:
+1. Write architecture baseline to `{run_dir}/outputs/architecture-baseline.json`:
    - Module count, dependency count, cycle count, average coupling, average cohesion
    - God Class candidates with LOC and method count
    - Dead code file count, dead export count
    - Timestamp and project type details
 
-2. Write architecture report to `<session>/artifacts/architecture-report.md`:
+2. Write architecture report to `{run_dir}/outputs/architecture-report.md`:
    - Ranked list of architecture issues with severity, location (file:line or module), measured impact
    - Issue categories: CYCLE, COUPLING, COHESION, GOD_CLASS, DUPLICATION, LAYER_VIOLATION, DEAD_CODE, API_BLOAT
    - Evidence summary per issue

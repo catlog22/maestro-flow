@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Interaction Pattern Researcher
 
 ## Phase 2: Context & Environment Detection

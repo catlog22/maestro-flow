@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: dispatch
 
 ## Purpose
@@ -54,7 +50,7 @@ TaskCreate({
   description: `Implement solution for issue <issueId>.
 
 Issue ID: <issueId>
-Solution file: <session-folder>/artifacts/solutions/<issueId>.json
+Solution file: {run_dir}/outputs/solutions/<issueId>.json
 Session: <session-folder>
 Execution method: <agent|codex|agy>
 

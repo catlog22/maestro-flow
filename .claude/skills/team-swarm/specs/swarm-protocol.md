@@ -32,7 +32,7 @@ Master protocol document for team-swarm: defines how the LLM coordinator and Pyt
 |  - Pure functions of session state files            |
 +-----------------------------------------------------+
          ^                                  |
-         | reads artifacts/ant-*.json       | writes pheromone/*.json
+         | reads {run_dir}/outputs/ant-*.json | writes pheromone/*.json
          |                                  v
 +-----------------------------------------------------+
 |  LLM Workers (team-worker agents)                  |
@@ -59,7 +59,7 @@ Master protocol document for team-swarm: defines how the LLM coordinator and Pyt
 [Callback] all ants done → handleIterationComplete
   ├─> (optional) spawn scorer worker → verified_scores.json
   ├─> python aco.py update --iter k
-  │    └─> reads artifacts/ant-k-*.json + verified_scores
+  │    └─> reads {run_dir}/outputs/ant-k-*.json + verified_scores
   │    └─> updates pheromone + elite + history
   ├─> python aco.py converged
   │    └─> {converged: true|false, reason: ...}
@@ -83,7 +83,7 @@ All scripts MUST:
 |------------|-------|---------------------|--------------|
 | `init` | swarm-config.json | `{status, pheromone_path, n_nodes}` | writes pheromone/current.json, task-space.json |
 | `select --iter k` | pheromone/current.json, swarm-config.json | `{iteration, assignments: [{ant_id, path_hints, ...}]}` | none |
-| `update --iter k` | artifacts/ant-k-*.json, optional verified_scores.json | `{iteration, mean_score, best_score, delta, elite_updated}` | writes pheromone/current.json (overwrite) + pheromone/history/k.json + trails/k.jsonl + best.json |
+| `update --iter k` | {run_dir}/outputs/ant-k-*.json, optional verified_scores.json | `{iteration, mean_score, best_score, delta, elite_updated}` | writes pheromone/current.json (overwrite) + pheromone/history/k.json + trails/k.jsonl + best.json |
 | `converged` | history/, best.json, config | `{converged: bool, reason: str, metrics: {...}}` | none |
 | `report` | best.json, history/ | full JSON: `{best, top_k, convergence_curve, ...}` | none |
 
@@ -94,9 +94,9 @@ All scripts MUST:
 | User intent → config | LLM coordinator | swarm-config.json |
 | Pheromone state | Python script | pheromone/current.json |
 | Ant assignment → ant prompt | LLM coordinator (templated) | injected into role-spec at spawn |
-| Ant exploration → artifact | LLM ant | artifacts/ant-k-id.json (schema-locked) |
+| Ant exploration → artifact | LLM ant | {run_dir}/outputs/ant-k-id.json (schema-locked) |
 | Artifact → pheromone update | Python script | reads artifacts, computes delta tau |
-| Elite solutions → human report | LLM analyst | artifacts/best-solution.md |
+| Elite solutions → human report | LLM analyst | {run_dir}/outputs/best-solution.md |
 
 ## Why Hybrid Coordinator (Not Pure Script)
 

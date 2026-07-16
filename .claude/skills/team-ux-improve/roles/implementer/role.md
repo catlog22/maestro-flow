@@ -5,16 +5,12 @@ inner_loop: true
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Code Implementer
 
 ## Phase 2: Task & Design Loading
 
 1. Extract session path from task description
-2. Read design guide: `<session>/artifacts/design-guide.md`
+2. Read design guide: `{run_dir}/outputs/design-guide.md`
 3. Extract implementation tasks from design guide
 4. **Wisdom Input**:
    - Read `<session>/wisdom/patterns/state-management.md` for state handling patterns
@@ -85,7 +81,7 @@ Validation steps:
 
 ### Context Accumulator Update
 
-Append to context_accumulator and write summary to `<session>/artifacts/fixes/README.md`.
+Append to context_accumulator and write summary to `{run_dir}/outputs/fixes/README.md`.
 
 Share state via team_msg:
 ```

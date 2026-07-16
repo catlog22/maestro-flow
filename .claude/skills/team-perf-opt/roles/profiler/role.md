@@ -7,10 +7,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Performance Profiler
 
 ## Phase 2: Context & Environment Detection
@@ -70,11 +66,11 @@ After profiling, scan findings for context-aware trigger signals (based on detec
 
 ## Phase 4: Report Generation
 
-1. Write baseline metrics to `<session>/artifacts/baseline-metrics.json`:
+1. Write baseline metrics to `{run_dir}/outputs/baseline-metrics.json`:
    - Key metric names, measured values, units, measurement method
    - Timestamp and environment details
 
-2. Write bottleneck report to `<session>/artifacts/bottleneck-report.md`:
+2. Write bottleneck report to `{run_dir}/outputs/bottleneck-report.md`:
    - Ranked list of bottlenecks with severity, location (file:line), measured impact
    - Evidence summary per bottleneck
    - Detected project type and profiling methods used

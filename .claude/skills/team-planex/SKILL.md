@@ -6,7 +6,7 @@ session-mode: run
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team PlanEx
@@ -113,8 +113,8 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 │   ├── messages.jsonl          # Message bus log
 │   └── meta.json               # Session state
 ├── task-analysis.json          # Coordinator analyze output
-├── artifacts/
-│   └── solutions/              # Planner solution output per issue
+├── artifacts/                  # scratch/intermediate; formal deliverables go to {run_dir}/outputs/
+│   └── solutions/              # Planner solution output per issue -> {run_dir}/outputs/solutions/
 │       ├── <issueId-1>.json
 │       └── <issueId-N>.json
 └── wisdom/                     # Cross-task knowledge

@@ -3,7 +3,7 @@ role: coordinator
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Coordinator Role
@@ -221,7 +221,7 @@ Regardless of complexity score or role count, coordinator MUST:
    ```
    .workflow/.team/<session-id>/
    +-- role-specs/
-   +-- artifacts/
+   +-- artifacts/          # scratch/intermediate; formal deliverables go to {run_dir}/outputs/
    +-- wisdom/
    +-- explorations/
    +-- discussions/
@@ -229,6 +229,18 @@ Regardless of complexity score or role count, coordinator MUST:
    ```
 
 5. **Call TeamCreate** with team name derived from session ID
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-coordinate --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-coordinate-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 6. **Read `specs/role-spec-template.md`** for Behavioral Traits + Reference Patterns
 
@@ -316,7 +328,7 @@ Delegate to `@commands/dispatch.md` which creates the full task chain:
 
 **Workflow**:
 1. Load session state -> count completed tasks, duration
-2. List all deliverables with output paths in `<session>/artifacts/`
+2. List all deliverables with output paths in `{run_dir}/outputs/`
 3. Include discussion summaries (if inline discuss was used)
 4. Summarize wisdom accumulated during execution
 5. Output report:

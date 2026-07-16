@@ -99,7 +99,7 @@ All dynamically generated role-specs MUST embed these traits into Phase 4. Coord
 
 - Files claimed as **created** → Read to confirm file exists and has content
 - Files claimed as **modified** → Read to confirm content actually changed
-- Analysis claimed as **complete** → artifact file exists in `<session>/artifacts/`
+- Analysis claimed as **complete** → artifact file exists in `{run_dir}/outputs/`
 
 ### Feedback Contract — completion report must include evidence
 
@@ -109,7 +109,7 @@ Phase 4 must produce a verification summary with these fields:
 |-------|---------------|---------|
 | `files_produced` | New files created | Path list |
 | `files_modified` | Existing files changed | Path + before/after line count |
-| `artifacts_written` | Always | Paths in `<session>/artifacts/` |
+| `artifacts_written` | Always | Paths in `{run_dir}/outputs/` |
 | `verification_method` | Always | How verified: Read confirm / syntax check / diff |
 
 ### Quality Gate — verify before reporting complete

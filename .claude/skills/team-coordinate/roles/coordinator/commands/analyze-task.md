@@ -1,7 +1,4 @@
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: analyze-task
 
 ## Purpose
@@ -68,13 +65,13 @@ Each capability produces default output artifacts:
 
 | Capability | Default Artifact | Format |
 |------------|-----------------|--------|
-| researcher | Research findings | `<session>/artifacts/research-findings.md` |
-| writer | Written document(s) | `<session>/artifacts/<doc-name>.md` |
-| developer | Code implementation | Source files + `<session>/artifacts/implementation-summary.md` |
-| designer | Design document | `<session>/artifacts/design-spec.md` |
-| analyst | Analysis report | `<session>/artifacts/analysis-report.md` |
-| tester | Test results | `<session>/artifacts/test-report.md` |
-| planner | Execution plan | `<session>/artifacts/execution-plan.md` |
+| researcher | Research findings | `{run_dir}/outputs/research-findings.md` |
+| writer | Written document(s) | `{run_dir}/outputs/<doc-name>.md` |
+| developer | Code implementation | Source files + `{run_dir}/outputs/implementation-summary.md` |
+| designer | Design document | `{run_dir}/outputs/design-spec.md` |
+| analyst | Analysis report | `{run_dir}/outputs/analysis-report.md` |
+| tester | Test results | `{run_dir}/outputs/test-report.md` |
+| planner | Execution plan | `{run_dir}/outputs/execution-plan.md` |
 
 ### Step 2.5: Key File Inference
 
@@ -137,7 +134,7 @@ For each role, determine frontmatter and generation hints:
 | `inner_loop` | `true` if role has 2+ serial same-prefix tasks |
 | `CLI tools` | Suggested, not mandatory — coordinator may adjust based on task needs |
 | `pattern_hint` | Reference pattern name from role-spec-template (research/document/code/analysis/validation) — guides coordinator's Phase 2-4 composition, NOT a rigid template selector |
-| `output_type` | `artifact` (new files in session/artifacts/) / `codebase` (modify existing project files) / `mixed` (both) — determines verification strategy in Behavioral Traits |
+| `output_type` | `artifact` (new files in {run_dir}/outputs/) / `codebase` (modify existing project files) / `mixed` (both) — determines verification strategy in Behavioral Traits |
 | `message_types.success` | `<prefix>_complete` |
 | `message_types.error` | `error` |
 
@@ -215,7 +212,7 @@ Write `<session-folder>/task-analysis.json`:
   },
   "needs_research": false,
   "artifacts": [
-    { "name": "research-findings.md", "producer": "researcher", "path": "artifacts/research-findings.md" }
+    { "name": "research-findings.md", "producer": "researcher", "path": "outputs/research-findings.md" }
   ]
 }
 ```

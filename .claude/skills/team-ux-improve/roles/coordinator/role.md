@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator Role
 
@@ -77,7 +77,7 @@ TEXT-LEVEL ONLY. No source code reading.
    ```
    .workflow/.team/ux-improve-<timestamp>/
    ├── .msg/
-   ├── artifacts/
+   ├── {run_dir}/outputs/   # Run deliverables (via maestro run)
    ├── explorations/
    └── wisdom/contributions/
    ```
@@ -85,6 +85,18 @@ TEXT-LEVEL ONLY. No source code reading.
 5. Initialize `.msg/meta.json` via team_msg state_update with pipeline metadata
 6. TeamCreate(team_name="ux-improve")
 7. Do NOT spawn workers yet - deferred to Phase 4
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-ux-improve --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-ux-improve-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 ## Phase 3: Create Task Chain
 
@@ -107,11 +119,11 @@ Delegate to `@commands/monitor.md#handleSpawnNext`:
 
 | Deliverable | Path |
 |-------------|------|
-| Scan Report | <session>/artifacts/scan-report.md |
-| Diagnosis | <session>/artifacts/diagnosis.md |
-| Design Guide | <session>/artifacts/design-guide.md |
-| Fix Files | <session>/artifacts/fixes/ |
-| Test Report | <session>/artifacts/test-report.md |
+| Scan Report | {run_dir}/outputs/scan-report.md |
+| Diagnosis | {run_dir}/outputs/diagnosis.md |
+| Design Guide | {run_dir}/outputs/design-guide.md |
+| Fix Files | {run_dir}/outputs/fixes/ |
+| Test Report | {run_dir}/outputs/test-report.md |
 
 3. **Wisdom Consolidation**: Check `<session>/wisdom/contributions/` for worker contributions
    - If contributions exist -> AskUserQuestion to merge to permanent wisdom

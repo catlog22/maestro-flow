@@ -6,7 +6,7 @@ session-mode: run
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team Architecture Optimization
@@ -117,7 +117,7 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 .workflow/.team/TAO-<slug>-<date>/
 ├── session.json                    # Session metadata + status + parallel_mode
 ├── task-analysis.json              # Coordinator analyze output
-├── artifacts/
+├── {run_dir}/outputs/              # Run deliverables (via maestro run)
 │   ├── architecture-baseline.json  # Analyzer: pre-refactoring metrics
 │   ├── architecture-report.md      # Analyzer: ranked structural issue findings
 │   ├── refactoring-plan.md         # Designer: prioritized refactoring plan

@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # UI Scanner
 
 ## Phase 2: Context Loading
@@ -118,7 +114,7 @@ For each component file:
 
 1. Classify issues by severity (High/Medium/Low)
 2. Group by category (unresponsive, missing feedback, state issues, input UX, visual design)
-3. Generate structured report and write to `<session>/artifacts/scan-report.md`
+3. Generate structured report and write to `{run_dir}/outputs/scan-report.md`
 4. Share state via team_msg:
    ```
    team_msg(operation="log", session_id=<session-id>, from="scanner",

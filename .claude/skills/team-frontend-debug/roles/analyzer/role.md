@@ -8,10 +8,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Analyzer
 
 ## Identity
@@ -134,7 +130,7 @@ If Low confidence: send `need_more_evidence` message with specific requests.
 
 ## Phase 4: RCA Report
 
-Write `<session>/artifacts/ANALYZE-001-rca.md`:
+Write `{run_dir}/outputs/ANALYZE-001-rca.md`:
 
 ```markdown
 # Root Cause Analysis Report
@@ -172,7 +168,7 @@ Send state_update:
 {
   "status": "task_complete",
   "task_id": "ANALYZE-001",
-  "ref": "<session>/artifacts/ANALYZE-001-rca.md",
+  "ref": "{run_dir}/outputs/ANALYZE-001-rca.md",
   "key_findings": ["Root cause: <summary>", "Location: <file:line>"],
   "decisions": ["Recommended fix: <approach>"],
   "verification": "self-validated"

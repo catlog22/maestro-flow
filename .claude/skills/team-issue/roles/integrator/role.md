@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [queue_ready, conflict_found, error]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Issue Integrator
 
 ## Phase 2: Collect Bound Solutions

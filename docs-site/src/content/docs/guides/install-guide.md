@@ -34,6 +34,15 @@ maestro install
 4. **复制文件** — 按组件定义复制到目标位置
 5. **生成 manifest** — 记录已安装组件，支持增量更新
 
+### 加法语义（v0.5.50+）
+
+安装采用**加法语义**——只添加、不删除。已存在的组件文件保留不覆盖，manifest 记录 `knownComponentIds` 跟踪所有曾安装过的组件。
+
+关键机制：
+- **安装锁** — 使用 lockfile 防止并发安装互相覆盖
+- **原子写** — manifest 写入采用 write-tmp-then-rename，避免断电/崩溃导致 manifest 损坏
+- **幂等安装** — 重复运行 `maestro install` 安全无副作用
+
 ---
 
 ## 组件分组

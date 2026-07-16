@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator - Performance Optimization Team
 
@@ -95,10 +95,22 @@ Triggered when an active/paused session is detected on coordinator entry.
 1. Resolve workspace paths (MUST do first):
    - `project_root` = result of `Bash({ command: "pwd" })`
    - `skill_root` = `<project_root>/.claude/skills/team-perf-opt`
-2. Create session directory with artifacts/, explorations/, wisdom/, discussions/ subdirs
+2. Create session directory with explorations/, wisdom/, discussions/ subdirs (deliverables go to {run_dir}/outputs/)
 3. Write session.json with extended fields (parallel_mode, max_branches, branches, fix_cycles)
 4. Initialize meta.json with pipeline metadata via team_msg
 5. Call `TeamCreate({ team_name: "perf-opt" })`
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-perf-opt --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-perf-opt-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 ---
 

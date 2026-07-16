@@ -269,11 +269,11 @@ export const guideRegistry: Array<{
   // ─── Advanced ──────────────────────────────────────────────────────────────
   {
     slug: 'config-reference',
-    file: 'tools-config-guide.md',
+    file: 'unified-config-guide.md',
     title: 'Configuration Reference',
-    description: 'All config files — role routing, hooks, overlays, search, workspace, worktree, skill params',
-    title_zh: '配置参考大全',
-    description_zh: '全部配置项 — 角色路由、Hook、Overlay、搜索、工作空间、Worktree、Skill 参数',
+    description: 'All config files, env vars, CLI options — cli-tools, api, hooks, overlays, search, workspace, skill params',
+    title_zh: '统一配置参考',
+    description_zh: '全部配置文件、环境变量、CLI 选项 — 工具注册、端点、Hook、Overlay、搜索、工作空间、Skill 参数',
     icon: 'settings',
     category: 'advanced',
   },

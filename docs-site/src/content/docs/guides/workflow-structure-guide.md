@@ -266,7 +266,31 @@ Learn 特殊前缀：`KNW-follow-`, `KNW-decompose-`, `KNW-retro-`, `KNW-opinion
 
 ---
 
-## 六、里程碑归档
+## 六、Session/Run 模型（v0.5.50+）
+
+### 产物输出路径
+
+Run 产物统一写入 `outputs/` 目录，`evidence/` 降级为非正式 traces：
+
+| 目录 | 定位 | 权威性 |
+|------|------|--------|
+| `outputs/` | 产物输出（report.md、plan.json 等） | 权威，下游消费 |
+| `evidence/` | 调试/诊断痕迹 | 非正式，仅供回溯 |
+
+### Session 命名
+
+`maestro run create` 支持 `--session <name>` 显式命名（v0.5.50+）：
+- 合法字符：`a-z`、`0-9`、`-`
+- 不合法输入自动转为 ASCII slug 回退
+- 未指定时使用自动生成的时间戳 ID
+
+### chains 数据层移除
+
+v0.5.50+ 移除了 coordinate 图执行子系统（chains 数据层）。原 `--chain` 参数不再需要，工作流协调转向 session-based 模型。
+
+---
+
+## 七、里程碑归档
 
 里程碑完成时 `maestro-milestone-complete` 创建归档：
 

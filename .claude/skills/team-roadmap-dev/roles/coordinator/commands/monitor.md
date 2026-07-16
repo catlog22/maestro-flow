@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: Monitor
 
 ## Constants
@@ -369,6 +365,12 @@ All phases done. Generate final project summary and finalize session.
 
 ```
 All phases completed (no pending, no in_progress across all phases)
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: log warning, continue (do not block completion action)
+  |
   +- Generate project-level summary:
   |   - Roadmap overview (phases completed)
   |   - Per-phase results:

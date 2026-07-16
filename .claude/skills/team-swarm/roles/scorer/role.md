@@ -8,10 +8,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Scorer Role — Phase 2-4
 
 ## Boundaries
@@ -36,12 +32,12 @@ message_types:
 | Target iteration | Task description (`Iteration to score: <k>`) | Yes |
 | Objective | `<session>/swarm-config.json#ant_prompt.objective` | Yes |
 | Scoring rubric | `<session>/swarm-config.json#scoring.rubric` (if defined) | Optional |
-| Ant artifacts | `<session>/artifacts/ant-<k>-*.json` | Yes |
+| Ant artifacts | `{run_dir}/outputs/ant-<k>-*.json` | Yes |
 | Task space | `<session>/task-space.json` (for context) | Optional |
 
 Workflow:
 1. Extract `k` from task description
-2. `Glob("<session>/artifacts/ant-<k>-*.json")` -> N artifacts
+2. `Glob("{run_dir}/outputs/ant-<k>-*.json")` -> N artifacts
 3. Read all N artifacts in parallel
 4. Read swarm-config.json -> capture objective + rubric
 

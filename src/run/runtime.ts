@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, extname, join, relative, resolve as resolvePath, sep } from 'node:path';
 import { scanOutputs, type ArtifactScanResult, type DiscoveredArtifact } from './artifacts.js';
 import {
   resolveCommandSource,
@@ -28,8 +28,14 @@ import {
   type CommandRun,
   type Gate,
   type GateRegistry,
+  type Handoff,
   type SessionState,
 } from './schemas.js';
+import {
+  buildIntentSection,
+  buildBoundaryContractSection,
+  buildProgressSection,
+} from './inject.js';
 import { SessionStore, type SessionBundle } from './store.js';
 import {
   ensureSessionProjection,
@@ -46,6 +52,23 @@ export interface RunUpstream {
   path: string;
   kind: string;
   status: 'sealed' | 'draft';
+}
+
+/** Compact view of a prior Run's handoff, shared by next/brief/prepare read-sides. */
+export interface PrevHandoff {
+  run_id: string;
+  command: string;
+  verdict: Handoff['verdict'];
+  summary: string;
+  decisions: string[];
+  concerns: string[];
+}
+
+/** Session anchor grounding block reused by brief (Intent / Boundary / Progress). */
+export interface AnchorSection {
+  intent: string | null;
+  boundary_contract: string | null;
+  progress: string | null;
 }
 
 export interface CreateRunOptions {
@@ -96,6 +119,20 @@ export interface CompleteRunResult extends CheckRunResult {
   artifact_ids: string[];
 }
 
+export interface PrepareConsumeStatus {
+  alias: string | null;
+  kind: string;
+  required: boolean;
+  present: boolean;
+  status: 'sealed' | 'draft' | null;
+  path: string | null;
+}
+
+export interface PreparePrevious {
+  handoff: PrevHandoff | null;
+  consumes: PrepareConsumeStatus[];
+}
+
 export interface PrepareStepResult {
   step: string;
   platform: string;
@@ -104,6 +141,8 @@ export interface PrepareStepResult {
   run_mode: { path: string; summary: string } | null;
   refs: Array<{ path: string; when: string }>;
   goal_mode: { platform: string; instructions: string } | null;
+  /** Present only when `sessionId` is supplied — read-only prior-step context. */
+  previous?: PreparePrevious;
 }
 
 export interface SkillContentResult {
@@ -126,6 +165,19 @@ export interface BriefRunResult {
   run_mode: { path: string; summary: string } | null;
   outputs: Array<{ artifact_id: string; kind: string; role: string; path: string; status: string }>;
   goal_mode: { platform: string; instructions: string } | null;
+  /** Aliases this Run consumed, resolved back to upstream artifacts. */
+  upstream: Record<string, RunUpstream>;
+  /** Handoff of the most recent sealed Run before this one (null if none). */
+  prev_handoff: PrevHandoff | null;
+  /** Session anchor grounding (Intent / Boundary Contract / Execution Progress). */
+  anchor: AnchorSection;
+}
+
+export interface CompleteRunOptions {
+  /** Extra concerns merged (append + dedupe) into the derived handoff. */
+  notes?: string[];
+  /** Run-relative paths registered as evidence artifacts beyond the outputs scan. */
+  extraArtifacts?: string[];
 }
 
 interface EvaluationContext {
@@ -271,6 +323,127 @@ function collectUpstream(
     if (alias && all[alias]) selected[alias] = all[alias];
   }
   return selected;
+}
+
+/**
+ * Reverse-lookup the aliases a Run actually consumed (run.input.consumes holds
+ * artifact_ids) back into the registry alias map, yielding alias → upstream.
+ * Used by `run brief` where the Run already exists and its consume set is fixed.
+ */
+function upstreamForConsumedIds(
+  sessionId: string,
+  registry: ArtifactRegistry,
+  consumedIds: string[],
+): Record<string, RunUpstream> {
+  const idToAlias = new Map<string, string>();
+  for (const [alias, artifactId] of Object.entries(registry.aliases)) {
+    if (!idToAlias.has(artifactId)) idToAlias.set(artifactId, alias);
+  }
+  const result: Record<string, RunUpstream> = {};
+  for (const artifactId of consumedIds) {
+    const artifact = registry.artifacts[artifactId];
+    if (!artifact) continue;
+    const alias = idToAlias.get(artifactId) ?? artifactId;
+    result[alias] = {
+      artifact_id: artifactId,
+      path: `sessions/${sessionId}/${artifact.relative_path}`,
+      kind: artifact.kind,
+      status: artifact.status === 'sealed' ? 'sealed' : 'draft',
+    };
+  }
+  return result;
+}
+
+/** Compact a full Handoff into the shared PrevHandoff summary shape. */
+function toPrevHandoff(handoff: Handoff): PrevHandoff {
+  return {
+    run_id: handoff.producer_run_id,
+    command: handoff.command,
+    verdict: handoff.verdict,
+    summary: handoff.summary,
+    decisions: handoff.decisions.map(d => d.text),
+    concerns: handoff.concerns,
+  };
+}
+
+/**
+ * Latest sealed Run's handoff at or before `beforeSequence` (exclusive), scanning
+ * the session's runs by descending sequence. When `beforeSequence` is undefined
+ * the newest sealed handoff wins. Returns null when no sealed handoff exists.
+ */
+function latestHandoffBefore(
+  store: SessionStore,
+  sessionId: string,
+  beforeSequence?: number,
+): PrevHandoff | null {
+  const runsDir = join(store.sessionDir(sessionId), 'runs');
+  if (!existsSync(runsDir)) return null;
+  const runIds = readdirSync(runsDir).filter(name => existsSync(join(runsDir, name, 'run.json')));
+  let best: { sequence: number; handoff: Handoff } | null = null;
+  for (const runId of runIds) {
+    let run: CommandRun;
+    try {
+      run = store.readRun(sessionId, runId);
+    } catch {
+      continue;
+    }
+    if (!run.handoff) continue;
+    if (beforeSequence !== undefined && run.sequence >= beforeSequence) continue;
+    if (!best || run.sequence > best.sequence) best = { sequence: run.sequence, handoff: run.handoff };
+  }
+  return best ? toPrevHandoff(best.handoff) : null;
+}
+
+/** Prev handoff via session.latest_completed_run_id (fast path for step-drivers). */
+function handoffByLatestCompleted(store: SessionStore, session: SessionState): PrevHandoff | null {
+  const runId = session.latest_completed_run_id;
+  if (!runId) return null;
+  try {
+    const run = store.readRun(session.session_id, runId);
+    return run.handoff ? toPrevHandoff(run.handoff) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build the shared session anchor grounding sections (Intent / Boundary
+ * Contract / Execution Progress). Progress is derived from the orchestration
+ * chain crossed with each completed Run's handoff.summary; an empty chain omits
+ * the Progress section. Reuses the P0 inject builders.
+ */
+function buildAnchorSections(store: SessionStore, session: SessionState): AnchorSection {
+  const chain = session.orchestration.chain;
+  const completed = chain.filter(s => (s.status === 'completed' || s.status === 'sealed') && s.run_id);
+  const recent = completed.slice(-5).map(s => {
+    let summary: string | null = null;
+    if (s.run_id) {
+      try {
+        summary = store.readRun(session.session_id, s.run_id).handoff?.summary ?? null;
+      } catch {
+        summary = null;
+      }
+    }
+    return {
+      step_id: s.step_id,
+      command: s.command,
+      stage: null,
+      summary,
+      caveats: null,
+    };
+  });
+  const progress = chain.length > 0
+    ? buildProgressSection({
+        recent,
+        done_count: completed.length,
+        pending_count: chain.filter(s => s.status === 'pending').length,
+      })
+    : null;
+  return {
+    intent: buildIntentSection(session.intent),
+    boundary_contract: buildBoundaryContractSection(session.boundary_contract),
+    progress,
+  };
 }
 
 function explicitGate(
@@ -606,17 +779,22 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     tx.writeRun(run);
     const nextState = ensureSessionProjection(freshState, projectSessionEntry(bundle.session));
     tx.writeJson(join(store.workflowRoot, 'state.json'), nextState);
+    const runDirRel = `.workflow/sessions/${sessionId}/runs/${runId}`;
+    const hasWorkflow = resolveStepContent(options.projectRoot, options.command).workflow !== null;
+    const readyReason = hasWorkflow
+      ? 'load the workflow execution manual, execute it, then run: maestro run check → maestro run complete'
+      : `write deliverables to ${runDirRel}/outputs/, then run: maestro run check → maestro run complete`;
     return {
       session_id: sessionId,
       run_id: runId,
-      run_dir: `.workflow/sessions/${sessionId}/runs/${runId}`,
+      run_dir: runDirRel,
       upstream,
       entry_gates: entrySummary,
       next: {
         command: `maestro run brief ${runId}`,
         reason: entrySummary.blocking.length > 0
           ? 'entry gates blocking — inspect gate status, resolve missing upstream before executing'
-          : 'load the workflow execution manual, execute it, then run: maestro run check → maestro run complete',
+          : readyReason,
       },
     };
   });
@@ -800,13 +978,89 @@ function recordCompletionEvidence(
   return refs;
 }
 
-export function completeRun(projectRoot: string, runId: string, sessionId?: string): CompleteRunResult {
+function inferExtraMediaType(path: string): string {
+  switch (extname(path).toLowerCase()) {
+    case '.json': return 'application/json';
+    case '.md': return 'text/markdown';
+    case '.yaml':
+    case '.yml': return 'application/yaml';
+    case '.txt':
+    case '.log': return 'text/plain';
+    default: return 'application/octet-stream';
+  }
+}
+
+/**
+ * Resolve `--artifact` run-relative paths into DiscoveredArtifact records for
+ * registration. Each path must resolve inside run_dir (else throw) and must
+ * exist (else throw). kind = filename stem, role = 'evidence'. Directories hash
+ * recursively via the same content model as scanOutputs.
+ */
+function discoverExtraArtifacts(
+  runDir: string,
+  sessionDir: string,
+  paths: string[],
+): DiscoveredArtifact[] {
+  const runDirAbs = resolvePath(runDir);
+  const discovered: DiscoveredArtifact[] = [];
+  for (const rel of paths) {
+    const abs = resolvePath(runDir, rel);
+    const within = abs === runDirAbs || abs.startsWith(runDirAbs + sep);
+    if (!within) {
+      throw new Error(`--artifact path escapes run directory: ${rel}`);
+    }
+    if (!existsSync(abs)) {
+      throw new Error(`--artifact path does not exist: ${rel}`);
+    }
+    const stat = statSync(abs);
+    const data = stat.isDirectory() ? null : readFileSync(abs);
+    const contentHash = data
+      ? createHash('sha256').update(data).digest('hex')
+      : createHash('sha256').update(abs).digest('hex');
+    const size = data ? data.byteLength : 0;
+    const kind = basename(abs, extname(abs)) || basename(abs);
+    discovered.push({
+      absolutePath: abs,
+      relativePath: relative(sessionDir, abs).replaceAll('\\', '/'),
+      kind,
+      schemaVersion: `${kind}/1.0`,
+      role: 'evidence',
+      mediaType: stat.isDirectory() ? 'application/vnd.maestro.directory' : inferExtraMediaType(abs),
+      contentHash,
+      size,
+    });
+  }
+  return discovered;
+}
+
+/** Append `notes` to a derived handoff's concerns, de-duplicated, preserving order. */
+function mergeNotesIntoConcerns(handoff: Handoff, notes: string[]): void {
+  if (notes.length === 0) return;
+  const seen = new Set(handoff.concerns);
+  for (const note of notes) {
+    const trimmed = note.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    handoff.concerns.push(trimmed);
+  }
+}
+
+export function completeRun(
+  projectRoot: string,
+  runId: string,
+  sessionId?: string,
+  options: CompleteRunOptions = {},
+): CompleteRunResult {
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
   if (located.run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
   const contract = contractForRun(projectRoot, located.run);
-  const scan = scanOutputs(store.runDir(located.sessionId, runId), store.sessionDir(located.sessionId), contract);
-  const frontmatter = readReportFrontmatter(store.runDir(located.sessionId, runId));
+  const runDir = store.runDir(located.sessionId, runId);
+  const sessionDir = store.sessionDir(located.sessionId);
+  const scan = scanOutputs(runDir, sessionDir, contract);
+  const extraArtifacts = discoverExtraArtifacts(runDir, sessionDir, options.extraArtifacts ?? []);
+  const frontmatter = readReportFrontmatter(runDir);
+  const notes = options.notes ?? [];
 
   return store.update(located.sessionId, (bundle, tx) => {
     const run = tx.readRun(runId);
@@ -915,15 +1169,54 @@ function resolveGoalMode(
   return block ? { platform, instructions: block } : null;
 }
 
+/**
+ * Read-only prior-step context for `run prepare --session`: the latest completed
+ * Run's handoff plus the present state of each contract-declared consume alias.
+ * Never mutates state and never creates directories.
+ */
+function preparePreviousContext(
+  projectRoot: string,
+  stepName: string,
+  sessionId: string,
+): PreparePrevious {
+  const store = new SessionStore(projectRoot);
+  if (!store.sessionExists(sessionId)) {
+    return { handoff: null, consumes: [] };
+  }
+  const bundle = store.readBundle(sessionId);
+  const handoff = handoffByLatestCompleted(store, bundle.session);
+  const contract = resolveCommandSource(projectRoot, stepName).contract;
+  const consumes: PrepareConsumeStatus[] = contract.consumes.map(consume => {
+    const alias = consume.alias
+      ?? Object.keys(bundle.artifacts.aliases).find(key => {
+        const id = bundle.artifacts.aliases[key];
+        return bundle.artifacts.artifacts[id]?.kind === consume.kind;
+      })
+      ?? null;
+    const artifactId = alias ? bundle.artifacts.aliases[alias] : undefined;
+    const artifact = artifactId ? bundle.artifacts.artifacts[artifactId] : undefined;
+    return {
+      alias,
+      kind: consume.kind,
+      required: consume.required,
+      present: Boolean(artifact),
+      status: artifact ? (artifact.status === 'sealed' ? 'sealed' : 'draft') : null,
+      path: artifact ? `sessions/${sessionId}/${artifact.relative_path}` : null,
+    };
+  });
+  return { handoff, consumes };
+}
+
 export function prepareStep(
   projectRoot: string,
   stepName: string,
   platform?: TargetPlatform,
+  sessionId?: string,
 ): PrepareStepResult {
   const suffix = platform ? PLATFORM_SUFFIX[platform] : undefined;
   const content = resolveStepContent(projectRoot, stepName, suffix);
   const tx = (raw: string) => platform ? transformContentForPlatform(raw, platform) : raw;
-  return {
+  const result: PrepareStepResult = {
     step: stepName,
     platform: platform ?? 'claude',
     prepare: content.prepare ? { path: content.prepare.path, content: tx(content.prepare.raw) } : null,
@@ -936,6 +1229,10 @@ export function prepareStep(
     refs: content.refs,
     goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
   };
+  if (sessionId) {
+    result.previous = preparePreviousContext(projectRoot, stepName, sessionId);
+  }
+  return result;
 }
 
 export function skillContent(
@@ -986,6 +1283,10 @@ export function briefRun(
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const upstream = upstreamForConsumedIds(located.sessionId, bundle.artifacts, run.input.consumes);
+  const prevHandoff = latestHandoffBefore(store, located.sessionId, run.sequence);
+  const anchor = buildAnchorSections(store, bundle.session);
+
   return {
     session_id: located.sessionId,
     run_id: runId,
@@ -1001,5 +1302,8 @@ export function briefRun(
       : null,
     outputs,
     goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
+    upstream,
+    prev_handoff: prevHandoff,
+    anchor,
   };
 }

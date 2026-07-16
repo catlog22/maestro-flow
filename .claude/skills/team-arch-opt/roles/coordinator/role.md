@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator
 
@@ -100,6 +100,18 @@ TEXT-LEVEL ONLY. No source code reading.
    ```
 7. Write session.json
 
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-arch-opt --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-arch-opt-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+
 ## Phase 3: Create Task Chain
 
 Delegate to @commands/dispatch.md:
@@ -123,11 +135,11 @@ Delegate to @commands/monitor.md#handleSpawnNext:
 
 | Deliverable | Path |
 |-------------|------|
-| Architecture Baseline | <session>/artifacts/architecture-baseline.json |
-| Architecture Report | <session>/artifacts/architecture-report.md |
-| Refactoring Plan | <session>/artifacts/refactoring-plan.md |
-| Validation Results | <session>/artifacts/validation-results.json |
-| Review Report | <session>/artifacts/review-report.md |
+| Architecture Baseline | {run_dir}/outputs/architecture-baseline.json |
+| Architecture Report | {run_dir}/outputs/architecture-report.md |
+| Refactoring Plan | {run_dir}/outputs/refactoring-plan.md |
+| Validation Results | {run_dir}/outputs/validation-results.json |
+| Review Report | {run_dir}/outputs/review-report.md |
 
 3. Include discussion summaries if discuss rounds were used
 4. Output pipeline summary: task count, duration, improvement metrics

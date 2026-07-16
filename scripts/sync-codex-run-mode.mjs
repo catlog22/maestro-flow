@@ -11,6 +11,7 @@ const codexRoot = join(root, '.codex', 'skills');
 const claudeCommands = join(root, '.claude', 'commands');
 const claudeSkills = join(root, '.claude', 'skills');
 const RUN_MODE_REF = '@~/.maestro/workflows/run-mode.md';
+const RUN_MODE_LITE_REF = '@~/.maestro/workflows/run-mode-lite.md';
 const CODEX_RUN_REF = '@~/.maestro/workflows/codex-run-mode.md';
 const obsoleteArtifactPattern = /\.workflow\/(?:scratch|\.scratchpad)|Legacy Compatibility Mapping/;
 
@@ -25,23 +26,28 @@ function sourceMetadata(name) {
   const skill = join(claudeSkills, name, 'SKILL.md');
   const source = existsSync(command) ? command : (existsSync(skill) ? skill : null);
   if (!source) return null;
-  const data = splitFrontmatter(readFileSync(source, 'utf8')).data;
-  return { mode: data['session-mode'] ?? null, contract: data.contract ?? null };
+  const text = readFileSync(source, 'utf8');
+  const data = splitFrontmatter(text).data;
+  const usesLite = text.includes(RUN_MODE_LITE_REF);
+  return { mode: data['session-mode'] ?? null, contract: data.contract ?? null, usesLite };
 }
 
 function genericContract() {
   return { discovery: 'self-described', consumes: [], produces: [], gates: { entry: [], exit: [] } };
 }
 
-function addRequiredReading(body) {
+function addRequiredReading(body, usesLite = false) {
+  const runRef = usesLite ? RUN_MODE_LITE_REF : RUN_MODE_REF;
   const block = body.match(/<required_reading>([\s\S]*?)<\/required_reading>/i);
   if (block) {
-    const refs = block[1].split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-    if (!refs.includes(RUN_MODE_REF)) refs.unshift(RUN_MODE_REF);
-    if (!refs.includes(CODEX_RUN_REF)) refs.push(CODEX_RUN_REF);
+    let refs = block[1].split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    refs = refs.filter(r => r !== RUN_MODE_REF && r !== RUN_MODE_LITE_REF && r !== CODEX_RUN_REF);
+    refs.unshift(runRef);
+    if (!usesLite) refs.push(CODEX_RUN_REF);
     return body.replace(block[0], `<required_reading>\n${refs.join('\n')}\n</required_reading>`);
   }
-  return `<required_reading>\n${RUN_MODE_REF}\n${CODEX_RUN_REF}\n</required_reading>\n\n${body}`;
+  const refsBlock = usesLite ? runRef : `${runRef}\n${CODEX_RUN_REF}`;
+  return `<required_reading>\n${refsBlock}\n</required_reading>\n\n${body}`;
 }
 
 function specialBlock(mode) {
@@ -117,7 +123,7 @@ for (const entry of readdirSync(codexRoot, { withFileTypes: true })) {
   if (mode === 'run') data.contract = source?.contract ?? data.contract ?? genericContract();
   if (mode !== 'run') delete data.contract;
   let cleanBody = mode === 'deprecated' ? '' : rewriteObsoleteArtifactPaths(removeManagedBlock(body)).replace(/^\s+/, '');
-  if (mode === 'run') cleanBody = addRequiredReading(cleanBody);
+  if (mode === 'run') cleanBody = addRequiredReading(cleanBody, source?.usesLite ?? false);
   const after = `---\n${YAML.stringify(data).trimEnd()}\n---\n\n${specialBlock(mode)}${cleanBody}`.trimEnd() + '\n';
   if (after === before) continue;
   changed++;

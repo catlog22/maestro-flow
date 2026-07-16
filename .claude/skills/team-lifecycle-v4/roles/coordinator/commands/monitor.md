@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Monitor Pipeline
 
 ## Constants
@@ -184,6 +180,12 @@ Pipeline done. Generate report and completion action.
    ```
    SendMessage({ to: "supervisor", message: { type: "shutdown_request", reason: "Pipeline complete" } })
    ```
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: log warning, continue (do not block completion action)
+  |
 2. Generate summary (deliverables, stats, discussions)
 3. Read session.completion_action:
    - interactive -> AskUserQuestion (Archive/Keep/Export)

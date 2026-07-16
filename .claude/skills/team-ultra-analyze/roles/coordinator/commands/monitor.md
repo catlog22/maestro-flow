@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: Monitor
 
 ## Constants
@@ -347,7 +343,12 @@ Triggered when all pipeline tasks are completed.
 | deep | All EXPLORE + ANALYZE + all DISCUSS-N + SYNTH-001 completed |
 
 1. Verify all tasks completed. If any not completed, return to handleSpawnNext
-2. If all completed, **inline-execute coordinator Phase 5** (shutdown workers → report → completion action). Do NOT STOP here — continue directly into Phase 5 within the same turn.
+2. Run lifecycle completion (before Phase 5):
+   - Read run_id from `team-session.json.run.run_id`
+   - Write `{run_dir}/report.md` with frontmatter (verdict/summary/concerns)
+   - Run `maestro run complete <run_id>`
+   - If complete fails: log warning, continue (do not block completion action)
+3. If all completed, **inline-execute coordinator Phase 5** (shutdown workers → report → completion action). Do NOT STOP here — continue directly into Phase 5 within the same turn.
 
 ## Phase 4: State Persistence
 

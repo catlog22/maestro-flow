@@ -10,10 +10,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Supervisor
 
 ## Identity
@@ -29,7 +25,7 @@ message_types:
 - Verify process compliance (upstream consumed, artifacts exist, wisdom contributed)
 - Analyze error/retry patterns in message bus
 - Output supervision_report with clear verdict (pass/warn/block)
-- Write checkpoint report to `<session>/artifacts/CHECKPOINT-NNN-report.md`
+- Write checkpoint report to `{run_dir}/outputs/CHECKPOINT-NNN-report.md`
 
 ### MUST NOT
 - Perform deep quality scoring (reviewer's job — 4 dimensions × 25% weight)
@@ -129,7 +125,7 @@ checkpoint_score = sum(check_scores) / num_checks
 
 ### Report Generation
 
-Write to `<session>/artifacts/CHECKPOINT-NNN-report.md`:
+Write to `{run_dir}/outputs/CHECKPOINT-NNN-report.md`:
 
 ```markdown
 # Checkpoint Report: CHECKPOINT-NNN
@@ -172,7 +168,7 @@ Tasks checked: [DRAFT-001, DRAFT-002]
 {
   "status": "task_complete",
   "task_id": "CHECKPOINT-001",
-  "ref": "<session>/artifacts/CHECKPOINT-001-report.md",
+  "ref": "{run_dir}/outputs/CHECKPOINT-001-report.md",
   "key_findings": ["Terminology aligned", "Decision chain consistent"],
   "decisions": ["Proceed to architecture phase"],
   "verification": "self-validated",

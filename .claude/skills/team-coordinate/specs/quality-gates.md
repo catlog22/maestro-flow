@@ -29,7 +29,7 @@ Quality checks vary by `output_type` (from task-analysis.json role metadata).
 
 | Check | Pass Criteria |
 |-------|---------------|
-| Artifact exists | File written to `<session>/artifacts/` |
+| Artifact exists | File written to `{run_dir}/outputs/` |
 | Content non-empty | Substantive content, not just headers |
 | Format correct | Expected format (MD, JSON) matches deliverable |
 | Cross-references | All references to upstream artifacts resolve |
@@ -41,7 +41,7 @@ Quality checks vary by `output_type` (from task-analysis.json role metadata).
 | Files modified | Claimed files actually changed (Read to confirm) |
 | Syntax valid | No syntax errors in modified files |
 | No regressions | Existing functionality preserved |
-| Summary artifact | Implementation summary written to artifacts/ |
+| Summary artifact | Implementation summary written to {run_dir}/outputs/ |
 
 ### output_type: mixed
 
@@ -54,7 +54,7 @@ Derived from Behavioral Traits in [role-spec-template.md](role-spec-template.md)
 | Step | Action | Required |
 |------|--------|----------|
 | 1 | Verify all claimed files exist via Read | Yes |
-| 2 | Confirm artifact written to `<session>/artifacts/` | Yes |
+| 2 | Confirm artifact written to `{run_dir}/outputs/` | Yes |
 | 3 | Check verification summary fields present | Yes |
 | 4 | Score against quality dimensions | Yes |
 | 5 | Apply threshold -> Pass/Review/Fail | Yes |

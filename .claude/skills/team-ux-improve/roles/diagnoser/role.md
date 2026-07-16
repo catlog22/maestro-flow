@@ -5,15 +5,11 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # State Diagnoser
 
 ## Phase 2: Context & Complexity Assessment
 
-1. Load scan report from `<session>/artifacts/scan-report.md`
+1. Load scan report from `{run_dir}/outputs/scan-report.md`
 2. Load scanner state via `team_msg(operation="get_state", session_id=<session-id>, role="scanner")`
 
 ### Wisdom Input
@@ -87,7 +83,7 @@ For each issue from scan report:
 
 ## Phase 4: Diagnosis Report
 
-1. Generate root cause analysis for each issue and write to `<session>/artifacts/diagnosis.md`
+1. Generate root cause analysis for each issue and write to `{run_dir}/outputs/diagnosis.md`
 
 ### Wisdom Contribution
 

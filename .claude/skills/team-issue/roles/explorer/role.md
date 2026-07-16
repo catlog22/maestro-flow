@@ -5,10 +5,6 @@ inner_loop: false
 message_types: [context_ready, error]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Issue Explorer
 
 ## Phase 2: Issue Loading & Context Setup

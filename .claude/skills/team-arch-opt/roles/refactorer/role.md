@@ -5,10 +5,6 @@ inner_loop: dynamic
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Code Refactorer
 
 ## Modes
@@ -22,9 +18,9 @@ message_types: [state_update]
 
 | Input | Source | Required |
 |-------|--------|----------|
-| Refactoring plan | <session>/artifacts/refactoring-plan.md | Yes (REFACTOR, no branch) |
-| Branch refactoring detail | <session>/artifacts/branches/B{NN}/refactoring-detail.md | Yes (REFACTOR with branch) |
-| Pipeline refactoring plan | <session>/artifacts/pipelines/{P}/refactoring-plan.md | Yes (REFACTOR with pipeline) |
+| Refactoring plan | {run_dir}/outputs/refactoring-plan.md | Yes (REFACTOR, no branch) |
+| Branch refactoring detail | {run_dir}/outputs/branches/B{NN}/refactoring-detail.md | Yes (REFACTOR with branch) |
+| Pipeline refactoring plan | {run_dir}/outputs/pipelines/{P}/refactoring-plan.md | Yes (REFACTOR with pipeline) |
 | Review/validation feedback | From task description | Yes (FIX) |
 | .msg/meta.json | <session>/wisdom/.msg/meta.json | Yes |
 | Wisdom files | <session>/wisdom/patterns.md | No |
@@ -40,9 +36,9 @@ message_types: [state_update]
 | Neither present | - | Single mode -- load full refactoring plan |
 
 3. **Load refactoring context by mode**:
-   - **Single mode (no branch)**: Read `<session>/artifacts/refactoring-plan.md` -- extract ALL priority-ordered changes
-   - **Fan-out branch**: Read `<session>/artifacts/branches/B{NN}/refactoring-detail.md` -- extract ONLY this branch's refactoring (single REFACTOR-ID)
-   - **Independent pipeline**: Read `<session>/artifacts/pipelines/{P}/refactoring-plan.md` -- extract this pipeline's plan
+   - **Single mode (no branch)**: Read `{run_dir}/outputs/refactoring-plan.md` -- extract ALL priority-ordered changes
+   - **Fan-out branch**: Read `{run_dir}/outputs/branches/B{NN}/refactoring-detail.md` -- extract ONLY this branch's refactoring (single REFACTOR-ID)
+   - **Independent pipeline**: Read `{run_dir}/outputs/pipelines/{P}/refactoring-plan.md` -- extract this pipeline's plan
 
 4. For FIX: parse review/validation feedback for specific issues to address
 5. Use `explore` CLI tool to load implementation context for target files
@@ -99,6 +95,6 @@ Append to context_accumulator for next REFACTOR/FIX task (single/inner-loop mode
 - Any discovered patterns or caveats for subsequent iterations
 
 **Branch output paths**:
-- Single: write artifacts to `<session>/artifacts/`
-- Fan-out: write artifacts to `<session>/artifacts/branches/B{NN}/`
-- Independent: write artifacts to `<session>/artifacts/pipelines/{P}/`
+- Single: write artifacts to `{run_dir}/outputs/`
+- Fan-out: write artifacts to `{run_dir}/outputs/branches/B{NN}/`
+- Independent: write artifacts to `{run_dir}/outputs/pipelines/{P}/`

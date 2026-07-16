@@ -5,15 +5,11 @@ inner_loop: false
 message_types: [state_update]
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # UX Designer
 
 ## Phase 2: Context & Pattern Loading
 
-1. Load diagnosis report from `<session>/artifacts/diagnosis.md`
+1. Load diagnosis report from `{run_dir}/outputs/diagnosis.md`
 2. Load diagnoser state via `team_msg(operation="get_state", session_id=<session-id>, role="diagnoser")`
 3. Detect framework from project structure
 4. Load framework-specific patterns:
@@ -135,7 +131,7 @@ Reference `specs/design-standards.md` for target standards.
 
 ## Phase 4: Design Document Generation
 
-1. Generate implementation guide for each issue and write to `<session>/artifacts/design-guide.md`
+1. Generate implementation guide for each issue and write to `{run_dir}/outputs/design-guide.md`
 
 ### Wisdom Contribution
 

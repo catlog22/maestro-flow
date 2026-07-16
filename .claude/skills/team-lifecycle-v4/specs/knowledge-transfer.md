@@ -6,7 +6,7 @@
 
 | Channel | Method | Producer | Consumer |
 |---------|--------|----------|----------|
-| Artifacts | Files in `<session>/artifacts/` | Task executor | Next task in pipeline |
+| Artifacts | Files in `{run_dir}/outputs/` | Task executor | Next task in pipeline |
 | State Updates | `team_msg(type="state_update")` | Task executor | Coordinator + downstream |
 | Wisdom | Append to `<session>/wisdom/*.md` | Any role | All roles |
 | Context Accumulator | In-memory aggregation | Inner loop only | Current task |
@@ -32,7 +32,7 @@ Every role MUST load context in this order before starting work.
 
 | Step | Action | Required |
 |------|--------|----------|
-| 1 | Write deliverable to `<session>/artifacts/<task-id>-<name>.md` | Yes |
+| 1 | Write deliverable to `{run_dir}/outputs/<task-id>-<name>.md` | Yes |
 | 2 | Send `team_msg(type="state_update")` with payload (see schema below) | Yes |
 | 3 | Append wisdom entries for learnings, decisions, issues found | If applicable |
 
@@ -44,7 +44,7 @@ Sent via `team_msg(type="state_update")` on task completion.
 {
   "status": "task_complete",
   "task_id": "<TASK-NNN>",
-  "ref": "<session>/artifacts/<filename>",
+  "ref": "{run_dir}/outputs/<filename>",
   "key_findings": [
     "Finding 1",
     "Finding 2"

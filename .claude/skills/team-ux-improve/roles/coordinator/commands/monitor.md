@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Monitor Pipeline
 
 ## Constants
@@ -89,8 +85,8 @@ Include in status output:
 
 ```
 Pipeline Status (standard):
-  [DONE]  SCAN-001    (scanner)     -> artifacts/scan-report.md
-  [DONE]  DIAG-001    (diagnoser)   -> artifacts/diagnosis.md
+  [DONE]  SCAN-001    (scanner)     -> {run_dir}/outputs/scan-report.md
+  [DONE]  DIAG-001    (diagnoser)   -> {run_dir}/outputs/diagnosis.md
   [RUN]   DESIGN-001  (designer)    -> designing solutions...
   [WAIT]  IMPL-001    (implementer) -> blocked by DESIGN-001
   [WAIT]  TEST-001    (tester)      -> blocked by IMPL-001
@@ -168,6 +164,14 @@ Pipeline done. Generate report and completion action.
 
 1. Verify all tasks (including any fix-verify iterations) have status "completed"
 2. If any tasks not completed -> handleSpawnNext
+
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: log warning, continue (do not block completion action)
+  |
+
 3. If all completed -> transition to coordinator Phase 5
 
 ## handleAdapt

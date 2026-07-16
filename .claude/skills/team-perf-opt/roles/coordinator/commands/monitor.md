@@ -1,7 +1,3 @@
-
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
 # Command: Monitor
 
 ## Phase 2: Context Loading
@@ -316,9 +312,16 @@ Triggered when all pipeline tasks are completed and no fix cycles remain.
 | Fan-out | ALL branches have BENCH + REVIEW completed with PASS/APPROVE (or escalated), shared stages done |
 | Independent | ALL pipelines have BENCH + REVIEW completed with PASS/APPROVE (or escalated) |
 
+  +- Run lifecycle completion:
+  |   - Read run_id from team-session.json.run.run_id
+  |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
+  |   - Run `maestro run complete <run_id>`
+  |   - If complete fails: log warning, continue (do not block completion action)
+  |
+
 **Aggregate results** before transitioning to Phase 5:
 
-1. For fan-out mode: collect per-branch benchmark results into `<session>/artifacts/aggregate-results.json`:
+1. For fan-out mode: collect per-branch benchmark results into `{run_dir}/outputs/aggregate-results.json`:
    ```json
    {
      "branches": {

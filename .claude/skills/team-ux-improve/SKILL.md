@@ -6,7 +6,7 @@ session-mode: run
 ---
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team UX Improve
@@ -127,7 +127,7 @@ Execute built-in Phase 1 (task discovery) -> role Phase 2-4 -> built-in Phase 5 
 ├── .msg/
 │   ├── messages.jsonl      # Team message bus
 │   └── meta.json           # Pipeline config + role state snapshot
-├── artifacts/              # Role deliverables
+├── {run_dir}/outputs/      # Run deliverables (via maestro run)
 │   ├── scan-report.md      # Scanner output
 │   ├── diagnosis.md        # Diagnoser output
 │   ├── design-guide.md     # Designer output

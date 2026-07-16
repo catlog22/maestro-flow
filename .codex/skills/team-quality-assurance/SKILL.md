@@ -1,6 +1,8 @@
 ---
 name: team-quality-assurance
-description: Unified team skill for quality assurance. Full closed-loop QA combining issue discovery and software testing. Triggers on "team quality-assurance", "team qa".
+description: Unified team skill for quality assurance. Full closed-loop QA
+  combining issue discovery and software testing. Triggers on "team
+  quality-assurance", "team qa".
 allowed-tools:
   - Bash
   - Edit
@@ -19,12 +21,20 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 > **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 
 # Team Quality Assurance

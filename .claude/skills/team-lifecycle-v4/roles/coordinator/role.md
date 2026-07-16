@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator Role
 
@@ -94,6 +94,18 @@ TEXT-LEVEL ONLY. No source code reading.
    - Use SKILL.md Supervisor Spawn Template (subagent_type: "team-supervisor")
    - Wait for "[supervisor] Ready" callback before proceeding to Phase 3
    - Record supervisor in active_workers with `resident: true` flag
+
+### Run Lifecycle Integration
+
+After session folder creation and before role-spec generation:
+
+1. **Create Run**: `maestro run create team-lifecycle-v4 --session <slug> --intent "<task summary>"`
+   - Slug format: `YYYYMMDD-team-lifecycle-v4-<topic>` (ASCII, ≤64 chars)
+   - Store returned `run_id` and `run_dir` in `team-session.json`:
+     ```json
+     "run": { "run_id": "<id>", "run_dir": "<path>" }
+     ```
+2. **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
 
 ## Phase 3: Create Task Chain
 

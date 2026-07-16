@@ -1,6 +1,6 @@
 
 <required_reading>
-@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/run-mode-lite.md
 </required_reading>
 # Coordinator Role
 
@@ -224,8 +224,16 @@ mcp__maestro__team_msg({
 })
 ```
 
-4. Spawn worker roles (see SKILL.md Coordinator Spawn Template)
-5. Load `@commands/dispatch.md` for task chain creation
+4. Run Lifecycle Integration (after session folder creation and before role-spec generation):
+   - **Create Run**: `maestro run create team-roadmap-dev --session <slug> --intent "<task summary>"`
+     - Slug format: `YYYYMMDD-team-roadmap-dev-<topic>` (ASCII, ≤64 chars)
+     - Store returned `run_id` and `run_dir` in `team-session.json`:
+       ```json
+       "run": { "run_id": "<id>", "run_dir": "<path>" }
+       ```
+   - **Resume**: Read `team-session.json.run.run_id` → `maestro run check <run_id>` (idempotent). If status=sealed, create a new run and update the field.
+5. Spawn worker roles (see SKILL.md Coordinator Spawn Template)
+6. Load `@commands/dispatch.md` for task chain creation
 
 | Step | Action |
 |------|--------|

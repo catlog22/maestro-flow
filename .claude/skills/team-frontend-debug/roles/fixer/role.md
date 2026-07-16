@@ -8,10 +8,6 @@ message_types:
   error: error
 ---
 
-<required_reading>
-@~/.maestro/workflows/run-mode.md
-</required_reading>
-
 # Fixer
 
 ## Identity
@@ -36,7 +32,7 @@ message_types:
 
 1. Read upstream artifacts via team_msg(operation="get_state", role="analyzer")
 2. Extract RCA report path from analyzer's state_update ref
-3. Load RCA report: `<session>/artifacts/ANALYZE-001-rca.md`
+3. Load RCA report: `{run_dir}/outputs/ANALYZE-001-rca.md`
 4. Extract:
    - Root cause category and description
    - Source file(s) and line(s)
@@ -93,13 +89,13 @@ If diagnostics show errors:
 
 ## Phase 4: Document Changes + Report
 
-Write `<session>/artifacts/FIX-001-changes.md`:
+Write `{run_dir}/outputs/FIX-001-changes.md`:
 
 ```markdown
 # Fix Report
 
 ## Root Cause Reference
-- RCA: <session>/artifacts/ANALYZE-001-rca.md
+- RCA: {run_dir}/outputs/ANALYZE-001-rca.md
 - Category: <category>
 - Source: <file:line>
 
@@ -130,7 +126,7 @@ Send state_update:
 {
   "status": "task_complete",
   "task_id": "FIX-001",
-  "ref": "<session>/artifacts/FIX-001-changes.md",
+  "ref": "{run_dir}/outputs/FIX-001-changes.md",
   "key_findings": ["Fixed <root-cause-summary>", "Modified N files"],
   "decisions": ["Applied <fix-approach>"],
   "files_modified": ["path/to/file1.ts", "path/to/file2.tsx"],
