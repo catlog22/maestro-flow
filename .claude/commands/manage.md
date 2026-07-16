@@ -1,6 +1,6 @@
 ---
 name: manage
-description: Project management hub — status, issues, knowledge stores, and drift/rebuild sync
+description: Project management hub — status, issues, knowledge stores, and drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest / wiki / domain；约束类规则走 /spec add。Triggers on "项目状态", "issue 管理", "知识沉淀", "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
 argument-hint: "status|issue|knowledge|sync [args...]"
 allowed-tools:
   - Read
