@@ -46,3 +46,6 @@ dashboard/node_modules/
 .agents/
 
 search-cache.json
+
+# Pi platform local config (permissions/model mapping), same nature as .claude/settings.local.json
+.pi/
