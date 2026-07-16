@@ -1,11 +1,11 @@
 <!-- session-mode: inherited -->
-# Goal Tracking Protocol
+# Task Tracking Protocol
 
-Goal/Task 工具是 session 权威状态的 **UI 镜像**，不替代 session 状态。
+Task 工具是 session 权威状态的 **UI 镜像**，不替代 session 状态。
 
 ## 原则
 
-- 权威真相在 `session.json` / `run.json`，goal/task 工具是只读投影
+- 权威真相在 `session.json` / `run.json`，task 工具是只读投影
 - LLM 不维护镜像一致性——插件/宿主负责对账
 - 手工 update 仅用于 LLM 主动发现的状态变更（完成/失败），不用于中间进度
 

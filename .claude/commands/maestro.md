@@ -13,6 +13,8 @@ allowed-tools:
   - SendMessage
   - AskUserQuestion
   - TodoWrite
+  - TaskCreate
+  - TaskUpdate
 session-mode: run
 contract:
   discovery: self-described
@@ -67,7 +69,12 @@ $ARGUMENTS — user intent text, or special keywords.
 14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
 15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 session 生命周期 + step 排序 + cross-step decision 节点；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）只单次推荐，不得出现在 FSM step 内。
 16. **模板输出边界（--compose）** — `A_COMPOSE_TEMPLATE` 的写入 MUST 限定 `~/.maestro/templates/workflows/`（模板 JSON + index.json）与 `.workflow/templates/design-drafts/`（草稿）；NEVER 修改源码或 `.claude/commands/`。`--play` 视模板为只读，运行态只写 session status.json。
+17. **Goal tracking 与 session 双写** — 主流程在 session 创建、step 派发、step 完成时同步创建/更新 goal，补充 status.json 的 UI 可见进度。
 </invariants>
+
+<task_tracking>
+@~/.maestro/workflows/task-tracking.md
+</task_tracking>
 
 <state_machine>
 
@@ -239,7 +246,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 3. Select chain from chainMap，遵循拓扑约束：
    - 压力测试/拷问/验证假设/grill/stress-test → `grill`（**-y 模式透传 `-y` 到 grill，grill 以 Auto mode 执行，不跳过**）
    - 头脑风暴/探索 → `brainstorm`
-   - 学习/阅读代码/跟读/follow → `[@skill] Skill("learn", "follow")`；调查/为什么/investigate → `[@skill] Skill("learn", "investigate")`；分解/模式/decompose → `[@skill] Skill("learn", "decompose")`；评审/挑战/second-opinion → `[@skill] Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective`）
+   - 学习/阅读代码/跟读/follow → `[@skill] Skill("learn", "follow")`；调查/为什么/investigate → `[@skill] Skill("learn", "investigate")`；分解/模式/decompose → `[@skill] Skill("learn", "decompose")`；评审/挑战/second-opinion → `[@skill] Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective --session YYYYMMDD-retrospective-{topic} --intent "{goal}"`）
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
    - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）

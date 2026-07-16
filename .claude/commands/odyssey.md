@@ -127,9 +127,9 @@ All base invariants apply (evidence append-only, session-as-state, phase goal tr
 7. **Goal tracking 与 session 双写** — 各 phase 进入/退出时同步创建/更新 goal，补充 session.json 的 UI 可见进度。
 </invariants>
 
-<goal_tracking>
-@~/.maestro/workflows/goal-tracking.md
-</goal_tracking>
+<task_tracking>
+@~/.maestro/workflows/task-tracking.md
+</task_tracking>
 
 <self_iteration>
 Self-iteration (logic in odyssey-base.md) applies to each mode's discovery + audit + GENERALIZE stages:

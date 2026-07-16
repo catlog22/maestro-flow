@@ -219,3 +219,37 @@ wait_agent({ timeout_ms: 3600000 })
 - 输入 Schema: [`multi_agents_spec.rs#L96-L350`](https://github.com/openai/codex/blob/d7ba5ff/codex-rs/core/src/tools/handlers/multi_agents_spec.rs#L96-L350)
 - 输出 Schema: [`multi_agents_spec.rs#L352-L539`](https://github.com/openai/codex/blob/d7ba5ff/codex-rs/core/src/tools/handlers/multi_agents_spec.rs#L352-L539)
 - AgentStatus: [`protocol.rs#L1703-L1723`](https://github.com/openai/codex/blob/d7ba5ff/codex-rs/protocol/src/protocol.rs#L1703-L1723)
+
+## Goal 工具（非 multi-agent 集，随平台提供）
+
+用户实测签名（2026-07）。任务/步骤清单用 `update_plan`；**勿将 TaskCreate/TaskUpdate/TodoWrite 映射到 goal 工具**。
+
+```ts
+create_goal(args: { objective: string; token_budget?: number }): Promise<unknown>
+get_goal(args: {}): Promise<unknown>      // 已用时间 + 剩余 token 预算
+update_goal(args: { status: "complete" | "blocked" }): Promise<unknown>
+```
+
+约束：
+- 仅在用户明确要求创建 Goal 时调用；不得从普通任务自行推断。
+- 同一时刻仅一个活跃 goal；存在未完成 goal 时 `create_goal` 失败。
+- `update_goal` 仅 `complete` | `blocked`（无 goal_id）；`blocked` 需同一阻塞连续 ≥3 个 goal turn；预算将尽 ≠ complete。
+- Goal 完成后，向用户报告工具返回的最终 token 用量。
+
+## update_plan 工具（任务清单，对标 Claude TaskCreate/TodoWrite）
+
+用户实测签名（2026-07）：
+
+```ts
+update_plan(args: {
+  explanation?: string;
+  plan: Array<{
+    step: string;
+    status: "pending" | "in_progress" | "completed";
+  }>;
+}): Promise<unknown>
+```
+
+约束：
+- 整体提交步骤数组（替换式，非增量）。
+- Claude 的 TaskCreate/TaskUpdate/TodoWrite 一律映射到此工具；依赖/认领（addBlockedBy/owner）记入 session 工件字段，不是工具参数。

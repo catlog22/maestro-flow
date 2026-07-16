@@ -99,6 +99,15 @@ Session: `maestro explore show` / `maestro explore output <id>`
 - `spawn_agents_on_csv`：`max_runtime_seconds`（单个 worker 最大运行时间，秒）**必须显式设为上限 `3600`**。
 - `wait_agent`：`timeout_ms` 默认仅 30000 — **每次调用显式设置，最少 `180000`（3 分钟）**；长任务用上限 `3600000`。
 
+## Plan Tracking
+
+- 任务/步骤进度用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护：整体提交步骤数组，status: `pending` | `in_progress` | `completed`。权威状态在 session 工件中。
+
+## Goal 工具（与任务跟踪无关）
+
+- 签名：`create_goal({ objective, token_budget? })`、`update_goal({ status: "complete" | "blocked" })`、`get_goal({})`。
+- **仅在用户明确要求创建 Goal 时使用**：单一活跃 goal，不得从普通任务自行推断创建；完成后向用户报告最终 token 用量。
+
 ## Knowledge System
 
 **Gate rule**: run `maestro search` + `maestro load` BEFORE reading code or editing files. 空结果 ≠ 免检：返回 hint 时先执行 hint 再重试；确认无既有知识后照常推进，任务结束按 Record 补录。

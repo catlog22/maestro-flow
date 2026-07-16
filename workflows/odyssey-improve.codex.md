@@ -6,7 +6,7 @@
 
 # Workflow: Odyssey Improve (Codex)
 
-6-dimension runtime quality improvement — performance/security/architecture/reliability/observability/maintainability audit → diagnose → fix → generalize. Codex-adapted: uses `spawn_agents_on_csv`, `request_user_input`, `create_goal`/`update_goal`.
+6-dimension runtime quality improvement — performance/security/architecture/reliability/observability/maintainability audit → diagnose → fix → generalize. Codex-adapted: uses `spawn_agents_on_csv`, `request_user_input`, `update_plan`.
 
 ---
 
@@ -111,9 +111,9 @@ S_VERIFY → S_FIX           : needs_rework
 
 ### Actions
 
-**A_INTAKE extra** — Baseline capture: record current metrics (test pass rate, bundle size, dependency count, complexity hotspots) to `session.json.baseline_metrics`. `create_goal({ description: "Improve: {target} across {dimensions}", condition: "所有 phase gates 通过 + END 状态" })`
+**A_INTAKE extra** — Baseline capture: record current metrics (test pass rate, bundle size, dependency count, complexity hotspots) to `session.json.baseline_metrics`. `update_plan({ plan: [{ step: "G1: survey", status: "pending" }, { step: "G2: audit", status: "pending" }, { step: "G3: diagnose", status: "pending" }, { step: "G4: verify", status: "pending" }] })`（初始化 gate 清单）
 
-**A_SURVEY** — (1) Dependency audit (package.json/lock), complexity scan (size/nesting), test coverage map, error handling scan (empty catch, unhandled promise). (2) CLI-assisted (optional): `maestro delegate --role analyze --mode analysis` for dependency health / complexity hotspots / coverage gaps / error patterns (`run_in_background: true`). (3) Evidence phase=survey. Update §2. `update_goal({ id: G1, status: "completed" })`.
+**A_SURVEY** — (1) Dependency audit (package.json/lock), complexity scan (size/nesting), test coverage map, error handling scan (empty catch, unhandled promise). (2) CLI-assisted (optional): `maestro delegate --role analyze --mode analysis` for dependency health / complexity hotspots / coverage gaps / error patterns (`run_in_background: true`). (3) Evidence phase=survey. Update §2. `update_plan`（G1 → completed）.
 
 Commit: `"odyssey-improve({slug}): SURVEY — current state survey complete"`
 
@@ -143,13 +143,13 @@ spawn_agents_on_csv({
 })
 ```
 
-Merge results from all dimensions → evidence phase=audit. Write `session.json.audit_result`. Update §3 (findings by dimension + severity matrix). `update_goal({ id: G2, status: "completed" })`.
+Merge results from all dimensions → evidence phase=audit. Write `session.json.audit_result`. Update §3 (findings by dimension + severity matrix). `update_plan`（G2 → completed）.
 
 **GATE: all-dimensions-audited** — all 6 dimensions (or `--dimensions` subset) completed with structured findings, merged into severity matrix, evidence phase=audit logged per dimension. Zero dimensions reviewed is BLOCKED (W002 partial from agent failure is a warning).
 
 Commit: `"odyssey-improve({slug}): AUDIT — dimension audit complete"`
 
-**A_DIAGNOSE** — Root cause analysis for critical/high findings — don't fix symptoms. (1) Group by dimension, prioritize by severity; for each: hypothesis → trace code path + git history → evidence phase=diagnosis. (2) Ambiguity → evidence phase=decision; Normal: `request_user_input` | `-y`: defer. (3) CLI-assisted for complex findings (`run_in_background: true`). (4) Write `session.json.diagnoses[]`. Update §4. `update_goal({ id: G3, status: "completed" })`.
+**A_DIAGNOSE** — Root cause analysis for critical/high findings — don't fix symptoms. (1) Group by dimension, prioritize by severity; for each: hypothesis → trace code path + git history → evidence phase=diagnosis. (2) Ambiguity → evidence phase=decision; Normal: `request_user_input` | `-y`: defer. (3) CLI-assisted for complex findings (`run_in_background: true`). (4) Write `session.json.diagnoses[]`. Update §4. `update_plan`（G3 → completed）.
 
 Commit: `"odyssey-improve({slug}): DIAGNOSE — root cause analysis complete"`
 
@@ -159,7 +159,7 @@ Commit: `"odyssey-improve({slug}): DIAGNOSE — root cause analysis complete"`
 
 Commit: `"odyssey-improve({slug}): FIX — {dimension} {tier} tier addressed"`
 
-**A_VERIFY** — (1) Run tests covering modified areas. (2) Re-capture metrics, compare with `baseline_metrics`. (3) CLI-assisted: `maestro delegate --role review --mode analysis` (`run_in_background: true`). (4) `needs_rework` → S_FIX; `verified` → `update_goal({ id: G4, status: "completed" })`. (5) Write `confirmation`. Update §5 (before/after metrics table).
+**A_VERIFY** — (1) Run tests covering modified areas. (2) Re-capture metrics, compare with `baseline_metrics`. (3) CLI-assisted: `maestro delegate --role review --mode analysis` (`run_in_background: true`). (4) `needs_rework` → S_FIX; `verified` → `update_plan`（G4 → completed）. (5) Write `confirmation`. Update §5 (before/after metrics table).
 
 **GATE: zero-remaining-verified** — every diagnosed finding is fixed and verified, individually classified (issue / decision), or skipped via `--skip-fix`; tests pass over modified areas; metrics re-captured and compared against `baseline_metrics`; no unaddressed actionable findings; before/after table written to understanding.md §8.
 

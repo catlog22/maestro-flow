@@ -6,7 +6,7 @@
 
 # Workflow: Odyssey Review (Codex)
 
-Codex-adapted: uses `spawn_agents_on_csv`, `request_user_input`, `create_goal`/`update_goal`.
+Codex-adapted: uses `spawn_agents_on_csv`, `request_user_input`, `update_plan`.
 
 ## State Chain
 
@@ -62,7 +62,7 @@ Back-half: `S_GENERALIZE → S_DISCOVER → S_RECORD → END` (see odyssey-base-
 | G5 | Discoveries triaged | all hits classified | S_DISCOVER | skip_generalize |
 | G6 | Learnings persisted | spec entries or no actionable | S_RECORD | — |
 
-`create_goal({ description: "Review: {intent_summary}", condition: "G1-G6 all done or skipped per flags" })`
+`update_plan({ plan: [{ step: "G1: review", status: "pending" }, ..., { step: "G6: record", status: "pending" }] })`（按上方 gate 表初始化 G1-G6 步骤清单）
 
 ---
 
@@ -141,7 +141,7 @@ Skip if no CLI tools (W006).
 - PURPOSE: call chains, recent changes, error gaps, similar patterns
 - EXPECTED: JSON `{call_chains, recent_changes, error_gaps, similar_patterns}`
 
-Write `explore.json` + evidence phase=explore. Update §3 (Exploration). Mark G2. `update_goal({ id: explore_goal_id, status: "completed" })`
+Write `explore.json` + evidence phase=explore. Update §3 (Exploration). Mark G2. `update_plan`（G2 → completed）
 
 **GATE: discovery-complete** — archaeology/explore evidence logged, understanding.md §2-§3 updated, G2 marked (W003 partial / W006 skip acceptable).
 
@@ -169,7 +169,7 @@ spawn_agents_on_csv({
 })
 ```
 
-Merge all dimension findings → evidence phase=review. Write `review_result` + §4 severity matrix. Mark G1. `update_goal({ id: review_goal_id, status: "completed" })`
+Merge all dimension findings → evidence phase=review. Write `review_result` + §4 severity matrix. Mark G1. `update_plan`（G1 → completed）
 
 **GATE: all-dimensions-reviewed** — all 4 dimension agents (correctness, security, performance, architecture) completed, findings merged into review_result with severity classification, evidence phase=review logged, §4 severity matrix written, G1 marked. Zero dimensions reviewed is BLOCKED (W002 partial with ≥1 dimension allowed).
 
@@ -186,7 +186,7 @@ Normal: `request_user_input` per tier | `-y`: auto-fix all. Remaining > 0 → re
 
 ### A_CONFIRM
 
-Run tests + `maestro delegate --role review --mode analysis` (`run_in_background: true`) zero-residual review. `remaining == 0 AND new == 0` → confirmed, mark G3 `update_goal({ id: confirm_goal_id, status: "completed" })`; otherwise → needs_rework → S_FIX. Update `confirmation` + `remaining_actionable` + §5.
+Run tests + `maestro delegate --role review --mode analysis` (`run_in_background: true`) zero-residual review. `remaining == 0 AND new == 0` → confirmed, mark G3 `update_plan`（G3 → completed）; otherwise → needs_rework → S_FIX. Update `confirmation` + `remaining_actionable` + §5.
 
 **GATE: zero-remaining** — exhaustive fix applied tier-by-tier, `remaining_actionable == 0` (or all remaining individually classified as deferred after 5-round escalation), tests pass, CLI re-review confirms no new findings, confirmation + §5 written, G3 marked. `needs_rework` routes back to FIX; skippable only when `skip_fix == true`.
 

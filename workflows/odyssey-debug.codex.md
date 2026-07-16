@@ -6,7 +6,7 @@
 
 # Workflow: Odyssey Debug (Codex)
 
-Codex-adapted debug mode. Uses `spawn_agents_on_csv`, `request_user_input`, `create_goal`/`update_goal`. Self-contained — no references to the Claude version.
+Codex-adapted debug mode. Uses `spawn_agents_on_csv`, `request_user_input`, `update_plan`. Self-contained — no references to the Claude version.
 
 ## State Chain
 
@@ -162,7 +162,7 @@ Skip if no CLI tools (W006).
 - PURPOSE: call chains, recent changes, error gaps, similar patterns
 - EXPECTED: JSON `{call_chains, recent_changes, error_gaps, similar_patterns}`
 
-Write `explore.json` + evidence phase=explore. Update understanding.md §3 (Exploration). Mark G2. `update_goal({ id: explore_goal_id, status: "completed" })`
+Write `explore.json` + evidence phase=explore. Update understanding.md §3 (Exploration). Mark G2. `update_plan`（G2 → completed）
 
 **GATE: discovery-complete** — archaeology/explore evidence logged, understanding.md §2-§3 updated, G2 marked (W003 partial / W006 skip acceptable).
 
@@ -173,7 +173,7 @@ Write `explore.json` + evidence phase=explore. Update understanding.md §3 (Expl
 3. Ambiguity → evidence phase=decision:
    - Normal: `request_user_input`
    - `-y`: defer
-4. Confirmed → `session.json.root_cause` + understanding.md §5 (Root Cause). Mark G1. `update_goal({ id: diagnose_goal_id, status: "completed" })`
+4. Confirmed → `session.json.root_cause` + understanding.md §5 (Root Cause). Mark G1. `update_plan`（G1 → completed）
 
 **GATE: diagnosis-confirmed** — all hypotheses tested with evidence, root cause confirmed with reproduction or code/log evidence (or INCONCLUSIVE after 3-strike), understanding.md §4-§5 written. Zero hypotheses tested is BLOCKED.
 
@@ -204,7 +204,7 @@ Write `explore.json` + evidence phase=explore. Update understanding.md §3 (Expl
    ```
 4. Update understanding.md §6 (Fix & Confirmation).
    - `needs_rework` → S_FIX
-   - `confirmed` → mark G3. `update_goal({ id: confirm_goal_id, status: "completed" })`
+   - `confirmed` → mark G3. `update_plan`（G3 → completed）
 
 **GATE: fix-confirmed** — fix implemented and tests pass, CLI review done, `confirmation.overall` set, understanding.md §6 written, G3 marked. `needs_rework` routes back to FIX; skippable only when `skip_fix == true`.
 

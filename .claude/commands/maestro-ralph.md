@@ -101,19 +101,9 @@ Remaining      → intent (amend_mode 时为 change_request)
 23. **Goal tracking 与 session 双写** — 主流程在 session 创建、step 派发、step 完成时同步创建/更新 goal，补充 session.json 的 UI 可见进度。
 </invariants>
 
-<goal_tracking>
-
-**时机与操作**（goal 是 session.json 的 UI 镜像，不替代 session 状态）：
-
-| 时机 | 操作 | 示例 |
-|------|------|------|
-| S_CREATE（session 创建后） | [@task] TaskCreate 整体 session goal | `TaskCreate({ description: "Session: {intent_summary}", subject: "所有 steps completed + task_decomposition_all_done" })` |
-| A_STEP_DISPATCH（step 派发时） | [@task] TaskCreate 当前 step goal | `TaskCreate({ description: "Step {index}: {step.skill}", subject: "{step.stage} 完成" })` |
-| A_STEP_COMPLETE（step 完成时） | [@task] TaskUpdate step goal | `TaskUpdate({ taskId: step_goal_id, status: "completed" })` |
-| A_APPLY_GOAL_DONE（子目标全完成） | [@task] TaskUpdate session goal | `TaskUpdate({ taskId: session_goal_id, status: "completed" })` |
-| S_HANDLE_FAIL（step 失败） | [@task] TaskUpdate step goal | `TaskUpdate({ taskId: step_goal_id, status: "failed" })` |
-
-</goal_tracking>
+<task_tracking>
+@~/.maestro/workflows/task-tracking.md
+</task_tracking>
 
 <state_machine>
 

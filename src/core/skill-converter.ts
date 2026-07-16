@@ -28,8 +28,8 @@ export interface BuildStats {
   files: number;
 }
 
-/** Body replacement pair: regex pattern + replacement string. */
-type BodyReplacement = [RegExp, string];
+/** Body replacement pair: regex pattern + replacement string or replacer function. */
+type BodyReplacement = [RegExp, string] | [RegExp, (...args: string[]) => string];
 
 /** Platform-specific conversion configuration. */
 interface ConversionProfile {
@@ -141,12 +141,23 @@ function parseSimpleYaml(raw: string): ParsedFrontmatter {
     // Inline value — only split on commas for list-like keys
     if (LIST_KEYS.has(key) && value.includes(',')) {
       out[key] = value.split(',').map(s => s.trim()).filter(Boolean);
+    } else if (/^".*"$/.test(value)) {
+      // Unescape double-quoted scalars so serializeFrontmatter's re-escaping
+      // round-trips instead of compounding (\" → \\\" on every pass).
+      out[key] = value.slice(1, -1).replace(/\\(["\\])/g, '$1');
     } else {
       out[key] = value.replace(/^["']|["']$/g, '');
     }
     i++;
   }
   return out;
+}
+
+function yamlNeedsQuoting(s: string): boolean {
+  if (!s) return false;
+  // `"` and `\` must force quoting — parseSimpleYaml unescapes quoted scalars,
+  // so emitting them bare would strip characters on the next parse pass.
+  return /["\\\[\]{}#*&!|>,]/.test(s) || /:\s/.test(s) || /^'|'$/.test(s);
 }
 
 function serializeFrontmatter(fm: ParsedFrontmatter): string {
@@ -158,6 +169,9 @@ function serializeFrontmatter(fm: ParsedFrontmatter): string {
     } else if (typeof value === 'string' && value.includes('\n')) {
       lines.push(`${key}: |`);
       for (const ln of value.split('\n')) lines.push(`  ${ln}`);
+    } else if (typeof value === 'string' && yamlNeedsQuoting(value)) {
+      const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      lines.push(`${key}: "${escaped}"`);
     } else {
       lines.push(`${key}: ${value}`);
     }
@@ -315,16 +329,18 @@ export const TOOL_FIELD_MAP: Record<string, Record<string, FieldMapping>> = {
       fields: { skill: 'AbsolutePath', args: null },
     },
   },
+  // codex 无任务板工具；清单跟踪走 update_plan（整体替换 plan 数组，无逐字段映射）。
+  // goal 工具（create_goal/update_goal）仅限用户明确要求时使用，禁止映射任务跟踪。
   TaskCreate: {
     codex: {
-      tool: 'create_goal',
-      fields: { description: 'objective', subject: 'criteria' },
+      tool: 'update_plan',
+      fields: {},
     },
   },
   TaskUpdate: {
     codex: {
-      tool: 'update_goal',
-      fields: { taskId: 'goal_id', status: 'status' },
+      tool: 'update_plan',
+      fields: {},
     },
   },
   spawn_agents_on_csv: {
@@ -576,9 +592,15 @@ function convertTextCodex(
   const { frontmatter, body } = splitFrontmatter(content);
 
   let hasAgent = false;
+  let hasPlan = false;
   if (isSkillOrCommand) {
     const agentRefs = detectAgentCalls(body);
     if (agentRefs.length > 0 || /\bAgent\s*\(/.test(body)) hasAgent = true;
+    if (/\b(?:TaskCreate|TaskUpdate|TodoWrite)\b/.test(body)) hasPlan = true;
+    // Already-converted content (e.g. hand-tuned .codex.md overrides passing
+    // through the runtime transformer) carries these notes — don't re-inject.
+    if (body.includes('**Agent timeout**')) hasAgent = false;
+    if (body.includes('**Plan tracking**')) hasPlan = false;
   }
 
   let convertedBody = rewriteAgentCallSitesCodex(body);
@@ -607,15 +629,27 @@ function convertTextCodex(
   const agentNote = hasAgent
     ? '\n> **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。\n'
     : '';
-  return fmBlock + agentNote + stripToolTags(convertedBody);
+  const planNote = hasPlan
+    ? '\n> **Plan tracking**: codex 无 TaskCreate/TaskUpdate/TodoWrite 任务板。进度清单用 `update_plan({ explanation?, plan: [{ step, status }] })` 维护（整体提交步骤数组，status: `pending` | `in_progress` | `completed`），权威状态始终在 session 工件中；依赖/认领（addBlockedBy/owner）是工件字段，不是工具参数。\n'
+    : '';
+  return fmBlock + agentNote + planNote + stripToolTags(convertedBody);
 }
 
+/** Injected note lines mention Claude tool names literally (e.g. "codex 无
+ * TaskCreate/... 任务板") — shield them from word-level replacements so a
+ * second pass over already-converted content leaves them intact. */
+const INJECTED_NOTE_LINE = /^> \*\*(?:Plan tracking|Agent timeout)\*\*:.*$/gm;
+
 function applyBodyReplacements(body: string, profile: ConversionProfile): string {
-  let out = body;
+  const shielded: string[] = [];
+  let out = body.replace(INJECTED_NOTE_LINE, line => {
+    shielded.push(line);
+    return `\0NOTE${shielded.length - 1}\0`;
+  });
   for (const [pattern, replacement] of profile.bodyReplacements) {
-    out = out.replace(pattern, replacement);
+    out = out.replace(pattern, replacement as string);
   }
-  return out;
+  return out.replace(/\0NOTE(\d+)\0/g, (_m, i: string) => shielded[Number(i)]);
 }
 
 // ---------------------------------------------------------------------------
@@ -697,6 +731,8 @@ function buildTree(
 const AGY_PROFILE: ConversionProfile = {
   bodyReplacements: [
     [/ralph skills --platform claude\b/g, 'ralph skills --platform agy'],
+    [/<task_tracking>[\s\S]*?<\/task_tracking>/g, ''],
+    [/\bmaestro run (prepare|skill|brief)\b(?![^\n`]*--platform)/g, 'maestro run $1 --platform agy'],
     [/\bmcp__exa__web_search_exa\b/g, 'search_web'],
     [/\bSendMessage\b/g, 'send_message'],
     [/\bAskUserQuestion\b/g, 'ask_question'],
@@ -738,38 +774,55 @@ const AGY_PROFILE: ConversionProfile = {
 //   <!-- @subagent -->       Agent()        → spawn_agent()
 //   <!-- @subagent:batch -->  multi Agent()  → spawn_agents_on_csv()
 //   <!-- @ask -->             AskUserQuestion → request_user_input
-//   <!-- @task -->            TaskCreate/Update → create_goal/update_goal
+//   <!-- @task -->            TaskCreate/Update → update_plan
 //   <!-- @msg -->             SendMessage    → send_message / followup_task
 //   <!-- @skill -->           Skill()        → inline execution
 // Tags are semantic anchors — placed before tool calls in .claude/ source
 // files so the converter can locate substitution points reliably.
 // ---------------------------------------------------------------------------
 
+const CODEX_TASK_TRACKING_BLOCK = `<task_tracking>
+
+**时机与操作**（plan 是 session 权威状态的 UI 镜像，不替代 session 状态）：
+
+| 时机 | 操作 | 示例 |
+|------|------|------|
+| Session 创建后 | update_plan 初始化步骤清单 | \`update_plan({ plan: [{ step: "Step {index}: {step.skill}", status: "pending" }, ...] })\` |
+| Step 派发时 | update_plan 标记当前 step | \`update_plan({ plan: [..., 当前 step status: "in_progress"] })\` |
+| Step 完成时 | update_plan 标记完成 | \`update_plan({ plan: [..., 该 step status: "completed"] })\` |
+| Step 失败时 | update_plan + explanation 说明 | \`update_plan({ explanation: "Step {index} failed: {reason}", plan: [...] })\` |
+
+</task_tracking>`;
+
 const CODEX_PROFILE: ConversionProfile = {
   bodyReplacements: [
     [/ralph skills --platform claude\b/g, 'ralph skills --platform codex'],
+    [/<task_tracking>[\s\S]*?<\/task_tracking>/g, CODEX_TASK_TRACKING_BLOCK],
+    [/\bmaestro run (prepare|skill|brief)\b(?![^\n`]*--platform)/g, 'maestro run $1 --platform codex'],
     [/\bAskUserQuestion\b/g, 'request_user_input'],
     [/\bSendMessage\s*\(\s*\{\s*to:/g, 'followup_task({ target:'],
     [/\bSendMessage\b/g, 'send_message'],
-    [/\bTaskCreate\b/g, 'create_goal'],
-    [/\bTaskUpdate\b/g, 'update_goal'],
+    [/\bTaskCreate\b/g, 'update_plan'],
+    [/\bTaskUpdate\b/g, 'update_plan'],
     [/\bTaskList\s*\(\s*\)/g, 'list_agents()'],
     [/\bTaskList\b/g, 'list_agents'],
     [/\bTaskGet\b/g, 'wait_agent'],
     [/\bTaskStop\b/g, 'interrupt_agent'],
     [/\bTodoWrite\b/g, 'update_plan'],
-    // Enforce max_runtime_seconds: 3600 on spawn_agents_on_csv calls
-    [/spawn_agents_on_csv\s*\(\s*\{(?![\s\S]*max_runtime_seconds)/g, 'spawn_agents_on_csv({ max_runtime_seconds: 3600,'],
+    // Enforce max_runtime_seconds: 3600 on spawn_agents_on_csv calls.
+    // Lookahead is bounded by the call's `})` closer (tempered token), so a
+    // `)` inside a string argument neither ends the scan nor causes re-injection.
+    [/spawn_agents_on_csv\s*\(\s*\{(?!(?:(?!\}\s*\))[\s\S])*?max_runtime_seconds)/g, 'spawn_agents_on_csv({ max_runtime_seconds: 3600,'],
     // Enforce timeout_ms: 3600000 (max) on wait_agent calls
-    [/wait_agent\s*\(\s*\{(?![\s\S]*timeout_ms)/g, 'wait_agent({ timeout_ms: 3600000,'],
+    [/wait_agent\s*\(\s*\{(?!(?:(?!\}\s*\))[\s\S])*?timeout_ms)/g, 'wait_agent({ timeout_ms: 3600000,'],
     [/wait_agent\s*\(\s*\)/g, 'wait_agent({ timeout_ms: 3600000 })'],
   ],
   frontmatterToolMap: {
     AskUserQuestion: 'request_user_input',
     SendMessage: 'send_message',
     Agent: 'spawn_agent',
-    TaskCreate: 'create_goal',
-    TaskUpdate: 'update_goal',
+    TaskCreate: 'update_plan',
+    TaskUpdate: 'update_plan',
     TaskList: 'list_agents',
     TaskGet: 'wait_agent',
     TaskStop: 'interrupt_agent',
@@ -803,9 +856,28 @@ const CODEX_PROFILE: ConversionProfile = {
 // Install: https://github.com/catlog22/pi-maestro-flow
 // ---------------------------------------------------------------------------
 
+const PI_HOST_MIRROR_BLOCK = `<host_mirror>
+
+**镜像协议**（状态对账由插件自动完成，LLM 只保留两个语义动作）：
+
+| 动作 | 工具调用 | 说明 |
+|------|----------|------|
+| 步进 | \`todo({ action: "next" })\` | 激活下一步 + 注入上游摘要 + 绑定 skill |
+| 完成宣告 | \`goal done\` | 触发前置校验（chain 全 completed + gates 无 failed）+ verifier |
+
+- 禁止手工 \`todo({ action: "create" })\` / \`todo({ action: "update" })\` 镜像任务——bridge 从 session.json 自动物化
+- goal 由 bridge 从 session intent + definition_of_done 自动派生
+- 压缩恢复后首个动作：\`maestro run brief <run-id>\` 重挂协议
+
+</host_mirror>`;
+
 const PI_PROFILE: ConversionProfile = {
   bodyReplacements: [
     [/ralph skills --platform claude\b/g, 'ralph skills --platform pi'],
+    [/<task_tracking>[\s\S]*?<\/task_tracking>/g, PI_HOST_MIRROR_BLOCK],
+    [/\bmaestro run (prepare|skill|brief)\b(?![^\n`]*--platform)/g, 'maestro run $1 --platform pi'],
+    [/\bTaskCreate\s*\(\s*\{([^}]*)\}\s*\)/g, (_m: string, params: string) => `todo({ action: "create", ${params.trim()} })`],
+    [/\bTaskUpdate\s*\(\s*\{([^}]*)\}\s*\)/g, (_m: string, params: string) => `todo({ action: "update", ${params.trim()} })`],
     [/\bTaskCreate\b/g, 'todo({ action: "create" })'],
     [/\bTaskUpdate\b/g, 'todo({ action: "update" })'],
     [/\bTaskList\s*\(\s*\)/g, 'todo({ action: "list" })'],
@@ -909,9 +981,25 @@ function convertTextPi(
 // Agents Standard profile
 // ---------------------------------------------------------------------------
 
+const STD_TASK_TRACKING_BLOCK = `<task_tracking>
+
+**时机与操作**（goal 是 session 权威状态的 UI 镜像，不替代 session 状态）：
+
+| 时机 | 操作 | 示例 |
+|------|------|------|
+| Session 创建后 | create_task session goal | \`create_task({ description: "所有 steps completed", subject: "Session: {intent_summary}" })\` |
+| Step 派发时 | create_task step goal | \`create_task({ description: "{step.stage} 完成", subject: "Step {index}: {step.skill}" })\` |
+| Step 完成时 | update_task step goal | \`update_task({ taskId: step_goal_id, status: "completed" })\` |
+| 子目标全完成时 | update_task session goal | \`update_task({ taskId: session_goal_id, status: "completed" })\` |
+| Step 失败时 | update_task step goal | \`update_task({ taskId: step_goal_id, status: "failed" })\` |
+
+</task_tracking>`;
+
 const AGENTS_STANDARD_PROFILE: ConversionProfile = {
   bodyReplacements: [
     [/ralph skills --platform claude\b/g, 'ralph skills --platform agent'],
+    [/<task_tracking>[\s\S]*?<\/task_tracking>/g, STD_TASK_TRACKING_BLOCK],
+    [/\bmaestro run (prepare|skill|brief)\b(?![^\n`]*--platform)/g, 'maestro run $1 --platform agents-standard'],
     [/\bAskUserQuestion\b/g, 'ask_user'],
     [/\bSendMessage\b/g, 'send_message'],
     [/\bExitPlanMode\b/g, 'exit_plan_mode'],

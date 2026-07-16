@@ -6,7 +6,7 @@
 
 # Workflow: Odyssey UI (Codex)
 
-6-dimension visual experience audit — survey design context, audit dimensions, divergent exploration, fix, verify, generalize. Codex-adapted: uses `spawn_agents_on_csv`, `request_user_input`, `create_goal`/`update_goal`.
+6-dimension visual experience audit — survey design context, audit dimensions, divergent exploration, fix, verify, generalize. Codex-adapted: uses `spawn_agents_on_csv`, `request_user_input`, `update_plan`.
 
 ---
 
@@ -113,7 +113,7 @@ Discover routes: new component to audit → S_AUDIT; fixable sibling → S_FIX.
 
 ### Actions
 
-**A_SURVEY** — (1) Design system inventory: scan for design tokens, CSS variables, theme imports. (2) Current state analysis: styling patterns, layout strategy, component hierarchy. (3) CLI-assisted: `maestro delegate --role analyze --mode analysis` (`run_in_background: true`) — survey tokens, spacing, typography, hierarchy, consistency. (4) Evidence phase=survey. Update §2. Mark G1. `update_goal({ id: survey_goal_id, status: "completed" })`
+**A_SURVEY** — (1) Design system inventory: scan for design tokens, CSS variables, theme imports. (2) Current state analysis: styling patterns, layout strategy, component hierarchy. (3) CLI-assisted: `maestro delegate --role analyze --mode analysis` (`run_in_background: true`) — survey tokens, spacing, typography, hierarchy, consistency. (4) Evidence phase=survey. Update §2. Mark G1. `update_plan`（G1 → completed）
 
 Commit: `"odyssey-ui({slug}): SURVEY — design context survey complete"`
 
@@ -148,7 +148,7 @@ spawn_agents_on_csv({
 })
 ```
 
-**Step 3 — Merge:** Collect `findings_json` from all 6 agents. Merge into unified findings list. Evidence phase=audit. Write `audit_result` to session state. Update §3 severity matrix. Mark G2. `update_goal({ id: audit_goal_id, status: "completed" })`
+**Step 3 — Merge:** Collect `findings_json` from all 6 agents. Merge into unified findings list. Evidence phase=audit. Write `audit_result` to session state. Update §3 severity matrix. Mark G2. `update_plan`（G2 → completed）
 
 **GATE: all-dimensions-audited** — all 6 dimensions (or `--dimensions` subset) completed with structured findings, merged into severity matrix, evidence phase=audit logged per dimension. Zero dimensions reviewed is BLOCKED (W002 partial from agent failure is a warning).
 
@@ -181,7 +181,7 @@ spawn_agents_on_csv({
 
 **Step 3 — CLI-assisted:** `maestro delegate --role analyze --mode analysis` (`run_in_background: true`) — polish opportunities, micro-interactions, visual rhythm, delight moments.
 
-**Step 4 — Consolidate:** Merge audit findings + divergent ideas → prioritized list (severity x impact x effort). Evidence phase=diverge. Update §4. Mark G3. `update_goal({ id: diverge_goal_id, status: "completed" })`
+**Step 4 — Consolidate:** Merge audit findings + divergent ideas → prioritized list (severity x impact x effort). Evidence phase=diverge. Update §4. Mark G3. `update_plan`（G3 → completed）
 
 **GATE: diverge-explored** — both Polish and Delight agents completed, returning distinct `[{idea, category, impact, effort, description, inspiration}]` entries; CLI-assisted analysis completed; all outputs consolidated with audit findings into a prioritized list (severity × impact × effort); evidence phase=diverge logged; understanding.md §4 written.
 
@@ -191,7 +191,7 @@ Commit: `"odyssey-ui({slug}): DIVERGE — divergent exploration complete"`
 
 Commit: `"odyssey-ui({slug}): FIX — {tier} tier addressed"`
 
-**A_VERIFY** — (1) Run tests (lint, unit, visual regression). (2) `maestro delegate --role review --mode analysis` (`run_in_background: true`) — visual correctness, interaction states, accessibility, responsive. (3) `needs_rework` → S_FIX; `verified` → mark G4. `update_goal({ id: verify_goal_id, status: "completed" })`. Update §5, write `confirmation`.
+**A_VERIFY** — (1) Run tests (lint, unit, visual regression). (2) `maestro delegate --role review --mode analysis` (`run_in_background: true`) — visual correctness, interaction states, accessibility, responsive. (3) `needs_rework` → S_FIX; `verified` → mark G4. `update_plan`（G4 → completed）. Update §5, write `confirmation`.
 
 **GATE: zero-remaining-verified** — every prioritized finding and idea is fixed and verified, individually classified (issue / decision), or skipped via `--skip-fix`; tests pass (lint, unit, visual regression); confirmation written; no unaddressed actionable findings; understanding.md §5 updated. `needs_rework` routes back to FIX.
 
