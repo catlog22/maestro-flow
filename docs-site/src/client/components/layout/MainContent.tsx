@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { useI18n } from '@/client/i18n/index.js';
+import { useVersion } from '@/client/version/index.js';
 import { Breadcrumbs } from '@/client/components/navigation/index.js';
-import { inventoryData } from '@/client/routes/route-config.js';
+import { getInventory } from '@/client/routes/route-config.js';
 
 // ---------------------------------------------------------------------------
 // MainContent — Gemini CLI style: clean content area
@@ -14,6 +15,7 @@ interface MainContentProps {
 
 export function MainContent({ children, showBreadcrumbs = true }: MainContentProps) {
   const { t } = useI18n();
+  const { version } = useVersion();
   return (
     <main
       role="main"
@@ -30,7 +32,7 @@ export function MainContent({ children, showBreadcrumbs = true }: MainContentPro
       <div id="main-content" className="max-w-[var(--size-content-max-width)] mx-auto px-[var(--spacing-6)] sm:px-[var(--spacing-8)] lg:px-[var(--spacing-10)] py-[var(--spacing-8)] lg:py-[var(--spacing-10)]">
         {showBreadcrumbs && (
           <div className="mb-[var(--spacing-6)]">
-            <Breadcrumbs categories={inventoryData.categories} />
+            <Breadcrumbs categories={getInventory(version).categories} />
           </div>
         )}
         {children}

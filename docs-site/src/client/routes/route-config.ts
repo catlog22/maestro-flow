@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
-// Route Configuration — generated from inventory.json categories
+// Route Configuration — version-aware inventory with v1/v2 support
 // ---------------------------------------------------------------------------
 
-// Import inventory JSON with type assertion
-import inventoryJson from '../data/inventory.json';
+import inventoryV1Json from '../data/inventory.json';
+import inventoryV2Json from '../data/inventory-v2.json';
+import type { DocVersion } from '../version/index.js';
 
 // Type definitions
 export interface Category {
@@ -21,6 +22,8 @@ export interface Command {
   description: string;
   argumentHint?: string;
   allowedTools?: string[];
+  deprecated?: boolean;
+  subcommands?: string[];
 }
 
 export interface Skill {
@@ -39,11 +42,50 @@ export interface InventoryData {
   codex_skills: Skill[];
 }
 
-// Typed inventory data
-export const inventory: InventoryData = inventoryJson as InventoryData;
+const v1Data = inventoryV1Json as InventoryData;
+const v2Base = inventoryV2Json as InventoryData;
 
-// Export for convenience
-export const inventoryData: InventoryData = inventory;
+// v2 shares skills from v1 (skills haven't changed)
+const v2Data: InventoryData = {
+  ...v2Base,
+  claude_skills: v1Data.claude_skills,
+  codex_skills: v1Data.codex_skills,
+};
+
+// Default export (v1 for backward compat during static route generation)
+export const inventory: InventoryData = v1Data;
+export const inventoryData: InventoryData = v1Data;
+
+// Version-aware accessor
+export function getInventory(version: DocVersion): InventoryData {
+  return version === 'v2' ? v2Data : v1Data;
+}
+
+// All commands across both versions (for static route generation)
+export function getAllCommands(): Command[] {
+  const seen = new Set<string>();
+  const result: Command[] = [];
+  for (const cmd of [...v1Data.commands, ...v2Data.commands]) {
+    if (!seen.has(cmd.name)) {
+      seen.add(cmd.name);
+      result.push(cmd);
+    }
+  }
+  return result;
+}
+
+// All categories across both versions
+export function getAllCategories(): Category[] {
+  const seen = new Set<string>();
+  const result: Category[] = [];
+  for (const cat of [...v1Data.categories, ...v2Data.categories]) {
+    if (!seen.has(cat.id)) {
+      seen.add(cat.id);
+      result.push(cat);
+    }
+  }
+  return result;
+}
 
 // Extract command slugs from names (e.g., "maestro-init" -> "init")
 export const getCommandSlug = (commandName: string): string => {
@@ -53,12 +95,13 @@ export const getCommandSlug = (commandName: string): string => {
 
 // Helper: Get category by ID
 export const getCategoryById = (id: string): Category | undefined => {
-  return inventory.categories.find((c) => c.id === id);
+  return getAllCategories().find((c) => c.id === id);
 };
 
-// Helper: Get commands by category
-export const getCommandsByCategory = (categoryId: string): Command[] => {
-  return inventory.commands.filter((c) => c.category === categoryId);
+// Helper: Get commands by category (version-aware)
+export const getCommandsByCategory = (categoryId: string, version?: DocVersion): Command[] => {
+  const data = version ? getInventory(version) : v1Data;
+  return data.commands.filter((c) => c.category === categoryId);
 };
 
 // Helper: Get skills by category
@@ -67,8 +110,8 @@ export const getSkillsByCategory = (categoryId: string): {
   codex: Skill[];
 } => {
   return {
-    claude: inventory.claude_skills.filter((s) => s.category === categoryId),
-    codex: inventory.codex_skills.filter((s) => s.category === categoryId),
+    claude: v1Data.claude_skills.filter((s) => s.category === categoryId),
+    codex: v1Data.codex_skills.filter((s) => s.category === categoryId),
   };
 };
 
@@ -137,13 +180,14 @@ function scoreMatch(tokens: string[], fields: Array<{ text: string; weight: numb
   return { score: totalScore, matchedField: bestField };
 }
 
-export const searchInventory = (query: string, categoryFilter?: string): SearchResult[] => {
+export const searchInventory = (query: string, categoryFilter?: string, version?: DocVersion): SearchResult[] => {
   const tokens = tokenize(query);
   if (tokens.length === 0) return [];
 
+  const data = version ? getInventory(version) : v1Data;
   const results: SearchResult[] = [];
 
-  inventory.commands.forEach((cmd) => {
+  data.commands.forEach((cmd) => {
     if (categoryFilter && cmd.category !== categoryFilter) return;
     const zh = zhCommands[cmd.name];
     const { score, matchedField } = scoreMatch(tokens, [
@@ -168,7 +212,7 @@ export const searchInventory = (query: string, categoryFilter?: string): SearchR
     }
   });
 
-  inventory.claude_skills.forEach((skill) => {
+  data.claude_skills.forEach((skill) => {
     if (categoryFilter && skill.category !== categoryFilter) return;
     const zh = zhSkills[skill.name];
     const { score, matchedField } = scoreMatch(tokens, [
@@ -192,7 +236,7 @@ export const searchInventory = (query: string, categoryFilter?: string): SearchR
     }
   });
 
-  inventory.codex_skills.forEach((skill) => {
+  data.codex_skills.forEach((skill) => {
     if (categoryFilter && skill.category !== categoryFilter) return;
     const { score, matchedField } = scoreMatch(tokens, [
       { text: skill.name, weight: 3, field: 'name' },

@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useI18n } from '@/client/i18n/index.js';
+import { useVersion } from '@/client/version/index.js';
 import { useSidebar } from './SidebarContext.js';
-import { inventoryData, getCommandsByCategory, getCommandSlug, type Command, type Skill } from '@/client/routes/route-config.js';
+import { getInventory, getCommandsByCategory, getCommandSlug, type Command, type Skill } from '@/client/routes/route-config.js';
 import { getAllGuideMeta } from '@/client/data/index.js';
 import { getGuideIcon } from '@/client/utils/guideIcons.js';
 import { getCategoryIcon } from '@/client/utils/categoryIcons.js';
@@ -22,6 +23,7 @@ interface CategorySection {
 
 export function Sidebar() {
   const { t } = useI18n();
+  const { version } = useVersion();
   const location = useLocation();
   const { isOpen: isMobileOpen, close: closeSidebar } = useSidebar();
 
@@ -39,18 +41,24 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isMobileOpen, closeSidebar]);
 
+  const inv = useMemo(() => getInventory(version), [version]);
+
   const defaultSections: CategorySection[] = useMemo(() => {
-    return inventoryData.categories.map((cat) => ({
+    return inv.categories.map((cat) => ({
       id: cat.id,
       titleKey: `categories.${cat.id.replace('-', '_')}`,
-      commands: getCommandsByCategory(cat.id),
-      claudeSkills: inventoryData.claude_skills.filter((s) => s.category === cat.id),
-      codexSkills: inventoryData.codex_skills.filter((s) => s.category === cat.id),
+      commands: getCommandsByCategory(cat.id, version),
+      claudeSkills: inv.claude_skills.filter((s) => s.category === cat.id),
+      codexSkills: inv.codex_skills.filter((s) => s.category === cat.id),
       isOpen: ['maestro', 'spec', 'quality'].includes(cat.id),
     }));
-  }, []);
+  }, [inv, version]);
 
   const [sections, setSections] = useState<CategorySection[]>(defaultSections);
+
+  useEffect(() => {
+    setSections(defaultSections);
+  }, [defaultSections]);
 
   const isActivePath = (categoryId: string): boolean => {
     const pathParts = location.pathname.split('/').filter(Boolean);

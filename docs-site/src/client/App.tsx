@@ -1,7 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { I18nProvider } from './i18n/index.js';
+import { VersionProvider, useVersion } from './version/index.js';
 import { Layout } from './components/layout/Layout.js';
-import { inventoryData, getCommandSlug } from './routes/route-config.js';
+import { getAllCommands, getAllCategories, getCommandSlug, getInventory, getSkillsByCategory } from './routes/route-config.js';
 
 // Lazy load pages for code splitting
 const LandingPage = lazy(() => import('./pages/LandingPage.js'));
@@ -24,13 +25,123 @@ function GuideRouteWrapper() {
   return <GuidePage slug={slug} />;
 }
 
+// Pre-compute all routes (union of v1+v2 commands) so URLs are stable
+const allCommands = getAllCommands();
+const allCategories = getAllCategories();
+const allSkills = {
+  claude: getInventory('v1').claude_skills,
+  codex: getInventory('v1').codex_skills,
+};
+
 // ---------------------------------------------------------------------------
-// App — root component with i18n provider, router, and layout
+// VersionAwareRoutes — renders routes with version-filtered data
+// ---------------------------------------------------------------------------
+
+function VersionAwareRoutes() {
+  const { version } = useVersion();
+  const inv = getInventory(version);
+
+  return (
+    <Routes>
+      {/* Home */}
+      <Route path="/" element={<LandingPage categories={inv.categories} />} />
+
+      {/* Category pages — version-aware commands */}
+      {allCategories.map((category) => (
+        <Route
+          key={category.id}
+          path={`/${category.id}`}
+          element={
+            <CategoryPage
+              categoryId={category.id}
+              category={inv.categories.find((c) => c.id === category.id) || category}
+              commands={inv.commands.filter((c) => c.category === category.id)}
+              claudeSkills={inv.claude_skills.filter((s) => s.category === category.id)}
+              codexSkills={inv.codex_skills.filter((s) => s.category === category.id)}
+            />
+          }
+        />
+      ))}
+
+      {/* Command detail pages — all versions registered for stable URLs */}
+      {allCommands.map((command) => {
+        const slug = getCommandSlug(command.name);
+        const cat = allCategories.find((c) => c.id === command.category);
+        if (!cat) return null;
+        return (
+          <Route
+            key={command.name}
+            path={`/${command.category}/${slug}`}
+            element={
+              <CommandDetailPage
+                commandName={command.name}
+                category={cat}
+                command={command}
+              />
+            }
+          />
+        );
+      })}
+
+      {/* Claude Skills detail pages */}
+      {allSkills.claude.map((skill) => (
+        <Route
+          key={`claude-${skill.name}`}
+          path={`/skills/${skill.name}`}
+          element={
+            <SkillDetailPage
+              skillName={skill.name}
+              skillType="claude"
+              skill={skill}
+              category={allCategories.find((c) => c.id === skill.category)!}
+            />
+          }
+        />
+      ))}
+
+      {/* Codex Skills detail pages */}
+      {allSkills.codex.map((skill) => (
+        <Route
+          key={`codex-${skill.name}`}
+          path={`/codex/${skill.name}`}
+          element={
+            <SkillDetailPage
+              skillName={skill.name}
+              skillType="codex"
+              skill={skill}
+              category={allCategories.find((c) => c.id === skill.category)!}
+            />
+          }
+        />
+      ))}
+
+      {/* Search page */}
+      <Route path="/search" element={<SearchPage />} />
+
+      {/* Changelog page */}
+      <Route path="/changelog" element={<ChangelogPage />} />
+
+      {/* Quick Start - top-level route */}
+      <Route path="/quick-start" element={<QuickStartPage />} />
+
+      {/* Guides */}
+      <Route path="/guides" element={<Navigate to="/guides/command-usage" replace />} />
+      <Route path="/guides/:slug" element={<GuideRouteWrapper />} />
+
+      {/* Catch-all - redirect to home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// App — root component with i18n, version provider, router, and layout
 // ---------------------------------------------------------------------------
 
 export function App() {
   return (
     <I18nProvider>
+      <VersionProvider>
       <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || undefined}>
         <Layout>
           <Suspense
@@ -40,96 +151,11 @@ export function App() {
               </div>
             }
           >
-            <Routes>
-              {/* Home */}
-              <Route path="/" element={<LandingPage categories={inventoryData.categories} />} />
-
-              {/* Category pages */}
-              {inventoryData.categories.map((category) => (
-                <Route
-                  key={category.id}
-                  path={`/${category.id}`}
-                  element={
-                    <CategoryPage
-                      categoryId={category.id}
-                      category={category}
-                      commands={inventoryData.commands.filter((c) => c.category === category.id)}
-                      claudeSkills={inventoryData.claude_skills.filter((s) => s.category === category.id)}
-                      codexSkills={inventoryData.codex_skills.filter((s) => s.category === category.id)}
-                    />
-                  }
-                />
-              ))}
-
-              {/* Command detail pages */}
-              {inventoryData.commands.map((command) => {
-                const slug = getCommandSlug(command.name);
-                return (
-                  <Route
-                    key={command.name}
-                    path={`/${command.category}/${slug}`}
-                    element={
-                      <CommandDetailPage
-                        commandName={command.name}
-                        category={inventoryData.categories.find((c) => c.id === command.category)!}
-                        command={command}
-                      />
-                    }
-                  />
-                );
-              })}
-
-              {/* Claude Skills detail pages */}
-              {inventoryData.claude_skills.map((skill) => (
-                <Route
-                  key={`claude-${skill.name}`}
-                  path={`/skills/${skill.name}`}
-                  element={
-                    <SkillDetailPage
-                      skillName={skill.name}
-                      skillType="claude"
-                      skill={skill}
-                      category={inventoryData.categories.find((c) => c.id === skill.category)!}
-                    />
-                  }
-                />
-              ))}
-
-              {/* Codex Skills detail pages */}
-              {inventoryData.codex_skills.map((skill) => (
-                <Route
-                  key={`codex-${skill.name}`}
-                  path={`/codex/${skill.name}`}
-                  element={
-                    <SkillDetailPage
-                      skillName={skill.name}
-                      skillType="codex"
-                      skill={skill}
-                      category={inventoryData.categories.find((c) => c.id === skill.category)!}
-                    />
-                  }
-                />
-              ))}
-
-              {/* Search page */}
-              <Route path="/search" element={<SearchPage />} />
-
-              {/* Changelog page */}
-              <Route path="/changelog" element={<ChangelogPage />} />
-
-              {/* Quick Start - top-level route */}
-              <Route path="/quick-start" element={<QuickStartPage />} />
-
-              {/* Guides */}
-              <Route path="/guides" element={<Navigate to="/guides/command-usage" replace />} />
-              <Route path="/guides/:slug" element={<GuideRouteWrapper />} />
-
-              {/* Catch-all - redirect to home */}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <VersionAwareRoutes />
           </Suspense>
         </Layout>
       </BrowserRouter>
+      </VersionProvider>
     </I18nProvider>
   );
 }

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useI18n } from '@/client/i18n/index.js';
-import { searchInventory, inventory, type SearchResult } from '@/client/routes/route-config.js';
+import { useVersion } from '@/client/version/index.js';
+import { searchInventory, getInventory, type SearchResult } from '@/client/routes/route-config.js';
 import { CompactSearchInput } from '@/client/components/navigation/index.js';
 
 export default function SearchPage() {
   const { t, locale } = useI18n();
+  const { version } = useVersion();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
@@ -13,7 +15,7 @@ export default function SearchPage() {
   const handleSearch = (searchQuery: string) => {
     setQuery(searchQuery);
     if (searchQuery.trim().length >= 1) {
-      setResults(searchInventory(searchQuery, categoryFilter));
+      setResults(searchInventory(searchQuery, categoryFilter, version));
     } else {
       setResults([]);
     }
@@ -22,7 +24,7 @@ export default function SearchPage() {
   const handleCategoryChange = (cat: string | undefined) => {
     setCategoryFilter(cat);
     if (query.trim().length >= 1) {
-      setResults(searchInventory(query, cat));
+      setResults(searchInventory(query, cat, version));
     }
   };
 
@@ -41,7 +43,7 @@ export default function SearchPage() {
             active={!categoryFilter}
             onClick={() => handleCategoryChange(undefined)}
           />
-          {inventory.categories.map((cat) => (
+          {getInventory(version).categories.map((cat) => (
             <FilterChip
               key={cat.id}
               label={cat.name}
