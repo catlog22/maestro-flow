@@ -182,7 +182,7 @@ Artifact paths and metadata are declared in `prepare/plan.md` contract.
 }
 ```
 
-**outputs/waves.json**, **outputs/dependency-graph.json**, **outputs/collision-report.json**. If a plan check runs, write `outputs/evidence/plan-check.json`.
+**outputs/waves.json**, **outputs/dependency-graph.json**, **outputs/collision-report.json**. If a plan check runs, write `outputs/plan-check.json`.
 
 ### report frontmatter
 

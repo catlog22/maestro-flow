@@ -36,25 +36,27 @@ $ARGUMENTS: "<idea or @file> [-y] [-c] [--from <source>]"
 ## Output Structure
 
 ```
-.workflow/.spec/SPEC-{slug}-{YYYY-MM-DD}/
-├── spec-config.json              # Session configuration + phase state
-├── discovery-context.json        # Codebase exploration (optional)
-├── refined-requirements.json     # Phase 1.5: Confirmed requirements
-├── glossary.json                 # Phase 2: Terminology glossary
-├── product-brief.md              # Phase 2: Product brief
-├── requirements/                 # Phase 3: Detailed PRD
-│   ├── _index.md                 #   Summary, MoSCoW table, traceability
-│   ├── REQ-NNN-{slug}.md         #   Functional requirement
-│   └── NFR-{type}-NNN-{slug}.md  #   Non-functional requirement
-├── architecture/                 # Phase 4: Architecture decisions
-│   ├── _index.md                 #   Overview, components, tech stack
-│   └── ADR-NNN-{slug}.md         #   Architecture Decision Record
-├── epics/                        # Phase 5: Epic/Story breakdown
-│   ├── _index.md                 #   Epic table, dependency map, MVP
-│   └── EPIC-NNN-{slug}.md        #   Individual Epic with Stories
-├── readiness-report.md           # Phase 6: Quality report
-├── spec-summary.md               # Phase 6: Executive summary
-└── roadmap.md                    # Phase 7: Project roadmap (also written to .workflow/roadmap.md)
+{run_dir}/
+├── outputs/
+│   ├── spec-config.json              # Session configuration + phase state
+│   ├── discovery-context.json        # Codebase exploration (optional)
+│   ├── refined-requirements.json     # Phase 1.5: Confirmed requirements
+│   ├── glossary.json                 # Phase 2: Terminology glossary
+│   ├── product-brief.md              # Phase 2: Product brief
+│   ├── requirements/                 # Phase 3: Detailed PRD
+│   │   ├── _index.md                 #   Summary, MoSCoW table, traceability
+│   │   ├── REQ-NNN-{slug}.md         #   Functional requirement
+│   │   └── NFR-{type}-NNN-{slug}.md  #   Non-functional requirement
+│   ├── architecture/                 # Phase 4: Architecture decisions
+│   │   ├── _index.md                 #   Overview, components, tech stack
+│   │   └── ADR-NNN-{slug}.md         #   Architecture Decision Record
+│   ├── epics/                        # Phase 5: Epic/Story breakdown
+│   │   ├── _index.md                 #   Epic table, dependency map, MVP
+│   │   └── EPIC-NNN-{slug}.md        #   Individual Epic with Stories
+│   ├── readiness-report.md           # Phase 6: Quality report
+│   ├── spec-summary.md               # Phase 6: Executive summary
+│   └── roadmap.md                    # Phase 7: Project roadmap
+└── report.md
 ```
 
 ---
@@ -106,8 +108,8 @@ Parse input, analyze the seed idea, optionally explore codebase, establish sessi
 
 **Step 2.2: Session Initialization**
 ```
-Session ID: SPEC-{slug}-{YYYY-MM-DD}
-Output dir: .workflow/.spec/{session_id}/
+Session: via maestro run create spec-generate --session YYYYMMDD-spec-{slug}
+Output dir: {run_dir}/outputs/
 ```
 
 **Step 2.3: Seed Analysis via CLI** (MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep)
@@ -387,8 +389,8 @@ MANDATORY: apply ~/.maestro/workflows/roadmap-common.md **Roadmap Template** for
 ```
 Glob product-brief.md AND requirements/ AND architecture/ AND epics/ MUST exist before final report; BLOCKED if missing.
 == spec-generate complete ==
-Session: SPEC-{slug}-{date} | Quality: {score}% ({gate}) | Phases: {completed_count}/7
-Output: .workflow/.spec/{session_id}/
+Session: {session_id} | Quality: {score}% ({gate}) | Phases: {completed_count}/7
+Output: {run_dir}/outputs/
   spec-config.json, product-brief.md, requirements/, architecture/, epics/,
   readiness-report.md, spec-summary.md, roadmap.md
 

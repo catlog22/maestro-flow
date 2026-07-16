@@ -149,7 +149,7 @@ contract:
     exit: [context-collected, plan-generated, plan-checked, plan-confirmed]
 ```
 
-- **产物迁移**：`.task/TASK-*.json` → `outputs/tasks/TASK-*.json`（不再隐藏目录）；`plan-check` → `evidence/plan-check.json` + `evidence.json`；删 Session 级 `tasks.json` 设想。
+- **产物迁移**：`.task/TASK-*.json` → `outputs/tasks/TASK-*.json`（不再隐藏目录）；`plan-check` → `outputs/plan-check.json`；删 Session 级 `tasks.json` 设想。
 - **改造点**：Registry 登记一个 `kind:task-collection` artifact 指向 `outputs/tasks/`，`plan.json#task_ids` 为 primary index；Execute 经 `current-plan` 解析 task collection ref。
 - **Swarm 优化建议**：
   * **任务打包与别名消费**：`plan.json#task_ids` 需作为 Primary Index，以便 execute 命令只通过 `current-plan` 别名解析对应任务文件，避免对 `outputs/tasks/` 目录进行多余的文件遍历。

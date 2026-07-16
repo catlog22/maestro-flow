@@ -81,7 +81,7 @@ title: ".workflow/ 文件体系变更方案 — Session/Run 模型"
 │               ├── run.json        # 权威：元信息 + goal + gates + input/output + handoff
 │               ├── report.md       # LLM 书写源 → complete 后定格为不可变产物
 │               ├── outputs/        # 权威：command-specific 正式产物
-│               ├── evidence/       # 证据附件（惰性：有内容才创建）
+│               ├── evidence/       # 非正式 traces（惰性，不参与门禁）
 │               └── work/           # 临时草稿（惰性），complete 时清理
 └── tmp/                            # 可删临时区（.gitignore）
     ├── hook/{host_session_id}.json # Hook 去重缓存
@@ -94,7 +94,7 @@ title: ".workflow/ 文件体系变更方案 — Session/Run 模型"
 
 - `sessions/{id}/` 路径全生命周期稳定，不随 active/sealed/archived 移动；
 - 正式产物只进所属 Run 的 `outputs/`；`work/` 与 `tmp/` 都不承载正式产物；
-- `runs/*/evidence/`、`runs/*/work/`、session `specs/ knowhow/` **惰性创建**——最小 Run = `run.json` + `report.md` + `outputs/`；
+- `runs/*/evidence/`（非正式 traces，不参与门禁）、`runs/*/work/`、session `specs/ knowhow/` **惰性创建**——最小 Run = `run.json` + `report.md` + `outputs/`；正式 evidence-role 产物写入 `outputs/`（与 prepare 合约对齐）；
 - `runs/*/work/` 是单 Run 草稿（complete 清理）；`tmp/` 是跨 Run/Session 可抛弃区（保留 7 天）；
 - 命令**不得**直接 append/edit 权威 JSON——由单一写入所有者（SessionStore）批量事务写入；
 - `sessions/index.json`、`wiki-index.json` 惰性重建，不参与写入仲裁；
@@ -500,7 +500,7 @@ next:
 | `maestro-analyze` | discussion.md · analysis.md · conclusions.json · context.md · context-package.json | `findings.json` · `risk-matrix.json`（讨论入 `report.md`；verdict 入 `run.json.handoff`） |
 | `maestro-blueprint` | — | `product-brief.md` · `prd.md` · `architecture.md` · `requirements.json` · `epics.json` · `traceability.json` |
 | `maestro-roadmap` | `roadmap.md`（项目根） | `roadmap.json`（session DAG + 种子）· `roadmap.md`；运行时写 `state.json.sessions[]` |
-| `maestro-plan` | plan.json · .task/TASK-*.json · .summaries/ | `plan.json` · `tasks/TASK-*.json` · `waves.json` · `dependency-graph.json` · `collision-report.json`；`evidence/plan-check.json` |
+| `maestro-plan` | plan.json · .task/TASK-*.json · .summaries/ | `plan.json` · `tasks/TASK-*.json` · `waves.json` · `dependency-graph.json` · `collision-report.json`；`outputs/plan-check.json` |
 | `maestro-execute` | .summaries/TASK-*-summary.md · verification.json | `execution.json` · `task-results.json` · `self-check.json`（原 verification.json 更名）· `change-manifest.json`（复盘入 `report.md`） |
 | **verify**（独立 Run） | scratch/*-verify-*/verification.json | 独立 verify Run：`verification.json` · `requirement-coverage.json` · `antipattern-report.json`；alias `latest-verification` |
 | `quality-review` | review.json | `review-findings.json`（避免与 analyze 的 findings.json 同名异义，文件名即 kind）· `spec-conflicts.json` · `issue-candidates.json` |

@@ -37,9 +37,9 @@ maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode plan
 
 ## Artifact Boundary
 
-- Every formal artifact MUST be written under `{run_dir}/outputs/`.
-- Evidence and worker traces MUST be written under `{run_dir}/evidence/`.
+- Every formal artifact (including evidence-role artifacts declared in the prepare contract) MUST be written under `{run_dir}/outputs/`.
 - Human-readable synthesis and handoff MUST be written to `{run_dir}/report.md`.
+- Informal worker traces and intermediate logs may use `{run_dir}/evidence/` (lazily created, not gate-checked).
 - Temporary computation may use `{run_dir}/work/`; it is never an artifact and is never indexed.
 - `.workflow/sessions/{session_id}/` is the only Session authority. Do not create private command Session directories or a second status/manifest truth source. Team message buses may exist only as transient coordination and never contain formal artifacts.
 - Protocol files (`session.json`, `run.json`, `artifacts.json`) are runtime-owned and MUST NOT be edited directly.

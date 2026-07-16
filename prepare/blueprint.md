@@ -6,17 +6,17 @@ contract:
   consumes:
     - { kind: context-package, alias: upstream-context, required: false }
   produces:
-    - { path: product-brief.md, kind: blueprint, alias: current-blueprint, role: primary }
-    - { path: blueprint-config.json, kind: blueprint-config, role: evidence }
-    - { path: discovery-context.json, kind: discovery-context, role: evidence, optional: true }
-    - { path: refined-requirements.json, kind: refined-requirements, role: evidence }
-    - { path: glossary.json, kind: glossary, role: attachment }
-    - { path: requirements/, kind: requirements-spec, role: attachment }
-    - { path: architecture/, kind: architecture-spec, role: attachment }
-    - { path: epics/, kind: epics-spec, role: attachment }
-    - { path: readiness-report.md, kind: readiness-report, role: evidence }
-    - { path: blueprint-summary.md, kind: blueprint-summary, role: attachment }
-    - { path: context-package.json, kind: context-package, alias: blueprint-context, role: attachment }
+    - { path: outputs/product-brief.md, kind: blueprint, alias: current-blueprint, role: primary }
+    - { path: outputs/blueprint-config.json, kind: blueprint-config, role: evidence }
+    - { path: outputs/discovery-context.json, kind: discovery-context, role: evidence, optional: true }
+    - { path: outputs/refined-requirements.json, kind: refined-requirements, role: evidence }
+    - { path: outputs/glossary.json, kind: glossary, role: attachment }
+    - { path: outputs/requirements/, kind: requirements-spec, role: attachment }
+    - { path: outputs/architecture/, kind: architecture-spec, role: attachment }
+    - { path: outputs/epics/, kind: epics-spec, role: attachment }
+    - { path: outputs/readiness-report.md, kind: readiness-report, role: evidence }
+    - { path: outputs/blueprint-summary.md, kind: blueprint-summary, role: attachment }
+    - { path: outputs/context-package.json, kind: context-package, alias: blueprint-context, role: attachment }
   gates:
     exit: [phases-complete, readiness-passed]
 refs:

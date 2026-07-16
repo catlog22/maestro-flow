@@ -306,8 +306,8 @@ interface ConversionProfile {
 | `Agent` | `spawn_agent` |
 | `Skill` | `spawn_agent` |
 | `SendMessage` | `send_message` |
-| `TaskCreate` | `create_goal` |
-| `TaskUpdate` | `update_goal` |
+| `TaskCreate` | `update_plan` |
+| `TaskUpdate` | `update_plan` |
 | `TaskList` | `list_agents` |
 | `TaskGet` | `wait_agent` |
 | `TaskStop` | `interrupt_agent` |
@@ -316,7 +316,7 @@ interface ConversionProfile {
 **正文替换**（除上述映射外的额外规则）：
 - `SendMessage({ to:` → `followup_task({ target:`
 - `ralph skills --platform claude` → `ralph skills --platform codex`
-- `<goal_tracking>` 块替换为 Codex 专用版本
+- `<task_tracking>` 块替换为 Codex 专用版本
 - `spawn_agents_on_csv` 调用强制注入 `max_runtime_seconds: 3600`
 - `wait_agent` 调用强制注入 `timeout_ms: 3600000`
 
@@ -432,6 +432,6 @@ maestro run create odyssey-planex \
 
 1. **`<required_reading>` 引用 canonical `run-mode.md`** — 不得内联复制 Session/Run 生命周期
 2. **`maestro run create` 前置** — 任何领域工作前必须先 create run
-3. **产物边界** — 正式产物只进 `{run_dir}/outputs/`；证据进 `{run_dir}/evidence/`
+3. **产物边界** — 正式产物（含 evidence-role）只进 `{run_dir}/outputs/`；非正式 traces 可进 `{run_dir}/evidence/`（惰性、不参与门禁）
 4. **协议文件只读** — `session.json`、`run.json`、`artifacts.json` 由 runtime 拥有，不得直接编辑
 5. **`check` → `complete` 顺序** — `check` blocking 时禁止 `complete`；run 未完成时禁止报告成功

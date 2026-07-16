@@ -27,24 +27,27 @@ GATE P3→P4: REQUIRED `requirements/_index.md` written with MoSCoW priority tab
 ## Output Structure
 
 ```
-.workflow/blueprint/BLP-{slug}-{YYYY-MM-DD}/
-├── blueprint-config.json             # Session configuration + phase state
-├── discovery-context.json        # Codebase exploration (optional)
-├── refined-requirements.json     # Phase 1.5: Confirmed requirements
-├── glossary.json                 # Phase 2: Terminology glossary
-├── product-brief.md              # Phase 2: Product brief
-├── requirements/                 # Phase 3: Detailed PRD
-│   ├── _index.md                 #   Summary, MoSCoW table, traceability
-│   ├── REQ-NNN-{slug}.md         #   Functional requirement
-│   └── NFR-{type}-NNN-{slug}.md  #   Non-functional requirement
-├── architecture/                 # Phase 4: Architecture decisions
-│   ├── _index.md                 #   Overview, components, tech stack
-│   └── ADR-NNN-{slug}.md         #   Architecture Decision Record
-├── epics/                        # Phase 5: Epic/Story breakdown
-│   ├── _index.md                 #   Epic table, dependency map, MVP
-│   └── EPIC-NNN-{slug}.md        #   Individual Epic with Stories
-├── readiness-report.md           # Phase 6: Quality report
-└── blueprint-summary.md          # Phase 6: Executive summary
+{run_dir}/
+├── outputs/
+│   ├── blueprint-config.json             # Session configuration + phase state
+│   ├── discovery-context.json        # Codebase exploration (optional)
+│   ├── refined-requirements.json     # Phase 1.5: Confirmed requirements
+│   ├── glossary.json                 # Phase 2: Terminology glossary
+│   ├── product-brief.md              # Phase 2: Product brief
+│   ├── requirements/                 # Phase 3: Detailed PRD
+│   │   ├── _index.md                 #   Summary, MoSCoW table, traceability
+│   │   ├── REQ-NNN-{slug}.md         #   Functional requirement
+│   │   └── NFR-{type}-NNN-{slug}.md  #   Non-functional requirement
+│   ├── architecture/                 # Phase 4: Architecture decisions
+│   │   ├── _index.md                 #   Overview, components, tech stack
+│   │   └── ADR-NNN-{slug}.md         #   Architecture Decision Record
+│   ├── epics/                        # Phase 5: Epic/Story breakdown
+│   │   ├── _index.md                 #   Epic table, dependency map, MVP
+│   │   └── EPIC-NNN-{slug}.md        #   Individual Epic with Stories
+│   ├── readiness-report.md           # Phase 6: Quality report
+│   ├── blueprint-summary.md          # Phase 6: Executive summary
+│   └── context-package.json          # Handoff context
+└── report.md
 ```
 
 ---
@@ -96,8 +99,8 @@ Parse input, analyze the seed idea, optionally explore codebase, establish sessi
 
 **Step 2.2: Session Initialization**
 ```
-Session ID: BLP-{slug}-{YYYY-MM-DD}
-Output dir: .workflow/blueprint/{session_id}/
+Session: via maestro run create blueprint --session YYYYMMDD-blueprint-{slug}
+Output dir: {run_dir}/outputs/
 ```
 
 **Step 2.3: Seed Analysis via CLI** — MANDATORY, NOT SUBSTITUTABLE
@@ -340,10 +343,10 @@ Blueprint specification package is complete (all 6 phases done). Suggest next wo
 
 ```
 == blueprint complete ==
-Session: BLP-{slug}-{date} | Quality: {score}% ({gate}) | Phases: {completed_count}/6
-Output: .workflow/blueprint/{session_id}/
+Session: {session_id} | Quality: {score}% ({gate}) | Phases: {completed_count}/6
+Output: {run_dir}/outputs/
   blueprint-config.json, product-brief.md, requirements/, architecture/, epics/,
-  readiness-report.md, blueprint-summary.md
+  readiness-report.md, blueprint-summary.md, context-package.json
 
 Next: analyze (deep analysis) | roadmap (generate roadmap) | plan 1 (plan first phase)
 ```

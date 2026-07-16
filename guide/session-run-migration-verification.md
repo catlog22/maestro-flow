@@ -51,7 +51,7 @@ Pilot 工作区位于 PlanEx session 的 `pilot-workspace/`，未进入产品源
 
 ## Canonical 边界
 
-- 正式产物只允许写入 `{run_dir}/outputs/`，evidence 只允许写入 `{run_dir}/evidence/`，叙事与 handoff 只允许写入 `{run_dir}/report.md`。
+- 正式产物（含 evidence-role 声明的产物）只允许写入 `{run_dir}/outputs/`，非正式 traces 可写入 `{run_dir}/evidence/`（惰性、不参与门禁），叙事与 handoff 只允许写入 `{run_dir}/report.md`。
 - `run create` 仅复用 normalized intent 相同且状态为 running/paused 的 Session；没有匹配项时创建新 Session。
 - lifecycle 基础协议统一引用 `@~/.maestro/workflows/run-mode.md`；command 仍需自包含领域逻辑。
 - scratch、milestone phase artifact folder 与 `state.json.artifacts[]` 不再属于运行时、Search、Hook 或 merge validation 的兼容输入。

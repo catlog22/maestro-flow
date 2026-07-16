@@ -8,8 +8,8 @@ This adapter extends `@~/.maestro/workflows/run-mode.md` for Codex skills. The c
 
 - Preserve Codex-native tools and orchestration: `spawn_agents_on_csv`, collaboration agents, `request_user_input`, goal APIs, and structured tool schemas.
 - CSV master state, wave inputs, and intermediate results are temporary computation. Store them under `{run_dir}/work/csv-wave/`.
-- Worker traces and cross-worker discoveries are evidence. Store them under `{run_dir}/evidence/`.
-- Only frontmatter-declared typed artifacts are formal outputs. Store them at their declared `{run_dir}/outputs/...` paths.
+- All formal artifacts (including evidence-role outputs) MUST be stored at their declared `{run_dir}/outputs/...` paths.
+- Informal worker traces and cross-worker discoveries may use `{run_dir}/evidence/` (lazily created, not gate-checked).
 - Human-readable synthesis and handoff belong in `{run_dir}/report.md`.
 
 ## Authority and Completion

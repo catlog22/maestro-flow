@@ -84,7 +84,7 @@ Supports three modes:
 - **Revise** (`--revise`): Incrementally modify existing plan
 - **Check** (`--check`): Standalone plan verification
 
-Formal output goes to the active Run returned by `maestro run create`: typed artifacts under `{run_dir}/outputs/`, evidence under `{run_dir}/evidence/`, and narrative/handoff in `{run_dir}/report.md`.
+Formal output goes to the active Run returned by `maestro run create`: all typed artifacts (including evidence-role) under `{run_dir}/outputs/`, and narrative/handoff in `{run_dir}/report.md`.
 </purpose>
 ```
 
@@ -683,8 +683,7 @@ When the workflow produces 3+ output files, document the directory structure:
     tasks/
       TASK-001.json            ← Individual task definition
       TASK-002.json
-  evidence/
-    exploration-arch.json      ← Agent exploration results
+    exploration-arch.json      ← Agent exploration results (evidence-role)
 ```
 ```
 
