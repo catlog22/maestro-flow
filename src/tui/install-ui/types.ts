@@ -43,6 +43,20 @@ export interface InstallFlowConfig {
   codexDedupeAgents?: boolean;
   installPluginClaude?: boolean;
   installPluginCodex?: boolean;
+  configureCodexMultiAgentV2?: boolean;
+  /** Subsystems explicitly disabled by a non-interactive/profile install. */
+  explicitlyDisabled?: {
+    claudeHooks?: boolean;
+    claudeMcp?: boolean;
+    codexHooks?: boolean;
+    codexMcp?: boolean;
+    agyHooks?: boolean;
+    genericHooks?: string[];
+    extraMcp?: boolean;
+    statusline?: boolean;
+    pluginClaude?: boolean;
+    pluginCodex?: boolean;
+  };
 }
 
 // ---------------------------------------------------------------------------

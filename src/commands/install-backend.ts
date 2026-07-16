@@ -245,6 +245,147 @@ function getCodexConfigPath(scope: 'global' | 'project', projectPath: string): s
     : join(homedir(), '.codex', 'config.toml');
 }
 
+interface TomlPrimitiveEntry {
+  key: string;
+  value: string;
+  comments?: string[];
+}
+
+/**
+ * Update primitive keys inside one TOML table without parsing or reserializing
+ * the rest of the user's file. Unknown tables, keys, ordering, and comments
+ * remain byte-for-byte unchanged apart from newline normalization.
+ */
+function upsertTomlTable(
+  content: string,
+  tableName: string,
+  entries: TomlPrimitiveEntry[],
+): string {
+  const lines = content ? content.split(/\r?\n/) : [];
+  const tableHeader = `[${tableName}]`;
+  const escapedHeader = tableHeader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const headerPattern = new RegExp(`^\\s*${escapedHeader}\\s*(?:#.*)?$`);
+  const headerIndex = lines.findIndex((line) => headerPattern.test(line));
+
+  if (headerIndex < 0) {
+    if (lines.length > 0 && lines[lines.length - 1].trim() !== '') lines.push('');
+    lines.push(tableHeader);
+    for (const entry of entries) {
+      for (const comment of entry.comments ?? []) lines.push(`# ${comment}`);
+      lines.push(`${entry.key} = ${entry.value}`);
+    }
+    return lines.join('\n');
+  }
+
+  const anyHeader = /^\s*\[\[?[^\]]+\]\]?\s*(?:#.*)?$/;
+  let sectionEnd = lines.length;
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    if (anyHeader.test(lines[i])) {
+      sectionEnd = i;
+      break;
+    }
+  }
+
+  for (const entry of entries) {
+    const keyPattern = new RegExp(`^(\\s*${entry.key}\\s*=\\s*)[^#]*(\\s+#.*)?$`);
+    let existingIndex = -1;
+    for (let i = headerIndex + 1; i < sectionEnd; i++) {
+      if (keyPattern.test(lines[i])) {
+        existingIndex = i;
+        break;
+      }
+    }
+
+    if (existingIndex >= 0) {
+      const match = lines[existingIndex].match(keyPattern);
+      lines[existingIndex] = `${match?.[1] ?? `${entry.key} = `}${entry.value}${match?.[2] ?? ''}`;
+      continue;
+    }
+
+    const addition = [
+      ...(entry.comments ?? []).map((comment) => `# ${comment}`),
+      `${entry.key} = ${entry.value}`,
+    ];
+    lines.splice(sectionEnd, 0, ...addition);
+    sectionEnd += addition.length;
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Enable Codex request-user-input and Multi-Agent V2 defaults. This is an
+ * additive user preference: install updates it, uninstall never removes it.
+ */
+export function configureCodexMultiAgentV2(
+  scope: 'global' | 'project',
+  projectPath: string,
+): string | null {
+  const fp = getCodexConfigPath(scope, projectPath);
+  const tempPath = `${fp}.maestro-${process.pid}-${Date.now()}.tmp`;
+  try {
+    let content = existsSync(fp) ? readFileSync(fp, 'utf-8') : '';
+    content = upsertTomlTable(content, 'features', [
+      {
+        key: 'default_mode_request_user_input',
+        value: 'true',
+        comments: ['Allow request_user_input in the default mode.'],
+      },
+      {
+        key: 'multi_agents_v2',
+        value: 'true',
+        comments: ['Enable the Codex Multi-Agent V2 feature.'],
+      },
+    ]);
+    content = upsertTomlTable(content, 'features.multi_agent_v2', [
+      {
+        key: 'enabled',
+        value: 'true',
+        comments: ['Enable V2 fallback for models without an explicit protocol.'],
+      },
+      {
+        key: 'hide_spawn_agent_metadata',
+        value: 'false',
+        comments: ['Keep spawn metadata visible; Codex defaults this option to true.'],
+      },
+      {
+        key: 'tool_namespace',
+        value: '"maestro"',
+        comments: ['Avoid the reserved collaboration namespace used by newer Codex models.'],
+      },
+      {
+        key: 'max_concurrent_threads_per_session',
+        value: '7',
+        comments: ['One primary agent plus up to six concurrent sub-agents.'],
+      },
+      {
+        key: 'min_wait_timeout_ms',
+        value: '180000',
+        comments: ['Minimum wait_agent timeout: 3 minutes.'],
+      },
+      {
+        key: 'default_wait_timeout_ms',
+        value: '180000',
+        comments: ['Default wait_agent timeout: 3 minutes.'],
+      },
+      {
+        key: 'max_wait_timeout_ms',
+        value: '3600000',
+        comments: ['Maximum wait_agent timeout: 1 hour.'],
+      },
+    ]);
+
+    const dir = join(fp, '..');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(tempPath, content.replace(/\n{3,}/g, '\n\n').trimEnd() + '\n', 'utf-8');
+    renameSync(tempPath, fp);
+    return fp;
+  } catch {
+    if (existsSync(tempPath)) unlinkSync(tempPath);
+    return null;
+  }
+}
+
 /**
  * Remove the `[mcp_servers.maestro-tools]` and `[mcp_servers.maestro-tools.env]`
  * sections from a TOML string. Returns the cleaned content.
@@ -493,7 +634,9 @@ export function pruneOrphans(
       const srcPath = join(src, entry);
       const destPath = join(dest, entry);
       if (statSync(srcPath).isDirectory() && existsSync(destPath) && statSync(destPath).isDirectory()) {
-        removed += pruneOrphans(srcPath, destPath, fileFilter);
+        // fileFilter classifies top-level component roots only. Applying it to
+        // nested SKILL.md/references/assets entries corrupts valid components.
+        removed += pruneOrphans(srcPath, destPath);
       }
       continue;
     }
@@ -847,6 +990,7 @@ export interface UninstallResult {
   claudeHooksRemoved: number;
   codexHooksRemoved: number;
   agyHooksRemoved: number;
+  genericHooksRemoved: Record<string, number>;
   statuslineRemoved: boolean;
   mcpRemoved: { claude: boolean; codex: boolean; extras: string[] };
 }
@@ -881,6 +1025,7 @@ export function uninstallManifest(
     claudeHooksRemoved: 0,
     codexHooksRemoved: 0,
     agyHooksRemoved: 0,
+    genericHooksRemoved: {},
     statuslineRemoved: false,
     mcpRemoved: { claude: false, codex: false, extras: [] },
   };
@@ -904,6 +1049,11 @@ export function uninstallManifest(
   }
   if (hooks?.agy) {
     result.agyHooksRemoved = uninstallAgyHooks(hooks.agy.settingsPath, hooks.agy.installed);
+  }
+  if (hooks?.generic) {
+    for (const [platformId, record] of Object.entries(hooks.generic)) {
+      result.genericHooksRemoved[platformId] = uninstallCodexHooks(record.settingsPath, record.installed);
+    }
   }
 
   // --- Statusline ---
@@ -1205,6 +1355,7 @@ export function performFallbackCleanup(
     claudeHooksRemoved: 0,
     codexHooksRemoved: 0,
     agyHooksRemoved: 0,
+    genericHooksRemoved: {},
     statuslineRemoved: false,
     mcpRemoved: { claude: false, codex: false, extras: [] },
   };

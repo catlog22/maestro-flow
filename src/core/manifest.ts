@@ -14,10 +14,13 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
+  statSync,
   writeFileSync,
   unlinkSync,
   rmSync,
 } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { paths } from '../config/paths.js';
 import { hasAnyMarkers, removeAllSections } from './tag-injector.js';
 
@@ -72,6 +75,8 @@ export interface Manifest {
   hookLevel?: string;
   /** Component IDs selected during interactive install (omitted = all) */
   selectedComponentIds?: string[];
+  /** Component catalog visible when this manifest was written. */
+  knownComponentIds?: string[];
 
   /** Individually disabled items (type:name format, e.g. "command:odyssey-debug") */
   disabledItems?: string[];
@@ -104,6 +109,8 @@ const SCHEMA_VERSION = '2.0';
 // ---------------------------------------------------------------------------
 
 const MANIFESTS_DIR = join(paths.home, 'manifests');
+const MANIFEST_LOCK = join(MANIFESTS_DIR, '.install.lock');
+const MANIFEST_LOCK_STALE_MS = 5 * 60_000;
 
 function ensureDir(): void {
   if (!existsSync(MANIFESTS_DIR)) {
@@ -122,11 +129,11 @@ export function manifestFile(id: string): string {
 export function createManifest(
   scope: 'global' | 'project',
   targetPath: string,
-  opts?: { hookLevel?: string; selectedComponentIds?: string[] },
+  opts?: { hookLevel?: string; selectedComponentIds?: string[]; knownComponentIds?: string[] },
 ): Manifest {
-  const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').split('.')[0];
+  const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').replace('Z', '');
   return {
-    id: `${scope}-${ts}`,
+    id: `${scope}-${ts}-${randomUUID().slice(0, 8)}`,
     version: SCHEMA_VERSION,
     scope,
     targetPath,
@@ -134,15 +141,53 @@ export function createManifest(
     entries: [],
     hookLevel: opts?.hookLevel,
     selectedComponentIds: opts?.selectedComponentIds,
+    knownComponentIds: opts?.knownComponentIds,
   };
 }
 
+function installManifestFiles(): string[] {
+  if (!existsSync(MANIFESTS_DIR)) return [];
+  // Overlay state is stored in the same directory using overlays-*.json and
+  // is not an installation manifest. Never parse or delete it here.
+  return readdirSync(MANIFESTS_DIR)
+    .filter((file) => /^(global|project)-.+\.json$/.test(file));
+}
+
+function acquireManifestLock(): void {
+  try {
+    writeFileSync(MANIFEST_LOCK, String(process.pid), { flag: 'wx' });
+    return;
+  } catch {
+    try {
+      if (Date.now() - statSync(MANIFEST_LOCK).mtimeMs > MANIFEST_LOCK_STALE_MS) {
+        unlinkSync(MANIFEST_LOCK);
+        writeFileSync(MANIFEST_LOCK, String(process.pid), { flag: 'wx' });
+        return;
+      }
+    } catch { /* fall through to the explicit lock error */ }
+    throw new Error(`Installation manifest is locked: ${MANIFEST_LOCK}`);
+  }
+}
+
+function releaseManifestLock(): void {
+  try {
+    if (existsSync(MANIFEST_LOCK)
+      && readFileSync(MANIFEST_LOCK, 'utf-8').trim() === String(process.pid)) {
+      unlinkSync(MANIFEST_LOCK);
+    }
+  } catch { /* lock expires and can be reclaimed if cleanup is interrupted */ }
+}
+
 export function addFile(manifest: Manifest, filePath: string): void {
-  manifest.entries.push({ path: filePath, type: 'file' });
+  if (!manifest.entries.some((entry) => entry.type === 'file' && entry.path === filePath)) {
+    manifest.entries.push({ path: filePath, type: 'file' });
+  }
 }
 
 export function addDir(manifest: Manifest, dirPath: string): void {
-  manifest.entries.push({ path: dirPath, type: 'dir' });
+  if (!manifest.entries.some((entry) => entry.type === 'dir' && entry.path === dirPath)) {
+    manifest.entries.push({ path: dirPath, type: 'dir' });
+  }
 }
 
 // --- Extended tracking helpers ---
@@ -160,6 +205,12 @@ export function recordCodexHooks(manifest: Manifest, record: HookRecord): void {
 export function recordAgyHooks(manifest: Manifest, record: HookRecord): void {
   manifest.hooks ??= {};
   manifest.hooks.agy = record;
+}
+
+export function recordGenericHooks(manifest: Manifest, platformId: string, record: HookRecord): void {
+  manifest.hooks ??= {};
+  manifest.hooks.generic ??= {};
+  manifest.hooks.generic[platformId] = record;
 }
 
 export function recordStatusline(manifest: Manifest, record: StatuslineRecord): void {
@@ -184,23 +235,56 @@ export function recordExtraMcp(manifest: Manifest, record: ExtraMcpRecord): void
 
 // --- Save / Load ---
 
-export function saveManifest(manifest: Manifest): string {
+export function saveManifest(
+  manifest: Manifest,
+  opts?: { expectedPriorId?: string | null },
+): string {
   ensureDir();
-  // Remove old manifests for same scope+path
-  removeOld(manifest.scope, manifest.targetPath);
+  acquireManifestLock();
+  try {
+    if (opts && Object.prototype.hasOwnProperty.call(opts, 'expectedPriorId')) {
+      const currentId = findManifest(manifest.scope, manifest.targetPath)?.id ?? null;
+      if (currentId !== opts.expectedPriorId) {
+        throw new Error(
+          `Installation manifest changed concurrently (expected ${opts.expectedPriorId ?? 'none'}, found ${currentId ?? 'none'}).`,
+        );
+      }
+    }
+  // Never overwrite an existing manifest in place. A unique destination keeps
+  // the previous installation record recoverable until the new record is
+  // completely written and atomically promoted.
+  if (existsSync(manifestFile(manifest.id))) {
+    manifest.id = `${manifest.scope}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  }
   const fp = manifestFile(manifest.id);
-  writeFileSync(fp, JSON.stringify(manifest, null, 2), 'utf-8');
+  const tempPath = `${fp}.${process.pid}.${randomUUID().slice(0, 8)}.tmp`;
+  try {
+    writeFileSync(tempPath, JSON.stringify(manifest, null, 2), 'utf-8');
+    renameSync(tempPath, fp);
+  } catch (error) {
+    if (existsSync(tempPath)) unlinkSync(tempPath);
+    throw error;
+  }
+
+  // Cleanup happens only after the replacement is durable. If cleanup is
+  // interrupted, findManifest() deterministically selects the newest record.
+  removeOld(manifest.scope, manifest.targetPath, fp);
   return fp;
+  } finally {
+    releaseManifestLock();
+  }
 }
 
-function removeOld(scope: string, targetPath: string): void {
+function removeOld(scope: string, targetPath: string, keepPath?: string): void {
   if (!existsSync(MANIFESTS_DIR)) return;
   const norm = targetPath.toLowerCase().replace(/[\\/]+$/, '');
-  for (const f of readdirSync(MANIFESTS_DIR).filter(f => f.endsWith('.json'))) {
+  for (const f of installManifestFiles()) {
+    const candidatePath = join(MANIFESTS_DIR, f);
+    if (keepPath && candidatePath === keepPath) continue;
     try {
-      const m = JSON.parse(readFileSync(join(MANIFESTS_DIR, f), 'utf-8')) as Manifest;
+      const m = JSON.parse(readFileSync(candidatePath, 'utf-8')) as Manifest;
       if (m.scope === scope && m.targetPath.toLowerCase().replace(/[\\/]+$/, '') === norm) {
-        unlinkSync(join(MANIFESTS_DIR, f));
+        unlinkSync(candidatePath);
       }
     } catch { /* skip */ }
   }
@@ -209,22 +293,24 @@ function removeOld(scope: string, targetPath: string): void {
 export function findManifest(scope: 'global' | 'project', targetPath: string): Manifest | null {
   if (!existsSync(MANIFESTS_DIR)) return null;
   const norm = targetPath.toLowerCase().replace(/[\\/]+$/, '');
-  for (const f of readdirSync(MANIFESTS_DIR).filter(f => f.endsWith('.json'))) {
+  const matches: Manifest[] = [];
+  for (const f of installManifestFiles()) {
     try {
       const m = JSON.parse(readFileSync(join(MANIFESTS_DIR, f), 'utf-8')) as Manifest;
       m.entries ??= [];
       if (m.scope === scope && m.targetPath.toLowerCase().replace(/[\\/]+$/, '') === norm) {
-        return m;
+        matches.push(m);
       }
     } catch { /* skip */ }
   }
-  return null;
+  matches.sort((a, b) => b.installedAt.localeCompare(a.installedAt));
+  return matches[0] ?? null;
 }
 
 export function getAllManifests(): Manifest[] {
   if (!existsSync(MANIFESTS_DIR)) return [];
   const results: Manifest[] = [];
-  for (const f of readdirSync(MANIFESTS_DIR).filter(f => f.endsWith('.json'))) {
+  for (const f of installManifestFiles()) {
     try {
       const m = JSON.parse(readFileSync(join(MANIFESTS_DIR, f), 'utf-8')) as Manifest;
       m.entries ??= [];

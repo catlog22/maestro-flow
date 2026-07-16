@@ -63,6 +63,7 @@ export interface UseInstallFlowStateOptions {
 export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   const { pkgRoot, initialStep, initialMode, initialStepIds, initialProjectPath } = opts;
   const isSubcommand = !!initialStep;
+  const shouldInstallComponents = !initialStepIds || initialStepIds.includes('components');
   const resolvedInitialStep: FlowStep = (initialStep === 'mode' || !initialStep) ? 'platforms' : initialStep as FlowStep;
 
   // --- Core navigation ---
@@ -197,8 +198,17 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       ? inferPlatformsFromManifest(lastManifest)
       : inferPlatformsFromDisk(mode, projectPath),
   );
+  // Preserve the exact manifest/profile selection until the user explicitly
+  // changes a platform/addon toggle. Platform inference is for presentation;
+  // it must not silently expand a partial historical selection.
+  const [preservedComponentIds, setPreservedComponentIds] = useState<Set<string> | null>(
+    () => lastManifest?.selectedComponentIds !== undefined
+      ? new Set(migrateComponentIds(lastManifest.selectedComponentIds))
+      : null,
+  );
 
   const togglePlatform = useCallback((plat: string) => {
+    setPreservedComponentIds(null);
     setSelectedPlatforms(prev => {
       const next = new Set(prev);
       const p = plat as Platform;
@@ -216,7 +226,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     COMPONENT_DEFS.filter(d => d.id.endsWith('-chinese')).map(d => d.id),
   ), []);
   const [chineseEnabled, setChineseEnabled] = useState<boolean>(() => {
-    if (!lastManifest?.selectedComponentIds?.length) return true;
+    if (lastManifest?.selectedComponentIds === undefined) return true;
     return lastManifest.selectedComponentIds.some(id => id.endsWith('-chinese'));
   });
 
@@ -231,6 +241,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
   });
 
   const toggleAddon = useCallback((id: string) => {
+    setPreservedComponentIds(null);
     if (id === 'chinese') { setChineseEnabled(v => !v); return; }
     setSelectedAddons(prev => {
       const next = new Set(prev);
@@ -242,12 +253,20 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
 
   // --- Computed: selectedComponentIds from platforms + chinese + addons ---
   const selectedComponentIds = useMemo(() => {
-    const ids = new Set<string>();
     const skipFileCopy = (plat: string, def: ComponentDef) =>
       !def.inject && (
         (plat === 'claude' && enabledSteps.pluginClaude) ||
         (plat === 'codex' && enabledSteps.pluginCodex)
       );
+    if (preservedComponentIds) {
+      return Array.from(preservedComponentIds).filter((id) => {
+        const def = COMPONENT_DEFS.find((candidate) => candidate.id === id);
+        if (!def) return false;
+        const platform = def.platform ?? 'shared';
+        return !skipFileCopy(platform, def);
+      });
+    }
+    const ids = new Set<string>();
     for (const def of COMPONENT_DEFS) {
       const plat = def.platform ?? 'shared';
       if (CHINESE_IDS.has(def.id)) continue;
@@ -278,10 +297,11 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       }
     }
     return Array.from(ids);
-  }, [selectedPlatforms, chineseEnabled, selectedAddons, ADDON_IDS, CHINESE_IDS, enabledSteps.pluginClaude, enabledSteps.pluginCodex]);
+  }, [preservedComponentIds, selectedPlatforms, chineseEnabled, selectedAddons, ADDON_IDS, CHINESE_IDS, enabledSteps.pluginClaude, enabledSteps.pluginCodex]);
 
   const applyComponentIds = useCallback((ids: string[]) => {
-    const idSet = new Set(ids);
+    const migratedIds = migrateComponentIds(ids);
+    const idSet = new Set(migratedIds);
     const plats = new Set<Platform>();
     for (const def of COMPONENT_DEFS) {
       if (def.platform && def.platform !== 'shared' && idSet.has(def.id)) {
@@ -289,8 +309,9 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       }
     }
     if (plats.size > 0) setSelectedPlatforms(plats);
-    setChineseEnabled(ids.some(id => id.endsWith('-chinese')));
-    setSelectedAddons(new Set(ids.filter(id => ADDON_IDS.has(id))));
+    setChineseEnabled(migratedIds.some(id => id.endsWith('-chinese')));
+    setSelectedAddons(new Set(migratedIds.filter(id => ADDON_IDS.has(id))));
+    setPreservedComponentIds(idSet);
   }, [ADDON_IDS]);
 
   const setSelectedComponentIds = applyComponentIds;
@@ -368,6 +389,9 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     setSelectedPlatforms(lastManifest
       ? inferPlatformsFromManifest(lastManifest)
       : inferPlatformsFromDisk(mode, projectPath));
+    setPreservedComponentIds(lastManifest?.selectedComponentIds !== undefined
+      ? new Set(migrateComponentIds(lastManifest.selectedComponentIds))
+      : null);
     setSelectedAddons(lastManifest?.selectedComponentIds?.length
       ? new Set(lastManifest.selectedComponentIds.filter(id => ADDON_IDS.has(id)))
       : new Set<string>());
@@ -406,7 +430,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
 
   const flowConfig: InstallFlowConfig = useMemo(() => ({
     mode, projectPath,
-    installComponents: true,
+    installComponents: shouldInstallComponents,
     installHooks: enabledSteps.hooks,
     installMcp: enabledSteps.mcp && mcpEnabled,
     installCodexHooks: enabledSteps.codexHooks,
@@ -431,7 +455,9 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
     codexDedupeAgents: selectedPlatforms.has('codex') && selectedPlatforms.has('agents-standard') && codexDedupeAgents,
     installPluginClaude: enabledSteps.pluginClaude,
     installPluginCodex: enabledSteps.pluginCodex,
-  }), [mode, projectPath, enabledSteps, hookLevel, selectedComponents.length,
+    configureCodexMultiAgentV2: shouldInstallComponents && selectedComponentIds.some((id) =>
+      COMPONENT_DEFS.some((def) => def.id === id && def.platform === 'codex')),
+  }), [mode, projectPath, enabledSteps, shouldInstallComponents, hookLevel, selectedComponents.length,
     fileCount, mcpTools, mcpEnabled, selectedComponentIds, mcpProjectRoot,
     codexHookLevel, codexMcpEnabled, codexMcpTools, codexMcpProjectRoot,
     agyHookLevel, extraMcpTargetIds, genericHookLevels,
@@ -576,6 +602,7 @@ export function useInstallFlowState(opts: UseInstallFlowStateOptions) {
       setCodexMcpTools(v.codexMcpTools);
       setCodexMcpProjectRoot(v.codexMcpProjectRoot);
       setAgyHooksSelection(v.agyHooks);
+      setGenericHookLevels(v.genericHookLevels);
       setExtraMcpTargetIds(v.extraMcpTargetIds);
       setInstallStatusline(v.installStatusline);
       setStatuslineTheme(v.statuslineTheme);

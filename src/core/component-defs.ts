@@ -742,12 +742,28 @@ export function migrateComponentIds(ids: string[]): string[] {
  * Used during `maestro update` reinstall so new-version components
  * with `defaultSelected !== false` are automatically included.
  */
-export function mergeNewDefaults(existingIds: string[]): string[] {
+export function mergeNewDefaults(existingIds: string[], knownIds?: string[]): string[] {
   const migrated = migrateComponentIds(existingIds);
+  // Older manifests did not record the catalog they were created from. In
+  // that case absence is ambiguous (new component vs explicit opt-out), so
+  // preserving the exact migrated selection is the only safe behavior.
+  if (!knownIds) return migrated;
+
   const migratedSet = new Set(migrated);
+  const knownSet = new Set(knownIds.flatMap((id) => migrateComponentIds([id])));
+  const selectedPlatforms = new Set(
+    COMPONENT_DEFS
+      .filter((def) => migratedSet.has(def.id))
+      .map((def) => def.platform ?? 'shared')
+      .filter((platform) => platform !== 'shared'),
+  );
   for (const def of COMPONENT_DEFS) {
-    if (!migratedSet.has(def.id) && def.defaultSelected !== false) {
+    const platform = def.platform ?? 'shared';
+    const platformSelected = platform === 'shared' || selectedPlatforms.has(platform);
+    if (!knownSet.has(def.id) && !migratedSet.has(def.id)
+      && def.defaultSelected !== false && platformSelected) {
       migrated.push(def.id);
+      migratedSet.add(def.id);
     }
   }
   return migrated;

@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { describe, it, expect } from 'vitest';
-import { createManifest, recordClaudeHooks, recordCodexHooks, recordStatusline, recordClaudeMcp, recordExtraMcp } from '../core/manifest.js';
+import { createManifest, recordClaudeHooks, recordCodexHooks, recordGenericHooks, recordStatusline, recordClaudeMcp, recordExtraMcp } from '../core/manifest.js';
 import { manifestToProfile } from '../core/install-profile.js';
 import { mergeNewDefaults, migrateComponentIds, COMPONENT_DEFS } from '../core/component-defs.js';
 
@@ -83,6 +83,46 @@ describe('manifestToProfile', () => {
     expect(profile.codex.hooks.basePreset).toBe('minimal');
     expect(profile.codex.hooks.selectedHooks).toEqual(['hook-a', 'hook-b']);
   });
+
+  it('should not infer MCP or statusline from hooks on a v2 manifest', () => {
+    const m = createManifest('global', '/home/user/.maestro');
+    recordClaudeHooks(m, {
+      settingsPath: '/home/.claude/settings.json',
+      installed: ['spec-injector'],
+      level: 'minimal',
+    });
+
+    const profile = manifestToProfile(m);
+
+    expect(profile.claude.hooks.enabled).toBe(true);
+    expect(profile.claude.mcp.enabled).toBe(false);
+    expect(profile.codex.mcp.enabled).toBe(false);
+    expect(profile.claude.statusline.enabled).toBe(false);
+  });
+
+  it('should preserve an explicit empty component selection', () => {
+    const m = createManifest('global', '/home/user/.maestro', {
+      selectedComponentIds: [],
+      knownComponentIds: COMPONENT_DEFS.map(d => d.id),
+    });
+
+    const profile = manifestToProfile(m);
+
+    expect(profile.components.enabled).toBe(false);
+    expect(profile.components.selectedIds).toEqual([]);
+    expect(profile.components.knownIds).toEqual(COMPONENT_DEFS.map(d => d.id));
+  });
+
+  it('should preserve generic platform hook levels', () => {
+    const m = createManifest('global', '/home/user/.maestro');
+    recordGenericHooks(m, 'cursor', {
+      settingsPath: '/home/.cursor/hooks.json',
+      installed: ['session-context'],
+      level: 'minimal',
+    });
+
+    expect(manifestToProfile(m).genericHooks).toEqual({ cursor: 'minimal' });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -100,19 +140,23 @@ describe('mergeNewDefaults', () => {
   });
 
   it('should add new default-selected components not in existing list', () => {
-    // Use a minimal subset — mergeNewDefaults should add other defaultSelected !== false defs
-    const existing = ['workflows'];
-    const result = mergeNewDefaults(existing);
+    const existing = ['commands'];
+    const known = COMPONENT_DEFS.map(d => d.id).filter(id => id !== 'agents');
+    const result = mergeNewDefaults(existing, known);
 
-    // 'commands' has defaultSelected undefined (= true), should be added
-    expect(result).toContain('commands');
-    // 'agents' has defaultSelected undefined (= true), should be added
+    // 'agents' is genuinely new and belongs to the already-selected Claude platform.
     expect(result).toContain('agents');
+  });
+
+  it('should preserve an old manifest exactly when its known catalog is unavailable', () => {
+    const result = mergeNewDefaults(['workflows']);
+    expect(result).toEqual(['workflows']);
   });
 
   it('should NOT add components with defaultSelected: false', () => {
     const existing = ['workflows'];
-    const result = mergeNewDefaults(existing);
+    const known = COMPONENT_DEFS.map(d => d.id).filter(id => id !== 'skills-extra-team');
+    const result = mergeNewDefaults(existing, known);
 
     // These have defaultSelected: false — should NOT be auto-added
     expect(result).not.toContain('commands-odyssey');
@@ -126,7 +170,7 @@ describe('mergeNewDefaults', () => {
     const allDefaultIds = COMPONENT_DEFS
       .filter(d => d.defaultSelected !== false)
       .map(d => d.id);
-    const result = mergeNewDefaults(allDefaultIds);
+    const result = mergeNewDefaults(allDefaultIds, COMPONENT_DEFS.map(d => d.id));
 
     const unique = new Set(result);
     expect(result.length).toBe(unique.size);

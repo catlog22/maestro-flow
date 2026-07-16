@@ -5,7 +5,7 @@
 // Progress is reported via an optional callback; callers decide how to display.
 // ---------------------------------------------------------------------------
 
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { paths } from '../config/paths.js';
@@ -18,12 +18,15 @@ import {
   addCodexMcpServer,
   addExtraMcpServer,
   copyRecursive,
-  pruneOrphans,
   injectDocFile,
   createTargetBackup,
-  uninstallManifest,
   writeCodexSkillDedupeConfig,
   removeCodexSkillDedupeConfig,
+  configureCodexMultiAgentV2,
+  removeMcpServerAt,
+  removeCodexMcpServerAt,
+  removeExtraMcpServerAt,
+  getExtraMcpTargetSpec,
   type CopyStats,
 } from '../commands/install-backend.js';
 import {
@@ -35,10 +38,12 @@ import {
   recordClaudeHooks,
   recordCodexHooks,
   recordAgyHooks,
+  recordGenericHooks,
   recordStatusline,
   recordClaudeMcp,
   recordCodexMcp,
   recordExtraMcp,
+  type Manifest,
 } from './manifest.js';
 import {
   installHooksByLevel,
@@ -46,6 +51,11 @@ import {
   installAgyHooksByLevel,
   installGenericHooksByLevel,
   installStatusline as installStatuslineFn,
+  uninstallClaudeHooks,
+  uninstallCodexHooks,
+  uninstallAgyHooks,
+  getGenericHooksPlatform,
+  removeClaudeStatusline,
 } from '../commands/hooks.js';
 import type { InstallFlowConfig } from '../tui/install-ui/types.js';
 
@@ -74,6 +84,7 @@ export interface InstallResult {
 export type StepName =
   | 'backup' | 'cleanup' | 'components' | 'hooks' | 'statusline'
   | 'mcp' | 'codexHooks' | 'codexMcp' | 'agyHooks' | 'extraMcp' | 'plugin' | 'manifest'
+  | 'codexConfig'
   | `ghooks-${string}`;
 
 export type ProgressCallback = (step: StepName, status: 'active' | 'done' | 'error', detail: string) => void;
@@ -113,10 +124,12 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   let backupPath: string | null = null;
   const warnings: string[] = [];
 
-  // Pre-scan components once (shared by backup + component-install phases)
+  // Pre-scan components once (shared by backup + component-install phases).
+  // Keep the full catalog so upgrade logic can later distinguish genuinely
+  // new components from items a user previously chose not to install.
+  const scannedComponents = scanComponents(pkgRoot, config.mode, config.projectPath);
   const components = (config.installComponents || config.backupClaudeMd || config.backupAll)
-    ? scanComponents(pkgRoot, config.mode, config.projectPath)
-        .filter((c) => c.available && config.selectedComponentIds.includes(c.def.id))
+    ? scannedComponents.filter((c) => c.available && config.selectedComponentIds.includes(c.def.id))
     : [];
 
   // --- Backup ---
@@ -132,28 +145,55 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
 
   // --- Cleanup ---
   if (cancelled()) throw new CancelledError();
-  progress('cleanup', 'active', 'Removing prior install...');
+  progress('cleanup', 'active', 'Loading prior install state...');
   const disabledItems = scanDisabledItems(targetBase);
   const prior = findManifest(config.mode, targetPath);
-  if (prior) {
-    uninstallManifest(prior, { skipContentManaged: true });
-  }
-  progress('cleanup', 'done', prior ? 'prior manifest removed' : 'clean slate');
+  const globalPrior = config.mode === 'project' ? findManifest('global', paths.home) : null;
+  progress('cleanup', 'done', prior ? 'prior state preserved' : 'clean slate');
 
-  // --- Fresh manifest ---
+  // --- Replacement manifest ---
+  // Installation is additive. Existing ownership/config records remain until
+  // an explicit uninstall operation removes them. This prevents a partial
+  // `install --components ...` call from silently uninstalling unrelated
+  // components, hooks, MCP registrations, statusline, or plugins.
   paths.ensure(paths.home);
+  const alwaysGlobalIds = new Set(
+    scannedComponents.filter((component) => component.def.alwaysGlobal).map((component) => component.def.id),
+  );
+  const requestedIds = config.installComponents ? config.selectedComponentIds : [];
+  const selectedComponentIds = Array.from(new Set([
+    ...(prior?.selectedComponentIds ?? []).filter((id) => config.mode !== 'project' || !alwaysGlobalIds.has(id)),
+    ...requestedIds.filter((id) => config.mode !== 'project' || !alwaysGlobalIds.has(id)),
+  ]));
   const manifest = createManifest(config.mode, targetPath, {
     ...(config.installHooks && config.hookLevel !== 'none'
       ? { hookLevel: config.hookLevel }
-      : {}),
-    selectedComponentIds: config.installComponents ? config.selectedComponentIds : [],
+      : prior?.hookLevel ? { hookLevel: prior.hookLevel } : {}),
+    selectedComponentIds,
+    knownComponentIds: scannedComponents.map((component) => component.def.id),
   });
-  if (prior?.disabledItems?.length) {
-    manifest.disabledItems = prior.disabledItems;
+  if (prior) {
+    copyPriorState(manifest, prior, (entry) => config.mode !== 'project' || !isPathWithin(paths.home, entry.path));
+    await clearExplicitlyDisabledState(manifest, prior, config);
   }
-  // Save manifest early so interrupted installs leave a trackable manifest on disk
-  saveManifest(manifest);
-
+  const sharedManifest = config.mode === 'project' && config.installComponents
+    ? createManifest('global', paths.home, {
+        hookLevel: globalPrior?.hookLevel,
+        selectedComponentIds: Array.from(new Set([
+          ...(globalPrior?.selectedComponentIds ?? []),
+          ...(prior?.selectedComponentIds ?? []).filter((id) => alwaysGlobalIds.has(id)),
+          ...requestedIds.filter((id) => alwaysGlobalIds.has(id)),
+        ])),
+        knownComponentIds: scannedComponents.map((component) => component.def.id),
+      })
+    : null;
+  if (sharedManifest && globalPrior) copyPriorState(sharedManifest, globalPrior);
+  if (sharedManifest && prior) {
+    for (const entry of prior.entries.filter((candidate) => isPathWithin(paths.home, candidate.path))) {
+      if (entry.type === 'file') addFile(sharedManifest, entry.path);
+      else addDir(sharedManifest, entry.path);
+    }
+  }
   // --- Components ---
   if (config.installComponents) {
     if (cancelled()) throw new CancelledError();
@@ -162,28 +202,19 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
 
     for (let i = 0; i < total; i++) {
       const comp = components[i];
+      const ownershipManifest = comp.def.alwaysGlobal && sharedManifest ? sharedManifest : manifest;
       if (cancelled()) throw new CancelledError();
       progress('components', 'active', `[${i + 1}/${total}] ${comp.def.label}`);
       if (comp.def.build) {
         const result = comp.def.build(join(pkgRoot, '.claude'), comp.targetDir);
         stats.files += result.files;
-        trackBuildOutput(comp.targetDir, manifest);
+        trackBuildOutput(comp.targetDir, ownershipManifest);
       } else if (comp.def.inject) {
-        const result = injectDocFile(comp.sourceFull, comp.targetDir, stats, manifest, comp.def.section);
+        const result = injectDocFile(comp.sourceFull, comp.targetDir, stats, ownershipManifest, comp.def.section);
         if (result.warning) warnings.push(result.warning);
       } else {
-        copyRecursive(comp.sourceFull, comp.targetDir, stats, manifest, comp.def.fileFilter);
+        copyRecursive(comp.sourceFull, comp.targetDir, stats, ownershipManifest, comp.def.fileFilter);
       }
-    }
-
-    // --- Prune orphans: remove files in target that no longer exist in source ---
-    let pruned = 0;
-    for (const comp of components) {
-      if (comp.def.build || comp.def.inject) continue;
-      pruned += pruneOrphans(comp.sourceFull, comp.targetDir, comp.def.fileFilter);
-    }
-    if (pruned > 0) {
-      progress('components', 'active', `Pruned ${pruned} orphan files`);
     }
 
     if (cancelled()) throw new CancelledError();
@@ -191,7 +222,7 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     writeFileSync(versionPath, JSON.stringify({
       version, installedAt: new Date().toISOString(), installer: 'maestro',
     }, null, 2), 'utf-8');
-    addFile(manifest, versionPath);
+    addFile(sharedManifest ?? manifest, versionPath);
 
     restoreDisabledState(disabledItems, targetBase);
     applyOverlaysPostInstall(config.mode, targetBase);
@@ -200,6 +231,18 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     dirsCreated = stats.dirs;
     filesSkipped = stats.skipped;
     progress('components', 'done', `${filesInstalled} files`);
+  }
+
+  // --- Codex Multi-Agent V2 preferences ---
+  if (config.installComponents && config.configureCodexMultiAgentV2) {
+    if (cancelled()) throw new CancelledError();
+    progress('codexConfig', 'active', 'Enabling Multi-Agent V2...');
+    const configPath = configureCodexMultiAgentV2(config.mode, config.projectPath);
+    if (!configPath) {
+      progress('codexConfig', 'error', 'Failed to update config.toml');
+      throw new Error('Failed to update Codex config.toml');
+    }
+    progress('codexConfig', 'done', configPath);
   }
 
   // --- Hooks (Claude) ---
@@ -302,6 +345,11 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
         project: config.mode === 'project',
       });
       genericHooksInstalled[platId] = result.installedHooks.length;
+      recordGenericHooks(manifest, platId, {
+        settingsPath: result.settingsPath,
+        installed: result.installedHooks,
+        level,
+      });
       progress(stepId, 'done', `${result.installedHooks.length} hooks`);
     }
   }
@@ -330,8 +378,6 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     removeCodexSkillDedupeConfig(config.mode, config.projectPath);
     const count = writeCodexSkillDedupeConfig(config.mode, config.projectPath);
     if (count > 0) progress('manifest', 'active', `Codex dedupe: ${count} .agents/ skills disabled`);
-  } else {
-    removeCodexSkillDedupeConfig(config.mode, config.projectPath);
   }
 
   // --- Plugin registration ---
@@ -365,7 +411,10 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
   // --- Save manifest ---
   if (cancelled()) throw new CancelledError();
   progress('manifest', 'active', 'Saving...');
-  const manifestPath = saveManifest(manifest);
+  if (sharedManifest) {
+    saveManifest(sharedManifest, { expectedPriorId: globalPrior?.id ?? null });
+  }
+  const manifestPath = saveManifest(manifest, { expectedPriorId: prior?.id ?? null });
   progress('manifest', 'done', 'saved');
 
   return {
@@ -377,6 +426,102 @@ export async function executeInstallPipeline(opts: ExecutorOptions): Promise<Ins
     manifestPath,
     statuslineInstalled, backupPath, migrationWarnings: warnings,
   };
+}
+
+function copyPriorState(
+  target: Manifest,
+  prior: Manifest,
+  includeEntry: (entry: Manifest['entries'][number]) => boolean = () => true,
+): void {
+  target.entries = prior.entries.filter(includeEntry).map((entry) => ({ ...entry }));
+  if (prior.disabledItems) target.disabledItems = [...prior.disabledItems];
+  if (prior.hooks) target.hooks = JSON.parse(JSON.stringify(prior.hooks));
+  if (prior.statusline) target.statusline = { ...prior.statusline };
+  if (prior.mcp) target.mcp = JSON.parse(JSON.stringify(prior.mcp));
+  if (prior.plugin) target.plugin = { ...prior.plugin };
+}
+
+async function clearExplicitlyDisabledState(
+  target: Manifest,
+  prior: Manifest,
+  config: InstallFlowConfig,
+): Promise<void> {
+  const disabled = config.explicitlyDisabled;
+  if (!disabled) return;
+
+  const genericRecords = (disabled.genericHooks ?? [])
+    .filter((platformId) => prior.hooks?.generic?.[platformId])
+    .map((platformId) => [platformId, prior.hooks!.generic![platformId]] as const);
+  const unsupportedGenericPlatforms = genericRecords
+    .filter(([platformId]) => !getGenericHooksPlatform(platformId))
+    .map(([platformId]) => platformId);
+  if (unsupportedGenericPlatforms.length > 0) {
+    throw new Error(
+      `Cannot safely remove generic hooks for unknown platforms: ${unsupportedGenericPlatforms.join(', ')}`,
+    );
+  }
+
+  if (disabled.claudeHooks && prior.hooks?.claude) {
+    uninstallClaudeHooks(prior.hooks.claude.settingsPath, prior.hooks.claude.installed);
+    delete target.hooks?.claude;
+    delete target.hookLevel;
+  }
+  if (disabled.codexHooks && prior.hooks?.codex) {
+    uninstallCodexHooks(prior.hooks.codex.settingsPath, prior.hooks.codex.installed);
+    delete target.hooks?.codex;
+  }
+  if (disabled.agyHooks && prior.hooks?.agy) {
+    uninstallAgyHooks(prior.hooks.agy.settingsPath, prior.hooks.agy.installed);
+    delete target.hooks?.agy;
+  }
+  if (genericRecords.length > 0) {
+    for (const [platformId, record] of genericRecords) {
+      // Registered generic platforms explicitly use Codex-compatible hooks.json.
+      uninstallCodexHooks(record.settingsPath, record.installed);
+      delete target.hooks?.generic?.[platformId];
+    }
+    if (target.hooks?.generic && Object.keys(target.hooks.generic).length === 0) {
+      delete target.hooks.generic;
+    }
+  }
+  if (target.hooks && Object.keys(target.hooks).length === 0) delete target.hooks;
+
+  if (disabled.statusline && prior.statusline) {
+    removeClaudeStatusline(prior.statusline.settingsPath);
+    delete target.statusline;
+  }
+  if (disabled.claudeMcp && prior.mcp?.claude) {
+    removeMcpServerAt(prior.mcp.claude.configPath);
+    delete target.mcp?.claude;
+  }
+  if (disabled.codexMcp && prior.mcp?.codex) {
+    removeCodexMcpServerAt(prior.mcp.codex.configPath);
+    delete target.mcp?.codex;
+  }
+  if (disabled.extraMcp && prior.mcp?.extras) {
+    for (const record of prior.mcp.extras) {
+      const spec = getExtraMcpTargetSpec(record.targetId as Parameters<typeof getExtraMcpTargetSpec>[0]);
+      if (spec) removeExtraMcpServerAt(record.configPath, spec.format);
+    }
+    delete target.mcp?.extras;
+  }
+  if (target.mcp && Object.keys(target.mcp).length === 0) delete target.mcp;
+
+  if ((disabled.pluginClaude && prior.plugin?.claude) || (disabled.pluginCodex && prior.plugin?.codex)) {
+    const { uninstallPlugin } = await import('./plugin-bridge.js');
+    uninstallPlugin({
+      claude: disabled.pluginClaude && !!prior.plugin?.claude,
+      codex: disabled.pluginCodex && !!prior.plugin?.codex,
+    });
+  }
+  if (disabled.pluginClaude) delete target.plugin?.claude;
+  if (disabled.pluginCodex) delete target.plugin?.codex;
+  if (target.plugin && !target.plugin.claude && !target.plugin.codex) delete target.plugin;
+}
+
+function isPathWithin(root: string, candidate: string): boolean {
+  const rel = relative(resolve(root), resolve(candidate));
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
 /**

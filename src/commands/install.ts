@@ -28,6 +28,7 @@ import {
 import { t } from '../i18n/index.js';
 import { registerFontsSubcommand } from './font-guide.js';
 import { installAllStepContent } from '../core/workflows-installer.js';
+import type { InstallProfile } from '../core/install-profile.js';
 
 function resolveMode(opts: { global?: boolean; path?: string }): { mode: 'global' | 'project'; projectPath: string } {
   if (opts.path) {
@@ -205,7 +206,8 @@ export function registerInstallCommand(program: Command): void {
   const install = program
     .command('install')
     .description('Install maestro assets (interactive step selection)')
-    .option('--force', 'Non-interactive batch install of all components')
+    .option('--force', 'Non-interactive install (inherits the existing installation)')
+    .option('--all-platforms', 'With --force: install every available platform component')
     .option('--global', 'Install global assets only (with --force)')
     .option('--path <dir>', 'Install to project directory (with --force)')
     .option('--hooks <level>', 'Hook level for --force mode: none, minimal, standard, full')
@@ -221,7 +223,7 @@ export function registerInstallCommand(program: Command): void {
     .option('--import <path>', 'Import profile and install non-interactively')
     .option('--upgrade', 'With --import: merge new default-selected components (used by update)')
     .option('--load <path>', 'Load profile into interactive TUI (pre-fill state)')
-    .action(async (opts: { force?: boolean; global?: boolean; path?: string; hooks?: string; mcp?: boolean; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; extraMcp?: string; components?: string; statusline?: boolean | string; plugin?: boolean; export?: boolean | string; import?: string; upgrade?: boolean; load?: string }) => {
+    .action(async (opts: { force?: boolean; allPlatforms?: boolean; global?: boolean; path?: string; hooks?: string; mcp?: boolean; codexHooks?: string; codexMcp?: boolean; agyHooks?: string; extraMcp?: string; components?: string; statusline?: boolean | string; plugin?: boolean; export?: boolean | string; import?: string; upgrade?: boolean; load?: string }) => {
       const pkgRoot = getPackageRoot();
 
       // Validate package root
@@ -249,24 +251,37 @@ export function registerInstallCommand(program: Command): void {
         const { migrateComponentIds: migrateIds, mergeNewDefaults } = await import('./install-backend.js');
         const profile = importProfile(opts.import);
         console.error(`Importing profile: ${profile.name} (${profile.scope})`);
+        if (profile.scope === 'project' && !opts.path) {
+          throw new Error('Project install profiles require an explicit --path <dir>.');
+        }
         const componentIds = opts.upgrade
-          ? mergeNewDefaults(profile.components.selectedIds)
+          ? mergeNewDefaults(profile.components.selectedIds, profile.components.knownIds)
           : migrateIds(profile.components.selectedIds);
         await forceInstall(pkgRoot, version, {
           global: profile.scope === 'global',
           path: opts.path,
-          hooks: profile.claude.hooks.basePreset,
-          mcp: profile.claude.mcp.enabled || undefined,
-          codexHooks: profile.codex.hooks.basePreset,
-          codexMcp: profile.codex.mcp.enabled || undefined,
-          agyHooks: profile.agy.hooks.basePreset,
+          installComponents: profile.components.enabled,
+          hooks: profile.claude.hooks.enabled ? profile.claude.hooks.basePreset : 'none',
+          mcp: profile.claude.mcp.enabled,
+          mcpTools: profile.claude.mcp.tools,
+          mcpProjectRoot: profile.claude.mcp.projectRoot,
+          codexHooks: profile.codex.hooks.enabled ? profile.codex.hooks.basePreset : 'none',
+          codexMcp: profile.codex.mcp.enabled,
+          codexMcpTools: profile.codex.mcp.tools,
+          codexMcpProjectRoot: profile.codex.mcp.projectRoot,
+          agyHooks: profile.agy.hooks.enabled ? profile.agy.hooks.basePreset : 'none',
+          genericHookLevels: profile.genericHooks,
           extraMcp: profile.extraMcp.enabled ? profile.extraMcp.targetIds.join(',') : undefined,
-          components: componentIds.join(','),
-          statusline: profile.claude.statusline.enabled ? profile.claude.statusline.theme : undefined,
-          claudeHooksSelection: profile.claude.hooks.isCustom ? profile.claude.hooks : undefined,
-          codexHooksSelection: profile.codex.hooks.isCustom ? profile.codex.hooks : undefined,
-          agyHooksSelection: profile.agy.hooks.isCustom ? profile.agy.hooks : undefined,
-          plugin: profile.plugin?.enabled || undefined,
+          extraMcpEnabled: profile.extraMcp.enabled,
+          components: profile.components.enabled ? componentIds.join(',') : undefined,
+          statusline: profile.claude.statusline.enabled ? profile.claude.statusline.theme : false,
+          claudeHooksSelection: enabledCustomHookSelection(profile.claude.hooks),
+          codexHooksSelection: enabledCustomHookSelection(profile.codex.hooks),
+          agyHooksSelection: enabledCustomHookSelection(profile.agy.hooks),
+          pluginClaude: profilePluginPlatformState(profile.plugin, 'claude'),
+          pluginCodex: profilePluginPlatformState(profile.plugin, 'codex'),
+          backupClaudeMd: profile.backup.claudeMd,
+          backupAll: profile.backup.all,
         });
         return;
       }
@@ -363,6 +378,7 @@ export function registerInstallCommand(program: Command): void {
 // ---------------------------------------------------------------------------
 
 interface ForceInstallOpts {
+  allPlatforms?: boolean;
   global?: boolean;
   path?: string;
   hooks?: string;
@@ -371,12 +387,40 @@ interface ForceInstallOpts {
   codexMcp?: boolean;
   agyHooks?: string;
   extraMcp?: string;
+  extraMcpEnabled?: boolean;
   components?: string;
+  installComponents?: boolean;
   statusline?: boolean | string;
   claudeHooksSelection?: { basePreset: string; selectedHooks: string[]; isCustom: boolean };
   codexHooksSelection?: { basePreset: string; selectedHooks: string[]; isCustom: boolean };
   agyHooksSelection?: { basePreset: string; selectedHooks: string[]; isCustom: boolean };
   plugin?: boolean;
+  pluginClaude?: boolean;
+  pluginCodex?: boolean;
+  mcpTools?: string[];
+  mcpProjectRoot?: string;
+  codexMcpTools?: string[];
+  codexMcpProjectRoot?: string;
+  backupClaudeMd?: boolean;
+  backupAll?: boolean;
+  genericHookLevels?: Record<string, HookLevel>;
+}
+
+type ProfileHookSelection = InstallProfile['claude']['hooks'];
+
+export function enabledCustomHookSelection(
+  selection: ProfileHookSelection,
+): ProfileHookSelection | undefined {
+  return selection.enabled && selection.isCustom ? selection : undefined;
+}
+
+export function profilePluginPlatformState(
+  plugin: InstallProfile['plugin'],
+  platform: 'claude' | 'codex',
+): boolean | undefined {
+  if (!plugin) return undefined;
+  if (plugin.enabled === false) return false;
+  return plugin[platform];
 }
 
 async function forceInstall(
@@ -386,6 +430,8 @@ async function forceInstall(
 ): Promise<void> {
   const { executeInstallPipeline } = await import('../core/install-executor.js');
   const { migrateComponentIds } = await import('./install-backend.js');
+  const { findManifest } = await import('../core/manifest.js');
+  const { paths } = await import('../config/paths.js');
 
   console.error(t.install.forceVersion.replace('{version}', version));
   console.error('');
@@ -400,68 +446,162 @@ async function forceInstall(
 
   const components = scanComponents(pkgRoot, mode, projectPath);
   const available = components.filter((c) => c.available);
-  const componentIds = opts.components
-    ? migrateComponentIds(opts.components.split(','))
-    : undefined;
-  let toInstall = componentIds
-    ? available.filter(c => componentIds.includes(c.def.id))
-    : available;
+  const targetPath = mode === 'global' ? paths.home : projectPath;
+  const prior = findManifest(mode, targetPath);
+  const availableIds = new Set(available.map((component) => component.def.id));
+  const rawComponentIds = opts.components === undefined
+    ? undefined
+    : opts.components.split(',').map((id) => id.trim()).filter(Boolean);
 
-  // Plugin mode: skip file-copy components for platforms using native plugin
-  if (opts.plugin) {
+  if (rawComponentIds && rawComponentIds.length === 0) {
+    throw new Error('--components requires at least one component ID.');
+  }
+
+  const invalidComponentIds = rawComponentIds?.filter((id) => {
+    const migrated = migrateComponentIds([id]);
+    return migrated.length === 0 || migrated.some((candidate) => !availableIds.has(candidate));
+  }) ?? [];
+  if (invalidComponentIds.length > 0) {
+    throw new Error(`Unknown or unavailable component IDs: ${invalidComponentIds.join(', ')}`);
+  }
+
+  const requestedIds = rawComponentIds ? migrateComponentIds(rawComponentIds) : undefined;
+  const priorIds = prior?.selectedComponentIds === undefined
+    ? undefined
+    : migrateComponentIds(prior.selectedComponentIds);
+  let selectedIds: string[];
+  if (opts.allPlatforms) {
+    selectedIds = available.map((component) => component.def.id);
+  } else if (requestedIds) {
+    selectedIds = Array.from(new Set([...(priorIds ?? []), ...requestedIds]));
+  } else if (priorIds) {
+    selectedIds = priorIds;
+  } else if (prior) {
+    // Legacy manifests used an omitted selection to mean "all".
+    selectedIds = available.map((component) => component.def.id);
+  } else if (opts.installComponents === false) {
+    selectedIds = [];
+  } else {
+    // Match the fresh TUI default: shared infrastructure + Claude assets.
+    selectedIds = available
+      .filter((component) => component.def.defaultSelected !== false)
+      .filter((component) => {
+        const platform = component.def.platform ?? 'shared';
+        return platform === 'shared' || platform === 'claude';
+      })
+      .map((component) => component.def.id);
+  }
+  let toInstall = available.filter((component) => selectedIds.includes(component.def.id));
+
+  const pluginClaudeRequested = opts.plugin === true || (opts.pluginClaude ?? prior?.plugin?.claude ?? false);
+  const pluginCodexRequested = opts.plugin === true || (opts.pluginCodex ?? prior?.plugin?.codex ?? false);
+
+  // Plugin mode: skip file-copy components only for the platforms that use a
+  // native plugin. Injected instruction files remain additive.
+  if (pluginClaudeRequested || pluginCodexRequested) {
     toInstall = toInstall.filter(c => {
       if (c.def.inject) return true; // keep inject components (CLAUDE.md, AGENTS.md)
-      if (c.def.platform === 'claude') return false;
-      if (c.def.platform === 'codex') return false;
+      if (c.def.platform === 'claude' && pluginClaudeRequested) return false;
+      if (c.def.platform === 'codex' && pluginCodexRequested) return false;
       return true;
     });
   }
 
-  const hookLevel = (opts.hooks ?? 'none') as HookLevel;
-  const codexHookLevel = (opts.codexHooks ?? 'none') as HookLevel;
-  const agyHookLevel = (opts.agyHooks ?? 'none') as HookLevel;
-  const statuslineTheme = typeof opts.statusline === 'string' ? opts.statusline : 'notion';
+  const hookLevel = (opts.hooks ?? prior?.hooks?.claude?.level ?? prior?.hookLevel ?? 'none') as HookLevel;
+  const codexHookLevel = (opts.codexHooks ?? prior?.hooks?.codex?.level ?? 'none') as HookLevel;
+  const agyHookLevel = (opts.agyHooks ?? prior?.hooks?.agy?.level ?? 'none') as HookLevel;
+  const statuslineTheme = typeof opts.statusline === 'string'
+    ? opts.statusline
+    : prior?.statusline?.theme ?? 'notion';
 
-  const hasCustomClaude = opts.claudeHooksSelection?.isCustom && opts.claudeHooksSelection.selectedHooks.length > 0;
-  const hasCustomCodex = opts.codexHooksSelection?.isCustom && opts.codexHooksSelection.selectedHooks.length > 0;
-  const hasCustomAgy = opts.agyHooksSelection?.isCustom && opts.agyHooksSelection.selectedHooks.length > 0;
-  const extraMcpTargetIds: ExtraMcpTargetId[] = opts.extraMcp
+  const inheritedClaudeSelection = opts.hooks === undefined && prior?.hooks?.claude
+    ? { basePreset: hookLevel, selectedHooks: [...prior.hooks.claude.installed], isCustom: true }
+    : undefined;
+  const inheritedCodexSelection = opts.codexHooks === undefined && prior?.hooks?.codex
+    ? { basePreset: codexHookLevel, selectedHooks: [...prior.hooks.codex.installed], isCustom: true }
+    : undefined;
+  const inheritedAgySelection = opts.agyHooks === undefined && prior?.hooks?.agy
+    ? { basePreset: agyHookLevel, selectedHooks: [...prior.hooks.agy.installed], isCustom: true }
+    : undefined;
+  const claudeHooksSelection = opts.hooks === 'none'
+    ? undefined
+    : opts.claudeHooksSelection ?? inheritedClaudeSelection;
+  const codexHooksSelection = opts.codexHooks === 'none'
+    ? undefined
+    : opts.codexHooksSelection ?? inheritedCodexSelection;
+  const agyHooksSelection = opts.agyHooks === 'none'
+    ? undefined
+    : opts.agyHooksSelection ?? inheritedAgySelection;
+
+  const hasCustomClaude = claudeHooksSelection?.isCustom && claudeHooksSelection.selectedHooks.length > 0;
+  const hasCustomCodex = codexHooksSelection?.isCustom && codexHooksSelection.selectedHooks.length > 0;
+  const hasCustomAgy = agyHooksSelection?.isCustom && agyHooksSelection.selectedHooks.length > 0;
+  const extraMcpTargetIds: ExtraMcpTargetId[] = opts.extraMcpEnabled === false
+    ? []
+    : opts.extraMcp
     ? opts.extraMcp.split(',').map(s => s.trim()) as ExtraMcpTargetId[]
-    : [];
+    : (prior?.mcp?.extras?.map((entry) => entry.targetId as ExtraMcpTargetId) ?? []);
+
+  const installPluginClaude = pluginClaudeRequested;
+  const installPluginCodex = pluginCodexRequested;
+  const mcpTools = opts.mcpTools ?? [...MCP_TOOLS];
+  const codexMcpTools = opts.codexMcpTools ?? [...MCP_TOOLS];
+  const configureCodexV2 = opts.installComponents !== false && selectedIds.some((id) =>
+    components.some((component) => component.def.id === id && component.def.platform === 'codex'));
+  const genericHookLevels = opts.genericHookLevels ?? Object.fromEntries(
+    Object.entries(prior?.hooks?.generic ?? {}).map(([id, record]) => [id, (record.level ?? 'none') as HookLevel]),
+  );
 
   const config: import('../tui/install-ui/types.js').InstallFlowConfig = {
     mode,
     projectPath,
-    installComponents: true,
+    installComponents: opts.installComponents !== false,
     installHooks: (hookLevel !== 'none' && HOOK_LEVELS.includes(hookLevel)) || !!hasCustomClaude,
-    installMcp: !!opts.mcp,
+    installMcp: opts.mcp ?? !!prior?.mcp?.claude,
     installCodexHooks: (codexHookLevel !== 'none' && HOOK_LEVELS.includes(codexHookLevel)) || !!hasCustomCodex,
     codexHookLevel,
-    installCodexMcp: !!opts.codexMcp,
-    codexMcpTools: [...MCP_TOOLS],
-    codexMcpProjectRoot: '',
+    installCodexMcp: opts.codexMcp ?? !!prior?.mcp?.codex,
+    codexMcpTools,
+    codexMcpProjectRoot: opts.codexMcpProjectRoot ?? '',
     installAgyHooks: (agyHookLevel !== 'none' && HOOK_LEVELS.includes(agyHookLevel)) || !!hasCustomAgy,
     agyHookLevel,
     installExtraMcp: extraMcpTargetIds.length > 0,
     extraMcpTargetIds,
-    genericHookLevels: {},
-    installStatusline: !!opts.statusline,
+    genericHookLevels,
+    installStatusline: opts.statusline === undefined ? !!prior?.statusline : !!opts.statusline,
     statuslineTheme,
     hookLevel,
     componentCount: toInstall.length,
     fileCount: toInstall.reduce((sum, c) => sum + c.fileCount, 0),
-    mcpToolCount: MCP_TOOLS.length,
+    mcpToolCount: mcpTools.length,
     selectedComponentIds: toInstall.map(c => c.def.id),
-    mcpTools: [...MCP_TOOLS],
-    mcpProjectRoot: '',
-    backupClaudeMd: true,
-    backupAll: false,
-    claudeHooksSelection: opts.claudeHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
-    codexHooksSelection: opts.codexHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
-    agyHooksSelection: opts.agyHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
+    mcpTools,
+    mcpProjectRoot: opts.mcpProjectRoot ?? '',
+    backupClaudeMd: opts.backupClaudeMd ?? true,
+    backupAll: opts.backupAll ?? false,
+    claudeHooksSelection: claudeHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
+    codexHooksSelection: codexHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
+    agyHooksSelection: agyHooksSelection as import('../tui/install-ui/HooksConfig.js').HooksSelection,
     codexDedupeAgents: toInstall.some(c => c.def.id.startsWith('codex-')) && toInstall.some(c => c.def.id.startsWith('agents-standard-')),
-    installPluginClaude: !!opts.plugin,
-    installPluginCodex: !!opts.plugin,
+    installPluginClaude,
+    installPluginCodex,
+    configureCodexMultiAgentV2: configureCodexV2,
+    explicitlyDisabled: {
+      claudeHooks: opts.hooks !== undefined && !((hookLevel !== 'none' && HOOK_LEVELS.includes(hookLevel)) || !!hasCustomClaude),
+      claudeMcp: opts.mcp === false,
+      codexHooks: opts.codexHooks !== undefined && !((codexHookLevel !== 'none' && HOOK_LEVELS.includes(codexHookLevel)) || !!hasCustomCodex),
+      codexMcp: opts.codexMcp === false,
+      agyHooks: opts.agyHooks !== undefined && !((agyHookLevel !== 'none' && HOOK_LEVELS.includes(agyHookLevel)) || !!hasCustomAgy),
+      genericHooks: opts.genericHookLevels === undefined
+        ? undefined
+        : Object.entries(opts.genericHookLevels)
+            .filter(([, level]) => level === 'none')
+            .map(([platformId]) => platformId),
+      extraMcp: opts.extraMcpEnabled === false,
+      statusline: opts.statusline === false,
+      pluginClaude: opts.plugin !== true && opts.pluginClaude === false,
+      pluginCodex: opts.plugin !== true && opts.pluginCodex === false,
+    },
   };
 
   const result = await executeInstallPipeline({

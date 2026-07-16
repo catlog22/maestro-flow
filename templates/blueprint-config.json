@@ -1,0 +1,22 @@
+{
+  "session_id": "{{SESSION_ID}}",
+  "seed_input": "{{SEED_INPUT}}",
+  "input_type": "text",
+  "timestamp": "{{ISO_8601}}",
+  "mode": "interactive",
+  "complexity": "moderate",
+  "depth": "standard",
+  "focus_areas": [],
+  "spec_type": "service",
+  "iteration_count": 0,
+  "iteration_history": [],
+  "seed_analysis": {
+    "problem_statement": "",
+    "target_users": [],
+    "domain": "",
+    "constraints": [],
+    "dimensions": []
+  },
+  "has_codebase": false,
+  "phasesCompleted": []
+}
