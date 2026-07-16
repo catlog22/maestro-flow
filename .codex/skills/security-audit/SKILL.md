@@ -1,7 +1,7 @@
 ---
 name: security-audit
 description: OWASP Top 10 and STRIDE security auditing with supply chain analysis
-argument-hint: [quick|standard|deep] [--scope <path>]
+argument-hint: "[quick|standard|deep] [--scope <path>]"
 allowed-tools:
   - Bash
   - Glob
@@ -17,8 +17,17 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <purpose>
 Systematic security audit covering OWASP Top 10, dependency supply chain, secrets detection,
@@ -68,7 +77,7 @@ $ARGUMENTS — Parse tier and scope:
 
 **GATE 3: Report → Completion**
 - REQUIRED: Severity matrix produced with file:line references and remediation.
-- REQUIRED: Artifact registered in state.json.
+- REQUIRED: Declared typed output registered by `maestro run complete`.
 - BLOCKED if missing: do not emit completion status without severity matrix.
 
 **Phase 1: Reconnaissance**

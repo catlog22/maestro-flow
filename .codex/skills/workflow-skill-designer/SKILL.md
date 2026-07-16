@@ -1,6 +1,9 @@
 ---
 name: workflow-skill-designer
-description: Meta-skill for designing orchestrator+phases structured workflow skills. Creates SKILL.md coordinator with progressive phase loading, TodoWrite patterns, and data flow. Triggers on "design workflow skill", "create workflow skill", "workflow skill designer".
+description: Meta-skill for designing orchestrator+phases structured workflow
+  skills. Creates SKILL.md coordinator with progressive phase loading, TodoWrite
+  patterns, and data flow. Triggers on "design workflow skill", "create workflow
+  skill", "workflow skill designer".
 allowed-tools:
   - Bash
   - Edit
@@ -18,10 +21,19 @@ allowed-tools:
   - update_plan
   - wait_agent
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # Workflow Skill Designer

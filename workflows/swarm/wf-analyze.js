@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-analyze',
   description: 'Multi-dimensional analysis with adversarial score verification and 3-way advocacy synthesis',
-  whenToUse: 'Accelerate maestro-analyze with parallel exploration + scoring + adversarial cross-verify + judge panel Go/No-Go',
+  whenToUse: 'Accelerate the analyze step with parallel exploration + scoring + adversarial cross-verify + judge panel Go/No-Go',
   phases: [
     { title: 'Explore', detail: '3-layer codebase exploration via cli-explore-agent' },
     { title: 'Score', detail: 'Parallel 6-dimension scoring via workflow-analyzer' },

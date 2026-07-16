@@ -1,6 +1,9 @@
 ---
 name: scholar-latex-organizer
-description: Organize messy conference LaTeX template .zip files into clean Overleaf-ready structure. Extracts, analyzes, cleans up, and generates README with submission requirements. Triggers on "organize LaTeX template", "clean up template", "prepare Overleaf template", "整理LaTeX模板".
+description: Organize messy conference LaTeX template .zip files into clean
+  Overleaf-ready structure. Extracts, analyzes, cleans up, and generates README
+  with submission requirements. Triggers on "organize LaTeX template", "clean up
+  template", "prepare Overleaf template", "整理LaTeX模板".
 allowed-tools:
   - Bash
   - Edit
@@ -13,6 +16,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
+version: 0.5.50
 ---
 
 # Scholar LaTeX Organizer

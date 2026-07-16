@@ -1,7 +1,9 @@
 ---
 name: maestro-next
-description: Single-step recommendation engine — route intent to the best next step, with companion utilities
-argument-hint: <intent> [-y] [--dry-run] [--top N] [--list] [--suggest] [--note <text>] [--promote] [--lite]
+description: Single-step recommendation engine — route intent to the best next
+  step, with companion utilities
+argument-hint: <intent> [-y] [--dry-run] [--top N] [--list] [--suggest] [--note
+  <text>] [--promote] [--lite]
 allowed-tools:
   - Bash
   - Edit
@@ -12,8 +14,17 @@ allowed-tools:
   - request_user_input
   - spawn_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <purpose>
 Parse intent + project state → score candidates from the step registry → recommend a single atomic step → confirm → execute via `maestro run prepare --platform codex` + `maestro run create`. Also provides companion utilities: knowledge loading (--suggest), structured note recording (--note), and insight promotion (--promote).

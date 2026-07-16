@@ -118,7 +118,6 @@ const AGENT_CATEGORY_MAP: Record<string, SpecCategory[]> = {
 
   // Context / research agents
   'context-search-agent':         ['coding', 'arch'],
-  'workflow-research-agent':      ['coding'],
   'workflow-codebase-mapper':     ['arch'],
   'workflow-analyzer':            ['coding', 'arch'],
   'workflow-external-researcher': ['coding', 'arch'],

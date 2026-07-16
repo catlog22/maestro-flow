@@ -60,8 +60,8 @@ Every command MUST classify `session-mode` as one of:
 | Usage pattern | Needs interview_protocol? | Example |
 |---------------|--------------------------|---------|
 | Multi-round decision tree with traversal order | **Yes** — full protocol with 6 strategy elements | analyze, brainstorm, grill, roadmap, blueprint, init |
-| Version/option selection (1-2 questions, no tree) | **Lightweight** — declare decision points only, no traversal rules | milestone-release |
-| Simple confirmation (proceed/cancel) | **No** — handled inline in `<execution>` | plan, execute, verify, milestone-audit, milestone-complete |
+| Version/option selection (1-2 questions, no tree) | **Lightweight** — declare decision points only, no traversal rules | maestro-update |
+| Simple confirmation (proceed/cancel) | **No** — handled inline in `<execution>` | plan, execute, verify, maestro-session-seal |
 
 Section authoring rules are defined in § 2 below.
 
@@ -455,7 +455,7 @@ Commands reference this standard in `<context> ### Pre-load` and annotate their 
 
 ## 4. Depth Standard
 
-Using `maestro-plan.md` (188 lines) as the depth benchmark. Every pipeline command should meet the following minimum depth:
+Using `plan.md` as the depth benchmark. Every pipeline command should meet the following minimum depth:
 
 ### Minimum Requirements
 
@@ -526,9 +526,8 @@ The two styles are complementary: FSM orchestrators invoke pipeline commands; pi
 
 | Style | Commands |
 |-------|----------|
-| **Pipeline** | init, analyze, plan, execute, verify, brainstorm, grill, blueprint, roadmap, milestone-audit, milestone-complete, milestone-release |
-| **FSM** | ralph, ralph-execute |
-| **Needs evaluation** | coordinate (multi-role handoff may need FSM) |
+| **Pipeline** | init, analyze, plan, execute, verify, brainstorm, grill, blueprint, roadmap, maestro-session-seal |
+| **FSM** | maestro, maestro-ralph |
 
 ---
 
@@ -793,7 +792,7 @@ Workflow depth correlates with interactivity, multi-agent orchestration, and mod
 | Multi-agent (parallel spawning, cross-agent synthesis) | 400-700 | execute, brainstorm |
 | Multi-mode (3+ execution paths) | 400-600 | plan (create/revise/check/tdd) |
 | Standard (single linear pipeline) | 200-400 | blueprint, roadmap |
-| Procedural/operational (archive, audit, release) | 100-200 | milestone-audit, milestone-complete |
+| Procedural/operational (archive, audit, seal) | 100-200 | maestro-session-seal |
 
 A workflow under 100 lines likely belongs inline in the command file rather than as a separate file.
 

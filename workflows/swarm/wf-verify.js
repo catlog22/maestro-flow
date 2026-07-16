@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-verify',
   description: 'Three-layer verification with prosecutor/defender/judge adversarial aggregation',
-  whenToUse: 'Accelerate maestro-execute verification gate with parallel layer checks + adversarial pass/fail determination',
+  whenToUse: 'Accelerate the execute step verification gate with parallel layer checks + adversarial pass/fail determination',
   phases: [
     { title: 'Check', detail: 'Parallel 3-layer verification + anti-pattern scan via workflow-verifier' },
     { title: 'Argue', detail: 'Prosecutor argues FAIL, Defender argues PASS — adversarial positions' },

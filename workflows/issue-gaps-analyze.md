@@ -11,7 +11,7 @@ Root cause analysis for issues using CLI exploration and codebase context gather
 Supports single issue (ISS-ID) or batch (all open/registered) with classification and parallel analysis.
 Produces analysis records in issues.jsonl and context.md for downstream `plan --gaps`.
 
-**Invoked by**: `maestro-analyze --gaps [ISS-ID]`
+**Invoked by**: `analyze --gaps [ISS-ID]`
 
 ## Input
 
@@ -141,7 +141,7 @@ Construct IssueAnalysis:
 Read-modify-write issues.jsonl (single pass for all analyzed issues):
   For each issue:
     Set issue.analysis = ANALYSIS, updated_at = NOW_ISO
-    Append issue.history: { action: "analyzed", at: NOW_ISO, by: "maestro-analyze --gaps" }
+    Append issue.history: { action: "analyzed", at: NOW_ISO, by: "analyze --gaps" }
     Status unchanged (analysis is metadata enrichment).
 Verify: re-read file, confirm analysis field present for all updated issues.
 ```

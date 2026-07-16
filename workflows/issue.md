@@ -17,7 +17,7 @@
 ```
 Extract SUBCOMMAND (first token) and ARGS (remaining) from $ARGUMENTS.
 Valid: create | list | status | update | close | link
-Missing/invalid → error with usage: /manage-issue <create|list|status|update|close|link> [options]
+Missing/invalid → error with usage: /manage issue <create|list|status|update|close|link> [options]
 ```
 
 ---
@@ -182,8 +182,8 @@ If no issues found:
 ```
 No issues found{with applied filters}.
 
-Create one: Skill({ skill: "manage-issue", args: "create --title \"...\"" })
-Discover issues: Skill({ skill: "manage-issue-discover" })
+Create one: Skill({ skill: "manage", args: "issue create --title \"...\"" })
+Discover issues: Skill({ skill: "manage", args: "issue discover" })
 ```
 
 ---

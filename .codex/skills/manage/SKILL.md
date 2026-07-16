@@ -1,6 +1,9 @@
 ---
 name: manage
-description: Project management hub — status, issues, knowledge stores, and drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest / wiki / domain；约束类规则走 /spec add。Triggers on "项目状态", "issue 管理", "知识沉淀", "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
+description: Project management hub — status, issues, knowledge stores, and
+  drift/rebuild sync. knowledge 子命令覆盖 capture（knowhow 沉淀）/ audit（知识审计）/ harvest
+  / wiki / domain；约束类规则走 /spec add。Triggers on "项目状态", "issue 管理", "知识沉淀",
+  "knowhow capture", "knowledge audit", "知识审计", "drift 同步".
 argument-hint: <subcommand> [args...] where subcommand = status|issue|knowledge|sync
 allowed-tools:
   - Bash
@@ -18,8 +21,8 @@ allowed-tools:
   - spawn_agent
   - spawn_agents_on_csv
   - wait_agent
-session-mode: run
-contract: 
+session-mode: none
+version: 0.5.50
 ---
 
 <purpose>
@@ -129,7 +132,7 @@ Next-step decision table defined in workflow status.md Step 5.
 | Phase needs analysis | step `analyze` (`maestro run prepare --platform codex analyze` + `maestro run create analyze --session YYYYMMDD-analyze-{topic} --intent "{goal}" -- {phase}`) |
 | Phase needs planning | step `plan` (`maestro run prepare --platform codex plan` + `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- {phase}`) |
 | Phase needs execution | step `execute` (`maestro run prepare --platform codex execute` + `maestro run create execute --session YYYYMMDD-execute-{topic} --intent "{goal}" -- {phase}`) |
-| Session ready to seal | step `session-seal` |
+| Session ready to seal | maestro-session-seal (not a step) |
 | Issues need triage | `/manage issue list` |
 </completion>
 

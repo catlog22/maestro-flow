@@ -217,6 +217,7 @@ S_APPLY_VERDICT:
   → S_STEP_LOCATE WHEN: verdict == "escalate"             DO: A_APPLY_ESCALATE
   → S_STEP_LOCATE WHEN: post-session + next dep-ready session   DO: A_ADVANCE_SESSION
   → END              WHEN: post-session + no next session
+  → END              WHEN: post-session + seal failed（显示 blockers，session 保持 running）
   → END              WHEN: post-debug-escalate                DO: A_PAUSE_ESCALATE
   → END              WHEN: post-reground + drifted + confidence >= 60  DO: A_REGROUND_HALT
   → S_STEP_LOCATE WHEN: post-reground + aligned           DO: A_APPLY_PROCEED
@@ -884,9 +885,11 @@ Bash({
 ### A_STRUCTURAL_EVALUATE
 
 **post-session:**
-1. Read state.json → resolve session dependency graph
-2. next dep-ready session exists（依赖已满足的 pending session）→ A_ADVANCE_SESSION
-3. no next session → END，set `active_session_id = null`
+1. Mark session sealed：`Bash("maestro run seal-session {session.session_id}")` — CLI 写 `session.json.lifecycle.sealed_at`、投影 `state.json.sessions[].status = sealed` 并清空 `active_session_id`（知识提取不在此做，完整封印流程属 `maestro-session-seal` 命令）
+2. CLI 报错（unsealed Runs / session gates 未过）→ 显示 blockers + END（session 保持 running），提示人工运行 `/maestro-session-seal` 排查
+3. Read state.json → resolve session dependency graph（step 1 落盘的 sealed 状态使下游 session 变为 dep-ready）
+4. next dep-ready session exists（依赖已满足的 pending session）→ A_ADVANCE_SESSION
+5. no next session（DAG 完结或 adhoc session 无依赖图）→ END
 
 **post-debug-escalate:** always → A_PAUSE_ESCALATE
 
@@ -1320,7 +1323,7 @@ Engine 模式新增（`--engine swarm|universal`，见 `<engines>`）：
 - [ ] goal_changelog 含完整 before/after + impact_assessment
 - [ ] blueprint_id session 字段支持 --from blueprint:{BLP_ID} 路径
 - [ ] spec-setup 预检（build rule 0.5）
-- [ ] post-session adhoc 分支：mark session sealed + clear active_session_id
+- [ ] post-session：mark session sealed（`maestro run seal-session`，含 clear active_session_id）先于 DAG 推进；seal 失败 → END + 提示 `/maestro-session-seal`；adhoc 无依赖图 → END
 - [ ] post-reground + drifted + confidence < 60 → A_APPLY_PROCEED (LOW CONFIDENCE)
 - [ ] Fix-loop 插入的 step 通过 A_STEP_DISPATCH 逐步执行
 - [ ] re-grounding 3-step 插入规则（build rule 5.5）不变

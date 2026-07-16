@@ -1,6 +1,10 @@
 ---
 name: scholar-ideation
-description: Research ideation workflow from literature search to research planning. Triggers on "brainstorm research ideas", "identify research gaps", "conduct gap analysis", "start research project", "conduct literature review", "define research question", "select research method", "plan research", "research ideation".
+description: Research ideation workflow from literature search to research
+  planning. Triggers on "brainstorm research ideas", "identify research gaps",
+  "conduct gap analysis", "start research project", "conduct literature review",
+  "define research question", "select research method", "plan research",
+  "research ideation".
 allowed-tools:
   - Bash
   - Edit
@@ -13,6 +17,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
+version: 0.5.50
 ---
 
 # Scholar Ideation

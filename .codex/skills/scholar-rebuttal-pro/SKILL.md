@@ -1,6 +1,9 @@
 ---
 name: scholar-rebuttal-pro
-description: Enhanced academic paper review response workflow with Agy/CLI collaborative analysis and multi-perspective discussion. Produces structured rebuttal documents with evidence-based strategies. Triggers on "rebuttal", "respond to reviewers", "review response", "审稿回复".
+description: Enhanced academic paper review response workflow with Agy/CLI
+  collaborative analysis and multi-perspective discussion. Produces structured
+  rebuttal documents with evidence-based strategies. Triggers on "rebuttal",
+  "respond to reviewers", "review response", "审稿回复".
 allowed-tools:
   - Bash
   - Edit
@@ -16,10 +19,19 @@ allowed-tools:
   - spawn_agent
   - update_plan
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # Scholar Rebuttal Pro

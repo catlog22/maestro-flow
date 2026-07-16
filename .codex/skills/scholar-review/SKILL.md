@@ -1,6 +1,9 @@
 ---
 name: scholar-review
-description: Systematic academic paper review workflow covering self-review before submission and rebuttal writing after receiving reviewer feedback. Triggers on "review paper", "self-review", "write rebuttal", "respond to reviewers", "analyze review comments", "paper review".
+description: Systematic academic paper review workflow covering self-review
+  before submission and rebuttal writing after receiving reviewer feedback.
+  Triggers on "review paper", "self-review", "write rebuttal", "respond to
+  reviewers", "analyze review comments", "paper review".
 allowed-tools:
   - Bash
   - Edit
@@ -13,6 +16,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
+version: 0.5.50
 ---
 
 # Scholar Review

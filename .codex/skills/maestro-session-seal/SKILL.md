@@ -1,7 +1,7 @@
 ---
 name: maestro-session-seal
 description: Seal current session with knowledge extraction and DAG progression
-argument-hint: [--session <session_id>] [-y] [--skip-knowledge]
+argument-hint: "[--session <session_id>] [-y] [--skip-knowledge]"
 allowed-tools:
   - Bash
   - Edit
@@ -18,8 +18,17 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <purpose>
 Seal a completed session: verify all runs are done, extract knowledge (specs/knowhow promotion), mark session as sealed, and recommend the next dep-ready session from the DAG.

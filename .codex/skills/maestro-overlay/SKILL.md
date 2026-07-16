@@ -1,7 +1,10 @@
 ---
 name: maestro-overlay
-description: Create or edit command overlays from natural language, or auto-generate them from workflow deficiency signals
-argument-hint: <intent> | --amend [description] [--from-verify <dir>] [--from-review <dir>] [--from-session <id>] [--from-issues ISS-xxx,...] [--scan] [--dry-run] [-y]
+description: Create or edit command overlays from natural language, or
+  auto-generate them from workflow deficiency signals
+argument-hint: <intent> | --amend [description] [--from-verify <dir>]
+  [--from-review <dir>] [--from-session <id>] [--from-issues ISS-xxx,...]
+  [--scan] [--dry-run] [-y]
 allowed-tools:
   - Bash
   - Glob
@@ -10,8 +13,9 @@ allowed-tools:
   - Write
   - request_user_input
 session-mode: none
-contract: 
+version: 0.5.50
 ---
+
 <purpose>
 Turn instructions into command overlays — JSON patch files that augment `.claude/commands/*.md`
 non-invasively, auto-applied by `maestro install`. Two modes:

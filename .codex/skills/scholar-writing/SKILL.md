@@ -1,6 +1,11 @@
 ---
 name: scholar-writing
-description: End-to-end academic paper writing workflow. Takes a research repository and produces a publication-ready LaTeX manuscript for top ML/AI conferences (NeurIPS, ICML, ICLR, ACL, AAAI, COLM). Covers repo understanding, structure planning, section drafting, citation management, anti-AI polishing, and conference formatting. Triggers on "write paper", "draft paper", "scholar writing", "paper writing workflow".
+description: End-to-end academic paper writing workflow. Takes a research
+  repository and produces a publication-ready LaTeX manuscript for top ML/AI
+  conferences (NeurIPS, ICML, ICLR, ACL, AAAI, COLM). Covers repo understanding,
+  structure planning, section drafting, citation management, anti-AI polishing,
+  and conference formatting. Triggers on "write paper", "draft paper", "scholar
+  writing", "paper writing workflow".
 allowed-tools:
   - Bash
   - Edit
@@ -14,10 +19,19 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # Scholar Writing

@@ -25,12 +25,12 @@ Unlike `maestro wiki list` which shows raw entries, this workflow synthesizes an
 ## Argument Shape
 
 ```
-/wiki-digest                                  → digest entire wiki
-/wiki-digest auth                             → topic-scoped digest
-/wiki-digest --recent 14                      → entries updated in last 14 days
-/wiki-digest --type spec                      → spec entries only
-/wiki-digest --format full                    → detailed per-entry summaries
-/wiki-digest auth --create-issues             → digest + auto-create gap issues
+/manage knowledge wiki digest                                  → digest entire wiki
+/manage knowledge wiki digest auth                             → topic-scoped digest
+/manage knowledge wiki digest --recent 14                      → entries updated in last 14 days
+/manage knowledge wiki digest --type spec                      → spec entries only
+/manage knowledge wiki digest --format full                    → detailed per-entry summaries
+/manage knowledge wiki digest auth --create-issues             → digest + auto-create gap issues
 ```
 
 | Flag | Effect |
@@ -145,7 +145,7 @@ Produce `.workflow/knowhow/KNW-digest-{slug}-{YYYY-MM-DD}.md`:
 ## Knowledge Gaps
 | Gap | Theme | Type Missing | Suggested Action |
 |-----|-------|-------------|-----------------|
-| No knowhow for auth patterns | Security | knowhow | /learn-decompose src/auth/ |
+| No knowhow for auth patterns | Security | knowhow | /learn decompose src/auth/ |
 
 ## Unlinked Insights
 {knowhow entries not connected to wiki graph}
@@ -177,9 +177,9 @@ For each knowledge gap from Stage 5: dedup against `.workflow/issues/issues.json
 
 | Action | Command |
 |--------|---------|
-| Deep dive on a theme | `/learn-follow <wiki-id>` |
-| Fix graph connectivity | `/wiki-connect --fix` |
-| Decompose for patterns | `/learn-decompose <path>` |
+| Deep dive on a theme | `/learn follow <wiki-id>` |
+| Fix graph connectivity | `/manage knowledge wiki connect --fix` |
+| Decompose for patterns | `/learn decompose <path>` |
 | Create missing entries | `maestro wiki create --type <type> --slug <slug>` |
-| Triage gap issues | `/manage-issue list --source wiki-digest` |
+| Triage gap issues | `/manage issue list --source wiki-digest` |
 

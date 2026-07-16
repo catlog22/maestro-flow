@@ -33,25 +33,27 @@ const taskPatterns = [
 
 #### Step 4.2: 推荐工作流
 
+> 序列中的裸名称为 first-tier step（经 `/maestro "<意图>"` 自动路由或 `maestro run` 执行）；`/` 前缀为独立命令。
+
 **新项目 — Path A** (复杂度: 高):
 
 ```markdown
 ## 新项目工作流
 
 ### 路径 A: 完整新项目
-1. `/maestro-brainstorm "项目描述"` — 发散探索，多角色创意
-2. `/maestro-blueprint` — (可选) 7-phase 正式规格文档化
+1. `brainstorm "项目描述"` — 发散探索，多角色创意
+2. `blueprint` — (可选) 7-phase 正式规格文档化
 3. `/maestro-init --from brainstorm:ID`
-4. `/maestro-analyze "topic"` — 宏观分析，探索影响面 → scope_verdict
-5. `/maestro-roadmap --from analyze:ANL-xxx` — 纯编排，Milestone > Phase 分解
-6. `/maestro-analyze 1` — 微观分析，Phase 级深入
-7. `/maestro-plan 1` → `/maestro-execute`
+4. `analyze "topic"` — 宏观分析，探索影响面 → scope_verdict
+5. `roadmap --from analyze:ANL-xxx` — 纯编排，Milestone > Phase 分解
+6. `analyze 1` — 微观分析，Phase 级深入
+7. `plan 1` → `execute`
 
 ### 路径 E: 纯规格文档（不进执行链）
-1. `/maestro-blueprint "project idea"` — 供人阅读和决策
+1. `blueprint "project idea"` — 供人阅读和决策
 
 ### 路径 F: 纯探索（不进执行链）
-1. `/maestro-brainstorm "idea"` — 供人决策
+1. `brainstorm "idea"` — 供人决策
 ```
 
 **旧项目大功能 — Path B** (复杂度: 高):
@@ -59,10 +61,10 @@ const taskPatterns = [
 ```markdown
 ## 旧项目大功能工作流
 
-1. `/maestro-analyze "feature X"` — 宏观分析 → scope_verdict=large
-2. `/maestro-roadmap --from analyze:ANL-xxx` — Milestone > Phase 分解
-3. `/maestro-analyze 1` — 微观分析
-4. `/maestro-plan 1` → `/maestro-execute`
+1. `analyze "feature X"` — 宏观分析 → scope_verdict=large
+2. `roadmap --from analyze:ANL-xxx` — Milestone > Phase 分解
+3. `analyze 1` — 微观分析
+4. `plan 1` → `execute`
 ```
 
 **中等功能 — Path C** (复杂度: 中，跳过 roadmap):
@@ -70,12 +72,12 @@ const taskPatterns = [
 ```markdown
 ## 中等功能工作流
 
-1. `/maestro-analyze "feature X"` — 宏观分析 → scope_verdict=medium
-2. `/maestro-plan --from analyze:ANL-xxx` — 直达规划，跳过 roadmap
-3. `/maestro-execute`
+1. `analyze "feature X"` — 宏观分析 → scope_verdict=medium
+2. `plan --from analyze:ANL-xxx` — 直达规划，跳过 roadmap
+3. `execute`
 
 ### 快速渠道（简单功能）
-1. `/maestro-quick "功能描述"` — 一键完成
+1. `quick "功能描述"` — 一键完成
 
 ### 全自动
 1. `/maestro -y "功能描述"` — 自动选择并执行完整流程
@@ -86,11 +88,11 @@ const taskPatterns = [
 ```markdown
 ## 小改动工作流
 
-1. `/maestro-plan "fix auth bug"` — 直接规划
-2. `/maestro-execute`
+1. `plan "fix auth bug"` — 直接规划
+2. `execute`
 
 ### 快速修复（已知问题）
-1. `/maestro-quick "修复 Bug 描述"`
+1. `quick "修复 Bug 描述"`
 ```
 
 **Bug 追踪** (Issue 闭环):
@@ -99,12 +101,12 @@ const taskPatterns = [
 ## Bug 追踪工作流
 
 ### Issue 闭环（需要追踪）
-1. `/manage-issue-discover by-prompt "问题描述"` — 发现 Issue
-2. `/manage-issue create --title "Bug 标题" --severity high` — 创建 Issue
-3. `/maestro-analyze --gaps ISS-xxx` — 根因分析
-4. `/maestro-plan --gaps` — 方案规划
-5. `/maestro-execute` — 执行修复
-6. `/manage-issue close ISS-xxx --resolution "Fixed"` — 关闭 Issue
+1. `/manage issue discover by-prompt "问题描述"` — 发现 Issue
+2. `/manage issue create --title "Bug 标题" --severity high` — 创建 Issue
+3. `analyze --gaps ISS-xxx` — 根因分析
+4. `plan --gaps` — 方案规划
+5. `execute` — 执行修复
+6. `/manage issue close ISS-xxx --resolution "Fixed"` — 关闭 Issue
 ```
 
 **代码审查**:
@@ -112,15 +114,15 @@ const taskPatterns = [
 ```markdown
 ## 质量管线
 
-1. `/quality-review [phase] --level standard` — 多维代码审查
-2. `/quality-auto-test [phase]` — 自动测试（智能路由）
-3. `/quality-test [phase]` — 业务测试（UAT）
+1. `review [phase] --level standard` — 多维代码审查
+2. `auto-test [phase]` — 自动测试（智能路由）
+3. `test [phase]` — 业务测试（UAT）
 
 ### 测试失败修复循环
-1. `/quality-debug --from-uat [phase]` — 诊断失败
-2. `/maestro-plan [phase] --gaps` — 生成修复计划
-3. `/maestro-execute [phase]` — 执行修复
-4. `/quality-auto-test [phase] --re-run` — 重跑失败场景
+1. `debug --from-uat [phase]` — 诊断失败
+2. `plan [phase] --gaps` — 生成修复计划
+3. `execute [phase]` — 执行修复
+4. `auto-test [phase] --re-run` — 重跑失败场景
 ```
 
 **Odyssey 长周期循环** (深度自主):
@@ -155,8 +157,8 @@ const taskPatterns = [
 上游起源: brainstorm(发散) | blueprint(收敛) | grill(压力测试) → 可选
 理解层:   analyze "topic"(宏观) → scope_verdict 路由
 编排层:   roadmap(可选，仅 scope_verdict=large 时建议)
-执行层:   plan → execute → quality → milestone-audit → milestone-complete
-快速渠道: maestro-quick → (直接完成)
+执行层:   plan → execute → quality → session-seal
+快速渠道: quick → (直接完成)
 Issue 闭环: discover → create → analyze --gaps → plan --gaps → execute → close
 全自动:   /maestro -y → (自动路由)
 Odyssey:  odyssey --mode debug|improve|planex|ui → (自主循环)
@@ -205,13 +207,13 @@ Odyssey:  odyssey --mode debug|improve|planex|ui → (自主循环)
 |---|------|------|---------|
 | 1 | `/maestro` | 智能协调器 | 不确定用哪个命令时，告诉它你的目标 |
 | 2 | `/maestro-init` | 初始化项目 | 首次使用，创建 .workflow/ 结构 |
-| 3 | `/maestro-brainstorm` | 头脑风暴 | 新项目发散探索、多角色创意 |
-| 4 | `/maestro-blueprint` | 规格文档化 | 正式 7-phase 收敛规格链 |
-| 5 | `/maestro-analyze` | 双层分析 | 宏观: `"topic"` 探索影响面；微观: `1` Phase 级深入 |
-| 6 | `/maestro-roadmap` | 路线图编排 | scope_verdict=large 时，Milestone > Phase 分解 |
-| 7 | `/maestro-plan` | 规划 | 分析完成后生成执行计划，支持 `--from analyze:ANL-xxx` 直达 |
-| 8 | `/maestro-execute` | 执行 | 计划完成后，执行实现 |
-| 9 | `/maestro-quick` | 快速任务 | 简单任务跳过管线 |
+| 3 | `brainstorm` | 头脑风暴 | 新项目发散探索、多角色创意 |
+| 4 | `blueprint` | 规格文档化 | 正式 7-phase 收敛规格链 |
+| 5 | `analyze` | 双层分析 | 宏观: `"topic"` 探索影响面；微观: `1` Phase 级深入 |
+| 6 | `roadmap` | 路线图编排 | scope_verdict=large 时，Milestone > Phase 分解 |
+| 7 | `plan` | 规划 | 分析完成后生成执行计划，支持 `--from analyze:ANL-xxx` 直达 |
+| 8 | `execute` | 执行 | 计划完成后，执行实现 |
+| 9 | `quick` | 快速任务 | 简单任务跳过管线 |
 | 10 | `/maestro-next` | 智能导航 | 不确定下一步时，自动检测状态推荐 |
 ```
 

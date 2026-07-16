@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-execute',
   description: 'Wave-based parallel execution with adversarial convergence verification and 3-vote status determination',
-  whenToUse: 'Accelerate maestro-execute with parallel task implementation + adversarial convergence checks + 3-vote report',
+  whenToUse: 'Accelerate the execute step with parallel task implementation + adversarial convergence checks + 3-vote report',
   phases: [
     { title: 'Load', detail: 'Load plan and resolve task dependencies' },
     { title: 'Execute', detail: 'Wave-based parallel task execution via workflow-executor' },

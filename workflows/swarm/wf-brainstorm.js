@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-brainstorm',
   description: 'Multi-role brainstorm with 3-specialist cross-review and adversarial guidance arbitration',
-  whenToUse: 'Accelerate maestro-brainstorm with parallel roles + 3-specialist cross-review + adversarial guidance synthesis',
+  whenToUse: 'Accelerate the brainstorm step with parallel roles + 3-specialist cross-review + adversarial guidance synthesis',
   phases: [
     { title: 'Analyze', detail: 'Parallel multi-role analysis via role-design-author' },
     { title: 'CrossReview', detail: '3 specialized reviewers (conflict-hunter, synergy-finder, gap-detector) in parallel' },

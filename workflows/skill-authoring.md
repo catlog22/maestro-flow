@@ -146,9 +146,9 @@ S_DECISION:
 Enrichment table:
 | Skill | Args | Source |
 |-------|------|--------|
-| maestro-plan | --dir {analyze_artifact_path} | state.json artifacts |
-| maestro-execute | --dir {plan_artifact_path} | state.json artifacts |
-| quality-debug | "{gap_summary}" | decision verdict |
+| plan | --dir {analyze_artifact_path} | state.json artifacts |
+| execute | --dir {plan_artifact_path} | state.json artifacts |
+| debug | "{gap_summary}" | decision verdict |
 
 ### A_INSERT_FIX_LOOP
 
@@ -217,7 +217,7 @@ Enrichment table:
 
 1. **Pilot**: `maestro-ralph/SKILL.md` — 本质是 adaptive state machine，收益最大
 2. **Extract**: 抽 `MACRO: RUN_CSV_WAVE` 共享子程序
-3. **Rollout**: `maestro-plan` 和 `maestro-execute` 用 Phase Cards 轻量整理（不必完整状态机化）
+3. **Rollout**: `plan` 和 `execute` step 用 Phase Cards 轻量整理（不必完整状态机化）
 
 ### Phase Cards（适用于 plan/execute）
 

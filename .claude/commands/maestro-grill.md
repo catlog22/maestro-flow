@@ -131,11 +131,11 @@ Status verdicts:
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Need multi-role elaboration | `Skill({ skill: "maestro-brainstorm", args: "{topic} --from grill:{artifact_id}" })` |
-| Need deep technical analysis | `Skill({ skill: "maestro-analyze", args: "{topic} --from grill:{artifact_id}" })` |
-| Scope is clear, ready for roadmap | `Skill({ skill: "maestro-roadmap", args: "--from grill:{artifact_id}" })` |
-| Need formal spec package | `Skill({ skill: "maestro-blueprint", args: "--from grill:{artifact_id}" })` |
-| More branches to walk | `Skill({ skill: "maestro-grill", args: "{topic} -c" })` |
+| Need multi-role elaboration | `brainstorm {topic} --from grill:{artifact_id}` (step) |
+| Need deep technical analysis | `analyze {topic} --from grill:{artifact_id}` (step) |
+| Scope is clear, ready for roadmap | `roadmap --from grill:{artifact_id}` (step) |
+| Need formal spec package | `blueprint --from grill:{artifact_id}` (step) |
+| More branches to walk | `/maestro-grill {topic} -c` |
 </completion>
 
 <error_codes>

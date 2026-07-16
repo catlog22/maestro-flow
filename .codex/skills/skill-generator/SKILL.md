@@ -1,6 +1,9 @@
 ---
 name: skill-generator
-description: Meta-skill for creating new Claude Code skills with configurable execution modes. Supports sequential (fixed order) and autonomous (stateless) phase patterns. Use for skill scaffolding, skill creation, or building new workflows. Triggers on "create skill", "new skill", "skill generator".
+description: Meta-skill for creating new Claude Code skills with configurable
+  execution modes. Supports sequential (fixed order) and autonomous (stateless)
+  phase patterns. Use for skill scaffolding, skill creation, or building new
+  workflows. Triggers on "create skill", "new skill", "skill generator".
 allowed-tools:
   - Bash
   - Glob
@@ -16,12 +19,21 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 > **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # Skill Generator

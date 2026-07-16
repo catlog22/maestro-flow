@@ -89,15 +89,10 @@ export interface SkillContextInput {
 // ---------------------------------------------------------------------------
 
 const SKILL_PATTERNS: Array<{ pattern: RegExp; skill: string }> = [
-  { pattern: /\/maestro-execute\s+(\d+)/, skill: 'maestro-execute' },
-  { pattern: /\/maestro-plan\s+(\d+)/, skill: 'maestro-plan' },
-  { pattern: /\/maestro-analyze\s+(\d+)/, skill: 'maestro-analyze' },
-  { pattern: /\/maestro-milestone-audit(?:\s+(\d+))?/, skill: 'maestro-milestone-audit' },
-  { pattern: /\/quality-review\s+(\d+)/, skill: 'quality-review' },
-  { pattern: /\/quality-test\s+(\d+)/, skill: 'quality-test' },
-  { pattern: /\/maestro(?:\s|$)/, skill: 'maestro' },
   { pattern: /\/maestro-ralph(?:\s|$)/, skill: 'maestro-ralph' },
-  { pattern: /\/maestro-link-coordinate(?:\s|$)/, skill: 'maestro-link-coordinate' },
+  { pattern: /\/maestro-next(?:\s|$)/, skill: 'maestro-next' },
+  { pattern: /\/maestro-session-seal(?:\s|$)/, skill: 'maestro-session-seal' },
+  { pattern: /\/maestro(?:\s|$)/, skill: 'maestro' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -236,7 +231,7 @@ export function evaluateSkillContext(data: SkillContextInput): HookOutput | null
         const state: WorkflowState = JSON.parse(readFileSync(statePath, 'utf8'));
 
         // Section 0: Coordinator session context
-        const COORDINATOR_SKILLS = ['maestro', 'maestro-ralph', 'maestro-link-coordinate'];
+        const COORDINATOR_SKILLS = ['maestro', 'maestro-ralph'];
         if (COORDINATOR_SKILLS.includes(skill.skill) && data.session_id) {
           const coordBridge = readCoordBridge(data.session_id);
           if (coordBridge) {

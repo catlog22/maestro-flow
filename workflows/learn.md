@@ -270,7 +270,7 @@ PHASE CONTEXT:
 
 | Workflow | Relationship |
 |----------|--------------|
-| `quality-retrospective` | Producer. Appends `<spec-entry>` to the same `specs/learnings.md` with `source: "retrospective"` and a populated `lens` field. |
-| `manage-knowhow-capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. Both write to `.workflow/knowhow/` with different prefixes. |
+| `retrospective` (step) | Producer. Appends `<spec-entry>` to the same `specs/learnings.md` with `source: "retrospective"` and a populated `lens` field. |
+| `/manage knowledge capture` | Sibling. Captures session state for recovery; `learn` captures timeless insights. Both write to `.workflow/knowhow/` with different prefixes. |
 | `phase-transition` | Reader (informally). Phase-transition's free-form `.workflow/specs/learnings.md` is a distinct file with a different audience; do not merge them. |
-| `maestro-plan` | Future consumer. Should query via `maestro wiki search` or `maestro wiki list --type knowhow --role implement` to inform planning decisions. (Out of scope for this command.) |
+| `plan` (step) | Future consumer. Should query via `maestro wiki search` or `maestro wiki list --type knowhow --role implement` to inform planning decisions. (Out of scope for this command.) |

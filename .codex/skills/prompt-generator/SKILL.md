@@ -1,6 +1,11 @@
 ---
 name: prompt-generator
-description: Generate or convert Claude Code prompt files — command orchestrators, skill files, agent role definitions, or style conversion of existing files. Follows GSD-style content separation with built-in quality gates. Triggers on "create command", "new command", "create skill", "new skill", "create agent", "new agent", "convert command", "convert skill", "convert agent", "prompt generator", "优化".
+description: Generate or convert Claude Code prompt files — command
+  orchestrators, skill files, agent role definitions, or style conversion of
+  existing files. Follows GSD-style content separation with built-in quality
+  gates. Triggers on "create command", "new command", "create skill", "new
+  skill", "create agent", "new agent", "convert command", "convert skill",
+  "convert agent", "prompt generator", "优化".
 allowed-tools:
   - Bash
   - Edit
@@ -16,6 +21,7 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: none
+version: 0.5.50
 ---
 
 > **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。

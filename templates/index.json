@@ -45,14 +45,14 @@
     "gaps": []
   },
 
-  "_optional_note_validation": "Populated only when quality-test/quality-auto-test workflows run",
+  "_optional_note_validation": "Populated only when test/auto-test workflows run",
   "validation": {
     "status": "pending",
     "test_coverage": null,
     "gaps": []
   },
 
-  "_optional_note_uat": "Populated only when quality-test UAT workflow runs",
+  "_optional_note_uat": "Populated only when test UAT workflow runs",
   "uat": {
     "status": "pending",
     "test_count": 0,

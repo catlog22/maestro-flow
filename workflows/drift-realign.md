@@ -298,7 +298,7 @@ for each actionable finding:
 | `rebuild` | 收集 rebuild 目标；全部其他 action 完成后：通过 `Skill()` 自动调用 `/manage sync codebase --full` |
 
 rebuild 后处理：
-- 若 W001 或重大结构变更 → MUST run `/manage-codebase-rebuild`
+- 若 W001 或重大结构变更 → MUST run `/manage sync rebuild`
 
 Conflict-marker 清除：
 - 对于 update/archive 的 spec 目标文件，若存在 conflict-marker：
@@ -341,7 +341,7 @@ state.json 原子写：备份 → 写新版本 → re-read 验证。
 
 ## Auto-Rebuilt
 - /manage sync codebase --full triggered: {yes/no}
-- /manage-codebase-rebuild suggested: {yes/no}
+- /manage sync rebuild suggested: {yes/no}
 
 ## Backup
 - Location: .workflow/.trash/drift-realign-{timestamp}/
@@ -380,8 +380,8 @@ Scope: all
 
 Next:
   → 处理 TODO 标记:           grep -r "DRIFT-TODO" .workflow/
-  → 内部矛盾审查:             /manage-knowledge-audit --scope all
-  → 全量 codebase 重建:       /manage-codebase-rebuild
+  → 内部矛盾审查:             /manage knowledge audit --scope all
+  → 全量 codebase 重建:       /manage sync rebuild
   → 周期巡检 (REQUIRED at milestone end): run --scope all --report
 ```
 

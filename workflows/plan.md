@@ -189,7 +189,7 @@ Artifact paths and metadata are declared in `prepare/plan.md` contract.
 Write `report.md`, frontmatter containing at least `verdict`, `summary`, `constraints`, `decisions`, `concerns` plus:
 ```yaml
 next:
-  - { command: maestro-execute, reason: plan ready, needs: [current-plan] }
+  - { command: execute, reason: plan ready, needs: [current-plan] }
 ```
 Body has fixed sections `Summary`, `Conclusion/Verdict`, `Discussion/Retrospective`, `Artifacts`, `Handoff/Next`, reference `current-plan` via aref, never copy the JSON source of truth.
 

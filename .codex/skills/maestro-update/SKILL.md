@@ -1,7 +1,7 @@
 ---
 name: maestro-update
 description: Detect version, preview changes, apply workflow upgrades
-argument-hint: [--dry-run] [--force] [--setup-only]
+argument-hint: "[--dry-run] [--force] [--setup-only]"
 allowed-tools:
   - Bash
   - Edit
@@ -11,7 +11,9 @@ allowed-tools:
   - Write
   - request_user_input
 session-mode: none
+version: 0.5.50
 ---
+
 <purpose>
 Detect current version, run schema migration to latest, then follow the version-specific upgrade workflow.
 Schema migrations are handled by `maestro update --migrate`; workflow docs (`~/.maestro/workflows/updates/`) handle setup.

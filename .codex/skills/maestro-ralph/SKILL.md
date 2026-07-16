@@ -1,7 +1,9 @@
 ---
 name: maestro-ralph
-description: "Adaptive lifecycle orchestrator — compose, dispatch executor via collaboration.spawn_agent, evaluate, loop"
-argument-hint: "<intent> [-y] [--amend [change]] [--roadmap] [--engine swarm|universal] | status | continue"
+description: Adaptive lifecycle orchestrator — compose, dispatch executor via
+  collaboration.spawn_agent, evaluate, loop
+argument-hint: <intent> [-y] [--amend [change]] [--roadmap] [--engine
+  swarm|universal] | status | continue
 allowed-tools:
   - Read
   - Write
@@ -22,7 +24,13 @@ contract:
   discovery: self-described
   consumes: []
   produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 > **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 

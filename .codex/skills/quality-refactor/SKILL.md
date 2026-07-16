@@ -1,7 +1,9 @@
 ---
 name: quality-refactor
-description: Use when accumulated tech debt needs systematic identification and safe reduction
-argument-hint: [<scope>]
+description: Use when accumulated tech debt needs systematic identification and
+  safe reduction
+argument-hint:
+  - <scope>
 allowed-tools:
   - Bash
   - Edit
@@ -18,8 +20,17 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <purpose>
 Targeted refactoring with safety guarantees: plan → confirm → execute with test verification per change → reflection-log.md.

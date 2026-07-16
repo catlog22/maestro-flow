@@ -33,7 +33,7 @@ Single-step skill executor with multi-agent orchestration capability. Call `maes
 
 ## Multi-Agent Orchestration
 
-当 skill prompt 需要多 agent 编排时（如 `maestro-execute` 的 wave 并行派发）：
+当 skill prompt 需要多 agent 编排时（如 `execute` step 的 wave 并行派发）：
 
 1. **派发 unnamed worker**：调用 `Agent()` 不传 name，子结果自动回流给本 executor（嵌套套娃模型）
 2. **等待结果**：子 Agent 的 task-notification 会自动回流到本 executor，可直接使用返回的 `<result>`

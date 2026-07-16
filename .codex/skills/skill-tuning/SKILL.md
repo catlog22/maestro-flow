@@ -1,6 +1,10 @@
 ---
 name: skill-tuning
-description: Universal skill diagnosis and optimization tool. Detect and fix skill execution issues including context explosion, long-tail forgetting, data flow disruption, and agent coordination failures. Supports Agy CLI for deep analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis", "optimize skill", "skill debug".
+description: Universal skill diagnosis and optimization tool. Detect and fix
+  skill execution issues including context explosion, long-tail forgetting, data
+  flow disruption, and agent coordination failures. Supports Agy CLI for deep
+  analysis. Triggers on "skill tuning", "tune skill", "skill diagnosis",
+  "optimize skill", "skill debug".
 allowed-tools:
   - Bash
   - Glob
@@ -16,10 +20,19 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # Skill Tuning

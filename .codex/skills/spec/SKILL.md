@@ -1,6 +1,9 @@
 ---
 name: spec
-description: Manage project specs — add, load, remove entries, or initialize the spec system. Spec = 项目约束规则（编码规范、架构约束、质量标准）；可复用知识文档走 /manage knowledge capture。Triggers on "spec add", "记录规范", "添加约束", "添加规则", "加载规范", "spec setup", "初始化规范".
+description: Manage project specs — add, load, remove entries, or initialize the
+  spec system. Spec = 项目约束规则（编码规范、架构约束、质量标准）；可复用知识文档走 /manage knowledge
+  capture。Triggers on "spec add", "记录规范", "添加约束", "添加规则", "加载规范", "spec setup",
+  "初始化规范".
 argument-hint: <subcommand> [args...] where subcommand = add|load|remove|setup
 allowed-tools:
   - Bash
@@ -11,7 +14,9 @@ allowed-tools:
   - Write
   - request_user_input
 session-mode: none
+version: 0.5.50
 ---
+
 <purpose>
 Spec management toolkit. Four subcommands:
 - `add` — add a `<spec-entry>` by category, with role tagging and 4-scope routing

@@ -123,11 +123,10 @@ Based on current project state, suggest the next command:
 | Phase reviewed, BLOCK verdict | plan \<N\> --gaps |
 | Phase reviewed, PASS/WARN | test \<N\> |
 | Low test coverage | auto-test \<N\> |
-| UAT passed, all phases done | /maestro-milestone-audit |
+| Tests green / UAT passed, active session | /maestro-session-seal |
 | UAT has failures | debug --from-uat \<N\> |
 | Need integration tests | auto-test \<N\> |
-| All milestone phases complete | /maestro-milestone-audit |
-| Milestone audit passed | /maestro-milestone-complete |
+| All sessions sealed (DAG complete) | roadmap (plan next sessions) |
 | Ad-hoc small task | quick \<task\> |
 
 Display:

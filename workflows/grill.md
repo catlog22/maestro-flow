@@ -431,7 +431,7 @@ context-package.json#domain.terminology[]  ──→  wrap-up domain extraction 
 ```
 
 - During Grill, **do NOT** call `maestro domain add` directly — terms may be modified or overturned during the grilling process
-- After all terms are locked via Step 5 synthesis, extraction is automatically triggered by `manage-harvest --auto` at the end of the chain
+- After all terms are locked via Step 5 synthesis, extraction is automatically triggered by `harvest --auto` at the end of the chain
 - Domain extraction always requires interactive confirmation (`-y` has no effect on domain registration)
 
 ### 7.3: Completion Report

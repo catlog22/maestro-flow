@@ -152,7 +152,7 @@ function findMatchingBracket(s: string, start: number, open: string, close: stri
  *   [positional]                → positional string
  *   <positional>                → required positional string
  *   "quoted text"               → positional string
- *   [<subcommand> [options]]    → positional string (e.g. manage-issue)
+ *   [<subcommand> [options]]    → positional string (e.g. issue)
  */
 function parseToken(token: string): SkillParamDef[] {
   // Determine wrapping

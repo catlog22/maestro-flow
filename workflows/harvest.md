@@ -8,19 +8,19 @@
 ## Argument Shape
 
 ```
-/manage-harvest                                      → scan all sources, interactive selection
-/manage-harvest <session-id>                         → harvest specific session (ANL-*, WFS-*, etc.)
-/manage-harvest <path>                               → harvest from explicit directory or file
-/manage-harvest --recent 7                           → harvest from artifacts updated in last 7 days
-/manage-harvest --source analysis                    → harvest only from analysis sessions
-/manage-harvest <target> --to wiki                   → force all findings to wiki
-/manage-harvest <target> --to spec                   → force all findings to spec
-/manage-harvest <target> --to issue                  → force all findings to issue
-/manage-harvest <target> --to auto                   → auto-classify routing (default)
-/manage-harvest <target> --dry-run                   → preview without writing
-/manage-harvest --prune                              → classify artifacts, graduate to knowhow, archive from state.json
-/manage-harvest --prune --age 14                     → only graduate artifacts older than 14 days
-/manage-harvest --prune --dry-run                    → preview prune plan without modifying state.json
+/manage knowledge harvest                                      → scan all sources, interactive selection
+/manage knowledge harvest <session-id>                         → harvest specific session (ANL-*, WFS-*, etc.)
+/manage knowledge harvest <path>                               → harvest from explicit directory or file
+/manage knowledge harvest --recent 7                           → harvest from artifacts updated in last 7 days
+/manage knowledge harvest --source analysis                    → harvest only from analysis sessions
+/manage knowledge harvest <target> --to wiki                   → force all findings to wiki
+/manage knowledge harvest <target> --to spec                   → force all findings to spec
+/manage knowledge harvest <target> --to issue                  → force all findings to issue
+/manage knowledge harvest <target> --to auto                   → auto-classify routing (default)
+/manage knowledge harvest <target> --dry-run                   → preview without writing
+/manage knowledge harvest --prune                              → classify artifacts, graduate to knowhow, archive from state.json
+/manage knowledge harvest --prune --age 14                     → only graduate artifacts older than 14 days
+/manage knowledge harvest --prune --dry-run                    → preview prune plan without modifying state.json
 ```
 
 | Flag | Effect |
@@ -325,7 +325,7 @@ Source: ANL-auth-20260410 (analysis)
 
 Next:
   → Review wiki entries: maestro wiki list --type note
-  → Triage issues: Skill({ skill: "manage-issue", args: "list --source harvest" })
+  → Triage issues: Skill({ skill: "manage", args: "issue list --source harvest" })
   → Connect wiki graph: Skill({ skill: "wiki-connect", args: "--fix" })
   → View specs: Skill({ skill: "spec-load", args: "--role implement" })
 ```
@@ -387,7 +387,7 @@ Scan `accumulated_context` sub-arrays:
     ANL-003  analysis  2026-03-15  "Security audit P2"
     BRN-002  brainstorm 2026-03-10  "Cache strategy"
     WFS-005  session   2026-03-08  "Feature toggle impl"
-    → Run: /manage-harvest ANL-003 BRN-002 WFS-005  (harvest before graduating)
+    → Run: /manage knowledge harvest ANL-003 BRN-002 WFS-005  (harvest before graduating)
 
   Estimated state.json reduction: 23 → 9 artifacts, 20 → 13 context entries
 ```
@@ -463,11 +463,11 @@ Append prune results to harvest report:
   Backup: .workflow/state.json.backup-prune-20260521T143022
 
   Stale (not harvested, action needed):
-    → /manage-harvest ANL-003 BRN-002 WFS-005
+    → /manage knowledge harvest ANL-003 BRN-002 WFS-005
 
   Next:
     → Review graduated knowhow: maestro wiki list --type knowhow --tags graduated
-    → Re-run prune after harvesting stale: /manage-harvest --prune
+    → Re-run prune after harvesting stale: /manage knowledge harvest --prune
 ```
 
 ### Safety invariants

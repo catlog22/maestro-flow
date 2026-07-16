@@ -18,8 +18,17 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <purpose>
 Create or sync a session-level git worktree for parallel development.

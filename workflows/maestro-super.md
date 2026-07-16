@@ -19,7 +19,7 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: All design/architecture/scope 
 
 ## 4. Auto-Advance Milestones
 
-After each milestone completes and passes verification, automatically advance to the next milestone without user confirmation. Run `maestro-milestone-complete` → next milestone chain automatically.
+After each milestone completes and passes verification, automatically advance to the next milestone without user confirmation. Run `maestro-session-seal` → next milestone chain automatically.
 
 ## 5. Quality Gate Scoring
 
@@ -35,7 +35,7 @@ Each milestone must pass a readiness score before advancing. Prevents premature 
 | Documentation (API docs, README, setup guide) | 10% | 60% |
 | **Weighted total** | | **≥ 80%** |
 
-Score is computed via `maestro-execute` verification gate + Gemini analysis. If score < 80%, generate fix plan and re-execute until threshold is met (max 3 retries per milestone, then report blockers).
+Score is computed via `execute` step verification gate + Gemini analysis. If score < 80%, generate fix plan and re-execute until threshold is met (max 3 retries per milestone, then report blockers).
 
 ## 6. Completion Criteria
 
@@ -90,7 +90,7 @@ Super mode extends the standard session `status.json` (`.workflow/.maestro/{sess
 - `planning` — roadmap/spec/plan generation
 - `executing` — milestone chain execution (plan → execute → verify)
 - `scoring` — quality gate evaluation
-- `advancing` — milestone-complete + next milestone setup
+- `advancing` — session-seal + next milestone setup
 - `completed` — all milestones passed
 - `blocked` — max retries exceeded, needs user intervention
 

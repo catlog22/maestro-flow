@@ -203,5 +203,5 @@ Report session count, root sessions, strategy, and output path. Verdict `DONE` o
 | Session activated, need analysis | `analyze --session {active-session-slug}` |
 | Simple project, ready to plan | `plan --session {active-session-slug}` |
 | Need UI design first | `impeccable build` |
-| View project dashboard | `manage-status` |
+| View project dashboard | `/manage status` |
 | Need formal spec documents | `blueprint` |

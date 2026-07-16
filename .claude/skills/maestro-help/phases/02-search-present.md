@@ -39,7 +39,7 @@
 
 ```
 1. Locate command in catalog.json commands[] by name
-2. Read the source file (e.g., "../../commands/maestro-analyze.md")
+2. Read the source file (e.g., "../../commands/maestro-ralph.md"; steps resolve to "~/.maestro/workflows/<step>.md")
 3. Extract key sections:
    - <purpose> content
    - argument-hint
@@ -69,12 +69,12 @@
 
 | 命令 | Guide 文档 | 状态 |
 |------|-----------|------|
-| maestro-analyze/plan/execute | `guide/command-usage-guide.md` (主干管线) | planned |
-| maestro-init/roadmap/blueprint | `guide/quick-start-guide.md` | planned |
+| analyze/plan/execute (steps) | `guide/command-usage-guide.md` (主干管线) | planned |
+| maestro-init + roadmap/blueprint (steps) | `guide/quick-start-guide.md` | planned |
 | maestro-ralph | `guide/maestro-ralph-guide.md` | planned |
 | maestro (协调器) | `guide/maestro-coordinator-guide.md` | planned |
-| manage-* | `guide/command-usage-guide.md` (管理) | planned |
-| quality-* | `guide/command-usage-guide.md` (质量) | planned |
+| /manage 子命令 | `guide/command-usage-guide.md` (管理) | planned |
+| review/test/auto-test/debug (steps) | `guide/command-usage-guide.md` (质量) | planned |
 | delegate | `guide/delegate-async-guide.md` | planned |
 | overlay/amend | `guide/overlay-guide.md` | planned |
 
@@ -92,16 +92,18 @@
 
 | 当前状态 | 推荐命令 | 原因 |
 |---------|---------|------|
-| 无 .workflow/ | `/maestro-init` | 项目未初始化，需要先创建工作区 |
-| init 完成，无上游 context | `/maestro-brainstorm` 或 `/maestro-analyze "topic"` | 先探索再规划；brainstorm 用于发散，analyze 宏观用于代码库分析 |
-| analyze 完成，scope_verdict=large | `/maestro-roadmap --from analyze:ANL-xxx` | 大范围需求，需要 Milestone > Phase 分解 |
-| analyze 完成，scope_verdict=medium/small | `/maestro-plan --from analyze:ANL-xxx` | 跳过 roadmap，直接规划（Path C） |
-| roadmap 完成，phase=pending | `/maestro-analyze 1` | 微观分析：Phase 级深入探索 |
-| analyze (微观) 完成 | `/maestro-plan 1` | Phase 级规划 |
-| plan 完成 | `/maestro-execute` | 规划完成，开始执行 |
-| execute 完成 | `/quality-review` | 执行完成，进入质量管线 |
-| quality 全通过 | `/maestro-milestone-audit` | 准备里程碑审计 |
-| 所有 Phase 完成 | `/maestro-milestone-complete` | 里程碑可以关闭 |
+| 无 .workflow/ 且有源码 | `/maestro-init` | 项目未初始化，需要先创建工作区 |
+| 无 .workflow/ 且无源码 | step `brainstorm` | 先发散探索再规划 |
+| 已初始化，无 roadmap 无 session | step `analyze` | 宏观分析，产出 scope_verdict |
+| 宏观 analyze 完成，scope_verdict=large | step `roadmap --from analyze:ANL-xxx` | 大范围需求，需要 session DAG 分解 |
+| 宏观 analyze 完成，scope_verdict=medium/small | step `plan --from analyze:ANL-xxx` | 跳过 roadmap，直接规划 |
+| 有 roadmap，dep-ready session 未启动 | step `analyze --session {slug}` | Session 级深入探索 |
+| session analyze 完成 | step `plan --session {slug}` | Session 级规划 |
+| plan 完成 | step `execute --session {slug}` | 规划完成，开始执行 |
+| execute 完成 | step `review --session {slug}` | 执行完成，进入质量管线 |
+| review PASS | step `auto-test --session {slug}` | 补足测试覆盖 |
+| tests 全绿 + active session | `/maestro-session-seal` | 封印 session：知识提取 + DAG 推进 |
+| 所有 session sealed | step `roadmap` | DAG 完结，规划下一批 sessions |
 
 ### Mode 6: Skill & Agent Browsing
 

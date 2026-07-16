@@ -1,12 +1,14 @@
 ---
 name: maestro-help
-description: Maestro Flow 命令帮助系统。搜索命令、浏览技能、工作流推荐、新手引导。Triggers on "maestro-help", "帮助", "命令", "怎么用", "skill", "workflow", "maestro 怎么用".
+description: Maestro Flow 命令帮助系统。搜索命令、浏览技能、工作流推荐、新手引导。Triggers on
+  "maestro-help", "帮助", "命令", "怎么用", "skill", "workflow", "maestro 怎么用".
 allowed-tools:
   - Glob
   - Grep
   - Read
   - request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 # Maestro Help
@@ -182,54 +184,55 @@ $ARGUMENTS → Parse:
 
 ### 上游起源 + 核心 (core)
 
+> 裸名称为 first-tier step：经 `/maestro "<意图>"` 自动路由，或 `maestro run prepare <step>` + `maestro run create <step> ...` 直接执行；`/` 前缀为独立命令。
+
 | 命令 | 用途 |
 |------|------|
 | `/maestro` | 智能协调器，自动路由 |
 | `/maestro-init` | 项目初始化 |
-| `/maestro-brainstorm` | 头脑风暴 — 发散探索，多角色创意 |
-| `/maestro-blueprint` | 正式规格文档化 — 7-phase 收敛规格链 |
-| `/maestro-roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
-| `/maestro-quick` | 快速任务 |
+| `brainstorm` | 头脑风暴 — 发散探索，多角色创意 |
+| `blueprint` | 正式规格文档化 — 7-phase 收敛规格链 |
+| `roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
+| `quick` | 快速任务 |
 | `/maestro-overlay` | Overlay 管理 — 自然语言创建，或 `--amend` 从信号自动生成修正补丁 |
 | `/maestro-grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
 | `/maestro-next` | 智能导航 — 检测状态并推荐下一步最优命令 |
-| `/maestro-companion` | 知识伴侣 — 上下文加载、洞察捕获、技能路由 |
-| `/maestro-swarm-workflow` | Swarm 并行加速器 — 多 agent 并发执行 |
-| `/maestro-universal-workflow` | 动态对抗工作流生成器 |
+| `/maestro-ralph --engine swarm` | Swarm 并行加速器 — 多 agent 并发执行 |
+| `/maestro-ralph --engine universal` | 动态对抗工作流生成器 |
 
 ### 理解层 + 执行管线 (pipeline)
 
 | 命令 | 用途 |
 |------|------|
-| `/maestro-analyze` | 双层分析 — 宏观(文本参数)探索影响面 / 微观(数字参数)Phase 级深入 |
-| `/maestro-plan` | 任务规划 — 支持 `--from analyze:ANL-xxx` 直达 |
-| `/maestro-execute` | 任务执行 |
+| `analyze` | 双层分析 — 宏观(文本参数)探索影响面 / 微观(数字参数)Phase 级深入 |
+| `plan` | 任务规划 — 支持 `--from analyze:ANL-xxx` 直达 |
+| `execute` | 任务执行 |
 
 ### 质量管线 (quality)
 
 | 命令 | 用途 |
 |------|------|
-| `/quality-review` | 代码审查 |
-| `/quality-auto-test` | 自动测试 |
-| `/quality-test` | 业务测试 |
-| `/quality-debug` | 质量调试 |
+| `review` | 代码审查 |
+| `auto-test` | 自动测试 |
+| `test` | 业务测试 |
+| `debug` | 质量调试 |
 | `/quality-refactor` | 重构 |
-| `/quality-retrospective` | 复盘 |
+| `retrospective` | 复盘 |
 
 ### 管理命令 (manage)
 
 | 命令 | 用途 |
 |------|------|
-| `/manage-issue` | Issue 管理 |
-| `/manage-issue-discover` | Issue 发现 |
-| `/manage-knowhow` | 知识管理 |
-| `/manage-knowhow-capture` | 知识捕获 |
-| `/manage-status` | 状态查看 |
-| `/manage-wiki` | Wiki 管理 |
-| `/manage-harvest` | 收获 |
-| `/manage-codebase-rebuild` | 代码库重建 |
-| `/manage-kg-extractors` | 知识图谱提取器管理 |
-| `/manage-knowledge-audit` | 知识审计 |
+| `/manage issue` | Issue 管理 |
+| `/manage issue discover` | Issue 发现 |
+| `/manage knowledge knowhow` | 知识管理 |
+| `/manage knowledge capture` | 知识捕获 |
+| `/manage status` | 状态查看 |
+| `/manage knowledge wiki` | Wiki 管理 |
+| `/manage knowledge harvest` | 收获 |
+| `/manage sync rebuild` | 代码库重建 |
+| `/manage knowledge extractors` | 知识图谱提取器管理 |
+| `/manage knowledge audit` | 知识审计 |
 
 ### Odyssey 长周期循环 (odyssey)
 
@@ -289,10 +292,10 @@ Odyssey 长周期循环（独立路径）
 | Path D | 小改动 | `plan "fix auth bug"` → `execute` |
 | Path E | 纯规格文档 | `blueprint "project idea"` → (供人阅读) |
 | Path F | 纯探索 | `brainstorm "idea"` → (供人决策) |
-| 快速修复 | 已知简单问题 | `/maestro-quick "修复描述"` |
-| Bug 追踪 | Issue 闭环 | `/manage-issue-discover` → `/manage-issue create` → analyze/plan/execute → close |
+| 快速修复 | 已知简单问题 | `quick "修复描述"` |
+| Bug 追踪 | Issue 闭环 | `/manage issue discover` → `/manage issue create` → analyze/plan/execute → close |
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
-| 代码审查 | 质量管线 | `/quality-review` → `/quality-auto-test` → `/quality-test` |
+| 代码审查 | 质量管线 | `review` → `auto-test` → `test` |
 | 团队开发 | Team Lite | `/maestro-collab` |
 | 长周期调试 | Odyssey 深度循环 | `/odyssey "问题描述" --mode debug` |
 | 长周期改进 | Odyssey 深度循环 | `/odyssey "改进目标" --mode improve` |

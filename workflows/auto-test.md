@@ -705,7 +705,7 @@ Files:
 | Result | Suggestion |
 |--------|------------|
 | Converged (>=threshold) | `review {phase}` to update validation |
-| All requirements verified (spec) | `milestone-audit` |
+| All requirements verified (spec) | `/maestro-session-seal` |
 | Bugs discovered (code_defects) | `debug --from-auto-test {phase}` |
 | Max iter, >80% | `test {phase}` for manual UAT on remaining gaps |
 | Max iter, <80% | `debug {phase}` for deep investigation |

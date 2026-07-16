@@ -12,8 +12,8 @@ Each overlay is a JSON file at `~/.maestro/overlays/<name>.json`:
 ```json
 {
   "name": "cli-verify-after-execute",
-  "description": "Run ccw cli quality review after /maestro-execute",
-  "targets": ["maestro-execute"],
+  "description": "Run ccw cli quality review after /maestro-ralph",
+  "targets": ["maestro-ralph"],
   "priority": 50,
   "enabled": true,
   "scope": "any",
@@ -39,7 +39,7 @@ Each overlay is a JSON file at `~/.maestro/overlays/<name>.json`:
 |---|---|---|
 | `name` | yes | Slug, matches `^[a-z0-9][a-z0-9-_]*$`. Filesystem-safe and unique across overlays. |
 | `description` | no | Short human summary shown in `maestro overlay list`. |
-| `targets` | yes | Array of command names without `.md` (e.g., `maestro-execute`). Missing/disabled targets are skipped with a log entry. |
+| `targets` | yes | Array of command names without `.md` (e.g., `maestro-ralph`). Missing/disabled targets are skipped with a log entry. |
 | `priority` | no | Default 50. Lower runs earlier. Alphabetical tiebreak. |
 | `enabled` | no | Default true. Set `false` to keep on disk but exclude from apply. |
 | `scope` | no | `global` / `project` / `any`. v1 is effectively global-only. |

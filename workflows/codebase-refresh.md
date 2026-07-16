@@ -141,7 +141,7 @@ Update .workflow/state.json: set codebase_last_refreshed and last_updated timest
 
 ```
 Display summary: changed files, components/features refreshed, symbols added/removed, warnings.
-Suggest next: manage-status to review.
+Suggest next: /manage status to review.
 ```
 
 ---

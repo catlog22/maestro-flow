@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-plan',
   description: 'Parallel context + 3-proposal judge panel planning + 3-critic adversarial verification',
-  whenToUse: 'Accelerate maestro-plan with parallel context + competing plan proposals + multi-critic adversarial check',
+  whenToUse: 'Accelerate the plan step with parallel context + competing plan proposals + multi-critic adversarial check',
   phases: [
     { title: 'Context', detail: 'Parallel context exploration from multiple sources' },
     { title: 'Compete', detail: '3 independent plan proposals from competing strategies' },

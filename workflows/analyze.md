@@ -310,7 +310,7 @@ constraints: []
 decisions: []
 concerns: []
 next:
-  - { command: maestro-plan, reason: analysis ready, needs: [current-analysis] }
+  - { command: plan, reason: analysis ready, needs: [current-analysis] }
 ---
 ## Summary
 ## Conclusion/Verdict
@@ -319,7 +319,7 @@ next:
 ## Handoff/Next
 ```
 
-In macro mode, if `scope_verdict == large`, next points to maestro-roadmap instead of maestro-plan. In the report, reference domain values with `{{aref:current-analysis#/...}}` or an aref block, **never copy the JSON source of truth**.
+In macro mode, if `scope_verdict == large`, next points to roadmap instead of plan. In the report, reference domain values with `{{aref:current-analysis#/...}}` or an aref block, **never copy the JSON source of truth**.
 
 → Wrap-up (archiving, spec/knowhow extraction) follows ref/finish-work.md.
 

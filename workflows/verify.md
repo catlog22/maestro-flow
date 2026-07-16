@@ -220,7 +220,7 @@ The verdict decides the downstream run; the report's needs includes `latest-veri
 | warn | acknowledge caveats then `review` / `test` |
 | fail (only medium/low gaps) | `plan --gaps` → `execute` → re-run `verify` (gap-fix loop, cycle until gaps clear or user accepts) |
 | fail/blocked (has critical) | `plan --gaps`, needs includes `latest-verification` |
-| low test coverage | `quality-auto-test` generates missing tests |
+| low test coverage | `auto-test` generates missing tests |
 | needs manual verification | `test` (interactive UAT) |
 
 **gap-fix loop**: `verify → plan --gaps → execute → verify` repeats until all gaps close or the user accepts remaining gaps.

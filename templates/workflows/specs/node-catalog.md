@@ -1,60 +1,59 @@
-# Node Catalog — Available Executors for maestro-composer
+# Node Catalog — Available Executors for `/maestro --compose`
 
 All executors available for node resolution in Phase 2 (Resolve).
-Only commands that exist in `~/.claude/commands/` are listed.
+First-tier steps live in `~/.maestro/workflows/`; commands (`/prefix`) live in `~/.claude/commands/`; dispatcher executors (`manage`, `spec`) take the subcommand in args.
 
-## Skill Nodes (maestro commands)
+## Step Nodes (first-tier steps)
 
 | Executor | Input Ports | Output Ports | Typical Args Template |
 |----------|-------------|--------------|----------------------|
-| `maestro-plan` | requirement | plan | `"{goal}"` |
-| `maestro-execute` | plan | code | `{phase}` |
-| `maestro-analyze` | requirement | analysis | `"{goal}"` |
-| `maestro-brainstorm` | topic | brainstorm-analysis | `"{goal}"` |
-| `maestro-spec-generate` | requirement | specification | `"{goal}"` |
-| `maestro-roadmap` | requirement | roadmap | `"{goal}"` |
-| `maestro-quick` | requirement | code | `"{goal}"` |
+| `plan` | requirement | plan | `"{goal}"` |
+| `execute` | plan | code | `{phase}` |
+| `analyze` | requirement | analysis | `"{goal}"` |
+| `brainstorm` | topic | brainstorm-analysis | `"{goal}"` |
+| `spec-generate` | requirement | specification | `"{goal}"` |
+| `roadmap` | requirement | roadmap | `"{goal}"` |
+| `quick` | requirement | code | `"{goal}"` |
 | `maestro-impeccable` | requirement | ui-design | `"{phase}" --chain build` |
 
-## Quality Commands (as skill nodes)
+## Quality Steps (as step nodes)
 
 | Executor | Input Ports | Output Ports | Typical Args |
 |----------|-------------|--------------|--------------|
-| `quality-review` | code | review-findings | `{phase}` |
-| `quality-test` | code | test-passed | `{phase}` |
-| `quality-auto-test` | code, requirement | auto-test-report | `{phase}` |
-| `quality-debug` | bug-report | diagnosis | `"{goal}"` |
+| `review` | code | review-findings | `{phase}` |
+| `test` | code | test-passed | `{phase}` |
+| `auto-test` | code, requirement | auto-test-report | `{phase}` |
+| `debug` | bug-report | diagnosis | `"{goal}"` |
 | `quality-refactor` | codebase | refactored-code | `"{goal}"` |
-| `quality-sync` | code | synced-docs | `{phase}` |
-| `quality-retrospective` | phase | retrospective | `{phase}` |
+| `sync` | code | synced-docs | `{phase}` |
+| `retrospective` | phase | retrospective | `{phase}` |
 
-## Management Commands (as skill nodes)
-
-| Executor | Input Ports | Output Ports | Typical Args |
-|----------|-------------|--------------|--------------|
-| `manage-status` | — | dashboard | (no args) |
-| `manage-issue` | — | issue-status | `"{goal}"` |
-| `manage-issue-discover` | codebase | pending-issues | `"{goal}"` |
-| `manage-codebase-rebuild` | — | docs | (no args) |
-| `manage-codebase-refresh` | — | docs | (no args) |
-| `manage-harvest` | artifacts | knowledge | (no args) |
-| `manage-learn` | — | learning | `"{goal}"` |
-
-## Milestone Commands (as skill nodes)
+## Management Nodes (dispatcher: `manage`)
 
 | Executor | Input Ports | Output Ports | Typical Args |
 |----------|-------------|--------------|--------------|
-| `maestro-milestone-audit` | — | audit-report | (no args) |
-| `maestro-milestone-complete` | — | archived | (no args) |
-| `maestro-milestone-release` | — | release | (no args) |
+| `manage` | — | dashboard | `status` |
+| `manage` | — | issue-status | `issue "{goal}"` |
+| `manage` | codebase | pending-issues | `issue discover "{goal}"` |
+| `manage` | — | docs | `sync rebuild` |
+| `manage` | — | docs | `sync codebase` |
+| `manage` | artifacts | knowledge | `knowledge harvest` |
 
-## Spec Commands (as skill nodes)
+## Session Close Commands (as skill nodes)
 
 | Executor | Input Ports | Output Ports | Typical Args |
 |----------|-------------|--------------|--------------|
-| `spec-add` | knowledge | spec-entry | `"{goal}"` |
-| `spec-load` | — | specs | `"{goal}"` |
-| `spec-setup` | — | specs | (no args) |
+| `maestro-session-seal` | — | sealed | (no args) |
+
+> Milestone audit is not a catalog node — run it via `/maestro-ralph "{goal}" --engine swarm --script wf-milestone-audit`.
+
+## Spec Nodes (dispatcher: `spec`)
+
+| Executor | Input Ports | Output Ports | Typical Args |
+|----------|-------------|--------------|--------------|
+| `spec` | knowledge | spec-entry | `add "{goal}"` |
+| `spec` | — | specs | `load "{goal}"` |
+| `spec` | — | specs | `setup` |
 
 ## CLI Nodes (via `maestro delegate`)
 
@@ -89,7 +88,7 @@ CONSTRAINTS: {scope}
 | subagent_type | Use Case | run_in_background |
 |---------------|----------|-------------------|
 | `general-purpose` | Freeform analysis or implementation | false |
-| `code-developer` | Code implementation | false |
+| `workflow-executor` | Code implementation | false |
 
 **Agent node args_template format**:
 ```
@@ -120,16 +119,16 @@ Deliver: [specify expected output format]
 
 | type_hint | Default executor type | Default executor |
 |-----------|----------------------|------------------|
-| `planning` | skill | `maestro-plan` |
-| `execution` | skill | `maestro-execute` |
-| `testing` | skill | `quality-test` |
-| `review` | skill | `quality-review` |
-| `brainstorm` | skill | `maestro-brainstorm` |
+| `planning` | skill | `plan` |
+| `execution` | skill | `execute` |
+| `testing` | skill | `test` |
+| `review` | skill | `review` |
+| `brainstorm` | skill | `brainstorm` |
 | `analysis` | cli | `maestro delegate --role analyze --mode analysis` |
-| `spec` | skill | `maestro-spec-generate` |
+| `spec` | skill | `spec-generate` |
 | `refactor` | skill | `quality-refactor` |
-| `integration-test` | skill | `quality-integration-test` |
-| `debug` | skill | `quality-debug` |
+| `integration-test` | skill | `auto-test` |
+| `debug` | skill | `debug` |
 | `agent` | agent | (infer subagent_type from description) |
 | `checkpoint` | checkpoint | — |
 
@@ -139,7 +138,7 @@ Deliver: [specify expected output format]
 - Execution nodes after planning: inherit phase from prior plan output
 - Testing/review nodes after execution: inherit phase from prior execution
 
-## Runtime Reference Syntax (resolved by maestro-player)
+## Runtime Reference Syntax (resolved by the `--play` runtime)
 
 | Reference | Resolves To |
 |-----------|-------------|

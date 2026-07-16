@@ -22,13 +22,13 @@ Complements `wiki-connect.md` (link discovery) and `wiki-digest.md` (synthesis) 
 ## Argument Shape
 
 ```
-/manage-wiki                                   → health dashboard (default)
-/manage-wiki health                            → health dashboard
-/manage-wiki search auth                       → search for "auth" with follow-up actions
-/manage-wiki cleanup                           → find orphans, broken links, stale entries
-/manage-wiki cleanup --fix                     → auto-fix issues
-/manage-wiki stats                             → graph statistics
-/manage-wiki stats --type spec                 → spec-only statistics
+/manage knowledge wiki                                   → health dashboard (default)
+/manage knowledge wiki health                            → health dashboard
+/manage knowledge wiki search auth                       → search for "auth" with follow-up actions
+/manage knowledge wiki cleanup                           → find orphans, broken links, stale entries
+/manage knowledge wiki cleanup --fix                     → auto-fix issues
+/manage knowledge wiki stats                             → graph statistics
+/manage knowledge wiki stats --type spec                 → spec-only statistics
 ```
 
 | Flag | Effect |
@@ -49,9 +49,9 @@ MANDATORY, NOT SUBSTITUTABLE by manual Read/Grep: graph operations (`orphans`, `
 
 ### Step 2: Render Dashboard
 
-Display: health score, entry counts by type, broken links, orphan count, top hubs. Include health status message and quick-action commands (`/wiki-connect --fix`, `/wiki-digest`, `/manage-wiki cleanup --fix`, `maestro wiki graph`).
+Display: health score, entry counts by type, broken links, orphan count, top hubs. Include health status message and quick-action commands (`/manage knowledge wiki connect --fix`, `/manage knowledge wiki digest`, `/manage knowledge wiki cleanup --fix`, `maestro wiki graph`).
 
-> **Scope split (complementary, not conflicting):** `/wiki-connect --fix` repairs/augments `related` links between existing entries (no deletion). `/manage-wiki cleanup --fix` deletes/flags orphans and removes broken-link entries from frontmatter. Run `wiki-connect` first to maximize link recovery, then `cleanup` to handle the true residual orphans.
+> **Scope split (complementary, not conflicting):** `/manage knowledge wiki connect --fix` repairs/augments `related` links between existing entries (no deletion). `/manage knowledge wiki cleanup --fix` deletes/flags orphans and removes broken-link entries from frontmatter. Run `wiki-connect` first to maximize link recovery, then `cleanup` to handle the true residual orphans.
 
 ---
 
@@ -65,7 +65,7 @@ maestro wiki search "<query>" --json
 
 ### Step 2: Display Results
 
-Show table of results (ID, type, title, tags) with action hints: `maestro wiki get <id>`, `backlinks <id>`, `/learn-follow <id>`, `/wiki-connect --scope <type>`.
+Show table of results (ID, type, title, tags) with action hints: `maestro wiki get <id>`, `backlinks <id>`, `/learn follow <id>`, `/manage knowledge wiki connect --scope <type>`.
 
 ### Step 3: Interactive Follow-up
 

@@ -1,7 +1,10 @@
 ---
 name: maestro-impeccable
-description: Use when designing, auditing, polishing, improving, or codifying frontend UI — websites, dashboards, landing pages, components, design systems
-argument-hint: <command|intent> [target] [flags] — chain: build|redesign|improve|enhance|launch|harden|foundation|live · --codify <source-path> 提取设计系统
+description: Use when designing, auditing, polishing, improving, or codifying
+  frontend UI — websites, dashboards, landing pages, components, design systems
+argument-hint: "<command|intent> [target] [flags] — chain:
+  build|redesign|improve|enhance|launch|harden|foundation|live · --codify
+  <source-path> 提取设计系统"
 allowed-tools:
   - Bash
   - Edit
@@ -19,8 +22,17 @@ allowed-tools:
   - update_plan
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <deferred_reading>
 Codify mode only (read when `--codify` and the corresponding phase starts):

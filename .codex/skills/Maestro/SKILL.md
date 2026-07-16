@@ -19,11 +19,20 @@ allowed-tools:
   - update_plan
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
 
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
+
 <purpose>
-Orchestrate all maestro commands: classify intent → select chain → create session → dispatch to `maestro-ralph-execute`.
+Orchestrate all maestro commands: classify intent → select chain → create session → dispatch to `maestro-ralph`.
 Session: `.workflow/.maestro/{session_id}/status.json`.
 </purpose>
 
@@ -49,7 +58,7 @@ $ARGUMENTS — user intent text, or special keywords.
 </context>
 
 <invariants>
-1. **All chains dispatch via maestro-ralph-execute** — maestro never executes steps directly
+1. **All chains dispatch via maestro-ralph** — maestro never executes steps directly
 2. **Session before execution** — status.json created before any step runs
 3. **Auto flag pass-through** — 仅当用户传入 `-y` 时透传 `-y` 到 skill args
 4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，下游 ralph 只消费不覆盖（当 `decomposition_owner == "maestro"` 时跳过二次提问，仅做 shape 校验 + 缺省字段补齐）
@@ -60,7 +69,7 @@ $ARGUMENTS — user intent text, or special keywords.
 9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
 10. **每个 step 必须 `completion_confirmed: true`** — 由 `maestro ralph complete N --status DONE|DONE_WITH_CONCERNS` 写入
 11. **schema** — `ralph_protocol_version: "2"` 标记 CLI-driven session；新增字段全部可选
-12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via ralph-execute）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
+12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via maestro-ralph）和 invariant 2（session before execution）和 invariant 10（completion_confirmed 由 CLI 写入）为硬约束。
 13. **Classification evidence** — S_CLASSIFY 的 chain 选择决策 MUST 记录到 status.json 的 `classification_rationale` 字段：匹配了哪个 pattern、排除了哪些备选、confidence level。无记录的分类不可进入 S_CREATE。
 14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
 15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 session 生命周期 + step 排序 + cross-step decision 节点；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）只单次推荐，不得出现在 FSM step 内。
@@ -79,7 +88,7 @@ S_DECOMPOSE     — 边界澄清、写执行准则+子目标清单       PERSIST
 S_CREATE        — 创建 session + status.json           PERSIST: session (全量)
 S_DRY_RUN       — 显示 chain 后结束                    PERSIST: —
 S_CONFIRM       — 用户确认（auto_mode 跳过）            PERSIST: —
-S_DISPATCH      — 移交 maestro-ralph-execute           PERSIST: —
+S_DISPATCH      — 移交 maestro-ralph           PERSIST: —
 S_FALLBACK      — 意图无法分类、请求输入                PERSIST: —
 </states>
 
@@ -129,7 +138,7 @@ S_CONFIRM:
   → END           WHEN: user cancels
 
 S_DISPATCH:
-  → END           DO: spawn_agent({ task_name: "maestro_ralph_execute", message: "Execute skill maestro-ralph-execute" })
+  → END           DO: spawn_agent({ task_name: "maestro_ralph", message: "Execute skill maestro-ralph" })
 
 S_FALLBACK:
   → S_CLASSIFY    WHEN: user provides new intent           DO: request_user_input
@@ -164,10 +173,10 @@ Compose a reusable workflow template (natural language → DAG). `--edit <path>`
 Execute a saved workflow template through the ralph chain runner. Flags: `--context k=v` (repeatable), `--list`, `--dry-run`.
 
 1. **Resolve template**: absolute path → as-is; slug → `~/.maestro/templates/workflows/index.json` lookup. `--list` → display index and END. Read deferred `template-schema.md` to validate (`template_id`, `nodes`, `edges`, `context_schema` required).
-2. **Bind context**: parse `--context k=v`; collect missing required variables via `request_user_input`; bind `{variable}` placeholders (leave `{N-xxx.field}` and `{prev_*}` for runtime resolution by ralph-execute).
+2. **Bind context**: parse `--context k=v`; collect missing required variables via `request_user_input`; bind `{variable}` placeholders (leave `{N-xxx.field}` and `{prev_*}` for runtime resolution by maestro-ralph).
 3. **Topological sort** (Kahn) template nodes → linear `steps[]` (parallel nodes share a batch index). Each step carries `skill`/`args`/`type` (skill|cli|agent|checkpoint) resolved as in `A_CREATE_SESSION`; cli nodes run async via `Bash(run_in_background)` + STOP, checkpoints pause with resume via `-c`.
 4. **Create session**: write `.workflow/.maestro/maestro-{YYYYMMDD-HHMMSS}/status.json` (`source: "maestro"`, `template_id`, bound `context`, topologically-ordered `steps[]`). `--dry-run` → display plan and END.
-5. Dispatch to `maestro-ralph-execute` (S_DISPATCH) — the runner honors checkpoints, resume-safety, and per-step `completion_confirmed` exactly as for classified chains.
+5. Dispatch to `maestro-ralph` (S_DISPATCH) — the runner honors checkpoints, resume-safety, and per-step `completion_confirmed` exactly as for classified chains.
 
 ### A_CLASSIFY_INTENT
 
@@ -198,7 +207,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 2. broad/medium → `request_user_input` ≤3 轮：Scope / Constraints / Definition of Done
 3. 派生 `execution_criteria` + `task_decomposition`（每个 sub-goal 含 `done_when` + `evidence` + `lifecycle` + `completion_confirmed: false`）
 4. **status.json 唯一真源**：写入 `boundary_contract` / `execution_criteria` / `task_decomposition`；不生成 markdown 清单
-5. 在最后一个 evidence-producing stage（execute/review/test）之后追加 `decision:post-goal-audit`（session 终结审计节点）。ralph-execute 在该节点按需动态生长 `steps[]`
+5. 在最后一个 evidence-producing stage（execute/review/test）之后追加 `decision:post-goal-audit`（session 终结审计节点）。maestro-ralph 在该节点按需动态生长 `steps[]`
 6. **输出 `/goal` 绑定提示词（不阻塞，用户可在执行过程中随时输入）：**
    ```
    📋 任务分解完成。可随时复制下面一行设定目标（执行过程中输入即可）：
@@ -285,11 +294,11 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
 - [ ] `command_scope`/`command_path` 由 `maestro ralph skills --platform codex --json --quiet` 预校验（project 覆盖 global）
 - [ ] Session schema 含 `ralph_protocol_version: "2"` + `active_step_index: null` + step.load 占位
 - [ ] 用户传入 `-y` 时透传到 skill args
-- [ ] All chains dispatched via maestro-ralph-execute
+- [ ] All chains dispatched via maestro-ralph
 - [ ] Low-complexity intents routed to step `quick`
 - [ ] (super) Requirements validated before roadmap
 - [ ] (super) Each session scored >= 80%
 - [ ] (compose) `--compose` produces a validated template (≤20 nodes, acyclic, no orphans) written to `~/.maestro/templates/workflows/` + index; drafts preserved on abandon
-- [ ] (play) `--play <template>` binds context, topologically sorts nodes → `steps[]`, and dispatches via maestro-ralph-execute; `--list`/`--dry-run` short-circuit
+- [ ] (play) `--play <template>` binds context, topologically sorts nodes → `steps[]`, and dispatches via maestro-ralph; `--list`/`--dry-run` short-circuit
 
 </appendix>

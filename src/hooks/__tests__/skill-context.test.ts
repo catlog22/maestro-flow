@@ -26,13 +26,13 @@ function setupWorkflow(): void {
     session_id: sessionId,
     intent: 'Auth Refactor',
     status: 'running',
-    active_run_id: '20260713-002-maestro-execute',
-    latest_completed_run_id: '20260713-001-maestro-plan',
+    active_run_id: '20260713-002-execute',
+    latest_completed_run_id: '20260713-001-plan',
   }));
   writeFileSync(join(sessionDir, 'artifacts.json'), JSON.stringify({
     artifacts: {
-      'ART-001-001': { kind: 'plan', role: 'primary', status: 'sealed', relative_path: 'runs/20260713-001-maestro-plan/outputs/plan.json' },
-      'ART-002-001': { kind: 'execution', role: 'primary', status: 'sealed', relative_path: 'runs/20260713-002-maestro-execute/outputs/change-manifest.json' },
+      'ART-001-001': { kind: 'plan', role: 'primary', status: 'sealed', relative_path: 'runs/20260713-001-plan/outputs/plan.json' },
+      'ART-002-001': { kind: 'execution', role: 'primary', status: 'sealed', relative_path: 'runs/20260713-002-execute/outputs/change-manifest.json' },
     },
     aliases: { 'current-plan': 'ART-001-001', 'latest-execution': 'ART-002-001' },
   }));
@@ -47,32 +47,28 @@ function cleanup(): void {
 // ---------------------------------------------------------------------------
 
 describe('parseSkillInvocation', () => {
-  it('matches /maestro-execute with phase number', () => {
-    const result = parseSkillInvocation('/maestro-execute 2');
+  it('matches /maestro with intent text', () => {
+    const result = parseSkillInvocation('/maestro implement auth');
     assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-execute');
-    assert.strictEqual(result.phaseNum, 2);
+    assert.strictEqual(result.skill, 'maestro');
   });
 
-  it('matches /maestro-plan with phase number', () => {
-    const result = parseSkillInvocation('/maestro-plan 1');
+  it('matches /maestro-ralph without falling through to /maestro', () => {
+    const result = parseSkillInvocation('/maestro-ralph fix login bug');
     assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-plan');
-    assert.strictEqual(result.phaseNum, 1);
+    assert.strictEqual(result.skill, 'maestro-ralph');
   });
 
-  it('matches /maestro-milestone-audit without number', () => {
-    const result = parseSkillInvocation('/maestro-milestone-audit');
+  it('matches /maestro-session-seal', () => {
+    const result = parseSkillInvocation('/maestro-session-seal');
     assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-milestone-audit');
-    assert.strictEqual(result.phaseNum, undefined);
+    assert.strictEqual(result.skill, 'maestro-session-seal');
   });
 
-  it('matches /maestro-milestone-audit with number', () => {
-    const result = parseSkillInvocation('/maestro-milestone-audit 2');
+  it('matches /maestro-next', () => {
+    const result = parseSkillInvocation('/maestro-next');
     assert.ok(result);
-    assert.strictEqual(result.skill, 'maestro-milestone-audit');
-    assert.strictEqual(result.phaseNum, 2);
+    assert.strictEqual(result.skill, 'maestro-next');
   });
 
   it('returns null for non-skill prompts', () => {
@@ -102,33 +98,33 @@ describe('evaluateSkillContext', () => {
 
   it('returns null when no workflow exists', () => {
     mkdirSync(TEST_DIR, { recursive: true });
-    const result = evaluateSkillContext({ user_prompt: '/maestro-execute 2', cwd: TEST_DIR });
+    const result = evaluateSkillContext({ user_prompt: '/maestro-ralph continue', cwd: TEST_DIR });
     assert.strictEqual(result, null);
   });
 
   it('returns canonical Session context', () => {
     setupWorkflow();
-    const result = evaluateSkillContext({ user_prompt: '/maestro-execute 2', cwd: TEST_DIR });
+    const result = evaluateSkillContext({ user_prompt: '/maestro-ralph continue', cwd: TEST_DIR });
     assert.ok(result);
     const ctx = result.hookSpecificOutput.additionalContext;
     assert.ok(ctx.includes('Session Context'));
     assert.ok(ctx.includes('20260713-auth-refactor'));
-    assert.ok(ctx.includes('20260713-002-maestro-execute'));
+    assert.ok(ctx.includes('20260713-002-execute'));
   });
 
   it('returns sealed artifact aliases', () => {
     setupWorkflow();
-    const result = evaluateSkillContext({ user_prompt: '/maestro-execute 2', cwd: TEST_DIR });
+    const result = evaluateSkillContext({ user_prompt: '/maestro-ralph continue', cwd: TEST_DIR });
     assert.ok(result);
     const ctx = result.hookSpecificOutput.additionalContext;
     assert.ok(ctx.includes('current-plan → ART-001-001'));
     assert.ok(ctx.includes('latest-execution → ART-002-001'));
-    assert.ok(ctx.includes('runs/20260713-001-maestro-plan/outputs/plan.json'));
+    assert.ok(ctx.includes('runs/20260713-001-plan/outputs/plan.json'));
   });
 
   it('uses correct hookEventName', () => {
     setupWorkflow();
-    const result = evaluateSkillContext({ user_prompt: '/maestro-execute 2', cwd: TEST_DIR });
+    const result = evaluateSkillContext({ user_prompt: '/maestro-ralph continue', cwd: TEST_DIR });
     assert.ok(result);
     assert.strictEqual(result.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   });

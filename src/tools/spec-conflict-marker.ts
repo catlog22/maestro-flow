@@ -7,7 +7,7 @@
  * Conflict flow:
  *   1. Agent search → detects knowledge conflict → markConflict()
  *   2. Injection → entries with confidence="contested" show warnings, sorted last
- *   3. /manage-knowledge-audit → reviews marks → clearConflict() or setConfidence()
+ *   3. /manage knowledge audit → reviews marks → clearConflict() or setConfidence()
  */
 
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';

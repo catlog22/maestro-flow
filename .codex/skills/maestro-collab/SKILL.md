@@ -1,7 +1,9 @@
 ---
 name: maestro-collab
-description: Use when a question needs cross-verification from multiple CLI tools or diverse analytical perspectives
-argument-hint: <requirement> [--tools agy,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]
+description: Use when a question needs cross-verification from multiple CLI
+  tools or diverse analytical perspectives
+argument-hint: <requirement> [--tools agy,qwen,claude] [--mode analysis|write]
+  [--rule <template>] [-y]
 allowed-tools:
   - Bash
   - Glob
@@ -17,8 +19,17 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
-contract: 
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
 
 <purpose>
 Fan-out requirement to multiple CLI tools in parallel → cross-verify for consensus/conflicts → synthesize into unified report with downstream artifacts (context.md + conclusions.json).
@@ -186,7 +197,7 @@ Write 3 files:
 - [ ] Boundary grill executed on CONFLICT items (skip if no boundary conflicts detected)
 - [ ] Boundary grill results written to collab-report.md § Boundary Grill Results (if conflicts found)
 - [ ] 3 output files produced (collab-report.md, context.md, conclusions.json)
-- [ ] CLB artifact registered in state.json
+- [ ] CLB Declared typed output registered by `maestro run complete`
 - [ ] Partial degradation: continued if 1+ tools succeeded
 </success_criteria>
 

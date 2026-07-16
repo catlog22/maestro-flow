@@ -380,8 +380,8 @@ MANDATORY: apply ~/.maestro/workflows/roadmap-common.md **Roadmap Template** for
 | Option | Action |
 |--------|--------|
 | Initialize project | Skill({ skill: "maestro-init" }) |
-| Plan first phase | Skill({ skill: "maestro-plan", args: "1" }) |
-| Create issues | Generate issues per phase via Skill({ skill: "manage-issue" }) |
+| Plan first phase | step `plan 1` |
+| Create issues | Generate issues per phase via Skill({ skill: "manage", args: "issue create" }) |
 | Export only | Spec + roadmap complete, no further action |
 
 ### Step 12: Final Report
@@ -394,7 +394,7 @@ Output: {run_dir}/outputs/
   spec-config.json, product-brief.md, requirements/, architecture/, epics/,
   readiness-report.md, spec-summary.md, roadmap.md
 
-Next: maestro-init (setup) | maestro-plan 1 (plan first phase)
+Next: maestro-init (setup) | plan 1 (plan first phase)
 ```
 
 ---

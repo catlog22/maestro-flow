@@ -133,7 +133,7 @@ GUARD: 用户选"应用并继续"
    - 按 A_BUILD_STEPS 规则构建（goal_ref + command_path 解析 + command_scope 校验）
    - 插入位置：当前 active step 之后、`post-goal-audit` 之前
 3. 原链路有 `post-goal-audit` → 保留
-4. 原链路无 `post-goal-audit` AND `task_decomposition` 存在 → 在 `milestone-complete` 前插入
+4. 原链路无 `post-goal-audit` AND `task_decomposition` 存在 → 在 `session-seal` 前插入
 5. Reindex all steps
 
 ### 5.5 Boundary
@@ -152,7 +152,7 @@ GUARD: 用户选"应用并继续"
    {change_type} — {reason}
    Risk: {RISK_LEVEL} | Superseded: {n} | Added: {n} | Skipped steps: {n} | Inserted steps: {n}
    ```
-3. Handoff → maestro-ralph-execute（平台适配：Claude 用 `Skill()`，Codex 用 `$` 直调）
+3. Handoff → 返回主流程 S_DISPATCH 继续执行循环（每步由 Agent(ralph-executor) 派发）
 
 ---
 

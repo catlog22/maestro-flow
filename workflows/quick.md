@@ -278,7 +278,7 @@ If any artifact is missing: DO NOT report completion. Complete the missing step 
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Task done, --full verification passed | `manage-status` |
+| Task done, --full verification passed | `/manage status` |
 | Task done, verification found gaps | `debug {issue}` |
 | Task done, want to sync docs | `sync` |
 | Need a full phase workflow instead | `plan {milestone}` |

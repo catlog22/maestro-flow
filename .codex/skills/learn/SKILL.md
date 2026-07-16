@@ -1,6 +1,7 @@
 ---
 name: learn
-description: Understand code through guided reading, investigation, pattern extraction, or second opinions
+description: Understand code through guided reading, investigation, pattern
+  extraction, or second opinions
 argument-hint: <subcommand> [args...] where subcommand = follow|investigate|decompose|consult
 allowed-tools:
   - Bash
@@ -16,9 +17,22 @@ allowed-tools:
   - spawn_agent
   - spawn_agents_on_csv
   - wait_agent
-session-mode: none
-contract: 
+session-mode: run
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
+version: 0.5.50
 ---
+
+<required_reading>
+@~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
+</required_reading>
+
 <purpose>
 Learning toolkit for building understanding of code, decisions, and plans. Four subcommands:
 - `follow` — guided section-by-section reading with forcing questions → understanding map

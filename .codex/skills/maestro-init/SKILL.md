@@ -1,7 +1,7 @@
 ---
 name: maestro-init
 description: Initialize project with auto state detection
-argument-hint: [-y] [--from <source>] [--from-brainstorm SESSION-ID]
+argument-hint: "[-y] [--from <source>] [--from-brainstorm SESSION-ID]"
 allowed-tools:
   - Bash
   - Glob
@@ -17,7 +17,13 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: bootstrap
+version: 0.5.50
 ---
+
+<bootstrap_mode>
+This skill initializes protected project state before a Session exists. It MUST NOT call `maestro run create`; bootstrap files remain owned by their protected stores.
+</bootstrap_mode>
+
 <purpose>
 Initialize project: detect state, create `.workflow/` with project.md, state.json, config.json.
 Entry point; downstream: step `roadmap` or step `brainstorm`.

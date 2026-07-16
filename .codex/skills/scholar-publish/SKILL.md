@@ -1,6 +1,9 @@
 ---
 name: scholar-publish
-description: Post-acceptance conference preparation workflow covering presentation slides, academic posters, and promotion content. Triggers on "scholar publish", "conference preparation", "prepare presentation", "create poster", "write promotion", "post-acceptance".
+description: Post-acceptance conference preparation workflow covering
+  presentation slides, academic posters, and promotion content. Triggers on
+  "scholar publish", "conference preparation", "prepare presentation", "create
+  poster", "write promotion", "post-acceptance".
 allowed-tools:
   - Bash
   - Edit
@@ -11,6 +14,7 @@ allowed-tools:
   - request_user_input
   - update_plan
 session-mode: none
+version: 0.5.50
 ---
 
 # Scholar Publish

@@ -108,7 +108,7 @@ match to features by keyword analysis. Build requirement entry:
     "acceptance_criteria": ["{criteria}"]
   }
 
-If no blueprint: requirements = [] (populated later by maestro-blueprint).
+If no blueprint: requirements = [] (populated later by the blueprint step).
 ```
 
 ### Step 5: Record Architecture Decisions (if ADRs exist)
@@ -196,8 +196,8 @@ If KG pipeline ran: include KG node/edge/layer/tour counts.
 If mapper agents failed: log W001.
 If not --skip-commit: suggest committing generated docs.
 Suggest next:
-  - manage-status (review)
-  - manage-codebase-refresh (incremental updates)
+  - /manage status (review)
+  - /manage sync codebase (incremental updates)
   - maestro kg stats (verify KG)
   - maestro wiki list --keyword kg (verify wiki integration)
   - maestro kg diff-wiki (future change impact analysis)

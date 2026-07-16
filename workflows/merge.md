@@ -120,6 +120,6 @@ Display:
   Roadmap: .workflow/roadmap.md updated
 
   Next steps:
-    Skill({ skill: "manage-status" })          -- View dashboard
-    Skill({ skill: "maestro-milestone-audit" }) -- Audit merged milestone
+    /manage status          -- View dashboard
+    /maestro-session-seal   -- Seal merged session (knowledge extraction + DAG progression)
 ```

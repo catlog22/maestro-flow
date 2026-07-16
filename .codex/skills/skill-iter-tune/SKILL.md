@@ -1,6 +1,10 @@
 ---
 name: skill-iter-tune
-description: Iterative skill tuning via execute-evaluate-improve feedback loop. Uses maestro delegate Claude to execute skill, Agy to evaluate quality, and Agent to apply improvements. Iterates until quality threshold or max iterations. Triggers on "skill iter tune", "iterative skill tuning", "tune skill".
+description: Iterative skill tuning via execute-evaluate-improve feedback loop.
+  Uses maestro delegate Claude to execute skill, Agy to evaluate quality, and
+  Agent to apply improvements. Iterates until quality threshold or max
+  iterations. Triggers on "skill iter tune", "iterative skill tuning", "tune
+  skill".
 allowed-tools:
   - Bash
   - Edit
@@ -18,10 +22,19 @@ allowed-tools:
   - spawn_agents_on_csv
   - wait_agent
 session-mode: run
+version: 0.5.50
+contract:
+  discovery: self-described
+  consumes: []
+  produces: []
+  gates:
+    entry: []
+    exit: []
 ---
 
 <required_reading>
 @~/.maestro/workflows/run-mode.md
+@~/.maestro/workflows/codex-run-mode.md
 </required_reading>
 
 # Skill Iter Tune

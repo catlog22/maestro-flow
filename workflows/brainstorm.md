@@ -167,7 +167,7 @@ Pass into Steps 2 and 3.
 3. AskUserQuestion for Non-Goals (multiSelect, include "Other" option)
 4. Store terminology + non_goals to session
 
-New candidate terms are stored only in `context-package.json#domain.terminology[]`, not written directly to glossary.yaml. They are uniformly promoted to formal terms by `manage-harvest --auto` at the end of the chain.
+New candidate terms are stored only in `context-package.json#domain.terminology[]`, not written directly to glossary.yaml. They are uniformly promoted to formal terms by `harvest --auto` at the end of the chain.
 
 **Skip if**: `--yes` (auto-generate terms, empty non-goals)
 

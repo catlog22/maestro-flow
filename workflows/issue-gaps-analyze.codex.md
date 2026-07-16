@@ -171,7 +171,7 @@ For each issue in the analysis array:
 
   Read-modify-write issues.jsonl (single pass):
     Set issue.analysis = ANALYSIS, updated_at = NOW_ISO
-    Append issue.history: { action: "analyzed", at: NOW_ISO, by: "maestro-analyze --gaps" }
+    Append issue.history: { action: "analyzed", at: NOW_ISO, by: "analyze --gaps" }
     Status unchanged (non-destructive enrichment).
 
 Verify: re-read, confirm analysis field present for all updated issues.

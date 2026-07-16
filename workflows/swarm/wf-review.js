@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-review',
   description: 'Multi-dimension code review with 3-vote adversarial verification and multi-perspective verdict',
-  whenToUse: 'Accelerate quality-review with parallel scanning + 3-vote finding verification + 3-perspective verdict arbitration',
+  whenToUse: 'Accelerate the review step with parallel scanning + 3-vote finding verification + 3-perspective verdict arbitration',
   phases: [
     { title: 'Scan', detail: 'Parallel dimension scanning via workflow-reviewer' },
     { title: 'Verify', detail: '3-vote adversarial verification per critical finding (majority wins)' },

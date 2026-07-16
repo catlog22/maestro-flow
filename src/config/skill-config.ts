@@ -25,7 +25,7 @@ export interface SkillDefaults {
 
 export interface SkillConfigFile {
   version: string;
-  /** key = skill name (e.g. "maestro-execute") */
+  /** key = skill name (e.g. "execute") */
   skills: Record<string, SkillDefaults>;
 }
 

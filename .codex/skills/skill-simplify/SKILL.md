@@ -1,6 +1,8 @@
 ---
 name: skill-simplify
-description: SKILL.md simplification with functional integrity verification. Analyze redundancy, optimize content, check no functionality lost. Triggers on "simplify skill", "optimize skill", "skill-simplify".
+description: SKILL.md simplification with functional integrity verification.
+  Analyze redundancy, optimize content, check no functionality lost. Triggers on
+  "simplify skill", "optimize skill", "skill-simplify".
 allowed-tools:
   - Bash
   - Edit
@@ -10,6 +12,7 @@ allowed-tools:
   - Write
   - request_user_input
 session-mode: none
+version: 0.5.50
 ---
 
 # Skill Simplify

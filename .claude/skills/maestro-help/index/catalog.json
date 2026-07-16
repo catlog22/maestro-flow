@@ -1,76 +1,67 @@
 {
   "_metadata": {
-    "version": "2.0.0",
-    "generated": "2026-06-21",
-    "description": "Maestro Flow command/skill/agent catalog — single source of truth for maestro-help"
+    "version": "3.0.0",
+    "generated": "2026-07-16",
+    "description": "Maestro Flow command/step/skill/agent catalog — single source of truth for maestro-help. type=step 的条目为 first-tier step：经 /maestro 自动路由，或 maestro run prepare/create 执行"
   },
   "commands": [
     {"name": "maestro", "command": "/maestro", "category": "core", "description": "智能协调器 — 根据意图和项目状态自动选择最优命令链", "source": "../../commands/maestro.md"},
     {"name": "maestro-init", "command": "/maestro-init", "category": "core", "description": "项目初始化 — 创建 .workflow/ 目录结构和状态文件", "source": "../../commands/maestro-init.md"},
-    {"name": "maestro-brainstorm", "command": "/maestro-brainstorm", "category": "core", "description": "头脑风暴 — 发散探索，多角色创意，上游起源命令", "source": "../../commands/maestro-brainstorm.md"},
-    {"name": "maestro-blueprint", "command": "/maestro-blueprint", "category": "core", "description": "正式规格文档化 — 7-phase 收敛规格链，上游起源命令，产出 .workflow/blueprint/", "source": "../../commands/maestro-blueprint.md"},
-    {"name": "maestro-roadmap", "command": "/maestro-roadmap", "category": "core", "description": "路线图编排 — Milestone > Phase 分解，下游以 milestone 为入口", "source": "../../commands/maestro-roadmap.md"},
-    {"name": "maestro-quick", "command": "/maestro-quick", "category": "core", "description": "快速任务 — 跳过管线直接完成，支持 --full/--discuss 模式", "source": "../../commands/maestro-quick.md"},
+    {"name": "brainstorm", "command": "brainstorm", "type": "step", "category": "core", "description": "头脑风暴 — 发散探索，多角色创意，上游起源 step", "source": "~/.maestro/workflows/brainstorm.md"},
+    {"name": "blueprint", "command": "blueprint", "type": "step", "category": "core", "description": "正式规格文档化 — 7-phase 收敛规格链，产出 .workflow/blueprint/", "source": "~/.maestro/workflows/blueprint.md"},
+    {"name": "roadmap", "command": "roadmap", "type": "step", "category": "core", "description": "路线图编排 — 消费上游 context，Milestone/Session DAG 分解", "source": "~/.maestro/workflows/roadmap.md"},
+    {"name": "quick", "command": "quick", "type": "step", "category": "core", "description": "快速任务 — 跳过管线直接完成，支持 --full/--discuss 模式", "source": "~/.maestro/workflows/quick.md"},
     {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 自然语言创建命令补丁，或 --amend 从工作流信号自动生成", "source": "../../commands/maestro-overlay.md"},
-    {"name": "maestro-composer", "command": "/maestro-composer", "category": "core", "description": "编排器 — compose + play 工作流组合执行", "source": "../../commands/maestro-composer.md"},
     {"name": "maestro-guard", "command": "/maestro-guard", "category": "core", "description": "编辑边界治理", "source": "../../commands/maestro-guard.md"},
-    {"name": "maestro-player", "command": "/maestro-player", "category": "core", "description": "播放器 — 执行已编排的工作流", "source": "../../commands/maestro-player.md"},
     {"name": "maestro-update", "command": "/maestro-update", "category": "core", "description": "版本更新 — 检查并安装最新版本", "source": "../../commands/maestro-update.md"},
     {"name": "maestro-grill", "command": "/maestro-grill", "category": "core", "description": "压力测试 — 对计划、想法或需求进行代码库现实性压力测试", "source": "../../commands/maestro-grill.md"},
     {"name": "maestro-next", "command": "/maestro-next", "category": "core", "description": "智能导航 — 检测工作流当前状态并推荐下一步最优命令", "source": "../../commands/maestro-next.md"},
-    {"name": "maestro-swarm-workflow", "command": "/maestro-swarm-workflow", "category": "core", "description": "Swarm 并行加速器 — 将意图路由到固定 Workflow 脚本进行多 agent 并发执行", "source": "../../commands/maestro-swarm-workflow.md"},
-    {"name": "maestro-universal-workflow", "command": "/maestro-universal-workflow", "category": "core", "description": "动态对抗工作流生成器 — 扫描库匹配或动态生成任务特定 Workflow 脚本", "source": "../../commands/maestro-universal-workflow.md"},
-    {"name": "maestro-companion", "command": "/maestro-companion", "category": "core", "description": "知识伴侣 — 加载上下文、记录伴侣文档、捕获洞察、路由到技能", "source": "../../commands/maestro-companion.md"},
+    {"name": "maestro-session-seal", "command": "/maestro-session-seal", "category": "core", "description": "Session 封印 — 知识提取 + 标记 sealed + DAG 推进（取代已废弃的 milestone-complete）", "source": "../../commands/maestro-session-seal.md"},
 
-    {"name": "maestro-analyze", "command": "/maestro-analyze", "category": "pipeline", "description": "双层分析 — 宏观(文本参数)探索影响面+scope_verdict / 微观(数字参数)Phase 级深入", "source": "../../commands/maestro-analyze.md"},
-    {"name": "maestro-plan", "command": "/maestro-plan", "category": "pipeline", "description": "任务规划 — 支持 --from analyze:ANL-xxx 直达、碰撞检测、gap 修复计划", "source": "../../commands/maestro-plan.md"},
-    {"name": "maestro-execute", "command": "/maestro-execute", "category": "pipeline", "description": "任务执行 — wave 并行执行、delegate 编排、自动提交", "source": "../../commands/maestro-execute.md"},
+    {"name": "analyze", "command": "analyze", "type": "step", "category": "pipeline", "description": "双层分析 — 宏观(文本参数)探索影响面+scope_verdict / 微观(--session)Session 级深入", "source": "~/.maestro/workflows/analyze.md"},
+    {"name": "plan", "command": "plan", "type": "step", "category": "pipeline", "description": "任务规划 — 支持 --from analyze:ANL-xxx 直达、碰撞检测、gap 修复计划", "source": "~/.maestro/workflows/plan.md"},
+    {"name": "execute", "command": "execute", "type": "step", "category": "pipeline", "description": "任务执行 — wave 并行执行、delegate 编排、内置验证门", "source": "~/.maestro/workflows/execute.md"},
 
-    {"name": "maestro-milestone-audit", "command": "/maestro-milestone-audit", "category": "milestone", "description": "里程碑审计 — 检查里程碑完成度和质量", "source": "../../commands/maestro-milestone-audit.md"},
-    {"name": "maestro-milestone-complete", "command": "/maestro-milestone-complete", "category": "milestone", "description": "里程碑完成 — 归档里程碑并推进下一个", "source": "../../commands/maestro-milestone-complete.md"},
-    {"name": "maestro-milestone-release", "command": "/maestro-milestone-release", "category": "milestone", "description": "里程碑发布 — 生成发布说明和变更日志", "source": "../../commands/maestro-milestone-release.md"},
+    {"name": "manage-status", "command": "/manage status", "category": "manage", "description": "状态查看 — 项目和工作流状态总览", "source": "../../commands/manage.md"},
+    {"name": "manage-issue", "command": "/manage issue", "category": "manage", "description": "Issue 管理 — CRUD 操作、状态追踪", "source": "../../commands/manage.md"},
+    {"name": "manage-issue-discover", "command": "/manage issue discover", "category": "manage", "description": "Issue 发现 — 按提示词或代码分析自动发现问题", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-knowhow", "command": "/manage knowledge knowhow", "category": "manage", "description": "知识管理 — knowhow 条目查询和管理", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-capture", "command": "/manage knowledge capture", "category": "manage", "description": "知识捕获 — 从会话中捕获非显而易见的知识", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-harvest", "command": "/manage knowledge harvest", "category": "manage", "description": "收获 — 从工作流产物中提取可复用资产", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-wiki", "command": "/manage knowledge wiki", "category": "manage", "description": "Wiki 管理 — 知识图谱条目操作（health/search/cleanup/connect/digest）", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-audit", "command": "/manage knowledge audit", "category": "manage", "description": "知识审计 — 审查 spec/knowhow/artifact 三存储的一致性与新鲜度", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-extractors", "command": "/manage knowledge extractors", "category": "manage", "description": "知识图谱提取器管理 — 自动生成 KG 提取规则", "source": "../../commands/manage.md"},
+    {"name": "manage-knowledge-domain", "command": "/manage knowledge domain", "category": "manage", "description": "领域术语注册 — 添加领域词条到 glossary", "source": "../../commands/manage.md"},
+    {"name": "manage-sync-codebase", "command": "/manage sync codebase", "category": "manage", "description": "代码库文档增量同步 — git diff → 影响追踪 → 刷新 codebase 文档", "source": "../../commands/manage.md"},
+    {"name": "manage-sync-rebuild", "command": "/manage sync rebuild", "category": "manage", "description": "代码库重建 — 全量重建代码库文档", "source": "../../commands/manage.md"},
+    {"name": "manage-sync-drift", "command": "/manage sync drift", "category": "manage", "description": "产物漂移检测与重对齐", "source": "../../commands/manage.md"},
 
-    {"name": "manage-issue", "command": "/manage-issue", "category": "manage", "description": "Issue 管理 — CRUD 操作、状态追踪", "source": "../../commands/manage-issue.md"},
-    {"name": "manage-issue-discover", "command": "/manage-issue-discover", "category": "manage", "description": "Issue 发现 — 按提示词或代码分析自动发现问题", "source": "../../commands/manage-issue-discover.md"},
-    {"name": "manage-knowhow", "command": "/manage-knowhow", "category": "manage", "description": "知识管理 — knowhow 条目查询和管理", "source": "../../commands/manage-knowhow.md"},
-    {"name": "manage-knowhow-capture", "command": "/manage-knowhow-capture", "category": "manage", "description": "知识捕获 — 从会话中捕获非显而易见的知识", "source": "../../commands/manage-knowhow-capture.md"},
-    {"name": "manage-harvest", "command": "/manage-harvest", "category": "manage", "description": "收获 — 从已完成里程碑中提取可复用资产", "source": "../../commands/manage-harvest.md"},
-    {"name": "manage-status", "command": "/manage-status", "category": "manage", "description": "状态查看 — 项目和工作流状态总览", "source": "../../commands/manage-status.md"},
-    {"name": "manage-wiki", "command": "/manage-wiki", "category": "manage", "description": "Wiki 管理 — 知识图谱条目操作", "source": "../../commands/manage-wiki.md"},
-    {"name": "manage-codebase-rebuild", "command": "/manage-codebase-rebuild", "category": "manage", "description": "代码库重建 — 全量重建代码库索引", "source": "../../commands/manage-codebase-rebuild.md"},
-    {"name": "manage-kg-extractors", "command": "/manage-kg-extractors", "category": "manage", "description": "知识图谱提取器管理 — 注册、列出、删除、审计知识提取器", "source": "../../commands/manage-kg-extractors.md"},
-    {"name": "manage-knowledge-audit", "command": "/manage-knowledge-audit", "category": "manage", "description": "知识审计 — 审计知识图谱节点和边的一致性、覆盖率和质量", "source": "../../commands/manage-knowledge-audit.md"},
-
-    {"name": "quality-review", "command": "/quality-review", "category": "quality", "description": "代码审查 — 多维度代码质量检查", "source": "../../commands/quality-review.md"},
-    {"name": "quality-auto-test", "command": "/quality-auto-test", "category": "quality", "description": "自动测试 — 智能路由 spec/gap/code 测试", "source": "../../commands/quality-auto-test.md"},
-    {"name": "quality-test", "command": "/quality-test", "category": "quality", "description": "业务测试 — 会话式 UAT 验证", "source": "../../commands/quality-test.md"},
-    {"name": "security-audit", "command": "/security-audit", "category": "quality", "description": "OWASP/STRIDE 安全审计", "source": "../../commands/security-audit.md"},
-    {"name": "quality-debug", "command": "/quality-debug", "category": "quality", "description": "质量调试 — 诊断测试失败并提供修复方案", "source": "../../commands/quality-debug.md"},
+    {"name": "review", "command": "review", "type": "step", "category": "quality", "description": "代码审查 — 多维度代码质量检查", "source": "~/.maestro/workflows/review.md"},
+    {"name": "auto-test", "command": "auto-test", "type": "step", "category": "quality", "description": "自动测试 — 智能路由 spec/gap/code 测试", "source": "~/.maestro/workflows/auto-test.md"},
+    {"name": "test", "command": "test", "type": "step", "category": "quality", "description": "业务测试 — 会话式 UAT 验证", "source": "~/.maestro/workflows/test.md"},
+    {"name": "debug", "command": "debug", "type": "step", "category": "quality", "description": "质量调试 — 诊断测试失败并提供修复方案", "source": "~/.maestro/workflows/debug.md"},
+    {"name": "retrospective", "command": "retrospective", "type": "step", "category": "quality", "description": "质量复盘 — 阶段性质量回顾和改进", "source": "~/.maestro/workflows/retrospective.md"},
     {"name": "quality-refactor", "command": "/quality-refactor", "category": "quality", "description": "代码重构 — 结构优化和模式改进", "source": "../../commands/quality-refactor.md"},
-    {"name": "manage-sync-codebase", "command": "/manage sync codebase", "category": "quality", "description": "代码库文档增量同步 — git diff → 影响追踪 → 刷新 codebase 文档", "source": "../../commands/manage.md"},
-    {"name": "quality-retrospective", "command": "/quality-retrospective", "category": "quality", "description": "质量复盘 — 阶段性质量回顾和改进", "source": "../../commands/quality-retrospective.md"},
+    {"name": "security-audit", "command": "/security-audit", "category": "quality", "description": "OWASP/STRIDE 安全审计", "source": "../../commands/security-audit.md"},
 
-    {"name": "spec-setup", "command": "/spec-setup", "category": "spec", "description": "Spec 初始化 — 创建项目规范文件", "source": "../../commands/spec-setup.md"},
-    {"name": "spec-load", "command": "/spec-load", "category": "spec", "description": "Spec 加载 — 按关键词加载规范条目", "source": "../../commands/spec-load.md"},
-    {"name": "spec-add", "command": "/spec-add", "category": "spec", "description": "Spec 录入 — 添加新的规范条目", "source": "../../commands/spec-add.md"},
-    {"name": "spec-remove", "command": "/spec-remove", "category": "spec", "description": "Spec 移除 — 删除已有规范条目", "source": "../../commands/spec-remove.md"},
+    {"name": "spec-setup", "command": "/spec setup", "category": "spec", "description": "Spec 初始化 — 创建项目规范文件", "source": "../../commands/spec.md"},
+    {"name": "spec-load", "command": "/spec load", "category": "spec", "description": "Spec 加载 — 按关键词加载规范条目", "source": "../../commands/spec.md"},
+    {"name": "spec-add", "command": "/spec add", "category": "spec", "description": "Spec 录入 — 添加新的规范条目", "source": "../../commands/spec.md"},
+    {"name": "spec-remove", "command": "/spec remove", "category": "spec", "description": "Spec 移除 — 删除已有规范条目", "source": "../../commands/spec.md"},
 
-    {"name": "learn-follow", "command": "/learn-follow", "category": "learn", "description": "跟读学习 — 从代码变更中学习模式", "source": "../../commands/learn-follow.md"},
-    {"name": "learn-decompose", "command": "/learn-decompose", "category": "learn", "description": "模式拆解 — 将复杂模式分解为可复用组件", "source": "../../commands/learn-decompose.md"},
-    {"name": "learn-investigate", "command": "/learn-investigate", "category": "learn", "description": "系统探究 — 深入调查技术选型和架构", "source": "../../commands/learn-investigate.md"},
-    {"name": "learn-second-opinion", "command": "/learn-second-opinion", "category": "learn", "description": "多视角分析 — 多 CLI 交叉验证观点", "source": "../../commands/learn-second-opinion.md"},
+    {"name": "learn-follow", "command": "/learn follow", "category": "learn", "description": "跟读学习 — 引导式阅读，段落级提问提取模式", "source": "../../commands/learn.md"},
+    {"name": "learn-investigate", "command": "/learn investigate", "category": "learn", "description": "系统探究 — 假设驱动地调查问题", "source": "../../commands/learn.md"},
+    {"name": "learn-decompose", "command": "/learn decompose", "category": "learn", "description": "模式拆解 — 将复杂模式分解为可复用组件", "source": "../../commands/learn.md"},
+    {"name": "learn-consult", "command": "/learn consult", "category": "learn", "description": "多视角分析 — 多 CLI 交叉验证观点（second opinion）", "source": "../../commands/learn.md"},
 
     {"name": "maestro-fork", "command": "/maestro-fork", "category": "worktree", "description": "Worktree 分叉 — 基于 milestone 创建隔离开发环境", "source": "../../commands/maestro-fork.md"},
     {"name": "maestro-merge", "command": "/maestro-merge", "category": "worktree", "description": "Worktree 合并 — 同步变更回主线", "source": "../../commands/maestro-merge.md"},
 
     {"name": "maestro-collab", "command": "/maestro-collab", "category": "team", "description": "人类团队协作 — .workflow/collab/ 目录管理", "source": "../../commands/maestro-collab.md"},
 
-    {"name": "maestro-ralph", "command": "/maestro-ralph", "category": "ralph", "description": "Ralph 引擎 — 自适应生命周期决策节点管理", "source": "../../commands/maestro-ralph.md"},
-    {"name": "maestro-ralph-execute", "command": "/maestro-ralph-execute", "category": "ralph", "description": "Ralph 执行 — 运行自适应决策链", "source": "../../commands/maestro-ralph-execute.md"},
+    {"name": "maestro-ralph", "command": "/maestro-ralph", "category": "ralph", "description": "Ralph 引擎 — 自适应生命周期编排；--engine swarm/universal 运行 Workflow 脚本（含 wf-milestone-audit 里程碑审计）", "source": "../../commands/maestro-ralph.md"},
 
     {"name": "maestro-impeccable", "command": "/maestro-impeccable", "category": "ui", "description": "UI 生产 — 设计系统生成 + impeccable 链式编排 + 质量门控 + --codify 从代码提取设计系统", "source": "../../commands/maestro-impeccable.md"},
-
-    {"name": "maestro-tools", "command": "/maestro-tools", "category": "tools", "description": "工具规范管理 — register 注册可复用流程 / execute 加载并逐步执行", "source": "../../commands/maestro-tools.md"},
 
     {"name": "odyssey", "command": "/odyssey", "category": "odyssey", "description": "长周期迭代闭环 — 单入口五模式 (debug|improve|planex|review|ui)：考古/审计 → 修复 → 验证 → 泛化 → 发现 → 知识持久化", "source": "../../commands/odyssey.md"}
   ],
@@ -125,13 +116,13 @@
     {"name": "scholar-writing", "category": "scholar", "description": "端到端学术论文写作 — 从研究仓库到出版级 LaTeX 手稿", "source": "../scholar-writing/SKILL.md"}
   ],
   "agents": [
+    {"name": "ralph-executor", "description": "单步执行器 — ralph next + 内联 skill 执行，多 agent 编排的无名嵌套", "category": "workflow"},
     {"name": "workflow-analyzer", "description": "多维度分析 — 证据评分和推荐", "category": "workflow"},
     {"name": "workflow-planner", "description": "任务分解和执行计划生成", "category": "workflow"},
     {"name": "workflow-executor", "description": "原子任务执行和验证", "category": "workflow"},
     {"name": "workflow-verifier", "description": "目标回溯验证（存在性、实质、连接）", "category": "workflow"},
     {"name": "workflow-reviewer", "description": "多维度代码审查", "category": "workflow"},
     {"name": "workflow-debugger", "description": "假设驱动调试和结构化证据日志", "category": "workflow"},
-    {"name": "workflow-research-agent", "description": "外部研究 — API 模式、技术验证", "category": "workflow"},
     {"name": "workflow-roadmapper", "description": "分阶段里程碑路线图", "category": "workflow"},
     {"name": "workflow-plan-checker", "description": "计划质量验证（最多 3 轮修订）", "category": "workflow"},
     {"name": "workflow-phase-researcher", "description": "特定路线图阶段的实现方法研究", "category": "workflow"},
@@ -157,13 +148,16 @@
     {"command": "maestro view", "description": "启动 Dashboard 看板", "category": "dashboard"},
     {"command": "maestro stop", "description": "停止 Dashboard 服务", "category": "dashboard"},
     {"command": "maestro delegate", "description": "委派任务给 AI 智能体", "category": "execution"},
+    {"command": "maestro explore", "description": "轻量只读代码搜索 — 1 prompt = 1 agent", "category": "execution"},
     {"command": "maestro coordinate", "description": "图工作流协调器（别名 coord）", "category": "execution"},
     {"command": "maestro cli", "description": "运行 CLI 智能体工具", "category": "execution"},
-    {"command": "maestro run", "description": "执行指定工作流", "category": "execution"},
+    {"command": "maestro run", "description": "Session/Run 生命周期 — prepare/create/complete/seal-session", "category": "execution"},
+    {"command": "maestro ralph", "description": "Ralph 链运行时 — next/complete/skills/session", "category": "execution"},
     {"command": "maestro serve", "description": "启动工作流服务器", "category": "execution"},
     {"command": "maestro launcher", "description": "Claude Code 启动器", "category": "setup"},
     {"command": "maestro spec", "description": "项目 Spec 管理", "category": "knowledge"},
     {"command": "maestro wiki", "description": "Wiki 知识图谱查询", "category": "knowledge"},
+    {"command": "maestro domain", "description": "领域术语管理 — init/add/list/show/update/remove/search", "category": "knowledge"},
     {"command": "maestro hooks", "description": "Hook 管理与运行", "category": "config"},
     {"command": "maestro overlay", "description": "命令 Overlay 管理", "category": "config"},
     {"command": "maestro collab", "description": "人类团队协作（别名 team）", "category": "team"},
@@ -174,14 +168,14 @@
     {"command": "maestro tool", "description": "工具交互（list/exec）", "category": "config"}
   ],
   "categories": {
-    "commands": ["core", "pipeline", "milestone", "manage", "quality", "spec", "learn", "worktree", "team", "ralph", "ui", "tools", "odyssey"],
+    "commands": ["core", "pipeline", "manage", "quality", "spec", "learn", "worktree", "team", "ralph", "ui", "odyssey"],
     "skills": ["meta", "team", "knowledge", "quality", "scholar"],
     "agents": ["workflow", "team", "cli", "ui"]
   },
   "guide_files": [
     {"file": "guide/quick-start-guide.md", "title": "快速入门", "description": "10 分钟了解核心功能", "status": "planned"},
     {"file": "guide/cli-commands-guide.md", "title": "CLI 命令参考", "description": "21 个终端命令详解", "status": "planned"},
-    {"file": "guide/command-usage-guide.md", "title": "Slash 命令使用", "description": "63 个 slash 命令分类和衔接", "status": "planned"},
+    {"file": "guide/command-usage-guide.md", "title": "Slash 命令使用", "description": "slash 命令分类和衔接", "status": "planned"},
     {"file": "guide/mcp-tools-guide.md", "title": "MCP 工具参考", "description": "9 个 MCP 工具详解", "status": "planned"},
     {"file": "guide/delegate-async-guide.md", "title": "Delegate 异步指南", "description": "异步任务委派和生命周期", "status": "planned"},
     {"file": "guide/hooks-guide.md", "title": "Hook 系统", "description": "12 个 Hook、4 个安装级别", "status": "planned"},
@@ -200,28 +194,28 @@
   "essential_commands": [
     "/maestro",
     "/maestro-init",
-    "/maestro-brainstorm",
-    "/maestro-blueprint",
-    "/maestro-analyze",
-    "/maestro-roadmap",
-    "/maestro-plan",
-    "/maestro-execute",
-    "/maestro-quick",
-    "/maestro-next"
+    "/maestro-next",
+    "/maestro-ralph",
+    "brainstorm",
+    "analyze",
+    "roadmap",
+    "plan",
+    "execute",
+    "/maestro-session-seal"
   ],
   "workflows": {
     "topology": {
-      "hierarchy": "Roadmap > Milestone > Phase | Plan > Task > Wave",
+      "hierarchy": "Roadmap > Milestone > Session | Plan > Task > Wave",
       "layers": {
         "upstream_origin": ["brainstorm (发散/轻量)", "blueprint (收敛/重型)"],
-        "understanding": "analyze 双层: 宏观(文本参数) + 微观(milestone 数字参数)",
+        "understanding": "analyze 双层: 宏观(文本参数) + 微观(--session)",
         "orchestration": "roadmap (可选，消费上游 context)",
         "execution": ["plan", "execute"]
       }
     },
     "paths": {
-      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze {milestone} → plan {milestone} → execute",
-      "B_large_feature": "analyze 宏观 → roadmap → analyze {milestone} → plan {milestone} → execute",
+      "A_full_project": "brainstorm → blueprint(可选) → analyze 宏观 → roadmap → analyze --session → plan --session → execute",
+      "B_large_feature": "analyze 宏观 → roadmap → analyze --session → plan --session → execute",
       "C_medium_feature": "analyze 宏观 → plan --from analyze:ANL-xxx → execute",
       "D_small_fix": "plan → execute",
       "E_spec_only": "blueprint → (供人阅读)",
@@ -231,23 +225,23 @@
     "main_pipeline": {
       "name": "主干管线",
       "phases": ["analyze", "plan", "execute"],
-      "quality": ["quality-auto-test", "quality-review", "quality-test"],
-      "close": ["maestro-milestone-audit", "maestro-milestone-complete"]
+      "quality": ["review", "auto-test", "test"],
+      "close": ["maestro-session-seal"]
     },
     "quick": {
       "name": "快速渠道",
-      "entry": "/maestro-quick",
+      "entry": "quick (step)",
       "modes": ["default (analyze+execute)", "--full (analyze+plan+execute)", "--discuss (multi-cli讨论)"]
     },
     "issue_loop": {
       "name": "Issue 闭环",
-      "phases": ["manage-issue-discover", "manage-issue create", "maestro-analyze --gaps", "maestro-plan --gaps", "maestro-execute", "manage-issue close"]
+      "phases": ["manage issue discover", "manage issue create", "analyze --gaps", "plan --gaps", "execute", "manage issue close"]
     },
     "init_paths": {
       "name": "初始化路径",
-      "from_brainstorm": "/maestro-brainstorm → /maestro-init --from brainstorm:<id> → /maestro-analyze 宏观",
-      "from_blueprint": "/maestro-blueprint → /maestro-init → /maestro-analyze 宏观",
-      "direct": "/maestro-init → /maestro-analyze 宏观"
+      "from_brainstorm": "brainstorm → /maestro-init --from brainstorm:<id> → analyze 宏观",
+      "from_blueprint": "blueprint → /maestro-init → analyze 宏观",
+      "direct": "/maestro-init → analyze 宏观"
     },
     "odyssey": {
       "name": "Odyssey 长周期循环",

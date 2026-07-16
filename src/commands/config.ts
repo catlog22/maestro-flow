@@ -197,8 +197,8 @@ export function registerConfigCommand(program: Command): void {
     });
 
   skills.command('set')
-    .description('Set a parameter default (e.g. maestro config skills set maestro-execute auto-commit true)')
-    .argument('<skill>', 'Skill name (e.g. maestro-execute)')
+    .description('Set a parameter default (e.g. maestro config skills set execute auto-commit true)')
+    .argument('<skill>', 'Skill name (e.g. execute)')
     .argument('<param>', 'Parameter name without -- prefix (e.g. auto-commit, y, method)')
     .argument('<value>', 'Default value')
     .option('-g, --global', 'Save to global config', false)

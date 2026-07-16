@@ -1,4 +1,4 @@
-# Workflow Template Schema — for maestro-composer Phase 5
+# Workflow Template Schema — for `/maestro --compose` Phase 5
 
 ## Template JSON
 
@@ -56,7 +56,7 @@ File location: `~/.maestro/templates/workflows/<slug>.json`
   "id": "N-001",
   "name": "Plan Feature",
   "type": "skill",
-  "executor": "maestro-plan",
+  "executor": "plan",
   "args_template": "{goal}",
   "input_ports": ["requirement"],
   "output_ports": ["plan"],

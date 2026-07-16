@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-milestone-audit',
   description: 'Parallel milestone audit with adversarial challenge and 3-vote verdict',
-  whenToUse: 'Accelerate maestro-milestone-audit with parallel dimension checks + adversarial challenge + 3-vote verdict',
+  whenToUse: 'Milestone audit acceleration (via /maestro-ralph --engine swarm) with parallel dimension checks + adversarial challenge + 3-vote verdict',
   phases: [
     { title: 'Audit', detail: 'Parallel 4-dimension milestone audit' },
     { title: 'Challenge', detail: 'Adversarial challenge of each audit dimension' },
@@ -107,7 +107,7 @@ const VERDICT_VOTE_SCHEMA = {
     verdict: { type: 'string', enum: ['PASS', 'FAIL'] },
     rationale: { type: 'string' },
     confidence: { type: 'number', minimum: 0, maximum: 100 },
-    next_step: { type: 'string', enum: ['milestone-complete', 'plan-gaps', 'execute', 'verify'] },
+    next_step: { type: 'string', enum: ['session-seal', 'plan-gaps', 'execute', 'verify'] },
   },
   required: ['perspective', 'verdict', 'rationale', 'confidence', 'next_step'],
 }
@@ -142,7 +142,7 @@ const REPORT_SCHEMA = {
       },
     },
     blocking_issues: { type: 'array', items: { type: 'object', properties: { dimension: { type: 'string' }, description: { type: 'string' }, remediation: { type: 'string' } }, required: ['dimension', 'description', 'remediation'] } },
-    next_step: { type: 'string', enum: ['milestone-complete', 'plan-gaps', 'execute', 'verify'] },
+    next_step: { type: 'string', enum: ['session-seal', 'plan-gaps', 'execute', 'verify'] },
     summary: { type: 'string' },
   },
   required: ['verdict', 'confidence', 'adversarial_outcome', 'dimension_results', 'blocking_issues', 'next_step', 'summary'],

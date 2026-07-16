@@ -7,7 +7,7 @@
 //   {
 //     "name": "cli-verify-after-execute",
 //     "description": "Add CLI verification after execute",
-//     "targets": ["maestro-execute", "maestro-plan"],
+//     "targets": ["execute", "plan"],
 //     "priority": 50,
 //     "enabled": true,
 //     "patches": [
