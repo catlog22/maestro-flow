@@ -179,6 +179,7 @@ reads:     # 开工要先读什么
 ---
 name: <step>
 description: <一句话：动作 + 产出物>
+goal: true                # 可选。长周期 step 声明后，run prepare/skill 按平台返回 goal_mode 创建指引（用户加载即为显式启用；平台无 goal 工具时为 null）
 argument-hint: "[args] [flags]"
 contract:
   consumes:  [{ kind, alias, required }]
@@ -198,6 +199,8 @@ refs:
 ## Risk Checklist
 ## Gate Intent
 ```
+
+平台覆盖文件（`prepare/<step>.codex.md` 等）**不继承** base 的 `goal` 标志——覆盖文件需要 goal 指引时须自行声明 `goal: true`。
 
 ### 逐段规则
 

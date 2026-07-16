@@ -1,6 +1,7 @@
 ---
 name: odyssey-planex
 description: "Odyssey planex mode — single requirement delivery loop through acceptance criteria definition, task planning, execution, verification, and fix iteration until all criteria pass"
+goal: true
 argument-hint: "<requirement> [--template feature|bugfix|refactor|migration|api-endpoint] [--method auto|agent|<cli>] [--skip-verify] [--skip-generalize] [--max-iterations N] [-y] [-c]"
 contract:
   consumes:

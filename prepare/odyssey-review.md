@@ -1,6 +1,7 @@
 ---
 name: odyssey-review
 description: "Odyssey review mode — multi-dimensional deep code review through archaeology, exploration, 4-dimension audit, exhaustive severity-tiered fix, and zero-residual confirmation, producing review findings with full evidence trail"
+goal: true
 argument-hint: "<target: file|dir|HEAD|staged|phase#|PR#> [--skip-fix] [--skip-generalize] [-y] [-c]"
 contract:
   consumes:

@@ -1,6 +1,7 @@
 ---
 name: odyssey-improve
 description: 6-dimension runtime quality audit → diagnose → fix → verify cycle with baseline metrics tracking and zero-residual enforcement
+goal: true
 argument-hint: "<target> [--dimensions <list>] [--fix-threshold <severity>] [--skip-fix] [--skip-generalize] [-y] [-c]"
 contract:
   consumes:

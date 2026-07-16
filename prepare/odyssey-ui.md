@@ -1,6 +1,7 @@
 ---
 name: odyssey-ui
 description: "6-dimension visual experience audit with divergent exploration — survey design context, audit visual/interaction/a11y/responsive/motion/edge dimensions, diverge for polish+delight, fix, verify, generalize"
+goal: true
 argument-hint: "<target> [--dimensions <list>] [--skip-fix] [--skip-generalize] [-y] [-c]"
 contract:
   consumes:

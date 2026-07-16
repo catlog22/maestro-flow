@@ -103,6 +103,7 @@ export interface PrepareStepResult {
   workflow: { path: string; line_count: number } | null;
   run_mode: { path: string; summary: string } | null;
   refs: Array<{ path: string; when: string }>;
+  goal_mode: { platform: string; instructions: string } | null;
 }
 
 export interface SkillContentResult {
@@ -111,6 +112,7 @@ export interface SkillContentResult {
   prepare: { path: string; content: string } | null;
   workflow: { path: string; content: string } | null;
   refs: Array<{ path: string; when: string }>;
+  goal_mode: { platform: string; instructions: string } | null;
 }
 
 export interface BriefRunResult {
@@ -123,6 +125,7 @@ export interface BriefRunResult {
   workflow: { path: string; content: string } | null;
   run_mode: { path: string; summary: string } | null;
   outputs: Array<{ artifact_id: string; kind: string; role: string; path: string; status: string }>;
+  goal_mode: { platform: string; instructions: string } | null;
 }
 
 interface EvaluationContext {
@@ -872,6 +875,37 @@ function summarizeRunMode(raw: string): string {
   return lines.slice(0, 8).join('\n');
 }
 
+// ---------------------------------------------------------------------------
+// Goal mode — prepare frontmatter 声明 `goal: true` 的 step，加载时按平台附带
+// goal 创建模式。用户选择加载带标志的 step 即构成显式启用（满足 codex goal
+// 工具「仅用户明确要求时使用」的约束）。平台无对应工具时返回 null。
+// ---------------------------------------------------------------------------
+
+const GOAL_MODE_BLOCKS: Partial<Record<TargetPlatform, string>> = {
+  codex: [
+    'Goal 模式（该 step 声明 goal 标志，用户加载即为明确启用）：',
+    '1. Run 开始时 `create_goal({ objective: "{step}: <用户意图一句话>" })`（用户给定预算时加 `token_budget`）；单一活跃 goal，若已有未完成 goal 先收口。',
+    '2. 过程中可用 `get_goal({})` 查看已用时间与剩余 token 预算。',
+    '3. Run 完成时 `update_goal({ status: "complete" })`；同一阻塞持续无法推进时 `update_goal({ status: "blocked" })`。',
+    '4. 完成后向用户报告工具返回的最终 token 用量。',
+  ].join('\n'),
+};
+
+function extractGoalFlag(raw: string): boolean {
+  const fm = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
+  if (!fm) return false;
+  return /^goal:\s*true\s*$/m.test(fm[1]);
+}
+
+function resolveGoalMode(
+  prepareRaw: string | undefined,
+  platform: TargetPlatform,
+): { platform: string; instructions: string } | null {
+  if (!prepareRaw || !extractGoalFlag(prepareRaw)) return null;
+  const block = GOAL_MODE_BLOCKS[platform];
+  return block ? { platform, instructions: block } : null;
+}
+
 export function prepareStep(
   projectRoot: string,
   stepName: string,
@@ -891,6 +925,7 @@ export function prepareStep(
       ? { path: content.runMode.path, summary: summarizeRunMode(content.runMode.raw) }
       : null,
     refs: content.refs,
+    goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
   };
 }
 
@@ -910,6 +945,7 @@ export function skillContent(
       ? { path: content.workflow.path, content: tx(content.workflow.raw) }
       : null,
     refs: content.refs,
+    goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
   };
 }
 
@@ -955,5 +991,6 @@ export function briefRun(
       ? { path: content.runMode.path, summary: summarizeRunMode(tx(content.runMode.raw)) }
       : null,
     outputs,
+    goal_mode: resolveGoalMode(content.prepare?.raw, platform ?? 'claude'),
   };
 }
