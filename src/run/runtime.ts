@@ -178,6 +178,12 @@ export interface CompleteRunOptions {
   notes?: string[];
   /** Run-relative paths registered as evidence artifacts beyond the outputs scan. */
   extraArtifacts?: string[];
+  /**
+   * Used as handoff.summary only when the report frontmatter yielded an empty
+   * one. Report frontmatter stays the primary source; this is the CLI fallback
+   * (e.g. ralph complete --summary when the executor wrote no frontmatter).
+   */
+  summaryFallback?: string;
 }
 
 interface EvaluationContext {
@@ -1096,7 +1102,7 @@ export function completeRun(
       };
     }
 
-    const artifactIds = registerArtifacts(bundle.artifacts, run, scan.artifacts);
+    const artifactIds = registerArtifacts(bundle.artifacts, run, [...scan.artifacts, ...extraArtifacts]);
     const primary = artifactIds.find(id => bundle.artifacts.artifacts[id]?.role === 'primary') ?? null;
     const evidenceRefs = recordCompletionEvidence(bundle, run, artifactIds, frontmatter);
     run.output = {
@@ -1105,6 +1111,10 @@ export function completeRun(
       verdict: frontmatter.verdict,
     };
     run.handoff = deriveHandoff(frontmatter, runId, run.command.name, artifactIds, evidenceRefs);
+    if (!run.handoff.summary.trim() && options.summaryFallback?.trim()) {
+      run.handoff.summary = options.summaryFallback.trim();
+    }
+    mergeNotesIntoConcerns(run.handoff, notes);
     run.status = 'sealed';
     run.sealed_at = localISO();
     bundle.session.latest_completed_run_id = runId;

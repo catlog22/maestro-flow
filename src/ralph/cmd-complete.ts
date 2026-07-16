@@ -38,6 +38,20 @@ export interface CompleteCmdOptions {
   expectedStepIndex?: number;
 }
 
+/**
+ * Ralph completion signals that belong in the run's handoff.concerns. caveats and
+ * concerns/reason are advisory notes about the step's outcome; deferred items are
+ * follow-up work the next step should see. All flow through the P1d notes channel,
+ * where completeRun appends them to handoff.concerns (append + dedupe).
+ */
+function handoffNotes(opts: CompleteCmdOptions): string[] {
+  const notes: string[] = [];
+  if (opts.caveats) notes.push(opts.caveats);
+  if (opts.status === 'DONE_WITH_CONCERNS' && opts.concerns) notes.push(opts.concerns);
+  if (opts.deferred?.length) notes.push(...opts.deferred.map(d => `deferred: ${d}`));
+  return notes;
+}
+
 export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
   const projectRoot = workflowRoot();
 
@@ -95,11 +109,17 @@ export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
     return 1;
   }
 
-  // Complete the standard Run if one exists
+  // Complete the standard Run if one exists. Ralph's completion signals ride the
+  // P1d notes channel so run.json.handoff carries them: caveats/concerns/deferred
+  // append to handoff.concerns, and summary is a fallback when the executor left
+  // report frontmatter without one (deriveHandoff yields an empty summary then).
   const runId = chainStep.run_id;
   if (runId) {
     try {
-      completeStandardRun(projectRoot, runId, sessionId);
+      completeStandardRun(projectRoot, runId, sessionId, {
+        notes: handoffNotes(opts),
+        summaryFallback: opts.summary,
+      });
     } catch (err) {
       // Non-fatal: the run might already be completed/sealed
       const msg = err instanceof Error ? err.message : String(err);

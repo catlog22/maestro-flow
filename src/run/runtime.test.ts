@@ -15,7 +15,7 @@ import { Command } from 'commander';
 import { createSessionState } from './defaults.js';
 import { sessionStateSchema } from './schemas.js';
 import { SessionStore } from './store.js';
-import { checkRun, completeRun, createRun, prepareStep, sealSession } from './runtime.js';
+import { briefRun, checkRun, completeRun, createRun, prepareStep, sealSession } from './runtime.js';
 import { registerRunCommand } from '../commands/run.js';
 import { resolveCommandSource } from './contract.js';
 import { migrateV1toV2, readStateJson, writeStateJson } from '../utils/state-schema.js';
@@ -90,7 +90,7 @@ describe('Session/Run runtime', () => {
     const program = new Command();
     registerRunCommand(program);
     const run = program.commands.find(command => command.name() === 'run');
-    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'create', 'check', 'complete', 'brief', 'skill', 'seal-session']);
+    expect(run?.commands.map(command => command.name())).toEqual(['prepare', 'next', 'create', 'check', 'complete', 'brief', 'skill', 'seal-session']);
   });
 
   it('parses every migrated core command contract', () => {
@@ -350,5 +350,159 @@ gates:
     value.extra = true;
     writeFileSync(path, JSON.stringify(value, null, 2));
     expect(() => new SessionStore(projectRoot).readBundle(created.session_id)).toThrow(/unrecognized/i);
+  });
+
+  it('brief exposes consumed upstream, the previous handoff, and the session anchor', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'demo-plan', `consumes: []
+produces:
+  - kind: plan
+    primary: true
+    path: outputs/plan.json
+    alias: current-plan
+gates:
+  entry: []
+  exit: []`);
+    commandFile(projectRoot, 'demo-exec', `consumes:
+  - kind: plan
+    alias: current-plan
+    required: false
+produces: []
+gates:
+  entry: []
+  exit: []`);
+
+    const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'brief anchor demo' });
+    writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
+    expect(completeRun(projectRoot, planRun.run_id).sealed).toBe(true);
+
+    const execRun = createRun({ projectRoot, command: 'demo-exec', session: planRun.session_id, intent: 'brief anchor demo' });
+    expect(execRun.upstream['current-plan']).toBeDefined();
+
+    const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
+    // upstream reverse-lookup by consumed artifact ids
+    expect(brief.upstream['current-plan']).toBeDefined();
+    expect(brief.upstream['current-plan'].kind).toBe('plan');
+    // previous sealed handoff
+    expect(brief.prev_handoff?.run_id).toBe(planRun.run_id);
+    expect(brief.prev_handoff?.summary).toBe('Plan ready');
+    // anchor grounding — intent always present; boundary empty here
+    expect(brief.anchor.intent).toBe('**Intent**: brief anchor demo');
+    expect(brief.anchor.boundary_contract).toBeNull();
+  });
+
+  it('prepare --session attaches the previous handoff and consume status; bare prepare is unchanged', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'demo-plan', `consumes: []
+produces:
+  - kind: plan
+    primary: true
+    path: outputs/plan.json
+    alias: current-plan
+gates:
+  entry: []
+  exit: []`);
+    commandFile(projectRoot, 'demo-exec', `consumes:
+  - kind: plan
+    alias: current-plan
+    required: true
+produces: []
+gates:
+  entry: []
+  exit: []`);
+
+    const bare = prepareStep(projectRoot, 'demo-exec');
+    expect(bare.previous).toBeUndefined();
+
+    const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'prepare session demo' });
+    writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
+    expect(completeRun(projectRoot, planRun.run_id).sealed).toBe(true);
+
+    const withSession = prepareStep(projectRoot, 'demo-exec', undefined, planRun.session_id);
+    // bare-content fields identical to the stateless call
+    expect(withSession.prepare).toEqual(bare.prepare);
+    expect(withSession.workflow).toEqual(bare.workflow);
+    // previous context populated from latest_completed_run_id + contract consumes
+    expect(withSession.previous?.handoff?.run_id).toBe(planRun.run_id);
+    const consume = withSession.previous?.consumes.find(c => c.alias === 'current-plan');
+    expect(consume).toMatchObject({ kind: 'plan', required: true, present: true, status: 'sealed' });
+  });
+
+  it('complete --note merges into handoff concerns with de-duplication', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'note-demo', `consumes: []\nproduces: []\ngates:\n  entry: []\n  exit: []`);
+    const created = createRun({ projectRoot, command: 'note-demo', intent: 'note merge' });
+    writeFileSync(join(
+      projectRoot, '.workflow', 'sessions', created.session_id, 'runs', created.run_id, 'report.md',
+    ), '---\nverdict: ready\nsummary: done\nconcerns:\n  - existing concern\n---\n', 'utf8');
+
+    const completed = completeRun(projectRoot, created.run_id, undefined, {
+      notes: ['existing concern', 'fresh note', 'fresh note'],
+    });
+    expect(completed.sealed).toBe(true);
+    const run = new SessionStore(projectRoot).readRun(created.session_id, created.run_id);
+    expect(run.handoff?.concerns).toEqual(['existing concern', 'fresh note']);
+  });
+
+  it('complete --artifact registers extra evidence and rejects out-of-bounds paths', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'art-demo', `consumes: []\nproduces: []\ngates:\n  entry: []\n  exit: []`);
+    const created = createRun({ projectRoot, command: 'art-demo', intent: 'extra artifact' });
+    const runDir = join(projectRoot, '.workflow', 'sessions', created.session_id, 'runs', created.run_id);
+    writeFileSync(join(runDir, 'report.md'), '---\nverdict: ready\nsummary: done\n---\n', 'utf8');
+    writeFileSync(join(runDir, 'evidence', 'trace.log'), 'trace lines\n', 'utf8');
+
+    // out-of-bounds path is rejected before any state change
+    expect(() => completeRun(projectRoot, created.run_id, undefined, {
+      extraArtifacts: ['../../escape.txt'],
+    })).toThrow(/escapes run directory/i);
+    // missing path is rejected
+    expect(() => completeRun(projectRoot, created.run_id, undefined, {
+      extraArtifacts: ['evidence/missing.log'],
+    })).toThrow(/does not exist/i);
+
+    const completed = completeRun(projectRoot, created.run_id, undefined, {
+      extraArtifacts: ['evidence/trace.log'],
+    });
+    expect(completed.sealed).toBe(true);
+    const artifacts = JSON.parse(readFileSync(
+      join(projectRoot, '.workflow', 'sessions', created.session_id, 'artifacts.json'), 'utf8',
+    ));
+    const extra = Object.values(artifacts.artifacts).find((a: any) => a.relative_path.endsWith('evidence/trace.log')) as any;
+    expect(extra).toBeDefined();
+    expect(extra.kind).toBe('trace');
+    expect(extra.role).toBe('evidence');
+  });
+
+  it('closes the loop: complete --note surfaces in the next brief upstream and prev handoff', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'demo-plan', `consumes: []
+produces:
+  - kind: plan
+    primary: true
+    path: outputs/plan.json
+    alias: current-plan
+gates:
+  entry: []
+  exit: []`);
+    commandFile(projectRoot, 'demo-exec', `consumes:
+  - kind: plan
+    alias: current-plan
+    required: false
+produces: []
+gates:
+  entry: []
+  exit: []`);
+
+    const planRun = createRun({ projectRoot, command: 'demo-plan', intent: 'closed loop' });
+    writePlanRun(projectRoot, planRun.session_id, planRun.run_id);
+    const done = completeRun(projectRoot, planRun.run_id, undefined, { notes: ['watch the migration order'] });
+    expect(done.sealed).toBe(true);
+
+    // A downstream run consuming the plan sees the alias and the note in prev handoff.
+    const execRun = createRun({ projectRoot, command: 'demo-exec', session: planRun.session_id, intent: 'closed loop' });
+    const brief = briefRun(projectRoot, execRun.run_id, execRun.session_id);
+    expect(brief.upstream['current-plan']).toBeDefined();
+    expect(brief.prev_handoff?.concerns).toContain('watch the migration order');
   });
 });

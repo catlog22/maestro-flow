@@ -13,6 +13,21 @@ import { join, resolve } from 'node:path';
 import { SessionStore, type SessionBundle } from '../run/store.js';
 import type { SessionState } from '../run/schemas.js';
 import { createSessionState } from '../run/defaults.js';
+// Chain navigation/mutation is engine-agnostic and canonical in src/run/chain.ts.
+// Re-export here so existing ralph callers keep importing from the adapter while
+// the logic lives in one place. Dependency direction is ralph → run only.
+import {
+  activeStepIndex,
+  nextPendingIndex,
+  nextPendingDecisionIndex,
+  updateChainStepStatus,
+} from '../run/chain.js';
+export {
+  activeStepIndex,
+  nextPendingIndex,
+  nextPendingDecisionIndex,
+  updateChainStepStatus,
+} from '../run/chain.js';
 import type {
   CompletionStatus,
   GoalChangelogEntry,
@@ -167,32 +182,6 @@ export function chainStepId(index: number, command: string): string {
   return `step-${String(index).padStart(3, '0')}-${command}`;
 }
 
-export function activeStepIndex(session: SessionState): number | null {
-  const chain = session.orchestration.chain;
-  for (let i = 0; i < chain.length; i++) {
-    if (chain[i].status === 'running') return i;
-  }
-  return null;
-}
-
-export function nextPendingIndex(session: SessionState, skipDecisions = true): number | null {
-  const chain = session.orchestration.chain;
-  for (let i = 0; i < chain.length; i++) {
-    if (chain[i].status !== 'pending') continue;
-    if (skipDecisions && chain[i].decision_ref) continue;
-    return i;
-  }
-  return null;
-}
-
-export function nextPendingDecisionIndex(session: SessionState): number | null {
-  const chain = session.orchestration.chain;
-  for (let i = 0; i < chain.length; i++) {
-    if (chain[i].status === 'pending' && chain[i].decision_ref) return i;
-  }
-  return null;
-}
-
 // ── Session creation helpers ─────────────────────────────────────────────────
 
 export function createRalphSession(
@@ -237,24 +226,6 @@ export function createRalphSession(
 }
 
 // ── Update helpers ───────────────────────────────────────────────────────────
-
-export function updateChainStepStatus(
-  projectRoot: string,
-  sessionId: string,
-  stepIndex: number,
-  status: string,
-  runId?: string | null,
-): void {
-  const store = new SessionStore(projectRoot);
-  store.update(sessionId, (draft) => {
-    const step = draft.session.orchestration.chain[stepIndex];
-    if (!step) throw new Error(`Chain step index ${stepIndex} out of range`);
-    step.status = status;
-    if (runId !== undefined) step.run_id = runId;
-    draft.session.activity_revision++;
-    return null;
-  });
-}
 
 export function updateRalphMeta(
   projectRoot: string,

@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import { briefRun, checkRun, completeRun, createRun, prepareStep, skillContent, sealSession } from '../run/runtime.js';
+import { runNextStep } from '../run/next.js';
 import type { TargetPlatform } from '../core/skill-converter.js';
 
 const VALID_PLATFORMS: TargetPlatform[] = ['claude', 'codex', 'agy', 'agents-standard', 'pi'];
@@ -25,15 +26,33 @@ export function registerRunCommand(program: Command): void {
   run
     .command('prepare <step>')
     .description('Return prepare file + workflow metadata for pre-task thinking (read-only, stateless)')
+    .option('--session <id>', 'attach prior-step context from a Session (read-only)')
     .option('--workflow-root <path>', 'project root', process.cwd())
     .option('--platform <name>', 'target platform for tool substitution (claude|codex|agy|agents-standard)')
-    .action((step: string, opts: { workflowRoot: string; platform?: string }) => {
+    .action((step: string, opts: { session?: string; workflowRoot: string; platform?: string }) => {
       try {
         const platform = opts.platform as TargetPlatform | undefined;
         if (platform && !VALID_PLATFORMS.includes(platform)) {
           throw new Error(`unknown platform "${platform}", valid: ${VALID_PLATFORMS.join(', ')}`);
         }
-        print(prepareStep(resolve(opts.workflowRoot), step, platform));
+        print(prepareStep(resolve(opts.workflowRoot), step, platform, opts.session));
+      } catch (error) {
+        reportError(error);
+      }
+    });
+
+  run
+    .command('next')
+    .description('Advance a Session chain: create the next pending Run and emit a compact birth packet')
+    .option('--session <id>', 'explicit Session ID')
+    .option('--json', 'emit structured JSON instead of the human-readable birth packet')
+    .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
+    .action((opts: { session?: string; json?: boolean; workflowRoot: string }) => {
+      try {
+        const outcome = runNextStep(resolve(opts.workflowRoot), { sessionId: opts.session, json: opts.json });
+        const stream = outcome.exitCode === 0 ? process.stdout : process.stderr;
+        stream.write(outcome.message + '\n');
+        if (outcome.exitCode !== 0) process.exitCode = outcome.exitCode;
       } catch (error) {
         reportError(error);
       }
@@ -86,10 +105,15 @@ export function registerRunCommand(program: Command): void {
     .command('complete <run-id>')
     .description('Derive artifacts and handoff, enforce exit gates, and seal a Run')
     .option('--session <id>', 'explicit Session ID')
+    .option('--note <text>', 'supplementary concern merged into the handoff (repeatable)', collect, [])
+    .option('--artifact <path>', 'run-relative path registered as evidence beyond the outputs scan (repeatable)', collect, [])
     .option('--workflow-root <path>', 'project root containing .workflow', process.cwd())
-    .action((runId: string, opts: { session?: string; workflowRoot: string }) => {
+    .action((runId: string, opts: { session?: string; note: string[]; artifact: string[]; workflowRoot: string }) => {
       try {
-        const result = completeRun(resolve(opts.workflowRoot), runId, opts.session);
+        const result = completeRun(resolve(opts.workflowRoot), runId, opts.session, {
+          notes: opts.note,
+          extraArtifacts: opts.artifact,
+        });
         print(result);
         if (!result.sealed) process.exitCode = 1;
       } catch (error) {
