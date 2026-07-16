@@ -33,6 +33,81 @@ export interface LlmCallOptions {
   maxTokens?: number;
 }
 
+const RETRYABLE_TRANSPORT_ERROR_NAMES = new Set([
+  'APIConnectionError',
+  'APIConnectionTimeoutError',
+  'AbortError',
+  'ConnectTimeoutError',
+  'HeadersTimeoutError',
+  'SocketError',
+]);
+
+const RETRYABLE_TRANSPORT_ERROR_CODES = new Set([
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+/**
+ * Return true only for connection-level failures where retrying without the
+ * configured proxy is safe. HTTP/API errors (for example 401 or 429) must not
+ * be retried because the provider may already have processed the request.
+ */
+export function isRetryableTransportError(error: unknown): boolean {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as {
+      name?: unknown;
+      code?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+    const name = typeof candidate.name === 'string' ? candidate.name : '';
+    const code = typeof candidate.code === 'string' ? candidate.code : '';
+    const message = typeof candidate.message === 'string' ? candidate.message : '';
+
+    if (RETRYABLE_TRANSPORT_ERROR_NAMES.has(name)) return true;
+    if (RETRYABLE_TRANSPORT_ERROR_CODES.has(code)) return true;
+    if (/\b(?:ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH|ETIMEDOUT|UND_ERR_(?:CONNECT_TIMEOUT|HEADERS_TIMEOUT|SOCKET))\b/.test(message)) {
+      return true;
+    }
+    if (name === 'TypeError' && message === 'fetch failed') return true;
+
+    current = candidate.cause;
+  }
+
+  return false;
+}
+
+/**
+ * Execute an HTTP route and retry it directly once when a configured proxy
+ * fails at the transport layer. This covers the race where the proxy stops
+ * after the command-level reachability probe succeeds.
+ */
+export async function withDirectProxyFallback<T>(
+  config: LlmConfig,
+  request: (effectiveConfig: LlmConfig) => Promise<T>,
+): Promise<T> {
+  try {
+    return await request(config);
+  } catch (proxyError) {
+    if (!config.proxyUrl || !isRetryableTransportError(proxyError)) {
+      throw proxyError;
+    }
+
+    const directConfig = { ...config, proxyUrl: undefined };
+    return request(directConfig);
+  }
+}
+
 /**
  * Fast connectivity probe — GET /models with a short timeout.
  * Returns true if the endpoint responds (any HTTP status), false on timeout/connection error.
@@ -92,13 +167,19 @@ export async function callLlm(
   tools: ChatCompletionTool[],
   options?: LlmCallOptions,
 ): Promise<LlmResponse> {
-  if (config.format === 'anthropic') {
-    return callAnthropic(config, messages, tools, options);
-  }
-  if (config.format === 'openai-responses') {
-    return callOpenAiResponses(config, messages, tools, options);
-  }
-  return callOpenAi(client, config, messages, tools, options);
+  return withDirectProxyFallback(config, async (effectiveConfig) => {
+    if (effectiveConfig.format === 'anthropic') {
+      return callAnthropic(effectiveConfig, messages, tools, options);
+    }
+    if (effectiveConfig.format === 'openai-responses') {
+      return callOpenAiResponses(effectiveConfig, messages, tools, options);
+    }
+
+    const effectiveClient = effectiveConfig.proxyUrl === config.proxyUrl
+      ? client
+      : createClient(effectiveConfig).client;
+    return callOpenAi(effectiveClient, effectiveConfig, messages, tools, options);
+  });
 }
 
 // ---------------------------------------------------------------------------
