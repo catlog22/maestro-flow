@@ -106,7 +106,7 @@ Status: DONE
 
 | Condition | Suggestion |
 |-----------|-----------|
-| Next session activated | step `analyze` (`maestro run prepare analyze` + `maestro run create analyze -- --session {next-slug}`) |
+| Next session activated | step `analyze` (`maestro run prepare analyze` + `maestro run create analyze --session {next-slug} --intent "{goal}"`) |
 | DAG complete (all sealed) | `/manage status` |
 | Knowledge review needed | `/manage knowledge audit` |
 </completion>

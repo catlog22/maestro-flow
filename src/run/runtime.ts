@@ -153,7 +153,7 @@ function slug(value: string, fallback: string): string {
   const normalized = value
     .normalize('NFKD')
     .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
   return normalized || fallback;
@@ -191,15 +191,24 @@ function projectSessionEntry(session: SessionState): ProjectSessionEntry {
   };
 }
 
-function resolveSessionId(store: SessionStore, state: StateJsonV2, requested: string | undefined, intent: string): string {
+function validateSessionSlug(value: string): void {
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(value)) {
+    throw new Error(`Invalid session ID: "${value}". Use lowercase alphanumeric + hyphens (e.g. 20260715-odyssey-jwt-auth).`);
+  }
+  if (value.length > 128) {
+    throw new Error(`Session ID too long (${value.length} > 128): "${value.slice(0, 40)}..."`);
+  }
+}
+
+function resolveSessionId(store: SessionStore, state: StateJsonV2, requested: string | undefined, intent: string, command: string): string {
   if (requested) {
-    if (!store.sessionExists(requested)) throw new Error(`Session not found: ${requested}`);
+    validateSessionSlug(requested);
     return requested;
   }
-  const intentKey = slug(intent, 'session');
+  const intentKey = slug(intent, command);
   const candidates = (state.sessions ?? []).filter(entry =>
     (entry.status === 'running' || entry.status === 'paused')
-    && slug(entry.intent, 'session') === intentKey
+    && slug(entry.intent, command) === intentKey
     && store.sessionExists(entry.session_id),
   );
   if (state.active_session_id) {
@@ -207,7 +216,7 @@ function resolveSessionId(store: SessionStore, state: StateJsonV2, requested: st
     if (active) return active.session_id;
   }
   if (candidates.length > 0) return candidates.at(-1)!.session_id;
-  const base = `${dateId()}-${slug(intent, 'session')}`;
+  const base = `${dateId()}-${slug(intent, command)}`;
   if (!store.sessionExists(base)) return base;
   for (let index = 2; index < 1000; index++) {
     const candidate = `${base}-${String(index).padStart(2, '0')}`;
@@ -534,7 +543,7 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   const store = new SessionStore(options.projectRoot);
   const state = projectState(options.projectRoot);
   const intent = options.intent?.trim() || options.command;
-  const sessionId = resolveSessionId(store, state, options.sessionId, intent);
+  const sessionId = resolveSessionId(store, state, options.sessionId, intent, options.command);
   if (!store.sessionExists(sessionId)) store.createSession(sessionId, intent);
   const source = resolveCommandSource(options.projectRoot, options.command);
 

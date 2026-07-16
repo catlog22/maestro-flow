@@ -207,8 +207,8 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 
 | Condition | Suggestion |
 |-----------|-----------|
-| No critical findings | `maestro run create review -- {phase}` |
-| Critical findings need fix | `maestro run create plan -- {phase} --gaps` |
+| No critical findings | `maestro run create review --session YYYYMMDD-review-{topic} --intent "{goal}" -- {phase}` |
+| Critical findings need fix | `maestro run create plan --session YYYYMMDD-plan-{topic} --intent "{goal}" -- {phase} --gaps` |
 | Need deeper analysis | `/security-audit deep --scope {path}` |
 | Want dependency remediation | Fix vulnerabilities, then re-run `/security-audit` |
 </completion>

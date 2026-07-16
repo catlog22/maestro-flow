@@ -101,8 +101,8 @@ maestro ralph complete <idx> --status {STATUS} [--evidence {path}]
 | Condition | Suggestion |
 |-----------|-----------|
 | All tests pass | `/manage sync codebase` (update codebase docs) |
-| Test failures after refactor | `maestro run create debug -- "test failures after refactor in {scope}"` |
-| No test suite available | `maestro run create auto-test -- {phase}` |
+| Test failures after refactor | `maestro run create debug --session YYYYMMDD-debug-{topic} --intent "test failures after refactor in {scope}"` |
+| No test suite available | `maestro run create auto-test --session YYYYMMDD-auto-test-{topic} --intent "{goal}" -- {phase}` |
 </completion>
 
 <error_codes>
