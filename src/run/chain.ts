@@ -59,7 +59,7 @@ export function updateChainStepStatus(
   projectRoot: string,
   sessionId: string,
   stepIndex: number,
-  status: string,
+  status: OrchestrationStep['status'],
   runId?: string | null,
 ): void {
   const store = new SessionStore(projectRoot);

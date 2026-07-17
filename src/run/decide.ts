@@ -32,7 +32,6 @@
 // reuse it (direction ralph → run only).
 // ---------------------------------------------------------------------------
 
-import { appendFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionStore } from './store.js';
 import { localISO } from '../utils/state-schema.js';
@@ -104,14 +103,15 @@ function decideNextPointer(
  * changes the verdict outcome (the store write already committed).
  */
 function appendDecisionLog(
-  sessionDir: string,
+  projectRoot: string,
+  sessionId: string,
   record: Record<string, unknown>,
 ): void {
+  const store = new SessionStore(projectRoot);
   try {
-    mkdirSync(sessionDir, { recursive: true });
-    appendFileSync(join(sessionDir, 'decisions.ndjson'), JSON.stringify(record) + '\n', 'utf8');
-  } catch {
-    /* best-effort — the store write is the source of truth */
+    store.appendLine(join(store.sessionDir(sessionId), 'decisions.ndjson'), JSON.stringify(record));
+  } catch (error) {
+    console.error(`[maestro run decide] failed to append decisions.ndjson: ${(error as Error).message}`);
   }
 }
 
@@ -183,7 +183,7 @@ export function runDecide(
     };
   });
 
-  appendDecisionLog(store.sessionDir(sessionId), {
+  appendDecisionLog(projectRoot, sessionId, {
     type: 'decide',
     point_id: pointId,
     verdict: options.verdict,

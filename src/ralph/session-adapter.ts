@@ -172,7 +172,7 @@ export function resolveRalphSession(
 export interface ChainStep {
   step_id: string;
   command: string;
-  status: string;
+  status: SessionState['orchestration']['chain'][number]['status'];
   run_id: string | null;
   inserted_by: string;
   decision_ref: string | null;

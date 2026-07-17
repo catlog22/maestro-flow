@@ -17,10 +17,14 @@ const chainRetrySchema = z.object({
   max: z.number().int().nonnegative(),
 }).strict();
 
+export const orchestrationStepStatusSchema = z.enum([
+  'pending', 'running', 'completed', 'sealed', 'failed', 'skipped',
+]);
+
 const orchestrationStepSchema = z.object({
   step_id: nonEmptyString,
   command: nonEmptyString,
-  status: nonEmptyString,
+  status: orchestrationStepStatusSchema,
   run_id: z.string().nullable(),
   inserted_by: nonEmptyString,
   decision_ref: z.string().nullable(),
@@ -356,4 +360,3 @@ export type Handoff = z.infer<typeof handoffSchema>;
 export type CommandRun = z.infer<typeof commandRunSchema>;
 export type ArtifactMeta = z.infer<typeof artifactMetaSchema>;
 export type ReportFrontmatter = z.infer<typeof reportFrontmatterSchema>;
-

@@ -1,6 +1,8 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, join, relative } from 'node:path';
+import { join, relative } from 'node:path';
+import { z } from 'zod';
+import { SessionStore } from './store.js';
 
 export interface MutationEntry {
   timestamp: string;
@@ -10,6 +12,15 @@ export interface MutationEntry {
   mutation_type: 'write' | 'append' | 'delete' | 'patch';
   run_id: string | null;
 }
+
+const mutationEntrySchema = z.object({
+  timestamp: z.string(),
+  actor: z.string().min(1),
+  target: z.string(),
+  content_hash: z.string().nullable(),
+  mutation_type: z.enum(['write', 'append', 'delete', 'patch']),
+  run_id: z.string().nullable(),
+}).strict();
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -28,10 +39,9 @@ export function appendMutation(
   entry: Omit<MutationEntry, 'timestamp'>,
 ): void {
   const path = ledgerPath(projectRoot);
-  const dir = dirname(path);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const record: MutationEntry = { timestamp: localISO(), ...entry };
-  appendFileSync(path, JSON.stringify(record) + '\n', 'utf8');
+  mutationEntrySchema.parse(record);
+  new SessionStore(projectRoot).appendLine(path, JSON.stringify(record));
 }
 
 export function logMutation(
@@ -59,5 +69,11 @@ export function readLedger(projectRoot: string): MutationEntry[] {
   return readFileSync(path, 'utf8')
     .split('\n')
     .filter(Boolean)
-    .map(line => JSON.parse(line) as MutationEntry);
+    .map((line, index) => {
+      try {
+        return mutationEntrySchema.parse(JSON.parse(line));
+      } catch (error) {
+        throw new Error(`Invalid mutation ledger entry at line ${index + 1}: ${(error as Error).message}`);
+      }
+    });
 }

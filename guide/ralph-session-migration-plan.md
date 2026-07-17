@@ -10,7 +10,18 @@
 > - "run next 显示当前步骤简要信息,如何调用"
 > - "后续 next 命令也可以推荐多个 run"
 
-## 0. 基线事实(2026-07-16 盘点)
+## 实施与审查状态（2026-07-17）
+
+| 阶段 | 当前状态 | 证据 / 未完成项 |
+|------|----------|-----------------|
+| M1–M4 | 已实现并审查加固 | `62bec6fd` 落地；`957e1954` 补齐迁移幂等、路径边界、chain 完整性与 Protected Data Store |
+| M5 | 已实现并审查加固 | Prompt/镜像已切通用动词；`49892e57` 收敛 Run/chain/lease 单事务并让 Ralph alias 优先读取 Session 1.1 |
+| M6（maestro2） | 已实现 | ledger 独立、consumer fallback、Codex 镜像已落地 |
+| M6（pi 镜像） | **待验收** | `D:\pi-maestro-flow` 当前有并行未提交改动；未获得可归因的 clean test 证据前不得宣称全量完成 |
+
+本文 §0 是 `62bec6fd` 实施前基线，§1–§5 保留目标设计与执行分解；上表是当前事实来源。
+
+## 0. 实施前基线事实（2026-07-16 盘点）
 
 | 事实 | 位置 |
 |------|------|
@@ -19,7 +30,7 @@
 | `run next` session 解析无 engine 过滤,可能绕 lease 误驱 ralph session(已知隐患) | `src/run/next.ts:110-142` |
 | `ralph complete <index>` 携带 verdict 四态 + 信号参数,写 step_details + 调 completeStandardRun | `src/ralph/cmd-complete.ts` / `src/commands/ralph.ts:104-166` |
 | `maestro session` 顶层命令不存在;建链只有内部 `createRalphSession(chain, decisionPoints)` | `src/ralph/session-adapter.ts` |
-| ralph-meta 代码消费方(src/ralph 之外)仅 1 处:coordinator-tracker 读 lifecycle_position/phase/passed_gates(existsSync 兜底) | `src/hooks/coordinator-tracker.ts:195-201` |
+| ralph-meta 代码消费方(src/ralph 之外)仅 1 处:coordinator-tracker 读 lifecycle_position/phase/passed_gates(existsSync 兜底) | `src/hooks/coordinator-tracker.ts` 的 `orchestration.position` fallback block |
 | prompt 层消费方:`.claude/commands/maestro-ralph.md`(FSM)+ `.claude/commands/maestro.md`(/maestro 主协调器,6 处 ralph next/complete 引用)+ `.codex/` 镜像 | `.claude/commands/maestro.md:61,65,96,336,385,466` |
 | 前一规划的"不 bump schema"红线在此废止:完全迁移必然演进 schema,以 1.0 兼容读取替代 | 本文 §5 |
 
@@ -119,7 +130,7 @@ FSM、建链规则(A_BUILD_STEPS)、决策评估(A_AGENT_EVALUATE / GOAL_AUDIT /
 | **M2 complete 内化** | 免参解析 + `--verdict` 四态链推进 + `--decision/--evidence/--reason` 信号参数汇入 handoff;完成输出 next 指针;lease 校验 | runtime.ts, chain.ts, commands/run.ts | 与 ralph complete 四态语义等价的测试;免参闭环测试 |
 | **M3 next 增强** | running → 信息卡;decision → 决策卡;推荐段(三源);`--pick`;lease 校验 | next.ts, commands/run.ts | 各分支输出 fixture 断言;exit code 0/2/3 不变 |
 | **M4 链动词** | session create --chain-file;chain insert/skip/replace(校验 goal_ref/retry/decision 插入规则);createRalphSession 委托通用创建器 | commands/session.ts, 新 chain-admin.ts, session-adapter.ts | 建链→执行→插步→完成 全链 CLI 冒烟 |
-| **M5 prompt 层切换** | maestro-ralph.md **与 maestro.md** 全部动词替换 + 借新能力做瘦身优化(FSM 逻辑不动、invariant 编号保留;删除已被出生包/信息卡/anchor 覆盖的手工上下文拼装与重复调度说明);ralph-executor.md 更新;ralph next/complete/retry 别名化 + 弃用提示;run decide 实装 | .claude/commands/maestro-ralph.md, .claude/commands/maestro.md, agents/ralph-executor.md, commands/ralph.ts, 新 decide.ts | 完整 ralph 冒烟:建链→执行→decision→fix 插步→seal;两份 prompt 文件零 session.json 直写指令、零 ralph next/complete 旧动词残留 |
+| **M5 prompt 层切换** | maestro-ralph.md **与 maestro.md** 全部动词替换 + 借新能力做瘦身优化(FSM 逻辑不动、invariant 编号保留;删除已被出生包/信息卡/anchor 覆盖的手工上下文拼装与重复调度说明);ralph-executor.md 更新;ralph next/complete/retry 别名化 + 弃用提示;run decide 实装 | .claude/commands/maestro-ralph.md, .claude/commands/maestro.md, agents/ralph-executor.md, commands/ralph.ts, 新 decide.ts | 完整 ralph 冒烟:建链→执行→decision→fix 插步→seal；对 `.claude/commands/maestro-ralph.md`、`.claude/commands/maestro.md`、`.claude/agents/ralph-executor.md`、`.codex/skills/maestro-ralph/SKILL.md`、`.codex/agents/ralph-executor.toml` 全量检查：零 direct authority-file write 指令、零 executable `ralph next/complete/retry` 旧动词 |
 | **M6 清理 + 镜像** | coordinator-tracker 改读 orchestration.position(ralph-meta 兜底);cmd-session/cmd-check 改读 session.json;verification-ledger 独立文件;session-adapter 收缩;codex sync;pi 镜像对齐 | hooks/coordinator-tracker.ts, ralph/cmd-*.ts, .codex/, D:\pi-maestro-flow | lint + vitest + build 全绿;lint:session-run 无新增;pi 测试全绿 |
 
 **依赖序**:M1 → {M2, M3, M4} → {M5, M6}。M5 之前 ralph 旧路径全程可用(别名 + 双 schema 读),
@@ -160,3 +171,4 @@ FSM、建链规则(A_BUILD_STEPS)、决策评估(A_AGENT_EVALUATE / GOAL_AUDIT /
 - 只改 D:\maestro2 源(及 M6 的 pi 镜像仓),不碰 ~/.maestro/ 安装副本。
 - src/run 不得 import src/ralph(方向不变:ralph → run)。
 - 编排智能不下沉:任何 FSM/评估逻辑不得写入 runtime 代码。
+- 跨仓验收不得借用脏工作树结果：M6 的 pi 镜像必须在可归因的提交或隔离 worktree 中完成测试后再标记完成。

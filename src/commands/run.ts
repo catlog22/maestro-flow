@@ -361,6 +361,9 @@ export function registerRunCommand(program: Command): void {
     .option('--workflow-root <path>', 'project root', process.cwd())
     .action((target: string, opts: { actor: string; type: string; hash?: string; runId?: string; workflowRoot: string }) => {
       try {
+        if (!['write', 'append', 'delete', 'patch'].includes(opts.type)) {
+          throw new Error(`invalid mutation type "${opts.type}" (write|append|delete|patch)`);
+        }
         const root = resolve(opts.workflowRoot);
         logMutation(root, opts.actor, resolve(root, target), {
           contentHash: opts.hash,
