@@ -120,8 +120,10 @@ You implement a single task from the execution plan. Each task is executed atomi
   - `issue_id` -- Linked issue for commit message annotation
 
 ## Output Location
-- **Scratch execution**: `.workflow/scratch/{slug}/.summaries/TASK-{NNN}-summary.md`
-- **Task status updates**: In-place update of `.task/TASK-{NNN}.json` (set top-level `status`)
+Caller-provided paths take precedence (run mode injects them in the dispatch prompt).
+- **Run mode (default)**: summary at `{run_dir}/outputs/summaries/{task-id}.md`
+- **Ad-hoc (no run context)**: `.workflow/scratch/{slug}/.summaries/TASK-{NNN}-summary.md`
+- **Task status updates**: In-place update of the caller-provided task JSON (set top-level `status`)
 - **Git commits**: One atomic commit per task in the project repository
 
 ## Error Behavior

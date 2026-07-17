@@ -33,7 +33,7 @@ You research the implementation approach for a specific phase of the roadmap. Yo
 - Research summary from `.workflow/research/SUMMARY.md` (if available)
 
 ## Output
-`.workflow/scratch/{slug}/research.md` (resolved via state.json artifact registry).
+Research document at the caller-provided path (run mode: `{run_dir}/outputs/research.md`; ad-hoc: `.workflow/scratch/{slug}/research.md`). Some callers request return-only markdown — return the document as final text without writing files.
 
 Structure:
 ```
@@ -69,7 +69,7 @@ Structure:
 N/A -- produces markdown research document
 
 ## Output Location
-`.workflow/scratch/{slug}/research.md`
+Caller-provided path takes precedence. Run mode: `{run_dir}/outputs/research.md`. Ad-hoc (no run context): `.workflow/scratch/{slug}/research.md`. When the caller requests return-only output, write no files.
 
 ## Error Behavior
 - If codebase analysis (`.workflow/codebase/`) is unavailable, note as limitation and proceed with external research only

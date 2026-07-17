@@ -82,6 +82,7 @@ session_id: <session-id>
 team_name: <team-name>
 requirement: <task-description>
 inner_loop: <true|false>
+run_dir: <run-dir from team-session.json run.run_dir>
 
 ## Progress Milestones
 session_id: <session-id>
@@ -114,6 +115,7 @@ session: <session-folder>
 session_id: <session-id>
 team_name: <team-name>
 requirement: <task-description>
+run_dir: <run-dir from team-session.json run.run_dir>
 
 ## Progress Milestones
 session_id: <session-id>

@@ -43,7 +43,7 @@ N/A -- reads code artifacts, not task JSON.
 - **Codebase docs** (if `.workflow/codebase/` exists) — `ARCHITECTURE.md` for expected interface contracts and module boundaries across phases
 
 ## Output Location
-`.workflow/scratch/{milestone}/integration-audit.md`
+Caller-provided path takes precedence. Run mode: `{run_dir}/outputs/integration-audit.md`. Ad-hoc (no run context): `.workflow/scratch/{milestone}/integration-audit.md`.
 
 ## Output
 Integration audit report at the output location above:

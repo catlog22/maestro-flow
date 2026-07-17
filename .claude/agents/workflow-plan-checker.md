@@ -46,7 +46,7 @@ You validate the quality of execution plans before they proceed to implementatio
 - **Project specs** — `maestro load --type spec --category arch`: verify tasks comply with architecture constraints and module boundaries
 
 ## Output Location
-`.workflow/scratch/{slug}/plan-check.md`
+Caller-provided path takes precedence. Run mode: `{run_dir}/outputs/plan-check.json` (report content as structured JSON). Ad-hoc (no run context): `.workflow/scratch/{slug}/plan-check.md`.
 
 ## Output
 Check report written to the output location above:

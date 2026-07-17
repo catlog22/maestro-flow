@@ -31,6 +31,7 @@ Extract these fields from the prompt:
 | `team_name` | Yes | Team name for SendMessage routing |
 | `requirement` | Yes | Original task/requirement description |
 | `inner_loop` | Yes | `true` or `false` -- whether to loop through same-prefix tasks |
+| `run_dir` | No | Run directory for formal deliverables; if absent, resolve from `<session>/team-session.json` `run.run_dir`; sessions without a Run fall back to `<session>/artifacts/` |
 
 ### 2. Load Role Spec
 
@@ -88,7 +89,7 @@ During Phase 2-4 execution, if you detect codebase signals relevant to specialis
 
 After execution, publish contributions:
 
-1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md`
+1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md` (run_dir per the Input contract resolution: prompt field > team-session.json `run.run_dir` > `<session>/artifacts/` fallback)
 2. Prepare state data for the reporting phase
 3. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
 
@@ -195,7 +196,7 @@ Determine report variant based on loop state:
    - Multiple ready tasks or checkpoint: SendMessage to coordinator
 
 ## Input
-- Prompt with role assignment fields (role, role_spec, session, session_id, team_name, requirement, inner_loop)
+- Prompt with role assignment fields (role, role_spec, session, session_id, team_name, requirement, inner_loop, optional run_dir)
 - Role spec file containing frontmatter metadata and execution instructions
 - Session folder with wisdom files and upstream artifacts
 - Task list accessible via TaskList/TaskGet

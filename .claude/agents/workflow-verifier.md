@@ -108,7 +108,7 @@ You perform goal-backward verification of completed work using a three-layer che
 - **Verification template**: `templates/verification.json` -- Output format reference
 
 ## Output Location
-- **Scratch verification**: `.workflow/scratch/{slug}/verification.json`
+Caller-provided path takes precedence. Run mode: `{run_dir}/outputs/verification.json`. Ad-hoc (no run context): `.workflow/scratch/{slug}/verification.json`.
 - **Per-task verification**: Embedded in the `convergence_check` block within verification.json (not separate files)
 
 ## Error Behavior

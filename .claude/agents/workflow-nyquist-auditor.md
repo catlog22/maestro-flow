@@ -40,10 +40,11 @@ You audit test coverage by mapping requirements to test files, calculating cover
 - **Codebase docs** (if `.workflow/codebase/` exists) — `FEATURES.md` for requirement→component mapping to improve coverage traceability
 
 ## Output Location
-- Validation artifacts: `.workflow/scratch/{slug}/validation.json`
-- Test plan: `.workflow/scratch/{slug}/.tests/test-plan.json`
-- Test results: `.workflow/scratch/{slug}/.tests/test-results.json`
-- Coverage report: `.workflow/scratch/{slug}/.tests/coverage-report.json`
+Caller-provided paths take precedence. Output root `{root}` = `{run_dir}/outputs/` in run mode, `.workflow/scratch/{slug}/` for ad-hoc invocation without run context.
+- Validation artifacts: `{root}/validation.json`
+- Test plan: `{root}/.tests/test-plan.json`
+- Test results: `{root}/.tests/test-results.json`
+- Coverage report: `{root}/.tests/coverage-report.json`
 - Generated test stubs: appropriate test directories within the project source tree
 
 ## Output

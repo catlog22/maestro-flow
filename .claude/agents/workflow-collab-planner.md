@@ -134,8 +134,9 @@ You are a collaborative planner that works within a pre-allocated task ID range.
 - Cross-boundary dependencies use the same `depends_on` field as standard tasks
 
 ## Output Location
-- **Scratch tasks**: `.workflow/scratch/{slug}/.task/TASK-{NNN}.json` (within assigned ID range only)
-- **Plan notes**: `.workflow/scratch/{slug}/plan-note.md` (append your section, do not overwrite others)
+Paths injected by the coordinating planner take precedence.
+- **Task files**: `{run_dir}/outputs/tasks/TASK-{NNN}.json` in run mode, `.workflow/scratch/{slug}/.task/TASK-{NNN}.json` ad-hoc (within assigned ID range only)
+- **Plan notes**: `{run_dir}/outputs/plan-note.md` in run mode, `.workflow/scratch/{slug}/plan-note.md` ad-hoc (append your section, do not overwrite others)
 - **Never write**: plan.json (that is the coordinating planner's responsibility)
 
 ## Error Behavior

@@ -187,9 +187,11 @@ These rules prevent over-splitting that wastes tokens on unnecessary agent spawn
 - Field `related_success_criteria` is deprecated and removed from task template; SC-to-Task traceability is handled via `convergence.criteria` referencing roadmap success criteria
 
 ## Output Location
-- **Scratch planning**: `.workflow/scratch/{slug}/plan.json` and `.workflow/scratch/{slug}/.task/TASK-{NNN}.json`
-- **Plan notes** (collab mode): `.workflow/scratch/{slug}/plan-note.md`
-- **Quick mode**: Same paths, fewer task files
+Caller-provided paths take precedence (run mode injects them in the dispatch prompt).
+- **Run mode (default)**: `{run_dir}/outputs/plan.json` and `{run_dir}/outputs/tasks/TASK-{NNN}.json`
+- **Quick mode**: caller injects `${QUICK_DIR}` (= `{run_dir}/outputs/`) with `.task/` scaffolding — follow the injected paths
+- **Plan notes** (collab mode): `{run_dir}/outputs/plan-note.md`
+- **Ad-hoc (no run context)**: `.workflow/scratch/{slug}/plan.json` and `.workflow/scratch/{slug}/.task/TASK-{NNN}.json`
 
 ## Error Behavior
 - **Missing context.md**: Stop and report -- planning requires context; do not guess

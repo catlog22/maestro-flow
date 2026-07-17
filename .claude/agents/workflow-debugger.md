@@ -88,7 +88,7 @@ Each line in evidence.ndjson:
 - Reference: `templates/verification.json` for understanding gap format
 
 ## Output Location
-- **Scratch debugging**: `.workflow/scratch/debug-{slug}/understanding.md` and `.workflow/scratch/debug-{slug}/evidence.ndjson`
+Caller-provided paths take precedence. Run mode: `{run_dir}/outputs/understanding.md` and `{run_dir}/outputs/evidence.ndjson`. Ad-hoc (no run context): `.workflow/scratch/debug-{slug}/understanding.md` and `.workflow/scratch/debug-{slug}/evidence.ndjson`.
 - **Code fixes**: Applied directly to project source files (not in .debug directory)
 
 ## Error Behavior
