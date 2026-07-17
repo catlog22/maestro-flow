@@ -1,7 +1,7 @@
 export const meta = {
   name: 'wf-grill',
   description: 'Adversarial stress-testing with meta-skeptic challenge and 3-vote verdict',
-  whenToUse: 'Accelerate maestro-grill with parallel branch probing + meta-adversarial synthesis + 3-vote verdict',
+  whenToUse: 'Accelerate the grill step with parallel branch probing + meta-adversarial synthesis + 3-vote verdict',
   phases: [
     { title: 'Explore', detail: 'Codebase evidence gathering via cli-explore-agent' },
     { title: 'Stress', detail: 'Parallel adversarial branch probing' },

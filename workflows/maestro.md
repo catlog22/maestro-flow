@@ -146,7 +146,7 @@ const chainMap = {
   // ── Single-step ──
   'status':             [{ cmd: 'manage status' }],
   'init':               [{ cmd: 'maestro-init' }],
-  'grill':              [{ cmd: 'maestro-grill', args: '"{description}"' }],
+  'grill':              [{ cmd: 'grill', args: '"{description}"' }],
   'blueprint':          [{ cmd: 'blueprint', args: '"{description}"' }],
   'analyze-macro':      [{ cmd: 'analyze', args: '"{description}"' }],
   'analyze':            [{ cmd: 'analyze', args: '{phase}' }],
@@ -202,7 +202,7 @@ const chainMap = {
   'full-lifecycle':       [{ cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'review', args: '{phase}' }, { cmd: 'test', args: '{phase}' }, { cmd: 'maestro-session-seal' }, { cmd: 'harvest', args: '--auto' }],
   'spec-driven':          [{ cmd: 'maestro-init' }, { cmd: 'roadmap', args: '--mode full "{description}"' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
   'roadmap-driven':       [{ cmd: 'maestro-init' }, { cmd: 'roadmap', args: '"{description}"' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
-  'grill-driven':         [{ cmd: 'maestro-grill', args: '"{description}"' }, { cmd: 'brainstorm', args: '"{description}" --from grill:{grill_id}' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
+  'grill-driven':         [{ cmd: 'grill', args: '"{description}"' }, { cmd: 'brainstorm', args: '"{description}" --from grill:{grill_id}' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
   'blueprint-driven':     [{ cmd: 'maestro-init' }, { cmd: 'blueprint', args: '"{description}"' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
   'brainstorm-driven':    [{ cmd: 'brainstorm', args: '"{description}"' }, { cmd: 'plan', args: '{phase}' }, { cmd: 'execute', args: '{phase}' }, { cmd: 'harvest', args: '--auto' }],
   'brainstorm_visualize': [{ cmd: 'brainstorm-visualize', args: '"{description}"' }],

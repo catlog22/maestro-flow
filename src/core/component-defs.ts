@@ -4,10 +4,11 @@
 // Both `maestro install` (CLI) and the Dashboard wizard import from here.
 // ---------------------------------------------------------------------------
 
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import { createRequire } from 'node:module';
 import { paths } from '../config/paths.js';
+import { DEFAULT_ENTRY_STEPS } from './entry-command-generator.js';
 
 const require = createRequire(import.meta.url);
 
@@ -214,6 +215,26 @@ export const COMPONENT_DEFS: ComponentDef[] = [
     mandatory: true,
     category: 'commands',
     platform: 'claude',
+  },
+  {
+    id: 'commands-entry',
+    label: 'Entry Commands (run steps)',
+    description: 'Thin slash-command wrappers that drive `maestro run` for selected steps (grill, collab). Fine-grained: maestro install entry-commands --steps ...',
+    sourcePath: 'prepare',
+    sourceCountDir: 'prepare',
+    fileFilter: (name) => DEFAULT_ENTRY_STEPS.includes(name.replace(/\.md$/, '')),
+    target: (mode, projectPath) =>
+      mode === 'global'
+        ? join(homedir(), '.claude', 'commands')
+        : join(projectPath, '.claude', 'commands'),
+    alwaysGlobal: false,
+    category: 'commands',
+    platform: 'claude',
+    defaultSelected: false,
+    build: (claudeDir, targetDir) => {
+      const { buildEntryCommands } = require('./entry-command-generator.js');
+      return buildEntryCommands(dirname(claudeDir), targetDir);
+    },
   },
   {
     id: 'agents',

@@ -664,6 +664,8 @@ export function adaptCodebaseDocIndex(parsed: unknown, sourcePath: string): Wiki
 const RUN_COMMAND_CATEGORY: Record<string, string> = {
   grill: 'arch',
   'maestro-grill': 'arch',
+  collab: 'arch',
+  'maestro-collab': 'arch',
   brainstorm: 'arch',
   'maestro-brainstorm': 'arch',
   blueprint: 'arch',

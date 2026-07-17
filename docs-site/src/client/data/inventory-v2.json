@@ -77,7 +77,7 @@
       "name": "maestro",
       "file": ".claude/commands/maestro.md",
       "category": "maestro",
-      "description": "Auto-route intent to optimal command chain — the main entry point for all maestro operations",
+      "description": "Auto-route intent to optimal command chain — default multi-step closed-loop orchestration; stepwise interactive execution via /maestro-next",
       "argumentHint": "<intent> [-y] [-c] [--dry-run] [--super]"
     },
     {
@@ -98,22 +98,8 @@
       "name": "maestro-next",
       "file": ".claude/commands/maestro-next.md",
       "category": "maestro",
-      "description": "Single-step recommendation engine — route intent to the best next step",
+      "description": "Default interactive entry for development intents — recommend and execute one atomic step; multi-step work builds a user-confirmed manual-engine chain, walks stepwise, or hands off to /maestro",
       "argumentHint": "<intent>|--list|--suggest [-y] [--dry-run]"
-    },
-    {
-      "name": "maestro-collab",
-      "file": ".claude/commands/maestro-collab.md",
-      "category": "maestro",
-      "description": "Multi-CLI collaborative analysis — fan-out to multiple CLI tools, cross-verify, synthesize",
-      "argumentHint": "<requirement> [--tools agy,qwen,claude] [--mode analysis|write] [--rule <template>] [-y]"
-    },
-    {
-      "name": "maestro-grill",
-      "file": ".claude/commands/maestro-grill.md",
-      "category": "maestro",
-      "description": "Socratic pressure-test a plan/idea against codebase reality — adversarial questioning with code evidence",
-      "argumentHint": "<topic|plan> [-y] [-c] [--from <source>] [--depth shallow|standard|deep]"
     },
     {
       "name": "maestro-impeccable",
@@ -192,7 +178,7 @@
       "name": "learn",
       "file": ".claude/commands/learn.md",
       "category": "learn",
-      "description": "Understand code through guided reading, investigation, pattern extraction, or second opinions. Unified command.",
+      "description": "User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual /learn only; auto code analysis routes via /maestro-next.",
       "argumentHint": "follow|investigate|decompose|consult [args...]",
       "subcommands": ["follow", "investigate", "decompose", "consult"]
     },

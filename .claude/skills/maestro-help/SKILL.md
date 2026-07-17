@@ -189,7 +189,7 @@ $ARGUMENTS → Parse:
 | `roadmap` | 路线图编排 — 消费上游 context，纯 Milestone > Phase 分解 |
 | `quick` | 快速任务 |
 | `/maestro-overlay` | Overlay 管理 — 自然语言创建，或 `--amend` 从信号自动生成修正补丁 |
-| `/maestro-grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
+| `grill` | 压力测试 — 对计划或需求进行代码库现实性压力测试 |
 | `/maestro-next` | 智能导航 — 检测状态并推荐下一步最优命令 |
 | `/maestro-ralph --engine swarm` | Swarm 并行加速器 — 多 agent 并发执行 |
 | `/maestro-ralph --engine universal` | 动态对抗工作流生成器 |
@@ -290,7 +290,7 @@ Odyssey 长周期循环（独立路径）
 | Bug 追踪 | Issue 闭环 | `/manage issue discover` → `/manage issue create` → analyze/plan/execute → close |
 | 全自动 | /maestro 入口 | `/maestro -y "任务描述"` |
 | 代码审查 | 质量管线 | `review` → `auto-test` → `test` |
-| 团队开发 | Team Lite | `/maestro-collab` |
+| 多 CLI 交叉验证 | Collab step | `collab "需求描述"` |
 | 长周期调试 | Odyssey 深度循环 | `/odyssey "问题描述" --mode debug` |
 | 长周期改进 | Odyssey 深度循环 | `/odyssey "改进目标" --mode improve` |
 | 需求迭代 | Odyssey 深度循环 | `/odyssey "需求描述" --mode planex` |
