@@ -4,10 +4,15 @@
 // overlaid, quality/auto/boundary honored, and ralph-meta.json written.
 
 import { describe, it, beforeEach, afterEach, expect } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createRalphSession, readMeta, type ChainStep } from '../session-adapter.js';
+import {
+  createRalphSession,
+  readMeta,
+  resolveRalphSession,
+  type ChainStep,
+} from '../session-adapter.js';
 import { SessionStore } from '../../run/store.js';
 
 let root: string;
@@ -68,5 +73,29 @@ describe('createRalphSession (delegates to createChainSession)', () => {
     expect(session.orchestration.auto_mode).toBe(false);
     expect(session.orchestration.chain).toHaveLength(0);
     expect(result.meta.lifecycle_position).toBe('analyze');
+  });
+
+  it('fails closed when an explicit legacy metadata file is malformed', () => {
+    const id = 'ralph-20260716-121212';
+    const result = createRalphSession(root, id, 'corrupt legacy metadata');
+    writeFileSync(join(result.sessionDir, 'ralph-meta.json'), '{broken', 'utf-8');
+
+    expect(() => readMeta(result.sessionDir)).toThrow(/invalid legacy ralph-meta\.json/);
+    expect(() => resolveRalphSession(root, id)).toThrow(/invalid legacy ralph-meta\.json/);
+  });
+
+  it('rejects known legacy metadata fields with invalid runtime types', () => {
+    const id = 'ralph-20260716-131313';
+    const result = createRalphSession(root, id, 'invalid legacy lease');
+    writeFileSync(join(result.sessionDir, 'ralph-meta.json'), JSON.stringify({
+      lifecycle_position: 'execute',
+      phase: null,
+      milestone: 'M1',
+      execution_owner: 'ralph-execute',
+      owner_epoch: 'not-a-number',
+      lease_id: 'lease-1',
+    }), 'utf-8');
+
+    expect(() => readMeta(result.sessionDir)).toThrow(/owner_epoch/);
   });
 });

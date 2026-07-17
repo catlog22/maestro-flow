@@ -10,6 +10,7 @@
 
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { z } from 'zod';
 import { SessionStore, type SessionBundle } from '../run/store.js';
 import type { OrchestrationLease, SessionState } from '../run/schemas.js';
 import { createChainSession, chainStepId } from '../run/chain-admin.js';
@@ -82,6 +83,113 @@ export interface RalphStepDetail {
   concerns?: string | null;
 }
 
+const ralphTaskDecompositionItemSchema = z.object({
+  id: z.string(),
+  goal: z.string(),
+  boundary: z.string().optional(),
+  done_when: z.string().optional(),
+  evidence: z.string().optional(),
+  lifecycle: z.array(z.string()).optional(),
+  status: z.enum(['pending', 'done', 'superseded']),
+  completion_confirmed: z.boolean().optional(),
+  completed_at: z.string().nullable().optional(),
+  superseded_by: z.string().nullable().optional(),
+  superseded_at: z.string().nullable().optional(),
+  origin: z.string().nullable().optional(),
+}).passthrough();
+
+const goalSnapshotSchema = z.object({
+  id: z.string(),
+  goal: z.string(),
+  done_when: z.string().optional(),
+}).passthrough();
+
+const goalChangelogEntrySchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  change_type: z.enum(['modify', 'add', 'remove', 'boundary']),
+  reason: z.string(),
+  impact_assessment: z.object({
+    risk_level: z.enum(['low', 'medium', 'high']),
+    invalidated_steps: z.array(z.number().int()),
+    new_steps_inserted: z.number().int(),
+  }).passthrough().optional(),
+  before: z.object({
+    goals: z.array(goalSnapshotSchema),
+    boundary_snippet: z.string().optional(),
+  }).passthrough(),
+  after: z.object({
+    goals: z.array(goalSnapshotSchema),
+    boundary_snippet: z.string().optional(),
+  }).passthrough(),
+}).passthrough();
+
+const verificationLedgerEntrySchema = z.object({
+  authority: z.string(),
+  dimension: z.string(),
+  subject_ids: z.array(z.string()),
+  evidence_hashes: z.record(z.string(), z.string()),
+  scope_hash: z.string(),
+  verdict: z.string(),
+  confidence: z.enum(['high', 'medium', 'low']),
+  concerns: z.string().nullable().optional(),
+  risk_ceiling: z.enum(['low', 'medium', 'high']),
+  created_at: z.string(),
+}).passthrough();
+
+const ralphStepDetailSchema = z.object({
+  args: z.string(),
+  stage: z.string(),
+  scope: z.enum(['phase', 'standalone', 'milestone']).nullable().optional(),
+  goal_ref: z.string().nullable().optional(),
+  skill: z.string(),
+  retry_count: z.number().int().nonnegative().optional(),
+  max_retries: z.number().int().nonnegative().optional(),
+  completion_status: z.enum(['DONE', 'DONE_WITH_CONCERNS', 'NEEDS_RETRY', 'BLOCKED']).nullable().optional(),
+  completion_evidence: z.union([z.string(), z.array(z.string())]).nullable().optional(),
+  completion_summary: z.string().nullable().optional(),
+  completion_decisions: z.array(z.string()).nullable().optional(),
+  completion_caveats: z.string().nullable().optional(),
+  completion_deferred: z.array(z.string()).nullable().optional(),
+  concerns: z.string().nullable().optional(),
+}).passthrough();
+
+// Legacy metadata remains extensible for one-version compatibility, but every
+// field this adapter consumes is runtime-validated. Unknown fields survive;
+// known fields with the wrong type fail closed instead of disabling a lease or
+// silently erasing orchestration context.
+const ralphMetaSchema: z.ZodType<RalphMeta> = z.object({
+  lifecycle_position: z.string(),
+  phase: z.number().int().nullable(),
+  phase_is_new: z.boolean().optional(),
+  milestone: z.string(),
+  planning_mode: z.enum(['unified', 'independent']).optional(),
+  scope_verdict: z.enum(['large', 'medium', 'small', 'unknown']).nullable().optional(),
+  analyze_macro_id: z.string().nullable().optional(),
+  blueprint_id: z.string().nullable().optional(),
+  cli_tool: z.string().optional(),
+  platform: z.enum(['claude', 'codex', 'agent', 'agy']).optional(),
+  passed_gates: z.array(z.string()).optional(),
+  context: z.object({
+    issue_id: z.string().nullable().optional(),
+    scratch_dir: z.string().nullable().optional(),
+    plan_dir: z.string().nullable().optional(),
+    analysis_dir: z.string().nullable().optional(),
+    brainstorm_dir: z.string().nullable().optional(),
+    blueprint_dir: z.string().nullable().optional(),
+  }).passthrough().optional(),
+  decomposition_owner: z.string().optional(),
+  execution_owner: z.string().optional(),
+  owner_epoch: z.number().int().nonnegative().optional(),
+  lease_id: z.string().optional(),
+  execution_criteria: z.array(z.string()).optional(),
+  task_decomposition: z.array(ralphTaskDecompositionItemSchema).optional(),
+  task_decomposition_all_done: z.boolean().optional(),
+  goal_changelog: z.array(goalChangelogEntrySchema).optional(),
+  verification_ledger: z.array(verificationLedgerEntrySchema).optional(),
+  step_details: z.record(z.string(), ralphStepDetailSchema).optional(),
+}).passthrough();
+
 // ── Resolved ralph session (what callers get) ────────────────────────────────
 
 export interface ResolvedRalphSession {
@@ -109,17 +217,19 @@ export function readMeta(sessionDir: string): RalphMeta {
   const path = metaPath(sessionDir);
   if (!existsSync(path)) return defaultMeta();
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as RalphMeta;
-  } catch {
-    return defaultMeta();
+    return ralphMetaSchema.parse(JSON.parse(readFileSync(path, 'utf-8')));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`invalid legacy ralph-meta.json at ${path}: ${detail}`);
   }
 }
 
 export function writeMeta(sessionDir: string, meta: RalphMeta): void {
   const path = metaPath(sessionDir);
+  const validated = ralphMetaSchema.parse(meta);
   mkdirSync(sessionDir, { recursive: true });
   const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify(meta, null, 2), 'utf-8');
+  writeFileSync(tmp, JSON.stringify(validated, null, 2), 'utf-8');
   renameSync(tmp, path);
 }
 
