@@ -10,29 +10,40 @@
 // ralph-meta.json is left untouched (non-destructive migration).
 // ---------------------------------------------------------------------------
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { z } from 'zod';
 import { join } from 'node:path';
+import { SessionStore } from '../run/store.js';
 import type { VerificationLedgerEntry } from './status-schema.js';
 
-interface VerificationLedgerFile {
-  schema_version: 'verification-ledger/1.0';
-  entries: VerificationLedgerEntry[];
-}
+const verificationLedgerEntrySchema = z.object({
+  authority: z.string(),
+  dimension: z.string(),
+  subject_ids: z.array(z.string()),
+  evidence_hashes: z.record(z.string(), z.string()),
+  scope_hash: z.string(),
+  verdict: z.string(),
+  confidence: z.enum(['high', 'medium', 'low']),
+  concerns: z.string().nullable().optional(),
+  risk_ceiling: z.enum(['low', 'medium', 'high']),
+  created_at: z.string(),
+}).strict();
 
-function ledgerPath(sessionDir: string): string {
-  return join(sessionDir, 'verification-ledger.json');
+const verificationLedgerFileSchema = z.object({
+  schema_version: z.literal('verification-ledger/1.0'),
+  entries: z.array(verificationLedgerEntrySchema),
+}).strict();
+
+type VerificationLedgerFile = z.infer<typeof verificationLedgerFileSchema>;
+
+function ledgerPath(store: SessionStore, sessionId: string): string {
+  return join(store.sessionDir(sessionId), 'verification-ledger.json');
 }
 
 /** Read the independent verification-ledger.json (empty when absent/corrupt). */
-export function readLedgerFile(sessionDir: string): VerificationLedgerEntry[] {
-  const path = ledgerPath(sessionDir);
-  if (!existsSync(path)) return [];
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<VerificationLedgerFile>;
-    return Array.isArray(parsed.entries) ? parsed.entries : [];
-  } catch {
-    return [];
-  }
+export function readLedgerFile(projectRoot: string, sessionId: string): VerificationLedgerEntry[] {
+  const store = new SessionStore(projectRoot);
+  const initial: VerificationLedgerFile = { schema_version: 'verification-ledger/1.0', entries: [] };
+  return store.readJsonFile(ledgerPath(store, sessionId), verificationLedgerFileSchema, initial).entries;
 }
 
 /** True when two ledger entries address the same authority + dimension + subjects. */
@@ -51,10 +62,11 @@ function sameKey(a: VerificationLedgerEntry, b: VerificationLedgerEntry): boolea
  * conflict). Dropping duplicate keys keeps `find`-style queries deterministic.
  */
 export function mergedLedger(
-  sessionDir: string,
+  projectRoot: string,
+  sessionId: string,
   legacy: VerificationLedgerEntry[],
 ): VerificationLedgerEntry[] {
-  const fileEntries = readLedgerFile(sessionDir);
+  const fileEntries = readLedgerFile(projectRoot, sessionId);
   const merged = [...fileEntries];
   for (const entry of legacy) {
     if (!merged.some(existing => sameKey(existing, entry))) merged.push(entry);
@@ -67,13 +79,16 @@ export function mergedLedger(
  * entry with the same authority + dimension + subject set. Atomic write via a
  * temp file + rename (no in-place truncation). ralph-meta.json is not touched.
  */
-export function upsertLedgerFile(sessionDir: string, entry: VerificationLedgerEntry): void {
-  mkdirSync(sessionDir, { recursive: true });
-  const entries = readLedgerFile(sessionDir).filter(existing => !sameKey(existing, entry));
-  entries.push(entry);
-  const file: VerificationLedgerFile = { schema_version: 'verification-ledger/1.0', entries };
-  const path = ledgerPath(sessionDir);
-  const tmp = `${path}.tmp`;
-  writeFileSync(tmp, JSON.stringify(file, null, 2), 'utf-8');
-  renameSync(tmp, path);
+export function upsertLedgerFile(
+  projectRoot: string,
+  sessionId: string,
+  entry: VerificationLedgerEntry,
+): void {
+  const store = new SessionStore(projectRoot);
+  verificationLedgerEntrySchema.parse(entry);
+  const initial: VerificationLedgerFile = { schema_version: 'verification-ledger/1.0', entries: [] };
+  store.updateJsonFile(ledgerPath(store, sessionId), verificationLedgerFileSchema, initial, draft => {
+    draft.entries = draft.entries.filter(existing => !sameKey(existing, entry));
+    draft.entries.push(entry);
+  });
 }

@@ -43,6 +43,7 @@ import {
   nextPendingIndex,
 } from './chain.js';
 import { checkLease, claimLease, type LeaseClaim } from './lease.js';
+import { validateSessionId } from './ids.js';
 import {
   ensureSessionProjection,
   localISO,
@@ -307,18 +308,9 @@ function projectSessionEntry(session: SessionState): ProjectSessionEntry {
   };
 }
 
-function validateSessionSlug(value: string): void {
-  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(value)) {
-    throw new Error(`Invalid session ID: "${value}". Use lowercase alphanumeric + hyphens (e.g. 20260715-odyssey-jwt-auth).`);
-  }
-  if (value.length > 128) {
-    throw new Error(`Session ID too long (${value.length} > 128): "${value.slice(0, 40)}..."`);
-  }
-}
-
 function resolveSessionId(store: SessionStore, state: StateJsonV2, requested: string | undefined, intent: string, command: string): string {
   if (requested) {
-    validateSessionSlug(requested);
+    validateSessionId(requested);
     return requested;
   }
   const intentKey = slug(intent, command);

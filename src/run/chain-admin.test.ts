@@ -114,6 +114,14 @@ describe('createChainSession — predefined chain', () => {
     expect(reloaded.orchestration.chain).toHaveLength(4);
   });
 
+  it('rejects path traversal and duplicate explicit session IDs', () => {
+    const projectRoot = root();
+    expect(() => createChainSession(projectRoot, '../escape', { intent: 'x' })).toThrow(/Invalid session ID/);
+    createChainSession(projectRoot, 'fixed-20260717-000000', { intent: 'first' });
+    expect(() => createChainSession(projectRoot, 'fixed-20260717-000000', { intent: 'second' }))
+      .toThrow(/already exists/);
+  });
+
   it('--intent overrides the intent inside the chain definition', () => {
     const projectRoot = root();
     const { sessionId } = createChainSession(projectRoot, 'feat-z', {
@@ -154,6 +162,13 @@ describe('chainDefinitionSchema — input validation', () => {
 
   it('rejects unknown top-level keys (strict)', () => {
     expect(() => chainDefinitionSchema.parse({ intent: 'x', steps: [{ command: 'a' }], bogus: 1 })).toThrow();
+  });
+
+  it('rejects decision steps without a matching decision point', () => {
+    expect(() => chainDefinitionSchema.parse({
+      steps: [{ command: 'gate', decision_ref: 'DP-missing' }],
+      decision_points: [],
+    })).toThrow(/no matching decision point/);
   });
 });
 
@@ -259,6 +274,24 @@ describe('insertChainStep', () => {
     });
     expect(inserted.decision_ref).toBe('post-goal-audit');
     expect(inserted.retry).toBeUndefined();
+    expect(store.readBundle(sessionId).session.orchestration.decision_points[0]).toMatchObject({
+      point_id: 'post-goal-audit', status: 'pending', retry_count: 0, max_retries: 2,
+    });
+  });
+
+  it('keeps inserted step IDs unique when the command matches the pending tail', () => {
+    const projectRoot = root();
+    const sessionId = seededSession(projectRoot, ['running', 'pending']);
+    const store = new SessionStore(projectRoot);
+    const chain = store.readBundle(sessionId).session.orchestration.chain;
+    const inserted = insertChainStep(projectRoot, sessionId, {
+      after: chain[0].step_id,
+      command: chain[1].command,
+      insertedBy: 'test',
+    });
+    const ids = store.readBundle(sessionId).session.orchestration.chain.map(step => step.step_id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(inserted.step_id).not.toBe(chain[1].step_id);
   });
 });
 

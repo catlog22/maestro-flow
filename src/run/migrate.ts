@@ -73,8 +73,8 @@ function readRalphMeta(sessionDir: string): RalphMetaLoose | null {
   if (!existsSync(path)) return null;
   try {
     return JSON.parse(readFileSync(path, 'utf-8')) as RalphMetaLoose;
-  } catch {
-    return null;
+  } catch (error) {
+    throw new Error(`invalid legacy ralph-meta.json at ${path}: ${(error as Error).message}`);
   }
 }
 
@@ -138,11 +138,6 @@ export function migrateSession(projectRoot: string, sessionId: string): MigrateR
   const session = bundle.session;
   const orch = session.orchestration;
 
-  // Already migrated: 1.1 file that already carries the promoted blocks.
-  if (session.schema_version === 'session/1.1' && (orch.position !== null || orch.decomposition !== null)) {
-    return { session_id: sessionId, status: 'already-migrated', had_ralph_meta: false, mapped_steps: 0 };
-  }
-
   const runningStep = orch.chain.find(step => step.status === 'running');
   if (runningStep) {
     throw new Error(
@@ -166,34 +161,43 @@ export function migrateSession(projectRoot: string, sessionId: string): MigrateR
   }
 
   const stepDetails = meta.step_details ?? {};
-  let mappedSteps = 0;
-
-  store.update(sessionId, (draft) => {
+  const applied = store.update(sessionId, (draft) => {
     const o = draft.session.orchestration;
-    o.position = buildPosition(meta);
-    o.decomposition = buildDecomposition(meta);
-    o.lease = buildLease(meta);
-    o.executor = buildExecutor(meta);
+    let changed = draft.session.schema_version === 'session/1.0';
+    let mappedSteps = 0;
+    if (o.position === null) { o.position = buildPosition(meta); changed = true; }
+    const decomposition = buildDecomposition(meta);
+    if (o.decomposition === null && decomposition !== null) { o.decomposition = decomposition; changed = true; }
+    const lease = buildLease(meta);
+    if (o.lease === null && lease !== null) { o.lease = lease; changed = true; }
+    const executor = buildExecutor(meta);
+    if (o.executor === null && executor !== null) { o.executor = executor; changed = true; }
 
     // Fold per-step enrichment onto chain steps, matched by step_id.
     for (const step of o.chain) {
       const detail = stepDetails[step.step_id];
       if (!detail) continue;
-      if (detail.args !== undefined) step.args = detail.args;
-      if (detail.stage !== undefined) step.stage = detail.stage;
-      if (detail.goal_ref !== undefined) step.goal_ref = detail.goal_ref;
-      step.retry = {
-        count: detail.retry_count ?? 0,
-        max: detail.max_retries ?? DEFAULT_RETRY_MAX,
-      };
-      mappedSteps++;
+      let mapped = false;
+      if (step.args === undefined && detail.args !== undefined) { step.args = detail.args; mapped = true; }
+      if (step.stage === undefined && detail.stage !== undefined) { step.stage = detail.stage; mapped = true; }
+      if (step.goal_ref === undefined && detail.goal_ref !== undefined) { step.goal_ref = detail.goal_ref; mapped = true; }
+      if (step.retry === undefined) {
+        step.retry = { count: detail.retry_count ?? 0, max: detail.max_retries ?? DEFAULT_RETRY_MAX };
+        mapped = true;
+      }
+      if (mapped) { mappedSteps++; changed = true; }
     }
 
-    draft.session.activity_revision++;
-    return null;
+    if (changed) draft.session.activity_revision++;
+    return { changed, mappedSteps };
   });
 
-  return { session_id: sessionId, status: 'migrated', had_ralph_meta: true, mapped_steps: mappedSteps };
+  return {
+    session_id: sessionId,
+    status: applied.changed ? 'migrated' : 'already-migrated',
+    had_ralph_meta: true,
+    mapped_steps: applied.mappedSteps,
+  };
 }
 
 /**

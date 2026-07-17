@@ -9,8 +9,9 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
+  appendFileSync,
 } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { z } from 'zod';
 import { safeRename } from '../utils/state-schema.js';
 import {
@@ -26,6 +27,7 @@ import {
   type SessionState,
 } from './schemas.js';
 import { createArtifactRegistry, createEvidenceStore, createGateRegistry, createSessionState } from './defaults.js';
+import { assertSafePathSegment } from './ids.js';
 
 const STALE_LOCK_MS = 30_000;
 const MAX_BACKUPS = 10;
@@ -123,10 +125,12 @@ export class SessionStore {
   }
 
   sessionDir(sessionId: string): string {
+    assertSafePathSegment(sessionId, 'session ID');
     return join(this.sessionsRoot, sessionId);
   }
 
   runDir(sessionId: string, runId: string): string {
+    assertSafePathSegment(runId, 'run ID');
     return join(this.sessionDir(sessionId), 'runs', runId);
   }
 
@@ -139,9 +143,16 @@ export class SessionStore {
     return existsSync(join(this.sessionDir(sessionId), 'session.json'));
   }
 
-  createSession(sessionId: string, intent: string): SessionBundle {
+  createSession(
+    sessionId: string,
+    intent: string,
+    options: { ifExists?: 'reuse' | 'error' } = {},
+  ): SessionBundle {
     return this.withLock(() => {
-      if (this.sessionExists(sessionId)) return this.readBundle(sessionId);
+      if (this.sessionExists(sessionId)) {
+        if (options.ifExists === 'error') throw new Error(`Session already exists: ${sessionId}`);
+        return this.readBundle(sessionId);
+      }
       const bundle: SessionBundle = {
         session: createSessionState(sessionId, intent),
         gates: createGateRegistry(),
@@ -210,6 +221,48 @@ export class SessionStore {
 
   clearCache(): void {
     this.cache.clear();
+  }
+
+  readJsonFile<T>(path: string, schema: z.ZodType<T>, fallback?: T): T {
+    const safePath = this.assertWorkflowPath(path);
+    if (!existsSync(safePath)) {
+      if (fallback === undefined) throw new Error(`Missing authoritative file: ${safePath}`);
+      return clone(schema.parse(fallback));
+    }
+    return this.readValidated(safePath, schema);
+  }
+
+  updateJsonFile<T>(
+    path: string,
+    schema: z.ZodType<T>,
+    initial: T,
+    mutator: (draft: T) => void,
+  ): T {
+    const safePath = this.assertWorkflowPath(path);
+    return this.withLock(() => {
+      const current = existsSync(safePath) ? this.readValidated(safePath, schema) : schema.parse(initial);
+      const draft = clone(current);
+      mutator(draft);
+      schema.parse(draft);
+      this.writeBatchUnlocked([{ path: safePath, value: draft, schema }]);
+      return clone(draft);
+    });
+  }
+
+  appendLine(path: string, line: string): void {
+    const safePath = this.assertWorkflowPath(path);
+    this.withLock(() => {
+      mkdirSync(dirname(safePath), { recursive: true });
+      appendFileSync(safePath, line.endsWith('\n') ? line : `${line}\n`, 'utf8');
+    });
+  }
+
+  private assertWorkflowPath(path: string): string {
+    const root = resolve(this.workflowRoot);
+    const target = resolve(path);
+    const rel = relative(root, target);
+    if (rel.startsWith('..') || isAbsolute(rel)) throw new Error(`Path escapes .workflow: ${path}`);
+    return target;
   }
 
   private readValidated<T>(path: string, schema: z.ZodType<T>): T {

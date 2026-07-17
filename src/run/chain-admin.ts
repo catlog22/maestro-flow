@@ -21,6 +21,7 @@ import type {
   OrchestrationStep,
   SessionState,
 } from './schemas.js';
+import { validateSessionId } from './ids.js';
 
 // ── Step id convention (canonical) ───────────────────────────────────────────
 // Mirrors the historic ralph convention `step-{NNN}-{command}` so migrated and
@@ -83,7 +84,20 @@ export const chainDefinitionSchema = z.object({
   position: chainDefPositionSchema.nullable().optional(),
   decomposition: chainDefDecompositionSchema.nullable().optional(),
   executor: chainDefExecutorSchema.nullable().optional(),
-}).strict();
+}).strict().superRefine((definition, ctx) => {
+  const pointIds = new Set<string>();
+  for (const point of definition.decision_points ?? []) {
+    if (pointIds.has(point.point_id)) {
+      ctx.addIssue({ code: 'custom', message: `duplicate decision point: ${point.point_id}`, path: ['decision_points'] });
+    }
+    pointIds.add(point.point_id);
+  }
+  definition.steps.forEach((step, index) => {
+    if (step.decision_ref && !pointIds.has(step.decision_ref)) {
+      ctx.addIssue({ code: 'custom', message: `decision_ref has no matching decision point: ${step.decision_ref}`, path: ['steps', index, 'decision_ref'] });
+    }
+  });
+});
 
 export type ChainDefinition = z.infer<typeof chainDefinitionSchema>;
 
@@ -185,6 +199,7 @@ function timestampId(): string {
  */
 export function deriveSessionId(slug: string): string {
   const trimmed = slug.trim();
+  validateSessionId(trimmed);
   if (/\d{8}-\d{6}$/.test(trimmed) || /\d{14}$/.test(trimmed)) return trimmed;
   const ts = timestampId();
   const stamp = `${ts.slice(0, 8)}-${ts.slice(8, 14)}`;
@@ -210,7 +225,7 @@ export function createChainSession(
 
   const sessionId = deriveSessionId(slug);
   const store = new SessionStore(projectRoot);
-  store.createSession(sessionId, intent);
+  store.createSession(sessionId, intent, { ifExists: 'error' });
 
   const engine = opts.engine ?? def?.engine ?? 'manual';
   const qualityMode = opts.qualityMode ?? def?.quality_mode ?? 'standard';
@@ -267,6 +282,19 @@ function resolveAfterIndex(chain: OrchestrationStep[], after: string): number {
   return idx;
 }
 
+function uniqueStepId(
+  chain: OrchestrationStep[],
+  index: number,
+  command: string,
+  exclude?: OrchestrationStep,
+): string {
+  const base = chainStepId(index, command);
+  if (!chain.some(step => step !== exclude && step.step_id === base)) return base;
+  let suffix = 2;
+  while (chain.some(step => step !== exclude && step.step_id === `${base}-${suffix}`)) suffix++;
+  return `${base}-${suffix}`;
+}
+
 export interface InsertChainStepOpts {
   after: string;
   command: string;
@@ -302,7 +330,7 @@ export function insertChainStep(
     }
     const decisionRef = opts.decisionRef ?? null;
     const step: OrchestrationStep = {
-      step_id: chainStepId(insertPos, opts.command),
+      step_id: uniqueStepId(chain, insertPos, opts.command),
       command: opts.command,
       status: 'pending',
       run_id: null,
@@ -313,6 +341,16 @@ export function insertChainStep(
     if (opts.stage !== undefined) step.stage = opts.stage;
     if (opts.goalRef !== undefined) step.goal_ref = opts.goalRef;
     if (!decisionRef) step.retry = { count: 0, max: DEFAULT_RETRY_MAX };
+    if (decisionRef && !draft.session.orchestration.decision_points.some(point => point.point_id === decisionRef)) {
+      draft.session.orchestration.decision_points.push({
+        point_id: decisionRef,
+        after_step_id: chain[afterIdx]?.step_id ?? null,
+        status: 'pending',
+        retry_count: 0,
+        max_retries: DEFAULT_DECISION_MAX_RETRIES,
+        evidence_ref: null,
+      });
+    }
     chain.splice(insertPos, 0, step);
     draft.session.activity_revision++;
     return step;
@@ -374,7 +412,7 @@ export function replaceChainStep(
     }
     if (opts.command !== undefined) {
       step.command = opts.command;
-      step.step_id = chainStepId(index, opts.command);
+      step.step_id = uniqueStepId(chain, index, opts.command, step);
     }
     if (opts.args !== undefined) step.args = opts.args;
     if (opts.stage !== undefined) step.stage = opts.stage;

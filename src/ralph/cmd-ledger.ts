@@ -40,7 +40,7 @@ export async function runLedger(opts: LedgerCmdOptions): Promise<number> {
   if (opts.action === 'query') {
     // Merge the independent verification-ledger.json with the legacy ralph-meta
     // ledger so both migrated and un-migrated sessions resolve.
-    const ledger = mergedLedger(resolved.sessionDir, resolved.meta.verification_ledger ?? []);
+    const ledger = mergedLedger(projectRoot, resolved.sessionId, resolved.meta.verification_ledger ?? []);
     return handleQuery(ledger, opts);
   }
   return handleAdd(projectRoot, resolved.sessionId, opts);
@@ -133,7 +133,7 @@ function handleAdd(projectRoot: string, sessionId: string, opts: LedgerCmdOption
 
   // Writes go to the independent verification-ledger.json (M6), which upserts by
   // authority + dimension + subject set. ralph-meta.json is not modified.
-  upsertLedgerFile(resolved.sessionDir, entry);
+  upsertLedgerFile(projectRoot, sessionId, entry);
 
   console.log(`[ralph ledger] entry added successfully for subjects: ${opts.subjects.join(', ')}`);
   return 0;

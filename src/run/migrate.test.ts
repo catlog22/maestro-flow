@@ -232,6 +232,36 @@ describe('migrateSession', () => {
     expect(second.mapped_steps).toBe(0);
   });
 
+  it('fills missing promoted blocks after a partial Session 1.1 update', () => {
+    const sessionId = 'migrate-partial';
+    writeSession(sessionId, { version: 'session/1.0', chain: fullChain });
+    writeRalphMeta(sessionId, fullMeta);
+    const store = new SessionStore(tmpRoot);
+    store.update(sessionId, draft => {
+      draft.session.orchestration.position = {
+        lifecycle: 'manual-override', phase: 9, phase_is_new: false, milestone: 'manual',
+        planning_mode: null, passed_gates: [], scope_verdict: null,
+      };
+      return null;
+    });
+
+    const result = migrateSession(tmpRoot, sessionId);
+    expect(result.status).toBe('migrated');
+    const session = store.readBundle(sessionId).session;
+    expect(session.orchestration.position?.lifecycle).toBe('manual-override');
+    expect(session.orchestration.decomposition?.goals[0].id).toBe('G1');
+    expect(session.orchestration.lease?.owner).toBe('ralph-execute');
+    expect(session.orchestration.chain[0].args).toBe('--depth deep');
+  });
+
+  it('rejects corrupt ralph-meta instead of treating it as absent', () => {
+    const sessionId = 'migrate-corrupt';
+    writeSession(sessionId, { version: 'session/1.0', chain: fullChain });
+    writeFileSync(join(sessionDir(sessionId), 'ralph-meta.json'), '{broken', 'utf8');
+    expect(() => migrateSession(tmpRoot, sessionId)).toThrow(/invalid legacy ralph-meta/);
+    expect(readSessionRaw(sessionId).schema_version).toBe('session/1.0');
+  });
+
   it('rejects a session with a running chain step', () => {
     const sessionId = 'migrate-running';
     const chain = [
