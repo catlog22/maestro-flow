@@ -217,7 +217,10 @@ export function createChainSession(
   slug: string,
   opts: CreateChainSessionOpts = {},
 ): CreateChainSessionResult {
-  const def = opts.definition;
+  // Public callers are not necessarily the CLI, so do not rely on Commander
+  // having parsed the chain-file already. Validate before allocating a Session
+  // to avoid leaving an empty shell for an invalid definition.
+  const def = opts.definition ? chainDefinitionSchema.parse(opts.definition) : undefined;
   const intent = opts.intent ?? def?.intent;
   if (!intent) {
     throw new Error('intent is required (pass opts.intent or definition.intent)');

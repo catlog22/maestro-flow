@@ -114,10 +114,12 @@ const executorSchema = z.object({
   cli_tool: z.string(),
 }).strict();
 
+export const decisionPointStatusSchema = z.enum(['pending', 'passed', 'escalated']);
+
 const decisionPointSchema = z.object({
   point_id: nonEmptyString,
   after_step_id: z.string().nullable(),
-  status: nonEmptyString,
+  status: decisionPointStatusSchema,
   retry_count: z.number().int().nonnegative(),
   max_retries: z.number().int().nonnegative(),
   evidence_ref: z.string().nullable(),

@@ -17,7 +17,7 @@ import { checkLease } from '../run/lease.js';
 import {
   resolveRalphSession,
   effectiveLease,
-  updateChainStepStatus,
+  readMeta,
   updateRalphMeta,
   workflowRoot,
 } from './session-adapter.js';
@@ -149,31 +149,57 @@ export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
 
   if (!canonicalTransitionApplied) {
     const store = new SessionStore(projectRoot);
-    store.update(sessionId, (draft) => {
-      const step = draft.session.orchestration.chain[opts.index];
-      switch (opts.status) {
-        case 'DONE':
-        case 'DONE_WITH_CONCERNS':
-          step.status = 'completed';
-          draft.session.active_run_id = null;
-          break;
-        case 'NEEDS_RETRY': {
-          const current = step.retry ?? { count: 0, max: 2 };
-          step.retry = { count: current.count + 1, max: current.max };
-          step.status = 'pending';
-          step.run_id = null;
-          draft.session.active_run_id = null;
-          break;
+    let fallbackResult: 'updated' | 'already-terminal';
+    try {
+      fallbackResult = store.update(sessionId, (draft) => {
+        // Legacy sessions may have no canonical Run. Re-check the lease and
+        // expected step identity under the same store lock that commits the
+        // fallback transition; the earlier checks are only user-facing fast
+        // failures and cannot authorize this write.
+        const freshMeta = readMeta(store.sessionDir(sessionId));
+        const freshLeaseConflict = checkLease(effectiveLease(draft.session, freshMeta), leaseClaim);
+        if (freshLeaseConflict) throw new Error(freshLeaseConflict);
+
+        const step = draft.session.orchestration.chain[opts.index];
+        if (!step || step.step_id !== chainStep.step_id) {
+          throw new Error(`step ${opts.index} changed before completion`);
         }
-        case 'BLOCKED':
-          step.status = 'failed';
-          draft.session.status = 'paused';
-          draft.session.active_run_id = null;
-          break;
-      }
-      draft.session.activity_revision++;
-      return null;
-    });
+        if (step.status === 'completed' || step.status === 'sealed') return 'already-terminal';
+        if (step.status !== 'running' || step.run_id !== chainStep.run_id) {
+          throw new Error(`step ${opts.index} changed before completion (status=${step.status}, run_id=${step.run_id ?? '<none>'})`);
+        }
+        if (opts.expectedSkill && step.command !== opts.expectedSkill) {
+          throw new Error(`expected command "${opts.expectedSkill}" does not match step command "${step.command}"`);
+        }
+
+        switch (opts.status) {
+          case 'DONE':
+          case 'DONE_WITH_CONCERNS':
+            step.status = 'completed';
+            draft.session.active_run_id = null;
+            break;
+          case 'NEEDS_RETRY': {
+            const current = step.retry ?? { count: 0, max: 2 };
+            step.retry = { count: current.count + 1, max: current.max };
+            step.status = 'pending';
+            step.run_id = null;
+            draft.session.active_run_id = null;
+            break;
+          }
+          case 'BLOCKED':
+            step.status = 'failed';
+            draft.session.status = 'paused';
+            draft.session.active_run_id = null;
+            break;
+        }
+        draft.session.activity_revision++;
+        return 'updated';
+      });
+    } catch (error) {
+      console.error(`[ralph complete] fallback transition refused: ${(error as Error).message}`);
+      return 1;
+    }
+    if (fallbackResult === 'already-terminal') return 0;
   }
 
   // Record completion details in ralph-meta

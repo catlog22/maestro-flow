@@ -98,4 +98,19 @@ describe('createRalphSession (delegates to createChainSession)', () => {
 
     expect(() => readMeta(result.sessionDir)).toThrow(/owner_epoch/);
   });
+
+  it('rejects an invalid pre-built chain before allocating a Session', () => {
+    const id = 'ralph-20260716-141414';
+    expect(() => createRalphSession(root, id, 'invalid chain', {
+      chain: [{
+        step_id: 'step-000-decision',
+        command: 'decision',
+        status: 'pending',
+        run_id: null,
+        inserted_by: 'test',
+        decision_ref: 'missing-point',
+      }],
+    })).toThrow(/decision_ref has no matching decision point/);
+    expect(new SessionStore(root).sessionExists(id)).toBe(false);
+  });
 });

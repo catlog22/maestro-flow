@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -307,6 +307,45 @@ describe('run next — atomic chain binding', () => {
     createRun({ projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: stepId });
     expect(() => createRun({ projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: stepId }))
       .toThrow(/already running|not pending/);
+  });
+});
+
+describe('run next — sealed reconciliation fencing', () => {
+  it('does not overwrite a concurrent needs-retry requeue with a stale sealed Run', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'reconcile race', [{ command: 'demo-plan' }], { active: true });
+    const created = createRun({ projectRoot, command: 'demo-plan', sessionId: 's' });
+    completeRun(projectRoot, created.run_id, 's');
+
+    const originalUpdate = SessionStore.prototype.update;
+    let injected = false;
+    const spy = vi.spyOn(SessionStore.prototype, 'update').mockImplementation(function (
+      this: SessionStore,
+      sessionId,
+      mutator,
+    ) {
+      if (!injected && sessionId === 's') {
+        injected = true;
+        originalUpdate.call(this, sessionId, (draft) => {
+          const step = draft.session.orchestration.chain[0];
+          step.status = 'pending';
+          step.run_id = null;
+          step.retry = { count: 1, max: 2 };
+          return null;
+        });
+      }
+      return originalUpdate.call(this, sessionId, mutator);
+    });
+
+    const outcome = runNextStep(projectRoot, { sessionId: 's' });
+    spy.mockRestore();
+
+    expect(outcome.exitCode).toBe(0);
+    const step = readChain(projectRoot, 's')[0];
+    expect(step.status).toBe('running');
+    expect(step.run_id).not.toBe(created.run_id);
+    expect(step.retry).toEqual({ count: 1, max: 2 });
   });
 });
 

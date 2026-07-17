@@ -42,7 +42,6 @@ import {
   activeStepIndex,
   nextPendingIndex,
   nextPendingDecisionIndex,
-  updateChainStepStatus,
 } from './chain.js';
 import { checkLease } from './lease.js';
 import { SessionStore } from './store.js';
@@ -407,10 +406,8 @@ function reconcileSealedSteps(
   store: SessionStore,
   session: SessionState,
 ): SessionState {
-  const chain = session.orchestration.chain;
-  let dirty = false;
-  for (let i = 0; i < chain.length; i++) {
-    const step = chain[i];
+  const candidates: Array<{ stepId: string; runId: string }> = [];
+  for (const step of session.orchestration.chain) {
     if (step.status !== 'running' || !step.run_id) continue;
     let runStatus: string | null = null;
     try {
@@ -419,11 +416,34 @@ function reconcileSealedSteps(
       runStatus = null;
     }
     if (runStatus === 'sealed' || runStatus === 'completed') {
-      updateChainStepStatus(projectRoot, session.session_id, i, 'sealed', step.run_id);
-      dirty = true;
+      candidates.push({ stepId: step.step_id, runId: step.run_id });
     }
   }
-  return dirty ? store.readBundle(session.session_id).session : session;
+  if (candidates.length === 0) return session;
+
+  // The pre-scan is only a cheap locator. Re-read both the chain step and Run
+  // while holding the SessionStore lock, then apply a step_id + run_id + status
+  // CAS. This prevents a concurrent needs-retry verdict from being overwritten
+  // by a stale sealed-Run snapshot.
+  store.update(session.session_id, (draft, tx) => {
+    let dirty = false;
+    for (const candidate of candidates) {
+      const step = draft.session.orchestration.chain.find(s => s.step_id === candidate.stepId);
+      if (!step || step.status !== 'running' || step.run_id !== candidate.runId) continue;
+      let runStatus: string | null = null;
+      try {
+        runStatus = tx.readRun(candidate.runId).status;
+      } catch {
+        runStatus = null;
+      }
+      if (runStatus !== 'sealed' && runStatus !== 'completed') continue;
+      step.status = 'sealed';
+      dirty = true;
+    }
+    if (dirty) draft.session.activity_revision++;
+    return null;
+  });
+  return store.readBundle(session.session_id).session;
 }
 
 // ── --pick target resolution ──────────────────────────────────────────────────

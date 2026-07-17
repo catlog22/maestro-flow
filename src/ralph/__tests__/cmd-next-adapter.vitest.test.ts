@@ -570,3 +570,66 @@ next: []
     expect(handoff!.summary).toBe('CLI fallback summary');
   });
 });
+
+describe('ralph complete — legacy fallback fencing', () => {
+  let root: string;
+  let origCwd: string;
+
+  beforeEach(() => {
+    origCwd = process.cwd();
+    root = mkdtempSync(join(tmpdir(), 'ralph-complete-fallback-'));
+    process.chdir(root);
+  });
+
+  afterEach(() => {
+    process.chdir(origCwd);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('re-checks the legacy lease inside the fallback transaction', async () => {
+    seedRalphSession(root, 'sess-legacy', 'legacy fallback', [
+      { command: 'demo-plan', status: 'running', run_id: null },
+    ], {
+      execution_owner: 'ralph-execute',
+      owner_epoch: 1,
+      lease_id: 'L1',
+      step_details: {},
+    });
+
+    const originalUpdate = SessionStore.prototype.update;
+    let injected = false;
+    const spy = vi.spyOn(SessionStore.prototype, 'update').mockImplementation(function (
+      this: SessionStore,
+      sessionId,
+      mutator,
+    ) {
+      if (!injected && sessionId === 'sess-legacy') {
+        injected = true;
+        writeMeta(this.sessionDir(sessionId), {
+          lifecycle_position: 'execute',
+          phase: null,
+          milestone: '',
+          execution_owner: 'other-owner',
+          owner_epoch: 2,
+          lease_id: 'L2',
+          step_details: {},
+        });
+      }
+      return originalUpdate.call(this, sessionId, mutator);
+    });
+
+    const result = await runComplete({
+      sessionId: 'sess-legacy',
+      index: 0,
+      status: 'DONE',
+      evidence: [],
+      executionOwner: 'ralph-execute',
+      ownerEpoch: 1,
+      leaseId: 'L1',
+    });
+    spy.mockRestore();
+
+    expect(result).toBe(1);
+    expect(new SessionStore(root).readBundle('sess-legacy').session.orchestration.chain[0].status).toBe('running');
+  });
+});

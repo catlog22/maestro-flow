@@ -190,6 +190,16 @@ gates:
     const valid = createSessionState('20260713-demo', 'demo');
     expect(sessionStateSchema.parse(valid).schema_version).toBe('session/1.1');
     expect(() => sessionStateSchema.parse({ ...valid, unexpected: true })).toThrow(/unrecognized/i);
+    const invalidDecision = structuredClone(valid);
+    invalidDecision.orchestration.decision_points = [{
+      point_id: 'D1',
+      after_step_id: null,
+      status: 'unknown',
+      retry_count: 0,
+      max_retries: 2,
+      evidence_ref: null,
+    }];
+    expect(() => sessionStateSchema.parse(invalidDecision)).toThrow(/pending|passed|escalated/);
   });
 
   it('allocates stable per-session sequence numbers and creates protected authority files', () => {

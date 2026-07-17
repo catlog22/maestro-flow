@@ -288,6 +288,30 @@ export interface ChainStep {
   decision_ref: string | null;
 }
 
+function assertPrebuiltChainIntegrity(
+  chain: ChainStep[],
+  decisionPoints: SessionState['orchestration']['decision_points'],
+): void {
+  const stepIds = new Set<string>();
+  for (const step of chain) {
+    if (stepIds.has(step.step_id)) throw new Error(`duplicate chain step id: ${step.step_id}`);
+    stepIds.add(step.step_id);
+  }
+  const pointIds = new Set<string>();
+  for (const point of decisionPoints) {
+    if (pointIds.has(point.point_id)) throw new Error(`duplicate decision point: ${point.point_id}`);
+    pointIds.add(point.point_id);
+    if (point.after_step_id && !stepIds.has(point.after_step_id)) {
+      throw new Error(`decision point ${point.point_id} references unknown after_step_id: ${point.after_step_id}`);
+    }
+  }
+  for (const step of chain) {
+    if (step.decision_ref && !pointIds.has(step.decision_ref)) {
+      throw new Error(`decision_ref has no matching decision point: ${step.decision_ref}`);
+    }
+  }
+}
+
 // Re-export the canonical step-id builder (defined in src/run/chain-admin.ts).
 // Direction ralph → run only; existing ralph callers keep importing it here.
 export { chainStepId };
@@ -307,6 +331,8 @@ export function createRalphSession(
     meta?: Partial<RalphMeta>;
   } = {},
 ): ResolvedRalphSession {
+  assertPrebuiltChainIntegrity(opts.chain ?? [], opts.decisionPoints ?? []);
+
   // Delegate the session shell (dir, session.json, engine/quality/auto/boundary)
   // to the generic creator; sessionId is an explicit ralph id so it is used
   // verbatim. Ralph passes a pre-built chain/decision_points, so those are

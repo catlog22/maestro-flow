@@ -27,9 +27,8 @@ export interface LeaseClaim {
  * active, each set field of the lease must match the claim:
  *   - `owner` ≠ executionOwner  → conflict (mirrors ralph execution_owner check)
  *   - `id`    ≠ leaseId         → conflict (mirrors ralph lease_id check)
- *   - `epoch` ≠ ownerEpoch      → conflict (epoch fencing; ralph tracked epoch in
- *                                 meta without a dedicated reject, so we gate it
- *                                 only when the claim supplies one)
+ *   - `epoch` ≠ ownerEpoch      → conflict (epoch fencing; an active lease
+ *                                 requires the complete owner/epoch/id claim)
  */
 export function checkLease(
   lease: OrchestrationLease | null | undefined,
@@ -43,8 +42,8 @@ export function checkLease(
   if (lease.id && lease.id !== claim.leaseId) {
     return `lease conflict: session lease_id is "${lease.id}", got "${claim.leaseId ?? '<none>'}"`;
   }
-  if (claim.ownerEpoch !== undefined && lease.epoch !== claim.ownerEpoch) {
-    return `lease conflict: session epoch is ${lease.epoch}, got ${claim.ownerEpoch}`;
+  if (lease.epoch !== claim.ownerEpoch) {
+    return `lease conflict: session epoch is ${lease.epoch}, got ${claim.ownerEpoch ?? '<none>'}`;
   }
   return null;
 }

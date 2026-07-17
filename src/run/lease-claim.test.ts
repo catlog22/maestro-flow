@@ -158,6 +158,7 @@ describe('run next — lease claim', () => {
 
     const lease = leaseOf(projectRoot, 's');
     expect(checkLease(lease, { executionOwner: 'other', leaseId: 'L1' })).toContain('lease conflict');
+    expect(checkLease(lease, { executionOwner: 'ralph-execute', leaseId: 'L1' })).toContain('epoch');
     expect(checkLease(lease, { executionOwner: 'ralph-execute', leaseId: 'L1', ownerEpoch: 1 })).toBeNull();
   });
 });
