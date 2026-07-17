@@ -3,7 +3,7 @@
 
 This file is the single Session/Run lifecycle contract for every command, workflow, and stateful skill that declares `session-mode: run`.
 
-Lifecycle verbs: **prepare → create → brief → complete**.
+Lifecycle verbs: **prepare → create → brief → check → complete**.
 
 ## Prepare (optional, read-only)
 
