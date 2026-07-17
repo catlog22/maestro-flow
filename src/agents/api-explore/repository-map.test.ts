@@ -127,10 +127,11 @@ describe('buildSystemPrompt', () => {
       truncated: false,
     };
 
-    const prompt = buildSystemPrompt('/project', repositoryMap);
+    const prompt = buildSystemPrompt('/project', repositoryMap, 5);
 
     expect(prompt).toContain('## Repository map (overview depth 1)');
-    expect(prompt).toContain('choose precise path/include/exclude arguments');
+    expect(prompt).toContain('choose precise Batch Search paths');
+    expect(prompt).toContain('at most **5 Batch rounds**');
     expect(prompt.indexOf('project/\n└── src/')).toBeLessThan(prompt.indexOf('## Search query syntax'));
   });
 });

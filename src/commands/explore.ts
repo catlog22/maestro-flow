@@ -12,6 +12,7 @@ import {
   resolveExploreProxyUrl,
   injectProxy,
   resolveMoaPreset,
+  DEFAULT_EXPLORE_MAX_TURNS,
   type ResolvedMoaPreset,
 } from '../agents/api-explore/config.js';
 import { checkProxyReachable } from '../config/cli-tools-config.js';
@@ -85,7 +86,7 @@ export function registerExploreCommand(program: Command): void {
     .option('--all', 'Fan out to all configured endpoints')
     .option('--parallel <n>', 'Max concurrent endpoint queues (default: from config or 4)', parseInt)
     .option('--ep-concurrency <n>', 'Max concurrent jobs per endpoint (default: unlimited, or endpoint config "concurrency")', parseInt)
-    .option('--max-turns <n>', 'Max agent turns per job (default: from config or 6)', parseInt)
+    .option('--max-turns <n>', 'Max Batch rounds per job (default: from config or 5)', parseInt)
     .option('--tree-depth <n>', 'Repository tree depth injected into the first prompt (default: 3, range: 1-6)', parseInt)
     .option('--cd <dir>', 'Working directory for exploration')
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
@@ -140,7 +141,7 @@ export function registerExploreCommand(program: Command): void {
         }
       }
       const cwd = resolve(opts.cd ?? process.cwd());
-      const maxTurns = opts.maxTurns ?? config.maxTurns ?? 6;
+      const maxTurns = opts.maxTurns ?? config.maxTurns ?? DEFAULT_EXPLORE_MAX_TURNS;
       const treeDepth = normalizeRepositoryMapDepth(opts.treeDepth ?? config.treeDepth);
       const concurrency = opts.parallel ?? config.concurrency ?? 4;
 

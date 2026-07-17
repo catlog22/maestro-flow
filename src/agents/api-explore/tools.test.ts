@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { executeToolAsync } from './tools.js';
+import { executeToolAsync, TOOL_SCHEMAS } from './tools.js';
 
 const tempDirs: string[] = [];
 
@@ -83,5 +83,37 @@ describe('Read tool', () => {
       JSON.stringify({ file_path: join(sibling, 'secret.ts') }),
       root,
     )).rejects.toThrow('outside working directory');
+  });
+});
+
+describe('Batch tool', () => {
+  it('executes mixed commands, skips duplicates, and contains per-command errors', async () => {
+    const root = createWorkspace();
+    writeFileSync(join(root, 'config.ts'), 'export const batchSymbol = true;\n');
+
+    const search = { type: 'Search', query: 'batchSymbol', path: root };
+    const result = await executeToolAsync('Batch', JSON.stringify({
+      commands: [
+        search,
+        { type: 'Read', file_path: join(root, 'config.ts') },
+        search,
+        { type: 'Read', file_path: join(root, 'missing.ts') },
+      ],
+    }), root);
+
+    expect(result).toContain('Batch completed: 4 command(s), 1 error(s), 1 duplicate(s).');
+    expect(result).toContain('config.ts:1:export const batchSymbol = true;');
+    expect(result).toContain('Skipped duplicate command in this batch.');
+    expect(result).toContain('missing.ts');
+  });
+
+  it('does not impose a schema command-count limit', () => {
+    const batchSchema = TOOL_SCHEMAS[0].function.parameters as {
+      properties: { commands: { maxItems?: number } };
+    };
+
+    expect(TOOL_SCHEMAS).toHaveLength(1);
+    expect(TOOL_SCHEMAS[0].function.name).toBe('Batch');
+    expect(batchSchema.properties.commands.maxItems).toBeUndefined();
   });
 });

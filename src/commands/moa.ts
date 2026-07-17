@@ -9,6 +9,7 @@ import {
   resolveExploreProxyUrl,
   injectProxy,
   resolveMoaPreset,
+  DEFAULT_EXPLORE_MAX_TURNS,
   type PipelineStep,
 } from '../agents/api-explore/config.js';
 import { checkProxyReachable } from '../config/cli-tools-config.js';
@@ -69,7 +70,7 @@ export function registerMoaCommand(program: Command): void {
     .command('moa [prompts...]')
     .description('Mixture-of-Agents exploration: reference endpoints inform an aggregator')
     .option('--preset <name>', 'MOA preset name (default: from config)')
-    .option('--max-turns <n>', 'Max agent turns per reference/aggregator (default: 6)', parseInt)
+    .option('--max-turns <n>', 'Max Batch rounds per reference/aggregator (default: 5)', parseInt)
     .option('--cd <dir>', 'Working directory for exploration')
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
     .option('--no-save', 'Do not save session')
@@ -127,7 +128,7 @@ export function registerMoaCommand(program: Command): void {
       }
 
       const cwd = resolve(opts.cd ?? process.cwd());
-      const maxTurns = opts.maxTurns ?? 6;
+      const maxTurns = opts.maxTurns ?? DEFAULT_EXPLORE_MAX_TURNS;
       const presetName = opts.preset ?? config.moa?.defaultPreset ?? 'default';
       const referenceEndpoints = preset.referenceEndpoints.map(ep => ep.name);
 

@@ -4,6 +4,9 @@ import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const BATCH_EXECUTION_CONCURRENCY = 16;
+const BATCH_RESULT_BUDGET_BYTES = 64 * 1024;
+const BATCH_COMMAND_RESULT_MAX_BYTES = 12 * 1024;
 
 export interface ToolSchema {
   type: 'function';
@@ -225,6 +228,18 @@ interface SearchArgs {
   files_only?: boolean;
 }
 
+interface ReadArgs {
+  file_path: string;
+  offset?: number;
+  limit?: number;
+}
+
+type BatchCommand = ({ type: 'Search' } & SearchArgs) | ({ type: 'Read' } & ReadArgs);
+
+interface BatchArgs {
+  commands: BatchCommand[];
+}
+
 function buildSearchRgArgs(args: SearchArgs, cwd: string): { rgArgs: string[]; usePcre2: boolean; searchPath: string } {
   const searchPath = args.path ? resolve(cwd, args.path) : cwd;
   assertWithinCwd(searchPath, cwd);
@@ -285,6 +300,99 @@ async function searchAsync(args: SearchArgs, cwd: string): Promise<string> {
     if (isNoMatch(err)) return 'No matches found.';
     throw err;
   }
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  if (Buffer.byteLength(value, 'utf-8') <= maxBytes) return value;
+  const marker = '\n…[batch result truncated]';
+  const markerBytes = Buffer.byteLength(marker, 'utf-8');
+  let low = 0;
+  let high = value.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (Buffer.byteLength(value.slice(0, mid), 'utf-8') + markerBytes <= maxBytes) low = mid;
+    else high = mid - 1;
+  }
+  return value.slice(0, low) + marker;
+}
+
+function canonicalCommand(command: BatchCommand): string {
+  return JSON.stringify(Object.fromEntries(
+    Object.entries(command).sort(([a], [b]) => a.localeCompare(b)),
+  ));
+}
+
+async function runBatchCommand(command: BatchCommand, cwd: string): Promise<string> {
+  if (command.type === 'Search') {
+    if (typeof command.query !== 'string' || !command.query.trim()) {
+      throw new Error('Batch Search command requires a non-empty query');
+    }
+    return searchAsync({
+      ...command,
+      limit: Math.min(Math.max(1, command.limit ?? 60), 120),
+    }, cwd);
+  }
+  if (command.type === 'Read') {
+    if (typeof command.file_path !== 'string' || !command.file_path.trim()) {
+      throw new Error('Batch Read command requires file_path');
+    }
+    return readFile({
+      ...command,
+      limit: Math.min(Math.max(1, command.limit ?? 160), 240),
+    }, cwd);
+  }
+  throw new Error(`Unknown Batch command type: ${(command as { type?: unknown }).type ?? '(missing)'}`);
+}
+
+async function batch(args: BatchArgs, cwd: string): Promise<string> {
+  if (!Array.isArray(args.commands) || args.commands.length === 0) {
+    throw new Error('Batch requires at least one command');
+  }
+
+  const results = new Array<{ status: 'ok' | 'error' | 'duplicate'; content: string }>(args.commands.length);
+  const seen = new Set<string>();
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (nextIndex < args.commands.length) {
+      const index = nextIndex++;
+      const command = args.commands[index];
+      const key = canonicalCommand(command);
+      if (seen.has(key)) {
+        results[index] = { status: 'duplicate', content: 'Skipped duplicate command in this batch.' };
+        continue;
+      }
+      seen.add(key);
+      try {
+        results[index] = { status: 'ok', content: await runBatchCommand(command, cwd) };
+      } catch (err) {
+        results[index] = {
+          status: 'error',
+          content: `Error: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }
+  }
+
+  const workers = Math.min(BATCH_EXECUTION_CONCURRENCY, args.commands.length);
+  await Promise.all(Array.from({ length: workers }, () => runWorker()));
+
+  const perCommandBudget = Math.min(
+    BATCH_COMMAND_RESULT_MAX_BYTES,
+    Math.max(512, Math.floor(BATCH_RESULT_BUDGET_BYTES / args.commands.length)),
+  );
+  const sections = results.map((result, index) => {
+    const type = args.commands[index]?.type ?? 'Unknown';
+    const content = truncateUtf8(result.content, perCommandBudget);
+    return `--- command ${index + 1} (${type}, ${result.status}) ---\n${content}`;
+  });
+  const errors = results.filter(result => result.status === 'error').length;
+  const duplicates = results.filter(result => result.status === 'duplicate').length;
+  const output = [
+    `Batch completed: ${args.commands.length} command(s), ${errors} error(s), ${duplicates} duplicate(s).`,
+    ...sections,
+  ].join('\n');
+  return truncateUtf8(output, BATCH_RESULT_BUDGET_BYTES);
 }
 
 // ---------------------------------------------------------------------------
@@ -371,6 +479,7 @@ export function executeTool(name: string, argsJson: string, cwd: string): string
 export async function executeToolAsync(name: string, argsJson: string, cwd: string): Promise<string> {
   const args = JSON.parse(argsJson || '{}');
   switch (name) {
+    case 'Batch': return batch(args, cwd);
     case 'Read': return readFile(args, cwd);
     case 'Glob': return glob(args, cwd);
     case 'Grep': return grepAsync(args, cwd);
@@ -387,36 +496,34 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   {
     type: 'function',
     function: {
-      name: 'Search',
-      description: 'Keyword search with multi-keyword support. Returns relative paths with line numbers. Case insensitive.',
+      name: 'Batch',
+      description: 'Execute any number of independent Search and Read commands in one parallel batch. Put every command that can run independently into the same call.',
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search query without surrounding quotes. Modes: handleAuth (single keyword), error | warn | fatal (OR), export + async (AND — both on same line), export async function (exact phrase), /\\bfunc\\w+/ (raw regex wrapped in //).' },
-          path: { type: 'string', description: 'Directory to search in.' },
-          include: { type: 'string', description: 'Include files matching glob (e.g. "*.ts").' },
-          exclude: { type: 'string', description: 'Exclude files matching glob (e.g. "*.test.ts").' },
-          context: { type: 'integer', description: 'Lines of context around each match.' },
-          limit: { type: 'integer', description: 'Max output lines. Default: 80.' },
-          files_only: { type: 'boolean', description: 'Return file paths only, no content.' },
+          commands: {
+            type: 'array',
+            minItems: 1,
+            description: 'Commands to execute concurrently. There is no fixed command-count limit; avoid duplicates and include all independent work for this round.',
+            items: {
+              type: 'object',
+              properties: {
+                type: { type: 'string', enum: ['Search', 'Read'], description: 'Command type.' },
+                query: { type: 'string', description: 'Search query without surrounding quotes. Supports OR with |, AND with +, exact phrases, and /raw regex/.' },
+                path: { type: 'string', description: 'Search directory or file.' },
+                include: { type: 'string', description: 'Search include glob, e.g. *.ts.' },
+                exclude: { type: 'string', description: 'Search exclude glob, e.g. *.test.ts.' },
+                context: { type: 'integer', description: 'Search context lines.' },
+                files_only: { type: 'boolean', description: 'Search file paths only.' },
+                file_path: { type: 'string', description: 'Absolute or cwd-relative file path for Read.' },
+                offset: { type: 'integer', description: 'Read start line, 1-indexed.' },
+                limit: { type: 'integer', description: 'Search output-line or Read line-count limit.' },
+              },
+              required: ['type'],
+            },
+          },
         },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'Read',
-      description: 'Read file content with line numbers. Use offset+limit to read a specific section.',
-      parameters: {
-        type: 'object',
-        properties: {
-          file_path: { type: 'string', description: 'Absolute path to the file.' },
-          offset: { type: 'integer', description: 'Start line (1-indexed).' },
-          limit: { type: 'integer', description: 'Number of lines to read.' },
-        },
-        required: ['file_path'],
+        required: ['commands'],
       },
     },
   },

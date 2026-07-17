@@ -3,6 +3,7 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/reso
 import { callLlm, type LlmConfig, type LlmCallOptions } from './llm.js';
 import { executeToolAsync, type ToolSchema } from './tools.js';
 import { stdoutEmitter, type StreamEmitter } from './stream-json-emitter.js';
+import { DEFAULT_EXPLORE_MAX_TURNS } from './config.js';
 
 export interface AgentLoopParams {
   prompt: string;
@@ -27,7 +28,7 @@ export interface AgentLoopResult {
 
 export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResult> {
   const { prompt, systemPrompt, client, llmConfig, toolSchemas, cwd } = params;
-  const maxTurns = params.maxTurns ?? 0;
+  const maxTurns = params.maxTurns ?? DEFAULT_EXPLORE_MAX_TURNS;
   const emitter = params.emitter ?? stdoutEmitter;
 
   emitter.init();
@@ -41,25 +42,37 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let totalInput = 0;
   let totalOutput = 0;
   let turn = 0;
+  let toolRounds = 0;
   let toolCalled = false;
   let pendingContent = '';
+  let finalAnswerRequested = false;
 
   while (true) {
     turn++;
 
     await params.beforeTurn?.({ turn, messages });
 
-    if (maxTurns > 0 && turn > maxTurns && !pendingContent) {
-      const over = turn - maxTurns;
-      const nudge = over === 1
-        ? 'You have used all allocated turns. Provide your final answer now based on what you have gathered.'
-        : `You are ${over} turns over the limit. Stop calling tools and return your answer immediately.`;
-      messages.push({ role: 'user', content: nudge });
+    const forceFinalAnswer = tools.length > 0 && maxTurns > 0 && toolRounds >= maxTurns;
+    if (forceFinalAnswer && !finalAnswerRequested && !pendingContent) {
+      messages.push({
+        role: 'user',
+        content: `You have completed ${toolRounds} Batch rounds. Tools are now disabled. Return the final answer using the evidence already gathered.`,
+      });
+      finalAnswerRequested = true;
     }
 
     let response;
     try {
-      response = await callLlm(client, llmConfig, messages, tools, params.llmOptions);
+      const messagesForCall = forceFinalAnswer
+        ? compactMessagesForFinalAnswer(messages)
+        : messages;
+      response = await callLlm(
+        client,
+        llmConfig,
+        messagesForCall,
+        forceFinalAnswer ? [] : tools,
+        params.llmOptions,
+      );
     } catch (err) {
       const errMsg = `LLM API error: ${err instanceof Error ? err.message : String(err)}`;
       emitter.message(errMsg);
@@ -71,8 +84,16 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     totalOutput += response.usage.outputTokens;
 
     if (response.toolCalls.length > 0) {
+      if (forceFinalAnswer) {
+        const content = response.content?.trim()
+          || 'Tool round budget exhausted before the model produced a final answer.';
+        emitter.message(content);
+        emitter.result({ input_tokens: totalInput, output_tokens: totalOutput });
+        return { content, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
+      }
       pendingContent = '';
       toolCalled = true;
+      toolRounds++;
       if (response.content) {
         emitter.message(response.content, true);
       }
@@ -105,7 +126,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         emitter.toolResult(r.id, r.result, r.error);
         messages.push({ role: 'tool', tool_call_id: r.id, content: r.result });
       }
-    } else if (!toolCalled && turn <= 2) {
+    } else if (tools.length > 0 && !toolCalled && turn <= 2) {
       // Anti-hallucination: force tool use before answering
       messages.push({
         role: 'assistant',
@@ -113,7 +134,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       });
       messages.push({
         role: 'user',
-        content: 'You must call Search before answering. Pick a keyword from the query and search.',
+        content: 'You must call Batch before answering. Put all independent Search commands into one Batch call.',
       });
     } else {
       const text = response.content ?? '';
@@ -134,6 +155,32 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       return { content, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
     }
   }
+}
+
+const FINAL_CONTEXT_TOOL_ROUNDS = 3;
+
+function compactMessagesForFinalAnswer(
+  messages: ChatCompletionMessageParam[],
+): ChatCompletionMessageParam[] {
+  const roundStarts: number[] = [];
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index];
+    if (message.role !== 'assistant' || !('tool_calls' in message)) continue;
+    if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
+      roundStarts.push(index);
+    }
+  }
+  if (roundStarts.length <= FINAL_CONTEXT_TOOL_ROUNDS) return messages;
+
+  const tailStart = roundStarts[roundStarts.length - FINAL_CONTEXT_TOOL_ROUNDS];
+  return [
+    ...messages.slice(0, 2),
+    {
+      role: 'user',
+      content: `[Earlier Batch rounds omitted to reduce payload. Use the retained ${FINAL_CONTEXT_TOOL_ROUNDS} most recent evidence rounds for the final answer.]`,
+    },
+    ...messages.slice(tailStart),
+  ];
 }
 
 function safeParseJson(str: string): Record<string, unknown> {

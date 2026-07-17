@@ -5,6 +5,7 @@ import {
   resolveEndpoints,
   resolveExploreProxyUrl,
   injectProxy,
+  DEFAULT_EXPLORE_MAX_TURNS,
 } from '../../agents/api-explore/config.js';
 import {
   buildJobsFromEntries,
@@ -70,7 +71,7 @@ export class ExplorePlugin implements MaestroPlugin {
       const results = await runExploreJobs({
         jobs,
         cwd: this.cwd,
-        maxTurns: marker.maxTurns ?? 4,
+        maxTurns: marker.maxTurns ?? DEFAULT_EXPLORE_MAX_TURNS,
         concurrency: Math.min(jobs.length, 4),
       });
 

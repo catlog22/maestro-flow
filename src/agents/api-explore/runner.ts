@@ -132,7 +132,8 @@ async function runSingleJob(
     }
 
     const { client, config } = createClient(job.llmConfig);
-    const systemPrompt = buildSystemPrompt(cwd, repositoryMap);
+    const maxTurns = job.maxTurns ?? globalMaxTurns;
+    const systemPrompt = buildSystemPrompt(cwd, repositoryMap, maxTurns);
     const prompt = buildExplorePrompt(job.prompt);
 
     const result = await agentLoop({
@@ -142,7 +143,7 @@ async function runSingleJob(
       llmConfig: config,
       toolSchemas: TOOL_SCHEMAS,
       cwd,
-      maxTurns: job.maxTurns ?? globalMaxTurns,
+      maxTurns,
       emitter: createTraceEmitter(trace),
     });
 

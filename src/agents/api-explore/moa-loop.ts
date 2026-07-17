@@ -11,6 +11,7 @@ import { buildSystemPrompt } from './system-prompt.js';
 import { executeSteps, createPipelineContext } from './moa-pipeline.js';
 import type { StreamEmitter } from './stream-json-emitter.js';
 import type { PipelineStep, ResolvedMoaPreset } from './config.js';
+import { DEFAULT_EXPLORE_MAX_TURNS } from './config.js';
 import {
   buildRepositoryMap,
   extractRepositoryMapFocusPaths,
@@ -57,7 +58,11 @@ export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
       targetDepth: params.treeDepth,
       focusPaths: extractRepositoryMapFocusPaths([params.prompt]),
     });
-  const systemPrompt = buildSystemPrompt(params.cwd, repositoryMap);
+  const systemPrompt = buildSystemPrompt(
+    params.cwd,
+    repositoryMap,
+    params.maxTurns ?? DEFAULT_EXPLORE_MAX_TURNS,
+  );
   const steps = params.pipeline ?? params.preset.steps;
 
   const ctx = createPipelineContext(params.prompt);

@@ -33,6 +33,8 @@ export interface ExploreConfig {
   moa?: import('../../config/api-config.js').MoaConfig;
 }
 
+export const DEFAULT_EXPLORE_MAX_TURNS = 5;
+
 export function loadExploreConfig(): ExploreConfig {
   const api = loadApiConfig();
   const moa = loadMoaConfig();

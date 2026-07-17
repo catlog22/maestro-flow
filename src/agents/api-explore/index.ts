@@ -3,7 +3,12 @@ import { createClient, type LlmConfig, type LlmFormat } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
-import { loadExploreConfig, getDefaultEndpoint, resolveExploreProxyUrl } from './config.js';
+import {
+  DEFAULT_EXPLORE_MAX_TURNS,
+  loadExploreConfig,
+  getDefaultEndpoint,
+  resolveExploreProxyUrl,
+} from './config.js';
 import {
   buildRepositoryMap,
   extractRepositoryMapFocusPaths,
@@ -51,7 +56,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
   model = model || fileConfig.model || process.env.API_EXPLORE_MODEL || '';
   baseUrl = baseUrl || fileConfig.baseUrl || process.env.API_EXPLORE_BASE_URL || '';
   apiKey = apiKey || fileConfig.apiKey || process.env.API_EXPLORE_API_KEY || process.env.OPENAI_API_KEY || '';
-  maxTurns = maxTurns || fileConfig.maxTurns || 6;
+  maxTurns = maxTurns || fileConfig.maxTurns || DEFAULT_EXPLORE_MAX_TURNS;
   treeDepth = normalizeRepositoryMapDepth(treeDepth || fileConfig.treeDepth);
   const extraBody = fileConfig.extraBody;
   const resolvedFormat: LlmFormat = (format || fileConfig.format || 'openai') as LlmFormat;
@@ -99,7 +104,7 @@ async function main(): Promise<void> {
     targetDepth: treeDepth,
     focusPaths: extractRepositoryMapFocusPaths([prompt]),
   });
-  const systemPrompt = buildSystemPrompt(cwd, repositoryMap);
+  const systemPrompt = buildSystemPrompt(cwd, repositoryMap, maxTurns);
 
   const result = await agentLoop({
     prompt: prompt.trim(),
