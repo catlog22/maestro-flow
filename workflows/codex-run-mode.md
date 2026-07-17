@@ -17,4 +17,4 @@ This adapter extends `@~/.maestro/workflows/run-mode.md` for Codex skills. The c
 - The skill frontmatter `contract` is the output schema and alias authority. Domain examples in the body MUST NOT create a second artifact registry or output root.
 - Never edit `.workflow/state.json` artifact arrays or Session protocol JSON. Resolve inputs from the `upstream` map returned by `maestro run create`.
 - Every CSV worker MUST call `report_agent_job_result` exactly once. Workers do not mutate protocol files or orchestrator-owned CSV files.
-- Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`. Sealed artifacts are immutable.
+- Finish with `maestro run check {run_id}` and `maestro run complete {run_id}`. When every gate is clean, `run check` emits a `finish` checklist (handoff, knowledge record, conflict marking, verdict, workflow-declared norms) — work through it before completing. Sealed artifacts are immutable.

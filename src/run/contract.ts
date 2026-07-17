@@ -152,6 +152,8 @@ export interface ResolvedStepContent {
   workflow: { path: string; raw: string } | null;
   runMode: { path: string; raw: string } | null;
   refs: Array<{ path: string; when: string }>;
+  /** Workflow-declared finish norms (frontmatter `finish:`), appended to the `run check` finish checklist. */
+  finish: string[];
 }
 
 const refEntrySchema = z.union([
@@ -218,6 +220,12 @@ function extractRefs(raw: string): Array<{ path: string; when: string }> {
   return refs;
 }
 
+function extractFinish(raw: string): string[] {
+  const parsed = extractFrontmatter(raw);
+  if (!parsed || !Array.isArray(parsed.finish)) return [];
+  return parsed.finish.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0);
+}
+
 function resolveAssociatedWorkflow(
   dirs: string[],
   commandName: string,
@@ -279,6 +287,7 @@ export function resolveStepContent(
     : null;
   const runMode = runModeOverride || resolveInDirs(workflowDirs, 'run-mode.md');
   const refs = prepare ? extractRefs(prepare.raw) : [];
+  const finish = workflow ? extractFinish(workflow.raw) : [];
 
-  return { prepare, workflow, runMode, refs };
+  return { prepare, workflow, runMode, refs, finish };
 }

@@ -30,6 +30,7 @@ import {
   type Gate,
   type GateRegistry,
   type Handoff,
+  type ReportFrontmatter,
   type SessionState,
 } from './schemas.js';
 import {
@@ -122,6 +123,14 @@ export interface CheckRunResult {
   artifacts: Array<{ path: string; kind: string; role: string; alias?: string }>;
   warnings: string[];
   errors: string[];
+  /** Populated by `run check`: repair loop while gates block, complete when clean, advance when sealed. */
+  next?: { command: string; reason: string };
+  /**
+   * Finish-work checklist, populated by `run check` only once every gate is
+   * clean: core handoff/record/verdict norms plus workflow frontmatter
+   * `finish:` lines. Prompt-layer guidance — never a blocking gate.
+   */
+  finish?: string[];
 }
 
 export interface CompleteRunResult extends CheckRunResult {
@@ -890,6 +899,48 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   });
 }
 
+/**
+ * Finish-work checklist injected when `run check` finds every gate clean.
+ * Core norms (handoff frontmatter, knowledge record, verdict semantics) are
+ * runtime-built; workflow frontmatter `finish:` lines extend them. Mirrors the
+ * core/extension split of the injection builder (inject.ts).
+ */
+function buildFinishChecklist(projectRoot: string, run: CommandRun, frontmatter: ReportFrontmatter): string[] {
+  const lines: string[] = [];
+  if (!frontmatter.summary.trim()) {
+    lines.push('report.md handoff frontmatter is empty — fill summary (plus concerns/decisions) before completing; the sealed handoff is derived from it.');
+  }
+  lines.push('Record new knowledge before sealing: constraints/rules → `maestro spec add`, reusable recipes/pitfalls → `/manage knowledge capture`; skip only if nothing new was learned.');
+  lines.push('Mark every spec/knowhow entry this Run contradicted: replaced by a better rule → `maestro spec add ... --json` then `maestro spec supersede <old-sid> --by <new-sid>`; both sides defensible → `maestro spec conflict mark <file> <line> --note "<reason>"` and let `/manage knowledge audit` adjudicate. Never seal with a known-stale entry unmarked.');
+  lines.push('Pick the verdict honestly: `done` (clean) or `done-with-concerns` (works but carries caveats — list every caveat in concerns).');
+  lines.push(...resolveStepContent(projectRoot, run.command.name).finish);
+  return lines;
+}
+
+function checkNext(
+  sessionId: string,
+  runId: string,
+  status: CommandRun['status'],
+  clean: boolean,
+): { command: string; reason: string } {
+  if (status === 'sealed' || status === 'completed') {
+    return {
+      command: `maestro run next --session ${sessionId}`,
+      reason: 'run sealed — advance the chain',
+    };
+  }
+  if (!clean) {
+    return {
+      command: `maestro run check ${runId}`,
+      reason: 'blocking gates or scan errors — repair outputs, then re-run check',
+    };
+  }
+  return {
+    command: `maestro run complete ${runId}`,
+    reason: 'all gates clean — work through the finish checklist, then complete (--verdict done|done-with-concerns)',
+  };
+}
+
 export function checkRun(projectRoot: string, runId: string, sessionId?: string): CheckRunResult {
   const store = new SessionStore(projectRoot);
   const located = store.findRun(runId, sessionId);
@@ -908,6 +959,7 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
       artifacts: scanSummary(scan),
       warnings: scan.warnings,
       errors: scan.errors,
+      next: checkNext(located.sessionId, runId, 'sealed', true),
     };
   }
 
@@ -925,6 +977,7 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
     const gates = evaluateRunGates(bundle, run, context);
     if (run.status === 'created') run.status = 'running';
     tx.writeRun(run);
+    const clean = gates.blocking.length === 0 && scan.errors.length === 0;
     return {
       session_id: located.sessionId,
       run_id: runId,
@@ -933,6 +986,8 @@ export function checkRun(projectRoot: string, runId: string, sessionId?: string)
       artifacts: scanSummary(scan),
       warnings: scan.warnings,
       errors: scan.errors,
+      next: checkNext(located.sessionId, runId, run.status, clean),
+      ...(clean ? { finish: buildFinishChecklist(projectRoot, run, frontmatter) } : {}),
     };
   });
 }
@@ -1634,6 +1689,6 @@ function briefNext(
   }
   return {
     command: `maestro run check ${runId}`,
-    reason: `pre-completion gate check (does not seal); when clean, run: maestro run complete ${runId}`,
+    reason: `pre-completion gate check (does not seal); when clean it emits the finish checklist — work through it, then run: maestro run complete ${runId}`,
   };
 }

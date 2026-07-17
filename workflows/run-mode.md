@@ -50,5 +50,18 @@ maestro run create odyssey --session 20260715-odyssey-planex-todo -- --mode plan
 ## Completion
 
 1. Run `maestro run check {run_id}` and repair any blocking artifact or exit gate it reports.
-2. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically.
-3. Report success only when the Run is completed. Completed artifacts are immutable; revisions create new Runs/artifacts.
+2. When every gate is clean, `run check` emits a `finish` checklist — handoff frontmatter, knowledge record, conflict marking (supersede / contest stale spec-knowhow entries), verdict choice, plus norms declared by the workflow. Work through it before completing; it is prompt-layer guidance, never a blocking gate.
+3. Run `maestro run complete {run_id}`. The artifact gate is derived from the Run contract and evaluated automatically.
+4. Report success only when the Run is completed. Completed artifacts are immutable; revisions create new Runs/artifacts.
+
+**Workflow-specific finish norms**: declare a `finish:` list in the workflow file's YAML frontmatter; each entry is one norm line appended to the `run check` finish checklist.
+
+```yaml
+---
+name: my-workflow
+prepare: my-workflow
+commands: [my-command]
+finish:
+  - Confirm every fix commit references its finding ID.
+---
+```

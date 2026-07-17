@@ -342,6 +342,56 @@ gates:
     expect(() => checkRun(projectRoot, created.run_id)).toThrow(/immutable|artifact set changed/i);
   });
 
+  it('emits the next pointer and injects the finish checklist only when check passes', () => {
+    const projectRoot = root();
+    commandFile(projectRoot, 'finish-demo', `consumes: []
+produces:
+  - kind: plan
+    primary: true
+    path: outputs/plan.json
+    alias: current-plan
+gates:
+  entry: []
+  exit: []`);
+    const workflowDir = join(projectRoot, 'workflows');
+    mkdirSync(workflowDir, { recursive: true });
+    writeFileSync(join(workflowDir, 'finish-demo.md'), `---
+name: finish-demo
+prepare: finish-demo
+commands: [finish-demo]
+finish:
+  - Confirm every fix commit references its finding ID.
+---
+# Workflow: finish demo
+`, 'utf8');
+
+    const created = createRun({ projectRoot, command: 'finish-demo', intent: 'finish demo' });
+    const blocked = checkRun(projectRoot, created.run_id);
+    expect(blocked.gates.blocking).toHaveLength(1);
+    expect(blocked.next?.command).toBe(`maestro run check ${created.run_id}`);
+    expect(blocked.finish).toBeUndefined();
+
+    writePlanRun(projectRoot, created.session_id, created.run_id);
+    const clean = checkRun(projectRoot, created.run_id);
+    expect(clean.gates.blocking).toEqual([]);
+    expect(clean.next?.command).toBe(`maestro run complete ${created.run_id}`);
+    expect(clean.finish?.some(line => line.includes('finding ID'))).toBe(true);
+    expect(clean.finish?.some(line => line.includes('maestro spec add'))).toBe(true);
+    expect(clean.finish?.some(line => line.includes('spec supersede'))).toBe(true);
+    expect(clean.finish?.some(line => line.includes('spec conflict mark'))).toBe(true);
+    expect(clean.finish?.some(line => line.includes('handoff frontmatter is empty'))).toBe(false);
+
+    completeRun(projectRoot, created.run_id);
+    const sealed = checkRun(projectRoot, created.run_id);
+    expect(sealed.next?.command).toBe(`maestro run next --session ${created.session_id}`);
+    expect(sealed.finish).toBeUndefined();
+
+    commandFile(projectRoot, 'bare-demo', `consumes: []\nproduces: []\ngates:\n  entry: []\n  exit: []`);
+    const bare = createRun({ projectRoot, command: 'bare-demo', intent: 'bare demo' });
+    const bareCheck = checkRun(projectRoot, bare.run_id);
+    expect(bareCheck.finish?.[0]).toContain('handoff frontmatter is empty');
+  });
+
   it('seals a Session only after every Run is sealed and clears the active pointer', () => {
     const projectRoot = root();
     commandFile(projectRoot, 'seal-demo', `consumes: []\nproduces: []\ngates:\n  entry: []\n  exit: []`);
