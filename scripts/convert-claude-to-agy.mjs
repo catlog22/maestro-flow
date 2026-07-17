@@ -134,7 +134,9 @@ function splitFrontmatter(content) {
   }
   const end = content.indexOf('\n---', 4);
   if (end < 0) return { frontmatter: null, raw: '', body: content };
-  const raw = content.slice(4, end).replace(/\r\n/g, '\n');
+  // CRLF worktrees: the closing "\r\n---" match leaves a lone trailing "\r"
+  // on the last frontmatter line — strip it or YAML.parse rejects flow arrays.
+  const raw = content.slice(4, end).replace(/\r\n/g, '\n').replace(/\r$/, '');
   const afterMarker = content.indexOf('\n', end + 4);
   const body = afterMarker >= 0 ? content.slice(afterMarker + 1) : '';
   const parsed = YAML.parse(raw);

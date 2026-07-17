@@ -14,7 +14,7 @@
     {"name": "maestro-overlay", "command": "/maestro-overlay", "category": "core", "description": "Overlay 管理 — 自然语言创建命令补丁，或 --amend 从工作流信号自动生成", "source": "../../commands/maestro-overlay.md"},
     {"name": "maestro-guard", "command": "/maestro-guard", "category": "core", "description": "编辑边界治理", "source": "../../commands/maestro-guard.md"},
     {"name": "maestro-update", "command": "/maestro-update", "category": "core", "description": "版本更新 — 检查并安装最新版本", "source": "../../commands/maestro-update.md"},
-    {"name": "maestro-grill", "command": "/maestro-grill", "category": "core", "description": "压力测试 — 对计划、想法或需求进行代码库现实性压力测试", "source": "../../commands/maestro-grill.md"},
+    {"name": "grill", "command": "grill", "type": "step", "category": "core", "description": "压力测试 — 对计划、想法或需求进行代码库现实性压力测试", "source": "~/.maestro/workflows/grill.md"},
     {"name": "maestro-next", "command": "/maestro-next", "category": "core", "description": "智能导航 — 检测工作流当前状态并推荐下一步最优命令", "source": "../../commands/maestro-next.md"},
     {"name": "maestro-session-seal", "command": "/maestro-session-seal", "category": "core", "description": "Session 封印 — 知识提取 + 标记 sealed + DAG 推进（取代已废弃的 milestone-complete）", "source": "../../commands/maestro-session-seal.md"},
 
@@ -57,7 +57,7 @@
     {"name": "maestro-fork", "command": "/maestro-fork", "category": "worktree", "description": "Worktree 分叉 — 基于 milestone 创建隔离开发环境", "source": "../../commands/maestro-fork.md"},
     {"name": "maestro-merge", "command": "/maestro-merge", "category": "worktree", "description": "Worktree 合并 — 同步变更回主线", "source": "../../commands/maestro-merge.md"},
 
-    {"name": "maestro-collab", "command": "/maestro-collab", "category": "team", "description": "人类团队协作 — .workflow/collab/ 目录管理", "source": "../../commands/maestro-collab.md"},
+    {"name": "collab", "command": "collab", "type": "step", "category": "team", "description": "多 CLI 交叉验证 — 需求并行分发多个 CLI 工具，共识/冲突/独有分类后合成统一结论", "source": "~/.maestro/workflows/collab.md"},
 
     {"name": "maestro-ralph", "command": "/maestro-ralph", "category": "ralph", "description": "Ralph 引擎 — 自适应生命周期编排；--engine swarm/universal 运行 Workflow 脚本（含 wf-milestone-audit 里程碑审计）", "source": "../../commands/maestro-ralph.md"},
 

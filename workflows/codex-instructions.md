@@ -94,10 +94,20 @@ Bash({ command: "maestro explore \"FIND: ...\nSCOPE: ...\"" })
 
 Session: `maestro explore show` / `maestro explore output <id>`
 
-## Agent Timeout Constraints
+## Agent 调用与超时
 
+V2 agent 默认**异步执行**：`spawn_agent` / `followup_task` 触发后必须 `wait_agent` 阻塞取回结果，否则子 Agent 成为孤儿、final answer 丢失。标准调用序列：
+
+```ts
+spawn_agent({ task_name: "<slug>", message: "<完整任务 prompt>", fork_turns: "none" })
+wait_agent({ timeout_ms: 3600000 })   // timed_out 且未完成 → 再次 wait_agent 续等
+```
+
+- **默认：除明确短任务外一律阻塞等待，用最长超时**。凡耗时不可预判（分析、审查、实现、探索、多轮子 Agent —— 即绝大多数场景），`spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）。不猜测短时长、绝不依赖 30000 默认值，避免 `timed_out` 提前返回后遗留运行中的 Agent。
+- **续等而非丢弃**：`timed_out: true` 且 Agent 状态非 `completed`/`errored` → 再次 `wait_agent({ timeout_ms: 3600000 })` 续等；必要时 `list_agents` 确认状态。
+- **例外：仅明确短任务**（耗时确定且短，如单点状态查询/回显）才可设较短 `timeout_ms`（最小 `10000`）。默认不走此路径。
+- `wait_agent` 返回的 `message` 仅为 mailbox 更新摘要——final answer 以 `FINAL_ANSWER` 消息投递，不要把摘要当结果正文。
 - `spawn_agents_on_csv`：`max_runtime_seconds`（单个 worker 最大运行时间，秒）**必须显式设为上限 `3600`**。
-- `wait_agent`：`timeout_ms` 默认仅 30000 — **每次调用显式设置，最少 `180000`（3 分钟）**；长任务用上限 `3600000`。
 
 ## Plan Tracking
 

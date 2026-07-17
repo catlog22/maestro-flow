@@ -1,5 +1,5 @@
 
-> **Agent timeout**: `spawn_agent` 无内置超时。等待结果时使用 `wait_agent({ timeout_ms: 3600000 })`（最大值 1 小时）。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
+> **Agent timeout**: `spawn_agent` 异步执行且无内置超时 — 除明确短任务外一律 `spawn_agent` 后立即 `wait_agent({ timeout_ms: 3600000 })`（上限 1 小时）阻塞等待，绝不依赖 30000 默认值；`timed_out: true` 且 Agent 未完成时再次 `wait_agent` 续等，不丢弃。批量场景使用 `spawn_agents_on_csv({ max_runtime_seconds: 3600, ... })`。
 # GSD Content Separation Rules
 
 Rules for validating the boundary between **command delegation prompts** (spawn_agent() calls) and **agent role definitions** (agent `.md` files). Derived from analysis of GSD's `plan-phase.md`, `execute-phase.md`, `research-phase.md` and their corresponding agents (`gsd-planner`, `gsd-plan-checker`, `gsd-executor`, `gsd-phase-researcher`, `gsd-verifier`).

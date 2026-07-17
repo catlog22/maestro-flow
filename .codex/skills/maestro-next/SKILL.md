@@ -57,7 +57,7 @@ $ARGUMENTS — intent text + optional flags.
 6. Intent text present → S_STATE → S_RANK → S_PRESENT
 7. No arguments → lifecycle inference for natural next step
 
-**Candidate pool:** All 13 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) and standalone commands (`maestro-grill`) are NEVER in the candidate pool.
+**Candidate pool:** All 15 first-tier steps registered in `prepare/` + `workflows/`. Pipeline orchestrators (`maestro`, `maestro-ralph*`) are NEVER in the candidate pool.
 </context>
 
 <invariants>
@@ -198,7 +198,8 @@ init → {brainstorm | blueprint | analyze-macro} → roadmap
 | roadmap / milestone / phasing / session plan / work breakdown | roadmap | Decompose requirements into session DAG with scope, success criteria, dependency edges |
 | quick / small / ad-hoc / one-off / trivial | quick | Shortened pipeline for small tasks, preserving atomic commits and state tracking |
 | retrospective / retro / lessons learned / post-mortem / reflect | retrospective | Post-phase four-lens review (technical/process/quality/decision) → spec/knowhow/issue routing |
-| grill / pressure test / stress test | maestro-grill (standalone command) | Not in candidate pool — route to `/maestro-grill` directly |
+| grill / pressure test / stress test | grill | Socratic pressure-test of a plan/idea against codebase reality — adversarial questioning, terminology collision checks |
+| collab / cross-verify / multi-tool / second opinion | collab | Fan out one requirement to multiple CLI tools, cross-verify findings into a unified conclusion |
 | refactor / tech debt | quality-refactor (retained skill) | — |
 | sync docs | manage sync codebase (retained skill) | — |
 | issue / defect | manage issue (retained skill) | — |
@@ -246,8 +247,6 @@ maestro run complete <run_id> --workflow-root .
 
 For retained skills (not in step registry): execute via `Skill({ skill: <name>, args: <args> })` directly.
 
-For standalone commands redirected from routing table (e.g. grill → maestro-grill): display redirect message and suggest the user invoke the standalone command directly. Do NOT attempt step execution.
-
 </actions>
 
 </state_machine>
@@ -277,12 +276,12 @@ Before executing, assess task complexity to choose the right channel:
 
 ### --list mode
 
-Group all 13 first-tier steps by cluster + show retained skills separately:
+Group all 15 first-tier steps by cluster + show retained skills separately:
 
 ```
 Core Chain:  analyze → plan → execute → verify
 Quality:     review, test, auto-test, debug, retrospective
-Discovery:   brainstorm, blueprint, roadmap, quick
+Discovery:   grill, collab, brainstorm, blueprint, roadmap, quick
 
 Retained Skills: quality-refactor, manage sync codebase, manage-*, learn-*, spec-*, ...
 ```
