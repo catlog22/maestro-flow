@@ -31,7 +31,7 @@ Extract these fields from the prompt:
 | `team_name` | Yes | Team name for SendMessage routing |
 | `requirement` | Yes | Original task/requirement description |
 | `inner_loop` | Yes | `true` or `false` -- whether to loop through same-prefix tasks |
-| `run_dir` | No | Run directory for formal deliverables; if absent, resolve from `<session>/team-session.json` `run.run_dir`; sessions without a Run fall back to `<session>/artifacts/` |
+| `run_dir` | No | Run directory; formal deliverables go under `{run_dir}/outputs/`. If absent, resolve from `<session>/team-session.json` `run.run_dir`; sessions without a Run write deliverables directly to `<session>/artifacts/` (no `outputs/` suffix) |
 
 ### 2. Load Role Spec
 
@@ -89,7 +89,7 @@ During Phase 2-4 execution, if you detect codebase signals relevant to specialis
 
 After execution, publish contributions:
 
-1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md` (run_dir per the Input contract resolution: prompt field > team-session.json `run.run_dir` > `<session>/artifacts/` fallback)
+1. Write deliverable to `{run_dir}/outputs/<prefix>-<task-id>-<name>.md` (deliverable root per the Input contract: `{run_dir}/outputs/` when a Run exists, otherwise `<session>/artifacts/`)
 2. Prepare state data for the reporting phase
 3. Append discoveries to wisdom files (`learnings.md`, `decisions.md`, `issues.md`)
 
@@ -202,7 +202,7 @@ Determine report variant based on loop state:
 - Task list accessible via TaskList/TaskGet
 
 ## Output
-- Completed task artifacts in `{run_dir}/outputs/`
+- Completed task artifacts in `{run_dir}/outputs/` (or `<session>/artifacts/` when the session has no Run)
 - Wisdom file contributions in `<session>/wisdom/`
 - State updates via message bus (`team_msg` with type `state_update`)
 - Final report delivered via SendMessage to coordinator
@@ -214,6 +214,7 @@ Determine report variant based on loop state:
 - Cannot call Agent() to spawn other agents (use CLI tools or request coordinator help)
 - Cannot create or reassign tasks for other roles
 - Do not modify resources outside your own scope
+- `team-session.json` is read-only for workers — the coordinator is its sole writer
 - All output lines must be prefixed with `[<role>]` tag for coordinator message routing
 - Cumulative errors >= 3: report to coordinator and STOP
 - If role spec file is not found: report error via SendMessage and STOP

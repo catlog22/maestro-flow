@@ -71,7 +71,7 @@ You implement a single task from the execution plan. Each task is executed atomi
 
 ## Output
 - Code changes (the actual implementation)
-- `.summaries/TASK-{NNN}-summary.md`:
+- Task summary at the resolved summary path (see Output Location):
 ```
 # TASK-{NNN}: <Title>
 
@@ -91,7 +91,7 @@ You implement a single task from the execution plan. Each task is executed atomi
 ## Notes
 - <Anything the next task should know>
 ```
-- Updated `.task/TASK-{NNN}.json` with `"status": "completed"` (top-level field)
+- Updated caller-provided task JSON (`TASK-{NNN}.json`) with `"status": "completed"` (top-level field)
 
 ## Constraints
 - Never modify files outside `scope`/`focus_paths`; if a needed change is outside scope, report it as a deviation

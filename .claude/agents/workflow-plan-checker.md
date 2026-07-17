@@ -49,7 +49,7 @@ You validate the quality of execution plans before they proceed to implementatio
 Caller-provided path takes precedence. Run mode: `{run_dir}/outputs/plan-check.json` (report content as structured JSON). Ad-hoc (no run context): `.workflow/scratch/{slug}/plan-check.md`.
 
 ## Output
-Check report written to the output location above:
+Check report written to the output location above. When the target path ends in `.json`, serialize the same report content as JSON (`{status, round, coverage, feasibility, dependencies, convergence, files_consistency, read_first, action_concreteness, summary}`); the Markdown template below applies to `.md` targets:
 ```
 # Plan Check Report
 
