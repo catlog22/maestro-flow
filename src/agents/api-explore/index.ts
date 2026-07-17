@@ -1,18 +1,23 @@
-import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createClient, type LlmConfig, type LlmFormat } from './llm.js';
 import { TOOL_SCHEMAS } from './tools.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { agentLoop } from './agent-loop.js';
 import { loadExploreConfig, getDefaultEndpoint, resolveExploreProxyUrl } from './config.js';
+import {
+  buildRepositoryMap,
+  extractRepositoryMapFocusPaths,
+  normalizeRepositoryMapDepth,
+} from './repository-map.js';
 
-function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurns: number } {
+function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurns: number; treeDepth: number } {
   let model = '';
   let baseUrl = '';
   let apiKey = '';
   let format = '';
   let cwd = process.cwd();
   let maxTurns = 0;
+  let treeDepth = 0;
 
   for (let i = 2; i < argv.length; i++) {
     switch (argv[i]) {
@@ -34,6 +39,9 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
       case '--max-turns':
         maxTurns = parseInt(argv[++i] ?? '0', 10);
         break;
+      case '--tree-depth':
+        treeDepth = parseInt(argv[++i] ?? '0', 10);
+        break;
     }
   }
 
@@ -44,6 +52,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
   baseUrl = baseUrl || fileConfig.baseUrl || process.env.API_EXPLORE_BASE_URL || '';
   apiKey = apiKey || fileConfig.apiKey || process.env.API_EXPLORE_API_KEY || process.env.OPENAI_API_KEY || '';
   maxTurns = maxTurns || fileConfig.maxTurns || 6;
+  treeDepth = normalizeRepositoryMapDepth(treeDepth || fileConfig.treeDepth);
   const extraBody = fileConfig.extraBody;
   const resolvedFormat: LlmFormat = (format || fileConfig.format || 'openai') as LlmFormat;
 
@@ -51,7 +60,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
     // Try named endpoints as fallback
     const defaultEp = getDefaultEndpoint(fileConfig);
     if (defaultEp) {
-      return { llmConfig: { ...defaultEp, proxyUrl }, cwd: resolve(cwd), maxTurns };
+      return { llmConfig: { ...defaultEp, proxyUrl }, cwd: resolve(cwd), maxTurns, treeDepth };
     }
 
     process.stderr.write(
@@ -64,7 +73,7 @@ function parseArgs(argv: string[]): { llmConfig: LlmConfig; cwd: string; maxTurn
     process.exit(1);
   }
 
-  return { llmConfig: { model, baseUrl, apiKey, format: resolvedFormat, extraBody, proxyUrl }, cwd: resolve(cwd), maxTurns };
+  return { llmConfig: { model, baseUrl, apiKey, format: resolvedFormat, extraBody, proxyUrl }, cwd: resolve(cwd), maxTurns, treeDepth };
 }
 
 function readStdin(): Promise<string> {
@@ -76,19 +85,8 @@ function readStdin(): Promise<string> {
   });
 }
 
-function getDirListing(cwd: string): string {
-  try {
-    return readdirSync(cwd)
-      .filter(name => !name.startsWith('.'))
-      .slice(0, 50)
-      .join('\n');
-  } catch {
-    return '(unable to list directory)';
-  }
-}
-
 async function main(): Promise<void> {
-  const { llmConfig, cwd, maxTurns } = parseArgs(process.argv);
+  const { llmConfig, cwd, maxTurns, treeDepth } = parseArgs(process.argv);
   const prompt = await readStdin();
 
   if (!prompt.trim()) {
@@ -97,8 +95,11 @@ async function main(): Promise<void> {
   }
 
   const { client, config } = createClient(llmConfig);
-  const dirListing = getDirListing(cwd);
-  const systemPrompt = buildSystemPrompt(cwd, dirListing);
+  const repositoryMap = buildRepositoryMap(cwd, {
+    targetDepth: treeDepth,
+    focusPaths: extractRepositoryMapFocusPaths([prompt]),
+  });
+  const systemPrompt = buildSystemPrompt(cwd, repositoryMap);
 
   const result = await agentLoop({
     prompt: prompt.trim(),

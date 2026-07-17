@@ -9,7 +9,6 @@
  * > endpoint config `concurrency` > unlimited.
  */
 
-import { readdirSync } from 'node:fs';
 import { createClient, probeEndpoint, type LlmConfig } from './llm.js';
 import { createTraceEmitter, silentEmitter, type StreamEvent } from './stream-json-emitter.js';
 import { TOOL_SCHEMAS } from './tools.js';
@@ -19,6 +18,11 @@ import { buildExplorePrompt } from './prompt-parser.js';
 import { moaAgentLoop } from './moa-loop.js';
 import type { ResolvedMoaPreset } from './config.js';
 import { EndpointCircuitBreaker, type CircuitBreakerConfig, type NamedEndpointRef } from './circuit-breaker.js';
+import {
+  buildRepositoryMap,
+  extractRepositoryMapFocusPaths,
+  type RepositoryMap,
+} from './repository-map.js';
 
 export interface ExploreJob {
   id: string;
@@ -52,6 +56,8 @@ export interface RunnerOptions {
   concurrency: number;
   /** Explicit max concurrent jobs within the same endpoint (overrides endpoint config; default: unlimited) */
   endpointConcurrency?: number;
+  /** Repository tree depth injected into the first prompt (default: 3, range: 1-6) */
+  treeDepth?: number;
   /** When set, route each job through MOA instead of a single-endpoint agentLoop */
   moaPreset?: ResolvedMoaPreset;
   /** Circuit breaker config for endpoint failover */
@@ -96,22 +102,11 @@ export async function recoverTrippedEndpoints(
   return recovered;
 }
 
-function getDirListing(cwd: string): string {
-  try {
-    return readdirSync(cwd)
-      .filter(name => !name.startsWith('.'))
-      .slice(0, 50)
-      .join('\n');
-  } catch {
-    return '(unable to list directory)';
-  }
-}
-
 async function runSingleJob(
   job: ExploreJob,
   cwd: string,
   globalMaxTurns: number,
-  dirListing: string,
+  repositoryMap: RepositoryMap,
   moaPreset?: ResolvedMoaPreset,
 ): Promise<ExploreResult> {
   const start = Date.now();
@@ -123,6 +118,7 @@ async function runSingleJob(
         preset: moaPreset,
         cwd,
         maxTurns: globalMaxTurns,
+        repositoryMap,
         emitter: silentEmitter,
       });
       return {
@@ -136,7 +132,7 @@ async function runSingleJob(
     }
 
     const { client, config } = createClient(job.llmConfig);
-    const systemPrompt = buildSystemPrompt(cwd, dirListing);
+    const systemPrompt = buildSystemPrompt(cwd, repositoryMap);
     const prompt = buildExplorePrompt(job.prompt);
 
     const result = await agentLoop({
@@ -184,7 +180,7 @@ async function drainQueue(
   concurrency: number,
   cwd: string,
   maxTurns: number,
-  dirListing: string,
+  repositoryMap: RepositoryMap,
   totalJobs: number,
   jobIndexMap: Map<string, number>,
   callbacks: Pick<RunnerOptions, 'onProgress' | 'onJobStart' | 'onJobDone'>,
@@ -233,7 +229,7 @@ async function drainQueue(
         `[${globalIdx + 1}/${totalJobs}] ${job.endpointName}:${job.llmConfig.model} — starting`,
       );
 
-      let result = await runSingleJob(job, cwd, maxTurns, dirListing, moaPreset);
+      let result = await runSingleJob(job, cwd, maxTurns, repositoryMap, moaPreset);
 
       // Record success/failure for circuit breaker
       if (breaker) {
@@ -267,7 +263,7 @@ async function drainQueue(
             endpointName: candidate.name,
             llmConfig: candidate.llmConfig,
           };
-          const retryResult = await runSingleJob(retryJob, cwd, maxTurns, dirListing, moaPreset);
+          const retryResult = await runSingleJob(retryJob, cwd, maxTurns, repositoryMap, moaPreset);
           result = retryResult;
           if (!retryResult.error) {
             breaker?.recordSuccess(candidate.name);
@@ -308,6 +304,7 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
   const {
     jobs, cwd, maxTurns, concurrency,
     endpointConcurrency,
+    treeDepth,
     moaPreset,
     circuitBreaker: cbConfig,
     allEndpoints,
@@ -316,7 +313,15 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
 
   if (jobs.length === 0) return [];
 
-  const dirListing = getDirListing(cwd);
+  const focusPaths = extractRepositoryMapFocusPaths(jobs.map(job => job.prompt));
+  const repositoryMap = buildRepositoryMap(cwd, { targetDepth: treeDepth, focusPaths });
+  const mapFlags = [
+    repositoryMap.fellBack ? 'depth reduced' : '',
+    repositoryMap.truncated ? 'truncated' : '',
+  ].filter(Boolean);
+  onProgress?.(
+    `Repository map: depth=${repositoryMap.depth}, ${(repositoryMap.sizeBytes / 1024).toFixed(1)}KB, focus=${repositoryMap.focusCount ?? 0}${mapFlags.length ? ` (${mapFlags.join(', ')})` : ''}`,
+  );
 
   // Circuit breaker: shared across all endpoint queues
   const breaker = allEndpoints && allEndpoints.length > 1
@@ -405,7 +410,7 @@ export async function runExploreJobs(opts: RunnerOptions): Promise<ExploreResult
       const idx = nextQueue++;
       const [name, queue] = queueEntries[idx];
       const results = await drainQueue(
-        queue, queueLimits.get(name) ?? Infinity, cwd, maxTurns, dirListing,
+        queue, queueLimits.get(name) ?? Infinity, cwd, maxTurns, repositoryMap,
         jobs.length, jobIndexMap,
         { onProgress, onJobStart, onJobDone },
         moaPreset,

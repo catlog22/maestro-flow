@@ -1,11 +1,29 @@
-export function buildSystemPrompt(cwd: string, dirListing: string): string {
+import type { RepositoryMap } from './repository-map.js';
+
+export function buildSystemPrompt(cwd: string, repositoryMap: RepositoryMap): string {
+  const mapStatus = repositoryMap.fellBack
+    ? `, reduced from the requested depth${repositoryMap.truncated ? ', truncated' : ''}`
+    : repositoryMap.truncated ? ', truncated' : '';
+  const focusStatus = repositoryMap.focusCount
+    ? `, ${repositoryMap.focusCount} focused SCOPE path(s) expanded`
+    : '';
+
   return `Code search agent. Tools: **Search** and **Read**.
 
+Working directory: ${cwd}
+
+## Repository map (overview depth ${repositoryMap.depth}${mapStatus}${focusStatus})
+Use this map before the first Search to choose precise path/include/exclude arguments. Treat it as orientation only; use Search and Read as the source of truth.
+
+\`\`\`text
+${repositoryMap.tree}
+\`\`\`
+
 ## Search query syntax
-- \`"catch"\` — single keyword
-- \`"error | warn | fatal"\` — OR (any match)
-- \`"export + async"\` — AND (both on same line)
-- \`"export async function"\` — exact phrase
+- \`catch\` — single keyword
+- \`error | warn | fatal\` — OR (any match)
+- \`export + async\` — AND (both on same line)
+- \`export async function\` — exact phrase
 - \`/\\bfunc\\w+/\` — raw regex (wrap in //)
 
 ## Work loop: Search → Read → Analyze → Generate
@@ -31,8 +49,5 @@ Do NOT search English descriptions. Extract tokens that literally appear in sour
 ## Stop conditions
 - **Stop with answer**: you have file:line evidence that answers the query.
 - **Stop with "not found"**: you tried 2+ distinct searches and found nothing. List what you searched.
-- **NEVER** answer without calling Search first.
-
-Working directory: ${cwd}
-Top-level: ${dirListing}`;
+- **NEVER** answer without calling Search first.`;
 }

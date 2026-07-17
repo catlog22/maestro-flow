@@ -22,6 +22,7 @@ import {
   listSessions,
   loadSession,
 } from '../agents/api-explore/session.js';
+import { normalizeRepositoryMapDepth } from '../agents/api-explore/repository-map.js';
 
 function truncatePrompt(prompt: string, maxLen = 60): string {
   const oneLine = prompt.replace(/\n/g, ' ').trim();
@@ -85,6 +86,7 @@ export function registerExploreCommand(program: Command): void {
     .option('--parallel <n>', 'Max concurrent endpoint queues (default: from config or 4)', parseInt)
     .option('--ep-concurrency <n>', 'Max concurrent jobs per endpoint (default: unlimited, or endpoint config "concurrency")', parseInt)
     .option('--max-turns <n>', 'Max agent turns per job (default: from config or 6)', parseInt)
+    .option('--tree-depth <n>', 'Repository tree depth injected into the first prompt (default: 3, range: 1-6)', parseInt)
     .option('--cd <dir>', 'Working directory for exploration')
     .option('-o, --output-dir <dir>', 'Save session to custom directory instead of .workflow/explore/')
     .option('--no-save', 'Do not save session')
@@ -99,6 +101,7 @@ export function registerExploreCommand(program: Command): void {
         parallel?: number;
         epConcurrency?: number;
         maxTurns?: number;
+        treeDepth?: number;
         cd?: string;
         outputDir?: string;
         save?: boolean;
@@ -138,6 +141,7 @@ export function registerExploreCommand(program: Command): void {
       }
       const cwd = resolve(opts.cd ?? process.cwd());
       const maxTurns = opts.maxTurns ?? config.maxTurns ?? 6;
+      const treeDepth = normalizeRepositoryMapDepth(opts.treeDepth ?? config.treeDepth);
       const concurrency = opts.parallel ?? config.concurrency ?? 4;
 
       let resolvedPreset: ResolvedMoaPreset | undefined;
@@ -200,6 +204,7 @@ export function registerExploreCommand(program: Command): void {
         maxTurns,
         concurrency,
         endpointConcurrency: epConcurrency,
+        treeDepth,
         moaPreset: resolvedPreset,
         circuitBreaker: config.circuitBreaker,
         allEndpoints: allEps,

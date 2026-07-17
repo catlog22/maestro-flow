@@ -36,16 +36,26 @@ const FIELD_PATTERN = new RegExp(
   'i',
 );
 
+const ESCAPED_FIELD_BREAK = new RegExp(
+  `(?:\\\\r)?\\\\n(?=(${Object.keys(FIELD_MAP).join('|')})\\s*:)`,
+  'gi',
+);
+
+function normalizeStructuredFieldBreaks(text: string): string {
+  return text.replace(ESCAPED_FIELD_BREAK, '\n');
+}
+
 export function isStructuredPrompt(text: string): boolean {
   return /^(FIND|PURPOSE)\s*:/im.test(text);
 }
 
 export function parseStructuredPrompt(text: string): StructuredPrompt {
+  const normalizedText = normalizeStructuredFieldBreaks(text);
   const fields: Partial<StructuredPrompt> = {};
   let currentKey: keyof StructuredPrompt | null = null;
   const lines: string[] = [];
 
-  for (const line of text.split('\n')) {
+  for (const line of normalizedText.split('\n')) {
     const match = line.match(FIELD_PATTERN);
     if (match) {
       if (currentKey && lines.length > 0) {
@@ -63,7 +73,7 @@ export function parseStructuredPrompt(text: string): StructuredPrompt {
   }
 
   return {
-    find: fields.find ?? text.trim(),
+    find: fields.find ?? normalizedText.trim(),
     scope: fields.scope,
     exclude: fields.exclude,
     attention: fields.attention,

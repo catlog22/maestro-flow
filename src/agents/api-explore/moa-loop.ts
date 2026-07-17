@@ -7,11 +7,15 @@
  * config or passed dynamically.
  */
 
-import { readdirSync } from 'node:fs';
 import { buildSystemPrompt } from './system-prompt.js';
 import { executeSteps, createPipelineContext } from './moa-pipeline.js';
 import type { StreamEmitter } from './stream-json-emitter.js';
 import type { PipelineStep, ResolvedMoaPreset } from './config.js';
+import {
+  buildRepositoryMap,
+  extractRepositoryMapFocusPaths,
+  type RepositoryMap,
+} from './repository-map.js';
 
 export interface ReferenceOutput {
   endpointName: string;
@@ -37,6 +41,8 @@ export interface MoaLoopParams {
   preset: ResolvedMoaPreset;
   cwd: string;
   maxTurns?: number;
+  treeDepth?: number;
+  repositoryMap?: RepositoryMap;
   onProgress?: (msg: string) => void;
   cache?: boolean;
   cacheTtlMs?: number;
@@ -46,17 +52,12 @@ export interface MoaLoopParams {
 }
 
 export async function moaAgentLoop(params: MoaLoopParams): Promise<MoaResult> {
-  let dirListing: string;
-  try {
-    dirListing = readdirSync(params.cwd)
-      .filter(n => !n.startsWith('.'))
-      .slice(0, 50)
-      .join('\n');
-  } catch {
-    dirListing = '(unable to list)';
-  }
-
-  const systemPrompt = buildSystemPrompt(params.cwd, dirListing);
+  const repositoryMap = params.repositoryMap
+    ?? buildRepositoryMap(params.cwd, {
+      targetDepth: params.treeDepth,
+      focusPaths: extractRepositoryMapFocusPaths([params.prompt]),
+    });
+  const systemPrompt = buildSystemPrompt(params.cwd, repositoryMap);
   const steps = params.pipeline ?? params.preset.steps;
 
   const ctx = createPipelineContext(params.prompt);

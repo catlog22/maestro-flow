@@ -1,6 +1,6 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
-import { execSync, execFileSync, execFile } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -17,7 +17,8 @@ export interface ToolSchema {
 function assertWithinCwd(target: string, cwd: string): void {
   const resolved = resolve(target);
   const resolvedCwd = resolve(cwd);
-  if (!resolved.startsWith(resolvedCwd)) {
+  const rel = relative(resolvedCwd, resolved);
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     throw new Error(`Path "${target}" is outside working directory "${cwd}"`);
   }
 }
@@ -41,9 +42,37 @@ function relativizeOutput(output: string, cwd: string): string {
 // Read
 // ---------------------------------------------------------------------------
 
+const SOURCE_EXTENSION_FALLBACKS: Record<string, string[]> = {
+  '.js': ['.ts', '.tsx'],
+  '.jsx': ['.tsx'],
+  '.mjs': ['.mts', '.ts'],
+  '.cjs': ['.cts', '.ts'],
+};
+
+function resolveReadableFile(filePath: string, cwd: string): { path: string; usedFallback: boolean } {
+  const requested = resolve(cwd, filePath);
+  assertWithinCwd(requested, cwd);
+  if (existsSync(requested) && statSync(requested).isFile()) {
+    return { path: requested, usedFallback: false };
+  }
+
+  const extension = extname(requested).toLowerCase();
+  const fallbacks = SOURCE_EXTENSION_FALLBACKS[extension] ?? [];
+  const stem = extension ? requested.slice(0, -extension.length) : requested;
+  for (const fallbackExtension of fallbacks) {
+    const candidate = `${stem}${fallbackExtension}`;
+    assertWithinCwd(candidate, cwd);
+    if (existsSync(candidate) && statSync(candidate).isFile()) {
+      return { path: candidate, usedFallback: true };
+    }
+  }
+
+  return { path: requested, usedFallback: false };
+}
+
 function readFile(args: { file_path: string; offset?: number; limit?: number }, cwd: string): string {
-  assertWithinCwd(args.file_path, cwd);
-  const content = readFileSync(args.file_path, 'utf-8');
+  const resolved = resolveReadableFile(args.file_path, cwd);
+  const content = readFileSync(resolved.path, 'utf-8');
   const lines = content.split('\n');
   const offset = Math.max(1, args.offset ?? 1);
   const end = args.limit ? Math.min(offset + args.limit - 1, lines.length) : lines.length;
@@ -55,7 +84,10 @@ function readFile(args: { file_path: string; offset?: number; limit?: number }, 
   if (end < lines.length) {
     result.push(`... (${lines.length - end} more lines)`);
   }
-  return result.join('\n');
+  const body = result.join('\n');
+  return resolved.usedFallback
+    ? `[resolved source: ${toRelative(resolved.path, cwd)}]\n${body}`
+    : body;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,7 +154,11 @@ async function runRgAsync(rgArgs: string[]): Promise<string> {
 }
 
 function isNoMatch(err: unknown): boolean {
-  return !!(err && typeof err === 'object' && 'status' in err && (err as { status: number }).status === 1);
+  if (!err || typeof err !== 'object') return false;
+  const value = 'status' in err
+    ? (err as { status?: number | string }).status
+    : 'code' in err ? (err as { code?: number | string }).code : undefined;
+  return value === 1 || value === '1';
 }
 
 function isRegexError(msg: string): boolean {
@@ -171,6 +207,14 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function stripMatchingQuotes(value: string): string {
+  if (value.length < 2) return value;
+  const quote = value[0];
+  if ((quote !== '"' && quote !== "'") || value[value.length - 1] !== quote) return value;
+  const inner = value.slice(1, -1);
+  return inner.includes(quote) ? value : inner.trim();
+}
+
 interface SearchArgs {
   query: string;
   path?: string;
@@ -187,15 +231,15 @@ function buildSearchRgArgs(args: SearchArgs, cwd: string): { rgArgs: string[]; u
 
   let pattern: string;
   let usePcre2 = false;
-  const q = args.query.trim();
+  const q = stripMatchingQuotes(args.query.trim());
 
   if (q.startsWith('/') && q.endsWith('/')) {
     pattern = q.slice(1, -1);
   } else if (q.includes(' | ') || q.includes(', ')) {
-    const keywords = q.split(/\s*[|,]\s*/).filter(Boolean).map(escapeRegex);
+    const keywords = q.split(/\s*[|,]\s*/).filter(Boolean).map(stripMatchingQuotes).map(escapeRegex);
     pattern = `(${keywords.join('|')})`;
   } else if (/\s\+\s/.test(q)) {
-    const keywords = q.split(/\s\+\s/).filter(Boolean).map(escapeRegex);
+    const keywords = q.split(/\s\+\s/).filter(Boolean).map(stripMatchingQuotes).map(escapeRegex);
     pattern = keywords.map(k => `(?=.*${k})`).join('') + '.*';
     usePcre2 = true;
   } else if (q.includes(' ')) {
@@ -228,7 +272,7 @@ function search(args: SearchArgs, cwd: string): string {
     return formatRgOutput(output, cwd, 0, args.limit ?? 80);
   } catch (err) {
     if (isNoMatch(err)) return 'No matches found.';
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    throw err;
   }
 }
 
@@ -239,7 +283,7 @@ async function searchAsync(args: SearchArgs, cwd: string): Promise<string> {
     return formatRgOutput(output, cwd, 0, args.limit ?? 80);
   } catch (err) {
     if (isNoMatch(err)) return 'No matches found.';
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    throw err;
   }
 }
 
@@ -294,7 +338,7 @@ function grep(args: GrepArgs, cwd: string): string {
     return formatRgOutput(output, cwd, args.offset ?? 0, args.limit ?? 80);
   } catch (err) {
     if (isNoMatch(err)) return 'No matches found.';
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    throw err;
   }
 }
 
@@ -305,7 +349,7 @@ async function grepAsync(args: GrepArgs, cwd: string): Promise<string> {
     return formatRgOutput(output, cwd, args.offset ?? 0, args.limit ?? 80);
   } catch (err) {
     if (isNoMatch(err)) return 'No matches found.';
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    throw err;
   }
 }
 
@@ -320,7 +364,7 @@ export function executeTool(name: string, argsJson: string, cwd: string): string
     case 'Glob': return glob(args, cwd);
     case 'Grep': return grep(args, cwd);
     case 'Search': return search(args, cwd);
-    default: return `Unknown tool: ${name}`;
+    default: throw new Error(`Unknown tool: ${name}`);
   }
 }
 
@@ -331,7 +375,7 @@ export async function executeToolAsync(name: string, argsJson: string, cwd: stri
     case 'Glob': return glob(args, cwd);
     case 'Grep': return grepAsync(args, cwd);
     case 'Search': return searchAsync(args, cwd);
-    default: return `Unknown tool: ${name}`;
+    default: throw new Error(`Unknown tool: ${name}`);
   }
 }
 
@@ -348,7 +392,7 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Search query. Modes: "handleAuth" (single keyword), "error | warn | fatal" (OR), "export + async" (AND — both on same line), "export async function" (exact phrase), /\\bfunc\\w+/ (raw regex wrapped in //).' },
+          query: { type: 'string', description: 'Search query without surrounding quotes. Modes: handleAuth (single keyword), error | warn | fatal (OR), export + async (AND — both on same line), export async function (exact phrase), /\\bfunc\\w+/ (raw regex wrapped in //).' },
           path: { type: 'string', description: 'Directory to search in.' },
           include: { type: 'string', description: 'Include files matching glob (e.g. "*.ts").' },
           exclude: { type: 'string', description: 'Exclude files matching glob (e.g. "*.test.ts").' },

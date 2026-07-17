@@ -59,6 +59,7 @@ export interface ApiConfig {
   extraBody?: Record<string, unknown>;
   maxTurns?: number;
   concurrency?: number;
+  treeDepth?: number;
 }
 
 const API_JSON_PATH = join(homedir(), '.maestro', 'api.json');

@@ -21,6 +21,8 @@ export interface ExploreConfig {
   extraBody?: Record<string, unknown>;
   maxTurns?: number;
   concurrency?: number;
+  /** Repository tree depth injected into the first explore prompt (1-6) */
+  treeDepth?: number;
   /** Named endpoints for parallel multi-endpoint usage */
   endpoints?: Record<string, import('../../config/api-config.js').EndpointConfig>;
   /** Proxy config */
