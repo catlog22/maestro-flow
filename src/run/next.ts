@@ -44,7 +44,7 @@ import {
   nextPendingDecisionIndex,
   updateChainStepStatus,
 } from './chain.js';
-import { checkLease, claimLease } from './lease.js';
+import { checkLease } from './lease.js';
 import { SessionStore } from './store.js';
 import { readStateJson } from '../utils/state-schema.js';
 import type { SessionState, Handoff } from './schemas.js';
@@ -557,34 +557,25 @@ export function runNextStep(projectRoot: string, opts: NextCmdOptions = {}): Nex
       command: chainStep.command,
       sessionId,
       intent: session.intent,
-      args: opts.args,
+      args: opts.args ?? (chainStep.args ? [chainStep.args] : undefined),
+      chainStepId: chainStep.step_id,
+      leaseClaim: {
+        executionOwner: opts.executionOwner,
+        ownerEpoch: opts.ownerEpoch,
+        leaseId: opts.leaseId,
+      },
     });
   } catch (err) {
+    const current = store.readBundle(sessionId).session;
+    const concurrentRunning = activeStepIndex(current);
+    if (concurrentRunning !== null) {
+      return { exitCode: 3, result: null, message: renderRunningCard(store, current, sessionId, concurrentRunning) };
+    }
     return {
       exitCode: 1,
       result: null,
       message: `[run next] failed to create run: ${err instanceof Error ? err.message : String(err)}`,
     };
-  }
-
-  updateChainStepStatus(projectRoot, sessionId, nextIdx, 'running', created.run_id);
-
-  // Lease claim (§1.4 / M6): now that the step is live, write/renew the lease so
-  // subsequent next/complete calls carry the fencing triple. Mirrors the ralph
-  // cmd-next path (`m.execution_owner = ...` post-advance). checkLease already
-  // rejected a conflicting claim above, so this only writes on a fresh claim or a
-  // matching renewal; a call without --execution-owner leaves the lease untouched.
-  const claim = claimLease(session.orchestration.lease, {
-    executionOwner: opts.executionOwner,
-    ownerEpoch: opts.ownerEpoch,
-    leaseId: opts.leaseId,
-  });
-  if (claim) {
-    store.update(sessionId, (draft) => {
-      draft.session.orchestration.lease = claim;
-      draft.session.activity_revision++;
-      return null;
-    });
   }
 
   const result: NextResult = {

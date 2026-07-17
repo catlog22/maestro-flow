@@ -24,6 +24,7 @@ import { resolveStepContent } from '../run/contract.js';
 import { runNextStep, type NextResult } from '../run/next.js';
 import { summarizeRunMode, type RunUpstream, type PrevHandoff } from '../run/runtime.js';
 import { SessionStore } from '../run/store.js';
+import { checkLease } from '../run/lease.js';
 import {
   buildEnvelope,
   buildIntentSection,
@@ -36,6 +37,9 @@ import {
 import { loadSkillConfig } from '../config/skill-config.js';
 import {
   resolveRalphSession,
+  effectiveDecomposition,
+  effectiveLease,
+  effectivePosition,
   updateRalphMeta,
   workflowRoot,
   type RalphMeta,
@@ -64,13 +68,13 @@ export async function runNext(opts: NextCmdOptions): Promise<number> {
   const { sessionId, bundle, meta } = resolved;
   const session = bundle.session;
 
-  // Lease verification against ralph-meta (ralph-specific — messages unchanged).
-  if (meta.execution_owner && meta.execution_owner !== opts.executionOwner) {
-    console.error(`[ralph next] lease conflict: session owned by "${meta.execution_owner}", got "${opts.executionOwner}"`);
-    return 1;
-  }
-  if (meta.lease_id && meta.lease_id !== opts.leaseId) {
-    console.error(`[ralph next] lease conflict: session lease_id is "${meta.lease_id}", got "${opts.leaseId}"`);
+  const leaseConflict = checkLease(effectiveLease(session, meta), {
+    executionOwner: opts.executionOwner,
+    ownerEpoch: opts.ownerEpoch,
+    leaseId: opts.leaseId,
+  });
+  if (leaseConflict) {
+    console.error(`[ralph next] ${leaseConflict}`);
     return 1;
   }
 
@@ -87,7 +91,13 @@ export async function runNext(opts: NextCmdOptions): Promise<number> {
   // Advance the chain + mint the Run via the shared driver. It owns the
   // running/decision/no-pending/no-content guards; re-brand its generic messages
   // as ralph so executor-facing stderr keeps the `[ralph next]` prefix.
-  const outcome = runNextStep(projectRoot, { sessionId, args: pendingArgs });
+  const outcome = runNextStep(projectRoot, {
+    sessionId,
+    args: pendingArgs,
+    executionOwner: opts.executionOwner,
+    ownerEpoch: opts.ownerEpoch,
+    leaseId: opts.leaseId,
+  });
   if (outcome.exitCode !== 0 || !outcome.result) {
     console.error(rebrand(outcome.message));
     return outcome.exitCode;
@@ -132,7 +142,8 @@ function pendingStepArgs(session: SessionState, meta: RalphMeta): string[] {
   for (const step of chain) {
     if (step.status !== 'pending' || step.decision_ref) continue;
     const detail = meta.step_details?.[step.step_id];
-    return detail?.args ? [detail.args] : [];
+    const args = step.args ?? detail?.args;
+    return args ? [args] : [];
   }
   return [];
 }
@@ -142,7 +153,7 @@ function emitPrompt(
   session: SessionState,
   meta: RalphMeta,
   result: NextResult,
-  chainStep: { step_id: string; command: string },
+  chainStep: SessionState['orchestration']['chain'][number],
   detail: RalphStepDetail | null,
   content: ReturnType<typeof resolveStepContent>,
 ): void {
@@ -150,7 +161,7 @@ function emitPrompt(
   const total = result.step.total;
   const command = chainStep.command;
   const runId = result.run_id;
-  const args = (detail?.args ?? '').trim();
+  const args = (chainStep.args ?? detail?.args ?? '').trim();
 
   // Build body from workflow content (primary) or prepare content
   let body = '';
@@ -255,7 +266,7 @@ function buildSessionAnchor(
   sessionId: string,
   session: SessionState,
   meta: RalphMeta,
-  chainStep: { step_id: string; command: string },
+  chainStep: SessionState['orchestration']['chain'][number],
   detail: RalphStepDetail | null,
 ): string | null {
   // Core section — Intent. Empty intent suppresses the whole anchor: it drops
@@ -265,6 +276,8 @@ function buildSessionAnchor(
 
   const chain = session.orchestration.chain;
   const completedSteps = chain.filter(s => s.status === 'completed' || s.status === 'sealed');
+  const position = effectivePosition(session, meta);
+  const decomposition = effectiveDecomposition(session, meta);
 
   // Sections are composed in the ralph anchor's canonical order. Core sections
   // (Intent / Boundary / Progress / Signals) come from src/run/inject.ts; the
@@ -275,7 +288,7 @@ function buildSessionAnchor(
     completionVerb: (n) => `maestro ralph complete ${n} --session ${sessionId}`,
     sections: [
       intentSection,
-      buildScopeSection(meta),
+      buildScopeSection(position),
       buildBoundaryContractSection(session.boundary_contract),
       buildProgressSection({
         recent: completedSteps.length > 0
@@ -289,7 +302,7 @@ function buildSessionAnchor(
               return {
                 step_id: s.step_id,
                 command: s.command,
-                stage: d?.stage ?? null,
+                stage: s.stage ?? d?.stage ?? null,
                 summary: handoff?.summary || (d?.completion_summary ?? null),
                 caveats: concernsAsCaveat(handoff) ?? (d?.completion_caveats ?? null),
               };
@@ -298,9 +311,9 @@ function buildSessionAnchor(
         done_count: completedSteps.length,
         pending_count: chain.filter(s => s.status === 'pending').length,
       }),
-      buildGoalsSection(meta),
-      buildCurrentGoalSection(meta, detail),
-      buildCriteriaSection(meta),
+      buildGoalsSection(decomposition),
+      buildCurrentGoalSection(decomposition, chainStep.goal_ref ?? detail?.goal_ref ?? null),
+      buildCriteriaSection(decomposition),
       buildSignalsSection(collectSignals(store, sessionId, meta, completedSteps)),
     ],
   });
@@ -328,31 +341,34 @@ function concernsAsCaveat(handoff: { concerns: string[] } | null): string | null
 
 // ── Ralph extension sections (ralph-meta grounded) ───────────────────────────
 
-function buildScopeSection(meta: RalphMeta): string {
-  const phase = meta.phase ?? '—';
-  const scope = meta.scope_verdict ?? 'unknown';
-  return `**Scope**: ${scope} | Phase ${phase} | Milestone: ${meta.milestone || '—'}`;
+function buildScopeSection(position: ReturnType<typeof effectivePosition>): string {
+  const phase = position.phase ?? '—';
+  const scope = position.scope_verdict ?? 'unknown';
+  return `**Scope**: ${scope} | Phase ${phase} | Milestone: ${position.milestone || '—'}`;
 }
 
-function buildGoalsSection(meta: RalphMeta): string | null {
-  const activeGoals = (meta.task_decomposition ?? []).filter(g => g.status !== 'superseded');
+function buildGoalsSection(decomposition: ReturnType<typeof effectiveDecomposition>): string | null {
+  const activeGoals = decomposition.goals.filter(g => g.status !== 'superseded');
   if (activeGoals.length === 0) return null;
   const gLines = ['**Goals Overview**:'];
   for (const g of activeGoals) {
     const icon = g.status === 'done' ? '✓' : '○';
     gLines.push(`- [${icon}] ${g.id}: ${truncate(g.goal, 100)} — done_when: ${truncate(g.done_when ?? '', 80)}`);
   }
-  if (meta.goal_changelog?.length) {
-    gLines.push(`- Course corrections: ${meta.goal_changelog.length} applied`);
+  if (decomposition.changelog.length) {
+    gLines.push(`- Course corrections: ${decomposition.changelog.length} applied`);
   }
   return gLines.join('\n');
 }
 
-function buildCurrentGoalSection(meta: RalphMeta, detail: RalphStepDetail | null): string | null {
-  if (!detail?.goal_ref || !meta.task_decomposition) return null;
-  const goal = meta.task_decomposition.find(t => t.id === detail.goal_ref);
+function buildCurrentGoalSection(
+  decomposition: ReturnType<typeof effectiveDecomposition>,
+  goalRef: string | null,
+): string | null {
+  if (!goalRef) return null;
+  const goal = decomposition.goals.find(t => t.id === goalRef);
   if (!goal) return null;
-  const lines = [`**Current Goal** (${detail.goal_ref}):`];
+  const lines = [`**Current Goal** (${goalRef}):`];
   lines.push(`- Goal: ${truncate(goal.goal, 300)}`);
   if (goal.boundary) lines.push(`- Boundary: ${truncate(goal.boundary, 200)}`);
   if (goal.done_when) lines.push(`- Done when: ${truncate(goal.done_when, 200)}`);
@@ -360,9 +376,9 @@ function buildCurrentGoalSection(meta: RalphMeta, detail: RalphStepDetail | null
   return lines.join('\n');
 }
 
-function buildCriteriaSection(meta: RalphMeta): string | null {
-  if (!meta.execution_criteria?.length) return null;
-  return `**Execution Criteria**: ${capList(meta.execution_criteria, 5)}`;
+function buildCriteriaSection(decomposition: ReturnType<typeof effectiveDecomposition>): string | null {
+  if (!decomposition.execution_criteria.length) return null;
+  return `**Execution Criteria**: ${capList(decomposition.execution_criteria, 5)}`;
 }
 
 function collectSignals(

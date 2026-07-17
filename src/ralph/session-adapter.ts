@@ -11,7 +11,7 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, renameSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { SessionStore, type SessionBundle } from '../run/store.js';
-import type { SessionState } from '../run/schemas.js';
+import type { OrchestrationLease, SessionState } from '../run/schemas.js';
 import { createChainSession, chainStepId } from '../run/chain-admin.js';
 // Chain navigation/mutation is engine-agnostic and canonical in src/run/chain.ts.
 // Re-export here so existing ralph callers keep importing from the adapter while
@@ -235,9 +235,11 @@ export function updateRalphMeta(
 ): void {
   const store = new SessionStore(projectRoot);
   const sessionDir = store.sessionDir(sessionId);
-  const meta = readMeta(sessionDir);
-  updater(meta);
-  writeMeta(sessionDir, meta);
+  store.withLock(() => {
+    const meta = readMeta(sessionDir);
+    updater(meta);
+    writeMeta(sessionDir, meta);
+  });
 }
 
 // ── session.json-first position / decomposition readers (1.1 with meta fallback)
@@ -290,6 +292,7 @@ export function effectivePosition(session: SessionState, meta: RalphMeta): Effec
 export interface EffectiveDecomposition {
   execution_criteria: string[];
   goals: RalphTaskDecompositionItem[];
+  changelog: GoalChangelogEntry[];
 }
 
 export function effectiveDecomposition(session: SessionState, meta: RalphMeta): EffectiveDecomposition {
@@ -298,11 +301,24 @@ export function effectiveDecomposition(session: SessionState, meta: RalphMeta): 
     return {
       execution_criteria: d.execution_criteria,
       goals: d.goals as RalphTaskDecompositionItem[],
+      changelog: d.changelog as GoalChangelogEntry[],
     };
   }
   return {
     execution_criteria: meta.execution_criteria ?? [],
     goals: meta.task_decomposition ?? [],
+    changelog: meta.goal_changelog ?? [],
+  };
+}
+
+/** Canonical Session 1.1 lease with legacy ralph-meta fallback. */
+export function effectiveLease(session: SessionState, meta: RalphMeta): OrchestrationLease | null {
+  if (session.orchestration.lease) return session.orchestration.lease;
+  if (meta.execution_owner == null && meta.owner_epoch == null && meta.lease_id == null) return null;
+  return {
+    owner: meta.execution_owner ?? null,
+    epoch: meta.owner_epoch ?? 0,
+    id: meta.lease_id ?? null,
   };
 }
 

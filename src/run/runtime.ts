@@ -39,11 +39,10 @@ import {
 } from './inject.js';
 import { SessionStore, type SessionBundle } from './store.js';
 import {
-  requeueChainStepForRetry,
   nextPendingDecisionIndex,
   nextPendingIndex,
-  updateChainStepStatus,
 } from './chain.js';
+import { checkLease, claimLease, type LeaseClaim } from './lease.js';
 import {
   ensureSessionProjection,
   localISO,
@@ -85,6 +84,10 @@ export interface CreateRunOptions {
   intent?: string;
   args?: string[];
   parentRunId?: string;
+  /** Atomically bind the new Run to this pending chain step. */
+  chainStepId?: string;
+  /** Lease claim validated and persisted with the chain binding. */
+  leaseClaim?: LeaseClaim;
 }
 
 export interface CreateRunResult {
@@ -124,6 +127,13 @@ export interface CompleteRunResult extends CheckRunResult {
   sealed: boolean;
   primary_artifact_id: string | null;
   artifact_ids: string[];
+  /** Present when completeRun atomically applied a chain verdict. */
+  chain_transition?: {
+    step_id: string;
+    index: number;
+    step_status: string;
+    retry: { count: number; max: number; exhausted: boolean } | null;
+  } | null;
 }
 
 export interface PrepareConsumeStatus {
@@ -202,6 +212,10 @@ export interface CompleteRunOptions {
    * next step's birth packet can surface them via prev_handoff.
    */
   decisions?: string[];
+  /** Lease claim checked inside the same transaction that seals the Run. */
+  leaseClaim?: LeaseClaim;
+  /** Internal chain transition used by completeRunWithVerdict. */
+  chainVerdict?: CompletionVerdict;
 }
 
 /** Chain-advancement instruction carried by `run complete --verdict`. */
@@ -785,6 +799,20 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
   if (!store.sessionExists(sessionId)) store.createSession(sessionId, intent);
 
   return store.update(sessionId, (bundle, tx) => {
+    let boundStep: SessionState['orchestration']['chain'][number] | null = null;
+    if (options.chainStepId) {
+      const conflict = checkLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
+      if (conflict) throw new Error(conflict);
+      const running = bundle.session.orchestration.chain.find(step => step.status === 'running');
+      if (running) throw new Error(`chain step already running: ${running.step_id}`);
+      boundStep = bundle.session.orchestration.chain.find(step => step.step_id === options.chainStepId) ?? null;
+      if (!boundStep) throw new Error(`chain step not found: ${options.chainStepId}`);
+      if (boundStep.status !== 'pending') {
+        throw new Error(`chain step ${boundStep.step_id} is ${boundStep.status}, not pending`);
+      }
+      if (boundStep.decision_ref) throw new Error(`chain step ${boundStep.step_id} is a decision node`);
+    }
+
     const freshState = projectState(options.projectRoot);
     const sequence = nextSequence(store, sessionId);
     const runId = `${dateId()}-${String(sequence).padStart(3, '0')}-${slug(options.command, 'run')}`;
@@ -837,6 +865,12 @@ export function createRun(options: CreateRunOptions): CreateRunResult {
     if (entrySummary.blocking.length > 0) run.status = 'blocked';
 
     bundle.session.active_run_id = runId;
+    if (boundStep) {
+      boundStep.status = 'running';
+      boundStep.run_id = runId;
+      const lease = claimLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
+      if (lease) bundle.session.orchestration.lease = lease;
+    }
     bundle.session.activity_revision++;
     bundle.session.status = 'running';
     bundle.gates.revision++;
@@ -1128,6 +1162,37 @@ function mergeDecisionsIntoHandoff(handoff: Handoff, decisions: string[]): void 
   }
 }
 
+function applyChainVerdict(
+  session: SessionState,
+  runId: string,
+  verdict: CompletionVerdict,
+): NonNullable<CompleteRunResult['chain_transition']> | null {
+  const index = session.orchestration.chain.findIndex(step => step.run_id === runId);
+  if (index < 0) return null;
+  const step = session.orchestration.chain[index];
+  let retry: NonNullable<CompleteRunResult['chain_transition']>['retry'] = null;
+  switch (verdict) {
+    case 'done':
+    case 'done-with-concerns':
+      step.status = 'sealed';
+      break;
+    case 'needs-retry': {
+      const current = step.retry ?? { count: 0, max: 2 };
+      const next = { count: current.count + 1, max: current.max };
+      step.retry = next;
+      step.status = 'pending';
+      step.run_id = null;
+      retry = { ...next, exhausted: next.count >= next.max };
+      break;
+    }
+    case 'blocked':
+      step.status = 'failed';
+      session.status = 'paused';
+      break;
+  }
+  return { step_id: step.step_id, index, step_status: step.status, retry };
+}
+
 export function completeRun(
   projectRoot: string,
   runId: string,
@@ -1146,6 +1211,8 @@ export function completeRun(
   const notes = options.notes ?? [];
 
   return store.update(located.sessionId, (bundle, tx) => {
+    const leaseConflict = checkLease(bundle.session.orchestration.lease, options.leaseClaim ?? {});
+    if (leaseConflict) throw new Error(leaseConflict);
     const run = tx.readRun(runId);
     if (run.status === 'sealed') throw new Error(`Run ${runId} is sealed and immutable`);
     run.status = 'completed';
@@ -1176,6 +1243,7 @@ export function completeRun(
         sealed: false,
         primary_artifact_id: null,
         artifact_ids: [],
+        chain_transition: null,
       };
     }
 
@@ -1197,6 +1265,9 @@ export function completeRun(
     run.sealed_at = localISO();
     bundle.session.latest_completed_run_id = runId;
     if (bundle.session.active_run_id === runId) bundle.session.active_run_id = null;
+    const chainTransition = options.chainVerdict
+      ? applyChainVerdict(bundle.session, runId, options.chainVerdict)
+      : null;
     bundle.session.activity_revision++;
     summarizeRegistry(bundle.gates);
     tx.writeRun(run);
@@ -1214,6 +1285,7 @@ export function completeRun(
       sealed: true,
       primary_artifact_id: primary,
       artifact_ids: artifactIds,
+      chain_transition: chainTransition,
     };
   });
 }
@@ -1299,8 +1371,6 @@ export function completeRunWithVerdict(
 ): CompleteVerdictResult {
   const verdict = options.verdict ?? 'done';
   const store = new SessionStore(projectRoot);
-  const session = store.readBundle(sessionId).session;
-  const boundStep = chainStepForRun(session, runId);
 
   // Compose the notes channel: caller notes + blocked reason + an auto concern
   // for done-with-concerns when the caller left the notes empty (ralph appended a
@@ -1319,62 +1389,54 @@ export function completeRunWithVerdict(
     extraArtifacts: options.extraArtifacts,
     summaryFallback: options.summaryFallback,
     decisions: options.decisions,
+    leaseClaim: options.leaseClaim,
+    chainVerdict: verdict,
   });
 
-  // Non-chain run: verdict is advisory, chain/session untouched. Signals already
-  // landed on the handoff via completeRun above.
-  if (!boundStep) {
-    const current = store.readBundle(sessionId).session;
+  const after = store.readBundle(sessionId).session;
+  if (!seal.sealed) {
+    const bound = chainStepForRun(after, runId);
+    const current = bound ? after.orchestration.chain[bound.index] : null;
+    return {
+      session_id: sessionId,
+      run_id: runId,
+      verdict,
+      run_sealed: false,
+      chain: current ? {
+        step_id: current.step_id,
+        index: bound!.index,
+        step_status: current.status,
+        retry: current.retry ? { ...current.retry, exhausted: current.retry.count >= current.retry.max } : null,
+      } : null,
+      session_status: after.status,
+      next: { command: `maestro run check ${runId}`, reason: 'Run gates are blocking; fix outputs before advancing the chain' },
+      seal,
+    };
+  }
+
+  const transition = seal.chain_transition ?? null;
+  if (!transition) {
     return {
       session_id: sessionId,
       run_id: runId,
       verdict,
       run_sealed: seal.sealed,
       chain: null,
-      session_status: current.status,
-      next: completionNextPointer(current),
+      session_status: after.status,
+      next: completionNextPointer(after),
       seal,
     };
   }
-
-  // Drive the bound chain step. A blocked seal (exit gates / scan errors) leaves
-  // the run un-sealed; the verdict still applies to the chain so the orchestrator
-  // sees the intended transition, but the un-sealed run status is reported.
-  let retry: { count: number; max: number; exhausted: boolean } | null = null;
-  let stepStatus: string;
-  switch (verdict) {
-    case 'done':
-    case 'done-with-concerns':
-      updateChainStepStatus(projectRoot, sessionId, boundStep.index, 'sealed', runId);
-      stepStatus = 'sealed';
-      break;
-    case 'needs-retry': {
-      retry = requeueChainStepForRetry(projectRoot, sessionId, boundStep.index);
-      stepStatus = 'pending';
-      break;
-    }
-    case 'blocked':
-      updateChainStepStatus(projectRoot, sessionId, boundStep.index, 'failed', runId);
-      store.update(sessionId, (draft) => {
-        draft.session.status = 'paused';
-        draft.session.activity_revision++;
-        return null;
-      });
-      stepStatus = 'failed';
-      break;
-  }
-
-  const after = store.readBundle(sessionId).session;
   return {
     session_id: sessionId,
     run_id: runId,
     verdict,
     run_sealed: seal.sealed,
     chain: {
-      step_id: boundStep.step_id,
-      index: boundStep.index,
-      step_status: stepStatus,
-      retry,
+      step_id: transition.step_id,
+      index: transition.index,
+      step_status: transition.step_status,
+      retry: transition.retry,
     },
     session_status: after.status,
     next: completionNextPointer(after),

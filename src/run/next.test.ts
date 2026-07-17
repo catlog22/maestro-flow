@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runNextStep } from './next.js';
-import { completeRun } from './runtime.js';
+import { completeRun, createRun } from './runtime.js';
 import { SessionStore } from './store.js';
 import { writeStateJson, migrateV1toV2 } from '../utils/state-schema.js';
 import type { SessionState } from './schemas.js';
@@ -279,6 +279,34 @@ describe('run next — step navigation', () => {
     const chain = readChain(projectRoot, 's');
     expect(chain[0].status).toBe('running');
     expect(chain[0].run_id).toBe(outcome.result?.run_id);
+  });
+});
+
+describe('run next — atomic chain binding', () => {
+  it('forwards the predefined chain args into the created Run', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'args', [{ command: 'demo-plan' }], { active: true });
+    const store = new SessionStore(projectRoot);
+    store.update('s', draft => {
+      draft.session.orchestration.chain[0].args = '--depth deep';
+      return null;
+    });
+
+    const outcome = runNextStep(projectRoot, { sessionId: 's' });
+    expect(outcome.exitCode).toBe(0);
+    expect(store.readRun('s', outcome.result!.run_id).input.args).toEqual(['--depth deep']);
+  });
+
+  it('rejects a second Run binding after the pending step was claimed', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo-plan', PLAN_CONTRACT);
+    seedSession(projectRoot, 's', 'atomic', [{ command: 'demo-plan' }], { active: true });
+    const stepId = new SessionStore(projectRoot).readBundle('s').session.orchestration.chain[0].step_id;
+
+    createRun({ projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: stepId });
+    expect(() => createRun({ projectRoot, command: 'demo-plan', sessionId: 's', chainStepId: stepId }))
+      .toThrow(/already running|not pending/);
   });
 });
 

@@ -243,6 +243,17 @@ describe('run decide — errors', () => {
     expect(() => runDecide(projectRoot, 's', 'DP-9', { verdict: 'proceed', confidence: 'high' }))
       .toThrow(/decision point not found: DP-9.*DP-1/s);
   });
+
+  it('rejects re-deciding a terminal decision point', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    seedSession(projectRoot, 's', [{ command: 'gate', decision_ref: 'DP-1' }], [{ point_id: 'DP-1' }]);
+    runDecide(projectRoot, 's', 'DP-1', { verdict: 'proceed', confidence: 'high' });
+
+    expect(() => runDecide(projectRoot, 's', 'DP-1', { verdict: 'escalate', confidence: 'low' }))
+      .toThrow(/terminal decisions cannot be re-decided/);
+    expect(orchOf(projectRoot, 's').decision_points[0].status).toBe('passed');
+  });
 });
 
 // ── CLI wiring ────────────────────────────────────────────────────────────────

@@ -257,6 +257,22 @@ describe('run complete — verdict chain transitions', () => {
   });
 });
 
+describe('run complete — completion gate integrity', () => {
+  it('does not advance the chain when the Run cannot seal', () => {
+    const projectRoot = root();
+    stepCommand(projectRoot, 'demo');
+    const commandPath = join(projectRoot, '.claude', 'commands', 'demo.md');
+    writeFileSync(commandPath, `<contract>\nconsumes: []\nproduces:\n  - kind: plan\n    primary: true\n    path: outputs/plan.json\ngates:\n  entry: []\n  exit: []\n</contract>\n`, 'utf8');
+    seedSession(projectRoot, 's', [{ command: 'demo' }]);
+    const runId = startStep(projectRoot, 's', 0);
+
+    const result = completeRunWithVerdict(projectRoot, runId, 's', { verdict: 'done' });
+    expect(result.run_sealed).toBe(false);
+    expect(chainOf(projectRoot, 's')[0]).toMatchObject({ status: 'running', run_id: runId });
+    expect(result.next.command).toBe(`maestro run check ${runId}`);
+  });
+});
+
 // ── Non-chain run ───────────────────────────────────────────────────────────────
 
 describe('run complete — non-chain run', () => {

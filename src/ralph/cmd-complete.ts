@@ -12,9 +12,11 @@
 // ---------------------------------------------------------------------------
 
 import { SessionStore } from '../run/store.js';
-import { completeRun as completeStandardRun } from '../run/runtime.js';
+import { completeRunWithVerdict, type CompletionVerdict } from '../run/runtime.js';
+import { checkLease } from '../run/lease.js';
 import {
   resolveRalphSession,
+  effectiveLease,
   updateChainStepStatus,
   updateRalphMeta,
   workflowRoot,
@@ -68,13 +70,14 @@ export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
   const session = bundle.session;
   const chain = session.orchestration.chain;
 
-  // Lease verification
-  if (meta.execution_owner && meta.execution_owner !== opts.executionOwner) {
-    console.error(`[ralph complete] lease conflict: session owned by "${meta.execution_owner}", got "${opts.executionOwner}"`);
-    return 1;
-  }
-  if (meta.lease_id && meta.lease_id !== opts.leaseId) {
-    console.error(`[ralph complete] lease conflict: session lease_id is "${meta.lease_id}", got "${opts.leaseId}"`);
+  const leaseClaim = {
+    executionOwner: opts.executionOwner,
+    ownerEpoch: opts.ownerEpoch,
+    leaseId: opts.leaseId,
+  };
+  const leaseConflict = checkLease(effectiveLease(session, meta), leaseClaim);
+  if (leaseConflict) {
+    console.error(`[ralph complete] ${leaseConflict}`);
     return 1;
   }
 
@@ -114,45 +117,64 @@ export async function runComplete(opts: CompleteCmdOptions): Promise<number> {
   // append to handoff.concerns, and summary is a fallback when the executor left
   // report frontmatter without one (deriveHandoff yields an empty summary then).
   const runId = chainStep.run_id;
+  let canonicalTransitionApplied = false;
   if (runId) {
     try {
-      completeStandardRun(projectRoot, runId, sessionId, {
+      const verdict: CompletionVerdict = opts.status === 'DONE'
+        ? 'done'
+        : opts.status === 'DONE_WITH_CONCERNS'
+          ? 'done-with-concerns'
+          : opts.status === 'NEEDS_RETRY'
+            ? 'needs-retry'
+            : 'blocked';
+      const completed = completeRunWithVerdict(projectRoot, runId, sessionId, {
+        verdict,
         notes: handoffNotes(opts),
         summaryFallback: opts.summary,
+        reason: opts.reason,
+        leaseClaim,
       });
+      if (!completed.run_sealed) {
+        console.error(`[ralph complete] run ${runId} did not pass completion gates; chain unchanged`);
+        return 1;
+      }
+      canonicalTransitionApplied = completed.chain !== null;
     } catch (err) {
       // Non-fatal: the run might already be completed/sealed
       const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.includes('sealed') && !msg.includes('immutable')) {
-        console.error(`[ralph complete] warning: run completion failed: ${msg}`);
-      }
+      console.error(`[ralph complete] run completion failed: ${msg}`);
+      return 1;
     }
   }
 
-  // Update chain step status
-  const store = new SessionStore(projectRoot);
-  store.update(sessionId, (draft) => {
-    const step = draft.session.orchestration.chain[opts.index];
-    switch (opts.status) {
-      case 'DONE':
-      case 'DONE_WITH_CONCERNS':
-        step.status = 'completed';
-        draft.session.active_run_id = null;
-        break;
-      case 'NEEDS_RETRY':
-        step.status = 'pending';
-        step.run_id = null;
-        draft.session.active_run_id = null;
-        break;
-      case 'BLOCKED':
-        step.status = 'failed';
-        draft.session.status = 'paused';
-        draft.session.active_run_id = null;
-        break;
-    }
-    draft.session.activity_revision++;
-    return null;
-  });
+  if (!canonicalTransitionApplied) {
+    const store = new SessionStore(projectRoot);
+    store.update(sessionId, (draft) => {
+      const step = draft.session.orchestration.chain[opts.index];
+      switch (opts.status) {
+        case 'DONE':
+        case 'DONE_WITH_CONCERNS':
+          step.status = 'completed';
+          draft.session.active_run_id = null;
+          break;
+        case 'NEEDS_RETRY': {
+          const current = step.retry ?? { count: 0, max: 2 };
+          step.retry = { count: current.count + 1, max: current.max };
+          step.status = 'pending';
+          step.run_id = null;
+          draft.session.active_run_id = null;
+          break;
+        }
+        case 'BLOCKED':
+          step.status = 'failed';
+          draft.session.status = 'paused';
+          draft.session.active_run_id = null;
+          break;
+      }
+      draft.session.activity_revision++;
+      return null;
+    });
+  }
 
   // Record completion details in ralph-meta
   updateRalphMeta(projectRoot, sessionId, (m) => {

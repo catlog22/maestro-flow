@@ -240,6 +240,11 @@ export function registerRunCommand(program: Command): void {
           extraArtifacts: [...opts.artifact, ...opts.evidence],
           summaryFallback: opts.summary,
           reason: opts.reason,
+          leaseClaim: {
+            executionOwner: opts.executionOwner,
+            ownerEpoch: opts.ownerEpoch,
+            leaseId: opts.leaseId,
+          },
         });
         print(result);
         process.stderr.write(`next: ${result.next.command}\n      ${result.next.reason}\n`);

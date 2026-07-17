@@ -140,6 +140,9 @@ export function runDecide(
       const known = orch.decision_points.map(p => p.point_id).join(', ') || '(none)';
       throw new Error(`decision point not found: ${pointId} (known: ${known})`);
     }
+    if (point.status !== 'pending') {
+      throw new Error(`decision point ${pointId} is already ${point.status}; terminal decisions cannot be re-decided`);
+    }
 
     const nodeIdx = chainDecisionNodeIndex(draft.session, pointId);
     const node = nodeIdx >= 0 ? orch.chain[nodeIdx] : null;

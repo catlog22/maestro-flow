@@ -196,6 +196,45 @@ describe('ralph next — adapter', () => {
     expect(out).toContain('maestro ralph retry 0 --session sess-anchor');
   });
 
+  it('prefers Session 1.1 lease, args, position and decomposition over stale ralph-meta', async () => {
+    stepCommand(root, 'demo-plan', PLAN_CONTRACT, 'WORKFLOW_BODY_HERE');
+    seedRalphSession(root, 'sess-canonical', 'canonical state', [{ command: 'demo-plan' }], {
+      scope_verdict: 'small', phase: 1, milestone: 'legacy', execution_criteria: ['legacy criterion'],
+      task_decomposition: [{ id: 'OLD', goal: 'old goal', status: 'pending' }],
+      step_details: { 'step-000-demo-plan': { args: '--legacy', stage: 'old', skill: 'demo-plan' } },
+    });
+    const store = new SessionStore(root);
+    store.update('sess-canonical', draft => {
+      draft.session.orchestration.lease = { owner: 'agent-a', epoch: 2, id: 'lease-a' };
+      draft.session.orchestration.position = {
+        lifecycle: 'execute', phase: 3, phase_is_new: false, milestone: 'M3', planning_mode: null,
+        passed_gates: ['scope'], scope_verdict: 'large',
+      };
+      draft.session.orchestration.decomposition = {
+        execution_criteria: ['canonical criterion'],
+        goals: [{ id: 'G1', goal: 'canonical goal', status: 'pending' }],
+        changelog: [],
+      };
+      draft.session.orchestration.chain[0].args = '--canonical';
+      draft.session.orchestration.chain[0].goal_ref = 'G1';
+      return null;
+    });
+
+    const cap = captureStdout();
+    const code = await runNext({
+      sessionId: 'sess-canonical', executionOwner: 'agent-a', ownerEpoch: 2, leaseId: 'lease-a',
+    });
+    cap.restore();
+    expect(code).toBe(0);
+    const out = cap.text();
+    expect(out).toContain('**Scope**: large | Phase 3 | Milestone: M3');
+    expect(out).toContain('canonical goal');
+    expect(out).toContain('canonical criterion');
+    expect(out).toContain('args="--canonical"');
+    const runId = store.readBundle('sess-canonical').session.orchestration.chain[0].run_id!;
+    expect(store.readRun('sess-canonical', runId).input.args).toEqual(['--canonical']);
+  });
+
   it('surfaces the upstream table and previous step handoff (fixes the dropped-upstream bug)', async () => {
     stepCommand(root, 'demo-plan', PLAN_CONTRACT);
     stepCommand(root, 'demo-execute', EXEC_CONTRACT);
