@@ -130,4 +130,72 @@ describe('agentLoop Batch round budget', () => {
     expect(finalMessages.some(message => message.content?.includes('Earlier Batch rounds omitted'))).toBe(true);
     expect(mocks.callLlm.mock.calls[5][3]).toEqual([]);
   });
+
+  it('merges undeclared direct Search and Read calls into one Batch round', async () => {
+    mocks.callLlm
+      .mockResolvedValueOnce({
+        content: null,
+        toolCalls: [
+          { id: 'direct-search', name: 'Search', arguments: '{"query":"target","path":"src"}' },
+          { id: 'direct-read', name: 'Read', arguments: '{"file_path":"src/target.ts","offset":10}' },
+        ],
+        usage: { inputTokens: 10, outputTokens: 2 },
+        stopReason: 'tool_calls',
+      })
+      .mockResolvedValueOnce({
+        content: 'final answer',
+        toolCalls: [],
+        usage: { inputTokens: 20, outputTokens: 4 },
+        stopReason: 'stop',
+      });
+
+    const result = await agentLoop({
+      prompt: 'find target',
+      systemPrompt: 'system',
+      client,
+      llmConfig,
+      toolSchemas: [batchSchema],
+      maxTurns: 1,
+      cwd: process.cwd(),
+      emitter: silentEmitter,
+    });
+
+    expect(result.content).toBe('final answer');
+    expect(mocks.executeToolAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.executeToolAsync.mock.calls[0][0]).toBe('Batch');
+    expect(JSON.parse(mocks.executeToolAsync.mock.calls[0][1])).toEqual({
+      commands: [
+        { query: 'target', path: 'src', type: 'Search' },
+        { file_path: 'src/target.ts', offset: 10, type: 'Read' },
+      ],
+    });
+  });
+
+  it('adds an efficiency checkpoint after two rounds without consuming the hard cap', async () => {
+    mocks.callLlm
+      .mockResolvedValueOnce(batchResponse('batch-1'))
+      .mockResolvedValueOnce(batchResponse('batch-2'))
+      .mockResolvedValueOnce({
+        content: 'enough evidence',
+        toolCalls: [],
+        usage: { inputTokens: 20, outputTokens: 4 },
+        stopReason: 'stop',
+      });
+
+    const result = await agentLoop({
+      prompt: 'trace x',
+      systemPrompt: 'system',
+      client,
+      llmConfig,
+      toolSchemas: [batchSchema],
+      maxTurns: 5,
+      cwd: process.cwd(),
+      emitter: silentEmitter,
+    });
+
+    expect(result.content).toBe('enough evidence');
+    expect(mocks.callLlm.mock.calls[2][3]).toHaveLength(1);
+    const checkpointMessages = mocks.callLlm.mock.calls[2][2] as Array<{ content?: string }>;
+    expect(checkpointMessages.at(-1)?.content).toContain('Efficiency checkpoint');
+  });
 });

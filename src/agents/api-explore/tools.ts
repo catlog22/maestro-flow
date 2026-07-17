@@ -81,6 +81,15 @@ function readFile(args: { file_path: string; offset?: number; limit?: number }, 
   const end = args.limit ? Math.min(offset + args.limit - 1, lines.length) : lines.length;
 
   const result: string[] = [];
+  if (end < lines.length) {
+    result.push(`[showing lines ${offset}-${end} of ${lines.length}; next offset=${end + 1}]`);
+    const declarations = collectOmittedDeclarations(lines, end);
+    if (declarations.length > 0) {
+      result.push('--- omitted declaration index (use these line numbers for targeted Read) ---');
+      result.push(...declarations);
+      result.push('--- requested lines ---');
+    }
+  }
   for (let i = offset - 1; i < end; i++) {
     result.push(`${i + 1}\t${lines[i]}`);
   }
@@ -91,6 +100,16 @@ function readFile(args: { file_path: string; offset?: number; limit?: number }, 
   return resolved.usedFallback
     ? `[resolved source: ${toRelative(resolved.path, cwd)}]\n${body}`
     : body;
+}
+
+function collectOmittedDeclarations(lines: string[], start: number): string[] {
+  const declarations: string[] = [];
+  const declarationPattern = /^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|interface|type|enum|const|let|var)\s+([A-Za-z_$][\w$]*)/;
+  for (let index = start; index < lines.length && declarations.length < 30; index++) {
+    const match = lines[index].match(declarationPattern);
+    if (match) declarations.push(`${index + 1}\t${match[1]}`);
+  }
+  return declarations;
 }
 
 // ---------------------------------------------------------------------------
@@ -497,14 +516,14 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     type: 'function',
     function: {
       name: 'Batch',
-      description: 'Execute any number of independent Search and Read commands in one parallel batch. Put every command that can run independently into the same call.',
+      description: 'Execute one evidence-gathering round as parallel Search and Read commands. Bundle all independent work, scope commands to known paths, and avoid Search plus Read of the same region.',
       parameters: {
         type: 'object',
         properties: {
           commands: {
             type: 'array',
             minItems: 1,
-            description: 'Commands to execute concurrently. There is no fixed command-count limit; avoid duplicates and include all independent work for this round.',
+            description: 'Commands to execute concurrently. No fixed count limit: include each distinct evidence gap once; typical rounds use 3-8 commands.',
             items: {
               type: 'object',
               properties: {

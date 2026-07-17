@@ -84,6 +84,24 @@ describe('Read tool', () => {
       root,
     )).rejects.toThrow('outside working directory');
   });
+
+  it('indexes declarations omitted from the first page for targeted follow-up reads', async () => {
+    const root = createWorkspace();
+    const lines = Array.from({ length: 220 }, (_, index) =>
+      index === 179 ? 'export function lateTarget() {}' : `// line ${index + 1}`,
+    );
+    writeFileSync(join(root, 'long-file.ts'), `${lines.join('\n')}\n`);
+
+    const result = await executeToolAsync(
+      'Batch',
+      JSON.stringify({ commands: [{ type: 'Read', file_path: 'long-file.ts' }] }),
+      root,
+    );
+
+    expect(result).toContain('next offset=161');
+    expect(result).toContain('omitted declaration index');
+    expect(result).toContain('180\tlateTarget');
+  });
 });
 
 describe('Batch tool', () => {

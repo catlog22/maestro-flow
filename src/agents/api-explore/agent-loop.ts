@@ -1,6 +1,6 @@
 import type OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions.js';
-import { callLlm, type LlmConfig, type LlmCallOptions } from './llm.js';
+import { callLlm, type LlmConfig, type LlmCallOptions, type LlmToolCall } from './llm.js';
 import { executeToolAsync, type ToolSchema } from './tools.js';
 import { stdoutEmitter, type StreamEmitter } from './stream-json-emitter.js';
 import { DEFAULT_EXPLORE_MAX_TURNS } from './config.js';
@@ -46,6 +46,7 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
   let toolCalled = false;
   let pendingContent = '';
   let finalAnswerRequested = false;
+  let efficiencyCheckpointRequested = false;
 
   while (true) {
     turn++;
@@ -59,6 +60,19 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
         content: `You have completed ${toolRounds} Batch rounds. Tools are now disabled. Return the final answer using the evidence already gathered.`,
       });
       finalAnswerRequested = true;
+    }
+    if (
+      tools.length > 0
+      && toolRounds >= 2
+      && toolRounds < maxTurns
+      && !efficiencyCheckpointRequested
+      && !pendingContent
+    ) {
+      messages.push({
+        role: 'user',
+        content: 'Efficiency checkpoint: compare the gathered evidence with every EXPECTED item. If all items are covered, return the final answer now. Call Batch again only for a specific missing evidence item, and include all commands for that gap in one Batch.',
+      });
+      efficiencyCheckpointRequested = true;
     }
 
     let response;
@@ -83,7 +97,9 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
     totalInput += response.usage.inputTokens;
     totalOutput += response.usage.outputTokens;
 
-    if (response.toolCalls.length > 0) {
+    const toolCalls = normalizeBatchToolCalls(response.toolCalls);
+
+    if (toolCalls.length > 0) {
       if (forceFinalAnswer) {
         const content = response.content?.trim()
           || 'Tool round budget exhausted before the model produced a final answer.';
@@ -101,19 +117,19 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       messages.push({
         role: 'assistant',
         content: response.content,
-        tool_calls: response.toolCalls.map(tc => ({
+        tool_calls: toolCalls.map(tc => ({
           id: tc.id,
           type: 'function' as const,
           function: { name: tc.name, arguments: tc.arguments },
         })),
       });
 
-      for (const tc of response.toolCalls) {
+      for (const tc of toolCalls) {
         emitter.toolUse(tc.name, safeParseJson(tc.arguments), tc.id);
       }
 
       const results = await Promise.all(
-        response.toolCalls.map(async (tc) => {
+        toolCalls.map(async (tc) => {
           try {
             return { id: tc.id, result: await executeToolAsync(tc.name, tc.arguments, cwd), error: false };
           } catch (err) {
@@ -155,6 +171,42 @@ export async function agentLoop(params: AgentLoopParams): Promise<AgentLoopResul
       return { content, usage: { inputTokens: totalInput, outputTokens: totalOutput } };
     }
   }
+}
+
+/**
+ * Some OpenAI-compatible endpoints occasionally emit undeclared direct Search
+ * or Read calls, or multiple Batch calls in one assistant turn. Collapse all
+ * supported commands into the single declared Batch call so local concurrency,
+ * result budgets, and round accounting remain authoritative.
+ */
+function normalizeBatchToolCalls(toolCalls: LlmToolCall[]): LlmToolCall[] {
+  if (toolCalls.length === 0) return toolCalls;
+  if (toolCalls.length === 1 && toolCalls[0].name === 'Batch') return toolCalls;
+
+  const commands: Record<string, unknown>[] = [];
+  for (const toolCall of toolCalls) {
+    const args = safeParseJson(toolCall.arguments);
+    if (toolCall.name === 'Batch') {
+      if (!Array.isArray(args.commands)) return toolCalls;
+      for (const command of args.commands) {
+        if (!command || typeof command !== 'object' || Array.isArray(command)) return toolCalls;
+        commands.push(command as Record<string, unknown>);
+      }
+      continue;
+    }
+    if (toolCall.name === 'Search' || toolCall.name === 'Read') {
+      commands.push({ ...args, type: toolCall.name });
+      continue;
+    }
+    return toolCalls;
+  }
+
+  if (commands.length === 0) return toolCalls;
+  return [{
+    id: toolCalls[0].id,
+    name: 'Batch',
+    arguments: JSON.stringify({ commands }),
+  }];
 }
 
 const FINAL_CONTEXT_TOOL_ROUNDS = 3;

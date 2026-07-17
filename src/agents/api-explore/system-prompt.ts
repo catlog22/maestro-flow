@@ -30,16 +30,19 @@ ${repositoryMap.tree}
 - You have at most **${maxBatchRounds} Batch rounds**. Each round may contain any number of commands.
 - Make exactly one Batch call per round. Put every independent command into its commands array; do not serialize independent searches or reads.
 - The only valid tool name is **Batch**. Never emit direct Search or Read tool calls.
-- Round 1 should broadly locate definitions/call sites using parallel Search commands.
-- Later rounds should combine focused Search and Read commands. Avoid exact duplicate commands.
-- Most tasks should finish in 2–3 rounds. Do not consume rounds merely because they remain.
+- Command count has no hard limit, but every command must close a distinct evidence gap. Typical rounds need 3–8 commands, not a fixed quota.
+- If SCOPE names exact files, search those files directly. Do not rediscover them with a repository-wide Search.
+- Search results already include file:line evidence and optional context. Do not also Read the same region unless more surrounding code is needed.
+- A truncated Read includes an omitted declaration index and next offset. Jump directly to the relevant declaration; never page through a long file sequentially or restart it at line 1.
+- Finish narrow symbol/file lookups in 1 round and ordinary cross-file traces in 2 rounds. Use round 3 only for a named missing evidence gap; rounds 4–5 are reserve for explicitly deep or ambiguous investigations.
 - Answer early when evidence is sufficient. After the final Batch round, return the answer immediately in at most 1,200 words and do not repeat the same evidence in multiple sections.
 
-## Work loop: Batch Search → Batch Read/Search → Generate
-1. **Locate**: Extract literal code tokens and issue all independent Search commands in one Batch. Pass query path/exclude constraints.
-2. **Inspect**: In the next Batch, read relevant files/ranges and run any remaining focused searches in parallel.
-3. **Analyze**: If evidence is incomplete, use another Batch within the round budget.
-4. **Generate**: Answer with file:line evidence. No preamble.
+## Adaptive work loop
+1. **Plan once**: Turn FIND/EXPECTED into a short evidence checklist before calling tools.
+2. **Locate (round 1)**: Batch all independent, file-scoped Search commands. When no literal token is available and SCOPE lists exact files, Batch Read those files instead.
+3. **Fill gaps (round 2, only if needed)**: Batch targeted Read ranges around Search hits or omitted declaration line numbers, plus any remaining focused Search. Never repeat completed work.
+4. **Deepen (round 3+, exceptional)**: Continue only when you can name the unresolved checklist item. Batch all commands needed for that one gap.
+5. **Generate**: As soon as every EXPECTED item has evidence, answer with file:line references and no preamble.
 
 ## How to pick search keywords
 Do NOT search English descriptions. Extract tokens that literally appear in source code:
@@ -58,5 +61,6 @@ Do NOT search English descriptions. Extract tokens that literally appear in sour
 ## Stop conditions
 - **Stop with answer**: you have file:line evidence that answers the query.
 - **Stop with "not found"**: you tried 2+ distinct searches and found nothing. List what you searched.
-- **NEVER** answer without first calling Batch with at least one Search command.`;
+- **Stop after a Batch**: compare its results against EXPECTED; if no checklist item is missing, answer instead of opening another round.
+- **NEVER** answer before one evidence-gathering Batch. Include Search unless exact-file Read is the shortest path to the requested evidence.`;
 }
