@@ -11,3 +11,25 @@ args = ["bin/maestro-mcp.js"]
 
 [mcp_servers.maestro.env]
 MAESTRO_ENABLED_TOOLS = "write_file,edit_file,read_file,read_many_files,team_msg,store_knowhow"
+
+[features]
+# Allow request_user_input in the default mode.
+default_mode_request_user_input = true
+# Enable the Codex Multi-Agent V2 feature.
+multi_agents_v2 = true
+
+[features.multi_agent_v2]
+# Enable V2 fallback for models without an explicit protocol.
+enabled = true
+# Keep spawn metadata visible; Codex defaults this option to true.
+hide_spawn_agent_metadata = false
+# Avoid the reserved collaboration namespace used by newer Codex models.
+tool_namespace = "maestro"
+# One primary agent plus up to six concurrent sub-agents.
+max_concurrent_threads_per_session = 7
+# Minimum wait_agent timeout: 3 minutes.
+min_wait_timeout_ms = 180000
+# Default wait_agent timeout: 3 minutes.
+default_wait_timeout_ms = 180000
+# Maximum wait_agent timeout: 1 hour.
+max_wait_timeout_ms = 3600000
