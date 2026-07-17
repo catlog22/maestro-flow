@@ -1,6 +1,6 @@
 ---
 name: maestro
-description: Auto-route intent to optimal command chain
+description: "Auto-route intent to optimal command chain — default multi-step closed-loop orchestration; for stepwise interactive execution use /maestro-next"
 argument-hint: "<intent> [-y] [-c] [--dry-run] [--super]"
 allowed-tools:
   - Read
@@ -59,7 +59,7 @@ $ARGUMENTS — user intent text, or special keywords.
 4. **Decomposition contract — maestro owns** — `source=="maestro"` 的 session 由 maestro 拥有分解契约（`decomposition_owner="maestro"`）：S_DECOMPOSE 产出 additive block (`boundary_contract`, `execution_criteria`, `task_decomposition`)，随 chain-file 的 `decomposition` 块建入 session；下游 ralph 只消费不覆盖（当 `decomposition_owner == "maestro"` 时跳过二次提问，仅做 shape 校验 + 缺省字段补齐）
 5. **session.json orchestration 唯一真源** — 不生成 `goal-checklist.md` 或外部清单；一切状态写入经 CLI 动词（`session create --chain-file` / `session chain insert|skip|replace` / `run next` / `run complete --verdict` / `run decide` / `session meta update`），本命令不直写 session.json
 6. **执行步骤统一通过 `maestro run next` 加载** — `command_scope`/`command_path` 由 `maestro ralph skills --platform claude --json --quiet` 预校验（project 覆盖 global，限定 `.claude/`）；decision 节点由主流程通过 [@subagent] Agent() 评估、经 `run decide` 落盘，不 handoff 到其他 skill
-7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由 ralph 在 `post-analyze-scope` 决定
+7. **Topology awareness** — chain catalog 含 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / ...；scope_verdict 由链内 `post-analyze-scope` decision 节点落盘决定，本命令不预判
 8. **Grill `-y` 透传** — `-y` auto mode 透传 `-y` 到 grill args（grill 自身 Auto mode 用代码代答），不删除 grill stage；grill 仍产出 grill-report/terminology/context-package 供下游 brainstorm
 9. **D-007-S session 解析** — session 由 `state.json.sessions[]` 的 `session_id` 或 intent slug 匹配
 10. **每个 step 由 verdict 驱动链推进** — 由 `maestro run complete --verdict done|done-with-concerns`（免 run-id）驱动 chain step 完成+推进
@@ -67,7 +67,7 @@ $ARGUMENTS — user intent text, or special keywords.
 12. **Invariant violation = BLOCK** — 违反上述任一 invariant 即阻断当前操作，不可绕过。特别是 invariant 1（dispatch via Agent(ralph-executor)）和 invariant 2（session before execution）和 invariant 10（verdict 驱动链推进由 CLI 写入）为硬约束。
 13. **Classification evidence** — S_CLASSIFY 的 chain 选择决策 MUST 记录（匹配了哪个 pattern、排除了哪些备选、confidence level）作为分类留痕。无记录的分类不可进入 S_CREATE。
 14. **禁止以上下文消耗为由中断执行** — harness 自动处理 context compression，以"上下文不足"或"避免 context overflow"为由中断属于 invariant violation
-15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 session 生命周期 + step 排序 + cross-step decision 节点；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）只单次推荐，不得出现在 FSM step 内。
+15. **控制权优先级（范式治理）** — FSM（maestro/maestro-ralph）独占 **ralph/coordinator 引擎** session 的生命周期 + step 排序 + cross-step decision 节点；manual 引擎 session 不在管辖内——不认领、不派发；Pipeline（plan/execute/analyze）只拥有自身 artifact GATE，由 ralph dispatch 时 GATE 失败 → `complete BLOCKED|NEEDS_RETRY`、自身 GATE 全过 → DONE；Router（maestro-next）不得出现在 FSM step 内。
 16. **模板输出边界（--compose）** — `A_COMPOSE_TEMPLATE` 的写入 MUST 限定 `~/.maestro/templates/workflows/`（模板 JSON + index.json）与 `.workflow/templates/design-drafts/`（草稿）；NEVER 修改源码或 `.claude/commands/`。`--play` 视模板为只读，运行态经 CLI 动词写 session.json。
 17. **Goal tracking 与 session 双写** — 主流程在 session 创建、step 派发、step 完成时同步创建/更新 goal，补充 session.json 的 UI 可见进度。
 </invariants>
@@ -249,7 +249,7 @@ Execute a saved workflow template through the ralph chain runner. Flags: `--cont
    - 学习/阅读代码/跟读/follow → `[@skill] Skill("learn", "follow")`；调查/为什么/investigate → `[@skill] Skill("learn", "investigate")`；分解/模式/decompose → `[@skill] Skill("learn", "decompose")`；评审/挑战/second-opinion → `[@skill] Skill("learn", "consult")`；回顾/retro → step `retrospective`（`maestro run prepare retrospective` + `maestro run create retrospective --session YYYYMMDD-retrospective-{topic} --intent "{goal}"`）
    - 正式规格/spec-generate/7-phase → `blueprint`
    - 项目初始化 → `init`
-   - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，由 ralph 在 `post-analyze-scope` 决定是否插入 roadmap+analyze 或直跳 plan --from analyze）
+   - 宽/中等意图 + 无 session 上下文 → `analyze-macro`（产 scope_verdict，链内 `post-analyze-scope` decision 节点据此决定插入 roadmap+analyze 或直跳 plan --from analyze）
    - session 上下文 → `analyze --session {session}` → `plan --session {session}` → `execute --session {session}` → quality pipeline
    - 已有 analyze artifact 想直达执行 → `plan --from analyze:{ANL_ID}` → execute → quality pipeline
    - 已有 blueprint artifact → `plan --from blueprint:{BLP_ID}` → execute → quality pipeline
@@ -435,7 +435,7 @@ post-analyze-scope 触发：读 macro analyze artifact → 提取 scope_verdict 
 - [ ] Chain catalog 覆盖 grill / brainstorm / blueprint / analyze-macro / analyze / roadmap / plan(三路径) / execute / quality pipeline
 - [ ] `-y` 模式透传 `-y` 到 grill（grill 以 Auto mode 代码代答执行，stage 不跳过）
 - [ ] D-007-S: session 步骤的 `session_ref` 通过 `state.json.sessions[]` 的 session_id 或 intent slug 匹配
-- [ ] macro analyze 后跟 `decision:post-analyze-scope`（由 ralph 评估 scope_verdict 决定下游链路）
+- [ ] macro analyze 后跟 `decision:post-analyze-scope`（decision 节点评估 scope_verdict 决定下游链路）
 - [ ] plan 支持 `--session {session}` / `--from analyze:{ANL_ID}` / `--from blueprint:{BLP_ID}` 三路径；chain step args 携出处
 - [ ] Broad lifecycle intents decomposed (≤3 boundary questions); narrow/single-step skip
 - [ ] session.json orchestration 唯一真源；无 markdown 清单；post-goal-audit 节点在 decomposed 时追加；/goal 提示词以 session.json 为判据

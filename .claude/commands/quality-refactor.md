@@ -1,6 +1,6 @@
 ---
 name: quality-refactor
-description: Use when accumulated tech debt needs systematic identification and safe reduction
+description: "Systematic tech-debt identification and safe reduction — plan → confirm → execute with per-change test verification. For explicit refactoring requests; casual tech-debt mentions route via /maestro-next"
 argument-hint: "[<scope>]"
 allowed-tools:
   - Read

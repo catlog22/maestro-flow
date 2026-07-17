@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Understand code through guided reading, investigation, pattern extraction, or second opinions
+description: User-invoked learning toolkit — guided reading, investigation, pattern extraction, or second opinions. Manual `/learn` only; NEVER auto-invoke for code exploration or analysis — route those intents to the analyze step via /maestro-next
 argument-hint: "follow|investigate|decompose|consult [args...]"
 allowed-tools:
   - Read

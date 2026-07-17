@@ -320,7 +320,7 @@ If any artifact is missing: DO NOT report completion.
 
 ## Resume
 
-Scan `.workflow/.maestro/ui-craft-*/status.json` for `status == "running"` → most recent → resume from `current_step`.
+Scan `.workflow/.maestro/ui-craft-*/status.json` for `status == "running" || status == "paused"` → most recent → resume from `current_step`.
 
 ## Quality Gate — Finding → Command Fallback
 
