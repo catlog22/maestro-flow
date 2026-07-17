@@ -39,7 +39,10 @@ export function checkLease(
   if (lease.owner !== claim.executionOwner) {
     return `lease conflict: session owned by "${lease.owner}", got "${claim.executionOwner ?? '<none>'}"`;
   }
-  if (lease.id && lease.id !== claim.leaseId) {
+  if (!lease.id) {
+    return 'lease conflict: active session lease has no lease_id';
+  }
+  if (lease.id !== claim.leaseId) {
     return `lease conflict: session lease_id is "${lease.id}", got "${claim.leaseId ?? '<none>'}"`;
   }
   if (lease.epoch !== claim.ownerEpoch) {
@@ -54,8 +57,8 @@ export function checkLease(
  * live): a claim is written only when the caller supplies an executionOwner and
  * either the session has no active lease owner (fresh claim) or the existing
  * owner matches (renewal). A conflicting claim never reaches here — checkLease
- * rejects it upstream. epoch/id carry through the claim when supplied, else the
- * current lease's values (renewal) or defaults (fresh claim: epoch 0, id null).
+ * rejects it upstream. An active owner always requires a complete epoch/id
+ * fencing tuple; omitted fields are rejected instead of inherited or defaulted.
  *
  * Returns null (no write) when no executionOwner is supplied, so `run next`
  * without `--execution-owner` leaves a leaseless session leaseless.
@@ -65,12 +68,17 @@ export function claimLease(
   claim: LeaseClaim,
 ): OrchestrationLease | null {
   if (!claim.executionOwner) return null;
-  const current = lease ?? null;
-  // A conflict would have been rejected by checkLease; current is either absent,
-  // owner-less, or already owned by this claimant.
+  if (claim.ownerEpoch === undefined) {
+    throw new Error('lease claim requires --owner-epoch when --execution-owner is set');
+  }
+  if (!claim.leaseId) {
+    throw new Error('lease claim requires --lease-id when --execution-owner is set');
+  }
+  // A conflict would have been rejected by checkLease; persist the complete
+  // fencing tuple supplied by this claim without inheriting omitted fields.
   return {
     owner: claim.executionOwner,
-    epoch: claim.ownerEpoch ?? current?.epoch ?? 0,
-    id: claim.leaseId ?? current?.id ?? null,
+    epoch: claim.ownerEpoch,
+    id: claim.leaseId,
   };
 }

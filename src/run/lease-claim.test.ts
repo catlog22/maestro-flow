@@ -78,14 +78,22 @@ describe('claimLease', () => {
       .toEqual({ owner: 'ralph-execute', epoch: 3, id: 'L1' });
   });
 
-  it('carries current epoch/id on renewal when claim omits them', () => {
-    expect(claimLease({ owner: 'ralph-execute', epoch: 5, id: 'L9' }, { executionOwner: 'ralph-execute' }))
-      .toEqual({ owner: 'ralph-execute', epoch: 5, id: 'L9' });
+  it('requires the complete epoch/id fencing tuple on renewal', () => {
+    expect(() => claimLease(
+      { owner: 'ralph-execute', epoch: 5, id: 'L9' },
+      { executionOwner: 'ralph-execute' },
+    )).toThrow(/owner-epoch/);
+    expect(() => claimLease(
+      { owner: 'ralph-execute', epoch: 5, id: 'L9' },
+      { executionOwner: 'ralph-execute', ownerEpoch: 5 },
+    )).toThrow(/lease-id/);
   });
 
-  it('defaults epoch 0 / id null on a fresh owner-less lease', () => {
-    expect(claimLease({ owner: null, epoch: 0, id: null }, { executionOwner: 'ralph-execute' }))
-      .toEqual({ owner: 'ralph-execute', epoch: 0, id: null });
+  it('requires the complete epoch/id fencing tuple for a fresh claim', () => {
+    expect(() => claimLease(
+      { owner: null, epoch: 0, id: null },
+      { executionOwner: 'ralph-execute' },
+    )).toThrow(/owner-epoch/);
   });
 });
 
@@ -160,5 +168,9 @@ describe('run next — lease claim', () => {
     expect(checkLease(lease, { executionOwner: 'other', leaseId: 'L1' })).toContain('lease conflict');
     expect(checkLease(lease, { executionOwner: 'ralph-execute', leaseId: 'L1' })).toContain('epoch');
     expect(checkLease(lease, { executionOwner: 'ralph-execute', leaseId: 'L1', ownerEpoch: 1 })).toBeNull();
+    expect(checkLease(
+      { owner: 'ralph-execute', epoch: 1, id: null },
+      { executionOwner: 'ralph-execute', leaseId: 'L1', ownerEpoch: 1 },
+    )).toContain('no lease_id');
   });
 });
