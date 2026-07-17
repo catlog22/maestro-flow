@@ -96,6 +96,8 @@ Session: `maestro explore show` / `maestro explore output <id>`
 
 **Gate rule**: run `maestro search` + `maestro load` BEFORE reading code or editing files. 空结果 ≠ 免检：返回 hint 时先执行 hint 再重试；确认无既有知识后照常推进，任务结束按 Record 补录。
 
+**Re-search triggers**（任务中重新检索，换关键词不重复旧 query）：进入新模块/子系统边界；同一问题修复失败 2 次；架构/方案决策前。
+
 ```bash
 maestro search "<query>" [--type <type>] [--category <cat>] [--kind <kind>] [--code] [--kg]
 maestro load --type <type> [--list] [--category <cat>] [--keyword <word>] [--id <id>]
@@ -114,8 +116,15 @@ Separate concepts from symbols. Add `--kg` for full-source.
 |--------|------|
 | Known symbol → definition/signature | `maestro search "<Symbol>" --code` (file:line, no agent cost) |
 | Concept / knowledge / conventions | `maestro search "<keywords>"` |
+| Debug 症状 / review 教训（沉淀产物） | `maestro search "<关键词>" --kind diagnosis` / `--kind lessons` |
 | Usage sweep / pattern scan | `maestro explore` |
 | Exact regex / line content | Grep |
+
+**Association follow-through** — 命中后沿关联走一跳，优于重发大 query：
+
+- 命中分块条目（id 带 `-NNN` 尾缀）→ `maestro load --type knowhow --id <父条目id>` 取全文
+- 顺藤摸瓜（谁引用它 / 它引用谁）→ `maestro wiki backlinks <id>` / `maestro wiki forward <id>`
+- 规则演化脉络 → `maestro spec history <sid>`
 
 Zero code hits with a hint (e.g. `code index not initialized`) → run the hinted command, then retry — don't abandon code search.
 
@@ -138,6 +147,7 @@ maestro load --type spec --category coding
 
 Category routing: decisions→`arch`, patterns→`coding`, pitfalls→`debug`/`learning`, rules→`review`, tests→`test`.
 入口分工：slash 命令走引导式工作流；`maestro spec add` CLI 直写（supersede 流程用 `--json` 拿 sid）。
+`session-mode: run` 命令在 `maestro run check` 全绿时会收到 finish 收口清单（handoff、补录、冲突标注、verdict）——逐项执行，不跳过。
 
 ### Supersession & Conflict (dual-track)
 
