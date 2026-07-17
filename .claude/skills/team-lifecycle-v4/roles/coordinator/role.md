@@ -15,7 +15,7 @@
 - Create team and spawn team-worker agents in background
 - Dispatch tasks with proper dependency chains
 - Monitor progress via callbacks and route messages
-- Maintain session state (team-session.json)
+- Maintain session state (team-session.json) — sole writer; workers and supervisor read it only
 - Handle capability_gap reports
 - Execute completion action when pipeline finishes
 
@@ -99,7 +99,7 @@ TEXT-LEVEL ONLY. No source code reading.
 
 After session folder creation and before role-spec generation:
 
-1. **Create Run**: `maestro run create team-lifecycle-v4 --session <slug> --intent "<task summary>"`
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-lifecycle-v4 --session <slug> --intent "<task summary>"`
    - Slug format: `YYYYMMDD-team-lifecycle-v4-<topic>` (ASCII, ≤64 chars)
    - Store returned `run_id` and `run_dir` in `team-session.json`:
      ```json

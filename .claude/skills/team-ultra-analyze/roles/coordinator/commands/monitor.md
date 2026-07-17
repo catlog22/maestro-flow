@@ -347,7 +347,7 @@ Triggered when all pipeline tasks are completed.
    - Read run_id from `team-session.json.run.run_id`
    - Write `{run_dir}/report.md` with frontmatter (verdict/summary/concerns)
    - Run `maestro run complete <run_id>`
-   - If complete fails: log warning, continue (do not block completion action)
+   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
 3. If all completed, **inline-execute coordinator Phase 5** (shutdown workers → report → completion action). Do NOT STOP here — continue directly into Phase 5 within the same turn.
 
 ## Phase 4: State Persistence

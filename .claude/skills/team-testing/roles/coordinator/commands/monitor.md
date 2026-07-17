@@ -215,7 +215,7 @@ Pipeline done. Generate report and completion action.
      - Read run_id from team-session.json.run.run_id
      - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
      - Run `maestro run complete <run_id>`
-     - If complete fails: log warning, continue (do not block completion action)
+     - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
    - Read final state from meta.json (analyst.quality_score, executor.coverage, gc_rounds)
    - Generate summary (deliverables, task count, GC rounds, coverage metrics)
 4. Read session.completion_action:

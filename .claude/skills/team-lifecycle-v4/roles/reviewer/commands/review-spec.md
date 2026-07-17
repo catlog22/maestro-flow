@@ -22,7 +22,7 @@
 4. Run cross-document validation
 5. Generate readiness-report.md + blueprint-summary.md
 6. Run DISCUSS-003:
-   - Artifact: <session>/spec/readiness-report.md
+   - Artifact: {run_dir}/outputs/readiness-report.md
    - Perspectives: product, technical, quality, risk, coverage
    - Handle verdict per consensus protocol
    - DISCUSS-003 HIGH always triggers user pause

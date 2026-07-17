@@ -108,7 +108,7 @@ mcp__maestro__team_msg({
 
 After session folder creation and before role-spec generation:
 
-1. **Create Run**: `maestro run create team-planex --session <slug> --intent "<task summary>"`
+1. **Resolve Run** (birth-packet first): if the dispatch context already carries `run_id` / `run_dir` (injected by an orchestrator), store them in `team-session.json` and skip create — a second create mints an empty duplicate Run. Otherwise: `maestro run create team-planex --session <slug> --intent "<task summary>"`
    - Slug format: `YYYYMMDD-team-planex-<topic>` (ASCII, ≤64 chars)
    - Store returned `run_id` and `run_dir` in `team-session.json`:
      ```json
@@ -138,7 +138,7 @@ Run lifecycle completion (before generating the summary):
 - Read run_id from team-session.json.run.run_id
 - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
 - Run `maestro run complete <run_id>`
-- If complete fails: log warning, continue (do not block completion action)
+- If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
 
 1. Load session state -> count completed tasks, duration
 2. List deliverables with output paths

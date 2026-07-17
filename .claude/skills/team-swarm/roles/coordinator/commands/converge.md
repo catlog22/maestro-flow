@@ -67,7 +67,7 @@ If missing -> AskUserQuestion (skip synthesis / retry analyst).
   |   - Read run_id from team-session.json.run.run_id
   |   - Write {run_dir}/report.md with frontmatter (verdict/summary/concerns)
   |   - Run `maestro run complete <run_id>`
-  |   - If complete fails: log warning, continue (do not block completion action)
+  |   - If complete fails: fix the blocking gate and retry once; still failing -> do NOT archive/clean - keep the team active (status=paused) and report the blocking gate
 ```
 
 ### Step 4: Build completion summary
