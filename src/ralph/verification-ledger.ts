@@ -39,7 +39,7 @@ function ledgerPath(store: SessionStore, sessionId: string): string {
   return join(store.sessionDir(sessionId), 'verification-ledger.json');
 }
 
-/** Read the independent verification-ledger.json (empty when absent/corrupt). */
+/** Read the independent verification-ledger.json (empty when absent; corrupt data fails closed). */
 export function readLedgerFile(projectRoot: string, sessionId: string): VerificationLedgerEntry[] {
   const store = new SessionStore(projectRoot);
   const initial: VerificationLedgerFile = { schema_version: 'verification-ledger/1.0', entries: [] };
